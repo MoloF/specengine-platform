@@ -31,7 +31,8 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 | `get_impact` | `node_id` \| `qpath` \| `since: <commit>` | nodes, symbols, tests, tasks within the radius | graph + bindings; `since` = git diff -> graph walk (change impact) |
 | `refs` | `id` | `spec refs --json`: the node's markers and mentions, each with its binding | shipped; needed **during** refactoring; spec-side referrers: `get_node` with links |
 | `unmapped` | `path?` | `spec unmapped --json`: rows of units, mapped, percent, mentioned; a file's unmapped items | shipped; where there is no spec (tracey `query unmapped`) |
-| `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`; `content` = the neutral brief | shipped; `next`: the lowest-numbered `ready` (priority later) |
+| `get_roadmap` | `release?` \| `pool?` | `spec roadmap --json`: the plan's groups and items with `waits_on` and their tasks | shipped; capped as the CLI (`docs/canon/spec-roadmap.md` "Surfaces") |
+| `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`, `roadmap`; `content` = the neutral brief | shipped; `next`: the first `ready` by the plan (`docs/canon/spec-roadmap.md` "Next") |
 | `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | shipped; only `ready`; opens a run |
 | `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | shipped; -> `review` |
 | `check_binding` | `node_id`, `qpath` | whether the marker resolves, `ast_hash`, `sync` | formerly `bind_code_symbol`, check only |
@@ -130,7 +131,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 ## 3. HTTP (daemon)
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` by `spec serve` (`docs/canon/serve.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|health|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols` to come
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|health|roadmap|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols` to come
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), on a trigger and only with GET/SSE (see §1.1)

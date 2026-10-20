@@ -81,9 +81,11 @@ import type {
 // the review document's `drift` after `revisions` (48 keys), both written into the file by its TE-11,
 // and health-code's ten (UI-1, AC-9 of docs/features/health-code.md: the health document's `code`,
 // `assumes`, `unbound` after `notes`, rows 4-5 and their parts, the fifty-sixth and last
-// `UnboundMarker`). A key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty
-// today; a listed key the file already names fails. While that file is absent the comparison is
-// skipped, saying so; once it exists it names all fifty-six, in the slices' order.
+// `UnboundMarker`); roadmap-surfaces adds a key, no set (UI-1 of docs/features/roadmap-surfaces.md:
+// the package's `roadmap` after `bundle`, 26 keys). A key the types carry ahead of the file is
+// listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that
+// file is absent the comparison is skipped, saying so; once it exists it names all fifty-six, in
+// the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -269,7 +271,8 @@ const KEYS = {
   TaskList: { tasks: true, notes: true } satisfies Record<keyof TaskList, true>,
   TaskListEntry: { id: true, status: true, title: true, targets: true, stale: true, updated_at: true } satisfies Record<keyof TaskListEntry, true>,
   TaskNotFound: { id: true, reason: true } satisfies Record<keyof TaskNotFound, true>,
-  // docs/canon/task-package.md "Package": the package and each of its parts, `author` among them.
+  // docs/canon/task-package.md "Package": the package and each of its parts, `author` among them;
+  // docs/features/roadmap-surfaces.md "Data" `roadmap` after `bundle` (its `TaskRoadmap` set: 3a).
   TaskPackage: {
     schema_version: true,
     id: true,
@@ -292,6 +295,7 @@ const KEYS = {
     claim: true,
     runs: true,
     bundle: true,
+    roadmap: true,
     author: true,
     created_at: true,
     updated_at: true,
@@ -474,7 +478,7 @@ const CITED: Record<Named, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -721,8 +725,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect([...ALL].sort()).toEqual([...NAMES].sort());
   });
 
-  it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks)", () => {
-    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 25, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
+  it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 26, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks, UI-1 of roadmap-surfaces)", () => {
+    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 26, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
@@ -731,6 +735,15 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HEALTH_CODE).toHaveLength(46);
     expect(ALL).toHaveLength(56);
     expect(new Set(ALL).size).toBe(56);
+  });
+
+  it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
+    const pkg = Object.keys(KEYS.TaskPackage);
+    expect(pkg.slice(pkg.indexOf("bundle"), pkg.indexOf("bundle") + 3)).toEqual(["bundle", "roadmap", "author"]);
+    expect(declaredKeys("TaskPackage")).toEqual(pkg);
+    expect(source).toMatch(/^  roadmap: TaskRoadmap \| null;$/m);
+    // The TaskRoadmap set comes with 3a's roadmap document (docs/features/roadmap-surfaces.md "Decisions", Q-H).
+    expect(NAMES.filter((name) => name.includes("Roadmap"))).toEqual([]);
   });
 
   it("counts health-left's three: 3 document keys (6 since health-code's three follow them), 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
@@ -902,6 +915,11 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(45);
     expect(Object.keys(sets).at(-1)).toBe("UnboundMarker");
     expect(sets.InboxEntry).not.toContain("drift");
+  });
+
+  it("names the package's 26 keys in the types' order: roadmap after bundle, before author (UI-1 of roadmap-surfaces)", () => {
+    expect(sets.TaskPackage).toEqual(served("TaskPackage"));
+    expect(sets.TaskPackage).toHaveLength(26);
   });
 
   it("names health-left's keys in the document's order: the health document's three, then health-code's three, an amendment's six (AC-T2; UI-1 of health-code)", () => {

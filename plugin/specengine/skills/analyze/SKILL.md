@@ -11,7 +11,7 @@ Use this when you are asked to analyse or plan a task. A task is the owner's uni
 
 ## Steps
 
-1. **Read the task.** Call `get_task` with its `task_id`. The package holds the goal, targets, criteria, assumptions, the open questions bound to it, the owner's notes, the last plan, and whether the spec changed since approval (`stale`).
+1. **Read the task.** Call `get_task` with its `task_id`. The package holds the goal, targets, criteria, assumptions, the open questions bound to it, the owner's notes, the last plan, and whether the spec changed since approval (`stale`). Its `roadmap` places it on the project's roadmap; `get_roadmap` shows that roadmap, its items and the tasks on them, when the order of the work matters. The roadmap is advisory: nothing waits on it, and its items change only through a proposal the owner decides.
 2. **Read its spec.** Call `get_context_bundle` with the task's targets in `node_ids`; narrow with `get_node`, `search` or `get_tree` only where the bundle is not enough (the read-spec skill).
 3. **Raise each gap as a record.** Where the spec is silent or ambiguous, or the code disagrees with it, call `ask_question` or `report_discrepancy` with the task's `task_id` and your `working_answer`, and keep going on that answer (the ask-owner skill). Nothing waits for the owner's reply.
 4. **Submit the plan.** Call `submit_plan` with the `task_id`, `plan_md` (Markdown: what changes where, in what order, and how it is checked), `criteria` (references or short texts) and `affected_nodes` (the other spec nodes the work touches). A new plan replaces the last one. A plan is taken only before the owner approves the task.

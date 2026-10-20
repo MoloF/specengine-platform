@@ -46,8 +46,10 @@
 //! [`plan_tasks`] joins a plan with a repository's task rows (canon
 //! `spec-roadmap`, "Position"), pure as [`plan`]: each open task executes
 //! the first open item among its targets in the listing's order, the
-//! others form the pool. [`plan`], its lines and the view never read a
-//! task: the caller adds the join to its own output.
+//! others form the pool; [`task_item`] is one task's item and group,
+//! [`next_order`] tasks by their items' listing order, then number (`spec
+//! task show --next`, advisory). [`plan`], its lines and the view never
+//! read a task: the caller adds the join to its own output.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -1001,35 +1003,90 @@ impl PlanTasks {
 /// joins the pool. Tasks are ordered by number (an ID that is none after
 /// every number), then by the whole row. Closed rows are left out.
 pub fn plan_tasks(plan: &Plan, tasks: &[PlanTask]) -> PlanTasks {
-    let mut listing: BTreeMap<&str, usize> = BTreeMap::new();
-    for (at, item) in plan
-        .groups
-        .iter()
-        .flat_map(|group| &group.items)
-        .enumerate()
-    {
-        listing.entry(item.id.as_str()).or_insert(at);
-    }
+    let listing = Listing::new(plan);
     let mut open: Vec<&PlanTask> = tasks.iter().filter(|task| task.is_open()).collect();
     open.sort_by(|a, b| task_key(a).cmp(&task_key(b)).then_with(|| a.cmp(b)));
     let mut joined = PlanTasks::default();
     for task in open {
-        let item = task
-            .targets
-            .iter()
-            .filter_map(|target| listing.get_key_value(target.as_str()))
-            .min_by_key(|&(_, &at)| at)
-            .map(|(&id, _)| id);
-        match item {
-            Some(id) => joined
+        match listing.executed(task) {
+            Some(at) => joined
                 .items
-                .entry(id.to_owned())
+                .entry(listing.items[at].1.id.clone())
                 .or_default()
                 .push(task.clone()),
             None => joined.pool.push(task.clone()),
         }
     }
     joined
+}
+
+/// The open item an open `task` executes in `plan`, with its group, as
+/// [`plan_tasks`] joins it: the item whose line names the task in `spec
+/// roadmap`. `None` for a closed task or one executing no open item.
+pub fn task_item<'p>(plan: &'p Plan, task: &PlanTask) -> Option<(&'p PlanGroup, &'p PlanItem)> {
+    if !task.is_open() {
+        return None;
+    }
+    let listing = Listing::new(plan);
+    listing.executed(task).map(|at| listing.items[at])
+}
+
+/// `tasks` in `next`'s order (canon `spec-roadmap`, "Position"): by the
+/// listing index of the open item each executes ([`task_item`]), then by
+/// number; those executing none after every one that does, by number.
+/// Advisory: an order to read, never a hold on a task. Pure, any row order
+/// one result.
+pub fn next_order<'a>(plan: &Plan, tasks: &'a [PlanTask]) -> Vec<&'a PlanTask> {
+    let listing = Listing::new(plan);
+    let mut keyed: Vec<(usize, &PlanTask)> = tasks
+        .iter()
+        .map(|task| {
+            let at = task
+                .is_open()
+                .then(|| listing.executed(task))
+                .flatten()
+                .unwrap_or(usize::MAX);
+            (at, task)
+        })
+        .collect();
+    keyed.sort_by(|(a_at, a), (b_at, b)| {
+        a_at.cmp(b_at)
+            .then_with(|| task_key(a).cmp(&task_key(b)))
+            .then_with(|| a.cmp(b))
+    });
+    keyed.into_iter().map(|(_, task)| task).collect()
+}
+
+/// The open items of a plan in `spec roadmap`'s listing order (the groups
+/// in order, each one's items in order), with their groups.
+struct Listing<'p> {
+    items: Vec<(&'p PlanGroup, &'p PlanItem)>,
+    /// Each item's ID, its first index in `items`.
+    index: BTreeMap<&'p str, usize>,
+}
+
+impl<'p> Listing<'p> {
+    fn new(plan: &'p Plan) -> Self {
+        let items: Vec<(&PlanGroup, &PlanItem)> = plan
+            .groups
+            .iter()
+            .flat_map(|group| group.items.iter().map(move |item| (group, item)))
+            .collect();
+        let mut index = BTreeMap::new();
+        for (at, (_, item)) in items.iter().enumerate() {
+            index.entry(item.id.as_str()).or_insert(at);
+        }
+        Self { items, index }
+    }
+
+    /// The listing index of the first of `task`'s targets that is an open
+    /// item, targets compared with item IDs as written; its state unread.
+    fn executed(&self, task: &PlanTask) -> Option<usize> {
+        task.targets
+            .iter()
+            .filter_map(|target| self.index.get(target.as_str()).copied())
+            .min()
+    }
 }
 
 /// A task's place in number order: its number, an ID that is none last.

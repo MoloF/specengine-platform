@@ -401,6 +401,7 @@ export function aTaskPackage(fields: Partial<TaskPackage> & Pick<TaskPackage, "i
     claim: fields.claim ?? null,
     runs: fields.runs ?? [],
     bundle: fields.bundle ?? null,
+    roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at ?? "2026-10-01T09:00:00Z",
     updated_at: fields.updated_at ?? "2026-10-01T10:00:00Z",

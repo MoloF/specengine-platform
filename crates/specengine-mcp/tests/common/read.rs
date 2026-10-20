@@ -20,9 +20,10 @@ use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
     DriftRequest, Env, Exit, GitEnv, Globals, IntakeSeverity, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, RefsRequest, ReviewRequest, SearchRequest, ShowRequest,
-    SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest, render_json, render_text,
+    ProposedText, QuestionRequest, RefsRequest, ReviewRequest, RoadmapRequest, SearchRequest,
+    ShowRequest, SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest, render_json,
+    render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -71,8 +72,9 @@ pub const CODE_TOOLS: [&str; 3] = ["find_symbols", "refs", "unmapped"];
 /// thirteen since docs/features/task-package.md, fourteen since
 /// docs/features/kind-decision.md (`report_decision`), fifteen since
 /// docs/features/drift-queue.md (`report_drift`), eighteen since
-/// docs/features/code-tools.md (`find_symbols`, `refs`, `unmapped`).
-pub const TOOLS: [&str; 18] = [
+/// docs/features/code-tools.md (`find_symbols`, `refs`, `unmapped`),
+/// nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`).
+pub const TOOLS: [&str; 19] = [
     "ask_question",
     "claim_task",
     "complete_task",
@@ -80,6 +82,7 @@ pub const TOOLS: [&str; 18] = [
     "get_context_bundle",
     "get_node",
     "get_proposal",
+    "get_roadmap",
     "get_task",
     "get_tree",
     "propose_change",
@@ -603,7 +606,10 @@ pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> E
 /// `get_tree` = `tree`, `get_node` = `show`, `search` = `search` with the
 /// query as one word, `get_context_bundle` = `bundle`; a queue tool as
 /// [`queue_library`] with the wall clock and the server's git environment;
-/// a code tool as [`code_library`].
+/// a code tool as [`code_library`]; `get_roadmap` = `spec roadmap
+/// [--release R] [--pool]` with the server's git environment
+/// (docs/features/roadmap-surfaces.md: `release` beside `pool: true` the
+/// CLI's usage error, exit 2).
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     if CODE_TOOLS.contains(&tool) {
         return code_library(tool, args, env, globals);
@@ -673,6 +679,16 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             },
         )
         .map(Outcome::Bundle),
+        "get_roadmap" => specengine_cli::roadmap(
+            env,
+            globals,
+            &RoadmapRequest {
+                release: text("release"),
+                pool: flag("pool"),
+                git: server_git(env),
+            },
+        )
+        .map(|outcome| Outcome::Roadmap(Box::new(outcome))),
         other => panic!("no CLI counterpart for tool {other}"),
     };
     expected(outcome)

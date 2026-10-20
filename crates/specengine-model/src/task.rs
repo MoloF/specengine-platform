@@ -254,6 +254,27 @@ pub struct PackageBundle {
     pub bundle_hash: Option<String>,
 }
 
+/// The task's place on the plan of the reading root's `[roadmap]` items,
+/// per read, never stored: the open item it executes, as `spec roadmap`
+/// lists the task on that item's line.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TaskRoadmap {
+    /// The item's ID.
+    pub item: String,
+    /// `release`, `pool` or `unplaced`.
+    pub group: String,
+    /// The item's `release` as written; `null` when absent or no string.
+    pub release: Option<String>,
+    /// 1-based within its release; `null` outside one.
+    pub position: Option<u64>,
+    /// The open items of its group.
+    pub of: u64,
+    /// The item's `priority` as written; `null` when absent or no string.
+    pub priority: Option<String>,
+    /// The open items it depends on, in written order.
+    pub waits_on: Vec<String>,
+}
+
 /// The task package: `spec task show --json`, MCP `get_task`'s
 /// `structuredContent`. One database and tree state give byte-identical
 /// JSON: no read time inside.
@@ -284,6 +305,9 @@ pub struct TaskPackage {
     pub claim: Option<TaskClaim>,
     pub runs: Vec<TaskRun>,
     pub bundle: PackageBundle,
+    /// `null` without `[roadmap]`, with one that cannot be read (a note
+    /// says why), or when the task executes no open item.
+    pub roadmap: Option<TaskRoadmap>,
     pub author: TaskAuthor,
     pub created_at: String,
     pub updated_at: String,

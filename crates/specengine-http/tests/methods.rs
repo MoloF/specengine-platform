@@ -27,8 +27,10 @@ use common::{Reply, Scratch, Server, beyond_daemon, request_bytes};
 /// Every read route of A, with a valid query (`graph`, `check`:
 /// docs/features/ui-live.md "Description and interactions"; `tasks`,
 /// `tasks/:id`: docs/features/ui-live-tasks.md "Rules and edge cases";
-/// `round`: docs/features/ui-round.md "Data").
-const READS: [&str; 13] = [
+/// `round`: docs/features/ui-round.md "Data"; `roadmap`:
+/// docs/features/roadmap-surfaces.md, its answer on A a 503: no
+/// `[roadmap]`).
+const READS: [&str; 14] = [
     "/api/projects",
     "/api/projects/lantern-keep/tree",
     "/api/projects/lantern-keep/nodes/MEC-STAMINA",
@@ -36,6 +38,7 @@ const READS: [&str; 13] = [
     "/api/projects/lantern-keep/bundle?node_ids=MEC-STAMINA",
     "/api/projects/lantern-keep/graph?ref=MEC-STAMINA",
     "/api/projects/lantern-keep/check",
+    "/api/projects/lantern-keep/roadmap",
     "/api/projects/lantern-keep/inbox",
     "/api/projects/lantern-keep/proposals/PR-0001",
     "/api/projects/lantern-keep/tasks",
@@ -53,7 +56,7 @@ const ROUND_ANSWERS: &str = "/api/projects/lantern-keep/round/answers";
 /// docs/features/ui-live-tasks.md "Rules and edge cases"). `/` is the web
 /// UI's since docs/features/ui-embed.md; no SPA fallback, no `/index.html`
 /// alias, no `/assets` listing (T5).
-const UNKNOWN: [&str; 16] = [
+const UNKNOWN: [&str; 18] = [
     "/index.html",
     "/assets",
     "/api",
@@ -65,6 +68,8 @@ const UNKNOWN: [&str; 16] = [
     "/api/projects/lantern-keep/tree/more",
     "/api/projects/lantern-keep/check/more",
     "/api/projects/lantern-keep/graph/MEC-STAMINA",
+    "/api/projects/lantern-keep/roadmap/beta",
+    "/api/projects/lantern-keep/roadmaps",
     "/api/projects/lantern-keep/tasks/",
     "/api/projects/lantern-keep/tasks/T-0001/transition",
     "/api/projects/lantern-keep/round/",
@@ -280,6 +285,11 @@ fn an_unknown_path_is_a_404_for_every_method() {
             assert!(
                 message.starts_with(&format!("no route {path}: the routes are /api/projects ")),
                 "{context}: {message}"
+            );
+            // docs/features/roadmap-surfaces.md: `roadmap` after `health`.
+            assert!(
+                message.contains(" health, roadmap, inbox, "),
+                "{context}: the list names roadmap: {message}"
             );
         }
     }

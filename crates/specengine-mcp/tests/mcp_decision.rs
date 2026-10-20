@@ -350,14 +350,17 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 754 since docs/features/code-tools.md "INSTRUCTIONS" (1 892 less
     // 138; the spec's 1 755 is off by one: phase A report, D1). The BLAKE3
     // values are `mcp_code.rs`' `PLANNED_*_BLAKE3` (as `mcp_path.rs`).
-    assert_eq!(before.len(), 1754);
+    // 1 794 and 1 932 since docs/features/roadmap-surfaces.md ("Data":
+    // `; get_roadmap(release?, pool?) = roadmap` on the reads' line, 40
+    // bytes); the values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1794);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "42f9ecfda69898a7615608e5a09789da3b2c2ac25d178b6461b70ddfd33f1133"
+        "24c5cd5dfe4ebe7957ed07488d9c334799b2fb4add97df4b098a023bbb0db52c"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1892);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1932);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c"
+        "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb3399dc942201de37e"
     );
 }

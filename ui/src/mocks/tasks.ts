@@ -25,7 +25,8 @@ import type { MockProposal, StoredReview } from "./build";
 // an unreadable row. ledger-api: T-0031 in progress, T-0033 in plan review, both with a profile.
 // `large` adds T-0200 to T-0519, the seven states in turn, T-0200 at every cap of the package
 // (its 128 changed nodes past the diffs' total: 32 diffs, 96 entries `diff` null); each other one
-// in progress claimed with run 1 open, as T-0109.
+// in progress claimed with run 1 open, as T-0109. No mock project has a `[roadmap]`, so every
+// package's `roadmap` is null (docs/features/roadmap-surfaces.md "Data"; the plan's mocks: 3a).
 
 /** A diff's cap and the package's total over its diffs, in bytes (`docs/canon/task-package.md` "Caps"). */
 const DIFF_MAX = 8192;
@@ -87,6 +88,7 @@ export function task(fields: Pick<StoredTask, "id" | "project" | "status" | "cre
     claim: fields.claim ?? null,
     runs: fields.runs ?? [],
     bundle: fields.bundle ?? null,
+    roadmap: fields.roadmap ?? null,
     author: fields.author ?? null,
     created_at: fields.created_at,
     updated_at: fields.updated_at ?? fields.created_at,
@@ -690,6 +692,7 @@ export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]
     claim: stored.claim,
     runs: stored.runs,
     bundle: stored.bundle,
+    roadmap: stored.roadmap,
     author: stored.author,
     created_at: stored.created_at,
     updated_at: stored.updated_at,

@@ -50,7 +50,7 @@ The mirror equals the CLI key for key: `c_state`, `moniker` free strings or null
 
 ### Plugin
 
-P1 (`plugin-files.md` "Changing it"): a key a tool returns is a MINOR. This part takes the next MINOR at shipping (0.11.0 if before 6b-2), a `PINS` line and a `SCHEMA_PINS` entry; 6b-2 then takes the one after (L2, `verify-node.md`).
+P1 (`plugin-files.md` "Changing it"): a key a tool returns is a MINOR. This part takes the next MINOR at shipping (0.12.0 if before 6b-2; 2b `roadmap-surfaces.md` took 0.11.0), a `PINS` line and a `SCHEMA_PINS` entry; 6b-2 then takes the one after (L2, `verify-node.md`).
 
 ## Rules and edge cases
 
@@ -68,7 +68,7 @@ M: mutation -> the test turning red; CLI tests seed a snapshot through 11a-2's f
 - [ ] S3 -- `stale_snapshot_marks_every_c_line` (any `tree_fp` input changed); `changed_file_rows_are_unseen`; an `unmatched` row. M: no suffix -> `adjacent_inherent_impls_get_distinct_monikers`; a unique moniker suffixed -> `unique_moniker_is_unchanged`.
 - [ ] S4 -- M: names compared -> `agrees_compares_crate_and_modules_only`; false without one target -> `agrees_is_null_without_a_single_target`.
 - [ ] S5 -- M: no tier -> `moniker_query_finds_its_symbol` (after `exact`; a stale snapshot answers).
-- [ ] S6 -- M: a key not mirrored -> `mcp_code.rs` `code_tools_equal_the_cli`; `mcp_genre` green; the schema changed at 0.10.0 -> `plugin_files.rs` `tool_schemas_follow_the_plugin_version` (`plugin.json`, `PINS`, `SCHEMA_PINS` bumped).
+- [ ] S6 -- M: a key not mirrored -> `mcp_code.rs` `code_tools_equal_the_cli`; `mcp_genre` green; the schema changed at 0.11.0 -> `plugin_files.rs` `tool_schemas_follow_the_plugin_version` (`plugin.json`, `PINS`, `SCHEMA_PINS` bumped).
 - [ ] S7 -- M: a moniker leaking -> 11a-2's `outputs_equal_with_and_without_a_snapshot` for `refs`, `unmapped`, `health`, `bundle`, `verify`, `lock`; `symbols` bytes identical across roots (TE-4, `symbol_reads_determinism.rs`).
 
 spec-writer:
@@ -86,7 +86,7 @@ spec-writer:
 |---|---|---|
 | Q4 per row | `c_state`, `moniker`, `agrees` shown, never binding | lock re-keyed per `ra_ap` bump |
 | SW | `unseen` for a changed file; tier after `exact` | moved offsets mislabelled |
-| L2 plugin | the next MINOR here (0.11.0 if first); 6b-2 the one after | 0.11.0 held for 6b-2 parks this behind 5b-1..6b-2 |
+| L2 plugin | the next MINOR here (0.12.0 if first); 6b-2 the one after | 0.12.0 held for 6b-2 parks this behind 5b-1..6b-2 |
 
 Q4: 2026-10-10 under the owner's pre-approval; L2: owner pre-approved 2026-10-19; review open. The rest: `layer-c.md` "Open".
 

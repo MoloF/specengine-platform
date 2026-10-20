@@ -31,9 +31,10 @@ use crate::common::proposal::{NOW, Pair};
 /// The clock of every task command unless a test names another.
 pub const CLOCK: &str = "2026-10-07T09:00:00Z";
 
-/// The package's 25 keys, in order (docs/canon/task-package.md
-/// "Package").
-pub const PACKAGE_KEYS: [&str; 25] = [
+/// The package's 26 keys, in order (docs/canon/task-package.md
+/// "Package"); `roadmap` after `bundle` since
+/// docs/features/roadmap-surfaces.md (Q-D).
+pub const PACKAGE_KEYS: [&str; 26] = [
     "schema_version",
     "id",
     "project",
@@ -55,6 +56,7 @@ pub const PACKAGE_KEYS: [&str; 25] = [
     "claim",
     "runs",
     "bundle",
+    "roadmap",
     "author",
     "created_at",
     "updated_at",

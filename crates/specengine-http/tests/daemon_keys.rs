@@ -101,6 +101,10 @@
 //! `counter.rs:37` assumes: a row with its proposal, one with its node),
 //! and on A and its amended copy (`off`). M: a key dropped from the
 //! fixture.
+//!
+//! RD-9 of docs/features/roadmap-surfaces.md (Q-D, Q-H): `TaskPackage`
+//! holds `roadmap` after `bundle` (26 keys; `null` on A, which has no
+//! `[roadmap]`); no set more until 3a.
 
 mod common;
 mod task_state;
@@ -1121,8 +1125,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         );
     }
     // ui-live-tasks' seventeen (docs/features/ui-live-tasks.md
-    // "Key sets"), in that order, with their counts; the package's 25 keys in
-    // the canon's order, its `runs` items the seven of a run.
+    // "Key sets"), in that order, with their counts; the package's 26 keys in
+    // the canon's order (`roadmap` after `bundle` since
+    // docs/features/roadmap-surfaces.md, Q-D, Q-H: no set of its own until
+    // 3a), its `runs` items the seven of a run.
     let counts: Vec<(&str, usize)> = sets[15..32]
         .iter()
         .map(|(name, keys)| (*name, keys.len()))
@@ -1133,7 +1139,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("TaskList", 2),
             ("TaskListEntry", 6),
             ("TaskNotFound", 2),
-            ("TaskPackage", 25),
+            ("TaskPackage", 26),
             ("TaskTarget", 4),
             ("TaskCriterion", 2),
             ("TaskAssumption", 2),
@@ -1150,7 +1156,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         ]
     );
     assert_eq!(sets[18].1[..2], ["schema_version", "id"]);
-    assert_eq!(sets[18].1[24], "notes");
+    assert_eq!(sets[18].1[20..22], ["bundle", "roadmap"]);
+    assert_eq!(sets[18].1[25], "notes");
     assert_eq!(
         sets[29].1,
         [

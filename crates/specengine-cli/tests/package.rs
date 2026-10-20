@@ -148,7 +148,7 @@ fn shaped(pair: &Pair, nodes: (&str, &str, &str), edited: (&str, &str, &str)) ->
 }
 
 /// AC-03 (07 s1.2 P2-4, P2-7, P2-8, P2-11): on spec-a and spec-b the
-/// package holds "Data"'s 25 keys in order, `schema_version` 1, the same
+/// package holds "Data"'s 26 keys in order, `schema_version` 1, the same
 /// key paths on both; no key anywhere starts with `block`; the role
 /// `nest-developer` stored verbatim (claim and run); the package alone
 /// carries the verbatim title, goal, criteria text (a reference's text
@@ -684,7 +684,7 @@ fn ac03_a_non_rust_project_gets_no_stack_word() {
 
 /// AC-03 (07 s1.2 P2-4, P2-5): the non-Rust spec-c gives the package
 /// spec-a gives, every list filled (`shaped`: two criteria, an owner's
-/// note, a claim, a run, a bound question, a diff): "Data"'s 25 keys in
+/// note, a claim, a run, a bound question, a diff): "Data"'s 26 keys in
 /// order, `schema_version` 1, the same key paths, the same brief sections;
 /// the texts are spec-c's own. M: a key renamed without a bump.
 #[test]

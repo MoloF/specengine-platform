@@ -42,6 +42,6 @@ pub use task::{
     OwnerNote, PackageAssumption, PackageBinding, PackageBundle, PackageProposal, PackageTarget,
     RunOutcome, SnapshotDiff, SnapshotNode, SnapshotPlace, SpecSnapshot,
     TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskClaim, TaskCriterion, TaskPackage,
-    TaskRun, TaskStatus,
+    TaskRoadmap, TaskRun, TaskStatus,
 };
 pub use value::{FmValue, OrderedMap};

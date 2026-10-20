@@ -389,10 +389,12 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // `amendment` (+10) and drops get_tree's ": the node tree" (-15); 1 886
     // since docs/features/drift-queue.md (its `report_drift` line, words
     // trimmed elsewhere); 1 892 since docs/features/code-tools.md
-    // "INSTRUCTIONS" (the code tools' line), the change line unchanged.
+    // "INSTRUCTIONS" (the code tools' line), the change line unchanged;
+    // 1 932 since docs/features/roadmap-surfaces.md (`get_roadmap`'s 40
+    // bytes on the reads' line).
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1892);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1932);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -424,9 +426,10 @@ fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
     assert_eq!(sent, format!("{}{paragraph}", specengine_mcp::INSTRUCTIONS));
     // 2 042 since docs/features/kind-amendment.md; 2 043 since
     // docs/features/drift-queue.md; 1 968 since docs/features/code-tools.md
-    // (1 892 and the 76-byte paragraph).
-    assert_eq!(sent.len(), 1968);
-    assert_eq!(2048 - sent.len(), 80, "the room the spec states");
+    // (1 892 and the 76-byte paragraph); 2 008 since
+    // docs/features/roadmap-surfaces.md (1 932 and the paragraph).
+    assert_eq!(sent.len(), 2008);
+    assert_eq!(2048 - sent.len(), 40, "the room the spec states");
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());
 }

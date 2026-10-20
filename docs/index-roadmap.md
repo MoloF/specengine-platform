@@ -39,4 +39,3 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0027.md](roadmap/RM-0027.md) Queue export to Beads or Task Master · crates/specengine-cli · draft
 - [docs/roadmap/RM-0028.md](roadmap/RM-0028.md) Spec digest into AGENTS.md or CLAUDE.md for external reviewers · crates/specengine-cli · draft
 - [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) Hygiene pass: the review nits of 5b-1b, 5c and 8a-2 · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0030.md](roadmap/RM-0030.md) roadmap-surfaces (Phase 6, 2b): next by the plan, the package's place, MCP and HTTP reads · crates/specengine-core, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, plugin, ui · draft

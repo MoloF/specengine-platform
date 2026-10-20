@@ -37,16 +37,18 @@ instructions. Deterministic: one state, one result; no LLM inside."
 
 const GET_TASK_DESCRIPTION: &str = concat!(
     "One task of the current repository: the same as `spec task show T` (task_id) or `spec task \
-show --next` (next: true: the lowest-numbered ready task). content is the brief (goal, criteria, \
-targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, \
-bundle), cut at 40000 characters; structuredContent the versioned task package (--json), every \
-key present, absent null.
+show --next` (next: true: the first ready task in the roadmap's order of the items the tasks \
+execute, as get_roadmap lists them, then by number; without `[roadmap]`, the lowest-numbered). \
+content is the brief (goal, criteria, targets, assumptions, open proposals, owner notes, plan, \
+spec changes since approval, runs, bundle), cut at 40000 characters; structuredContent the \
+versioned task package (--json), every key present, absent null.
 
 stale: true when a node the owner approved (spec_snapshot) changed or went in the compared \
 place (the claimed worktree, else the snapshot's): snapshot_diff holds the diffs from the \
 approved text. Nothing is blocked by it: read the diff and keep working, or ask the owner. \
 The bundle comes by reference: get_context_bundle with bundle.node_ids and bundle.budget gives \
-its text.
+its text. roadmap: the roadmap item the task executes and its place (null when none); \
+advisory, nothing waits on it.
 
 task_id: T- and 4 or more digits, as spec task list writes it. next: true. Give exactly one of \
 them: anything else is an error result naming both.
@@ -181,7 +183,9 @@ const _: () = assert!(holds_number(
 pub(crate) struct GetTaskArgs {
     /// `T-` and 4 or more digits.
     pub task_id: Option<String>,
-    /// `true`: the lowest-numbered `ready` task of this repository.
+    /// `true`: the first `ready` task of this repository in `spec
+    /// roadmap`'s order of the items the tasks execute, then by number;
+    /// without `[roadmap]`, the lowest-numbered. Advisory.
     pub next: Option<bool>,
 }
 

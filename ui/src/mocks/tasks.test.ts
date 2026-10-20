@@ -181,11 +181,18 @@ describe("the cases the slice names (Data, Mock)", () => {
       "claim",
       "runs",
       "bundle",
+      "roadmap",
       "author",
       "created_at",
       "updated_at",
       "notes",
     ]);
+  });
+
+  it("place no task on a plan: no mock project has a [roadmap], so each package's roadmap is null", () => {
+    const stored = [...mockTasks("harbor-sim").tasks, ...mockTasks("ledger-api").tasks, ...largeTasks()];
+    expect(stored.length).toBeGreaterThan(300);
+    expect(stored.filter((entry) => entry.roadmap !== null).map((entry) => entry.id)).toEqual([]);
   });
 });
 

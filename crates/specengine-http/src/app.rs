@@ -38,9 +38,9 @@ use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CheckRequest, GraphRequest, InboxRequest, Outcome, ReviewRequest,
-    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
-    StageRequest, TaskListRequest, TaskShowRequest, TreeRequest, UnstageRequest, View, process_git,
-    project_entry, round_limit, utc_now,
+    RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
+    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TreeRequest,
+    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -107,6 +107,7 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/graph", read(graph))
         .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/health", read(health))
+        .route("/api/projects/{p}/roadmap", read(roadmap))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
         .route("/api/projects/{p}/tasks", read(tasks))
@@ -265,8 +266,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
-             nodes/<REF>, search, bundle, graph, check, health, inbox, proposals/<id>, tasks, \
-             tasks/<id>, round, events}}; the web UI: / and /assets/<file>",
+             nodes/<REF>, search, bundle, graph, check, health, roadmap, inbox, proposals/<id>, \
+             tasks, tasks/<id>, round, events}}; the web UI: / and /assets/<file>",
             uri.path()
         ),
     )
@@ -427,6 +428,33 @@ async fn health(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
     args("health", &[], &uri)?;
     Ok(run(project, |env, globals| {
         specengine_cli::health(env, globals).map(Outcome::Health)
+    })
+    .await)
+}
+
+/// `GET …/roadmap`: `spec roadmap [--release R | --pool] --json`, the
+/// browser view (nothing cut: `truncated` false, `omitted` 0), in the
+/// project's turn (it refreshes the index; the queue read as it is).
+/// `release` with `pool=true`: a 400 with the CLI's line, nothing run; a
+/// `release` naming none: the exit-1 document, a 404; no `[roadmap]` or a
+/// bad one: the CLI's exit 2, a 503.
+async fn roadmap(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("roadmap", &["release", "pool"], &uri)?;
+    let release = args.text("release").map_err(Refusal::bad_request)?;
+    let pool = args
+        .boolean("pool")
+        .map_err(Refusal::bad_request)?
+        .unwrap_or(false);
+    roadmap_flags(release.as_deref(), pool).map_err(|error| Refusal::bad_request(error.message))?;
+    Ok(run(project, move |env, globals| {
+        let request = RoadmapRequest {
+            release,
+            pool,
+            git: process_git(env),
+        };
+        specengine_cli::roadmap_with_view(env, globals, &request, View::Browser)
+            .map(|outcome| Outcome::Roadmap(Box::new(outcome)))
     })
     .await)
 }

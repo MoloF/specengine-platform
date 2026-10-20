@@ -1,5 +1,7 @@
 //! The read tools (task spec `mcp-read`): `get_tree`, `get_node`, `search`,
-//! `get_context_bundle`, each one call into the CLI library.
+//! `get_context_bundle`, and `get_roadmap` (task spec `roadmap-surfaces`:
+//! `spec roadmap`, the queue read as it is, no schema step), each one call
+//! into the CLI library.
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
@@ -22,13 +24,14 @@ use serde::Deserialize;
 use serde_json::Value;
 use specengine_cli::{
     BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, Globals, MIN_TERM_CHARS,
-    OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX,
-    SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TreeRequest, render_json,
-    render_text,
+    OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET, RoadmapRequest, SEARCH_LIMIT_DEFAULT,
+    SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TreeRequest,
+    View, process_git, render_json, render_text,
 };
 
 use crate::mirror::{
-    BundleDocument, SearchDocument, ShowDocument, TreeDocument, input_schema, output_schema,
+    BundleDocument, RoadmapDocument, SearchDocument, ShowDocument, TreeDocument, input_schema,
+    output_schema,
 };
 use crate::server::SpecEngineServer;
 
@@ -150,6 +153,32 @@ that cannot run: an error result with its one line. ",
     common_tail!()
 );
 
+const ROADMAP_DESCRIPTION: &str = concat!(
+    "The plan of the project's roadmap items (the item documents its config's `[roadmap]` \
+names): each release in the config's order with its open items by their depends_on chain, \
+then priority, each with its position, status, priority, estimate and the open items it \
+waits on; range sums per release, to the cut and in total; the current release; then the \
+items in no release (the pool) and those in a release the config does not list. An item an \
+open task of this repository executes names the task and its state; the open tasks \
+executing no open item follow the pool. The same as `spec roadmap [--release R | --pool]`: \
+content is the command's output (its note lines first), structuredContent its --json \
+document.
+
+release: only that release's items, as the config names it. pool: true: only the pool and \
+the unlisted ones. Absent: every group. release with pool: true cannot run.
+
+The order is advisory: get_task with next: true reads it, and nothing waits on it. Reads \
+only: the items are spec files, changed only through propose_change and the owner's decision \
+on a terminal.
+
+An answer above 40000 characters is cut, with a tail saying how to narrow it (it names the \
+command's flags: --release R is release, --pool is pool). A release the config does not \
+name: an error result with the reason, and the document. A call that cannot run (no \
+project, no `[roadmap]` in the config, release with pool: true): an error result with its \
+one line. ",
+    common_tail!()
+);
+
 /// The sentence every description holds (07 §1.1; AC-01).
 pub(crate) const DETERMINISM: &str = "Deterministic: one state, one result; no LLM inside.";
 
@@ -218,14 +247,17 @@ const _: () = assert!(TREE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(NODE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(SEARCH_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(BUNDLE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(ROADMAP_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(TREE_DESCRIPTION.is_ascii());
 const _: () = assert!(NODE_DESCRIPTION.is_ascii());
 const _: () = assert!(SEARCH_DESCRIPTION.is_ascii());
 const _: () = assert!(BUNDLE_DESCRIPTION.is_ascii());
+const _: () = assert!(ROADMAP_DESCRIPTION.is_ascii());
 const _: () = assert!(holds(TREE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(NODE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(SEARCH_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(BUNDLE_DESCRIPTION, DETERMINISM));
+const _: () = assert!(holds(ROADMAP_DESCRIPTION, DETERMINISM));
 // The numbers the descriptions state are the CLI's.
 const _: () = assert!(holds_number(
     TREE_DESCRIPTION,
@@ -280,6 +312,12 @@ const _: () = assert!(holds_number(
     "config, else ",
     DEFAULT_BUNDLE_BUDGET as usize,
     ". "
+));
+const _: () = assert!(holds_number(
+    ROADMAP_DESCRIPTION,
+    "above ",
+    OUTPUT_CAP_CHARS,
+    " characters"
 ));
 const _: () = assert!(holds_number(
     QUERY_DOC,
@@ -403,6 +441,19 @@ pub(crate) struct BundleArgs {
     pub budget: Option<i64>,
 }
 
+/// `get_roadmap` arguments; `release` with `pool: true` is the CLI's
+/// refusal (exit 2), told at run time.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RoadmapArgs {
+    /// `--release R`: only this release's items, as `[roadmap] releases`
+    /// names it.
+    pub release: Option<String>,
+    /// `--pool`: `true` lists only the pool and the items in a release not
+    /// listed.
+    pub pool: Option<bool>,
+}
+
 #[tool_router(router = read_tools, vis = "pub(crate)")]
 impl SpecEngineServer {
     /// `spec tree`.
@@ -505,6 +556,34 @@ impl SpecEngineServer {
             })
             .await
             .into_tool_result("get_context_bundle"))
+    }
+
+    /// `spec roadmap`.
+    #[tool(
+        description = ROADMAP_DESCRIPTION,
+        input_schema = input_schema::<RoadmapArgs>(),
+        output_schema = output_schema::<RoadmapDocument>(),
+        annotations(read_only_hint = true, destructive_hint = false, open_world_hint = false),
+        meta = result_size_meta()
+    )]
+    async fn get_roadmap(
+        &self,
+        Parameters(args): Parameters<RoadmapArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let release = args.release;
+        let pool = args.pool.unwrap_or(false);
+        Ok(self
+            .call(move |env, globals| {
+                let request = RoadmapRequest {
+                    release,
+                    pool,
+                    git: process_git(env),
+                };
+                specengine_cli::roadmap_with_view(env, globals, &request, View::Capped)
+                    .map(|outcome| Outcome::Roadmap(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("get_roadmap"))
     }
 }
 

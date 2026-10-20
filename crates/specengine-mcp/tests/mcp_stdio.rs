@@ -28,9 +28,10 @@ const REVIEW_TOOL_META_KEY: &str = "anthropic/requiresUserInteraction";
 /// `report_decision` (docs/features/kind-decision.md) and `report_drift`
 /// (docs/features/drift-queue.md), the five task tools
 /// (docs/features/task-package.md), the three code tools
-/// (docs/features/code-tools.md), the consent demo and the two probes, in
-/// wire order.
-const PROBES_BUILD_TOOLS: [&str; 21] = [
+/// (docs/features/code-tools.md), `get_roadmap`
+/// (docs/features/roadmap-surfaces.md), the consent demo and the two
+/// probes, in wire order.
+const PROBES_BUILD_TOOLS: [&str; 22] = [
     "ask_question",
     "claim_task",
     "complete_task",
@@ -38,6 +39,7 @@ const PROBES_BUILD_TOOLS: [&str; 21] = [
     "get_context_bundle",
     "get_node",
     "get_proposal",
+    "get_roadmap",
     "get_task",
     "get_tree",
     "probe_output",

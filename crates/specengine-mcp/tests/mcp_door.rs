@@ -48,6 +48,11 @@
 //! code tool without its calls here; a write under the root. Their own
 //! door over `fixtures/code-a` with its lock (TE-2): `mcp_code.rs`.
 //!
+//! RD-8 of docs/features/roadmap-surfaces.md: `get_roadmap` joins the door
+//! with valid and invalid calls (spec-a has no `[roadmap]`: each valid
+//! call an exit-2 error result); its own over the roadmap fixtures:
+//! `mcp_roadmap.rs`.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -424,6 +429,26 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
             vec![
                 json!({"path": 7}),
                 json!({"path": ["src"]}),
+                json!({"bogus": true}),
+            ],
+        ),
+        // docs/features/roadmap-surfaces.md RD-8: spec-a has no
+        // `[roadmap]`, so each valid call is the CLI's exit-2 line, as is
+        // `release` beside `pool: true` (the usage error); wrong types and
+        // an unknown field are bad arguments.
+        "get_roadmap" => (
+            vec![
+                json!({}),
+                json!({"release": "beta"}),
+                json!({"pool": true}),
+                json!({"release": null, "pool": null}),
+                json!({"pool": false}),
+                json!({"release": "beta", "pool": true}),
+            ],
+            vec![
+                json!({"release": 7}),
+                json!({"release": ["beta"]}),
+                json!({"pool": "yes"}),
                 json!({"bogus": true}),
             ],
         ),

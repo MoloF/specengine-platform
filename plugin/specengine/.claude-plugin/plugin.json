@@ -1,6 +1,6 @@
 {
   "name": "specengine",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "description": "SpecEngine for agents: the spec MCP server, skills to read the spec, raise questions, discrepancies and decisions, propose spec changes and work on tasks, the roles analyst, spec-author, implementer, tester and reviewer with /specengine:feature to run a task through them, and the task gate on file writes.",
   "author": {
     "name": "MoloF"

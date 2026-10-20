@@ -60,8 +60,9 @@
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
 //! - [`tree_with_view`], [`show_with_view`], [`search_with_view`],
-//!   [`graph_with_view`]: those reads bounded by a [`View`], the daemon's
-//!   [`View::Browser`] never cut (task specs `daemon-read`, `ui-live`);
+//!   [`graph_with_view`], [`roadmap_with_view`]: those reads bounded by a
+//!   [`View`], the daemon's [`View::Browser`] never cut (task specs
+//!   `daemon-read`, `ui-live`, `roadmap-surfaces`);
 //!   [`project_entry`], [`events_after`]: a
 //!   served project's entry and the queue's events after a `seq`, which
 //!   only the daemon reads (no command prints them); [`EventsTail`] the
@@ -142,7 +143,8 @@
 //!   repository's open tasks read as the queue holds them (task spec
 //!   `roadmap-position`: no schema step, a queue that cannot be read a
 //!   note, never an exit); a `--release` naming no release is an outcome
-//!   with its reason, exit 1;
+//!   with its reason, exit 1; [`roadmap_flags`] its usage check, for the
+//!   daemon;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`,
 //!   `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or refused by the
 //!   proposal or its target (the queue's commands), 2 could not run
@@ -318,7 +320,7 @@ pub use refs::{
     BindingRow, CodeCount, MarkerRow, MentionRow, RefsNode, RefsOutcome, RefsRequest, refs,
 };
 pub use review::{ReviewRequest, review, review_brief};
-pub use roadmap::{RoadmapOutcome, RoadmapRequest, roadmap};
+pub use roadmap::{RoadmapOutcome, RoadmapRequest, roadmap, roadmap_flags, roadmap_with_view};
 pub use roles::{RoleCounts, SubjectCounts, role_counts};
 pub use round::{
     AnswerOutcome, RoundAnswer, RoundAnswerBody, RoundAnswerEntry, RoundAnswerRequest,

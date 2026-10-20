@@ -6,7 +6,7 @@
 //!   byte-equal to `spec --root R task list [--status S]... --json` less
 //!   its final LF. M: `status` ignored.
 //! - AC-02, show parity: T-0001 to T-0004 are 200, byte-equal to `spec
-//!   --root R task show T --json` less its LF, the 25 keys in order; two
+//!   --root R task show T --json` less its LF, the 26 keys in order; two
 //!   reads byte-identical; T-0002 `stale` true with one `snapshot_diff`
 //!   entry. M: the request built with `next: true`.
 //! - AC-03, refusals: `/tasks/T-0099` 404 exactly `{id, reason}` of
@@ -40,9 +40,10 @@ use serde_json::{Value, json};
 use specengine_cli::{Env, Globals, TaskStatus, events_after};
 use task_state::{A, B, Case, repo_in_s};
 
-/// The package's 25 keys, in order (docs/canon/task-package.md
-/// "Package").
-const PACKAGE_KEYS: [&str; 25] = [
+/// The package's 26 keys, in order (docs/canon/task-package.md
+/// "Package"); `roadmap` after `bundle` since
+/// docs/features/roadmap-surfaces.md (Q-D).
+const PACKAGE_KEYS: [&str; 26] = [
     "schema_version",
     "id",
     "project",
@@ -64,6 +65,7 @@ const PACKAGE_KEYS: [&str; 25] = [
     "claim",
     "runs",
     "bundle",
+    "roadmap",
     "author",
     "created_at",
     "updated_at",
@@ -331,7 +333,7 @@ fn ac01_to_ac05_the_task_routes_are_the_clis_documents_and_change_nothing() {
                 second.body, first.body,
                 "{path}: two reads are byte-identical"
             );
-            assert_eq!(keys_of(first.text()), PACKAGE_KEYS, "{path}: the 25 keys");
+            assert_eq!(keys_of(first.text()), PACKAGE_KEYS, "{path}: the 26 keys");
             let package = first.json();
             assert_eq!(package["id"], json!(id), "{path}");
             assert_eq!(package["project"], json!(case.slug), "{path}");

@@ -51,6 +51,11 @@
 //!   edited or over 1 200 bytes.
 //! - docs/features/bevy-roles-reads.md "Plugin" (P1): 0.10.0, `find_symbols`'
 //!   `roles` (a key a tool returns: MINOR); no skill text changes.
+//! - docs/features/roadmap-surfaces.md RD-10 ("Plugin", 0.11.0): the
+//!   nineteenth tool, `get_roadmap`, backticked in `analyze` with the
+//!   package's `roadmap`, and only there of the skills; the plan named
+//!   advisory, its items changed only through the owner. M: `get_roadmap`
+//!   unnamed.
 //!
 //! Compiles to nothing with `--features probes` (the ACs name the default
 //! build). The repository is only read.
@@ -121,6 +126,9 @@ const NAMES: [(&str, &[&str]); 6] = [
             "plan_md",
             "criteria",
             "affected_nodes",
+            // docs/features/roadmap-surfaces.md RD-10 ("Plugin", 0.11.0).
+            "get_roadmap",
+            "roadmap",
         ],
     ),
     (
@@ -350,7 +358,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's eighteen tools"
+        "the default build's nineteen tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1163,8 +1171,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    // 0.10.0 since docs/features/bevy-roles-reads.md.
-    assert_eq!(manifest["version"], "0.10.0");
+    // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
+    // docs/features/roadmap-surfaces.md.
+    assert_eq!(manifest["version"], "0.11.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1244,8 +1253,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
             .expect("plugin.json"),
     )
     .expect("JSON");
-    // 0.10.0 since docs/features/bevy-roles-reads.md.
-    assert_eq!(manifest["version"], "0.10.0");
+    // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
+    // docs/features/roadmap-surfaces.md.
+    assert_eq!(manifest["version"], "0.11.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1348,9 +1358,10 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.10.0",
+        manifest["version"], "0.11.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
-         drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0"
+         drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
+         roadmap-surfaces: 0.11.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1466,7 +1477,9 @@ fn rd9_problems(skills: &Skills) -> Vec<String> {
 fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     let skills = committed();
     assert_eq!(rd9_problems(&skills), Vec::<String>::new());
-    assert_eq!(TOOLS.len(), 18);
+    // Nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`,
+    // named in `analyze`: `rd10_analyze_names_get_roadmap`).
+    assert_eq!(TOOLS.len(), 19);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
 
     // M: a code tool unnamed (every backticked `refs` reworded).
@@ -1516,5 +1529,43 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
         &rd9_problems(&longer),
         "1180 bytes together",
         "description sum",
+    );
+}
+
+/// docs/features/roadmap-surfaces.md RD-10 ("Plugin", 0.11.0): `analyze`
+/// backticks `get_roadmap` and the package's `roadmap` (AC-11's list), the
+/// one skill naming the tool (AC-06: every tool somewhere); the step says
+/// the plan is advisory and its items change only through a proposal the
+/// owner decides (ADR-0035). M: `get_roadmap` unnamed.
+#[test]
+fn rd10_analyze_names_get_roadmap() {
+    let skills = committed();
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    let naming: Vec<&String> = skills
+        .iter()
+        .filter(|(_, text)| backticked(text).iter().any(|span| span == "get_roadmap"))
+        .map(|(skill, _)| skill)
+        .collect();
+    assert_eq!(naming, ["analyze"], "the skills naming `get_roadmap`");
+    let analyze = &skills["analyze"];
+    let step = analyze
+        .lines()
+        .find(|line| line.contains("`get_roadmap`"))
+        .expect("a line naming get_roadmap");
+    for words in ["advisory", "owner"] {
+        assert!(step.contains(words), "{words:?} in {step:?}");
+    }
+
+    // M: `get_roadmap` unnamed.
+    let unnamed = edited(&skills, "analyze", "`get_roadmap`", "the plan tool");
+    assert_names(
+        &ac11_problems(&unnamed),
+        "analyze: `get_roadmap` not backticked",
+        "get_roadmap unnamed",
+    );
+    assert_names(
+        &ac06_problems(&unnamed, &listed()),
+        "tool `get_roadmap` backticked nowhere",
+        "get_roadmap unnamed (AC-06)",
     );
 }

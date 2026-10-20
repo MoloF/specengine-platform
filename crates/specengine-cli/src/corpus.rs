@@ -44,10 +44,22 @@ pub(crate) fn indexed_in(
     messages.extend(warnings);
     let mut input = index.indexed_input().map_err(store_error)?;
     if with_bytes {
-        let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
-        read_bytes(&mut input, &tree, project, messages);
+        add_bytes(&mut input, project, messages)?;
     }
     Ok(input)
+}
+
+/// What `with_bytes` adds to an input [`indexed`] gave without it: each
+/// parsed file read and parsed again as it is now, so the two reads give
+/// one input (the package's plan is `spec roadmap`'s).
+pub(crate) fn add_bytes(
+    input: &mut CheckInput,
+    project: &ProjectRoot,
+    messages: &mut Vec<Message>,
+) -> Result<(), CliError> {
+    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
+    read_bytes(input, &tree, project, messages);
+    Ok(())
 }
 
 /// Reads every parsed file again and parses it as it is now, whatever its

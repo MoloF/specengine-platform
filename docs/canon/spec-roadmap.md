@@ -79,7 +79,7 @@ Then the join's, stderr only: `tasks not shown: <why>` once (the queue's error, 
 
 ## Command
 
-`spec roadmap [--release R | --pool] [--json]`, CLI `roadmap.rs` (`roadmap(.., &RoadmapRequest {release, pool, git}) -> RoadmapOutcome`): reads the index the call updates, as `spec tree` (`corpus::indexed`), then the queue ("Position"); writes only the data directory. `--release R`: that release's group; `--pool`: pool and unplaced; neither: every group. The first line and the JSON's top-level keys are always the whole plan's.
+`spec roadmap [--release R | --pool] [--json]`, CLI `roadmap.rs` (`roadmap(.., &RoadmapRequest {release, pool, git}) -> RoadmapOutcome` = `roadmap_with_view(.., View::Capped)`, flags by `roadmap_flags` first): reads the index the call updates, as `spec tree` (`corpus::indexed`), then the queue ("Position"); writes only the data directory. `--release R`: that release's group; `--pool`: pool and unplaced; neither: every group. The first line and the JSON's top-level keys are always the whole plan's.
 
 ```text
 roadmap: <o> open, <d> done; current <release or none>[; to <cut> <sum>]; total <sum>
@@ -106,3 +106,11 @@ The tail prints its brackets literally. Before it at most 40 000 characters (`OU
 The `index = true` generator entry's optional `roadmap = "<path>"`, also in its `writes`: the last output of `render_index_set` (core `roadmap.rs` `render_view`), written by `spec export index`, compared by `spec check` as the index (`spec-check-graph.md` §11.5), unlisted there, never a proposal's target. Core `RoadmapView {path, config, line}`. Config errors at the key's line: the key off the index entry; a path failing `checked_path`, equal to `[paths] index` or a shard's, or not in `writes`; no `[roadmap]`. A bad `[roadmap]`, `[ids]` or `[paths]` gives its own line and message, once. Keyless, the check reads no `[roadmap]`.
 
 From the walked files alone (`--staged`: staged blobs and config): no `HOME`, slug, index database, queue, clock or cut. The index's header, H1 `Roadmap`, `source: the plan items of [roadmap]`; `Plan::summary` a paragraph; per group `## ` + `PlanGroup::header` (sums `Sum::text`), then its open items, each `PlanItem::line` unindented, without the path, the ID linked from the view's directory; `## Notes` with `- <note>` each when any; values one-lined.
+
+## Next
+
+`spec task show --next` (MCP `get_task {next: true}`): of this repository's `ready` tasks the first in core `next_order(&Plan, &[PlanTask])`: by the plan's order of the item each executes ("Position"), then number, those executing none last. No `[roadmap]`, or a plan not read (the package's note `roadmap: <why>`): by number. Advisory: no claim, transition or gate reads the plan; an open `waits_on` holds nothing. `task list` keeps number order.
+
+## Surfaces
+
+The reading root's plan, built as `spec roadmap`'s, read once per command: the package's `roadmap` and brief line (`task-package.md` "Package", "Brief"; core `task_item`: the item and group a task executes); MCP `get_roadmap {release?, pool?}`, capped, no table (`mcp-read.md` "Tools"); the daemon's `GET .../roadmap`, `View::Browser`: uncut, `omitted` 0, the join's notes stderr only (`crates/specengine-http/README.md`).

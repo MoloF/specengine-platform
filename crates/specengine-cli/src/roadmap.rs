@@ -34,7 +34,9 @@
 //! roadmap view. Everything before the tail is at most
 //! [`OUTPUT_CAP_CHARS`] characters: lines print whole, in order, until the
 //! next would pass it; the tail only when an item is not shown
-//! (canon `spec-roadmap`, "Cut"); the JSON holds what the text prints. The plan's
+//! (canon `spec-roadmap`, "Cut"); the JSON holds what the text prints
+//! ([`roadmap_with_view`] with the daemon's [`View::Browser`]: nothing cut,
+//! `truncated` false, `omitted` 0). The plan's
 //! notes go to stderr as `note:` lines and into the JSON's `notes`; none
 //! changes the exit. The queue's notes follow them on stderr alone (a
 //! queue that cannot be read, a row that does not decode, another
@@ -55,7 +57,7 @@ use specengine_core::{
 use specengine_model::TaskStatus;
 use specengine_store::{GitEnv, SqliteQueue, TaskList, WorktreeGit, same_repository};
 
-use crate::cap::OUTPUT_CAP_CHARS;
+use crate::cap::{OUTPUT_CAP_CHARS, View};
 use crate::corpus::indexed;
 use crate::location::db_path;
 use crate::project::{ProjectRoot, config_error, discover_with_text};
@@ -157,11 +159,31 @@ pub fn roadmap(
     globals: &Globals,
     request: &RoadmapRequest,
 ) -> Result<RoadmapOutcome, CliError> {
-    if request.release.is_some() && request.pool {
+    roadmap_with_view(env, globals, request, View::Capped)
+}
+
+/// `--release R` with `--pool`: exit 2, `spec: --release and --pool cannot
+/// be used together`, before anything is read. The daemon judges its
+/// `release` and `pool` by it before anything runs.
+pub fn roadmap_flags(release: Option<&str>, pool: bool) -> Result<(), CliError> {
+    if release.is_some() && pool {
         return Err(CliError::spec(
             "--release and --pool cannot be used together",
         ));
     }
+    Ok(())
+}
+
+/// [`roadmap`], its answer bounded by `view` (the daemon's
+/// [`View::Browser`]: every listed item and pool task shown, `truncated`
+/// false, `omitted` 0).
+pub fn roadmap_with_view(
+    env: &Env,
+    globals: &Globals,
+    request: &RoadmapRequest,
+    view: View,
+) -> Result<RoadmapOutcome, CliError> {
+    roadmap_flags(request.release.as_deref(), request.pool)?;
     let (project, text) = discover_with_text(env, globals)?;
     let config = RoadmapConfig::from_toml(&text, &project.config.scheme)
         .map_err(|error| config_error(&project.config_label, &error))?
@@ -213,8 +235,31 @@ pub fn roadmap(
             .collect(),
         None => (0..groups.len()).collect(),
     };
-    cut(&mut outcome);
+    match view {
+        View::Capped => cut(&mut outcome),
+        View::Browser => uncut(&mut outcome),
+    }
     Ok(outcome)
+}
+
+/// Every listed group, item and pool task shown (the browser view).
+fn uncut(outcome: &mut RoadmapOutcome) {
+    let groups = &outcome.plan.groups;
+    outcome.shown = outcome
+        .listed
+        .iter()
+        .map(|&at| (at, groups[at].items.len()))
+        .collect();
+    outcome.shown_pool_tasks = if outcome
+        .listed
+        .iter()
+        .any(|&at| groups[at].kind == GroupKind::Pool)
+    {
+        outcome.tasks.pool.len()
+    } else {
+        0
+    };
+    outcome.truncated = false;
 }
 
 /// The lines that print within [`OUTPUT_CAP_CHARS`] after the first, an

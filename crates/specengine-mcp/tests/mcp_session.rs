@@ -81,6 +81,8 @@ fn valid_args(tool: &str) -> Value {
         "find_symbols" => json!({"query": "stamina"}),
         "refs" => json!({"id": "MEC-STAMINA"}),
         "unmapped" => json!({}),
+        // docs/features/roadmap-surfaces.md: the whole plan.
+        "get_roadmap" => json!({}),
         other => panic!("no arguments for {other}"),
     }
 }

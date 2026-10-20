@@ -68,6 +68,13 @@
 //!   schemas as 6b-1 shipped them: today's without `roles`) and 0.10.0. M:
 //!   a schema changed, no new entry; a new entry above `plugin.json`'s
 //!   version (the version kept); a repeated version.
+//! - docs/features/roadmap-surfaces.md RD-10: 0.10.0 -> 0.11.0 (MINOR: the
+//!   tool `get_roadmap`, the package's `roadmap`, `next`'s field doc);
+//!   `analyze` names `get_roadmap` (the tree with the version set back and
+//!   that text out hashes as 0.10.0's pin, and set back once more as
+//!   0.9.0's); a `SCHEMA_PINS` entry 0.11.0, 0.10.0's schemas today's
+//!   without the three (0.9.0's those without `roles`). M11: the version
+//!   kept.
 //!
 //! The repository is only read.
 
@@ -210,6 +217,14 @@ const PINS: &[(&str, &str)] = &[
         "0.10.0",
         "4f82fced339e7b649efa1debc03ec2232fb59d002e5753cb3247be26e3cfd749",
     ),
+    // docs/features/roadmap-surfaces.md RD-10 (0.10.0 -> 0.11.0, MINOR: a
+    // new tool, a key a tool returns): `analyze` names `get_roadmap` and
+    // the package's `roadmap` in its step 1 ([`ANALYZE_ROADMAP`]); the tree
+    // with the version set back and that text out hashes as 0.10.0's pin.
+    (
+        "0.11.0",
+        "a5efcedf44908dea3f481932b08e63e0d17bebcfba241b1b01f23ea59c3f1807",
+    ),
 ];
 
 /// `(version, hash)` of the tools' wire schemas (docs/features/bevy-roles-reads.md
@@ -218,7 +233,7 @@ const PINS: &[(&str, &str)] = &[
 /// ([`wire_schemas`]), append-only, versions strictly increasing, each a
 /// version of [`PINS`]; the last is the current schemas', its version at
 /// most `plugin.json`'s. A schema change needs a new entry, so a higher
-/// version; a PATCH that changes no schema adds none (6b-2's 0.11.0
+/// version; a PATCH that changes no schema adds none (a later MINOR
 /// appends).
 const SCHEMA_PINS: &[(&str, &str)] = &[
     // The schemas as 6b-1 shipped them with 0.9.0: `schema_hash` of a fresh
@@ -233,6 +248,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.10.0",
         "a3ac083d710a01fef896edb3eda7d534137f3c2ad628ad5f6d07a13ea6e44cff",
+    ),
+    // docs/features/roadmap-surfaces.md RD-10: the tool `get_roadmap`, the
+    // package's `roadmap` in `get_task`'s output schema, `next`'s field
+    // doc in its input schema ([`as_of_0_10_0`] takes the three out).
+    (
+        "0.11.0",
+        "ff1d31c9cffddff6242c8d000842ef5cbedc2f034ae134e708aac7d7bb7a5520",
     ),
 ];
 
@@ -920,6 +942,16 @@ fn ac05_problems(tree: &Tree) -> Vec<String> {
 }
 
 const READ_SPEC: &str = "specengine/skills/read-spec/SKILL.md";
+const ANALYZE: &str = "specengine/skills/analyze/SKILL.md";
+
+/// What docs/features/roadmap-surfaces.md (0.11.0) adds to `analyze`'s
+/// step 1, its leading space included: the package's `roadmap` and
+/// `get_roadmap`.
+const ANALYZE_ROADMAP: &str = " Its `roadmap` places it on the project's roadmap; `get_roadmap` \
+                               shows that roadmap, its items and the tasks on them, when the order \
+                               of the work matters. The roadmap is advisory: nothing waits on it, \
+                               and its items change only through a proposal the owner decides.";
+
 const FEATURE_SKILL: &str = "specengine/skills/feature/SKILL.md";
 const ASK_OWNER: &str = "specengine/skills/ask-owner/SKILL.md";
 
@@ -1314,27 +1346,43 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of bevy-roles-reads (docs/features/bevy-roles-reads.md
-    // "Plugin", P1): 0.10.0, after code-tools' 0.9.0. M: the version
+    // The pin of roadmap-surfaces (docs/features/roadmap-surfaces.md
+    // RD-10): 0.11.0, after bevy-roles-reads' 0.10.0. M: the version
     // unchanged.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.10.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.9.0");
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.11.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.10.0");
+    assert_eq!(PINS[PINS.len() - 3].0, "0.9.0");
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.10.0"),
+        json!("0.11.0"),
         "plugin.json's version"
     );
-    // "No other file under plugin/specengine/ changes": the tree with
-    // plugin.json's version set back is 0.9.0's pinned content.
+    // 0.11.0 changes plugin.json's version and `analyze`'s step 1 alone:
+    // both set back, the tree is 0.10.0's pinned content.
     let back = edited(
         &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.11.0\"",
+        "\"version\": \"0.10.0\"",
+    );
+    let back = edited(&back, ANALYZE, ANALYZE_ROADMAP, "");
+    assert_eq!(
+        content_hash(&back),
+        PINS[PINS.len() - 2].1,
+        "0.11.0 changes plugin.json's version and analyze's roadmap text only"
+    );
+    // bevy-roles-reads' restated (docs/features/bevy-roles-reads.md
+    // "Plugin", P1): "no other file under plugin/specengine/ changes", so
+    // 0.10.0's tree with the version set back is 0.9.0's pinned content.
+    let older = edited(
+        &back,
         PLUGIN_JSON,
         "\"version\": \"0.10.0\"",
         "\"version\": \"0.9.0\"",
     );
     assert_eq!(
-        content_hash(&back),
-        PINS[PINS.len() - 2].1,
+        content_hash(&older),
+        PINS[PINS.len() - 3].1,
         "0.10.0 changes plugin.json's version only"
     );
     // A renamed file with the same bytes changes the hash too.
@@ -1468,6 +1516,37 @@ fn without_roles(schema: &mut Value) -> usize {
     stripped
 }
 
+/// `get_task`'s `next` as 0.10.0 documented it (its field doc, before
+/// docs/features/roadmap-surfaces.md).
+const NEXT_DOC_0_10_0: &str = "`true`: the lowest-numbered `ready` task of this repository.";
+
+/// `schemas` (the wire schemas by tool) as 0.10.0 listed them
+/// (docs/features/roadmap-surfaces.md RD-10): no `get_roadmap`, no
+/// `roadmap` property or `required` entry in `get_task`'s output schema,
+/// `next`'s doc 0.10.0's.
+fn as_of_0_10_0(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("schemas by tool");
+    assert!(tools.remove("get_roadmap").is_some(), "get_roadmap listed");
+    let task = &mut tools["get_task"];
+    let output = task["outputSchema"]
+        .as_object_mut()
+        .expect("an object schema");
+    let properties = output["properties"]
+        .as_object_mut()
+        .expect("the package's properties");
+    assert!(
+        properties.remove("roadmap").is_some(),
+        "the package's roadmap"
+    );
+    let required = output["required"].as_array_mut().expect("required");
+    let before = required.len();
+    required.retain(|name| name != "roadmap");
+    assert_eq!(required.len() + 1, before, "roadmap required");
+    let next = &mut task["inputSchema"]["properties"]["next"];
+    assert!(next["description"].is_string(), "next's doc: {next}");
+    next["description"] = json!(NEXT_DOC_0_10_0);
+}
+
 fn schema_pin_problems(pins: &[(&str, &str)], current: &str, plugin_version: &str) -> Vec<String> {
     let mut problems = Vec::new();
     let Some(&(last_version, last_hash)) = pins.last() else {
@@ -1538,11 +1617,21 @@ fn tool_schemas_follow_the_plugin_version() {
     );
 
     assert_eq!(SCHEMA_PINS[0].0, "0.9.0", "the first entry is 0.9.0's");
-    assert!(
-        SCHEMA_PINS.iter().any(|(pinned, _)| *pinned == "0.10.0"),
-        "an entry for 0.10.0"
+    assert_eq!(SCHEMA_PINS[1].0, "0.10.0", "an entry for 0.10.0");
+    assert_eq!(SCHEMA_PINS[2].0, "0.11.0", "an entry for 0.11.0");
+    // docs/features/roadmap-surfaces.md RD-10: 0.10.0's schemas are
+    // today's without `get_roadmap`, the package's `roadmap` and `next`'s
+    // new doc.
+    let mut at_0_10_0 = schemas.clone();
+    as_of_0_10_0(&mut at_0_10_0);
+    let at_0_10_0_hash = schema_hash(&at_0_10_0);
+    assert_eq!(
+        at_0_10_0_hash, SCHEMA_PINS[1].1,
+        "0.10.0's schemas are today's without the roadmap"
     );
-    let mut before = schemas.clone();
+    assert_ne!(at_0_10_0_hash, current, "the roadmap changed the schemas");
+    // bevy-roles-reads' restated: 0.9.0's are 0.10.0's without `roles`.
+    let mut before = at_0_10_0.clone();
     assert_eq!(
         without_roles(&mut before["find_symbols"]["outputSchema"]),
         1,
@@ -1551,9 +1640,9 @@ fn tool_schemas_follow_the_plugin_version() {
     let before_hash = schema_hash(&before);
     assert_eq!(
         before_hash, SCHEMA_PINS[0].1,
-        "0.9.0's schemas are today's without `roles`"
+        "0.9.0's schemas are 0.10.0's without `roles`"
     );
-    assert_ne!(before_hash, current, "`roles` changed the schemas");
+    assert_ne!(before_hash, at_0_10_0_hash, "`roles` changed the schemas");
 
     let mut changed = schemas.clone();
     changed["find_symbols"]["outputSchema"]["properties"]["extra"] = json!({"type": "null"});
@@ -1566,6 +1655,12 @@ fn tool_schemas_follow_the_plugin_version() {
         &schema_pin_problems(SCHEMA_PINS, &current, "0.9.0"),
         "above plugin.json's",
         "plugin.json kept at 0.9.0",
+    );
+    // docs/features/roadmap-surfaces.md M11: the version kept at 0.10.0.
+    assert_names(
+        &schema_pin_problems(SCHEMA_PINS, &current, "0.10.0"),
+        "above plugin.json's",
+        "plugin.json kept at 0.10.0",
     );
     let (last, hash) = *SCHEMA_PINS.last().expect("an entry");
     let repeated: Vec<(&str, &str)> = SCHEMA_PINS.iter().copied().chain([(last, hash)]).collect();

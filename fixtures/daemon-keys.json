@@ -17,7 +17,7 @@
   "TaskList": ["tasks", "notes"],
   "TaskListEntry": ["id", "status", "title", "targets", "stale", "updated_at"],
   "TaskNotFound": ["id", "reason"],
-  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "author", "created_at", "updated_at", "notes"],
+  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "roadmap", "author", "created_at", "updated_at", "notes"],
   "TaskTarget": ["id", "path", "kind", "title"],
   "TaskCriterion": ["ref", "text"],
   "TaskAssumption": ["proposal", "text"],

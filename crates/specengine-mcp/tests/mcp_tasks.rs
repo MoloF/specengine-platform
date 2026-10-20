@@ -243,8 +243,10 @@ fn ac14_the_task_tools_and_their_schemas() {
     // 1 885 since docs/features/kind-amendment.md (+10 `amendment`, -15);
     // 1 886 since docs/features/drift-queue.md (its `report_drift` line);
     // 1 892 since docs/features/code-tools.md "INSTRUCTIONS" (the reads in
-    // two lines, the second the code tools; `Hints use flags:`).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1892);
+    // two lines, the second the code tools; `Hints use flags:`); 1 932
+    // since docs/features/roadmap-surfaces.md (`get_roadmap` on the reads'
+    // line).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1932);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
@@ -450,6 +452,15 @@ const PACKAGE_V1: &[&str] = &[
     "bundle.node_ids",
     "bundle.budget",
     "bundle.bundle_hash",
+    // docs/features/roadmap-surfaces.md (Q-D): added at version 1.
+    "roadmap",
+    "roadmap.item",
+    "roadmap.group",
+    "roadmap.release",
+    "roadmap.position",
+    "roadmap.of",
+    "roadmap.priority",
+    "roadmap.waits_on",
     "author",
     "author.type",
     "author.role",

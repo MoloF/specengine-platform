@@ -1152,6 +1152,29 @@ export interface TaskBundle {
   bundle_hash: string | null;
 }
 
+/** A plan group: each release, then the pool (no `release`), then unplaced; other strings kept. Source: `docs/canon/spec-roadmap.md` "Command". */
+export type RoadmapGroupKind = "release" | "pool" | "unplaced" | Unlisted;
+
+/**
+ * The task's place on the plan, read at the reading root as `bundle_hash` is: the open item it
+ * executes (`docs/canon/spec-roadmap.md` "Position"), its group; `release` the item's as written
+ * (an unplaced item keeps the name), null when absent or mistyped; `position` 1-based in the
+ * release, null outside one (a pool item: `release` and `position` null); `of` the group's open
+ * items; `priority` the item's, project vocabulary; `waits_on` its open predecessors. Advisory: an
+ * unfinished predecessor never holds the task (ADR-0012). The package's `roadmap` is null with no
+ * `[roadmap]`, a bad table (a note `roadmap: <why>`), or no open item executed.
+ * Source: `docs/canon/task-package.md` "Package".
+ */
+export interface TaskRoadmap {
+  item: string;
+  group: RoadmapGroupKind;
+  release: string | null;
+  position: number | null;
+  of: number;
+  priority: string | null;
+  waits_on: string[];
+}
+
 /**
  * `spec task show T --json`, uncut: every key present, absent null, lists []. `stale`, `snapshot_diff`,
  * `open_proposals` and `assumptions` are computed by the core per read; `schema_version` as
@@ -1180,6 +1203,7 @@ export interface TaskPackage {
   claim: TaskClaim | null;
   runs: TaskRun[];
   bundle: TaskBundle | null;
+  roadmap: TaskRoadmap | null;
   author: Author | null;
   created_at: string;
   updated_at: string;

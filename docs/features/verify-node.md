@@ -12,7 +12,7 @@ adrs: []
 
 Before handing in, an agent asks whether a node's bindings still hold. Plain `spec verify` judges every lock key against the whole tree (`docs/canon/spec-verify.md`), and MCP never runs it (its opening): an agent runs Bash and reads the whole project's findings.
 
-Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restricted to one node's bindings, judged over the files the code index selects (Q5, Q30); `check_binding`, its MCP twin, a report kept at exit 2; the `implement` skill naming it; `TOOLS` 19, the next plugin MINOR at shipping (L2 2026-10-19: `layer-c-reads.md` may take 0.11.0 first). Split from `code-tools.md` (Q28): 6b-1 ships the three code reads after 6a-3; this ships after 5c, so its rows carry 5b-1's `levels` and 5c's `anchor` from the start. No ADR: ADR-0042 (judge, exits; `architecture-code.md#verify`), ADR-0046 (`#sync-in-reads`: verify's plain state over the refreshed code index, the lock and the read's own parse), ADR-0012/0039 (no gate reads a finding), ADR-0004/0005, ADR-0050 (format 2), ADR-0008 applied.
+Delivered: `spec verify --node REF [--symbol QPATH]`, plain verify's rows restricted to one node's bindings, judged over the files the code index selects (Q5, Q30); `check_binding`, its MCP twin, a report kept at exit 2; the `implement` skill naming it; `TOOLS` 20, the next plugin MINOR at shipping (0.11.0 went to 2b `roadmap-surfaces.md`, 2026-10-20; L2: `layer-c-reads.md` may take 0.12.0 first). Split from `code-tools.md` (Q28): 6b-1 ships the three code reads after 6a-3; this ships after 5c, so its rows carry 5b-1's `levels` and 5c's `anchor` from the start. No ADR: ADR-0042 (judge, exits; `architecture-code.md#verify`), ADR-0046 (`#sync-in-reads`: verify's plain state over the refreshed code index, the lock and the read's own parse), ADR-0012/0039 (no gate reads a finding), ADR-0004/0005, ADR-0050 (format 2), ADR-0008 applied.
 
 ## Description and interactions
 
@@ -70,13 +70,13 @@ Q31. 6b-1's code line (`code-tools.md` "INSTRUCTIONS") gains `; check_binding(no
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.
 ```
 
-1 938 B, 1 800 less the tasks line, 2 014 with `probes`: 34 B left (over 6b-1's text as built: 1 892, 1 754, 1 968; `mcp-read.md` **Texts**). The four pins re-pinned as 6b-1's.
+Over 2b's text as built (1 932, 1 794 less the tasks line, 2 008 with `probes`: 40 B left; `mcp-read.md` **Texts**) the clause gives 1 978, 1 840, 2 054: 6 B over, so this slice cuts at least 6 B elsewhere, never a rule. The four pins re-pinned as 2b's.
 
 **Description** (≤ 2 048 B, ASCII, the determinism sentence): plain verify of one node, its CLI twin, the `[code]` need, nothing written; a report kept at exit 2; under `enforce*` a Fix row comes back `isError`, a finding, not a failure; `OUTPUT_CAP_CHARS` asserted.
 
 ### Plugin
 
-WA-19. `implement`'s body names `check_binding` (each target before `report_run`; a Fix or cannot row fixed or raised with a working answer, never hidden). Descriptions unchanged; the body ≤ 4 096 B (2 521 B now, front-matter included); all nineteen tools named; the next MINOR, a `PINS` line and an entry in 10a-2's schema-pin list (P1, 2026-10-16: `bevy-roles-reads.md` takes 0.10.0; L2, 2026-10-19: 11a-3 `layer-c-reads.md` takes the next MINOR if it ships first).
+WA-19. `implement`'s body names `check_binding` (each target before `report_run`; a Fix or cannot row fixed or raised with a working answer, never hidden). Descriptions unchanged; the body ≤ 4 096 B (2 521 B now, front-matter included); all twenty tools named; the next MINOR, a `PINS` line and an entry in 10a-2's schema-pin list (P1, 2026-10-16: `bevy-roles-reads.md` takes 0.10.0; L2, 2026-10-19: 11a-3 `layer-c-reads.md` takes the next MINOR if it ships first).
 
 ### Fixtures
 
@@ -95,14 +95,14 @@ Q33. No new fixture: scratch copies of `fixtures/code-a/` with 5b-1's format-2 g
 
 rust-developer (M = the mutation that must turn the named test red):
 
-- [ ] RD-1 -- `tools/list`, both eras: the nineteen; `TOOLS` 19, `CODE_TOOLS` 4. M: `check_binding` without a door call -> `mcp_door`'s coverage; its description over 2 048 B or without the sentence -> `mcp_default`.
+- [ ] RD-1 -- `tools/list`, both eras: the twenty; `TOOLS` 20, `CODE_TOOLS` 4. M: `check_binding` without a door call -> `mcp_door`'s coverage; its description over 2 048 B or without the sentence -> `mcp_default`.
 - [ ] RD-2 -- forms. M: `--node` with `--changed` or `--staged` -> `verify_node_is_plain_only`; `--symbol` alone -> `verify_symbol_needs_node`.
 - [ ] RD-3 -- selection. M: own states or filter -> `check_binding_equals_the_verify_rows`; sections taken -> `verify_node_lists_the_node_not_its_sections`; a homoglyph marker dropped -> `verify_node_follows_refs_listing`; counts over all rows -> `verify_node_counts_its_rows_only`; REF naming nothing at exit 1 -> `verify_node_naming_nothing_is_exit_2`; tiers on QPATH -> `verify_symbol_is_byte_exact`; a moved row's `from` ignored -> `verify_symbol_matches_a_moved_rows_from`.
 - [ ] RD-4 -- files and freshness (Q30). M: a tree walk -> `verify_node_walks_no_tree`; `--node` without its refresh -> `verify_node_refreshes_the_code_index` (an edited `.rs` reads fresh); plain verify refreshing -> 6a-2's `verify_leaves_the_code_index_untouched`; the index's digest columns read (tampered) -> `check_binding_levels_are_fresh`.
 - [ ] RD-5 -- keys (Q29). M: a row key added, or `node`, `symbol`, `omitted` absent from plain JSON -> `verify_json_every_key_present` (CLI `verify_output.rs`).
 - [ ] RD-6 -- exit 2 (S13; no MCP code). M: `read.rs` drops a rendered exit-2 document -> `check_binding_cannot_verify_keeps_its_rows`; a document at a usage exit 2 -> `check_binding_usage_has_no_document`.
 - [ ] RD-7 -- text and size (Q34). M: a moved `ok` row without its `moved from` line -> `verify_node_prints_moved_ok_rows`; `--node` uncut -> `verify_node_cut_names_narrowing`; over `MAX_RESULT_CHARS` -> `mcp_size`.
-- [ ] RD-8 -- `INSTRUCTIONS` (Q31). M: `check_binding` unnamed -> `mcp_default`; over 2 048 B, `probes` included -> `server.rs`' asserts; the text changed, a pin kept -> `mcp_decision.rs`, `mcp_path.rs`, `mcp_tasks.rs` (1 938), `mcp_create.rs` (2 014); after 2b (`roadmap-surfaces.md`) 1 978 and 2 054, so cut at least 6 B.
+- [ ] RD-8 -- `INSTRUCTIONS` (Q31). M: `check_binding` unnamed -> `mcp_default`; over 2 048 B, `probes` included -> `server.rs`' asserts; the text changed, a pin kept -> `mcp_decision.rs`, `mcp_path.rs`, `mcp_tasks.rs` (1 978 less the cut), `mcp_create.rs` (2 054 less it, at most 2 048): 2b (`roadmap-surfaces.md`, shipped) left 40 B, so cut at least 6 B.
 - [ ] RD-9 -- read-only, no reader. M: a write under the root or a queue row -> `mcp_door`; a task transition reading a result -> `no_task_transition_reads_a_finding` (new: S18).
 - [ ] RD-10 -- graph. M: a store or `rusqlite` edge in MCP -> `build_graph.rs` (7); an HTTP route -> `fixtures/daemon-keys.json`'s test.
 - [ ] RD-11 -- plugin. M: `check_binding` unnamed -> `plugin_skills.rs`; the version unchanged -> `plugin_files.rs`.
@@ -126,7 +126,7 @@ spec-writer:
 - **Divergence**: if 6a-2's store pass and the walk disagree on ambiguity (`docs/canon/symbol-index.md` "Cache key and cross-file pass", Ambiguity), `check_binding` contradicts `spec verify` (ADR-0046): 6a-2's RD-15 and TE-3 here guard it.
 - **Churn**: 5b-1 and 5c rewrite `verify.rs`, `verify_rows.rs`; this starts on the commit after 5c ships.
 - **Agent reading**: under `enforce*` a Fix row comes back `isError`; the description says it is a finding.
-- **`INSTRUCTIONS`**: 34 B left; 7a (about 33 B) and 7b (46 B) re-measure and cut about 45 B elsewhere, never a rule.
+- **`INSTRUCTIONS`**: 40 B left after 2b, 6 B short of this clause; 7a (about 33 B) and 7b (46 B) need about 85 B more cut in all, never a rule.
 - **Cost**: each call refreshes the code index (`noop_ms` ≤ 200) against MCP's 1 s (`mcp-read.md` "Latency"); TE-4 decides 6c.
 
 ## Out of scope
@@ -142,7 +142,7 @@ spec-writer:
 | 28 split (owner) | this after 5c; 6b-1 `code-tools.md` after 6a-3 (else: `code-tools.md` Q28) |
 | 29 row keys | none: `levels` (5b-1) and `anchor` (5c) answer 07:37's "ast_hash, sync"; `markers` stay `{line, rev}` (else: every verify row, every stored drift item and 5b-1's, 5c's goldens wider) |
 | 30 `--node`'s files (owner) | only the files the index selects (6a-2's Q17 read) (else: a full plain run filtered, every call parsing the whole tree against MCP's 1 s) |
-| 31 `INSTRUCTIONS` | the 46 B clause on 6b-1's code line: 34 B left (else: a line of its own, over the limit) |
+| 31 `INSTRUCTIONS` | the 46 B clause on 6b-1's code line, at least 6 B cut elsewhere (else: a line of its own, over the limit) |
 | 32 canon home | a new Tier 2 `docs/canon/spec-verify-node.md` (`docs/index-canon-spec.md`), one pointer in `spec-verify.md`'s opening (else: `spec-verify.md`, which 5b-1 and 5c fill first from 578 B of room) |
 | 33 fixtures | `code-a` with 5b-1's format-2 golden (else: a format-1 lock exits 2) |
 | 34 moved `ok` rows | printed with their `moved from` line, as 5c prints a moved row (else: a second rule for one class of row) |

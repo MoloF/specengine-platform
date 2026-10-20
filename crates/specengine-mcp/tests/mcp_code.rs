@@ -1522,7 +1522,9 @@ fn code_mirrors_pin_the_q35_types() {
 /// `INSTRUCTIONS` as docs/features/code-tools.md "INSTRUCTIONS" plans them
 /// (Q31): 4c-1's text with the reads in two lines, the second the code
 /// tools (`spec ` and two glosses dropped; the REF paragraph keeps `with
-/// ["links"]`), and `Hints use flags:`; 1 892 bytes.
+/// ["links"]`), and `Hints use flags:`; 1 892 bytes. 1 932 since
+/// docs/features/roadmap-surfaces.md ("Data"): the reads' line ends with
+/// [`ROADMAP_READ`] (40 bytes).
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1530,7 +1532,8 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "Reads:\n",
     "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = ",
     "show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, ",
-    "budget?) = bundle; get_proposal(proposal_id) = review --brief.\n",
+    "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
+    "pool?) = roadmap.\n",
     "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; ",
     "unmapped(path?) = unmapped.\n",
     "Queue (writes only the queue; the owner decides on a terminal):\n",
@@ -1558,6 +1561,10 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- IDs are Latin only; a look-alike is refused with its Latin fix.",
 );
 
+/// docs/features/roadmap-surfaces.md "Data": what the reads' line gains,
+/// before its full stop (40 bytes).
+const ROADMAP_READ: &str = "; get_roadmap(release?, pool?) = roadmap";
+
 /// The code tools' line, its LF included (104 + 1 bytes).
 const CODE_LINE: &str = "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; \
                          unmapped(path?) = unmapped.\n";
@@ -1573,32 +1580,45 @@ const PROBES_PARAGRAPH: &str =
 
 /// `blake3_hex(PLANNED_INSTRUCTIONS)`: the hash of the spec's text built
 /// here, never of the server's; `mcp_path.rs` and `mcp_decision.rs` pin
-/// the same value against `INSTRUCTIONS`.
-const PLANNED_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
+/// the same value against `INSTRUCTIONS` (re-pinned by
+/// docs/features/roadmap-surfaces.md).
+const PLANNED_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb3399dc942201de37e";
+
+/// code-tools' text (1 892 bytes), [`PLANNED_INSTRUCTIONS`] less
+/// [`ROADMAP_READ`]: its `PLANNED_BLAKE3` before
+/// docs/features/roadmap-surfaces.md.
+const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
 /// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`].
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "42f9ecfda69898a7615608e5a09789da3b2c2ac25d178b6461b70ddfd33f1133";
+    "24c5cd5dfe4ebe7957ed07488d9c334799b2fb4add97df4b098a023bbb0db52c";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
 /// 1 968 with the probes paragraph, 80 left of 2 048; the code line once,
 /// under "Reads:", right after the reads' line; `Hints use flags:`; every
 /// tool named. M: a tool unnamed; the text changed, a pin kept.
+/// docs/features/roadmap-surfaces.md RD-8 ("Data"): the reads' line gains
+/// [`ROADMAP_READ`] before its full stop: 1 932 bytes, 1 794 less the
+/// tasks line, 2 008 with the probes paragraph, 40 left.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 1892, "the spec's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 1932, "the spec's figure");
+    assert_eq!(ROADMAP_READ.len(), 40);
     assert_eq!(CODE_LINE.len(), 105);
     assert_eq!(TASKS_LINE.len(), 138);
     assert_eq!(PROBES_PARAGRAPH.len(), 76);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 1892);
+    assert_eq!(instructions.len(), 1932);
     assert!(instructions.is_ascii());
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
+    assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
     assert!(
-        instructions.contains(&format!("review --brief.\n{CODE_LINE}Queue (")),
-        "the code line closes the reads"
+        instructions.contains(&format!(
+            "review --brief{ROADMAP_READ}.\n{CODE_LINE}Queue ("
+        )),
+        "the roadmap read ends the reads' line; the code line closes the reads"
     );
     assert!(instructions.contains("Hints use flags: --kind is kinds"));
     assert!(!instructions.contains("CLI flags"));
@@ -1610,10 +1630,22 @@ fn rd5_instructions_are_the_planned_text() {
         assert!(instructions.contains(&format!("{name}(")), "{name}(");
     }
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1754, "1 892 less 138 (the spec says 1 755)");
+    assert_eq!(less.len(), 1794, "1 932 less 138");
     let with_probes = instructions.len() + PROBES_PARAGRAPH.len();
-    assert_eq!(with_probes, 1968);
-    assert_eq!(2048 - with_probes, 80, "the room Q31 states");
+    assert_eq!(with_probes, 2008);
+    assert_eq!(
+        2048 - with_probes,
+        40,
+        "the room docs/features/roadmap-surfaces.md states"
+    );
+    // The text before docs/features/roadmap-surfaces.md: code-tools' 1 892.
+    let before = instructions.replacen(ROADMAP_READ, "", 1);
+    assert_eq!(before.len(), 1892);
+    assert_eq!(
+        blake3_hex(before.as_bytes()),
+        CODE_TOOLS_BLAKE3,
+        "only the roadmap read was added"
+    );
 }
 
 /// RD-5: the BLAKE3 pins of the planned text, computed over the spec's

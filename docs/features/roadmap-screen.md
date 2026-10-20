@@ -8,7 +8,7 @@ adrs: [ADR-0052]
 
 # roadmap-screen (Phase 6, 3a): the Roadmap screen, read-only
 
-A compact draft, refreshed against 2b (`roadmap-surfaces.md`, RM-0030) as built before it starts.
+A compact draft, refreshed before it starts. 2b (`roadmap-surfaces.md`, RM-0030, shipped 2026-10-20) serves its data: the route `crates/specengine-http/README.md` "Endpoints", the document `docs/canon/spec-roadmap.md` "Command", "Surfaces".
 
 ## Why
 
@@ -20,12 +20,12 @@ The owner asked to see the path, the chain, the MVP line and the pool at a glanc
 - **Lanes**: one per release in config order, the current release and the MVP cut marked in text, not by colour alone; then the pool (with 2a's tasks executing no item) and unplaced. Each item a card: ID, title, status, priority, estimate, `waits on`, `cycle`, its open tasks (2a), linking to its Tree node.
 - **Chain**: a lazy, read-only `@xyflow/react` canvas of `depends_on` between items, laid out by the Graph screen's hand-written layered layout; a List twin carries the same content as text.
 - **Ranges**: a bar per release from the sums (min..max in `unit`), no dates, the unestimated count beside it.
-- **Data**: the daemon's `GET /api/projects/:p/roadmap` (2b) through the one client interface; the mock scenario for "Mock data". It re-reads on `task.*`, `proposal.approved` and `proposal.apply_failed`, one trailing read (as Health since 9a-3).
+- **Data**: the daemon's `GET /api/projects/:p/roadmap[?release=R | ?pool=true]` (2b: uncut, `omitted` 0; 404 the exit-1 document; 503 without `[roadmap]` or with a bad one) through the one client interface; the join's notes are stderr only, so the body has none: the refresh decides whether the screen needs a key; the mock scenario for "Mock data". It re-reads on `task.*`, `proposal.approved` and `proposal.apply_failed`, one trailing read (as Health since 9a-3).
 - **No write**: no drag, no stage, no command to copy for a move (3b, below).
 
 ## Acceptance criteria
 
-- [ ] UI-1 -- generated types for the roadmap document; `daemonKeys.test.ts`' count follows 2b's keys.
+- [ ] UI-1 -- the roadmap document's types and daemon key sets, left here by 2b (its Q-H): `ui/src/api/provisional.ts` (`RoadmapGroup` the group object beside 2b's `RoadmapGroupKind`), `fixtures/daemon-keys.json`, `daemonKeys.test.ts`' count.
 - [ ] UI-2 -- routes: seven sections in order (`routes.test.ts`).
 - [ ] UI-3 -- no state by colour alone (`crates/specengine-eval/tests/ui_policy.rs`).
 - [ ] UI-4 -- the canvas is read-only (no drag handler, no edge creation) and the List twin carries the same items, edges and marks as text.

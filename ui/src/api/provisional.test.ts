@@ -40,6 +40,7 @@ import type {
   TaskNotFound,
   TaskPackage,
   TaskProposal,
+  TaskRoadmap,
   TaskRun,
   TaskTarget,
   TreeNode,
@@ -375,6 +376,7 @@ const TASK_KEYS = {
     claim: true,
     runs: true,
     bundle: true,
+    roadmap: true,
     author: true,
     created_at: true,
     updated_at: true,
@@ -400,6 +402,15 @@ const TASK_KEYS = {
     changed_files: true,
   } satisfies Record<keyof TaskRun, true>,
   TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
+  TaskRoadmap: {
+    item: true,
+    group: true,
+    release: true,
+    position: true,
+    of: true,
+    priority: true,
+    waits_on: true,
+  } satisfies Record<keyof TaskRoadmap, true>,
 };
 
 /** The key lists as the canon's JSON writes them, copied verbatim. */
@@ -408,7 +419,7 @@ const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -421,6 +432,7 @@ const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   TaskClaim: "at, role, worktree, branch",
   TaskRun: "run, role, started_at, ended_at, outcome, summary, changed_files",
   TaskBundle: "node_ids, budget, bundle_hash",
+  TaskRoadmap: "item, group, release, position, of, priority, waits_on",
 };
 
 /** The canon of the task commands, and of the package (ui-live-tasks "Citations"). */
@@ -449,10 +461,12 @@ describe("the task types (AC-02 of ui-tasks, AC-13 of ui-live-tasks)", () => {
     expect(Object.keys(TASK_KEYS[name]).join(", ")).toBe(TASK_CITED[name]);
   });
 
-  it("count 25 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document", () => {
-    expect([TASK_KEYS.TaskPackage, TASK_KEYS.TaskListEntry, TASK_KEYS.TaskRun, TASK_KEYS.OwnerNote, TASK_KEYS.TaskNotFound].map((keys) => Object.keys(keys).length)).toEqual([
-      25, 6, 7, 2, 2,
-    ]);
+  it("count 26 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document, 7 roadmap keys", () => {
+    expect(
+      [TASK_KEYS.TaskPackage, TASK_KEYS.TaskListEntry, TASK_KEYS.TaskRun, TASK_KEYS.OwnerNote, TASK_KEYS.TaskNotFound, TASK_KEYS.TaskRoadmap].map(
+        (keys) => Object.keys(keys).length,
+      ),
+    ).toEqual([26, 6, 7, 2, 2, 7]);
   });
 
   it.each(Object.keys(TASK_KEYS))("%s cites the canon's heading", (type) => {
@@ -481,6 +495,23 @@ describe("the task types (AC-02 of ui-tasks, AC-13 of ui-live-tasks)", () => {
     const made: TaskBundle = { node_ids: ["MEC-TIDES"], budget: 10000, bundle_hash: "b3:0" };
     expect([unmade.bundle_hash, made.bundle_hash]).toEqual([null, "b3:0"]);
     expect(commentOf("TaskBundle")).toContain("`bundle_hash` null");
+  });
+
+  it("type the package's roadmap as the task's place on the plan, or null (UI-1 of roadmap-surfaces)", () => {
+    const placed: TaskRoadmap = { item: "RM-0011", group: "release", release: "beta", position: 5, of: 8, priority: "should", waits_on: ["RM-0010"] };
+    const pooled: TaskRoadmap = { item: "RM-0020", group: "pool", release: null, position: null, of: 3, priority: null, waits_on: [] };
+    const unplaced: TaskRoadmap = { item: "RM-0030", group: "unplaced", release: "someday", position: null, of: 1, priority: "any-priority", waits_on: [] };
+    const none: Pick<TaskPackage, "roadmap"> = { roadmap: null };
+    expect([placed, pooled, unplaced].map(({ group, position }) => [group, position])).toEqual([
+      ["release", 5],
+      ["pool", null],
+      ["unplaced", null],
+    ]);
+    expect(none.roadmap).toBeNull();
+    expect(source).toMatch(/^  roadmap: TaskRoadmap \| null;$/m);
+    expect(source).toMatch(/^export type RoadmapGroupKind = "release" \| "pool" \| "unplaced" \| Unlisted;$/m);
+    expect(commentOf("RoadmapGroupKind")).toContain('`docs/canon/spec-roadmap.md` "Command"');
+    expect(commentOf("TaskRoadmap")).toContain("never holds the task (ADR-0012)");
   });
 
   it("say a proposal's summary and a diff's two nulls as the canon does", () => {

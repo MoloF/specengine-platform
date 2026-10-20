@@ -34,6 +34,7 @@ use specengine_core::task::{
     TaskIdError, control_problem, needs_message, over_bytes, over_items, parse_task_id,
     run_outcome, task_look_alike_message, task_prefix_clash, transition,
 };
+use specengine_core::{Plan, PlanTask, next_order};
 use specengine_model::{SnapshotPlace, TaskClaim, TaskCriterion, TaskPackage, TaskStatus, grammar};
 use specengine_store::{
     GitEnv, NewTask, QueueError, SnapshotEntry, StoredNote, Task, TaskChange, TaskSnapshot,
@@ -42,7 +43,9 @@ use specengine_store::{
 
 use crate::apply::Consent;
 use crate::corpus::indexed;
-use crate::package::{NodeNow, Roots, assemble, node_now, render_brief, staleness};
+use crate::package::{
+    NodeNow, Roots, assemble, node_now, plan_task, reading_plan, render_brief, staleness,
+};
 use crate::proposals::{QueueContext, checked_now, escaped_error, open_context, queue_cannot};
 use crate::propose::{ProposedText, is_path_target, read_text, resolved_node};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
@@ -70,7 +73,9 @@ pub struct TaskNewRequest {
 pub struct TaskShowRequest {
     /// `T` as given; `None` with `next`.
     pub id: Option<String>,
-    /// `--next`: the lowest-numbered `ready` task of this repository.
+    /// `--next`: the first `ready` task of this repository in `spec
+    /// roadmap`'s order of the items the tasks execute, then by number;
+    /// without `[roadmap]`, the lowest-numbered. Advisory.
     pub next: bool,
     pub git: GitEnv,
 }
@@ -577,6 +582,8 @@ fn run_show(
         reason: Some(reason),
         messages: Vec::new(),
     };
+    let mut messages = Vec::new();
+    let mut roots = Roots::default();
     let task = match written {
         Some(Err(written)) => return Ok(missing(None, not_a_task(written))),
         Some(Ok(id)) => match find_task(&context, &id)? {
@@ -585,20 +592,21 @@ fn run_show(
         },
         None => {
             let listed = context.queue.list_tasks(None).map_err(queue_cannot)?;
-            let next = listed.tasks.into_iter().find(|task| {
-                task.status == TaskStatus::Ready
-                    && same_repository(&task.git_common_dir, &context.common_dir)
-            });
-            match next {
-                Some(task) => task,
-                None => {
-                    return Ok(missing(None, "no ready task in this repository".to_owned()));
-                }
+            let ready: Vec<Task> = listed
+                .tasks
+                .into_iter()
+                .filter(|task| {
+                    task.status == TaskStatus::Ready
+                        && same_repository(&task.git_common_dir, &context.common_dir)
+                })
+                .collect();
+            if ready.is_empty() {
+                return Ok(missing(None, "no ready task in this repository".to_owned()));
             }
+            let reading = reading_plan(env, &context, &mut roots);
+            next_task(ready, reading.plan())
         }
     };
-    let mut messages = Vec::new();
-    let mut roots = Roots::default();
     let package = assemble(
         env,
         globals,
@@ -615,6 +623,23 @@ fn run_show(
         reason: None,
         messages,
     })
+}
+
+/// `--next`'s task of `ready` (this repository's `ready` tasks by number,
+/// at least one): the first in the plan's order (core's [`next_order`]:
+/// by the listing index of the open item each executes, then number;
+/// those executing none after them); without a plan, or when none
+/// executes an item, the lowest-numbered. Advisory: an unfinished
+/// predecessor never holds a task.
+fn next_task(mut ready: Vec<Task>, plan: Option<&Plan>) -> Task {
+    let first = plan.and_then(|plan| {
+        let rows: Vec<PlanTask> = ready.iter().map(plan_task).collect();
+        next_order(plan, &rows).first().map(|row| row.id.clone())
+    });
+    let at = first
+        .and_then(|id| ready.iter().position(|task| task.id == id))
+        .unwrap_or(0);
+    ready.swap_remove(at)
 }
 
 // --------------------------------------------------------------- list

@@ -403,7 +403,7 @@ enum TaskCommand {
             conflicts_with = "next"
         )]
         id: Option<String>,
-        /// The lowest-numbered `ready` task of this repository.
+        /// The first `ready` task of this repository in `spec roadmap`'s order of the items the tasks execute, then by number (tasks executing none last); without `[roadmap]`, the lowest-numbered. Advisory: nothing waits on it.
         #[arg(long)]
         next: bool,
     },

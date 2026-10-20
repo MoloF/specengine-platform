@@ -3,7 +3,8 @@
 //! "Intake document", "Tools": the review and intake documents; the closed
 //! objects of `report_discrepancy`'s input) and of the task tools
 //! (`docs/canon/task-package.md` "Package", "MCP": the package, the task
-//! commands' document) and of the code tools
+//! commands' document), of `get_roadmap` (`docs/canon/spec-roadmap.md`
+//! "Command": `spec roadmap`'s document) and of the code tools
 //! (`docs/canon/mcp-code.md` "Mirrors": `spec symbols`, `spec refs`,
 //! `spec unmapped`; a symbol target's `roles`, each key a free string or
 //! integer, never an enum of the code layer's words).
@@ -799,10 +800,33 @@ pub(crate) struct TaskPackage {
     pub claim: Option<TaskClaim>,
     pub runs: Vec<TaskRun>,
     pub bundle: PackageBundle,
+    /// The task's place on the plan; `null` without `[roadmap]`, with one
+    /// that cannot be read (a note says why), or when the task executes no
+    /// open item.
+    pub roadmap: Option<TaskRoadmap>,
     pub author: ProposalAuthor,
     pub created_at: String,
     pub updated_at: String,
     pub notes: Vec<String>,
+}
+
+/// The open item a task executes, as get_roadmap lists the task on it:
+/// read at the reading root, per read.
+#[derive(JsonSchema)]
+pub(crate) struct TaskRoadmap {
+    /// The item's ID.
+    pub item: String,
+    pub group: RoadmapGroupKind,
+    /// The item's `release` as written; `null` when absent or no string.
+    pub release: Option<String>,
+    /// 1-based within its release; `null` outside one.
+    pub position: Option<u64>,
+    /// The open items of its group.
+    pub of: u64,
+    /// The item's `priority` as written.
+    pub priority: Option<String>,
+    /// The open items it depends on, in written order.
+    pub waits_on: Vec<String>,
 }
 
 /// A task's state.
@@ -956,6 +980,137 @@ pub(crate) struct TaskDocument {
     pub run: Option<u64>,
     /// A refusal's reason last.
     pub notes: Vec<String>,
+}
+
+// ----------------------------------------------------------------- roadmap
+//
+// `spec roadmap --json` (`docs/canon/spec-roadmap.md` "Command"): the
+// project's releases, priorities, units and statuses are free strings, as
+// its `[roadmap]` and its items write them.
+
+/// `spec roadmap --json`: the whole plan's keys, then what is shown.
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapDocument {
+    /// `release` as given; `null` without one.
+    pub release: Option<String>,
+    /// `pool: true`: the pool and the unplaced items only.
+    pub pool: bool,
+    /// Why `release` lists nothing (the result is then an error); `null`
+    /// otherwise.
+    pub reason: Option<String>,
+    /// `[roadmap] prefix`.
+    pub prefix: String,
+    /// `[roadmap] dir`.
+    pub dir: String,
+    /// `[roadmap] unit`, verbatim.
+    pub unit: Option<String>,
+    /// The first release holding an open item.
+    pub current: Option<String>,
+    pub counts: RoadmapCounts,
+    /// The releases from the first through `[roadmap] mvp_cut`; `null`
+    /// without it.
+    pub cut: Option<RoadmapCut>,
+    /// Every release.
+    pub total: RoadmapSum,
+    /// The groups whose header is shown, in order.
+    pub groups: Vec<RoadmapGroup>,
+    /// This repository's open tasks executing no open item, as shown.
+    pub pool_tasks: Vec<RoadmapPoolTask>,
+    /// The plan's notes.
+    pub notes: Vec<String>,
+    pub truncated: bool,
+    /// The listed items and pool tasks not shown.
+    pub omitted: usize,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapCounts {
+    pub open: usize,
+    pub done: usize,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapCut {
+    pub release: String,
+    pub min: u64,
+    pub max: u64,
+    pub unestimated: u64,
+}
+
+/// The estimated bounds added; `unestimated` the open items without one.
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapSum {
+    pub min: u64,
+    pub max: u64,
+    pub unestimated: u64,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapGroup {
+    pub group: RoadmapGroupKind,
+    /// A release's name; `null` for the pool and the unplaced items.
+    pub name: Option<String>,
+    pub current: bool,
+    pub mvp_cut: bool,
+    pub open: usize,
+    pub done: usize,
+    /// Over its open items.
+    pub sum: RoadmapSum,
+    /// Its open items shown, in order.
+    pub items: Vec<RoadmapItem>,
+}
+
+/// A group of the plan.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum RoadmapGroupKind {
+    Release,
+    Pool,
+    Unplaced,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapItem {
+    /// 1-based within its release; `null` outside one.
+    pub position: Option<usize>,
+    pub id: String,
+    pub title: Option<String>,
+    pub path: String,
+    /// `status:` as written.
+    pub status: Option<String>,
+    /// `release:` as written; `null` when absent or no string.
+    pub release: Option<String>,
+    /// `priority:` as written.
+    pub priority: Option<String>,
+    /// `null`: unestimated.
+    pub estimate: Option<RoadmapEstimate>,
+    /// The open items it depends on, in written order.
+    pub waits_on: Vec<String>,
+    /// A member of a `depends_on` cycle of its release.
+    pub cycle: bool,
+    /// This repository's open tasks executing it, by number.
+    pub tasks: Vec<RoadmapItemTask>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapEstimate {
+    pub min: u64,
+    pub max: u64,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapItemTask {
+    pub id: String,
+    pub status: TaskState,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct RoadmapPoolTask {
+    pub id: String,
+    pub status: TaskState,
+    pub title: Option<String>,
+    /// As stored: IDs, or an id-less document's path.
+    pub targets: Vec<String>,
 }
 
 // -------------------------------------------------------------------- code

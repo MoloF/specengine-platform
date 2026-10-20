@@ -34,8 +34,9 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// server's most important text. ASCII only, so bytes equal characters.
 /// Task spec `code-tools` (Q31) puts the reads on one line and the code
 /// tools on a second (`spec ` and two glosses dropped), says `Hints use
-/// flags:` and cuts the probes paragraph to 76 bytes: 1 892 bytes, 1 754
-/// without the tasks line, 1 968 with the probes paragraph.
+/// flags:` and cuts the probes paragraph to 76 bytes; task spec
+/// `roadmap-surfaces` adds `get_roadmap` to the reads (40 bytes): 1 932
+/// bytes, 1 794 without the tasks line, 2 008 with the probes paragraph.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
@@ -44,7 +45,7 @@ command: content its `2>&1` output, structuredContent its --json document.
 Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
-bundle; get_proposal(proposal_id) = review --brief.
+bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped.
 Queue (writes only the queue; the owner decides on a terminal):
