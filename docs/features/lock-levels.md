@@ -11,7 +11,7 @@ adrs: [ADR-0050]
 
 ## Why
 
-Format 1 kept one v2 `ast_hash` per item and only its file's blob for a `module` or `ron` binding: declared levels were dead, and any edit of a RON file or a module's file was drift for everything bound in it (05:137). Verify can judge by levels only once the lock holds them; the bytes freeze at the first format-2 lock (ADR-0050). 5b-1 split (Q22): this slice (format 2, its writers and readers, verify judging as v2 did, `lock_code`, both goldens, the `lock.rs` pin); 5b-2 `lock-rebase.md` right after, closing the window (a format-1 lock stops verify and the writers until rebased; none exists: Q23); then 5b-1b `lock-levels-verify.md` (verify by levels), the carry-overs' XS slice, 5c.
+Format 1 kept one v2 `ast_hash` per item and only its file's blob for a `module` or `ron` binding: declared levels were dead, and any edit of a RON file or a module's file was drift for everything bound in it (05:137). Verify can judge by levels only once the lock holds them; the bytes freeze at the first format-2 lock (ADR-0050). 5b-1 split (Q22): this slice (format 2, its writers and readers, verify judging as v2 did, `lock_code`, both goldens, the `lock.rs` pin); 5b-2 `lock-rebase.md` right after, closing the window (a format-1 lock stops verify and the writers until rebased; none exists: Q23); then 5b-1b `lock-levels-verify.md` (verify by levels, the carry-overs folded in as its RD-9), 5c.
 
 ## Description and interactions
 
@@ -51,7 +51,7 @@ Pointers kept for the citations into this spec.
 
 ### Carry-overs
 
-Listed once, in `lock-levels-verify.md` "Later" (Q22), with this slice's review nits.
+Listed once, in `lock-levels-verify.md` "Carry-overs" (Q22; its RD-9 since Q47), with this slice's review nits.
 
 ## Rules and edge cases
 

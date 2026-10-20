@@ -42,4 +42,4 @@ Verify's `HEAD` lock (`spec-verify.md` "Base"; `--changed`, `--staged`): `Some` 
 - A module and its inline `mod` marked for one node and relation: the `mod`'s entry drops `ambiguous`, the module's too if the `mod` ends its symbol (`mod a` in `a.rs`).
 - git < 2.44 ignores `GIT_NO_LAZY_FETCH`: a partial clone may fetch a missing blob.
 - From the binary upgrade to the rebase commit a project's verify hook refuses every commit (cause 6), under `enforce` or plain `spec verify` a Fix row that one too: switch to `enforce-introduced` before the upgrade (`HEAD`'s stricter mode counts), else it takes `--no-verify` or the hook off.
-- A panic hashing or naming reads "the Rust parser failed on …" (`lock-levels-verify.md` "Later").
+- A panic hashing or naming reads "the Rust parser failed on …" (`lock-levels-verify.md` RD-9).
