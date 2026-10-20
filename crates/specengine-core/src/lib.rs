@@ -83,7 +83,9 @@
 //!   `roadmap` view; [`roadmap`] — [`plan`]: the plan of the items it names
 //!   over the check's input (releases in order, the chain, priority ties,
 //!   range sums, the current release, the pool), pure (task spec
-//!   `roadmap-items`, ADR-0052), its lines and the view (`roadmap-view`).
+//!   `roadmap-items`, ADR-0052), its lines and the view (`roadmap-view`);
+//!   [`plan_tasks`]: its join with a repository's task rows, pure
+//!   (`roadmap-position`).
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -139,7 +141,8 @@ pub use project_toml::{
 };
 pub use revision::{Revision, revision};
 pub use roadmap::{
-    CutSum, ESTIMATE_MAX, Estimate, GroupKind, Plan, PlanGroup, PlanItem, Sum, parse_estimate, plan,
+    CutSum, ESTIMATE_MAX, Estimate, GroupKind, Plan, PlanGroup, PlanItem, PlanTask, PlanTasks, Sum,
+    parse_estimate, plan, plan_tasks,
 };
 pub use roadmap_toml::{MAX_UNIT_BYTES, RoadmapConfig, roadmap_from_toml};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};

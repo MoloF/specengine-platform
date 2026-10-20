@@ -13,7 +13,7 @@ adrs: [ADR-0052]
 
 The owner (2026-09-30): set the goal of the work and trace the whole path — place work in a roadmap, set priority, build the chain, separate MVP, V1, V2, roughly estimate timelines, track where we are, see the pool of work not yet distributed or taken into development. On 2026-10-20: needed now, before the rest of Phase 3. The path was prose in 08 s2 ("~N weeks", "shipped" stamps, a hand-summed "Total") that drifts; parked work was scattered over "Open minors", "Later" sections and 08's Phase 5 "Optional"; tasks had no priority and `next` took the lowest-numbered `ready` task.
 
-Delivered: plan items as spec files (ADR-0052), the `[roadmap]` table, three typed front-matter keys, `INDEX_FORMAT` 12, and `spec roadmap`, which computes the path and the pool from the repository's files alone; how it works now: `docs/canon/spec-roadmap.md`. This repository's open work seeded once, 29 items in `docs/roadmap/`. The view (1b `roadmap-view.md`), the queue's progress and `next` (2 `roadmap-position.md`) and the screen (3a `roadmap-screen.md`) call its `plan` as is.
+Delivered: plan items as spec files (ADR-0052), the `[roadmap]` table, three typed front-matter keys, `INDEX_FORMAT` 12, and `spec roadmap`, which computes the path and the pool from the repository's files alone; how it works now: `docs/canon/spec-roadmap.md`. This repository's open work seeded once, 29 items in `docs/roadmap/`. The view (1b `roadmap-view.md`), the queue's progress (2a `roadmap-position.md`), `next` (2b `roadmap-surfaces.md`) and the screen (3a `roadmap-screen.md`) call its `plan` as is.
 
 ## Data
 

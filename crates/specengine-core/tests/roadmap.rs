@@ -1109,7 +1109,8 @@ fn sum_json(sum: &specengine_core::roadmap::Sum) -> Value {
 }
 
 /// The plan of a fixture in the shape of `expected.json` (the CLI's
-/// document), the request keys left at a whole-plan read.
+/// document), the request keys left at a whole-plan read and the task
+/// keys of the join (docs/features/roadmap-position.md TE-1) empty.
 fn plan_json(plan: &Plan, roadmap: &RoadmapConfig) -> Value {
     let groups: Vec<Value> = plan
         .groups
@@ -1130,6 +1131,9 @@ fn plan_json(plan: &Plan, roadmap: &RoadmapConfig) -> Value {
                         "estimate": item.estimate.map(|e| serde_json::json!({"min": e.min, "max": e.max})),
                         "waits_on": item.waits_on,
                         "cycle": item.cycle,
+                        // The plan reads no queue: the join's keys
+                        // (roadmap-position) are empty.
+                        "tasks": [],
                     })
                 })
                 .collect();
@@ -1162,6 +1166,7 @@ fn plan_json(plan: &Plan, roadmap: &RoadmapConfig) -> Value {
         })),
         "total": sum_json(&plan.total),
         "groups": groups,
+        "pool_tasks": [],
         "notes": plan.notes,
         "truncated": false,
         "omitted": 0,

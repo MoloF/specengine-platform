@@ -29,10 +29,13 @@ use specengine_core::proposal::{Author, author_field_problem};
 use specengine_core::task::{TaskAction, needs_message, task_id, task_number, transition};
 use specengine_model::{RunOutcome, SnapshotPlace, TaskClaim, TaskCriterion, TaskStatus};
 
-use super::{ID_ORDER, Place, QueueError, SqliteQueue, check_time, log, to_json};
+use super::{
+    ID_ORDER, Place, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, check_time, log, to_json,
+    user_version,
+};
 use crate::error::{Db, StoreError};
 use crate::git::same_dir;
-use crate::same_repository;
+use crate::{same_repository, schema};
 
 /// `task.created`.
 pub const EVENT_TASK_CREATED: &str = "task.created";
@@ -324,28 +327,28 @@ impl SqliteQueue {
     /// into [`TaskList::unreadable`].
     pub fn list_tasks(&self, git_common_dir: Option<&str>) -> Result<TaskList, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
-        let rows = {
-            let mut statement = tx
-                .prepare(&format!(
-                    "SELECT {TASK_SELECT} FROM main.tasks WHERE project = ?1 \
-                     AND (?2 IS NULL OR git_common_dir = ?2) {ID_ORDER}"
-                ))
-                .db()?;
-            statement
-                .query_map(rusqlite::params![self.project, git_common_dir], raw_task)
-                .db()?
-                .collect::<rusqlite::Result<Vec<_>>>()
-                .db()?
-        };
-        let mut list = TaskList::default();
-        for raw in rows {
-            let id = raw[0].clone().unwrap_or_default();
-            let runs = raw_runs(&tx, &id)?;
-            match decode_task(raw, runs) {
-                Ok(task) => list.tasks.push(task),
-                Err(row) => list.unreadable.push(row),
-            }
+        let list = listed_tasks(&tx, &self.project, git_common_dir)?;
+        tx.commit().db()?;
+        Ok(list)
+    }
+
+    /// [`Self::list_tasks`] of every repository for a handle that ran no
+    /// schema step ([`Self::open_existing`]), in one snapshot: a queue
+    /// whose `tasks` table does not exist yet (an index-only DB, a schema
+    /// before 4) holds none; nothing is written, no table added. The
+    /// `user_version` is read in the same snapshot: a newer build's queue
+    /// is [`QueueError::SchemaTooNew`].
+    pub fn list_existing_tasks(&self) -> Result<TaskList, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let version = user_version(&tx)?;
+        if version > QUEUE_SCHEMA_VERSION {
+            return Err(QueueError::SchemaTooNew { found: version });
         }
+        let list = if schema::has_table(&tx, "tasks")? {
+            listed_tasks(&tx, &self.project, None)?
+        } else {
+            TaskList::default()
+        };
         tx.commit().db()?;
         Ok(list)
     }
@@ -607,6 +610,39 @@ pub(crate) fn next_task_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
 
 /// A task row's columns in [`TASK_SELECT`] order, not decoded.
 type RawTask = Vec<Option<String>>;
+
+/// The project's tasks (of the repository `git_common_dir` when given,
+/// compared as stored) by number, read in the caller's snapshot; a row
+/// that does not decode is skipped into [`TaskList::unreadable`].
+fn listed_tasks(
+    conn: &Connection,
+    project: &str,
+    git_common_dir: Option<&str>,
+) -> Result<TaskList, QueueError> {
+    let rows = {
+        let mut statement = conn
+            .prepare(&format!(
+                "SELECT {TASK_SELECT} FROM main.tasks WHERE project = ?1 \
+                 AND (?2 IS NULL OR git_common_dir = ?2) {ID_ORDER}"
+            ))
+            .db()?;
+        statement
+            .query_map(rusqlite::params![project, git_common_dir], raw_task)
+            .db()?
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .db()?
+    };
+    let mut list = TaskList::default();
+    for raw in rows {
+        let id = raw[0].clone().unwrap_or_default();
+        let runs = raw_runs(conn, &id)?;
+        match decode_task(raw, runs) {
+            Ok(task) => list.tasks.push(task),
+            Err(row) => list.unreadable.push(row),
+        }
+    }
+    Ok(list)
+}
 
 fn raw_task(row: &Row<'_>) -> rusqlite::Result<RawTask> {
     (0..17)

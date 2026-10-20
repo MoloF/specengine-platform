@@ -8,16 +8,16 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 28 open, 1 done; current mvp; to mvp 2-3 days; total 41-68 days
+roadmap: 28 open, 2 done; current mvp; to mvp 2-3 days; total 39-66 days
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
 1. [RM-0001](../roadmap/RM-0001.md) | Live check: real tasks of each pilot through the full cycle | draft | must | 2-3
 
-## release v1 | 9 open, 1 done | 26-42 days
+## release v1 | 9 open, 2 done | 24-40 days
 
-1. [RM-0003](../roadmap/RM-0003.md) | roadmap-position (Phase 6, 2): live progress, next by the plan, MCP and HTTP reads | draft | must | 4-6
-2. [RM-0004](../roadmap/RM-0004.md) | roadmap-screen (Phase 6, 3a): the Roadmap screen, read-only | draft | must | 4-6 | waits on RM-0003
+1. [RM-0030](../roadmap/RM-0030.md) | roadmap-surfaces (Phase 6, 2b): next by the plan, the package's place, MCP and HTTP reads | draft | must | 2-4
+2. [RM-0004](../roadmap/RM-0004.md) | roadmap-screen (Phase 6, 3a): the Roadmap screen, read-only | draft | must | 4-6 | waits on RM-0030
 3. [RM-0005](../roadmap/RM-0005.md) | verify-node (6b-2): spec verify --node, MCP check_binding | draft | should | 2-3
 4. [RM-0006](../roadmap/RM-0006.md) | bundle-bindings (7a): an agent's reads carry its nodes' code bindings | draft | should | 3-5 | waits on RM-0005
 5. [RM-0007](../roadmap/RM-0007.md) | impact (7b): the blast radius of a node, a symbol or a revision | draft | should | 3-5 | waits on RM-0006

@@ -1,69 +1,73 @@
 ---
 class: spec
-status: draft
-scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, plugin]
-ref: Phase 6 slice 2 of `roadmap-items.md` (its Q-5, Q-6, N7); the requirement-analyst's breakdown of 2026-10-20, decided under the owner's pre-approval, review open; 05 s3.3; 07 s1.2, s3; 08 s2
+status: shipped
+scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, fixtures]
+ref: Phase 6 slice 2a of `roadmap-items.md` (its Q-5, Q-6, N7); the requirement-analyst's refresh of 2026-10-20 against 1a (725f338) and 1b (b88b680), split and decided under the owner's pre-approval (Q-A..Q-H), review open; 05 s3.3; 08 s2; developer iteration 1, the review accepted it (nits only)
+shipped: 2026-10-20
 adrs: [ADR-0052]
 ---
 
-# roadmap-position (Phase 6, 2): live progress, `next` by the plan, MCP and HTTP reads
+# roadmap-position (Phase 6, 2a): the tasks on the plan in `spec roadmap`
 
-A compact draft, refreshed against 1a and 1b as built before it starts.
+Split on 2026-10-20 (Q-A): this is 2a, the join in `spec roadmap` and the tolerant task read; 2b `docs/features/roadmap-surfaces.md` serves it (`next`, the package, MCP, HTTP, plugin 0.11.0, UI types). Plan items: RM-0003 (2a, shipped), RM-0030 (2b).
 
 ## Why
 
-1a and 1b place work from git alone; the owner still cannot see what is being worked on, `next` still takes the lowest-numbered `ready` task (`crates/specengine-cli/src/task.rs` `--next`; 07 s1.2 "priority later"), and an agent cannot see where its task sits on the path. Slice 2 joins the plan to the queue, read-only, and serves it on every surface.
+1a and 1b place work from git alone: the owner sees the path but not what is being worked on, and the plan cannot say which open item has an approved task waiting or a claimed one running. 2a joins the plan to this repository's task rows, read-only and per read (ADR-0052: position is computed, never stored, `docs/canon/architecture.md#storage`), on the one surface that already prints the plan.
 
-## Description and interactions
+Delivered: `spec roadmap` ends an item's line with its open tasks and prints the open tasks executing no open item after the pool's items; JSON `tasks` per item and `pool_tasks`; task lines count in the cut; the join's notes go to stderr only; no schema step, no table, no new exit. The view and core's lines stay git-only. No ADR: it applies ADR-0052, ADR-0012, ADR-0039 and ADR-0008. How it works now: `docs/canon/spec-roadmap.md` "Position", "Notes", "Command", "Cut"; the store read: `docs/canon/tasks.md` "API".
 
-- **`spec roadmap`** also reads the queue, read-only: an item is **in progress** when a task executing it is `in_progress` (its line gains ` | task T-NNNN in_progress`, JSON `tasks: [{id, status}]` per item); open tasks (not `done`, `accepted`, `cancelled`) executing no item are listed under the pool (JSON `pool_tasks`). Without a queue row nothing changes from 1a's output. The 1b view stays git only.
-- **Which item a task executes** (N7): of its `targets` with the `[roadmap] prefix`, the best placed: earliest release, then position; pool, then unplaced last; ties by ID. Editing an item after approval may mark its task `stale`, informational as today.
-- **`spec task show --next`, MCP `get_task {next: true}`**: `ready` tasks of this repository ordered by their item's (release rank, position, priority rank), then task number; tasks with no item after every placed one, by number. Without `[roadmap]` the order is today's. Advisory: no transition, claim or gate reads the plan (Q-5, ADR-0012); an unfinished predecessor never holds a task.
-- **Task package**: a new key **`roadmap`** (the existing `plan` key is the agent's submitted plan): `null`, or `{item, release, position, priority, waits_on}`; the brief gains one line `Roadmap: <ID>, release <r>, position <p> of <n>`. A new key keeps `schema_version` 1 (`docs/canon/task-package.md` "Versioning").
-- **MCP** `get_roadmap(release?, pool?)` = `spec roadmap --json` (structuredContent) and its text (content), cut at 40 000 characters with 1a's tail. Read-only; agents propose items, never set release or priority (ADR-0035, 08 AC-3).
-- **HTTP** `GET /api/projects/:p/roadmap[?release=R|?pool=true]`: the JSON document, browser view, uncut (`View::Browser`).
-- **Plugin** 0.11.0: the nineteenth tool; `get_roadmap` named in the `analyze` or `implement` skill.
+## Decided
 
-## Rules and edge cases
+2026-10-20 under the owner's pre-approval, review open.
 
-- WHEN the database is deleted, `spec roadmap` SHALL give 1a's git-derived keys unchanged and empty task-derived ones.
-- WHEN a project has no `[roadmap]`, `next` and the package SHALL be byte-identical to before.
-- WHEN a predecessor is unfinished, `ready`, `claim_task` and the gate SHALL behave as without the chain.
+| | Answer |
+|---|---|
+| Q-A | split at the schema seam: 2a core, store, CLI; 2b (RM-0030, after RM-0003) the rest; RM-0004 (3a) after RM-0030 |
+| Q-B | an item shows every open task (not `done`, `accepted`, `cancelled`) with its state; in progress when one is `in_progress`, never merged with the item's own `status:` |
+| Q-C | a task executes the first open item among its targets in the listing order over the whole plan; only done targets or none: a pool task; `--release R` filters what prints, never re-places |
+| Q-G | a store read with no schema step (`list_existing_tasks` over `open_existing`, the gate's precedent); 2b's `get_roadmap` reuses it, so mcp-read AC-18 stays green |
 
 ## Acceptance criteria
 
 rust-developer (M = the mutation that must turn the named test red):
 
-- [ ] RD-1 -- next; CLI `tests/task_next_roadmap.rs`. M: number order kept -> `next_follows_the_roadmap`; behaviour without `[roadmap]` changed -> `next_without_roadmap_is_lowest_number`.
-- [ ] RD-2 -- advisory. M: a predecessor check added -> `unfinished_predecessor_never_holds_a_task`.
-- [ ] RD-3 -- position. M: a claimed task ignored -> `claimed_task_marks_its_item_in_progress`. Unmutated: `database_loss_keeps_the_plan`, `best_placed_target_is_the_item`, `task_without_item_joins_the_pool`.
-- [ ] RD-4 -- package. M: `schema_version` 2 -> `p2_2_the_package_schema_is_pinned_at_version_1` (`mcp_tasks.rs`); the key named `plan` -> the package key pins.
-- [ ] RD-5 -- MCP. M: output differing from the CLI -> `get_roadmap_equals_the_cli`; `mcp_door.rs` and `server.rs`' size asserts green.
-- [ ] RD-6 -- HTTP. M: the route capped -> `roadmap_route_is_uncut`; `daemon_keys.rs` and `fixtures/daemon-keys.json` follow the new keys.
-- [ ] RD-7 -- plugin. M: the version not bumped -> `tool_schemas_follow_the_plugin_version` (`crates/specengine-mcp/tests/plugin_files.rs`); all nineteen tools named.
+- [x] RD-1 -- the join, core `tests/roadmap_position.rs` (new, pure, over `roadmap-a` and `roadmap-b`'s parsed plans). M1: the first target as written used -> `best_placed_target_is_the_item`; M2: the result following row order -> `position_ignores_task_row_order`. Unmutated: `done_item_targets_join_the_pool`, `non_item_targets_join_the_pool`, `tasks_by_number` (`T-9999` before `T-10000`; one row each of `done`, `accepted`, `cancelled` placed nowhere).
+- [x] RD-2 -- the CLI, `tests/roadmap_position.rs` (new; `task_common`'s `Pair` on git copies of `roadmap-a`, slug `tide-runner`; the binary). M3: a claimed task ignored -> `claimed_task_marks_its_item_in_progress`. Unmutated: `every_open_state_is_shown_by_number`, `pool_tasks_print_after_the_pool_items`, `database_loss_keeps_the_plan`, `other_repository_tasks_are_noted` (one note; the other repository shows them without it), `closed_tasks_are_not_listed`, `no_git_worktree_reads_no_tasks` (1a's bytes, no note, exit 0), `roadmap_creates_no_queue_table` (the tables `spec tree` leaves, `user_version` 0), `unreadable_queue_is_one_note` (newer schema, a corrupt row, `T` in `[ids]`: exit 0, one note, the plan's lines).
+- [x] RD-3 -- the cut, same file. M4: task lines not counted -> `roadmap_cut_counts_task_lines` (505 items, 3 pool tasks, a cell on the first: `n` 508 with no flag, 500 with `--release`, the cap held, `omitted` = `k`).
+- [x] RD-4 -- the view stays git-only: `view_ignores_the_queue`, `export_writes_the_view_without_a_data_directory`, `view_lines_are_the_roadmap_lines` (CLI `tests/roadmap_view.rs`) green unchanged; core `tests/roadmap_genre.rs` green over the three sources it scans.
 
-test-engineer: the queue cells over `roadmap-a` (a claimed task, a task with two item targets, a task with none, a deleted DB); `get_roadmap` against the CLI on both fixtures; the HTTP route on both.
+test-engineer:
 
-spec-writer (bytes 2026-10-20; trim before adding, never a raised cap):
+- [x] TE-1 -- `fixtures/roadmap-{a,b}/expected.json` gain `tasks: []` after each item's `cycle` and `pool_tasks: []` after `groups`; `expected.txt` unchanged; `roadmap_a_matches_expected`, `roadmap_b_matches_expected` and the rest of CLI `tests/roadmap.rs` green; core `tests/roadmap.rs` `fixture_plans_match_expected_json` green, its `plan_json` writing the two keys empty (the plan reads no queue).
 
-- [ ] SW-1 -- `spec-roadmap.md` "Position", "Next", "Surfaces".
-- [ ] SW-2 -- `tasks.md` `--next` (11 746 of 12 288); `task-package.md` (10 115); `mcp-read.md` (12 117: 171 B left); `plugin-files.md` (5 072: nineteen, 0.11.0); HTTP README (10 234: 6 B left); MCP README (10 210: 30 B left); 07 s1.2 `get_task`, s3; `CLAUDE.md` State.
+spec-writer (bytes by `wc -c` after / cap):
 
-## Files
+- [x] SW-0 -- the refresh and split; `roadmap-surfaces.md`; RM-0003 retitled, RM-0030 added, RM-0004 re-chained; `roadmap-screen.md`, `verify-node.md` re-pointed.
+- [x] SW-1 -- `docs/canon/spec-roadmap.md` 11 276 / 12 288 (+1 140; 1 012 B left for 2b): "Position" (new), "Notes" (the join's, stderr only), "Command" (`RoadmapRequest.git`, the queue read, the cell and task lines, two JSON keys), "Cut" (`n` with the pool's task lines); trimmed "Items" and "Config" wording. The five code citations of "Position" resolve (`doc_pointers`).
+- [x] SW-2 -- RM-0003 shipped and the view regenerated; 08 s2 Phase 6 names 2a; `CLAUDE.md` State 6 291 / 16 384; `docs/canon/tasks.md` "API" names `list_existing_tasks` (11 881 / 12 288). No change: core README (its `plan` pointer covers `plan_tasks`), store README ("ops named in those canons"), CLI README, `architecture.md`.
 
-rust-developer: core `roadmap.rs` (the queue join, the next key), model (the package's `roadmap`), CLI `roadmap.rs`, `task.rs`, `package.rs`; MCP the tool, its mirror, `INSTRUCTIONS`; HTTP the route; `plugin/` (version, skill). test-engineer: CLI `tests/task_next_roadmap.rs`, `tests/roadmap.rs`; MCP `tests/mcp_tasks.rs`, `tests/mcp_door.rs`, `tests/plugin_files.rs`; HTTP `tests/daemon_keys.rs`, `fixtures/daemon-keys.json`.
+## Risks
 
-## Dependencies and interactions
-
-- After 1b; about 1 week.
-- **6b-2** `verify-node.md`: its plugin MINOR becomes 0.12.0; `INSTRUCTIONS` had 1 892 B without probes after 6b-1 (1 968 with them, of 2 048): `get_roadmap` (about 40 B) and `check_binding` do not both fit without a trim, so 6b-2 is refreshed after this slice.
-- **7a** `bundle-bindings.md`: the package, `mirror.rs`, `p2_2…`, `daemon-keys.json`, `provisional.ts` and the `daemonKeys` counts shift here; its RD-9, RD-11 and UI-1 are refreshed after.
-- **11a-3** takes a plugin MINOR after 6b-2's.
+- **Two meanings of "in progress"**: the item's `status: in-progress` and a task's `in_progress`; both print verbatim, canon "Position" says which is which.
+- **Version skew**: install `spec`, `specengine-mcp`, `specengine-http` from one commit (1b's rule).
 
 ## Out of scope
 
-The screen (3a); moves (3b); a queue column or schema step (N7); a gate; dates.
+`next`, the package, MCP, HTTP, plugin, UI (2b); the screen (3a); moves (3b); a queue column or schema step (N7); a gate; dates.
 
 ## Implementation
 
-Not started.
+| Module | What it does |
+|---|---|
+| core `src/roadmap.rs` | `PlanTask {id, status, title, targets}` (`is_open`), `PlanTasks {items, pool}` (`of`, `in_progress`, `is_empty`), `plan_tasks` (listing index per item, tasks sorted by `task_key` then the row), module doc; `plan`, `summary`, `header`, `line`, `cells`, `entry`, the view untouched |
+| core `src/lib.rs` | re-exports `PlanTask`, `PlanTasks`, `plan_tasks`; module line |
+| store `src/queue/tasks.rs` | `SqliteQueue::list_existing_tasks`: one deferred read-only transaction, newer `user_version` `SchemaTooNew`, no `tasks` table empty; `list_tasks` shares the row reader `listed_tasks`, behaviour unchanged |
+| CLI `src/roadmap.rs` | `RoadmapRequest.git` (`Default` dropped); `queue_tasks` (the read order, notes), `repository` (git common dir), `task_cell`, `pool_task_line`, `cut` counting both, `RoadmapOutcome.{tasks, shown_pool_tasks, task_notes}`, JSON `tasks`, `pool_tasks`; module doc |
+| CLI `src/main.rs` | `RoadmapRequest { git: process_git(env) }`; the `roadmap` help names the open tasks (not in the spec's file list, pinned by nothing) |
+| CLI `src/lib.rs` | the module line ("never the queue" gone) |
+| tests, fixtures | core `tests/roadmap_position.rs` (new), `tests/roadmap.rs` `plan_json`; CLI `tests/roadmap_position.rs` (new); `fixtures/roadmap-{a,b}/expected.json` |
+
+No new dependency, no schema step; nothing in MCP, HTTP, `plugin/`, `ui/`, `daemon-keys.json`, `PACKAGE_KEYS` or `INSTRUCTIONS`. Deviations: none against this spec. Known, kept: the shared reader decodes every row of the project, so a corrupt `runs` row of a closed task or of another repository's task adds its `; not shown` note, as `task list` does (a narrow SELECT is 2b's option). A micro pass after the review, done, no output change: the doc comments of `RoadmapOutcome.messages` and `.truncated` updated; closed rows skipped before `same_repository`.
+
+Tests (the final tree): nextest core, code, CLI, MCP, HTTP, store, model, import 3 150 passed, 12 skipped; eval `build_graph`, `doc_pointers`, `anonymity`, `layout_cli`, `import_cli` 149 of 152, `doc_pointers` red only for the "Position" citations (resolved by SW-1), the two fixture-status guards green once committed; clippy `--all-targets`, fmt clean; `spec check` clean. Mutations 4 of 4 killed: M1 `best_placed_target_is_the_item`, M2 `position_ignores_task_row_order`, M3 (`in_progress` rows skipped) `claimed_task_marks_its_item_in_progress`, M4 `roadmap_cut_counts_task_lines` and `pool_task_lines_fill_the_cap`. New: core `roadmap_position.rs` (5), CLI `roadmap_position.rs` (13, beyond RD-2/RD-3 `pool_task_lines_fill_the_cap`, `pool_task_title_prints_on_one_line_escaped`, `failing_git_is_one_note`); TE-1 both `expected.json`, core `roadmap.rs` `plan_json`. Not covered: a store-level test of `list_existing_tasks` (covered end to end); the database-error and older-schema notes.

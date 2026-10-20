@@ -60,7 +60,7 @@ Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell`
 
 ### Phase 6. Planning: roadmap and pool (moved before the rest of Phase 3 by the owner's decision, 2026-10-20)
 
-Releases, priority, a `depends_on` chain, range estimates, a computed position, the pool; plan items are files in git (ADR-0052). Slices decided 2026-10-20 under the owner's pre-approval, review open, each scoped in its spec. Shipped 2026-10-20 (`docs/canon/spec-roadmap.md`): `roadmap-items` (1a; the open work seeded once as items in `docs/roadmap/`, read by `spec roadmap`) and `roadmap-view` (1b; the generated view replacing §2's slice lists, its "~N weeks" and "Total"). The draft `docs/features/roadmap.md` is abandoned as split.
+Releases, priority, a `depends_on` chain, range estimates, a computed position, the pool; plan items are files in git (ADR-0052). Slices decided 2026-10-20 under the owner's pre-approval, review open, each scoped in its spec. Shipped 2026-10-20 (`docs/canon/spec-roadmap.md`): `roadmap-items` (1a; the open work seeded once as items in `docs/roadmap/`, read by `spec roadmap`), `roadmap-view` (1b; the generated view replacing §2's slice lists, its "~N weeks" and "Total") and `roadmap-position` (2a; this repository's open tasks on `spec roadmap`, read-only; 2b `roadmap-surfaces` serves them). The draft `docs/features/roadmap.md` is abandoned as split.
 
 ## 3. Product acceptance criteria
 

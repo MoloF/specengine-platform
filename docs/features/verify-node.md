@@ -102,7 +102,7 @@ rust-developer (M = the mutation that must turn the named test red):
 - [ ] RD-5 -- keys (Q29). M: a row key added, or `node`, `symbol`, `omitted` absent from plain JSON -> `verify_json_every_key_present` (CLI `verify_output.rs`).
 - [ ] RD-6 -- exit 2 (S13; no MCP code). M: `read.rs` drops a rendered exit-2 document -> `check_binding_cannot_verify_keeps_its_rows`; a document at a usage exit 2 -> `check_binding_usage_has_no_document`.
 - [ ] RD-7 -- text and size (Q34). M: a moved `ok` row without its `moved from` line -> `verify_node_prints_moved_ok_rows`; `--node` uncut -> `verify_node_cut_names_narrowing`; over `MAX_RESULT_CHARS` -> `mcp_size`.
-- [ ] RD-8 -- `INSTRUCTIONS` (Q31). M: `check_binding` unnamed -> `mcp_default`; over 2 048 B, `probes` included -> `server.rs`' asserts; the text changed, a pin kept -> `mcp_decision.rs`, `mcp_path.rs`, `mcp_tasks.rs` (1 938), `mcp_create.rs` (2 014).
+- [ ] RD-8 -- `INSTRUCTIONS` (Q31). M: `check_binding` unnamed -> `mcp_default`; over 2 048 B, `probes` included -> `server.rs`' asserts; the text changed, a pin kept -> `mcp_decision.rs`, `mcp_path.rs`, `mcp_tasks.rs` (1 938), `mcp_create.rs` (2 014); after 2b (`roadmap-surfaces.md`) 1 978 and 2 054, so cut at least 6 B.
 - [ ] RD-9 -- read-only, no reader. M: a write under the root or a queue row -> `mcp_door`; a task transition reading a result -> `no_task_transition_reads_a_finding` (new: S18).
 - [ ] RD-10 -- graph. M: a store or `rusqlite` edge in MCP -> `build_graph.rs` (7); an HTTP route -> `fixtures/daemon-keys.json`'s test.
 - [ ] RD-11 -- plugin. M: `check_binding` unnamed -> `plugin_skills.rs`; the version unchanged -> `plugin_files.rs`.

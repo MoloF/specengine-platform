@@ -174,7 +174,7 @@ enum Command {
     },
     /// List the unapplied amendments: the working tree's live documents that name a node they amend (`links: {amends: [ID]}`), each with those links; read-only, exit 0 whatever is listed, 2 when it cannot run (no project, a config error, an incomplete walk).
     Health,
-    /// Print the plan of the `[roadmap]` items: releases in order, each one's open items by chain then priority, range sums, the current release, the pool; read-only, exit 0 whatever is listed, 1 when --release names no release, 2 when it cannot run (no project, a config error, no or a bad `[roadmap]`).
+    /// Print the plan of the `[roadmap]` items: releases in order, each one's open items by chain then priority with this repository's open tasks, range sums, the current release, the pool; read-only, exit 0 whatever is listed, 1 when --release names no release, 2 when it cannot run (no project, a config error, no or a bad `[roadmap]`).
     Roadmap {
         /// Only this release's group.
         #[arg(long, value_name = "R", conflicts_with = "pool")]
@@ -882,7 +882,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         Command::Roadmap { release, pool } => Outcome::Roadmap(Box::new(specengine_cli::roadmap(
             env,
             globals,
-            &RoadmapRequest { release, pool },
+            &RoadmapRequest {
+                release,
+                pool,
+                git: process_git(env),
+            },
         )?)),
         Command::Refs { reference } => Outcome::Refs(Box::new(specengine_cli::refs(
             env,

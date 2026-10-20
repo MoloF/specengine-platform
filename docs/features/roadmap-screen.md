@@ -8,24 +8,24 @@ adrs: [ADR-0052]
 
 # roadmap-screen (Phase 6, 3a): the Roadmap screen, read-only
 
-A compact draft, refreshed against slice 2 as built before it starts.
+A compact draft, refreshed against 2b (`roadmap-surfaces.md`, RM-0030) as built before it starts.
 
 ## Why
 
-The owner asked to see the path, the chain, the MVP line and the pool at a glance (2026-09-30: "decorative, additional"; 2026-10-20: needed now). After slice 2 the daemon serves the plan; the UI draws it, computing nothing (ADR-0033, `docs/canon/architecture.md#ui`).
+The owner asked to see the path, the chain, the MVP line and the pool at a glance (2026-09-30: "decorative, additional"; 2026-10-20: needed now). After 2b the daemon serves the plan; the UI draws it, computing nothing (ADR-0033, `docs/canon/architecture.md#ui`).
 
 ## Description and interactions
 
 - **Route**: a seventh nav section `roadmap`, `#/<p>/roadmap[/<ID>]` (N9; `ui/src/app/sections.ts`, `routes.ts`' "six" -> "seven", `Shell.tsx`), after Tasks; Health keeps its place.
-- **Lanes**: one per release in config order, the current release and the MVP cut marked in text, not by colour alone; then the pool (with slice 2's tasks executing no item) and unplaced. Each item a card: ID, title, status, priority, estimate, `waits on`, `cycle`, its task (slice 2), linking to its Tree node.
+- **Lanes**: one per release in config order, the current release and the MVP cut marked in text, not by colour alone; then the pool (with 2a's tasks executing no item) and unplaced. Each item a card: ID, title, status, priority, estimate, `waits on`, `cycle`, its open tasks (2a), linking to its Tree node.
 - **Chain**: a lazy, read-only `@xyflow/react` canvas of `depends_on` between items, laid out by the Graph screen's hand-written layered layout; a List twin carries the same content as text.
 - **Ranges**: a bar per release from the sums (min..max in `unit`), no dates, the unestimated count beside it.
-- **Data**: the daemon's `GET /api/projects/:p/roadmap` (slice 2) through the one client interface; the mock scenario for "Mock data". It re-reads on `task.*`, `proposal.approved` and `proposal.apply_failed`, one trailing read (as Health since 9a-3).
+- **Data**: the daemon's `GET /api/projects/:p/roadmap` (2b) through the one client interface; the mock scenario for "Mock data". It re-reads on `task.*`, `proposal.approved` and `proposal.apply_failed`, one trailing read (as Health since 9a-3).
 - **No write**: no drag, no stage, no command to copy for a move (3b, below).
 
 ## Acceptance criteria
 
-- [ ] UI-1 -- generated types for the roadmap document; `daemonKeys.test.ts`' count follows slice 2's keys.
+- [ ] UI-1 -- generated types for the roadmap document; `daemonKeys.test.ts`' count follows 2b's keys.
 - [ ] UI-2 -- routes: seven sections in order (`routes.test.ts`).
 - [ ] UI-3 -- no state by colour alone (`crates/specengine-eval/tests/ui_policy.rs`).
 - [ ] UI-4 -- the canvas is read-only (no drag handler, no edge creation) and the List twin carries the same items, edges and marks as text.
@@ -36,7 +36,7 @@ spec-writer: 07 s3 a Roadmap row; `ui/README.md` (8 181 of 10 240); a "Screen" s
 
 ## Files
 
-ui-developer: `ui/src/app/{sections,routes}.ts`, `Shell.tsx`, a `ui/src/roadmap/` screen, `ui/src/api` (the read), `ui/src/mocks/roadmap.*`. Can start on mocks after 1a; lands after slice 2.
+ui-developer: `ui/src/app/{sections,routes}.ts`, `Shell.tsx`, a `ui/src/roadmap/` screen, `ui/src/api` (the read), `ui/src/mocks/roadmap.*`. Can start on mocks after 1a; lands after 2b.
 
 ## Out of scope
 

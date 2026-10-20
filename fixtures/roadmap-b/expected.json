@@ -59,7 +59,8 @@
           "waits_on": [
             "WORK-030"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 2,
@@ -71,7 +72,8 @@
           "priority": "p1",
           "estimate": null,
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 3,
@@ -86,7 +88,8 @@
             "max": 0
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 4,
@@ -103,7 +106,8 @@
           "waits_on": [
             "WORK-021"
           ],
-          "cycle": true
+          "cycle": true,
+          "tasks": []
         },
         {
           "position": 5,
@@ -117,7 +121,8 @@
           "waits_on": [
             "WORK-020"
           ],
-          "cycle": true
+          "cycle": true,
+          "tasks": []
         },
         {
           "position": 6,
@@ -134,7 +139,8 @@
           "waits_on": [
             "WORK-021"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 7,
@@ -149,7 +155,8 @@
             "max": 3
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 8,
@@ -166,7 +173,8 @@
           "waits_on": [
             "WORK-010"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 9,
@@ -183,7 +191,8 @@
           "waits_on": [
             "WORK-011"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 10,
@@ -198,7 +207,8 @@
             "max": 1
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     },
@@ -228,7 +238,8 @@
             "max": 6
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 2,
@@ -243,7 +254,8 @@
             "max": 2
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 3,
@@ -258,7 +270,8 @@
             "max": 1
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     },
@@ -288,7 +301,8 @@
             "max": 2
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": null,
@@ -303,7 +317,8 @@
             "max": 2
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     },
@@ -333,7 +348,8 @@
             "max": 5
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": null,
@@ -345,11 +361,13 @@
           "priority": "p1",
           "estimate": null,
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     }
   ],
+  "pool_tasks": [],
   "notes": [
     "WORK-016: priority \"p9\" is not in [roadmap] priorities",
     "WORK-021: estimate \"4-2\" is not N or N-M",

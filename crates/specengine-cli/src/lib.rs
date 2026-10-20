@@ -138,8 +138,11 @@
 //!   over an unchanged tree; [`layer_c_state`] that snapshot's freshness;
 //! - [`roadmap()`]: `spec roadmap [--release R | --pool]` (task spec
 //!   `roadmap-items`), the plan of the `[roadmap]` items computed from the
-//!   repository's files over the index it updates, never the queue; a
-//!   `--release` naming no release is an outcome with its reason, exit 1;
+//!   repository's files over the index it updates, joined with this
+//!   repository's open tasks read as the queue holds them (task spec
+//!   `roadmap-position`: no schema step, a queue that cannot be read a
+//!   note, never an exit); a `--release` naming no release is an outcome
+//!   with its reason, exit 1;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`,
 //!   `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or refused by the
 //!   proposal or its target (the queue's commands), 2 could not run

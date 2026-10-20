@@ -24,7 +24,7 @@ unit       = "days"                       # optional: printed after every sum, n
 
 Core `roadmap_toml.rs`: `RoadmapConfig::from_toml(text, &IdScheme) -> Result<Option<_>, ProjectError>`, `None` without the table; the six fields plus `scheme` (the `[ids]` judged against) and `paths` (the text's `[paths]`), so `plan` resolves `depends_on` as `spec check` does. `ProjectConfig` only name-checks `roadmap`: a bad table fails `spec roadmap` alone; with a view ("View"), every command loading the check config. Every value is judged; the first error by line prints `<config>:<line>: <message>`, exit 2: another key (`unknown field`); a required key missing (`` `[roadmap]` has no `dir`: it is required ``, at the header line); a wrong type (`` `roadmap.prefix`: expected a string, found an integer ``); `prefix` not in `[ids]`, an alias, of shape `name` or feature-scoped; `dir` failing `checked_path`; `releases` or `priorities` empty, an entry not a slug (`slug_problem`: `grammar::is_slug`, then at most 64 bytes) or repeated (`` `roadmap.releases`: "v1" is repeated ``); `mvp_cut` not in `releases` (judged once they read); `unit` blank, over 32 bytes or holding a control character.
 
-Here: `RM` (`plan-item`, width 4) in `docs/roadmap/`, shard `docs/index-roadmap.md`, view `docs/generated/roadmap.md`; `mvp` the rest of Phases 0-2, `v1` Phases 3, 4, 6, `v2` Phase 5. An older `spec`, `specengine-mcp` or `specengine-http` refuses a config holding `[roadmap]` and an `INDEX_FORMAT` 12 index, an older `spec` the `roadmap` key: install the three from one commit.
+Here: `RM` (`plan-item`, width 4) in `docs/roadmap/`, shard `docs/index-roadmap.md`, view `docs/generated/roadmap.md`; `mvp` the rest of Phases 0-2, `v1` Phases 3, 4, 6, `v2` Phase 5. Older `spec`, `specengine-mcp`, `specengine-http` refuse `[roadmap]` with an `INDEX_FORMAT` 12 index, an older `spec` the `roadmap` key: install the three from one commit.
 
 ## Items
 
@@ -40,7 +40,7 @@ links:
   depends_on: [RM-0004]   # optional: the chain
 ```
 
-Typed (core `TYPED_KEYS` 30, model `Fields`, import's copy: `import-layout.md` "YAML"): `release`, `priority` `Text`; `estimate` `TextOrInteger`, a YAML integer kept as its decimal text (`3` -> `"3"`). Never counted (`node-revision.md` "Never counted"): a value of the key's type leaves `NORM_RECIPE`, every `norm_hash` and revision as they are. A wrongly typed one (a list, a mapping; a number or boolean under `release`, `priority`; a float or boolean under `estimate`) is `frontmatter-type`, kept in `extra`, and nulls its document's `norm_hash` as any wrongly typed key (`node-revision.md` "Null"), where it used to be an `unknown-key` warning.
+Typed (core `TYPED_KEYS` 30, model `Fields`, import's copy: `import-layout.md` "YAML"): `release`, `priority` `Text`; `estimate` `TextOrInteger`, a YAML integer kept as its decimal text (`3` -> `"3"`). Never counted (`node-revision.md` "Never counted"): a value of the key's type leaves `NORM_RECIPE`, every `norm_hash` and revision as they are. A wrongly typed one (a list, a mapping; a number or boolean under `release`, `priority`; a float or boolean under `estimate`) is `frontmatter-type`, kept in `extra`, its document's `norm_hash` null (`node-revision.md` "Null").
 
 No check rule of its own: `depends-cycle`, `ref-dangling`, `frontmatter-type`, `status-invalid`, `id-width`, `id-taken` cover items. Other reads see a node of its `[ids]` kind; a Tier 3 item only with `--archive`.
 
@@ -58,9 +58,15 @@ Core `roadmap.rs`, `plan(&CheckInput, &RoadmapConfig) -> Plan`: pure, no clock, 
 8. **Sums** per group over its open items: `min`, `max` the estimated bounds added, `unestimated` the others, never a 0. Cut: the releases from the first through `mvp_cut` (none without it); total: every release; pool and unplaced in neither.
 9. **Current**: the first release holding an open item, else none.
 
+## Position
+
+Core `plan_tasks(&Plan, &[PlanTask]) -> PlanTasks {items, pool}`, pure as `plan`, any row order one result. An open task (`is_open`: not `done`, `accepted`, `cancelled`) executes the first open item among its stored `targets` in the plan's order; with none it is a **pool task**. An item lists its tasks by number, states verbatim; `in_progress(id)` when one is `in_progress`, never its `status:`.
+
+The CLI reads the queue once, best effort as `GateQueue::tasks`: `SqliteQueue::open_existing`, `list_existing_tasks` (read-only, no schema step), never `open_context` or an exit. No task row, or a root in no git repository: no task, no note. Only this repository's rows (`same_repository`) join.
+
 ## Notes
 
-Of open items, each once, sorted by text: stderr `note:` lines after the index refresh's, and JSON `notes` (the plan's alone); never the exit.
+Of open items, each once, sorted by text: stderr `note:` lines after the index refresh's, and JSON `notes`; never the exit.
 
 - `<ID>: release "<r>" is not in [roadmap] releases`; `<ID>: release is not a string`
 - `<ID>: priority "<p>" is not in [roadmap] priorities`; `<ID>: priority is not a string`
@@ -69,28 +75,31 @@ Of open items, each once, sorted by text: stderr `note:` lines after the index r
 - `<ID>: outside [roadmap] dir <dir>` (still an item)
 - `<ID>: also defined in <path>; <path> is read`, when the file read or the one left out is open
 
+Then the join's, stderr only: `tasks not shown: <why>` once (the queue's error, `git in <root>: <error>`, `<config>: <clash>` for `PR` or `T`); `<row>; not shown` per row not decoded; `` <n> task(s) of another repository of the project `<slug>` not shown: `spec roadmap` shows the current repository's ``.
+
 ## Command
 
-`spec roadmap [--release R | --pool] [--json]`, CLI `roadmap.rs` (`roadmap(.., &RoadmapRequest {release, pool}) -> RoadmapOutcome`): reads the index the call updates, as `spec tree` (`corpus::indexed`), never the queue; writes only the data directory. `--release R`: that release's group; `--pool`: pool and unplaced; neither: every group. The first line and the JSON's top-level keys are always the whole plan's.
+`spec roadmap [--release R | --pool] [--json]`, CLI `roadmap.rs` (`roadmap(.., &RoadmapRequest {release, pool, git}) -> RoadmapOutcome`): reads the index the call updates, as `spec tree` (`corpus::indexed`), then the queue ("Position"); writes only the data directory. `--release R`: that release's group; `--pool`: pool and unplaced; neither: every group. The first line and the JSON's top-level keys are always the whole plan's.
 
 ```text
 roadmap: <o> open, <d> done; current <release or none>[; to <cut> <sum>]; total <sum>
 release <name>[ | current][ | mvp cut] | <o> open, <d> done | <sum>
-  <position>. <ID> | <title> | <status> | <priority> | <estimate>[ | waits on <ID>, …][ | cycle] | <path>
+  <position>. <ID> | <title> | <status> | <priority> | <estimate>[ | waits on <ID>, …][ | cycle] | <path>[ | task <T> <state>, …]
 pool | <o> open, <d> done | <sum>
-  - <ID> | … | <path>
+  - <ID> | … | <path>[ | task …]
+  - <T> | <state> | <title> | <targets, comma-joined>
 unplaced | <o> open, <d> done | <sum>
-  - <ID> | … | <path> | release <as written, or mistyped>
+  - <ID> | … | <path> | release <as written, or mistyped>[ | task …]
 [truncated: <k> of <n> items not shown; add --release R or --pool]
 ```
 
-An absent value prints `-`; `<sum>`: `<min>-<max>` (`<min>` when equal), ` <unit>` verbatim (`1 days`), `, <u> unestimated` when u > 0; text through the one-line rule. JSON, every key present, in order: `release`, `pool`, `reason`, `prefix`, `dir`, `unit`, `current`, `counts {open, done}`, `cut {release, min, max, unestimated}` or null, `total`, `groups [{group, name, current, mvp_cut, open, done, sum, items [{position, id, title, path, status, release, priority, estimate {min, max} or null, waits_on, cycle}]}]`, `notes`, `truncated`, `omitted`; `group` `release`, `pool` or `unplaced`, `name` null but for a release; an item's `release` as written, null when absent or mistyped.
+An absent value prints `-`; `<sum>`: `<min>-<max>` (`<min>` when equal), ` <unit>` verbatim (`1 days`), `, <u> unestimated` when u > 0; text through the one-line rule. JSON, every key present, in order: `release`, `pool`, `reason`, `prefix`, `dir`, `unit`, `current`, `counts {open, done}`, `cut {release, min, max, unestimated}` or null, `total`, `groups [{group, name, current, mvp_cut, open, done, sum, items [{position, id, title, path, status, release, priority, estimate {min, max} or null, waits_on, cycle, tasks [{id, status}]}]}]`, `pool_tasks [{id, status, title, targets}]`, `notes` (the plan's), `truncated`, `omitted`; `group` `release`, `pool` or `unplaced`, `name` null but for a release; an item's `release` as written, null when absent or mistyped.
 
 Exits: 0 printed; 1 `--release R` naming no release: stderr `spec: no release "R" in [roadmap] releases (<list>)`, with `--json` the document, `reason` set, `groups` empty; 2: no project, a config error, `spec: <config> has no [roadmap]`, a bad table, an index not updatable, `--release` with `--pool` (usage).
 
 ## Cut
 
-The tail prints its brackets literally. Before it at most 40 000 characters (`OUTPUT_CAP_CHARS`): lines, headers included, print whole and in order until the next would pass. `n` counts the items the request lists (with neither flag, pool and unplaced too), `k` those not shown; the tail and `truncated: true` only when k > 0. The JSON holds what prints: the groups whose header printed, their printed items, `omitted` = k.
+The tail prints its brackets literally. Before it at most 40 000 characters (`OUTPUT_CAP_CHARS`): lines, headers included, print whole and in order until the next would pass. `n` counts the items the request lists (with neither flag, pool and unplaced too) plus, the pool listed, its task lines; `k` those not shown; the tail and `truncated: true` only when k > 0. The JSON holds what prints: the groups whose header printed, their printed items, `omitted` = k.
 
 ## View
 

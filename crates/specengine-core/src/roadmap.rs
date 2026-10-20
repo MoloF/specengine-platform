@@ -42,6 +42,12 @@
 //! entry's roadmap view (canon `spec-roadmap`, "View"; the last output of
 //! [`crate::check::render_index_set`]) is the same lines in Markdown,
 //! `render_view`, from the walked files alone.
+//!
+//! [`plan_tasks`] joins a plan with a repository's task rows (canon
+//! `spec-roadmap`, "Position"), pure as [`plan`]: each open task executes
+//! the first open item among its targets in the listing's order, the
+//! others form the pool. [`plan`], its lines and the view never read a
+//! task: the caller adds the join to its own output.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
@@ -49,7 +55,7 @@ use std::fmt::Write as _;
 
 use petgraph::algo::tarjan_scc;
 use petgraph::graph::{DiGraph, NodeIndex};
-use specengine_model::{FmValue, Node, ParsedFile};
+use specengine_model::{FmValue, Node, ParsedFile, TaskStatus};
 
 use crate::check::config::DocClass;
 use crate::check::resolve::written;
@@ -58,6 +64,7 @@ use crate::check::{
     generated_header, relative_link,
 };
 use crate::roadmap_toml::RoadmapConfig;
+use crate::task::task_number;
 use crate::walk_scope::is_under;
 
 /// The link type of the chain.
@@ -929,4 +936,103 @@ fn item_notes(item: &Read<'_>, slot: Slot, config: &RoadmapConfig, notes: &mut B
     if !is_under(&item.file.path, &config.dir) {
         notes.insert(format!("{id}: outside [roadmap] dir {}", config.dir));
     }
+}
+
+/// A task row as the join reads it (canon `spec-roadmap`, "Position"): one
+/// of the queue's tasks of the reading repository, any state.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PlanTask {
+    /// As stored, `T-0001`.
+    pub id: String,
+    pub status: TaskStatus,
+    pub title: Option<String>,
+    /// As stored: canonical IDs, or an id-less document's path.
+    pub targets: Vec<String>,
+}
+
+impl PlanTask {
+    /// Not `done`, `accepted` or `cancelled`: the join places it.
+    pub fn is_open(&self) -> bool {
+        !matches!(
+            self.status,
+            TaskStatus::Done | TaskStatus::Accepted | TaskStatus::Cancelled
+        )
+    }
+}
+
+/// The open tasks of a plan ([`plan_tasks`]): the items they execute and
+/// the pool of the others.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct PlanTasks {
+    /// Per open item's ID, the open tasks executing it, by number; an item
+    /// no task executes is absent.
+    pub items: BTreeMap<String, Vec<PlanTask>>,
+    /// The open tasks executing no open item (no target an item, or only
+    /// done ones), by number.
+    pub pool: Vec<PlanTask>,
+}
+
+impl PlanTasks {
+    /// The open tasks executing the item `id`, by number.
+    pub fn of(&self, id: &str) -> &[PlanTask] {
+        self.items.get(id).map_or(&[], Vec::as_slice)
+    }
+
+    /// The item `id` is in progress: a task executing it is `in_progress`.
+    /// Its own `status:` is the file's, never this.
+    pub fn in_progress(&self, id: &str) -> bool {
+        self.of(id)
+            .iter()
+            .any(|task| task.status == TaskStatus::InProgress)
+    }
+
+    /// No open task at all.
+    pub fn is_empty(&self) -> bool {
+        self.items.is_empty() && self.pool.is_empty()
+    }
+}
+
+/// The join of `plan` with the task rows `tasks` (canon `spec-roadmap`,
+/// "Position"): pure, any row order giving one result. Of the open rows
+/// ([`PlanTask::is_open`]), each executes the first of its targets that
+/// is an open item of `plan` in `spec roadmap`'s listing order (the
+/// groups in order, each one's items in order), targets compared with item
+/// IDs as written; one with none, or with only done or unknown targets,
+/// joins the pool. Tasks are ordered by number (an ID that is none after
+/// every number), then by the whole row. Closed rows are left out.
+pub fn plan_tasks(plan: &Plan, tasks: &[PlanTask]) -> PlanTasks {
+    let mut listing: BTreeMap<&str, usize> = BTreeMap::new();
+    for (at, item) in plan
+        .groups
+        .iter()
+        .flat_map(|group| &group.items)
+        .enumerate()
+    {
+        listing.entry(item.id.as_str()).or_insert(at);
+    }
+    let mut open: Vec<&PlanTask> = tasks.iter().filter(|task| task.is_open()).collect();
+    open.sort_by(|a, b| task_key(a).cmp(&task_key(b)).then_with(|| a.cmp(b)));
+    let mut joined = PlanTasks::default();
+    for task in open {
+        let item = task
+            .targets
+            .iter()
+            .filter_map(|target| listing.get_key_value(target.as_str()))
+            .min_by_key(|&(_, &at)| at)
+            .map(|(&id, _)| id);
+        match item {
+            Some(id) => joined
+                .items
+                .entry(id.to_owned())
+                .or_default()
+                .push(task.clone()),
+            None => joined.pool.push(task.clone()),
+        }
+    }
+    joined
+}
+
+/// A task's place in number order: its number, an ID that is none last.
+fn task_key(task: &PlanTask) -> (u64, &str) {
+    (task_number(&task.id).unwrap_or(u64::MAX), task.id.as_str())
 }

@@ -62,7 +62,8 @@
             "max": 5
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 2,
@@ -74,7 +75,8 @@
           "priority": "should",
           "estimate": null,
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 3,
@@ -91,7 +93,8 @@
           "waits_on": [
             "RM-0030"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 4,
@@ -106,7 +109,8 @@
             "max": 4
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 5,
@@ -123,7 +127,8 @@
           "waits_on": [
             "RM-0010"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 6,
@@ -137,7 +142,8 @@
           "waits_on": [
             "RM-0011"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 7,
@@ -152,7 +158,8 @@
             "max": 2
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 8,
@@ -167,7 +174,8 @@
             "max": 1
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     },
@@ -197,7 +205,8 @@
             "max": 2
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 2,
@@ -214,7 +223,8 @@
           "waits_on": [
             "RM-0020"
           ],
-          "cycle": true
+          "cycle": true,
+          "tasks": []
         },
         {
           "position": 3,
@@ -231,7 +241,8 @@
           "waits_on": [
             "RM-0021"
           ],
-          "cycle": true
+          "cycle": true,
+          "tasks": []
         },
         {
           "position": 4,
@@ -249,7 +260,8 @@
             "RM-0030",
             "RM-0020"
           ],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": 5,
@@ -264,7 +276,8 @@
             "max": 1
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     },
@@ -294,7 +307,8 @@
             "max": 5
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         },
         {
           "position": null,
@@ -306,7 +320,8 @@
           "priority": null,
           "estimate": null,
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     },
@@ -336,11 +351,13 @@
             "max": 6
           },
           "waits_on": [],
-          "cycle": false
+          "cycle": false,
+          "tasks": []
         }
       ]
     }
   ],
+  "pool_tasks": [],
   "notes": [
     "RM-0012: estimate \"4-2\" is not N or N-M",
     "RM-0018: priority \"urgent\" is not in [roadmap] priorities",

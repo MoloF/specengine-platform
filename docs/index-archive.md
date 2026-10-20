@@ -69,6 +69,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/rev-discipline.md](features/rev-discipline.md) shipped
 - [docs/features/rev-rule.md](features/rev-rule.md) shipped
 - [docs/features/roadmap-items.md](features/roadmap-items.md) shipped
+- [docs/features/roadmap-position.md](features/roadmap-position.md) shipped
 - [docs/features/roadmap-view.md](features/roadmap-view.md) shipped
 - [docs/features/roadmap.md](features/roadmap.md) abandoned
 - [docs/features/round.md](features/round.md) shipped
@@ -109,4 +110,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/verify-task.md](features/verify-task.md) shipped
 - [docs/features/verify-tests.md](features/verify-tests.md) shipped
 - [docs/roadmap/RM-0002.md](roadmap/RM-0002.md) shipped
+- [docs/roadmap/RM-0003.md](roadmap/RM-0003.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped
