@@ -102,7 +102,7 @@ Same header, own tag. Evidence for following (5c), never a judge: verify compare
 | `quote` | `put(before) ‖ put(head) ‖ put(tail) ‖ put(after)`: `head`, `tail` the source from the first attached attribute (else the item) to the item's end, split around the name (no name: `tail` empty); `before`, `after` the nearest non-blank line before `head`'s line and after the item's last line, spaces and tabs trimmed (none: empty). A neighbour's edit changes it by design |
 | `body_bytes` | `u32`, not hashed: the text lengths of the leaves `walk3(body)` emits (comments, `,`, N1-N3 forms excluded), summed, saturating |
 
-**Triviality**: `body_bytes < TRIVIAL_BODY_BYTES` (124, 08 AC-15), `LevelHashes::is_trivial()` the one comparison (5c pins a copy); a trivial item is never followed. No recipe, lock or index byte holds it.
+**Triviality**: `body_bytes < TRIVIAL_BODY_BYTES` (124, 08 AC-15), `LevelHashes::is_trivial()` (5c's core gets it as a parameter); a trivial item is never followed. No recipe, lock or index byte holds it.
 
 **Broken** (08 AC-14): an item with `has_error()` on itself or an attached attribute, or a run past the cap, gets no level and no fingerprint: `CannotVerify` with `hash_item`'s categories.
 
