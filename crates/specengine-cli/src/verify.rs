@@ -42,6 +42,18 @@
 //! over the index's side (a shared path and blob neither read nor parsed
 //! again), Pre-existing as `--changed` marks it. An unmerged path is (5)
 //! each; an index blob that cannot be read or parsed (3).
+//!
+//! `--task T` (task spec `verify-task`; `--staged` excluded, a usage
+//! error): after discovery the task is resolved ([`named_task`], the queue
+//! opened as `spec task show` opens it, `--config` only the root's own
+//! file); any failure there exits 2, stdout empty. Then plain's run (with
+//! `--changed` its base, Pre-existing marked over the whole tree), and,
+//! with no run cause, its rows kept to the task's set from the same corpus
+//! ([`task_set`], "A row in a set" both halves); `skipped` 0. Counts,
+//! cascade, `delta`, hints, verdict and exit are the kept rows'; a run
+//! cause is never filtered. A row naming no node now and a set node no
+//! kept row reaches are each counted in a note; the task is read, never
+//! changed.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -57,7 +69,10 @@ use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGi
 use crate::code_walk::read_tree;
 use crate::corpus::indexed;
 use crate::lock::{build_recipes, read_lock};
+use crate::node_set::{Named, named_task, task_set};
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text, locate};
+use crate::proposals::{escaped_error, open_context};
+use crate::refs::{Corpus, NodeKey};
 use crate::verify_rows::{
     Anchor, CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, CommitConfig, HeadMode,
     IndexShare, Judged, Row, RunCause, Walked, judge_commit, judge_walk, read_commit, read_head,
@@ -68,6 +83,10 @@ use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 /// judge's, `verify_rows`).
 const CAUSE_UNMERGED: u8 = 5;
 const CAUSE_DATA: u8 = 8;
+
+/// `--task` with `--staged`, as the library refuses it (`main`: clap's
+/// conflict; task spec `verify-task`): a commit being recorded has no task.
+const STAGED_TASK: &str = "the argument '--task <T>' cannot be used with '--staged'";
 
 /// What `spec verify` judges, and whether against `HEAD`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -86,6 +105,9 @@ pub enum VerifiedTree {
 pub struct VerifyRequest {
     /// Plain, `--changed` or `--staged`.
     pub tree: VerifiedTree,
+    /// `--task T` as written: the rows kept to the task's nodes (task spec
+    /// `verify-task`); refused with `--staged`.
+    pub task: Option<String>,
     /// Git's environment (`--staged`: its `GIT_INDEX_FILE` names the index).
     pub git: GitEnv,
 }
@@ -192,10 +214,12 @@ pub struct VerifyOutcome {
     pub mode: Option<Mode>,
     /// `None` plain; `HEAD`, `unborn`.
     pub base: Option<&'static str>,
+    /// `--task`'s task ID; `None` without it.
+    pub task: Option<String>,
     pub verdict: Verdict,
-    /// Every row, `ok` too, in key order.
+    /// Every row, `ok` too, in key order (`--task`: those of its nodes).
     pub rows: Vec<VerifyRow>,
-    /// Markers skipped: `queue` and `other_project` IDs.
+    /// Markers skipped: `queue` and `other_project` IDs (`--task`: 0).
     pub skipped: usize,
     /// The run causes, in order.
     pub cannot: Vec<String>,
@@ -224,19 +248,32 @@ impl VerifyOutcome {
     }
 }
 
-/// `spec verify`: only discovery fails the call; every later failure is a
-/// run cause of the outcome (exit 2).
+/// `spec verify`: only discovery (and `--task`'s task) fails the call;
+/// every later failure is a run cause of the outcome (exit 2).
 pub fn verify(
     env: &Env,
     globals: &Globals,
     request: &VerifyRequest,
 ) -> Result<VerifyOutcome, CliError> {
     if request.tree == VerifiedTree::Staged {
+        if request.task.is_some() {
+            return Err(CliError::spec(STAGED_TASK));
+        }
         return verify_staged(env, globals, request);
     }
     let changed = request.tree == VerifiedTree::Changed;
     let (project, text) = discover_with_text(env, globals)?;
     project.slug()?;
+    // The task before anything else is read: its refusal exits 2 with
+    // stdout empty, never a run cause (task spec `verify-task`).
+    let task = match &request.task {
+        Some(written) => Some(
+            open_context(env, globals, &request.git)
+                .and_then(|context| named_task(&context, written))
+                .map_err(escaped_error)?,
+        ),
+        None => None,
+    };
     let mut messages = Vec::new();
     let mut causes: Vec<RunCause> = Vec::new();
     let label = &project.config_label;
@@ -342,6 +379,11 @@ pub fn verify(
             if let Err(cause) = open.finish() {
                 causes.push(RunCause::new(CAUSE_GIT, cause.message));
             }
+            // `--task`: the rows judged, kept to the task's nodes before the
+            // verdict; a run cause is the whole run's, never filtered.
+            if let (Some(task), Some(rows), true) = (&task, judged.as_mut(), causes.is_empty()) {
+                keep_task_rows(rows, task, &input, &project, &mut messages);
+            }
         }
         // The session's end is no cause of its own: one is listed already.
         (.., Some(open)) => {
@@ -353,12 +395,68 @@ pub fn verify(
         configured,
         has_base: changed,
         base,
+        task: task.map(|task| task.id),
         head_mode,
         judged,
         causes,
         messages,
         label,
     }))
+}
+
+/// `--task`'s filter (task spec `verify-task`): `judged`'s rows kept to
+/// `task`'s set, built from the same corpus, by "A row in a set", both
+/// halves. A row keeps no written marker ID: its key's node is the node its
+/// markers resolve to (canonical), or their ID part as written, which the
+/// judge reads as it read the markers; so the key's node is the marker half
+/// when the row has a marker, and the entry half when it has an entry.
+/// `skipped` is 0. Notes: the set's refs naming nothing, the rows naming
+/// no node now (never kept), the set's nodes no kept row reaches.
+fn keep_task_rows(
+    judged: &mut Judged,
+    task: &specengine_store::Task,
+    input: &specengine_core::check::CheckInput,
+    project: &ProjectRoot,
+    messages: &mut Vec<Message>,
+) {
+    let scheme = &project.config.scheme;
+    let mut corpus = Corpus::new(input, scheme, &project.config.paths);
+    let set = task_set(task, &corpus, scheme, messages);
+    let named = Named::of(&corpus, scheme);
+    let mut reached: BTreeSet<NodeKey> = BTreeSet::new();
+    let mut nameless = 0usize;
+    judged.rows.retain(|row| {
+        let node = row.key.node.as_str();
+        let written = [node];
+        let markers: &[&str] = if row.markers.is_empty() {
+            &[]
+        } else {
+            &written
+        };
+        let entry = row.entry.as_ref().map(|_| node);
+        let nodes = set.row_nodes(&mut corpus, markers, entry);
+        if nodes.is_empty() {
+            if !named.any(&mut corpus, markers, entry) {
+                nameless += 1;
+            }
+            return false;
+        }
+        reached.extend(nodes);
+        true
+    });
+    judged.skipped = 0;
+    if nameless > 0 {
+        messages.push(Message::Note(format!(
+            "verify --task: {nameless} rows name no node now; plain spec verify lists them"
+        )));
+    }
+    let without = set.keys().filter(|key| !reached.contains(key)).count();
+    if without > 0 {
+        messages.push(Message::Note(format!(
+            "verify --task: {without} nodes of {} have no binding",
+            task.id
+        )));
+    }
 }
 
 /// What a run gathered before its verdict.
@@ -368,6 +466,8 @@ struct Gathered<'a> {
     /// `--changed` or `--staged`.
     has_base: bool,
     base: Option<&'static str>,
+    /// `--task`'s task ID.
+    task: Option<String>,
     head_mode: HeadMode,
     judged: Option<Judged>,
     causes: Vec<RunCause>,
@@ -383,6 +483,7 @@ fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
         configured,
         has_base,
         base,
+        task,
         head_mode,
         judged,
         mut causes,
@@ -407,6 +508,7 @@ fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
     VerifyOutcome {
         mode,
         base,
+        task,
         verdict,
         rows,
         skipped,
@@ -533,6 +635,7 @@ fn verify_staged(
         configured,
         has_base: true,
         base,
+        task: None,
         head_mode,
         judged,
         causes,
@@ -1118,9 +1221,14 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
     } else {
         String::new()
     };
+    // `--task`: `verify --task <T>: ` (task spec `verify-task`).
+    let command = match &outcome.task {
+        Some(task) => format!("verify --task {task}"),
+        None => "verify".to_owned(),
+    };
     out.push_str(&format!(
-        "verify: {}{mode}: {} fix, {} check{pre_existing}, {} cannot, {} ok{moved}; {} by blob, \
-         {} by ast; {} skipped\n",
+        "{command}: {}{mode}: {} fix, {} check{pre_existing}, {} cannot, {} ok{moved}; {} by \
+         blob, {} by ast; {} skipped\n",
         outcome.verdict.as_str(),
         counts.fix,
         counts.check,
@@ -1213,6 +1321,8 @@ struct DeltaJson<'a> {
 struct VerifyJson<'a> {
     mode: Option<&'static str>,
     base: Option<&'static str>,
+    /// `--task`'s ID, `null` without it (task spec `verify-task`).
+    task: Option<&'a str>,
     verdict: &'static str,
     counts: CountsJson,
     cascade: CascadeJson,
@@ -1243,6 +1353,7 @@ impl Serialize for VerifyOutcome {
         let document = VerifyJson {
             mode: self.mode.map(Mode::as_str),
             base: self.base,
+            task: self.task.as_deref(),
             verdict: self.verdict.as_str(),
             counts: CountsJson {
                 rows: counts.rows,

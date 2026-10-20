@@ -31,7 +31,8 @@
 //! canon `spec-lock`, "`spec lock regen`") and `spec lock rebase`
 //! ([`lock_rebase`]: task spec `lock-rebase`); `spec verify [--changed |
 //! --staged]` ([`verify`]: canon `spec-verify`, "Rows", "Verdict and
-//! exit"), drift between `spec.lock` and the tree, read-only; task spec
+//! exit"; `--task T [--changed]`: task spec `verify-task`), drift between
+//! `spec.lock` and the tree, read-only; task spec
 //! `drift-queue`: `spec propose drift` ([`propose_drift`]), the drift of
 //! `HEAD`'s commit queued as `drift` items for the owner, approved by the
 //! same lock accept; task spec `rev-rule`: `spec bump` ([`bump`]), the
@@ -117,9 +118,10 @@
 //!   ([`Serve::Start`], `main` execs it); [`DaemonFile`] is `daemon.json`,
 //!   which only the daemon writes ([`prepared_data_dir`], [`checked_data_dir`]
 //!   its data directory, created and guarded);
-//! - [`verify`]: `spec verify [--changed]`, a state per lock key and
-//!   marker binding, Fix, Check or Pre-existing findings, the verdict under
-//!   `[verify] mode`; its run causes are in the report (exit 2);
+//! - [`verify`]: `spec verify [--changed] [--task T]`, a state per lock key
+//!   and marker binding, Fix, Check or Pre-existing findings, the verdict
+//!   under `[verify] mode`; its run causes are in the report (exit 2);
+//!   `--task` keeps the rows of a task's nodes (task spec `verify-task`);
 //!   [`verify_tests`]: `spec verify --tests [--task T]` (task spec
 //!   `verify-tests`), the `@verifies` tests run by the project's own
 //!   command after the owner's [`Consent`], Unix only;

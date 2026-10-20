@@ -7,7 +7,10 @@
 //! marker (`fixtures/verify-ecs`: `empty`). The binary runs where the
 //! terminal or the usage error is the subject (stdin a pipe holding `y`:
 //! an agent's shell), the library with a consent closure elsewhere. Each
-//! test names the mutation that turns it red (`M:`).
+//! test names the mutation that turns it red (`M:`). `--task` without
+//! `--tests` is plain verify's scope since docs/features/verify-task.md
+//! (8a-2): its forms, `--task --staged` the usage error, are
+//! `verify_task.rs`'s `verify_task_with_staged_is_usage`.
 
 mod common;
 mod lock_common;
@@ -54,34 +57,6 @@ fn verify_tests_with_staged_is_usage() {
         }
     }
     kiln.assert_nothing_started("usage");
-}
-
-/// RD-1 (P1): `--task` without `--tests` is a usage error in 8a-1 (8a-2
-/// lifts it), alone and beside `--changed` or `--staged` (clap waives a
-/// `requires` when a conflicting flag is present): exit 2, stdout empty,
-/// the message naming `--tests`. M: `--task` alone run (plain verify
-/// answers on stdout), or the check left to clap.
-#[test]
-fn verify_task_without_tests_is_usage() {
-    let kiln = Kiln::new("vt-usage-task");
-    let task = kiln.new_task(&["KILN-RAMP"]);
-    for args in [
-        &["verify", "--task", task.as_str()][..],
-        &["verify", "--task", task.as_str(), "--json"][..],
-        &["verify", "--changed", "--task", task.as_str()][..],
-        &["verify", "--staged", "--task", task.as_str()][..],
-        &["verify", "--staged", "--task", task.as_str(), "--json"][..],
-    ] {
-        let run = kiln.spec_piped_stdin(args, b"y\n");
-        run.code(2);
-        assert_eq!(run.stdout, "", "{args:?}: stdout empty");
-        assert!(
-            run.stderr.contains("--tests"),
-            "{args:?}: the usage error names --tests:\n{}",
-            run.stderr
-        );
-    }
-    kiln.assert_nothing_started("--task alone");
 }
 
 /// RD-2 (ADR-0044): `require_terminal("verify --tests")` runs before any

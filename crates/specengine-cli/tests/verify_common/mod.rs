@@ -17,6 +17,10 @@
 //! from the spec's "States" and "Output", never from the command's own
 //! output.
 //!
+//! docs/features/verify-task.md's tests (`verify_task.rs`) make their tasks
+//! here ([`new_task`], [`plan_task`], [`approve_task`], [`claim_task`]):
+//! library calls into the repository's scratch `HOME`, at [`TASK_CLOCK`].
+//!
 //! Only the verify test binaries include this module (`mod
 //! verify_common;`, after `mod common;` and `mod lock_common;`).
 
@@ -27,6 +31,10 @@ use std::fs;
 use std::path::Path;
 
 use serde_json::{Value, json};
+use specengine_cli::{
+    CliError, Globals, ProposedText, TaskClaimRequest, TaskDecisionRequest, TaskNewRequest,
+    TaskOutcome, TaskPlanRequest,
+};
 use specengine_store::{ProposalFilter, ProposalQueue as _, SqliteQueue};
 
 use crate::common::{Run, copy_dir, data_dir, fixture, snapshot};
@@ -56,9 +64,10 @@ pub const STAMINA_MD: &str = "docs/spec/stamina.md";
 /// The three modes of `[verify]`, loosest first.
 pub const MODES: [&str; 3] = ["observe", "enforce-introduced", "enforce"];
 
-/// The keys of the JSON document, in order ("Output").
-pub const TOP_KEYS: [&str; 9] = [
-    "mode", "base", "verdict", "counts", "cascade", "rows", "delta", "cannot", "notes",
+/// The keys of the JSON document, in order ("Output"; `task` after `base`
+/// since docs/features/verify-task.md "spec verify --task", **JSON**).
+pub const TOP_KEYS: [&str; 10] = [
+    "mode", "base", "task", "verdict", "counts", "cascade", "rows", "delta", "cannot", "notes",
 ];
 
 /// The keys of a row, in order ("Output"; `levels` after `compared` since
@@ -315,6 +324,100 @@ pub fn set_mode(root: &Path, mode: &str) {
     let mut text = fs::read_to_string(&path).expect("specengine.toml");
     text.push_str(&format!("\n[verify]\nmode = \"{mode}\"\n"));
     fs::write(path, text).expect("specengine.toml");
+}
+
+// ------------------------------------------------------------------ tasks
+
+/// The clock the task commands of docs/features/verify-task.md's tests
+/// run at.
+pub const TASK_CLOCK: &str = "2026-10-20T09:00:00Z";
+
+/// A task command that must answer: its outcome.
+fn task_answered(outcome: Result<TaskOutcome, CliError>, context: &str) -> TaskOutcome {
+    let outcome = outcome.unwrap_or_else(|error| panic!("{context}: {error}"));
+    assert_eq!(outcome.exit().code(), 0, "{context}: {outcome:?}");
+    outcome
+}
+
+/// `spec task new --nodes <nodes>` through the library from the root:
+/// the new ID (`draft`).
+pub fn new_task(repo: &LockRepo, nodes: &[&str]) -> String {
+    new_task_in(repo, &repo.root, nodes)
+}
+
+/// [`new_task`] from the worktree at `cwd` (another repository of the
+/// project when `cwd` is a copy: the same `HOME`, the same queue).
+pub fn new_task_in(repo: &LockRepo, cwd: &Path, nodes: &[&str]) -> String {
+    let outcome = specengine_cli::task_new(
+        &repo.env(cwd),
+        &Globals::default(),
+        &TaskNewRequest {
+            nodes: nodes.iter().map(|node| (*node).to_owned()).collect(),
+            title: Some("Check the scope".to_owned()),
+            goal: Some("Verify the task's nodes only.".to_owned()),
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: TASK_CLOCK.to_owned(),
+            git: repo.git_env(cwd),
+        },
+    );
+    task_answered(outcome, "task new").id.expect("a task ID")
+}
+
+/// `spec task plan <id>` with `criteria` and `affected` (`review`).
+pub fn plan_task(repo: &LockRepo, id: &str, criteria: &[&str], affected: &[&str]) {
+    let outcome = specengine_cli::task_plan(
+        &repo.env(&repo.root),
+        &Globals::default(),
+        &TaskPlanRequest {
+            id: id.to_owned(),
+            plan: ProposedText::Given(b"1. Change the code.\n2. Verify the task.\n".to_vec()),
+            criteria: criteria.iter().map(|c| (*c).to_owned()).collect(),
+            affected: affected.iter().map(|a| (*a).to_owned()).collect(),
+            now: TASK_CLOCK.to_owned(),
+            git: repo.git_env(&repo.root),
+        },
+    );
+    task_answered(outcome, "task plan");
+}
+
+/// The owner's `spec task approve <id>` (`ready`), consent `y`.
+pub fn approve_task(repo: &LockRepo, id: &str) {
+    let mut asked = 0;
+    let mut consent = |_: &str| {
+        asked += 1;
+        true
+    };
+    let outcome = specengine_cli::task_approve(
+        &repo.env(&repo.root),
+        &Globals::default(),
+        &TaskDecisionRequest {
+            id: id.to_owned(),
+            note: None,
+            now: TASK_CLOCK.to_owned(),
+            git: repo.git_env(&repo.root),
+        },
+        &mut consent,
+    );
+    task_answered(outcome, "task approve");
+    assert_eq!(asked, 1, "approve asks once");
+}
+
+/// `spec task claim <id>` for the root's worktree (`in_progress`, run 1).
+pub fn claim_task(repo: &LockRepo, id: &str) {
+    let outcome = specengine_cli::task_claim(
+        &repo.env(&repo.root),
+        &Globals::default(),
+        &TaskClaimRequest {
+            id: id.to_owned(),
+            role: "developer".to_owned(),
+            worktree: repo.root.clone(),
+            now: TASK_CLOCK.to_owned(),
+            git: repo.git_env(&repo.root),
+        },
+    );
+    task_answered(outcome, "task claim");
 }
 
 /// The class "States" gives a state; `null` for `ok`.

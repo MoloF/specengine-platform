@@ -136,7 +136,7 @@ Shipped as `round` (`docs/canon/round.md`, ADR-0038); R and A records, cancelled
 
 ## 6. Implementation, verification, acceptance
 
-1. The developer places `// @implements <node>` at a new or changed symbol, the tester places `// @verifies <AC|node>` at tests.
+1. The developer places `// @implements <node>` at a new or changed symbol, the tester places `// @verifies <AC|node>` at tests. Before `report_run` the agent runs `spec verify --task T-0107`, plain verify's rows kept to the task's nodes, no terminal; the owner adds `--changed` at review (shipped 8a-2: `docs/canon/spec-verify-scope.md`).
 2. The owner runs `spec verify --tests --task T-0107` on a terminal: after one `[y/N]` it runs the bound tests through the project's `[verify] tests` template and records a `verify.tests` event, no `runs` row (shipped 8a-1: `docs/canon/spec-verify-tests.md`); from 8b, on success it records evidence in `spec.lock` (`[[tested]]`, ADR-0044) and `impl_status → verified`. **The machine sets the status, not the agent's self-report.**
 3. `complete_task` → `done`. Manual criteria (`kind: manual`) stay open and land in the "awaiting acceptance" panel.
 4. `spec ship <feature>`: the feature spec is compressed to intent and criteria, the rest goes to the archive; `--accepted` sets `acceptance: accepted`.

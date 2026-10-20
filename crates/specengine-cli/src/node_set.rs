@@ -12,16 +12,26 @@
 //!   each node of an ambiguous ID, a look-alike under its Latin fix's
 //!   node), and the node of its lock entry when that is a set node's
 //!   canonical ID. Only the builder adds sections or parents.
+//! - **The task named** ([`named_task`]): `--task T` of this repository,
+//!   read from the queue `spec task show` opens; every refusal exits 2
+//!   with stdout empty (`--tests`, and plain `--task`: task spec
+//!   `verify-task`).
+//! - **A row naming a node** ([`Named::any`]): the same rule over every
+//!   node of the corpus; plain `--task` counts the rows naming none in a
+//!   note instead of keeping them (task spec `verify-task`).
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use specengine_core::check::canonical_id;
+use specengine_core::task::task_prefix_clash;
 use specengine_model::IdScheme;
 use specengine_store::Task;
 
-use crate::Message;
+use crate::proposals::QueueContext;
 use crate::refs::{Corpus, NodeKey};
 use crate::show::{Target, classify};
+use crate::task::{find_task, not_a_task, written_task};
+use crate::{CliError, Message};
 
 /// Why a stored ref's `@rev` would be ignored (no stored ref has one).
 const REV_IGNORED: &str = "a task's node set reads no revision";
@@ -87,6 +97,60 @@ impl NodeSet {
         }
         found
     }
+}
+
+/// The canonical cited IDs of every node of a corpus: whether a row names
+/// any node now ("A row in a set" with the set every node).
+#[derive(Debug)]
+pub(crate) struct Named {
+    ids: BTreeSet<String>,
+}
+
+impl Named {
+    /// Every node of `corpus` with an ID, by its canonical cited ID.
+    pub(crate) fn of(corpus: &Corpus<'_>, scheme: &IdScheme) -> Self {
+        let mut ids = BTreeSet::new();
+        for (file, checked) in corpus.files.iter().enumerate() {
+            let Some(parsed) = &checked.parsed else {
+                continue;
+            };
+            ids.extend(
+                (0..parsed.nodes.len())
+                    .filter_map(|ord| canonical_of(corpus, scheme, NodeKey { file, ord })),
+            );
+        }
+        Self { ids }
+    }
+
+    /// Whether a row names a node now: one of `markers` names one as
+    /// `spec refs` lists it, or `entry` is a node's canonical ID.
+    pub(crate) fn any(
+        &self,
+        corpus: &mut Corpus<'_>,
+        markers: &[&str],
+        entry: Option<&str>,
+    ) -> bool {
+        markers
+            .iter()
+            .any(|written| !corpus.judge(written).nodes.is_empty())
+            || entry.is_some_and(|entry| self.ids.contains(entry))
+    }
+}
+
+/// The task `--task` names, of this repository: exit 2, stdout empty,
+/// canon `tasks`, "Commands"' texts, for an `[ids]` taking `T`, an ID that
+/// is none, a look-alike, an unknown or another repository's task.
+pub(crate) fn named_task(context: &QueueContext, written: &str) -> Result<Task, CliError> {
+    if let Some(clash) = task_prefix_clash(&context.project.config.scheme) {
+        return Err(CliError::spec(format!(
+            "{}: {clash}",
+            context.project.config_label
+        )));
+    }
+    let Some(id) = written_task(written)? else {
+        return Err(CliError::spec(not_a_task(written)));
+    };
+    find_task(context, &id)?.map_err(CliError::spec)
 }
 
 /// The canonical cited ID of `key`; `None` for a node without an ID.

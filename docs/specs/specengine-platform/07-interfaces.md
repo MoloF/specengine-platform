@@ -102,7 +102,8 @@ spec task approve T | changes T --note "..." | cancel T
 
 # code and drift
 spec symbols QUERY | --node REF | --file F | --at F:L   # shipped: docs/canon/symbol-reads.md; unbound nodes: spec health
-spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md; --task 8a-2
+spec verify [--changed | --staged] [--json]         # shipped: docs/canon/spec-verify.md
+spec verify --task T [--changed] [--json]           # shipped: docs/canon/spec-verify-scope.md; the task's nodes' rows
 spec verify --tests [--task T] [--json]             # shipped: docs/canon/spec-verify-tests.md; the owner's terminal, [y/N]
 spec bump [--staged] [--json]                       # read-only: nodes to raise (shipped: docs/canon/node-revision.md)
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md

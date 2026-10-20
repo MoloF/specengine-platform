@@ -88,7 +88,7 @@ No block: no entry (a per-node read's `tested` null).
 
 ### Plain verify
 
-WA-11; at 8b's shipping. JSON `tested` after 4a's `delta`: per block by `node` bytes `{"node":"R-12","state":"stale","category":"code_changed","rev":3,"node_rev":3,"commit":"a0cea48<33 hex>","verified_at":"2026-10-12"}` (`rev`, `commit`, `verified_at` the block's; `node_rev` 4a's); `[]` without a block; null under `--changed` and on a lock run cause; `--task` (8a-2, `verify-task.md`) scopes it as rows. Text: each non-`verified` entry after the rows' `hint:` lines, before the summary; an evidence-free lock's text stays byte-identical. No finding, class, count, hint or exit effect.
+WA-11; at 8b's shipping. JSON `tested` after 4a's `delta`: per block by `node` bytes `{"node":"R-12","state":"stale","category":"code_changed","rev":3,"node_rev":3,"commit":"a0cea48<33 hex>","verified_at":"2026-10-12"}` (`rev`, `commit`, `verified_at` the block's; `node_rev` 4a's); `[]` without a block; null under `--changed` and on a lock run cause; `--task` (8a-2, `spec-verify-scope.md`) scopes it as rows. Text: each non-`verified` entry after the rows' `hint:` lines, before the summary; an evidence-free lock's text stays byte-identical. No finding, class, count, hint or exit effect.
 
 ```
 tested | stale code_changed | R-12

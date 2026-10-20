@@ -54,7 +54,6 @@ use specengine_code::{
 };
 use specengine_core::CodeConfig;
 use specengine_core::lock::Lock;
-use specengine_core::task::task_prefix_clash;
 use specengine_core::verify::{
     NodeVerdict, PROBE_TEST, PlaceholderValues, RunVerdict, TestOutcome, TestTemplate,
     node_verdict, tests_verdict, verify_from_toml,
@@ -66,11 +65,10 @@ use crate::apply::Consent;
 use crate::code_walk::{CodeTree, FilePackage, read_tree, tree_packages};
 use crate::corpus::indexed;
 use crate::lock::{Facts, NodeAt, Repo, Target, build_recipes, committed_bindings, node_at_head};
-use crate::node_set::{NodeSet, canonical_of, task_set};
+use crate::node_set::{NodeSet, canonical_of, named_task, task_set};
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text};
 use crate::proposals::{QueueContext, checked_now, escaped_error, open_context};
 use crate::refs::{Corpus, NodeKey, RON};
-use crate::task::{find_task, not_a_task, written_task};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// The refusal off Unix ("Order" step 1).
@@ -592,22 +590,6 @@ fn status_list(status: &[StatusEntry]) -> String {
         .map(|entry| format!("{}{} {}", entry.index, entry.worktree, entry.path))
         .collect::<Vec<_>>()
         .join(", ")
-}
-
-/// The task `--task` names, of this repository ("The node set": exit 2,
-/// stdout empty, canon `tasks`, "Commands"' texts, for an ID that is none, a
-/// look-alike, `T` in `[ids]`, an unknown or another repository's task).
-fn named_task(context: &QueueContext, written: &str) -> Result<Task, CliError> {
-    if let Some(clash) = task_prefix_clash(&context.project.config.scheme) {
-        return Err(CliError::spec(format!(
-            "{}: {clash}",
-            context.project.config_label
-        )));
-    }
-    let Some(id) = written_task(written)? else {
-        return Err(CliError::spec(not_a_task(written)));
-    };
-    find_task(context, &id)?.map_err(CliError::spec)
 }
 
 // ---------------------------------------------------------------- select

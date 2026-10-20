@@ -211,7 +211,7 @@ enum Command {
         #[arg(long, value_name = "S", default_value_t = specengine_cli::RESOLVE_TIMEOUT_DEFAULT, value_parser = clap::value_parser!(u64).range(specengine_cli::RESOLVE_TIMEOUT_MIN..=specengine_cli::RESOLVE_TIMEOUT_MAX))]
         timeout: u64,
     },
-    /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode. With --tests: run the tests `@verifies` binds through the project's `[verify] tests` command, on a terminal after one [y/N], over a clean committed tree; exit 0 verified, 1 not verified, 2 refused, interrupted or when it cannot run.
+    /// Show drift between spec.lock and the tree: a state per lock entry and marker binding, findings Fix, Check or pre-existing; read-only. Exit 0 clean or observed, 1 blocked (only under `[verify] mode` enforce-introduced or enforce, on a Fix finding), 2 when a binding or the lock cannot be verified, in every mode. With --task T: only the rows of task T's nodes, the verdict and exit theirs. With --tests: run the tests `@verifies` binds through the project's `[verify] tests` command, on a terminal after one [y/N], over a clean committed tree; exit 0 verified, 1 not verified, 2 refused, interrupted or when it cannot run.
     Verify {
         /// Judge against HEAD too: a finding HEAD already has is pre-existing.
         #[arg(long)]
@@ -222,8 +222,8 @@ enum Command {
         /// Run the bound tests (`@verifies`) with the project's `[verify] tests` command, after the owner's [y/N] on a terminal; Unix only.
         #[arg(long, conflicts_with_all = ["changed", "staged"])]
         tests: bool,
-        /// With --tests: only the tests of task T's nodes (its targets, criteria and affected nodes, and the sections they contain).
-        #[arg(long, value_name = "T", requires = "tests")]
+        /// Only task T's nodes (its targets, criteria and affected nodes, and the sections they contain): the rows of those nodes, or with --tests their bound tests.
+        #[arg(long, value_name = "T", conflicts_with = "staged")]
         task: Option<String>,
     },
     /// Export generated output (`index`: the registered index generator's document; `state`: a backup of the proposal queue).
@@ -741,18 +741,6 @@ fn main() -> ExitCode {
     {
         return usage_error(&stdout_json_conflict());
     }
-    // clap waives `--task`'s `requires = "tests"` when `--changed` or
-    // `--staged`, which conflict with `--tests`, is present.
-    if matches!(
-        cli.command,
-        Command::Verify {
-            tests: false,
-            task: Some(_),
-            ..
-        }
-    ) {
-        return usage_error(&task_without_tests());
-    }
     let globals = Globals {
         root: cli.root,
         config: cli.config,
@@ -945,9 +933,12 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             )?))
         }
         Command::Verify {
-            changed, staged, ..
+            changed,
+            staged,
+            task,
+            ..
         } => {
-            // clap refuses `--staged` with `--changed`.
+            // clap refuses `--staged` with `--changed` or `--task`.
             let tree = if staged {
                 VerifiedTree::Staged
             } else if changed {
@@ -960,6 +951,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 globals,
                 &VerifyRequest {
                     tree,
+                    task,
                     git: process_git(env),
                 },
             )?))
@@ -1965,18 +1957,6 @@ fn stdout_json_conflict() -> clap::Error {
     match index {
         Some(index) => index.error(ErrorKind::ArgumentConflict, MESSAGE),
         None => Cli::command().error(ErrorKind::ArgumentConflict, MESSAGE),
-    }
-}
-
-/// `verify --task` without `--tests`, whatever else is passed: clap's own
-/// text for the missing argument, its usage block `verify`'s.
-fn task_without_tests() -> clap::Error {
-    const MESSAGE: &str = "the following required arguments were not provided:\n  --tests";
-    let mut command = Cli::command();
-    command.build();
-    match command.find_subcommand_mut("verify") {
-        Some(verify) => verify.error(ErrorKind::MissingRequiredArgument, MESSAGE),
-        None => Cli::command().error(ErrorKind::MissingRequiredArgument, MESSAGE),
     }
 }
 

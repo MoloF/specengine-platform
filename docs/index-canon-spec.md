@@ -27,5 +27,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-lock.md](canon/spec-lock.md) spec.lock: the file, its entries, spec lock regen · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-anchors.md](canon/spec-verify-anchors.md) spec verify's anchors: a renamed or moved binding followed · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-output.md](canon/spec-verify-output.md) spec verify's output: rows, hints, summary, JSON · crates/specengine-cli · tier 2
+- [docs/canon/spec-verify-scope.md](canon/spec-verify-scope.md) spec verify's scopes: a node set's rows · crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-tests.md](canon/spec-verify-tests.md) spec verify --tests: bound tests run by the project's own command · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-verify.md](canon/spec-verify.md) spec verify: drift between spec.lock and the tree · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2

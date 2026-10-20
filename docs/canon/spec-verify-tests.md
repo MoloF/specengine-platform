@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-20
 ---
 
 # `spec verify --tests`: bound tests run by the project's own command
@@ -22,10 +22,10 @@ timeout = 600   # seconds per invocation, probe included, 1..86400
 
 ## The node set
 
-CLI `node_set.rs`, shared with `verify --task`, `--node`:
+CLI `node_set.rs` (`named_task` too), shared with plain `--task` (`spec-verify-scope.md`) and `--node`:
 
 - **A task's set** (`task_set`): its `targets`, `criteria` refs and `affected_nodes` columns now, any state, never `snapshot`, resolved as `spec show` resolves a REF, plus contained sections; a ref naming nothing: `note: verify: <ref> names nothing now`. `T` in `[ids]`, a look-alike, unknown or another repository's: exit 2, stdout empty, `tasks.md` "Commands"' texts.
-- **A row in a set** (`NodeSet::row_nodes`): a marker `spec refs` lists under a set node (`resolved`, `alias`, each `ambiguous`, `homoglyph` under its fix's node), or a lock entry whose `node` is one. `--tests` uses the marker half.
+- **A row in a set** (`NodeSet::row_nodes`): a marker `spec refs` lists under a set node (`resolved`, `alias`, each `ambiguous`, `homoglyph` under its fix's node), or a lock entry whose `node` is one. `--tests` uses the marker half, plain `--task` both.
 - **Selection**: the task's set, else every node a `@verifies` binding names; a test row per (`file`, `symbol`), a keyless binding's per marker comment (by its offset), with its set nodes; a node is reported when a `@verifies` binding names it (`--task`: `note: verify --tests: <n> nodes of <T> have no @verifies binding`).
 
 ## Placeholders
@@ -40,7 +40,7 @@ From the structured name (`placed_name_file`), never a split qpath: `{file}` roo
 
 ## Order
 
-1. Usage, exit 2: `--tests` with `--changed` or `--staged`; `--task` without `--tests` (with `--changed`/`--staged`: clap's missing-argument text under `Usage: spec verify [OPTIONS]`). Then not Unix, `require_terminal`, the clock: exit 2, stdout empty.
+1. Usage, exit 2: `--tests` with `--changed` or `--staged`. Then not Unix, `require_terminal`, the clock: exit 2, stdout empty.
 2. Discovery (exit 2); `[verify]` (`tests` required), `[code]`: else `cannot`.
 3. A worktree, `HEAD` born, a branch, no operation in progress: else `cannot`.
 4. `status_all`, no pathspec: an entry -> `dirty`. The root's `specengine.toml`, whatever `--config` names (another `--config`: `cannot` at 5), not a blob of `HEAD` (ignored) -> `cannot`; a git error: `git: <error>`.
