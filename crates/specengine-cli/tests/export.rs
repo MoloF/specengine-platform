@@ -7,6 +7,9 @@
 //! `index-drift` nor `index-missing`; equal bytes are not rewritten (mtime
 //! kept); `--stdout` prints the same bytes and writes nothing. Refusals exit
 //! 2 with nothing on stdout and the index unchanged or absent.
+//!
+//! docs/features/roadmap-view.md RD-5 (the section at the end): the
+//! roadmap view on copies of `roadmap-a` and `roadmap-b`.
 
 #![cfg(unix)]
 
@@ -14,7 +17,7 @@ mod common;
 
 use std::fs;
 use std::os::unix::fs::{PermissionsExt as _, symlink};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
 
 use common::check::{codes, index_path, library_render, registered, set_paths_key};
@@ -411,5 +414,362 @@ fn a_rewrite_keeps_the_file() {
             .filter(|name| name.contains("index"))
             .collect();
         assert_eq!(names, ["index.md"], "{fixture}");
+    }
+}
+
+// ------------------------------------------------------------------ roadmap view
+// docs/features/roadmap-view.md RD-5, on scratch copies of `roadmap-a` and
+// `roadmap-b` whose configs (written into the copies) add `[paths] index`,
+// an archive shard and the `roadmap` view in a subdirectory: the view is
+// written last, `unchanged` when equal (mtime kept), alone rewritten when
+// edited; `--stdout` with a view uses `==> <path> <==` even without a
+// shard; the JSON's top-level `roadmap` (never under `shards`), absent
+// without a view; a missing view directory refuses every output; a view
+// outside the walk is written with one `warning:`.
+
+/// `(fixture, view)`: the view in a subdirectory of the walk.
+const VIEWED: [(&str, &str); 2] = [
+    ("roadmap-a", "docs/views/roadmap.md"),
+    ("roadmap-b", "docs/generated/work/plan.md"),
+];
+
+const VIEW_INDEX: &str = "docs/index.md";
+const VIEW_ARCHIVE: &str = "docs/index-archive.md";
+
+/// `base` with `[paths] index` and the index entry: the archive shard when
+/// `shard`, the view at `view` when given.
+fn view_entry(base: &str, shard: bool, view: Option<&str>) -> String {
+    use common::check::quoted;
+    let mut text = set_paths_key(base, "index", &quoted(VIEW_INDEX));
+    let mut writes = vec![quoted(VIEW_INDEX)];
+    if shard {
+        writes.push(quoted(VIEW_ARCHIVE));
+    }
+    if let Some(view) = view {
+        writes.push(quoted(view));
+    }
+    text.push_str(&format!(
+        "\n[[generators]]\ncommand = \"gen-index\"\nwrites  = [{}]\nindex   = true\n",
+        writes.join(", ")
+    ));
+    if shard {
+        text.push_str(&format!(
+            "shards  = [{{ path = {}, tier3 = true }}]\n",
+            quoted(VIEW_ARCHIVE)
+        ));
+    }
+    if let Some(view) = view {
+        text.push_str(&format!("roadmap = {}\n", quoted(view)));
+    }
+    text
+}
+
+/// A scratch copy of `fixture` configured by [`view_entry`], the view's
+/// directory created.
+fn view_copy(scratch: &Scratch, fixture: &str, shard: bool, view: Option<&str>) -> PathBuf {
+    let root = scratch.copy(fixture, "copy");
+    let base = read_text(&root, "specengine.toml");
+    write(&root, "specengine.toml", view_entry(&base, shard, view));
+    if let Some(view) = view {
+        fs::create_dir_all(root.join(view).parent().unwrap()).unwrap();
+    }
+    root
+}
+
+/// The library's render set of `root` with its own config.
+fn library_set(root: &Path) -> Vec<specengine_core::check::IndexOutput> {
+    use specengine_core::ProjectConfig;
+    use specengine_core::check::{CheckConfig, render_index_set};
+    use specengine_store::{WorkingTree, check_input};
+    let text = read_text(root, "specengine.toml");
+    let project = ProjectConfig::from_toml(&text).expect("a valid ProjectConfig");
+    let check =
+        CheckConfig::from_toml(&text).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
+    let generator = check.index_generator().expect("an index = true entry");
+    let tree = WorkingTree::new(root, &project.paths).expect("a working tree");
+    let input = check_input(&tree, &project.scheme);
+    render_index_set(&input, VIEW_INDEX, generator)
+}
+
+fn view_index_codes(home: &Path, root: &Path) -> Vec<(String, String)> {
+    let check = spec(home, root, &["--json", "check"]);
+    let json: serde_json::Value = serde_json::from_str(&check.stdout).expect("a JSON report");
+    json["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["code"].as_str().is_some_and(|c| c.starts_with("index-")))
+        .map(|f| {
+            (
+                f["code"].as_str().unwrap().to_owned(),
+                f["path"].as_str().unwrap().to_owned(),
+            )
+        })
+        .collect()
+}
+
+/// RD-5: written last, after the root and the shard; a rerun `unchanged`
+/// with every mtime kept; the JSON's `roadmap` beside `shards`; a hand edit
+/// to the view rewrites it alone; a deleted view recreated, `written` true.
+#[test]
+fn the_view_is_written_last_and_reported_in_text_and_json() {
+    for (fixture, view) in VIEWED {
+        let scratch = Scratch::new("export-view-set");
+        let home = scratch.home("h");
+        let root = view_copy(&scratch, fixture, true, Some(view));
+        let outputs = library_set(&root);
+        let paths: Vec<&str> = outputs.iter().map(|o| o.path.as_str()).collect();
+        assert_eq!(paths, [VIEW_INDEX, VIEW_ARCHIVE, view], "{fixture}");
+
+        let run = spec(&home, &root, &["export", "index"]);
+        run.code(0);
+        let wrote: String = outputs
+            .iter()
+            .map(|o| format!("wrote {}: {} bytes\n", o.path, o.bytes.len()))
+            .collect();
+        assert_eq!(run.stdout, wrote, "{fixture}: the view last");
+        assert_eq!(run.stderr, "", "{fixture}");
+        for o in &outputs {
+            assert!(read(&root, &o.path) == o.bytes.as_bytes(), "{}", o.path);
+        }
+        assert_eq!(view_index_codes(&home, &root), [], "{fixture}");
+
+        // A rerun: every output `unchanged`, no mtime touched.
+        for o in &outputs {
+            set_mtime(&root.join(&o.path), long_ago());
+        }
+        let run = spec(&home, &root, &["export", "index"]);
+        run.code(0);
+        let unchanged: String = outputs
+            .iter()
+            .map(|o| format!("unchanged {}: {} bytes\n", o.path, o.bytes.len()))
+            .collect();
+        assert_eq!(run.stdout, unchanged, "{fixture}");
+        for o in &outputs {
+            assert_eq!(mtime(&root.join(&o.path)), long_ago(), "{}", o.path);
+        }
+
+        // JSON: `roadmap` a top-level key after `shards`, the same three keys.
+        let run = spec(&home, &root, &["--json", "export", "index"]);
+        run.code(0);
+        assert_eq!(
+            run.stdout,
+            format!(
+                "{{\"path\":\"{VIEW_INDEX}\",\"bytes\":{},\"written\":false,\"shards\":[{{\"path\":\"{VIEW_ARCHIVE}\",\"bytes\":{},\"written\":false}}],\"roadmap\":{{\"path\":\"{view}\",\"bytes\":{},\"written\":false}}}}\n",
+                outputs[0].bytes.len(),
+                outputs[1].bytes.len(),
+                outputs[2].bytes.len(),
+            ),
+            "{fixture}"
+        );
+
+        // The view edited by hand: drift on it alone, then it alone rewritten.
+        let file = root.join(view);
+        fs::write(&file, format!("{}- a hand edit\n", outputs[2].bytes)).unwrap();
+        set_mtime(&file, long_ago());
+        assert_eq!(
+            view_index_codes(&home, &root),
+            [("index-drift".to_owned(), view.to_owned())],
+            "{fixture}"
+        );
+        let run = spec(&home, &root, &["export", "index"]);
+        run.code(0);
+        assert_eq!(
+            run.stdout,
+            format!(
+                "unchanged {VIEW_INDEX}: {} bytes\nunchanged {VIEW_ARCHIVE}: {} bytes\nwrote {view}: {} bytes\n",
+                outputs[0].bytes.len(),
+                outputs[1].bytes.len(),
+                outputs[2].bytes.len()
+            ),
+            "{fixture}"
+        );
+        assert!(read(&root, view) == outputs[2].bytes.as_bytes());
+        assert_ne!(mtime(&file), long_ago(), "{fixture}: the view rewritten");
+        for o in &outputs[..2] {
+            assert_eq!(mtime(&root.join(&o.path)), long_ago(), "{}", o.path);
+        }
+
+        // Deleted: recreated, `written` true in the JSON.
+        fs::remove_file(&file).unwrap();
+        assert_eq!(
+            view_index_codes(&home, &root),
+            [("index-missing".to_owned(), view.to_owned())],
+            "{fixture}"
+        );
+        let run = spec(&home, &root, &["--json", "export", "index"]);
+        run.code(0);
+        assert_eq!(
+            run.json(),
+            serde_json::json!({
+                "path": VIEW_INDEX,
+                "bytes": outputs[0].bytes.len(),
+                "written": false,
+                "shards": [{"path": VIEW_ARCHIVE, "bytes": outputs[1].bytes.len(), "written": false}],
+                "roadmap": {"path": view, "bytes": outputs[2].bytes.len(), "written": true},
+            }),
+            "{fixture}"
+        );
+        assert!(read(&root, view) == outputs[2].bytes.as_bytes());
+    }
+}
+
+/// RD-5: `--stdout` with a view and no shard prints both outputs after
+/// their `==> <path> <==` lines, writes nothing; the JSON without shards
+/// has `roadmap` and no `shards`.
+#[test]
+fn stdout_with_a_view_and_no_shard_names_each_output() {
+    for (fixture, view) in VIEWED {
+        let scratch = Scratch::new("export-view-stdout");
+        let home = scratch.home("h");
+        let root = view_copy(&scratch, fixture, false, Some(view));
+        let outputs = library_set(&root);
+        assert_eq!(outputs.len(), 2, "{fixture}");
+        let before = snapshot(&root);
+        let run = spec(&home, &root, &["export", "index", "--stdout"]);
+        run.code(0);
+        assert_eq!(
+            run.stdout,
+            format!(
+                "==> {VIEW_INDEX} <==\n{}==> {view} <==\n{}",
+                outputs[0].bytes, outputs[1].bytes
+            ),
+            "{fixture}"
+        );
+        assert_eq!(run.stderr, "", "{fixture}");
+        assert_eq!(snapshot(&root), before, "{fixture}: --stdout wrote");
+
+        let run = spec(&home, &root, &["--json", "export", "index"]);
+        run.code(0);
+        let json = run.json();
+        assert_eq!(
+            json,
+            serde_json::json!({
+                "path": VIEW_INDEX,
+                "bytes": outputs[0].bytes.len(),
+                "written": true,
+                "roadmap": {"path": view, "bytes": outputs[1].bytes.len(), "written": true},
+            }),
+            "{fixture}"
+        );
+    }
+}
+
+/// RD-5 and "Rules": without the `roadmap` key the export is 1a's — one
+/// root line, JSON without `roadmap` — and the index root is the same bytes
+/// as with the view registered (the view is listed nowhere).
+#[test]
+fn without_a_view_the_export_is_unchanged() {
+    for (fixture, view) in VIEWED {
+        for shard in [false, true] {
+            let scratch = Scratch::new("export-view-none");
+            let home = scratch.home("h");
+            let root = view_copy(&scratch, fixture, shard, None);
+            let run = spec(&home, &root, &["--json", "export", "index"]);
+            run.code(0);
+            let json = run.json();
+            let keys: Vec<&String> = json.as_object().unwrap().keys().collect();
+            // `serde_json`'s map: keys in byte order.
+            let want = if shard {
+                vec!["bytes", "path", "shards", "written"]
+            } else {
+                vec!["bytes", "path", "written"]
+            };
+            assert_eq!(keys, want, "{fixture} shard {shard}: no `roadmap` key");
+            let without = read(&root, VIEW_INDEX);
+
+            // The same copy with the view: the root is the same bytes.
+            let base = read_text(&scratch.copy(fixture, "fresh"), "specengine.toml");
+            write(
+                &root,
+                "specengine.toml",
+                view_entry(&base, shard, Some(view)),
+            );
+            fs::create_dir_all(root.join(view).parent().unwrap()).unwrap();
+            let run = spec(&home, &root, &["export", "index"]);
+            run.code(0);
+            assert!(
+                run.stdout.starts_with(&format!("unchanged {VIEW_INDEX}: ")),
+                "{fixture}: {}",
+                run.stdout
+            );
+            assert!(read(&root, VIEW_INDEX) == without, "{fixture}");
+            assert!(
+                !String::from_utf8_lossy(&without).contains(view),
+                "{fixture}: the index lists the view"
+            );
+        }
+    }
+}
+
+/// RD-5 and "Rules": the view's directory missing → exit 2, nothing on
+/// stdout, one `spec:` line naming the view, no output written — the index
+/// neither created nor, when stale, rewritten.
+#[test]
+fn a_missing_view_directory_refuses_every_output() {
+    for (fixture, view) in VIEWED {
+        let scratch = Scratch::new("export-view-nodir");
+        let home = scratch.home("h");
+        let root = view_copy(&scratch, fixture, true, Some(view));
+        fs::remove_dir_all(root.join(view).parent().unwrap()).unwrap();
+        let run = spec(&home, &root, &["export", "index"]);
+        assert_refused(
+            &format!("{fixture}: no view directory"),
+            &run,
+            &root.join(VIEW_INDEX),
+            None,
+            &[view],
+        );
+        assert!(
+            !root.join(VIEW_ARCHIVE).exists(),
+            "{fixture}: shard written"
+        );
+
+        // A stale index and shard: kept byte for byte.
+        write(&root, VIEW_INDEX, "stale\n");
+        write(&root, VIEW_ARCHIVE, "stale shard\n");
+        let run = spec(&home, &root, &["export", "index"]);
+        assert_refused(
+            &format!("{fixture}: stale index, no view directory"),
+            &run,
+            &root.join(VIEW_INDEX),
+            Some(b"stale\n"),
+            &[view],
+        );
+        assert_eq!(read(&root, VIEW_ARCHIVE), b"stale shard\n", "{fixture}");
+        assert!(
+            !root.join(view).parent().unwrap().exists(),
+            "{fixture}: the directory was created"
+        );
+    }
+}
+
+/// RD-5: a view outside the walk is written with one `warning:` naming it;
+/// `spec check` then reports it `index-missing`.
+#[test]
+fn a_view_outside_the_walk_is_written_with_a_warning() {
+    for (fixture, _) in VIEWED {
+        let view = "site/roadmap.md";
+        let scratch = Scratch::new("export-view-outside");
+        let home = scratch.home("h");
+        let root = view_copy(&scratch, fixture, false, Some(view));
+        let outputs = library_set(&root);
+        let run = spec(&home, &root, &["export", "index"]);
+        run.code(0);
+        let lines = run.stderr_lines();
+        assert_eq!(lines.len(), 1, "{fixture}: {}", run.stderr);
+        assert!(
+            lines[0].starts_with("warning: ") && lines[0].contains(&format!("`{view}`")),
+            "{fixture}: {}",
+            lines[0]
+        );
+        for o in &outputs {
+            assert!(read(&root, &o.path) == o.bytes.as_bytes(), "{}", o.path);
+        }
+        assert_eq!(
+            view_index_codes(&home, &root),
+            [("index-missing".to_owned(), view.to_owned())],
+            "{fixture}"
+        );
     }
 }

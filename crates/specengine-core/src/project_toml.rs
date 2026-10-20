@@ -24,9 +24,11 @@
 //!   readers are the check's, [`crate::gate`]'s for `zones` and `gate`,
 //!   [`crate::code_toml`]'s and [`crate::verify`]'s, read only where code is
 //!   read, [`crate::health_toml`]'s and [`crate::roadmap_toml`]'s, read only
-//!   by `spec health` and `spec roadmap`): a bad `[gate]`, `[verify]` or
-//!   `[roadmap]` fails no read; any other key is an error at its line, so a
-//!   `[path]` typo cannot silently fall back to the default walk.
+//!   by `spec health` and `spec roadmap`, the latter also by the check
+//!   tables when the index entry registers a `roadmap` view): a bad
+//!   `[gate]`, `[verify]` or `[roadmap]` fails no read; any other key is an
+//!   error at its line, so a `[path]` typo cannot silently fall back to the
+//!   default walk.
 //!
 //! Every error is `file:line: message` through [`ProjectError::at`].
 

@@ -409,6 +409,8 @@ fn the_registry_example_loads() {
                 line: 14,
             },
         ],
+        // docs/features/roadmap-view.md: the §11.6 block registers no view.
+        roadmap: None,
     };
     assert_eq!(
         example.lines().nth(9).map(str::trim_end),
@@ -988,6 +990,7 @@ fn read_back(value: &str) -> Result<String, String> {
         gate: None,
         line: 1,
         shards: Vec::new(),
+        roadmap: None,
     };
     let render = render_index(&CheckInput::default(), "a.md", &generator);
     let scheme = IdScheme::from_toml("").expect("empty scheme");
@@ -1491,4 +1494,398 @@ fn shards_load_in_config_order_with_their_lines() {
     let config =
         CheckConfig::from_toml(plain).unwrap_or_else(|e| panic!("{}", e.at("specengine.toml")));
     assert!(config.index_generator().unwrap().shards.is_empty());
+}
+
+// ------------------------------------------------------------------ roadmap view
+// docs/features/roadmap-view.md RD-1 (the registry): the `index = true`
+// entry takes `roadmap = "<path>"`; every rule of the key is a config error
+// at its line (`specengine.toml:<line>: message`), a bad `[roadmap]` with
+// `RoadmapConfig::from_toml`'s own line and message; without the key a bad
+// `[roadmap]` fails no check.
+//
+// M1: the key accepted on an entry without `index = true` turns
+// `roadmap_output_only_on_the_index_entry` red.
+
+/// `[paths]`, `[ids]` and a good `[roadmap]` on lines 1-11; the entry
+/// appended by [`viewed`] starts on line 13.
+const VIEW_HEAD: &str = "\
+[paths]
+index = \"x/root.md\"
+
+[ids]
+PLN = { kind = \"work-item\", width = 3 }
+
+[roadmap]
+prefix     = \"PLN\"
+dir        = \"work\"
+releases   = [\"near\", \"far\"]
+priorities = [\"high\", \"low\"]
+";
+
+/// [`VIEW_HEAD`] (with `[roadmap]` as given) and `entry` from line 13.
+fn viewed_with(head: &str, entry: &str) -> String {
+    format!("{head}\n{entry}")
+}
+
+fn viewed(entry: &str) -> String {
+    viewed_with(VIEW_HEAD, entry)
+}
+
+/// The index entry with the view on line 17 (`writes` line 15).
+const VIEW_ENTRY: &str = "\
+[[generators]]
+command = \"gen\"
+writes  = [\"x/root.md\", \"x/view/plan.md\"]
+index   = true
+roadmap = \"x/view/plan.md\"
+";
+
+/// `(case, text) -> Err(file:line: message)` or the accepted config.
+fn view_error(text: &str) -> Result<CheckConfig, String> {
+    CheckConfig::from_toml(text).map_err(|error| error.at("specengine.toml"))
+}
+
+/// Each `(case, text, line, fragment)` must fail as
+/// `specengine.toml:<line>: <message holding fragment>`.
+fn expect_errors(cases: &[(&str, String, usize, &str)]) -> Vec<String> {
+    let mut failures = Vec::new();
+    for (case, text, line, fragment) in cases {
+        match view_error(text) {
+            Ok(config) => failures.push(format!("{case}: accepted as {config:?}")),
+            Err(shown) => {
+                let prefix = format!("specengine.toml:{line}: ");
+                if !shown.starts_with(&prefix) || shown.len() <= prefix.len() {
+                    failures.push(format!("{case}: {shown:?} does not start with {prefix:?}"));
+                } else if !shown[prefix.len()..].contains(fragment) {
+                    failures.push(format!("{case}: {shown:?} does not name {fragment:?}"));
+                }
+            }
+        }
+    }
+    failures
+}
+
+#[test]
+fn a_view_on_the_index_entry_loads_with_its_path_line_and_table() {
+    use specengine_core::RoadmapConfig;
+    let text = viewed(VIEW_ENTRY);
+    let config = view_error(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+    let generator = config.index_generator().expect("the index entry");
+    assert_eq!(generator.writes, strings(&["x/root.md", "x/view/plan.md"]));
+    let view = generator.roadmap.as_ref().expect("the view");
+    assert_eq!(view.path, "x/view/plan.md");
+    assert_eq!(view.line, 17, "the line of the `roadmap` key");
+    let scheme = IdScheme::from_toml(&text).expect("valid [ids]");
+    let table = RoadmapConfig::from_toml(&text, &scheme)
+        .expect("a good [roadmap]")
+        .expect("the table");
+    assert_eq!(view.config, table, "the entry carries `[roadmap]` as read");
+
+    // Key order inside the entry is free; a view beside shards, after them
+    // or before them in `writes`; `./` and a trailing `/`-free path.
+    for entry in [
+        "[[generators]]\nroadmap = \"x/view/plan.md\"\ncommand = \"gen\"\nwrites  = [\"x/view/plan.md\", \"x/root.md\"]\nindex   = true\n",
+        "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\", \"x/s.md\", \"x/view/plan.md\"]\nindex   = true\nroadmap = \"x/view/plan.md\"\nshards  = [{ path = \"x/s.md\", tier3 = true }]\n",
+        "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/view/plan.md\", \"x/root.md\", \"x/s.md\"]\nindex   = true\nshards  = [{ path = \"x/s.md\", claims = [\"work/**\"] }]\nroadmap = \"x/view/plan.md\"\n",
+    ] {
+        let text = viewed(entry);
+        let config = view_error(&text).unwrap_or_else(|e| panic!("{e}\n{text}"));
+        let view = config
+            .index_generator()
+            .and_then(|g| g.roadmap.as_ref())
+            .unwrap_or_else(|| panic!("no view:\n{text}"));
+        assert_eq!(view.path, "x/view/plan.md");
+    }
+
+    // Without the key: no view, the entry as before.
+    let plain =
+        viewed("[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\"]\nindex   = true\n");
+    let config = view_error(&plain).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(config.index_generator().unwrap().roadmap, None);
+}
+
+/// M1.
+#[test]
+fn roadmap_output_only_on_the_index_entry() {
+    let cases = vec![
+        (
+            "a second entry without `index`",
+            viewed(
+                "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\"]\nindex   = true\n\n[[generators]]\ncommand = \"other\"\nwrites  = [\"x/plan.md\"]\nroadmap = \"x/plan.md\"\n",
+            ),
+            21,
+            "`roadmap` is only for the entry with `index = true`",
+        ),
+        (
+            "an entry with `index = false`",
+            viewed(
+                "[[generators]]\ncommand = \"other\"\nwrites  = [\"x/plan.md\"]\nindex   = false\nroadmap = \"x/plan.md\"\n",
+            ),
+            17,
+            "`roadmap` is only for the entry with `index = true`",
+        ),
+        (
+            "the only entry, no `index` key, no `[paths] index`",
+            "[ids]\nPLN = { kind = \"work-item\", width = 3 }\n\n[roadmap]\nprefix     = \"PLN\"\ndir        = \"work\"\nreleases   = [\"near\"]\npriorities = [\"high\"]\n\n[[generators]]\ncommand = \"other\"\nroadmap = \"x/plan.md\"\nwrites  = [\"x/plan.md\"]\n"
+                .to_owned(),
+            12,
+            "`roadmap` is only for the entry with `index = true`",
+        ),
+    ];
+    let failures = expect_errors(&cases);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    // The same key on the index entry loads: the rule is the entry's, not
+    // the key's.
+    let config = view_error(&viewed(VIEW_ENTRY)).unwrap_or_else(|e| panic!("{e}"));
+    assert!(config.index_generator().unwrap().roadmap.is_some());
+}
+
+/// Every rule of the key, its line exact.
+#[test]
+fn invalid_views_fail_with_file_line_message() {
+    let entry = |writes: &str, view: &str| {
+        viewed(&format!(
+            "[[generators]]\ncommand = \"gen\"\nwrites  = [{writes}]\nindex   = true\nroadmap = {view}\n"
+        ))
+    };
+    let cases: Vec<(&str, String, usize, &str)> = vec![
+        (
+            "the view not in `writes`",
+            entry("\"x/root.md\"", "\"x/view/plan.md\""),
+            17,
+            "`roadmap` x/view/plan.md is not in the entry's `writes`: list it there too",
+        ),
+        (
+            "the view is `[paths] index`",
+            entry("\"x/root.md\"", "\"x/root.md\""),
+            17,
+            "`roadmap` x/root.md is the `[paths] index`: the view is a file of its own",
+        ),
+        (
+            "the view is a shard",
+            viewed(
+                "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\", \"x/s.md\"]\nindex   = true\nshards  = [{ path = \"x/s.md\", tier3 = true }]\nroadmap = \"x/s.md\"\n",
+            ),
+            18,
+            "`roadmap` x/s.md is the shard of line 17: the view is a file of its own",
+        ),
+        (
+            "the view leaves the root",
+            entry("\"x/root.md\"", "\"../plan.md\""),
+            17,
+            "`roadmap`: \"../plan.md\" leaves the root",
+        ),
+        (
+            "the view is absolute",
+            entry("\"x/root.md\"", "\"/x/plan.md\""),
+            17,
+            "`roadmap`: \"/x/plan.md\" is absolute",
+        ),
+        (
+            "the view has an empty component",
+            entry("\"x/root.md\"", "\"x//plan.md\""),
+            17,
+            "`roadmap`: \"x//plan.md\" has an empty component",
+        ),
+        (
+            "the view is empty",
+            entry("\"x/root.md\"", "\"\""),
+            17,
+            "`roadmap`: \"\" is empty",
+        ),
+        (
+            "the view is no string",
+            entry("\"x/root.md\"", "3"),
+            17,
+            "",
+        ),
+        (
+            "an extra `writes` path beside the view",
+            entry(
+                "\"x/root.md\", \"x/view/plan.md\", \"x/stale.md\"",
+                "\"x/view/plan.md\"",
+            ),
+            15,
+            "`writes`: x/stale.md is neither the `[paths] index` x/root.md, a shard nor the `roadmap` view",
+        ),
+        (
+            "`[roadmap]` absent: at the key's line",
+            "[paths]\nindex = \"x/root.md\"\n\n[ids]\nPLN = { kind = \"work-item\", width = 3 }\n\n[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\", \"x/view/plan.md\"]\nindex   = true\nroadmap = \"x/view/plan.md\"\n"
+                .to_owned(),
+            11,
+            "`roadmap` x/view/plan.md is the view of `[roadmap]`, but there is no `[roadmap]` table: add it, or drop the key",
+        ),
+        // "Data": the rules in the table's order, the first that applies
+        // reported. Off the index entry with a bad path: the entry's rule.
+        (
+            "order: off the index entry before the path",
+            viewed(
+                "[[generators]]\ncommand = \"other\"\nwrites  = [\"x/plan.md\"]\nroadmap = \"../plan.md\"\n",
+            ),
+            16,
+            "`roadmap` is only for the entry with `index = true`",
+        ),
+        // `[roadmap]` absent and the path not in `writes`: `writes` first.
+        (
+            "order: `writes` before the table",
+            "[paths]\nindex = \"x/root.md\"\n\n[ids]\nPLN = { kind = \"work-item\", width = 3 }\n\n[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\"]\nindex   = true\nroadmap = \"x/view/plan.md\"\n"
+                .to_owned(),
+            11,
+            "is not in the entry's `writes`",
+        ),
+        // A bad `[roadmap]` and the path not in `writes`: `writes` first.
+        (
+            "order: `writes` before a bad table",
+            viewed_with(
+                &head_but("releases", Some("releases   = []")),
+                "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\"]\nindex   = true\nroadmap = \"x/view/plan.md\"\n",
+            ),
+            17,
+            "is not in the entry's `writes`",
+        ),
+    ];
+    let failures = expect_errors(&cases);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// `VIEW_HEAD` with its `[roadmap]` line starting `key` replaced by `with`
+/// (`None`: removed).
+fn head_but(key: &str, with: Option<&str>) -> String {
+    let mut out = String::new();
+    let mut inside = false;
+    for line in VIEW_HEAD.lines() {
+        if line.starts_with('[') {
+            inside = line == "[roadmap]";
+        }
+        if inside && line.split_whitespace().next() == Some(key) {
+            if let Some(with) = with {
+                out.push_str(with);
+                out.push('\n');
+            }
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    out
+}
+
+/// Q-B: with a view, a bad `[roadmap]` is a config error of the check
+/// tables, with `RoadmapConfig::from_toml`'s own line and message, byte for
+/// byte; without the key the same text loads (it fails `spec roadmap`
+/// alone).
+#[test]
+fn a_bad_roadmap_with_a_view_is_its_own_error_at_its_line() {
+    use specengine_core::RoadmapConfig;
+    let heads: Vec<(&str, String)> = vec![
+        (
+            "releases empty",
+            head_but("releases", Some("releases   = []")),
+        ),
+        (
+            "an unknown key",
+            head_but("dir", Some("dir        = \"work\"\nowner      = \"x\"")),
+        ),
+        (
+            "mvp_cut not a release",
+            head_but("dir", Some("dir        = \"work\"\nmvp_cut    = \"mid\"")),
+        ),
+        (
+            "prefix not in [ids]",
+            head_but("prefix", Some("prefix     = \"QQQ\"")),
+        ),
+        (
+            "dir leaving the root",
+            head_but("dir", Some("dir        = \"../w\"")),
+        ),
+        ("priorities missing", head_but("priorities", None)),
+        (
+            "a priority repeated",
+            head_but("priorities", Some("priorities = [\"high\", \"high\"]")),
+        ),
+        (
+            "prefix not a string",
+            head_but("prefix", Some("prefix     = 4")),
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (case, head) in &heads {
+        let with = viewed_with(head, VIEW_ENTRY);
+        let scheme = IdScheme::from_toml(&with).expect("valid [ids]");
+        let Err(own) = RoadmapConfig::from_toml(&with, &scheme) else {
+            failures.push(format!("{case}: `[roadmap]` reads:\n{with}"));
+            continue;
+        };
+        assert!(own.line.is_some(), "{case}: {own:?}");
+        match CheckConfig::from_toml(&with) {
+            Ok(_) => failures.push(format!("{case}: accepted with a view")),
+            Err(error) => {
+                if (error.line, error.message.as_str()) != (own.line, own.message.as_str()) {
+                    failures.push(format!(
+                        "{case}:\n  got      {}\n  expected {}",
+                        error.at("specengine.toml"),
+                        own.at("specengine.toml")
+                    ));
+                }
+            }
+        }
+        // The project reads still load: a check-table error only.
+        if let Err(error) = specengine_core::ProjectConfig::from_toml(&with) {
+            failures.push(format!(
+                "{case}: ProjectConfig refused: {}",
+                error.at("specengine.toml")
+            ));
+        }
+        // Without the key the same table fails no check.
+        let without = viewed_with(
+            head,
+            "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\"]\nindex   = true\n",
+        );
+        if let Err(error) = CheckConfig::from_toml(&without) {
+            failures.push(format!(
+                "{case}: refused without a view: {}",
+                error.at("specengine.toml")
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// No `roadmap` key: a bad `[roadmap]` loads as a check config, with or
+/// without a registry, and the check runs to a verdict over it.
+#[test]
+fn bad_roadmap_without_a_view_fails_no_check() {
+    use common::check::Config;
+    use specengine_core::check::Verdict;
+    let bad = head_but("releases", Some("releases   = []"));
+    for text in [
+        bad.clone(),
+        viewed_with(
+            &bad,
+            "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\"]\nindex   = true\n",
+        ),
+        viewed_with(
+            &bad,
+            "[[generators]]\ncommand = \"gen\"\nwrites  = [\"x/root.md\", \"x/s.md\"]\nindex   = true\nshards  = [{ path = \"x/s.md\", tier3 = true }]\n",
+        ),
+    ] {
+        let config = Config::from_toml(&text);
+        assert!(
+            config
+                .check
+                .index_generator()
+                .is_none_or(|g| g.roadmap.is_none()),
+            "{text}"
+        );
+        let report = config.check(&[(
+            "work/PLN-001.md",
+            "---\nclass: spec\nid: PLN-001\nstatus: draft\nscope: [x]\n---\n\n# One\n",
+        )]);
+        assert_ne!(report.verdict, Verdict::CannotCheck, "{text}");
+        assert!(
+            report.cannot_check.is_empty(),
+            "{text}\n{:?}",
+            report.cannot_check
+        );
+    }
 }

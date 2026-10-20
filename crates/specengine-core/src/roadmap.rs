@@ -36,9 +36,16 @@
 //!
 //! It names no prefix, release, priority or unit of any project: every one
 //! comes from the table.
+//!
+//! `spec roadmap`'s lines are built here ([`Plan::summary`],
+//! [`PlanGroup::header`], [`PlanItem::line`], [`Sum::text`]); the index
+//! entry's roadmap view (canon `spec-roadmap`, "View"; the last output of
+//! [`crate::check::render_index_set`]) is the same lines in Markdown,
+//! `render_view`, from the walked files alone.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::fmt::Write as _;
 
 use petgraph::algo::tarjan_scc;
 use petgraph::graph::{DiGraph, NodeIndex};
@@ -46,7 +53,10 @@ use specengine_model::{FmValue, Node, ParsedFile};
 
 use crate::check::config::DocClass;
 use crate::check::resolve::written;
-use crate::check::{CheckFile, CheckInput, FileText, Resolver, front_matter_failure};
+use crate::check::{
+    CheckFile, CheckInput, FileText, Generator, Resolver, RoadmapView, front_matter_failure,
+    generated_header, relative_link,
+};
 use crate::roadmap_toml::RoadmapConfig;
 use crate::walk_scope::is_under;
 
@@ -219,6 +229,200 @@ fn estimate_bound(text: &str) -> Option<u64> {
     }
     let value: u64 = text.parse().ok()?;
     (value <= ESTIMATE_MAX).then_some(value)
+}
+
+impl Sum {
+    /// `<min>-<max>` (`<min>` when equal), ` <unit>` when set, `, <u>
+    /// unestimated` when some are.
+    pub fn text(self, unit: Option<&str>) -> String {
+        let mut text = if self.min == self.max {
+            self.min.to_string()
+        } else {
+            format!("{}-{}", self.min, self.max)
+        };
+        if let Some(unit) = unit {
+            text.push(' ');
+            text.push_str(&one_line(unit));
+        }
+        if self.unestimated > 0 {
+            let _ = write!(text, ", {} unestimated", self.unestimated);
+        }
+        text
+    }
+}
+
+impl Plan {
+    /// The whole plan's line, `spec roadmap`'s first and the view's
+    /// paragraph: `roadmap: <o> open, <d> done; current <release or
+    /// none>[; to <cut> <sum>]; total <sum>`.
+    pub fn summary(&self, unit: Option<&str>) -> String {
+        let mut line = format!(
+            "roadmap: {} open, {} done; current {}",
+            self.open,
+            self.done,
+            self.current
+                .as_deref()
+                .map_or_else(|| "none".to_owned(), one_line)
+        );
+        if let Some(cut) = &self.cut {
+            let _ = write!(
+                line,
+                "; to {} {}",
+                one_line(&cut.release),
+                cut.sum.text(unit)
+            );
+        }
+        let _ = write!(line, "; total {}", self.total.text(unit));
+        line
+    }
+}
+
+impl PlanGroup {
+    /// The group's line, `spec roadmap`'s header and the view's heading:
+    /// `release <name>[ | current][ | mvp cut] | <o> open, <d> done |
+    /// <sum>`, `pool | …`, `unplaced | …`.
+    pub fn header(&self, unit: Option<&str>) -> String {
+        let mut line = match (self.kind, &self.name) {
+            (GroupKind::Release, Some(name)) => format!("release {}", one_line(name)),
+            (kind, _) => kind.as_str().to_owned(),
+        };
+        if self.current {
+            line.push_str(" | current");
+        }
+        if self.mvp_cut {
+            line.push_str(" | mvp cut");
+        }
+        let _ = write!(
+            line,
+            " | {} open, {} done | {}",
+            self.open,
+            self.done,
+            self.sum.text(unit)
+        );
+        line
+    }
+}
+
+impl PlanItem {
+    /// `spec roadmap`'s line of the item in a group of `kind`, indented:
+    /// `<position>.` in a release, else `-`; the ID, title, status,
+    /// priority and estimate (`-` when absent)`[ | waits on <ID>, …][ |
+    /// cycle] | <path>`, and in the unplaced group `| release <as written,
+    /// or mistyped>`.
+    pub fn line(&self, kind: GroupKind) -> String {
+        format!(
+            "  {} {}{} | {}{}",
+            self.lead(kind),
+            one_line(&self.id),
+            self.cells(kind),
+            one_line(&self.path),
+            self.placement(kind)
+        )
+    }
+
+    /// The view's entry: [`PlanItem::line`] unindented, the ID a Markdown
+    /// link to `link`, the path left out.
+    pub(crate) fn entry(&self, kind: GroupKind, link: &str) -> String {
+        format!(
+            "{} [{}]({link}){}{}",
+            self.lead(kind),
+            one_line(&self.id),
+            self.cells(kind),
+            self.placement(kind)
+        )
+    }
+
+    /// `<position>.` in a release, else `-`.
+    fn lead(&self, kind: GroupKind) -> String {
+        match self.position {
+            Some(position) if kind == GroupKind::Release => format!("{position}."),
+            _ => "-".to_owned(),
+        }
+    }
+
+    /// ` | <title> | <status> | <priority> | <estimate>[ | waits on <ID>,
+    /// …][ | cycle]`.
+    fn cells(&self, kind: GroupKind) -> String {
+        let mut cells = format!(
+            " | {} | {} | {} | {}",
+            or_dash(self.title.as_deref()),
+            or_dash(self.status.as_deref()),
+            or_dash(self.priority.as_deref()),
+            self.estimate
+                .map_or_else(|| "-".to_owned(), |estimate| estimate.to_string())
+        );
+        if !self.waits_on.is_empty() {
+            let names: Vec<String> = self.waits_on.iter().map(|id| one_line(id)).collect();
+            let _ = write!(cells, " | waits on {}", names.join(", "));
+        }
+        if kind == GroupKind::Release && self.cycle {
+            cells.push_str(" | cycle");
+        }
+        cells
+    }
+
+    /// ` | release <as written, or mistyped>` in the unplaced group, else
+    /// nothing.
+    fn placement(&self, kind: GroupKind) -> String {
+        if kind != GroupKind::Unplaced {
+            return String::new();
+        }
+        match &self.release {
+            Some(release) => format!(" | {RELEASE_KEY} {}", one_line(release)),
+            None => format!(" | {RELEASE_KEY} mistyped"),
+        }
+    }
+}
+
+/// A value on one line: line breaks become spaces.
+fn one_line(text: &str) -> String {
+    text.replace("\r\n", " ").replace(['\n', '\r'], " ")
+}
+
+/// `-` for a value not given.
+fn or_dash(value: Option<&str>) -> String {
+    value.map_or_else(|| "-".to_owned(), one_line)
+}
+
+/// The view's H1.
+const VIEW_TITLE: &str = "Roadmap";
+/// The view's `source:`.
+const VIEW_SOURCE: &str = "the plan items of [roadmap]";
+/// The heading of the view's notes.
+const NOTES_TITLE: &str = "Notes";
+
+/// The roadmap view of `input` (canon `spec-roadmap`, "View"): the index
+/// header of `generator` (H1 `Roadmap`, `source:` the plan items), then
+/// `spec roadmap`'s lines of the whole plan of `view.config` in Markdown,
+/// uncut: the summary a paragraph; each group a `##` heading, its open
+/// items after a blank line (none: the heading alone), each
+/// [`PlanItem::entry`] linked from the view's directory; `## Notes` with
+/// one `- <note>` each when there are notes. Pure: no clock, no queue; one
+/// input in any order gives one text.
+pub(crate) fn render_view(input: &CheckInput, generator: &Generator, view: &RoadmapView) -> String {
+    let plan = plan(input, &view.config);
+    let unit = view.config.unit.as_deref();
+    let mut out = generated_header(generator, VIEW_TITLE, VIEW_SOURCE);
+    out.push_str(&plan.summary(unit));
+    out.push('\n');
+    for group in &plan.groups {
+        let _ = write!(out, "\n## {}\n", group.header(unit));
+        if !group.items.is_empty() {
+            out.push('\n');
+        }
+        for item in &group.items {
+            let link = relative_link(&view.path, &item.path);
+            out.push_str(&item.entry(group.kind, &link));
+            out.push('\n');
+        }
+    }
+    if !plan.notes.is_empty() {
+        let _ = write!(out, "\n## {NOTES_TITLE}\n\n");
+        for note in &plan.notes {
+            let _ = writeln!(out, "- {}", one_line(note));
+        }
+    }
+    out
 }
 
 /// An item's `release:`.

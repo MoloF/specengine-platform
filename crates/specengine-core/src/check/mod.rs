@@ -32,7 +32,8 @@
 //!   [`bundle_layers`] — the layers of a context bundle over it (task spec
 //!   `spec-cli-bundle`), by link type and `[ids]` scope only;
 //! - [`render_index_set`] — the generated index, rendered in memory: the
-//!   root and its shards ([`render_index`]: the root alone);
+//!   root, its shards and the roadmap view ([`render_index`]: the root
+//!   alone);
 //!   [`walk_gap`] — the first gap of an incomplete walk, which stops the
 //!   index comparison and the index writer alike (§11.5);
 //!   [`is_tier3`] / [`is_tier3_file`] — the one Tier 3 predicate (the
@@ -88,7 +89,7 @@ pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
 pub use bundle::{BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers};
 pub use config::{
     Budgets, BundleNode, BundleTask, CheckConfig, CheckRule, ClassContract, Classes, ConfigError,
-    DEFAULT_GATE, DocClass, Generator, Mode, Shard, ShardKind, bundle_node_from_toml,
+    DEFAULT_GATE, DocClass, Generator, Mode, RoadmapView, Shard, ShardKind, bundle_node_from_toml,
     bundle_task_from_toml, check_config_from_toml,
 };
 pub use engine::{PARSER_SEVERITY, add_findings, parser_severity, run};
@@ -96,6 +97,9 @@ pub use generated::{WalkGap, walk_gap};
 pub use health::{BoundCandidate, bound_candidates};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
 pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, render_index_set};
+/// The generated header and a link from one output's directory
+/// (`crate::roadmap`'s view, written as an index output is).
+pub(crate) use render::{header as generated_header, relative_link};
 pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
 pub use resolve::{Resolution, Resolver, canonical_id, feature_scoped};
 pub use spec_graph::{

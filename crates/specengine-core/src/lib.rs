@@ -79,10 +79,11 @@
 //!   keys and fingerprint strings in, one follow per entry out, the
 //!   triviality threshold the caller's;
 //! - [`roadmap_toml`] — `RoadmapConfig::from_toml`: the `[roadmap]` table,
-//!   read by `spec roadmap` alone; [`roadmap`] — [`plan`]: the plan of the
-//!   items it names over the check's input (releases in order, the chain,
-//!   priority ties, range sums, the current release, the pool), pure (task
-//!   spec `roadmap-items`, ADR-0052).
+//!   read by `spec roadmap` and by the check tables of an index entry with a
+//!   `roadmap` view; [`roadmap`] — [`plan`]: the plan of the items it names
+//!   over the check's input (releases in order, the chain, priority ties,
+//!   range sums, the current release, the pool), pure (task spec
+//!   `roadmap-items`, ADR-0052), its lines and the view (`roadmap-view`).
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 

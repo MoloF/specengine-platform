@@ -21,7 +21,9 @@
 //! ```
 //!
 //! `<sum>`: `<min>-<max>` (`<min>` when equal), ` <unit>` when set, `, <u>
-//! unestimated` when some are. Everything before the tail is at most
+//! unestimated` when some are. The lines are core's ([`Plan::summary`],
+//! `PlanGroup::header`, `PlanItem::line`), shared with the index entry's
+//! roadmap view. Everything before the tail is at most
 //! [`OUTPUT_CAP_CHARS`] characters: lines print whole, in order, until the
 //! next would pass it; the tail only when an item is not shown
 //! (canon `spec-roadmap`, "Cut"); the JSON holds what the text prints. The plan's
@@ -31,12 +33,12 @@
 //! error, no or a bad `[roadmap]`, an index that cannot be updated.
 
 use serde::Serialize;
-use specengine_core::{GroupKind, Plan, PlanGroup, PlanItem, RoadmapConfig, Sum, plan};
+use specengine_core::{GroupKind, Plan, RoadmapConfig, Sum, plan};
 
 use crate::cap::OUTPUT_CAP_CHARS;
 use crate::corpus::indexed;
 use crate::project::{config_error, discover_with_text};
-use crate::{CliError, Env, Globals, Message, one_line};
+use crate::{CliError, Env, Globals, Message};
 
 /// `spec roadmap` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -161,14 +163,14 @@ fn cut(outcome: &mut RoadmapOutcome) {
     let mut shown = Vec::new();
     'groups: for &at in &outcome.listed {
         let group = &outcome.plan.groups[at];
-        let cost = header(group, unit).chars().count() + 1;
+        let cost = group.header(unit).chars().count() + 1;
         if used + cost > OUTPUT_CAP_CHARS {
             break;
         }
         used += cost;
         let mut items = 0;
         for item in &group.items {
-            let cost = item_line(group.kind, item).chars().count() + 1;
+            let cost = item.line(group.kind).chars().count() + 1;
             if used + cost > OUTPUT_CAP_CHARS {
                 shown.push((at, items));
                 break 'groups;
@@ -182,103 +184,9 @@ fn cut(outcome: &mut RoadmapOutcome) {
     outcome.truncated = outcome.omitted() > 0;
 }
 
-/// `<min>-<max>` (`<min>` when equal), ` <unit>`, `, <u> unestimated`.
-fn sum_text(sum: Sum, unit: Option<&str>) -> String {
-    let mut text = if sum.min == sum.max {
-        sum.min.to_string()
-    } else {
-        format!("{}-{}", sum.min, sum.max)
-    };
-    if let Some(unit) = unit {
-        text.push(' ');
-        text.push_str(&one_line(unit));
-    }
-    if sum.unestimated > 0 {
-        text.push_str(&format!(", {} unestimated", sum.unestimated));
-    }
-    text
-}
-
-/// The first line: the whole plan's.
+/// The first line: the whole plan's (core [`Plan::summary`]).
 fn summary(outcome: &RoadmapOutcome) -> String {
-    let plan = &outcome.plan;
-    let unit = outcome.unit.as_deref();
-    let mut line = format!(
-        "roadmap: {} open, {} done; current {}",
-        plan.open,
-        plan.done,
-        plan.current
-            .as_deref()
-            .map_or_else(|| "none".to_owned(), one_line)
-    );
-    if let Some(cut) = &plan.cut {
-        line.push_str(&format!(
-            "; to {} {}",
-            one_line(&cut.release),
-            sum_text(cut.sum, unit)
-        ));
-    }
-    line.push_str(&format!("; total {}", sum_text(plan.total, unit)));
-    line
-}
-
-/// A group's header line.
-fn header(group: &PlanGroup, unit: Option<&str>) -> String {
-    let mut line = match (group.kind, &group.name) {
-        (GroupKind::Release, Some(name)) => format!("release {}", one_line(name)),
-        (kind, _) => kind.as_str().to_owned(),
-    };
-    if group.current {
-        line.push_str(" | current");
-    }
-    if group.mvp_cut {
-        line.push_str(" | mvp cut");
-    }
-    line.push_str(&format!(
-        " | {} open, {} done | {}",
-        group.open,
-        group.done,
-        sum_text(group.sum, unit)
-    ));
-    line
-}
-
-/// `-` for a value not given.
-fn or_dash(value: Option<&str>) -> String {
-    value.map_or_else(|| "-".to_owned(), one_line)
-}
-
-/// An item's line, indented.
-fn item_line(kind: GroupKind, item: &PlanItem) -> String {
-    let lead = match item.position {
-        Some(position) if kind == GroupKind::Release => format!("{position}."),
-        _ => "-".to_owned(),
-    };
-    let mut line = format!(
-        "  {lead} {} | {} | {} | {} | {}",
-        one_line(&item.id),
-        or_dash(item.title.as_deref()),
-        or_dash(item.status.as_deref()),
-        or_dash(item.priority.as_deref()),
-        item.estimate
-            .map_or_else(|| "-".to_owned(), |estimate| estimate.to_string())
-    );
-    if !item.waits_on.is_empty() {
-        let names: Vec<String> = item.waits_on.iter().map(|id| one_line(id)).collect();
-        line.push_str(&format!(" | waits on {}", names.join(", ")));
-    }
-    if kind == GroupKind::Release && item.cycle {
-        line.push_str(" | cycle");
-    }
-    line.push_str(&format!(" | {}", one_line(&item.path)));
-    if kind == GroupKind::Unplaced {
-        let release = match &item.release {
-            Some(release) => one_line(release),
-            None => "mistyped".to_owned(),
-        };
-        line.push_str(&format!(" | release {release}"));
-    }
-    line
+    outcome.plan.summary(outcome.unit.as_deref())
 }
 
 pub(crate) fn render_text(outcome: &RoadmapOutcome) -> String {
@@ -290,10 +198,10 @@ pub(crate) fn render_text(outcome: &RoadmapOutcome) -> String {
     out.push('\n');
     for &(at, items) in &outcome.shown {
         let group = &outcome.plan.groups[at];
-        out.push_str(&header(group, unit));
+        out.push_str(&group.header(unit));
         out.push('\n');
         for item in &group.items[..items.min(group.items.len())] {
-            out.push_str(&item_line(group.kind, item));
+            out.push_str(&item.line(group.kind));
             out.push('\n');
         }
     }

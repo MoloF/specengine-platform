@@ -1,11 +1,13 @@
 //! `spec export index [--stdout]`: the generated index, rendered by core's
 //! `render_index_set` with the `[[generators]]` entry that has `index =
 //! true` over a fresh walk of the working tree, written to `<root>/<[paths]
-//! index>` and to each shard the entry lists, in config order, and nowhere
-//! else (the owner's Q3: a mode of `spec export`, whose bare form is Phase
-//! 2's queue export). The header names the registered `command` and `gate`;
-//! there is no default path, command, gate or shard. No database, slug or
-//! `HOME`; the baseline is not read.
+//! index>`, to each shard the entry lists, in config order, then to its
+//! `roadmap` view when it registers one (the plan of `[roadmap]`'s items
+//! from the walked files alone, canon `spec-roadmap`), and nowhere else
+//! (the owner's Q3: a mode of `spec export`, whose bare form is Phase 2's
+//! queue export). The header names the registered `command` and `gate`;
+//! there is no default path, command, gate, shard or view. No database,
+//! slug or `HOME`; neither the queue nor the baseline is read.
 //!
 //! Refused, exit 2, nothing written: a config error (one line per cause), no
 //! `index = true` entry, an incomplete walk (a file that cannot be read or
@@ -25,8 +27,8 @@
 //! `warning:`: names skipped for not being UTF-8 (their documents are not
 //! listed), each output outside the walk.
 //!
-//! `--stdout` prints the render and writes nothing; with shards, each output
-//! in order after a `==> <path> <==` line.
+//! `--stdout` prints the render and writes nothing; with shards or a view,
+//! each output in order after a `==> <path> <==` line.
 
 use std::collections::BTreeMap;
 use std::fs::{self, OpenOptions};
@@ -64,13 +66,16 @@ pub struct ExportOutcome {
     pub render: Option<String>,
     /// The shards of the index, in config order; empty without shards.
     pub shards: Vec<ShardOutcome>,
+    /// The roadmap view, written after the shards; `None` without one.
+    pub roadmap: Option<ShardOutcome>,
     pub messages: Vec<Message>,
 }
 
-/// What `spec export index` did with one shard: as for the root.
+/// What `spec export index` did with one shard, or with the roadmap view:
+/// as for the root.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ShardOutcome {
-    /// The shard's `path`, root-relative.
+    /// The shard's (or the view's) `path`, root-relative.
     pub path: String,
     /// The render's length in bytes.
     pub bytes: usize,
@@ -143,15 +148,24 @@ pub fn export_index(
             )));
         }
     }
+    let view = generator.roadmap.as_ref().map(|view| view.path.as_str());
+    if let Some(view) = view
+        && !scope.in_walk_scope(view)
+    {
+        messages.push(Message::Warning(format!(
+            "the roadmap view `{view}` is outside the walk (the roots, `exclude`): \
+             `spec check` reports it `index-missing`"
+        )));
+    }
 
     let outputs = render_index_set(&input, &index_path, generator);
     let written = if request.stdout {
         vec![false; outputs.len()]
     } else {
-        write_outputs(&located.root, &outputs)?
+        write_outputs(&located.root, &outputs, view)?
     };
     let render = |text: &str| request.stdout.then(|| text.to_owned());
-    let mut outcomes = outputs
+    let mut outcomes: Vec<ShardOutcome> = outputs
         .iter()
         .zip(written)
         .map(|(output, written)| ShardOutcome {
@@ -159,7 +173,14 @@ pub fn export_index(
             bytes: output.bytes.len(),
             written,
             render: render(&output.bytes),
-        });
+        })
+        .collect();
+    // The view is the last output, after the root and the shards.
+    let roadmap = match outcomes.last() {
+        Some(last) if outcomes.len() > 1 && view == Some(last.path.as_str()) => outcomes.pop(),
+        _ => None,
+    };
+    let mut outcomes = outcomes.into_iter();
     let Some(root) = outcomes.next() else {
         return Err(CliError::spec(
             "the index render has no root; nothing was written".to_owned(),
@@ -171,18 +192,29 @@ pub fn export_index(
         written: root.written,
         render: root.render,
         shards: outcomes.collect(),
+        roadmap,
         messages,
     })
 }
 
 /// Inspects every output before writing any (a refusal writes nothing),
 /// then writes them in order, each only when its bytes differ: per output,
-/// whether it was written.
-fn write_outputs(root: &Path, outputs: &[IndexOutput]) -> Result<Vec<bool>, CliError> {
+/// whether it was written. `view`: the roadmap view's path, the last output.
+fn write_outputs(
+    root: &Path,
+    outputs: &[IndexOutput],
+    view: Option<&str>,
+) -> Result<Vec<bool>, CliError> {
     let refused = |why: String| CliError::spec(format!("{why}; nothing was written"));
     let mut targets = Vec::with_capacity(outputs.len());
     for (at, output) in outputs.iter().enumerate() {
-        let role = if at == 0 { Role::Root } else { Role::Shard };
+        let role = if at == 0 {
+            Role::Root
+        } else if view == Some(output.path.as_str()) {
+            Role::View
+        } else {
+            Role::Shard
+        };
         let target = inspect(root, &output.path, role, output.bytes.as_bytes()).map_err(refused)?;
         targets.push(target);
     }
@@ -275,6 +307,8 @@ enum Role {
     Root,
     /// A shard of the index entry.
     Shard,
+    /// The index entry's roadmap view.
+    View,
 }
 
 impl Role {
@@ -283,6 +317,7 @@ impl Role {
         match self {
             Self::Root => format!("`[paths] index` `{path}`"),
             Self::Shard => format!("the index shard `{path}`"),
+            Self::View => format!("the roadmap view `{path}`"),
         }
     }
 
@@ -291,6 +326,7 @@ impl Role {
         match self {
             Self::Root => "`[paths] index`".to_owned(),
             Self::Shard => format!("the index shard `{path}`"),
+            Self::View => format!("the roadmap view `{path}`"),
         }
     }
 }
@@ -504,8 +540,8 @@ pub(crate) fn io_message(error: &StoreError) -> String {
 }
 
 /// One `wrote <path>: <n> bytes` or `unchanged …` line per output, the root
-/// first; `--stdout`: the render, or with shards each output after a
-/// `==> <path> <==` line.
+/// first, the roadmap view last; `--stdout`: the render of a single output,
+/// or each output after a `==> <path> <==` line.
 pub(crate) fn render_text(outcome: &ExportOutcome) -> String {
     let outputs = std::iter::once((
         outcome.path.as_str(),
@@ -513,16 +549,17 @@ pub(crate) fn render_text(outcome: &ExportOutcome) -> String {
         outcome.written,
         outcome.render.as_deref(),
     ))
-    .chain(outcome.shards.iter().map(|shard| {
+    .chain(outcome.shards.iter().chain(&outcome.roadmap).map(|output| {
         (
-            shard.path.as_str(),
-            shard.bytes,
-            shard.written,
-            shard.render.as_deref(),
+            output.path.as_str(),
+            output.bytes,
+            output.written,
+            output.render.as_deref(),
         )
     }));
     if let Some(render) = &outcome.render
         && outcome.shards.is_empty()
+        && outcome.roadmap.is_none()
     {
         return render.clone();
     }
@@ -545,10 +582,13 @@ struct ExportJson<'a> {
     written: bool,
     #[serde(skip_serializing_if = "<[ShardOutcome]>::is_empty")]
     shards: &'a [ShardOutcome],
+    #[serde(skip_serializing_if = "Option::is_none")]
+    roadmap: Option<&'a ShardOutcome>,
 }
 
 /// `{path, bytes, written}`, as [`crate::render_json`] prints it; with
-/// shards, also `shards`: the same keys per shard, in config order.
+/// shards, also `shards`: the same keys per shard, in config order; with a
+/// roadmap view, also `roadmap`: the same keys.
 impl Serialize for ExportOutcome {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         ExportJson {
@@ -556,6 +596,7 @@ impl Serialize for ExportOutcome {
             bytes: self.bytes,
             written: self.written,
             shards: &self.shards,
+            roadmap: self.roadmap.as_ref(),
         }
         .serialize(serializer)
     }

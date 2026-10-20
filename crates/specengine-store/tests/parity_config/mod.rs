@@ -37,10 +37,15 @@ pub const INDEX_LIVE_SHARDS: [(&str, &str); 5] = [
     ("docs/index-roadmap.md", "docs/roadmap/*.md"),
 ];
 
-/// The index set of the root config in config order: the root, then the
-/// shards. The index entry's `writes`, the render's outputs and the export's
-/// lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 7] = [
+/// The roadmap view of the root config's index entry (`roadmap`; ADR-0052,
+/// docs/features/roadmap-view.md): the plan of `[roadmap]`'s items, the
+/// entry's last output.
+pub const VIEW: &str = "docs/generated/roadmap.md";
+
+/// The outputs of the root config's index entry in config order: the root,
+/// then the shards, then the roadmap view. The index entry's `writes`, the
+/// render's outputs and the export's lines, all in this order.
+pub const INDEX_OUTPUTS: [&str; 8] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
@@ -48,7 +53,12 @@ pub const INDEX_OUTPUTS: [&str; 7] = [
     INDEX_LIVE_SHARDS[2].0,
     INDEX_LIVE_SHARDS[3].0,
     INDEX_LIVE_SHARDS[4].0,
+    VIEW,
 ];
+
+/// The index set proper of [`INDEX_OUTPUTS`]: the root and the shards, the
+/// view aside (it lists no document and is listed in none).
+pub const INDEX_SET: usize = INDEX_OUTPUTS.len() - 1;
 
 /// X: the registered export command of the index (`[[generators]] command`).
 pub const EXPORT: &str = "cargo run -q -p specengine-cli -- export index";

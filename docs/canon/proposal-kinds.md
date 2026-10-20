@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-20
 ---
 
 # Proposal kinds: create
@@ -22,7 +22,7 @@ Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kin
 In order; the first refusal answers, exit 1 unless named; nothing stored or reserved:
 
 1. **Form** (exit 2): clap, the author grammar; the place bound (Creation 5) before the text is read: an unbound root exits 2 first.
-2. **Target**. A path no indexed file has: `--base` -> ``nothing at `<path>`: a new file is written against no base; drop --base``; the path clean, `.md`, in the walk (core `Paths::in_walk_scope`; else `` `<p>` is no file the walk would list ``), not under `[paths] generated`, not `[paths] index` nor a shard (live or archive) of the `index = true` `[[generators]]` entry: `` `<p>` is the project's index (`[paths] index`) | the index's archive shard | a shard of the index: only `spec export index` writes it, never a proposal ``; no symlink or non-directory on its way, nothing there (a dangling symlink too) nor in git's index: `` `<p>` exists: a create never replaces a file; to add ID sections to it, name its span_hash with --base ``. Else the section form: Creation 1-2; no `--base` -> that `exists`.
+2. **Target**. A path no indexed file has: `--base` -> ``nothing at `<path>`: a new file is written against no base; drop --base``; the path clean, `.md`, in the walk (core `Paths::in_walk_scope`; else `` `<p>` is no file the walk would list ``), not under `[paths] generated`, not `[paths] index`, a shard (live or archive) nor the roadmap view of the `index = true` `[[generators]]` entry (CLI `create.rs` `index_files`, at propose and at apply step 3): `` `<p>` is the project's index (`[paths] index`) | the index's archive shard | a shard of the index | the index's roadmap view: only `spec export index` writes it, never a proposal ``; no symlink or non-directory on its way, nothing there (a dangling symlink too) nor in git's index: `` `<p>` exists: a create never replaces a file; to add ID sections to it, name its span_hash with --base ``. Else the section form: Creation 1-2; no `--base` -> that `exists`.
 3. **Text**: UTF-8, <= `TEXT_MAX_BYTES`, verbatim, parsed under the recorded root's scheme (a parser panic: refused). File form: `class: generated` refused; a front-matter declaring `amends` -> `` `<p>` declares `amends`: raise it as `spec propose amendment <p>`; nothing stored ``; one that does not read is no refusal (stored with its finding, step 5). Section form: Creation 3's splice under the section rule (core `add_sections`): the file's (ID, heading level) pairs kept in order; refused: an ID dropped or moved, the `id:` changed, a level changed, a heading at the target's level or above, `` no new ID: the text adds no `{#ID}` section; `spec propose update` replaces a span ``. `update`'s rule is unchanged: any added ID refused.
 4. **New IDs**: the file form's `id:` and `{#ID}`s; the section form's added sections and any ID-shaped `{#...}` the parser took as no definition (an alias prefix, a look-alike) the span did not hold. Each in text order, canonical (`slug/ID` for a feature-scoped prefix in a feature document, ADR-0026), checked in order:
    - an `aliases_from` prefix -> `` `QST-033` (line N) is written with a legacy `aliases_from` prefix: a new ID is written with its canonical prefix, `Q-033` ``;

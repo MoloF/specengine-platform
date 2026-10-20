@@ -1793,23 +1793,29 @@ fn n2_a_create_lost_in_the_race_names_the_holder_and_its_state() {
 }
 
 /// spec-b's config with `[paths] index = "docs/index.md"` and an `index =
-/// true` generator writing it, an archive shard and a live shard.
+/// true` generator writing it, an archive shard, a live shard and the
+/// roadmap view `docs/spec/plan-view.md` (docs/features/roadmap-view.md; a
+/// `[roadmap]` over spec-b's `REQ`).
 fn sharded_config(base: &str) -> String {
     let mut text = set_paths_key(base, "index", &quoted("docs/index.md"));
     text.push_str(
-        "\n[[generators]]\ncommand = \"gen-index\"\nwrites  = [\"docs/index.md\", \
-         \"docs/index-archive.md\", \"docs/spec/index-records.md\"]\nindex   = true\n\
+        "\n[roadmap]\nprefix     = \"REQ\"\ndir        = \"docs/spec\"\n\
+         releases   = [\"one\"]\npriorities = [\"high\"]\n\
+         \n[[generators]]\ncommand = \"gen-index\"\nwrites  = [\"docs/index.md\", \
+         \"docs/index-archive.md\", \"docs/spec/index-records.md\", \
+         \"docs/spec/plan-view.md\"]\nindex   = true\nroadmap = \"docs/spec/plan-view.md\"\n\
          shards  = [\n  { path = \"docs/index-archive.md\", tier3 = true },\n  \
          { path = \"docs/spec/index-records.md\", claims = [\"docs/records/**\"] },\n]\n",
     );
     text
 }
 
-/// n4: `[paths] index` and each shard of the index generator (live,
-/// archive) are refused at propose (exit 1, nothing stored); a create
-/// stored before the config named its path is refused at apply step 3
-/// (`apply_failed` step 3, nothing changed). M: the index's files not
-/// refused.
+/// n4: `[paths] index`, each shard of the index generator (live,
+/// archive) and its roadmap view (docs/features/roadmap-view.md) are
+/// refused at propose (exit 1, nothing stored); a create stored before the
+/// config named its path is refused at apply step 3 (`apply_failed` step 3,
+/// nothing changed), a shard's and the view's alike. M: the index's files
+/// not refused.
 #[test]
 fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
     let pair = Pair::new("pk-n4", "spec-b");
@@ -1823,6 +1829,7 @@ fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
         None,
         plain,
     );
+    let early_view = created(&pair, &pair.linked, "docs/spec/plan-view.md", None, plain);
     let config = read_text(&pair.linked, "specengine.toml");
     write(&pair.linked, "specengine.toml", sharded_config(&config));
     pair.commit_all(&pair.linked, "The index and its shards");
@@ -1830,6 +1837,7 @@ fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
         ("docs/index.md", "the project's index (`[paths] index`)"),
         ("docs/index-archive.md", "the index's archive shard"),
         ("docs/spec/index-records.md", "a shard of the index"),
+        ("docs/spec/plan-view.md", "the index's roadmap view"),
     ] {
         for text in [plain, page] {
             let reason = refused_create(&pair, &pair.linked, path, None, text, path);
@@ -1858,6 +1866,23 @@ fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
     assert!(!pair.linked.join("docs/spec/index-records.md").exists());
     assert_eq!(
         pair.events_of(&early),
+        events(&[(EVENT_CREATED, None), (EVENT_APPLY_FAILED, Some(3))])
+    );
+    // The roadmap view likewise.
+    let (outcome, questions) = approve(&pair, &pair.main, &early_view, true);
+    let reason = refused(&outcome, "apply step 3 of the view");
+    assert!(
+        reason.contains(
+            "`docs/spec/plan-view.md` is the index's roadmap view: only `spec export index` \
+             writes it, never a proposal; nothing changed"
+        ),
+        "{reason}"
+    );
+    assert!(questions.is_empty());
+    assert_eq!(pair.rev(&pair.linked, "t1"), head);
+    assert!(!pair.linked.join("docs/spec/plan-view.md").exists());
+    assert_eq!(
+        pair.events_of(&early_view),
         events(&[(EVENT_CREATED, None), (EVENT_APPLY_FAILED, Some(3))])
     );
 }

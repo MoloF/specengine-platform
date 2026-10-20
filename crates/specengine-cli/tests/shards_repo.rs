@@ -5,8 +5,9 @@
 //! archive shard of the spec's "Data" plus live shards beside it, three
 //! since 2026-10-10, four since 2026-10-15 (`docs/index-canon-spec.md`
 //! ahead of `docs/index-canon.md`), five since docs/features/roadmap-items.md
-//! SW-4 (`docs/index-roadmap.md`, the plan items), the spec's AC-12 and
-//! AC-13 holding for that config).
+//! SW-4 (`docs/index-roadmap.md`, the plan items), and the roadmap view
+//! `docs/generated/roadmap.md` last since docs/features/roadmap-view.md
+//! SW-5, the spec's AC-12 and AC-13 holding for that config).
 //! `spec export index` never runs in this repository; every run gets a
 //! scratch `HOME`; `git status` is the same before and after.
 //!
@@ -57,13 +58,16 @@ const POINTERS: &str = "\n## Shards\n\n- [docs/index-archive.md](index-archive.m
 
 /// The root config's index entry, verbatim: the spec's shipping entry
 /// (the archive shard) with the five live shards after it, the `spec-*`
-/// canon's first (the first matching claim wins), the plan items' last.
+/// canon's first (the first matching claim wins), the plan items' last;
+/// since docs/features/roadmap-view.md SW-5, the roadmap view
+/// `docs/generated/roadmap.md` in `writes` and `roadmap`.
 const SHIPPING: &str = "\
 [[generators]]
 command = \"cargo run -q -p specengine-cli -- export index\"
 writes  = [\"docs/index.md\", \"docs/index-archive.md\", \"docs/index-canon-spec.md\", \"docs/index-canon.md\", \"docs/index-decisions.md\", \"docs/index-crates.md\",
-           \"docs/index-roadmap.md\"]
+           \"docs/index-roadmap.md\", \"docs/generated/roadmap.md\"]
 index   = true
+roadmap = \"docs/generated/roadmap.md\"
 gate    = \"cargo run -q -p specengine-cli -- check\"
 # Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md \"Generated\".
 shards  = [{ path = \"docs/index-archive.md\", tier3 = true },
@@ -209,6 +213,9 @@ fn shipping_copy(scratch: &Scratch) -> (std::path::PathBuf, String) {
         "the root config is not the shipping config:\n{repo_toml}"
     );
     write(&copy, "specengine.toml", &toml);
+    // The roadmap view's directory, which export never creates (it holds
+    // no other document).
+    fs::create_dir_all(copy.join(parity_config::VIEW).parent().unwrap()).unwrap();
     (copy, toml)
 }
 
@@ -432,7 +439,8 @@ fn shipping_a_spec_costs_the_root_nothing() {
         .iter()
         .map(|path| read(&copy, path))
         .collect();
-    // `<verb> <path>: <n> bytes` for every live shard, unchanged.
+    // `<verb> <path>: <n> bytes` for every live shard and the roadmap
+    // view (no seed below is a plan item), unchanged.
     let live_unchanged = || -> String {
         INDEX_OUTPUTS[2..]
             .iter()

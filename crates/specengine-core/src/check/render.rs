@@ -20,6 +20,10 @@
 //! output keeps the sections and line formats above, its links relative to
 //! its own directory. The root ends with one pointer per shard; no output is
 //! listed in any output. No shard: the single file, byte for byte.
+//!
+//! The index entry's `roadmap` view, when registered, is the last output:
+//! the same header, the plan of `[roadmap]`'s items as `crate::roadmap`
+//! renders it (canon `spec-roadmap`, "View").
 
 use std::fmt::Write as _;
 
@@ -56,10 +60,13 @@ const SECTIONS: [(Section, &str); 5] = [
 /// The title of the root's pointer section, present only with shards.
 const SHARDS_TITLE: &str = "Shards";
 
-/// One output of the index: the root or a shard.
+/// The `source:` of an index output's header.
+const INDEX_SOURCE: &str = "front-matter of the repository's documents";
+
+/// One output of the index entry: the root, a shard or the roadmap view.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IndexOutput {
-    /// Root-relative: `[paths] index` or a shard's `path`.
+    /// Root-relative: `[paths] index`, a shard's `path` or the view's.
     pub path: String,
     /// The render: byte for byte what the generator writes there.
     pub bytes: String,
@@ -78,17 +85,22 @@ pub fn render_index(input: &CheckInput, index_path: &str, generator: &Generator)
 
 /// Every output of the index of `input`, built by `generator`: the root at
 /// `index_path` (root-relative) first, then each of `generator.shards` in
-/// config order. Every walked document but a generated one is listed in
-/// exactly one output; no output is listed, whatever its front-matter. The
-/// result is independent of the order of `input.files`.
+/// config order, then the roadmap view when `generator.roadmap` is set.
+/// Every walked document but a generated one is listed in exactly one index
+/// output; no output, the view included, is listed, whatever its
+/// front-matter. The result is independent of the order of `input.files`.
 pub fn render_index_set(
     input: &CheckInput,
     index_path: &str,
     generator: &Generator,
 ) -> Vec<IndexOutput> {
     let shards = &generator.shards;
-    let is_output =
-        |path: &str| path == index_path || shards.iter().any(|shard| shard.path == path);
+    let view = generator.roadmap.as_ref();
+    let is_output = |path: &str| {
+        path == index_path
+            || shards.iter().any(|shard| shard.path == path)
+            || view.is_some_and(|view| view.path == path)
+    };
     let mut files: Vec<&CheckFile> = input
         .files
         .iter()
@@ -121,8 +133,8 @@ pub fn render_index_set(
         placed[shard.map_or(0, |at| at + 1)].push((section, file));
     }
 
-    let mut outputs = Vec::with_capacity(1 + shards.len());
-    let mut root = header(generator, "Documentation index");
+    let mut outputs = Vec::with_capacity(2 + shards.len());
+    let mut root = header(generator, "Documentation index", INDEX_SOURCE);
     root.push_str(
         "Reading protocol (§9): this index, then at most three documents. Needing a third step means the index is wrong: fix it rather than reading further.\n",
     );
@@ -139,7 +151,11 @@ pub fn render_index_set(
         bytes: root,
     });
     for (shard, documents) in shards.iter().zip(&placed[1..]) {
-        let mut out = header(generator, &format!("Documentation index: {}", label(shard)));
+        let mut out = header(
+            generator,
+            &format!("Documentation index: {}", label(shard)),
+            INDEX_SOURCE,
+        );
         let back = relative_link(&shard.path, index_path);
         let _ = writeln!(
             out,
@@ -151,15 +167,22 @@ pub fn render_index_set(
             bytes: out,
         });
     }
+    if let Some(view) = view {
+        outputs.push(IndexOutput {
+            path: view.path.clone(),
+            bytes: crate::roadmap::render_view(input, generator, view),
+        });
+    }
     outputs
 }
 
-/// Front-matter, the H1 `title` and the build comment, then a blank line.
-fn header(generator: &Generator, title: &str) -> String {
+/// Front-matter naming `source`, the H1 `title` and the build comment, then
+/// a blank line.
+pub(crate) fn header(generator: &Generator, title: &str, source: &str) -> String {
     let command = &generator.command;
     let gate = generator.gate();
     format!(
-        "---\nclass: generated\ngenerator: {command}\nsource: front-matter of the repository's documents\n---\n\n\
+        "---\nclass: generated\ngenerator: {command}\nsource: {source}\n---\n\n\
          # {title}\n\n\
          <!-- Built by `{command}`. Manual edits are overwritten on rebuild, and `{gate}` rejects them. -->\n\n"
     )
@@ -252,7 +275,7 @@ fn line(file: &CheckFile, index_path: &str) -> String {
 /// `target` relative to the directory of the file `from`: the common
 /// leading directories dropped, one `..` per remaining directory of
 /// `from` (`a/b/x.md` → `c.md`: `../../c.md`; → `a/c/y.md`: `../c/y.md`).
-fn relative_link(from: &str, target: &str) -> String {
+pub(crate) fn relative_link(from: &str, target: &str) -> String {
     let from_dirs: Vec<&str> = from.split('/').collect();
     let from_dirs = &from_dirs[..from_dirs.len() - 1];
     let target_parts: Vec<&str> = target.split('/').collect();

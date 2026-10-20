@@ -13,7 +13,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 ## Specs
 
 - [docs/roadmap/RM-0001.md](roadmap/RM-0001.md) Live check: real tasks of each pilot through the full cycle · plugin, crates/specengine-cli · draft
-- [docs/roadmap/RM-0002.md](roadmap/RM-0002.md) roadmap-view (Phase 6, 1b): the committed, checked roadmap view · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0003.md](roadmap/RM-0003.md) roadmap-position (Phase 6, 2): live progress, next by the plan, MCP and HTTP reads · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin · draft
 - [docs/roadmap/RM-0004.md](roadmap/RM-0004.md) roadmap-screen (Phase 6, 3a): the Roadmap screen, read-only · ui · draft
 - [docs/roadmap/RM-0005.md](roadmap/RM-0005.md) verify-node (6b-2): spec verify --node, MCP check_binding · crates/specengine-cli, crates/specengine-mcp, plugin · draft

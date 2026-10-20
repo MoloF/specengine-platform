@@ -1,7 +1,10 @@
 //! `[roadmap]` of `specengine.toml` (canon `spec-roadmap`, "Config"): where
-//! plan items are found and how the plan is ordered, read only by `spec
-//! roadmap`. [`crate::ProjectConfig::from_toml`]
-//! only name-checks `roadmap`, so a bad table fails no other command.
+//! plan items are found and how the plan is ordered, read by `spec roadmap`
+//! and, only when the index entry registers a `roadmap` view, by the check
+//! tables ([`crate::check::CheckConfig::from_toml`]): a bad table then fails
+//! every command that loads them, as a bad `[[generators]]` entry does.
+//! [`crate::ProjectConfig::from_toml`] only name-checks `roadmap`, so
+//! without a view a bad table fails `spec roadmap` alone.
 //!
 //! - `prefix` (required): an `[ids]` prefix of shape `number`, not of
 //!   `scope = "feature"`; a legacy alias is an error naming the canonical

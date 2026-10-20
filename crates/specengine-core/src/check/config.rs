@@ -5,8 +5,9 @@
 //! generator entry or process rule is an error `file:line: message`
 //! through [`ConfigError::at`]; other tables are ignored (`[paths] index` is
 //! read only to cross-check the index generator, `[ids]` only for the kinds
-//! a rule may name), so editing these tables leaves the `[ids]` fingerprint
-//! (and every stored parse) alone.
+//! a rule may name, `[roadmap]` only for the index entry's `roadmap` view,
+//! a bad table then an error of these tables), so editing these tables
+//! leaves the `[ids]` fingerprint (and every stored parse) alone.
 
 use std::fmt;
 use std::ops::Range;
@@ -16,6 +17,7 @@ use toml::Spanned;
 
 pub use super::rules_toml::CheckRule;
 use super::rules_toml::{RawRule, rules_from};
+use crate::roadmap_toml::{RoadmapConfig, roadmap_from_toml};
 
 /// Default document caps in bytes of the whole file, front-matter and BOM
 /// included: the documentation convention's budgets (tier 0, tier 1, the
@@ -250,6 +252,9 @@ pub struct Generator {
     /// `index = true`. Empty: no shard (also `shards = []`), the index is
     /// the one file at `[paths] index`.
     pub shards: Vec<Shard>,
+    /// The roadmap view (`roadmap = "<path>"`); only with `index = true`.
+    /// `None`: the entry writes no view.
+    pub roadmap: Option<RoadmapView>,
     /// The 1-based line of the entry.
     pub line: usize,
 }
@@ -259,6 +264,21 @@ impl Generator {
     pub fn gate(&self) -> &str {
         self.gate.as_deref().unwrap_or(DEFAULT_GATE)
     }
+}
+
+/// The roadmap view of the index entry (canon `spec-roadmap`, "View"): one
+/// more output the entry writes after its shards, the plan of `[roadmap]`'s
+/// items as Markdown, rendered and compared byte for byte as the index is;
+/// never listed in the index.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoadmapView {
+    /// Root-relative, under the `[paths]` path rules; in the entry's
+    /// `writes`, neither `[paths] index` nor a shard's path.
+    pub path: String,
+    /// `[roadmap]`, checked: the plan the view renders.
+    pub config: RoadmapConfig,
+    /// The 1-based line of the `roadmap` key.
+    pub line: usize,
 }
 
 /// One shard of the index (ADR-0030): a file the `index = true` entry
@@ -540,8 +560,9 @@ struct NarrowBudgets {
 /// not empty, root-relative paths no other entry writes; one `index = true`
 /// at most, and only for an entry that writes the `[paths] index` file;
 /// `gate` only beside `index = true`, not blank, a plain YAML scalar;
-/// `shards` only beside `index = true` ([`shards_from`]), and that entry
-/// writes nothing but the `[paths] index` file and its shards.
+/// `shards` only beside `index = true` ([`shards_from`]); `roadmap` only
+/// beside `index = true` ([`roadmap_view_from`]); and that entry writes
+/// nothing but the `[paths] index` file, its shards and its view.
 fn generators_from(
     text: &str,
     raw: Vec<Spanned<RawGenerator>>,
@@ -697,15 +718,29 @@ fn generators_from(
             }
             Some(shards) => shards_from(text, shards.into_inner(), &paths, &index_path)?,
         };
-        // The index entry writes the root and its shards, nothing else: a
-        // stale output cannot hide in `writes`, never compared with a render.
+        let roadmap = match entry.roadmap {
+            None => None,
+            Some(view) if !index => {
+                return Err(error_at(
+                    view.span(),
+                    "`roadmap` is only for the entry with `index = true`".to_owned(),
+                ));
+            }
+            Some(view) => Some(roadmap_view_from(text, view, &paths, &shards, &index_path)?),
+        };
+        // The index entry writes the root, its shards and its view, nothing
+        // else: a stale output cannot hide in `writes`, never compared with
+        // a render.
         if index && let Some(Some(root)) = &index_path {
             for (path, span) in paths.iter().zip(&written) {
-                if path != root && !shards.iter().any(|shard| shard.path == *path) {
+                if path != root
+                    && !shards.iter().any(|shard| shard.path == *path)
+                    && roadmap.as_ref().is_none_or(|view| view.path != *path)
+                {
                     return Err(error_at(
                         span.clone(),
                         format!(
-                            "`writes`: {path} is neither the `[paths] index` {root} nor a shard: the index entry writes only the index and its `shards`"
+                            "`writes`: {path} is neither the `[paths] index` {root}, a shard nor the `roadmap` view: the index entry writes only the index, its `shards` and its `roadmap`"
                         ),
                     ));
                 }
@@ -717,6 +752,7 @@ fn generators_from(
             index,
             gate,
             shards,
+            roadmap,
             line,
         });
     }
@@ -846,6 +882,62 @@ fn shards_from(
         });
     }
     Ok(shards)
+}
+
+/// The `roadmap` view of the index entry, checked: a path under the
+/// `[paths]` path rules, neither `[paths] index` nor a shard's, in the
+/// entry's `writes`; then `[roadmap]` present and valid (canon
+/// `spec-roadmap`, "Config"), its `prefix` judged against `[ids]`. A bad
+/// `[roadmap]` is reported with its own line and message; an `[ids]` or a
+/// `[paths]` that does not read, with theirs, as `ProjectConfig` reports
+/// them (one cause once the loader drops repeats). `index_path` as in
+/// [`shards_from`].
+fn roadmap_view_from(
+    text: &str,
+    raw: Spanned<String>,
+    writes: &[String],
+    shards: &[Shard],
+    index_path: &Option<Option<String>>,
+) -> Result<RoadmapView, ConfigError> {
+    let line = super::text::line_of_str(text, raw.span().start);
+    let error_at = |message: String| ConfigError {
+        line: Some(line),
+        message,
+    };
+    let path = crate::paths_toml::checked_path(raw.get_ref(), false)
+        .map_err(|problem| error_at(format!("`roadmap`: {problem}")))?;
+    if let Some(Some(root)) = index_path
+        && *root == path
+    {
+        return Err(error_at(format!(
+            "`roadmap` {path} is the `[paths] index`: the view is a file of its own"
+        )));
+    }
+    if let Some(shard) = shards.iter().find(|shard| shard.path == path) {
+        return Err(error_at(format!(
+            "`roadmap` {path} is the shard of line {}: the view is a file of its own",
+            shard.line
+        )));
+    }
+    if !writes.contains(&path) {
+        return Err(error_at(format!(
+            "`roadmap` {path} is not in the entry's `writes`: list it there too"
+        )));
+    }
+    let scheme = crate::scheme_from_toml(text).map_err(|error| ConfigError {
+        line: error.line,
+        message: error.message,
+    })?;
+    match roadmap_from_toml(text, &scheme) {
+        Ok(Some(config)) => Ok(RoadmapView { path, config, line }),
+        Ok(None) => Err(error_at(format!(
+            "`roadmap` {path} is the view of `[roadmap]`, but there is no `[roadmap]` table: add it, or drop the key"
+        ))),
+        Err(error) => Err(ConfigError {
+            line: error.line,
+            message: error.message,
+        }),
+    }
 }
 
 /// Why `value`, a shard's claim or path, would not render into the index's
@@ -979,6 +1071,8 @@ struct RawGenerator {
     gate: Option<Spanned<String>>,
     #[serde(default)]
     shards: Option<Spanned<Vec<Spanned<RawShard>>>>,
+    #[serde(default)]
+    roadmap: Option<Spanned<String>>,
 }
 
 /// One `shards` table of the index entry as written.

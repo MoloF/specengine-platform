@@ -899,8 +899,8 @@ fn reserved_by(held: &Reservation) -> String {
 }
 
 /// The files `spec export index` writes, with what each is: `[paths]
-/// index`, and the shards (live and archive) of the `index = true`
-/// generator when the root's check tables read.
+/// index`, and the shards (live and archive) and the roadmap view of the
+/// `index = true` generator when the root's check tables read.
 fn index_files(root: &Path, paths: &Paths) -> Vec<(String, &'static str)> {
     let mut files = Vec::new();
     if let Some(index) = &paths.index {
@@ -917,6 +917,9 @@ fn index_files(root: &Path, paths: &Paths) -> Vec<(String, &'static str)> {
                 "a shard of the index"
             };
             files.push((shard.path.clone(), what));
+        }
+        if let Some(view) = &generator.roadmap {
+            files.push((view.path.clone(), "the index's roadmap view"));
         }
     }
     files

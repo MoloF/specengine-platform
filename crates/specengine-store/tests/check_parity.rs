@@ -52,9 +52,9 @@ use std::process::Command;
 
 use common::{Scratch, repository_root};
 use parity_config::{
-    DANGLING, EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, INDEX_SHARD, SKIP_FILES,
-    add_dangling_mention, claimed, claiming_shard, glob_matches, mutated, root_toml, roots,
-    skipped_file, skipped_files, std_walk, with_roots,
+    DANGLING, EXPORT, GATE, INDEX, INDEX_LIVE_SHARDS, INDEX_OUTPUTS, INDEX_SET, INDEX_SHARD,
+    SKIP_FILES, VIEW, add_dangling_mention, claimed, claiming_shard, glob_matches, mutated,
+    root_toml, roots, skipped_file, skipped_files, std_walk, with_roots,
 };
 use specengine_core::check::{
     CheckConfig, CheckInput, Mode, Report, ShardKind, Verdict, is_tier3_file, render_index,
@@ -672,6 +672,11 @@ fn the_core_render_is_the_committed_index() {
     assert_eq!(generator.command, EXPORT);
     assert_eq!(generator.gate(), GATE);
     assert_eq!(generator.writes, INDEX_OUTPUTS);
+    // docs/features/roadmap-view.md SW-5: the view, written last.
+    assert_eq!(
+        generator.roadmap.as_ref().map(|view| view.path.as_str()),
+        Some(VIEW)
+    );
     // Six shards (index-shards, ADR-0030): the archive, then the live
     // ones, each with its one claim (docs/README.md "Generated"), the
     // `spec-*` canon before the rest of the canon, the plan items last
@@ -697,7 +702,7 @@ fn the_core_render_is_the_committed_index() {
             .map(|output| output.path.as_str())
             .collect::<Vec<_>>(),
         INDEX_OUTPUTS,
-        "the root, then the shards in config order"
+        "the root, then the shards in config order, then the view"
     );
     assert_eq!(
         render_index(&input, INDEX, generator),
@@ -796,6 +801,23 @@ fn the_core_render_is_the_committed_index() {
         !root.contains("](roadmap/"),
         "{INDEX}: a docs/roadmap/ document"
     );
+    // The roadmap view (docs/features/roadmap-view.md): last, its own
+    // header, listed in no output, linking the plan items from its
+    // directory.
+    let view = set[INDEX_SET].bytes.as_str();
+    assert_eq!(set[INDEX_SET].path, VIEW);
+    assert!(
+        view.contains("\nsource: the plan items of [roadmap]\n---\n\n# Roadmap\n\n"),
+        "{VIEW}: the view header: {view}"
+    );
+    assert!(view.contains("](../roadmap/RM-"), "{VIEW}: no item link");
+    for output in &set[..INDEX_SET] {
+        assert!(
+            !output.bytes.contains("generated/roadmap.md"),
+            "{}: lists the view",
+            output.path
+        );
+    }
     // Independent of the walk's order.
     input.files.reverse();
     assert_eq!(render_index_set(&input, INDEX, generator), set);
@@ -966,6 +988,9 @@ fn every_document_of_this_repository_is_listed_once() {
     let render = render_index_set(&input, INDEX, generator);
     let paths: Vec<&str> = render.iter().map(|output| output.path.as_str()).collect();
     assert_eq!(paths, INDEX_OUTPUTS);
+    // The index set proper: the view lists plan items, never documents of
+    // the index (docs/features/roadmap-view.md).
+    let (render, paths) = (&render[..INDEX_SET], &paths[..INDEX_SET]);
     let committed: Vec<String> = paths
         .iter()
         .map(|path| {
@@ -1151,7 +1176,8 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
             "{path}: listed once across the set"
         );
     }
-    let outputs: Vec<(&str, &str)> = set
+    // The index set proper, the roadmap view aside.
+    let outputs: Vec<(&str, &str)> = set[..INDEX_SET]
         .iter()
         .map(|output| (output.path.as_str(), output.bytes.as_str()))
         .collect();
@@ -1162,8 +1188,8 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
         &input,
     ));
     assert!(failures.is_empty(), "{}", failures.join("\n"));
-    // The live shards are the committed ones byte for byte: no seed is a
-    // live claimed document.
+    // The live shards (and the roadmap view) are the committed ones byte
+    // for byte: no seed is a live claimed document or a plan item.
     for output in &set[2..] {
         let committed = fs::read_to_string(repository_root().join(&output.path)).unwrap();
         assert!(

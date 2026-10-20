@@ -3,11 +3,12 @@
 //!
 //! - `index-drift`, `index-missing`: with an `index = true` entry, the
 //!   render of each output of the index (the root at `[paths] index`, then
-//!   each shard) is compared byte for byte with its walked bytes, each
-//!   output on its own. Nothing is written; bytes not supplied → cannot check;
-//!   an incomplete walk (an unreadable file or directory, a missing written
-//!   root: each a cause of "cannot check") → not compared. A skipped
-//!   non-UTF-8 name does not stop the comparison.
+//!   each shard, then the entry's roadmap view) is compared byte for byte
+//!   with its walked bytes, each output on its own. Nothing is written;
+//!   bytes not supplied → cannot check; an incomplete walk (an unreadable
+//!   file or directory, a missing written root: each a cause of "cannot
+//!   check") → not compared. A skipped non-UTF-8 name does not stop the
+//!   comparison.
 //! - `generator-unknown`, `generator-path`: with the table (even empty),
 //!   every `class: generated` document names a registered `command` in
 //!   `generator:`, and its path is in that entry's `writes`.
@@ -172,9 +173,21 @@ fn registry(corpus: &Corpus<'_>, generators: &[Generator], findings: &mut Vec<Fi
     }
 }
 
-/// Each output of the index (the root, then its shards) judged on its own:
-/// `index-missing` when it was not walked; `index-drift` when its bytes
-/// differ from its render, on the line of the first differing byte.
+/// Which output of the index entry is compared, for the messages.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Output {
+    /// `[paths] index`.
+    Root,
+    /// A shard of the index.
+    Shard,
+    /// The entry's roadmap view.
+    View,
+}
+
+/// Each output of the index (the root, then its shards, then the roadmap
+/// view) judged on its own: `index-missing` when it was not walked;
+/// `index-drift` when its bytes differ from its render, on the line of the
+/// first differing byte.
 fn index(
     input: &CheckInput,
     corpus: &Corpus<'_>,
@@ -183,30 +196,37 @@ fn index(
     findings: &mut Vec<Finding>,
     causes: &mut Vec<Cause>,
 ) {
+    let view = generator.roadmap.as_ref().map(|view| view.path.as_str());
     for (at, output) in render_index_set(input, index_path, generator)
         .iter()
         .enumerate()
     {
-        compare(corpus, output, at == 0, generator, findings, causes);
+        let role = if at == 0 {
+            Output::Root
+        } else if view == Some(output.path.as_str()) {
+            Output::View
+        } else {
+            Output::Shard
+        };
+        compare(corpus, output, role, generator, findings, causes);
     }
 }
 
-/// One output against its walked bytes; `root`: the `[paths] index` file,
-/// else a shard.
+/// One output against its walked bytes.
 fn compare(
     corpus: &Corpus<'_>,
     output: &IndexOutput,
-    root: bool,
+    role: Output,
     generator: &Generator,
     findings: &mut Vec<Finding>,
     causes: &mut Vec<Cause>,
 ) {
     let command = &generator.command;
     let path = output.path.as_str();
-    let (what, bytes) = if root {
-        ("the `[paths] index` file", "the index bytes were")
-    } else {
-        ("the index shard", "the index shard's bytes were")
+    let (what, bytes) = match role {
+        Output::Root => ("the `[paths] index` file", "the index bytes were"),
+        Output::Shard => ("the index shard", "the index shard's bytes were"),
+        Output::View => ("the roadmap view", "the roadmap view's bytes were"),
     };
     let Some(&at) = corpus.by_path.get(path) else {
         findings.push(error(

@@ -122,7 +122,7 @@ spec compact --dry-run
 spec export                                          # to come: generated/queue.md
 spec export state [--out PATH]                       # shipped: the queue's JSONL dump, docs/canon/queue-backup.md
 spec import-state FILE                               # shipped: restore it into an empty queue, a terminal's [y/N]
-spec export index [--stdout]                         # [paths] index by its registered generator (Q3)
+spec export index [--stdout]                         # [paths] index, its shards and roadmap view by its registered generator (Q3)
 ```
 
 `--json` is available everywhere for scripts and the consumer project's tests.

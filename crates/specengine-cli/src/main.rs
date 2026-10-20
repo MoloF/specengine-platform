@@ -696,7 +696,7 @@ enum Propose {
 
 #[derive(Subcommand)]
 enum Export {
-    /// Render the index of the `[[generators]]` entry with `index = true` and write it to `[paths] index`.
+    /// Render the outputs of the `[[generators]]` entry with `index = true` and write them: `[paths] index`, its shards and its roadmap view.
     Index {
         /// Print the render instead of writing it.
         #[arg(long, conflicts_with = "json")]

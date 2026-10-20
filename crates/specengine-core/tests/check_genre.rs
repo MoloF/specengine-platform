@@ -22,6 +22,12 @@
 //! their feature documents. The scope pass's sources name no prefix, slug,
 //! `features/`, `records/` or `docs/`; their one path-shaped literal is the
 //! document extension `".md"`.
+//!
+//! docs/features/roadmap-view.md RD-6: core `src/roadmap.rs`, where the
+//! roadmap view is rendered, is scanned with the check sources, and this
+//! repository's view (`generated/`, `roadmap.md`) is a project name. M6: a
+//! hard-coded `"docs/generated/roadmap.md"` there turns
+//! `the_check_source_names_no_prefix_path_or_file_of_a_project` red.
 
 mod common;
 
@@ -280,6 +286,9 @@ fn check_sources() -> Vec<std::path::PathBuf> {
         }
     }
     sources.push(repository_root().join("crates/specengine-store/src/check.rs"));
+    // docs/features/roadmap-view.md RD-6: the roadmap view's render (the
+    // line builders moved from the CLI) is an output of the index entry.
+    sources.push(repository_root().join("crates/specengine-core/src/roadmap.rs"));
     sources.sort();
     sources
 }
@@ -315,6 +324,10 @@ const PROJECT_NAMES: &[&str] = &[
     "index-records",
     // docs/features/roadmap-items.md SW-4: this repository's plan shard.
     "index-roadmap",
+    // docs/features/roadmap-view.md RD-6: this repository's roadmap view
+    // (`docs/generated/roadmap.md`; `docs/` above catches the whole path).
+    "generated/",
+    "roadmap.md",
 ];
 
 #[test]
@@ -333,7 +346,13 @@ fn the_check_source_names_no_prefix_path_or_file_of_a_project() {
     let mut offenders = Vec::new();
     let sources = check_sources();
     assert!(sources.len() >= 11, "{sources:?}");
-    for new in ["render.rs", "generated.rs", "graph.rs", "resolve.rs"] {
+    for new in [
+        "render.rs",
+        "generated.rs",
+        "graph.rs",
+        "resolve.rs",
+        "src/roadmap.rs",
+    ] {
         assert!(
             sources.iter().any(|path| path.ends_with(new)),
             "{new} is scanned: {sources:?}"

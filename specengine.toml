@@ -56,8 +56,9 @@ unit       = "days"
 [[generators]]
 command = "cargo run -q -p specengine-cli -- export index"
 writes  = ["docs/index.md", "docs/index-archive.md", "docs/index-canon-spec.md", "docs/index-canon.md", "docs/index-decisions.md", "docs/index-crates.md",
-           "docs/index-roadmap.md"]
+           "docs/index-roadmap.md", "docs/generated/roadmap.md"]
 index   = true
+roadmap = "docs/generated/roadmap.md"
 gate    = "cargo run -q -p specengine-cli -- check"
 # Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md "Generated".
 shards  = [{ path = "docs/index-archive.md", tier3 = true },

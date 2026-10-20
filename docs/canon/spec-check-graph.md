@@ -12,8 +12,8 @@ reviewed: 2026-10-20
 
 ## API (`specengine_core::check`)
 
-- `render_index_set(&CheckInput, index_path: &str, &Generator) -> Vec<IndexOutput {path, bytes: String}>`: the root, then each shard in config order; pure, blind to input order. `render_index` (same arguments) → the root's bytes. `walk_gap(&CheckInput, &Paths) -> Option<WalkGap {Unreadable, MissingRoot, UnlistedDir}>`: the first stop condition of §11.5 by path, shared with `spec export index`.
-- `CheckConfig.generators: Option<Vec<Generator {command, writes, index, gate?, shards: [Shard {path, kind: ShardKind {Tier3, Claims(globs)}, line}], line}>>` (`None`: no table, the rules are off); `CheckConfig::index_generator()` → the `index = true` entry; `Generator::gate()` → `gate`, else `DEFAULT_GATE` = `spec check`; `Shard::is_archive()`.
+- `render_index_set(&CheckInput, index_path: &str, &Generator) -> Vec<IndexOutput {path, bytes: String}>`: the root, each shard in config order, then the roadmap view; pure, blind to input order. `render_index` (same arguments) → the root's bytes. `walk_gap(&CheckInput, &Paths) -> Option<WalkGap {Unreadable, MissingRoot, UnlistedDir}>`: the first stop condition of §11.5 by path, shared with `spec export index`.
+- `CheckConfig.generators: Option<Vec<Generator {command, writes, index, gate?, shards: [Shard {path, kind: ShardKind {Tier3, Claims(globs)}, line}], roadmap: Option<RoadmapView {path, config, line}>, line}>>` (`None`: no table, the rules are off); `CheckConfig::index_generator()` → the `index = true` entry; `Generator::gate()` → `gate`, else `DEFAULT_GATE` = `spec check`; `Shard::is_archive()`.
 - Module `check::resolve`: `Resolver`, `Resolution`, scope-aware, taking the citing file (`docs/canon/spec-check-links.md` "API"); the store keeps `dst` as written, so `spec refs`, `get_impact` reuse it.
 - Normal dependency: `petgraph =0.8.3`, default features off (`Graph`, `tarjan_scc`; owner, Q-C).
 
@@ -51,7 +51,7 @@ None compared on a `walk_gap` (a `read_error`, an `UnreadableDir`, a written `Mi
 
 ## §11.6: the generator registry
 
-This repository's entry, less two of its shards:
+This repository's entry, less two shards and `roadmap` (`spec-roadmap.md` "View"):
 
 ```toml
 [[generators]]
@@ -67,7 +67,7 @@ shards  = [  # optional, index entry only (#index-shards)
   { path = "docs/index-crates.md", claims = ["crates/*/README.md"] }]
 ```
 
-`specengine.toml:<line>: message`, and the run cannot check: an unknown key; a wrong type, a `[generators]` table included; `command` missing, blank or repeated across entries; `writes` missing, empty, a path breaking the `[paths]` rules, or a path shared with another entry; `index = true` twice; `gate` without `index = true`, or blank; `index = true` while `[paths] index` is absent or not in `writes`; an index entry `writes` path neither `[paths] index` nor a shard; `shards` off the index entry; a shard with an unknown key, no `path`, both or neither of `tier3` and `claims`, `tier3` not `true`, `claims` empty; a shard `path` or claim breaking the `[paths]` or `exclude` rules or holding a control character or a backtick (rendered into Markdown); a shard `path` equal to `[paths] index` or another's, or not in `writes`; `tier3 = true` twice (the first shard error only; claims matching nothing or overlapping: fine); `command` or `gate` not a plain YAML scalar — a newline or control character, leading or trailing whitespace, a leading YAML indicator (19: `YAML_INDICATORS`), `: ` or ` #` inside, a trailing `:`, `-->` (it would close the header comment) — or not reading back as itself through the crate's front-matter reader (`read_back`): null, booleans, numbers, `.inf`, `-.inf`, `.nan` (non-finite floats). The table is outside the index fingerprint (`[ids]` only): editing it re-parses nothing.
+`specengine.toml:<line>: message`, and the run cannot check: an unknown key; a wrong type, a `[generators]` table included; `command` missing, blank or repeated across entries; `writes` missing, empty, a path breaking the `[paths]` rules, or a path shared with another entry; `index = true` twice; `gate` without `index = true`, or blank; `index = true` while `[paths] index` is absent or not in `writes`; an index entry `writes` path neither `[paths] index`, a shard nor the view; `shards` off the index entry; a shard with an unknown key, no `path`, both or neither of `tier3` and `claims`, `tier3` not `true`, `claims` empty; a shard `path` or claim breaking the `[paths]` or `exclude` rules or holding a control character or a backtick (rendered into Markdown); a shard `path` equal to `[paths] index` or another's, or not in `writes`; `tier3 = true` twice (the first shard error only; claims matching nothing or overlapping: fine); `command` or `gate` not a plain YAML scalar — a newline or control character, leading or trailing whitespace, a leading YAML indicator (19: `YAML_INDICATORS`), `: ` or ` #` inside, a trailing `:`, `-->` (it would close the header comment) — or not reading back as itself through the crate's front-matter reader (`read_back`): null, booleans, numbers, `.inf`, `-.inf`, `.nan` (non-finite floats). The table is outside the index fingerprint (`[ids]` only): editing it re-parses nothing.
 
 WHEN the table is present (even empty), each `class: generated` document whose front-matter was read SHALL name a registered `command` in `generator:`, else `generator-unknown` (subject: the value, `""` if absent), and its path SHALL be in that entry's `writes`, else `generator-path` (the message names `writes`). Both errors sit on the `generator:` line, else line 1. A failed front-matter gives only its parser findings.
 
@@ -90,11 +90,11 @@ This repository (`enforce`, no baseline): `clean`, no warning.
 ## Next
 
 - The root `[ids]` must not configure prefixes that collide with prose labels (Q-1…, AC-01…).
-- Elsewhere: drift in project generators' output (ADR-0013); `@rev`, `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; mentions in code (ADR-0016, Phase 3); fix data for `ref-superseded` (Phase 2).
+- Elsewhere: drift in project generators' output (ADR-0013); `project:`; citations of rejected decisions; `supersedes` ↔ `superseded-by` consistency; fix data for `ref-superseded` (Phase 2).
 
 ## Open nits
 
-- `Resolution::Resolved(Vec<usize>)` allocates per resolved reference; linear, left.
-- Eval's `build_graph.rs` greps `File::`, also matching `ParsedFile::`, `CheckFile::` (closures work around it; `\bFile::` is cleaner).
-- The plain-scalar rule rejects a leading `-`, `?` or `:` though YAML reads `-x` as a string: conservative, accepted.
-- `NotAString`'s message ("a null, a boolean or a number") is imprecise if serde-saphyr's `properties` is ever enabled.
+- `Resolution::Resolved(Vec<usize>)` allocates per reference; left.
+- Eval's `build_graph.rs` grep `File::` also matches `ParsedFile::`, `CheckFile::` (`\bFile::` would not).
+- The plain-scalar rule rejects a leading `-`, `?` or `:` though YAML reads `-x` as a string: conservative, kept.
+- `NotAString`'s message ("a null, a boolean or a number") goes imprecise if serde-saphyr's `properties` is enabled.

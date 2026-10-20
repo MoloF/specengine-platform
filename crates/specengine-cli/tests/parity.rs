@@ -8,10 +8,12 @@
 //! `docs/index.md`, its archive shard `docs/index-archive.md` and its live
 //! shards `docs/index-canon-spec.md`, `docs/index-canon.md`,
 //! `docs/index-decisions.md`, `docs/index-crates.md` and
-//! `docs/index-roadmap.md` (docs/features/roadmap-items.md SW-4) deleted, X
-//! recreates all seven byte-identical to the working tree's, one `wrote`
-//! line each in config order; run again it reports all `unchanged` and keeps
-//! the mtimes, the JSON with `shards` (the six, in order);
+//! `docs/index-roadmap.md` (docs/features/roadmap-items.md SW-4) and the
+//! roadmap view `docs/generated/roadmap.md` (docs/features/roadmap-view.md
+//! SW-5) deleted, X recreates all eight byte-identical to the working
+//! tree's, one `wrote` line each in config order, the view last; run again
+//! it reports all `unchanged` and keeps the mtimes, the JSON with `shards`
+//! (the six, in order) and `roadmap`;
 //! `--stdout` prints the same bytes, one `==> <path> <==` block per output;
 //! one byte edited in an output → `spec check` exit 1, one `index-drift`
 //! naming X on that output only.
@@ -42,8 +44,8 @@ use std::process::Command;
 use common::check::{library, library_with, text};
 use common::{Scratch, repository_root, snapshot, spec, write};
 use parity_config::{
-    DANGLING, EXPORT, GATE, INDEX, INDEX_OUTPUTS, add_dangling_mention, root_toml, skipped_files,
-    std_walk,
+    DANGLING, EXPORT, GATE, INDEX, INDEX_OUTPUTS, INDEX_SET, VIEW, add_dangling_mention, root_toml,
+    skipped_files, std_walk,
 };
 use specengine_core::ProjectConfig;
 use specengine_core::check::{CheckConfig, Verdict, worst_w};
@@ -150,6 +152,9 @@ fn export_index_recreates_this_repository_s_index() {
     }
     copy_skipped(&repository, &copy);
     write(&copy, "specengine.toml", root_toml());
+    // The view's directory, which export never creates (it holds no other
+    // document).
+    fs::create_dir_all(copy.join(VIEW).parent().unwrap()).unwrap();
     for output in outputs {
         assert!(!copy.join(output).exists(), "{output} on the copy");
     }
@@ -188,9 +193,9 @@ fn export_index_recreates_this_repository_s_index() {
     assert_eq!(run.stdout, lines("unchanged"));
     let run = spec(&home, &copy, &["--json", "export", "index"]);
     run.code(0);
-    let shards: Vec<String> = outputs[1..]
+    let shards: Vec<String> = outputs[1..INDEX_SET]
         .iter()
-        .zip(&working[1..])
+        .zip(&working[1..INDEX_SET])
         .map(|(output, bytes)| {
             format!(
                 "{{\"path\":\"{output}\",\"bytes\":{},\"written\":false}}",
@@ -201,9 +206,10 @@ fn export_index_recreates_this_repository_s_index() {
     assert_eq!(
         run.stdout,
         format!(
-            "{{\"path\":\"{INDEX}\",\"bytes\":{},\"written\":false,\"shards\":[{}]}}\n",
+            "{{\"path\":\"{INDEX}\",\"bytes\":{},\"written\":false,\"shards\":[{}],\"roadmap\":{{\"path\":\"{VIEW}\",\"bytes\":{},\"written\":false}}}}\n",
             working[0].len(),
-            shards.join(",")
+            shards.join(","),
+            working[INDEX_SET].len()
         )
     );
     for (output, mtime) in outputs.iter().zip(&mtimes) {
@@ -258,6 +264,7 @@ fn export_index_recreates_this_repository_s_index() {
         "## Decisions",
         "## Canon",
         "## Specs",
+        "# Roadmap",
     ];
     for (at, (output, heading)) in outputs.iter().zip(headings).enumerate() {
         let mut edited = working[at].clone();

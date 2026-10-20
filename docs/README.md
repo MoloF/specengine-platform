@@ -21,9 +21,9 @@ The norm is `docs/canon/documentation-system.md` (ADR-0022). This document descr
 | canon | how it works now | `CLAUDE.md`, `README.md`, `*/README.md`, `docs/canon/` | rewritten in place |
 | decision | why, and when | `docs/decisions/ADR-NNNN.md` | never edited, only superseded |
 | spec | what we are doing now | `docs/features/<slug>.md`, `docs/specs/` | consumable: compacted after shipping |
-| generated | what exists | `docs/index.md` and its shards | written by the generator only |
+| generated | what exists | `docs/index.md`, its shards, `docs/generated/` | written by the generator only |
 
-Misclassification is the main source of rot. A spec in canon position lies within weeks. A canon written as a decision log forces everyone to replay history.
+Misclassification is the main source of rot: a spec in canon position lies within weeks, a canon written as a log forces a replay of history.
 
 ## Tiers
 
@@ -40,7 +40,7 @@ Misclassification is the main source of rot. A spec in canon position lies withi
 | Tier 1 | 10 240 per subtree | §4 |
 | Index: the root, each live shard | 10 240 | §4; the archive shard uncapped |
 | Decision | 1 536 | §4 |
-| Tier 2 canon | 12 288 | repository calibration (§4 step 2: recompute from the average of five documents actually opened after the first working week; the cap may only go down) |
+| Tier 2 canon | 12 288 | repository calibration (§4 step 2: the average of five documents actually opened in the first working week; the cap may only go down) |
 | Spec | none; after shipping — intent + summary ≤ 3 KB | §6 |
 
 Overflow moves detail down a tier; the cap is **never raised**. The summary line of `spec check` shows the worst working set W (`docs/canon/spec-check.md` "Output").
@@ -96,7 +96,7 @@ Self-test: can you answer "how does X work now" without opening a single ADR? If
 
 ## Generated
 
-The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here six: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-canon-spec.md` (`docs/canon/spec-*.md`, the commands' canon), `docs/index-canon.md` (the rest of `docs/canon/*.md`; Tier 2 canon is cited by path, found by scope), `docs/index-decisions.md` (`docs/decisions/*.md`, read by id), `docs/index-crates.md` (`crates/*/README.md`, by path) and `docs/index-roadmap.md` (`docs/roadmap/*.md`, the plan items), so the root keeps what a task starts from (Tier 0–1 canon, the live specs), its `## Shards` points at the rest, and a read costs the root plus at most one live shard. The first claim matching a path wins, so a narrower glob stands before `docs/canon/*.md`. Canon grows with every shipped feature, live specs leave the root when shipped: the canon shards, not the root, near their cap first; the next split is again a narrower `claims` glob before `docs/index-canon.md`. All are written only by that generator, `cargo run -q -p specengine-cli -- export index`; a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
+The index is the root `docs/index.md`, the one entry point, plus the shards its generator entry in the root `specengine.toml` lists, one line per document across them (ADR-0030, `docs/canon/spec-check-graph.md#index-shards`). Here six: `docs/index-archive.md`, every Tier 3 line; live, `docs/index-canon-spec.md` (`docs/canon/spec-*.md`, the commands' canon), `docs/index-canon.md` (the rest of `docs/canon/*.md`; Tier 2 canon is cited by path, found by scope), `docs/index-decisions.md` (`docs/decisions/*.md`, read by id), `docs/index-crates.md` (`crates/*/README.md`, by path) and `docs/index-roadmap.md` (`docs/roadmap/*.md`, the plan items), so the root keeps what a task starts from (Tier 0–1 canon, the live specs), its `## Shards` points at the rest, and a read costs the root plus at most one live shard. The first claim matching a path wins, so a narrower glob stands before `docs/canon/*.md`. Shipped specs leave the root, canon grows: the canon shards near their cap first; the next split is again a narrower `claims` glob before `docs/index-canon.md`. It also writes the roadmap view `docs/generated/roadmap.md`, unindexed (`docs/canon/spec-roadmap.md` "View"). All are written only by that generator, `cargo run -q -p specengine-cli -- export index`; a manual edit fails the check (`index-drift`). Everything derivable from code is generated, not written.
 
 ## Enforcement
 
