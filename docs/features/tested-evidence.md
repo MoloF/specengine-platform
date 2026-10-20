@@ -185,7 +185,7 @@ spec-writer:
 - Read cost: each read hashes a tested node's bindings; entries at their `file_blob` cost nothing, a binding without an entry parses its file.
 - CRLF checkouts: as 4a/5b's verify, a multi-line literal's digest differs on disk; module and RON no longer stale wholesale.
 - A project hook stopping on any Fix row refuses the lock commit: the evidence is lost, the event stays. `HEAD` moving during a long run: nothing written.
-- Churn: regen conflicts on blocks; 4a's JSON goldens, 5b's rebase JSON, `daemon-keys.json` change at shipping.
+- Churn: regen conflicts on blocks; 4a's JSON goldens, 5b's rebase JSON, `daemon-keys.json`, `check_binding`'s mirror (a plugin MINOR) change at shipping.
 
 ## Out of scope
 

@@ -81,6 +81,9 @@ fn valid_args(tool: &str) -> Value {
         "find_symbols" => json!({"query": "stamina"}),
         "refs" => json!({"id": "MEC-STAMINA"}),
         "unmapped" => json!({}),
+        // docs/features/check-binding.md: one node, so the call reaches the
+        // CLI (no project: its `spec init` line, no document).
+        "check_binding" => json!({"node": "MEC-STAMINA"}),
         // docs/features/roadmap-surfaces.md: the whole plan.
         "get_roadmap" => json!({}),
         other => panic!("no arguments for {other}"),

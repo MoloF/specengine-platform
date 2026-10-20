@@ -59,6 +59,29 @@
 //! - TE-3, the `find_symbols` half:
 //!   `te3_find_symbols_roles_are_byte_identical_across_roots_order_cwd_and_crlf`.
 //!
+//! docs/features/check-binding.md (6b-2b), `check_binding` = `spec verify
+//! --node REF [--symbol QPATH]` (`common/read.rs` `code_library`), the
+//! fourth code tool (`TWINS`, `CODE_TOOLS`; the RD-1, RD-5, genre and TE-2
+//! door tests above take it in):
+//!
+//! - RD-7: `check_binding_parity_per_exit` over a git repository of
+//!   `fixtures/code-a` with the golden lock, both eras: exits 0, 1 under
+//!   `enforce` (and `enforce-introduced`, no base), 2 with the report
+//!   (a Cannot row, a walk gap, a format-1 lock) and 2 without (REF,
+//!   discovery), schema refusals; `Want::Verdict` (the document kept, no
+//!   `reason`). M8: a rendered exit-2 report answered as `CannotRun`.
+//! - `check_binding_is_listed_as_a_read` (input, annotations, description).
+//! - TE-2: `check_binding_mirror_is_verify_json` (the key sets, enums,
+//!   `AlwaysNull`); `check_binding_documents_meet_every_key` (the walker
+//!   over code-a drifted and `fixtures/anchor-states` renamed: every state,
+//!   anchor state, nullable key and `delta.bindings` list met);
+//!   `check_binding_is_byte_identical_across_roots_order_and_cwd`;
+//!   `check_binding_leaves_stdout_json_rpc_only`;
+//!   `check_binding_on_spec_c_is_the_code_table_report`; `mcp_size.rs`.
+//! - TE-3: `te2_code_tools_write_nothing_under_the_root` (its calls) and
+//!   `te3_check_binding_writes_nothing_under_the_root` (`enforce`
+//!   committed, the git index stat-dirty); `mcp_door.rs` over spec-a.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(all(unix, not(feature = "probes")))]
@@ -84,8 +107,9 @@ use common::*;
 use git::Sandbox;
 use serde_json::{Value, json};
 use specengine_cli::{
-    Env, GitEnv, Globals, InboxRequest, OUTPUT_CAP_CHARS, SYMBOLS_LIMIT_DEFAULT, SYMBOLS_LIMIT_MAX,
-    SYMBOLS_LIMIT_MIN, TaskListRequest, events_after, inbox, task_list,
+    Env, GitEnv, Globals, InboxRequest, LockAcceptRequest, LockPrompt, OUTPUT_CAP_CHARS,
+    SYMBOLS_LIMIT_DEFAULT, SYMBOLS_LIMIT_MAX, SYMBOLS_LIMIT_MIN, TaskListRequest, events_after,
+    inbox, lock_accept, task_list,
 };
 
 /// The reads' fixture (Q33).
@@ -104,8 +128,10 @@ const NO_CODE: &str =
 /// The determinism sentence of every description.
 const DETERMINISM: &str = "Deterministic: one state, one result; no LLM inside.";
 
-/// Each code tool and the CLI command its description names.
-const TWINS: [(&str, &str); 3] = [
+/// Each code tool and the CLI command its description names
+/// (`check_binding` since docs/features/check-binding.md).
+const TWINS: [(&str, &str); 4] = [
+    ("check_binding", "spec verify --node"),
     ("find_symbols", "spec symbols"),
     ("refs", "spec refs"),
     ("unmapped", "spec unmapped"),
@@ -197,6 +223,12 @@ enum Want {
     Form(&'static str),
     /// Parity only: the spec pins no exit (a reading names it).
     Parity,
+    /// `check_binding` (docs/features/check-binding.md "Data", the exit
+    /// table): a rendered report with this verdict, its document kept at
+    /// every exit: `clean` and `observed` a success (exit 0), `blocked`
+    /// (exit 1) and `cannot-verify` (exit 2, a report) an error result;
+    /// the summary line `verify --node …` in the text.
+    Verdict(&'static str),
 }
 
 impl Want {
@@ -241,6 +273,24 @@ impl Want {
                 );
             }
             Want::Parity => {}
+            Want::Verdict(verdict) => {
+                let document = &result["structuredContent"];
+                assert!(
+                    document.is_object(),
+                    "{context}: the report's document is kept (M8): {result}"
+                );
+                assert_eq!(document["verdict"], json!(verdict), "{context}: {text}");
+                assert!(
+                    document.get("reason").is_none(),
+                    "{context}: verify's document has no `reason`: {document}"
+                );
+                let finding = !matches!(verdict, "clean" | "observed");
+                assert_eq!(result["isError"], json!(finding), "{context}: {text}");
+                assert!(
+                    text.lines().any(|line| line.starts_with("verify --node ")),
+                    "{context}: the summary line: {text:?}"
+                );
+            }
         }
     }
 }
@@ -536,7 +586,7 @@ fn rd1_code_tools_are_listed_as_reads() {
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
-        assert_eq!(tool_names(&list), TOOLS, "{era:?}: eighteen tools");
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty tools");
         for (name, twin) in TWINS {
             assert!(CODE_TOOLS.contains(&name));
             let listed = tool(&list, name);
@@ -1524,7 +1574,9 @@ fn code_mirrors_pin_the_q35_types() {
 /// tools (`spec ` and two glosses dropped; the REF paragraph keeps `with
 /// ["links"]`), and `Hints use flags:`; 1 892 bytes. 1 932 since
 /// docs/features/roadmap-surfaces.md ("Data"): the reads' line ends with
-/// [`ROADMAP_READ`] (40 bytes).
+/// [`ROADMAP_READ`] (40 bytes). 1 978 since docs/features/check-binding.md
+/// ("INSTRUCTIONS", Q31, Q-C): the code line ends with [`CHECK_BINDING_CLAUSE`]
+/// (46 bytes).
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1535,7 +1587,7 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
     "pool?) = roadmap.\n",
     "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; ",
-    "unmapped(path?) = unmapped.\n",
+    "unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.\n",
     "Queue (writes only the queue; the owner decides on a terminal):\n",
     "- propose_change = spec propose update|create|interpretation|amendment: a node's new ",
     "text against its span_hash; create: new ID sections in it, or a new file (base null).\n",
@@ -1565,33 +1617,43 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
 /// before its full stop (40 bytes).
 const ROADMAP_READ: &str = "; get_roadmap(release?, pool?) = roadmap";
 
-/// The code tools' line, its LF included (104 + 1 bytes).
+/// docs/features/check-binding.md "INSTRUCTIONS": what the code line gains,
+/// before its full stop (46 bytes).
+const CHECK_BINDING_CLAUSE: &str = "; check_binding(node, symbol?) = verify --node";
+
+/// The code tools' line, its LF included (104 + 1 bytes; 151 since
+/// docs/features/check-binding.md: [`CHECK_BINDING_CLAUSE`] before the stop).
 const CODE_LINE: &str = "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; \
-                         unmapped(path?) = unmapped.\n";
+                         unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.\n";
 
 /// task-package's tasks line, its LF included.
 const TASKS_LINE: &str = "- get_task, claim_task, submit_plan, report_run, complete_task = spec \
                           task show|claim|plan|report|complete; the three above take task_id.\n";
 
 /// The `probes` build's paragraph after code-tools (76 bytes; its pin:
-/// `mcp_create.rs`).
-const PROBES_PARAGRAPH: &str =
-    "\n\nProbes build: review_proposal, probe_output, probe_sleep (owner's checks).";
+/// `mcp_create.rs`); 59 since docs/features/check-binding.md (Q-C: ` (owner's
+/// checks)` cut, -17).
+const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output, probe_sleep.";
 
 /// `blake3_hex(PLANNED_INSTRUCTIONS)`: the hash of the spec's text built
 /// here, never of the server's; `mcp_path.rs` and `mcp_decision.rs` pin
 /// the same value against `INSTRUCTIONS` (re-pinned by
-/// docs/features/roadmap-surfaces.md).
-const PLANNED_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb3399dc942201de37e";
+/// docs/features/roadmap-surfaces.md and docs/features/check-binding.md).
+const PLANNED_BLAKE3: &str = "d4194b2b26224e59dfcda9fa3853af96a119fd5015cd524cb39bdbfad9bb17bf";
+
+/// roadmap-surfaces' text (1 932 bytes), [`PLANNED_INSTRUCTIONS`] less
+/// [`CHECK_BINDING_CLAUSE`]: its `PLANNED_BLAKE3` before
+/// docs/features/check-binding.md.
+const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb3399dc942201de37e";
 
 /// code-tools' text (1 892 bytes), [`PLANNED_INSTRUCTIONS`] less
-/// [`ROADMAP_READ`]: its `PLANNED_BLAKE3` before
+/// [`ROADMAP_READ`] and [`CHECK_BINDING_CLAUSE`]: its `PLANNED_BLAKE3` before
 /// docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
 /// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`].
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "24c5cd5dfe4ebe7957ed07488d9c334799b2fb4add97df4b098a023bbb0db52c";
+    "dc019aa43be4ede2b6ac5a8bf24e15d3711e67b7a3d04ea0226bd345bf95d547";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -1601,19 +1663,32 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// docs/features/roadmap-surfaces.md RD-8 ("Data"): the reads' line gains
 /// [`ROADMAP_READ`] before its full stop: 1 932 bytes, 1 794 less the
 /// tasks line, 2 008 with the probes paragraph, 40 left.
+/// docs/features/check-binding.md ("INSTRUCTIONS", Q-C): the code line
+/// gains [`CHECK_BINDING_CLAUSE`] before its stop and the probes paragraph loses
+/// ` (owner's checks)`: 1 978 bytes, 1 840 less the tasks line, 2 037 with
+/// the 59-byte paragraph, 11 left (70 in the default build).
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 1932, "the spec's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 1978, "the spec's figure");
     assert_eq!(ROADMAP_READ.len(), 40);
-    assert_eq!(CODE_LINE.len(), 105);
+    assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
+    assert_eq!(CODE_LINE.len(), 151);
     assert_eq!(TASKS_LINE.len(), 138);
-    assert_eq!(PROBES_PARAGRAPH.len(), 76);
+    assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 1932);
+    assert_eq!(instructions.len(), 1978);
+    assert_eq!(2048 - instructions.len(), 70, "the default build's room");
     assert!(instructions.is_ascii());
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
+    assert_eq!(instructions.matches(CHECK_BINDING_CLAUSE).count(), 1);
+    assert!(
+        instructions.contains(&format!(
+            "unmapped(path?) = unmapped{CHECK_BINDING_CLAUSE}.\nQueue ("
+        )),
+        "check_binding ends the code line"
+    );
     assert!(
         instructions.contains(&format!(
             "review --brief{ROADMAP_READ}.\n{CODE_LINE}Queue ("
@@ -1630,21 +1705,31 @@ fn rd5_instructions_are_the_planned_text() {
         assert!(instructions.contains(&format!("{name}(")), "{name}(");
     }
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1794, "1 932 less 138");
+    assert_eq!(less.len(), 1840, "1 978 less 138");
     let with_probes = instructions.len() + PROBES_PARAGRAPH.len();
-    assert_eq!(with_probes, 2008);
+    assert_eq!(with_probes, 2037);
     assert_eq!(
         2048 - with_probes,
-        40,
-        "the room docs/features/roadmap-surfaces.md states"
+        11,
+        "the room docs/features/check-binding.md states"
     );
-    // The text before docs/features/roadmap-surfaces.md: code-tools' 1 892.
-    let before = instructions.replacen(ROADMAP_READ, "", 1);
+    // The text before docs/features/check-binding.md: roadmap-surfaces'
+    // 1 932.
+    let roadmap = instructions.replacen(CHECK_BINDING_CLAUSE, "", 1);
+    assert_eq!(roadmap.len(), 1932);
+    assert_eq!(
+        blake3_hex(roadmap.as_bytes()),
+        ROADMAP_BLAKE3,
+        "only the check_binding clause was added"
+    );
+    // The text before docs/features/roadmap-surfaces.md: code-tools' 1 892,
+    // both clauses stripped.
+    let before = roadmap.replacen(ROADMAP_READ, "", 1);
     assert_eq!(before.len(), 1892);
     assert_eq!(
         blake3_hex(before.as_bytes()),
         CODE_TOOLS_BLAKE3,
-        "only the roadmap read was added"
+        "only the roadmap read and the check_binding clause were added"
     );
 }
 
@@ -1657,6 +1742,14 @@ fn rd5_planned_instructions_hashes() {
     assert_eq!(
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
+    );
+    assert_eq!(
+        blake3_hex(
+            PLANNED_INSTRUCTIONS
+                .replacen(CHECK_BINDING_CLAUSE, "", 1)
+                .as_bytes()
+        ),
+        ROADMAP_BLAKE3
     );
 }
 
@@ -2495,7 +2588,8 @@ fn queue_rows(env: &Env, git: &GitEnv) -> (Vec<String>, String, String) {
 /// TE-2 (08 AC-3, S14, S15): a temp git repository of `fixtures/code-a`
 /// with `fixtures/spec-lock/code-a.lock` as it stands committed as
 /// `spec.lock`; every code tool called valid and invalid (forms, exits 0,
-/// 1, 2, bad arguments) in both eras from a subdirectory; then `git
+/// 1, 2, bad arguments; `check_binding` since docs/features/check-binding.md
+/// TE-3) in both eras from a subdirectory; then `git
 /// status --porcelain=v1 -z --untracked-files=all` is as before (empty),
 /// `.git/index`'s mtime and `spec.lock`'s bytes unchanged, the tree
 /// (`.git` included) byte-identical, the queue's proposals, tasks and
@@ -2557,6 +2651,20 @@ fn te2_code_tools_write_nothing_under_the_root() {
         ("unmapped", json!({"path": "crates/tally/src/counter.rs"})),
         ("unmapped", json!({"path": "tools/loose.rs"})),
         ("unmapped", json!({"path": "docs"})),
+        // docs/features/check-binding.md TE-3: exits 0 (observed, clean), 2
+        // with a report and without one.
+        ("check_binding", json!({"node": "PIECE-COUNTER"})),
+        (
+            "check_binding",
+            json!({"node": "LAW-STEP", "symbol": "crates/tally::counter::Tally::step"}),
+        ),
+        (
+            "check_binding",
+            json!({"node": "PIECE-LIMITS", "symbol": null}),
+        ),
+        ("check_binding", json!({"node": "LAW-BOUND"})),
+        ("check_binding", json!({"node": "LAW-NOPE"})),
+        ("check_binding", json!({"node": "L\u{0410}W-STEP"})),
     ];
     let invalid = [
         ("find_symbols", json!({"query": 5})),
@@ -2564,6 +2672,9 @@ fn te2_code_tools_write_nothing_under_the_root() {
         ("refs", json!({})),
         ("refs", json!({"id": ["LAW-STEP"]})),
         ("unmapped", json!({"path": 3})),
+        ("check_binding", json!({})),
+        ("check_binding", json!({"node": 7})),
+        ("check_binding", json!({"node": "LAW-STEP", "bogus": true})),
     ];
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&cwd), Home::At(&home));
@@ -2621,4 +2732,1331 @@ fn te2_code_tools_write_nothing_under_the_root() {
         data_dir(&home).join("code-a.db").is_file(),
         "the index lives under HOME"
     );
+}
+
+// ------------------------------------------------- check-binding (6b-2b)
+
+/// The golden lock (`fixtures/spec-lock`, format 2) and its format-1 twin.
+const GOLDEN_LOCK: &str = "code-a.lock";
+const GOLDEN_LOCK_FORMAT_1: &str = "code-a.format-1.lock";
+
+/// code-a's files the check-binding tests edit.
+const TALLY_COUNTER: &str = "crates/tally/src/counter.rs";
+const TALLY_LIB: &str = "crates/tally/src/lib.rs";
+const TALLY_BOUNDS: &str = "crates/tally/tests/bounds.rs";
+const TALLY_LIMITS: &str = "data/limits.ron";
+const TALLY_COUNTER_MD: &str = "docs/spec/counter.md";
+
+/// GOAL-01 with a Cyrillic O: refused with its Latin fix.
+const GOAL_LOOK_ALIKE: &str = "G\u{41E}AL-01";
+
+/// `spec verify`'s run cause without `[code]` (docs/canon/code-bindings.md
+/// "The `[code]` table"), as its document's `cannot` holds it.
+const NO_CODE_CAUSE: &str =
+    "specengine.toml has no [code] table: the code layer is off (add [code] with roots)";
+
+/// The clock of the anchor repository's accepts.
+const ACCEPT_CLOCK: &str = "2026-10-08T09:30:00Z";
+
+/// The nine row states (docs/canon/spec-verify.md "States").
+const VERIFY_STATES: [&str; 9] = [
+    "cannot_verify",
+    "predated",
+    "bad_marker",
+    "broken_binding",
+    "unlocked",
+    "spec_ahead",
+    "code_ahead",
+    "conflict",
+    "ok",
+];
+
+/// The top keys of verify's document (13; `spec-verify-output.md`), the
+/// keys of a row (17), of a binding key and of an anchor's place
+/// (docs/features/check-binding.md "Data", **Mirror**).
+const VERIFY_TOP_KEYS: [&str; 13] = [
+    "mode", "base", "task", "node", "symbol", "verdict", "counts", "cascade", "rows", "delta",
+    "cannot", "notes", "omitted",
+];
+const VERIFY_ROW_KEYS: [&str; 17] = [
+    "node",
+    "relation",
+    "file",
+    "kind",
+    "symbol",
+    "item_kind",
+    "state",
+    "category",
+    "detail",
+    "class",
+    "pre_existing",
+    "markers",
+    "node_rev",
+    "lock",
+    "compared",
+    "levels",
+    "anchor",
+];
+const VERIFY_KEY_KEYS: [&str; 6] = ["node", "relation", "file", "kind", "symbol", "item_kind"];
+const VERIFY_PLACE_KEYS: [&str; 4] = ["file", "kind", "symbol", "item_kind"];
+
+/// The row keys `null` on some row and set on another over the corpora of
+/// `check_binding_documents_meet_every_key` (the walker meets both members
+/// of each union).
+const VERIFY_NULLABLE: [&str; 11] = [
+    "kind",
+    "symbol",
+    "item_kind",
+    "category",
+    "detail",
+    "class",
+    "node_rev",
+    "lock",
+    "compared",
+    "levels",
+    "anchor",
+];
+
+/// A git repository of `fixtures/<fixture>` at `<scratch>/<dir>` (copied
+/// in reverse name order when `reversed`), `edit` applied, committed
+/// clean by the sandbox's git (its own `HOME`, fixed identity); the root,
+/// canonical.
+fn git_copy(
+    scratch: &Scratch,
+    fixture_name: &str,
+    dir: &str,
+    reversed: bool,
+    edit: impl Fn(&Path),
+) -> PathBuf {
+    let root = scratch.join(dir);
+    copy_dir(&fixture(fixture_name), &root, reversed);
+    let root = root.canonicalize().expect("a root");
+    edit(&root);
+    let sandbox = Sandbox::new(scratch.path());
+    sandbox.init(&root);
+    sandbox.add_all(&root);
+    sandbox.commit(&root, &format!("{fixture_name} as committed"));
+    root
+}
+
+/// `fixtures/spec-lock/<lock>` written as `root`'s `spec.lock`.
+fn with_lock(lock: &str) -> impl Fn(&Path) {
+    let bytes = fs::read(fixture("spec-lock").join(lock)).expect("the golden lock");
+    move |root: &Path| fs::write(root.join("spec.lock"), &bytes).expect("spec.lock")
+}
+
+/// `[verify] mode = "<mode>"` appended to the root's config (written,
+/// never committed).
+fn set_verify_mode(root: &Path, mode: &str) {
+    let config = read_text(root, "specengine.toml");
+    write(
+        root,
+        "specengine.toml",
+        format!("{config}\n[verify]\nmode = \"{mode}\"\n"),
+    );
+}
+
+/// verify_node.rs' `drift()` over the golden: `CAP` and the RON cap
+/// edited, LAW-BOUND's text edited, PIECE-COUNTER's `//!` marker in the
+/// test file removed: every state of "States" met (the golden holds the
+/// others).
+fn drift_golden(root: &Path) {
+    replace(root, TALLY_COUNTER, "CAP: u32 = 10;", "CAP: u32 = 12;");
+    replace(root, TALLY_LIMITS, "cap: 10,", "cap: 12,");
+    replace(
+        root,
+        TALLY_COUNTER_MD,
+        "The count never exceeds the cap.",
+        "The count never exceeds the cap, ever.",
+    );
+    replace(root, TALLY_BOUNDS, "//! @verifies PIECE-COUNTER\n", "");
+}
+
+impl Project {
+    /// `fixtures/code-a` with `fixtures/spec-lock/<lock>` committed as
+    /// `spec.lock`, a git repository, its own `HOME`.
+    fn golden(lock: &str) -> Self {
+        let scratch = Scratch::new("cb-golden");
+        let home = scratch.home("h");
+        let root = git_copy(&scratch, "code-a", "repo", false, with_lock(lock));
+        Self {
+            _scratch: scratch,
+            home,
+            root,
+        }
+    }
+
+    /// `fixtures/anchor-states` committed, `nodes` accepted through the
+    /// CLI library (one lock commit each, format 2, consent yes), then the
+    /// renames of TE-1's scenarios "rename within the file" (KITE-RENAME:
+    /// a moved anchor) and "twins, equal quotes, both renamed"
+    /// (KITE-CLONE: ambiguous anchors) written, uncommitted.
+    fn anchors(nodes: &[&str]) -> Self {
+        let scratch = Scratch::new("cb-anchors");
+        let home = scratch.home("h");
+        let root = git_copy(&scratch, "anchor-states", "repo", false, |_| {});
+        let sandbox = Sandbox::new(scratch.path());
+        let env = cli_env(&root, Some(&home));
+        for node in nodes {
+            let mut yes = |_: &LockPrompt<'_>| true;
+            lock_accept(
+                &env,
+                &Globals::default(),
+                &LockAcceptRequest {
+                    reference: (*node).to_owned(),
+                    editorial: false,
+                    now: ACCEPT_CLOCK.to_owned(),
+                    git: GitEnv::new(&root, sandbox.vars()),
+                    proposal: None,
+                    branch: None,
+                },
+                &mut yes,
+                &[],
+            )
+            .unwrap_or_else(|error| panic!("lock accept {node}: {error}"));
+        }
+        assert_eq!(porcelain(&sandbox, &root), b"", "the accepts committed");
+        replace(
+            &root,
+            "crates/sky/src/rename.rs",
+            "pub fn lift_force(",
+            "pub fn lift_power(",
+        );
+        replace(
+            &root,
+            "crates/sky/src/clones.rs",
+            "pub fn gust_left(",
+            "pub fn gust_west(",
+        );
+        replace(
+            &root,
+            "crates/sky/src/clones.rs",
+            "pub fn gust_right(",
+            "pub fn gust_east(",
+        );
+        Self {
+            _scratch: scratch,
+            home,
+            root,
+        }
+    }
+}
+
+/// docs/features/check-binding.md "Data", **Description**: what the agent
+/// mends and what the owner settles, exactly (437 bytes; no state or
+/// class word).
+const CHECK_BINDING_MEND: &str = "Mend what your change broke: a binding that no longer reaches its code, spec \
+and code both changed, a bad marker, a marker naming a revision its node has \
+not reached, or a binding it cannot verify; else raise it with \
+report_discrepancy. The owner settles code ahead of its spec (as after \
+implementing), a spec ahead of its code and a binding not yet locked: name \
+them in your report, never hide them. Zero rows is a result, not an error.";
+
+/// docs/features/check-binding.md "Data", **Mirror**: `node`'s doc
+/// comment, its `outputSchema` description, exactly.
+const CHECK_BINDING_NODE_DOC: &str =
+    "The IDs (a holder without one: its citation) of the nodes the REF names, in holder order.";
+
+/// `check_binding` with `args`, its verdict wanted.
+fn bound(label: &'static str, args: Value, verdict: &'static str) -> Call {
+    call(label, "check_binding", args, Want::Verdict(verdict))
+}
+
+/// `check_binding` with `args`, exit 2 without a document wanted.
+fn unbound(label: &'static str, args: Value) -> Call {
+    call(label, "check_binding", args, Want::CannotRun)
+}
+
+/// The `check_binding` output schema of a fresh server.
+fn check_binding_schema() -> Value {
+    let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
+    let list = session.tools();
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+    output_schemas(&list)
+        .remove("check_binding")
+        .expect("check_binding has an outputSchema")
+}
+
+/// docs/features/check-binding.md RD-1 and "Data": `check_binding` is
+/// listed in both eras as a read (the reads' annotations, `_meta`, an
+/// object `outputSchema` without `$ref`); its input is exactly `{"node":
+/// string, "symbol": string|null}`, `node` required, nothing else; its
+/// description is at most 2 048 ASCII bytes holding the determinism
+/// sentence, its CLI twin, `[code]`, "this session's worktree", that it
+/// writes nothing under the root, the base it lacks (`enforce-introduced`
+/// as `enforce`), a finding as no failure, and states the cut as the
+/// CLI's. M: a writer's hints; `symbol` required or `task` offered; the
+/// description without the worktree or the base.
+#[test]
+fn check_binding_is_listed_as_a_read() {
+    for era in ERAS {
+        let mut session = Session::open(era, &[], None, Home::Fresh);
+        let list = session.tools();
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}");
+        let listed = tool(&list, "check_binding");
+        assert_eq!(
+            listed["annotations"],
+            json!({"readOnlyHint": true, "destructiveHint": false, "openWorldHint": false}),
+            "{era:?}: the reads' annotations"
+        );
+        assert_eq!(
+            listed["_meta"],
+            json!({"anthropic/maxResultSizeChars": specengine_mcp::MAX_RESULT_CHARS}),
+            "{era:?}: _meta"
+        );
+        assert_eq!(listed["outputSchema"]["type"], json!("object"));
+        assert!(!listed.to_string().contains("\"$ref\""), "{era:?}: a $ref");
+        let input = &listed["inputSchema"];
+        assert_eq!(input["type"], json!("object"), "{era:?}");
+        assert_eq!(input["additionalProperties"], json!(false), "{era:?}");
+        assert_eq!(input["required"], json!(["node"]), "{era:?}");
+        assert_eq!(keys_at(input), set(&["node", "symbol"]), "{era:?}: {input}");
+        assert_eq!(types_of(&input["properties"]["node"]), set(&["string"]));
+        assert_eq!(
+            types_of(&input["properties"]["symbol"]),
+            set(&["null", "string"])
+        );
+        let description = listed["description"].as_str().expect("a description");
+        assert!(description.len() <= 2048, "{} bytes", description.len());
+        assert!(description.is_ascii(), "{era:?}: not ASCII");
+        for part in [
+            DETERMINISM,
+            "spec verify --node",
+            "[code]",
+            "this session's worktree",
+            "writes nothing under the project root",
+            "enforce-introduced",
+            "finding",
+        ] {
+            assert!(
+                description.contains(part),
+                "{era:?}: no {part:?} in {description:?}"
+            );
+        }
+        assert_eq!(CHECK_BINDING_MEND.len(), 437, "the spec's figure");
+        assert_eq!(
+            description.matches(CHECK_BINDING_MEND).count(),
+            1,
+            "{era:?}: the mend paragraph exactly: {description:?}"
+        );
+        let mut texts = vec![description.to_owned()];
+        descriptions(input, &mut texts);
+        assert!(
+            !cut_numbers(description).is_empty(),
+            "{era:?}: no cut stated: {description:?}"
+        );
+        for text in &texts {
+            assert!(text.is_ascii(), "{era:?}: {text:?}");
+            for number in cut_numbers(text) {
+                assert_eq!(number, OUTPUT_CAP_CHARS, "{era:?}: {text:?}");
+            }
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}
+
+/// RD-7 (M8), docs/features/check-binding.md "Data", the exit table, both
+/// eras, a scratch git repository of `fixtures/code-a` with the golden
+/// lock: every answer is the CLI library's `spec verify --node REF
+/// [--symbol QPATH]` (content `2>&1`, `structuredContent` its `--json`
+/// document, walked against the `outputSchema`) and its exit's shape:
+///
+/// - exit 0: `observed` (a node, its document path, `slug/ID`, a module
+///   QPATH, `symbol: null`) and `clean` (no binding: the note; a QPATH
+///   matching no row);
+/// - exit 1 under `enforce`: `blocked`, an error result with its document
+///   (a finding, not a failure); `enforce-introduced` judged as `enforce`
+///   (no base);
+/// - exit 2 with a report, its document kept: a Cannot row (an ID, an
+///   alias, `ID#SECTION`, a RON `<file>#<path>` QPATH), a walk gap (the
+///   CLI's `cannot:` line naming the file; readable again, the next call
+///   answers), a format-1 lock;
+/// - exit 2 without one: a REF naming nothing, a look-alike (its Latin
+///   fix), `project:`, an empty REF, discovery (no `specengine.toml`);
+///   schema refusals (`node` absent or no string, `symbol` no string, an
+///   unknown `task`): rmcp's `Parameters` error results.
+///
+/// M8: a rendered exit-2 report answered as `CannotRun`.
+#[test]
+fn check_binding_parity_per_exit() {
+    let project = Project::golden(GOLDEN_LOCK);
+    let observe = [
+        bound("observed", json!({"node": "PIECE-COUNTER"}), "observed"),
+        bound(
+            "its document",
+            json!({"node": TALLY_COUNTER_MD}),
+            "observed",
+        ),
+        bound(
+            "symbol null",
+            json!({"node": "PIECE-COUNTER", "symbol": null}),
+            "observed",
+        ),
+        bound(
+            "a module",
+            json!({"node": "PIECE-COUNTER", "symbol": "crates/tally::counter"}),
+            "observed",
+        ),
+        bound(
+            "no row",
+            json!({"node": "PIECE-COUNTER", "symbol": "crates/tally::nowhere"}),
+            "clean",
+        ),
+        bound("no binding", json!({"node": "PIECE-LIMITS"}), "clean"),
+        bound("slug/ID", json!({"node": "cap-check/PASS-01"}), "observed"),
+        bound(
+            "a cannot row",
+            json!({"node": "LAW-BOUND"}),
+            "cannot-verify",
+        ),
+        bound("an alias", json!({"node": "AIM-01"}), "cannot-verify"),
+        bound(
+            "a section",
+            json!({"node": "PIECE-COUNTER#LAW-BOUND"}),
+            "cannot-verify",
+        ),
+        bound(
+            "a RON symbol",
+            json!({"node": "LAW-STEP", "symbol": "data/limits.ron#root.step"}),
+            "cannot-verify",
+        ),
+        bound(
+            "a bound qpath",
+            json!({"node": "LAW-STEP", "symbol": "crates/tally::counter::Tally::step"}),
+            "observed",
+        ),
+        bound(
+            "nope",
+            json!({"node": "LAW-STEP", "symbol": "nope"}),
+            "clean",
+        ),
+        bound(
+            "several holders",
+            json!({"node": "PREM-001"}),
+            "cannot-verify",
+        ),
+        unbound("unknown", json!({"node": "LAW-NOPE"})),
+        unbound("look-alike", json!({"node": GOAL_LOOK_ALIKE})),
+        unbound("a law look-alike", json!({"node": "L\u{0410}W-STEP"})),
+        unbound("project:", json!({"node": "project:PIECE-COUNTER"})),
+        unbound("empty", json!({"node": ""})),
+    ];
+    // A second holder of PREM-001, uncommitted: verify judges the
+    // worktree.
+    let premise = read_text(&project.root, "docs/records/PREM-001.md");
+    write(&project.root, "docs/records/PREM-001-twin.md", &premise);
+    for results in project.answers(&observe) {
+        let doc = |label: &str| document(&observe, &results, label);
+        let text = |label: &str| content_text(pick(&observe, &results, label));
+        for (at, call) in observe.iter().enumerate() {
+            if let Want::Verdict(_) = call.want {
+                let document = &results[at]["structuredContent"];
+                assert_eq!(document["mode"], json!("observe"), "{}", call.label);
+                assert!(document["node"].is_array(), "{}: {document}", call.label);
+                assert_eq!(document["symbol"], call.args["symbol"], "{}", call.label);
+                assert!(document["omitted"]["rows"].is_u64(), "{}", call.label);
+            }
+        }
+        assert_eq!(doc("observed")["node"], json!(["PIECE-COUNTER"]));
+        assert_eq!(doc("an alias")["node"], json!(["GOAL-01"]));
+        assert!(
+            text("no binding").contains("note: verify: PIECE-LIMITS has no binding\n"),
+            "{:?}",
+            text("no binding")
+        );
+        assert!(
+            doc("a cannot row")["counts"]["cannot"].as_u64() >= Some(1),
+            "{}",
+            doc("a cannot row")
+        );
+        assert!(
+            text("look-alike").contains("write `GOAL-01`"),
+            "the Latin fix: {:?}",
+            text("look-alike")
+        );
+        assert!(
+            text("unknown").starts_with("spec: `LAW-NOPE`"),
+            "{:?}",
+            text("unknown")
+        );
+        assert!(
+            text("a law look-alike").contains("write `LAW-STEP`"),
+            "{:?}",
+            text("a law look-alike")
+        );
+        assert_eq!(doc("nope")["rows"], json!([]));
+        assert!(
+            text("nope").contains("note: verify: LAW-STEP has no binding on nope\n"),
+            "zero rows, the note: {:?}",
+            text("nope")
+        );
+        assert_eq!(doc("a bound qpath")["counts"]["rows"], json!(1));
+        // Several holders: the CLI's one `warning:` line first, `node`
+        // every holder.
+        assert!(
+            text("several holders").starts_with("warning: `PREM-001` has 2 holders"),
+            "{:?}",
+            text("several holders")
+        );
+        assert_eq!(text("several holders").matches("warning: ").count(), 1);
+        assert_eq!(
+            doc("several holders")["node"],
+            json!(["PREM-001", "PREM-001"])
+        );
+    }
+    fs::remove_file(project.root.join("docs/records/PREM-001-twin.md")).expect("the twin");
+
+    // Exit 1: a Fix row under `enforce`, and under `enforce-introduced`
+    // with no base.
+    let config = read_text(&project.root, "specengine.toml");
+    for mode in ["enforce", "enforce-introduced"] {
+        set_verify_mode(&project.root, mode);
+        let calls = [
+            bound("blocked", json!({"node": "PIECE-COUNTER"}), "blocked"),
+            bound(
+                "blocked slug/ID",
+                json!({"node": "cap-check/PASS-01"}),
+                "blocked",
+            ),
+            bound(
+                "its module only",
+                json!({"node": "PIECE-COUNTER", "symbol": "crates/tally::counter"}),
+                "observed",
+            ),
+            bound("clean", json!({"node": "PIECE-LIMITS"}), "clean"),
+            bound(
+                "a cannot row",
+                json!({"node": "LAW-BOUND"}),
+                "cannot-verify",
+            ),
+            unbound("unknown", json!({"node": "LAW-NOPE"})),
+        ];
+        for results in project.answers(&calls) {
+            let blocked = document(&calls, &results, "blocked");
+            // No base: `enforce-introduced` judged as `enforce`, with the
+            // CLI's note.
+            assert_eq!(blocked["mode"], json!("enforce"), "{blocked}");
+            assert_eq!(
+                blocked["notes"]
+                    .as_array()
+                    .expect("notes")
+                    .iter()
+                    .any(|note| note.as_str().is_some_and(|note| {
+                        note.contains("enforce-introduced") && note.contains("judged as `enforce`")
+                    })),
+                mode == "enforce-introduced",
+                "{mode}: {blocked}"
+            );
+            assert!(blocked["counts"]["fix"].as_u64() >= Some(1), "{blocked}");
+        }
+        write(&project.root, "specengine.toml", &config);
+    }
+    // Exit 1: a locked binding gone (PIECE-COUNTER's `//!` marker in the
+    // test file removed: `marker_gone`, a Fix row), under `enforce`.
+    set_verify_mode(&project.root, "enforce");
+    let bounds = read_text(&project.root, TALLY_BOUNDS);
+    replace(
+        &project.root,
+        TALLY_BOUNDS,
+        "//! @verifies PIECE-COUNTER\n",
+        "",
+    );
+    let calls = [bound(
+        "a binding gone",
+        json!({"node": "PIECE-COUNTER", "symbol": "crates/tally::test:bounds"}),
+        "blocked",
+    )];
+    for results in project.answers(&calls) {
+        let rows = &document(&calls, &results, "a binding gone")["rows"];
+        assert_eq!(rows[0]["state"], json!("broken_binding"), "{rows}");
+        assert_eq!(rows[0]["class"], json!("fix"), "{rows}");
+    }
+    write(&project.root, TALLY_BOUNDS, &bounds);
+    write(&project.root, "specengine.toml", &config);
+
+    // Exit 2, a report: a walk gap, then healed.
+    let gap = project.root.join(TALLY_LIB);
+    fs::set_permissions(&gap, fs::Permissions::from_mode(0o000)).expect("chmod");
+    let walk = [
+        bound(
+            "walk gap",
+            json!({"node": "PIECE-COUNTER"}),
+            "cannot-verify",
+        ),
+        bound(
+            "walk gap, a symbol",
+            json!({"node": "LAW-BOUND", "symbol": "crates/tally::counter::CAP"}),
+            "cannot-verify",
+        ),
+        unbound("walk gap, unknown", json!({"node": "LAW-NOPE"})),
+    ];
+    for results in project.answers(&walk) {
+        for label in ["walk gap", "walk gap, a symbol"] {
+            let text = content_text(pick(&walk, &results, label));
+            assert!(
+                text.contains("cannot: the code walk is incomplete: `crates/tally/src/lib.rs`"),
+                "{label}: {text:?}"
+            );
+            let cannot = &document(&walk, &results, label)["cannot"];
+            assert!(
+                cannot[0]
+                    .as_str()
+                    .is_some_and(|line| line.starts_with("the code walk is incomplete: ")),
+                "{label}: {cannot}"
+            );
+            assert_eq!(
+                document(&walk, &results, label)["rows"],
+                json!([]),
+                "{label}: no row judged under a run cause"
+            );
+        }
+    }
+    fs::set_permissions(&gap, fs::Permissions::from_mode(0o644)).expect("chmod");
+    project.answers(&[bound(
+        "healed",
+        json!({"node": "PIECE-COUNTER"}),
+        "observed",
+    )]);
+
+    // Exit 2, a report: a format-1 lock.
+    let old = Project::golden(GOLDEN_LOCK_FORMAT_1);
+    let calls = [
+        bound(
+            "format 1",
+            json!({"node": "PIECE-COUNTER"}),
+            "cannot-verify",
+        ),
+        unbound("format 1, unknown", json!({"node": "LAW-NOPE"})),
+    ];
+    for results in old.answers(&calls) {
+        let text = content_text(pick(&calls, &results, "format 1"));
+        assert!(
+            text.contains("cannot: spec.lock:2: format 1"),
+            "the lock's run cause: {text:?}"
+        );
+        assert_eq!(
+            document(&calls, &results, "format 1")["rows"],
+            json!([]),
+            "no row judged under a run cause"
+        );
+    }
+
+    // Exit 2 without a document: discovery; and the schema's refusals.
+    let scratch = Scratch::new("cb-nowhere");
+    let home = scratch.home("h");
+    let nowhere = scratch.dir("nowhere");
+    let env = cli_env(&nowhere, Some(&home));
+    let globals = Globals::default();
+    for era in ERAS {
+        let mut session = Session::open(era, &[], Some(&nowhere), Home::At(&home));
+        let schemas = output_schemas(&session.tools());
+        for args in [
+            json!({"node": "PIECE-COUNTER"}),
+            json!({"node": "PIECE-COUNTER", "symbol": "crates/tally::counter"}),
+        ] {
+            let result = checked_call(
+                &mut session,
+                &schemas,
+                "check_binding",
+                args.clone(),
+                &env,
+                &globals,
+            );
+            let context = format!("{era:?} discovery {args}");
+            Want::CannotRun.check(&result, &context);
+            assert!(
+                content_text(&result).contains("no specengine.toml"),
+                "{context}: {}",
+                content_text(&result)
+            );
+        }
+        for (args, needle) in [
+            (json!({}), "node"),
+            (json!({"symbol": "crates/tally::counter"}), "node"),
+            (json!({"node": 7}), ""),
+            (json!({"node": ["PIECE-COUNTER"]}), ""),
+            (json!({"node": "PIECE-COUNTER", "symbol": 3}), ""),
+            (json!({"node": "PIECE-COUNTER", "task": "T-0001"}), "task"),
+        ] {
+            let reply = session.call("check_binding", args.clone());
+            assert_bad_arguments(&reply, needle, &format!("{era:?} {args}"));
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+        assert_eq!(done.stderr, "", "{era:?}");
+    }
+}
+
+/// TE-2, the mirror (docs/features/check-binding.md "Data", **Mirror**):
+/// the output schema's key sets are verify's document, named here (a key
+/// dropped from both the mirror and the CLI still fails): 13 top keys, 17
+/// row keys, `counts`, `cascade`, `delta` with its `bindings`, a binding
+/// key and an anchor's place, `levels`, `anchor`, `markers[]`, `lock`,
+/// `omitted {rows}`; `base`, `task`, `delta.symbols` and
+/// `delta.tests_reaching` exactly `{"type": "null"}` (`AlwaysNull`); the
+/// CLI's closed words enums (`mode`, `verdict`, `relation`, `kind` with
+/// `null`, the nine states, `class`, `compared`, an anchor's `state`);
+/// `item_kind`, `category`, `detail` and `levels` items free strings.
+/// M: `kind` free or without `null`; a state missing; `task` typed; a
+/// row key dropped.
+#[test]
+fn check_binding_mirror_is_verify_json() {
+    let schema = check_binding_schema();
+    assert_eq!(keys_at(&schema), set(&VERIFY_TOP_KEYS));
+    for path in ["base", "task", "delta.symbols", "delta.tests_reaching"] {
+        let at = schema_at(&schema, path);
+        let mut bare = at.clone();
+        if let Some(object) = bare.as_object_mut() {
+            object.remove("description");
+        }
+        assert_eq!(bare, json!({"type": "null"}), "{path}: AlwaysNull: {at}");
+    }
+    let types = |path: &str| types_of(schema_at(&schema, path));
+    let words = |path: &str| enum_values(schema_at(&schema, path));
+    assert_eq!(types("node"), set(&["array"]), "node: the holders' IDs");
+    assert_eq!(
+        schema_at(&schema, "node")["description"],
+        json!(CHECK_BINDING_NODE_DOC),
+        "node's doc"
+    );
+    assert_eq!(types("node[]"), set(&["string"]));
+    assert_eq!(types("symbol"), set(&["null", "string"]));
+    assert_eq!(
+        words("mode"),
+        Some(set(&["observe", "enforce-introduced", "enforce"]))
+    );
+    assert!(types("mode").contains("null"), "mode before the config");
+    assert_eq!(
+        words("verdict"),
+        Some(set(&["clean", "observed", "blocked", "cannot-verify"]))
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "counts")),
+        set(&[
+            "rows",
+            "ok",
+            "fix",
+            "check",
+            "cannot",
+            "pre_existing",
+            "skipped"
+        ])
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "cascade")),
+        set(&["by_blob", "by_ast"])
+    );
+    for path in ["counts.rows", "counts.skipped", "cascade.by_ast"] {
+        assert_eq!(types(path), set(&["integer"]), "{path}");
+    }
+    for path in ["cannot", "notes"] {
+        assert_eq!(types(path), set(&["array"]), "{path}");
+        assert_eq!(types(&format!("{path}[]")), set(&["string"]), "{path}");
+    }
+    assert_eq!(keys_at(schema_at(&schema, "omitted")), set(&["rows"]));
+    assert_eq!(types("omitted.rows"), set(&["integer"]));
+
+    assert_eq!(keys_at(schema_at(&schema, "rows[]")), set(&VERIFY_ROW_KEYS));
+    assert_eq!(
+        words("rows[].relation"),
+        Some(set(&["implements", "verifies", "configures", "assumes"]))
+    );
+    assert_eq!(words("rows[].kind"), Some(set(&["item", "module", "ron"])));
+    assert!(types("rows[].kind").contains("null"), "a keyless row");
+    assert_eq!(words("rows[].state"), Some(set(&VERIFY_STATES)));
+    assert_eq!(
+        words("rows[].class"),
+        Some(set(&["fix", "check", "cannot"]))
+    );
+    assert!(types("rows[].class").contains("null"), "an ok row");
+    assert_eq!(words("rows[].compared"), Some(set(&["blob", "ast"])));
+    assert!(types("rows[].compared").contains("null"));
+    for path in [
+        "rows[].item_kind",
+        "rows[].category",
+        "rows[].detail",
+        "rows[].levels.lock[]",
+        "rows[].levels.markers[]",
+        "rows[].levels.changed[]",
+    ] {
+        assert_eq!(words(path), None, "{path}: an enum");
+        assert!(types(path).contains("string"), "{path}: not a string");
+    }
+    for path in [
+        "rows[].symbol",
+        "rows[].item_kind",
+        "rows[].category",
+        "rows[].detail",
+        "rows[].node_rev",
+        "rows[].lock",
+        "rows[].levels",
+        "rows[].levels.changed",
+        "rows[].anchor",
+        "rows[].anchor.from",
+        "rows[].anchor.candidates",
+        "rows[].markers[].rev",
+    ] {
+        assert!(types(path).contains("null"), "{path}: not nullable");
+    }
+    assert_eq!(types("rows[].pre_existing"), set(&["boolean"]));
+    assert!(types("rows[].node_rev").contains("integer"));
+    assert_eq!(
+        keys_at(schema_at(&schema, "rows[].markers[]")),
+        set(&["line", "rev"])
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "rows[].lock")),
+        set(&["rev", "commit", "verified_at"])
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "rows[].levels")),
+        set(&["lock", "markers", "changed"])
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "rows[].anchor")),
+        set(&["state", "from", "candidates"])
+    );
+    assert_eq!(
+        words("rows[].anchor.state"),
+        Some(set(&["exact", "moved", "ambiguous", "lost"]))
+    );
+    for path in ["rows[].anchor.from", "rows[].anchor.candidates[]"] {
+        assert_eq!(
+            keys_at(schema_at(&schema, path)),
+            set(&VERIFY_PLACE_KEYS),
+            "{path}"
+        );
+        assert_eq!(
+            words(&format!("{path}.kind")),
+            Some(set(&["item", "module", "ron"])),
+            "{path}.kind"
+        );
+    }
+
+    assert_eq!(
+        keys_at(schema_at(&schema, "delta")),
+        set(&["symbols", "bindings", "affected_nodes", "tests_reaching"])
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "delta.bindings")),
+        set(&["moved", "ambiguous", "lost", "stale"])
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "delta.bindings.moved[]")),
+        set(&["from", "to"])
+    );
+    for path in [
+        "delta.bindings.moved[].from",
+        "delta.bindings.moved[].to",
+        "delta.bindings.ambiguous[]",
+        "delta.bindings.lost[]",
+        "delta.bindings.stale[]",
+    ] {
+        assert_eq!(
+            keys_at(schema_at(&schema, path)),
+            set(&VERIFY_KEY_KEYS),
+            "{path}"
+        );
+    }
+    assert_eq!(types("delta.affected_nodes[]"), set(&["string"]));
+}
+
+/// TE-2, the walker (docs/features/check-binding.md "Data", **Mirror**):
+/// every answer over two corpora of different nature is the CLI
+/// library's and conforms to the `outputSchema` (exact key sets, every
+/// key required): `fixtures/code-a` with the golden lock and
+/// verify_node.rs' drift edits (a library: every node, the nine states)
+/// and `fixtures/anchor-states` (a kite game crate: KITE-RENAME renamed,
+/// KITE-CLONE's equal twins renamed, KITE-STEADY untouched). Across them
+/// each state is met, each nullable row key with a value and with `null`,
+/// each anchor state, an anchor's `from` and `candidates`, and each of
+/// `delta.bindings`' lists non-empty. M: a mirror key's type narrower than
+/// the CLI's (a `null` or a value refused).
+#[test]
+fn check_binding_documents_meet_every_key() {
+    let golden = Project::golden(GOLDEN_LOCK);
+    drift_golden(&golden.root);
+    let nodes = [
+        "PIECE-COUNTER",
+        "LAW-BOUND",
+        "LAW-STEP",
+        "LAW-ODD",
+        "GOAL-01",
+        "PREM-001",
+        "cap-check/PASS-01",
+        "PIECE-LIMITS",
+    ];
+    let golden_calls: Vec<Call> = nodes
+        .iter()
+        .map(|node| {
+            call(
+                "golden",
+                "check_binding",
+                json!({"node": node}),
+                Want::Parity,
+            )
+        })
+        .collect();
+    let anchors = Project::anchors(&["KITE-STEADY", "KITE-RENAME", "KITE-CLONE"]);
+    let anchor_calls: Vec<Call> = ["KITE-STEADY", "KITE-RENAME", "KITE-CLONE"]
+        .iter()
+        .map(|node| {
+            call(
+                "anchors",
+                "check_binding",
+                json!({"node": node}),
+                Want::Parity,
+            )
+        })
+        .collect();
+    let mut documents: Vec<Value> = Vec::new();
+    for results in golden
+        .answers(&golden_calls)
+        .into_iter()
+        .chain(anchors.answers(&anchor_calls))
+    {
+        for result in results {
+            documents.push(result["structuredContent"].clone());
+        }
+    }
+    let rows: Vec<&Value> = documents
+        .iter()
+        .flat_map(|document| document["rows"].as_array().expect("rows"))
+        .collect();
+    let met = |what: &str, values: Vec<&Value>| {
+        let found: BTreeSet<String> = values
+            .into_iter()
+            .map(|value| if value.is_null() { "null" } else { "value" }.to_owned())
+            .collect();
+        assert_eq!(found, set(&["null", "value"]), "{what}: both members met");
+    };
+    for key in VERIFY_NULLABLE {
+        met(key, rows.iter().map(|row| &row[key]).collect());
+    }
+    let levels: Vec<&Value> = rows.iter().map(|row| &row["levels"]).collect();
+    met(
+        "levels.changed",
+        levels
+            .iter()
+            .filter(|levels| levels.is_object())
+            .map(|levels| &levels["changed"])
+            .collect(),
+    );
+    let anchored: Vec<&Value> = rows
+        .iter()
+        .map(|row| &row["anchor"])
+        .filter(|anchor| anchor.is_object())
+        .collect();
+    met(
+        "anchor.from",
+        anchored.iter().map(|anchor| &anchor["from"]).collect(),
+    );
+    met(
+        "anchor.candidates",
+        anchored
+            .iter()
+            .map(|anchor| &anchor["candidates"])
+            .collect(),
+    );
+    met(
+        "markers[].rev",
+        rows.iter()
+            .flat_map(|row| row["markers"].as_array().expect("markers"))
+            .map(|marker| &marker["rev"])
+            .collect(),
+    );
+    let states: BTreeSet<String> = rows
+        .iter()
+        .map(|row| row["state"].as_str().expect("a state").to_owned())
+        .collect();
+    assert_eq!(states, set(&VERIFY_STATES), "every state met");
+    let anchor_states: BTreeSet<String> = anchored
+        .iter()
+        .map(|anchor| anchor["state"].as_str().expect("a state").to_owned())
+        .collect();
+    assert_eq!(
+        anchor_states,
+        set(&["exact", "moved", "ambiguous", "lost"]),
+        "every anchor state met"
+    );
+    for list in ["moved", "ambiguous", "lost", "stale"] {
+        assert!(
+            documents.iter().any(|document| {
+                document["delta"]["bindings"][list]
+                    .as_array()
+                    .is_some_and(|items| !items.is_empty())
+            }),
+            "delta.bindings.{list} met non-empty"
+        );
+    }
+    for document in &documents {
+        for key in ["base", "task"] {
+            assert_eq!(document[key], Value::Null, "{key}: always null");
+        }
+        for key in ["symbols", "tests_reaching"] {
+            assert_eq!(document["delta"][key], Value::Null, "delta.{key}");
+        }
+    }
+}
+
+/// The requests of one check_binding determinism session: `tools/list`,
+/// then every exit and REF form over the golden.
+fn check_binding_requests() -> Vec<(String, Value)> {
+    let mut list = vec![("tools/list".to_owned(), json!({}))];
+    for arguments in [
+        json!({"node": "PIECE-COUNTER"}),
+        json!({"node": "PIECE-COUNTER", "symbol": "crates/tally::counter"}),
+        json!({"node": TALLY_COUNTER_MD}),
+        json!({"node": "PIECE-LIMITS"}),
+        json!({"node": "cap-check/PASS-01"}),
+        json!({"node": "LAW-BOUND"}),
+        json!({"node": "AIM-01"}),
+        json!({"node": "GOAL-01"}),
+        json!({"node": "LAW-STEP", "symbol": "data/limits.ron#root.step"}),
+        json!({"node": "LAW-NOPE"}),
+        json!({"node": GOAL_LOOK_ALIKE}),
+        json!({"node": 7}),
+    ] {
+        list.push((
+            "tools/call".to_owned(),
+            json!({"name": "check_binding", "arguments": arguments}),
+        ));
+    }
+    list
+}
+
+/// TE-2, determinism (docs/features/check-binding.md, its rules): a
+/// forward git copy of the golden, a copy created in reverse name order
+/// at another, deeper root, and a copy read with `--root` from another
+/// working directory, each with its own `HOME`, give byte-identical reply
+/// lines (the same request ids) for every exit and REF form in both eras;
+/// a repeated session the same bytes again; no line holds a root, a
+/// `HOME`, a scratch name or today's date. CRLF copies are not covered
+/// (`spec-verify-scope.md` "Known limits"). M: the absolute root in a
+/// document; a row order from a hash map.
+#[test]
+fn check_binding_is_byte_identical_across_roots_order_and_cwd() {
+    let one = Scratch::new("cbdet-one");
+    let two = Scratch::new("cbdet-two-with-a-longer-name");
+    let forward = git_copy(
+        &one,
+        "code-a",
+        "cbdet-first-root",
+        false,
+        with_lock(GOLDEN_LOCK),
+    );
+    let reverse = git_copy(
+        &two,
+        "code-a",
+        "nested/cbdet-second-root",
+        true,
+        with_lock(GOLDEN_LOCK),
+    );
+    let fourth = git_copy(
+        &two,
+        "code-a",
+        "cbdet-fourth-root",
+        true,
+        with_lock(GOLDEN_LOCK),
+    );
+    let elsewhere = two.dir("cbdet-elsewhere");
+    let homes = [
+        one.home("cbdet-home-one"),
+        two.home("cbdet-home-two"),
+        two.home("cbdet-home-four"),
+    ];
+    let fourth_text = fourth.to_str().expect("UTF-8").to_owned();
+    let dates = dates_around_now();
+    for era in ERAS {
+        let lines = |args: &[&str], cwd: &Path, home: &Path| {
+            lines_of_requests(era, args, cwd, home, check_binding_requests())
+        };
+        let first = lines(&[], &forward, &homes[0]);
+        let variants = [
+            ("reverse", lines(&[], &reverse, &homes[1])),
+            (
+                "--root from elsewhere",
+                lines(&["--root", fourth_text.as_str()], &elsewhere, &homes[2]),
+            ),
+            ("again", lines(&[], &forward, &homes[0])),
+        ];
+        for (label, lines) in &variants {
+            assert_eq!(first.len(), lines.len(), "{era:?} {label}");
+            for (index, (left, right)) in first.iter().zip(lines).enumerate() {
+                assert_eq!(left, right, "{era:?} {label}: reply {index} differs");
+            }
+        }
+        let forbidden: Vec<String> = [&forward, &reverse, &fourth, &elsewhere]
+            .iter()
+            .map(|path| path.to_str().expect("UTF-8").to_owned())
+            .chain(
+                homes
+                    .iter()
+                    .map(|home| home.to_str().expect("UTF-8").to_owned()),
+            )
+            .chain(["cbdet-".to_owned()])
+            .chain(dates.iter().cloned())
+            .collect();
+        for line in &first {
+            for text in &forbidden {
+                assert!(!line.contains(text.as_str()), "{era:?}: {text:?} in {line}");
+            }
+        }
+        // The replies are the answers asked for: observed, a report, none.
+        let replies: Vec<Value> = first.iter().map(|line| parse_message(line)).collect();
+        assert_eq!(
+            result(&replies[1])["structuredContent"]["verdict"],
+            json!("observed"),
+            "{era:?}"
+        );
+        assert_eq!(
+            result(&replies[6])["structuredContent"]["verdict"],
+            json!("cannot-verify"),
+            "{era:?}"
+        );
+        assert!(
+            result(&replies[10]).get("structuredContent").is_none(),
+            "{era:?}: LAW-NOPE"
+        );
+    }
+}
+
+/// TE-2, quiet (AC-19's rule for `check_binding`): over broken, empty,
+/// BOM-led, look-alike-marked and non-UTF-8 code files in the golden
+/// repository every call answers the CLI's answer (its `note:` and
+/// `cannot:` lines inside `content`), stdout carries JSON-RPC only (the
+/// harness parses every line), stderr stays empty, the process exits 0.
+/// M: a `println!` or the default panic hook on the path.
+#[test]
+fn check_binding_leaves_stdout_json_rpc_only() {
+    let project = Project::golden(GOLDEN_LOCK);
+    let root = &project.root;
+    write(
+        root,
+        "crates/tally/src/raw.rs",
+        b"// @implements LAW-STEP\npub fn raw() -> u32 {\n    1\n}\n// \xff\xfe not text\n"
+            .as_slice(),
+    );
+    write(
+        root,
+        "crates/tally/src/half.rs",
+        "// @implements LAW-STEP\npub fn half( {\n",
+    );
+    write(root, "crates/tally/src/empty.rs", "");
+    write(
+        root,
+        "crates/tally/src/bom.rs",
+        "\u{feff}// @implements PIECE-COUNTER\npub fn bom() -> u32 {\n    2\n}\n",
+    );
+    write(
+        root,
+        "crates/tally/src/mixed.rs",
+        "// @implements L\u{0410}W-STEP@1\npub fn mixed() -> u32 {\n    3\n}\n",
+    );
+    write(
+        root,
+        "data/odd.ron",
+        "Odd(\n    width: , // @configures LAW-STEP\n",
+    );
+    let calls = [
+        call(
+            "quiet",
+            "check_binding",
+            json!({"node": "LAW-STEP"}),
+            Want::Parity,
+        ),
+        call(
+            "quiet",
+            "check_binding",
+            json!({"node": "PIECE-COUNTER"}),
+            Want::Parity,
+        ),
+        call(
+            "quiet",
+            "check_binding",
+            json!({"node": "GOAL-01"}),
+            Want::Parity,
+        ),
+        call(
+            "quiet",
+            "check_binding",
+            json!({"node": "LAW-STEP", "symbol": "crates/tally::raw::raw"}),
+            Want::Parity,
+        ),
+    ];
+    let env = project.env();
+    let globals = Globals::default();
+    for era in ERAS {
+        let (mut session, schemas) = project.open(era);
+        for call in &calls {
+            checked_call(
+                &mut session,
+                &schemas,
+                call.tool,
+                call.args.clone(),
+                &env,
+                &globals,
+            );
+        }
+        let done = session.finish();
+        assert_eq!(done.status.code(), Some(0), "{era:?}: {}", done.stderr);
+        assert!(done.messages.is_empty(), "{era:?}: {:?}", done.messages);
+        assert_eq!(done.stderr, "", "{era:?}: stderr");
+    }
+}
+
+/// TE-2, genre (docs/features/check-binding.md "Data", the exit table:
+/// "2, a report"): over `fixtures/spec-c` (a Python service, no `[code]`)
+/// committed in git, `check_binding` is the CLI's report with its
+/// document: `cannot-verify`, the one run cause `[code]`'s line (`cannot:`
+/// in the text, `cannot` in the document), no row; a REF naming nothing
+/// still has none. The tool's texts and sources: the genre test above (it
+/// walks every code tool). M: the `[code]` cause answered as `CannotRun`.
+#[test]
+fn check_binding_on_spec_c_is_the_code_table_report() {
+    let scratch = Scratch::new("cb-genre");
+    let home = scratch.home("h");
+    let root = git_copy(&scratch, "spec-c", "repo", false, |_| {});
+    let project = Project {
+        _scratch: scratch,
+        home,
+        root,
+    };
+    let calls = [
+        bound("a node", json!({"node": "AREA-HIRE"}), "cannot-verify"),
+        bound(
+            "a node, a symbol",
+            json!({"node": "FEE-RIDE", "symbol": "src/dock_hire/fees.py"}),
+            "cannot-verify",
+        ),
+        unbound("unknown", json!({"node": "FEE-NOPE"})),
+    ];
+    for results in project.answers(&calls) {
+        for label in ["a node", "a node, a symbol"] {
+            let document = document(&calls, &results, label);
+            assert_eq!(document["cannot"], json!([NO_CODE_CAUSE]), "{label}");
+            assert_eq!(document["rows"], json!([]), "{label}");
+            let text = content_text(pick(&calls, &results, label));
+            assert!(
+                text.contains(&format!("cannot: {NO_CODE_CAUSE}\n")),
+                "{label}: {text:?}"
+            );
+        }
+    }
+}
+
+/// TE-3, the MCP half (08 AC-3, the single door): a git repository of
+/// `fixtures/code-a` with the golden lock and `[verify] mode = "enforce"`
+/// committed, a code file's mtime moved after the commit (the git index
+/// stat-dirty: a `git status` that refreshes it would write
+/// `.git/index`); `check_binding` called valid at every exit (0, 1, 2 with
+/// a report and without) and invalid, in both eras, from a
+/// subdirectory; then `git status --porcelain=v1 -z
+/// --untracked-files=all` is as before (empty), `.git/index`'s mtime and
+/// `spec.lock`'s bytes unchanged, the tree (`.git` included)
+/// byte-identical, the queue's proposals, tasks and events unchanged,
+/// every new path under `HOME`. M: a lock write, a queue row, an index
+/// refresh.
+#[test]
+fn te3_check_binding_writes_nothing_under_the_root() {
+    let scratch = Scratch::new("cb-door");
+    let home = scratch.home("h");
+    let root = git_copy(&scratch, "code-a", "repo", false, |root| {
+        with_lock(GOLDEN_LOCK)(root);
+        set_verify_mode(root, "enforce");
+    });
+    let lock = fs::read(root.join("spec.lock")).expect("spec.lock");
+    let sandbox = Sandbox::new(scratch.path());
+    let env = cli_env(&root, Some(&home));
+    let git = GitEnv::new(&root, sandbox.vars());
+    index_with_library(&env, &Globals::default());
+    let queue = queue_rows(&env, &git);
+    // Stat-dirty, content clean: the index records the old mtime.
+    let touched = root.join(TALLY_COUNTER);
+    fs::File::options()
+        .write(true)
+        .open(&touched)
+        .and_then(|file| file.set_modified(UNIX_EPOCH + std::time::Duration::from_secs(86_400)))
+        .expect("an older mtime");
+    let status = porcelain(&sandbox, &root);
+    assert_eq!(status, b"", "committed clean");
+    let index_mtime = || {
+        fs::metadata(root.join(".git").join("index"))
+            .and_then(|meta| meta.modified())
+            .expect(".git/index")
+    };
+    let mtime = index_mtime();
+    let tree = snapshot(&root);
+    let paths: BTreeSet<String> = snapshot(scratch.path()).into_keys().collect();
+    let cwd = root.join("crates").join("tally");
+
+    let valid = [
+        (json!({"node": "PIECE-LIMITS"}), Some("clean")),
+        (
+            json!({"node": "PIECE-COUNTER", "symbol": "crates/tally::counter"}),
+            Some("observed"),
+        ),
+        (json!({"node": "PIECE-COUNTER"}), Some("blocked")),
+        (json!({"node": "LAW-BOUND"}), Some("cannot-verify")),
+        (json!({"node": "AIM-01"}), Some("cannot-verify")),
+        (
+            json!({"node": "LAW-STEP", "symbol": null}),
+            Some("cannot-verify"),
+        ),
+        (json!({"node": "LAW-NOPE"}), None),
+        (json!({"node": GOAL_LOOK_ALIKE}), None),
+    ];
+    let invalid = [
+        json!({}),
+        json!({"node": 5}),
+        json!({"node": "PIECE-COUNTER", "symbol": ["x"]}),
+        json!({"node": "PIECE-COUNTER", "task": "T-0001"}),
+        json!({"node": "PIECE-COUNTER", "accept": true}),
+    ];
+    for era in ERAS {
+        let mut session = Session::open(era, &[], Some(&cwd), Home::At(&home));
+        assert_eq!(tool_names(&session.tools()), TOOLS, "{era:?}");
+        for (args, verdict) in &valid {
+            let reply = session.call("check_binding", args.clone());
+            let result = result(&reply);
+            let context = format!("{era:?} {args}");
+            match verdict {
+                Some(verdict) => Want::Verdict(verdict).check(result, &context),
+                None => Want::CannotRun.check(result, &context),
+            }
+        }
+        for args in &invalid {
+            let reply = session.call("check_binding", args.clone());
+            assert_bad_arguments(&reply, "", &format!("{era:?} {args}"));
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+        assert_eq!(done.stderr, "", "{era:?}");
+    }
+
+    assert_eq!(porcelain(&sandbox, &root), status, "git status");
+    assert_eq!(index_mtime(), mtime, ".git/index touched");
+    assert_eq!(
+        fs::read(root.join("spec.lock")).expect("spec.lock"),
+        lock,
+        "spec.lock"
+    );
+    assert!(snapshot(&root) == tree, "the repository changed");
+    assert_eq!(queue_rows(&env, &git), queue, "the queue changed");
+    let home_prefix = format!(
+        "{}/",
+        home.strip_prefix(scratch.path())
+            .expect("HOME in the scratch")
+            .display()
+    );
+    for path in snapshot(scratch.path()).into_keys() {
+        if !paths.contains(&path) {
+            assert!(
+                path.starts_with(&home_prefix),
+                "a new path outside HOME: {path}"
+            );
+        }
+    }
 }

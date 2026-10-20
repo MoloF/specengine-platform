@@ -136,7 +136,7 @@ spec-writer:
 
 ## Risks
 
-The fit re-estimates the whole body per candidate (3 000: 1.13 s, `spec-cli-bundle.md` "Open"): rows need running counts. The JSON gains a row per placed row (signature ≤ 512 B, qpath unbounded): `mcp_size` re-measured, package rows capped to keep `PACKAGE_BUDGET + OUTPUT_CAP_CHARS` ≤ 500 000. Every bundle, tree, `show --bindings`, `get_task` (the daemon per request) refreshes the code index and may spawn git, against MCP's 1 s (`mcp-read.md` "Latency"). Package rows show the reading root's code to an agent in another worktree (accepted, as `bundle_hash`). 7a stands on drafts 3, 4a, 6a and unshipped 1: a change in their row shapes reopens the row object.
+The fit re-estimates the whole body per candidate (3 000: 1.13 s, `spec-cli-bundle.md` "Open"): rows need running counts. The JSON gains a row per placed row (signature ≤ 512 B, qpath unbounded): `mcp_size` re-measured, package rows capped to keep `PACKAGE_BUDGET + OUTPUT_CAP_CHARS` ≤ 500 000. Every bundle, tree, `show --bindings`, `get_task` (the daemon per request) refreshes the code index and may spawn git, against MCP's 1 s (`mcp-read.md` "Latency"). Package rows show the reading root's code to an agent in another worktree (accepted, as `bundle_hash`). 7a stands on drafts 3, 4a, 6a and unshipped 1: a change in their row shapes reopens the row object. Filling `delta.tests_reaching` changes `check_binding`'s `outputSchema` (`mcp-code.md` "Mirrors", `{"type": "null"}` today): its mirror, a plugin MINOR and a `SCHEMA_PINS` entry; this line's 33 B overflow the `probes` build's 11 B: cut there.
 
 ## Out of scope
 
@@ -166,7 +166,7 @@ WA-n: the analysis' working answers (2026-10-10), below; "SW refinement": the sp
 
 ## Dependencies and ordering
 
-- **Needs**: 1 `code-refs` (built, unshipped) -> 3 `spec-lock` (the reader) -> 4a `spec-verify` (judge, row key, blob call) -> 6a `symbol-index` (tables, refresh, signature); [6b-1, 6b-2 first (08 s2, 2026-10-16), leaving `INSTRUCTIONS` 34 B: `code-tools.md`, `verify-node.md`] -> 7a -> 7b.
+- **Needs**: 1 `code-refs` (built, unshipped) -> 3 `spec-lock` (the reader) -> 4a `spec-verify` (judge, row key, blob call) -> 6a `symbol-index` (tables, refresh, signature); [6b-1, 6b-2 shipped (2026-10-16, 2026-10-21), leaving `INSTRUCTIONS` 70 B, 11 B in the `probes` build: `mcp-read.md` **Texts**] -> 7a -> 7b.
 - **Order**: this spec and ADR-0046 now, code after 6a, 5b and 5c (2026-10-13, `symbol-index.md` Q11); 6c first if AC-10's no-op timing (`noop_ms` ≤ 200) fails. **Independent**: 4b, 4c, 8a. **Later**: Phase 4. **Either side**: 8b (`tested` here, by the later).
 
 ## Implementation

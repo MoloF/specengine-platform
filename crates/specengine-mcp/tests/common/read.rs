@@ -12,6 +12,12 @@
 //! `UnmappedRequest { path }`, `Outcome::Symbols`, `Outcome::Unmapped`)
 //! are the working names of docs/features/symbol-reads.md Q35 and its
 //! tester's phase A (L25); adapt them to what 6a-3 commits.
+//!
+//! docs/features/check-binding.md (6b-2b): `check_binding` joins
+//! [`CODE_TOOLS`] (four) and `TOOLS` (twenty); its twin in
+//! [`code_library`] is `verify` with `node` and `symbol` as written, the
+//! working tree, no task, the server's git environment. A rendered exit 2
+//! (verify's report) keeps its document ([`expected`]).
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -22,8 +28,8 @@ use specengine_cli::{
     DriftRequest, Env, Exit, GitEnv, Globals, IntakeSeverity, Outcome, ProposeRequest,
     ProposedText, QuestionRequest, RefsRequest, ReviewRequest, RoadmapRequest, SearchRequest,
     ShowRequest, SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest,
-    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest, render_json,
-    render_text,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest,
+    VerifiedTree, VerifyRequest, render_json, render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -65,17 +71,21 @@ pub const TASK_TOOLS: [&str; 5] = [
 ];
 
 /// The code tools of docs/features/code-tools.md (6b-1), in `tools/list`
-/// order: `spec symbols`, `spec refs`, `spec unmapped`, each read-only.
-pub const CODE_TOOLS: [&str; 3] = ["find_symbols", "refs", "unmapped"];
+/// order: `spec symbols`, `spec refs`, `spec unmapped`, each read-only;
+/// four since docs/features/check-binding.md (6b-2b): `check_binding`,
+/// `spec verify --node`.
+pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unmapped"];
 
 /// Every tool of the default build, in `tools/list` order (by name):
 /// thirteen since docs/features/task-package.md, fourteen since
 /// docs/features/kind-decision.md (`report_decision`), fifteen since
 /// docs/features/drift-queue.md (`report_drift`), eighteen since
 /// docs/features/code-tools.md (`find_symbols`, `refs`, `unmapped`),
-/// nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`).
-pub const TOOLS: [&str; 19] = [
+/// nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`),
+/// twenty since docs/features/check-binding.md (`check_binding`).
+pub const TOOLS: [&str; 20] = [
     "ask_question",
+    "check_binding",
     "claim_task",
     "complete_task",
     "find_symbols",
@@ -542,8 +552,9 @@ pub fn task_library(
 /// splits it), `limit` with `query` only (else the tool's own error, no
 /// CLI twin, no document; the form count is judged first: reading L3 of
 /// the phase A report); `refs` = `spec refs REF`; `unmapped` = `spec
-/// unmapped [PATH]`. Exit 1 keeps its document (`reason`), exit 2 has
-/// none ([`expected`]). PHASE-B: the 6a-3 names (module docs).
+/// unmapped [PATH]`; `check_binding` = `spec verify --node REF [--symbol
+/// QPATH]`. Exit 1 keeps its document, a `CliError` (exit 2) has none, a
+/// rendered exit 2 (verify's report) keeps it ([`expected`]).
 pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     let text = |key: &str| args[key].as_str().map(str::to_owned);
     let refused = |message: &str| Expected {
@@ -597,6 +608,21 @@ pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> E
             specengine_cli::unmapped(env, globals, &UnmappedRequest { path: text("path") })
                 .map(|outcome| Outcome::Unmapped(Box::new(outcome)))
         }
+        // docs/features/check-binding.md "Data": `spec verify --node REF
+        // [--symbol QPATH] --json`, `node` and `symbol` as written, the
+        // working tree, no task, the server's git environment.
+        "check_binding" => specengine_cli::verify(
+            env,
+            globals,
+            &VerifyRequest {
+                tree: VerifiedTree::WorkingTree,
+                task: None,
+                node: Some(text("node").expect("check_binding node")),
+                symbol: text("symbol"),
+                git: server_git(env),
+            },
+        )
+        .map(|outcome| Outcome::Verify(Box::new(outcome))),
         other => panic!("no code twin for tool {other}"),
     };
     expected(outcome)

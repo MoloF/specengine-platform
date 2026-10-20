@@ -24,11 +24,22 @@
 //! printed for the spec's "Implementation"
 //! (`find_symbols_over_code_bevy_records_its_maxima`).
 //!
+//! docs/features/check-binding.md TE-2 ("Size"): the same corpus is
+//! committed in git, and `check_binding {node: "LANE-WIDE"}` (its 3 000
+//! bound items, no lock: 3 000 `unlocked` rows, `observed`) joins
+//! `code_tools_cut_stay_under_the_declared_cap`: past the CLI's cut, its
+//! JSON holding only the printed rows (`omitted.rows` the rest) and its
+//! whole `delta`; one QPATH narrows it to one row, uncut. Its maximum is
+//! printed with the others.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
 
 mod common;
+
+#[path = "../../specengine-cli/tests/common/git.rs"]
+mod git;
 
 use std::path::Path;
 
@@ -372,6 +383,12 @@ fn code_tools_cut_stay_under_the_declared_cap() {
     let home = scratch.home("h");
     let root = scratch.dir("wide");
     wide_code(&root);
+    // docs/features/check-binding.md TE-2: committed, so `check_binding`
+    // judges a worktree (no git: a run cause, no row).
+    let sandbox = git::Sandbox::new(scratch.path());
+    sandbox.init(&root);
+    sandbox.add_all(&root);
+    sandbox.commit(&root, "the wide corpus");
     let env = cli_env(&root, Some(&home));
     let globals = Globals::default();
     let calls = [
@@ -381,12 +398,18 @@ fn code_tools_cut_stay_under_the_declared_cap() {
         ("refs", json!({"id": "LANE-WIDE"})),
         ("unmapped", json!({"path": "pkg/w/src/loose.rs"})),
         ("unmapped", json!({"path": "pkg/w/src/many"})),
-        // A few lines each: the name of two items, a root's rows.
+        ("check_binding", json!({"node": "LANE-WIDE"})),
+        // A few lines each: the name of two items, a root's rows, one
+        // binding.
         ("find_symbols", json!({"query": wide_name(7), "limit": 200})),
         ("unmapped", json!({})),
+        (
+            "check_binding",
+            json!({"node": "LANE-WIDE", "symbol": format!("pkg/w::bound::{}", wide_name(7))}),
+        ),
     ];
-    // The first six pass the CLI's cut.
-    let cut = 6;
+    // The first seven pass the CLI's cut.
+    let cut = 7;
     let mut session = Session::open(Era::Legacy, &[], Some(&root), Home::At(&home));
     let schemas = output_schemas(&session.tools());
     let mut largest: Vec<(String, usize)> = Vec::new();
@@ -405,6 +428,24 @@ fn code_tools_cut_stay_under_the_declared_cap() {
                 "{tool} {args}: the corpus does not reach the CLI's cut: {}",
                 clip(shown)
             );
+        } else {
+            assert!(
+                !shown.contains("[truncated: "),
+                "{tool} {args}: uncut: {}",
+                clip(shown)
+            );
+        }
+        if *tool == "check_binding" {
+            // The document holds the printed rows, `omitted.rows` the rest.
+            let document = &result["structuredContent"];
+            assert_eq!(document["verdict"], json!("observed"), "{args}");
+            let rows = document["counts"]["rows"].as_u64().expect("counts.rows");
+            let printed = document["rows"].as_array().expect("rows").len() as u64;
+            let omitted = document["omitted"]["rows"].as_u64().expect("omitted.rows");
+            assert_eq!(printed + omitted, rows, "{args}: printed and omitted rows");
+            let want = if index < cut { 3_000 } else { 1 };
+            assert_eq!(rows, want, "{args}");
+            assert_eq!(omitted > 0, index < cut, "{args}: omitted {omitted}");
         }
         assert!(
             before_tail(shown).chars().count() <= OUTPUT_CAP_CHARS + 1_000,

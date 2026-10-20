@@ -75,6 +75,12 @@
 //!   0.9.0's); a `SCHEMA_PINS` entry 0.11.0, 0.10.0's schemas today's
 //!   without the three (0.9.0's those without `roles`). M11: the version
 //!   kept.
+//! - docs/features/check-binding.md "Plugin": 0.11.0 -> 0.12.0 (MINOR: the
+//!   tool `check_binding`); `implement` gains its step 5, the later steps
+//!   renumbered (the tree with the version set back and that step out,
+//!   the steps renumbered back, hashes as 0.11.0's pin, and the 0.11.0
+//!   ties restated below it); a `SCHEMA_PINS` entry 0.12.0, 0.11.0's
+//!   schemas today's without `check_binding`. M: the version kept.
 //!
 //! The repository is only read.
 
@@ -225,6 +231,15 @@ const PINS: &[(&str, &str)] = &[
         "0.11.0",
         "a5efcedf44908dea3f481932b08e63e0d17bebcfba241b1b01f23ea59c3f1807",
     ),
+    // docs/features/check-binding.md "Plugin" (0.11.0 -> 0.12.0, MINOR: a
+    // new tool): `implement` names `check_binding` in a new step 5, its
+    // later steps renumbered ([`without_check_step`] takes it out); the
+    // tree with the version set back and that step out hashes as 0.11.0's
+    // pin.
+    (
+        "0.12.0",
+        "9ac6cc17275049f32555b00fb3c8af577188d9005d26e3828b2c87e591818ebf",
+    ),
 ];
 
 /// `(version, hash)` of the tools' wire schemas (docs/features/bevy-roles-reads.md
@@ -255,6 +270,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.11.0",
         "ff1d31c9cffddff6242c8d000842ef5cbedc2f034ae134e708aac7d7bb7a5520",
+    ),
+    // docs/features/check-binding.md "Plugin": the tool `check_binding`
+    // ([`as_of_0_11_0`] takes it out).
+    (
+        "0.12.0",
+        "5af6b592b5d09daeed6aabd5b5111df952ae1533aabe44b50431a8441e4e68a7",
     ),
 ];
 
@@ -952,6 +973,34 @@ const ANALYZE_ROADMAP: &str = " Its `roadmap` places it on the project's roadmap
                                of the work matters. The roadmap is advisory: nothing waits on it, \
                                and its items change only through a proposal the owner decides.";
 
+const IMPLEMENT: &str = "specengine/skills/implement/SKILL.md";
+
+/// `implement`'s text as 0.11.0 shipped it (docs/features/check-binding.md
+/// "Plugin"): the numbered step naming `check_binding` (one line) taken
+/// out, the later steps' numbers lowered by one.
+fn without_check_step(text: &str) -> String {
+    let mut out = String::new();
+    let mut removed = false;
+    for line in text.split_inclusive('\n') {
+        let number = line
+            .split_once(". ")
+            .and_then(|(number, _)| number.parse::<u32>().ok());
+        match number {
+            Some(_) if line.contains("`check_binding`") => {
+                assert!(!removed, "one step names check_binding");
+                removed = true;
+            }
+            Some(number) if removed => {
+                let (_, rest) = line.split_once(". ").expect("a numbered step");
+                out.push_str(&format!("{}. {rest}", number - 1));
+            }
+            _ => out.push_str(line),
+        }
+    }
+    assert!(removed, "a step names check_binding");
+    out
+}
+
 const FEATURE_SKILL: &str = "specengine/skills/feature/SKILL.md";
 const ASK_OWNER: &str = "specengine/skills/ask-owner/SKILL.md";
 
@@ -1346,21 +1395,41 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of roadmap-surfaces (docs/features/roadmap-surfaces.md
-    // RD-10): 0.11.0, after bevy-roles-reads' 0.10.0. M: the version
-    // unchanged.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.11.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.10.0");
-    assert_eq!(PINS[PINS.len() - 3].0, "0.9.0");
+    // The pin of check-binding (docs/features/check-binding.md "Plugin"):
+    // 0.12.0, after roadmap-surfaces' 0.11.0. M: the version unchanged.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.12.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.11.0");
+    assert_eq!(PINS[PINS.len() - 3].0, "0.10.0");
+    assert_eq!(PINS[PINS.len() - 4].0, "0.9.0");
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.11.0"),
+        json!("0.12.0"),
         "plugin.json's version"
     );
-    // 0.11.0 changes plugin.json's version and `analyze`'s step 1 alone:
-    // both set back, the tree is 0.10.0's pinned content.
-    let back = edited(
+    // 0.12.0 changes plugin.json's version and `implement`'s check step
+    // alone (the later steps renumbered): both set back, the tree is
+    // 0.11.0's pinned content.
+    let mut at_0_11_0 = edited(
         &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.12.0\"",
+        "\"version\": \"0.11.0\"",
+    );
+    let implement = String::from_utf8(tree.files[IMPLEMENT].clone()).expect("UTF-8");
+    at_0_11_0.files.insert(
+        IMPLEMENT.to_owned(),
+        without_check_step(&implement).into_bytes(),
+    );
+    assert_eq!(
+        content_hash(&at_0_11_0),
+        PINS[PINS.len() - 2].1,
+        "0.12.0 changes plugin.json's version and implement's check step only"
+    );
+    // roadmap-surfaces' restated (docs/features/roadmap-surfaces.md
+    // RD-10): 0.11.0 changes plugin.json's version and `analyze`'s step 1
+    // alone: both set back, the tree is 0.10.0's pinned content.
+    let back = edited(
+        &at_0_11_0,
         PLUGIN_JSON,
         "\"version\": \"0.11.0\"",
         "\"version\": \"0.10.0\"",
@@ -1368,7 +1437,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     let back = edited(&back, ANALYZE, ANALYZE_ROADMAP, "");
     assert_eq!(
         content_hash(&back),
-        PINS[PINS.len() - 2].1,
+        PINS[PINS.len() - 3].1,
         "0.11.0 changes plugin.json's version and analyze's roadmap text only"
     );
     // bevy-roles-reads' restated (docs/features/bevy-roles-reads.md
@@ -1382,7 +1451,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&older),
-        PINS[PINS.len() - 3].1,
+        PINS[PINS.len() - 4].1,
         "0.10.0 changes plugin.json's version only"
     );
     // A renamed file with the same bytes changes the hash too.
@@ -1516,6 +1585,16 @@ fn without_roles(schema: &mut Value) -> usize {
     stripped
 }
 
+/// `schemas` (the wire schemas by tool) as 0.11.0 listed them
+/// (docs/features/check-binding.md "Plugin"): no `check_binding`.
+fn as_of_0_11_0(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("schemas by tool");
+    assert!(
+        tools.remove("check_binding").is_some(),
+        "check_binding listed"
+    );
+}
+
 /// `get_task`'s `next` as 0.10.0 documented it (its field doc, before
 /// docs/features/roadmap-surfaces.md).
 const NEXT_DOC_0_10_0: &str = "`true`: the lowest-numbered `ready` task of this repository.";
@@ -1619,17 +1698,31 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[0].0, "0.9.0", "the first entry is 0.9.0's");
     assert_eq!(SCHEMA_PINS[1].0, "0.10.0", "an entry for 0.10.0");
     assert_eq!(SCHEMA_PINS[2].0, "0.11.0", "an entry for 0.11.0");
-    // docs/features/roadmap-surfaces.md RD-10: 0.10.0's schemas are
-    // today's without `get_roadmap`, the package's `roadmap` and `next`'s
-    // new doc.
-    let mut at_0_10_0 = schemas.clone();
+    assert_eq!(SCHEMA_PINS[3].0, "0.12.0", "an entry for 0.12.0");
+    // docs/features/check-binding.md "Plugin": 0.11.0's schemas are
+    // today's without `check_binding`.
+    let mut at_0_11_0 = schemas.clone();
+    as_of_0_11_0(&mut at_0_11_0);
+    let at_0_11_0_hash = schema_hash(&at_0_11_0);
+    assert_eq!(
+        at_0_11_0_hash, SCHEMA_PINS[2].1,
+        "0.11.0's schemas are today's without check_binding"
+    );
+    assert_ne!(at_0_11_0_hash, current, "check_binding changed the schemas");
+    // docs/features/roadmap-surfaces.md RD-10, restated: 0.10.0's schemas
+    // are 0.11.0's without `get_roadmap`, the package's `roadmap` and
+    // `next`'s new doc.
+    let mut at_0_10_0 = at_0_11_0.clone();
     as_of_0_10_0(&mut at_0_10_0);
     let at_0_10_0_hash = schema_hash(&at_0_10_0);
     assert_eq!(
         at_0_10_0_hash, SCHEMA_PINS[1].1,
-        "0.10.0's schemas are today's without the roadmap"
+        "0.10.0's schemas are 0.11.0's without the roadmap"
     );
-    assert_ne!(at_0_10_0_hash, current, "the roadmap changed the schemas");
+    assert_ne!(
+        at_0_10_0_hash, at_0_11_0_hash,
+        "the roadmap changed the schemas"
+    );
     // bevy-roles-reads' restated: 0.9.0's are 0.10.0's without `roles`.
     let mut before = at_0_10_0.clone();
     assert_eq!(
@@ -1661,6 +1754,12 @@ fn tool_schemas_follow_the_plugin_version() {
         &schema_pin_problems(SCHEMA_PINS, &current, "0.10.0"),
         "above plugin.json's",
         "plugin.json kept at 0.10.0",
+    );
+    // docs/features/check-binding.md: the version kept at 0.11.0.
+    assert_names(
+        &schema_pin_problems(SCHEMA_PINS, &current, "0.11.0"),
+        "above plugin.json's",
+        "plugin.json kept at 0.11.0",
     );
     let (last, hash) = *SCHEMA_PINS.last().expect("an entry");
     let repeated: Vec<(&str, &str)> = SCHEMA_PINS.iter().copied().chain([(last, hash)]).collect();

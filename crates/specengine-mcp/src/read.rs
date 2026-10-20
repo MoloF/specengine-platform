@@ -8,8 +8,10 @@
 //! library function, its rendering. Nothing is kept after it. The answer is
 //! the CLI's, byte for byte: `content` = its stderr lines then its stdout
 //! text (`spec … 2>&1`), `structuredContent` = its `--json` document parsed.
-//! Exit 1 is an error result with that document; exit 2 an error result with
-//! the error line(s) alone; a panic an error result naming the tool. An
+//! Exit 1 is an error result with that document, and so is an exit 2 the
+//! command renders (a report, as `spec verify`'s run causes); an exit 2 that
+//! renders nothing (the `CliError`) an error result with the error line(s)
+//! alone; a panic an error result naming the tool. An
 //! argument the input schema refuses (a wrong type, an unknown name, a value
 //! outside an enum) is rmcp's `Parameters` error result before any call
 //! (`isError: true`, no `structuredContent`; SEP-1303), never a JSON-RPC
@@ -589,7 +591,9 @@ impl SpecEngineServer {
 
 /// What one CLI library call gave, rendered on the blocking pool.
 pub(crate) enum Answer {
-    /// The command answered (exit 0) or found nothing (exit 1).
+    /// The command rendered its answer: exit 0; exit 1 (found nothing, a
+    /// refusal, a finding); exit 2 with a report (as `spec verify`'s run
+    /// causes and rows it cannot verify).
     Rendered {
         exit: Exit,
         /// Stderr lines, then stdout: `spec … 2>&1`.
@@ -597,7 +601,7 @@ pub(crate) enum Answer {
         /// The `--json` document as `render_json` gives it, parsed.
         document: Value,
     },
-    /// The command could not run (exit 2).
+    /// The command could not run (exit 2, nothing rendered).
     CannotRun(CliError),
     /// The `--json` document did not parse (never expected): the parser's
     /// message.

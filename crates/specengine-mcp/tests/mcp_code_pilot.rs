@@ -26,6 +26,10 @@
 //! ID). It fails, never skips, naming an unset variable. A cold call past
 //! the harness's 60 s read timeout fails the run: record it as a breach.
 //!
+//! docs/features/check-binding.md TE-2: `check_binding {node}` joins the
+//! forms of `te3_pilot_*` (the same ID), cold and the warm median of five
+//! against the same 1 s, under the same read-only proof.
+//!
 //! docs/features/bevy-roles-reads.md TE-8 (S20), the same rules
 //! (`te8_pilot_a_find_symbols_roles_latency`, B alike): `find_symbols`
 //! with and without `[code] frameworks` (`SPECENGINE_CODE_FRAMEWORKS_<A|B>`,
@@ -217,6 +221,8 @@ fn run(label: &str, suffix: &str) {
         ("find_symbols {node}", "find_symbols", json!({"node": id})),
         ("refs {id}", "refs", json!({"id": id})),
         ("unmapped {}", "unmapped", json!({})),
+        // docs/features/check-binding.md TE-2: the node's bindings judged.
+        ("check_binding {node}", "check_binding", json!({"node": id})),
     ];
     if let (Some(path), Some(line)) = (first["path"].as_str(), first["start_line"].as_u64()) {
         forms.push(("find_symbols {file}", "find_symbols", json!({"file": path})));

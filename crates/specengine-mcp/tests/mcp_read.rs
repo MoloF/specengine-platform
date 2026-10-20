@@ -593,6 +593,9 @@ fn code_input_schemas_are_the_flags(list: &Value, era: common::read::Era) {
     );
     assert_eq!(keys("refs"), ["id"], "{era:?}");
     assert_eq!(keys("unmapped"), ["path"], "{era:?}");
+    // docs/features/check-binding.md: `node` as written, `symbol` absent
+    // or `null` = every row.
+    assert_eq!(keys("check_binding"), ["node", "symbol"], "{era:?}");
     let nullable_string: std::collections::BTreeSet<String> =
         ["null".to_owned(), "string".to_owned()].into();
     let symbols = input("find_symbols");
@@ -623,6 +626,21 @@ fn code_input_schemas_are_the_flags(list: &Value, era: common::read::Era) {
         "{era:?}: refs.id"
     );
     assert_eq!(input("refs")["required"], json!(["id"]), "{era:?}");
+    assert_eq!(
+        type_set(&input("check_binding")["properties"]["node"]),
+        ["string".to_owned()].into(),
+        "{era:?}: check_binding.node"
+    );
+    assert_eq!(
+        type_set(&input("check_binding")["properties"]["symbol"]),
+        nullable_string,
+        "{era:?}: check_binding.symbol"
+    );
+    assert_eq!(
+        input("check_binding")["required"],
+        json!(["node"]),
+        "{era:?}"
+    );
     for name in ["find_symbols", "unmapped"] {
         let required = input(name)["required"].clone();
         assert!(

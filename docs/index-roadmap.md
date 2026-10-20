@@ -13,7 +13,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 ## Specs
 
 - [docs/roadmap/RM-0001.md](roadmap/RM-0001.md) Live check: real tasks of each pilot through the full cycle · plugin, crates/specengine-cli · draft
-- [docs/roadmap/RM-0005.md](roadmap/RM-0005.md) verify-node (6b-2): spec verify --node, MCP check_binding · crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0006.md](roadmap/RM-0006.md) bundle-bindings (7a): an agent's reads carry its nodes' code bindings · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0007.md](roadmap/RM-0007.md) impact (7b): the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/roadmap/RM-0008.md](roadmap/RM-0008.md) tested-evidence (8b): a passing test run becomes evidence in spec.lock · crates/specengine-core, crates/specengine-cli · draft

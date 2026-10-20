@@ -1,10 +1,14 @@
 //! The code tools (`docs/features/code-tools.md`, 6b-1): `find_symbols`,
 //! `refs` and `unmapped`, the twins of `spec symbols`, `spec refs` and
 //! `spec unmapped` (`docs/canon/symbol-reads.md`,
-//! `docs/canon/spec-cli-refs.md`), each one call into the CLI library
-//! through `read.rs`' [`SpecEngineServer::call`] and [`Answer`], answering
-//! what the CLI answers: `content` its text, `structuredContent` its
-//! `--json` document (exit 1 kept, exit 2 none).
+//! `docs/canon/spec-cli-refs.md`), and `check_binding`
+//! (`docs/features/check-binding.md`, 6b-2b), the twin of `spec verify
+//! --node REF [--symbol QPATH]` (`docs/canon/spec-verify-scope.md`
+//! "`--node`"), each one call into the CLI library through `read.rs`'
+//! [`SpecEngineServer::call`] and [`Answer`], answering what the CLI
+//! answers: `content` its text, `structuredContent` its `--json` document
+//! (exit 1 kept; exit 2 kept when the CLI prints a report, `check_binding`'s
+//! run causes and rows it cannot verify, else none).
 //!
 //! - **Forms**: `find_symbols` takes exactly one of `query`, `node`, `file`
 //!   and `at` (a `null` is absent), told at run time as `get_task`'s (no
@@ -16,6 +20,11 @@
 //! - **Reads**: each call refreshes the spec index, then the code index,
 //!   inside the CLI read; nothing is kept between calls, nothing under the
 //!   project root is written.
+//! - **`check_binding`**: `node` and `symbol` passed as written (MCP never
+//!   resolves a REF or matches a path), the working tree judged, no task
+//!   and no base: the server's root, this session's worktree. Nothing reads
+//!   its result (ADR-0012, ADR-0042): no `spec.lock`, queue row or event is
+//!   written.
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::{CallToolResult, ContentBlock};
@@ -23,10 +32,13 @@ use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use specengine_cli::{
     OUTPUT_CAP_CHARS, Outcome, RefsRequest, SYMBOLS_LIMIT_DEFAULT, SYMBOLS_LIMIT_MAX,
-    SYMBOLS_LIMIT_MIN, SymbolsForm, SymbolsRequest, UnmappedRequest, symbols_limit_error,
+    SYMBOLS_LIMIT_MIN, SymbolsForm, SymbolsRequest, UnmappedRequest, VerifiedTree, VerifyRequest,
+    process_git, symbols_limit_error,
 };
 
-use crate::mirror::{RefsDocument, SymbolsDocument, UnmappedDocument, input_schema, output_schema};
+use crate::mirror::{
+    RefsDocument, SymbolsDocument, UnmappedDocument, VerifyDocument, input_schema, output_schema,
+};
 use crate::read::{Answer, DESCRIPTION_LIMIT, DETERMINISM, holds, holds_number, result_size_meta};
 use crate::server::SpecEngineServer;
 
@@ -102,6 +114,36 @@ walk): an error result with its one line. ",
     code_tail!()
 );
 
+const CHECK_BINDING_DESCRIPTION: &str = concat!(
+    "Whether a node's code bindings still hold, judged in this session's worktree: per \
+binding of the nodes a REF names (a spec marker, a spec.lock entry), a row with its file, \
+symbol, relation, state, class, markers, lock entry, levels and anchor, then the counts, the \
+delta and the verdict under `[verify] mode`. The same as `spec verify --node REF [--symbol \
+QPATH]`: content is the command's output (note and warning lines first), structuredContent \
+its --json document. Needs a `[code]` table in the project's config: without one, an error \
+result with the report.
+
+node: a REF, any form get_node takes: its own bindings, not its sections' or its parent's. An \
+ID several documents hold judges all of them, with a warning.
+symbol: only the rows whose symbol is this qualified path, byte for byte (a moved row's old \
+one too). Absent: every row.
+
+Mend what your change broke: a binding that no longer reaches its code, spec and code both \
+changed, a bad marker, a marker naming a revision its node has not reached, or a binding it \
+cannot verify; else raise it with report_discrepancy. The owner settles code ahead of its \
+spec (as after implementing), a spec ahead of its code and a binding not yet locked: name \
+them in your report, never hide them. Zero rows is a result, not an error.
+
+No base is read: `enforce-introduced` is judged as `enforce`, so under either a binding the \
+change broke, or one broken before it, is an error result with the report: a finding, not a \
+failed call. So is a row that cannot be verified or a run cause (no `[code]`, an incomplete \
+walk, an unreadable lock). An answer above 40000 characters is cut, with a tail counting the \
+rest (it names --symbol QPATH: symbol). A REF naming nothing, a look-alike ID (refused with \
+its Latin fix) or another call that cannot run: an error result with its one line, no \
+document. ",
+    code_tail!()
+);
+
 /// The input schema's description of `find_symbols.query`.
 const QUERY_DOC: &str = "A qualified path, a suffix of one or a bare name, as one value.";
 
@@ -124,6 +166,10 @@ const REF_DOC: &str = "An ID, an alias, `slug/ID`, `ID#SECTION` or a root-relati
 const PATH_DOC: &str =
     "A `[code]` root, or a directory or code file under one. Absent: a row per root.";
 
+/// The input schema's description of `check_binding.symbol`.
+const SYMBOL_DOC: &str =
+    "Only the rows whose symbol is this qualified path, byte for byte. Absent: every row.";
+
 /// `find_symbols` given not exactly one form
 /// (`docs/canon/mcp-code.md` "Tools", Forms).
 const ONE_FORM: &str = "spec: find_symbols takes exactly one of `query`, `node`, `file` and `at`\n";
@@ -135,19 +181,31 @@ const LIMIT_WITH_QUERY: &str = "spec: find_symbols takes `limit` with `query` on
 const _: () = assert!(FIND_SYMBOLS_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(REFS_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(UNMAPPED_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(CHECK_BINDING_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(FIND_SYMBOLS_DESCRIPTION.is_ascii());
 const _: () = assert!(REFS_DESCRIPTION.is_ascii());
 const _: () = assert!(UNMAPPED_DESCRIPTION.is_ascii());
+const _: () = assert!(CHECK_BINDING_DESCRIPTION.is_ascii());
 const _: () = assert!(holds(FIND_SYMBOLS_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(REFS_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(UNMAPPED_DESCRIPTION, DETERMINISM));
+const _: () = assert!(holds(CHECK_BINDING_DESCRIPTION, DETERMINISM));
 // Each names its CLI twin and the table it needs.
 const _: () = assert!(holds(FIND_SYMBOLS_DESCRIPTION, "`spec symbols "));
 const _: () = assert!(holds(REFS_DESCRIPTION, "`spec refs "));
 const _: () = assert!(holds(UNMAPPED_DESCRIPTION, "`spec unmapped "));
+const _: () = assert!(holds(CHECK_BINDING_DESCRIPTION, "`spec verify --node "));
 const _: () = assert!(holds(FIND_SYMBOLS_DESCRIPTION, "`[code]`"));
 const _: () = assert!(holds(REFS_DESCRIPTION, "`[code]`"));
 const _: () = assert!(holds(UNMAPPED_DESCRIPTION, "`[code]`"));
+const _: () = assert!(holds(CHECK_BINDING_DESCRIPTION, "`[code]`"));
+// `check_binding` judges this session's worktree with no base
+// (`docs/features/check-binding.md` "Data").
+const _: () = assert!(holds(CHECK_BINDING_DESCRIPTION, "this session's worktree"));
+const _: () = assert!(holds(
+    CHECK_BINDING_DESCRIPTION,
+    "`enforce-introduced` is judged as `enforce`"
+));
 // The numbers the texts state are the CLI's.
 const _: () = assert!(holds_number(
     FIND_SYMBOLS_DESCRIPTION,
@@ -163,6 +221,12 @@ const _: () = assert!(holds_number(
 ));
 const _: () = assert!(holds_number(
     UNMAPPED_DESCRIPTION,
+    "above ",
+    OUTPUT_CAP_CHARS,
+    " characters"
+));
+const _: () = assert!(holds_number(
+    CHECK_BINDING_DESCRIPTION,
     "above ",
     OUTPUT_CAP_CHARS,
     " characters"
@@ -230,6 +294,17 @@ pub(crate) struct RefsArgs {
 pub(crate) struct UnmappedArgs {
     #[schemars(description = PATH_DOC)]
     pub path: Option<String>,
+}
+
+/// `check_binding` arguments: `--node REF [--symbol QPATH]`, each as
+/// written.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct CheckBindingArgs {
+    #[schemars(description = REF_DOC)]
+    pub node: String,
+    #[schemars(description = SYMBOL_DOC)]
+    pub symbol: Option<String>,
 }
 
 /// The tool's own error result: `text`, no document.
@@ -348,5 +423,35 @@ impl SpecEngineServer {
             })
             .await
             .into_tool_result("unmapped"))
+    }
+
+    /// `spec verify --node`: the working tree, no task. A rendered exit 2
+    /// (a run cause, a row it cannot verify) keeps its document.
+    #[tool(
+        description = CHECK_BINDING_DESCRIPTION,
+        input_schema = input_schema::<CheckBindingArgs>(),
+        output_schema = output_schema::<VerifyDocument>(),
+        annotations(read_only_hint = true, destructive_hint = false, open_world_hint = false),
+        meta = result_size_meta()
+    )]
+    async fn check_binding(
+        &self,
+        Parameters(args): Parameters<CheckBindingArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let CheckBindingArgs { node, symbol } = args;
+        Ok(self
+            .call(move |env, globals| {
+                let request = VerifyRequest {
+                    tree: VerifiedTree::WorkingTree,
+                    task: None,
+                    node: Some(node),
+                    symbol,
+                    git: process_git(env),
+                };
+                specengine_cli::verify(env, globals, &request)
+                    .map(|outcome| Outcome::Verify(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("check_binding"))
     }
 }

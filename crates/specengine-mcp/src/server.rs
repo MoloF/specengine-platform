@@ -35,8 +35,10 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// Task spec `code-tools` (Q31) puts the reads on one line and the code
 /// tools on a second (`spec ` and two glosses dropped), says `Hints use
 /// flags:` and cuts the probes paragraph to 76 bytes; task spec
-/// `roadmap-surfaces` adds `get_roadmap` to the reads (40 bytes): 1 932
-/// bytes, 1 794 without the tasks line, 2 008 with the probes paragraph.
+/// `roadmap-surfaces` adds `get_roadmap` to the reads (40 bytes); task
+/// spec `check-binding` (Q-C) adds `check_binding` to the code line (46
+/// bytes) and cuts the probes paragraph to 59 bytes: 1 978 bytes, 1 840
+/// without the tasks line, 2 037 with the probes paragraph.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
@@ -47,7 +49,7 @@ Reads:
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
-= unmapped.
+= unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):
 - propose_change = spec propose update|create|interpretation|amendment: a node's new text \
 against its span_hash; create: new ID sections in it, or a new file (base null).
@@ -75,12 +77,12 @@ files change only when the owner approves.
 );
 
 /// Appended to [`INSTRUCTIONS`] when the measurement tools are built in
-/// (cut to leave room for the code tools' line, task spec `code-tools`;
-/// the probe tools' descriptions say what each does).
+/// (cut to leave room for the code tools' line, task specs `code-tools`
+/// and `check-binding`; the probe tools' descriptions say what each does).
 #[cfg(feature = "probes")]
 const PROBE_INSTRUCTIONS: &str = "
 
-Probes build: review_proposal, probe_output, probe_sleep (owner's checks).";
+Probes build: review_proposal, probe_output, probe_sleep.";
 
 /// Claude Code truncates `instructions` and tool descriptions at this length
 /// (`crates/specengine-mcp/README.md`, "Claude Code client").

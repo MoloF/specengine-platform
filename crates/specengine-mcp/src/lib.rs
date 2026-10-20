@@ -13,7 +13,8 @@
 //! `show`, `search`, `bundle`), answering what the CLI answers; the code
 //! tools `find_symbols`, `refs`, `unmapped` (`spec symbols`, `refs`,
 //! `unmapped`: task spec `code-tools`, reading the code index the call
-//! refreshes, as the CLI does); the queue
+//! refreshes, as the CLI does) and `check_binding` (`spec verify --node`:
+//! task spec `check-binding`); the queue
 //! tools `propose_change`, `ask_question`, `report_discrepancy`,
 //! `report_decision`, `report_drift` (writing only the proposal queue in
 //! the data directory, as `spec propose` does; `report_decision`: task spec

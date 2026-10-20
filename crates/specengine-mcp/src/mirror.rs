@@ -7,7 +7,8 @@
 //! "Command": `spec roadmap`'s document) and of the code tools
 //! (`docs/canon/mcp-code.md` "Mirrors": `spec symbols`, `spec refs`,
 //! `spec unmapped`; a symbol target's `roles`, each key a free string or
-//! integer, never an enum of the code layer's words).
+//! integer, never an enum of the code layer's words; `spec verify --node`,
+//! `check_binding`'s: `docs/features/check-binding.md` "Data").
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -90,7 +91,8 @@ fn require_all(schema: &mut Value) {
 }
 
 /// `"type": "null"`: a key the CLI always writes as `null` (`bundle`'s
-/// Phase 2 `task`).
+/// Phase 2 `task`; `spec verify --node`'s `base`, `task`, `delta.symbols`,
+/// `delta.tests_reaching`).
 pub(crate) struct AlwaysNull;
 
 impl JsonSchema for AlwaysNull {
@@ -1458,4 +1460,243 @@ pub(crate) struct UnmappedItem {
 pub(crate) struct UnmappedOmitted {
     pub rows: usize,
     pub unmapped: usize,
+}
+
+// ------------------------------------------------------------------ verify
+//
+// `spec verify --node REF [--symbol QPATH] --json`, `check_binding`'s
+// document (`docs/canon/spec-verify-output.md`, `docs/canon/spec-verify.md`
+// "States", `docs/canon/spec-verify-anchors.md`; the CLI's `VerifyJson`,
+// key for key): the CLI's closed words are enums; an item's kind, a
+// category, a detail and a level are free strings. Under `--node` the
+// base, the task, `delta.symbols` and `delta.tests_reaching` are always
+// `null`.
+
+/// `spec verify --node --json`.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyDocument {
+    /// The mode the verdict used; `null` when the config's mode cannot be
+    /// read.
+    pub mode: Option<VerifyMode>,
+    /// No base: the working tree alone.
+    pub base: AlwaysNull,
+    /// No task.
+    pub task: AlwaysNull,
+    /// The IDs (a holder without one: its citation) of the nodes the REF names, in holder order.
+    pub node: Vec<String>,
+    /// The symbol the rows are kept to; `null` without one.
+    pub symbol: Option<String>,
+    pub verdict: VerifyVerdict,
+    pub counts: VerifyCounts,
+    pub cascade: VerifyCascade,
+    /// The rows printed, `ok` ones too, in key order.
+    pub rows: Vec<VerifyRowShape>,
+    pub delta: VerifyDelta,
+    /// The run causes, in order.
+    pub cannot: Vec<String>,
+    pub notes: Vec<String>,
+    pub omitted: VerifyOmitted,
+}
+
+/// A verify mode.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "kebab-case")]
+pub(crate) enum VerifyMode {
+    Observe,
+    EnforceIntroduced,
+    Enforce,
+}
+
+/// What a run says.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "kebab-case")]
+pub(crate) enum VerifyVerdict {
+    Clean,
+    Observed,
+    Blocked,
+    CannotVerify,
+}
+
+/// Every count over the rows kept, the printed and the cut ones.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyCounts {
+    pub rows: usize,
+    pub ok: usize,
+    pub fix: usize,
+    pub check: usize,
+    pub cannot: usize,
+    pub pre_existing: usize,
+    pub skipped: usize,
+}
+
+/// How the rows with a lock entry were compared.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyCascade {
+    pub by_blob: usize,
+    pub by_ast: usize,
+}
+
+/// One row: a lock key (a keyless one: `kind`, `symbol`, `item_kind`
+/// `null`), its state, class and facts.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyRowShape {
+    pub node: String,
+    pub relation: MarkerRelation,
+    pub file: String,
+    pub kind: Option<VerifyKind>,
+    pub symbol: Option<String>,
+    /// The item's kind as the code layer names it.
+    pub item_kind: Option<String>,
+    pub state: VerifyState,
+    pub category: Option<String>,
+    pub detail: Option<String>,
+    /// `null` for a row that holds.
+    pub class: Option<VerifyClass>,
+    pub pre_existing: bool,
+    pub markers: Vec<VerifyMarker>,
+    /// The node's revision; `null` unknown or no node.
+    pub node_rev: Option<u32>,
+    pub lock: Option<VerifyLock>,
+    /// `null` without a lock entry, decided earlier, or nothing compared.
+    pub compared: Option<VerifyCompared>,
+    pub levels: Option<VerifyLevels>,
+    /// `null` without a lock entry, or when the row cannot be verified.
+    pub anchor: Option<VerifyAnchor>,
+}
+
+/// What a lock entry binds.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum VerifyKind {
+    Item,
+    Module,
+    Ron,
+}
+
+/// A row's state.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum VerifyState {
+    CannotVerify,
+    Predated,
+    BadMarker,
+    BrokenBinding,
+    Unlocked,
+    SpecAhead,
+    CodeAhead,
+    Conflict,
+    Ok,
+}
+
+/// A finding's class.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum VerifyClass {
+    Fix,
+    Check,
+    Cannot,
+}
+
+/// How a row's code was compared with its lock entry.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum VerifyCompared {
+    Blob,
+    Ast,
+}
+
+/// One marker of a row: its line and written revision (`null`:
+/// unversioned or malformed).
+#[derive(JsonSchema)]
+pub(crate) struct VerifyMarker {
+    pub line: usize,
+    pub rev: Option<u32>,
+}
+
+/// A row's lock entry.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyLock {
+    pub rev: u32,
+    pub commit: String,
+    pub verified_at: String,
+}
+
+/// A row's levels: the entry's, its markers' united, and those whose
+/// digest changed (`null` when none was compared).
+#[derive(JsonSchema)]
+pub(crate) struct VerifyLevels {
+    pub lock: Vec<String>,
+    pub markers: Vec<String>,
+    pub changed: Option<Vec<String>>,
+}
+
+/// Where a row's binding is: a moved row's old place, an ambiguous row's
+/// candidates.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyAnchor {
+    pub state: VerifyAnchorState,
+    pub from: Option<VerifyPlace>,
+    pub candidates: Option<Vec<VerifyPlace>>,
+}
+
+/// How a row's binding was found.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum VerifyAnchorState {
+    Exact,
+    Moved,
+    Ambiguous,
+    Lost,
+}
+
+/// A binding's place: its key without the node and relation.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyPlace {
+    pub file: String,
+    pub kind: VerifyKind,
+    pub symbol: String,
+    /// The item's kind as the code layer names it.
+    pub item_kind: Option<String>,
+}
+
+/// The bindings that moved, are ambiguous, lost or stale, and the nodes
+/// with a finding, over the rows not pre-existing.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyDelta {
+    pub symbols: AlwaysNull,
+    pub bindings: VerifyBindings,
+    pub affected_nodes: Vec<String>,
+    pub tests_reaching: AlwaysNull,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct VerifyBindings {
+    pub moved: Vec<VerifyMoved>,
+    pub ambiguous: Vec<VerifyKey>,
+    pub lost: Vec<VerifyKey>,
+    pub stale: Vec<VerifyKey>,
+}
+
+/// A moved binding: its lock entry's key and its own.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyMoved {
+    pub from: VerifyKey,
+    pub to: VerifyKey,
+}
+
+/// A row's key.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyKey {
+    pub node: String,
+    pub relation: MarkerRelation,
+    pub file: String,
+    pub kind: Option<VerifyKind>,
+    pub symbol: Option<String>,
+    pub item_kind: Option<String>,
+}
+
+/// The rows the cut left out.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyOmitted {
+    pub rows: usize,
 }

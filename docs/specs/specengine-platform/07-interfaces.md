@@ -23,7 +23,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`); `find_symbols`, `refs`, `unmapped` as reads of the code index (`docs/canon/mcp-code.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `report_drift`: `docs/canon/proposal-drift.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`); `find_symbols`, `refs`, `unmapped` as reads of the code index, `check_binding` as `spec verify --node` (`docs/canon/mcp-code.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `report_drift`: `docs/canon/proposal-drift.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
@@ -35,7 +35,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 | `get_task` | `task_id` \| `next: true` | the task package (versioned, ADR-0027): `structuredContent` = status, goal, plan, targets, criteria, assumptions, open proposals, owner comments, bindings, `spec_snapshot` + diff, `bundle_hash`, `profile`, `roadmap`; `content` = the neutral brief | shipped; `next`: the first `ready` by the plan (`docs/canon/spec-roadmap.md` "Next") |
 | `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | shipped; only `ready`; opens a run |
 | `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | shipped; -> `review` |
-| `check_binding` | `node_id`, `qpath` | whether the marker resolves, `ast_hash`, `sync` | formerly `bind_code_symbol`, check only; its CLI twin `spec verify --node` shipped (`docs/canon/spec-verify-scope.md`), the tool is 6b-2b's |
+| `check_binding` | `node`, `symbol?` | `spec verify --node --json`: each binding's state, class, levels and anchor, the counts, `delta`, the verdict | shipped; formerly `bind_code_symbol`, check only; the session's worktree, no base (`docs/canon/mcp-code.md`) |
 | `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | shipped; `verified` is set by `spec verify`, not by this call |
 | `complete_task` | `task_id` | task status | shipped; run reported -> `done` |
 

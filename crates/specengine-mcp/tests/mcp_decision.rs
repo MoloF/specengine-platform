@@ -353,14 +353,18 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 794 and 1 932 since docs/features/roadmap-surfaces.md ("Data":
     // `; get_roadmap(release?, pool?) = roadmap` on the reads' line, 40
     // bytes); the values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1794);
+    // 1 840 and 1 978 since docs/features/check-binding.md
+    // ("INSTRUCTIONS": `; check_binding(node, symbol?) = verify --node` on
+    // the code line, 46 bytes); the values `mcp_code.rs`' re-pinned
+    // `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1840);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "24c5cd5dfe4ebe7957ed07488d9c334799b2fb4add97df4b098a023bbb0db52c"
+        "dc019aa43be4ede2b6ac5a8bf24e15d3711e67b7a3d04ea0226bd345bf95d547"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1932);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1978);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb3399dc942201de37e"
+        "d4194b2b26224e59dfcda9fa3853af96a119fd5015cd524cb39bdbfad9bb17bf"
     );
 }

@@ -53,6 +53,13 @@
 //! call an exit-2 error result); its own over the roadmap fixtures:
 //! `mcp_roadmap.rs`.
 //!
+//! TE-3 of docs/features/check-binding.md: `check_binding` joins the door
+//! with valid and invalid calls (spec-a has no `[code]`: a node is the
+//! CLI's exit-2 report, a REF naming nothing its error line); the queue
+//! holds what it held, the repository stays byte-identical. M: the tool
+//! without its calls here. Its own door over `fixtures/code-a` with its
+//! lock: `mcp_code.rs`.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -450,6 +457,30 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"release": ["beta"]}),
                 json!({"pool": "yes"}),
                 json!({"bogus": true}),
+            ],
+        ),
+        // docs/features/check-binding.md TE-3: spec-a has no `[code]`, so
+        // a node is the CLI's report (exit 2, its document kept), a REF
+        // naming nothing or a look-alike its error line; a node absent or
+        // not a string, `symbol` not a string and an unknown field are bad
+        // arguments. Its own door over `fixtures/code-a` with its lock:
+        // `mcp_code.rs` `te3_check_binding_writes_nothing_under_the_root`.
+        "check_binding" => (
+            vec![
+                json!({"node": "MEC-STAMINA"}),
+                json!({"node": "MEC-STAMINA", "symbol": "src::stamina::regen"}),
+                json!({"node": "MEC-STAMINA", "symbol": null}),
+                json!({"node": "MEC-STAMINA#RULE-STAM-REGEN"}),
+                json!({"node": "MEC-NOPE"}),
+                json!({"node": "M\u{0415}C-STAMINA"}),
+            ],
+            vec![
+                json!({}),
+                json!({"node": 7}),
+                json!({"symbol": "src::stamina::regen"}),
+                json!({"node": "MEC-STAMINA", "symbol": ["x"]}),
+                json!({"node": "MEC-STAMINA", "task_id": "T-0001"}),
+                json!({"node": "MEC-STAMINA", "bogus": true}),
             ],
         ),
         _ => return None,

@@ -88,7 +88,7 @@ Q13. `spec verify --changed --json`: "Since"'s `{added, removed, changed, rename
 
 ### INSTRUCTIONS
 
-WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included: the reads lines reworded, none dropped. 2026-10-16: 80 B of room after 6b-1 (1 892 B, 1 968 with `probes`: `mcp-read.md` **Texts**); 6b-2 spends first and leaves 34 B (1 938, 2 014; `verify-node.md` "INSTRUCTIONS"), 7a about 33 B of it; in the reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B): about 45 B cut elsewhere, never a rule, re-measured after 7a.
+WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included: the reads lines reworded, none dropped. 2026-10-21: 70 B of room after 6b-2b (1 978 B; 2 037 with `probes`, 11 B left: `mcp-read.md` **Texts**), 7a about 33 B of it (the `probes` build about 22 B over: 7a cuts); in the reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B): a cut elsewhere, never a rule, re-measured after 7a.
 
 ## Rules and edge cases
 
@@ -127,7 +127,7 @@ spec-writer:
 
 ## Risks
 
-`INSTRUCTIONS` has 5 B left in the `probes` build, 34 B after 6b-2 and about 1 B after 7a: `get_impact`'s 46 B need a cut of about 45 B, re-measured after 7a. An agent's `since` is untrusted input to git ("Rules"). `--since` cost grows with the diff, `--symbol`'s `name` tier can match many symbols: both bounded by the cut, not by a cap on work. A task's nodes resolve at the reading root, as 7a's package rows. 7b generalises 4a's reader (a draft): a change there reopens "Since".
+`INSTRUCTIONS` has 70 B left after 6b-2b, 11 B in the `probes` build, about 37 B and none after 7a: `get_impact`'s 46 B need a cut of about 9 B, 46 B in the `probes` build, re-measured after 7a. Filling `delta.symbols` changes `check_binding`'s `outputSchema` (`mcp-code.md` "Mirrors", `{"type": "null"}` today): its mirror, a plugin MINOR and a `SCHEMA_PINS` entry. An agent's `since` is untrusted input to git ("Rules"). `--since` cost grows with the diff, `--symbol`'s `name` tier can match many symbols: both bounded by the cut, not by a cap on work. A task's nodes resolve at the reading root, as 7a's package rows. 7b generalises 4a's reader (a draft): a change there reopens "Since".
 
 ## Out of scope
 

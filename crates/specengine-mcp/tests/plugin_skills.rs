@@ -144,6 +144,8 @@ const NAMES: [(&str, &[&str]); 6] = [
             "summary",
             "changed_files",
             "complete_task",
+            // docs/features/check-binding.md "Plugin" (0.12.0).
+            "check_binding",
         ],
     ),
     // docs/features/plugin-roles.md R-6.
@@ -358,7 +360,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's nineteen tools"
+        "the default build's twenty tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1172,8 +1174,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     )
     .expect("JSON");
     // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
-    // docs/features/roadmap-surfaces.md.
-    assert_eq!(manifest["version"], "0.11.0");
+    // docs/features/roadmap-surfaces.md; 0.12.0 since
+    // docs/features/check-binding.md.
+    assert_eq!(manifest["version"], "0.12.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1254,8 +1257,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     )
     .expect("JSON");
     // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
-    // docs/features/roadmap-surfaces.md.
-    assert_eq!(manifest["version"], "0.11.0");
+    // docs/features/roadmap-surfaces.md; 0.12.0 since
+    // docs/features/check-binding.md.
+    assert_eq!(manifest["version"], "0.12.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1358,10 +1362,10 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.11.0",
+        manifest["version"], "0.12.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
-         roadmap-surfaces: 0.11.0"
+         roadmap-surfaces: 0.11.0; check-binding: 0.12.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1421,7 +1425,12 @@ fn files_step(body: &str, from: usize) -> Option<usize> {
     None
 }
 
-/// RD-9's problems: `read-spec` backticks each code tool, its first
+/// The code reads `read-spec` names (docs/features/code-tools.md RD-9):
+/// its own list, not `CODE_TOOLS` (docs/features/check-binding.md Q-D:
+/// `read-spec` unchanged; `check_binding` is `implement`'s).
+const READ_SPEC_CODE_TOOLS: [&str; 3] = ["find_symbols", "refs", "unmapped"];
+
+/// RD-9's problems: `read-spec` backticks each code read, its first
 /// mention after the first `get_context_bundle` and before the files
 /// step; its description is [`READ_SPEC_DESCRIPTION`]; the five
 /// model-invoked descriptions are 1 170 bytes together, within 1 200.
@@ -1452,7 +1461,7 @@ fn rd9_problems(skills: &Skills) -> Vec<String> {
         problems.push("read-spec: no files step after the bundle".to_owned());
         return problems;
     };
-    for tool in CODE_TOOLS {
+    for tool in READ_SPEC_CODE_TOOLS {
         match body.find(&format!("`{tool}`")) {
             None => problems.push(format!("read-spec: `{tool}` not backticked")),
             Some(at) if at < bundle => {
@@ -1478,9 +1487,17 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     let skills = committed();
     assert_eq!(rd9_problems(&skills), Vec::<String>::new());
     // Nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`,
-    // named in `analyze`: `rd10_analyze_names_get_roadmap`).
-    assert_eq!(TOOLS.len(), 19);
+    // named in `analyze`: `rd10_analyze_names_get_roadmap`); twenty since
+    // docs/features/check-binding.md (`check_binding`, named in
+    // `implement`: `check_binding_implement_names_the_tool`).
+    assert_eq!(TOOLS.len(), 20);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
+    assert!(
+        READ_SPEC_CODE_TOOLS
+            .iter()
+            .all(|tool| CODE_TOOLS.contains(tool))
+    );
+    assert!(!READ_SPEC_CODE_TOOLS.contains(&"check_binding"), "Q-D");
 
     // M: a code tool unnamed (every backticked `refs` reworded).
     let mut unnamed = skills.clone();
@@ -1505,7 +1522,7 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
         PRECEDENCE,
         &format!("{PRECEDENCE} Start with `find_symbols`, `refs` or `unmapped`."),
     );
-    for tool in CODE_TOOLS {
+    for tool in READ_SPEC_CODE_TOOLS {
         assert_names(
             &rd9_problems(&early),
             &format!("read-spec: `{tool}` before the bundle"),
@@ -1567,5 +1584,97 @@ fn rd10_analyze_names_get_roadmap() {
         &ac06_problems(&unnamed, &listed()),
         "tool `get_roadmap` backticked nowhere",
         "get_roadmap unnamed (AC-06)",
+    );
+}
+
+/// docs/features/check-binding.md "Plugin": `implement`'s step 5, exactly
+/// (696 bytes with its line feed).
+const CHECK_STEP: &str = "5. **Check the bindings.** Before the report, call `check_binding` once per \
+target, its `id` (else its `path`) as `node`; it judges this session's \
+worktree. Mend what your change broke: a binding that no longer reaches its \
+code, spec and code that both changed, a marker naming a revision its node \
+has not reached, or one it cannot verify; else raise it with \
+`report_discrepancy` and keep working on your `working_answer`. The owner \
+settles code that moved ahead of its spec, a spec ahead of its code and a \
+binding not yet locked: name them in the report, never hide them. An error \
+result with a report is a finding, not a failed call; where the project \
+binds no code, the report says so: go on.";
+
+/// The row states of `spec verify` (docs/canon/spec-verify.md "States")
+/// a skill never names: the skill says what they mean, in words.
+const STATE_WORDS: [&str; 7] = [
+    "cannot_verify",
+    "predated",
+    "bad_marker",
+    "broken_binding",
+    "spec_ahead",
+    "code_ahead",
+    "cannot-verify",
+];
+
+/// docs/features/check-binding.md "Plugin" (0.12.0): `implement`
+/// backticks `check_binding` (AC-11's list), the one skill naming it
+/// (AC-06: every tool somewhere; `read-spec` unchanged, Q-D); its step
+/// comes after the claim's and before the report's, says the tool judges this session's
+/// worktree and parts what the agent mends from what the owner settles,
+/// with no state word in the skill; the body stays within 4 096 bytes.
+/// M: `check_binding` unnamed; a state word in the step.
+#[test]
+fn check_binding_implement_names_the_tool() {
+    let skills = committed();
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    let naming: Vec<&String> = skills
+        .iter()
+        .filter(|(_, text)| backticked(text).iter().any(|span| span == "check_binding"))
+        .map(|(skill, _)| skill)
+        .collect();
+    assert_eq!(naming, ["implement"], "the skills naming `check_binding`");
+    let implement = &skills["implement"];
+    let lines: Vec<&str> = implement.lines().collect();
+    let step = lines
+        .iter()
+        .position(|line| line.contains("`check_binding`"))
+        .expect("a line naming check_binding");
+    let report = lines
+        .iter()
+        .position(|line| line.contains("`report_run`"))
+        .expect("a line naming report_run");
+    let claim = lines
+        .iter()
+        .position(|line| line.contains("`claim_task`"))
+        .expect("a line naming claim_task");
+    assert!(
+        claim < step && step < report,
+        "the check comes after the claim and before the report"
+    );
+    assert_eq!(CHECK_STEP.len() + 1, 696, "the spec's figure");
+    assert_eq!(lines[step], CHECK_STEP, "the spec's step 5");
+    for words in ["this session's worktree", "owner", "report_discrepancy"] {
+        assert!(
+            lines[step].contains(words),
+            "{words:?} in {:?}",
+            lines[step]
+        );
+    }
+    for word in STATE_WORDS {
+        assert!(!has_word(implement, word), "{word:?} in implement");
+    }
+    let body = implement
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert!(body.len() <= 4096, "the body is {} bytes", body.len());
+
+    // M: `check_binding` unnamed.
+    let unnamed = edited(&skills, "implement", "`check_binding`", "the binding check");
+    assert_names(
+        &ac11_problems(&unnamed),
+        "implement: `check_binding` not backticked",
+        "check_binding unnamed",
+    );
+    assert_names(
+        &ac06_problems(&unnamed, &listed()),
+        "tool `check_binding` backticked nowhere",
+        "check_binding unnamed (AC-06)",
     );
 }
