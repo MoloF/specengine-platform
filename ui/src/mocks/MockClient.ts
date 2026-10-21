@@ -32,6 +32,7 @@ import type {
   TaskPackage,
   TreeView,
 } from "../api/types";
+import { mockCode } from "./bindings";
 import { inboxEntryOf, noReview, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { checkReportOf } from "./check";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
@@ -148,9 +149,11 @@ export class MockClient implements SpecEngineClient {
     return treeOf(this.project(project).corpus, options);
   }
 
+  /** A node's read; with `bindings`, the project's code layer in this scenario (src/mocks/bindings.ts), built only then. */
   async getNode(project: string, ref: string, options: NodeOptions = {}): Promise<NodeView> {
     await this.read();
-    return nodeViewOf(this.project(project).corpus, ref, options);
+    const code = (options.with ?? []).includes("bindings") ? mockCode(project, this.scenario) : undefined;
+    return nodeViewOf(this.project(project).corpus, ref, options, code);
   }
 
   async search(project: string, options: SearchOptions): Promise<SearchResults> {

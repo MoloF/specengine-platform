@@ -584,7 +584,7 @@ export interface ShownNode {
   omitted: Omitted | null;
   links: ShownLinks | null;
   /**
-   * The node's code bindings, after `links`: null without `with=bindings` (the UI never asks yet),
+   * The node's code bindings, after `links`: null without `with=bindings` (the Bindings tab asks),
    * without `[code]` or under a cause that lists no row. Source: `docs/canon/code-reads.md` "spec show --bindings".
    */
   bindings: ShownBindings | null;

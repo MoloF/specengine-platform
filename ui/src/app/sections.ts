@@ -14,7 +14,7 @@ export const SECTIONS = [
   {
     id: "tree",
     label: "Spec tree",
-    about: "The business-logic tree and each node's text, links, bundle and proposals.",
+    about: "The business-logic tree and each node's text, links, code bindings, bundle and proposals.",
   },
   { id: "graph", label: "Graph", about: "Nodes and their links, with an impact mode." },
   { id: "health", label: "Health", about: "What is left, drift, budgets and W metrics." },

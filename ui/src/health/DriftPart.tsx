@@ -1,3 +1,4 @@
+import type { MouseEvent } from "react";
 import type { HealthQuery } from "../api/queries";
 import type { BindingPlace, DriftCounts, DriftRow, TestedRow } from "../api/types";
 import { sectionHash } from "../app/routes";
@@ -19,14 +20,14 @@ function placeOf(place: BindingPlace): string {
 
 /**
  * A row's node: linked to the tree as cited (an unresolved or gone ID opens the tree's "names
- * nothing"); a bare marker's `""` as text.
+ * nothing"); a bare marker's `""` as text. `onFollow`: the tree view's, when the link sits in it.
  */
-function NodeLink({ project, node }: { project: string; node: string }) {
+function NodeLink({ project, node, onFollow }: { project: string; node: string; onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   if (node === "") {
     return <span className="health-code-id">No ID</span>;
   }
   return (
-    <a className="health-code-id" href={sectionHash(project, "tree", node)}>
+    <a className="health-code-id" href={sectionHash(project, "tree", node)} onClick={onFollow}>
       <bdi className="mono">{oneLine(node)}</bdi>
     </a>
   );
@@ -76,16 +77,18 @@ function DriftLine({ project, row }: { project: string; row: DriftRow }) {
 }
 
 /**
- * One `[[tested]]` entry not verified: its state's label and icon (unverifiable in cannot-verify's
- * role), the node linked to the tree, the category raw; the revision the run vouched for, the
- * node's now, the commit and the run's date, as stored.
+ * One `[[tested]]` entry: its state's label and icon (unverifiable in cannot-verify's role, never
+ * verified's), the node linked to the tree, the category raw; the revision the run vouched for, the
+ * node's now, the commit and the run's date, as stored. Row 6 lists those not verified; a node's
+ * Bindings tab every one of its set (docs/features/ui-node-bindings.md), its links the tree view's
+ * `onFollow`.
  */
-function TestedLine({ project, entry }: { project: string; entry: TestedRow }) {
+export function TestedLine({ project, entry, onFollow }: { project: string; entry: TestedRow; onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   return (
     <li className="health-left-row health-code-row" data-tested={entry.node} tabIndex={-1}>
       <p className="health-code-head">
         <Badge name="Evidence" look={testedLook(entry.state)} />
-        <NodeLink project={project} node={entry.node} />
+        <NodeLink project={project} node={entry.node} onFollow={onFollow} />
         {entry.category !== null && <span className="mono health-code-word">{oneLine(entry.category)}</span>}
       </p>
       <p className="health-code-meta">

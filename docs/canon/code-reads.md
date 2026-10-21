@@ -90,7 +90,7 @@ A node's block follows its header and links block, before its bytes:
 ## Twins
 
 - MCP `get_node {id, with?, archive?}`: `with` items the enum `["links", "bindings"]`; `archive` with `"links"` only. Mirror: `ShowNode.bindings` `Option<ShowBindings {rows, omitted, tested}>`, `BindingRowShape` key for key (`relation`, `kind`, `sync`, `anchor` verify's enums; the rest free). `NODE_DESCRIPTION` 1 670 B. `get_context_bundle`'s `layers.bindings`, `.tests`: `BundleRowShape` (`BindingRowShape`'s keys, then `tokens_est`); `get_task`'s `bindings`: `BindingRowShape`. The resource `spec://<slug>/node/<REF>` carries none.
-- Daemon: `nodes/{*ref}?with=bindings`, repeatable with `with=links`: the CLI's JSON, `View::Browser`; another value: 400 `` `with=<value>`: the values are `links` and `bindings` ``. The bundle's and task's JSON carry rows; the Bundle tab prints them as lines with a Sync badge, no link (`docs/features/bundle-bindings.md` "UI and daemon keys"); no node screen (RM-0011).
+- Daemon: `nodes/{*ref}?with=bindings`, repeatable with `with=links`: the CLI's JSON, `View::Browser`; another value: 400 `` `with=<value>`: the values are `links` and `bindings` ``. The bundle's and task's JSON carry rows; the Bundle tab prints them as lines with a Sync badge, no link (`docs/features/bundle-bindings.md` "UI and daemon keys"); Bindings tab: `drift-screens.md`.
 - Plugin: `read-spec` names `with: ["bindings"]` (0.13.0), the bundle's rows and their `sync` (0.14.0, step 1; `plugin.md` "Skills").
 
 ## delta.tests_reaching
@@ -99,5 +99,5 @@ A node's block follows its header and links block, before its bytes:
 
 ## Known limits
 
-- Tree counters (`spec tree`, `get_tree`, the daemon's tree; ADR-0046 names them) are deferred to RM-0011, opt-in: by default every tree load would judge the whole tree.
+- Tree counters (`spec tree`, `get_tree`, the daemon's tree; ADR-0046 names them) are deferred to RM-0034, opt-in: by default every tree load would judge the whole tree.
 - Cost, release, warm, `fixtures/code-a` plus 1 000 files (`show_bindings_cost`, `#[ignore]`): `show --bindings` 51 ms, `verify --node` 52, plain verify 64, plain `show` 6. With 10 000 files (`bundle_bindings_cost`): `bundle` 219 ms (7 without `[code]`), `task show` 237, plain verify 365.

@@ -1,7 +1,8 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
+import { BindingsPanel } from "../tree/BindingsPanel";
 import { aCheckFinding, aCheckReport, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage, entryOf } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, openStreams, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import { HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS } from "./http";
@@ -893,5 +894,68 @@ describe("the Tasks screen on the live tail (AC-10 of ui-live-tasks)", () => {
     await waitFor(() => {
       expect(row().textContent).toContain("Ready");
     });
+  });
+});
+
+describe("the Bindings tab on the live tail (UI-6 of ui-node-bindings)", () => {
+  const BINDINGS = "/api/projects/alpha/nodes/MEC-TIDES?with=bindings";
+
+  /** The tab's panel, opened, and alpha's live tail. */
+  function BindingsTab() {
+    useLiveQueue("alpha");
+    return <BindingsPanel project="alpha" nodeRef="MEC-TIDES" onFollow={() => undefined} />;
+  }
+
+  /** Renders the opened panel over the stubbed daemon, its one read answered; alpha's stream open; the fetch stub cleared. */
+  async function opened() {
+    const fetchStub = daemon();
+    render(
+      <ApiProvider client={new HttpClient()} queryClient={createQueryClient()}>
+        <BindingsTab />
+      </ApiProvider>,
+    );
+    await screen.findByRole("button", { name: "Read again" });
+    expect(urlsOf(fetchStub)).toEqual([BINDINGS]);
+    const source = stream("/api/projects/alpha/events");
+    source.open();
+    fetchStub.mockClear();
+    return { fetchStub, source };
+  }
+
+  /** Every request's method, as sent. */
+  function methodsOf(fetchStub: ReturnType<typeof stubFetch>): string[] {
+    return fetchStub.mock.calls.map(([, init]) => init?.method ?? "GET");
+  }
+
+  it("proposal.applied reads the opened panel again, once; proposal.created reads nothing of it", async () => {
+    const { fetchStub, source } = await opened();
+    act(() => {
+      source.emit("proposal.created", '{"id":"PR-0002"}', "120");
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(urlsOf(fetchStub)).toEqual([]);
+    act(() => {
+      source.emit("proposal.applied", '{"id":"PR-0002","commit":"abc1234"}', "121");
+    });
+    await waitFor(() => {
+      expect(urlsOf(fetchStub)).toEqual([BINDINGS]);
+    });
+    await screen.findByRole("button", { name: "Read again" });
+    expect(urlsOf(fetchStub)).toEqual([BINDINGS]);
+    expect(methodsOf(fetchStub)).toEqual(["GET"]);
+  });
+
+  it("Read again sends one GET per click, and only GETs ever", async () => {
+    const { fetchStub } = await opened();
+    for (const times of [1, 2]) {
+      fireEvent.click(screen.getByRole("button", { name: "Read again" }));
+      await waitFor(() => {
+        expect(urlsOf(fetchStub)).toEqual(Array.from({ length: times }, () => BINDINGS));
+      });
+      await screen.findByRole("button", { name: "Read again" });
+    }
+    expect(methodsOf(fetchStub)).toEqual(["GET", "GET"]);
   });
 });

@@ -1,14 +1,27 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import appCss from "../styles/app.css?raw";
 import { ClientError } from "../api/client";
 import { App } from "../app/App";
-import type { NodeView, ShownLinks } from "../api/types";
-import { aBundle, aBundleItem, aBundleRow, aLink, aNode, aProposal, aSearchHit, aSearchResults, aTreeView, someLayers } from "../test/builders";
+import type { BindingRow, NodeView, ShownBindings, ShownLinks, ShownNode } from "../api/types";
+import {
+  aBindingRow,
+  aBundle,
+  aBundleItem,
+  aBundleRow,
+  aLink,
+  aNode,
+  aProposal,
+  aSearchHit,
+  aSearchResults,
+  aTestedRow,
+  aTreeView,
+  someLayers,
+} from "../test/builders";
 import { takeConsoleCalls } from "../test/console";
 import { renderApp } from "../test/render";
 import { argsOf, type StubClient } from "../test/stubClient";
-import { LINKS, textOf, TREE, treeClient } from "../test/treeStub";
+import { LINKS, textOf, TREE, treeClient, viewOf } from "../test/treeStub";
 
 // docs/features/ui-tree-node.md on a stub client: AC-05 (unknown REF), AC-06 (the text), AC-07
 // (no markup from data, hrefs only #/), AC-08 (links), AC-09 (proposals), AC-10 (bundle), AC-12
@@ -226,9 +239,10 @@ describe("the node's heading and text (AC-05, AC-06, AC-14)", () => {
     await openNode(treeClient());
     const list = screen.getByRole("tablist");
     const tabs = within(list).getAllByRole("tab");
-    expect(tabs.map((each) => each.textContent.replace(/\d+$/, "").trim())).toEqual(["Text", "Links", "Bundle", "Proposals"]);
-    expect(tabs.map((each) => each.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false"]);
-    expect(tabs.map((each) => each.tabIndex)).toEqual([0, -1, -1, -1]);
+    // UI-1 of ui-node-bindings: Bindings after Links, in 07 s3's order.
+    expect(tabs.map((each) => each.textContent.replace(/\d+$/, "").trim())).toEqual(["Text", "Links", "Bindings", "Bundle", "Proposals"]);
+    expect(tabs.map((each) => each.getAttribute("aria-selected"))).toEqual(["true", "false", "false", "false", "false"]);
+    expect(tabs.map((each) => each.tabIndex)).toEqual([0, -1, -1, -1, -1]);
     for (const each of tabs) {
       const panel = document.getElementById(each.getAttribute("aria-controls") ?? "");
       expect(panel?.getAttribute("role")).toBe("tabpanel");
@@ -239,12 +253,12 @@ describe("the node's heading and text (AC-05, AC-06, AC-14)", () => {
     expect(document.activeElement).toBe(tabs[1]);
     expect(tabs[0]?.getAttribute("aria-selected")).toBe("true");
     fireEvent.keyDown(tabs[1] ?? list, { key: "End" });
-    expect(document.activeElement).toBe(tabs[3]);
-    fireEvent.keyDown(tabs[3] ?? list, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(tabs[4]);
+    fireEvent.keyDown(tabs[4] ?? list, { key: "ArrowRight" });
     expect(document.activeElement).toBe(tabs[0]);
     fireEvent.keyDown(tabs[0] ?? list, { key: "ArrowLeft" });
-    expect(document.activeElement).toBe(tabs[3]);
-    fireEvent.keyDown(tabs[3] ?? list, { key: "Home" });
+    expect(document.activeElement).toBe(tabs[4]);
+    fireEvent.keyDown(tabs[4] ?? list, { key: "Home" });
     expect(document.activeElement).toBe(tabs[0]);
     fireEvent.keyDown(tabs[0] ?? list, { key: "ArrowRight", ctrlKey: true });
     expect(document.activeElement).toBe(tabs[0]);
@@ -819,5 +833,397 @@ describe("states of the node and its tabs (AC-12)", () => {
     expect(caught.length).toBeGreaterThan(0);
     expect(screen.getByRole("tree")).toBeTruthy();
     expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("DOC-A");
+  });
+});
+
+// docs/features/ui-node-bindings.md on a stub client: UI-1 (one read, on the tab's first opening),
+// UI-2 (rows per holder in the daemon's order, each field), UI-3 (null, not judged, none), UI-4
+// (the test evidence's three states), long lists, the commands, Read again and the read's failure.
+
+/** The calls of the stub's node read that asked for bindings. */
+function bindingsReads(client: StubClient) {
+  return argsOf(client.getNode).filter(([, , options]) => (options as { with?: string[] } | undefined)?.with?.includes("bindings") === true);
+}
+
+/**
+ * The stub's node reads, the bindings read answering each holder's bindings (as given, or per
+ * holder) with `notes`; the plain and links reads as the stub's.
+ */
+function bindingsClient(bindings: ShownBindings | null | ((holder: ShownNode) => ShownBindings | null), notes: string[] = []) {
+  const client = treeClient();
+  client.getNode.mockImplementation((_project, ref, options) => {
+    const view = viewOf(ref, options?.with?.includes("links") === true);
+    if (options?.with?.includes("bindings") !== true || view.nodes.length === 0) {
+      return Promise.resolve(view);
+    }
+    return Promise.resolve({
+      ...view,
+      notes,
+      nodes: view.nodes.map((node) => ({ ...node, bindings: typeof bindings === "function" ? bindings(node) : bindings })),
+    });
+  });
+  return client;
+}
+
+/** A holder's bindings: its rows, nothing left out, its test evidence `[]` unless given. */
+function shown(rows: BindingRow[], tested: ShownBindings["tested"] = []): ShownBindings {
+  return { rows, omitted: 0, tested };
+}
+
+/**
+ * Rows in the daemon's (verify's) order, which neither sync nor file order gives: a moved row, a
+ * keyless one, a RON value, an ambiguous one, a bare marker's not judged in a non-Latin file.
+ */
+function daemonRows(): BindingRow[] {
+  return [
+    aBindingRow({
+      node: "DOC-A",
+      file: "src/z.rs",
+      symbol: "crate::z::run",
+      sync: "code_ahead",
+      category: "code_changed",
+      detail: "body",
+      anchor: { state: "moved", from: { file: "src/old.rs", kind: "item", symbol: "crate::old::run", item_kind: "function_item" }, candidates: null },
+    }),
+    aBindingRow({ node: "DOC-A", relation: "verifies", file: "src/a.rs", kind: null, symbol: null, item_kind: null, line: null, end_line: null, signature: null, layer: null, sync: "bad_marker", category: "unanchored", anchor: null }),
+    aBindingRow({ node: "SEC-A1", relation: "configures", file: "data/a.ron", kind: "ron", symbol: "root.limit", item_kind: null, line: 4, end_line: null, signature: null, layer: null }),
+    aBindingRow({
+      node: "SEC-A1",
+      file: "src/c.rs",
+      symbol: "crate::c::step",
+      sync: "cannot_verify",
+      category: "ambiguous_symbol",
+      detail: "duplicate",
+      anchor: {
+        state: "ambiguous",
+        from: null,
+        candidates: [
+          { file: "src/c.rs", kind: "item", symbol: "crate::c::step", item_kind: "function_item" },
+          { file: "src/d.rs", kind: "item", symbol: "crate::d::step", item_kind: null },
+        ],
+      },
+    }),
+    aBindingRow({ node: "", file: NON_LATIN_FILE, symbol: "crate::b::walk", sync: null, category: null, detail: null, anchor: null }),
+  ];
+}
+
+/** The panel's binding lines, each as its paragraphs' text. */
+function bindingLines(root: ParentNode): (string | null)[][] {
+  return Array.from(root.querySelectorAll(".binding-line"), (line) => Array.from(line.querySelectorAll("p"), (part) => part.textContent));
+}
+
+/** A holder's part of the panel by its place. */
+function holderPart(panel: HTMLElement, place: string): HTMLElement {
+  const part = panel.querySelector<HTMLElement>(`[data-holder="${place}"]`);
+  if (part === null) {
+    throw new Error(`no holder ${place}`);
+  }
+  return part;
+}
+
+const NO_CODE_NOTE = "bindings: specengine.toml has no [code] table: the code layer is off (add [code] with roots)";
+
+describe("the Bindings tab's read (UI-1 of ui-node-bindings)", () => {
+  it("reads nodes/<REF>?with=bindings once, when the tab first opens: none before, none on reopening", async () => {
+    const client = bindingsClient(shown(daemonRows()));
+    await openNode(client);
+    await openTab("Links");
+    await openTab("Bundle");
+    await openTab("Text");
+    await waitFor(() => {
+      expect(client.getBundle).toHaveBeenCalledTimes(1);
+    });
+    expect(bindingsReads(client)).toEqual([]);
+    const panel = await openTab("Bindings");
+    await within(panel).findByText("Code bindings");
+    expect(bindingsReads(client)).toEqual([["alpha", "DOC-A", { with: ["bindings"] }]]);
+    await openTab("Text");
+    await openTab("Bindings");
+    await openTab(/^Proposals/);
+    await openTab("Bindings");
+    expect(within(panel).getAllByText("Code bindings")).toHaveLength(1);
+    expect(bindingsReads(client)).toHaveLength(1);
+  });
+
+  it("reads again on Read again, the last answer kept up meanwhile; nothing else asks", async () => {
+    const client = bindingsClient(shown(daemonRows()));
+    await openNode(client);
+    const panel = await openTab("Bindings");
+    await within(panel).findByText("Code bindings");
+    fireEvent.click(within(panel).getByRole("button", { name: "Read again" }));
+    expect(within(panel).getByText("Code bindings")).toBeTruthy();
+    await waitFor(() => {
+      expect(bindingsReads(client)).toHaveLength(2);
+    });
+    await within(panel).findByRole("button", { name: "Read again" });
+    expect(bindingsReads(client)).toHaveLength(2);
+  });
+
+  it("fails alone: the daemon's words, Retry reads again; the tree, the node and the other tabs stay", async () => {
+    const client = bindingsClient(shown(daemonRows()));
+    const message = "spec: the index is locked by another process";
+    client.getNode.mockImplementation((_project, ref, options) =>
+      options?.with?.includes("bindings") === true
+        ? Promise.reject(new ClientError({ status: 503, message }))
+        : Promise.resolve(viewOf(ref, options?.with?.includes("links") === true)),
+    );
+    await openNode(client);
+    const panel = await openTab("Bindings");
+    expect((await within(panel).findByRole("alert")).textContent).toBe(`The bindings of DOC-A could not be read${message}`);
+    fireEvent.click(within(panel).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(bindingsReads(client)).toHaveLength(2);
+    });
+    expect(screen.getByRole("tree")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("DOC-A");
+  });
+
+  it("slow: a busy skeleton until the read answers", async () => {
+    const client = bindingsClient(shown([]));
+    client.getNode.mockImplementation((_project, ref, options) =>
+      options?.with?.includes("bindings") === true ? new Promise(() => undefined) : Promise.resolve(viewOf(ref, options?.with?.includes("links") === true)),
+    );
+    await openNode(client);
+    await openTab("Bindings");
+    expect((await screen.findByLabelText("Loading the bindings of DOC-A")).getAttribute("aria-busy")).toBe("true");
+  });
+});
+
+describe("the Bindings tab's rows (UI-2 of ui-node-bindings)", () => {
+  it("shows the rows in the daemon's order, never sorted, each field: node (\"\" as No ID), relation, the three place forms, binding or No symbol, layer, sync, signature, Moved from, Candidate", async () => {
+    await openNode(bindingsClient(shown(daemonRows())));
+    const panel = await openTab("Bindings");
+    await within(panel).findByText("Code bindings");
+    expect(bindingLines(panel)).toEqual([
+      ["DOC-Aimplementssrc/z.rs:10-20", "item crate::z::run function_itemlayer a", "Sync: Code aheadcode_changed body", "Signature:pub fn run()", "Moved fromsrc/old.rs | item crate::old::run function_item"],
+      ["DOC-Averifiessrc/a.rs", "No symbol", "Sync: Bad markerunanchored"],
+      ["SEC-A1configuresdata/a.ron:4", "ron root.limit", "Sync: In sync"],
+      [
+        "SEC-A1implementssrc/c.rs:10-20",
+        "item crate::c::step function_itemlayer a",
+        "Sync: Cannot verifyambiguous_symbol duplicate",
+        "Signature:pub fn run()",
+        "Candidatesrc/c.rs | item crate::c::step function_item",
+        "Candidatesrc/d.rs | item crate::d::step",
+      ],
+      [`No IDimplements${NON_LATIN_FILE}:10-20`, "item crate::b::walk function_itemlayer a", "Sync: Not judged", "Signature:pub fn run()"],
+    ]);
+    expect(within(panel).getByText("5 rows")).toBeTruthy();
+    // Nothing in a row is a link: its node may be unresolved, its symbol is a qpath.
+    expect(Array.from(panel.querySelectorAll(".binding-line a"))).toEqual([]);
+    expect(panel.textContent).not.toMatch(/undefined|NaN|\[object/);
+  });
+
+  it("gives each holder of a REF its own rows under its place, h2 per holder, lists h3, no level skipped", async () => {
+    const client = bindingsClient((holder) =>
+      shown([aBindingRow({ node: "SEC-DUP", file: `src/${holder.path.replaceAll("/", "_")}.rs`, symbol: `crate::at_${String(holder.line)}` })]),
+    );
+    await openNode(client, "SEC-DUP");
+    const panel = await openTab("Bindings");
+    await within(panel).findAllByText("Code bindings");
+    const holders = TREE.filter((row) => row.id === "SEC-DUP");
+    expect(holders).toHaveLength(2);
+    for (const holder of holders) {
+      const part = holderPart(panel, `${holder.path}:${String(holder.line)}`);
+      expect(within(part).getByRole("heading", { level: 2 }).textContent).toBe(`${holder.path}:${String(holder.line)}-${String(holder.line + 9)}`);
+      expect(within(part).getByRole("heading", { level: 3, name: "Code bindings" })).toBeTruthy();
+      expect(bindingLines(part).map((line) => line[1])).toEqual([`item crate::at_${String(holder.line)} function_itemlayer a`]);
+    }
+    expectNoSkippedLevel();
+  });
+
+  it("skips no heading level with one holder: its lists and the commands are h2 under the h1", async () => {
+    await openNode(bindingsClient(shown(daemonRows(), [aTestedRow({ node: "DOC-A" })])));
+    const panel = await openTab("Bindings");
+    await within(panel).findByText("Code bindings");
+    expect(within(panel).getByRole("heading", { name: "Code bindings" }).tagName).toBe("H2");
+    expect(within(panel).getByRole("heading", { name: "Test evidence" }).tagName).toBe("H2");
+    expect(within(panel).getByRole("heading", { name: "Commands for a terminal" }).tagName).toBe("H2");
+    expectNoSkippedLevel();
+  });
+
+  it("draws a row not judged and one that cannot be verified each in its own role, neither like a row in sync", async () => {
+    await openNode(bindingsClient(shown(daemonRows())));
+    const panel = await openTab("Bindings");
+    await within(panel).findByText("Code bindings");
+    const tone = (label: string) => within(panel).getAllByText(label)[0]?.closest(".badge")?.getAttribute("data-tone");
+    expect([tone("In sync"), tone("Not judged"), tone("Cannot verify")]).toEqual(["sync-ok", "sync-not-judged", "sync-cannot-verify"]);
+  });
+
+  it("shows the first 10 rows, then Show all, which shows every row and moves focus to the 11th", async () => {
+    const rows = Array.from({ length: 25 }, (_, index) => aBindingRow({ node: "DOC-A", file: `src/f${String(index).padStart(2, "0")}.rs`, sync: "unlocked" }));
+    await openNode(bindingsClient(shown(rows)));
+    const panel = await openTab("Bindings");
+    await within(panel).findByText("25 rows");
+    expect(panel.querySelectorAll(".binding-line")).toHaveLength(10);
+    expect(within(panel).getByText("The first 10 of 25, in spec verify's order.")).toBeTruthy();
+    fireEvent.click(within(panel).getByRole("button", { name: "Show all 25" }));
+    expect(panel.querySelectorAll(".binding-line")).toHaveLength(25);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(panel.querySelectorAll(".binding-line")[10]);
+    });
+    expect(bindingLines(panel).map((line) => line[0])).toEqual(rows.map((row) => `DOC-Aimplements${row.file}:10-20`));
+  });
+});
+
+describe("the Bindings tab's states (UI-3, UI-4 of ui-node-bindings)", () => {
+  it("null: Not read and the daemon's note verbatim, never a number, never None", async () => {
+    await openNode(bindingsClient(null, [NO_CODE_NOTE]));
+    const panel = await openTab("Bindings");
+    await within(panel).findByText(NO_CODE_NOTE);
+    const part = holderPart(panel, "docs/spec/a.md:1");
+    expect(part.textContent).toContain("Not read");
+    expect(part.textContent).not.toMatch(/\d|None/);
+    expect(within(panel).getByRole("list", { name: "Notes from the daemon on the bindings" }).textContent).toBe(NO_CODE_NOTE);
+    expect(within(panel).queryByText("Code bindings")).toBeNull();
+    expect(within(panel).queryByText("Test evidence")).toBeNull();
+  });
+
+  it("listed, never judged (sync null): each row Not judged, never In sync; the note verbatim", async () => {
+    const note = "bindings: spec.lock:1: unclosed array, expected `]`";
+    const listed = { sync: null, category: null, detail: null, anchor: null };
+    await openNode(bindingsClient(shown([aBindingRow({ node: "DOC-A", ...listed }), aBindingRow({ node: "DOC-A", file: "src/b.rs", ...listed })], null), [note]));
+    const panel = await openTab("Bindings");
+    await within(panel).findByText(note);
+    expect(within(panel).getAllByText("Not judged", { selector: ".badge-label" })).toHaveLength(2);
+    expect(within(panel).queryByText("In sync")).toBeNull();
+    expect(Array.from(panel.querySelectorAll(".binding-line .badge"), (badge) => badge.getAttribute("data-tone"))).toEqual(["sync-not-judged", "sync-not-judged"]);
+  });
+
+  it("zero rows: None, said as such", async () => {
+    await openNode(bindingsClient(shown([])));
+    const panel = await openTab("Bindings");
+    const rows = (await within(panel).findByRole("heading", { name: "Code bindings" })).closest("section");
+    expect(rows?.textContent).toBe("Code bindingsNone: no marker or lock entry binds code to this node or a section within it.");
+    expect(panel.querySelectorAll(".binding-line")).toHaveLength(0);
+  });
+
+  it("test evidence: each entry with its state, the node linked; [] None; null Not judged, each its own words", async () => {
+    const entries = [
+      aTestedRow({ node: "DOC-A", state: "verified", category: null, rev: 2, node_rev: 2 }),
+      aTestedRow({ node: "SEC-A1", state: "unverifiable", category: "predated", rev: 3, node_rev: null }),
+    ];
+    const evidence = async (tested: ShownBindings["tested"]) => {
+      const client = bindingsClient(shown(daemonRows(), tested), tested === null ? ["tested: spec.lock: a [[tested]] block names no commit"] : []);
+      await openNode(client);
+      const panel = await openTab("Bindings");
+      const heading = await within(panel).findByRole("heading", { name: "Test evidence" });
+      const section = heading.closest("section");
+      const text = section?.textContent ?? "";
+      const links = Array.from(section?.querySelectorAll("a") ?? [], (link) => [link.textContent, link.getAttribute("href")]);
+      cleanup();
+      return { text, links };
+    };
+    const listed = await evidence(entries);
+    expect(listed.text).toContain("Evidence: Verified");
+    expect(listed.text).toContain("Evidence: Unverifiable");
+    expect(listed.text).toContain("Vouched for rev 3");
+    expect(listed.text).toContain("No revision now");
+    expect(listed.links).toEqual([
+      ["DOC-A", "#/alpha/tree/DOC-A"],
+      ["SEC-A1", "#/alpha/tree/SEC-A1"],
+    ]);
+    const none = await evidence([]);
+    expect(none.text).toBe("Test evidenceNone: no [[tested]] block covers this node or a section within it.");
+    const notJudged = await evidence(null);
+    expect(notJudged.text).toBe("Test evidenceNot judged: the [[tested]] entries were not judged on this read; the daemon\u2019s note above says why.");
+    expect(new Set([listed.text, none.text, notJudged.text]).size).toBe(3);
+  });
+});
+
+/** The commands block's first note, as shown. */
+const NOTE_TEXT =
+  "Copy a command and run it in the project\u2019s worktree; only spec lock accept asks [y/N], before it writes spec.lock, and spec propose drift queues an item for your decision. Nothing runs from here, and nothing waits on these rows.";
+
+describe("the Bindings tab's commands (UI-5 of ui-node-bindings)", () => {
+  /** The commands block's command texts and notes. */
+  function commandsOf(panel: HTMLElement) {
+    const block = within(panel).getByRole("heading", { name: "Commands for a terminal" }).closest("section");
+    return {
+      texts: Array.from(block?.querySelectorAll(".command-text") ?? [], (command) => command.textContent),
+      notes: Array.from(block?.querySelectorAll(".owner-commands-note") ?? [], (note) => note.textContent),
+      blocks: panel.querySelectorAll(".owner-commands").length,
+    };
+  }
+
+  /** A stub answering any REF with `holders` nodes of ID `id`, each with bindings when asked. */
+  function anyRefClient(id: string | null, holders: number) {
+    const client = treeClient();
+    client.getNode.mockImplementation((_project, ref, options) =>
+      Promise.resolve({
+        ref,
+        reason: null,
+        notes: [],
+        nodes: Array.from({ length: holders }, (_, index) =>
+          aNode({ id, path: `docs/features/f${String(index)}.md`, line: 5, bindings: options?.with?.includes("bindings") === true ? shown([]) : null }),
+        ),
+      }),
+    );
+    return client;
+  }
+
+  it("offers the REF's three commands to copy, once, fixed words and the REF; the note says which asks; nothing runs", async () => {
+    const client = bindingsClient(shown(daemonRows()));
+    await openNode(client);
+    const panel = await openTab("Bindings");
+    const list = await within(panel).findByRole("list", { name: "Commands for DOC-A" });
+    expect(commandsOf(panel)).toEqual({
+      texts: ["spec verify --node DOC-A", "spec propose drift DOC-A", "spec lock accept DOC-A"],
+      notes: [NOTE_TEXT],
+      blocks: 1,
+    });
+    expect(within(list).getAllByRole("button", { name: /^Copy/ })).toHaveLength(3);
+    expect(Array.from(list.querySelectorAll(".command-meaning"), (meaning) => meaning.textContent)[1]).toBe(
+      "Queue its drift: judges the node's own rows at HEAD (commit edits first) and queues an Inbox item for your decision",
+    );
+    // Reads only: the stub's writes are never called.
+    expect(client.stageDecision).not.toHaveBeenCalled();
+    expect(client.unstageDecision).not.toHaveBeenCalled();
+  });
+
+  it("builds them from the REF, never a holder's bare ID: a feature-scoped REF with several holders gets verify alone, once, with the note", async () => {
+    await openNode(anyRefClient("AC-07", 2), "slug/AC-07");
+    const panel = await openTab("Bindings");
+    await within(panel).findByRole("list", { name: "Commands for slug/AC-07" });
+    expect(commandsOf(panel)).toEqual({
+      texts: ["spec verify --node slug/AC-07"],
+      notes: [
+        NOTE_TEXT,
+        "Only verify is offered: slug/AC-07 names 2 nodes, and spec propose drift and spec lock accept each name one.",
+      ],
+      blocks: 1,
+    });
+    expect(panel.textContent).not.toMatch(/--node AC-07|drift AC-07|accept AC-07/);
+  });
+
+  it("gives one REF's two holders (SEC-DUP) verify alone; a feature-scoped REF with one holder all three", async () => {
+    await openNode(bindingsClient(shown([])), "SEC-DUP");
+    let panel = await openTab("Bindings");
+    await within(panel).findByRole("list", { name: "Commands for SEC-DUP" });
+    expect(commandsOf(panel).texts).toEqual(["spec verify --node SEC-DUP"]);
+    cleanup();
+    await openNode(anyRefClient("AC-07", 1), "slug/AC-07");
+    panel = await openTab("Bindings");
+    await within(panel).findByRole("list", { name: "Commands for slug/AC-07" });
+    expect(commandsOf(panel).texts).toEqual(["spec verify --node slug/AC-07", "spec propose drift slug/AC-07", "spec lock accept slug/AC-07"]);
+  });
+
+  it("offers an ID-less document verify alone, by its path REF, with the note; none for a REF the check refuses, whatever the holder's ID", async () => {
+    await openNode(bindingsClient(shown([])), "docs/spec/b.md");
+    let panel = await openTab("Bindings");
+    await within(panel).findByRole("list", { name: "Commands for docs/spec/b.md" });
+    expect(commandsOf(panel)).toEqual({
+      texts: ["spec verify --node docs/spec/b.md"],
+      notes: [NOTE_TEXT, "docs/spec/b.md names a document with no ID; spec propose drift and spec lock accept need one."],
+      blocks: 1,
+    });
+    cleanup();
+    for (const refused of ["DOC-A#SEC-A1", "DOC-A; rm -rf ~"]) {
+      await openNode(anyRefClient("DOC-A", 1), refused);
+      panel = await openTab("Bindings");
+      expect((await within(panel).findByText(/^No command for/)).textContent).toBe(`No command for ${refused}: only a REF of Latin letters, digits and . _ / - is put in a command.`);
+      expect(panel.querySelectorAll(".command-text")).toHaveLength(0);
+      cleanup();
+    }
   });
 });

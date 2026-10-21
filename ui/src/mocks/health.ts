@@ -396,7 +396,7 @@ function entry(rev: number, commit: string, verified_at: string): DriftLock {
 
 /** The two commits harbor-sim's lock entries and tests vouched at. */
 const LOCKED_AT = "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4";
-const TESTED_AT = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
+export const TESTED_AT = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
 
 /** An item of harbor-sim's code as an anchor names it. */
 function itemPlace(file: string, symbol: string): BindingPlace {
@@ -432,7 +432,7 @@ function driftRow(node: string, relation: string, file: string, binding: [kind: 
  * `moor` moved from berths.rs to crew.rs and changed; RULE-HIGH-WATER's test is gone, two of the
  * same name its candidates; the look-alike, unanchored and cannot-verify markers are row 5's.
  */
-function harborDrift(): DriftRow[] {
+export function harborDrift(): DriftRow[] {
   const exact = { state: "exact", from: null, candidates: null };
   return [
     driftRow("MEC-CARGO-CRANES", "implements", "src/sim/berths.rs", ["module", "harbor_sim::berths", null], { markers: [{ line: 1, rev: 1 }], node_rev: 1 }),
@@ -513,11 +513,11 @@ function harborDrift(): DriftRow[] {
 }
 
 /** harbor-sim's bindings in sync, and the markers naming its queue items (row 4's six), skipped. */
-const HARBOR_OK = 9;
+export const HARBOR_OK = 9;
 const HARBOR_SKIPPED = 6;
 
 /** harbor-sim's `[[tested]]` entries not verified, by node bytes: MEC-TIDES's spec changed, RULE-QUAY-LIGHTS gone (DEC-0014 amends it), RULE-TIDE-WINDOW's marker predated. */
-function harborTested(): TestedRow[] {
+export function harborTested(): TestedRow[] {
   return [
     { node: "MEC-TIDES", state: "stale", category: "spec_changed", rev: 2, node_rev: 3, commit: TESTED_AT, verified_at: "2026-10-02" },
     { node: "RULE-QUAY-LIGHTS", state: "node_gone", category: null, rev: 1, node_rev: null, commit: TESTED_AT, verified_at: "2026-10-02" },

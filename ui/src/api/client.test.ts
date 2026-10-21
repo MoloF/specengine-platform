@@ -57,7 +57,7 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
   });
 
   it("names the options exactly as the MCP tools do", () => {
-    for (const option of ["root?: string;", "depth?: number;", "kinds?: string[];", "archive?: boolean;", 'with?: "links"[];', "query: string;", "limit?: number;", "node_ids: string[];", "budget?: number;", "ref: string;", "impact?: boolean;", "types?: string[];"]) {
+    for (const option of ["root?: string;", "depth?: number;", "kinds?: string[];", "archive?: boolean;", 'with?: ("links" | "bindings")[];', "query: string;", "limit?: number;", "node_ids: string[];", "budget?: number;", "ref: string;", "impact?: boolean;", "types?: string[];"]) {
       expect([option, source.includes(option)]).toEqual([option, true]);
     }
   });

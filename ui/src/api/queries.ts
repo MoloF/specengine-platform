@@ -424,6 +424,17 @@ export function useNode(project: string, ref: string, options: NodeOptions = {},
 /** A node's read as a view holds it (the node pane's links read, shown by the Links tab). */
 export type NodeQuery = ReturnType<typeof useNode>;
 
+/**
+ * A node's code bindings, `nodes/<REF>?with=bindings`:
+ * `docs/canon/code-reads.md` "spec show --bindings". The Bindings tab's one read, made when it
+ * mounts on the tab's first opening. Its key is the node's, `["node", project, ref, {with:
+ * ["bindings"], archive: false}]`, so an apply and a gap read it again with the project's other
+ * node reads; no other event does (a code edit fires none: the tab's Read again).
+ */
+export function useNodeBindings(project: string, ref: string) {
+  return useNode(project, ref, { with: ["bindings"] });
+}
+
 /** A search once submitted (`options` null before); a new query never shows the last one's hits. */
 export function useSearch(project: string, options: SearchOptions | null) {
   const client = useClient();

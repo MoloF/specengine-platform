@@ -147,7 +147,7 @@ UI in **English** (ADR-0014); spec content as is (the project's language), fonts
 |---|---|
 | **Home** | per project: tasks waiting for approval or changed since, the queue's counts and first items; a Cmd-K palette to a section, task, proposal, node or project (`docs/features/ui-home.md`) |
 | **Tree** | hierarchy Project → Domain → Mechanic → Rule; statuses, `sync`, open-proposal counter; search |
-| **Node** | rendered markdown, Source a toggle away (ADR-0036; editing: CodeMirror later); tabs: links (direct and reverse), bindings (symbol, signature, `sync`), history (git), proposals |
+| **Node** | rendered markdown, Source a toggle away (ADR-0036; editing: CodeMirror later); tabs: links (direct and reverse), bindings (rows with `sync`, test evidence, commands to copy: `docs/canon/drift-screens.md`), bundle, history (git), proposals |
 | **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
 | **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
 | **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |

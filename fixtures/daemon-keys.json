@@ -72,5 +72,7 @@
   "DriftRow": ["node", "relation", "file", "kind", "symbol", "item_kind", "state", "category", "detail", "class", "pre_existing", "markers", "node_rev", "lock", "compared", "levels", "anchor"],
   "DriftMarker": ["line", "rev"],
   "DriftLock": ["rev", "commit", "verified_at"],
-  "DriftLevels": ["lock", "markers", "changed"]
+  "DriftLevels": ["lock", "markers", "changed"],
+  "ShownNode": ["id", "kind", "title", "path", "line", "end_line", "status", "rev", "tokens_est", "archived", "utf8", "sections", "norm_hash", "span_hash", "text", "truncated", "omitted", "links", "bindings"],
+  "ShownBindings": ["rows", "omitted", "tested"]
 }

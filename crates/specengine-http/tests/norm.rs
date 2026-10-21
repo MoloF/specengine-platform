@@ -4,8 +4,10 @@
 //! between `sections` and `span_hash` (a string, or `null` for a document
 //! whose front-matter may have lost a link and for a file that is not
 //! UTF-8); the document's top level stays `NodeView`'s four keys, as
-//! `fixtures/daemon-keys.json` lists them (unchanged by this slice). M: the
-//! key at `NodeView`'s top level.
+//! `fixtures/daemon-keys.json` lists them (unchanged by this slice; since
+//! docs/features/ui-node-bindings.md TE-1 the fixture lists the node's
+//! keys too, `ShownNode`, its one `norm_hash` between `sections` and
+//! `span_hash`). M: the key at `NodeView`'s top level.
 
 mod common;
 
@@ -61,8 +63,37 @@ fn te8_nodes_carry_norm_hash_as_spec_show_does() {
         keys.contains("\n  \"NodeView\": [\"ref\", \"reason\", \"notes\", \"nodes\"],\n"),
         "NodeView lists its four top-level keys only"
     );
-    assert!(
-        !keys.contains("norm_hash"),
-        "no norm key in daemon-keys.json"
+    // ui-node-bindings (TE-1): the node's set holds the key, between
+    // `sections` and `span_hash`; no other set does.
+    let fixture: Value = serde_json::from_str(&keys).expect("daemon-keys.json");
+    let holding: Vec<&String> = fixture
+        .as_object()
+        .expect("sets")
+        .iter()
+        .filter(|(_, set)| {
+            set.as_array()
+                .expect("a set")
+                .contains(&Value::from("norm_hash"))
+        })
+        .map(|(name, _)| name)
+        .collect();
+    assert_eq!(
+        holding,
+        ["ShownNode"],
+        "the norm key in the node's set alone"
+    );
+    let node: Vec<&str> = fixture["ShownNode"]
+        .as_array()
+        .expect("ShownNode")
+        .iter()
+        .map(|key| key.as_str().expect("a key"))
+        .collect();
+    let at = node
+        .iter()
+        .position(|key| *key == "norm_hash")
+        .expect("norm_hash");
+    assert_eq!(
+        node[at - 1..=at + 1],
+        ["sections", "norm_hash", "span_hash"]
     );
 }

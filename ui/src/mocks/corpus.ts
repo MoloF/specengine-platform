@@ -13,6 +13,7 @@ import type {
   NodeView,
   SearchHit,
   SearchResults,
+  ShownBindings,
   ShownLink,
   ShownLinks,
   ShownNode,
@@ -23,6 +24,7 @@ import type {
   TreeView,
   WorkingAnswer,
 } from "../api/types";
+import { bindingsOf, type MockCode } from "./bindings";
 import { fakeHex, tokensEst, type MockCorpus, type MockDocument, type MockLink, type MockNode } from "./build";
 
 // The reads `spec serve` answers for a browser (daemon-read): tree, nodes and search uncut,
@@ -314,7 +316,7 @@ function normHash(corpus: MockCorpus, node: MockNode, file: MockDocument): strin
   return `b3:${fakeHex([NORM_RECIPE, String(links.length), ...links, normText(ownLines(node, file))].join("\n"), 64)}`;
 }
 
-function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null): ShownNode {
+function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null, bindings: ShownBindings | null): ShownNode {
   const file = fileOf(corpus, node);
   const text = spanText(node, file);
   return {
@@ -336,8 +338,7 @@ function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null)
     truncated: false,
     omitted: null,
     links,
-    // The UI never asks for `with=bindings` (no screen yet: docs/canon/code-reads.md "Twins").
-    bindings: null,
+    bindings,
   };
 }
 
@@ -423,9 +424,20 @@ export function linksOf(corpus: MockCorpus, node: MockNode, archive: boolean): S
   return { outgoing: outgoing.sort(linkOrder), incoming: incoming.sort(linkOrder), left_out: leftOut, omitted: 0 };
 }
 
-/** `spec show --json`: the holders of a REF, or the reason there are none (exit 1). */
-export function nodeViewOf(corpus: MockCorpus, ref: string, options: NodeOptions = {}): NodeView {
+/** The IDs of a shown node's set for its bindings: itself and every section within it (`docs/canon/code-reads.md` "The node sets"). */
+function setIds(corpus: MockCorpus, node: MockNode): Set<string> {
+  const sections = fileOf(corpus, node).sections.filter((section) => within(section, node));
+  return new Set([node, ...sections].flatMap((each) => (each.id === null ? [] : [each.id])));
+}
+
+/**
+ * `spec show --json`: the holders of a REF, or the reason there are none (exit 1, the code layer
+ * unread). With `bindings`, each holder's rows from `code` (none given: no [code] table), and the
+ * code layer's one note after show's own.
+ */
+export function nodeViewOf(corpus: MockCorpus, ref: string, options: NodeOptions = {}, code: MockCode = { notes: [], rows: null, tested: null }): NodeView {
   const links = (options.with ?? []).includes("links");
+  const bindings = (options.with ?? []).includes("bindings");
   if (options.archive === true && !links) {
     throw refusal("--archive applies to --links only: add --links, or drop --archive");
   }
@@ -436,9 +448,14 @@ export function nodeViewOf(corpus: MockCorpus, ref: string, options: NodeOptions
   return {
     ref,
     reason: null,
-    notes: [],
+    notes: bindings ? [...code.notes] : [],
     nodes: resolved.holders.map((holder) =>
-      shownNode(corpus, holder, links ? linksOf(corpus, holder, options.archive ?? false) : null),
+      shownNode(
+        corpus,
+        holder,
+        links ? linksOf(corpus, holder, options.archive ?? false) : null,
+        bindings ? structuredClone(bindingsOf(code, setIds(corpus, holder))) : null,
+      ),
     ),
   };
 }

@@ -1,7 +1,10 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { App } from "../app/App";
+import { oneLine } from "../health/codeRows";
+import { LARGE_BINDINGS } from "./bindings";
 import { BASIN_NAME_DECOMPOSED, HOSTILE_LINK, HOSTILE_TITLE, LONG_TOKEN } from "./harbor-sim/fixtures";
+import { CODE_GAP_CAUSE, CODE_OFF_CAUSE, LOCK_CAUSE, LOOKALIKE_BASIN } from "./health";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
@@ -251,5 +254,92 @@ describe("the mock's hard cases on screen", () => {
     }
     expect(document.activeElement?.getAttribute("role")).toBe("treeitem");
     expect(document.activeElement).not.toBe(first);
+  });
+});
+
+// The Bindings tab over the mock (UI-2, UI-3, UI-4, UI-8 of docs/features/ui-node-bindings.md):
+// harbor-sim's rows in the daemon's order, its states; large's 3 000 rows; code-cannot's two degrades;
+// ledger-api without [code].
+
+/** Opens the Bindings tab of the node at `hash` and waits for its read. */
+async function bindingsTab(scenario: Scenario, hash: string, ready: string): Promise<HTMLElement> {
+  renderMock(scenario, hash);
+  fireEvent.click(await screen.findByRole("tab", { name: "Bindings" }));
+  const panel = await screen.findByRole("tabpanel", { name: "Bindings" });
+  await within(panel).findAllByText(ready, {}, { timeout: 5000 });
+  return panel;
+}
+
+/** Each binding line's first two paragraphs and its sync badge's label. */
+function lineHeads(panel: HTMLElement): string[][] {
+  return Array.from(panel.querySelectorAll(".binding-line"), (line) => [
+    line.querySelector("p")?.textContent ?? "",
+    line.querySelector(".badge-label")?.textContent ?? "",
+  ]);
+}
+
+describe("the Bindings tab over the mock (UI-2, UI-3, UI-4, UI-8 of ui-node-bindings)", () => {
+  it("normal: rows in the daemon's order, never by sync or file; the node and its sections; a moved row", async () => {
+    const panel = await bindingsTab("normal", "#/harbor-sim/tree/MEC-MOORING", "4 rows");
+    expect(lineHeads(panel)).toEqual([
+      ["MEC-MOORINGimplementssrc/sim/crew.rs:31-48", "Code ahead"],
+      ["MEC-MOORINGverifiestests/mooring.rs:6-21", "In sync"],
+      ["RULE-MOOR-CREWimplementssrc/sim/crew.rs", "Bad marker"],
+      ["RULE-MOOR-NIGHTimplementssrc/sim/crew.rs", "Cannot verify"],
+    ]);
+    expect(panel.querySelector(".binding-line")?.textContent).toContain("Moved fromsrc/sim/berths.rs | item harbor_sim::berths::moor function_item");
+    expect(within(panel).getByRole("list", { name: "Commands for MEC-MOORING" })).toBeTruthy();
+    expect(panel.querySelector('[data-evidence-state="none"]')?.textContent).toBe("None: no [[tested]] block covers this node or a section within it.");
+  });
+
+  it("normal: a look-alike row as written, under its Latin fix's document, after the fix's own row", async () => {
+    const panel = await bindingsTab("normal", "#/harbor-sim/tree/DOM-BERTHS", "2 rows");
+    expect(lineHeads(panel)).toEqual([
+      ["RULE-BASIN-NAMEimplementssrc/sim/berths.rs:37-41", "In sync"],
+      [`${LOOKALIKE_BASIN}implementssrc/sim/berths.rs:31-35`, "Bad marker"],
+    ]);
+  });
+
+  it("normal: the test evidence, a verified entry among them; two holders each their part", async () => {
+    const tides = await bindingsTab("normal", "#/harbor-sim/tree/MEC-TIDES", "3 rows");
+    const evidence = within(tides).getByRole("list", { name: "Test evidence of MEC-TIDES, by node" });
+    expect(Array.from(evidence.querySelectorAll(".badge-label"), (label) => label.textContent)).toEqual(["Stale", "Unverifiable"]);
+    cleanup();
+    const speed = await bindingsTab("normal", "#/harbor-sim/tree/RULE-FAIRWAY-SPEED", "1 row");
+    expect(within(speed).getAllByRole("heading", { level: 2 }).filter((heading) => heading.classList.contains("holder-text-title"))).toHaveLength(2);
+    expect(within(speed).getAllByText("1 row")).toHaveLength(2);
+    cleanup();
+    const tables = await bindingsTab("normal", "#/harbor-sim/tree/MEC-TIDE-TABLES", "1 row");
+    expect(within(tables).getByRole("list", { name: "Test evidence of MEC-TIDE-TABLES, by node" }).textContent).toContain("Evidence: Verified");
+  });
+
+  it("large: DOM-GEN-01's 3 000 rows, ten drawn, then Show all 3000", async () => {
+    const panel = await bindingsTab("large", "#/harbor-sim/tree/DOM-GEN-01", `${String(LARGE_BINDINGS)} rows`);
+    expect(panel.querySelectorAll(".binding-line")).toHaveLength(10);
+    fireEvent.click(within(panel).getByRole("button", { name: "Show all 3000" }));
+    expect(panel.querySelectorAll(".binding-line")).toHaveLength(LARGE_BINDINGS);
+    expect(lineHeads(panel).at(-1)).toEqual(["DOM-GEN-01implementssrc/gen/d01/part_3000.rs", "Unlocked"]);
+  }, 20000);
+
+  it("code-cannot: harbor-sim not read, its note as the CLI prints it, no number; ledger-api's rows listed, Not judged, test evidence not judged", async () => {
+    const harbor = await bindingsTab("code-cannot", "#/harbor-sim/tree/MEC-TIDES", "Not read");
+    expect(within(harbor).getByRole("list", { name: "Notes from the daemon on the bindings" }).textContent).toBe(oneLine(`bindings: ${CODE_GAP_CAUSE}`));
+    expect(harbor.querySelector(".holder-bindings")?.textContent).not.toMatch(/\d|None/);
+    cleanup();
+    const ledger = await bindingsTab("code-cannot", "#/ledger-api/tree/SVC-REFUNDS", "1 row");
+    expect(within(ledger).getByRole("list", { name: "Notes from the daemon on the bindings" }).textContent).toBe(`bindings: ${LOCK_CAUSE}`);
+    expect(lineHeads(ledger)).toEqual([["SVC-REFUNDSimplementssrc/refunds/service.rs", "Not judged"]]);
+    expect(ledger.querySelector('[data-evidence-state="not-judged"]')?.textContent).toMatch(/^Not judged: the \[\[tested\]\] entries were not judged/);
+  });
+
+  it("ledger-api: no [code] table, Not read and the note; not-configured: its rows in sync", async () => {
+    const off = await bindingsTab("normal", "#/ledger-api/tree/SVC-REFUNDS", "Not read");
+    expect(within(off).getByRole("list", { name: "Notes from the daemon on the bindings" }).textContent).toBe(`bindings: ${CODE_OFF_CAUSE}`);
+    cleanup();
+    const measured = await bindingsTab("not-configured", "#/ledger-api/tree/SVC-LEDGER", "None");
+    expect(measured.querySelectorAll(".binding-line")).toHaveLength(0);
+    cleanup();
+    const refunds = await bindingsTab("not-configured", "#/ledger-api/tree/SVC-REFUNDS", "1 row");
+    expect(lineHeads(refunds)).toEqual([["SVC-REFUNDSimplementssrc/refunds/service.rs", "In sync"]]);
   });
 });

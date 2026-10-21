@@ -114,6 +114,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/ui-live-tasks.md](features/ui-live-tasks.md) shipped
 - [docs/features/ui-live.md](features/ui-live.md) shipped
 - [docs/features/ui-markdown.md](features/ui-markdown.md) shipped
+- [docs/features/ui-node-bindings.md](features/ui-node-bindings.md) shipped
 - [docs/features/ui-round.md](features/ui-round.md) shipped
 - [docs/features/ui-shell.md](features/ui-shell.md) shipped
 - [docs/features/ui-tasks.md](features/ui-tasks.md) shipped

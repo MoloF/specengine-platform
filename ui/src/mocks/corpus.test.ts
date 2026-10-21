@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
+import type { BindingRow, ShownBindings } from "../api/types";
+import { bindingsNote, harborBindingRows, LARGE_BINDINGS } from "./bindings";
 import { specFile, type MockCorpus } from "./build";
 import { nodeViewOf } from "./corpus";
 import { BASIN_NAME_DECOMPOSED, DRAFT_FILE, TIDE_FILE } from "./harbor-sim/fixtures";
+import { CODE_GAP_CAUSE, CODE_OFF_CAUSE, HARBOR_OK, healthReportOf, LOCK_CAUSE, LOOKALIKE_BASIN } from "./health";
 import { EMPTY_TREE_NOTE, MockClient } from "./MockClient";
+import type { Scenario } from "./scenario";
 
 // The mock's reads as docs/features/ui-tree-node.md "Data" (Mocks) and the daemon-read contract
 // ask: uncut; an unknown REF as its exit-1 document; refusals (exit 2) as 503 in the CLI's words;
@@ -11,7 +15,7 @@ import { EMPTY_TREE_NOTE, MockClient } from "./MockClient";
 
 const NOW = Date.parse("2026-10-06T12:00:00Z");
 
-function mock(scenario: "normal" | "empty" | "large" = "normal") {
+function mock(scenario: Scenario = "normal") {
   return new MockClient(scenario, { now: () => NOW, delayMs: 0 });
 }
 
@@ -359,5 +363,137 @@ describe("norm_hash (UI-1 of norm-hash)", () => {
     const node = nodeViewOf(corpus, "DOC-1").nodes[0];
     expect([node?.utf8, node?.norm_hash]).toEqual([false, null]);
     expect(node?.span_hash).toMatch(/^b3:[0-9a-f]{64}$/);
+  });
+});
+
+// UI-8 of docs/features/ui-node-bindings.md: `with=bindings` as the daemon answers it
+// (docs/canon/code-reads.md "spec show --bindings", "Degrade"), and its agreement with Health's row 6.
+
+const ROW_KEYS = ["node", "relation", "file", "kind", "symbol", "item_kind", "line", "end_line", "signature", "layer", "sync", "category", "detail", "anchor"];
+const ENTRY_KEYS = ["node", "state", "category", "rev", "node_rev", "commit", "verified_at"];
+
+/** Every holder's bindings of a REF, read with `with=bindings`, and the read's notes. */
+async function bindingsRead(client: MockClient, project: string, ref: string): Promise<{ notes: string[]; bindings: (ShownBindings | null)[] }> {
+  const view = await client.getNode(project, ref, { with: ["bindings"] });
+  return { notes: view.notes, bindings: view.nodes.map((node) => node.bindings) };
+}
+
+/** A row's key and judgement, as Health's row 6 and a read both carry them. */
+function judged(row: Pick<BindingRow, "node" | "relation" | "file" | "kind" | "symbol" | "item_kind" | "category" | "detail" | "anchor">, sync: string | null) {
+  return [row.node, row.relation, row.file, row.kind, row.symbol, row.item_kind, sync, row.category, row.detail, JSON.stringify(row.anchor)].join("|");
+}
+
+/** Every node of harbor-sim by ID, each read once. */
+async function everyNode(client: MockClient): Promise<string[]> {
+  const tree = await client.getTree("harbor-sim");
+  return [...new Set(tree.nodes.flatMap((node) => (node.id === null ? [] : [node.id])))];
+}
+
+describe("getNode with bindings (UI-8 of ui-node-bindings)", () => {
+  it("gives each harbor-sim row its 14 keys and each entry its 7, in order; without the option, null and no note", async () => {
+    const client = mock();
+    const read = await bindingsRead(client, "harbor-sim", "MEC-TIDES");
+    const bindings = read.bindings[0];
+    expect(Object.keys(bindings ?? {})).toEqual(["rows", "omitted", "tested"]);
+    expect(bindings?.rows.length).toBeGreaterThan(0);
+    for (const row of bindings?.rows ?? []) {
+      expect(Object.keys(row)).toEqual(ROW_KEYS);
+    }
+    expect(bindings?.tested?.length).toBeGreaterThan(0);
+    for (const entry of bindings?.tested ?? []) {
+      expect(Object.keys(entry)).toEqual(ENTRY_KEYS);
+    }
+    expect([read.notes, bindings?.omitted]).toEqual([[], 0]);
+    const plain = await client.getNode("harbor-sim", "MEC-TIDES", { with: ["links"] });
+    expect([plain.notes, plain.nodes[0]?.bindings]).toEqual([[], null]);
+  });
+
+  it("lists a node's set: itself and its sections, in verify's key order; a look-alike under its Latin fix", async () => {
+    const client = mock();
+    const rows = async (ref: string) => (await bindingsRead(client, "harbor-sim", ref)).bindings[0]?.rows.map((row) => `${row.node} ${row.relation} ${row.file} ${String(row.sync)}`);
+    expect(await rows("MEC-MOORING")).toEqual([
+      "MEC-MOORING implements src/sim/crew.rs code_ahead",
+      "MEC-MOORING verifies tests/mooring.rs ok",
+      "RULE-MOOR-CREW implements src/sim/crew.rs bad_marker",
+      "RULE-MOOR-NIGHT implements src/sim/crew.rs cannot_verify",
+    ]);
+    // RULE-MOOR-NIGHT is a section within RULE-MOOR-CREW (### under ##); RULE-MOOR-NIGHT itself lists its own.
+    expect(await rows("RULE-MOOR-CREW")).toEqual(["RULE-MOOR-CREW implements src/sim/crew.rs bad_marker", "RULE-MOOR-NIGHT implements src/sim/crew.rs cannot_verify"]);
+    expect(await rows("RULE-MOOR-NIGHT")).toEqual(["RULE-MOOR-NIGHT implements src/sim/crew.rs cannot_verify"]);
+    expect(await rows("RULE-BASIN-NAME")).toEqual(["RULE-BASIN-NAME implements src/sim/berths.rs ok", `${LOOKALIKE_BASIN} implements src/sim/berths.rs bad_marker`]);
+    expect(await rows("DOM-WATER")).toEqual([]);
+    // Two holders of one ID: each lists the row its ID names.
+    const speed = await bindingsRead(client, "harbor-sim", "RULE-FAIRWAY-SPEED");
+    expect(speed.bindings.map((each) => each?.rows.map((row) => row.symbol))).toEqual([["harbor_sim::fairway::speed_limit"], ["harbor_sim::fairway::speed_limit"]]);
+  });
+
+  it("agrees with Health's row 6: counted once under the node it names, the rows not ok are Health's twelve, the ok ones its counts.ok", async () => {
+    const client = mock();
+    const counted: BindingRow[] = [];
+    for (const id of await everyNode(client)) {
+      const read = await bindingsRead(client, "harbor-sim", id);
+      // A node's own rows: those its ID names (the look-alike's are filed under its fix).
+      counted.push(...(read.bindings[0]?.rows ?? []).filter((row) => row.node === id || (id === "RULE-BASIN-NAME" && row.node === LOOKALIKE_BASIN)));
+    }
+    const drift = healthReportOf("harbor-sim", "normal").drift;
+    const health = (drift.rows ?? []).map((row) => judged(row, row.state));
+    expect(counted.filter((row) => row.sync !== "ok").map((row) => judged(row, row.sync)).sort()).toEqual([...health].sort());
+    // In verify's key order, as Health lists them.
+    expect(harborBindingRows().filter((row) => row.sync !== "ok").map((row) => judged(row, row.sync))).toEqual(health);
+    expect(counted.filter((row) => row.sync === "ok")).toHaveLength(drift.counts?.ok ?? -1);
+    expect(drift.counts?.ok).toBe(HARBOR_OK);
+    expect(counted).toHaveLength(harborBindingRows().length);
+  });
+
+  it("gives the entries of a node's set, a verified one too, never the gone node's", async () => {
+    const client = mock();
+    const tested = async (ref: string) => (await bindingsRead(client, "harbor-sim", ref)).bindings[0]?.tested?.map((entry) => `${entry.node} ${entry.state}`);
+    expect(await tested("MEC-TIDES")).toEqual(["MEC-TIDES stale", "RULE-TIDE-WINDOW unverifiable"]);
+    expect(await tested("MEC-TIDE-TABLES")).toEqual(["MEC-TIDE-TABLES verified"]);
+    expect(await tested("MEC-MOORING")).toEqual([]);
+    const health = healthReportOf("harbor-sim", "normal").drift.tested ?? [];
+    expect(health.map((entry) => entry.state)).toContain("node_gone");
+  });
+
+  it("answers an unknown REF with its exit-1 document, the code layer unread: no note", async () => {
+    expect(await mock().getNode("harbor-sim", "R-404", { with: ["bindings"] })).toEqual({
+      ref: "R-404",
+      reason: "`R-404` resolves to no ID and no alias",
+      notes: [],
+      nodes: [],
+    });
+  });
+
+  it("degrades as the daemon does: no [code], a walk gap, an invalid lock; ledger-api's rows in sync when configured", async () => {
+    expect(await bindingsRead(mock(), "ledger-api", "SVC-REFUNDS")).toEqual({ notes: [bindingsNote(CODE_OFF_CAUSE)], bindings: [null] });
+    expect(bindingsNote(CODE_OFF_CAUSE)).toBe("bindings: specengine.toml has no [code] table: the code layer is off (add [code] with roots)");
+    const cannot = mock("code-cannot");
+    expect(await bindingsRead(cannot, "harbor-sim", "MEC-TIDES")).toEqual({ notes: [`bindings: ${CODE_GAP_CAUSE}`], bindings: [null] });
+    const listed = await bindingsRead(cannot, "ledger-api", "SVC-LEDGER");
+    expect(listed.notes).toEqual([`bindings: ${LOCK_CAUSE}`]);
+    expect(listed.bindings[0]?.tested).toBeNull();
+    expect(listed.bindings[0]?.rows.map((row) => [row.sync, row.category, row.detail, row.anchor])).toEqual([]);
+    const refunds = await bindingsRead(cannot, "ledger-api", "SVC-REFUNDS");
+    expect(refunds.bindings[0]?.rows.map((row) => [row.node, row.sync, row.category, row.detail, row.anchor, row.line])).toEqual([["SVC-REFUNDS", null, null, null, null, null]]);
+    const configured = mock("not-configured");
+    const own: BindingRow[] = [];
+    const ids = (await configured.getTree("ledger-api")).nodes.flatMap((node) => (node.id === null ? [] : [node.id]));
+    expect(ids.length).toBeGreaterThan(5);
+    for (const id of ids) {
+      const read = await bindingsRead(configured, "ledger-api", id);
+      expect([id, read.notes, read.bindings[0]?.tested]).toEqual([id, [], []]);
+      own.push(...(read.bindings[0]?.rows ?? []).filter((row) => row.node === id));
+    }
+    expect(own.map((row) => row.sync)).toEqual(["ok", "ok"]);
+    expect(own).toHaveLength(healthReportOf("ledger-api", "not-configured").drift.counts?.ok ?? -1);
+  });
+
+  it("large: DOM-GEN-01 holds 3 000 unlocked rows in verify's key order; harbor-sim's others as normal", async () => {
+    const client = mock("large");
+    const rows = (await bindingsRead(client, "harbor-sim", "DOM-GEN-01")).bindings[0]?.rows ?? [];
+    expect(rows).toHaveLength(LARGE_BINDINGS);
+    expect(new Set(rows.map((row) => row.sync))).toEqual(new Set(["unlocked"]));
+    expect(rows.map((row) => row.file)).toEqual(rows.map((row) => row.file).sort());
+    expect(await bindingsRead(client, "harbor-sim", "MEC-MOORING")).toEqual(await bindingsRead(mock(), "harbor-sim", "MEC-MOORING"));
   });
 });

@@ -64,6 +64,9 @@ const ROUND_TEXT = "/src/round/text";
 /** The two text modules as loaded, for their exports. */
 const textModules = import.meta.glob<Record<string, unknown>>(["/src/round/text.ts", "/src/ui/text.ts"], { eager: true });
 
+/** The Bindings tab's sources (docs/features/ui-node-bindings.md): held to Health's rules for rows (UI-7). */
+const BINDINGS_TAB: readonly string[] = ["/src/tree/BindingsPanel.tsx", "/src/tree/BindingLine.tsx", "/src/tree/commands.ts"];
+
 /** The provisional types' module, with or without an extension (as in eslint.config.js). */
 const PROVISIONAL = /(^|\/)provisional(\.[jt]sx?)?$/;
 
@@ -324,8 +327,8 @@ describe("source policy", () => {
     }
   });
 
-  it("compares no kind, class, status, state, link type, reason, ID state, binding or relation in Health but in the label map: rows 3 to 6 shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui and UI-3 of health-drift-ui)", () => {
-    const outside = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
+  it("compares no kind, class, status, state, sync, link type, reason, ID state, binding or relation in Health or the Bindings tab but in the label maps: rows 3 to 6 and binding rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui and UI-7 of ui-node-bindings)", () => {
+    const outside = (path: string) => !(path.startsWith("/src/health/") || BINDINGS_TAB.includes(path)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
       expect.arrayContaining([
         "/src/health/AmendmentsPart.tsx",
@@ -334,9 +337,10 @@ describe("source policy", () => {
         "/src/health/DriftPart.tsx",
         "/src/health/codeRows.tsx",
         "/src/health/labels.ts",
+        ...BINDINGS_TAB,
       ]),
     );
-    const field = "\\.(kind|class|status|state|type|reason|id_state|binding|relation)\\b";
+    const field = "\\.(kind|class|status|state|sync|type|reason|id_state|binding|relation)\\b";
     const equality = "([!=]==?)(?!=)";
     const absent = "(null|undefined)\\b";
     const compared = new RegExp(
@@ -373,6 +377,11 @@ describe("source policy", () => {
       "const look = LOOKS[row.class];",
       "const look = LOOKS.get(row.class);",
       'rows.filter((row) => row.state === "conflict")',
+      // UI-7 of ui-node-bindings: a binding row's sync branched on.
+      'const fine = row.sync === "ok";',
+      'row.sync !== "unlocked" && <p />',
+      "const look = LOOKS[row.sync];",
+      'rows.some((row) => row.sync === "conflict")',
     ]) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }
@@ -387,13 +396,16 @@ describe("source policy", () => {
       "<span className=\"kind-tag\">{oneLine(marker.relation)}</span>",
       "<Badge name=\"Class\" look={driftClassLook(row.class)} />",
       "<Badge name=\"State\" look={syncLook(row.state)} />",
+      "<Badge name=\"Sync\" look={syncLook(row.sync)} />",
+      "{row.node === \"\" ? <span>{noId}</span> : <bdi className=\"mono\">{row.node}</bdi>}",
+      "{holder.bindings === null ? <NotRead /> : <Rows />}",
     ]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
     }
   });
 
-  it("sorts nothing in Health but the findings, and keeps every label table in labels.ts: rows 3 to 6 drawn in the daemon's order, each word through one map (UI-3 of health-drift-ui)", () => {
-    const parts = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
+  it("sorts nothing in Health but the findings, nor in the Bindings tab, and keeps every label table in labels.ts: rows 3 to 6 and binding rows drawn in the daemon's order, each word through one map (UI-3 of health-drift-ui, UI-2 of ui-node-bindings)", () => {
+    const parts = (path: string) => !(path.startsWith("/src/health/") || BINDINGS_TAB.includes(path)) || /\.test\.tsx?$/.test(path);
     const sorted = /\.(sort|toSorted|reverse|toReversed)\(/;
     expect(offending(sorted, (path) => parts(path) || path === "/src/health/findings.ts")).toEqual([]);
     // The scope is right: the findings are grouped and ordered by the view (docs/features/ui-health.md).

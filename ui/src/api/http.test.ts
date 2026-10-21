@@ -79,6 +79,12 @@ describe("each method hits its URL (AC-09)", () => {
       "/api/projects/harbor-sim/nodes/MEC-TIDES%23RULE-TIDE-WINDOW?with=links&archive=true",
     ],
     [
+      "getNode, the bindings read (ui-node-bindings), links beside it repeating `with`",
+      (client) => client.getNode("alpha", "LAW-BOUND", { with: ["links", "bindings"] }),
+      "/api/projects/alpha/nodes/LAW-BOUND?with=links&with=bindings",
+    ],
+    ["getNode, the Bindings tab's read", (client) => client.getNode("alpha", "LAW-BOUND", { with: ["bindings"] }), "/api/projects/alpha/nodes/LAW-BOUND?with=bindings"],
+    [
       "getNode, a path REF's `/` as %2F",
       (client) => client.getNode("alpha", "docs/spec/movement/stamina.md"),
       "/api/projects/alpha/nodes/docs%2Fspec%2Fmovement%2Fstamina.md",

@@ -1816,7 +1816,9 @@ fn ac_r9_tasks_list_it_bound_or_by_the_nodes_it_amends() {
 /// docs/features/health-code.md its ten, AC-9, and
 /// docs/features/roadmap-screen.md its ten, TE-1; 74 since
 /// docs/features/bundle-bindings.md, docs/features/tested-reads.md and
-/// docs/features/health-drift.md added theirs; the amendment adds none).
+/// docs/features/health-drift.md added theirs; 76 since
+/// docs/features/ui-node-bindings.md added `ShownNode` and
+/// `ShownBindings`, TE-1; the amendment adds none).
 /// M: a key added.
 #[test]
 fn ac_r10_the_review_is_a_new_files_46_keys() {
@@ -1837,11 +1839,11 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        74,
+        76,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
-         tested-reads' `TestedRow` and health-drift's six"
+         tested-reads' `TestedRow`, health-drift's six and ui-node-bindings' two"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

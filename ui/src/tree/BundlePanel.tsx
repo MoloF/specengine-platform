@@ -1,13 +1,14 @@
 import { useId, useRef, useState, type MouseEvent, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useBundle } from "../api/queries";
-import type { BindingPlace, BundleBindingRow, BundleItem, BundleLayers, BundleView, TailEntry } from "../api/types";
+import type { BundleBindingRow, BundleItem, BundleLayers, BundleView, TailEntry } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { directionLabel, formLabel, isCodeLayer, LAYER_HEADINGS, layerHeading, linkStateLook, syncLook } from "./labels";
+import { BindingLine } from "./BindingLine";
+import { directionLabel, formLabel, isCodeLayer, LAYER_HEADINGS, layerHeading, linkStateLook } from "./labels";
 
 const DIGITS = /^\d*$/;
 /** The largest budget the daemon takes (`u32::MAX`, `docs/canon/spec-cli-bundle.md` "Command"). */
@@ -63,72 +64,6 @@ function ItemRow({ project, item, onFollow }: { project: string; item: BundleIte
   );
 }
 
-/** A row's place as `spec show --bindings` prints it: `<file>:<line>-<end_line>`, `<file>:<line>` or `<file>`. */
-function placeOf(row: BundleBindingRow): string {
-  if (row.line === null) {
-    return row.file;
-  }
-  return row.end_line === null ? `${row.file}:${String(row.line)}` : `${row.file}:${String(row.line)}-${String(row.end_line)}`;
-}
-
-/** A binding as verify names it: `<kind> <symbol>[ <item_kind>]` (a keyless row has none: "No symbol"). */
-function bindingOf(place: Pick<BindingPlace, "kind" | "symbol" | "item_kind">): string {
-  return place.item_kind === null ? `${place.kind} ${place.symbol}` : `${place.kind} ${place.symbol} ${place.item_kind}`;
-}
-
-/**
- * One code binding row of layer 5 or 9 as lines: its node and relation, its place, its binding and
- * layer, its sync (verify's state, labelled; category and detail raw), its signature, where it moved
- * from or might be. Nothing in it is a link: a row's node may be unresolved and its symbol is a
- * qpath, neither a tree node (docs/features/bundle-bindings.md "UI and daemon keys").
- */
-function BindingLine({ row }: { row: BundleBindingRow }) {
-  const judgement = [row.category, row.detail].filter((word) => word !== null).join(" ");
-  const key = row.kind !== null && row.symbol !== null ? bindingOf({ kind: row.kind, symbol: row.symbol, item_kind: row.item_kind }) : null;
-  const from = row.anchor?.from ?? null;
-  const candidates = row.anchor?.candidates ?? [];
-  return (
-    <li className="bundle-item">
-      <p className="bundle-item-head">
-        <span className="mono">{row.node === "" ? "-" : row.node}</span>
-        <span className="kind-tag">{row.relation}</span>
-        <span className="mono">{placeOf(row)}</span>
-      </p>
-      <p className="bundle-item-meta">
-        {key === null ? <span>No symbol</span> : <span className="mono">{key}</span>}
-        {row.layer !== null && <span>layer {row.layer}</span>}
-        <span>{row.tokens_est} tokens</span>
-      </p>
-      <p className="bundle-item-meta">
-        <Badge name="Sync" look={syncLook(row.sync)} />
-        {judgement !== "" && <span className="mono">{judgement}</span>}
-      </p>
-      {row.signature !== null && (
-        <p className="bundle-item-meta">
-          <span>Signature:</span>
-          <span className="mono">{row.signature}</span>
-        </p>
-      )}
-      {from !== null && (
-        <p className="bundle-item-meta">
-          <span>Moved from</span>
-          <span className="mono">
-            {from.file} | {bindingOf(from)}
-          </span>
-        </p>
-      )}
-      {candidates.map((candidate) => (
-        <p key={`${candidate.file}|${bindingOf(candidate)}`} className="bundle-item-meta">
-          <span>Candidate</span>
-          <span className="mono">
-            {candidate.file} | {bindingOf(candidate)}
-          </span>
-        </p>
-      ))}
-    </li>
-  );
-}
-
 /**
  * What tells two rows apart: their place in the layer, then verify's key and, for a keyless row,
  * its state and category (`docs/canon/spec-verify.md` "Rows"). A listed row has neither
@@ -157,7 +92,7 @@ function LayerList({
     return (
       <ul className="bundle-items">
         {layers[layer].map((row, index) => (
-          <BindingLine key={rowKey(row, index)} row={row} />
+          <BindingLine key={rowKey(row, index)} row={row} tokens={row.tokens_est} noId="-" />
         ))}
       </ul>
     );

@@ -11,6 +11,7 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
+import { BindingsPanel } from "./BindingsPanel";
 import { BundlePanel } from "./BundlePanel";
 import { LinksPanel } from "./LinksPanel";
 import { proposalsFor } from "./matching";
@@ -18,7 +19,7 @@ import { ProposalsPanel } from "./ProposalsPanel";
 import { rowName, type TreeRow } from "./rows";
 import { TextPanel, type TextTarget } from "./TextPanel";
 
-type TabId = "text" | "links" | "bundle" | "proposals";
+type TabId = "text" | "links" | "bindings" | "bundle" | "proposals";
 
 /** How the pane came to show its node, for where focus goes (docs/features/ui-tree-node.md "Implementation", Keys). */
 export type Arrival = "start" | "follow" | "change";
@@ -85,11 +86,14 @@ export function NoNodePane() {
         <h1 id="tree-title" tabIndex={-1}>
           Spec tree
         </h1>
-        <p className="view-about">The business-logic tree and each node&rsquo;s text, links, bundle and proposals.</p>
+        <p className="view-about">The business-logic tree and each node&rsquo;s text, links, code bindings, bundle and proposals.</p>
       </header>
       <div className="empty-state">
         <h2>No node open</h2>
-        <p>Pick a node in the tree, or search the spec, to read its text as written, its links, the bundle an agent gets and the proposals that name it.</p>
+        <p>
+          Pick a node in the tree, or search the spec, to read its text as written, its links, the code bound to it, the bundle an agent gets and the
+          proposals that name it.
+        </p>
         <p className="muted">In the tree: the arrow keys move, Enter opens, ? lists every key.</p>
       </div>
     </article>
@@ -98,10 +102,10 @@ export function NoNodePane() {
 
 /**
  * One node by REF: its heading (the REF when several holders answer it, each holder then under
- * its own h2), the header facts, the daemon's notes and four tabs. The Text tab shows at once,
+ * its own h2), the header facts, the daemon's notes and five tabs. The Text tab shows at once,
  * rendered or as its source; the node's links read starts beside it (the rendered text's anchors,
- * the Links tab), the text never waiting for it. The Bundle tab reads on first open; Proposals
- * reads the Inbox's query.
+ * the Links tab), the text never waiting for it. The Bindings and Bundle tabs each read on first
+ * open (docs/features/ui-node-bindings.md); Proposals reads the Inbox's query.
  */
 export function NodePane({
   project,
@@ -223,6 +227,7 @@ export function NodePane({
           tabs={[
             { id: "text", label: "Text" },
             { id: "links", label: "Links" },
+            { id: "bindings", label: "Bindings" },
             { id: "bundle", label: "Bundle" },
             {
               id: "proposals",
@@ -259,6 +264,13 @@ export function NodePane({
           {opened.has("links") && (
             <RegionBoundary name="links">
               <LinksPanel project={project} nodeRef={nodeRef} archive={archive} query={links} onShowInText={jump} onFollow={onFollow} />
+            </RegionBoundary>
+          )}
+        </TabPanel>
+        <TabPanel base={base} id="bindings" selected={tab === "bindings"}>
+          {opened.has("bindings") && (
+            <RegionBoundary name="bindings">
+              <BindingsPanel project={project} nodeRef={nodeRef} onFollow={onFollow} />
             </RegionBoundary>
           )}
         </TabPanel>

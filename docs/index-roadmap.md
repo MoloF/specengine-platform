@@ -34,3 +34,8 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0028.md](roadmap/RM-0028.md) Spec digest into AGENTS.md or CLAUDE.md for external reviewers · crates/specengine-cli · draft
 - [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) Hygiene pass: the review nits of 5b-1b, 5c and 8a-2 · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0031.md](roadmap/RM-0031.md) symbol-renamed: delta.symbols.renamed from the anchor pairing · crates/specengine-core, crates/specengine-cli · draft
+- [docs/roadmap/RM-0033.md](roadmap/RM-0033.md) lock-diff: what changed since the lock, beside a drifted binding · crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0034.md](roadmap/RM-0034.md) tree-bindings: opt-in binding counters in spec tree, get_tree and the daemon's tree · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin · draft
+- [docs/roadmap/RM-0035.md](roadmap/RM-0035.md) node-history: spec show --history and the node's History tab · crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0036.md](roadmap/RM-0036.md) impact-daemon: spec impact on the daemon and the graph's impact mode · crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0037.md](roadmap/RM-0037.md) evidence-level: each node's evidence level, computed per read · crates/specengine-core, crates/specengine-cli, ui · draft

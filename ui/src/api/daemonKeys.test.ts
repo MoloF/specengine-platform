@@ -52,7 +52,9 @@ import type {
   RoundTarget,
   RoundTask,
   SearchHit,
+  ShownBindings,
   ShownLink,
+  ShownNode,
   SnapshotDiff,
   SnapshotNode,
   SnapshotPlace,
@@ -108,10 +110,12 @@ import type {
 // docs/features/tested-reads.md: `TestedRow`, a package's `tested` entry, the sixty-eighth and last,
 // with the package's `tested` after `bindings`, 27 keys); health-drift's six (UI-1 of
 // docs/features/health-drift.md: the health document's `drift` after `unbound`, row 6, verify's
-// counts, its row, the row's marker, lock and levels, the seventy-fourth and last `DriftLevels`). A
-// key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the
-// file already names fails. While that file is absent the comparison is skipped, saying so; once it
-// exists it names all seventy-four, in the slices' order.
+// counts, its row, the row's marker, lock and levels, the seventy-fourth `DriftLevels`); and
+// ui-node-bindings' two (UI-8, TE-1 of docs/features/ui-node-bindings.md: a shown node's 19 keys,
+// `bindings` after `links`, and its `ShownBindings`, the seventy-sixth and last). A key the types
+// carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already
+// names fails. While that file is absent the comparison is skipped, saying so; once it exists it
+// names all seventy-six, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -589,6 +593,31 @@ const KEYS = {
   DriftMarker: { line: true, rev: true } satisfies Record<keyof DriftMarker, true>,
   DriftLock: { rev: true, commit: true, verified_at: true } satisfies Record<keyof DriftLock, true>,
   DriftLevels: { lock: true, markers: true, changed: true } satisfies Record<keyof DriftLevels, true>,
+  // crates/specengine-cli/README.md "Output and the cap": `spec show --json`'s node; its 19th key
+  // `bindings` after `links` and that key's three: docs/canon/code-reads.md "spec show --bindings"
+  // (docs/features/ui-node-bindings.md, UI-8 and TE-1).
+  ShownNode: {
+    id: true,
+    kind: true,
+    title: true,
+    path: true,
+    line: true,
+    end_line: true,
+    status: true,
+    rev: true,
+    tokens_est: true,
+    archived: true,
+    utf8: true,
+    sections: true,
+    norm_hash: true,
+    span_hash: true,
+    text: true,
+    truncated: true,
+    omitted: true,
+    links: true,
+    bindings: true,
+  } satisfies Record<keyof ShownNode, true>,
+  ShownBindings: { rows: true, omitted: true, tested: true } satisfies Record<keyof ShownBindings, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -681,6 +710,8 @@ const CITED: Record<Named, string> = {
   DriftMarker: "line, rev",
   DriftLock: "rev, commit, verified_at",
   DriftLevels: "lock, markers, changed",
+  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links, bindings",
+  ShownBindings: "rows, omitted, tested",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -804,8 +835,14 @@ const BEFORE_HEALTH_DRIFT: readonly Named[] = [...BEFORE_TESTED_READS, ...TESTED
  */
 const HEALTH_DRIFT: readonly Named[] = ["HealthDrift", "DriftCounts", "DriftRow", "DriftMarker", "DriftLock", "DriftLevels"];
 
+/** The seventy-four types the fixture named before ui-node-bindings. */
+const BEFORE_UI_NODE_BINDINGS: readonly Named[] = [...BEFORE_HEALTH_DRIFT, ...HEALTH_DRIFT];
+
+/** ui-node-bindings' two: a shown node and its bindings (docs/features/ui-node-bindings.md UI-8, TE-1). */
+const UI_NODE_BINDINGS: readonly Named[] = ["ShownNode", "ShownBindings"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_HEALTH_DRIFT, ...HEALTH_DRIFT];
+const ALL: readonly Named[] = [...BEFORE_UI_NODE_BINDINGS, ...UI_NODE_BINDINGS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -829,8 +866,8 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * health-drift's TE-5 wrote the health document's `drift` and its six sets, the seventy-fourth
- * `DriftLevels` (docs/features/health-drift.md).
+ * ui-node-bindings' TE-1 wrote `ShownNode` and `ShownBindings`, the seventy-sixth and last
+ * (docs/features/ui-node-bindings.md).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -868,7 +905,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_BUNDLE_BINDINGS.at(-1)).toBe("TaskRoadmap");
     expect(BEFORE_TESTED_READS.at(-1)).toBe("BindingRow");
     expect(BEFORE_HEALTH_DRIFT.at(-1)).toBe("TestedRow");
-    expect(ALL.at(-1)).toBe("DriftLevels");
+    expect(BEFORE_UI_NODE_BINDINGS.at(-1)).toBe("DriftLevels");
+    expect(ALL.at(-1)).toBe("ShownBindings");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -887,7 +925,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since health-drift's TE-5 wrote the health document's drift and its six sets into the file", () => {
+  it("lists ahead of the fixture only keys their types serve, none since ui-node-bindings' TE-1 wrote ShownNode and ShownBindings into the file", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -950,8 +988,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_BUNDLE_BINDINGS).toHaveLength(66);
     expect(BEFORE_TESTED_READS).toHaveLength(67);
     expect(BEFORE_HEALTH_DRIFT).toHaveLength(68);
-    expect(ALL).toHaveLength(74);
-    expect(new Set(ALL).size).toBe(74);
+    expect(BEFORE_UI_NODE_BINDINGS).toHaveLength(74);
+    expect(ALL).toHaveLength(76);
+    expect(new Set(ALL).size).toBe(76);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -986,6 +1025,27 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface TestedRow ");
     expect(at).toBeGreaterThan(0);
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/spec-lock-tested.md` "Reads"');
+  });
+
+  it("counts ui-node-bindings' two: a shown node's 19 keys, bindings its 19th after links, and ShownBindings' 3, declared so, the seventy-fifth and seventy-sixth sets (UI-8 of ui-node-bindings)", () => {
+    expect(UI_NODE_BINDINGS.map((name) => served(name).length)).toEqual([19, 3]);
+    expect(ALL.slice(BEFORE_UI_NODE_BINDINGS.length)).toEqual([...UI_NODE_BINDINGS]);
+    expect(declaredKeys("ShownNode")).toEqual(Object.keys(KEYS.ShownNode));
+    expect(declaredKeys("ShownBindings")).toEqual(Object.keys(KEYS.ShownBindings));
+    expect(served("ShownNode").slice(-2)).toEqual(["links", "bindings"]);
+    expect(source).toMatch(/^ {2}links: ShownLinks \| null;\n(?: {2}\/\*\*[^]*?\*\/\n)? {2}bindings: ShownBindings \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface ShownBindings \{\n {2}rows: BindingRow\[\];\n {2}omitted: number;\n {2}tested: TestedRow\[\] \| null;\n\}$/m);
+  });
+
+  it('ShownBindings cites `docs/canon/code-reads.md` "spec show --bindings"; ShownNode `crates/specengine-cli/README.md` "Output and the cap" (UI-8 of ui-node-bindings)', () => {
+    for (const [type, citation] of [
+      ["ShownBindings", '`docs/canon/code-reads.md` "spec show --bindings"'],
+      ["ShownNode", '`crates/specengine-cli/README.md` "Output and the cap"'],
+    ] as const) {
+      const at = source.indexOf(`export interface ${type} `);
+      expect([type, at > 0]).toEqual([type, true]);
+      expect(source.slice(source.lastIndexOf("/**", at), at)).toContain(citation);
+    }
   });
 
   it('BindingRow cites `docs/canon/code-reads.md` "The binding row" (UI-1 of bundle-bindings)', () => {
@@ -1038,10 +1098,10 @@ describe("the daemon's document types (AC-09)", () => {
     expect(declaredKeys(type)).toEqual(Object.keys(KEYS[type]));
   });
 
-  it("gives the health document drift after unbound, its seventh and last key, and counts health-drift's six: 6, 7, 17, 2, 3, 3, the last sets (UI-1 of health-drift)", () => {
+  it("gives the health document drift after unbound, its seventh and last key, and counts health-drift's six: 6, 7, 17, 2, 3, 3, before ui-node-bindings' two (UI-1 of health-drift)", () => {
     expect(served("HealthReport")).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
     expect(HEALTH_DRIFT.map((name) => served(name).length)).toEqual([6, 7, 17, 2, 3, 3]);
-    expect(ALL.slice(BEFORE_HEALTH_DRIFT.length)).toEqual([...HEALTH_DRIFT]);
+    expect(ALL.slice(BEFORE_HEALTH_DRIFT.length, BEFORE_UI_NODE_BINDINGS.length)).toEqual([...HEALTH_DRIFT]);
     // Row 6 is a code row (state, causes, counts, rows) with verify's tested and its own notes.
     expect(served("HealthDrift")).toEqual([...served("HealthAssumes"), "tested", "notes"]);
     expect(source).toMatch(/^ {2}unbound: HealthUnbound;\n {2}drift: HealthDrift;\n\}$/m);
@@ -1171,12 +1231,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the seventy-four types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six", () => {
+  it("names exactly the seventy-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all seventy-four, in the slices' order.
+    // None is ahead of the file today: it names all seventy-six, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(74);
+    expect(Object.keys(sets)).toHaveLength(76);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1246,13 +1306,24 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(pkg.indexOf("tested")).toBe(16);
   });
 
-  it("names health-drift's six after TestedRow, last, in the types' order and with their keys: 6, 7, 17, 2, 3, 3; the health document's drift its 7th, after unbound (UI-1, TE-5 of health-drift)", () => {
-    expect(Object.keys(sets).slice(BEFORE_HEALTH_DRIFT.length)).toEqual([...HEALTH_DRIFT]);
-    expect(Object.keys(sets).at(-1)).toBe("DriftLevels");
+  it("names health-drift's six after TestedRow, before ui-node-bindings' two, in the types' order and with their keys: 6, 7, 17, 2, 3, 3; the health document's drift its 7th, after unbound (UI-1, TE-5 of health-drift)", () => {
+    expect(Object.keys(sets).slice(BEFORE_HEALTH_DRIFT.length, BEFORE_UI_NODE_BINDINGS.length)).toEqual([...HEALTH_DRIFT]);
+    expect(Object.keys(sets).at(BEFORE_UI_NODE_BINDINGS.length - 1)).toBe("DriftLevels");
     expect(HEALTH_DRIFT.map((name) => sets[name])).toEqual(HEALTH_DRIFT.map((name) => served(name)));
     expect(HEALTH_DRIFT.map((name) => sets[name]?.length)).toEqual([6, 7, 17, 2, 3, 3]);
     const health = sets.HealthReport ?? [];
     expect([health.indexOf("drift"), health.length]).toEqual([6, 7]);
+  });
+
+  it("names ui-node-bindings' two after DriftLevels, last: a shown node's 19 keys, bindings after links, and ShownBindings' 3, in the types' order (UI-8, TE-1 of ui-node-bindings)", () => {
+    expect(Object.keys(sets).slice(BEFORE_UI_NODE_BINDINGS.length)).toEqual([...UI_NODE_BINDINGS]);
+    expect(Object.keys(sets).indexOf("ShownNode")).toBe(74);
+    expect(Object.keys(sets).at(-1)).toBe("ShownBindings");
+    expect(UI_NODE_BINDINGS.map((name) => sets[name])).toEqual(UI_NODE_BINDINGS.map((name) => served(name)));
+    expect(sets.ShownBindings).toEqual(["rows", "omitted", "tested"]);
+    const node = sets.ShownNode ?? [];
+    expect([node.indexOf("bindings"), node.length]).toEqual([18, 19]);
+    expect(node.slice(-2)).toEqual(["links", "bindings"]);
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {

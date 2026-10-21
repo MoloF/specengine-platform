@@ -33,9 +33,12 @@ export interface TreeOptions {
   archive?: boolean;
 }
 
-/** `get_node`: `--links`, and with it `--archive` (the daemon refuses `archive` without `links`). */
+/**
+ * `get_node`: `--links` and `--bindings`, each a repeated `with`; `--archive` with `links` only (the
+ * daemon refuses `archive` without `links`). Source: `docs/canon/code-reads.md` "Twins".
+ */
 export interface NodeOptions {
-  with?: "links"[];
+  with?: ("links" | "bindings")[];
   archive?: boolean;
 }
 

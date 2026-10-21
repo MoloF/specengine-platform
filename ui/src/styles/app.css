@@ -1691,6 +1691,52 @@ mark {
   margin-top: var(--space-2);
 }
 
+/* The Bindings tab (docs/features/ui-node-bindings.md): Read again beside the tab's line, then
+   each holder's rows and test evidence, then the commands; a row is a Bundle line, a test entry
+   Health's. A state without rows ("Not read", "None", "Not judged") reads as words, never a 0. */
+.bindings-panel,
+.holder-bindings {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.bindings-part {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.bindings-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2) var(--space-4);
+}
+
+.bindings-head p {
+  flex: 1 1 24rem;
+  max-width: 72ch;
+}
+
+.bindings-count,
+.bindings-state {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.bindings-not-read {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.binding-line .mono {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 /* Tree node pane: the way to the graph. */
 .node-actions {
   font-size: var(--font-size-s);

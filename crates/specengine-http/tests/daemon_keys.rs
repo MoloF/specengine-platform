@@ -147,6 +147,17 @@
 //! TE-1's daemon half: `tested_reads_daemon_equals_the_cli` (the kiln
 //! with its golden format-3 lock: `nodes/{*ref}?with=bindings`, `bundle`,
 //! `tasks/T-0001` are the CLI's documents byte for byte).
+//!
+//! TE-1 of docs/features/ui-node-bindings.md (RM-0011 slice 1), its Rust
+//! half: two sets more, 76 in all, last, after `DriftLevels`: `ShownNode`
+//! (the 19 keys of a `spec show --json` node, `bindings` the 19th, after
+//! `links`) and `ShownBindings` (`{rows, omitted, tested}`), from `GET
+//! nodes/GOAL-01?with=bindings` on code-health ([`health_code_repo`]: its
+//! rows listed, `tested` holding the made-up block, `omitted` 0 in the
+//! daemon's uncut view) and A's plain `nodes/MEC-STAMINA` (the same 19
+//! keys, `bindings` null); that read's rows are more `BindingRow`
+//! instances, its entries more `TestedRow` ones. M: `tested` dropped from
+//! the fixture's `ShownBindings`.
 
 mod common;
 mod task_state;
@@ -546,6 +557,15 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .text()
             .to_owned(),
     ];
+    // ui-node-bindings: the Bindings tab's read, code-health's GOAL-01
+    // with its rows and its `[[tested]]` entry.
+    let bound_view = vec![
+        server
+            .get("/api/projects/code-health/nodes/GOAL-01?with=bindings")
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -691,7 +711,35 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "{name}: code-health's row 6 serves one: {drift_measured:?}"
         );
     }
-    let tested_rows = [tested_rows, drift_tested].concat();
+    // ui-node-bindings: the shown nodes of A's plain reads and of the
+    // Bindings tab's read; that read's `bindings` objects, their rows and
+    // their entries (more `BindingRow` and `TestedRow` instances).
+    let bound_nodes = items(&bound_view, "nodes");
+    let shown_nodes = [items(&nodes, "nodes"), bound_nodes.clone()].concat();
+    let shown_bindings = objects(&with_object(&bound_nodes, "bindings"), "bindings");
+    assert!(
+        !shown_bindings.is_empty(),
+        "ShownBindings: GOAL-01's read holds an object: {bound_view:?}"
+    );
+    for text in &shown_bindings {
+        let value: serde_json::Value = serde_json::from_str(text).expect("JSON");
+        assert_eq!(value["omitted"], 0, "the daemon's view is uncut: {text}");
+    }
+    let shown_rows = items(&shown_bindings, "rows");
+    let shown_tested = items(
+        &shown_bindings
+            .iter()
+            .filter(|text| text.contains("\"tested\":["))
+            .cloned()
+            .collect::<Vec<_>>(),
+        "tested",
+    );
+    assert!(
+        !shown_rows.is_empty() && !shown_tested.is_empty(),
+        "GOAL-01's read lists rows and the made-up block: {shown_bindings:?}"
+    );
+    let binding_rows = [binding_rows, shown_rows].concat();
+    let tested_rows = [tested_rows, drift_tested, shown_tested].concat();
     for (name, found) in [
         ("AssumedProposal", &assumed_proposals),
         ("AssumedNode", &assumed_nodes),
@@ -760,7 +808,10 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 keys_of,
             ),
         ),
-        ("NodeView", one_key_set("NodeView", &nodes, keys_of)),
+        (
+            "NodeView",
+            one_key_set("NodeView", &[nodes.clone(), bound_view].concat(), keys_of),
+        ),
         (
             "SearchHit",
             one_key_set("SearchHit", &raw_items(&search, "hits"), keys_of),
@@ -1040,6 +1091,11 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         (
             "DriftLevels",
             one_key_set("DriftLevels", &drift_levels, keys_of),
+        ),
+        ("ShownNode", one_key_set("ShownNode", &shown_nodes, keys_of)),
+        (
+            "ShownBindings",
+            one_key_set("ShownBindings", &shown_bindings, keys_of),
         ),
     ]
 }
@@ -1367,10 +1423,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        74,
+        76,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
-         health-drift: 74)"
+         health-drift: 74; ui-node-bindings: 76)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1739,6 +1795,36 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         assert_eq!(*name, want_name);
         assert_eq!(keys, want_keys, "{name}");
     }
+    // ui-node-bindings' two, last (TE-1): a shown node's 19 keys in
+    // `spec show --json`'s order, `bindings` after `links`, and its
+    // bindings object's three.
+    assert_eq!(sets[74].0, "ShownNode");
+    assert_eq!(
+        sets[74].1,
+        [
+            "id",
+            "kind",
+            "title",
+            "path",
+            "line",
+            "end_line",
+            "status",
+            "rev",
+            "tokens_est",
+            "archived",
+            "utf8",
+            "sections",
+            "norm_hash",
+            "span_hash",
+            "text",
+            "truncated",
+            "omitted",
+            "links",
+            "bindings",
+        ]
+    );
+    assert_eq!(sets[75].0, "ShownBindings");
+    assert_eq!(sets[75].1, ["rows", "omitted", "tested"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1759,15 +1845,16 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 74 sets (41 until
+/// unchanged, no new key): the fixture holds 76 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
 /// docs/features/health-code.md its ten, AC-9,
 /// docs/features/roadmap-screen.md its ten, TE-1, and
 /// docs/features/bundle-bindings.md its `BindingRow`, RD-8, and
-/// docs/features/tested-reads.md its `TestedRow`, TE-5, and
-/// docs/features/health-drift.md its six, TE-5); a decision
+/// docs/features/tested-reads.md its `TestedRow`, TE-5,
+/// docs/features/health-drift.md its six, TE-5, and
+/// docs/features/ui-node-bindings.md its two, TE-1); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -1781,12 +1868,12 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        74,
-        "74 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        76,
+        "76 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
-         bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5) \
-         and health-drift's six (TE-5)"
+         bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
+         health-drift's six (TE-5) and ui-node-bindings' two (TE-1)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1900,7 +1987,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 74 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 76 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -1908,8 +1995,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/roadmap-screen.md its ten, TE-1, the key sets of
 /// docs/canon/spec-roadmap-screen.md "Rules", and
 /// docs/features/bundle-bindings.md its `BindingRow`, RD-8, and
-/// docs/features/tested-reads.md its `TestedRow`, TE-5, and
-/// docs/features/health-drift.md its six, TE-5); the amendment of
+/// docs/features/tested-reads.md its `TestedRow`, TE-5,
+/// docs/features/health-drift.md its six, TE-5, and
+/// docs/features/ui-node-bindings.md its two, TE-1); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -1926,12 +2014,12 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        74,
-        "74 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        76,
+        "76 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
-         bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5) \
-         and health-drift's six (TE-5)"
+         bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
+         health-drift's six (TE-5) and ui-node-bindings' two (TE-1)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
