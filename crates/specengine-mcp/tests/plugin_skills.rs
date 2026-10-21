@@ -146,6 +146,8 @@ const NAMES: [(&str, &[&str]); 6] = [
             "complete_task",
             // docs/features/check-binding.md "Plugin" (0.12.0).
             "check_binding",
+            // docs/features/impact.md "Plugin 0.15.0".
+            "get_impact",
         ],
     ),
     // docs/features/plugin-roles.md R-6.
@@ -360,7 +362,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's twenty tools"
+        "the default build's twenty-one tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1177,8 +1179,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/roadmap-surfaces.md; 0.12.0 since
     // docs/features/check-binding.md; 0.13.0 since
     // docs/features/show-bindings.md; 0.14.0 since
-    // docs/features/bundle-bindings.md.
-    assert_eq!(manifest["version"], "0.14.0");
+    // docs/features/bundle-bindings.md; 0.15.0 since
+    // docs/features/impact.md.
+    assert_eq!(manifest["version"], "0.15.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1262,8 +1265,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/roadmap-surfaces.md; 0.12.0 since
     // docs/features/check-binding.md; 0.13.0 since
     // docs/features/show-bindings.md; 0.14.0 since
-    // docs/features/bundle-bindings.md.
-    assert_eq!(manifest["version"], "0.14.0");
+    // docs/features/bundle-bindings.md; 0.15.0 since
+    // docs/features/impact.md.
+    assert_eq!(manifest["version"], "0.15.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1366,11 +1370,11 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.14.0",
+        manifest["version"], "0.15.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
-         bundle-bindings: 0.14.0"
+         bundle-bindings: 0.14.0; impact: 0.15.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1494,8 +1498,10 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // Nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`,
     // named in `analyze`: `rd10_analyze_names_get_roadmap`); twenty since
     // docs/features/check-binding.md (`check_binding`, named in
-    // `implement`: `check_binding_implement_names_the_tool`).
-    assert_eq!(TOOLS.len(), 20);
+    // `implement`: `check_binding_implement_names_the_tool`); twenty-one
+    // since docs/features/impact.md (`get_impact`, named in `implement`:
+    // `impact_implement_names_get_impact`).
+    assert_eq!(TOOLS.len(), 21);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
     assert!(
         READ_SPEC_CODE_TOOLS
@@ -1681,6 +1687,93 @@ fn check_binding_implement_names_the_tool() {
         &ac06_problems(&unnamed, &listed()),
         "tool `check_binding` backticked nowhere",
         "check_binding unnamed (AC-06)",
+    );
+}
+
+// ----------------------------------------------------------- impact (7b-1)
+
+/// docs/features/impact.md "Plugin 0.15.0": `implement`'s step 1, exactly
+/// (659 bytes and its line feed).
+const IMPACT_STEP_1: &str = "1. **Read the task.** Call `get_task` with its `task_id`. Go on only when it is approved and ready, or already claimed in this worktree for your work; anything else is the owner's to decide. Read the goal, targets, criteria, plan and owner notes; where the spec changed since approval (`stale`), read the current nodes with `get_context_bundle` first. Before the first edit, call `get_impact` once per target, its `id` (else its `path`) as `id`, or with the `symbol` you are about to change: it lists the nodes the change reaches, the code bound to them with each binding's `sync`, the tests to run and the open tasks on them; name those tasks in your report.";
+
+/// docs/features/impact.md "Plugin 0.15.0" (Q-J): `implement` backticks
+/// `get_impact` (AC-11's list), the one skill naming it (AC-06: every tool
+/// somewhere); its step 1 is the spec's text, word for word, before the
+/// claim's line; the step numbers kept (`check-binding`'s step 5 as
+/// pinned); no state word; the body 3 284 bytes, within 4 096. M:
+/// `get_impact` unnamed; the step reworded.
+#[test]
+fn impact_implement_names_get_impact() {
+    let skills = committed();
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    let naming: Vec<&String> = skills
+        .iter()
+        .filter(|(_, text)| backticked(text).iter().any(|span| span == "get_impact"))
+        .map(|(skill, _)| skill)
+        .collect();
+    assert_eq!(naming, ["implement"], "the skills naming `get_impact`");
+    let implement = &skills["implement"];
+    let lines: Vec<&str> = implement.lines().collect();
+    assert_eq!(IMPACT_STEP_1.len() + 1, 660, "the spec's figure");
+    let step = lines
+        .iter()
+        .position(|line| *line == IMPACT_STEP_1)
+        .expect("the spec's step 1, word for word");
+    let claim = lines
+        .iter()
+        .position(|line| line.contains("`claim_task`"))
+        .expect("a line naming claim_task");
+    assert!(step < claim, "step 1 before the claim's line");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| line.contains("`get_impact`"))
+            .count(),
+        1,
+        "get_impact named once"
+    );
+    assert!(
+        lines.contains(&CHECK_STEP),
+        "check-binding's step 5 kept, its number too"
+    );
+    for word in STATE_WORDS {
+        assert!(!has_word(implement, word), "{word:?} in implement");
+    }
+    let body = implement
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert_eq!(
+        body.len(),
+        3_284,
+        "the body's bytes as the spec measures them"
+    );
+    assert!(body.len() <= 4096, "the body is {} bytes", body.len());
+
+    // M: `get_impact` unnamed.
+    let unnamed = edited(&skills, "implement", "`get_impact`", "the radius tool");
+    assert_names(
+        &ac11_problems(&unnamed),
+        "implement: `get_impact` not backticked",
+        "get_impact unnamed",
+    );
+    assert_names(
+        &ac06_problems(&unnamed, &listed()),
+        "tool `get_impact` backticked nowhere",
+        "get_impact unnamed (AC-06)",
+    );
+    // M: the step reworded.
+    let reworded = edited(
+        &skills,
+        "implement",
+        "name those tasks in your report",
+        "go on",
+    );
+    assert!(
+        !reworded["implement"]
+            .lines()
+            .any(|line| line == IMPACT_STEP_1),
+        "the mutation is seen"
     );
 }
 

@@ -61,4 +61,4 @@ Accepted at shipping (2026-10-09); none blocks.
 - `--answer` leaves the linked patch written for the proposed decision: the owner rejects or approves it apart; no note.
 - A record supersedes nothing (no `supersedes:` slot): overriding an accepted decision is a question for the owner.
 - No intake note without `[decision_records]`; the round's empty sheet names questions and discrepancies only; some doc comments in the sources still name two deciding kinds; `ask_question`'s description lists a queued decision tersely.
-- `INSTRUCTIONS` keeps 1 B with probes, `ask-owner`'s body 37 B, the skills' descriptions 30 B.
+- `INSTRUCTIONS` keeps 31 B (`mcp-read.md` "Tools"), `ask-owner`'s body 37 B, the skills' descriptions 30 B.

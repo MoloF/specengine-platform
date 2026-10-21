@@ -1,0 +1,5 @@
+// Fares of the strait.
+Fares(
+    base: 1, // @configures FARE-01
+    late: 2,
+)

@@ -1,0 +1,21 @@
+# Fixture corpus impact (docs/features/impact.md, TE-1): a small ferry
+# timetable library, its specification and its code. `spec impact` walks
+# its graph (every followed link type, one unfollowed, a mention, a
+# generated and a shipped file), lists the code bound to what it reaches
+# (an impl with methods, an inline mod, file modules, a RON value, `@verifies`
+# tests) and the tasks the tests build in a scratch `HOME`. Prefixes, kinds
+# and slug of its own; nothing in the core knows them. What the command must
+# give: `expected.json`.
+
+[project]
+slug = "ferry-lines"
+
+[ids]
+ROUTE = { kind = "sea-lane",   shape = "name" }
+TIDE  = { kind = "tide-rule",  shape = "name" }
+FARE  = { kind = "fare-note",  width = 2 }
+NOTE  = { kind = "aside",      width = 3 }
+CHK   = { kind = "check-mark", width = 2, scope = "feature" }
+
+[code]
+roots = ["crates", "data"]

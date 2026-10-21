@@ -1,160 +1,117 @@
 ---
 class: spec
-status: draft
-scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures]
-ref: Phase 3 plan 2026-10-10, slice 7b of impact-bundle (WA-6, WA-10, WA-11, WA-14; Q1, Q7-Q9, Q13 decided under the owner's pre-approval, review open); 05 s5.3; 06 s1; 07 s1.2, s2; 08 s2
+status: shipped
+scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, fixtures]
+ref: Phase 3 slice 7b-1 of RM-0007 (split 2026-10-21; 7b-2 is `docs/features/impact-since.md`); Q-A..Q-J and the review's points, owner pre-approved, review open; 07 s1.2, s2; 08 s2; 2 iterations
+shipped: 2026-10-21
 adrs: [ADR-0046]
 ---
 
-# impact: the blast radius of a node, a symbol or a revision
+# impact (7b-1): the blast radius of a node or a code symbol
 
 ## Why
 
-08:131 promises the blast radius through `get_impact` (07 s1.2: `node_id | qpath | since: <commit>` -> nodes, symbols, tests, tasks); only `spec graph --impact` exists, nodes only, from one node. An agent about to change code, or handing in a branch, has no single call for what its change reaches, and reads graphs and files instead.
-
-Delivered: `spec impact` and MCP `get_impact` over 7a's rows and sync (`docs/canon/code-reads.md`), and `spec verify`'s `delta.symbols`. Slice 7 split (Q1): 7a first, 7b this. ADR-0046 (`architecture.md#control`, `architecture-code.md#sync-in-reads`).
-
-**In scope:** `spec impact REF | --symbol QPATH | --since REV`; `get_impact`; the tasks in the radius; `delta.symbols`; the `INSTRUCTIONS` line; `mcp_door` coverage; fixtures.
+Before a change an agent had no single call for what it reaches: `spec graph --impact` (nodes only, no MCP twin), `show --bindings` per node, then the tasks. Now `spec impact REF | --symbol QPATH` and MCP `get_impact` give the nodes the impact walk reaches, each bound symbol with its `sync`, the tests to run and this repository's open tasks on them; the `implement` skill calls it per target. Nothing shown changes an exit, status, claim or verdict. No ADR (ADR-0046); 7b-2 adds `--since` and `delta.symbols`.
 
 ## Description and interactions
 
-- **An agent** asks what a node, a symbol or its branch's code change reaches: nodes, bound symbols with their `sync`, the tests to run, the open tasks to warn. **The owner** runs it on a branch (`--since main`).
-- **Crates**: core the pure seeds and order, the walk reused; store the revision reader (4a's `HEAD` base reader at any commit: `rev-parse`, `ls-tree -r -z`, one `cat-file --batch`, one `hash-object --no-filters --stdin-paths`, under `GitEnv::child_vars`) and tasks by node; CLI `impact`, verify's delta; MCP `get_impact`. No new crate or dependency; MCP's stay exactly 7 (`build_graph.rs`), no git library.
-- **Reused, unchanged**: `spec graph --impact`'s walk, table and JSON (`spec-cli-graph.md`); 6a-3's lookup and `unmapped`'s containment (`docs/canon/symbol-reads.md` "Lookup", "spec unmapped"; `lookup_symbols`, `unmapped::reached`, `Seeds`, `symbols::place`: its "Crates and seams"); 7a's row, order, sync and refresh.
-- **Unchanged**: `spec check`, gate, hook, CI, `INDEX_FORMAT`, queue schema, every other read. **Writes**: the data directory only; the queue is read, never written.
-- **Overridden lines**, fixed at shipping (SW-2): 05:160 (`delta.symbols`), 07:31 (`node_id | qpath` -> `id | symbol`, 2026-10-10), 07:82-83, 08:44, 08:131.
+Canon: `docs/canon/spec-impact.md`; pointers in `spec-cli-graph.md`, `code-reads.md`, `symbol-index.md`, `mcp-read.md`, `plugin.md`, `plugin-files.md`. Unchanged: `spec graph`, `show`, `bundle`, `verify`, `check`, gate, CI, `specengine-http`, `ui/`, both index formats, the queue schema, `spec roadmap`'s output; no crate or dependency added (MCP's stay 7).
 
 ## Data
 
 ### Command
 
-Q8, WA-10. `spec impact REF | --symbol QPATH | --since REV [--depth N] [--json]` (+ `--root`, `--config`): exactly one input, else exit 2 ``spec: impact takes exactly one of REF, --symbol and --since``. MCP `get_impact {id?, symbol?, since?, depth?}`, each nullable, no root `oneOf` (as `get_task`, `task-package.md` "MCP"): not exactly one -> error result ``spec: get_impact takes exactly one of `id`, `symbol` and `since` ``. Argument names are the CLI's flags, the positional REF `id` as in `get_node`, `refs` (WA-17 mirror rule, `code-tools.md` "Tools"; 2026-10-10: overrides 07 s1.2's `node_id | qpath`, fixed at shipping). The read tools' annotations; `content` and `structuredContent` as every read (`mcp-read.md` "Parity").
+`spec impact [REF] [--symbol QPATH] [--depth N] [--json]`. Help, verbatim:
 
-### Seeds and walk
+- the command: "Show what a change to a node or a code symbol reaches: nodes, bound code with its sync, tests, open tasks; read-only."
+- REF: "Any form `show` takes."; `--symbol`: "Looked up as `spec symbols QUERY`."; `--depth` graph's: "Distance from REF at most; default unbounded."
 
-Seeds at distance 0, then `spec graph --impact`'s breadth-first walk (`depends_on`, `derived_from`, `verifies`, `uses_term` in; `constrains` out), each node once, `--depth N` as graph's.
+Usage, before discovery: `spec: impact takes exactly one of REF and --symbol`; no match: ``--symbol `<QPATH>` names no symbol``. Seeds, walk: `spec-impact.md` "Command", "Radius".
 
-- **REF**: its holders; `nodes` equal `spec graph REF --impact --json`'s.
-- **`--symbol QPATH`**: 6a's lookup at its best non-empty tier (`exact`, `suffix`, `name`), every symbol there; each reaches the nodes bound by containment (a marker on it, an enclosing item or inline mod, its file module; `docs/canon/symbol-reads.md` "spec unmapped"), any relation. None: exit 1 ``spec: --symbol `<q>` names no symbol``.
-- **`--since REV`**: "Since"; a changed or removed symbol reaches the nodes REV's markers bound by containment, a changed or added one those the disk's markers bind.
+### Rows and tasks
 
-### Since
+Rows: one `set_bindings` over the reached set and the nodes within it. `code` is `SetBindings.code`, `null` without `[code]` or under causes (1), (3), (8); `--symbol` falls back to the lookup walk's. Tasks: `open_tasks(.., GitPlace::Unnamed)`. Under that place no note carries a path, and the root is never string-replaced:
 
-Q7, WA-11.
-
-- **REV**: a leading `-` or a control character: exit 2 before any git call. Then `git rev-parse --verify --end-of-options <REV>^{commit}`; not a commit: exit 1 ``spec: --since `<REV>` is not a commit``.
-- **Compared**: REV's tree with the working tree on disk under the `[code]` roots and excludes, untracked files included, `.gitignore` and the git index never read (as `spec check --changed`, `spec-check-git.md` "The changed check"). `spec.lock` is not involved: drift since verification is `spec verify`'s question.
-- **Reads**: REV's `ls-tree -r -z` once; disk OIDs from one `hash-object --no-filters --stdin-paths`. Equal OID: unchanged. A differing path: REV's blob from one `cat-file --batch`, parsed; each item's 5a level digests against the index's (6a's columns; it stores no `ast_hash`: `symbol-index.md` Q11, 2026-10-13); a RON file whole.
-- **Delta**: `added` (disk only), `removed` (REV only), `changed` (both, the hash differs), each `{file, symbol, item_kind, line}` (`line` the disk's, REV's for removed), by file bytes, line, symbol; an equal-hash edit (a comment, formatting) is no change; `renamed` null until 7b's follow-up builds it on 5c's core pairing (`anchor-states.md` Q13, Q14: 5c fills `bindings.moved` only).
+- the data directory or the queue cannot be read (`db_path`, `open_existing`, `list_existing_tasks` fail): `tasks not shown: the queue cannot be read (spec roadmap names the cause)`;
+- git does not run or fails in the root: `tasks not shown: git in the project root failed (spec roadmap names the cause)`;
+- `spec roadmap` (`GitPlace::Root`) keeps its detailed texts.
 
 ### Output
 
-Text: seeds, the four lists, the summary; a row is 7a's line (`docs/canon/code-reads.md` "The binding row"):
+#### Text
 
-```
-since a0cea48: 1 file, 1 changed, 1 added, 0 removed
-  changed | crates/tally/src/counter.rs:22-30 | crates/tally::counter::impl Tally #1 impl_item
-  added | crates/tally/src/counter.rs:41-44 | <qpath> function_item
-node LAW-BOUND | law | Bound | docs/spec/counter.md:13 | distance 0
-node cap-check/PASS-01 | pass-mark | Stepping past the cap keeps the cap | docs/features/cap-check.md:13 | distance 1
-symbol LAW-BOUND | implements | crates/tally/src/counter.rs:22-30 | item crates/tally::counter::impl Tally #1 impl_item | layer a | sync code_ahead code_changed
-  sig impl Tally
-test cap-check/PASS-01 | verifies | crates/tally/tests/bounds.rs:16-22 | item <qpath> function_item | layer a | sync unlocked
-task T-0003 | in_progress | Raise the cap | LAW-BOUND
-impact: nodes 2, symbols 1, tests 1, tasks 1
-```
+`spec-impact.md` "Output", in its order.
 
-A REF seed prints no seed line; `--symbol` prints `symbol <q>: <n> at <tier>` and each match `  <qpath> | <item_kind> | <path>:<start>-<end>`.
+#### JSON
 
-- `nodes`: graph's node object `{id, kind, title, path, line, distance, archived}` by (distance, path, ord).
-- `symbols`: the rows (relation ≠ `verifies`) of every node reached; `tests`: their `verifies` rows (criteria verifying a reached node are reached: `verifies` is walked in); 7a's order and sync.
-- `tasks`: this repository's (`git_common_dir`) tasks whose `targets` or `affected_nodes` resolve to a reached node, status not `done`, `accepted` or `cancelled` (`tasks.md` "Transitions"): `{id, status, title, nodes}` (`nodes` the reached ones it names, in radius order), by ID.
-- **JSON**, every key present, absent null: `{input: {ref, symbol, since}, revision, depth, seeds: {nodes, symbols}, delta: {added, removed, changed, renamed}, nodes, symbols, tests, tasks, notes, truncated, code}`; `revision` the resolved commit; `delta` null but for `--since`; `seeds.symbols` `{qpath, item_kind, path, start_line, end_line, tier}`; `truncated` `{nodes, symbols, tests, tasks}` not shown; `code` as `spec refs`' `{files, rs, ron, skipped}`.
-- **Cut** at `OUTPUT_CAP_CHARS` (40 000): lists filled in order, the rest counted, then ``[truncated: <n> nodes, <s> symbols, <t> tests, <k> tasks not shown; narrow with --depth N, a REF or a narrower --symbol]``; JSON holds the printed items only.
+Keys, in order, as `spec-impact.md` "Output". `truncated` `null` uncut, else `{nodes, symbols, tests, tasks, seeds, delta}`; `symbols`, `tests` `null` for a `null` list, `seeds` `null` for REF, `delta` `null`.
+
+### Cut
+
+`spec-impact.md` "Cut": header and summary always, items whole within 40 000 characters, the JSON the printed items.
 
 ### Exits and degrade
 
-| Exit | When |
-|---|---|
-| 0 | answered, zero nodes or rows too |
-| 1 | REF names nothing (`show`'s reason); `--symbol` names no symbol; REV is not a commit |
-| 2, stdout empty | usage (inputs, `--depth`, an option-like or control-character REV); discovery; config; a look-alike ID; `--symbol` or `--since` without `[code]` (`code-refs.md`'s sentence), with a bad `[code]` or a walk gap; `--since` without git or on a git failure |
+`spec-impact.md` "Exits and degrade": 0 answered, 1 names nothing, 2 cannot run; the REF form degrades as 7a's reads.
 
-The REF form degrades as 7a's reads (`docs/canon/code-reads.md` "Degrade"): no `[code]`: `symbols`, `tests` null, silent; a code-layer cause: nodes and tasks unchanged, rows per 7a's table, one note. `--symbol` and `--since` take code as their input, so its failures exit 2 as `spec symbols`; a lock cause still only marks rows `sync -` with one note (ADR-0046).
+### MCP `get_impact`
 
-### delta.symbols
-
-Q13. `spec verify --changed --json`: "Since"'s `{added, removed, changed, renamed}` with REV = `HEAD`, the same reader and order, over all code, bound or not; unborn `HEAD`: every item `added`. Plain: null.
+`{id?, symbol?, depth?}`, its field docs verbatim in `read.rs`. Form error: ``spec: get_impact takes exactly one of `id` and `symbol` `` + `\n`. Mirror `ImpactDocument`: `truncated` nullable (`null` uncut), its `symbols`, `tests`, `seeds` nullable. **Description** `IMPACT_DESCRIPTION`, 1 898 B, verbatim in `read.rs`, pinned by `mcp_impact.rs`.
 
 ### INSTRUCTIONS
 
-WA-14. The tools line names `get_impact` within the 2 048 B compile-time asserts (`server.rs`), the `probes` build included: the reads lines reworded, none dropped. 2026-10-21: 70 B of room after 6b-2b (1 978 B; 2 037 with `probes`, 11 B left: `mcp-read.md` **Texts**), 7a about 33 B of it (the `probes` build about 22 B over: 7a cuts); in the reads line, `; get_impact(id|symbol|since, depth?) = impact` (46 B): a cut elsewhere, never a rule, re-measured after 7a.
+Q-B: `PROBE_INSTRUCTIONS` removed; both builds send `INSTRUCTIONS` alone. The reads line ends `get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol, depth?) = impact.` 1 977 -> 2 017 B (31 left), 1 879 without the tasks line.
 
-## Rules and edge cases
+### Plugin 0.15.0
 
-- WHEN run from two roots, another cwd, in reverse creation order or on CRLF copies, text and JSON SHALL be byte-identical.
-- WHEN `since` comes from an agent, it SHALL be refused before any git call if option-like or holding a control character, and SHALL reach git after `--end-of-options`.
-- Door: git only `rev-parse`, `ls-tree`, `cat-file`, `hash-object` without `-w`; never `status` or `diff` (they refresh `.git/index`). Genre: no stack, kind or fixture literal; `item_kind`, qpaths as data; the terminal task statuses are model's `TaskStatus`, not literals.
-- Cost grows with the diff (every REV blob under the code roots listed, differing ones parsed); the cut bounds the answer.
+MINOR (a new tool): `plugin.json`, `PINS` `a13a791146c0534242c528604fa0de8fbc3e93a1d5483f9c2c5f507cd1efcf44`, `SCHEMA_PINS` `70ff3720d4b3b7b13c62093d80a4c88cae2094e4580bd1e1d3003a41ed083581`; `TOOLS` 21. Only `implement` names `get_impact`, in step 1 (body 2 976 -> 3 284 of 4 096 B; verbatim in its `SKILL.md`, pinned by `plugin_skills.rs`, `plugin_files.rs`).
 
 ## Acceptance criteria
 
-rust-developer, M: mutation -> the test turning red:
+M: a counted mutation and the test it turns red; 9 of 9 killed. CLI `tests/impact.rs`, MCP `tests/mcp_impact.rs` unless named.
 
-- [ ] RD-1 -- M: outgoing `depends_on` followed -> `impact_nodes_equal_graph_impact`.
-- [ ] RD-2 -- M: two inputs accepted -> `impact_takes_exactly_one_input` (CLI exit 2; MCP error result); `node_id` or `qpath` as argument names -> `get_impact_arguments_are_the_flag_names` (`{id}`, `{symbol}` answer; `{node_id}` refused by `additionalProperties: false`).
-- [ ] RD-3 -- M: `-o…` or a control character passed through -> `option_like_since_is_refused_before_git`.
-- [ ] RD-4 -- since. M: `HEAD` used instead of REV -> `since_compares_the_given_revision`; untracked files ignored -> `since_counts_untracked_code`; an equal-hash edit counted -> `since_ignores_unchanged_hashes`.
-- [ ] RD-5 -- M: the exact item only -> `symbol_impact_reaches_the_enclosing_binding`.
-- [ ] RD-6 -- delta. M: filled in plain mode -> `plain_verify_has_no_symbol_delta`; `renamed` set -> `renamed_stays_null`.
-- [ ] RD-7 -- M: no tail -> `impact_cut_names_narrowing`; a terminal task listed -> `impact_lists_open_tasks_only`.
-- [ ] RD-8 -- M: `mcp_door` without `get_impact {since}` -> `mcp_door.rs`'s tool coverage; `INSTRUCTIONS` over 2 048 B, `probes` included -> `server.rs`'s compile-time asserts; a git library in MCP -> `build_graph.rs`'s dependency count (7); `git status` -> `reads_leave_git_index_and_objects_untouched` (new, the form of 7a-1's `show_bindings_writes_nothing_under_the_root`).
-
-test-engineer:
-
-- [ ] TE-1 -- 7a's repository plus commits: an item changed, one added, one removed, a comment-only edit, an untracked code file, a RON edit; `--symbol` on a nested item; a task in each status; `expected.json` with each form's lists.
-- [ ] TE-2 -- two roots, another cwd, reverse creation order, CRLF: identical text and JSON for the three forms.
-- [ ] TE-3 -- cost: `--since` over 1k changed files, latency recorded; a 10k-node radius cut with its tail.
-- [ ] TE-4 -- genre: `spec-c`: `impact REF` exit 0, code lists null; `--since` exit 2 naming `[code]`; the source scans.
-- [ ] TE-5 -- MCP: parity with `--json`, the schema walker, `mcp_size`'s maximum for `get_impact`, `mcp_door` with `{since}`.
-- [ ] TE-6 -- door: after each scenario `git status --porcelain=v1 -z --untracked-files=all`, `.git/index` mtime, the object count, `HEAD` unchanged.
-- [ ] TE-7 -- pilots, manual (`#[ignore]`, release, `--timeout`, foreground, scratch `HOME`): `impact` latency by form, `--since` over a real branch; no pilot name or path committed.
-
-spec-writer:
-
-- [x] SW-1 -- this spec, with `bundle-bindings.md`'s SW-1 (ADR-0046, the canon, 08, the amended drafts).
-- [ ] SW-2 -- at shipping: Tier 2 `docs/canon/impact.md`; `mcp-read.md` tools row and `INSTRUCTIONS` figures; the overridden lines; CLI, store, MCP READMEs; `CLAUDE.md` State.
-
-## Risks
-
-`INSTRUCTIONS` has 70 B left after 6b-2b, 11 B in the `probes` build, about 37 B and none after 7a: `get_impact`'s 46 B need a cut of about 9 B, 46 B in the `probes` build, re-measured after 7a. Filling `delta.symbols` changes `check_binding`'s `outputSchema` (`mcp-code.md` "Mirrors", `{"type": "null"}` today): its mirror, a plugin MINOR and a `SCHEMA_PINS` entry. An agent's `since` is untrusted input to git ("Rules"). `--since` cost grows with the diff, `--symbol`'s `name` tier can match many symbols: both bounded by the cut, not by a cap on work. A task's nodes resolve at the reading root, as 7a's package rows. 7b generalises 4a's reader (a draft): a change there reopens "Since".
+- [x] RD-1 -- `impact_nodes_equal_graph_impact` (`fixtures/impact/`, `spec-a`; `--depth` 0, 1, none): `nodes`, `left_out` graph's. M1: the shared walk's `depends_on` turned outgoing.
+- [x] RD-2 -- `impact_takes_exactly_one_input` (CLI exit 2; MCP the error result before discovery); `get_impact_arguments_are_the_flag_names`. M2: both inputs accepted.
+- [x] RD-3 -- `impact_rows_are_the_reached_sets_rows`: `show --bindings`' rows of the reached set, once, verify's order, split by relation. M3: within reduced to the node only.
+- [x] RD-4 -- `symbol_impact_reaches_the_enclosing_binding`, `mentions_never_seed_impact`, `symbol_naming_no_symbol_exits_1`. M4: only the marker's own item seeds. M5: mentions seed.
+- [x] RD-5 -- `impact_ref_never_fails_on_code`, a leg per cause: no `[code]` (rows, `code` `null`, no `bindings:` note), a bad `[code]`, a walk gap, an unmerged lock (`sync -`); `nodes`, `tasks`, exit unchanged; `symbol_impact_needs_code`. M6: the REF form exits 2 on a walk gap.
+- [x] RD-6 -- `impact_lists_open_tasks_only`, `impact_tasks_are_this_repositorys`, `impact_task_notes_hold_no_root` (an unreadable queue, failing git: the fixed notes, no path). M7: `done` tasks kept. M9: the store error back under the unnamed place.
+- [x] RD-7 -- `impact_cut_names_narrowing`, a 1 000-match name tier cutting `seeds.symbols`. M8: the JSON's nodes from all, not the printed.
+- [x] RD-8 (not counted) -- `get_impact_equals_the_cli` per exit, `get_impact_mirror_is_impact_json`, `get_impact_documents_meet_every_key`; `INSTRUCTIONS` 2 017 B; `build_graph.rs` 7.
+- [x] TE-1 -- `fixture_matches_the_shipped_reads`: `fixtures/impact/` (`expected.json`), every impact type, seed place and `TaskStatus`, another repository's task.
+- [x] TE-2 -- `impact_rows_equal_show_bindings_on_every_corpus` (`code-a`, `anchor-states`, `verify-tests`, `verify-ecs`).
+- [x] TE-3 -- `impact_is_byte_identical_across_roots_order_and_crlf`, `impact_json_holds_every_key`, `impact_text_prints_its_json`.
+- [x] TE-4 -- `impact_cost.rs` (`#[ignore]`, release, warm, median of five): a 10 000-node radius `impact HUB-CORE` 584 ms (`--json` 585), `graph --impact` 540; a 1 000-match name tier `--symbol` 582; `code-a` plus 10 000 files `impact GOAL-01` 771, `--symbol step` 703, `impact PREM-001` (5 000 bound items) 468, `show GOAL-01 --bindings` 259, `graph GOAL-01 --impact` 6.
+- [x] TE-5 -- `impact_on_another_genre_reads_no_code` (`spec-c`); `mcp_genre`.
+- [x] TE-6 -- `mcp_impact.rs`, `mcp_door`, `mcp_size` (`get_impact` maximum 100 621 characters, `{id}` 100 485); the schema conforms on an uncut REF, a no-`[code]` and a cut `--symbol` document; `TOOLS` 21; `plugin_skills.rs` (`impact_implement_names_get_impact`), `plugin_files.rs` 0.15.0.
+- [x] TE-7 -- `impact_writes_nothing_under_the_root`: status, `.git/index` mtime, objects, queue rows unchanged.
+- [ ] TE-7 pilots -- the owner's: `impact_pilot` (`#[ignore]`, release, scratch `HOME`), latency per form on both pilots.
+- [x] SW-1, SW-2 -- canon `spec-impact.md` 9 005 B, `code-reads.md` 12 263; `mcp-read.md` 12 266, `symbol-index.md` 12 286, `spec-cli-graph.md` 12 281; READMEs CLI, store 10 239, MCP 10 224.
 
 ## Out of scope
 
-filling `renamed` (7b's follow-up on 5c's core pairing, `anchor-states.md` Q14); `bindings.moved` (5c); a call-graph radius (5a `deps`, LSP); documents changed since REV as seeds (`spec check --changed` shows them; `spec graph --impact` per node); `--archive`; an HTTP route and the graph's impact screen (Phase 4); `--format dot|mermaid`; tasks of other repositories; a cap on `--since` work.
-
-## Open
-
-| Q | Working answer (owner pre-approved, review open) | The other answer costs |
-|---|---|---|
-| Q1 split | 7a `bundle-bindings`, then 7b this | 7a's value waits for 7b's git work |
-| Q7 `since` | a git revision vs the working tree, untracked included; the lock not involved | lock state is a second drift judge; `HEAD` only gives no branch radius |
-| Q8 `get_impact` | a new read tool, twin of `spec impact`; graph unchanged | `graph --impact` changes shipped JSON, and MCP has no graph tool |
-| Names (2026-10-10) | `{id, symbol, since, depth}`: the CLI's flags, REF `id` (WA-17, as 6b) | 07's `node_id`, `qpath`: two names for one argument |
-| Q9 ADR | ADR-0046 (shared with 7a) | the rule lives only in feature canon |
-| Q13 `delta.symbols` | `--changed` only, `HEAD` vs disk, all code; plain null | against the lock duplicates `bindings` |
-
-WA-n: the analysis' working answers (2026-10-10); "SW refinement": the spec-writer's.
-
-## Working answers
-
-[P] checked, [A] assumed. WA-6 [P/A] the row key is the lock key; 7a's row serves `symbols`, `tests`. WA-10 [P] `get_impact` is `node_id | qpath | since: <commit>` (named `id`, `symbol`, `since` from 2026-10-10) returning nodes, symbols, tests, tasks (07 s1.2, 06 s1); the walk and its directions exist (`spec-cli-graph.md`). WA-11 [P/A] `since` reuses `--changed`'s git calls at a given revision; git runs only as a subprocess (`build_graph.rs`). WA-12 [P] slice 7 owns `delta.symbols` (`spec-verify.md`, `symbol-index.md` Q6). WA-14 [P] `INSTRUCTIONS` is 1 885 B, 2 042 with `probes`, against 2 048, compile-time asserted; 6b adds four tools first. WA-15 [A] the MCP canon is near 12 288 B: detail in a new `impact.md` canon at shipping.
-
-## Dependencies and ordering
-
-- **Needs**: 7a (rows, sync, refresh, degrade) and through it 1, 3, 4a, 6a; 4a's `HEAD` base reader, generalised here.
-- **Order**: 7a -> 7b; 6b-1 and 6b-2 ship before 7a (08 s2, 2026-10-16) and take their `INSTRUCTIONS` shares first. **Independent**: 4b, 4c, 8a, 8b. **Later**: `renamed` on 5c's core pairing (`anchor-states.md` Q14: 5c ships first and leaves it null), Phase 4 (the graph's impact mode).
+`--since`, `delta.symbols`, `get_impact.since` (7b-2); `renamed`; documents as seeds; a call-graph radius; `--archive`, `--type`; an HTTP route, the graph's impact mode (RM-0011); `--format`; other repositories' tasks listed; layer C monikers.
 
 ## Implementation
 
-Not started. To record: modules, TE-3's and TE-7's figures, deviations with reasons.
+| Module | What it does |
+|---|---|
+| CLI `impact.rs` (new) | `impact(&Env, &Globals, &ImpactRequest {reference, symbol, depth, git}) -> ImpactOutcome` (`SeedSymbol`, `ImpactRow {row, binding}`, `ImpactTask`, `truncated()`), `render_text`, `Serialize`; seeds, `radius`, the cut |
+| CLI `graph.rs` | `Reach {walk, left_out}`, `reach` (the one walk of `graph_with_view` and `impact`), `impact_reach`; `node_of`, `node_line`, `NodeJson::of` crate-visible |
+| CLI `roadmap.rs` | `open_tasks(.., GitPlace) -> OpenTasks {here, others, notes}`, `GitPlace {Root, Unnamed}`, `others_note(n, slug, command)`; `spec roadmap` on them, unchanged |
+| CLI `bindings.rs` | `SetBindings.code`; `SetJudged.walk: SetWalk {files, skipped}`, `set_files` carrying the retry refresh's `skipped` |
+| CLI `lib.rs`, `main.rs` | `Outcome::Impact`, exports; the subcommand and its help |
+| store `code.rs`, `symbols.rs` | `SnapshotSymbols::LookupWithFiles {query, name}`: the hits and every symbol of each best-tier hit's file, one transaction; `files_symbols_in` prepares the per-file statement once per snapshot (`file_symbols_in` delegates to it) |
+| MCP `read.rs`, `mirror.rs`, `server.rs` | `get_impact`, `ImpactArgs`, `IMPACT_DESCRIPTION`, the form check; `ImpactDocument` (`Impact{Input,Seeds,SeedSymbol,Node,Task,Truncated}`); `PROBE_INSTRUCTIONS` removed |
+| `plugin/` | 0.15.0; `implement` step 1 |
+
+`node_set.rs` unchanged: `named_set` serves the tasks as is.
+
+Divergences (owner-approved):
+
+- Under `GitPlace::Unnamed` git and queue failures are fixed sentences: the draft's root replaced by `.` leaked paths (a subdirectory root, a worktree's common dir, the git config, the data directory) and mangled names.
+- RD-5's no-`[code]` leg means no `bindings:` note: its fixture's other-repository task note is right.
+- The review's `prepare_cached` became `files_symbols_in`: rusqlite's `cache` feature is not enabled, so no dependency changes.
+- Known limits: `LookupWithFiles` reads each hit file whole; the REF form costs about 3x `show --bindings` on `code-a` (771 against 259 ms): it judges the whole radius.
+
+`mcp_size`'s `get_impact` maximum: 100 621 characters (text 40 091, `structuredContent` 60 530; `--symbol` over a 3 000-row node; `{id}` 100 485), about a fifth of the 500 000 cap. Tests: nextest workspace 3 705 run, 55 skipped; eval `import_cli`, `layout_cli` pass once `fixtures/impact/` is committed.

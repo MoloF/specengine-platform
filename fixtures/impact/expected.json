@@ -1,0 +1,206 @@
+{
+ "_comment": "What docs/features/impact.md (7b-1) says `spec impact REF | --symbol QPATH [--depth N]` gives on this corpus (TE-1), built from the spec and the canon (spec-cli-graph.md 'Link types' and 'spec graph', symbol-reads.md 'Lookup' and 'spec unmapped', code-reads.md 'The node sets'), never from the command's output. The tests copy the corpus to a scratch git repository (this file left out), accept `lock` (one lock commit each: a partial lock), and make `tasks` through the CLI library in a scratch `HOME`, in this order (IDs T-0001 on), each with its `title`; `status` reached by the task commands, `analysis`, `in_review` and `accepted` (never entered by this build) set through SQL; `repository` `other` is a second git repository of the same project (same slug and `HOME`). `rows` names every binding row of the corpus by its six key fields (spec-verify.md 'Rows'). Per form: `args` after `spec impact`; `exit`; `nodes` as `[name, distance]` in the walk's order (name: the ID, else the path), equal to `spec graph REF --impact`'s for a REF; `left_out` graph's; `seeds.nodes` the seed nodes by name, `seeds.symbols` the lookup's best non-empty tier as `[qpath, item_kind, path, start_line, end_line, tier]` (null for a REF); `symbols` and `tests` the names of the rows of every reached node and every node within it, split on `verifies` (as sets: their order is verify's, checked against plain `spec verify --json`); `tasks` as `[id, [the reached nodes it names, in radius order]]` by ID: open tasks of this repository whose targets or affected nodes (each with its sections) meet a reached node or a node within one; `others` the open tasks of the other repository meeting the radius (one note). `reason` of an exit 1.",
+ "slug": "ferry-lines",
+ "lock": ["TIDE-WINDOW", "FARE-01"],
+ "tasks": [
+  {"id": "T-0001", "title": "Retime the crossing", "status": "draft", "targets": ["ROUTE-CROSSING"], "affected": [], "repository": "this"},
+  {"id": "T-0002", "title": "Move the docks", "status": "review", "targets": ["ROUTE-DOCKS"], "affected": ["FARE-01"], "repository": "this"},
+  {"id": "T-0003", "title": "Reprint the timetable", "status": "changes_requested", "targets": ["ROUTE-TIMETABLE"], "affected": [], "repository": "this"},
+  {"id": "T-0004", "title": "Widen the window", "status": "ready", "targets": ["TIDE-WINDOW"], "affected": [], "repository": "this"},
+  {"id": "T-0005", "title": "Print in colour", "status": "in_progress", "targets": ["NOTE-001"], "affected": [], "repository": "this"},
+  {"id": "T-0006", "title": "Price the late crossing", "status": "analysis", "targets": ["FARE-02"], "affected": [], "repository": "this"},
+  {"id": "T-0007", "title": "Charge by the window", "status": "in_review", "targets": ["FARE-02", "ROUTE-CROSSING"], "affected": [], "repository": "this"},
+  {"id": "T-0008", "title": "Crossed already", "status": "done", "targets": ["ROUTE-CROSSING"], "affected": [], "repository": "this"},
+  {"id": "T-0009", "title": "Accepted already", "status": "accepted", "targets": ["ROUTE-CROSSING"], "affected": [], "repository": "this"},
+  {"id": "T-0010", "title": "Dropped crossing", "status": "cancelled", "targets": ["ROUTE-CROSSING"], "affected": [], "repository": "this"},
+  {"id": "T-0011", "title": "Paint the docks", "status": "draft", "targets": ["ROUTE-DOCKS"], "affected": [], "repository": "this"},
+  {"id": "T-0012", "title": "Retime elsewhere", "status": "draft", "targets": ["ROUTE-CROSSING"], "affected": [], "repository": "other"}
+ ],
+ "rows": {
+  "slack": {"node": "TIDE-SLACK", "relation": "implements", "file": "crates/ferry/src/crossing.rs", "kind": "module", "symbol": "crates/ferry::crossing::slack", "item_kind": null},
+  "window": {"node": "TIDE-WINDOW", "relation": "implements", "file": "crates/ferry/src/crossing.rs", "kind": "item", "symbol": "crates/ferry::crossing::impl Crossing", "item_kind": "impl_item"},
+  "window-test": {"node": "TIDE-WINDOW", "relation": "verifies", "file": "crates/ferry/tests/crossing.rs", "kind": "item", "symbol": "crates/ferry::test:crossing::window_closes", "item_kind": "function_item"},
+  "chk-01": {"node": "ferry-check/CHK-01", "relation": "verifies", "file": "crates/ferry/tests/crossing.rs", "kind": "item", "symbol": "crates/ferry::test:crossing::waits_for_the_window", "item_kind": "function_item"},
+  "chk-02": {"node": "ferry-check/CHK-02", "relation": "verifies", "file": "crates/ferry/tests/crossing.rs", "kind": "item", "symbol": "crates/ferry::test:crossing::slack_widens_the_window", "item_kind": "function_item"},
+  "fare": {"node": "FARE-01", "relation": "implements", "file": "crates/ferry/src/fares.rs", "kind": "item", "symbol": "crates/ferry::fares::fare", "item_kind": "function_item"},
+  "fare-ron": {"node": "FARE-01", "relation": "configures", "file": "data/fares.ron", "kind": "ron", "symbol": "root.base", "item_kind": null},
+  "late-fare": {"node": "FARE-02", "relation": "implements", "file": "crates/ferry/src/fares.rs", "kind": "item", "symbol": "crates/ferry::fares::late_fare", "item_kind": "function_item"},
+  "timetable": {"node": "ROUTE-TIMETABLE", "relation": "implements", "file": "crates/ferry/src/lib.rs", "kind": "module", "symbol": "crates/ferry", "item_kind": null},
+  "board": {"node": "TIDE-BOARD", "relation": "implements", "file": "crates/ferry/src/board.rs", "kind": "module", "symbol": "crates/ferry::board", "item_kind": null},
+  "nope": {"node": "TIDE-NOPE", "relation": "implements", "file": "crates/ferry/src/crossing.rs", "kind": "item", "symbol": "crates/ferry::crossing::drifting", "item_kind": "function_item"}
+ },
+ "forms": [
+  {
+   "name": "a document: four incoming types, constrains outgoing; its outgoing depends_on, an incoming revises and an incoming mention not followed",
+   "args": ["ROUTE-CROSSING"],
+   "exit": 0,
+   "nodes": [["ROUTE-CROSSING", 0], ["docs/features/ferry-check.md", 1], ["FARE-01", 1], ["FARE-02", 1], ["ROUTE-TIMETABLE", 1], ["NOTE-001", 2]],
+   "left_out": {"generated": 1, "tier3": 1},
+   "seeds": {"nodes": ["ROUTE-CROSSING"], "symbols": null},
+   "symbols": ["slack", "window", "fare", "fare-ron", "late-fare", "timetable", "board"],
+   "tests": ["window-test", "chk-01", "chk-02"],
+   "tasks": [["T-0001", ["ROUTE-CROSSING"]], ["T-0002", ["FARE-01"]], ["T-0003", ["ROUTE-TIMETABLE"]], ["T-0004", ["ROUTE-CROSSING"]], ["T-0005", ["NOTE-001"]], ["T-0006", ["FARE-02"]], ["T-0007", ["ROUTE-CROSSING", "FARE-02"]]],
+   "others": 1
+  },
+  {
+   "name": "the document at depth 1: NOTE-001 not reached, the generated link into ROUTE-TIMETABLE not met",
+   "args": ["ROUTE-CROSSING", "--depth", "1"],
+   "exit": 0,
+   "nodes": [["ROUTE-CROSSING", 0], ["docs/features/ferry-check.md", 1], ["FARE-01", 1], ["FARE-02", 1], ["ROUTE-TIMETABLE", 1]],
+   "left_out": {"generated": 0, "tier3": 1},
+   "seeds": {"nodes": ["ROUTE-CROSSING"], "symbols": null},
+   "symbols": ["slack", "window", "fare", "fare-ron", "late-fare", "timetable", "board"],
+   "tests": ["window-test", "chk-01", "chk-02"],
+   "tasks": [["T-0001", ["ROUTE-CROSSING"]], ["T-0002", ["FARE-01"]], ["T-0003", ["ROUTE-TIMETABLE"]], ["T-0004", ["ROUTE-CROSSING"]], ["T-0006", ["FARE-02"]], ["T-0007", ["ROUTE-CROSSING", "FARE-02"]]],
+   "others": 1
+  },
+  {
+   "name": "a section: its own incoming derived_from",
+   "args": ["TIDE-WINDOW"],
+   "exit": 0,
+   "nodes": [["TIDE-WINDOW", 0], ["FARE-02", 1]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["TIDE-WINDOW"], "symbols": null},
+   "symbols": ["window", "late-fare"],
+   "tests": ["window-test"],
+   "tasks": [["T-0001", ["TIDE-WINDOW"]], ["T-0004", ["TIDE-WINDOW"]], ["T-0006", ["FARE-02"]], ["T-0007", ["TIDE-WINDOW", "FARE-02"]]],
+   "others": 1
+  },
+  {
+   "name": "the docks: reached by the crossing's depends_on, one step further out",
+   "args": ["ROUTE-DOCKS"],
+   "exit": 0,
+   "nodes": [["ROUTE-DOCKS", 0], ["ROUTE-CROSSING", 1], ["docs/features/ferry-check.md", 2], ["FARE-01", 2], ["FARE-02", 2], ["ROUTE-TIMETABLE", 2], ["NOTE-001", 3]],
+   "left_out": {"generated": 1, "tier3": 1},
+   "seeds": {"nodes": ["ROUTE-DOCKS"], "symbols": null},
+   "symbols": ["slack", "window", "fare", "fare-ron", "late-fare", "timetable", "board"],
+   "tests": ["window-test", "chk-01", "chk-02"],
+   "tasks": [["T-0001", ["ROUTE-CROSSING"]], ["T-0002", ["ROUTE-DOCKS", "FARE-01"]], ["T-0003", ["ROUTE-TIMETABLE"]], ["T-0004", ["ROUTE-CROSSING"]], ["T-0005", ["NOTE-001"]], ["T-0006", ["FARE-02"]], ["T-0007", ["ROUTE-CROSSING", "FARE-02"]], ["T-0011", ["ROUTE-DOCKS"]]],
+   "others": 1
+  },
+  {
+   "name": "a record whose only link is unfollowed (revises)",
+   "args": ["NOTE-002"],
+   "exit": 0,
+   "nodes": [["NOTE-002", 0]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["NOTE-002"], "symbols": null},
+   "symbols": [],
+   "tests": [],
+   "tasks": [],
+   "others": 0
+  },
+  {
+   "name": "a REF naming nothing",
+   "args": ["ROUTE-NOWHERE"],
+   "exit": 1
+  },
+  {
+   "name": "a method: its enclosing impl's marker seeds",
+   "args": ["--symbol", "opens"],
+   "exit": 0,
+   "nodes": [["TIDE-WINDOW", 0], ["FARE-02", 1]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["TIDE-WINDOW"], "symbols": [["crates/ferry::crossing::Crossing::opens", "function_item", "crates/ferry/src/crossing.rs", 11, 13, "suffix"]]},
+   "symbols": ["window", "late-fare"],
+   "tests": ["window-test"],
+   "tasks": [["T-0001", ["TIDE-WINDOW"]], ["T-0004", ["TIDE-WINDOW"]], ["T-0006", ["FARE-02"]], ["T-0007", ["TIDE-WINDOW", "FARE-02"]]],
+   "others": 1
+  },
+  {
+   "name": "a function in an inline mod in an inline mod: the outer mod's marker seeds; the name tier's other match left out",
+   "args": ["--symbol", "deep::reach"],
+   "exit": 0,
+   "nodes": [["TIDE-SLACK", 0]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["TIDE-SLACK"], "symbols": [["crates/ferry::crossing::slack::deep::reach", "function_item", "crates/ferry/src/crossing.rs", 28, 30, "suffix"]]},
+   "symbols": ["slack"],
+   "tests": [],
+   "tasks": [["T-0001", ["TIDE-SLACK"]], ["T-0007", ["TIDE-SLACK"]]],
+   "others": 1
+  },
+  {
+   "name": "two matches at one tier: one file module's marker seeds, the other file has none",
+   "args": ["--symbol", "rows"],
+   "exit": 0,
+   "nodes": [["TIDE-BOARD", 0]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["TIDE-BOARD"], "symbols": [["crates/ferry::board::rows", "function_item", "crates/ferry/src/board.rs", 4, 6, "suffix"], ["crates/ferry::fares::rows", "function_item", "crates/ferry/src/fares.rs", 13, 15, "suffix"]]},
+   "symbols": ["board"],
+   "tests": [],
+   "tasks": [["T-0003", ["TIDE-BOARD"]]],
+   "others": 0
+  },
+  {
+   "name": "two matches, two seeds at distance 0",
+   "args": ["--symbol", "reach"],
+   "exit": 0,
+   "nodes": [["TIDE-SLACK", 0], ["TIDE-BOARD", 0]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["TIDE-SLACK", "TIDE-BOARD"], "symbols": [["crates/ferry::board::reach", "function_item", "crates/ferry/src/board.rs", 8, 10, "suffix"], ["crates/ferry::crossing::slack::deep::reach", "function_item", "crates/ferry/src/crossing.rs", 28, 30, "suffix"]]},
+   "symbols": ["slack", "board"],
+   "tests": [],
+   "tasks": [["T-0001", ["TIDE-SLACK"]], ["T-0003", ["TIDE-BOARD"]], ["T-0007", ["TIDE-SLACK"]]],
+   "others": 1
+  },
+  {
+   "name": "an item bound only by a mention: it seeds nothing",
+   "args": ["--symbol", "dock_time"],
+   "exit": 0,
+   "nodes": [],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": [], "symbols": [["crates/ferry::crossing::dock_time", "function_item", "crates/ferry/src/crossing.rs", 35, 37, "suffix"]]},
+   "symbols": [],
+   "tests": [],
+   "tasks": [],
+   "others": 0
+  },
+  {
+   "name": "an item whose marker's ID names no node: it seeds nothing",
+   "args": ["--symbol", "drifting"],
+   "exit": 0,
+   "nodes": [],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": [], "symbols": [["crates/ferry::crossing::drifting", "function_item", "crates/ferry/src/crossing.rs", 40, 42, "suffix"]]},
+   "symbols": [],
+   "tests": [],
+   "tasks": [],
+   "others": 0
+  },
+  {
+   "name": "a test by its exact qpath: its @verifies marker seeds",
+   "args": ["--symbol", "crates/ferry::test:crossing::window_closes"],
+   "exit": 0,
+   "nodes": [["TIDE-WINDOW", 0], ["FARE-02", 1]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["TIDE-WINDOW"], "symbols": [["crates/ferry::test:crossing::window_closes", "function_item", "crates/ferry/tests/crossing.rs", 20, 23, "exact"]]},
+   "symbols": ["window", "late-fare"],
+   "tests": ["window-test"],
+   "tasks": [["T-0001", ["TIDE-WINDOW"]], ["T-0004", ["TIDE-WINDOW"]], ["T-0006", ["FARE-02"]], ["T-0007", ["TIDE-WINDOW", "FARE-02"]]],
+   "others": 1
+  },
+  {
+   "name": "an item and a RON value of one node; constrains is not followed in",
+   "args": ["--symbol", "fare"],
+   "exit": 0,
+   "nodes": [["FARE-01", 0]],
+   "left_out": {"generated": 0, "tier3": 0},
+   "seeds": {"nodes": ["FARE-01"], "symbols": [["crates/ferry::fares::fare", "function_item", "crates/ferry/src/fares.rs", 4, 6, "suffix"]]},
+   "symbols": ["fare", "fare-ron"],
+   "tests": [],
+   "tasks": [["T-0002", ["FARE-01"]]],
+   "others": 0
+  },
+  {
+   "name": "a query no symbol matches",
+   "args": ["--symbol", "nothing_here"],
+   "exit": 1,
+   "reason": "--symbol `nothing_here` names no symbol"
+  }
+ ],
+ "readings": [
+  "R1: the node object, the seed shapes, the task object and the text lines follow docs/features/impact.md 'Output' as the test file reads them (`impact.rs` [`node_line`], [`row_text`], [`task_line`]); re-read after the spec-writer's rewrite.",
+  "R2: a task's `nodes` reads 'the reached ones it names' as the reached nodes whose set (the node and every section within it) meets the task's named set: T-0004 on TIDE-WINDOW under ROUTE-CROSSING names ROUTE-CROSSING.",
+  "R3: `others` counts the other repository's open tasks meeting the radius; with none, no note."
+ ]
+}

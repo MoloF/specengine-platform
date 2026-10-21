@@ -361,14 +361,17 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // Q-F: `, --bindings is with ["bindings"]` after the links hint, +33;
     // ` (no specengine.toml: `spec init`)` cut, -34); the values
     // `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1839);
+    // 1 879 and 2 017 since docs/features/impact.md ("INSTRUCTIONS", Q-B:
+    // `; get_impact(id|symbol, depth?) = impact` on the reads' line, 40
+    // bytes); the values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1879);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "54d160f1bc427778ddf3efaff9a66ed89be04df9f0cd89f396e4a3408a1eeb72"
+        "523f0715e02bb48d622ec47c7294cec1d651a191fa93426b5e7a200ab21b12b9"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1977);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2017);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "0be8933f33543d7aafd9ab2c9419f5b5ae6b1702e07ce755a83c15ed799061f4"
+        "34f0f0b4a5f3555f6d59c2fb2e9fc4e94b9a303daeb1342320652309b44482e7"
     );
 }

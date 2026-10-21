@@ -274,6 +274,12 @@ fn ac12_a_non_rust_corpus_gets_no_stack_word() {
             json!({"node_ids": ["CROP-TOMATO"], "budget": 1}),
         ),
         ("get_tree", json!({"depth": -1})),
+        // docs/features/impact.md TE-5: the radius without `[code]`, a
+        // depth, a REF naming nothing, `symbol` (the `[code]` line).
+        ("get_impact", json!({"id": "CROP-TOMATO"})),
+        ("get_impact", json!({"id": "CROP-TOMATO", "depth": 1})),
+        ("get_impact", json!({"id": "CROP-NOPE"})),
+        ("get_impact", json!({"symbol": "tomato"})),
     ];
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&root), Home::At(&home));
@@ -524,6 +530,8 @@ fn kind_amendment_the_four_change_kinds_and_amends_are_no_literal_of_the_server(
     assert_eq!(literals(sample), [(1, "amendment".to_owned())]);
 }
 
+/// docs/features/impact.md TE-5: `get_impact` joins it (the radius of
+/// `CROP-TOMATO` with rows, tests and the task; by `sunny_bed`).
 /// docs/features/bundle-bindings.md TE-4 (genre): the garden corpus with a
 /// `[code]` table and a small crate of its own (watering routines bound to
 /// `CROP-TOMATO`, `CARE-WATER` and the criterion `watering/CHK-01` by
@@ -600,7 +608,28 @@ fn a_garden_with_code_gets_rows_and_no_stack_word() {
             !package["bindings"].as_array().expect("bindings").is_empty(),
             "{era:?}: the package's rows: {package}"
         );
-        for text in [bundle.to_string(), task.to_string()] {
+        // docs/features/impact.md TE-5: the radius of CROP-TOMATO carries
+        // its rows, its tests and the task; by a symbol too.
+        let impact = session.call("get_impact", json!({"id": "CROP-TOMATO"}));
+        let radius = &result(&impact)["structuredContent"];
+        for key in ["symbols", "tests", "tasks"] {
+            assert!(
+                !radius[key].as_array().expect("a list").is_empty(),
+                "{era:?}: the radius' {key}: {radius}"
+            );
+        }
+        let by_symbol = session.call("get_impact", json!({"symbol": "sunny_bed"}));
+        assert_eq!(
+            result(&by_symbol)["structuredContent"]["seeds"]["nodes"],
+            json!(["CROP-TOMATO"]),
+            "{era:?}: the item's marker seeds: {by_symbol}"
+        );
+        for text in [
+            bundle.to_string(),
+            task.to_string(),
+            impact.to_string(),
+            by_symbol.to_string(),
+        ] {
             assert_eq!(
                 stack_words(&text),
                 Vec::<&str>::new(),

@@ -129,25 +129,40 @@ pub(crate) fn lookup_in(
     Ok(hits)
 }
 
+/// The statement of [`file_symbols_in`]: `?1` the worktree, `?2` the path.
+const FILE_SYMBOLS_SQL: &str = concat!(
+    "SELECT ",
+    symbol_columns!(),
+    " FROM code_files f CROSS JOIN symbols s ON s.file = f.file_id
+     WHERE f.wt = ?1 AND f.path = ?2 ORDER BY s.ord"
+);
+
 /// [`SqliteIndex::file_symbols`] inside the caller's transaction.
 pub(crate) fn file_symbols_in(
     tx: &Transaction<'_>,
     wt: i64,
     path: &str,
 ) -> Result<Vec<StoredSymbol>, StoreError> {
-    let mut statement = tx
-        .prepare(concat!(
-            "SELECT ",
-            symbol_columns!(),
-            " FROM code_files f CROSS JOIN symbols s ON s.file = f.file_id
-             WHERE f.wt = ?1 AND f.path = ?2 ORDER BY s.ord"
-        ))
-        .db()?;
-    let symbols = statement
-        .query_map((wt, path), stored_symbol)
-        .db()?
-        .collect::<Result<Vec<_>, _>>()
-        .db()?;
+    files_symbols_in(tx, wt, [path])
+}
+
+/// [`file_symbols_in`] of each of `paths` in turn, its statement prepared
+/// once: by path as given, then `ord`.
+pub(crate) fn files_symbols_in<'p>(
+    tx: &Transaction<'_>,
+    wt: i64,
+    paths: impl IntoIterator<Item = &'p str>,
+) -> Result<Vec<StoredSymbol>, StoreError> {
+    let mut statement = tx.prepare(FILE_SYMBOLS_SQL).db()?;
+    let mut symbols = Vec::new();
+    for path in paths {
+        let rows = statement
+            .query_map((wt, path), stored_symbol)
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?;
+        symbols.extend(rows);
+    }
     Ok(symbols)
 }
 

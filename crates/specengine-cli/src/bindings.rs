@@ -45,7 +45,8 @@ use specengine_core::lock::{LOCK_FILE, Lock, LockKind, parse_lock};
 use specengine_core::verify::{Class, RowBinding, RowKey};
 use specengine_model::{BindingAnchor, BindingPlace, BindingRow};
 use specengine_store::{
-    CodeRefs, CodeSelection, GitEnv, SqliteIndex, StoredName, StoredNames, StoredSymbol, VerifyGit,
+    CodeFileState, CodeRefs, CodeSelection, GitEnv, SqliteIndex, StoredName, StoredNames,
+    StoredSymbol, VerifyGit,
 };
 
 use crate::code_index::{known_frameworks, refresh_code};
@@ -53,7 +54,7 @@ use crate::code_walk::{CodeTree, PartialGap, partial_tree};
 use crate::lock::{build_recipes, read_lock, read_lock_bytes};
 use crate::node_set::NodeSet;
 use crate::project::ProjectRoot;
-use crate::refs::{Corpus, NodeKey, no_code_table};
+use crate::refs::{CodeCount, Corpus, NodeKey, no_code_table, stored_count};
 use crate::store_error;
 use crate::verify::{
     CAUSE_DATA, CAUSE_UNMERGED, VerifyAnchor, VerifyPlace, key_set_nodes, keyed_binding, shown,
@@ -76,12 +77,22 @@ pub(crate) struct SetScope<'a> {
 }
 
 /// The set's rows as judged: the judge's rows kept to the set, each one's
-/// set nodes (in step with `judged.rows`), and the selected files' stored
-/// symbols by path.
+/// set nodes (in step with `judged.rows`), the selected files' stored
+/// symbols by path, and the walk the selection's snapshot holds.
 pub(crate) struct SetJudged {
     pub judged: Judged,
     pub nodes: Vec<BTreeSet<NodeKey>>,
     pub symbols: BTreeMap<String, Vec<StoredSymbol>>,
+    pub walk: SetWalk,
+}
+
+/// Every stored code file of the selection's snapshot (the walk's files,
+/// by path) and, when the judge refreshed the code index once more (a file
+/// edited since the first refresh), the names and files that refresh
+/// skipped for not being UTF-8.
+pub(crate) struct SetWalk {
+    pub files: Vec<CodeFileState>,
+    pub skipped: Option<usize>,
 }
 
 /// A read's rows of a node set and its one note (task spec
@@ -95,6 +106,9 @@ pub(crate) struct SetBindings {
     pub judged: bool,
     /// `bindings: <cause>`, the first cause in verify's order.
     pub note: Option<String>,
+    /// The code files the read's walk covered, as `spec refs` counts them;
+    /// `None` when no row could be read.
+    pub code: Option<CodeCount>,
 }
 
 /// One row of a read, the set nodes it belongs to, its binding as verify
@@ -111,14 +125,15 @@ pub(crate) struct SetRow {
 }
 
 /// The code index refreshed (`refresh_code`, as `spec refs` calls it), its
-/// notes added to `messages`. Causes: its first gap (3), worded as the
-/// walk's; the refresh failing (8).
+/// notes added to `messages`; the names and files it skipped for not being
+/// UTF-8. Causes: its first gap (3), worded as the walk's; the refresh
+/// failing (8).
 pub(crate) fn refreshed_code(
     index: &mut SqliteIndex,
     project: &ProjectRoot,
     code: &CodeConfig,
     messages: &mut Vec<Message>,
-) -> Result<(), RunCause> {
+) -> Result<usize, RunCause> {
     let refreshed = refresh_code(
         index,
         &project.root,
@@ -131,7 +146,7 @@ pub(crate) fn refreshed_code(
     messages.extend(refreshed.messages.iter().cloned());
     match refreshed.gap() {
         Some(gap) => Err(walk_gap(gap)),
-        None => Ok(()),
+        None => Ok(refreshed.report.skipped),
     }
 }
 
@@ -186,15 +201,17 @@ pub(crate) fn judge_set(
         },
         nodes,
         symbols: files.symbols,
+        walk: files.walk,
     })
 }
 
 /// The set's files as read: their partial tree, their stored symbols by
-/// path, and the lock cut to the set.
+/// path, the lock cut to the set, and the selection's walk.
 struct SetFiles {
     tree: CodeTree,
     symbols: BTreeMap<String, Vec<StoredSymbol>>,
     cut: Lock,
+    walk: SetWalk,
 }
 
 /// The selection of the set's files read and checked (see [`judge_set`]).
@@ -208,10 +225,11 @@ fn set_files(
 ) -> Result<SetFiles, RunCause> {
     let cut = cut_lock(scope.lock, set, corpus);
     let mut again = false;
+    let mut skipped = None;
     loop {
         if again {
             messages.truncate(notes_at);
-            refreshed_code(index, scope.project, scope.code, messages)?;
+            skipped = Some(refreshed_code(index, scope.project, scope.code, messages)?);
         }
         let selection = index
             .code_selection(|refs| selected(refs, &cut, set, corpus))
@@ -224,7 +242,15 @@ fn set_files(
                     .into_iter()
                     .map(|file| (file.path, file.symbols))
                     .collect();
-                return Ok(SetFiles { tree, symbols, cut });
+                return Ok(SetFiles {
+                    tree,
+                    symbols,
+                    cut,
+                    walk: SetWalk {
+                        files: selection.refs.files,
+                        skipped,
+                    },
+                });
             }
             Err(Fresh::Gap(gap)) => return Err(walk_gap(&gap)),
             Err(Fresh::Changed(path)) if again => {
@@ -351,6 +377,7 @@ pub(crate) fn set_bindings(
         rows: None,
         judged: false,
         note: Some(note(&cause)),
+        code: None,
     };
     let label = &project.config_label;
     // (2), (1): `[code]` alone; `[verify]` is never read.
@@ -368,9 +395,19 @@ pub(crate) fn set_bindings(
 
     // (3), (8): the code index refreshed, its gap anywhere a cause.
     let mut messages = Vec::new();
-    if let Err(cause) = refreshed_code(index, project, &code, &mut messages) {
-        return unknown(cause);
-    }
+    let skipped = match refreshed_code(index, project, &code, &mut messages) {
+        Ok(skipped) => skipped,
+        Err(cause) => return unknown(cause),
+    };
+    // The latest refresh's skipped names and files: the judge's own when
+    // it refreshed again.
+    let count = |walk: SetWalk| {
+        let refs = CodeRefs {
+            files: walk.files,
+            ..CodeRefs::default()
+        };
+        stored_count(&refs, walk.skipped.unwrap_or(skipped))
+    };
 
     // (4), (5), (6): git, the lock's unmerged stages, the lock.
     let mut causes: Vec<RunCause> = Vec::new();
@@ -431,12 +468,14 @@ pub(crate) fn set_bindings(
             rows: Some(judged.as_ref().map(judged_rows).unwrap_or_default()),
             judged: true,
             note: None,
+            code: judged.map(|judged| count(judged.walk)),
         };
     }
 
     // (4)-(6) alone: the keys listed, unjudged; with the lock unreadable,
     // its entries as far as its bytes parse.
     let mut rows = None;
+    let mut counted = None;
     if !causes.iter().any(leaves_no_row) {
         let listing = match lock {
             Some(lock) => lock,
@@ -450,7 +489,10 @@ pub(crate) fn set_bindings(
             keys,
         };
         match listed_rows(&scope, index, &mut messages) {
-            Ok(listed) => rows = Some(listed),
+            Ok((listed, walk)) => {
+                rows = Some(listed);
+                counted = Some(count(walk));
+            }
             Err(cause) => causes.push(cause),
         }
     }
@@ -459,6 +501,7 @@ pub(crate) fn set_bindings(
         rows,
         judged: false,
         note: causes.first().map(note),
+        code: counted,
     }
 }
 
@@ -494,13 +537,13 @@ fn any_lock(project: &ProjectRoot) -> Lock {
 }
 
 /// The set's rows listed, never judged: the selected files' tree and the
-/// cut lock's entries, kept to the set. Its causes: a walk gap (3), the
-/// data directory (8).
+/// cut lock's entries, kept to the set; with the selection's walk. Its
+/// causes: a walk gap (3), the data directory (8).
 fn listed_rows(
     scope: &SetScope<'_>,
     index: &mut SqliteIndex,
     messages: &mut Vec<Message>,
-) -> Result<Vec<SetRow>, RunCause> {
+) -> Result<(Vec<SetRow>, SetWalk), RunCause> {
     let project = scope.project;
     let scheme = &project.config.scheme;
     let mut corpus = Corpus::new(scope.input, scheme, &project.config.paths);
@@ -527,7 +570,7 @@ fn listed_rows(
             })
         })
         .collect();
-    Ok(rows)
+    Ok((rows, files.walk))
 }
 
 /// The judged rows as a read shows them.

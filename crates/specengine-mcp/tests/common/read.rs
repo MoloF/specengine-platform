@@ -18,6 +18,11 @@
 //! [`code_library`] is `verify` with `node` and `symbol` as written, the
 //! working tree, no task, the server's git environment. A rendered exit 2
 //! (verify's report) keeps its document ([`expected`]).
+//!
+//! docs/features/impact.md (7b-1): `get_impact` joins `TOOLS`
+//! (twenty-one); its twin in [`library`] is `spec impact [REF] [--symbol
+//! QPATH] [--depth N]` (`ImpactRequest {reference, symbol, depth, git}`),
+//! the tool's form error ([`GET_IMPACT_ONE_FORM`]) answered before it.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -25,9 +30,9 @@ use std::path::Path;
 use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
-    DriftRequest, Env, Exit, GitEnv, Globals, IntakeSeverity, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, RefsRequest, ReviewRequest, RoadmapRequest, SearchRequest,
-    ShowRequest, SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest,
+    DriftRequest, Env, Exit, GitEnv, Globals, ImpactRequest, IntakeSeverity, Outcome,
+    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, ReviewRequest, RoadmapRequest,
+    SearchRequest, ShowRequest, SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest,
     TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest,
     VerifiedTree, VerifyRequest, render_json, render_text,
 };
@@ -82,14 +87,16 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// docs/features/drift-queue.md (`report_drift`), eighteen since
 /// docs/features/code-tools.md (`find_symbols`, `refs`, `unmapped`),
 /// nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`),
-/// twenty since docs/features/check-binding.md (`check_binding`).
-pub const TOOLS: [&str; 20] = [
+/// twenty since docs/features/check-binding.md (`check_binding`),
+/// twenty-one since docs/features/impact.md (`get_impact`).
+pub const TOOLS: [&str; 21] = [
     "ask_question",
     "check_binding",
     "claim_task",
     "complete_task",
     "find_symbols",
     "get_context_bundle",
+    "get_impact",
     "get_node",
     "get_proposal",
     "get_roadmap",
@@ -110,6 +117,10 @@ pub const TOOLS: [&str; 20] = [
 /// exactly one of its four forms (a `null` is absent), as `get_task`'s.
 pub const FIND_SYMBOLS_ONE_FORM: &str =
     "spec: find_symbols takes exactly one of `query`, `node`, `file` and `at`\n";
+
+/// docs/features/impact.md "MCP `get_impact`", **Form**: not exactly one
+/// non-null of `id` and `symbol`, before discovery.
+pub const GET_IMPACT_ONE_FORM: &str = "spec: get_impact takes exactly one of `id` and `symbol`\n";
 
 /// docs/canon/mcp-code.md "Tools", Forms: `limit` beside a form other
 /// than `query`.
@@ -635,7 +646,9 @@ pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> E
 /// a code tool as [`code_library`]; `get_roadmap` = `spec roadmap
 /// [--release R] [--pool]` with the server's git environment
 /// (docs/features/roadmap-surfaces.md: `release` beside `pool: true` the
-/// CLI's usage error, exit 2).
+/// CLI's usage error, exit 2); `get_impact` = `spec impact [REF] [--symbol
+/// QPATH] [--depth N]` with the server's git environment, not exactly one
+/// non-null of `id` and `symbol` the tool's [`GET_IMPACT_ONE_FORM`].
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     if CODE_TOOLS.contains(&tool) {
         return code_library(tool, args, env, globals);
@@ -718,6 +731,26 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             },
         )
         .map(|outcome| Outcome::Roadmap(Box::new(outcome))),
+        "get_impact" => {
+            if args["id"].is_null() == args["symbol"].is_null() {
+                return Expected {
+                    text: GET_IMPACT_ONE_FORM.to_owned(),
+                    document: None,
+                    is_error: true,
+                };
+            }
+            specengine_cli::impact(
+                env,
+                globals,
+                &ImpactRequest {
+                    reference: text("id"),
+                    symbol: text("symbol"),
+                    depth: number("depth"),
+                    git: server_git(env),
+                },
+            )
+            .map(|outcome| Outcome::Impact(Box::new(outcome)))
+        }
         other => panic!("no CLI counterpart for tool {other}"),
     };
     expected(outcome)

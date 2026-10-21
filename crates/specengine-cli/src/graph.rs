@@ -29,7 +29,7 @@
 use std::collections::BTreeSet;
 
 use serde::Serialize;
-use specengine_core::check::{Endpoint, LinkState, NodeAt, SpecGraph};
+use specengine_core::check::{Endpoint, LinkState, NodeAt, SpecGraph, Walk};
 use specengine_model::link::is_link_type;
 use specengine_model::{
     Direction, IMPACT_LINK_TYPES, LINK_TYPES, graph_direction, impact_direction, is_weak_link,
@@ -187,19 +187,9 @@ pub fn graph_with_view(
         &starts,
         "all at distance 0",
     ));
-    let admission = Admission::new(&graph, request.archive, starts.iter().map(|at| at.file));
     outcome.types = followed(&graph, request);
-    let walk = graph.walk(
-        &starts,
-        |link_type| follow(request, link_type),
-        depth,
-        |file| admission.admits(file),
-    );
-    for &edge in &walk.left_out {
-        outcome
-            .left_out
-            .add(graph.standing(graph.edges()[edge].file));
-    }
+    let Reach { walk, left_out } = reach(&graph, &starts, request, depth);
+    outcome.left_out = left_out;
     outcome.nodes = walk
         .nodes
         .iter()
@@ -226,6 +216,51 @@ pub fn graph_with_view(
         View::Browser => (outcome.nodes.len(), outcome.edges.len()),
     };
     Ok(outcome)
+}
+
+/// What one walk from the starts reached, and the edges of a followed type
+/// it met in files the live rule leaves out, counted.
+pub(crate) struct Reach {
+    pub(crate) walk: Walk,
+    pub(crate) left_out: LeftOut,
+}
+
+/// The one walk of `spec graph` and `spec impact`: breadth-first from
+/// `starts` (distance 0) along the types `request` follows, at most
+/// `depth`, over the files the live rule admits (the starts' always), so
+/// `spec impact`'s nodes are `spec graph --impact`'s by construction.
+pub(crate) fn reach(
+    graph: &SpecGraph<'_>,
+    starts: &[NodeAt],
+    request: &GraphRequest,
+    depth: Option<usize>,
+) -> Reach {
+    let admission = Admission::new(graph, request.archive, starts.iter().map(|at| at.file));
+    let walk = graph.walk(
+        starts,
+        |link_type| follow(request, link_type),
+        depth,
+        |file| admission.admits(file),
+    );
+    let mut left_out = LeftOut::default();
+    for &edge in &walk.left_out {
+        left_out.add(graph.standing(graph.edges()[edge].file));
+    }
+    Reach { walk, left_out }
+}
+
+/// `spec graph --impact`'s walk from `starts` (the impact table, no
+/// `--type`, Tier 3 files' links left out): `spec impact`'s.
+pub(crate) fn impact_reach(
+    graph: &SpecGraph<'_>,
+    starts: &[NodeAt],
+    depth: Option<usize>,
+) -> Reach {
+    let request = GraphRequest {
+        impact: true,
+        ..GraphRequest::default()
+    };
+    reach(graph, starts, &request, depth)
 }
 
 /// How many nodes, then edges, fit within the cap: the nodes first; a node
@@ -320,7 +355,8 @@ fn followed(graph: &SpecGraph<'_>, request: &GraphRequest) -> Vec<FollowedType> 
         .collect()
 }
 
-fn node_of(graph: &SpecGraph<'_>, at: NodeAt, distance: usize) -> GraphNode {
+/// A node reached at `distance`, as `spec graph` and `spec impact` list it.
+pub(crate) fn node_of(graph: &SpecGraph<'_>, at: NodeAt, distance: usize) -> GraphNode {
     let node = graph.node(at);
     GraphNode {
         id: node.and_then(|node| node.id.clone()),
@@ -351,7 +387,9 @@ fn edge_of(graph: &SpecGraph<'_>, index: usize) -> GraphEdge {
     }
 }
 
-fn node_line(node: &GraphNode) -> String {
+/// `<distance> <name> | <kind or -> | <title or -> | <path>:<line>[ |
+/// archived]` (`spec impact`'s after its `node `).
+pub(crate) fn node_line(node: &GraphNode) -> String {
     let name = node.id.as_deref().unwrap_or(&node.path);
     let mut line = format!(
         "{} {} | {} | {} | {}:{}",
@@ -437,8 +475,9 @@ struct GraphJson<'a> {
     edges: Vec<EdgeJson<'a>>,
 }
 
+/// A node's JSON object, `spec graph`'s and `spec impact`'s.
 #[derive(Serialize)]
-struct NodeJson<'a> {
+pub(crate) struct NodeJson<'a> {
     id: Option<&'a str>,
     kind: Option<&'a str>,
     title: Option<&'a str>,
@@ -446,6 +485,20 @@ struct NodeJson<'a> {
     line: usize,
     distance: usize,
     archived: bool,
+}
+
+impl<'a> NodeJson<'a> {
+    pub(crate) fn of(node: &'a GraphNode) -> Self {
+        Self {
+            id: node.id.as_deref(),
+            kind: node.kind.as_deref(),
+            title: node.title.as_deref(),
+            path: &node.path,
+            line: node.line,
+            distance: node.distance,
+            archived: node.archived,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -474,15 +527,7 @@ fn view(outcome: &GraphOutcome) -> GraphJson<'_> {
         truncated: outcome.truncated(),
         nodes: outcome.nodes[..outcome.shown_nodes.min(outcome.nodes.len())]
             .iter()
-            .map(|node| NodeJson {
-                id: node.id.as_deref(),
-                kind: node.kind.as_deref(),
-                title: node.title.as_deref(),
-                path: &node.path,
-                line: node.line,
-                distance: node.distance,
-                archived: node.archived,
-            })
+            .map(NodeJson::of)
             .collect(),
         edges: outcome.edges[..outcome.shown_edges.min(outcome.edges.len())]
             .iter()

@@ -8,7 +8,7 @@ reviewed: 2026-10-21
 
 # Code in reads: binding rows, their sync, the degrade
 
-A read of nodes carries each of their code bindings as one row whose `sync` is the state `spec verify --node` gives it, by construction; the read never fails on the code layer (`architecture-code.md#sync-in-reads`, ADR-0046). Built: `spec show --bindings`, its twins, `delta.tests_reaching` (7a-1, `docs/features/show-bindings.md`); the bundle's layers 5 and 9, the package's `bindings` (7a-2, `docs/features/bundle-bindings.md`); `impact` (7b) reuses row, seam and degrade. Code: CLI `bindings.rs`, `show.rs`, `cap.rs`, `bundle.rs`, `package.rs`, `node_set.rs`; model `task.rs`; store `code.rs`.
+A read of nodes carries each of their code bindings as one row whose `sync` is the state `spec verify --node` gives it, by construction; the read never fails on the code layer (`architecture-code.md#sync-in-reads`, ADR-0046). Built: `spec show --bindings`, its twins, `delta.tests_reaching` (7a-1, `docs/features/show-bindings.md`); the bundle's layers 5 and 9, the package's `bindings` (7a-2, `docs/features/bundle-bindings.md`); `spec impact` (7b-1, `spec-impact.md`) reuses row, seam and degrade. Code: CLI `bindings.rs`, `show.rs`, `cap.rs`, `bundle.rs`, `package.rs`, `node_set.rs`; model `task.rs`; store `code.rs`.
 
 ## The binding row
 
@@ -42,7 +42,7 @@ Verify's `class`, `pre_existing`, `markers`, `node_rev`, `lock`, `compared`, `le
 CLI `bindings.rs`, one judge for `verify --node` and the reads:
 
 - `judge_set(&SetScope {project, code, input, lock, keys}, …) -> Result<SetJudged, RunCause>`: `spec-verify-scope.md` "`--node`" steps 4-6 over any node set (levels hashed afresh, never the index's digest columns), `code_selection` also giving each selected file's stored symbols (`SelectedFile.symbols`, by `ord`: the row's lines, signature, layer); rows kept by `verify.rs` `key_set_nodes`. `verify --node` calls it over its holders, its output unchanged.
-- `set_bindings(project, text, git_env, index, input, keys) -> SetBindings {rows, judged, note}`: "Degrade", never a read's failure. `verify_rows.rs` `list_rows` lists keys as the judge gathers them: nothing hashed, git never asked, no pairing.
+- `set_bindings(project, text, git_env, index, input, keys) -> SetBindings {rows, judged, note, code}` (`code` the walk's counts): "Degrade", never a read's failure. `verify_rows.rs` `list_rows` lists keys as the judge gathers them: nothing hashed, git never asked, no pairing.
 
 ## Degrade
 

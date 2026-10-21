@@ -1,7 +1,10 @@
 //! The read tools (task spec `mcp-read`): `get_tree`, `get_node`, `search`,
-//! `get_context_bundle`, and `get_roadmap` (task spec `roadmap-surfaces`:
-//! `spec roadmap`, the queue read as it is, no schema step), each one call
-//! into the CLI library.
+//! `get_context_bundle`, `get_roadmap` (task spec `roadmap-surfaces`:
+//! `spec roadmap`, the queue read as it is, no schema step) and
+//! `get_impact` (task spec `impact`: `spec impact REF | --symbol QPATH
+//! [--depth N]`, exactly one of `id` and `symbol` told at run time before
+//! any discovery, as `find_symbols`' forms), each one call into the CLI
+//! library.
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
@@ -25,15 +28,15 @@ use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use serde_json::Value;
 use specengine_cli::{
-    BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, Globals, MIN_TERM_CHARS,
-    OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET, RoadmapRequest, SEARCH_LIMIT_DEFAULT,
-    SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES, SearchRequest, ShowRequest, TreeRequest,
-    View, process_git, render_json, render_text,
+    BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, Globals, ImpactRequest,
+    MIN_TERM_CHARS, OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET, RoadmapRequest,
+    SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES, SearchRequest,
+    ShowRequest, TreeRequest, View, process_git, render_json, render_text,
 };
 
 use crate::mirror::{
-    BundleDocument, RoadmapDocument, SearchDocument, ShowDocument, TreeDocument, input_schema,
-    output_schema,
+    BundleDocument, ImpactDocument, RoadmapDocument, SearchDocument, ShowDocument, TreeDocument,
+    input_schema, output_schema,
 };
 use crate::server::SpecEngineServer;
 
@@ -190,6 +193,34 @@ one line. ",
     common_tail!()
 );
 
+const IMPACT_DESCRIPTION: &str = "What a change to a node or a code symbol reaches: the nodes the \
+impact walk reaches from it, each with its distance; the code bound to them and to the sections \
+within them, with each binding's sync; the tests bound to them; and this repository's open tasks \
+naming them. The same as `spec impact REF | --symbol QPATH [--depth N]`: content is the \
+command's output (its note and warning lines first), structuredContent its --json document.
+
+id: a REF, any form get_node takes: its nodes start the walk (an ID several documents hold: all \
+of them, with a warning).
+symbol: a code symbol, looked up as find_symbols' query: the walk starts at the nodes whose \
+markers bind an item of its best tier, an item enclosing one, or its file; a mention never starts \
+it. Needs a `[code]` table in the project's config.
+depth: links from the start at most; 0 = the start only. Absent: unbounded.
+Give exactly one of id and symbol: anything else is an error result naming them.
+
+The walk is `spec graph --impact`'s: what depends on, derives from, verifies or uses the terms of \
+a reached node, and what it constrains. Nothing here changes a status, a verdict or a gate. \
+Without a `[code]` table, id answers with no code and no tests; a binding that cannot be judged \
+(no git, an unreadable lock) is listed with an unknown sync and one note. An answer above 40000 \
+characters is cut, the counts first, with a tail counting the rest (it names --depth N: depth). \
+A REF naming nothing or a symbol naming no item: an error result with the reason, and the \
+document. A call that cannot run (a look-alike ID, refused with its Latin fix; symbol without \
+`[code]` or with an incomplete walk): an error result with its one line. Reads the files as \
+they are now: refreshes SpecEngine's indexes of the spec and the code in its data directory, \
+writes nothing under the project root. Deterministic: one state, one result; no LLM inside.";
+
+/// `get_impact` given not exactly one of `id` and `symbol`.
+const ONE_INPUT: &str = "spec: get_impact takes exactly one of `id` and `symbol`\n";
+
 /// The sentence every description holds (07 §1.1; AC-01).
 pub(crate) const DETERMINISM: &str = "Deterministic: one state, one result; no LLM inside.";
 
@@ -259,16 +290,22 @@ const _: () = assert!(NODE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(SEARCH_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(BUNDLE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(ROADMAP_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(IMPACT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(TREE_DESCRIPTION.is_ascii());
 const _: () = assert!(NODE_DESCRIPTION.is_ascii());
 const _: () = assert!(SEARCH_DESCRIPTION.is_ascii());
 const _: () = assert!(BUNDLE_DESCRIPTION.is_ascii());
 const _: () = assert!(ROADMAP_DESCRIPTION.is_ascii());
+const _: () = assert!(IMPACT_DESCRIPTION.is_ascii());
 const _: () = assert!(holds(TREE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(NODE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(SEARCH_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(BUNDLE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(ROADMAP_DESCRIPTION, DETERMINISM));
+const _: () = assert!(holds(IMPACT_DESCRIPTION, DETERMINISM));
+// It names its CLI twin and the table `symbol` needs.
+const _: () = assert!(holds(IMPACT_DESCRIPTION, "`spec impact "));
+const _: () = assert!(holds(IMPACT_DESCRIPTION, "`[code]`"));
 // The numbers the descriptions state are the CLI's.
 const _: () = assert!(holds_number(
     TREE_DESCRIPTION,
@@ -326,6 +363,12 @@ const _: () = assert!(holds_number(
 ));
 const _: () = assert!(holds_number(
     ROADMAP_DESCRIPTION,
+    "above ",
+    OUTPUT_CAP_CHARS,
+    " characters"
+));
+const _: () = assert!(holds_number(
+    IMPACT_DESCRIPTION,
     "above ",
     OUTPUT_CAP_CHARS,
     " characters"
@@ -437,6 +480,18 @@ const LIMIT_DOC: &str = "Hits at most, 1 to 200. Absent: 20.";
 /// The input schema's description of `get_context_bundle.budget`.
 const BUDGET_DOC: &str = "Estimated tokens at most. Absent: `[budgets] bundle_node`, else 2000.";
 
+/// The input schema's description of `get_impact.id`.
+const IMPACT_ID_DOC: &str =
+    "An ID, an alias, `slug/ID`, `ID#SECTION` or a root-relative `.md` path.";
+
+/// The input schema's description of `get_impact.symbol`.
+const IMPACT_SYMBOL_DOC: &str = "A code symbol, looked up as find_symbols' query: a qualified \
+path, a suffix of one or a bare name.";
+
+/// The input schema's description of `get_impact.depth`.
+const IMPACT_DEPTH_DOC: &str =
+    "Links from the start at most; 0 = the start only. Absent: unbounded.";
+
 /// `search` arguments.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -472,6 +527,19 @@ pub(crate) struct RoadmapArgs {
     /// `--pool`: `true` lists only the pool and the items in a release not
     /// listed.
     pub pool: Option<bool>,
+}
+
+/// `get_impact` arguments: exactly one of `id` and `symbol`, told at run
+/// time (no root `oneOf`: `docs/canon/mcp-read.md` "Tools").
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ImpactArgs {
+    #[schemars(description = IMPACT_ID_DOC)]
+    pub id: Option<String>,
+    #[schemars(description = IMPACT_SYMBOL_DOC)]
+    pub symbol: Option<String>,
+    #[schemars(description = IMPACT_DEPTH_DOC)]
+    pub depth: Option<i64>,
 }
 
 #[tool_router(router = read_tools, vis = "pub(crate)")]
@@ -610,6 +678,38 @@ impl SpecEngineServer {
             })
             .await
             .into_tool_result("get_roadmap"))
+    }
+
+    /// `spec impact`: exactly one of `id` and `symbol`, else the tool's
+    /// own error result before any discovery, no document.
+    #[tool(
+        description = IMPACT_DESCRIPTION,
+        input_schema = input_schema::<ImpactArgs>(),
+        output_schema = output_schema::<ImpactDocument>(),
+        annotations(read_only_hint = true, destructive_hint = false, open_world_hint = false),
+        meta = result_size_meta()
+    )]
+    async fn get_impact(
+        &self,
+        Parameters(args): Parameters<ImpactArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let ImpactArgs { id, symbol, depth } = args;
+        if id.is_some() == symbol.is_some() {
+            return Ok(CallToolResult::error(vec![ContentBlock::text(ONE_INPUT)]));
+        }
+        Ok(self
+            .call(move |env, globals| {
+                let request = ImpactRequest {
+                    reference: id,
+                    symbol,
+                    depth,
+                    git: process_git(env),
+                };
+                specengine_cli::impact(env, globals, &request)
+                    .map(|outcome| Outcome::Impact(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("get_impact"))
     }
 }
 

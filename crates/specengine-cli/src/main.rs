@@ -35,15 +35,15 @@ use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CheckRequest,
     CheckedTree, CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env,
     Exit, ExportIndexRequest, ExportStateRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress,
-    GateRequest, GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImportStateRequest,
-    InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
-    LockAcceptRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest,
-    RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve,
-    ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
-    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree,
-    VerifyRequest, VerifyTestsRequest, render_json, render_text,
+    GateRequest, GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
+    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
+    InterpretRequest, LockAcceptRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome,
+    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest,
+    ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
+    SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES,
+    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, UnmappedRequest,
+    VerifiedTree, VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -144,6 +144,18 @@ enum Command {
         /// Include links written in Tier 3 (archived) documents.
         #[arg(long)]
         archive: bool,
+    },
+    /// Show what a change to a node or a code symbol reaches: nodes, bound code with its sync, tests, open tasks; read-only.
+    Impact {
+        /// Any form `show` takes.
+        #[arg(value_name = "REF")]
+        reference: Option<String>,
+        /// Looked up as `spec symbols QUERY`.
+        #[arg(long, value_name = "QPATH")]
+        symbol: Option<String>,
+        /// Distance from REF at most; default unbounded.
+        #[arg(long, value_name = "N", allow_negative_numbers = true)]
+        depth: Option<i64>,
     },
     /// Assemble the context of REF within a budget of estimated tokens: the targets, open questions, ancestors, criteria, decisions, neighbours, terms; the rest named by ID.
     Bundle {
@@ -857,6 +869,20 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 archive,
             },
         )?),
+        Command::Impact {
+            reference,
+            symbol,
+            depth,
+        } => Outcome::Impact(Box::new(specengine_cli::impact(
+            env,
+            globals,
+            &ImpactRequest {
+                reference,
+                symbol,
+                depth,
+                git: process_git(env),
+            },
+        )?)),
         Command::Bundle { references, budget } => Outcome::Bundle(specengine_cli::bundle(
             env,
             globals,

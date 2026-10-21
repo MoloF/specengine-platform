@@ -1,0 +1,9 @@
+# Package of the impact fixture: parsed by the code walk, never built.
+# `[workspace]` keeps it out of the repository workspace.
+[package]
+name = "ferry"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]

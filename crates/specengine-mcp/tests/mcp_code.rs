@@ -586,7 +586,7 @@ fn rd1_code_tools_are_listed_as_reads() {
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
-        assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty tools");
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty-one tools");
         for (name, twin) in TWINS {
             assert!(CODE_TOOLS.contains(&name));
             let listed = tool(&list, name);
@@ -1579,6 +1579,8 @@ fn code_mirrors_pin_the_q35_types() {
 /// (46 bytes). 1 977 since docs/features/show-bindings.md (Q-F): the
 /// hints gain [`BINDINGS_HINT`] after `--links is with ["links"]` (33
 /// bytes) and the REF paragraph loses [`NO_PROJECT_GLOSS`] (34 bytes).
+/// 2 017 since docs/features/impact.md ("INSTRUCTIONS", Q-B): the reads'
+/// line ends with [`IMPACT_READ`] (40 bytes), the `probes` paragraph gone.
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1587,7 +1589,7 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = ",
     "show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, ",
     "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
-    "pool?) = roadmap.\n",
+    "pool?) = roadmap; get_impact(id|symbol, depth?) = impact.\n",
     "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; ",
     "unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.\n",
     "Queue (writes only the queue; the owner decides on a terminal):\n",
@@ -1619,6 +1621,17 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
 /// before its full stop (40 bytes).
 const ROADMAP_READ: &str = "; get_roadmap(release?, pool?) = roadmap";
 
+/// docs/features/impact.md "INSTRUCTIONS": what the reads' line gains after
+/// [`ROADMAP_READ`], before its full stop (40 bytes).
+const IMPACT_READ: &str = "; get_impact(id|symbol, depth?) = impact";
+
+/// docs/features/impact.md "INSTRUCTIONS": the reads' line, its LF
+/// included (312 bytes).
+const READS_LINE: &str = "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = \
+                          show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, \
+                          budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, \
+                          pool?) = roadmap; get_impact(id|symbol, depth?) = impact.\n";
+
 /// docs/features/check-binding.md "INSTRUCTIONS": what the code line gains,
 /// before its full stop (46 bytes).
 const CHECK_BINDING_CLAUSE: &str = "; check_binding(node, symbol?) = verify --node";
@@ -1632,14 +1645,20 @@ const BINDINGS_HINT: &str = ", --bindings is with [\"bindings\"]";
 /// no-project error result names `spec init` itself).
 const NO_PROJECT_GLOSS: &str = " (no specengine.toml: `spec init`)";
 
-/// check-binding's text (1 978 bytes) out of `instructions`: [`BINDINGS_HINT`]
-/// taken out and [`NO_PROJECT_GLOSS`] put back.
+/// check-binding's text (1 978 bytes) out of show-bindings' (1 977):
+/// [`BINDINGS_HINT`] taken out and [`NO_PROJECT_GLOSS`] put back.
 fn as_of_check_binding(instructions: &str) -> String {
     instructions.replacen(BINDINGS_HINT, "", 1).replacen(
         "a call that cannot run is",
         &format!("a call that cannot run{NO_PROJECT_GLOSS} is"),
         1,
     )
+}
+
+/// show-bindings' text (1 977 bytes) out of impact's (2 017):
+/// [`IMPACT_READ`] taken out.
+fn as_of_show_bindings(instructions: &str) -> String {
+    instructions.replacen(IMPACT_READ, "", 1)
 }
 
 /// The code tools' line, its LF included (104 + 1 bytes; 151 since
@@ -1651,20 +1670,25 @@ const CODE_LINE: &str = "- Code: find_symbols(query|node|file|at, limit?) = symb
 const TASKS_LINE: &str = "- get_task, claim_task, submit_plan, report_run, complete_task = spec \
                           task show|claim|plan|report|complete; the three above take task_id.\n";
 
-/// The `probes` build's paragraph after code-tools (76 bytes; its pin:
-/// `mcp_create.rs`); 59 since docs/features/check-binding.md (Q-C: ` (owner's
-/// checks)` cut, -17).
+/// The `probes` build's paragraph until docs/features/impact.md (Q-B: it
+/// goes; both builds send `INSTRUCTIONS` alone, `mcp_create.rs`).
 const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output, probe_sleep.";
 
 /// `blake3_hex(PLANNED_INSTRUCTIONS)`: the hash of the spec's text built
 /// here, never of the server's; `mcp_path.rs` and `mcp_decision.rs` pin
 /// the same value against `INSTRUCTIONS` (re-pinned by
-/// docs/features/roadmap-surfaces.md, docs/features/check-binding.md and
-/// docs/features/show-bindings.md).
-const PLANNED_BLAKE3: &str = "0be8933f33543d7aafd9ab2c9419f5b5ae6b1702e07ce755a83c15ed799061f4";
+/// docs/features/roadmap-surfaces.md, docs/features/check-binding.md,
+/// docs/features/show-bindings.md and docs/features/impact.md).
+const PLANNED_BLAKE3: &str = "34f0f0b4a5f3555f6d59c2fb2e9fc4e94b9a303daeb1342320652309b44482e7";
+
+/// show-bindings' text (1 977 bytes), [`as_of_show_bindings`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/impact.md.
+const SHOW_BINDINGS_BLAKE3: &str =
+    "0be8933f33543d7aafd9ab2c9419f5b5ae6b1702e07ce755a83c15ed799061f4";
 
 /// check-binding's text (1 978 bytes), [`as_of_check_binding`] over
-/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// show-bindings': its `PLANNED_BLAKE3` before
 /// docs/features/show-bindings.md.
 const CHECK_BINDING_BLAKE3: &str =
     "d4194b2b26224e59dfcda9fa3853af96a119fd5015cd524cb39bdbfad9bb17bf";
@@ -1678,10 +1702,10 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 /// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 839
-/// bytes); check-binding's 1 840 was `dc019aa4…`.
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 879
+/// bytes); show-bindings' 1 839 was `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "54d160f1bc427778ddf3efaff9a66ed89be04df9f0cd89f396e4a3408a1eeb72";
+    "523f0715e02bb48d622ec47c7294cec1d651a191fa93426b5e7a200ab21b12b9";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -1700,11 +1724,18 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// paragraph loses [`NO_PROJECT_GLOSS`]: 1 977 bytes, 1 839 less the tasks
 /// line, 2 036 with the 59-byte paragraph, 12 left (71 in the default
 /// build). M: the hint or the cut missing; the text changed, a pin kept.
+/// docs/features/impact.md ("INSTRUCTIONS", Q-B): the reads' line ends
+/// with [`IMPACT_READ`] after [`ROADMAP_READ`] (312 bytes with its LF), the
+/// `probes` paragraph gone: 2 017 bytes in both builds, 1 879 less the
+/// tasks line, 31 left. M: INSTRUCTIONS over 2 048 bytes (the build's
+/// asserts); the clause elsewhere; the text changed, a pin kept.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 1977, "the spec's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2017, "the spec's figure");
     assert_eq!(ROADMAP_READ.len(), 40);
+    assert_eq!(IMPACT_READ.len(), 40);
+    assert_eq!(READS_LINE.len(), 312, "the spec's reads line");
     assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
     assert_eq!(BINDINGS_HINT.len(), 33);
     assert_eq!(NO_PROJECT_GLOSS.len(), 34);
@@ -1712,11 +1743,31 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TASKS_LINE.len(), 138);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 1977);
-    assert_eq!(2048 - instructions.len(), 71, "the default build's room");
+    assert_eq!(instructions.len(), 2017);
+    assert_eq!(
+        2048 - instructions.len(),
+        31,
+        "the room docs/features/impact.md states"
+    );
     assert!(instructions.is_ascii());
+    assert!(
+        !instructions.contains("Probes build") && !instructions.contains(PROBES_PARAGRAPH),
+        "no probes paragraph (Q-B)"
+    );
+    assert_eq!(
+        instructions.matches(READS_LINE).count(),
+        1,
+        "the reads' line"
+    );
+    assert!(
+        instructions.contains(
+            "get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol, depth?) = impact.\n"
+        ),
+        "the reads' line ends with the impact clause, exactly"
+    );
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
+    assert_eq!(instructions.matches(IMPACT_READ).count(), 1);
     assert_eq!(instructions.matches(CHECK_BINDING_CLAUSE).count(), 1);
     assert_eq!(instructions.matches(BINDINGS_HINT).count(), 1);
     assert!(
@@ -1731,9 +1782,9 @@ fn rd5_instructions_are_the_planned_text() {
     );
     assert!(
         instructions.contains(&format!(
-            "review --brief{ROADMAP_READ}.\n{CODE_LINE}Queue ("
+            "review --brief{ROADMAP_READ}{IMPACT_READ}.\n{CODE_LINE}Queue ("
         )),
-        "the roadmap read ends the reads' line; the code line closes the reads"
+        "the roadmap and impact reads end the reads' line; the code line closes the reads"
     );
     assert!(instructions.contains("Hints use flags: --kind is kinds"));
     assert!(!instructions.contains("CLI flags"));
@@ -1753,18 +1804,20 @@ fn rd5_instructions_are_the_planned_text() {
     for name in CODE_TOOLS {
         assert!(instructions.contains(&format!("{name}(")), "{name}(");
     }
+    assert!(instructions.contains("get_impact("), "get_impact(");
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1839, "1 977 less 138");
-    let with_probes = instructions.len() + PROBES_PARAGRAPH.len();
-    assert_eq!(with_probes, 2036);
+    assert_eq!(less.len(), 1879, "2 017 less 138");
+    // The text before docs/features/impact.md: show-bindings' 1 977.
+    let show_bindings = as_of_show_bindings(instructions);
+    assert_eq!(show_bindings.len(), 1977);
     assert_eq!(
-        2048 - with_probes,
-        12,
-        "the room docs/features/show-bindings.md states"
+        blake3_hex(show_bindings.as_bytes()),
+        SHOW_BINDINGS_BLAKE3,
+        "only the impact clause was added"
     );
     // The text before docs/features/show-bindings.md: check-binding's
     // 1 978.
-    let check_binding = as_of_check_binding(instructions);
+    let check_binding = as_of_check_binding(&show_bindings);
     assert_eq!(check_binding.len(), 1978);
     assert_eq!(
         blake3_hex(check_binding.as_bytes()),
@@ -1801,13 +1854,15 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
+    let show_bindings = as_of_show_bindings(PLANNED_INSTRUCTIONS);
+    assert_eq!(blake3_hex(show_bindings.as_bytes()), SHOW_BINDINGS_BLAKE3);
     assert_eq!(
-        blake3_hex(as_of_check_binding(PLANNED_INSTRUCTIONS).as_bytes()),
+        blake3_hex(as_of_check_binding(&show_bindings).as_bytes()),
         CHECK_BINDING_BLAKE3
     );
     assert_eq!(
         blake3_hex(
-            as_of_check_binding(PLANNED_INSTRUCTIONS)
+            as_of_check_binding(&show_bindings)
                 .replacen(CHECK_BINDING_CLAUSE, "", 1)
                 .as_bytes()
         ),

@@ -55,7 +55,7 @@ use specengine_core::{
     GroupKind, Plan, PlanItem, PlanTask, PlanTasks, RoadmapConfig, Sum, plan, plan_tasks,
 };
 use specengine_model::TaskStatus;
-use specengine_store::{GitEnv, SqliteQueue, TaskList, WorktreeGit, same_repository};
+use specengine_store::{GitEnv, SqliteQueue, Task, TaskList, WorktreeGit, same_repository};
 
 use crate::cap::{OUTPUT_CAP_CHARS, View};
 use crate::corpus::indexed;
@@ -343,30 +343,95 @@ fn pool_task_line(task: &PlanTask) -> String {
 }
 
 /// This repository's task rows for the join (canon `spec-roadmap`,
-/// "Position"), read as the queue holds them: no schema step, nothing
-/// created or written, never an exit; with the queue's notes.
-///
-/// - No task row (no database, no queue table, an empty queue) or a
-///   project root in no git repository: none, no note.
-/// - A queue that cannot be read (a newer build's, a database error),
-///   `[ids]` taking the proposal or the task prefix, git that does not
-///   run: none, one note `tasks not shown: <why>`.
-/// - A row that does not decode: one note each, `<row>; not shown`.
-/// - Open tasks of another repository of the project: one note naming
-///   how many.
+/// "Position"), read as the queue holds them ([`open_tasks`]): no schema
+/// step, nothing created or written, never an exit; with the queue's notes,
+/// a git failure naming the root, then one note naming how many open tasks
+/// of another repository of the project are not shown.
 fn queue_tasks(
     env: &Env,
     project: &ProjectRoot,
     slug: &str,
     git: &GitEnv,
 ) -> (Vec<PlanTask>, Vec<String>) {
+    let read = open_tasks(env, project, slug, git, GitPlace::Root);
+    let mut notes = read.notes;
+    let rows = read
+        .here
+        .into_iter()
+        .map(|task| PlanTask {
+            id: task.id,
+            status: task.status,
+            title: task.title,
+            targets: task.targets,
+        })
+        .collect();
+    if let Some(note) = others_note(read.others.len(), slug, "spec roadmap") {
+        notes.push(note);
+    }
+    (rows, notes)
+}
+
+/// The open tasks of a project's queue (`PlanTask::is_open`), read as the
+/// queue holds them: those of this repository, those of another, and the
+/// queue's notes. `spec roadmap`'s join and `spec impact`'s tasks.
+pub(crate) struct OpenTasks {
+    /// This repository's, by number.
+    pub(crate) here: Vec<Task>,
+    /// Another repository's of the project, by number.
+    pub(crate) others: Vec<Task>,
+    pub(crate) notes: Vec<String>,
+}
+
+/// How the queue's notes name a failure: `spec roadmap`'s detailed texts
+/// (git's at the project root's path, the queue's own error), or texts
+/// that carry no path at all (a read whose answer holds no root and no
+/// data directory), leaving the cause to `spec roadmap`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum GitPlace {
+    Root,
+    Unnamed,
+}
+
+/// [`GitPlace::Unnamed`]'s note on a data directory or a queue that cannot
+/// be read.
+const QUEUE_UNREAD: &str = "the queue cannot be read (spec roadmap names the cause)";
+
+/// [`GitPlace::Unnamed`]'s note on git that does not run or fails.
+const GIT_FAILED: &str = "git in the project root failed (spec roadmap names the cause)";
+
+/// The project's open tasks, read as the queue holds them: no schema step,
+/// nothing created or written, never an exit.
+///
+/// - No task row (no database, no queue table, an empty queue) or a
+///   project root in no git repository: none, no note.
+/// - A queue that cannot be read (a newer build's, a database error),
+///   `[ids]` taking the proposal or the task prefix, git that does not
+///   run: none, one note `tasks not shown: <why>`; under
+///   [`GitPlace::Unnamed`] the queue's and git's `<why>` name no path.
+/// - A row that does not decode: one note each, `<row>; not shown`.
+pub(crate) fn open_tasks(
+    env: &Env,
+    project: &ProjectRoot,
+    slug: &str,
+    git: &GitEnv,
+    place: GitPlace,
+) -> OpenTasks {
+    let none = |notes| OpenTasks {
+        here: Vec::new(),
+        others: Vec::new(),
+        notes,
+    };
     let not_shown = |why: &str| {
         let note = escape_controls(&one_line(&format!("tasks not shown: {why}")));
-        (Vec::new(), vec![note])
+        none(vec![note])
+    };
+    let unread = |why: &str| match place {
+        GitPlace::Root => not_shown(why),
+        GitPlace::Unnamed => not_shown(QUEUE_UNREAD),
     };
     let db = match db_path(env, slug) {
         Ok(db) => db,
-        Err(error) => return not_shown(cause(&error)),
+        Err(error) => return unread(cause(&error)),
     };
     let read = SqliteQueue::open_existing(&db, slug).and_then(|queue| match queue {
         Some(queue) => queue.list_existing_tasks(),
@@ -374,58 +439,79 @@ fn queue_tasks(
     });
     let listed = match read {
         Ok(listed) => listed,
-        Err(error) => return not_shown(&error.to_string()),
+        Err(error) => return unread(&error.to_string()),
     };
     if listed.tasks.is_empty() && listed.unreadable.is_empty() {
-        return (Vec::new(), Vec::new());
+        return none(Vec::new());
     }
-    let common_dir = match repository(project, git) {
+    let common_dir = match repository(project, git, place) {
         Ok(Some(dir)) => dir,
-        Ok(None) => return (Vec::new(), Vec::new()),
+        Ok(None) => return none(Vec::new()),
         Err(why) => return not_shown(&why),
     };
     let scheme = &project.config.scheme;
     if let Some(clash) = prefix_clash(scheme).or_else(|| task_prefix_clash(scheme)) {
         return not_shown(&format!("{}: {clash}", project.config_label));
     }
-    let mut notes: Vec<String> = listed
+    let notes: Vec<String> = listed
         .unreadable
         .iter()
         .map(|row| escape_controls(&one_line(&format!("{row}; not shown"))))
         .collect();
-    let mut rows = Vec::new();
-    let mut others = 0usize;
+    let mut here = Vec::new();
+    let mut others = Vec::new();
     for task in listed.tasks {
-        let row = PlanTask {
-            id: task.id,
-            status: task.status,
-            title: task.title,
-            targets: task.targets,
-        };
-        if !row.is_open() {
+        if !is_open(task.status) {
             continue;
         }
         if same_repository(&task.git_common_dir, &common_dir) {
-            rows.push(row);
+            here.push(task);
         } else {
-            others += 1;
+            others.push(task);
         }
     }
-    if others > 0 {
-        notes.push(escape_controls(&one_line(&format!(
-            "{others} task(s) of another repository of the project `{slug}` not shown: \
-             `spec roadmap` shows the current repository's"
-        ))));
+    OpenTasks {
+        here,
+        others,
+        notes,
     }
-    (rows, notes)
+}
+
+/// Not `done`, `accepted` or `cancelled` (core's `PlanTask::is_open`).
+fn is_open(status: TaskStatus) -> bool {
+    PlanTask {
+        id: String::new(),
+        status,
+        title: None,
+        targets: Vec::new(),
+    }
+    .is_open()
+}
+
+/// `<n> task(s) of another repository of the project `<slug>` not shown:
+/// `<command>` shows the current repository's`; none for none.
+pub(crate) fn others_note(others: usize, slug: &str, command: &str) -> Option<String> {
+    (others > 0).then(|| {
+        escape_controls(&one_line(&format!(
+            "{others} task(s) of another repository of the project `{slug}` not shown: \
+             `{command}` shows the current repository's"
+        )))
+    })
 }
 
 /// The canonical git common dir of the project root's repository; `None`
 /// when git finds no repository there; `Err` the note's reason when git
-/// does not run or fails otherwise.
-fn repository(project: &ProjectRoot, git: &GitEnv) -> Result<Option<PathBuf>, String> {
-    let failed =
-        |error: &dyn std::fmt::Display| format!("git in {}: {error}", project.root.display());
+/// does not run or fails otherwise: git's error at the root's path, or
+/// under [`GitPlace::Unnamed`] a text with no path.
+fn repository(
+    project: &ProjectRoot,
+    git: &GitEnv,
+    place: GitPlace,
+) -> Result<Option<PathBuf>, String> {
+    let failed = |error: &dyn std::fmt::Display| match place {
+        GitPlace::Root => format!("git in {}: {error}", project.root.display()),
+        GitPlace::Unnamed => GIT_FAILED.to_owned(),
+    };
     let git = WorktreeGit::new(&project.root, git).map_err(|error| failed(&error))?;
     if git
         .top_if_repository()

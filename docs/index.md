@@ -21,7 +21,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
 - [docs/features/health-drift.md](features/health-drift.md) health-drift: Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui, fixtures · draft
-- [docs/features/impact.md](features/impact.md) impact: the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, fixtures · draft
+- [docs/features/impact-since.md](features/impact-since.md) impact-since (7b-2): the radius of the code changed since a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin, fixtures · draft
 - [docs/features/layer-c-reads.md](features/layer-c-reads.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols, the next plugin MINOR · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
 - [docs/features/tested-evidence.md](features/tested-evidence.md) tested-evidence: a passing test run becomes self-staling evidence in spec.lock · crates/specengine-core, crates/specengine-cli, fixtures · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress

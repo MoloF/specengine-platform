@@ -24,7 +24,7 @@ rmcp has no server-side lifecycle mode (`ClientLifecycleMode::Auto` is client-on
 - **stateless** (2026-07-28): every request carries `_meta` with `io.modelcontextprotocol/protocolVersion` and `…/clientCapabilities` (either missing -> -32602; `…/clientInfo` optional); `server/discover` is answered; `tools/list` and the resource results carry `ttlMs: 0`, `cacheScope: "public"`; no `ping`.
 - `--lifecycle` sets `supported_protocol_versions`: `auto` (default) = known versions up to 2026-07-28; `legacy` = up to 2025-11-25, a stateless request then gets -32022.
 - A first message other than `initialize`, `ping` or a complete stateless request ends the session (exit 1). rmcp skips non-JSON lines silently and, after stdin EOF, lets in-flight handlers run up to 5 s, then drops them unanswered.
-- `instructions` (`INSTRUCTIONS`, plus a probe paragraph under `probes`; `TEXT_LIMIT`) and every tool description (`DESCRIPTION_LIMIT`) are compile-time asserted <= 2 048 bytes.
+- `instructions` (`INSTRUCTIONS`, every build; `TEXT_LIMIT`) and every tool description (`DESCRIPTION_LIMIT`) are compile-time asserted <= 2 048 bytes.
 
 ## Claude Code client
 
@@ -40,7 +40,7 @@ Verified on v2.1.283 by script and by hand (Phase 0); the read-tool items checke
 
 ## Feature `probes`
 
-The measurement build, never default: the consent demo below (its `requestState` key needs `getrandom`), `probe_output {tokens}` -> `tokens` × 4 bytes of filler (max 200 000) and `probe_sleep {seconds}` (max 900, ends early on cancellation), both `readOnlyHint: true`, and their `instructions` paragraph.
+The measurement build, never default: the consent demo below (its `requestState` key needs `getrandom`), `probe_output {tokens}` -> `tokens` × 4 bytes of filler (max 200 000) and `probe_sleep {seconds}` (max 900, ends early on cancellation), both `readOnlyHint: true`.
 
 ## `review_proposal` — the Phase 0 consent demo (`probes`)
 
@@ -57,12 +57,12 @@ The measurement build, never default: the consent demo below (its `requestState`
 |---|---|
 | `lib.rs` | crate doc; re-exports `Lifecycle`, `SpecEngineServer`, `serve_stdio`, `ServeError`, `INSTRUCTIONS`, `MAX_RESULT_CHARS`; under `probes` `ReviewOutcome`, `FormAction`, `Decision`, `Era` |
 | `server.rs` | `SpecEngineServer` (`ServerHandler`, no project state): `INSTRUCTIONS` (bytes: `mcp-read.md` **Texts**) and their asserts, the tool routers (`read_tools`, `code_tools`, `intake_tools`, `task_tools`, `review_tools`), `get_info` (tools, resources), `Lifecycle` -> `supported_protocol_versions`, `list_resource{s,_templates}`, `read_resource` (blocking pool, 2026-07-28 cache hints); `serve_stdio` (clean exit on closed stdin, `ServeError`) |
-| `read.rs` | the read tools (`read_tools` router): argument types (bindings: `code-reads.md`), descriptions and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `Answer` -> the tool result; text helpers shared with `intake.rs` |
+| `read.rs` | the read tools (`read_tools` router; `get_impact`: `spec-impact.md`): argument types (bindings: `code-reads.md`), descriptions and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `Answer` -> the tool result; text helpers shared with `intake.rs` |
 | `code.rs` | the code tools (`code_tools`): arguments, the form checks before any call, descriptions, asserts; `read.rs`' `call` |
 | `intake.rs` | the queue tools (`intake_tools` router): argument types (one level of closed inline objects; `ChangeKind`: `proposal-kinds.md`), descriptions (the path form, `spec approve` too) and their asserts (each cap, `INTAKE_MATCHES_MAX`, `DISTINCT_MAX`), one CLI library call each with `author_role` always passed, `utc_now`, `process_git` |
 | `tasks.rs` | the task tools (`task_tools`): arguments, descriptions, asserts |
 | `resources.rs` | `list` (200 per page), the node template, `parse`, `read`, `percent_encode`, `percent_decode`, the error codes |
-| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (review, intake, drift, code documents, a record's keys, a one-key `Choice`, `BundleRowShape` (`BindingRowShape` + `tokens_est`); `kind` free), schema only |
+| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (review, intake, drift, code documents, a record's keys, a one-key `Choice`, `BundleRowShape` (`BindingRowShape` + `tokens_est`), `ImpactDocument`; `kind` free), schema only |
 | `review.rs` | `probes` only: `review_tools` router, `check_proposal_id`, form capability check, `ask_legacy` (raced with cancellation), `ask_stateless` / `resume` (`RequestStateCodec`), `finish` -> `ReviewOutcome` + prose |
 | `probes.rs` | `probes` only: `probe_output`, `probe_sleep` |
 | `main.rs` | clap CLI, the quiet panic hook, current-thread tokio runtime, exit codes |

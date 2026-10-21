@@ -203,6 +203,7 @@ mod graph;
 mod group;
 mod health;
 mod health_code;
+mod impact;
 mod inbox;
 mod init;
 mod intake;
@@ -288,6 +289,7 @@ pub use health_code::{
     AssumedNode, AssumedProposal, AssumedState, AssumesCounts, AssumesRow, CodeRow, CodeRows,
     RowState, UnboundCounts, UnboundMarker, UnboundRow,
 };
+pub use impact::{ImpactOutcome, ImpactRequest, ImpactRow, ImpactTask, SeedSymbol, impact};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
 pub use intake::{
@@ -415,8 +417,9 @@ pub enum Exit {
     /// clean or observed.
     Answered = 0,
     /// `spec show`, `spec tree`, `spec graph`, `spec bundle`, `spec refs`,
-    /// `spec symbols --node` found nothing: a dangling reference, no
-    /// configured prefix, a `.md` path that is not indexed.
+    /// `spec symbols --node`, `spec impact` found nothing: a dangling
+    /// reference, no configured prefix, a `.md` path that is not indexed,
+    /// a `--symbol` naming no code item.
     /// `spec check`: blocked. The queue's commands: refused by the proposal
     /// or its target (nothing stored, written or committed).
     NotFound = 1,
@@ -549,6 +552,8 @@ pub enum Outcome {
     Health(HealthOutcome),
     /// `roadmap`: the plan of the `[roadmap]` items.
     Roadmap(Box<RoadmapOutcome>),
+    /// `impact`: what a change of a node or a code item reaches.
+    Impact(Box<ImpactOutcome>),
     /// `refs`: what in the code names a node.
     Refs(Box<RefsOutcome>),
     /// `symbols`: the code index's targets of one form.
@@ -612,6 +617,7 @@ impl Outcome {
             Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
             Self::Symbols(symbols) if symbols.reason.is_some() => Exit::NotFound,
             Self::Roadmap(roadmap) if roadmap.reason.is_some() => Exit::NotFound,
+            Self::Impact(impact) if impact.reason.is_some() => Exit::NotFound,
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
             Self::LockRebase(rebase) => rebase.exit(),
@@ -648,6 +654,7 @@ impl Outcome {
             Self::Bump(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
             Self::Roadmap(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Impact(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Symbols(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Unmapped(outcome) => (&outcome.messages, None),
@@ -736,6 +743,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Bump(outcome) => bump::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
+        Outcome::Impact(outcome) => impact::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
         Outcome::Symbols(outcome) => symbols::render_text(outcome),
         Outcome::Unmapped(outcome) => unmapped::render_text(outcome),
@@ -778,6 +786,7 @@ impl serde::Serialize for Outcome {
             Self::Bump(outcome) => outcome.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
             Self::Roadmap(outcome) => outcome.serialize(serializer),
+            Self::Impact(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),
             Self::Symbols(outcome) => outcome.serialize(serializer),
             Self::Unmapped(outcome) => outcome.serialize(serializer),

@@ -40,8 +40,9 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// bytes) and cuts the probes paragraph to 59 bytes; task spec
 /// `show-bindings` (Q-F) adds the `--bindings` hint (33 bytes) and drops
 /// the `spec init` aside (34 bytes; the no-project error result names
-/// it): 1 977 bytes, 1 839 without the tasks line, 2 036 with the probes
-/// paragraph.
+/// it); task spec `impact` (Q-B) adds `get_impact` to the reads (40
+/// bytes) and drops the probes paragraph, so every build sends this text
+/// alone: 2 017 bytes, 1 879 without the tasks line.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
@@ -50,7 +51,8 @@ command: content its `2>&1` output, structuredContent its --json document.
 Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
-bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap.
+bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
+get_impact(id|symbol, depth?) = impact.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):
@@ -79,14 +81,6 @@ files change only when the owner approves.
 - IDs are Latin only; a look-alike is refused with its Latin fix."
 );
 
-/// Appended to [`INSTRUCTIONS`] when the measurement tools are built in
-/// (cut to leave room for the code tools' line, task specs `code-tools`
-/// and `check-binding`; the probe tools' descriptions say what each does).
-#[cfg(feature = "probes")]
-const PROBE_INSTRUCTIONS: &str = "
-
-Probes build: review_proposal, probe_output, probe_sleep.";
-
 /// Claude Code truncates `instructions` and tool descriptions at this length
 /// (`crates/specengine-mcp/README.md`, "Claude Code client").
 const TEXT_LIMIT: usize = 2048;
@@ -104,10 +98,6 @@ const _: () = assert!(holds_number(
     OUTPUT_CAP_CHARS,
     " characters"
 ));
-#[cfg(feature = "probes")]
-const _: () = assert!(PROBE_INSTRUCTIONS.is_ascii());
-#[cfg(feature = "probes")]
-const _: () = assert!(INSTRUCTIONS.len() + PROBE_INSTRUCTIONS.len() <= TEXT_LIMIT);
 
 /// Which protocol eras the server accepts.
 ///
@@ -193,10 +183,9 @@ fn cache_hints(context: &RequestContext<RoleServer>) -> bool {
 #[tool_handler(router = self.tool_router)]
 impl ServerHandler for SpecEngineServer {
     fn get_info(&self) -> ServerConfig {
-        #[cfg(not(feature = "probes"))]
+        // Every build, the measurement tools' too: the probe tools'
+        // descriptions say what each does.
         let instructions = INSTRUCTIONS.to_owned();
-        #[cfg(feature = "probes")]
-        let instructions = format!("{INSTRUCTIONS}{PROBE_INSTRUCTIONS}");
         ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_resources()

@@ -36,7 +36,7 @@ use crate::index::SqliteIndex;
 use crate::read::{with_worktree, worktree_id};
 use crate::roles::{StoredRole, roles_on_in};
 use crate::rows::hash_bytes;
-use crate::symbols::{SymbolHit, file_symbols_in, lookup_in};
+use crate::symbols::{SymbolHit, file_symbols_in, files_symbols_in, lookup_in};
 use crate::{b3_hash, schema, write};
 
 /// The columns [`stored_symbol`] reads, `s` a `symbols` row and `f` its
@@ -603,6 +603,19 @@ fn snapshot(
             SnapshotSymbols::Lookup { query, name } => {
                 snapshot.hits = lookup_in(tx, wt, query, name)?;
             }
+            SnapshotSymbols::LookupWithFiles { query, name } => {
+                snapshot.hits = lookup_in(tx, wt, query, name)?;
+                // The hits come by tier, the best first.
+                let best = snapshot.hits.first().map(|hit| hit.tier);
+                let paths: BTreeSet<&str> = snapshot
+                    .hits
+                    .iter()
+                    .filter(|hit| Some(hit.tier) == best)
+                    .map(|hit| hit.symbol.path.as_str())
+                    .collect();
+                // One statement for every file.
+                snapshot.symbols = files_symbols_in(tx, wt, paths)?;
+            }
             SnapshotSymbols::File(path) => snapshot.symbols = file_symbols_in(tx, wt, path)?,
             SnapshotSymbols::Bound => snapshot.symbols = bound_symbols(tx, wt)?,
             SnapshotSymbols::All => snapshot.symbols = all_symbols(tx, wt)?,
@@ -625,6 +638,11 @@ pub enum SnapshotSymbols<'q> {
     /// [`SqliteIndex::lookup_symbols`]' hits of `query`, `name` its name
     /// key, in [`CodeSnapshot::hits`].
     Lookup { query: &'q str, name: &'q str },
+    /// [`Self::Lookup`]'s hits, and in [`CodeSnapshot::symbols`] every
+    /// symbol of each file holding a hit at the best tier the lookup met
+    /// (the first hit's), by (path, ord): what the containment of those
+    /// hits reads (`spec impact --symbol`).
+    LookupWithFiles { query: &'q str, name: &'q str },
     /// [`SqliteIndex::file_symbols`] of one path.
     File(&'q str),
     /// Each symbol a stored marker is bound to, once, by (path, ord).
@@ -638,9 +656,12 @@ pub enum SnapshotSymbols<'q> {
 pub struct CodeSnapshot {
     /// Every stored file, marker and mention, as [`SqliteIndex::code_refs`].
     pub refs: CodeRefs,
-    /// [`SnapshotSymbols::Lookup`]'s hits in the lookup's order; else none.
+    /// [`SnapshotSymbols::Lookup`]'s and
+    /// [`SnapshotSymbols::LookupWithFiles`]' hits in the lookup's order;
+    /// else none.
     pub hits: Vec<SymbolHit>,
-    /// The other forms' symbols, by (path, ord); none for a lookup.
+    /// The other forms' symbols, by (path, ord): `LookupWithFiles`' the
+    /// best tier's files'; none for [`SnapshotSymbols::Lookup`].
     pub symbols: Vec<StoredSymbol>,
     /// [`SqliteIndex::code_snapshot_with_roles`]' role rows beside the
     /// hits or the symbols, by (path, `ord`); none from

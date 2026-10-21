@@ -53,6 +53,11 @@
 //! call an exit-2 error result); its own over the roadmap fixtures:
 //! `mcp_roadmap.rs`.
 //!
+//! TE-6 of docs/features/impact.md: `get_impact` joins the door with valid
+//! and invalid calls (spec-a has no `[code]`: a REF answers without code,
+//! `symbol` is the CLI's exit-2 line, the form errors the tool's own); the
+//! repository stays byte-identical. M: the tool without its calls here.
+//!
 //! TE-3 of docs/features/check-binding.md: `check_binding` joins the door
 //! with valid and invalid calls (spec-a has no `[code]`: a node is the
 //! CLI's exit-2 report, a REF naming nothing its error line); the queue
@@ -490,6 +495,36 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"node": "MEC-STAMINA", "symbol": ["x"]}),
                 json!({"node": "MEC-STAMINA", "task_id": "T-0001"}),
                 json!({"node": "MEC-STAMINA", "bogus": true}),
+            ],
+        ),
+        // docs/features/impact.md TE-6: spec-a has no `[code]`, so a REF
+        // answers with no code (exit 0), `depth` too; a REF naming nothing
+        // is exit 1, a look-alike and `depth: -1` exit 2, `symbol` the
+        // `[code]` line; none or both of `id` and `symbol` (a `null` is
+        // absent) the tool's form error; a wrong type, 07's `node_id` and
+        // `qpath`, 7b-2's `since` and an unknown field are bad arguments.
+        "get_impact" => (
+            vec![
+                json!({"id": "MEC-STAMINA"}),
+                json!({"id": "MEC-STAMINA", "depth": 1}),
+                json!({"id": "MEC-STAMINA#RULE-STAM-REGEN", "depth": 0}),
+                json!({"id": "MEC-STAMINA", "symbol": null, "depth": null}),
+                json!({"symbol": "stamina"}),
+                json!({"id": "MEC-NOPE"}),
+                json!({"id": "M\u{0415}C-STAMINA"}),
+                json!({"id": "MEC-STAMINA", "depth": -1}),
+                json!({}),
+                json!({"id": null, "symbol": null}),
+                json!({"id": "MEC-STAMINA", "symbol": "stamina"}),
+            ],
+            vec![
+                json!({"id": 7}),
+                json!({"id": ["MEC-STAMINA"]}),
+                json!({"id": "MEC-STAMINA", "depth": "1"}),
+                json!({"node_id": "MEC-STAMINA"}),
+                json!({"qpath": "stamina"}),
+                json!({"since": "HEAD"}),
+                json!({"id": "MEC-STAMINA", "bogus": true}),
             ],
         ),
         _ => return None,

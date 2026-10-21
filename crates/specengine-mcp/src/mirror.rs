@@ -8,7 +8,9 @@
 //! (`docs/canon/mcp-code.md` "Mirrors": `spec symbols`, `spec refs`,
 //! `spec unmapped`; a symbol target's `roles`, each key a free string or
 //! integer, never an enum of the code layer's words; `spec verify --node`,
-//! `check_binding`'s: `docs/features/check-binding.md` "Data").
+//! `check_binding`'s: `docs/features/check-binding.md` "Data"), and of
+//! `get_impact` (`spec impact`'s document: `docs/features/impact.md`
+//! "Data"; graph's node object, the read rows' [`BindingRowShape`]).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -92,7 +94,8 @@ fn require_all(schema: &mut Value) {
 
 /// `"type": "null"`: a key the CLI always writes as `null` (`bundle`'s
 /// Phase 2 `task`; `spec verify --node`'s `base`, `task`, `delta.symbols`,
-/// `delta.tests_reaching`).
+/// `delta.tests_reaching`; `spec impact`'s `input.since`, `revision`,
+/// `delta`, `truncated.delta`).
 pub(crate) struct AlwaysNull;
 
 impl JsonSchema for AlwaysNull {
@@ -1170,6 +1173,114 @@ pub(crate) struct RoadmapPoolTask {
     pub title: Option<String>,
     /// As stored: IDs, or an id-less document's path.
     pub targets: Vec<String>,
+}
+
+// ------------------------------------------------------------------ impact
+//
+// `spec impact REF | --symbol QPATH [--depth N] --json`, `get_impact`'s
+// document: the nodes as `spec graph`'s node object, the rows as the reads
+// show them; a node's kind, an item's kind and a layer are free strings.
+// `--since` is not taken: `input.since`, `revision`, `delta` and
+// `truncated.delta` are always `null`.
+
+/// `spec impact --json`.
+#[derive(JsonSchema)]
+pub(crate) struct ImpactDocument {
+    pub input: ImpactInput,
+    /// Why the REF or the symbol names nothing (the result is then an
+    /// error); `null` otherwise.
+    pub reason: Option<String>,
+    pub revision: AlwaysNull,
+    /// `depth` as given; `null`: unbounded.
+    pub depth: Option<usize>,
+    pub seeds: ImpactSeeds,
+    pub delta: AlwaysNull,
+    /// Links of a followed type written in generated or Tier 3 files, not
+    /// followed.
+    pub left_out: LeftOut,
+    /// The printed nodes by distance, path and position; distance 0 the
+    /// seeds.
+    pub nodes: Vec<ImpactNode>,
+    /// The printed code bindings of any relation but `verifies`, in
+    /// verify's row order; `null` without a `[code]` table or when the
+    /// code layer could not be read (a note says why).
+    pub symbols: Option<Vec<BindingRowShape>>,
+    /// The printed `verifies` bindings, in verify's row order; `null` as
+    /// `symbols`.
+    pub tests: Option<Vec<BindingRowShape>>,
+    /// The printed open tasks of this repository naming a reached node, by
+    /// number.
+    pub tasks: Vec<ImpactTask>,
+    pub notes: Vec<String>,
+    /// The items of each list the cut left out; `null` when uncut.
+    pub truncated: Option<ImpactTruncated>,
+    /// The code files the read's code walk covered; `null` without a
+    /// `[code]` table or when the code layer could not be read (no row
+    /// read: a bad `[code]`, an incomplete walk, the data directory);
+    /// `symbol`'s lookup walk's when the rows' read none.
+    pub code: Option<CodeCount>,
+}
+
+/// The input as given: one of `ref` and `symbol`.
+#[derive(JsonSchema)]
+pub(crate) struct ImpactInput {
+    #[schemars(rename = "ref")]
+    pub reference: Option<String>,
+    pub symbol: Option<String>,
+    pub since: AlwaysNull,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct ImpactSeeds {
+    /// The printed nodes at distance 0, by ID, else path.
+    pub nodes: Vec<String>,
+    /// The printed code items `symbol` names at the lookup's best tier;
+    /// `null` for `id`.
+    pub symbols: Option<Vec<ImpactSeedSymbol>>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct ImpactSeedSymbol {
+    pub qpath: String,
+    /// The item's kind as the code layer names it.
+    pub item_kind: String,
+    pub path: String,
+    pub start_line: usize,
+    pub end_line: usize,
+    pub tier: CodeTier,
+}
+
+/// A node reached, as `spec graph` lists it.
+#[derive(JsonSchema)]
+pub(crate) struct ImpactNode {
+    pub id: Option<String>,
+    /// Free: the project's kinds.
+    pub kind: Option<String>,
+    pub title: Option<String>,
+    pub path: String,
+    pub line: usize,
+    pub distance: usize,
+    pub archived: bool,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct ImpactTask {
+    pub id: String,
+    pub status: TaskState,
+    pub title: Option<String>,
+    /// The reached nodes it names (ID, else path), in radius order.
+    pub nodes: Vec<String>,
+}
+
+/// What the cut left out of each list; `null` for a `null` list.
+#[derive(JsonSchema)]
+pub(crate) struct ImpactTruncated {
+    pub nodes: usize,
+    pub symbols: Option<usize>,
+    pub tests: Option<usize>,
+    pub tasks: usize,
+    pub seeds: Option<usize>,
+    pub delta: AlwaysNull,
 }
 
 // -------------------------------------------------------------------- code

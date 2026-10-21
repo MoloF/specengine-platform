@@ -86,6 +86,9 @@ fn valid_args(tool: &str) -> Value {
         "check_binding" => json!({"node": "MEC-STAMINA"}),
         // docs/features/roadmap-surfaces.md: the whole plan.
         "get_roadmap" => json!({}),
+        // docs/features/impact.md: one input, so the call passes the form
+        // check and reaches the CLI (no project: its `spec init` line).
+        "get_impact" => json!({"id": "MEC-STAMINA"}),
         other => panic!("no arguments for {other}"),
     }
 }

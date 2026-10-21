@@ -47,6 +47,12 @@
 //! library's and within `MAX_RESULT_CHARS`; the maxima printed
 //! (`bundle_and_task_with_rows_stay_under_the_declared_cap`).
 //!
+//! docs/features/impact.md TE-6: `get_impact {id: "LANE-WIDE"}` and
+//! `{symbol: <a bound item's name>}` join
+//! `code_tools_cut_stay_under_the_declared_cap`: the 3 000 rows past the
+//! CLI's cut, the JSON the printed rows, `truncated.symbols` the rest, the
+//! tail last; the maximum printed with the others.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -419,6 +425,11 @@ fn code_tools_cut_stay_under_the_declared_cap() {
             "get_node",
             json!({"id": "LANE-WIDE", "with": ["links", "bindings"]}),
         ),
+        // docs/features/impact.md TE-6: the radius of LANE-WIDE (its 3 000
+        // rows past the cut), by its ID and by a bound item's name (the
+        // item and its `many/` twin: the bound one seeds LANE-WIDE).
+        ("get_impact", json!({"id": "LANE-WIDE"})),
+        ("get_impact", json!({"symbol": wide_name(7)})),
         // A few lines each: the name of two items, a root's rows, one
         // binding.
         ("find_symbols", json!({"query": wide_name(7), "limit": 200})),
@@ -428,8 +439,8 @@ fn code_tools_cut_stay_under_the_declared_cap() {
             json!({"node": "LANE-WIDE", "symbol": format!("pkg/w::bound::{}", wide_name(7))}),
         ),
     ];
-    // The first nine pass the CLI's cut.
-    let cut = 9;
+    // The first eleven pass the CLI's cut.
+    let cut = 11;
     let mut session = Session::open(Era::Legacy, &[], Some(&root), Home::At(&home));
     let schemas = output_schemas(&session.tools());
     let mut largest: Vec<(String, usize)> = Vec::new();
@@ -466,6 +477,24 @@ fn code_tools_cut_stay_under_the_declared_cap() {
             let want = if index < cut { 3_000 } else { 1 };
             assert_eq!(rows, want, "{args}");
             assert_eq!(omitted > 0, index < cut, "{args}: omitted {omitted}");
+        }
+        if *tool == "get_impact" {
+            // docs/features/impact.md "Cut": the printed rows in the JSON,
+            // `truncated` the rest, the tail last.
+            let document = &result["structuredContent"];
+            let printed = document["symbols"].as_array().expect("symbols").len() as u64;
+            let hidden = document["truncated"]["symbols"]
+                .as_u64()
+                .expect("truncated.symbols");
+            assert_eq!(printed + hidden, 3_000, "{args}: printed and not shown");
+            assert!(hidden > 0, "{args}: cut in the rows");
+            assert!(
+                shown
+                    .lines()
+                    .last()
+                    .is_some_and(|line| line.starts_with("[truncated: ")),
+                "{args}: the tail last"
+            );
         }
         if *tool == "get_node" {
             // docs/features/show-bindings.md "spec show --bindings": the
