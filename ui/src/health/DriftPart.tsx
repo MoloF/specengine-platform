@@ -1,17 +1,13 @@
 import type { MouseEvent } from "react";
 import type { HealthQuery } from "../api/queries";
-import type { BindingPlace, DriftCounts, DriftRow, TestedRow } from "../api/types";
+import type { BindingPlace, DriftCounts, DriftLevels, DriftLock, DriftMarker, DriftRow, StoredDriftRow, TestedRow } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Notes } from "../overview/parts";
+import { bindingOf } from "../tree/BindingLine";
 import { syncLook } from "../tree/labels";
 import { Badge } from "../ui/Badge";
 import { CodePart, CodeRowList, counted, oneLine, RowNotMeasured } from "./codeRows";
-import { codeRowLook, driftClassLook, driftTally, testedLook } from "./labels";
-
-/** A binding as `spec verify` prints it: `<kind> <symbol>[ <item_kind>]` (`docs/canon/spec-verify-output.md` "Text"). */
-function bindingOf(place: Pick<BindingPlace, "kind" | "symbol" | "item_kind">): string {
-  return place.item_kind === null ? `${place.kind} ${place.symbol}` : `${place.kind} ${place.symbol} ${place.item_kind}`;
-}
+import { codeRowLook, driftClassLook, driftTally, isEditorialRow, testedLook } from "./labels";
 
 /** Where a binding was or might be, as verify's sub-line gives it: `<file> | <binding>`. */
 function placeOf(place: BindingPlace): string {
@@ -33,14 +29,68 @@ function NodeLink({ project, node, onFollow }: { project: string; node: string; 
   );
 }
 
+/** A row's markers as verify keeps them: `line <n> @<N>`, or unversioned (`rev` null); none on a lock-only row. */
+function markersOf(markers: readonly DriftMarker[]): string {
+  if (markers.length === 0) {
+    return "No marker";
+  }
+  const each = markers.map((marker) => `line ${String(marker.line)} ${marker.rev === null ? "unversioned" : `@${String(marker.rev)}`}`);
+  return `${markers.length === 1 ? "Marker" : "Markers"} ${each.join(", ")}`;
+}
+
+/** A row's lock entry: the revision vouched for, the commit and the date, as stored; none without an entry. */
+function LockFact({ lock }: { lock: DriftLock | null }) {
+  if (lock === null) {
+    return <span className="health-code-fact">Not locked</span>;
+  }
+  return (
+    <span className="health-code-fact">
+      Locked rev <span className="mono">{lock.rev}</span>, <span className="mono health-code-place">{oneLine(lock.commit)}</span>,{" "}
+      <time dateTime={lock.verified_at}>{oneLine(lock.verified_at)}</time>
+    </span>
+  );
+}
+
+/** A level list's words in canonical order, as sent. */
+function levelWords(words: readonly string[]): string {
+  return words.length === 0 ? "none" : oneLine(words.join(", "));
+}
+
+/** A row's levels: the lock entry's, its markers' united, and those whose digest changed (only when compared by AST). */
+function LevelsFact({ levels }: { levels: DriftLevels }) {
+  return (
+    <p className="health-code-meta health-drift-levels">
+      <span>Levels</span>
+      <span className="health-code-fact">
+        lock <span className="mono">{levelWords(levels.lock)}</span>
+      </span>
+      <span className="health-code-fact">
+        markers <span className="mono">{levelWords(levels.markers)}</span>
+      </span>
+      {levels.changed !== null && (
+        <span className="health-code-fact">
+          changed <span className="mono">{levelWords(levels.changed)}</span>
+        </span>
+      )}
+    </p>
+  );
+}
+
 /**
- * One row 6 line, `spec verify`'s row (docs/canon/health-drift.md "Text"): its class's label and
- * icon (cannot verify in its own role, never ok's), the node linked to the tree, the relation raw;
- * verify's state through the tree's labels, its category and detail raw; the file and the binding
- * plain (a keyless row has none); then where a moved row was, or where an ambiguous one might be.
+ * One drift row, `spec verify`'s row (docs/canon/health-drift.md "Text"), Health's row 6 line and a
+ * drift item's stored row on the Inbox card alike (docs/canon/drift-screens.md): its class's label
+ * and icon (cannot verify in its own role, never ok's), the node linked to the tree, the relation
+ * raw, Pre-existing when so; verify's state through the tree's labels, its category and detail raw;
+ * the file and the binding plain (a keyless row has none); the markers, the node's revision, the
+ * lock entry, how the code was compared, the levels when sent; then where a moved row was, or where
+ * an ambiguous one might be. Every field on one line (`oneLine`); no text says "now": the card's
+ * rows are as of the commit judged, Health's as of the working tree. An absent `levels` or `anchor`
+ * (an older build's stored row) draws as null. `markEditorial`: the card's, a `spec_ahead
+ * same_revision` row marked Editorial (labels.ts says which); Health draws no mark.
  */
-function DriftLine({ project, row }: { project: string; row: DriftRow }) {
+export function DriftLine({ project, row, markEditorial = false }: { project: string; row: StoredDriftRow; markEditorial?: boolean }) {
   const judgement = [row.category, row.detail].filter((word) => word !== null).join(" ");
+  const levels = row.levels ?? null;
   const from = row.anchor?.from ?? null;
   const candidates = row.anchor?.candidates ?? [];
   return (
@@ -49,6 +99,8 @@ function DriftLine({ project, row }: { project: string; row: DriftRow }) {
         <Badge name="Class" look={driftClassLook(row.class)} />
         <NodeLink project={project} node={row.node} />
         <span className="kind-tag">{oneLine(row.relation)}</span>
+        {row.pre_existing && <span className="plain-tag">Pre-existing</span>}
+        {markEditorial && isEditorialRow(row) && <span className="plain-tag drift-editorial">Editorial</span>}
       </p>
       <p className="health-code-meta">
         <Badge name="State" look={syncLook(row.state)} />
@@ -62,6 +114,29 @@ function DriftLine({ project, row }: { project: string; row: DriftRow }) {
           <span>No symbol</span>
         )}
       </p>
+      <p className="health-code-meta health-drift-facts">
+        <span className="health-code-fact">{markersOf(row.markers)}</span>
+        <span className="health-code-fact">
+          {row.node_rev === null ? (
+            "No node revision"
+          ) : (
+            <>
+              Node rev <span className="mono">{row.node_rev}</span>
+            </>
+          )}
+        </span>
+        <LockFact lock={row.lock} />
+        <span className="health-code-fact">
+          {row.compared === null ? (
+            "Not compared"
+          ) : (
+            <>
+              Compared <span className="mono">{oneLine(row.compared)}</span>
+            </>
+          )}
+        </span>
+      </p>
+      {levels !== null && <LevelsFact levels={levels} />}
       {from !== null && (
         <p className="health-code-tail">
           Moved from <span className="mono">{placeOf(from)}</span>

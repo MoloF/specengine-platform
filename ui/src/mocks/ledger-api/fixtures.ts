@@ -1,3 +1,4 @@
+import type { StoredDriftRow } from "../../api/types";
 import { fakeHex, frontMatter, link, proposal, specFile, stamp, type MockCorpus, type MockProject } from "../build";
 import { nodeKinds, specStatuses } from "./kinds";
 
@@ -45,9 +46,10 @@ const LOCKED_COMMIT = "a0cea48d2f61b9e07c3a5d8f14b26e9c7d0a3f51";
 /**
  * Its rows as `spec verify --json` writes them (`docs/canon/spec-verify-output.md` "JSON"), by key,
  * each Pre-existing: a function the lock vouches for is gone from the ledger module (Fix), and the
- * refund function changed under an unchanged node (Check). The UI shows them as sent, untyped.
+ * refund function changed under an unchanged node (Check). An older build's rows: the 15 keys core
+ * reads, no `levels` or `anchor`; the card types them all the same.
  */
-const DRIFT_ROWS = [
+const DRIFT_ROWS: StoredDriftRow[] = [
   {
     node: DRIFT_NODE,
     relation: "implements",
@@ -81,6 +83,64 @@ const DRIFT_ROWS = [
     node_rev: 5,
     lock: { rev: 5, commit: LOCKED_COMMIT, verified_at: "2026-10-09" },
     compared: "ast",
+  },
+];
+
+/** The second drift item's node: the refund window, at revision 2 in the file and in its lock entries. */
+export const DRIFT_NODE_2 = "POL-REFUND-WINDOW";
+
+/** The second drift item, raised by a newer build: its rows carry all 17 of verify's keys. */
+export const DRIFT_ITEM_2 = "PR-0011";
+
+/**
+ * Its rows as a newer `spec verify --json` writes them, verify's 17 keys in order, `levels` and
+ * `anchor` too, by key, each Pre-existing: the deadline's node text changed at its locked revision
+ * (`spec_ahead same_revision`, Check: the card's Editorial row), and the window check moved to
+ * another file while both its body and its node changed (`conflict`, Fix: a moved anchor, levels
+ * changed).
+ */
+const DRIFT_ROWS_2: StoredDriftRow[] = [
+  {
+    node: DRIFT_NODE_2,
+    relation: "implements",
+    file: "src/refunds/clock.rs",
+    kind: "item",
+    symbol: "refunds::clock::refund_deadline",
+    item_kind: "function_item",
+    state: "spec_ahead",
+    category: "same_revision",
+    detail: null,
+    class: "check",
+    pre_existing: true,
+    markers: [{ line: 12, rev: 2 }],
+    node_rev: 2,
+    lock: { rev: 2, commit: LOCKED_COMMIT, verified_at: "2026-10-09" },
+    compared: "blob",
+    levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: null },
+    anchor: { state: "exact", from: null, candidates: null },
+  },
+  {
+    node: DRIFT_NODE_2,
+    relation: "implements",
+    file: "src/refunds/window.rs",
+    kind: "item",
+    symbol: "refunds::window::is_refundable",
+    item_kind: "function_item",
+    state: "conflict",
+    category: null,
+    detail: null,
+    class: "fix",
+    pre_existing: true,
+    markers: [{ line: 30, rev: 2 }],
+    node_rev: 2,
+    lock: { rev: 2, commit: LOCKED_COMMIT, verified_at: "2026-10-09" },
+    compared: "ast",
+    levels: { lock: ["sig", "body", "deps"], markers: ["sig", "body", "deps"], changed: ["body", "deps"] },
+    anchor: {
+      state: "moved",
+      from: { file: "src/refunds/policy.rs", kind: "item", symbol: "refunds::policy::is_refundable", item_kind: "function_item" },
+      candidates: null,
+    },
   },
 ];
 
@@ -322,6 +382,24 @@ export function ledgerApi(now: number): MockProject {
         notes: [`spec approve ${DRIFT_ITEM} shows the rows before asking`],
         author: agent("rust-developer", "R-0431"),
         created_at: at(10),
+      }),
+      // A second drift item, raised by a newer build: its rows carry `levels` and `anchor` (17 keys),
+      // where PR-0010's, an older build's, stop at 15; the card types both alike.
+      proposal({
+        id: DRIFT_ITEM_2,
+        project: SLUG,
+        kind: "drift",
+        severity: "high",
+        target_id: DRIFT_NODE_2,
+        target_path: "spec.lock",
+        target_ids: [DRIFT_NODE_2],
+        worktree: "/work/ledger-api",
+        base_commit: DRIFT_COMMIT,
+        summary: "spec_ahead same_revision, conflict",
+        drift: { hash: `b3:${fakeHex(`specengine-drift/v1\n${JSON.stringify(DRIFT_ROWS_2)}`, 64)}`, rows: DRIFT_ROWS_2, more: 0 },
+        notes: [`spec approve ${DRIFT_ITEM_2} shows the rows before asking`],
+        author: agent("rust-developer", "R-0431"),
+        created_at: at(20),
       }),
     ],
   };

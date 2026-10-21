@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # Proposal kind `drift`: lock drift in the owner's queue
@@ -60,7 +60,7 @@ The commit is accept's, `Proposal: PR-0012` after `Decided-by:` (its fifth check
 
 ## UI
 
-The inbox card keys off the review's `drift`, never the kind: "Drift evidence" first (rows, `more`, commit, hash, each row as JSON), then "Decided on a terminal" for the decision bar: the worktree, three commands to copy, `spec approve PR`, `spec approve PR --editorial` (always, its condition in words: rows untyped until Phase 4), `spec reject PR --reason "..."`; no Options or Section diff; a/r/c/d only announce. Mock: `ledger-api` PR-0010, in every scenario but `empty`; a stage refused after the `updated_at` check, a round answer before it, in the CLI's words.
+The inbox card keys off the review's `drift`, never the kind: "Drift evidence" first (rows, `more`, commit, hash, then each stored row typed through Health's row 6 line, raw when off its shape: `drift-screens.md` "Drift rows"), then "Decided on a terminal" for the decision bar: the worktree, three commands to copy, `spec approve PR`, `spec approve PR --editorial` (always; `spec_ahead same_revision` rows marked Editorial), `spec reject PR --reason "..."`; no Options or Section diff; a/r/c/d only announce. Mock: `ledger-api` PR-0010 and PR-0011, in every scenario but `empty`; a stage refused after the `updated_at` check, a round answer before it, in the CLI's words.
 
 ## Known limits
 

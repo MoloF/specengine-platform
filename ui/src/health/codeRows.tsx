@@ -5,11 +5,11 @@ import type { HealthAssumes, HealthDrift, HealthReport, HealthUnbound } from "..
 import { RegionBoundary } from "../app/RegionBoundary";
 import { Icon } from "../ui/Icon";
 import { ReadFailure, Skeleton } from "../ui/states";
-import { shownText } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { SHOWN_OPEN } from "./findings";
 import { codeRowLook, MEASURED_WITHOUT_COUNTS } from "./labels";
+import { oneLine } from "./oneLine";
 
 // What rows 4 to 6 of What is left share (docs/features/health-code-ui.md "Data";
 // docs/features/health-drift-ui.md "Description and interactions"): the part's frame and its four
@@ -23,14 +23,8 @@ export function counted(count: number, one: string, many: string): string {
   return `${String(count)} ${count === 1 ? one : many}`;
 }
 
-/**
- * A field of rows 4-6 as `spec health` prints it (docs/canon/health-code.md "Text"): on one line, a
- * line break written as a space, every other control character and bidirectional mark as `\u{..}`,
- * so a stored text can neither break the row nor reorder what is around it.
- */
-export function oneLine(text: string): string {
-  return shownText(text.replaceAll(/\r\n|\r|\n/g, " "));
-}
+/** A field on one line, as `spec health` prints it (`./oneLine.ts`, a leaf the label maps read too). */
+export { oneLine };
 
 /**
  * A code row the daemon did not measure (row 4, 5 or 6). Off or not configured, and any state word

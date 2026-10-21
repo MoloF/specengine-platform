@@ -1,4 +1,5 @@
 import type { BundleForm, BundleLayers, Direction, KnownSyncState, LinkState, SyncState, TreeMark } from "../api/types";
+import { oneLine } from "../health/oneLine";
 import type { Look } from "../ui/Badge";
 
 // The closed tables the tree and node views label: link states, tree marks, bundle forms, layer
@@ -100,12 +101,12 @@ const SYNC: Record<KnownSyncState, Look> = {
 /** A row the read listed but could not judge (`docs/canon/code-reads.md` "Degrade"): never ok's look. */
 const NOT_JUDGED: Look = { label: "Not judged", tone: "sync-not-judged", icon: "stub" };
 
-/** A binding row's sync: verify's state as a label, colour role and icon; null not judged; any other word raw, neutral. */
+/** A binding row's sync: verify's state as a label, colour role and icon; null not judged; any other word raw (on one line, `oneLine`), neutral. */
 export function syncLook(sync: SyncState | null): Look {
   if (sync === null) {
     return NOT_JUDGED;
   }
-  return lookup(SYNC, sync) ?? { label: sync, tone: "sync-unknown", icon: "unknown" };
+  return lookup(SYNC, sync) ?? { label: oneLine(sync), tone: "sync-unknown", icon: "unknown" };
 }
 
 /** The weak link type (`docs/canon/spec-cli-graph.md` "Link types"): listed after the strong ones. */

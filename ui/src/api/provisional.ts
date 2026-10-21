@@ -336,14 +336,42 @@ export interface RevisionChange {
  * A drift item's evidence, the review document's `drift`, keys in this order: `hash` its
  * `drift_hash` (`b3:` and 64 hex digits; an item raised again with another hash has new evidence),
  * `rows` the first 64 of its node's non-`ok` rows of `spec verify --json` at the commit judged, by
- * key, `more` how many rows are past them. A row stays untyped until Phase 4's drift screen: shown
- * as sent. Sources: `docs/features/drift-queue.md` "Review, inbox, round, stage";
+ * key, `more` how many rows are past them. A row is typed as stored, its shape checked when drawn
+ * (src/inbox/drift.ts): one that does not fit is shown as sent, and still counts.
+ * Sources: `docs/features/drift-queue.md` "Review, inbox, round, stage";
  * `docs/features/drift-queue.md` "The item".
  */
 export interface DriftEvidence {
   hash: string;
-  rows: unknown[];
+  rows: StoredDriftRow[];
   more: number;
+}
+
+/**
+ * One stored row of a drift item's evidence: `spec verify --json`'s row as the raise wrote it, keys
+ * in its order (`DriftRow`'s 17). The 15 core's `drift::DriftRow` reads are always there, absent
+ * null; `levels` and `anchor` are never required, kept as stored: an item an older build raised has
+ * neither. A later key is kept by the daemon and ignored here. Source:
+ * `docs/canon/proposal-drift-item.md` "The item"; the row: `docs/canon/spec-verify-output.md` "JSON".
+ */
+export interface StoredDriftRow {
+  node: string;
+  relation: string;
+  file: string;
+  kind: string | null;
+  symbol: string | null;
+  item_kind: string | null;
+  state: SyncState;
+  category: string | null;
+  detail: string | null;
+  class: string | null;
+  pre_existing: boolean;
+  markers: DriftMarker[];
+  node_rev: number | null;
+  lock: DriftLock | null;
+  compared: string | null;
+  levels?: DriftLevels | null;
+  anchor?: BindingAnchor | null;
 }
 
 /**

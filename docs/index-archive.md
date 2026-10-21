@@ -107,6 +107,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/tested-evidence.md](features/tested-evidence.md) shipped
 - [docs/features/tested-reads.md](features/tested-reads.md) shipped
 - [docs/features/token-calibration.md](features/token-calibration.md) shipped
+- [docs/features/ui-drift-evidence.md](features/ui-drift-evidence.md) shipped
 - [docs/features/ui-embed.md](features/ui-embed.md) shipped
 - [docs/features/ui-graph.md](features/ui-graph.md) shipped
 - [docs/features/ui-health.md](features/ui-health.md) shipped

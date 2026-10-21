@@ -913,8 +913,29 @@ describe("the daemon's document types (AC-09)", () => {
     expect(declaredKeys("Proposal")).toEqual(Object.keys(KEYS.Proposal));
     expect(declaredKeys("DriftEvidence")).toEqual(Object.keys(KEYS.DriftEvidence));
     expect(source).toMatch(/^  drift: DriftEvidence \| null;$/m);
-    // Untyped rows until Phase 4's drift screen, a count past them.
-    expect(source).toMatch(/^export interface DriftEvidence \{\n  hash: string;\n  rows: unknown\[\];\n  more: number;\n\}$/m);
+    // Its rows typed as stored (StoredDriftRow, checked when drawn), a count past them (UI-1 of ui-drift-evidence).
+    expect(source).toMatch(/^export interface DriftEvidence \{\n  hash: string;\n  rows: StoredDriftRow\[\];\n  more: number;\n\}$/m);
+  });
+
+  it("types a drift item's stored row as verify's 17 keys in DriftRow's order, levels and anchor alone optional (older items lack them); no key set of the daemon's: it passes rows through as stored (UI-1 of ui-drift-evidence)", () => {
+    expect(declaredKeys("StoredDriftRow")).toEqual(served("DriftRow"));
+    const start = source.indexOf("export interface StoredDriftRow {");
+    const body = source.slice(start, source.indexOf("\n}\n", start));
+    const optional = Array.from(body.matchAll(/^ {2}(\w+)\?:/gm), (match) => match[1]);
+    expect(optional).toEqual(["levels", "anchor"]);
+    expect(body).toMatch(/^ {2}levels\?: DriftLevels \| null;\n {2}anchor\?: BindingAnchor \| null;$/m);
+    // Every other key the type shares with DriftRow, declared alike.
+    const lineOf = (type: string, key: string) => {
+      const at = source.indexOf(`export interface ${type} {`);
+      return source.slice(at, source.indexOf("\n}\n", at)).split("\n").find((line) => line.startsWith(`  ${key}:`) || line.startsWith(`  ${key}?:`));
+    };
+    for (const key of served("DriftRow").filter((name) => name !== "levels" && name !== "anchor")) {
+      expect([key, lineOf("StoredDriftRow", key)]).toEqual([key, lineOf("DriftRow", key)]);
+    }
+    const at = source.indexOf("export interface StoredDriftRow ");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
+    expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
+    expect(ALL).toHaveLength(76);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {

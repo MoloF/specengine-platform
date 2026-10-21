@@ -41,6 +41,8 @@ import { argsOf, stubClient } from "../test/stubClient";
 // UI-7 (a measured row without counts or rows in fixed neutral words). docs/features/health-drift-ui.md:
 // UI-2 (row 6, drift, its states as rows 4 and 5's, its rows and test evidence; M7: never a 0 for a
 // row not measured), UI-3 (the daemon's order, every word through labels.ts).
+// docs/features/ui-drift-evidence.md: UI-5 (row 6's lines drawn by the drift card's row component,
+// with the six fields health-drift-ui left out; M5: Health keeping the short line).
 
 const LF = String.fromCharCode(10);
 
@@ -1105,6 +1107,61 @@ describe("row 6: drift (UI-2, UI-3 of health-drift-ui)", () => {
       ["Candidate src/aa.rs | item alpha::aa::tick function_item", "Candidate src/ab.rs | module alpha::ab"],
       [],
     ]);
+  });
+
+  it("row 6: details: each line's markers (@N, unversioned, none), the node's revision, the lock's revision, whole commit and date, compared raw, the levels when sent; never Pre-existing nor Editorial (UI-5 of ui-drift-evidence)", async () => {
+    // harbor-sim's MEC-MOORING and MEC-CARGO-CRANES as its mock serves them (mocks/health.ts; the
+    // mock itself is read in mocks/health.smoke.test.tsx), then the other forms of each field.
+    const LOCKED_AT = "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4";
+    const details: DriftRow[] = [
+      aDriftRow({
+        node: "MEC-MOORING",
+        file: "src/sim/crew.rs",
+        symbol: "harbor_sim::crew::moor",
+        state: "code_ahead",
+        category: "code_changed",
+        detail: "body",
+        markers: [{ line: 30, rev: 2 }],
+        node_rev: 2,
+        lock: { rev: 2, commit: LOCKED_AT, verified_at: "2026-10-02" },
+        compared: "ast",
+        levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: ["body"] },
+        anchor: { state: "moved", from: { file: "src/sim/berths.rs", kind: "item", symbol: "harbor_sim::berths::moor", item_kind: "function_item" }, candidates: null },
+      }),
+      aDriftRow({ node: "MEC-CARGO-CRANES", file: "src/sim/berths.rs", kind: "module", symbol: "harbor_sim::berths", item_kind: null, markers: [{ line: 1, rev: 1 }], node_rev: 1 }),
+      aDriftRow({
+        node: "Q-3",
+        file: "src/qq.rs",
+        symbol: "alpha::qq::lap",
+        state: "spec_ahead",
+        category: "same_revision",
+        markers: [
+          { line: 41, rev: 5 },
+          { line: 88, rev: null },
+        ],
+        node_rev: null,
+        lock: { rev: 2, commit: `c0ffee${LF}00c0ffee`, verified_at: "2026-10-11" },
+        compared: "blob",
+        levels: { lock: ["sig"], markers: [], changed: null },
+      }),
+      aDriftRow({ node: "Q-4", file: "src/qr.rs", markers: [] }),
+    ];
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(details) })));
+    expect(lines().map((line) => Array.from(line.querySelectorAll(".health-drift-facts .health-code-fact"), (fact) => fact.textContent))).toEqual([
+      ["Marker line 30 @2", "Node rev 2", `Locked rev 2, ${LOCKED_AT}, 2026-10-02`, "Compared ast"],
+      ["Marker line 1 @1", "Node rev 1", "Not locked", "Not compared"],
+      ["Markers line 41 @5, line 88 unversioned", "No node revision", "Locked rev 2, c0ffee 00c0ffee, 2026-10-11", "Compared blob"],
+      ["No marker", "Node rev 1", "Not locked", "Not compared"],
+    ]);
+    expect(
+      lines().map((line) => {
+        const levels = line.querySelector(".health-drift-levels");
+        return levels === null ? null : [textOf(levels.firstElementChild), ...Array.from(levels.querySelectorAll(".health-code-fact"), (fact) => fact.textContent)];
+      }),
+    ).toEqual([["Levels", "lock sig, body", "markers sig, body", "changed body"], null, ["Levels", "lock sig", "markers none"], null]);
+    // Health's rows come from plain verify, no base: never pre-existing; the Editorial mark is the drift card's alone.
+    expect(lines().map((line) => line.querySelectorAll(".health-code-head .plain-tag").length)).toEqual([0, 0, 0, 0]);
+    expect(driftPart().textContent).not.toMatch(/Pre-existing|Editorial|null|undefined|now/);
   });
 
   it("measured: beneath the rows, the test evidence not verified in the daemon's order: its state labelled (unverifiable in cannot-verify's role, never verified's), the node linked, the category raw, the revisions, commit and date as stored", async () => {

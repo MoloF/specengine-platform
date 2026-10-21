@@ -1,9 +1,11 @@
 import { useId } from "react";
 import type { DriftEvidence } from "../api/types";
+import { DriftLine } from "../health/DriftPart";
 import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
 import { Section } from "../ui/states";
-import { driftCommands, driftRowsText, driftRowText } from "./drift";
+import { shownText } from "../ui/text";
+import { driftCommands, driftRowsText, driftRowText, storedRowOf } from "./drift";
 
 const COPY_FAILED = "Copy failed: select the command and copy it";
 
@@ -50,10 +52,26 @@ export function TerminalDecision({ id, worktree }: { id: string; worktree: strin
 }
 
 /**
- * A drift item's evidence as the review document sends it: how many rows, the commit judged, the
- * evidence hash, and each stored row as its compact JSON, by key (the drift screen is Phase 4's).
+ * A stored row not in the shape `storedRowOf` reads: its compact JSON, as sent, still counted; a
+ * control or bidirectional mark JSON leaves as is written `\u{..}` (`shownText`), as every field.
  */
-export function DriftSection({ drift, commit }: { drift: DriftEvidence; commit: string | null }) {
+function RawRow({ row }: { row: unknown }) {
+  return (
+    <li className="drift-raw" data-raw="">
+      <span className="drift-raw-note">Shown as sent: not in the shape this screen reads.</span>
+      <code>{shownText(driftRowText(row))}</code>
+    </li>
+  );
+}
+
+/**
+ * A drift item's evidence as the review document sends it (docs/canon/drift-screens.md): how many
+ * rows, the commit judged, the evidence hash, then each stored row in the stored order, never
+ * sorted: typed through Health's row component with its markers, revisions, lock, comparison and
+ * levels, a `spec_ahead same_revision` row marked Editorial; a row of another shape as its compact
+ * JSON, still counted.
+ */
+export function DriftSection({ project, drift, commit }: { project: string; drift: DriftEvidence; commit: string | null }) {
   return (
     <Section title="Drift evidence">
       <p>Bindings of the node that spec verify finds out of step with spec.lock, as judged when the item was raised.</p>
@@ -66,12 +84,12 @@ export function DriftSection({ drift, commit }: { drift: DriftEvidence; commit: 
         <dd className="mono">{drift.hash}</dd>
       </dl>
       {drift.rows.length > 0 && (
-        <ol className="drift-rows" aria-label="Rows as spec verify --json writes them">
-          {drift.rows.map((row, index) => (
-            <li key={index}>
-              <code>{driftRowText(row)}</code>
-            </li>
-          ))}
+        <ol className="drift-rows" aria-label="Stored rows, in spec verify's order">
+          {drift.rows.map((row, index) => {
+            const typed = storedRowOf(row);
+            // The stored order is the rows' identity: two rows may share a node and a place.
+            return typed === null ? <RawRow key={index} row={row} /> : <DriftLine key={index} project={project} row={typed} markEditorial />;
+          })}
         </ol>
       )}
     </Section>

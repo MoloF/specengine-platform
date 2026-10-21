@@ -149,7 +149,7 @@ UI in **English** (ADR-0014); spec content as is (the project's language), fonts
 | **Tree** | hierarchy Project → Domain → Mechanic → Rule; statuses, `sync`, open-proposal counter; search |
 | **Node** | rendered markdown, Source a toggle away (ADR-0036; editing: CodeMirror later); tabs: links (direct and reverse), bindings (rows with `sync`, test evidence, commands to copy: `docs/canon/drift-screens.md`), bundle, history (git), proposals |
 | **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
-| **Queue** | proposal and question cards: evidence, options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
+| **Queue** | proposal and question cards: evidence (a drift item's rows typed: `docs/canon/drift-screens.md`), options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
 | **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
 | **Roadmap** | the plan, read-only: a lane per release (current, the MVP cut, range bars), the pool with its tasks, unplaced items; each card's waits and executing tasks; a lazy chain canvas, Lanes its text twin (`docs/canon/spec-roadmap-screen.md`) |
 | **Health** | "what is left" (rows 4-5 from `spec health`: `docs/canon/health-code.md`; drawn by `health-code-ui`), drift (row 6 from `spec health`: `docs/canon/health-drift.md`; drawn by `health-drift-ui`), budgets, W metrics |

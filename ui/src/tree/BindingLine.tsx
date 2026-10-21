@@ -1,11 +1,14 @@
 import type { BindingPlace, BindingRow } from "../api/types";
+import { oneLine } from "../health/codeRows";
 import { Badge } from "../ui/Badge";
 import { syncLook } from "./labels";
 
 // One code binding row as lines (`docs/canon/code-reads.md` "The binding row"), shared by the
 // Bundle tab's layers 5 and 9 (docs/features/bundle-bindings.md "UI and daemon keys") and the
 // Bindings tab (docs/features/ui-node-bindings.md). Every word is shown raw or through the tree's
-// labels; nothing in a row is a link: its node may be unresolved and its symbol is a qpath.
+// labels, each field on one line as Health's drift rows show theirs (`oneLine`,
+// docs/canon/drift-screens.md); nothing in a row is a link: its node may be unresolved and its
+// symbol is a qpath.
 
 /** A row's place as `spec show --bindings` prints it: `<file>:<line>-<end_line>`, `<file>:<line>` or `<file>`. */
 export function placeOf(row: BindingRow): string {
@@ -34,39 +37,35 @@ export function BindingLine({ row, tokens = null, noId, focusable = false }: { r
   return (
     <li className="bundle-item binding-line" tabIndex={focusable ? -1 : undefined}>
       <p className="bundle-item-head">
-        {row.node === "" ? <span>{noId}</span> : <bdi className="mono">{row.node}</bdi>}
-        <span className="kind-tag">{row.relation}</span>
-        <span className="mono">{placeOf(row)}</span>
+        {row.node === "" ? <span>{noId}</span> : <bdi className="mono">{oneLine(row.node)}</bdi>}
+        <span className="kind-tag">{oneLine(row.relation)}</span>
+        <span className="mono">{oneLine(placeOf(row))}</span>
       </p>
       <p className="bundle-item-meta">
-        {key === null ? <span>No symbol</span> : <span className="mono">{key}</span>}
-        {row.layer !== null && <span>layer {row.layer}</span>}
+        {key === null ? <span>No symbol</span> : <span className="mono">{oneLine(key)}</span>}
+        {row.layer !== null && <span>layer {oneLine(row.layer)}</span>}
         {tokens !== null && <span>{tokens} tokens</span>}
       </p>
       <p className="bundle-item-meta">
         <Badge name="Sync" look={syncLook(row.sync)} />
-        {judgement !== "" && <span className="mono">{judgement}</span>}
+        {judgement !== "" && <span className="mono">{oneLine(judgement)}</span>}
       </p>
       {row.signature !== null && (
         <p className="bundle-item-meta">
           <span>Signature:</span>
-          <span className="mono">{row.signature}</span>
+          <span className="mono">{oneLine(row.signature)}</span>
         </p>
       )}
       {from !== null && (
         <p className="bundle-item-meta">
           <span>Moved from</span>
-          <span className="mono">
-            {from.file} | {bindingOf(from)}
-          </span>
+          <span className="mono">{oneLine(`${from.file} | ${bindingOf(from)}`)}</span>
         </p>
       )}
       {candidates.map((candidate) => (
         <p key={`${candidate.file}|${bindingOf(candidate)}`} className="bundle-item-meta">
           <span>Candidate</span>
-          <span className="mono">
-            {candidate.file} | {bindingOf(candidate)}
-          </span>
+          <span className="mono">{oneLine(`${candidate.file} | ${bindingOf(candidate)}`)}</span>
         </p>
       ))}
     </li>

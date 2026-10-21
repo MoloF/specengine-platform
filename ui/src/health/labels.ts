@@ -9,11 +9,13 @@ import {
   type KnownCheckMode,
   type KnownCheckVerdict,
   type KnownFindingSeverity,
+  type StoredDriftRow,
   type TestedState,
   type UnboundReason,
 } from "../api/types";
 import { syncLook } from "../tree/labels";
 import type { Look } from "../ui/Badge";
+import { oneLine } from "./oneLine";
 
 // The check's closed tables (`docs/canon/spec-check.md` "Findings, debt, verdict"): a known value
 // gets a label, a colour role and an icon; any other string is shown raw in a neutral badge and
@@ -203,9 +205,9 @@ const DRIFT_CLASS = {
 /** verify's three classes, in its summary's order (`docs/canon/spec-verify-output.md` "Text"). */
 export const DRIFT_CLASSES: readonly string[] = Object.keys(DRIFT_CLASS);
 
-/** A class row 6 does not know, or none (only an `ok` row has none, and row 6 lists none): neutral, never ok's. */
+/** A class row 6 does not know, or none (only an `ok` row has none, and row 6 lists none): neutral, never ok's; the word on one line (`oneLine`). */
 function rawClass(label: string): Look {
-  return { label, tone: "sync-unknown", icon: "unknown" };
+  return { label: oneLine(label), tone: "sync-unknown", icon: "unknown" };
 }
 
 /** A row 6 line's class: Fix, Check, or Cannot verify in cannot-verify's role, never ok's; any other word raw, neutral. */
@@ -250,4 +252,15 @@ export const TESTED_STATES: readonly string[] = Object.keys(TESTED);
 /** A `[[tested]]` entry's state: its label, colour role and icon; unverifiable in cannot-verify's role, never verified's; any other word raw, neutral. */
 export function testedLook(value: TestedState): Look {
   return lookup(TESTED, value) ?? { label: value, tone: "sync-unknown", icon: "unknown" };
+}
+
+/**
+ * A drift row an editorial approve may fit: verify's `spec_ahead same_revision`, the node's text
+ * changed at its locked revision (`docs/canon/spec-verify.md` "States"). The Inbox card marks such
+ * a stored row "Editorial" and lists `spec approve PR --editorial` whatever its rows: they were
+ * judged when the item was raised, and accept judges `HEAD` again (`docs/canon/proposal-drift.md`
+ * "Approve"). The one place a row's state and category are told apart, as words passed in.
+ */
+export function isEditorialRow({ state, category }: Pick<StoredDriftRow, "state" | "category">): boolean {
+  return state === "spec_ahead" && category === "same_revision";
 }

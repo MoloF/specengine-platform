@@ -1014,6 +1014,32 @@ describe("the Bindings tab's rows (UI-2 of ui-node-bindings)", () => {
     expect(panel.textContent).not.toMatch(/undefined|NaN|\[object/);
   });
 
+  it("shows a binding row's daemon words on one line: a line feed in its file, signature or detail a space, another control \\u{..}, as Health's drift rows (UI-5 of ui-drift-evidence)", async () => {
+    const LF = String.fromCharCode(10);
+    const ESC = String.fromCharCode(0x1b);
+    const row = aBindingRow({
+      node: "DOC-A",
+      file: `src/two${LF}lines.rs`,
+      symbol: `crate::two${ESC}::run`,
+      signature: `pub fn run(${LF}    tide: u32,${LF})`,
+      sync: "code_ahead",
+      category: "code_changed",
+      detail: `body,${LF}deps`,
+      anchor: null,
+    });
+    await openNode(bindingsClient(shown([row])));
+    const panel = await openTab("Bindings");
+    await within(panel).findByText("Code bindings");
+    expect(bindingLines(panel)).toEqual([
+      [
+        "DOC-Aimplementssrc/two lines.rs:10-20",
+        "item crate::two\\u{1b}::run function_itemlayer a",
+        "Sync: Code aheadcode_changed body, deps",
+        "Signature:pub fn run(     tide: u32, )",
+      ],
+    ]);
+  });
+
   it("gives each holder of a REF its own rows under its place, h2 per holder, lists h3, no level skipped", async () => {
     const client = bindingsClient((holder) =>
       shown([aBindingRow({ node: "SEC-DUP", file: `src/${holder.path.replaceAll("/", "_")}.rs`, symbol: `crate::at_${String(holder.line)}` })]),

@@ -8,18 +8,18 @@ reviewed: 2026-10-21
 
 # Drift screens in the web UI
 
-Drift shown where the owner already reads, in the browser: the node's Bindings tab ("Bindings tab"); a drift item's typed rows with Health's row details (`ui-drift-evidence`) and the tree's badges (`ui-tree-drift`) are RM-0011's next slices. Read-only over reads the daemon already serves: no route, key on the wire, write, stage or SSE trigger of their own. Visibility, never a gate (ADR-0046, ADR-0012, `architecture.md#control`); types provisional (ADR-0033, `ui/README.md` "Contract seam"). A state is the daemon's word shown through `tree/labels.ts` or `health/labels.ts`, never compared or sorted elsewhere (`policy.test.ts` AC-U6); every word is text, wrapped, uncut.
+Drift shown where the owner already reads, in the browser: the node's Bindings tab ("Bindings tab") and a drift item's stored rows on its Inbox card, drawn by Health's row 6 line ("Drift rows"); the tree's badges (`ui-tree-drift`) are RM-0011's last slice. Read-only over reads the daemon already serves: no route, key on the wire, write, stage or SSE trigger of their own. Visibility, never a gate (ADR-0046, ADR-0012, `architecture.md#control`); types provisional (ADR-0033, `ui/README.md` "Contract seam"). A state, class, category or sync is the daemon's word shown through `tree/labels.ts` or `health/labels.ts`, never compared or sorted elsewhere (`policy.test.ts` AC-U6 and the no-sort test scan these screens' sources); every word is text, wrapped, uncut.
 
 ## Bindings tab
 
 **Read.** The node pane's tabs: Text, Links, Bindings, Bundle, Proposals (07 s3; `tree/NodePane.tsx`). The tab's first opening sends one `GET /api/projects/:p/nodes/<REF>?with=bindings` (`api/queries.ts` `useNodeBindings` = `useNode(p, ref, {with: ["bindings"]})`): `spec show REF --bindings --json` in `View::Browser`, uncut (`code-reads.md` "spec show --bindings"); never on mount, never with `archive`. The panel mounts inside `opened.has("bindings")` and stays: reselecting the tab reads nothing. Its key `["node", p, ref, {with: ["bindings"], archive: false}]` sits inside `["node", p]`, so `proposal.applied` and an event gap re-read it (`READS_OF_THE_SPEC`). A code edit, `spec lock accept` or an evidence commit fires no event (`health-drift.md` "Known limits"): "Read again" sends one GET per click ("Reading" meanwhile, a click then ignored), keeps the last answer with `aria-busy` and announces success; re-entering the node reads afresh. Cost: about 51 ms at code-a plus 1 000 files (`code-reads.md` "Known limits"), in the project's turn (`serve.md` "Concurrency"), so on demand only.
 
-**Panel** (`tree/BindingsPanel.tsx`), in order: an about line and "Read again"; `reason`, verbatim; the read's notes, each through `health/codeRows.tsx` `oneLine` as Health's causes, in the daemon's order (the `bindings:` and `tested:` causes, `code-reads.md` "Degrade"); each holder in the daemon's order; one commands block. One holder: h2 parts, no holder heading. Several (a REF declared twice): an h2 `<path>:<line>-<end_line>` each over a section "Bindings at <path>:<line>", h3 parts.
+**Panel** (`tree/BindingsPanel.tsx`), in order: an about line and "Read again"; `reason`, verbatim; the read's notes, each through `health/oneLine.ts` `oneLine` as Health's causes, in the daemon's order (the `bindings:` and `tested:` causes, `code-reads.md` "Degrade"); each holder in the daemon's order; one commands block. One holder: h2 parts, no holder heading. Several (a REF declared twice): an h2 `<path>:<line>-<end_line>` each over a section "Bindings at <path>:<line>", h3 parts.
 
 - **Code bindings**: `counted(n, "row", "rows")`, ", <k> more not shown" when `omitted` > 0 (never in the browser view); rows through `CodeRowList` (10, then "Show all <n>", focus on the 11th), each a `BindingLine`.
 - **Test evidence**: every entry, `verified` too, a `health/DriftPart.tsx` `TestedLine` (`testedLook`), its node a tree link taking the tree view's `onFollow` (optional, as Health omits it).
 
-**Row** (`tree/BindingLine.tsx`; the Bundle tab renders the same line plus `<n> tokens`): the node as sent in a `<bdi>`, never a link, `""` "No ID" here and a plain `-` in Bundle; relation raw; place `<file>:<line>-<end_line>`, `<file>:<line>` or `<file>`; binding `<kind> <symbol>[ <item_kind>]`, "No symbol" when `kind` or `symbol` is null; `layer <layer>` when set; a Sync badge (`syncLook`: null "Not judged", never "In sync"; an unlisted word raw, neutral); category and detail joined; "Signature:" and the text; "Moved from <file> | <binding>"; "Candidate <file> | <binding>" per candidate. The `binding-line` wrap rule holds in both tabs.
+**Row** (`tree/BindingLine.tsx`; the Bundle tab renders the same line plus `<n> tokens`), every daemon word on one line through `oneLine` (`health/oneLine.ts`, a leaf over `ui/text.ts` `shownText`, re-exported by `codeRows.tsx`: a line break a space, other controls and bidi marks `\u{..}`): the node as sent in a `<bdi>`, never a link, `""` "No ID" here and a plain `-` in Bundle; relation raw; place `<file>:<line>-<end_line>`, `<file>:<line>` or `<file>`; binding `<kind> <symbol>[ <item_kind>]`, "No symbol" when `kind` or `symbol` is null; `layer <layer>` when set; a Sync badge (`syncLook`: null "Not judged", never "In sync"; an unlisted word through `oneLine`, neutral); category and detail joined; "Signature:" and the text; "Moved from <file> | <binding>"; "Candidate <file> | <binding>" per candidate. The `binding-line` wrap rule holds in both tabs.
 
 | Case | The panel shows |
 |---|---|
@@ -40,12 +40,35 @@ State paragraphs carry `data-evidence-state`.
 
 **Mocks** (`mocks/bindings.ts`, `corpus.ts` `nodeViewOf`): `bindings` null unless asked (`mockCode` runs only then). harbor-sim's rows agree with Health's row 6 (its 12 non-`ok` rows, `counts.ok` rows `ok`); `large` adds 3 000 `unlocked` rows; `empty` sets `reason`. `code-cannot`: harbor-sim null with a `bindings:` note, ledger-api rows with `sync` and `tested` null. ledger-api otherwise null with the no-`[code]` note, but `not-configured`: its rows, all `ok`.
 
+## Drift rows
+
+One row component draws `spec verify`'s row in both places: Health's row 6 (the working tree's, `health-drift.md` "UI") and a drift item's stored rows on its Inbox card (as of the item's `base_commit`). No text says "now".
+
+**Line** (`health/DriftPart.tsx` `DriftLine {project, row: StoredDriftRow, markEditorial?}`): `<li class="health-left-row health-code-row" data-drift=<node> tabIndex=-1>`, every daemon word through `oneLine`, an unlisted class or state word too (`health/labels.ts` `rawClass`, `syncLook`; its badge neutral). In order:
+
+- head: the Class badge (`driftClassLook`), the node linked to the tree (`""` "No ID"), the relation, "Pre-existing" when `pre_existing`, "Editorial" when `markEditorial` and `isEditorialRow(row)`;
+- judgement: the State badge (`syncLook`), category and detail joined;
+- place: the file, `<kind> <symbol>[ <item_kind>]` (`tree/BindingLine.tsx` `bindingOf`) or "No symbol";
+- facts: "No marker", "Marker line 41 @5" or "Markers line 41 @5, line 88 unversioned" (a null `rev`: unversioned or malformed, the row's `bad_marker bad_rev` tells which); "Node rev 5" or "No node revision"; "Locked rev 5, <commit>, <verified_at>" (the whole commit, the date in a `<time>`) or "Not locked"; "Compared <word>" or "Not compared";
+- levels, only when `levels` is an object: "Levels", "lock sig, body", "markers sig, body", "changed body" (none when `changed` is null), `[]` "none";
+- tails: "Moved from <file> | <binding>", "Candidate <file> | <binding>" each. An absent `levels` or `anchor` (an older build's 15-key row) draws as null.
+
+`health/labels.ts` `isEditorialRow({state, category})`, true for `spec_ahead` with `same_revision` alone, is the one predicate there: the words passed in, never `row.state ===`.
+
+**Guard** (`inbox/drift.ts` `storedRowOf(row: unknown): StoredDriftRow | null`): a JSON object (not an array) whose keys, read by name from a list, fit verify's row (`spec-verify-output.md` "JSON"; the table: `docs/features/ui-drift-evidence.md` "Data"): `levels` and `anchor` may be absent, a count is a non-negative safe integer, later keys are ignored; anything else is null. `api/provisional.ts` `StoredDriftRow` is `DriftRow`'s 17 keys, `levels?` and `anchor?` optional; `DriftEvidence.rows: StoredDriftRow[]`. The daemon passes rows as stored, so no key set: `fixtures/daemon-keys.json` stays at 76.
+
+**Card** (`inbox/DriftItem.tsx` `DriftSection {project, drift, commit}`): the about line, Rows (`driftRowsText`), Commit judged, Evidence hash; then `<ol class="drift-rows" aria-label="Stored rows, in spec verify's order">`, every stored row in stored order, never sorted, filtered or cut (at most 64): a typed one a `DriftLine` with `markEditorial`; else `<li class="drift-raw" data-raw="">` "Shown as sent: not in the shape this screen reads." over `<code>` `shownText` of its compact JSON (bidi marks, DEL and C1 as `\u{..}`), still counted. No row makes the card throw.
+
+**Commands** (`inbox/drift.ts` `driftCommands`): `spec approve PR`, `spec approve PR --editorial`, `spec reject PR --reason "..."`, all three whatever the rows: they were judged at `base_commit`, and approve judges `HEAD` again (`proposal-drift.md` "Approve"). `--editorial` reads "Approve as editorial: only when the node's text changed at its locked revision and keeps its meaning; rows marked Editorial were so when the item was raised, and the terminal judges HEAD again; a plain approve refused for that names this command". A `conflict` at R = `rev_L` is never marked (that needs `node_rev` judged against `lock.rev`), though the terminal may name `--editorial` for it.
+
+**Mocks** (`mocks/ledger-api/fixtures.ts`), every scenario but `empty`: PR-0010, two 15-key rows (an older build's); PR-0011 (`POL-REFUND-WINDOW`, `high`), two 17-key rows, a `spec_ahead same_revision` (Editorial) and a moved `conflict` with levels.
+
 ## Known limits
 
-- `BindingLine` draws file, symbol, signature, category and detail raw, where Health's `DriftLine` puts them through `oneLine`; `ui-drift-evidence`'s shared row component settles it.
 - No deep link to a tab; no trigger of its own: the tab is stale after a code edit until "Read again", re-entry or an apply.
-- `DriftPart` and `codeRows` load with the main chunk (465.44 kB, under Vite's 500 kB warning).
+- `DriftPart` and `codeRows` load with the main chunk, the Inbox card pulling in `DriftPart` too (469.49 kB, under Vite's 500 kB warning).
+- A card's Editorial mark and facts are as of `base_commit`, so may be stale against `HEAD`; the terminal judges again.
 
 ## Tests
 
-UI: `NodePane.test.tsx` (tab order, the one read, rows, states, commands), `commands.test.ts`, `tree.smoke.test.tsx`, `corpus.test.ts`, `live.test.tsx`, `policy.test.ts` (AC-U6), `daemonKeys.test.ts`, `http.test.ts`. Rust: http `daemon_keys.rs`, `norm.rs`; CLI `kind_amendment.rs` (the count).
+UI: `NodePane.test.tsx` (tab order, the one read, rows, states, commands, one-line words), `commands.test.ts`, `tree.smoke.test.tsx`, `corpus.test.ts`, `live.test.tsx`; `inbox/drift.test.tsx` (the guard, every fact text, raw rows, commands, the mark), `mocks/drift.smoke.test.tsx` (PR-0010, PR-0011), `HealthView.test.tsx` and `mocks/health.smoke.test.tsx` (row 6's details: stub rows, harbor-sim); `policy.test.ts` (AC-U6, no sort), `daemonKeys.test.ts` (`StoredDriftRow`), `http.test.ts`. Rust: http `daemon_keys.rs`, `drift.rs`, `norm.rs`; CLI `kind_amendment.rs` (the count).

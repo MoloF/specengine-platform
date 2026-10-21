@@ -1092,15 +1092,34 @@ textarea.field {
   white-space: pre-wrap;
 }
 
-/* A drift item's stored rows as sent (docs/features/drift-queue.md "Review, inbox, round, stage"):
-   compact JSON, one per line, wrapped anywhere; untyped until Phase 4's drift screen. */
+/* A drift item's stored rows (docs/canon/drift-screens.md): each a Health row 6 line, boxed as
+   Health's are; a row not in the shape the card reads as its compact JSON, in a dashed box, wrapped
+   anywhere, never widening the card. */
 .drift-rows {
   display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drift-raw {
+  display: grid;
   gap: var(--space-1);
-  padding-left: var(--space-5);
-  font-family: var(--font-mono);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-m);
   font-size: var(--font-size-s);
   overflow-wrap: anywhere;
+}
+
+.drift-raw-note {
+  color: var(--text-secondary);
+}
+
+.drift-raw code {
+  font-family: var(--font-mono);
 }
 
 .dialog-actions {

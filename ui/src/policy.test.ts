@@ -67,6 +67,12 @@ const textModules = import.meta.glob<Record<string, unknown>>(["/src/round/text.
 /** The Bindings tab's sources (docs/features/ui-node-bindings.md): held to Health's rules for rows (UI-7). */
 const BINDINGS_TAB: readonly string[] = ["/src/tree/BindingsPanel.tsx", "/src/tree/BindingLine.tsx", "/src/tree/commands.ts"];
 
+/** The drift card's sources (docs/features/ui-drift-evidence.md): its rows held to Health's rules too (UI-6). */
+const DRIFT_CARD: readonly string[] = ["/src/inbox/drift.ts", "/src/inbox/DriftItem.tsx"];
+
+/** Health, the Bindings tab and the drift card: the row sources AC-U6 and the no-sort rule cover. */
+const ROW_SOURCES: readonly string[] = [...BINDINGS_TAB, ...DRIFT_CARD];
+
 /** The provisional types' module, with or without an extension (as in eslint.config.js). */
 const PROVISIONAL = /(^|\/)provisional(\.[jt]sx?)?$/;
 
@@ -327,8 +333,8 @@ describe("source policy", () => {
     }
   });
 
-  it("compares no kind, class, status, state, sync, link type, reason, ID state, binding or relation in Health or the Bindings tab but in the label maps: rows 3 to 6 and binding rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui and UI-7 of ui-node-bindings)", () => {
-    const outside = (path: string) => !(path.startsWith("/src/health/") || BINDINGS_TAB.includes(path)) || /\.test\.tsx?$/.test(path);
+  it("compares no kind, class, status, state, sync, link type, reason, ID state, binding, relation or category in Health, the Bindings tab or the drift card but in the label maps: rows 3 to 6, binding rows and stored drift rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui, UI-7 of ui-node-bindings and UI-6 of ui-drift-evidence)", () => {
+    const outside = (path: string) => !(path.startsWith("/src/health/") || ROW_SOURCES.includes(path)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
       expect.arrayContaining([
         "/src/health/AmendmentsPart.tsx",
@@ -338,9 +344,11 @@ describe("source policy", () => {
         "/src/health/codeRows.tsx",
         "/src/health/labels.ts",
         ...BINDINGS_TAB,
+        ...DRIFT_CARD,
       ]),
     );
-    const field = "\\.(kind|class|status|state|sync|type|reason|id_state|binding|relation)\\b";
+    // `category` since ui-drift-evidence: a stored drift row's category is told apart in labels.ts alone.
+    const field = "\\.(kind|class|status|state|sync|type|reason|id_state|binding|relation|category)\\b";
     const equality = "([!=]==?)(?!=)";
     const absent = "(null|undefined)\\b";
     const compared = new RegExp(
@@ -382,6 +390,11 @@ describe("source policy", () => {
       'row.sync !== "unlocked" && <p />',
       "const look = LOOKS[row.sync];",
       'rows.some((row) => row.sync === "conflict")',
+      // UI-6 of ui-drift-evidence: a stored row's state or category branched on in the card.
+      'const editorial = row.state === "spec_ahead" && row.category === "same_revision";',
+      'typeof row.state === "string"',
+      'const editorial = row.category === "same_revision";',
+      'row.category !== "marker_behind" && <span>Editorial</span>',
     ]) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }
@@ -399,13 +412,22 @@ describe("source policy", () => {
       "<Badge name=\"Sync\" look={syncLook(row.sync)} />",
       "{row.node === \"\" ? <span>{noId}</span> : <bdi className=\"mono\">{row.node}</bdi>}",
       "{holder.bindings === null ? <NotRead /> : <Rows />}",
+      // ui-drift-evidence: the guard's keys by name, the label map's words passed in.
+      'GUARANTEED.every(([key, fitting]) => fields.has(key) && fitting(fields.get(key)))',
+      '["state", text],',
+      'return state === "spec_ahead" && category === "same_revision";',
+      "{markEditorial && isEditorialRow(row) && <span>Editorial</span>}",
+      // A category shown or checked for presence, as row 6 and the test evidence do.
+      "{entry.category !== null && <span className=\"mono health-code-word\">{oneLine(entry.category)}</span>}",
+      "const judgement = [row.category, row.detail].filter((word) => word !== null).join(\" \");",
     ]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
     }
   });
 
-  it("sorts nothing in Health but the findings, nor in the Bindings tab, and keeps every label table in labels.ts: rows 3 to 6 and binding rows drawn in the daemon's order, each word through one map (UI-3 of health-drift-ui, UI-2 of ui-node-bindings)", () => {
-    const parts = (path: string) => !(path.startsWith("/src/health/") || BINDINGS_TAB.includes(path)) || /\.test\.tsx?$/.test(path);
+  it("sorts nothing in Health but the findings, nor in the Bindings tab or the drift card, and keeps every label table in labels.ts: rows 3 to 6, binding rows and stored drift rows drawn in the daemon's order, each word through one map (UI-3 of health-drift-ui, UI-2 of ui-node-bindings, UI-6 of ui-drift-evidence)", () => {
+    const parts = (path: string) => !(path.startsWith("/src/health/") || ROW_SOURCES.includes(path)) || /\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter((path) => !parts(path))).toEqual(expect.arrayContaining([...BINDINGS_TAB, ...DRIFT_CARD]));
     const sorted = /\.(sort|toSorted|reverse|toReversed)\(/;
     expect(offending(sorted, (path) => parts(path) || path === "/src/health/findings.ts")).toEqual([]);
     // The scope is right: the findings are grouped and ordered by the view (docs/features/ui-health.md).

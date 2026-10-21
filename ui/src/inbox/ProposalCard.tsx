@@ -175,7 +175,7 @@ function ReviewBody({
   const drift = review.drift;
   return (
     <>
-      {drift !== null && <DriftSection drift={drift} commit={review.base_commit} />}
+      {drift !== null && <DriftSection project={project} drift={drift} commit={review.base_commit} />}
 
       {review.evidence.length > 0 && (
         <Section title="Evidence">

@@ -452,6 +452,18 @@ describe("Health over the mock", () => {
     expect(codePart("drift").textContent).not.toMatch(/block|verdict/i);
   });
 
+  it("normal: row 6: details over harbor-sim: MEC-MOORING's markers, revision, lock, compared and levels; MEC-CARGO-CRANES unlocked, not compared, no levels; no Pre-existing, no Editorial (UI-5 of ui-drift-evidence)", async () => {
+    await loadedHealth();
+    const line = (node: string) => codePart("drift").querySelector(`[data-drift="${node}"]`);
+    const facts = (node: string) => Array.from(line(node)?.querySelectorAll(".health-drift-facts .health-code-fact") ?? [], (fact) => fact.textContent);
+    const levels = (node: string) => Array.from(line(node)?.querySelectorAll(".health-drift-levels .health-code-fact") ?? [], (fact) => fact.textContent);
+    expect(facts("MEC-MOORING")).toEqual(["Marker line 30 @2", "Node rev 2", "Locked rev 2, 4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4, 2026-10-02", "Compared ast"]);
+    expect(levels("MEC-MOORING")).toEqual(["lock sig, body", "markers sig, body", "changed body"]);
+    expect(facts("MEC-CARGO-CRANES")).toEqual(["Marker line 1 @1", "Node rev 1", "Not locked", "Not compared"]);
+    expect(line("MEC-CARGO-CRANES")?.querySelector(".health-drift-levels")).toBeNull();
+    expect(codePart("drift").textContent).not.toMatch(/Pre-existing|Editorial/);
+  });
+
   it("normal: a row's node opens its node in the tree", async () => {
     const { spies } = await loadedHealth();
     const link = codePart("drift").querySelector<HTMLAnchorElement>('[data-drift="MEC-TIDES"] a.health-code-id');
