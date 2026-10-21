@@ -37,7 +37,7 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
-    BundleRequest, CheckRequest, GraphRequest, InboxRequest, Outcome, ReviewRequest,
+    BundleRequest, CheckRequest, GraphRequest, HealthRequest, InboxRequest, Outcome, ReviewRequest,
     RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
     ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TreeRequest,
     UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, utc_now,
@@ -420,17 +420,26 @@ async fn check(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 }
 
 /// `GET …/health`: `spec health --json` (task specs `health-left`,
-/// `health-code`), in the project's turn; no query name. Row 3 walks the
-/// working tree on disk as the plain check walks it; rows 4-5 read the
-/// code index the call refreshes, as `refs` does (the data directory's
-/// indexes written, nothing else). Any row state is a 200 document; only
-/// the CLI's exit 2, row 3's alone (a config that cannot be used, an
-/// incomplete walk), is a 503.
+/// `health-code`, `health-drift`), in the project's turn; no query name.
+/// Row 3 walks the working tree on disk as the plain check walks it; rows
+/// 4-5 read the code index the call refreshes, as `refs` does (the data
+/// directory's indexes written, nothing else); row 6 judges over that
+/// handle as plain `spec verify` judges, git read-only through the
+/// daemon's environment. Any row state is a 200 document; only the CLI's
+/// exit 2, row 3's alone (a config that cannot be used, an incomplete
+/// walk), is a 503.
 async fn health(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     args("health", &[], &uri)?;
     Ok(run(project, |env, globals| {
-        specengine_cli::health(env, globals).map(Outcome::Health)
+        specengine_cli::health(
+            env,
+            globals,
+            &HealthRequest {
+                git: process_git(env),
+            },
+        )
+        .map(Outcome::Health)
     })
     .await)
 }

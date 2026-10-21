@@ -57,7 +57,9 @@
 //! - [`health`]: the working tree's unapplied amendments (live documents
 //!   that name a node they amend) over the walk `check` reads, no index;
 //!   then rows 4-5 ([`CodeRows`]: `@assumes` and queue markers, unbound
-//!   nodes) over the code index the call refreshes, as `refs` reads it;
+//!   nodes) over the code index the call refreshes, as `refs` reads it,
+//!   and row 6 ([`HealthDrift`]: plain `verify`'s rows but `ok`) over the
+//!   same handle;
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
 //! - [`tree_with_view`], [`show_with_view`], [`search_with_view`],
@@ -172,11 +174,11 @@
 //! lock regen`, which writes only `spec.lock` (canon `spec-lock`,
 //! "Travel and writes"); `index`, `verify`, `refs`, `symbols`, `unmapped`,
 //! `search`, `show`, `tree`, `graph`, `bundle`, `roadmap`, `propose`, `inbox`,
-//! `review`, `reject`, `import-state`, `round new` and `resolve` write only
-//! the data directory (`propose question`, `discrepancy` and `decision`
-//! too), `export state` only its dump (never inside the worktree), `check`,
-//! `health` and `serve` nothing (the daemon `serve` execs writes its data
-//! directory).
+//! `review`, `reject`, `import-state`, `round new`, `resolve` and `health`
+//! write only the data directory (`propose question`, `discrepancy` and
+//! `decision` too), `export state` only its dump (never inside the
+//! worktree), `check` and `serve` nothing (the daemon `serve` execs writes
+//! its data directory).
 //! Nothing found in the corpus is fatal to the indexed reads (`search`,
 //! `show`, `tree`, `graph`, `bundle`, `roadmap`): broken or unreadable files are
 //! indexed with their diagnostics and never change their exit code. The
@@ -208,6 +210,7 @@ mod graph;
 mod group;
 mod health;
 mod health_code;
+mod health_drift;
 mod impact;
 mod inbox;
 mod init;
@@ -290,11 +293,12 @@ pub use gate::{
 pub use graph::{
     FollowedType, GraphEdge, GraphNode, GraphOutcome, GraphRequest, graph, graph_with_view,
 };
-pub use health::{HealthOutcome, UnappliedAmendment, health};
+pub use health::{HealthOutcome, HealthRequest, UnappliedAmendment, health};
 pub use health_code::{
     AssumedNode, AssumedProposal, AssumedState, AssumesCounts, AssumesRow, CodeRow, CodeRows,
     RowState, UnboundCounts, UnboundMarker, UnboundRow,
 };
+pub use health_drift::HealthDrift;
 pub use impact::{ImpactOutcome, ImpactRequest, ImpactRow, ImpactTask, SeedSymbol, impact};
 pub use inbox::{INBOX_RATIONALE_CHARS, InboxEntry, InboxOutcome, InboxRequest, inbox};
 pub use init::{InitOutcome, InitRequest, derive_slug, init};
@@ -699,9 +703,17 @@ impl Outcome {
         {
             lines.push(one_line(error));
         }
-        // Health's rows 4-5: the refreshes' notes, a `cannot` row's causes.
+        // Health's rows 4-5: the refreshes' notes, a `cannot` row's causes;
+        // then row 6's (task spec `health-drift`), as verify escapes its own.
         if let Self::Health(outcome) = self {
             lines.extend(outcome.code_rows.messages.iter().map(Message::line));
+            lines.extend(
+                outcome
+                    .drift
+                    .messages()
+                    .iter()
+                    .map(|message| escape_controls(&message.line())),
+            );
         }
         // The queue's commands quote agent-written text.
         // So do the lock's commands: a path, a `qpath`, an ID.

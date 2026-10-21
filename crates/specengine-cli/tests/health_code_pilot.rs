@@ -12,6 +12,11 @@
 //! unchanged. No project name, path, ID or cause text is printed or
 //! written anywhere.
 //!
+//! docs/features/health-drift.md TE-7: row 6 too: its state, causes
+//! counted, `counts`, rows and evidence counted, and its share of a warm
+//! call (the same call with no `git` on `PATH`, row 6 `cannot`, rows 3-5
+//! byte-equal), against AC-10's 2 s for the whole.
+//!
 //! Run in the foreground, release, one pilot at a time:
 //! `SPECENGINE_PILOT_DIR=<root> [SPECENGINE_PILOT_CONFIG=<file>] cargo
 //! nextest run -p specengine-cli --release --test health_code_pilot
@@ -25,7 +30,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use common::git::Sandbox;
-use common::{Run, Scratch, spec};
+use common::{Run, Scratch, spec, spec_with};
 use serde_json::Value;
 
 /// The repeat's budget (AC-10's 2 s).
@@ -63,6 +68,47 @@ fn timed_health(home: &Path, root: &Path, config: Option<&Path>) -> (Run, Durati
     let started = Instant::now();
     let run = spec(home, root, &args);
     (run, started.elapsed())
+}
+
+/// `spec --root <root> [--config <config>] health --json` with `HOME`
+/// `home` and `PATH` an empty directory (row 6 `cannot`: no `git`), and
+/// its wall time.
+fn timed_health_without_git(
+    home: &Path,
+    root: &Path,
+    config: Option<&Path>,
+    empty: &Path,
+) -> (Run, Duration) {
+    let root_text = root.to_str().expect("a UTF-8 root").to_owned();
+    let config_text = config.map(|config| config.to_str().expect("a UTF-8 config").to_owned());
+    let mut args: Vec<&str> = vec!["--root", root_text.as_str()];
+    if let Some(config) = &config_text {
+        args.extend(["--config", config.as_str()]);
+    }
+    args.extend(["health", "--json"]);
+    let started = Instant::now();
+    let run = spec_with(
+        root,
+        &args,
+        &[("HOME", home.as_os_str()), ("PATH", empty.as_os_str())],
+    );
+    (run, started.elapsed())
+}
+
+/// Row 6's state, its causes counted, its counts, rows and evidence
+/// counted: no name, no path.
+fn drift_shape(row: &Value) -> String {
+    format!(
+        "{} | causes {} | counts {} | rows {} | tested {} | notes {}",
+        row["state"].as_str().unwrap_or("?"),
+        row["causes"].as_array().map_or(0, Vec::len),
+        row["counts"],
+        row["rows"].as_array().map_or(0, Vec::len),
+        row["tested"]
+            .as_array()
+            .map_or_else(|| "null".to_owned(), |entries| entries.len().to_string()),
+        row["notes"].as_array().map_or(0, Vec::len)
+    )
 }
 
 /// A row's state, its causes counted and its counts: no name, no path.
@@ -112,6 +158,34 @@ fn pilot_health_code_rows() {
     println!("code: {}", document["code"]);
     println!("assumes: {}", shape(&document["assumes"]));
     println!("unbound: {}", shape(&document["unbound"]));
+    println!("drift: {}", drift_shape(&document["drift"]));
+    let empty = scratch.dir("no-git-bin");
+    let (without, without_time) = timed_health_without_git(&home, &root, config.as_deref(), &empty);
+    assert_eq!(without.code, 0, "exit {}", without.code);
+    let rows_3_5 = without.json();
+    assert_eq!(
+        rows_3_5["drift"]["state"], "cannot",
+        "no git: row 6 `cannot`"
+    );
+    for key in [
+        "documents",
+        "amendments",
+        "notes",
+        "code",
+        "assumes",
+        "unbound",
+    ] {
+        assert_eq!(
+            rows_3_5[key], document[key],
+            "rows 3-5's `{key}` without row 6"
+        );
+    }
+    println!(
+        "row 6's share of a warm call: {} ms (repeat {} ms, rows 3-5 alone {} ms)",
+        again_time.saturating_sub(without_time).as_millis(),
+        again_time.as_millis(),
+        without_time.as_millis()
+    );
     println!(
         "stderr lines: first {}, repeat {}",
         first.stderr.lines().count(),

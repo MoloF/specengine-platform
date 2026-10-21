@@ -92,7 +92,7 @@ A block is one entry of its node in every count but the rebase's; its row `<chan
 
 ## Reads
 
-`show --bindings`, the bundle, the package and `impact`, with their MCP and HTTP twins, show these entries as computed state (ADR-0046). **Seam**: in `set_bindings_with(.., tested_also)`'s judged branch (`set_bindings` passes `&[]`), before the session's `finish()`, only when the uncut lock holds a block, `set_tested` calls `tested_entries` (`verify --node`'s call) for the canonical IDs of the read's keys and `tested_also`; each read takes its part of `SetBindings.tested` (`tested_of`). No second judge: a read and plain verify agree key for key.
+`show --bindings`, the bundle, the package and `impact`, with their MCP and HTTP twins, show these entries as computed state (ADR-0046); Health those not `verified` (`health-drift.md`). **Seam**: in `set_bindings_with(.., tested_also)`'s judged branch (`set_bindings` passes `&[]`), before the session's `finish()`, only when the uncut lock holds a block, `set_tested` calls `tested_entries` (`verify --node`'s call) for the canonical IDs of the read's keys and `tested_also`; each read takes its part of `SetBindings.tested` (`tested_of`). No second judge: a read and plain verify agree key for key.
 
 - **Entry**: model `TestedRow`, plain verify's seven keys; a list by `node` bytes, `null` not judged, `[]` no block; never `node_gone`. **Line** (`tested_line`): `tested | <state>[ <category>] | <node>`, each entry, `verified` too.
 - **show**: each shown node's own set; lines after its closing `  bindings` line, two spaces in, cut with it (`closing_cost`); JSON `bindings` `{rows, omitted, tested}`.

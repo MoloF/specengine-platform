@@ -269,28 +269,65 @@ fn set_files(
     notes_at: usize,
 ) -> Result<SetFiles, RunCause> {
     let cut = cut_lock(scope.lock, set, corpus);
+    let read = read_selection(
+        scope.project,
+        scope.code,
+        index,
+        messages,
+        notes_at,
+        |refs| selected(refs, &cut, set, corpus),
+    )?;
+    Ok(SetFiles {
+        tree: read.tree,
+        symbols: read.symbols,
+        cut,
+        walk: read.walk,
+    })
+}
+
+/// A selection's files as read: their partial tree, their stored symbols
+/// by path, and the selection's walk.
+struct ReadSelection {
+    tree: CodeTree,
+    symbols: BTreeMap<String, Vec<StoredSymbol>>,
+    walk: SetWalk,
+}
+
+/// The files `select` picks, from one read snapshot of the code index,
+/// each read again and checked against its stored BLAKE3 (a file edited
+/// since the refresh: the code index refreshed once more, its notes in
+/// place of the first's from `notes_at`, and the selection read again;
+/// edited again: a walk gap), bound into a partial tree. Causes: a walk
+/// gap (3), the data directory (8).
+fn read_selection(
+    project: &ProjectRoot,
+    code: &CodeConfig,
+    index: &mut SqliteIndex,
+    messages: &mut Vec<Message>,
+    notes_at: usize,
+    mut select: impl FnMut(&CodeRefs) -> BTreeSet<String>,
+) -> Result<ReadSelection, RunCause> {
     let mut again = false;
     let mut skipped = None;
     loop {
         if again {
             messages.truncate(notes_at);
-            skipped = Some(refreshed_code(index, scope.project, scope.code, messages)?);
+            skipped = Some(refreshed_code(index, project, code, messages)?);
         }
         let selection = index
-            .code_selection(|refs| selected(refs, &cut, set, corpus))
+            .code_selection(&mut select)
             .map_err(|error| RunCause::new(CAUSE_DATA, unprefixed(&store_error(error))))?
             .unwrap_or_default();
-        match fresh_tree(scope.project, &selection) {
+        match fresh_tree(project, &selection) {
             Ok(tree) => {
                 let symbols = selection
                     .files
                     .into_iter()
                     .map(|file| (file.path, file.symbols))
                     .collect();
-                return Ok(SetFiles {
+                return Ok(ReadSelection {
                     tree,
                     symbols,
-                    cut,
                     walk: SetWalk {
                         files: selection.refs.files,
                         skipped,
@@ -306,6 +343,75 @@ fn set_files(
             Err(Fresh::Changed(_)) => again = true,
         }
     }
+}
+
+// ------------------------------------------------------------ every key
+
+/// What the whole-key judge reads (task spec `health-drift`): the project,
+/// its `[code]`, the spec corpus read now (every file read again), the
+/// lock, uncut.
+pub(crate) struct KeyScope<'a> {
+    pub project: &'a ProjectRoot,
+    pub code: &'a CodeConfig,
+    pub input: &'a CheckInput,
+    pub lock: &'a Lock,
+}
+
+/// Every key's rows as plain verify judges them, and the partial tree
+/// judged: every lock entry's file and every stored marker's file
+/// (`spec verify`'s `tested` reads their bindings in it).
+pub(crate) struct KeysJudged {
+    pub judged: Judged,
+    pub tree: CodeTree,
+}
+
+/// Plain verify's rows over the code index (task spec `health-drift`):
+/// [`judge_set`]'s seam with every key selected, from one read snapshot
+/// of the refreshed code index: each lock entry's file and each stored
+/// marker's file, whatever its ID names (a `queue` or `other_project` ID's
+/// marker is counted `skipped` as plain counts it). Each file is read
+/// again and checked against its stored BLAKE3 ([`read_selection`]: a file
+/// edited since the refresh, one more refresh, its notes in place of the
+/// first's from `notes_at`; edited again: (3)), then judged by plain's
+/// judge against the uncut lock (`judge_walk`, no base). Every row is kept,
+/// as plain keeps it: a dangling key, a bare `""` one, a `node_gone` entry.
+pub(crate) fn judge_every_key(
+    scope: &KeyScope<'_>,
+    index: &mut SqliteIndex,
+    git: &VerifyGit,
+    messages: &mut Vec<Message>,
+    notes_at: usize,
+) -> Result<KeysJudged, RunCause> {
+    let lock = scope.lock;
+    let read = read_selection(
+        scope.project,
+        scope.code,
+        index,
+        messages,
+        notes_at,
+        |refs| every_key_file(refs, lock),
+    )?;
+    let walked = Walked {
+        project: scope.project,
+        code: scope.code,
+        input: scope.input,
+        tree: &read.tree,
+        lock,
+    };
+    let judged = judge_walk(&walked, git, None)?;
+    Ok(KeysJudged {
+        judged,
+        tree: read.tree,
+    })
+}
+
+/// Every lock entry's file and every stored marker's file.
+fn every_key_file(refs: &CodeRefs, lock: &Lock) -> BTreeSet<String> {
+    lock.entries
+        .keys()
+        .map(|key| key.file.clone())
+        .chain(refs.markers.iter().map(|marker| marker.path.clone()))
+        .collect()
 }
 
 /// The lock cut to the entries whose row can be a set node's: its key's

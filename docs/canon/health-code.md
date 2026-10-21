@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-21
 ---
 
 # Health's code rows: `assumes` and `unbound`
 
-Rows 4-5 of Health's "What is left" (06 s7) in `spec health [--json]` and its route, after row 3 (`health.md`): row 4 `assumes`, code resting on a queue item, or an `@assumes` on a node archived or in question; row 5 `unbound`, the nodes the project selects that no marker binds. Architecture rule: `architecture-code.md#health` (ADR-0047, ADR-0051). Row 6 (drift) is 9b's; Health draws rows 4-5 from 9a-2.
+Rows 4-5 of Health's "What is left" (06 s7) in `spec health [--json]` and its route, after row 3 (`health.md`): row 4 `assumes`, code resting on a queue item, or an `@assumes` on a node archived or in question; row 5 `unbound`, the nodes the project selects that no marker binds. Architecture rule: `architecture-code.md#health` (ADR-0047, ADR-0051). Row 6: `health-drift.md`. Health draws rows 4-5.
 
 ## Rule
 
@@ -24,7 +24,7 @@ Visibility only: no check finding, rule or gate; nothing blocks (ADR-0012, ADR-0
 
 ## Document
 
-`{documents, amendments, notes, code, assumes, unbound}`, the first three row 3's (`health.md` "spec health"); every key present, absent `null`, uncut; key sets in `fixtures/daemon-keys.json` (56).
+`{documents, amendments, notes, code, assumes, unbound, drift}`, the first three row 3's (`health.md` "spec health"), `drift` row 6's; every key present, absent `null`, uncut; key sets in `fixtures/daemon-keys.json` (74).
 
 - `code` (`HealthCode`): `{files, rs, ron, skipped}`, `spec refs`' count of the stored files; `null` unless the index was read.
 - A row (`HealthAssumes`, `HealthUnbound`): `{state, causes, counts, rows}`: `state` `measured`, `off`, `not_configured` (row 5) or `cannot`; `causes` the lines behind any other state, else `[]`; `counts`, `rows` `null` unless `measured`, never a 0.
@@ -35,7 +35,7 @@ Visibility only: no check finding, rule or gate; nothing blocks (ADR-0012, ADR-0
 
 The unit is a stored marker, no symbol, binding or containment filter (an `@assumes` in a function body counts). Judged:
 
-- **(a)** every marker whose ID state is `queue` (`code-bindings.md` "ID state"), any relation: `get` by the ID exactly as written (`PR-7` never finds `PR-0007`).
+- **(a)** every marker whose ID state is `queue` (`code-bindings.md` "ID state"), any relation: `get` by the ID exactly as written (`PR-7` is not `PR-0007`).
 - **(b)** every `assumes` marker whose ID names nodes, a row per holder: `archived` when its document is Tier 3 (`is_tier3_file`); else `in_question` when an `open` or `approved` item's `target_ids` hold its canonical ID (`list_readable`, by ID number, deduplicated); else no row.
 
 | `state` | (a) when |
@@ -71,7 +71,7 @@ relations = ["implements", "configures"]
 
 **Candidates** (core `bound_candidates`): live (`is_live`) nodes with an ID in a file whose front-matter reads, from the md index's `CheckInput`. A document by its own fields (`kind:`, else its ID's prefix kind); a `{#ID}` section by its ID's prefix kind and its document's class, path and front-matter.
 
-**Binding**: bound for a rule when a stored marker of one of its relations `maps` and its judged nodes hold the node; unbound when a selecting rule finds it so. No containment: a document's marker binds none of its sections, a section's not its document. Mentions, look-alikes (nor the fix's node), `queue`, `dangling`, `other_project` IDs never bind; `rev_state`, levels, the lock never matter. Parity (AC-4): unbound ⇔ `spec refs <node> --json` lists no marker of the rule's relations with such an `id_state` and `binding`.
+**Binding**: bound for a rule when a stored marker of one of its relations `maps` and its judged nodes hold the node; unbound when a selecting rule finds it so. No containment: a document's marker binds none of its sections, a section's not its document. Mentions, look-alikes (nor the fix's node), `queue`, `dangling`, `other_project` IDs never bind; `rev_state`, levels, the lock never matter. Parity: unbound ⇔ `spec refs <node> --json` lists no marker of the rule's relations with such an `id_state` and `binding`.
 
 **Rows** by path bytes, line, ID. `rules`: 1-based indices (config order) of the rules it fails; `mentions`: stored mentions whose judged nodes hold it (a look-alike's fix node too), ADR-0016's adoption signal; `markers`: every marker whose judged nodes hold it, by path, line, column, `reason` the first that applies of `homoglyph`, `unanchored`, `cannot_verify`, `relation`.
 
@@ -79,7 +79,7 @@ State, by precedence: `off`; `not_configured`; `cannot`, every cause (`[health]`
 
 ## Text
 
-AC-3's tree (`code-a`, `kinds = ["law"]`): row 3's amendment lines; row 4's rows; row 5's rows, each with its markers two spaces in; each row's summary, or `<row>: off|not configured|cannot: <cause>` per cause; `code:` only when the index was read; row 3's last line.
+AC-3's tree (`code-a`, `kinds = ["law"]`; row 6 elided): row 3's amendment lines; rows 4, 5, 6's rows, row 5's markers two spaces in; each row's summary, or `<row>: off|not configured|cannot: <cause>` per cause; `code:`, after row 6's summary, only when the index was read; row 3's last line.
 
 ```text
 assumes | otherwise | PR-0042 | crates/tally/src/counter.rs:40:8 | assumes | question applied {"answer":"No"} | record DEC-0003 docs/decisions/DEC-0003.md
@@ -109,7 +109,7 @@ Rows 4-5 `cannot`, `code` null, row 3 measured, exit 0: a bad `[code]` (`<config
 
 - **Older queue schema**: neither the daemon nor `spec index` runs a queue schema step, so after an upgrade row 4 is `cannot` until a queue command runs.
 - **Flood**: without markers row 5 lists nearly every selected node, each broken item's (`cannot_verify`) too; reasons and mentions keep it readable.
-- Row 5's stored order is path order, so dropping its sort goes unseen; row 4's sort is pinned.
+- Row 5's sort is unpinned (stored in path order).
 
 ## Modules
 
@@ -117,7 +117,7 @@ Rows 4-5 `cannot`, `code` null, row 3 measured, exit 0: a bad `[code]` (`<config
 |---|---|
 | core `health_toml.rs`, `project_toml.rs` | `HealthConfig {bound}` (`from_toml(text, scheme, relations, default_relations)`), `BoundRule {kinds, classes, paths, when, relations, line}`; `RawFile.health` |
 | core `check/health.rs` | `bound_candidates(files, rules) -> Vec<BoundCandidate {file, ord, rules}>` |
-| CLI `health_code.rs` | `code_rows(env, project, text) -> CodeRows {code, assumes, unbound, messages}`: reading, the pure row-4 judge `decided`, binding, text; `RowState`, `CodeRow`, `AssumedState`, row types re-exported |
+| CLI `health_code.rs` | `code_rows(env, project, text) -> (CodeRows {code, assumes, unbound, messages}, CodeShare)`: reading, the pure row-4 judge `decided`, binding, text; `RowState`, `CodeRow`, `AssumedState`, row types re-exported |
 | CLI `health.rs` | `HealthOutcome.code_rows`, after row 3 |
 | CLI `symbols.rs` | `maps<'s>(marker, judged) -> Result<Option<Place<'s>>, CliError>`, `unmapped.rs`' too |
 | CLI `refs.rs` | `no_code_table`, `Corpus::node_line`, shared |
@@ -126,4 +126,4 @@ Rows 4-5 `cannot`, `code` null, row 3 measured, exit 0: a bad `[code]` (`<config
 
 ## Tests
 
-CLI `tests/health.rs`, `health_rows/` (parity, failures, read-only, determinism, genre), `code_refs_walk.rs` (`NEW_MODULES` 17); store `queue_bare_reads.rs`; http `tests/health.rs`, `daemon_keys.rs` (66 sets); UI `daemonKeys.test.ts`. TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs`.
+CLI `tests/health.rs`, `health_rows/` (parity, failures, read-only, determinism, genre), `code_refs_walk.rs` (`NEW_MODULES` 18); store `queue_bare_reads.rs`; http `tests/health.rs`, `daemon_keys.rs` (74 sets); UI `daemonKeys.test.ts`. TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs`.

@@ -6,7 +6,9 @@
 //! mentions read at once (`code_refs()`); each stored ID judged once
 //! ([`Corpus::judge`]). No walk of its own, no symbol or role row, no lock,
 //! no git; the queue opened only as it is ([`SqliteQueue::open_existing`],
-//! no schema step). Visibility, never a gate.
+//! no schema step). Visibility, never a gate. The handle is kept open for
+//! row 6 ([`CodeShare`], task spec `health-drift`): the call refreshes
+//! each index once.
 //!
 //! - **Row 4, `assumes`**: per stored marker, whatever it binds: (a) an ID
 //!   of the queue's form, any relation, judged against its item (`get` by
@@ -46,10 +48,10 @@ use specengine_core::{BoundRule, CodeConfig, HealthConfig};
 use specengine_model::grammar::split_superseded_by;
 use specengine_store::{
     Choice, CodeRefs, KindFamily, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus,
-    QUEUE_SCHEMA_VERSION, SqliteQueue, StoredBinding, StoredMarker,
+    QUEUE_SCHEMA_VERSION, SqliteIndex, SqliteQueue, StoredBinding, StoredMarker,
 };
 
-use crate::code_index::{CodeRefresh, RON_AMBIGUOUS, refresh_code};
+use crate::code_index::{CodeRefresh, RON_AMBIGUOUS, known_frameworks, refresh_code};
 use crate::corpus::indexed_in;
 use crate::location::{OpenIndex, open_index};
 use crate::project::{ProjectRoot, config_error};
@@ -59,6 +61,8 @@ use crate::refs::{
     UNANCHORED, marker_words, no_code_table, stored_count, unknown_word,
 };
 use crate::symbols::{Place, maps, place};
+use crate::verify::{CAUSE_DATA, unprefixed};
+use crate::verify_rows::{CAUSE_CONFIG, CAUSE_WALK, RunCause};
 use crate::{CliError, Env, Message, escape_controls, one_line, store_error};
 
 /// Row 4's name, in its lines and notes.
@@ -291,20 +295,45 @@ pub struct CodeRows {
     pub messages: Vec<Message>,
 }
 
+/// What rows 4-5 leave row 6 (task spec `health-drift`): the call's one
+/// handle, or why there is none.
+pub(crate) enum CodeShare {
+    /// No `[code]`: nothing was opened; the rows' `off` cause.
+    Off(String),
+    /// `[code]` does not read: nothing was opened (plain verify's own read
+    /// of it names the cause).
+    Unread,
+    /// A step of the handle failed (the data directory, either refresh,
+    /// an unknown `[code] frameworks` name, the code walk's gap): rows 4-5's
+    /// cause, as plain verify orders it.
+    Failed(RunCause),
+    /// The handle, both indexes refreshed and the code walk complete.
+    Open(SharedIndex),
+}
+
+/// The handle rows 4-5 read, kept open, and the spec corpus it gave
+/// (every file read again).
+pub(crate) struct SharedIndex {
+    pub index: SqliteIndex,
+    pub input: CheckInput,
+}
+
 /// Rows 4-5 of `project`, whose config reads as `text` (row 3's bytes):
-/// never an error, a step that fails is its rows' cause.
-pub(crate) fn code_rows(env: &Env, project: &ProjectRoot, text: &str) -> CodeRows {
+/// never an error, a step that fails is its rows' cause. With the handle
+/// they read, for row 6.
+pub(crate) fn code_rows(env: &Env, project: &ProjectRoot, text: &str) -> (CodeRows, CodeShare) {
     let label = project.config_label.as_str();
     let code = match CodeConfig::from_toml(text) {
         Ok(Some(code)) => Ok(code),
         Ok(None) => {
             let cause = cause_of(&no_code_table(label));
-            return CodeRows {
+            let rows = CodeRows {
                 code: None,
                 assumes: CodeRow::not_measured(RowState::Off, vec![cause.clone()]),
-                unbound: CodeRow::not_measured(RowState::Off, vec![cause]),
+                unbound: CodeRow::not_measured(RowState::Off, vec![cause.clone()]),
                 messages: Vec::new(),
             };
+            return (rows, CodeShare::Off(cause));
         }
         Err(error) => Err(cause_of(&config_error(label, &error))),
     };
@@ -317,9 +346,26 @@ pub(crate) fn code_rows(env: &Env, project: &ProjectRoot, text: &str) -> CodeRow
     let rules = HealthConfig::from_toml(text, &project.config.scheme, &relations, &defaults)
         .map_err(|error| cause_of(&config_error(label, &error)));
 
-    let measured = code
-        .and_then(|code| read_code(env, project, &code).map_err(|error| cause_of(&error)))
-        .and_then(|read| measure(project, &read, rules.as_ref()).map_err(|error| cause_of(&error)));
+    let mut share = CodeShare::Unread;
+    let measured = code.and_then(|code| match open_code(env, project, &code) {
+        Ok(opened) => {
+            // The stored rows' read and what follows fail rows 4-5 alone:
+            // row 6 reads its own selection.
+            let measured = read_stored(&opened)
+                .and_then(|read| measure(project, &read, rules.as_ref()))
+                .map_err(|error| cause_of(&error));
+            share = CodeShare::Open(SharedIndex {
+                index: opened.index,
+                input: opened.input,
+            });
+            measured
+        }
+        Err(cause) => {
+            let text = cause.message.clone();
+            share = CodeShare::Failed(cause);
+            Err(text)
+        }
+    });
     let mut rows = match measured {
         Ok(rows) => rows,
         Err(cause) => CodeRows {
@@ -336,7 +382,7 @@ pub(crate) fn code_rows(env: &Env, project: &ProjectRoot, text: &str) -> CodeRow
     let mut notes = cannot_notes(ASSUMES, &rows.assumes);
     notes.extend(cannot_notes(UNBOUND, &rows.unbound));
     rows.messages.extend(notes);
-    rows
+    (rows, share)
 }
 
 /// A `<row>: <cause>` note per cause of a row that cannot be measured.
@@ -364,28 +410,44 @@ fn cause_of(error: &CliError) -> String {
         .to_owned()
 }
 
-/// What the rows read of the indexes, the handle closed.
-struct CodeRead {
+/// The call's one handle, kept open for row 6: both indexes refreshed, the
+/// code walk complete.
+struct Opened {
+    index: SqliteIndex,
     /// The spec index's input, each file read again (the judge's).
     input: CheckInput,
-    stored: CodeRefs,
-    code: CodeCount,
     db: PathBuf,
     slug: String,
+    /// The refreshes' notes.
     messages: Vec<Message>,
+    /// The names and files the code refresh skipped for not being UTF-8.
+    skipped: usize,
+}
+
+/// What rows 4-5 read of the handle: its stored files, markers and
+/// mentions, and their count.
+struct CodeRead<'o> {
+    opened: &'o Opened,
+    stored: CodeRefs,
+    code: CodeCount,
 }
 
 /// One database handle, as `spec refs` opens it: the spec index refreshed,
-/// then the code index ([`CodeRefresh::require_complete`]: a gap fails),
-/// then its stored rows.
-fn read_code(env: &Env, project: &ProjectRoot, code: &CodeConfig) -> Result<CodeRead, CliError> {
+/// then the code index ([`CodeRefresh::require_complete`]: a gap fails). A
+/// failing step's cause in plain verify's order (row 6 lists it as plain
+/// would): `[code] frameworks` (1), the gap (3), any other (8).
+fn open_code(env: &Env, project: &ProjectRoot, code: &CodeConfig) -> Result<Opened, RunCause> {
+    let data = |error: CliError| RunCause::new(CAUSE_DATA, unprefixed(&error));
     let OpenIndex {
         mut index,
         db,
         slug,
-    } = open_index(env, project)?;
+    } = open_index(env, project).map_err(data)?;
     let mut messages = Vec::new();
-    let input = indexed_in(&mut index, project, &mut messages, true)?;
+    let input = indexed_in(&mut index, project, &mut messages, true).map_err(data)?;
+    // `refresh_code` refuses an unknown name first: (1), not (8).
+    known_frameworks(code, &project.config_label)
+        .map_err(|error| RunCause::new(CAUSE_CONFIG, unprefixed(&error)))?;
     let refreshed: CodeRefresh = refresh_code(
         &mut index,
         &project.root,
@@ -393,18 +455,33 @@ fn read_code(env: &Env, project: &ProjectRoot, code: &CodeConfig) -> Result<Code
         &project.config_label,
         &project.config.scheme,
         false,
-    )?;
-    refreshed.require_complete()?;
+    )
+    .map_err(data)?;
+    refreshed
+        .require_complete()
+        .map_err(|error| RunCause::new(CAUSE_WALK, unprefixed(&error)))?;
     messages.extend(refreshed.messages.iter().cloned());
-    let stored = index.code_refs().map_err(store_error)?.unwrap_or_default();
-    let code = stored_count(&stored, refreshed.report.skipped);
-    Ok(CodeRead {
+    Ok(Opened {
+        index,
         input,
-        stored,
-        code,
         db,
         slug,
         messages,
+        skipped: refreshed.report.skipped,
+    })
+}
+
+/// The handle's stored rows, read at once (`code_refs()`).
+fn read_stored(opened: &Opened) -> Result<CodeRead<'_>, CliError> {
+    let stored = opened
+        .index
+        .code_refs()
+        .map_err(store_error)?
+        .unwrap_or_default();
+    Ok(CodeRead {
+        code: stored_count(&stored, opened.skipped),
+        stored,
+        opened,
     })
 }
 
@@ -423,10 +500,14 @@ struct Marked<'s> {
 /// build does not write fails both rows), each stored ID judged once.
 fn measure(
     project: &ProjectRoot,
-    read: &CodeRead,
+    read: &CodeRead<'_>,
     rules: Result<&HealthConfig, &String>,
 ) -> Result<CodeRows, CliError> {
-    let mut corpus = Corpus::new(&read.input, &project.config.scheme, &project.config.paths);
+    let mut corpus = Corpus::new(
+        &read.opened.input,
+        &project.config.scheme,
+        &project.config.paths,
+    );
     let mut marked = Vec::with_capacity(read.stored.markers.len());
     for marker in &read.stored.markers {
         let relation = marker_words(marker)?.relation;
@@ -449,7 +530,13 @@ fn measure(
         }
     }
 
-    let assumes = match assumes(project, &read.db, &read.slug, &corpus, &marked) {
+    let assumes = match assumes(
+        project,
+        &read.opened.db,
+        &read.opened.slug,
+        &corpus,
+        &marked,
+    ) {
         Ok((counts, rows)) => CodeRow::measured(counts, rows),
         Err(cause) => CodeRow::not_measured(RowState::Cannot, vec![cause]),
     };
@@ -465,7 +552,7 @@ fn measure(
         code: Some(read.code),
         assumes,
         unbound,
-        messages: read.messages.clone(),
+        messages: read.opened.messages.clone(),
     })
 }
 
@@ -891,7 +978,7 @@ fn assumes_line(row: &AssumesRow) -> String {
 }
 
 /// Row 4's and row 5's summary (or a `<row>: <state>: <cause>` line per
-/// cause), then `code:` when the index was read.
+/// cause); `code:` is [`code_line`]'s, after row 6's summary.
 pub(crate) fn summary_lines(rows: &CodeRows, out: &mut String) {
     match &rows.assumes.counts {
         Some(counts) if rows.assumes.state == RowState::Measured => {
@@ -921,6 +1008,10 @@ pub(crate) fn summary_lines(rows: &CodeRows, out: &mut String) {
         }
         _ => not_measured_lines(UNBOUND, &rows.unbound, out),
     }
+}
+
+/// `code:` when the index was read.
+pub(crate) fn code_line(rows: &CodeRows, out: &mut String) {
     if let Some(code) = &rows.code {
         out.push_str(&format!(
             "code: {} files (.rs {}, .ron {}), skipped {}\n",

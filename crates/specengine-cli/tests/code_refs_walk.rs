@@ -657,6 +657,10 @@ const HEALTH_CODE_MODULE: &str = "crates/specengine-cli/src/health_code.rs";
 const HEALTH_TOML_MODULE: &str = "crates/specengine-core/src/health_toml.rs";
 const HEALTH_CHECK_MODULE: &str = "crates/specengine-core/src/check/health.rs";
 
+/// docs/features/health-drift.md's module (TE-4): Health's row 6, plain
+/// verify's judge over the code index.
+const HEALTH_DRIFT_MODULE: &str = "crates/specengine-cli/src/health_drift.rs";
+
 /// The new modules of the slice, `items.rs` since
 /// docs/features/symbol-discriminator.md reads `cfg` there (its Q19, RD-3),
 /// the store's and the CLI's code-index modules since
@@ -666,8 +670,9 @@ const HEALTH_CHECK_MODULE: &str = "crates/specengine-core/src/check/health.rs";
 /// the store's and the CLI's role modules since docs/features/bevy-roles.md
 /// (RD-8: `NEW_MODULES` 11 + 2; the code crate's `frameworks` and `bevy`
 /// name the framework and stay out); Health's four since
-/// docs/features/health-code.md (TE-5: 13 + 4).
-const NEW_MODULES: [&str; 17] = [
+/// docs/features/health-code.md (TE-5: 13 + 4); row 6's since
+/// docs/features/health-drift.md (TE-4: 17 + 1).
+const NEW_MODULES: [&str; 18] = [
     "crates/specengine-core/src/code_toml.rs",
     "crates/specengine-code/src/bind.rs",
     "crates/specengine-code/src/naming.rs",
@@ -685,6 +690,7 @@ const NEW_MODULES: [&str; 17] = [
     HEALTH_CODE_MODULE,
     HEALTH_TOML_MODULE,
     HEALTH_CHECK_MODULE,
+    HEALTH_DRIFT_MODULE,
 ];
 
 /// Stack and genre words no engine source names.

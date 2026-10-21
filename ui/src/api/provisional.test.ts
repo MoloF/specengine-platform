@@ -15,11 +15,18 @@ import type {
   CheckFinding,
   CheckReport,
   DebtEntry,
+  DriftCounts,
+  DriftLevels,
+  DriftLock,
+  DriftMarker,
+  DriftRow,
   Finding,
   FollowedType,
   GraphEdge,
   GraphNode,
   GraphView,
+  HealthDrift,
+  HealthReport,
   OwnerNote,
   Proposal,
   RevisionChange,
@@ -909,7 +916,8 @@ describe("the tested types (UI of tested-reads)", () => {
     expect(declaredKeys("ShownBindings")).toEqual(["rows", "omitted", "tested"]);
     const pkg = declaredKeys("TaskPackage");
     expect(pkg.slice(pkg.indexOf("bindings"), pkg.indexOf("bindings") + 3)).toEqual(["bindings", "tested", "spec_snapshot"]);
-    expect(source.match(/^ {2}tested: TestedRow\[\] \| null;$/gm)).toHaveLength(2);
+    // The third is Health's row 6 (UI-1 of health-drift): verify's entries but `verified`.
+    expect(source.match(/^ {2}tested: TestedRow\[\] \| null;$/gm)).toHaveLength(3);
     const entry: TestedRow = {
       node: "R-12",
       state: "stale",
@@ -930,5 +938,182 @@ describe("the tested types (UI of tested-reads)", () => {
     const unverifiable: Pick<TestedRow, "state" | "category"> = { state: "unverifiable", category: "spec_ahead" };
     expect([gone.node_rev, gone.category, unverifiable.category]).toEqual([null, null, "spec_ahead"]);
     expect(source).toMatch(/^ {2}category: string \| null;\n {2}rev: number;\n {2}node_rev: number \| null;\n {2}commit: string;\n {2}verified_at: string;\n\}$/m);
+  });
+});
+
+/**
+ * UI-1 of docs/features/health-drift.md (types only, nothing drawn): Health's row 6, the health
+ * document's `drift` {state, causes, counts, rows, tested, notes}; verify's seven counts and its
+ * 17-key row with its marker, lock and levels, as `docs/canon/spec-verify-output.md` "JSON" writes
+ * them; the row's anchor and places the binding row's, its `tested` entries the reads'.
+ */
+const DRIFT_KEYS = {
+  HealthDrift: { state: true, causes: true, counts: true, rows: true, tested: true, notes: true } satisfies Record<keyof HealthDrift, true>,
+  DriftCounts: {
+    rows: true,
+    ok: true,
+    fix: true,
+    check: true,
+    cannot: true,
+    pre_existing: true,
+    skipped: true,
+  } satisfies Record<keyof DriftCounts, true>,
+  DriftRow: {
+    node: true,
+    relation: true,
+    file: true,
+    kind: true,
+    symbol: true,
+    item_kind: true,
+    state: true,
+    category: true,
+    detail: true,
+    class: true,
+    pre_existing: true,
+    markers: true,
+    node_rev: true,
+    lock: true,
+    compared: true,
+    levels: true,
+    anchor: true,
+  } satisfies Record<keyof DriftRow, true>,
+  DriftMarker: { line: true, rev: true } satisfies Record<keyof DriftMarker, true>,
+  DriftLock: { rev: true, commit: true, verified_at: true } satisfies Record<keyof DriftLock, true>,
+  DriftLevels: { lock: true, markers: true, changed: true } satisfies Record<keyof DriftLevels, true>,
+};
+
+/** The key lists as the spec's "Data" and verify's JSON write them, copied verbatim. */
+const DRIFT_CITED: Record<keyof typeof DRIFT_KEYS, string> = {
+  HealthDrift: "state, causes, counts, rows, tested, notes",
+  DriftCounts: "rows, ok, fix, check, cannot, pre_existing, skipped",
+  DriftRow: "node, relation, file, kind, symbol, item_kind, state, category, detail, class, pre_existing, markers, node_rev, lock, compared, levels, anchor",
+  DriftMarker: "line, rev",
+  DriftLock: "rev, commit, verified_at",
+  DriftLevels: "lock, markers, changed",
+};
+
+const DRIFT_NAMES = Object.keys(DRIFT_KEYS) as (keyof typeof DRIFT_KEYS)[];
+
+const HEALTH_DRIFT_DATA = '`docs/features/health-drift.md` "Data"';
+
+const VERIFY_JSON = '`docs/canon/spec-verify-output.md` "JSON"';
+
+/** The canon's example row (`docs/canon/spec-verify-output.md` "JSON"), a `conflict` on R-12, keys in its order. */
+function aConflictRow(): DriftRow {
+  return {
+    node: "R-12",
+    relation: "implements",
+    file: "crates/game/src/stamina.rs",
+    kind: "item",
+    symbol: "game::stamina::regen_system",
+    item_kind: "function_item",
+    state: "conflict",
+    category: null,
+    detail: null,
+    class: "fix",
+    pre_existing: false,
+    markers: [{ line: 41, rev: 2 }],
+    node_rev: 3,
+    lock: { rev: 2, commit: "a0cea48".padEnd(40, "0"), verified_at: "2026-10-10" },
+    compared: "ast",
+    levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: ["body"] },
+    anchor: { state: "exact", from: null, candidates: null },
+  };
+}
+
+describe("the drift types (UI-1 of health-drift)", () => {
+  it.each(DRIFT_NAMES)("%s has exactly the cited keys, declared in their order", (name) => {
+    expect(Object.keys(DRIFT_KEYS[name]).join(", ")).toBe(DRIFT_CITED[name]);
+    expect(declaredKeys(name).join(", ")).toBe(DRIFT_CITED[name]);
+  });
+
+  it("counts row 6's 6 keys, verify's 7 counts, a row's 17, a marker's 2, a lock's 3, the levels' 3", () => {
+    expect(DRIFT_NAMES.map((name) => Object.keys(DRIFT_KEYS[name]).length)).toEqual([6, 7, 17, 2, 3, 3]);
+    expect(Object.keys(aConflictRow())).toEqual(DRIFT_CITED.DriftRow.split(", "));
+  });
+
+  it.each(DRIFT_NAMES)("%s cites the spec's Data, the path and heading on one line", (name) => {
+    expect(commentOf(name).split("\n").some((line) => line.includes(HEALTH_DRIFT_DATA))).toBe(true);
+  });
+
+  it.each(DRIFT_NAMES.filter((name) => name !== "HealthDrift"))("%s cites verify's JSON: its shape is plain verify's, verbatim", (name) => {
+    expect(commentOf(name)).toContain(VERIFY_JSON);
+  });
+
+  it("gives the health document its drift after unbound, the seventh and last key, never null; cites the spec's Data on one line", () => {
+    expect(declaredKeys("HealthReport")).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
+    expect(source).toMatch(/^ {2}unbound: HealthUnbound;\n {2}drift: HealthDrift;\n\}$/m);
+    expect(commentOf("HealthReport").split("\n").some((line) => line.includes(HEALTH_DRIFT_DATA))).toBe(true);
+  });
+
+  it("reuses the binding row's anchor and places and the reads' tested entry: no drift copy of them", () => {
+    expect(source).toMatch(/^ {2}levels: DriftLevels \| null;\n {2}anchor: BindingAnchor \| null;\n\}$/m);
+    expect(source).toMatch(/^ {2}rows: DriftRow\[\] \| null;\n {2}tested: TestedRow\[\] \| null;\n {2}notes: string\[\];\n\}$/m);
+    expect(source).not.toMatch(/^export (?:interface|type) Drift(?:Anchor|Place|Tested)\w*/m);
+    const moved: NonNullable<DriftRow["anchor"]> = {
+      state: "moved",
+      from: { file: "crates/game/src/old.rs", kind: "item", symbol: "game::old::regen_system", item_kind: "function_item" },
+      candidates: null,
+    };
+    const row: DriftRow = { ...aConflictRow(), anchor: moved };
+    expect(row.anchor?.from?.file).toBe("crates/game/src/old.rs");
+  });
+
+  it("types a row's state as verify's states, any other word passing; its class, words and levels plain strings", () => {
+    expect(source).toMatch(/^ {2}item_kind: string \| null;\n {2}state: SyncState;\n/m);
+    const other: DriftRow["state"] = "drifting";
+    const row: Pick<DriftRow, "relation" | "kind" | "item_kind" | "category" | "detail" | "class" | "compared" | "levels"> = {
+      relation: "any-relation",
+      kind: "any-kind",
+      item_kind: "any_item",
+      category: "any_category",
+      detail: "any detail",
+      class: "any-class",
+      compared: "any-compare",
+      levels: { lock: ["any"], markers: [], changed: null },
+    };
+    expect([other, Object.values(row).length]).toEqual(["drifting", 8]);
+  });
+
+  it("keeps counts, rows and tested null unless measured, never 0; causes and notes lists", () => {
+    const off: HealthDrift = {
+      state: "off",
+      causes: ["specengine.toml has no [code] table: the code layer is off (add [code] with roots)"],
+      counts: null,
+      rows: null,
+      tested: null,
+      notes: [],
+    };
+    const measured: HealthDrift = {
+      state: "measured",
+      causes: [],
+      counts: { rows: 9, ok: 8, fix: 1, check: 0, cannot: 0, pre_existing: 0, skipped: 1 },
+      rows: [aConflictRow()],
+      tested: [],
+      notes: [],
+    };
+    const report: Pick<HealthReport, "drift"> = { drift: off };
+    expect([report.drift.counts, report.drift.rows, report.drift.tested, measured.rows?.[0]?.class]).toEqual([null, null, null, "fix"]);
+  });
+
+  it("keeps a row's keyless place, markers' revision, node revision, lock, compared, levels and anchor nullable, as verify sends them", () => {
+    const keyless: DriftRow = {
+      ...aConflictRow(),
+      kind: null,
+      symbol: null,
+      item_kind: null,
+      state: "cannot_verify",
+      category: "unanchored",
+      class: "cannot",
+      markers: [{ line: 7, rev: null }],
+      node_rev: null,
+      lock: null,
+      compared: null,
+      levels: null,
+      anchor: null,
+    };
+    expect(Object.keys(keyless)).toEqual(DRIFT_CITED.DriftRow.split(", "));
+    expect(source).toMatch(/^ {2}line: number;\n {2}rev: number \| null;\n\}$/m);
+    expect(source).toMatch(/^ {2}lock: string\[\];\n {2}markers: string\[\];\n {2}changed: string\[\] \| null;\n\}$/m);
   });
 });

@@ -11,6 +11,12 @@
 //! states and causes never change row 3 or the exit; the refreshes' notes
 //! and a `cannot` row's causes go to stderr, never into `notes`.
 //!
+//! Row 6 (task spec `health-drift`) comes last: [`crate::health_drift`]
+//! runs plain `spec verify`'s judge in-process over the handle rows 4-5
+//! read (no walk of its own; git through the caller's [`GitEnv`], read
+//! only), its rows but `ok` in `drift`; never a mode, a verdict or the
+//! exit.
+//!
 //! Each amendment is a walked live document that names a node it amends,
 //! listed with its `amends` out links exactly as `spec show <path>
 //! --links` lists them (the spec graph over the same walk, the shown
@@ -28,7 +34,7 @@
 //! ```text
 //! <path>[ | id <id>][ | class <class>][ | status <status>][ | <title>]
 //!   out <type> <name, else written> | <path>:<line>[ | as <written>][ | dangling: <reason> | …]
-//! <rows 4-5's rows, their summaries or causes, `code:` when read>
+//! <rows 4-6's rows, their summaries or causes, `code:` when read>
 //! spec health: <d> documents, <n> unapplied amendments
 //! ```
 //!
@@ -39,14 +45,15 @@
 use serde::Serialize;
 use specengine_core::check::{SpecGraph, unapplied_amendments};
 use specengine_model::AMENDS;
-use specengine_store::{NamedBytes, WorkingTree, check_input, load_config};
+use specengine_store::{GitEnv, NamedBytes, WorkingTree, check_input, load_config};
 
 use crate::corpus::Admission;
 use crate::export::{config_errors, incomplete, io_message};
 use crate::health_code::{
-    AssumesCounts, AssumesRow, CodeRow, CodeRows, UnboundCounts, UnboundRow, code_rows, row_lines,
-    summary_lines,
+    AssumesCounts, AssumesRow, CodeRow, CodeRows, UnboundCounts, UnboundRow, code_line, code_rows,
+    row_lines, summary_lines,
 };
+use crate::health_drift::{HealthDrift, drift_lines, drift_row, drift_summary};
 use crate::links::{LinkJson, ShownLink, link_json, link_line, node_links};
 use crate::project::{ProjectRoot, locate};
 use crate::refs::CodeCount;
@@ -64,6 +71,16 @@ pub struct HealthOutcome {
     pub messages: Vec<Message>,
     /// Rows 4-5 (task spec `health-code`).
     pub code_rows: CodeRows,
+    /// Row 6 (task spec `health-drift`).
+    pub drift: HealthDrift,
+}
+
+/// `spec health` options.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HealthRequest {
+    /// The caller's git environment: row 6 reads git as plain `spec
+    /// verify` does (read-only).
+    pub git: GitEnv,
 }
 
 /// One unapplied amendment: a live document that names a node it amends.
@@ -88,8 +105,12 @@ pub struct UnappliedAmendment {
 const NOT_MEASURED: &str = "unapplied amendments not measured";
 
 /// `spec health`: walks the working tree and lists its unapplied
-/// amendments.
-pub fn health(env: &Env, globals: &Globals) -> Result<HealthOutcome, CliError> {
+/// amendments; then rows 4-6.
+pub fn health(
+    env: &Env,
+    globals: &Globals,
+    request: &HealthRequest,
+) -> Result<HealthOutcome, CliError> {
     let located = locate(env, globals)?;
     let label = located.config_label.as_str();
     let config = NamedBytes::read(label, &located.config_file);
@@ -158,11 +179,15 @@ pub fn health(env: &Env, globals: &Globals) -> Result<HealthOutcome, CliError> {
         config_label: label.to_owned(),
         config: project,
     };
+    // Row 6 over the handle rows 4-5 read: one refresh of each index.
+    let (code_rows, share) = code_rows(env, &root, text);
+    let drift = drift_row(&root, text, &request.git, share);
     Ok(HealthOutcome {
         documents: input.files.len(),
         amendments,
         messages,
-        code_rows: code_rows(env, &root, text),
+        code_rows,
+        drift,
     })
 }
 
@@ -196,8 +221,8 @@ fn header_line(amendment: &UnappliedAmendment) -> String {
     line
 }
 
-/// Per amendment its header line and its links' lines, rows 4-5's rows
-/// and summaries, then the count line, always.
+/// Per amendment its header line and its links' lines, rows 4-6's rows,
+/// their summaries, `code:` when read, then the count line, always.
 pub(crate) fn render_text(outcome: &HealthOutcome) -> String {
     let mut out = String::new();
     for amendment in &outcome.amendments {
@@ -209,7 +234,10 @@ pub(crate) fn render_text(outcome: &HealthOutcome) -> String {
         }
     }
     row_lines(&outcome.code_rows, &mut out);
+    drift_lines(&outcome.drift, &mut out);
     summary_lines(&outcome.code_rows, &mut out);
+    drift_summary(&outcome.drift, &mut out);
+    code_line(&outcome.code_rows, &mut out);
     out.push_str(&format!(
         "spec health: {} documents, {} unapplied amendments\n",
         outcome.documents,
@@ -226,6 +254,7 @@ struct HealthJson<'a> {
     code: Option<CodeCount>,
     assumes: &'a CodeRow<AssumesCounts, AssumesRow>,
     unbound: &'a CodeRow<UnboundCounts, UnboundRow>,
+    drift: &'a HealthDrift,
 }
 
 #[derive(Serialize)]
@@ -257,6 +286,7 @@ fn view(outcome: &HealthOutcome) -> HealthJson<'_> {
         code: outcome.code_rows.code,
         assumes: &outcome.code_rows.assumes,
         unbound: &outcome.code_rows.unbound,
+        drift: &outcome.drift,
     }
 }
 

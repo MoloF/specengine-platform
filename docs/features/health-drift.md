@@ -1,148 +1,129 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [crates/specengine-cli, crates/specengine-http, ui, fixtures]
-ref: Phase 3 plan 2026-10-10, slice 9b of health-code (WA-1..WA-4, WA-8..WA-12; Q1, Q2, Q6-Q9, owner pre-approved, review open); 05 s5.3; 06 s4, s7; 08 s2
-adrs: [ADR-0047]
+ref: Phase 3 slice 9b-1 of RM-0009, split 2026-10-21 from the 9b analysis (Q-A..Q-K decided under the owner's pre-approval, review open); 05 s5.3; 06 s4, s7; 08 s2; 1 iteration
+shipped: 2026-10-21
+adrs: [ADR-0047, ADR-0051, ADR-0046, ADR-0044, ADR-0042]
 ---
 
-# health-drift: Health shows drift between spec.lock and the tree
+# health-drift (9b-1): spec health reports plain verify's drift
 
 ## Why
 
-Health's row 6 (06 s7: drift) reads "Not measured yet". `spec verify` (4a) shows drift only to whoever runs it, 4c-1 queues it only when raised (`docs/canon/proposal-drift.md`); Health is where the owner looks without asking. ADR-0047 lets it list plain verify's findings, read-only, never a verdict (`architecture-code.md#health`, `#verify`).
+Health's row 6 (06 s7: drift) read "Not measured yet" / "Phase 3": the owner saw drift only through `spec verify` or a raised `drift` item. He asked to see it where he already looks: the answer `spec verify`, `check_binding` and the reads' `sync` give for the same tree, never a verdict or a hold, stale test evidence (8b) beside it. ADR-0047 decides the row, ADR-0051 the one handle, ADR-0046 the judge over the refreshed index, ADR-0044 computed evidence, ADR-0042 verify's verdicts and exits; no new ADR (Q-B).
 
-Slice 9 split (Q1): 9a `health-code.md` (rows 4-5, the rule table, the document's row shape), 9b this. **In scope:** the `drift` key of `spec health [--json]` and its route; verify's judge run in-process over 9a's walk; 8b's non-`verified` `tested` entries if 8b has shipped; Health's row 6, provisional types, mocks.
+Delivered: `spec health [--json]` and its route gain `drift`, plain verify's judge run in-process over the code index the call already refreshed, the seam widened to every lock key and stored marker file; the daemon keys; the UI's provisional types and mocks (`off`), nothing drawn. 9b-2 `docs/features/health-drift-ui.md` draws row 6.
 
 ## Description and interactions
 
-- **The owner** sees each drifting binding's class, state, node, file and symbol without running `spec verify`; settling it stays `spec lock accept` or 4c-1's queue, on a terminal.
-- **Crates**: CLI `health.rs` calls verify's library judge (4a) in plain mode over 9a's code walk, so a call walks code once (WA-4); http tests; ui the part. No core or store change, no new crate or dependency.
-- **Unchanged**: `spec verify`'s text, JSON and exits, byte for byte; rows 3-5; `spec check`, hook, CI, gate, `spec.lock`, the queue. Git: verify's own reads only (`hash-object --no-filters`, never `-w`); no `status` or `diff`.
-- **Overridden lines**, fixed at shipping (SW-4): `health.md` "UI" (row 6 "Not measured yet"); `spec-verify.md` "Out of scope" (9b).
+- **Canon**: `docs/canon/health-drift.md`; `health-code.md` "Text" (`code:` now after row 6's summary).
+- **Owner**: each drifting binding, verify's counts and the stale evidence in `spec health` and its route; settling stays on a terminal. Agents keep `spec verify`, `check_binding`, `sync`: no MCP or plugin change.
+- **Unchanged**: `spec verify`'s text, JSON and exits, byte for byte; rows 3-5's lines; `spec check`, the hook, CI, the gate, `spec.lock`, the queue, events. Health raises no drift item.
+- **Decided** (Q-A..Q-K): recorded as the canon's facts; the split (Q-G), no ADR (Q-B), no new trigger (Q-F).
 
 ## Data
 
 ### `drift`
 
-WA-8, Q7. A row of 9a's shape (`docs/canon/health-code.md` "Document"), its `rows` and `counts` from plain `spec verify --json` (`docs/canon/spec-verify-output.md` "JSON"), plus `notes`:
+`spec health --json` is `{documents, amendments, notes, code, assumes, unbound, drift}`; `drift` (`HealthDrift`) holds 6 keys in this order; every key present, absent `null`, uncut (contract: `docs/canon/health-drift.md` "Document"):
 
-```json
-"drift":{"state":"measured","causes":[],
- "counts":{"rows":9,"ok":7,"fix":1,"check":1,"cannot":0,"pre_existing":0,"skipped":1},
- "rows":[{"node":"LAW-STEP","relation":"implements","file":"crates/tally/src/counter.rs","kind":"item",
-   "symbol":"crates/tally::counter::Tally::step","item_kind":"function_item","state":"conflict","category":null,
-   "detail":null,"class":"fix","pre_existing":false,"markers":[{"line":23,"rev":1}],"node_rev":2,
-   "lock":{"rev":1,"commit":"a0cea48<33 hex>","verified_at":"2026-10-10"},"compared":"ast"}],
- "notes":[]}
-```
+| Key | `measured` | `off`, `cannot` |
+|---|---|---|
+| `state` | `"measured"` | `"off"` (no `[code]`), `"cannot"` |
+| `causes` | `[]` | the cause lines, each without `cannot: ` |
+| `counts` | verify's `counts` verbatim, `{rows, ok, fix, check, cannot, pre_existing, skipped}`; `pre_existing` always 0 | `null` |
+| `rows` | verify's rows whose `class` is not `null` (never `ok`), its 17 keys in its order, uncut | `null` |
+| `tested` | verify's `tested` entries not `verified` (`TestedRow`), by node bytes; `[]` none; `null` blocks not judgeable | `null` |
+| `notes` | the row's own notes without `note: `: `tested: <cause>` | `[]` |
 
-- `counts`: verify's, verbatim (plain: `pre_existing` 0). `rows`: verify's without `ok`, its key order and objects verbatim; a `cannot_verify` row (class `cannot`) is a row, not the row state `cannot`.
-- `notes`: verify's, but the mode note (Health has no mode).
-- Left out (WA-8): `mode`, `verdict`, `base`, `cascade`, `delta`, the `hint:` lines; the word `blocked` never appears.
-- `tested` (8b-1, `docs/canon/spec-lock-tested.md` "Plain verify"): plain verify's `tested` entries not `verified`, verbatim, by node bytes; added by 9b (8b-1 shipped first), with `daemon-keys.json`.
-- State: `measured` when verify answers without a run cause (no `spec.lock`: its `unlocked` rows); `off` with no `[code]` (code-refs' sentence less `spec: `); `cannot` on any other run cause of plain verify (`docs/canon/spec-verify.md` "Verdict and exit": a config error, `[verify]`'s too; a walk gap; no worktree, no git, a git failure; `spec.lock` invalid, unmerged, another format or recipe; HOME, the data directory), `causes` its `cannot:` lines verbatim, `counts` and `rows` null, never 0.
+The **example tree**: `verify_common::golden` (`fixtures/code-a`, `fixtures/spec-lock/code-a.lock` committed as `spec.lock`) plus `CAP: u32 = 10;` to `12;` in `crates/tally/src/counter.rs`, uncommitted: `counts` `{"rows":39,"ok":8,"fix":19,"check":6,"cannot":6,"pre_existing":0,"skipped":2}`, 31 non-`ok` rows (LAW-BOUND's `code_ahead` holds `lock` and `levels`), `tested` `[]`. An invalid lock: `` {"state":"cannot","causes":["spec.lock:1: unclosed array, expected `]`"],"counts":null,"rows":null,"tested":null,"notes":[]} ``.
 
-### Text
+### Text and stderr
 
-Rows' lines in row order 4, 5, 6, their summaries in that order, `code:`, the last line unchanged (9a "Text"). Row 6: each row as verify's text line prefixed `drift | ` (never `pre-existing `); with 8b, verify's `tested` lines likewise (`drift | tested | <state>[ <category>] | <node>`); the summary `drift: <f> fix, <c> check, <k> cannot, <o> ok; <s> skipped` (verify's, less verdict, mode, cascade):
+Rows 4, 5, 6's lines; their summaries; `code:`; row 3's last line (canon `health-drift.md` "Text"). Row 6's lines are `drift | ` + verify's printed row blocks and non-`verified` `tested |` lines; its summary on the example tree `drift: 19 fix, 6 check, 6 cannot, 8 ok; 2 skipped`, else `drift: off|cannot: <cause>`. stderr: `note: drift: <cause>`, `note: drift: tested: <cause>`, escaped as verify's (rows 4-5's are not: a 9a follow-up).
 
-```text
-drift | fix | conflict | LAW-STEP | implements | crates/tally/src/counter.rs | item crates/tally::counter::Tally::step function_item
-drift | check | unlocked | LAW-BOUND | implements | crates/tally/src/counter.rs | item crates/tally::counter::Tally::bound function_item
-drift: 1 fix, 1 check, 0 cannot, 7 ok; 1 skipped
-```
+### Exit and route
 
-Not measured: `drift: off|cannot: <cause>` per cause, `cannot` also on stderr as `note: drift: <cause>`.
+Exit unchanged (0, or row 3's 2), never 1 under any `[verify] mode` (plain verify exits 2 on the example tree). The route: the CLI's bytes, any row-6 state a 200, verify's read-only git spawned in the project's turn.
 
-### Failures and exits
+### Daemon keys
 
-WA-2, Q6. 9a's list gains row 6: no `[code]` -> rows 4-6 `off`; a bad `[code]`, a walk gap, HOME or the data directory -> rows 4-6 `cannot`; a bad `[verify]`, no worktree or git, a git failure, an invalid or unmerged lock, another format or recipe -> row 6 `cannot` alone; the queue and `[health]` never touch row 6. Exit as 9a: never 1, whatever `[verify] mode`.
+`fixtures/daemon-keys.json` 68 to 74 sets: `HealthReport` 7 keys, `drift` last; after `TestedRow` (reused): `HealthDrift` 6, `DriftCounts` 7, `DriftRow` 17, `DriftMarker` 2, `DriftLock` 3, `DriftLevels` 3. The anchor and its places stay unpinned.
 
-### One walk
+### UI provisional types (9b-1)
 
-WA-4, Q8. 9a's `code_walk::read_tree` result feeds rows 4-5 and verify's judge; 6a's code index is neither read nor refreshed. 4a's CLI judge takes the walk (`spec-verify.md` RD-10) and re-parses only the bound files whose blob changed (its Q4), `spec verify` byte-identical (RD-13).
-
-**Note 2026-10-16** (9a's refresh, `health-code.md` Q8, Q18; ADR-0051): 9a-1 reads rows 4-5 from the code index the call refreshes; there is no 9a walk to share. Working answer: row 6 runs 7a's `sync` judge over that index (`docs/canon/architecture-code.md#sync-in-reads`), never a walk of its own. This section, "Why"' and "Description"'s "9a's walk", RD-13's `health_calls_read_tree_once` and Q8, Q9 below are restated at 9b's refresh, which decides; 9b then follows 7a.
-
-### Route and UI
-
-WA-9, WA-10.
-
-- Route as 9a: any row state a 200; the body grows by `drift`.
-- `ui/src/health/`: row 6 "Drift" becomes a part beside rows 4-5, 9a's four states, "None" and "over <rows> bindings, <skipped> skipped" at zero. Rows in the daemon's order, 10 then "Show all <n>"; class and state through the label map (`labels.ts`: `fix` "Fix", `check` "Check", `cannot` "Cannot verify"; an unknown word raw, so 5b's and 5c's states pass); the node linked to the tree, file and symbol plain.
-- No new trigger: drift moves with code edits and lock commits that fire no event; a 4c-1 approve's `proposal.applied` already re-reads; "Check again" re-reads.
-- **Exceptions to `.claude/agents/ui-developer.md`** (ADR-0033): provisional types in `ui/src/api/provisional.ts` citing `docs/features/health-drift.md` "Data"; no type generation (none exists).
+ADR-0033's exception, citing this "Data": the types of canon `health-drift.md` "UI"; mocks `off` everywhere; nothing drawn.
 
 ## Rules and edge cases
 
-- WHEN plain `spec verify --json` answers without a run cause, `drift.rows` SHALL equal its `rows` without `ok`, and `drift.counts` its `counts`.
-- WHEN it has a run cause, `drift` SHALL be `off` or `cannot` with its lines and no count.
-- WHEN `[verify] mode` is `enforce`, Health SHALL still exit 0 and carry no verdict.
-- Read-only (verify writes nothing: `spec-verify.md` RD-8); determinism, genre: 9a's rules.
+- WHEN plain `spec verify --json` on the same tree answers without a run cause, `drift.rows` SHALL be its `rows` without `ok`, byte for byte, `drift.counts` its `counts`, `drift.tested` its `tested` without `verified`.
+- WHEN `spec.lock` is absent, row 6 SHALL be measured, every binding `unlocked` (the flood).
+- WHEN `[verify] mode` is `enforce` or `enforce-introduced`, Health SHALL exit as without it, with no mode, verdict, hint or mode note.
+
+### Degrade matrix
+
+Exit 0 and a 200 in every case but row 3's config or walk (exit 2, a 503, rows 4-6 unrun). The table with its causes: `docs/canon/health-drift.md` "Failures".
+
+- **Rows 4-6 alike**: no `[code]` (2): `off`, the same sentence. A bad `[code]` (1): `cannot`, row 6 plain's lines and no (8), nothing opened. An unknown framework (1), HOME, the data directory, the md refresh, `refresh_code` (8), a walk gap (3): `cannot`, row 6 listing that cause and every other plain lists, in its order.
+- **Rows 4-5 only**: `code_refs`, an unknown stored word, the queue, `[health]`.
+- **Row 6 only**, `cannot`: a bad `[verify]` (1); no worktree, no `git`, a git failure (4); `spec.lock` unmerged (5), unreadable or invalid, format 1, another recipe (6); the selection's store read (8); a file changed twice (3). Blocks not judgeable: `measured`, `tested` `null`, note `tested: <cause>`.
 
 ## Acceptance criteria
 
-rust-developer, M: mutation -> the test turning red (CLI `tests/health.rs` unless named; RD-1..RD-6, RD-8..RD-12: `health-code.md`):
+CLI tests in `crates/specengine-cli/tests/health_drift/mod.rs`, mounted from `tests/health.rs`. Mutations M1-M6: 6 of 6 killed; M5 also as M5b (a `hint: … blocked` line after row 6's summary), the same test red.
 
-- [ ] RD-7 -- M: `ok` rows listed -> `drift_lists_no_ok_row`; an own judge -> `drift_equals_verify_rows_minus_ok`; a run cause read as zero -> `verify_run_cause_is_drift_cannot_never_zero`.
-- [ ] RD-13 -- M: the shared walk changes verify -> 4a's golden `verify` tests; a second walk per call -> `health_calls_read_tree_once` (counts `read_tree` calls; verify's re-parse of changed bound files is no walk, `spec-verify.md` Q4).
-- [ ] RD-14 -- M: exit 1 under `enforce` -> `drift_never_exits_1_under_enforce`; `mode`, `verdict`, `blocked` or a `hint:` in Health -> `health_carries_no_verdict_mode_or_hint`.
-- [ ] RD-15 -- 9a's tests extended to `drift`: `health_code_keys_present_without_code_table`, `health_writes_no_lock_queue_row_or_event` (lock bytes too), `health_code_rows_are_byte_identical_across_roots_and_order`, http `a_row_that_cannot_be_measured_is_still_a_200` (an invalid lock). M: each key or scenario dropped -> its test.
-- [ ] RD-16 -- 8b shipped first: M: a `verified` entry listed -> `drift_tested_lists_only_unverified`; else 8b's spec takes it.
+- [x] RD-1: plain's rows minus `ok`, its counts, `tested` minus `verified`, `causes` its `cannot`. M1 (an `ok` row listed) → `drift_lists_no_ok_row`; M2 (the rows kept to a node set, `skipped` 0) → `health_drift_equals_plain_on_every_corpus`; M6 (a `verified` entry listed) → `drift_tested_lists_only_unverified`.
+- [x] RD-2: no walk, one refresh unless a selected file changed; `code.parsed` 0 after `spec index`. M3 (`verify_as` or `read_tree` called) → `health_reads_the_code_index_not_the_tree`.
+- [x] RD-3: the degrade matrix, exit 0 under each mode, no `mode`, `verdict`, `blocked`, `hint:`. M4 (a run cause as 0 or `[]`) → `a_run_cause_is_drift_cannot_never_zero`; M5 (exit 1, a verdict, mode or hint) → `drift_never_exits_1_or_carries_a_verdict`.
+- [x] RD-4: read-only on the example tree (`health_writes_no_lock_queue_row_or_event`).
+- [x] RD-5: the verify, bindings, bundle, tested and impact goldens pass unedited; rows 3-5's lines unchanged, `code:` now after row 6's summary.
+- [x] RD-6: `drift_text_is_verify_lines_prefixed`.
+- [x] RD-7: http `ac_r6_every_health_is_the_clis_document_byte_for_byte`, `a_row_that_cannot_be_measured_is_still_a_200`.
+- [x] RD-8: determinism (`health_code_rows_are_byte_identical_across_roots_and_order`); no `git` on `PATH`: row 6 `cannot`.
+- [x] TE-1: parity over five corpora (golden, anchor-states, verify-tests with its tested lock, verify-ecs, a walk gap); fixtures untouched.
+- [x] TE-2: the matrix under `observe`, `enforce-introduced`, `enforce`; `fixtures/spec-c` row 6 `off`.
+- [x] TE-3: read-only and determinism over TE-1's trees.
+- [x] TE-4: genre; `code_refs_walk.rs` `NEW_MODULES` 18.
+- [x] TE-5: daemon keys 74, http `daemon_keys.rs` and UI `daemonKeys.test.ts` together.
+- [x] TE-6: `health_drift_cost` (`#[ignore]`), figures in "Implementation".
+- [ ] TE-7 (owner's): CLI and http `health_code_pilot.rs` gain row 6's state, counts and ms; a warm Health read ≤ 2 s per pilot.
+- [x] TE-8: M1-M6 each turn their test red.
 
-ui-developer (row 6; rows 4-5: `health-code-ui.md`):
-
-- [ ] UI-1 -- the provisional `drift` types cite "Data". M: a key missing -> `daemonKeys.test.ts`.
-- [ ] UI-2 -- row 6's four states; `HealthView.test.tsx`'s "no digit in row 6" replaced by them. M: 0 drawn for `cannot` -> `HealthView.test.tsx`.
-- [ ] UI-3 -- M: a sort in the UI -> `health.smoke.test.tsx`; a class or state compared outside the map -> `policy.test.ts`; `blocked` written -> `ui_policy.rs` `nothing_is_worded_as_a_hold_on_work`, unwidened.
-- [ ] UI-4 -- no new trigger. M: a re-read on a stage, `.created` or `task.*` -> `health.live.test.tsx`.
-- [ ] UI-5 -- mocks: harbor-sim rows of each class (a `cannot_verify` row); ledger-api `off`; `empty` measured zero; `large` (3 000 rows); `code-cannot` row 6 `cannot` too. M: a mock off its type -> `mocks/health.test.ts`.
-- [ ] UI-6 -- `pnpm lint` 0; `build`; `test` twice; no new package.
-
-test-engineer:
-
-- [ ] TE-1 -- temp git copies of `fixtures/code-a` with slice 3's golden lock: a scenario per verify state and category, no lock, an unmerged lock, a bad `[verify]`, no git on `PATH`; `git diff --stat -- fixtures/` empty.
-- [ ] TE-2 -- parity with `spec verify --json` in each TE-1 scenario, robust to 6a's discriminator and to 5b's, 5c's states once shipped.
-- [ ] TE-3 -- 9a's failure matrix with row 6's causes: states, causes, stderr, exit 0; under each `[verify] mode`.
-- [ ] TE-4 -- 9a's read-only probe (`spec.lock`'s bytes, `.git/index` mtime, object count) and determinism over TE-1.
-- [ ] TE-5 -- `fixtures/spec-c` row 6 `off`; source scans as 9a's TE-5.
-- [ ] TE-6 -- `daemon_keys.rs`: `HealthReport` + `drift`, exactly 5 new sets (the row, `counts`, a drift row, its marker, its `lock`), more with 8b's `tested`.
-- [ ] TE-7 -- pilots, manual, as 9a's TE-7: verify's share of a Health entry, the whole against AC-10's 2 s (08:79).
-- [ ] TE-8 -- every M above turns red.
-
-spec-writer:
-
-- [x] SW-1 -- this spec, with `health-code.md`'s SW-1..SW-3 (ADR-0047, the canon, the dated notes).
-- [ ] SW-4 -- at shipping: row 6 into `docs/canon/health-code.md` (9a's); `health.md`; verify's canon names Health as a reader; CLI, http, `ui/` READMEs; `CLAUDE.md` State.
-
-## Risks
-
-Cost: a Health entry runs verify too (`hash-object` over the bound files, the walk shared, changed bound files re-parsed), in the project's turn; TE-7 measures. Vocabulary: verify's `fix` class shows, `blocked` never. Flood: before any lock accept every binding is `unlocked`; the class counts keep it readable. Stale: code edits fire no event; the row is as of its read. `daemon-keys.json` changes again if 8b ships after.
+Not covered by tests, no deterministic trigger: the selection's store-read failure (8), a file changed twice (3), a queue cause leaving row 6 measured.
+- [x] UI-1: the provisional types and mocks; lint, build, test twice.
+- [x] SW-1, SW-2: this spec, the 9b-2 draft, RM-0009; at shipping canon `health-drift.md` (new) and six amended, the CLI and http READMEs, `CLAUDE.md`, 06-08; `export index`, `check` clean.
 
 ## Out of scope
 
-`verify --changed` (base, Pre-existing) in Health; `mode`, verdicts, hints; diffs, the diff inspector, `lock accept` or 4c-1's raise from the UI (Phase 4 drift screens, 08:50); 6a's store; a watcher; other worktrees; MCP; `verified` elsewhere in the UI (Phase 4).
-
-## Open
-
-| Q | Working answer (owner pre-approved, review open) | The other answer costs |
-|---|---|---|
-| Q1 split | 9b after 4a, with 8b's `tested` if shipped | rows 4-5 wait for 4a…8b |
-| Q2 ADR | ADR-0047, shared with 9a | `#control` edited undecided |
-| Q6 exits | row 6 fails alone, exit 0 | a lock error hides rows 3-5 |
-| Q7 row 6 | plain verify's rows but `ok`, counts, notes | the whole document: thousands of `ok`, `blocked`; a second judge: two answers |
-| Q8, Q9 | one walk, 6a unread; read-only, git via verify | a refresh per read; row 6 impossible |
-
-WA-n: the analysis' working answers (2026-10-10), [A] assumed: WA-1, -2, -3 (git only through verify), -4, -8, -10; [P] settled: WA-9, -11, -12.
-
-## Dependencies and ordering
-
-- **Needs**: 9a-1 and 9a-2 (row shape, parts; the walk: "One walk"' note); slice 3 `spec-lock` (lock reader); 4a `spec-verify` (the judge, run causes). Soft: 8b (`tested`).
-- **Row 5** aligned with 6a-3's X3 at 9a's refresh (2026-10-16): a `cannot_verify` marker binds nothing (`docs/canon/health-code.md` "Row 5: unbound").
-- **Refresh after 9a-3** (2026-10-19): `health-ui-follow-up.md` adds the trailing health read (triggers landing during a walk earn one more read after it; `proposal.approved` and `.apply_failed` become triggers) and `RowNotMeasured`'s fallback for a measured row without counts or rows ("Not measured: the answer holds no counts"). Row 6 inherits both; "Route and UI"'s "No new trigger" is re-read against them.
-- **Order**: 1 -> 3 -> 4a -> … -> 9b, after 9a; independent of 4b, 4c, 6, 7. 5b, 5c reach row 6 through verify (label map: unknown words raw). **Later**: Phase 4's drift screens.
+`--changed`/`--staged`, Pre-existing, mode, verdict, cascade, delta, hints, `ok` rows; per-node views (RM-0011); drawing row 6 (9b-2); UI actions, MCP, plugin, other worktrees, watchers, SSE; plain `spec verify` changes; index speed (RM-0020).
 
 ## Implementation
 
-Not started. To record: modules, TE-7's figures, deviations with reasons.
+| Module | What it does |
+|---|---|
+| CLI `health_drift.rs` (new) | `HealthDrift`; `drift_row(project, text, git, CodeShare)`: `plain_reads`, `judge_every_key`, `tested_entries` (every block), `concluded` (no mode), the projection; `drift_lines`, `drift_summary`, the notes |
+| CLI `bindings.rs` | `read_selection` (one snapshot, BLAKE3 recheck, one re-refresh, then (3); `set_files` uses it, unchanged); `KeyScope`, `KeysJudged`, `judge_every_key` (every lock entry's and stored marker's file, the uncut lock, no node filter), `every_key_file` |
+| CLI `health_code.rs` | `CodeShare`, `SharedIndex`, `Opened`; `read_code` split into `open_code` (the kept handle; causes (1), (3), (8) in plain's order) and `read_stored` (`code_refs`, rows 4-5 alone); `code_line` |
+| CLI `verify.rs` | `CountsJson::of` (verify's JSON too, bytes unchanged), `counts_json`, `moved_ok`, `moved_suffix` (verify's summary too); `row_block`, `VerifyOutcome::notes` `pub(crate)` |
+| CLI `health.rs` | `HealthRequest {git}`, `health(&Env, &Globals, &HealthRequest)`, `HealthOutcome.drift`, the key, the text order |
+| CLI `lib.rs`, `main.rs`; http `app.rs` | the module, re-exports, Health's stderr gaining row 6's notes; both callers pass `process_git(env)` |
+
+Deviations (accepted at review):
+
+1. `Counts` and `counts()` stay private (the draft: `pub(crate)`); `counts_json`, through `CountsJson::of`, is the one door.
+2. A second refresh's notes are dropped: the first refresh's stand, no duplicate line (canon "Known limits", with the mixed snapshot).
+3. A failing shared step lists every cause plain lists (an invalid lock beside HOME), `causes` being plain's `cannot:` lines; the draft said "the same cause".
+4. A bad `[code]` gives no (8): nothing is opened, so no data-directory cause plain could add.
+5. Row 6's stderr goes through `escape_controls`, as verify's; rows 4-5's does not (a 9a follow-up).
+
+Cost (TE-6, `health_drift_cost`, release, warm, median of 5, ms; "Data"'s example tree plus N unrelated committed `.rs` files):
+
+| N | plain `spec verify` | Health | Health, no lock | Health, row 6 off (no git) | row 6's share |
+|---|---|---|---|---|---|
+| 1 000 | 72 | 59 | 47 | 26 | 33 |
+| 10 000 | 380 | 242 | 230 | 208 | 33 |
+
+A6 holds: row 6's share stays below plain verify and does not grow with unrelated files (it reads only lock-entry and marker files); a warm Health read stays ≤ 2 s.
+
+Tests: nextest workspace 3 848 of 3 848 (63 skipped); ui 2 263 of 2 263; fmt, clippy (probes too), export, check, parity and the eval policy tests (86 of 86) clean.

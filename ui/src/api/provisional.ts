@@ -726,8 +726,9 @@ export interface UnappliedAmendment {
  * `counts.documents` on the same tree), the unapplied amendments by path, then the notes (a
  * front-matter that could not be judged), each without `note: `; after them rows 4-5: `code` the
  * stored code files' count, null unless the rows read the code index, `assumes` row 4, `unbound`
- * row 5, every key present. Sources: `docs/features/health-left.md` "Data";
- * `docs/features/health-code.md` "Data".
+ * row 5, then row 6: `drift`, every key present. Sources: `docs/features/health-left.md` "Data";
+ * `docs/features/health-code.md` "Data";
+ * `docs/features/health-drift.md` "Data".
  */
 export interface HealthReport {
   documents: number;
@@ -736,6 +737,7 @@ export interface HealthReport {
   code: HealthCode | null;
   assumes: HealthAssumes;
   unbound: HealthUnbound;
+  drift: HealthDrift;
 }
 
 // `spec health --json`'s rows 4-5 (docs/features/health-code.md "Data"): read from the code index
@@ -890,6 +892,102 @@ export interface UnboundMarker {
   id_state: string;
   binding: string;
   reason: UnboundReason;
+}
+
+// `spec health --json`'s row 6 (docs/features/health-drift.md "Data"): plain `spec verify`'s
+// judgement over the code index the call refreshes, read-only, never its mode or verdict. Its rows
+// are verify's rows but `ok`, verbatim; its counts verify's; its `tested` verify's entries but
+// `verified`. Words raw: a state through verify's states, a class, relation, kind, category,
+// detail, `compared` and a level as sent. Nothing drawn until 9b-2.
+
+/**
+ * Row 6, drift: `causes` the cause lines behind any state but `measured`, each without `cannot: `
+ * (`off`: rows 4-5's sentence), else `[]`; `counts`, `rows` and `tested` null unless `measured`, never
+ * 0, never partial; `tested` [] with no block or every block `verified`, null when the `[[tested]]`
+ * blocks cannot be judged; `notes` the row's own notes (today only `tested: <cause>`), without `note: `.
+ * Source: `docs/features/health-drift.md` "Data".
+ */
+export interface HealthDrift {
+  state: HealthRowState;
+  causes: string[];
+  counts: DriftCounts | null;
+  rows: DriftRow[] | null;
+  tested: TestedRow[] | null;
+  notes: string[];
+}
+
+/**
+ * Row 6's counts, `spec verify --json`'s seven verbatim: the bindings judged, `ok`, one per class,
+ * `pre_existing` (0: plain verify has no base) and the markers skipped.
+ * Sources: `docs/features/health-drift.md` "Data"; `docs/canon/spec-verify-output.md` "JSON".
+ */
+export interface DriftCounts {
+  rows: number;
+  ok: number;
+  fix: number;
+  check: number;
+  cannot: number;
+  pre_existing: number;
+  skipped: number;
+}
+
+/**
+ * One row 6 line, `spec verify --json`'s row verbatim, its 17 keys in this order, all present: the
+ * lock key (`node` the canonical cited ID, unresolved as written, a bare marker `""`; a keyless row's
+ * `kind`, `symbol`, `item_kind` null), verify's state, category and detail, `class` (`fix`, `check`,
+ * `cannot`; null only for `ok`, which row 6 never lists), `pre_existing`, the markers (`[]` for a
+ * lock-only row), the node's revision (null unknown or gone), the lock entry (null without one),
+ * `compared` (`blob`, `ast` or null), the levels and the anchor, each null when verify gives none.
+ * Sources: `docs/features/health-drift.md` "Data"; `docs/canon/spec-verify-output.md` "JSON".
+ */
+export interface DriftRow {
+  node: string;
+  relation: string;
+  file: string;
+  kind: string | null;
+  symbol: string | null;
+  item_kind: string | null;
+  state: SyncState;
+  category: string | null;
+  detail: string | null;
+  class: string | null;
+  pre_existing: boolean;
+  markers: DriftMarker[];
+  node_rev: number | null;
+  lock: DriftLock | null;
+  compared: string | null;
+  levels: DriftLevels | null;
+  anchor: BindingAnchor | null;
+}
+
+/**
+ * A row 6 line's marker: its line and `@N`, null when unversioned or malformed.
+ * Sources: `docs/features/health-drift.md` "Data"; `docs/canon/spec-verify-output.md` "JSON".
+ */
+export interface DriftMarker {
+  line: number;
+  rev: number | null;
+}
+
+/**
+ * A row 6 line's `spec.lock` entry: the revision vouched for, the commit, the UTC date.
+ * Sources: `docs/features/health-drift.md` "Data"; `docs/canon/spec-verify-output.md` "JSON".
+ */
+export interface DriftLock {
+  rev: number;
+  commit: string;
+  verified_at: string;
+}
+
+/**
+ * A row 6 line's levels, each in canonical order: the lock entry's, its markers' united, and those
+ * whose digest changed (null unless `compared` is `ast`). Words as sent.
+ * Sources: `docs/features/health-drift.md` "Data"; `docs/canon/spec-verify-output.md` "JSON".
+ */
+export interface DriftLevels {
+  lock: string[];
+  markers: string[];
+  changed: string[] | null;
 }
 
 /** Why a tree row is a root although its document declares a parent. Source: `docs/canon/spec-cli-graph.md` "spec tree". */

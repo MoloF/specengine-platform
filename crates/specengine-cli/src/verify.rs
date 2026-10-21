@@ -390,7 +390,7 @@ impl VerifyOutcome {
     }
 
     /// The `note:` lines' texts, in order.
-    fn notes(&self) -> Vec<String> {
+    pub(crate) fn notes(&self) -> Vec<String> {
         self.messages
             .iter()
             .filter_map(|message| match message {
@@ -1538,8 +1538,9 @@ fn state_hints(rows: &[VerifyRow]) -> Vec<String> {
 const OK_CLASS: &str = "-";
 
 /// A printed row's block: its line, then its moved row's old place or its
-/// ambiguous row's candidates, each line ended.
-fn row_block(row: &VerifyRow) -> String {
+/// ambiguous row's candidates, each line ended (Health's row 6 prints it
+/// too, task spec `health-drift`).
+pub(crate) fn row_block(row: &VerifyRow) -> String {
     let mut out = row_line(row);
     out.push('\n');
     if let Some(anchor) = &row.anchor {
@@ -1624,16 +1625,7 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
     } else {
         String::new()
     };
-    let moved = outcome
-        .rows
-        .iter()
-        .filter(|row| row.class.is_none() && anchor_state(row) == Some(MOVED))
-        .count();
-    let moved = if moved > 0 {
-        format!(" ({moved} moved)")
-    } else {
-        String::new()
-    };
+    let moved = moved_suffix(moved_ok(&outcome.rows));
     // `--task`: `verify --task <T>: ` (task spec `verify-task`); `--node`:
     // `verify --node <REF>[ --symbol <QPATH>]: ` (task spec `verify-node`).
     let command = match (&outcome.task, &outcome.node) {
@@ -1661,6 +1653,23 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
         outcome.skipped
     ));
     escape_controls(&out)
+}
+
+/// The `ok` rows whose binding moved.
+pub(crate) fn moved_ok(rows: &[VerifyRow]) -> usize {
+    rows.iter()
+        .filter(|row| row.class.is_none() && anchor_state(row) == Some(MOVED))
+        .count()
+}
+
+/// The summary's ` (<m> moved)` after its `ok` count ([`moved_ok`]);
+/// empty when none.
+pub(crate) fn moved_suffix(moved: usize) -> String {
+    if moved > 0 {
+        format!(" ({moved} moved)")
+    } else {
+        String::new()
+    }
 }
 
 /// A sub-line under a row: `  <word> <file> | <kind> <symbol>[
@@ -1720,15 +1729,36 @@ impl<'a> KeyJson<'a> {
     }
 }
 
-#[derive(Serialize)]
-struct CountsJson {
-    rows: usize,
-    ok: usize,
-    fix: usize,
-    check: usize,
-    cannot: usize,
-    pre_existing: usize,
-    skipped: usize,
+/// The JSON's `counts` (Health's `drift.counts` too, task spec
+/// `health-drift`: one struct, one order).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub(crate) struct CountsJson {
+    pub rows: usize,
+    pub ok: usize,
+    pub fix: usize,
+    pub check: usize,
+    pub cannot: usize,
+    pub pre_existing: usize,
+    pub skipped: usize,
+}
+
+impl CountsJson {
+    fn of(counts: &Counts, skipped: usize) -> Self {
+        Self {
+            rows: counts.rows,
+            ok: counts.ok,
+            fix: counts.fix,
+            check: counts.check,
+            cannot: counts.cannot,
+            pre_existing: counts.pre_existing,
+            skipped,
+        }
+    }
+}
+
+/// The outcome's `counts`, as its JSON gives them.
+pub(crate) fn counts_json(outcome: &VerifyOutcome) -> CountsJson {
+    CountsJson::of(&counts(outcome), outcome.skipped)
 }
 
 #[derive(Serialize)]
@@ -1843,15 +1873,7 @@ impl Serialize for VerifyOutcome {
             node: self.node.as_ref().map(|node| node.ids.as_slice()),
             symbol: self.node.as_ref().and_then(|node| node.symbol.as_deref()),
             verdict: self.verdict.as_str(),
-            counts: CountsJson {
-                rows: counts.rows,
-                ok: counts.ok,
-                fix: counts.fix,
-                check: counts.check,
-                cannot: counts.cannot,
-                pre_existing: counts.pre_existing,
-                skipped: self.skipped,
-            },
+            counts: CountsJson::of(&counts, self.skipped),
             cascade: CascadeJson {
                 by_blob: counts.by_blob,
                 by_ast: counts.by_ast,

@@ -35,15 +35,16 @@ use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CheckRequest,
     CheckedTree, CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env,
     Exit, ExportIndexRequest, ExportStateRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress,
-    GateRequest, GateStage, Globals, GraphRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
-    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
-    InterpretRequest, LockAcceptRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome,
-    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest,
-    ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
-    SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES,
-    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
-    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, UnmappedRequest,
-    VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
+    GateRequest, GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES,
+    ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity,
+    IntakeSource, InterpretRequest, LockAcceptRequest, LockPrompt, LockRebaseRequest,
+    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
+    RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
+    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
+    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
+    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
+    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest,
+    VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -925,7 +926,13 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 },
             )?)
         }
-        Command::Health => Outcome::Health(specengine_cli::health(env, globals)?),
+        Command::Health => Outcome::Health(specengine_cli::health(
+            env,
+            globals,
+            &HealthRequest {
+                git: process_git(env),
+            },
+        )?),
         Command::Roadmap { release, pool } => Outcome::Roadmap(Box::new(specengine_cli::roadmap(
             env,
             globals,

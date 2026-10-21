@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-21
 ---
 
 # Daemon: spec serve
@@ -85,7 +85,7 @@ No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distr
 
 ## Concurrency
 
-Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-5 (ADR-0051), its first call building the whole code index inside the turn, no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
+Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-6 (ADR-0051), its first call building the whole code index inside the turn, and row 6 spawning verify's read-only git there (`rev-parse`, the unmerged check, `hash-object` without `-w`: `health-drift.md` "Route"), no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
 
 ## Known limits
 

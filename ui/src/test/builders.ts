@@ -14,6 +14,7 @@ import type {
   GraphNode,
   GraphView,
   HealthAssumes,
+  HealthDrift,
   HealthReport,
   HealthUnbound,
   InboxEntry,
@@ -512,6 +513,11 @@ export function aCodeRowOff(): HealthAssumes & HealthUnbound {
   return { state: "off", causes: ["specengine.toml has no [code] table: the code layer is off (add [code] with roots)"], counts: null, rows: null };
 }
 
+/** Row 6 of `spec health --json` for tests, the code layer off: no counts, rows or tested, no note (docs/features/health-drift.md "Data"). */
+export function aDriftOff(): HealthDrift {
+  return { state: "off", causes: ["specengine.toml has no [code] table: the code layer is off (add [code] with roots)"], counts: null, rows: null, tested: null, notes: [] };
+}
+
 /** Row 4 or 5 of `spec health --json` for tests in a state the daemon does not measure: its causes, no counts, no rows. */
 export function aCodeRow(state: string, causes: string[]): HealthAssumes & HealthUnbound {
   return { state, causes, counts: null, rows: null };
@@ -572,9 +578,9 @@ export function measuredUnbound(rows: UnboundRow[], selected: number = rows.leng
   return { state: "measured", causes: [], counts: { rules, selected, bound: selected - rows.length, unbound: rows.length }, rows };
 }
 
-/** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note, rows 4-5 off. */
+/** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note, rows 4-6 off. */
 export function aHealthReport(amendments: UnappliedAmendment[] = [], fields: Partial<Omit<HealthReport, "amendments">> = {}): HealthReport {
-  return { documents: 7, amendments, notes: [], code: null, assumes: aCodeRowOff(), unbound: aCodeRowOff(), ...fields };
+  return { documents: 7, amendments, notes: [], code: null, assumes: aCodeRowOff(), unbound: aCodeRowOff(), drift: aDriftOff(), ...fields };
 }
 
 /** One item of a round sheet for tests: a question without options, nothing staged; omitted keys as the sheet gives them. */

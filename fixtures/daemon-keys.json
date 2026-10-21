@@ -40,7 +40,7 @@
   "RoundAnswersOutcome": ["project", "answers", "notes"],
   "RoundAnswerEntry": ["id", "outcome", "stage", "staged_at", "replaced", "reason"],
   "Interpretation": ["decision", "how", "why"],
-  "HealthReport": ["documents", "amendments", "notes", "code", "assumes", "unbound"],
+  "HealthReport": ["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"],
   "UnappliedAmendment": ["path", "id", "title", "class", "status", "links"],
   "ShownLink": ["type", "origin", "at", "name", "written", "path", "line", "state", "reason"],
   "RevisionRow": ["id", "rev", "to", "lock_entries", "refused"],
@@ -66,5 +66,11 @@
   "RoadmapPoolTask": ["id", "status", "title", "targets"],
   "TaskRoadmap": ["item", "group", "release", "position", "of", "priority", "waits_on"],
   "BindingRow": ["node", "relation", "file", "kind", "symbol", "item_kind", "line", "end_line", "signature", "layer", "sync", "category", "detail", "anchor"],
-  "TestedRow": ["node", "state", "category", "rev", "node_rev", "commit", "verified_at"]
+  "TestedRow": ["node", "state", "category", "rev", "node_rev", "commit", "verified_at"],
+  "HealthDrift": ["state", "causes", "counts", "rows", "tested", "notes"],
+  "DriftCounts": ["rows", "ok", "fix", "check", "cannot", "pre_existing", "skipped"],
+  "DriftRow": ["node", "relation", "file", "kind", "symbol", "item_kind", "state", "category", "detail", "class", "pre_existing", "markers", "node_rev", "lock", "compared", "levels", "anchor"],
+  "DriftMarker": ["line", "rev"],
+  "DriftLock": ["rev", "commit", "verified_at"],
+  "DriftLevels": ["lock", "markers", "changed"]
 }

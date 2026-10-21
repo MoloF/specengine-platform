@@ -23,7 +23,7 @@ import { SCENARIOS } from "./scenario";
 // core's order; normal, empty, large and cannot-check as the spec lists them, `error` and `slow`
 // as every read. Rows 4-5 (docs/features/health-code-ui.md "Data", Mocks, UI-4): each object on its
 // type (docs/canon/health-code.md "Document"), every state of either row, code-cannot and
-// not-configured.
+// not-configured. Row 6 (docs/features/health-drift.md "Data", UI-1): `off` everywhere until 9b-2.
 
 const PROJECTS = ["harbor-sim", "ledger-api"] as const;
 
@@ -38,6 +38,7 @@ const KEYS = {
   UnboundCounts: ["rules", "selected", "bound", "unbound"],
   UnboundRow: ["id", "kind", "title", "path", "line", "rules", "mentions", "markers"],
   UnboundMarker: ["path", "line", "column", "relation", "id_state", "binding", "reason"],
+  HealthDrift: ["state", "causes", "counts", "rows", "tested", "notes"],
 };
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
@@ -60,7 +61,7 @@ function byBytes(a: string, b: string): number {
 describe("the mock's health read", () => {
   it("normal: harbor-sim's two, the spec's decision with a dangling link and a draft spec amending RULE-BERTH-DRAFT, resolved", () => {
     const report = healthReportOf("harbor-sim", "normal");
-    expect(Object.keys(report)).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound"]);
+    expect(Object.keys(report)).toEqual(["documents", "amendments", "notes", "code", "assumes", "unbound", "drift"]);
     expect(report.amendments.map((amendment) => Object.keys(amendment))).toEqual([
       ["path", "id", "title", "class", "status", "links"],
       ["path", "id", "title", "class", "status", "links"],
@@ -167,6 +168,17 @@ describe("the mock's health read", () => {
       expect(row).toEqual({ state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null });
     }
   });
+
+  it.each(SCENARIOS.filter((scenario) => scenario !== "cannot-check"))(
+    "%s: row 6 is off for either project, its keys in the JSON's order, the code layer's sentence its cause, nothing counted, never 0 (UI-1 of health-drift)",
+    (scenario) => {
+      for (const project of PROJECTS) {
+        const { drift } = healthReportOf(project, scenario);
+        expect([project, Object.keys(drift)]).toEqual([project, KEYS.HealthDrift]);
+        expect([project, drift]).toEqual([project, { state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null, tested: null, notes: [] }]);
+      }
+    },
+  );
 
   it("normal: harbor-sim's row 4 holds a line in each of the eight states, its row 5 a marker of each reason and a node no marker names", () => {
     const { code, assumes, unbound } = healthReportOf("harbor-sim", "normal");

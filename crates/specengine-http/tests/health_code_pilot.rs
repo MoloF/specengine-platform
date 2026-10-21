@@ -7,6 +7,10 @@
 //! the 2 s of AC-10), rows 4-5's states and counts; the project's HEAD and
 //! status unchanged. No project name, path, ID or cause text is printed.
 //!
+//! docs/features/health-drift.md TE-7: row 6's state, causes counted,
+//! `counts`, rows and evidence counted, in the same body (the route's
+//! repeat against AC-10's 2 s already holds row 6's cost).
+//!
 //! Run in the foreground, release, one pilot at a time:
 //! `SPECENGINE_PILOT_DIR=<root> cargo nextest run -p specengine-http
 //! --release --test health_code_pilot --run-ignored ignored-only
@@ -77,6 +81,17 @@ fn pilot_health_route_timing() {
         );
     }
     println!("code: {}", document["code"]);
+    let drift = &document["drift"];
+    println!(
+        "drift: {} | causes {} | counts {} | rows {} | tested {}",
+        drift["state"].as_str().unwrap_or("?"),
+        drift["causes"].as_array().map_or(0, Vec::len),
+        drift["counts"],
+        drift["rows"].as_array().map_or(0, Vec::len),
+        drift["tested"]
+            .as_array()
+            .map_or_else(|| "null".to_owned(), |entries| entries.len().to_string())
+    );
     println!(
         "route wall time: first {} ms, repeat {} ms (AC-10: 2000 ms)",
         first_time.as_millis(),

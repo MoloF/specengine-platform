@@ -26,6 +26,14 @@
 //! measured, and a row that cannot be measured (a code walk gap, a bad
 //! `[code]`) stays a 200 holding `cannot`, never a 503; the call writes
 //! the slug's DB in the data directory alone. M: `cannot` as a 503.
+//!
+//! docs/features/health-drift.md RD-7 (9b-1, "Exit and route"): the body
+//! grows by row 6, `drift`, the route unchanged. On the example tree
+//! (code-a, the golden lock, `CAP` edited) the body is the CLI's bytes
+//! with row 6 measured and its rows listed; a row 6 that cannot be
+//! measured (an invalid `spec.lock`, no `git` on the daemon's `PATH`) and
+//! one that shares rows 4-5's cause stay a 200 holding `cannot`, never a
+//! 503. M: row 6 `cannot` as a 503, or the daemon's own git ignored.
 
 mod common;
 
@@ -33,7 +41,10 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 
-use common::{Reply, Run, Scratch, Server, beyond_daemon, read_text, replace, spec, write};
+use common::{
+    Reply, Run, Scratch, Server, beyond_daemon, product_env, read_text, replace, root_args, spec,
+    write,
+};
 
 /// A's amendments (docs/features/health-left.md AC-R1, AC-R2).
 const AMENDMENTS: [(&str, &str); 3] = [
@@ -200,6 +211,61 @@ fn ac_r6_every_health_is_the_clis_document_byte_for_byte() {
         "no index refreshed, nothing written: {:?}",
         beyond_daemon(&home)
     );
+    drop(server);
+
+    // docs/features/health-drift.md RD-7: the example tree, a daemon of
+    // its own (it refreshes the code index).
+    let example = example_tree(&scratch, "example");
+    let home = scratch.home("example");
+    let server = Server::serve(&home, &cwd, &[&example]);
+    let path = "/api/projects/code-a/health";
+    let run = cli_health(&cli_home, &cwd, &example);
+    let reply = server.get(path);
+    assert_eq!(reply.status, 200, "{path}: {}", reply.text());
+    assert_eq!(
+        reply.text(),
+        run.document(),
+        "{path}: `spec --root R health --json` less its final LF"
+    );
+    assert_eq!(
+        reply.header("content-type"),
+        Some("application/json; charset=utf-8"),
+        "{path}"
+    );
+    assert_plain(&reply, path);
+    let again = server.get(path);
+    assert_eq!((again.status, again.text()), (200, reply.text()), "{path}");
+    let document = reply.json();
+    let drift = &document["drift"];
+    assert_eq!(drift["state"], "measured", "{drift}");
+    assert_eq!(drift["counts"]["rows"], 39, "{drift}");
+    assert!(
+        drift["rows"].as_array().is_some_and(|rows| rows
+            .iter()
+            .any(|row| row["state"] == "code_ahead" && row["lock"].is_object())),
+        "the CAP row listed: {drift}"
+    );
+}
+
+/// "Data"'s example tree (docs/features/health-drift.md): a git copy of
+/// `fixtures/code-a` with the golden lock committed, `CAP: u32 = 10;` ->
+/// `12;` in `counter.rs` left uncommitted.
+fn example_tree(scratch: &Scratch, dir: &str) -> PathBuf {
+    let lock = read_text(&common::fixture("spec-lock"), "code-a.lock");
+    let root = variant(
+        scratch,
+        "code-a",
+        dir,
+        None,
+        &[("spec.lock", lock.as_str())],
+    );
+    replace(
+        &root,
+        "crates/tally/src/counter.rs",
+        "CAP: u32 = 10;",
+        "CAP: u32 = 12;",
+    );
+    root
 }
 
 #[test]
@@ -468,6 +534,8 @@ fn a_row_that_cannot_be_measured_is_still_a_200() {
         for row in ["assumes", "unbound"] {
             assert_eq!(document[row]["state"], "measured", "{context}: {row}");
         }
+        // docs/features/health-drift.md: no lock, every binding `unlocked`.
+        assert_eq!(document["drift"]["state"], "measured", "{context}");
         assert!(document["code"].is_object(), "{context}");
         assert_plain(&reply, context);
     };
@@ -500,6 +568,19 @@ fn a_row_that_cannot_be_measured_is_still_a_200() {
                     .is_some_and(|count| count > 0),
                 "{context}: row 3 measured"
             );
+            // docs/features/health-drift.md "Degrade matrix": a shared
+            // step's cause is row 6's too.
+            let drift = &document["drift"];
+            assert_eq!(drift["state"], "cannot", "{context}: {drift}");
+            for key in ["counts", "rows", "tested"] {
+                assert!(drift[key].is_null(), "{context}: {drift}");
+            }
+            assert!(
+                drift["causes"]
+                    .as_array()
+                    .is_some_and(|causes| causes.contains(&document["assumes"]["causes"][0])),
+                "{context}: {drift}"
+            );
             assert_plain(&reply, context);
         }
     };
@@ -521,10 +602,107 @@ fn a_row_that_cannot_be_measured_is_still_a_200() {
     write(&code, "specengine.toml", &config);
     measured("restored");
 
+    // docs/features/health-drift.md RD-7: an invalid `spec.lock` after the
+    // start: row 6 alone `cannot` (one cause, `spec.lock:<line>: …`), rows
+    // 4-5 measured, a 200 with the CLI's bytes; removed, measured again.
+    write(&code, "spec.lock", "format = 2\n[[binding]\n");
+    for _ in 0..2 {
+        let reply = server.get(path);
+        assert_eq!(
+            reply.status,
+            200,
+            "an invalid lock: no 503: {}",
+            reply.text()
+        );
+        assert_eq!(
+            reply.text(),
+            cli_health(&cli_home, &cwd, &code).document(),
+            "an invalid lock: the CLI's bytes"
+        );
+        let document = reply.json();
+        for row in ["assumes", "unbound"] {
+            assert_eq!(document[row]["state"], "measured", "an invalid lock: {row}");
+        }
+        let drift = &document["drift"];
+        assert_eq!(drift["state"], "cannot", "{drift}");
+        for key in ["counts", "rows", "tested"] {
+            assert!(drift[key].is_null(), "never 0: {drift}");
+        }
+        assert_eq!(drift["notes"], serde_json::json!([]), "{drift}");
+        let causes = drift["causes"].as_array().expect("causes");
+        assert!(
+            causes.len() == 1
+                && causes[0]
+                    .as_str()
+                    .is_some_and(|cause| cause.starts_with("spec.lock:")),
+            "{drift}"
+        );
+        assert_plain(&reply, "an invalid lock");
+    }
+    fs::remove_file(code.join("spec.lock")).expect("the lock removed");
+    measured("the lock removed");
+
     let written = beyond_daemon(&home);
     assert!(!written.is_empty(), "the route refreshed the code index");
     assert!(
         written.iter().all(|entry| entry.contains("code-a.db")),
         "the slug's DB alone: {written:?}"
     );
+}
+
+/// docs/features/health-drift.md RD-7, RD-8 ("Exit and route": the
+/// handler passes the daemon's own git): a daemon whose `PATH` holds no
+/// `git` serves the example tree with row 6 `cannot`, its one cause ``
+/// `git` could not be run: no `git` program was found on PATH ``, never
+/// a count; rows 3-5 as a daemon with git serves them; a 200 both times.
+/// M: the handler reads git from somewhere but its own environment.
+#[test]
+fn a_daemon_without_git_serves_row_6_cannot() {
+    let scratch = Scratch::new("health-drift-no-git");
+    let example = example_tree(&scratch, "example");
+    let cwd = scratch.dir("cwd");
+    let no_git = scratch.dir("no-git-bin");
+    let path = "/api/projects/code-a/health";
+
+    let home = scratch.home("with-git");
+    let server = Server::serve(&home, &cwd, &[&example]);
+    let with_git = server.get(path);
+    assert_eq!(with_git.status, 200, "{}", with_git.text());
+    drop(server);
+
+    let home = scratch.home("without-git");
+    let env: Vec<(std::ffi::OsString, std::ffi::OsString)> = product_env(&home)
+        .into_iter()
+        .map(|(key, value)| {
+            if key == "PATH" {
+                (key, no_git.clone().into_os_string())
+            } else {
+                (key, value)
+            }
+        })
+        .collect();
+    let server = Server::try_start_env(&env, &cwd, &root_args(&[&example]))
+        .unwrap_or_else(|refused| panic!("the daemon without git did not start: {refused:?}"));
+    let reply = server.get(path);
+    assert_eq!(reply.status, 200, "no 503: {}", reply.text());
+    assert_plain(&reply, "no git");
+    let document = reply.json();
+    assert_eq!(
+        document["drift"],
+        serde_json::json!({"state": "cannot",
+            "causes": ["`git` could not be run: no `git` program was found on PATH"],
+            "counts": null, "rows": null, "tested": null, "notes": []}),
+    );
+    let measured = with_git.json();
+    assert_eq!(measured["drift"]["state"], "measured");
+    for key in [
+        "documents",
+        "amendments",
+        "notes",
+        "code",
+        "assumes",
+        "unbound",
+    ] {
+        assert_eq!(document[key], measured[key], "rows 3-5's `{key}`");
+    }
 }

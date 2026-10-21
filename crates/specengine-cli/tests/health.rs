@@ -28,12 +28,25 @@
 //! scans the slice's new sources too (RD-4, TE-5). Rows 4-5 themselves:
 //! the [`health_rows`] module.
 //!
+//! docs/features/health-drift.md (9b-1) adds row 6 the same way: `drift`
+//! after `unbound` (`off` with the `[code]` sentence in every fixture
+//! here, `counts`, `rows`, `tested` null, `notes` `[]`), its `drift: off:`
+//! line after rows 4-5's; the library takes the caller's git
+//! (`HealthRequest`). AC-R7 lets row 6's own name `drift` be written in
+//! `health_drift.rs` alone ([`ROW_NAMES`]). Row 6 itself: the
+//! [`health_drift`] module.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
 
+mod anchor_common;
 mod common;
+mod health_drift;
 mod health_rows;
+mod lock_common;
+mod tested_common;
+mod verify_common;
 
 use std::collections::BTreeSet;
 use std::fmt;
@@ -46,8 +59,9 @@ use common::git::Sandbox;
 use common::proposal::Pair;
 use common::{Run, Scratch, read_text, repository_root, snapshot, spec, write};
 use serde::de::{Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
-use specengine_cli::{Env, Globals, Outcome, health, render_json, render_text};
+use specengine_cli::{Env, Globals, HealthRequest, Outcome, health, render_json, render_text};
 use specengine_model::{AMENDS, LINK_TYPES};
+use specengine_store::GitEnv;
 
 // ------------------------------------------------------------ ordered JSON
 
@@ -196,9 +210,35 @@ fn off_json() -> String {
     format!("{{\"state\":\"off\",\"causes\":[\"{NO_CODE}\"],\"counts\":null,\"rows\":null}}")
 }
 
-/// The text's two lines of rows 4-5 `off`, before the last line.
+/// The text's lines of rows 4-6 `off`, before the last line
+/// (docs/features/health-drift.md "Text and stderr": row 6's after rows
+/// 4-5's).
 fn off_lines() -> String {
-    format!("assumes: off: {NO_CODE}\nunbound: off: {NO_CODE}\n")
+    format!("assumes: off: {NO_CODE}\nunbound: off: {NO_CODE}\ndrift: off: {NO_CODE}\n")
+}
+
+/// Row 6 `off` without `[code]` (docs/features/health-drift.md "Data"):
+/// rows 4-5's sentence, `counts`, `rows`, `tested` null, `notes` `[]`.
+fn off_drift() -> J {
+    J::Obj(vec![
+        ("state".to_owned(), J::Str("off".to_owned())),
+        (
+            "causes".to_owned(),
+            J::Arr(vec![J::Str(NO_CODE.to_owned())]),
+        ),
+        ("counts".to_owned(), J::Null),
+        ("rows".to_owned(), J::Null),
+        ("tested".to_owned(), J::Null),
+        ("notes".to_owned(), J::Arr(Vec::new())),
+    ])
+}
+
+/// The JSON text of [`off_drift`].
+fn off_drift_json() -> String {
+    format!(
+        "{{\"state\":\"off\",\"causes\":[\"{NO_CODE}\"],\"counts\":null,\"rows\":null,\
+         \"tested\":null,\"notes\":[]}}"
+    )
 }
 
 /// A's amended copy: the documents written into it, in this order.
@@ -626,7 +666,8 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 "notes",
                 "code",
                 "assumes",
-                "unbound"
+                "unbound",
+                "drift"
             ],
             "{context}"
         );
@@ -643,6 +684,7 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
         for key in ["assumes", "unbound"] {
             assert_eq!(document.get(key), &off_row(), "{context}: {key}");
         }
+        assert_eq!(document.get("drift"), &off_drift(), "{context}: drift");
         for row in document.get("amendments").items() {
             assert_eq!(
                 row.keys(),
@@ -668,8 +710,9 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 run.stdout,
                 format!(
                     "{{\"documents\":13,\"amendments\":[],\"notes\":[],\"code\":null,\
-                     \"assumes\":{off},\"unbound\":{off}}}\n",
-                    off = off_json()
+                     \"assumes\":{off},\"unbound\":{off},\"drift\":{drift}}}\n",
+                    off = off_json(),
+                    drift = off_drift_json()
                 ),
                 "the whole document with zero"
             );
@@ -682,6 +725,9 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 xdg_data_home: None,
             },
             &Globals::default(),
+            &HealthRequest {
+                git: GitEnv::new(root.clone(), [("HOME", fresh.clone().into_os_string())]),
+            },
         )
         .expect("the library answers");
         let outcome = Outcome::Health(outcome);
@@ -697,7 +743,7 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
         );
         assert!(
             text.stdout.ends_with(&format!("{}{last}\n", off_lines())),
-            "{context}: rows 4-5 `off`, then the last line:\n{}",
+            "{context}: rows 4-6 `off`, then the last line:\n{}",
             text.stdout
         );
         if rows == 0 {
@@ -719,6 +765,7 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 && !line.starts_with("spec health: ")
                 && !line.starts_with("assumes: ")
                 && !line.starts_with("unbound: ")
+                && !line.starts_with("drift: ")
         })
         .collect();
     assert_eq!(
@@ -1191,6 +1238,13 @@ fn ac_r7_sources() -> Vec<String> {
     sources.into_iter().collect()
 }
 
+/// docs/features/health-drift.md "Text and stderr": row 6's own name,
+/// `drift` (its key, its `drift | ` lines, its `note: drift:` notes),
+/// written where row 6 is made, as `health_code.rs` writes `assumes` and
+/// `unbound`; the queue's kind `drift` stays a word every other Health
+/// source never writes.
+const ROW_NAMES: [(&str, &str); 1] = [("crates/specengine-cli/src/health_drift.rs", "drift")];
+
 /// AC-R7, the scan half (`proposal_genre.rs` holds the `"amends"` scan of
 /// every CLI source): the slice's new sources, core `check/unapplied.rs`
 /// and CLI `health.rs`, write no class, status, kind or link-type literal;
@@ -1266,7 +1320,7 @@ fn ac_r7_the_new_sources_write_no_class_status_kind_or_link_type() {
                 break;
             }
             for literal in literals(line) {
-                if words.contains(literal) {
+                if words.contains(literal) && !ROW_NAMES.contains(&(source.as_str(), literal)) {
                     found.push(format!("{source}:{}: {literal:?}", number + 1));
                 }
             }

@@ -6,6 +6,7 @@ import type {
   AssumesRow,
   HealthAssumes,
   HealthCode,
+  HealthDrift,
   HealthReport,
   HealthUnbound,
   ShownLink,
@@ -37,6 +38,10 @@ import type { Scenario } from "./scenario";
 // row 3 as normal. not-configured: row 5 without a rule, row 4 measured. Texts stored raw, as the
 // JSON carries them: a control character in a rejection's note and in a cause, which the UI writes
 // `\u{..}` as the CLI's text does.
+//
+// Row 6 (docs/features/health-drift.md "Data"): `off` for either project in every scenario, the
+// code layer's sentence its cause, no counts, rows or tested, no note, until 9b-2 draws the row and
+// its mocks measure it; nothing reads it yet.
 
 const HARBOR = "harbor-sim";
 
@@ -175,6 +180,11 @@ export const LARGE_UNBOUND = 3000;
 /** Row 4 or 5 not measured: its state and causes, no counts, no rows (both rows share the shape). */
 function notMeasured(state: "off" | "not_configured" | "cannot", causes: readonly string[]): HealthAssumes & HealthUnbound {
   return { state, causes: [...causes], counts: null, rows: null };
+}
+
+/** Row 6, not measured until 9b-2: `off`, the code layer's sentence its cause, never a 0. */
+function driftOff(): HealthDrift {
+  return { state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null, tested: null, notes: [] };
 }
 
 /** The code files each project's rows read, `spec refs`' count. */
@@ -375,5 +385,5 @@ export function healthReportOf(project: string, scenario: Scenario): HealthRepor
     amendments = scenario === "large" ? largeAmendments() : harborAmendments();
   }
   const { code, assumes, unbound } = codeRowsOf(project, scenario);
-  return { documents: documentsOf(project, scenario), amendments, notes: [], code, assumes, unbound };
+  return { documents: documentsOf(project, scenario), amendments, notes: [], code, assumes, unbound, drift: driftOff() };
 }

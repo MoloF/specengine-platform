@@ -32,6 +32,12 @@
 //! spec's ("Data", "The shared predicate"); a name it leaves to the
 //! developer is marked PHASE-B ([`PHASE_B_SOURCES`]).
 //!
+//! docs/features/health-drift.md (9b-1) extends these pins to row 6: the
+//! document's keys, the `off` and shared `cannot` rows, the text's order
+//! (RD-3), RD-2's scan (`verify_as` never called), RD-4's probe over the
+//! example tree, RD-8's byte identity with row 6 measured (the copies
+//! carry `.git`). Row 6 itself: `health_drift`.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 use std::collections::BTreeMap;
@@ -50,6 +56,7 @@ use specengine_store::{
     ProposalKind, ProposalQueue as _, RecordApproval, RecordSeries, SqliteQueue, patch_hash,
 };
 
+use super::health_drift::DRIFT_KEYS;
 use super::{J, NO_CODE, check_documents, health_json, health_run};
 use crate::common::bundle::blake3_hex;
 use crate::common::git::Sandbox;
@@ -65,14 +72,16 @@ use crate::common::{
 const NO_RULE: &str =
     "no [[health.bound]] rule: which nodes must be bound is the project's to declare";
 
-/// "The document": Health's keys since 9a-1, in order (9b adds `drift`).
-const DOCUMENT_KEYS: [&str; 6] = [
+/// "The document": Health's keys since 9a-1, in order;
+/// docs/features/health-drift.md "Data": `drift` the 7th.
+const DOCUMENT_KEYS: [&str; 7] = [
     "documents",
     "amendments",
     "notes",
     "code",
     "assumes",
     "unbound",
+    "drift",
 ];
 /// `HealthAssumes`, `HealthUnbound`.
 const ROW_KEYS: [&str; 4] = ["state", "causes", "counts", "rows"];
@@ -1033,7 +1042,11 @@ fn assumes_rows_over_the_seeded_queue() {
         "{}",
         run.stdout
     );
-    let tail: Vec<&str> = run.stdout.lines().rev().take(4).collect();
+    // docs/features/health-drift.md "Text and stderr": row 6's summary
+    // between rows 4-5's and `code:` (TE-1's tree holds the golden lock).
+    let mut tail: Vec<&str> = run.stdout.lines().rev().take(5).collect();
+    let drift = tail.remove(2);
+    assert!(drift.starts_with("drift: "), "{}", run.stdout);
     assert_eq!(
         tail,
         [
@@ -1214,6 +1227,8 @@ fn health_code_keys_present_without_code_table() {
     let tally_off = tree(&scratch, "code-a", "tally-off", LAW_RULE, &[]);
     drop_code_table(&tally_off);
     let off = json!({"state": "off", "causes": [NO_CODE], "counts": null, "rows": null});
+    let off_drift = json!({"state": "off", "causes": [NO_CODE], "counts": null, "rows": null,
+        "tested": null, "notes": []});
     for root in [&c, &a, &tally_off] {
         let (_, ordered, doc) = document(&home, root);
         let context = root.display().to_string();
@@ -1223,6 +1238,8 @@ fn health_code_keys_present_without_code_table() {
             assert_eq!(ordered.get(key).keys(), ROW_KEYS, "{context}: {key}");
             assert_eq!(doc[key], off, "{context}: {key}");
         }
+        assert_eq!(ordered.get("drift").keys(), DRIFT_KEYS, "{context}");
+        assert_eq!(doc["drift"], off_drift, "{context}");
     }
     let tally = tree(&scratch, "code-a", "tally", LAW_RULE, &[]);
     let (_, ordered, doc) = document(&home, &tally);
@@ -1232,6 +1249,7 @@ fn health_code_keys_present_without_code_table() {
         assert_eq!(ordered.get(key).keys(), ROW_KEYS, "{key}");
         assert_eq!(doc[key]["state"], "measured", "{key}");
     }
+    assert_eq!(ordered.get("drift").keys(), DRIFT_KEYS);
 }
 
 /// RD-1: row 3 is the same with rows 4-5 measured and `off`: code-a with
@@ -1284,6 +1302,8 @@ fn amendments_unchanged_by_code_rows() {
                     "assumes: ",
                     "unbound | ",
                     "unbound: ",
+                    "drift | ",
+                    "drift: ",
                     "code: ",
                     "  ",
                 ]
@@ -1319,6 +1339,22 @@ fn assert_code_rows_cannot(
     documents: usize,
     context: &str,
 ) {
+    assert_rows_cannot(env, root, cause, documents, context, true);
+}
+
+/// [`assert_code_rows_cannot`], row 6 too:
+/// docs/features/health-drift.md "Degrade matrix": a `shared` step's cause
+/// is row 6's too (`cannot`, never a count; these trees hold no worktree,
+/// a row-6 cause of its own, so the shared one is among its causes), else
+/// row 6 never names it.
+fn assert_rows_cannot(
+    env: &[(&str, &OsStr)],
+    root: &Path,
+    cause: &str,
+    documents: usize,
+    context: &str,
+    shared: bool,
+) {
     let cannot = json!({"state": "cannot", "causes": [cause], "counts": null, "rows": null});
     let run = health_with(env, root, true);
     run.code(0);
@@ -1328,6 +1364,17 @@ fn assert_code_rows_cannot(
     assert_eq!(doc["code"], Value::Null, "{context}");
     assert_eq!(doc["assumes"], cannot, "{context}: {}", run.show());
     assert_eq!(doc["unbound"], cannot, "{context}: {}", run.show());
+    let drift = &doc["drift"];
+    assert_eq!(drift["state"], "cannot", "{context}: {drift}");
+    for key in ["counts", "rows", "tested"] {
+        assert_eq!(drift[key], Value::Null, "{context}: {drift}");
+    }
+    let names = drift["causes"]
+        .as_array()
+        .expect("causes")
+        .iter()
+        .any(|named| named == cause);
+    assert_eq!(names, shared, "{context}: row 6's causes: {drift}");
     let last = format!("spec health: {documents} documents, 0 unapplied amendments");
     let lines = health_with(env, root, false);
     lines.code(0);
@@ -1338,7 +1385,12 @@ fn assert_code_rows_cannot(
         "{context}: `code:` only when read: {}",
         lines.stdout
     );
-    for row in ["assumes", "unbound"] {
+    let rows: &[&str] = if shared {
+        &["assumes", "unbound", "drift"]
+    } else {
+        &["assumes", "unbound"]
+    };
+    for row in rows {
         let shown = format!("{row}: cannot: {cause}");
         assert!(
             stdout.contains(&shown.as_str()),
@@ -1486,7 +1538,14 @@ fn a_row_that_cannot_be_measured_has_no_count() {
         "{cause}"
     );
     let env = [("HOME", home.as_os_str())];
-    assert_code_rows_cannot(&env, &root, &cause, documents, "an unknown stored word");
+    assert_rows_cannot(
+        &env,
+        &root,
+        &cause,
+        documents,
+        "an unknown stored word",
+        false,
+    );
 }
 
 /// RD-2: exit 0 in every state, both modes, never 1: rows measured with
@@ -1607,23 +1666,28 @@ fn no_code_table_resolves_no_data_directory() {
     let tally = tree(&scratch, "code-a", "tally", "", &[]);
     drop_code_table(&tally);
     let off = json!({"state": "off", "causes": [NO_CODE], "counts": null, "rows": null});
+    let off_drift = json!({"state": "off", "causes": [NO_CODE], "counts": null, "rows": null,
+        "tested": null, "notes": []});
     for root in [&c, &a, &tally] {
         let context = root.display().to_string();
         let (run, _, doc) = document(&home, root);
         assert_eq!(doc["code"], Value::Null, "{context}");
         assert_eq!(doc["assumes"], off, "{context}");
         assert_eq!(doc["unbound"], off, "{context}");
+        assert_eq!(doc["drift"], off_drift, "{context}");
         let lines = text(&home, root);
         assert!(
             lines.stdout.contains(&format!(
-                "assumes: off: {NO_CODE}\nunbound: off: {NO_CODE}\n"
+                "assumes: off: {NO_CODE}\nunbound: off: {NO_CODE}\ndrift: off: {NO_CODE}\n"
             )),
             "{context}: {}",
             lines.stdout
         );
         for done in [&run, &lines] {
             assert!(
-                !done.stderr.contains("note: assumes:") && !done.stderr.contains("note: unbound:"),
+                !done.stderr.contains("note: assumes:")
+                    && !done.stderr.contains("note: unbound:")
+                    && !done.stderr.contains("note: drift:"),
                 "{context}: {}",
                 done.show()
             );
@@ -1996,6 +2060,12 @@ fn rows_4_5_read_the_config_row_3_reads() {
             "{row}"
         );
     }
+    // docs/features/health-drift.md "Data": row 6 reads the same config.
+    assert_eq!(
+        doc["drift"],
+        json!({"state": "off", "causes": [cause], "counts": null, "rows": null,
+            "tested": null, "notes": []}),
+    );
 }
 
 // ------------------------------------------------------------ iteration 2's targets
@@ -2735,6 +2805,9 @@ fn cannot_verify_marker_binds_nothing() {
 /// "Text"): a fresh `HOME` (no queue), code-a's laws by default relations,
 /// `broken.rs:4` naming `LAW-DEFAULT`: the document byte for byte and the
 /// text line for line (`documents` = `spec check`'s).
+/// docs/features/health-drift.md "Degrade matrix": the tree holds no
+/// worktree, so row 6 is `cannot` with plain's cause (4), its line after
+/// rows 4-5's summaries.
 #[test]
 fn ac_3_tree_document_and_text_are_the_specs_example() {
     let scratch = Scratch::new("health-ac3-golden");
@@ -2748,7 +2821,7 @@ fn ac_3_tree_document_and_text_are_the_specs_example() {
     let documents = check_documents(&scratch.home("checks"), &root);
     let home = scratch.home("fresh");
     let (run, _, _) = document(&home, &root);
-    let want = r#"{"documents":DOCS,"amendments":[],"notes":[],"code":{"files":8,"rs":7,"ron":1,"skipped":0},"assumes":{"state":"measured","causes":[],"counts":{"markers":2,"rows":1,"pending":0,"as_assumed":0,"otherwise":0,"applied":0,"rejected":0,"unknown":1,"archived":0,"in_question":0},"rows":[{"id":"PR-7","state":"unknown","path":"crates/tally/src/lib.rs","line":13,"column":4,"relation":"implements","proposal":null,"node":null}]},"unbound":{"state":"measured","causes":[],"counts":{"rules":1,"selected":5,"bound":3,"unbound":2},"rows":[{"id":"LAW-SOURCE","kind":"law","title":"Source","path":"docs/spec/limits.md","line":12,"rules":[1],"mentions":0,"markers":[]},{"id":"LAW-DEFAULT","kind":"law","title":"Default","path":"docs/spec/limits.md","line":16,"rules":[1],"mentions":0,"markers":[{"path":"crates/tally/src/broken.rs","line":4,"column":4,"relation":"implements","id_state":"resolved","binding":"cannot_verify","reason":"cannot_verify"}]}]}}"#;
+    let want = r#"{"documents":DOCS,"amendments":[],"notes":[],"code":{"files":8,"rs":7,"ron":1,"skipped":0},"assumes":{"state":"measured","causes":[],"counts":{"markers":2,"rows":1,"pending":0,"as_assumed":0,"otherwise":0,"applied":0,"rejected":0,"unknown":1,"archived":0,"in_question":0},"rows":[{"id":"PR-7","state":"unknown","path":"crates/tally/src/lib.rs","line":13,"column":4,"relation":"implements","proposal":null,"node":null}]},"unbound":{"state":"measured","causes":[],"counts":{"rules":1,"selected":5,"bound":3,"unbound":2},"rows":[{"id":"LAW-SOURCE","kind":"law","title":"Source","path":"docs/spec/limits.md","line":12,"rules":[1],"mentions":0,"markers":[]},{"id":"LAW-DEFAULT","kind":"law","title":"Default","path":"docs/spec/limits.md","line":16,"rules":[1],"mentions":0,"markers":[{"path":"crates/tally/src/broken.rs","line":4,"column":4,"relation":"implements","id_state":"resolved","binding":"cannot_verify","reason":"cannot_verify"}]}]},"drift":{"state":"cannot","causes":["no git repository was found for the root, or git could not read it"],"counts":null,"rows":null,"tested":null,"notes":[]}}"#;
     assert_eq!(
         run.stdout,
         format!("{}\n", want.replace("DOCS", &documents.to_string()))
@@ -2765,6 +2838,7 @@ fn ac_3_tree_document_and_text_are_the_specs_example() {
              assumes: 1 rows of 2 markers: 0 pending, 0 as_assumed, 0 otherwise, 0 applied, \
              0 rejected, 1 unknown, 0 archived, 0 in_question\n\
              unbound: 2 of 5 selected nodes, 1 rules\n\
+             drift: cannot: no git repository was found for the root, or git could not read it\n\
              code: 8 files (.rs 7, .ron 1), skipped 0\n\
              spec health: {documents} documents, 0 unapplied amendments\n"
         )
@@ -3543,6 +3617,12 @@ fn probe(t: &Tally) -> Probe {
 /// the queue's dump, the last event's `seq`, every file outside the data
 /// directory; the data directory holds the slug's DB files alone. M: an
 /// event written.
+///
+/// docs/features/health-drift.md RD-4: then the example tree's edit
+/// (`CAP: u32 = 10;` -> `12;` in `counter.rs`, uncommitted: row 6
+/// measured with a `code_ahead` row over the golden lock): the same probe,
+/// and `.git/index`'s mtime and the count of `.git/objects` files too.
+/// M: Health writes a git object, the index or the lock.
 #[test]
 fn health_writes_no_lock_queue_row_or_event() {
     let t = Tally::new("health-rd8", LAW_RULE);
@@ -3579,6 +3659,55 @@ fn health_writes_no_lock_queue_row_or_event() {
             .all(|name| ["code-a.db", "code-a.db-wal", "code-a.db-shm"].contains(&name.as_str())),
         "{names:?}"
     );
+
+    replace(
+        &t.root,
+        "crates/tally/src/counter.rs",
+        "CAP: u32 = 10;",
+        "CAP: u32 = 12;",
+    );
+    let git_index = t.root.join(".git/index");
+    let mtime = || {
+        fs::metadata(&git_index)
+            .and_then(|meta| meta.modified())
+            .expect("the index's mtime")
+    };
+    let objects = || -> usize {
+        snapshot(&t.root.join(".git/objects"))
+            .values()
+            .filter(|bytes| bytes.is_some())
+            .count()
+    };
+    let before = probe(&t);
+    let (index_before, objects_before) = (mtime(), objects());
+    assert!(objects_before > 0, "premise: objects to count");
+    let doc = t.document();
+    assert_eq!(doc["drift"]["state"], "measured", "{}", doc["drift"]);
+    assert!(
+        doc["drift"]["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .any(|row| row["state"] == "code_ahead" && row["lock"].is_object()),
+        "premise: a locked binding drifts: {}",
+        doc["drift"]
+    );
+    for _ in 0..2 {
+        document(&t.home, &t.root);
+        text(&t.home, &t.root);
+    }
+    let after = probe(&t);
+    assert_eq!(after.status, before.status, "git status");
+    assert_eq!(after.head, before.head, "HEAD");
+    assert_eq!(after.lock, before.lock, "spec.lock");
+    assert_eq!(after.dump, before.dump, "the queue's rows");
+    assert_eq!(after.last_seq, before.last_seq, "no event");
+    assert!(
+        after.outside == before.outside,
+        "nothing written outside the data directory"
+    );
+    assert_eq!(mtime(), index_before, ".git/index untouched");
+    assert_eq!(objects(), objects_before, "no git object written");
 }
 
 /// `root`'s files but `.git`, written under `to` in reverse path order.
@@ -3591,6 +3720,13 @@ fn copy_reversed(from: &Path, to: &Path) {
     for (path, bytes) in files.iter().rev() {
         write(to, path, bytes);
     }
+}
+
+/// `from`'s `.git` copied under `to` byte for byte (docs/features/health-drift.md
+/// RD-8: a copy is the same repository at another path, so row 6 is judged
+/// there as here).
+fn copy_git(from: &Path, to: &Path) {
+    crate::common::copy_dir(&from.join(".git"), &to.join(".git"));
 }
 
 /// Every `.rs`, `.ron` and `.md` file under `root` with CRLF line ends.
@@ -3621,10 +3757,47 @@ const AAA_RS: &str =
 /// a CRLF copy; a file added after the first refresh (its rows stored
 /// last, its path first) gives the bytes a fresh data directory gives, and
 /// the rows by path and line. M: rows in stored order, not path and line.
+///
+/// docs/features/health-drift.md RD-8: the same with row 6 measured (the
+/// golden lock; the copies carry `.git`, the CRLF one's files differing
+/// from its index); with no `git` on `PATH` row 6 is `cannot`, its one
+/// cause `` `git` could not be run: no `git` program was found on PATH ``,
+/// rows 3-5's bytes (the document's first six keys) kept. M: row 6 read
+/// from the cwd, or rows 3-5 reading row 6.
 #[test]
 fn health_code_rows_are_byte_identical_across_roots_and_order() {
     let t = Tally::new("health-rd9", LAW_RULE);
     let first = both(&t.home, &t.root, None);
+    let measured: Value = serde_json::from_str(first[0].trim_end()).expect("JSON");
+    assert_eq!(
+        measured["drift"]["state"], "measured",
+        "{}",
+        measured["drift"]
+    );
+    let empty = t.scratch.join("no-git-bin");
+    fs::create_dir_all(&empty).expect("an empty PATH directory");
+    let no_git = health_with(
+        &[("HOME", t.home.as_os_str()), ("PATH", empty.as_os_str())],
+        &t.root,
+        true,
+    );
+    no_git.code(0);
+    let cannot: Value = serde_json::from_str(no_git.stdout.trim_end()).expect("JSON");
+    assert_eq!(
+        cannot["drift"],
+        json!({"state": "cannot",
+            "causes": ["`git` could not be run: no `git` program was found on PATH"],
+            "counts": null, "rows": null, "tested": null, "notes": []}),
+    );
+    let (_, with_git) = health_json(&t.home, &t.root);
+    let without_git = J::parse(no_git.stdout.trim_end());
+    for key in &DOCUMENT_KEYS[..6] {
+        assert_eq!(
+            with_git.get(key),
+            without_git.get(key),
+            "rows 3-5's `{key}`"
+        );
+    }
     assert_eq!(both(&t.home, &t.root, None), first, "a repeat");
     assert_eq!(
         both(&t.home, t.scratch.path(), Some(&t.root)),
@@ -3633,6 +3806,7 @@ fn health_code_rows_are_byte_identical_across_roots_and_order() {
     );
     let reversed = t.scratch.join("elsewhere/reversed");
     copy_reversed(&t.root, &reversed);
+    copy_git(&t.root, &reversed);
     assert_eq!(
         both(&t.home, &reversed, None),
         first,
@@ -3641,6 +3815,7 @@ fn health_code_rows_are_byte_identical_across_roots_and_order() {
     let crlf = t.scratch.join("other/place/crlf");
     copy_reversed(&t.root, &crlf);
     to_crlf(&crlf);
+    copy_git(&t.root, &crlf);
     assert_eq!(both(&t.home, &crlf, None), first, "a CRLF copy");
 
     let late = t.scratch.join("late");
@@ -3762,7 +3937,9 @@ fn calls(code: &str, name: &str) -> bool {
 /// `collect_rust`, `collect_ron`, `code_symbols` (nor a role or symbol
 /// snapshot: "no symbol read", "never the role rows"); Q13: `maps` is
 /// defined in `symbols.rs` and called by `unmapped.rs`. M: the walk
-/// revived.
+/// revived. docs/features/health-drift.md RD-2 (M3): row 6's sources
+/// (`health_drift.rs` holds `health`) never call verify's own walk,
+/// `verify_as`, nor `read_tree`.
 #[test]
 fn health_reads_the_code_index_not_the_tree() {
     let mut sources: Vec<String> = rust_files(&repository_root().join("crates/specengine-cli/src"))
@@ -3788,6 +3965,7 @@ fn health_reads_the_code_index_not_the_tree() {
     }
     for name in [
         "read_tree",
+        "verify_as",
         "collect_rust",
         "collect_ron",
         "code_symbols",
