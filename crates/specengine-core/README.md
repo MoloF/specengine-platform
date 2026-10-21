@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # specengine-core — the spec parser and the check
@@ -12,7 +12,7 @@ The reading core: the parser (a file's bytes -> `ParsedFile`) and `check` (parse
 
 ## API
 
-`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `check::run(input, scheme, paths, config, baseline, today) -> Report`: `spec check`'s engine, blind to input order, with `check::worst_w`, `check::judge` (against a base): `spec-check.md`; `render_index{,_set}`, `walk_gap`, `is_tier3_file` (with `is_tier3`, `is_live`, `front_matter_failure`), `CheckConfig.generators` in `-graph.md`; `unapplied_amendments` (`Unapplied`) in `health.md`, `HealthConfig::from_toml` (`[health]`), `check::bound_candidates` in `health-code.md`; `RoadmapConfig` (`[roadmap]`), `plan`: `spec-roadmap.md`; `check::resolve` (`Resolver`, `resolve_detached` for `spec show`; `canonical_id`, `feature_scoped`, the lock key), scopes, file links in `-links.md`; `CheckConfig.rules` (`check::CheckRule`, `check/rules{,_toml}.rs`), `own_spans` (own text as spans; the store's `own_text`) in `-process.md`; `NORM_RECIPE`, `norm_input`, `revision` (`Revision`, `number()`), `check::rev_rule` (`REV_NOT_RAISED`, `changed_nodes`, `rule_lock`, `judge` -> `Judged {findings, rows: [BumpRow]}`), `check::add_findings` (a report plus findings, debt rematched), `raise::raised_line`: `node-revision.md`; `check::SpecGraph` in `spec-cli-graph.md`; `check::bundle_layers` (`Bundle{Layer,Candidate,Layers}`, `BUNDLE_LINK_TYPES`), `bundle_node_from_toml` (`BundleNode`), `SpecGraph::{file, scheme}` in `spec-cli-bundle.md`. Proposals, module -> canon (its API named there): `patch`, `proposal`: `proposal-queue.md`; `raise`: `proposal-revisions.md`; `intake`: `agent-intake.md`; `record`: `decision-record.md`; `create`: `proposal-{kinds,amendment}.md`; `task` (`T-NNNN`, `transition`, caps, `PACKAGE_BINDINGS_MAX`), `bundle_task_from_toml`: `tasks.md`, its `FollowUp`, `follow_up_{title,goal}`: `proposal-completion.md`; `round` (`ROUND_*` bounds, `parse_answers`): `round.md`; `lock`: `spec-lock.md`; `verify` (pure; `[verify]`, `TestTemplate`, verdicts), `anchor` (pure `pair`): `spec-verify{,-tests,-anchors}.md`; `drift` (pure: `DriftEvidence`, `StoredJson`, `drift_hash_input`, `raises`): `proposal-drift{,-item}.md`.
+`parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile`; `IdScheme::from_toml(&str)` (trait `IdSchemeToml`, also `scheme_from_toml`) reads only `[ids]`; `Paths::from_toml(&str)` (also `paths_from_toml`) only `[paths]`; `tokens_est(&str) -> u32`; `check::run(input, scheme, paths, config, baseline, today) -> Report`: `spec check`'s engine, blind to input order, with `check::worst_w`, `check::judge` (against a base): `spec-check.md`; `render_index{,_set}`, `walk_gap`, `is_tier3_file` (with `is_tier3`, `is_live`, `front_matter_failure`), `CheckConfig.generators` in `-graph.md`; `unapplied_amendments` (`Unapplied`) in `health.md`, `HealthConfig::from_toml` (`[health]`), `check::bound_candidates` in `health-code.md`; `RoadmapConfig` (`[roadmap]`), `plan`: `spec-roadmap.md`; `check::resolve` (`Resolver`, `resolve_detached` for `spec show`; `canonical_id`, `feature_scoped`, the lock key), scopes, file links in `-links.md`; `CheckConfig.rules` (`check::CheckRule`, `check/rules{,_toml}.rs`), `own_spans` (own text as spans; the store's `own_text`) in `-process.md`; `NORM_RECIPE`, `norm_input`, `revision` (`Revision`, `number()`), `check::rev_rule` (`REV_NOT_RAISED`, `changed_nodes`, `rule_lock`, `judge` -> `Judged {findings, rows: [BumpRow]}`), `check::add_findings` (a report plus findings, debt rematched), `raise::raised_line`: `node-revision.md`; `check::SpecGraph` in `spec-cli-graph.md`; `check::bundle_layers` (`Bundle{Layer,Candidate,Layers}`, `BUNDLE_LINK_TYPES`), `bundle_node_from_toml` (`BundleNode`), `SpecGraph::{file, scheme}` in `spec-cli-bundle.md`. Proposals, module -> canon (API there): `patch`, `proposal`: `proposal-queue.md`; `raise`: `proposal-revisions.md`; `intake`: `agent-intake.md`; `record`: `decision-record.md`; `create`: `proposal-{kinds,amendment}.md`; `task` (`T-NNNN`, `transition`, caps, `PACKAGE_BINDINGS_MAX`), `bundle_task_from_toml`: `tasks.md`, its `FollowUp`, `follow_up_{title,goal}`: `proposal-completion.md`; `round` (`ROUND_*` bounds, `parse_answers`): `round.md`; `lock`: `spec-lock.md`; `verify` (pure; `[verify]`, `TestTemplate`, verdicts), `anchor` (pure `pair`): `spec-verify{,-tests,-anchors}.md`; `drift` (pure: `DriftEvidence`, `StoredJson`, `drift_hash_input`, `raises`): `proposal-drift{,-item}.md`; `symbol_delta` (pure): `spec-impact.md`.
 
 `ProjectConfig::from_toml` (also `project_from_toml`) reads all of `specengine.toml` for the CLI: `{project: Project {slug?, name?, language?, profile?}, scheme, paths, paths_written, project_line?, decision_records?}`. Closed: `[project]`, `[decision_records]` and the top level (`budgets`, `classes`, `check`, `generators`, `zones`, `gate` (`gate.rs`: `gate.md`), `code`, `verify`, `health`, `roadmap` only name-checked; `CodeConfig::from_toml`: `code-bindings.md`); `ProjectError {line?, message}`, `at(file)`. `slug()` errs when absent; `slug_problem`: `grammar::is_slug`, ≤ `MAX_SLUG_BYTES` (64).
 
@@ -22,7 +22,7 @@ What the index and the check walk (the walk itself: store README). `Paths {spec,
 
 ## Output
 
-`ParsedFile = {path, bom, front_matter?, body, nodes, links, anchors, diagnostics}`; BOM + front-matter + body = the file, even when it is not UTF-8. `anchors`: heading slugs, non-ID `{#…}`, `<a id|name>` (model README). `nodes[0]` is the document (`document()`), sections follow in source order (`sections()`); absent optional fields are omitted. `diagnostics` come in line order; the codes: model README.
+`ParsedFile = {path, bom, front_matter?, body, nodes, links, anchors, diagnostics}`; BOM + front-matter + body = the file, even when not UTF-8. `anchors`: heading slugs, non-ID `{#…}`, `<a id|name>` (model README). `nodes[0]` is the document (`document()`), sections follow in source order (`sections()`); absent optional fields omitted. `diagnostics` in line order; the codes: model README.
 
 ```json
 {"path":"spec/stamina.md","bom":false,"front_matter":[0,236],"body":[236,512],"nodes":[
@@ -32,7 +32,7 @@ What the index and the check walk (the walk itself: store README). `Paths {spec,
  "anchors":[{"name":"stamina","origin":"slug","level":1,"span":[236,245]}],"diagnostics":[]}
 ```
 
-**Spans** `[start, end)` are file byte offsets, BOM included; lines 1-based; CRLF is never normalised. Document `span` = the whole file. A **section** is a heading whose `id` attribute is a definable ID (other `{#…}` -> `anchors`); it ends at the next heading of the same or higher level, trailing whitespace trimmed, nested sections included. `heading` = the heading line without its line ending; `body` = from the line after it to the section end; disjoint, so a rename leaves the body hash alone (05 §3.5). Section fields: `title` (heading text), `level`, `attrs` (`key=value`, bare key -> null), `classes`, `rev` (`rev=N`, once, not 0), `parent` (nearest enclosing ID section, else the document), `kind` (prefix kind); `script` only when the ID as written is not Latin. **Document:** `kind` declared, else the prefix kind (another declared -> `kind-mismatch`, declared kept); `title` from `title:`, else the first H1; `summary` = first paragraph after the first H1 (no H1: before the first heading).
+**Spans** `[start, end)` are file byte offsets, BOM included; lines 1-based; CRLF never normalised. Document `span` = the whole file. A **section** is a heading whose `id` attribute is a definable ID (other `{#…}` -> `anchors`); it ends at the next heading of the same or higher level, trailing whitespace trimmed, nested sections included. `heading` = the heading line without its line ending; `body` = from the line after it to the section end; disjoint, so a rename leaves the body hash alone (05 §3.5). Section fields: `title` (heading text), `level`, `attrs` (`key=value`, bare key -> null), `classes`, `rev` (`rev=N`, once, not 0), `parent` (nearest enclosing ID section, else the document), `kind` (prefix kind); `script` only when the ID as written is not Latin. **Document:** `kind` declared, else the prefix kind (another declared -> `kind-mismatch`, declared kept); `title` from `title:`, else the first H1; `summary` = first paragraph after the first H1 (no H1: before the first heading).
 
 ## Front-matter
 
@@ -40,13 +40,13 @@ Optional UTF-8 BOM, then front-matter iff the next line is exactly `---`, closed
 
 ## Body references
 
-Scanned in text and inline code (tables and link text included), never in fenced or indented code, HTML (comments included), link destinations or attribute blocks; verbatim only (`R\-12` is none); `{#X-3}` in a paragraph is a mention. Each -> `mentions`, origin `inline`, `src` = innermost ID section, else the document ID, else omitted; so is a local link destination or definition, `dst` a path (`spec-check-links.md`). Linear: no rescan per `[[`, `{#`, `@`, `-`.
+Scanned in text and inline code (tables, link text included), never in fenced or indented code, HTML (comments included), link destinations or attribute blocks; verbatim only (`R\-12` is none); `{#X-3}` in a paragraph is a mention. Each -> `mentions`, origin `inline`, `src` = innermost ID section, else the document ID, else omitted; so is a local link destination or definition, `dst` a path (`spec-check-links.md`). Linear: no rescan per `[[`, `{#`, `@`, `-`.
 
 ## Input caps and libraries
 
 Nesting cap 32 (`MAX_DEPTH`): the root mapping is depth 1 (serde-saphyr `enter_depth`), so 32 levels parse and the 33rd is one `frontmatter-yaml`. Why 32: ≤ 1.05 MiB of a 2 MiB stack (serde-saphyr 1.3.0, debug).
 
-Alias expansion cap 10 000 (`MAX_ALIAS_EXPANSION`) replayed events, over it one `frontmatter-yaml`; both caps the parser's, before the library defaults.
+Alias expansion cap 10 000 (`MAX_ALIAS_EXPANSION`) replayed events, over it one `frontmatter-yaml`; both the parser's, before the library's.
 
 ## Token estimator
 

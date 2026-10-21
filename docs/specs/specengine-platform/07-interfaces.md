@@ -28,7 +28,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 | Tool | Input | Output | Notes |
 |---|---|---|---|
 | `find_symbols` | one of `query` (+ `limit`), `node`, `file`, `at` (`PATH:LINE`) | `spec symbols --json`: qpath, item kind, signature, lines, layer, tier, bindings with their nodes, roles with `[code] frameworks` | shipped; repo-map on demand; roles: `docs/canon/code-roles.md`; general code navigation the agent does with the `LSP` tool of the code-intelligence plugin (04 §1.7), SpecEngine does not duplicate it |
-| `get_impact` | one of `id`, `symbol` (+ `depth`); `since: <commit>`: 7b-2 | `spec impact --json`: the nodes the impact walk reaches, their bindings with each `sync`, tests, this repository's open tasks on them | shipped (7b-1): `docs/canon/spec-impact.md`; `since` = git diff -> graph walk (change impact, `docs/features/impact-since.md`) |
+| `get_impact` | one of `id`, `symbol`, `since` (a git revision) (+ `depth`) | `spec impact --json`: the nodes the impact walk reaches, their bindings with each `sync`, tests, this repository's open tasks on them | shipped (7b-1, 7b-2 `since`: the code changed since a revision against the disk): `docs/canon/spec-impact.md` |
 | `refs` | `id` | `spec refs --json`: the node's markers and mentions, each with its binding | shipped; needed **during** refactoring; spec-side referrers: `get_node` with links |
 | `unmapped` | `path?` | `spec unmapped --json`: rows of units, mapped, percent, mentioned; a file's unmapped items | shipped; where there is no spec (tracey `query unmapped`) |
 | `get_roadmap` | `release?` \| `pool?` | `spec roadmap --json`: the plan's groups and items with `waits_on` and their tasks | shipped; capped as the CLI (`docs/canon/spec-roadmap.md` "Surfaces") |
@@ -81,7 +81,7 @@ spec new KIND [--parent ID] [TITLE]      # unbuilt: the registry issues the ID, 
 spec edit ID                             # unbuilt: owner edit = instantly applied proposal
 spec search "query"
 spec graph ID [--impact] [--type T] [--depth N] [--archive] [--format dot|mermaid]
-spec impact REF | --symbol QPATH [--depth N] [--json]  # shipped: docs/canon/spec-impact.md; --since REV: 7b-2
+spec impact REF | --symbol QPATH | --since REV [--depth N] [--json]  # shipped: docs/canon/spec-impact.md
 spec refs REF [--json]                   # reverse lookup from the code index, shipped: docs/canon/code-bindings.md
 spec unmapped [PATH]                     # spec coverage of sources
 spec bundle REF… [--budget N]            # shipped, default 2000: docs/canon/spec-cli-bundle.md; --task T: Phase 2

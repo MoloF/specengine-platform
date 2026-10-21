@@ -13,6 +13,16 @@
 //!   --symbol step` beside `spec show GOAL-01 --bindings` and `spec graph
 //!   GOAL-01 --impact`.
 //!
+//! docs/features/impact-since.md TE-3, manual alike ([`impact_since_cost`]):
+//!
+//! - `spec impact --since HEAD` over 1 000 compared files (the impact
+//!   fixture plus 1 000 committed `.rs` files, every one's body edited on
+//!   disk), text and `--json`, beside the same with nothing edited;
+//! - `spec verify --changed` (text and `--json`) on `fixtures/code-a` (the
+//!   golden lock) plus 10 000 committed `.rs` files: before the delta (no
+//!   file differs), and after it, with 1 000 and with all 10 000 files'
+//!   bodies edited.
+//!
 //! `cargo nextest run -p specengine-cli --release --test impact_cost
 //! --run-ignored ignored-only --no-capture`
 
@@ -213,5 +223,105 @@ fn impact_cost() {
         premise.as_millis(),
         show.as_millis(),
         graph.as_millis()
+    );
+}
+
+/// The warm median of `spec args` (one run first), each run exiting as
+/// the first did; that exit.
+fn timed_any(git: &Sandbox, home: &Path, root: &Path, args: &[&str]) -> (Duration, i32) {
+    let code = spec_in(git, home, root, args).code;
+    let took = median(|| {
+        let started = Instant::now();
+        let run = spec_in(git, home, root, args);
+        let took = started.elapsed();
+        run.code(code);
+        took
+    });
+    (took, code)
+}
+
+/// `count` files `<dir>/part_<n>.rs` of one function each, `body` its
+/// value expression.
+fn parts(repo: &lock_common::LockRepo, dir: &str, count: usize, body: &str) {
+    for at in 0..count {
+        repo.write(
+            &format!("{dir}/part_{at:05}.rs"),
+            format!(
+                "/// Part {at}.\npub fn value_{at:05}(input: u32) -> u32 {{\n    input.wrapping_mul({at}).{body}\n}}\n"
+            ),
+        );
+    }
+}
+
+/// TE-3 (docs/features/impact-since.md "Acceptance criteria"): the two
+/// corpora, figures printed for the spec's "Implementation".
+#[test]
+#[ignore = "manual (TE-3): release, figures recorded in the spec"]
+fn impact_since_cost() {
+    let ferry = lock_common::LockRepo::of("is-cost", "impact", "repo", &[]);
+    parts(&ferry, "crates/ferry/src/many", 1_000, "wrapping_add(1)");
+    ferry.commit_all("1 000 files");
+    ferry.spec_piped(&ferry.root, &["index"]).code(0);
+    let time = |repo: &lock_common::LockRepo, args: &[&str]| {
+        timed_any(&repo.git, &repo.home, &repo.root, args)
+    };
+    let (quiet, _) = time(&ferry, &["impact", "--since", "HEAD"]);
+    parts(&ferry, "crates/ferry/src/many", 1_000, "wrapping_add(2)");
+    let check = spec_in(
+        &ferry.git,
+        &ferry.home,
+        &ferry.root,
+        &["impact", "--since", "HEAD"],
+    );
+    check.code(0);
+    assert!(
+        check.stdout.starts_with(&format!(
+            "since {}: 1000 files, 1000 changed, 0 added, 0 removed\n",
+            &ferry.head()[..7]
+        )),
+        "premise: 1 000 compared files: {}",
+        check.stdout.lines().next().unwrap_or_default()
+    );
+    let (since, _) = time(&ferry, &["impact", "--since", "HEAD"]);
+    let (since_json, _) = time(&ferry, &["impact", "--since", "HEAD", "--json"]);
+    eprintln!(
+        "TE-3: impact --since HEAD, warm, median of 5: nothing differing {} ms; 1 000 compared files {} ms (--json {} ms)",
+        quiet.as_millis(),
+        since.as_millis(),
+        since_json.as_millis()
+    );
+
+    let repo = verify_common::golden("is-cost-code-a");
+    repo.write(
+        "crates/filler/Cargo.toml",
+        "[package]\nname = \"filler\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    );
+    let mut lib = String::new();
+    for at in 0..10_000 {
+        lib.push_str(&format!("pub mod part_{at:05};\n"));
+    }
+    repo.write("crates/filler/src/lib.rs", lib);
+    parts(&repo, "crates/filler/src", 10_000, "wrapping_add(1)");
+    repo.commit_all("10 000 files");
+    repo.spec_piped(&repo.root, &["index"]).code(0);
+    let mut figures = Vec::new();
+    for (label, edited) in [
+        ("before the delta", 0),
+        ("1 000 edited", 1_000),
+        ("10 000 edited", 10_000),
+    ] {
+        parts(&repo, "crates/filler/src", edited, "wrapping_add(2)");
+        let (text, code) = time(&repo, &["verify", "--changed"]);
+        let (json, json_code) = time(&repo, &["verify", "--changed", "--json"]);
+        assert_eq!(code, json_code, "{label}: text and JSON exit alike");
+        figures.push(format!(
+            "{label}: text {} ms, --json {} ms (exit {code})",
+            text.as_millis(),
+            json.as_millis()
+        ));
+    }
+    eprintln!(
+        "TE-3: verify --changed on code-a + 10 000 .rs files, warm, median of 5: {}",
+        figures.join("; ")
     );
 }

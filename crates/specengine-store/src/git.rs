@@ -410,6 +410,20 @@ pub(crate) struct Entry {
     pub(crate) oid: String,
 }
 
+/// How [`Git::verify_rev`] reads an answer that is not one OID line.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RevAnswer {
+    /// `HEAD` and the revisions the reads bind themselves: exit 1 with
+    /// nothing printed names no commit (an unborn `HEAD`); any other such
+    /// answer is unreadable, so a misbehaving git stays a failure.
+    Strict,
+    /// A revision as a user gave it (`spec impact --since`): exit 1 names
+    /// no commit whatever it printed (a range prints its ends), and so does
+    /// an exit 0 that is not exactly one OID line (`^REV` prints
+    /// `^<oid>`); only an exit-0 answer that is not UTF-8 is unreadable.
+    Named,
+}
+
 /// An OID as git prints it: 40 or 64 lower-case hex digits.
 fn is_oid(oid: &[u8]) -> bool {
     matches!(oid.len(), 40 | 64)
@@ -616,24 +630,25 @@ impl Git {
     /// `HEAD`'s commit: `Some(oid)` when born, `None` when unborn (exit 1,
     /// nothing printed); anything else is a failure.
     fn head(&self) -> Result<Option<String>, GitFailure> {
-        self.verify_rev("HEAD")
+        self.verify_rev("HEAD", RevAnswer::Strict)
     }
 
     /// The commit `rev` names (`rev-parse --verify -q <rev>^{commit}`):
-    /// `None` when it names none (an unborn `HEAD` too); a `rev` starting
+    /// `None` when it names none (an unborn `HEAD` too; under
+    /// [`RevAnswer::Named`] a range or a negation too); a `rev` starting
     /// with `-` is refused unrun (it would read as an option).
-    fn commit_named(&self, rev: &str) -> Result<Option<String>, GitFailure> {
+    fn commit_named(&self, rev: &str, answer: RevAnswer) -> Result<Option<String>, GitFailure> {
         if rev.starts_with('-') || rev.contains(['\n', '\0']) {
             return Err(GitFailure::Unreadable {
                 command: "rev-parse",
             });
         }
-        self.verify_rev(&format!("{rev}^{{commit}}"))
+        self.verify_rev(&format!("{rev}^{{commit}}"), answer)
     }
 
-    /// `rev-parse --verify -q <spec>`: one OID, or `None` (exit 1, nothing
-    /// printed); anything else is a failure.
-    fn verify_rev(&self, spec: &str) -> Result<Option<String>, GitFailure> {
+    /// `rev-parse --verify -q <spec>`: one OID line (exit 0), or `None` as
+    /// `answer` reads the rest; an exit other than 0 or 1 is a failure.
+    fn verify_rev(&self, spec: &str, answer: RevAnswer) -> Result<Option<String>, GitFailure> {
         const COMMAND: &str = "rev-parse";
         let output = self
             .command(&["rev-parse", "--verify", "-q", spec])
@@ -642,18 +657,22 @@ impl Git {
         let unreadable = GitFailure::Unreadable { command: COMMAND };
         match output.status.code() {
             Some(0) => {
-                let oid = output
-                    .stdout
-                    .strip_suffix(b"\n")
-                    .ok_or(unreadable.clone())?;
-                if !is_oid(oid) {
-                    return Err(unreadable);
+                let oid = output.stdout.strip_suffix(b"\n").filter(|oid| is_oid(oid));
+                match (oid, answer) {
+                    (Some(oid), _) => String::from_utf8(oid.to_vec())
+                        .map(Some)
+                        .map_err(|_| unreadable),
+                    (None, RevAnswer::Strict) => Err(unreadable),
+                    // Not exactly one OID line (`^REV` prints `^<oid>`):
+                    // no commit, unless the answer cannot be read at all.
+                    (None, RevAnswer::Named) => std::str::from_utf8(&output.stdout)
+                        .map(|_| None)
+                        .map_err(|_| unreadable),
                 }
-                String::from_utf8(oid.to_vec())
-                    .map(Some)
-                    .map_err(|_| unreadable)
             }
             Some(1) if output.stdout.is_empty() => Ok(None),
+            // A range prints its ends and exits 1: no commit.
+            Some(1) if answer == RevAnswer::Named => Ok(None),
             Some(1) => Err(unreadable),
             code => Err(GitFailure::Failed {
                 command: COMMAND,
@@ -1149,9 +1168,14 @@ impl Staged {
         self.git.head()
     }
 
-    /// The commit `rev` names, in the root: `None` when it names none.
-    pub(crate) fn commit_named(&self, rev: &str) -> Result<Option<String>, GitFailure> {
-        self.git.commit_named(rev)
+    /// The commit `rev` names, in the root, read as `answer` says: `None`
+    /// when it names none.
+    pub(crate) fn commit_named(
+        &self,
+        rev: &str,
+        answer: RevAnswer,
+    ) -> Result<Option<String>, GitFailure> {
+        self.git.commit_named(rev, answer)
     }
 
     /// The object `name` names (`:2:./spec.lock`), read through the

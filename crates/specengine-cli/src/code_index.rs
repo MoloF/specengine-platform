@@ -36,8 +36,8 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 use specengine_code::frameworks::{self, KNOWN, role_facts};
 use specengine_code::{
-    Anchor, Binding, CODE_INDEX_FORMAT, Digest, FileRole, LevelHashes, LevelState, NamedFile,
-    PackageTargets, RustParser, Target, TargetIndex, TargetSource, UnitKind, bind_tree,
+    Anchor, Binding, CODE_INDEX_FORMAT, Digest, FileRole, ItemRecord, LevelHashes, LevelState,
+    NamedFile, PackageTargets, RustParser, Target, TargetIndex, TargetSource, UnitKind, bind_tree,
     comment_anchors, dir_text, item_levels, item_signatures, level_header, markers_in,
     placed_name_file, qpath,
 };
@@ -275,21 +275,7 @@ impl<'f> Analyzer<'f> {
         let signatures = item_signatures(&tree, text, &every);
         let lines = Lines::new(text);
 
-        // An item's parent: the nearest item before it whose bytes hold it
-        // (only an inline `mod`, an `impl` or a trait holds items).
-        let mut parents: Vec<Option<usize>> = Vec::with_capacity(analysis.items.len());
-        let mut open: Vec<usize> = Vec::new();
-        for (at, item) in analysis.items.iter().enumerate() {
-            while let Some(&last) = open.last() {
-                let outer = &analysis.items[last].byte_range;
-                if outer.start <= item.byte_range.start && item.byte_range.end <= outer.end {
-                    break;
-                }
-                open.pop();
-            }
-            parents.push(open.last().copied());
-            open.push(at);
-        }
+        let parents = item_parents(&analysis.items);
 
         let mut symbols = Vec::with_capacity(analysis.items.len());
         for (at, item) in analysis.items.iter().enumerate() {
@@ -557,6 +543,27 @@ impl Bound {
 struct Found {
     markers: Vec<CodeMarkerRow>,
     mentions: Vec<CodeMentionRow>,
+}
+
+/// Each item's parent, by index: the nearest item before it whose bytes
+/// hold it (only an inline `mod`, an `impl` or a trait holds items), over
+/// `items` in pre-order. The code index's `parent_ord` and the seeds of
+/// `spec impact --since` (`crate::code_delta`) both read it.
+pub(crate) fn item_parents(items: &[ItemRecord]) -> Vec<Option<usize>> {
+    let mut parents: Vec<Option<usize>> = Vec::with_capacity(items.len());
+    let mut open: Vec<usize> = Vec::new();
+    for (at, item) in items.iter().enumerate() {
+        while let Some(&last) = open.last() {
+            let outer = &items[last].byte_range;
+            if outer.start <= item.byte_range.start && item.byte_range.end <= outer.end {
+                break;
+            }
+            open.pop();
+        }
+        parents.push(open.last().copied());
+        open.push(at);
+    }
+    parents
 }
 
 /// A count, line or offset as a row stores it.

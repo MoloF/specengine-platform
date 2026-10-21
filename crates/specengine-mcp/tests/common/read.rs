@@ -23,6 +23,8 @@
 //! (twenty-one); its twin in [`library`] is `spec impact [REF] [--symbol
 //! QPATH] [--depth N]` (`ImpactRequest {reference, symbol, depth, git}`),
 //! the tool's form error ([`GET_IMPACT_ONE_FORM`]) answered before it.
+//! docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0" adds
+//! `since` (`ImpactRequest.since`, `--since REV`) to both.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -118,9 +120,11 @@ pub const TOOLS: [&str; 21] = [
 pub const FIND_SYMBOLS_ONE_FORM: &str =
     "spec: find_symbols takes exactly one of `query`, `node`, `file` and `at`\n";
 
-/// docs/features/impact.md "MCP `get_impact`", **Form**: not exactly one
-/// non-null of `id` and `symbol`, before discovery.
-pub const GET_IMPACT_ONE_FORM: &str = "spec: get_impact takes exactly one of `id` and `symbol`\n";
+/// docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0"
+/// (`ONE_INPUT`): not exactly one non-null of `id`, `symbol` and `since`,
+/// before discovery.
+pub const GET_IMPACT_ONE_FORM: &str =
+    "spec: get_impact takes exactly one of `id`, `symbol` and `since`\n";
 
 /// docs/canon/mcp-code.md "Tools", Forms: `limit` beside a form other
 /// than `query`.
@@ -647,8 +651,9 @@ pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> E
 /// [--release R] [--pool]` with the server's git environment
 /// (docs/features/roadmap-surfaces.md: `release` beside `pool: true` the
 /// CLI's usage error, exit 2); `get_impact` = `spec impact [REF] [--symbol
-/// QPATH] [--depth N]` with the server's git environment, not exactly one
-/// non-null of `id` and `symbol` the tool's [`GET_IMPACT_ONE_FORM`].
+/// QPATH] [--since REV] [--depth N]` with the server's git environment,
+/// not exactly one non-null of `id`, `symbol` and `since` the tool's
+/// [`GET_IMPACT_ONE_FORM`].
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     if CODE_TOOLS.contains(&tool) {
         return code_library(tool, args, env, globals);
@@ -732,7 +737,11 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
         )
         .map(|outcome| Outcome::Roadmap(Box::new(outcome))),
         "get_impact" => {
-            if args["id"].is_null() == args["symbol"].is_null() {
+            let given = ["id", "symbol", "since"]
+                .iter()
+                .filter(|key| !args[**key].is_null())
+                .count();
+            if given != 1 {
                 return Expected {
                     text: GET_IMPACT_ONE_FORM.to_owned(),
                     document: None,
@@ -745,6 +754,7 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
                 &ImpactRequest {
                     reference: text("id"),
                     symbol: text("symbol"),
+                    since: text("since"),
                     depth: number("depth"),
                     git: server_git(env),
                 },

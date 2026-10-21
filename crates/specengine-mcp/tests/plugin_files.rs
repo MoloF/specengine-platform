@@ -104,6 +104,14 @@
 //!   0.14.0 ties restated below it); a `SCHEMA_PINS` entry 0.15.0, 0.14.0's
 //!   schemas today's without `get_impact` ([`as_of_0_14_0`]). M: the
 //!   version kept.
+//! - docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
+//!   0.15.0 -> 0.16.0 (MINOR: `get_impact` takes `since`, its document's
+//!   keys typed); `implement`'s step 6 calls `get_impact` with `since`
+//!   ([`IMPLEMENT_STEP_6_0_15_0`] the step before: the tree with the
+//!   version set back and that step back hashes as 0.15.0's pin, and the
+//!   0.15.0 ties restated below it); a `SCHEMA_PINS` entry 0.16.0, 0.15.0's
+//!   schemas today's with `get_impact`'s `since` out and its document's
+//!   keys back to `null` ([`as_of_0_15_0`]). M: the version kept.
 //!
 //! The repository is only read.
 
@@ -288,7 +296,22 @@ const PINS: &[(&str, &str)] = &[
         "0.15.0",
         "a13a791146c0534242c528604fa0de8fbc3e93a1d5483f9c2c5f507cd1efcf44",
     ),
+    // docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0"
+    // (0.15.0 -> 0.16.0, MINOR: `get_impact` takes `since`): `implement`'s
+    // step 6 calls `get_impact` with `since` first; the tree with the
+    // version set back and [`IMPLEMENT_STEP_6_0_15_0`] back hashes as
+    // 0.15.0's pin.
+    (
+        "0.16.0",
+        "515793a2a75fd719ad62cef5f91f34afe7848924854ad19e683cee306aa33ef4",
+    ),
 ];
+
+/// `implement`'s step 6 as 0.15.0 shipped it.
+const IMPLEMENT_STEP_6_0_15_0: &str = "6. **Report the run.** Call `report_run` with the `task_id`, its `outcome`, a `summary` of what the run did and the `changed_files`. The task stays in progress after the report, and its writes still pass.";
+
+/// The step as docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0" writes it.
+const IMPLEMENT_STEP_6_0_16_0: &str = "6. **Report the run.** First call `get_impact` once with `since` the commit your work started from: run the tests it lists and name its open tasks. Then call `report_run` with the `task_id`, its `outcome`, a `summary` of what the run did and the `changed_files`. The task stays in progress after the report, and its writes still pass.";
 
 /// `implement`'s step 1 as 0.14.0 shipped it.
 const IMPLEMENT_STEP_1_0_14_0: &str = "1. **Read the task.** Call `get_task` with its `task_id`. Go on only when it is approved and ready, or already claimed in this worktree for your work; anything else is the owner's to decide. Read the goal, targets, criteria, plan and owner notes; where the spec changed since approval (`stale`), read the current nodes with `get_context_bundle` first.";
@@ -363,6 +386,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.15.0",
         "70ff3720d4b3b7b13c62093d80a4c88cae2094e4580bd1e1d3003a41ed083581",
+    ),
+    // docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
+    // `get_impact`'s `since` and its document's `input.since`, `revision`,
+    // `delta` and `truncated.delta` typed ([`as_of_0_15_0`] takes them
+    // back).
+    (
+        "0.16.0",
+        "e86927e8dcd1c81568bf5735b1d5da24e3053be2f8b3061ff521161a1ac49f83",
     ),
 ];
 
@@ -1482,23 +1513,50 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of impact, docs/features/impact.md "Plugin 0.15.0": 0.15.0,
-    // after bundle-bindings' 0.14.0. M: the version unchanged.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.15.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.14.0");
-    assert_eq!(PINS[PINS.len() - 3].0, "0.13.0");
-    assert_eq!(PINS[PINS.len() - 4].0, "0.12.0");
-    assert_eq!(PINS[PINS.len() - 5].0, "0.11.0");
-    assert_eq!(PINS[PINS.len() - 6].0, "0.10.0");
-    assert_eq!(PINS[PINS.len() - 7].0, "0.9.0");
+    // The pin of impact-since,
+    // docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
+    // 0.16.0, after impact's 0.15.0. M: the
+    // version unchanged.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.16.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.15.0");
+    assert_eq!(PINS[PINS.len() - 3].0, "0.14.0");
+    assert_eq!(PINS[PINS.len() - 4].0, "0.13.0");
+    assert_eq!(PINS[PINS.len() - 5].0, "0.12.0");
+    assert_eq!(PINS[PINS.len() - 6].0, "0.11.0");
+    assert_eq!(PINS[PINS.len() - 7].0, "0.10.0");
+    assert_eq!(PINS[PINS.len() - 8].0, "0.9.0");
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.15.0"),
+        json!("0.16.0"),
         "plugin.json's version"
     );
-    // 0.15.0 changes plugin.json's version and `implement`'s step 1 alone:
-    // both set back, the tree is 0.14.0's pinned content.
+    // 0.16.0 changes plugin.json's version and `implement`'s step 6 alone:
+    // both set back, the tree is 0.15.0's pinned content.
     let implement = String::from_utf8(tree.files[IMPLEMENT].clone()).expect("UTF-8");
+    assert_eq!(
+        implement.matches(IMPLEMENT_STEP_6_0_16_0).count(),
+        1,
+        "the spec's step 6"
+    );
+    let at_0_15_0 = edited(
+        &edited(
+            &tree,
+            PLUGIN_JSON,
+            "\"version\": \"0.16.0\"",
+            "\"version\": \"0.15.0\"",
+        ),
+        IMPLEMENT,
+        IMPLEMENT_STEP_6_0_16_0,
+        IMPLEMENT_STEP_6_0_15_0,
+    );
+    assert_eq!(
+        content_hash(&at_0_15_0),
+        PINS[PINS.len() - 2].1,
+        "0.16.0 changes plugin.json's version and implement's step 6 only"
+    );
+    // impact's restated (docs/features/impact.md "Plugin 0.15.0"): 0.15.0
+    // changes plugin.json's version and `implement`'s step 1 alone: both
+    // set back, the tree is 0.14.0's pinned content.
     assert_eq!(
         implement.matches(IMPLEMENT_STEP_1_0_15_0).count(),
         1,
@@ -1506,7 +1564,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     let at_0_14_0 = edited(
         &edited(
-            &tree,
+            &at_0_15_0,
             PLUGIN_JSON,
             "\"version\": \"0.15.0\"",
             "\"version\": \"0.14.0\"",
@@ -1517,7 +1575,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_14_0),
-        PINS[PINS.len() - 2].1,
+        PINS[PINS.len() - 3].1,
         "0.15.0 changes plugin.json's version and implement's step 1 only"
     );
     // bundle-bindings' restated (docs/features/bundle-bindings.md
@@ -1543,7 +1601,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_13_0),
-        PINS[PINS.len() - 3].1,
+        PINS[PINS.len() - 4].1,
         "0.14.0 changes plugin.json's version and read-spec's step 1 only"
     );
     // show-bindings' restated (docs/features/show-bindings.md
@@ -1568,7 +1626,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_12_0),
-        PINS[PINS.len() - 4].1,
+        PINS[PINS.len() - 5].1,
         "0.13.0 changes plugin.json's version and read-spec's bullet only"
     );
     // check-binding's restated (docs/features/check-binding.md "Plugin"):
@@ -1588,7 +1646,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_11_0),
-        PINS[PINS.len() - 5].1,
+        PINS[PINS.len() - 6].1,
         "0.12.0 changes plugin.json's version and implement's check step only"
     );
     // roadmap-surfaces' restated (docs/features/roadmap-surfaces.md
@@ -1603,7 +1661,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     let back = edited(&back, ANALYZE, ANALYZE_ROADMAP, "");
     assert_eq!(
         content_hash(&back),
-        PINS[PINS.len() - 6].1,
+        PINS[PINS.len() - 7].1,
         "0.11.0 changes plugin.json's version and analyze's roadmap text only"
     );
     // bevy-roles-reads' restated (docs/features/bevy-roles-reads.md
@@ -1617,7 +1675,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&older),
-        PINS[PINS.len() - 7].1,
+        PINS[PINS.len() - 8].1,
         "0.10.0 changes plugin.json's version only"
     );
     // A renamed file with the same bytes changes the hash too.
@@ -1749,6 +1807,36 @@ fn without_roles(schema: &mut Value) -> usize {
         }
     }
     stripped
+}
+
+/// `get_impact`'s document's `input` doc as 0.15.0 listed it.
+const IMPACT_INPUT_DOC_0_15_0: &str = "The input as given: one of `ref` and `symbol`.";
+
+/// `get_impact`'s `seeds.symbols` doc as 0.15.0 listed it.
+const IMPACT_SEED_SYMBOLS_DOC_0_15_0: &str =
+    "The printed code items `symbol` names at the lookup's best tier;\n`null` for `id`.";
+
+/// `schemas` as 0.15.0 listed them,
+/// docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
+/// `get_impact`'s input without `since`; its
+/// document's `input.since`, `revision`, `delta` and `truncated.delta`
+/// `AlwaysNull` (`{"type": "null"}`, no doc), `input`'s and
+/// `seeds.symbols`' 0.15.0 docs. No other tool's schema changed.
+fn as_of_0_15_0(schemas: &mut Value) {
+    let impact = &mut schemas["get_impact"];
+    let input = impact["inputSchema"]["properties"]
+        .as_object_mut()
+        .expect("get_impact's input properties");
+    assert!(input.remove("since").is_some(), "get_impact takes since");
+    let output = &mut impact["outputSchema"]["properties"];
+    for key in ["revision", "delta"] {
+        assert_ne!(output[key], json!({"type": "null"}), "{key} typed");
+        output[key] = json!({"type": "null"});
+    }
+    output["input"]["properties"]["since"] = json!({"type": "null"});
+    output["input"]["description"] = json!(IMPACT_INPUT_DOC_0_15_0);
+    output["truncated"]["properties"]["delta"] = json!({"type": "null"});
+    output["seeds"]["properties"]["symbols"]["description"] = json!(IMPACT_SEED_SYMBOLS_DOC_0_15_0);
 }
 
 /// `schemas` as 0.14.0 listed them (no `get_impact`; no other tool's
@@ -1943,17 +2031,32 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[4].0, "0.13.0", "an entry for 0.13.0");
     assert_eq!(SCHEMA_PINS[5].0, "0.14.0", "an entry for 0.14.0");
     assert_eq!(SCHEMA_PINS[6].0, "0.15.0", "an entry for 0.15.0");
-    assert_eq!(SCHEMA_PINS.len(), 7, "0.15.0 the last entry");
-    // docs/features/impact.md "Plugin 0.15.0": 0.14.0's schemas are
-    // today's without `get_impact`.
-    let mut at_0_14_0 = schemas.clone();
+    assert_eq!(SCHEMA_PINS[7].0, "0.16.0", "an entry for 0.16.0");
+    assert_eq!(SCHEMA_PINS.len(), 8, "0.16.0 the last entry");
+    // docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
+    // 0.15.0's schemas are today's with `get_impact`'s `since` out and its
+    // document's keys back to `null`.
+    let mut at_0_15_0 = schemas.clone();
+    as_of_0_15_0(&mut at_0_15_0);
+    let at_0_15_0_hash = schema_hash(&at_0_15_0);
+    assert_eq!(
+        at_0_15_0_hash, SCHEMA_PINS[6].1,
+        "0.15.0's schemas are today's without get_impact's since"
+    );
+    assert_ne!(at_0_15_0_hash, current, "since changed the schemas");
+    // docs/features/impact.md "Plugin 0.15.0", restated: 0.14.0's schemas
+    // are 0.15.0's without `get_impact`.
+    let mut at_0_14_0 = at_0_15_0.clone();
     as_of_0_14_0(&mut at_0_14_0);
     let at_0_14_0_hash = schema_hash(&at_0_14_0);
     assert_eq!(
         at_0_14_0_hash, SCHEMA_PINS[5].1,
-        "0.14.0's schemas are today's without get_impact"
+        "0.14.0's schemas are 0.15.0's without get_impact"
     );
-    assert_ne!(at_0_14_0_hash, current, "get_impact changed the schemas");
+    assert_ne!(
+        at_0_14_0_hash, at_0_15_0_hash,
+        "get_impact changed the schemas"
+    );
     // docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0",
     // restated: 0.13.0's schemas are 0.14.0's with the bundle's layers 5
     // and 9 and the package's `bindings` as they were.
@@ -2057,6 +2160,12 @@ fn tool_schemas_follow_the_plugin_version() {
         &schema_pin_problems(SCHEMA_PINS, &current, "0.14.0"),
         "above plugin.json's",
         "plugin.json kept at 0.14.0",
+    );
+    // docs/features/impact-since.md: the version kept at 0.15.0.
+    assert_names(
+        &schema_pin_problems(SCHEMA_PINS, &current, "0.15.0"),
+        "above plugin.json's",
+        "plugin.json kept at 0.15.0",
     );
     let (last, hash) = *SCHEMA_PINS.last().expect("an entry");
     let repeated: Vec<(&str, &str)> = SCHEMA_PINS.iter().copied().chain([(last, hash)]).collect();

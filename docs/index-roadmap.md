@@ -13,7 +13,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 ## Specs
 
 - [docs/roadmap/RM-0001.md](roadmap/RM-0001.md) Live check: real tasks of each pilot through the full cycle · plugin, crates/specengine-cli · draft
-- [docs/roadmap/RM-0007.md](roadmap/RM-0007.md) impact (7b): the blast radius of a node, a symbol or a revision · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0008.md](roadmap/RM-0008.md) tested-evidence (8b): a passing test run becomes evidence in spec.lock · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0009.md](roadmap/RM-0009.md) health-drift (9b): Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0010.md](roadmap/RM-0010.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols · crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, plugin · draft
@@ -36,3 +35,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0027.md](roadmap/RM-0027.md) Queue export to Beads or Task Master · crates/specengine-cli · draft
 - [docs/roadmap/RM-0028.md](roadmap/RM-0028.md) Spec digest into AGENTS.md or CLAUDE.md for external reviewers · crates/specengine-cli · draft
 - [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) Hygiene pass: the review nits of 5b-1b, 5c and 8a-2 · crates/specengine-core, crates/specengine-cli · draft
+- [docs/roadmap/RM-0031.md](roadmap/RM-0031.md) symbol-renamed: delta.symbols.renamed from the anchor pairing · crates/specengine-core, crates/specengine-cli · draft

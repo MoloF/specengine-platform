@@ -64,8 +64,9 @@ const FIXTURE: &str = "impact";
 const SLUG: &str = "ferry-lines";
 
 /// docs/features/impact.md "Command" (A9): the usage line of not exactly
-/// one input, stdout empty, exit 2.
-const ONE_INPUT: &str = "spec: impact takes exactly one of REF and --symbol";
+/// one input, stdout empty, exit 2;
+/// docs/features/impact-since.md "Command and guard" adds `--since` to it.
+const ONE_INPUT: &str = "spec: impact takes exactly one of REF, --symbol and --since";
 
 /// `code-bindings.md` "The `[code]` table": the sentence of a config
 /// without the table (`spec refs`' exit-2 line, without `spec: `).

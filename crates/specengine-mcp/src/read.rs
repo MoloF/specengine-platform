@@ -1,10 +1,10 @@
 //! The read tools (task spec `mcp-read`): `get_tree`, `get_node`, `search`,
 //! `get_context_bundle`, `get_roadmap` (task spec `roadmap-surfaces`:
 //! `spec roadmap`, the queue read as it is, no schema step) and
-//! `get_impact` (task spec `impact`: `spec impact REF | --symbol QPATH
-//! [--depth N]`, exactly one of `id` and `symbol` told at run time before
-//! any discovery, as `find_symbols`' forms), each one call into the CLI
-//! library.
+//! `get_impact` (task specs `impact`, `impact-since`: `spec impact REF |
+//! --symbol QPATH | --since REV [--depth N]`, exactly one of `id`, `symbol`
+//! and `since` told at run time before any discovery, as `find_symbols`'
+//! forms), each one call into the CLI library.
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
@@ -193,33 +193,35 @@ one line. ",
     common_tail!()
 );
 
-const IMPACT_DESCRIPTION: &str = "What a change to a node or a code symbol reaches: the nodes the \
-impact walk reaches from it, each with its distance; the code bound to them and to the sections \
-within them, with each binding's sync; the tests bound to them; and this repository's open tasks \
-naming them. The same as `spec impact REF | --symbol QPATH [--depth N]`: content is the \
-command's output (its note and warning lines first), structuredContent its --json document.
+const IMPACT_DESCRIPTION: &str = "What a change to a node, a code symbol or the code since a \
+revision reaches: the nodes the impact walk reaches from it, each with its distance; the code \
+bound to them and to the sections within them, with each binding's sync; the tests bound to them; \
+and this repository's open tasks naming them. The same as `spec impact REF | --symbol QPATH | \
+--since REV [--depth N]`: content is the command's output, structuredContent its --json document.
 
-id: a REF, any form get_node takes: its nodes start the walk (an ID several documents hold: all \
-of them, with a warning).
+id: a REF, any form get_node takes: its nodes start the walk (an ID several documents hold: all, \
+with a warning).
 symbol: a code symbol, looked up as find_symbols' query: the walk starts at the nodes whose \
 markers bind an item of its best tier, an item enclosing one, or its file; a mention never starts \
-it. Needs a `[code]` table in the project's config.
+it. Needs a `[code]` table.
+since: a git revision: the walk starts at the nodes bound to the code items changed on disk since \
+it, untracked ones too. Needs `[code]` and git.
 depth: links from the start at most; 0 = the start only. Absent: unbounded.
-Give exactly one of id and symbol: anything else is an error result naming them.
+Give exactly one of id, symbol and since: anything else is an error result naming them.
 
 The walk is `spec graph --impact`'s: what depends on, derives from, verifies or uses the terms of \
 a reached node, and what it constrains. Nothing here changes a status, a verdict or a gate. \
 Without a `[code]` table, id answers with no code and no tests; a binding that cannot be judged \
 (no git, an unreadable lock) is listed with an unknown sync and one note. An answer above 40000 \
-characters is cut, the counts first, with a tail counting the rest (it names --depth N: depth). \
-A REF naming nothing or a symbol naming no item: an error result with the reason, and the \
-document. A call that cannot run (a look-alike ID, refused with its Latin fix; symbol without \
-`[code]` or with an incomplete walk): an error result with its one line. Reads the files as \
-they are now: refreshes SpecEngine's indexes of the spec and the code in its data directory, \
+characters is cut, the counts first, with a tail counting the rest (it names --depth N: depth). A \
+REF, symbol or since naming nothing: an error result with the reason, and the document. A call \
+that cannot run (a look-alike ID, refused with its Latin fix; symbol or since without `[code]` or \
+with an incomplete walk; since outside git): an error result with its one line. Reads the files \
+as they are now: refreshes SpecEngine's indexes of the spec and the code in its data directory, \
 writes nothing under the project root. Deterministic: one state, one result; no LLM inside.";
 
-/// `get_impact` given not exactly one of `id` and `symbol`.
-const ONE_INPUT: &str = "spec: get_impact takes exactly one of `id` and `symbol`\n";
+/// `get_impact` given not exactly one of `id`, `symbol` and `since`.
+const ONE_INPUT: &str = "spec: get_impact takes exactly one of `id`, `symbol` and `since`\n";
 
 /// The sentence every description holds (07 §1.1; AC-01).
 pub(crate) const DETERMINISM: &str = "Deterministic: one state, one result; no LLM inside.";
@@ -488,6 +490,10 @@ const IMPACT_ID_DOC: &str =
 const IMPACT_SYMBOL_DOC: &str = "A code symbol, looked up as find_symbols' query: a qualified \
 path, a suffix of one or a bare name.";
 
+/// The input schema's description of `get_impact.since`.
+const IMPACT_SINCE_DOC: &str =
+    "A git revision: the code changed since it, against the files on disk.";
+
 /// The input schema's description of `get_impact.depth`.
 const IMPACT_DEPTH_DOC: &str =
     "Links from the start at most; 0 = the start only. Absent: unbounded.";
@@ -529,8 +535,8 @@ pub(crate) struct RoadmapArgs {
     pub pool: Option<bool>,
 }
 
-/// `get_impact` arguments: exactly one of `id` and `symbol`, told at run
-/// time (no root `oneOf`: `docs/canon/mcp-read.md` "Tools").
+/// `get_impact` arguments: exactly one of `id`, `symbol` and `since`, told
+/// at run time (no root `oneOf`: `docs/canon/mcp-read.md` "Tools").
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct ImpactArgs {
@@ -538,6 +544,8 @@ pub(crate) struct ImpactArgs {
     pub id: Option<String>,
     #[schemars(description = IMPACT_SYMBOL_DOC)]
     pub symbol: Option<String>,
+    #[schemars(description = IMPACT_SINCE_DOC)]
+    pub since: Option<String>,
     #[schemars(description = IMPACT_DEPTH_DOC)]
     pub depth: Option<i64>,
 }
@@ -680,8 +688,8 @@ impl SpecEngineServer {
             .into_tool_result("get_roadmap"))
     }
 
-    /// `spec impact`: exactly one of `id` and `symbol`, else the tool's
-    /// own error result before any discovery, no document.
+    /// `spec impact`: exactly one of `id`, `symbol` and `since`, else the
+    /// tool's own error result before any discovery, no document.
     #[tool(
         description = IMPACT_DESCRIPTION,
         input_schema = input_schema::<ImpactArgs>(),
@@ -693,8 +701,14 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<ImpactArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let ImpactArgs { id, symbol, depth } = args;
-        if id.is_some() == symbol.is_some() {
+        let ImpactArgs {
+            id,
+            symbol,
+            since,
+            depth,
+        } = args;
+        let given = [id.is_some(), symbol.is_some(), since.is_some()];
+        if given.into_iter().filter(|&given| given).count() != 1 {
             return Ok(CallToolResult::error(vec![ContentBlock::text(ONE_INPUT)]));
         }
         Ok(self
@@ -702,6 +716,7 @@ impl SpecEngineServer {
                 let request = ImpactRequest {
                     reference: id,
                     symbol,
+                    since,
                     depth,
                     git: process_git(env),
                 };

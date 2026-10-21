@@ -1580,7 +1580,10 @@ fn code_mirrors_pin_the_q35_types() {
 /// hints gain [`BINDINGS_HINT`] after `--links is with ["links"]` (33
 /// bytes) and the REF paragraph loses [`NO_PROJECT_GLOSS`] (34 bytes).
 /// 2 017 since docs/features/impact.md ("INSTRUCTIONS", Q-B): the reads'
-/// line ends with [`IMPACT_READ`] (40 bytes), the `probes` paragraph gone.
+/// line ends with `; get_impact(id|symbol, depth?) = impact` (40 bytes),
+/// the `probes` paragraph gone. 2 023 since docs/features/impact-since.md
+/// ("MCP, INSTRUCTIONS, plugin 0.16.0"): the clause gains [`SINCE_INPUT`]
+/// after `id|symbol`, [`IMPACT_READ`] (46 bytes).
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1589,7 +1592,7 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = ",
     "show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, ",
     "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
-    "pool?) = roadmap; get_impact(id|symbol, depth?) = impact.\n",
+    "pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact.\n",
     "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; ",
     "unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.\n",
     "Queue (writes only the queue; the owner decides on a terminal):\n",
@@ -1622,15 +1625,20 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
 const ROADMAP_READ: &str = "; get_roadmap(release?, pool?) = roadmap";
 
 /// docs/features/impact.md "INSTRUCTIONS": what the reads' line gains after
-/// [`ROADMAP_READ`], before its full stop (40 bytes).
-const IMPACT_READ: &str = "; get_impact(id|symbol, depth?) = impact";
+/// [`ROADMAP_READ`], before its full stop (40 bytes); 46 since
+/// docs/features/impact-since.md (with [`SINCE_INPUT`]).
+const IMPACT_READ: &str = "; get_impact(id|symbol|since, depth?) = impact";
+
+/// docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0": what
+/// the impact clause gains right after `id|symbol` (6 bytes).
+const SINCE_INPUT: &str = "|since";
 
 /// docs/features/impact.md "INSTRUCTIONS": the reads' line, its LF
-/// included (312 bytes).
+/// included (312 bytes; 318 since docs/features/impact-since.md).
 const READS_LINE: &str = "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = \
                           show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, \
                           budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, \
-                          pool?) = roadmap; get_impact(id|symbol, depth?) = impact.\n";
+                          pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact.\n";
 
 /// docs/features/check-binding.md "INSTRUCTIONS": what the code line gains,
 /// before its full stop (46 bytes).
@@ -1655,10 +1663,16 @@ fn as_of_check_binding(instructions: &str) -> String {
     )
 }
 
-/// show-bindings' text (1 977 bytes) out of impact's (2 017):
-/// [`IMPACT_READ`] taken out.
+/// impact's text (2 017 bytes) out of impact-since's (2 023):
+/// [`SINCE_INPUT`] taken out of the impact clause.
+fn as_of_impact(instructions: &str) -> String {
+    instructions.replacen("get_impact(id|symbol|since, ", "get_impact(id|symbol, ", 1)
+}
+
+/// show-bindings' text (1 977 bytes) out of impact's (2 017): the impact
+/// clause taken out.
 fn as_of_show_bindings(instructions: &str) -> String {
-    instructions.replacen(IMPACT_READ, "", 1)
+    instructions.replacen("; get_impact(id|symbol, depth?) = impact", "", 1)
 }
 
 /// The code tools' line, its LF included (104 + 1 bytes; 151 since
@@ -1678,8 +1692,14 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// here, never of the server's; `mcp_path.rs` and `mcp_decision.rs` pin
 /// the same value against `INSTRUCTIONS` (re-pinned by
 /// docs/features/roadmap-surfaces.md, docs/features/check-binding.md,
-/// docs/features/show-bindings.md and docs/features/impact.md).
-const PLANNED_BLAKE3: &str = "34f0f0b4a5f3555f6d59c2fb2e9fc4e94b9a303daeb1342320652309b44482e7";
+/// docs/features/show-bindings.md, docs/features/impact.md and
+/// docs/features/impact-since.md).
+const PLANNED_BLAKE3: &str = "9737b6644b04bf18e3c69b14c83d36ef6de5ca01fff650f6c3f9821072e45b1c";
+
+/// impact's text (2 017 bytes), [`as_of_impact`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/impact-since.md.
+const IMPACT_BLAKE3: &str = "34f0f0b4a5f3555f6d59c2fb2e9fc4e94b9a303daeb1342320652309b44482e7";
 
 /// show-bindings' text (1 977 bytes), [`as_of_show_bindings`] over
 /// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
@@ -1702,10 +1722,11 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 /// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 879
-/// bytes); show-bindings' 1 839 was `54d160f1…`.
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 885
+/// bytes); impact's 1 879 was `523f0715…`, show-bindings' 1 839
+/// `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "523f0715e02bb48d622ec47c7294cec1d651a191fa93426b5e7a200ab21b12b9";
+    "381344b2d7db35e5a4ef391cebf5068fcc7a318f26025225d8ef77e0f1127a28";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -1729,13 +1750,18 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// `probes` paragraph gone: 2 017 bytes in both builds, 1 879 less the
 /// tasks line, 31 left. M: INSTRUCTIONS over 2 048 bytes (the build's
 /// asserts); the clause elsewhere; the text changed, a pin kept.
+/// docs/features/impact-since.md ("MCP, INSTRUCTIONS, plugin 0.16.0"): the
+/// impact clause reads `get_impact(id|symbol|since, depth?) = impact`
+/// ([`SINCE_INPUT`], 6 bytes): 2 023 bytes, 1 885 less the tasks line, 25
+/// left. M: `since` unnamed; the text changed, a pin kept.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2017, "the spec's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2023, "the spec's figure");
     assert_eq!(ROADMAP_READ.len(), 40);
-    assert_eq!(IMPACT_READ.len(), 40);
-    assert_eq!(READS_LINE.len(), 312, "the spec's reads line");
+    assert_eq!(IMPACT_READ.len(), 46);
+    assert_eq!(SINCE_INPUT.len(), 6);
+    assert_eq!(READS_LINE.len(), 318, "the spec's reads line");
     assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
     assert_eq!(BINDINGS_HINT.len(), 33);
     assert_eq!(NO_PROJECT_GLOSS.len(), 34);
@@ -1743,11 +1769,11 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TASKS_LINE.len(), 138);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 2017);
+    assert_eq!(instructions.len(), 2023);
     assert_eq!(
         2048 - instructions.len(),
-        31,
-        "the room docs/features/impact.md states"
+        25,
+        "the room docs/features/impact-since.md states"
     );
     assert!(instructions.is_ascii());
     assert!(
@@ -1761,7 +1787,7 @@ fn rd5_instructions_are_the_planned_text() {
     );
     assert!(
         instructions.contains(
-            "get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol, depth?) = impact.\n"
+            "get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact.\n"
         ),
         "the reads' line ends with the impact clause, exactly"
     );
@@ -1806,9 +1832,17 @@ fn rd5_instructions_are_the_planned_text() {
     }
     assert!(instructions.contains("get_impact("), "get_impact(");
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1879, "2 017 less 138");
+    assert_eq!(less.len(), 1885, "2 023 less 138");
+    // The text before docs/features/impact-since.md: impact's 2 017.
+    let impact = as_of_impact(instructions);
+    assert_eq!(impact.len(), 2017);
+    assert_eq!(
+        blake3_hex(impact.as_bytes()),
+        IMPACT_BLAKE3,
+        "only `|since` was added"
+    );
     // The text before docs/features/impact.md: show-bindings' 1 977.
-    let show_bindings = as_of_show_bindings(instructions);
+    let show_bindings = as_of_show_bindings(&impact);
     assert_eq!(show_bindings.len(), 1977);
     assert_eq!(
         blake3_hex(show_bindings.as_bytes()),
@@ -1854,7 +1888,9 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
-    let show_bindings = as_of_show_bindings(PLANNED_INSTRUCTIONS);
+    let impact = as_of_impact(PLANNED_INSTRUCTIONS);
+    assert_eq!(blake3_hex(impact.as_bytes()), IMPACT_BLAKE3);
+    let show_bindings = as_of_show_bindings(&impact);
     assert_eq!(blake3_hex(show_bindings.as_bytes()), SHOW_BINDINGS_BLAKE3);
     assert_eq!(
         blake3_hex(as_of_check_binding(&show_bindings).as_bytes()),

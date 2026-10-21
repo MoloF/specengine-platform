@@ -52,6 +52,8 @@
 //! `code_tools_cut_stay_under_the_declared_cap`: the 3 000 rows past the
 //! CLI's cut, the JSON the printed rows, `truncated.symbols` the rest, the
 //! tail last; the maximum printed with the others.
+//! docs/features/impact-since.md TE-5: `get_impact {since: "HEAD"}` over
+//! the same corpus with 3 000 untracked items joins it (the delta cut).
 //!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
@@ -528,6 +530,63 @@ fn code_tools_cut_stay_under_the_declared_cap() {
             None => largest.push(((*tool).to_owned(), chars.max(units))),
         }
     }
+    // docs/features/impact-since.md TE-5: `get_impact {since: "HEAD"}` with
+    // 3 000 untracked items on disk: the delta cut last, the JSON its
+    // printed items, `truncated.delta` the rest, the tail last; within
+    // `MAX_RESULT_CHARS`, its size printed with the others.
+    let mut untracked = String::new();
+    for n in 0..3_000 {
+        untracked.push_str(&format!(
+            "pub fn an_untracked_item_with_a_long_name_to_fill_a_delta_line_{n:05}() {{}}\n"
+        ));
+    }
+    write(&root, "pkg/w/src/since_many.rs", untracked);
+    let args = json!({"since": "HEAD"});
+    let result = checked_call(
+        &mut session,
+        &schemas,
+        "get_impact",
+        args.clone(),
+        &env,
+        &globals,
+    );
+    assert_eq!(result["isError"], json!(false), "{args}");
+    let (text, structured, chars, units) = sizes(&result);
+    eprintln!(
+        "impact-since TE-5 get_impact {args}: text {text}, structuredContent {structured}, \
+         sum {chars} chars, {units} UTF-16 units"
+    );
+    let shown = content_text(&result);
+    assert!(
+        shown
+            .lines()
+            .last()
+            .is_some_and(|line| line.starts_with("[truncated: ")),
+        "{args}: the tail last"
+    );
+    let document = &result["structuredContent"];
+    let printed = document["delta"]["added"]
+        .as_array()
+        .expect("delta.added")
+        .len() as u64;
+    let hidden = document["truncated"]["delta"]
+        .as_u64()
+        .expect("truncated.delta");
+    assert_eq!(printed + hidden, 3_000, "{args}: printed and not shown");
+    assert!(printed > 0 && hidden > 0, "{args}: cut in the delta");
+    assert!(
+        before_tail(shown).chars().count() <= OUTPUT_CAP_CHARS + 1_000,
+        "{args}: {} characters before the tail",
+        before_tail(shown).chars().count()
+    );
+    assert!(
+        chars as u64 <= MAX_RESULT_CHARS && units as u64 <= MAX_RESULT_CHARS,
+        "{args}: {chars} characters ({units} UTF-16 units) over MAX_RESULT_CHARS"
+    );
+    eprintln!(
+        "impact-since TE-5 get_impact since maximum: {}",
+        chars.max(units)
+    );
     let done = session.finish();
     assert!(done.status.success(), "{}", done.stderr);
     assert_eq!(done.stderr, "", "stderr");

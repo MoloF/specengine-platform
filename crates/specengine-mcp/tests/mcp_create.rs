@@ -397,10 +397,11 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // (`check_binding`'s 46 bytes on the code line); 1 977 since
     // docs/features/show-bindings.md (the 33-byte bindings hint in, the
     // 34-byte no-project gloss out); 2 017 since docs/features/impact.md
-    // (`get_impact`'s 40 bytes on the reads' line).
+    // (`get_impact`'s 40 bytes on the reads' line); 2 023 since
+    // docs/features/impact-since.md (`|since` in its clause, 6 bytes).
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2017);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2023);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -424,8 +425,9 @@ fn ac17_the_instructions_name_create_within_their_budget() {
 /// docs/features/show-bindings.md "INSTRUCTIONS" (Q-F): 1 977 and the
 /// paragraph, 2 036 on the wire, 12 left. Then, Q-B, the paragraph goes:
 /// docs/features/impact.md "INSTRUCTIONS"
-/// the `probes` build sends `INSTRUCTIONS` alone, 2 017 bytes, 31 left. M:
-/// the paragraph kept (2 076 bytes: the build's assert fails).
+/// the `probes` build sends `INSTRUCTIONS` alone, 2 017 bytes, 31 left;
+/// 2 023, 25 left, since docs/features/impact-since.md. M: the paragraph
+/// kept (2 082 bytes: the build's assert fails).
 #[test]
 #[cfg(feature = "probes")]
 fn ac17_the_probes_build_sends_instructions_alone() {
@@ -440,9 +442,10 @@ fn ac17_the_probes_build_sends_instructions_alone() {
     // docs/features/roadmap-surfaces.md (1 932 and the paragraph); 2 037
     // since docs/features/check-binding.md (1 978 and the 59-byte
     // paragraph); 2 036 since docs/features/show-bindings.md (1 977 and
-    // the paragraph); 2 017 since docs/features/impact.md (no paragraph).
-    assert_eq!(sent.len(), 2017);
-    assert_eq!(2048 - sent.len(), 31, "the room the spec states");
+    // the paragraph); 2 017 since docs/features/impact.md (no paragraph);
+    // 2 023 since docs/features/impact-since.md.
+    assert_eq!(sent.len(), 2023);
+    assert_eq!(2048 - sent.len(), 25, "the room the spec states");
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());
 }

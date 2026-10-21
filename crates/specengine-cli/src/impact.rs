@@ -1,7 +1,8 @@
-//! `spec impact REF | --symbol QPATH [--depth N]` (canon `spec-impact`,
-//! task spec `impact`): what a change of a node or of a code item reaches,
-//! in one read — the nodes, their code bindings with their `sync`, the
-//! tests bound to them and this repository's open tasks naming them.
+//! `spec impact REF | --symbol QPATH | --since REV [--depth N]` (canon
+//! `spec-impact`, task specs `impact`, `impact-since`): what a change of a
+//! node, of a code item or of the code since a revision reaches, in one
+//! read — the nodes, their code bindings with their `sync`, the tests bound
+//! to them and this repository's open tasks naming them.
 //! Nothing it shows changes an exit, a status, a claim or a verdict; it
 //! writes nothing under the project root (the index refreshes in the data
 //! directory, the queue is read as `spec roadmap` reads it).
@@ -13,7 +14,14 @@
 //!   file's module (`spec unmapped`'s one containment), whatever their
 //!   relation, their ID resolved, an alias or ambiguous. A mention, or an
 //!   ID naming no node, seeds nothing. The lookup's hits and their files'
-//!   symbols come from one snapshot with the markers.
+//!   symbols come from one snapshot with the markers. Or the nodes the code
+//!   items changed since `--since`'s commit reach ([`crate::code_delta`]):
+//!   the commit's code under the current `[code]` against the files on
+//!   disk, untracked ones too, its documents, lock and config never read;
+//!   a removed or changed item through the commit's markers, an added or
+//!   changed one through the disk's, their IDs judged against the current
+//!   corpus. The REV is refused before any git child when it starts with
+//!   `-` or holds a control character.
 //! - **Nodes**: `spec graph --impact`'s walk from the seeds ([`impact_reach`],
 //!   the one walk), `--depth N` as graph's; `left_out` graph's.
 //! - **Rows**: one judge ([`set_bindings`]) over every reached node and the
@@ -21,8 +29,9 @@
 //!   `verifies`, `tests` the `verifies` rows, each in verify's row order.
 //!   The REF form degrades as the reads that show bindings: without
 //!   `[code]` both `null`, no note; a code-layer cause one `bindings:` note,
-//!   never an exit. `--symbol` takes the code as its input: no `[code]`, a
-//!   bad one or an incomplete walk is exit 2.
+//!   never an exit. `--symbol` and `--since` take the code as their
+//!   input: no `[code]`, a bad one or an incomplete walk is exit 2, and
+//!   for `--since` no git, a git failure or a blob missing too.
 //! - **Tasks**: this repository's open tasks whose targets and affected
 //!   nodes (each resolved now, with the sections it contains) meet a
 //!   reached node or a section within one, by number, each with the
@@ -30,6 +39,7 @@
 //!
 //! ```text
 //! [seed symbol <QPATH>: <n> at <tier>]
+//! [since <7 hex>: <f> files, <c> changed, <a> added, <r> removed]
 //! impact: nodes <n>, symbols <s or ->, tests <t or ->, tasks <k>[; code files <f> (.rs <r>, .ron <o>), skipped <s>][; left out: <g> generated, <a> archived]
 //! node <distance> <name> | <kind or -> | <title or -> | <path>:<line>[ | archived]
 //! symbol <row>
@@ -37,12 +47,14 @@
 //! test <row>
 //! task <T> | <state> | <title or -> | <node>, …
 //! seed <qpath> | <item_kind> | <path>:<start>-<end>
+//! <changed|added|removed> | <file>:<line> | <symbol> <item_kind>
 //! [truncated: <parts> not shown; lower --depth N or narrow the REF or --symbol]
+//! [truncated: <parts> not shown; lower --depth N or name a later --since REV]
 //! ```
 //!
 //! The cut: the seed header and the summary always print; then nodes,
-//! symbol rows, test rows (each with its lines), tasks and the seed
-//! matches, each whole, while the text stays within
+//! symbol rows, test rows (each with its lines), tasks, the seed matches
+//! and the delta's items, each whole, while the text stays within
 //! [`crate::OUTPUT_CAP_CHARS`] (the first item whole whatever its size);
 //! the first item that does not fit and every later one are not shown.
 //! The JSON holds exactly the printed items; `truncated` is `null` uncut.
@@ -55,11 +67,15 @@ use specengine_core::CodeConfig;
 use specengine_core::check::{CheckInput, NodeAt, SpecGraph};
 use specengine_core::lock::LockRelation;
 use specengine_model::{BindingRow, TaskStatus};
-use specengine_store::{CodeSnapshot, GitEnv, SnapshotSymbols, SqliteIndex, StoredSymbol};
+use specengine_store::{
+    CodeSnapshot, GitEnv, SnapshotSymbols, SqliteIndex, StoredSymbol, VerifyGit,
+};
 
 use crate::bindings::{SetRow, set_bindings};
 use crate::cap::{lines_within, row_lines};
+use crate::code_delta::{CodeDelta, DeltaItem, DeltaJson, code_delta};
 use crate::code_index::refresh_code;
+use crate::code_walk::{CodeTree, read_tree};
 use crate::corpus::{LeftOut, depth_of, holders_warning, indexed_in, locate};
 use crate::graph::{GraphNode, NodeJson, Reach, impact_reach, node_line, node_of};
 use crate::location::open_index;
@@ -71,6 +87,7 @@ use crate::search::notes;
 use crate::show::{Target, classify};
 use crate::symbols::maps;
 use crate::unmapped::{Seeds, reached};
+use crate::verify_rows::read_code;
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line, store_error};
 
 /// Why a REF's `@rev` is ignored.
@@ -79,13 +96,20 @@ const REV_IGNORED: &str = "`spec impact` reads the current files";
 /// The command the queue's other-repository note names.
 const COMMAND: &str = "spec impact";
 
-/// `spec impact` options: exactly one of `reference` and `symbol`.
+/// The hex digits of `--since`'s commit the text prints: a fixed prefix of
+/// the full OID, never git's abbreviation (which varies by repository).
+const REVISION_PREFIX: usize = 7;
+
+/// `spec impact` options: exactly one of `reference`, `symbol` and `since`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImpactRequest {
     /// REF as given: any form `spec show` takes.
     pub reference: Option<String>,
     /// `--symbol QPATH` as given: a qpath, a suffix of one or a name.
     pub symbol: Option<String>,
+    /// `--since REV` as given: a revision whose code is compared with the
+    /// files on disk.
+    pub since: Option<String>,
     /// `--depth N`; `None`: unbounded.
     pub depth: Option<i64>,
     /// Git's environment: the rows are judged with it and the tasks'
@@ -100,6 +124,10 @@ pub struct ImpactOutcome {
     pub reference: Option<String>,
     /// `--symbol` as given.
     pub symbol: Option<String>,
+    /// `--since` as given.
+    pub since: Option<String>,
+    /// `--since`'s commit, its full OID; `None` otherwise and at exit 1.
+    pub revision: Option<String>,
     pub reason: Option<String>,
     pub messages: Vec<Message>,
     pub depth: Option<usize>,
@@ -117,10 +145,13 @@ pub struct ImpactOutcome {
     pub tests: Option<Vec<ImpactRow>>,
     /// By number.
     pub tasks: Vec<ImpactTask>,
+    /// `--since`'s code items changed, added and removed; `None` otherwise
+    /// and at exit 1.
+    pub(crate) delta: Option<CodeDelta>,
     /// The code files the rows' read covered (`set_bindings`'); `None`
     /// without `[code]` or under a cause that leaves no row (a bad
     /// `[code]`, a walk gap, the data directory); `--symbol`'s lookup
-    /// walk's when the rows' read none.
+    /// walk's, `--since`'s walk on disk, when the rows' read none.
     pub code: Option<CodeCount>,
     /// How many of each list print (text and JSON alike).
     shown: Shown,
@@ -164,6 +195,9 @@ struct Shown {
     symbols: usize,
     tests: usize,
     tasks: usize,
+    /// Of the delta's items in their printed order: changed, added,
+    /// removed.
+    delta: usize,
 }
 
 impl ImpactOutcome {
@@ -172,6 +206,8 @@ impl ImpactOutcome {
         Self {
             reference: request.reference.clone(),
             symbol: request.symbol.clone(),
+            since: request.since.clone(),
+            revision: None,
             reason: None,
             messages: Vec::new(),
             depth,
@@ -181,6 +217,7 @@ impl ImpactOutcome {
             symbols: None,
             tests: None,
             tasks: Vec::new(),
+            delta: None,
             code: None,
             shown: Shown::default(),
         }
@@ -201,20 +238,42 @@ impl ImpactOutcome {
             || shown.symbols < self.symbols.as_ref().map_or(0, Vec::len)
             || shown.tests < self.tests.as_ref().map_or(0, Vec::len)
             || shown.tasks < self.tasks.len()
+            || shown.delta < self.delta.as_ref().map_or(0, CodeDelta::len)
     }
+}
+
+/// `--since`'s REV refused before any git child: a leading `-` (git would
+/// read an option) or a control character (U+0000-U+001F, U+007F).
+fn refused_revision(rev: &str) -> bool {
+    rev.starts_with('-') || rev.chars().any(|c| c <= '\u{1f}' || c == '\u{7f}')
+}
+
+/// A REV in a message: every control character, LF, CR and TAB too,
+/// written `\u{XX}` (`escape_controls`' form).
+fn shown_revision(rev: &str) -> String {
+    let mut out = String::with_capacity(rev.len());
+    for c in rev.chars() {
+        match c {
+            '\n' | '\r' | '\t' => out.push_str(&format!("\\u{{{:x}}}", u32::from(c))),
+            _ => out.push(c),
+        }
+    }
+    escape_controls(&out)
 }
 
 /// The one input as given.
 enum Asked<'r> {
     Reference(&'r str),
     Symbol(&'r str),
+    Since(&'r str),
 }
 
 /// The one input, read before the index: REF's target, or `--symbol`'s
-/// query with the `[code]` it needs.
+/// query or `--since`'s REV with the `[code]` it needs.
 enum Input<'r> {
     Reference(&'r str, Target),
     Symbol(&'r str, CodeConfig),
+    Since(&'r str, CodeConfig),
 }
 
 /// `spec impact`: reads the input, the config and the index, seeds,
@@ -224,15 +283,25 @@ pub fn impact(
     globals: &Globals,
     request: &ImpactRequest,
 ) -> Result<ImpactOutcome, CliError> {
-    let asked = match (&request.reference, &request.symbol) {
-        (Some(reference), None) => Asked::Reference(reference.trim()),
-        (None, Some(symbol)) => Asked::Symbol(symbol),
+    let asked = match (&request.reference, &request.symbol, &request.since) {
+        (Some(reference), None, None) => Asked::Reference(reference.trim()),
+        (None, Some(symbol), None) => Asked::Symbol(symbol),
+        (None, None, Some(since)) => Asked::Since(since),
         _ => {
             return Err(CliError::spec(
-                "impact takes exactly one of REF and --symbol",
+                "impact takes exactly one of REF, --symbol and --since",
             ));
         }
     };
+    // Before anything is read, git above all.
+    if let Asked::Since(rev) = asked
+        && refused_revision(rev)
+    {
+        return Err(CliError::spec(format!(
+            "--since `{}` is refused: a revision never starts with `-` or holds a control character",
+            shown_revision(rev)
+        )));
+    }
     let depth = depth_of(request.depth)?;
     let (project, text) = discover_with_text(env, globals)?;
     let slug = project.slug()?.to_owned();
@@ -247,6 +316,7 @@ pub fn impact(
             Err(reason) => return Ok(outcome.not_found(&reason, messages)),
         },
         Asked::Symbol(query) => Input::Symbol(query, code_config(&project, &text)?),
+        Asked::Since(rev) => Input::Since(rev, code_config(&project, &text)?),
     };
 
     // One handle for the spec index and the code index (as `spec bundle`),
@@ -279,6 +349,22 @@ pub fn impact(
                 Some(starts) => starts,
                 None => {
                     let reason = format!("--symbol `{query}` names no symbol");
+                    return Ok(outcome.not_found(&reason, messages));
+                }
+            }
+        }
+        Input::Since(rev, code) => {
+            let seeded = SinceSeeds {
+                project: &project,
+                code,
+                git: &request.git,
+                input: &read,
+                graph: &graph,
+            };
+            match since_starts(&seeded, rev, &mut outcome, &mut messages)? {
+                Some(starts) => starts,
+                None => {
+                    let reason = format!("--since `{}` is not a commit", shown_revision(rev));
                     return Ok(outcome.not_found(&reason, messages));
                 }
             }
@@ -448,6 +534,111 @@ fn seed_nodes(
     Ok(seeds)
 }
 
+/// What `--since`'s seeds read beside the walk on disk.
+struct SinceSeeds<'a> {
+    project: &'a ProjectRoot,
+    code: &'a CodeConfig,
+    git: &'a GitEnv,
+    input: &'a CheckInput,
+    graph: &'a SpecGraph<'a>,
+}
+
+/// `--since`'s seeds, in one git session (none: exit 2): REV's commit
+/// (`rev-parse`, `ls-tree`; none: `None`, exit 1), the walk on disk (a
+/// gap: exit 2), REV's code half under the current `[code]` (one `cat-file
+/// --batch`; a blob missing or a Rust file without a tree: exit 2), the
+/// session's end (failing: exit 2); the delta into `outcome.delta`, the
+/// commit into `outcome.revision`, the walk's count into `outcome.code`;
+/// the nodes the delta reaches, by (path, position).
+fn since_starts(
+    seeded: &SinceSeeds<'_>,
+    rev: &str,
+    outcome: &mut ImpactOutcome,
+    messages: &mut Vec<Message>,
+) -> Result<Option<Vec<NodeAt>>, CliError> {
+    let project = seeded.project;
+    let mut git =
+        VerifyGit::open(&project.root, seeded.git).map_err(|cause| cannot(&cause.message))?;
+    let read = since_read(seeded, &mut git, rev, messages);
+    let finished = git.finish();
+    let read = read?;
+    finished.map_err(|cause| cannot(&cause.message))?;
+    let Some(SinceRead {
+        walk,
+        revision,
+        tree,
+    }) = read
+    else {
+        return Ok(None);
+    };
+    let base: &CodeTree = tree.as_ref().unwrap_or(&walk);
+    let compared = code_delta(base, &walk);
+    let scheme = &project.config.scheme;
+    let mut corpus = Corpus::new(seeded.input, scheme, &project.config.paths);
+    let keys = compared.seeds(base, &walk, &mut corpus);
+    outcome.revision = Some(revision);
+    outcome.delta = Some(compared.delta);
+    let (rs, ron) = (walk.rust.len(), walk.ron.len());
+    outcome.code = Some(CodeCount {
+        files: rs + ron,
+        rs,
+        ron,
+        skipped: walk.skipped,
+    });
+    let mut starts: Vec<NodeAt> = keys
+        .iter()
+        .filter_map(|&key| {
+            let path = corpus.resolver.paths().get(key.file)?;
+            seeded
+                .graph
+                .file_of(path)
+                .map(|file| NodeAt { file, ord: key.ord })
+        })
+        .collect();
+    starts.sort_unstable();
+    starts.dedup();
+    Ok(Some(starts))
+}
+
+/// What `--since` read in its git session.
+struct SinceRead {
+    /// The walk on disk.
+    walk: CodeTree,
+    /// REV's commit, its full OID.
+    revision: String,
+    /// REV's code tree; `None`: the walk's, equal to it.
+    tree: Option<CodeTree>,
+}
+
+/// REV listed (`None`: no commit), the walk, REV's code half bound.
+fn since_read(
+    seeded: &SinceSeeds<'_>,
+    git: &mut VerifyGit,
+    rev: &str,
+    messages: &mut Vec<Message>,
+) -> Result<Option<SinceRead>, CliError> {
+    let Some(listing) = git
+        .list_revision(rev)
+        .map_err(|cause| cannot(&cause.message))?
+    else {
+        return Ok(None);
+    };
+    let walk = read_tree(&seeded.project.root, seeded.code, messages)?;
+    let tree = read_code(&listing, seeded.code, git, rev, None)
+        .and_then(|code| code.tree(&walk, rev))
+        .map_err(|cause| cannot(&cause.message))?;
+    Ok(Some(SinceRead {
+        walk,
+        revision: listing.label().to_owned(),
+        tree,
+    }))
+}
+
+/// Exit 2 for a git or code cause: its line, control characters escaped.
+fn cannot(message: &str) -> CliError {
+    CliError::spec(escape_controls(&one_line(message)))
+}
+
 /// What the radius reads beside the seeds.
 struct RadiusRead<'a> {
     env: &'a Env,
@@ -578,8 +769,19 @@ fn radius(
 
 // ------------------------------------------------------------- rendering
 
-/// `seed symbol <QPATH>: <n> at <tier>`: `--symbol`'s header.
+/// `seed symbol <QPATH>: <n> at <tier>`: `--symbol`'s header; `since <7
+/// hex>: <f> files, <c> changed, <a> added, <r> removed`: `--since`'s.
 fn header(outcome: &ImpactOutcome) -> Option<String> {
+    if let (Some(revision), Some(delta)) = (&outcome.revision, &outcome.delta) {
+        let prefix: String = revision.chars().take(REVISION_PREFIX).collect();
+        return Some(format!(
+            "since {prefix}: {} files, {} changed, {} added, {} removed",
+            delta.files,
+            delta.changed.len(),
+            delta.added.len(),
+            delta.removed.len()
+        ));
+    }
     let query = outcome.symbol.as_deref()?;
     let seeds = outcome.seeds.as_ref()?;
     let tier = seeds.first().map_or("-", |seed| seed.tier);
@@ -600,6 +802,17 @@ fn seed_line(seed: &SeedSymbol) -> String {
         seed.start_line,
         seed.end_line
     )
+}
+
+/// `<changed|added|removed> | <file>:<line> | <symbol> <item_kind>`.
+fn delta_line(word: &str, item: &DeltaItem) -> String {
+    escape_controls(&format!(
+        "{word} | {}:{} | {} {}",
+        one_line(&item.file),
+        item.line,
+        one_line(&item.symbol),
+        one_line(&item.item_kind)
+    ))
 }
 
 /// `node ` and `spec graph`'s node line.
@@ -696,7 +909,7 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
             .map(|row| cost(&row_text(word, row)))
             .collect()
     };
-    let lists: [Vec<usize>; 5] = [
+    let lists: [Vec<usize>; 6] = [
         outcome
             .nodes
             .iter()
@@ -715,10 +928,16 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
             .flatten()
             .map(|seed| seed_line(seed).chars().count() + 1)
             .collect(),
+        outcome
+            .delta
+            .iter()
+            .flat_map(CodeDelta::items)
+            .map(|(word, item)| delta_line(word, item).chars().count() + 1)
+            .collect(),
     ];
     let mut used = cost(&fixed);
     let mut cut = false;
-    let mut fits = [0usize; 5];
+    let mut fits = [0usize; 6];
     for (at, costs) in lists.iter().enumerate() {
         if cut {
             break;
@@ -729,13 +948,14 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
         used = now;
         cut = fit < costs.len();
     }
-    let [nodes, symbols, tests, tasks, seeds] = fits;
+    let [nodes, symbols, tests, tasks, seeds, delta] = fits;
     Shown {
         seeds,
         nodes,
         symbols,
         tests,
         tasks,
+        delta,
     }
 }
 
@@ -751,6 +971,7 @@ struct NotShown {
     tests: Option<usize>,
     tasks: usize,
     seeds: Option<usize>,
+    delta: Option<usize>,
 }
 
 fn not_shown(outcome: &ImpactOutcome) -> NotShown {
@@ -771,11 +992,16 @@ fn not_shown(outcome: &ImpactOutcome) -> NotShown {
             .seeds
             .as_ref()
             .map(|seeds| rest(seeds.len(), shown.seeds)),
+        delta: outcome
+            .delta
+            .as_ref()
+            .map(|delta| rest(delta.len(), shown.delta)),
     }
 }
 
 /// `[truncated: <parts> not shown; lower --depth N or narrow the REF or
-/// --symbol]`, zero parts omitted.
+/// --symbol]`, `--since`'s `…; lower --depth N or name a later --since
+/// REV]`, zero parts omitted.
 fn tail(outcome: &ImpactOutcome) -> String {
     let rest = not_shown(outcome);
     let parts: Vec<String> = [
@@ -784,6 +1010,7 @@ fn tail(outcome: &ImpactOutcome) -> String {
         (rest.tests, "tests"),
         (Some(rest.tasks), "tasks"),
         (rest.seeds, "seed matches"),
+        (rest.delta, "delta items"),
     ]
     .into_iter()
     .filter_map(|(count, what)| {
@@ -792,8 +1019,13 @@ fn tail(outcome: &ImpactOutcome) -> String {
             .map(|count| format!("{count} {what}"))
     })
     .collect();
+    let narrow = if outcome.since.is_some() {
+        "name a later --since REV"
+    } else {
+        "narrow the REF or --symbol"
+    };
     format!(
-        "[truncated: {} not shown; lower --depth N or narrow the REF or --symbol]",
+        "[truncated: {} not shown; lower --depth N or {narrow}]",
         parts.join(", ")
     )
 }
@@ -819,6 +1051,14 @@ pub(crate) fn render_text(outcome: &ImpactOutcome) -> String {
     if let Some(seeds) = &outcome.seeds {
         lines.extend(first(seeds, shown.seeds).iter().map(seed_line));
     }
+    if let Some(delta) = &outcome.delta {
+        lines.extend(
+            delta
+                .items()
+                .take(shown.delta)
+                .map(|(word, item)| delta_line(word, item)),
+        );
+    }
     if outcome.truncated() {
         lines.push(tail(outcome));
     }
@@ -834,12 +1074,12 @@ pub(crate) fn render_text(outcome: &ImpactOutcome) -> String {
 struct ImpactJson<'a> {
     input: InputJson<'a>,
     reason: Option<&'a str>,
-    /// `--since`'s commit: no form of this build takes one.
+    /// `--since`'s commit, its full OID.
     revision: Option<&'a str>,
     depth: Option<usize>,
     seeds: SeedsJson<'a>,
-    /// `--since`'s delta: no form of this build takes one.
-    delta: Option<()>,
+    /// `--since`'s printed delta items.
+    delta: Option<DeltaJson<'a>>,
     left_out: LeftOut,
     nodes: Vec<NodeJson<'a>>,
     symbols: Option<&'a [&'a BindingRow]>,
@@ -874,7 +1114,7 @@ struct TruncatedJson {
     tests: Option<usize>,
     tasks: usize,
     seeds: Option<usize>,
-    /// `--since`'s delta lines: no form of this build takes one.
+    /// `--since`'s delta items.
     delta: Option<usize>,
 }
 
@@ -900,17 +1140,17 @@ impl Serialize for ImpactOutcome {
                 tests: rest.tests,
                 tasks: rest.tasks,
                 seeds: rest.seeds,
-                delta: None,
+                delta: rest.delta,
             }
         });
         ImpactJson {
             input: InputJson {
                 reference: self.reference.as_deref(),
                 symbol: self.symbol.as_deref(),
-                since: None,
+                since: self.since.as_deref(),
             },
             reason: self.reason.as_deref(),
-            revision: None,
+            revision: self.revision.as_deref(),
             depth: self.depth,
             seeds: SeedsJson {
                 nodes: nodes
@@ -920,7 +1160,10 @@ impl Serialize for ImpactOutcome {
                     .collect(),
                 symbols: self.seeds.as_ref().map(|seeds| first(seeds, shown.seeds)),
             },
-            delta: None,
+            delta: self
+                .delta
+                .as_ref()
+                .map(|delta| DeltaJson::printed(delta, Some(shown.delta))),
             left_out: self.left_out,
             nodes: nodes.iter().map(NodeJson::of).collect(),
             symbols: symbols.as_deref(),

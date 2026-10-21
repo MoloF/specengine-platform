@@ -376,14 +376,18 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     // 1 879 and 2 017 since docs/features/impact.md ("INSTRUCTIONS", Q-B:
     // `; get_impact(id|symbol, depth?) = impact` on the reads' line, 40
     // bytes); the values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1879);
+    // 1 885 and 2 023 since
+    // docs/features/impact-since.md ("MCP, INSTRUCTIONS, plugin 0.16.0":
+    // `|since` after `id|symbol`, 6 bytes);
+    // the values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1885);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "523f0715e02bb48d622ec47c7294cec1d651a191fa93426b5e7a200ab21b12b9"
+        "381344b2d7db35e5a4ef391cebf5068fcc7a318f26025225d8ef77e0f1127a28"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2017);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2023);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "34f0f0b4a5f3555f6d59c2fb2e9fc4e94b9a303daeb1342320652309b44482e7"
+        "9737b6644b04bf18e3c69b14c83d36ef6de5ca01fff650f6c3f9821072e45b1c"
     );
 }

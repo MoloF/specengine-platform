@@ -559,7 +559,24 @@ fn verify_json_every_key_present() {
         object_keys(&json["delta"]),
         sorted(&["symbols", "bindings", "affected_nodes", "tests_reaching"])
     );
-    assert_eq!(json["delta"]["symbols"], Value::Null);
+    // docs/features/impact-since.md "verify --changed": under `--changed`
+    // the comparer's `{added, removed, changed, renamed}` (`renamed`
+    // `null`); `null` in plain verify.
+    assert_eq!(
+        object_keys(&json["delta"]["symbols"]),
+        sorted(&["added", "removed", "changed", "renamed"])
+    );
+    assert_eq!(json["delta"]["symbols"]["renamed"], Value::Null);
+    for list in ["added", "removed", "changed"] {
+        for item in json["delta"]["symbols"][list].as_array().expect("a list") {
+            assert_eq!(
+                object_keys(item),
+                sorted(&["file", "symbol", "item_kind", "line"]),
+                "{list}"
+            );
+        }
+    }
+    assert_eq!(whole.json["delta"]["symbols"], Value::Null, "plain's");
     // docs/features/show-bindings.md "delta.tests_reaching": a list of
     // six-field keys under `--changed` (and plain), never `null`.
     for document in [json, &whole.json] {

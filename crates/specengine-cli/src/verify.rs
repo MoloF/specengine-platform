@@ -74,6 +74,8 @@ use specengine_core::{CodeConfig, ProjectConfig};
 use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
 
 use crate::cap::OUTPUT_CAP_CHARS;
+use crate::code_delta::{CodeDelta, DeltaJson, code_delta};
+use crate::code_walk::CodeTree;
 use crate::code_walk::read_tree;
 use crate::corpus::indexed;
 use crate::lock::{build_recipes, read_lock};
@@ -268,6 +270,11 @@ pub struct VerifyOutcome {
     /// row the run judged (`--task`: before its filter); none with a run
     /// cause; `None` under `--node` (its JSON `null`).
     pub(crate) tests: Option<Vec<ReachingTest>>,
+    /// `delta.symbols` (task spec `impact-since`): `--changed`'s code
+    /// items `HEAD` and the working tree differ by, over all code, bound
+    /// or not (`--task`: unfiltered); `None` in every other mode and with
+    /// a run cause.
+    pub(crate) symbols: Option<CodeDelta>,
 }
 
 /// A `verifies` row and the nodes it reaches, by canonical ID (task spec
@@ -376,13 +383,35 @@ impl VerifyOutcome {
     }
 }
 
-/// `spec verify`: only discovery (and `--task`'s task, and `--node`'s REF
-/// and its index) fails the call; every later failure is a run cause of
-/// the outcome (exit 2).
+/// What a `spec verify` run renders (task spec `impact-since`): `--changed`
+/// hashes the code items of `delta.symbols` for the `--json` document
+/// alone, so a text run never pays for them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VerifyFormat {
+    Text,
+    Json,
+}
+
+/// `spec verify` as the `--json` document renders it ([`verify_as`] with
+/// [`VerifyFormat::Json`]): the whole outcome, either rendering.
 pub fn verify(
     env: &Env,
     globals: &Globals,
     request: &VerifyRequest,
+) -> Result<VerifyOutcome, CliError> {
+    verify_as(env, globals, request, VerifyFormat::Json)
+}
+
+/// `spec verify`: only discovery (and `--task`'s task, and `--node`'s REF
+/// and its index) fails the call; every later failure is a run cause of
+/// the outcome (exit 2). A [`VerifyFormat::Text`] outcome is never
+/// rendered as JSON: `--changed`'s `delta.symbols` is not computed for it,
+/// and nothing else differs.
+pub fn verify_as(
+    env: &Env,
+    globals: &Globals,
+    request: &VerifyRequest,
+    format: VerifyFormat,
 ) -> Result<VerifyOutcome, CliError> {
     if let Some(reference) = &request.node {
         let refused = match request.tree {
@@ -405,6 +434,7 @@ pub fn verify(
         return verify_staged(env, globals, request);
     }
     let changed = request.tree == VerifiedTree::Changed;
+    let symbols_wanted = changed && format == VerifyFormat::Json;
     let (project, text) = discover_with_text(env, globals)?;
     project.slug()?;
     // The task before anything else is read: its refusal exits 2 with
@@ -453,6 +483,7 @@ pub fn verify(
     let mut head_mode = HeadMode::Absent;
     let mut judged = None;
     let mut tests = Vec::new();
+    let mut symbols = None;
     match (causes.is_empty(), code, tree, lock, input, git) {
         (true, Some(code), Some(tree), Some(lock), Some(input), Some(mut open)) => {
             let walked = Walked {
@@ -462,14 +493,15 @@ pub fn verify(
                 tree: &tree,
                 lock: &lock,
             };
-            match run(env, globals, &walked, &mut open, changed) {
-                Ok((rows, at_head, unborn, lock_note)) => {
-                    if unborn {
+            match run(env, globals, &walked, &mut open, changed, symbols_wanted) {
+                Ok(ran) => {
+                    if ran.unborn {
                         base = Some("unborn");
                     }
-                    head_mode = at_head;
-                    judged = Some(rows);
-                    messages.extend(lock_note.map(Message::Note));
+                    head_mode = ran.head_mode;
+                    judged = Some(ran.judged);
+                    symbols = ran.symbols;
+                    messages.extend(ran.lock_note.map(Message::Note));
                 }
                 Err(cause) => causes.push(cause),
             }
@@ -504,6 +536,7 @@ pub fn verify(
         messages,
         label,
         tests: Some(tests),
+        symbols,
     }))
 }
 
@@ -699,6 +732,8 @@ pub(crate) struct Gathered<'a> {
     /// `delta.tests_reaching`'s candidates over every row judged (none
     /// when none was); `None` under `--node`.
     pub tests: Option<Vec<ReachingTest>>,
+    /// `delta.symbols`: `--changed`'s alone.
+    pub symbols: Option<CodeDelta>,
 }
 
 /// The outcome: the mode the verdict uses, shown as such whether rows were
@@ -716,6 +751,7 @@ pub(crate) fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
         mut messages,
         label,
         tests,
+        symbols,
     } = gathered;
     let mode = configured
         .map(|configured| judged_mode(configured, has_base, &head_mode, label, &mut messages));
@@ -746,6 +782,7 @@ pub(crate) fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
             .map(|cause| one_line(&cause.message))
             .collect(),
         tests: tests.map(|tests| if causes_empty { tests } else { Vec::new() }),
+        symbols: symbols.filter(|_| causes_empty),
         messages,
     }
 }
@@ -875,6 +912,7 @@ fn verify_staged(
         messages,
         label,
         tests: Some(tests),
+        symbols: None,
     }))
 }
 
@@ -953,16 +991,28 @@ fn state_name<S: serde::Serializer>(state: &State, serializer: S) -> Result<S::O
     serializer.serialize_str(state.as_str())
 }
 
-/// The base when asked, and the judge over the one walk; `HEAD`'s mode,
-/// whether it is unborn, and the note when `HEAD`'s lock gave way to the
-/// disk's.
+/// What [`run`] gave: the rows, `HEAD`'s mode, whether it is unborn, the
+/// note when `HEAD`'s lock gave way to the disk's, and `--changed`'s
+/// `delta.symbols`.
+struct Ran {
+    judged: Judged,
+    head_mode: HeadMode,
+    unborn: bool,
+    lock_note: Option<String>,
+    symbols: Option<CodeDelta>,
+}
+
+/// The base when asked, and the judge over the one walk; with the base and
+/// `symbols`, the code items it and the walk differ by (the record builder
+/// and comparer `spec impact --since HEAD` runs; unborn: every item added).
 fn run(
     env: &Env,
     globals: &Globals,
     walked: &Walked<'_>,
     git: &mut VerifyGit,
     changed: bool,
-) -> Result<(crate::verify_rows::Judged, HeadMode, bool, Option<String>), RunCause> {
+    symbols: bool,
+) -> Result<Ran, RunCause> {
     let head = if changed {
         let config = config_path(env, globals, walked.project);
         Some(read_head(walked, git, config.as_deref(), None)?)
@@ -970,6 +1020,11 @@ fn run(
         None
     };
     let judged = judge_walk(walked, git, head.as_ref())?;
+    let symbols = head.as_ref().filter(|_| symbols).map(|head| {
+        let unborn = CodeTree::empty();
+        let old = head.code(walked.tree).unwrap_or(&unborn);
+        code_delta(old, walked.tree).delta
+    });
     let (head_mode, unborn, lock_note) = match head {
         Some(head) => {
             let unborn = head.is_unborn();
@@ -977,7 +1032,13 @@ fn run(
         }
         None => (HeadMode::Absent, false, None),
     };
-    Ok((judged, head_mode, unborn, lock_note))
+    Ok(Ran {
+        judged,
+        head_mode,
+        unborn,
+        lock_note,
+        symbols,
+    })
 }
 
 /// The config's root-relative path, for `HEAD`'s counterpart: the root's
@@ -1634,8 +1695,9 @@ struct BindingsJson<'a> {
 }
 
 #[derive(Serialize)]
-struct DeltaJson<'a> {
-    symbols: Option<()>,
+struct VerifyDeltaJson<'a> {
+    /// `--changed`'s code items (task spec `impact-since`), uncapped.
+    symbols: Option<DeltaJson<'a>>,
     bindings: BindingsJson<'a>,
     affected_nodes: Vec<&'a str>,
     /// The keys of the `verifies` rows reaching an affected node; `null`
@@ -1664,7 +1726,7 @@ struct VerifyJson<'a> {
     cascade: CascadeJson,
     /// The rows the text prints (`--node`) or every row, `ok` too.
     rows: Vec<&'a VerifyRow>,
-    delta: DeltaJson<'a>,
+    delta: VerifyDeltaJson<'a>,
     cannot: &'a [String],
     notes: Vec<String>,
     /// `--node`'s rows not printed; `null` without `--node`.
@@ -1734,8 +1796,11 @@ impl Serialize for VerifyOutcome {
                 by_ast: counts.by_ast,
             },
             rows,
-            delta: DeltaJson {
-                symbols: None,
+            delta: VerifyDeltaJson {
+                symbols: self
+                    .symbols
+                    .as_ref()
+                    .map(|delta| DeltaJson::printed(delta, None)),
                 bindings: BindingsJson {
                     moved: introduced
                         .iter()

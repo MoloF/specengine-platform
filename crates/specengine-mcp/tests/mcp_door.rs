@@ -57,6 +57,8 @@
 //! and invalid calls (spec-a has no `[code]`: a REF answers without code,
 //! `symbol` is the CLI's exit-2 line, the form errors the tool's own); the
 //! repository stays byte-identical. M: the tool without its calls here.
+//! TE-5 of docs/features/impact-since.md: its `since` calls join them (the
+//! `[code]` line, the guard, the form), the repository byte-identical.
 //!
 //! TE-3 of docs/features/check-binding.md: `check_binding` joins the door
 //! with valid and invalid calls (spec-a has no `[code]`: a node is the
@@ -516,6 +518,16 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({}),
                 json!({"id": null, "symbol": null}),
                 json!({"id": "MEC-STAMINA", "symbol": "stamina"}),
+                // docs/features/impact-since.md TE-5: `since` joins the door
+                // (spec-a has no `[code]`: the CLI's exit-2 line; the guard,
+                // a REV naming no commit and the form before it).
+                json!({"since": "HEAD"}),
+                json!({"since": "HEAD", "depth": 0}),
+                json!({"since": "nope"}),
+                json!({"since": "-x"}),
+                json!({"since": "a\u{1}b"}),
+                json!({"id": "MEC-STAMINA", "since": "HEAD"}),
+                json!({"id": null, "symbol": null, "since": null}),
             ],
             vec![
                 json!({"id": 7}),
@@ -523,7 +535,8 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"id": "MEC-STAMINA", "depth": "1"}),
                 json!({"node_id": "MEC-STAMINA"}),
                 json!({"qpath": "stamina"}),
-                json!({"since": "HEAD"}),
+                json!({"since": 7}),
+                json!({"revision": "HEAD"}),
                 json!({"id": "MEC-STAMINA", "bogus": true}),
             ],
         ),

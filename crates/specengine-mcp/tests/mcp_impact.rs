@@ -22,6 +22,16 @@
 //! - TE-6: `mcp_door.rs` (the door over spec-a), `mcp_size.rs` (the
 //!   maximum), `mcp_genre.rs`; INSTRUCTIONS: `mcp_code.rs`.
 //!
+//! docs/features/impact-since.md (7b-2) "MCP, INSTRUCTIONS, plugin 0.16.0":
+//! `get_impact {id?, symbol?, since?, depth?}`, `since` the CLI's `--since
+//! REV`. RD-1 (MCP half): `get_impact_refuses_an_option_like_since_before_git`
+//! (the guard's line, a `git` shim on the server's `PATH` logging no
+//! child); TE-5: the form over three inputs, `{since}` answering, parity
+//! per exit for `since` (an answer, a cut one, a REV naming no commit, the
+//! guard, no `[code]`, outside git), the mirror typing `input.since`,
+//! `revision`, `delta` and `truncated.delta`, the description of 2 043
+//! bytes and the four field docs verbatim.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(all(unix, not(feature = "probes")))]
@@ -54,19 +64,23 @@ const FIXTURE: &str = "impact";
 /// The sentence every description holds.
 const DETERMINISM: &str = "Deterministic: one state, one result; no LLM inside.";
 
-/// docs/features/impact.md "MCP `get_impact`", **Description**, verbatim
-/// (1 898 bytes).
-const IMPACT_DESCRIPTION: &str = "What a change to a node or a code symbol reaches: the nodes the impact walk reaches from it, each with its distance; the code bound to them and to the sections within them, with each binding's sync; the tests bound to them; and this repository's open tasks naming them. The same as `spec impact REF | --symbol QPATH [--depth N]`: content is the command's output (its note and warning lines first), structuredContent its --json document.
+/// docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
+/// 7b-1's description (docs/features/impact.md "MCP `get_impact`") with the
+/// seven edits in place, 2 043 bytes.
+const IMPACT_DESCRIPTION: &str = "What a change to a node, a code symbol or the code since a revision reaches: the nodes the impact walk reaches from it, each with its distance; the code bound to them and to the sections within them, with each binding's sync; the tests bound to them; and this repository's open tasks naming them. The same as `spec impact REF | --symbol QPATH | --since REV [--depth N]`: content is the command's output, structuredContent its --json document.
 
-id: a REF, any form get_node takes: its nodes start the walk (an ID several documents hold: all of them, with a warning).
-symbol: a code symbol, looked up as find_symbols' query: the walk starts at the nodes whose markers bind an item of its best tier, an item enclosing one, or its file; a mention never starts it. Needs a `[code]` table in the project's config.
+id: a REF, any form get_node takes: its nodes start the walk (an ID several documents hold: all, with a warning).
+symbol: a code symbol, looked up as find_symbols' query: the walk starts at the nodes whose markers bind an item of its best tier, an item enclosing one, or its file; a mention never starts it. Needs a `[code]` table.
+since: a git revision: the walk starts at the nodes bound to the code items changed on disk since it, untracked ones too. Needs `[code]` and git.
 depth: links from the start at most; 0 = the start only. Absent: unbounded.
-Give exactly one of id and symbol: anything else is an error result naming them.
+Give exactly one of id, symbol and since: anything else is an error result naming them.
 
-The walk is `spec graph --impact`'s: what depends on, derives from, verifies or uses the terms of a reached node, and what it constrains. Nothing here changes a status, a verdict or a gate. Without a `[code]` table, id answers with no code and no tests; a binding that cannot be judged (no git, an unreadable lock) is listed with an unknown sync and one note. An answer above 40000 characters is cut, the counts first, with a tail counting the rest (it names --depth N: depth). A REF naming nothing or a symbol naming no item: an error result with the reason, and the document. A call that cannot run (a look-alike ID, refused with its Latin fix; symbol without `[code]` or with an incomplete walk): an error result with its one line. Reads the files as they are now: refreshes SpecEngine's indexes of the spec and the code in its data directory, writes nothing under the project root. Deterministic: one state, one result; no LLM inside.";
+The walk is `spec graph --impact`'s: what depends on, derives from, verifies or uses the terms of a reached node, and what it constrains. Nothing here changes a status, a verdict or a gate. Without a `[code]` table, id answers with no code and no tests; a binding that cannot be judged (no git, an unreadable lock) is listed with an unknown sync and one note. An answer above 40000 characters is cut, the counts first, with a tail counting the rest (it names --depth N: depth). A REF, symbol or since naming nothing: an error result with the reason, and the document. A call that cannot run (a look-alike ID, refused with its Latin fix; symbol or since without `[code]` or with an incomplete walk; since outside git): an error result with its one line. Reads the files as they are now: refreshes SpecEngine's indexes of the spec and the code in its data directory, writes nothing under the project root. Deterministic: one state, one result; no LLM inside.";
 
-/// docs/features/impact.md "MCP `get_impact`": the field docs, verbatim.
-const FIELD_DOCS: [(&str, &str); 3] = [
+/// docs/features/impact.md "MCP `get_impact`": the field docs, verbatim;
+/// `since`'s (`IMPACT_SINCE_DOC`)
+/// docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0".
+const FIELD_DOCS: [(&str, &str); 4] = [
     (
         "id",
         "An ID, an alias, `slug/ID`, `ID#SECTION` or a root-relative `.md` path.",
@@ -76,10 +90,25 @@ const FIELD_DOCS: [(&str, &str); 3] = [
         "A code symbol, looked up as find_symbols' query: a qualified path, a suffix of one or a bare name.",
     ),
     (
+        "since",
+        "A git revision: the code changed since it, against the files on disk.",
+    ),
+    (
         "depth",
         "Links from the start at most; 0 = the start only. Absent: unbounded.",
     ),
 ];
+
+/// docs/features/impact-since.md "Command and guard": the guard's line for
+/// a REV printed as `shown`, LF-ended as the tool's content.
+fn refused(shown: &str) -> String {
+    format!(
+        "spec: --since `{shown}` is refused: a revision never starts with `-` or holds a control character\n"
+    )
+}
+
+/// The tail's narrowing under `since` (docs/features/impact-since.md "Cut").
+const SINCE_TAIL: &str = " not shown; lower --depth N or name a later --since REV]";
 
 /// The document's keys (docs/features/impact.md "JSON").
 const TOP_KEYS: [&str; 14] = [
@@ -235,6 +264,21 @@ impl Project {
         sandbox.init(&root);
         sandbox.add_all(&root);
         sandbox.commit(&root, &format!("{fixture_name} as committed"));
+        Self {
+            scratch,
+            home,
+            root,
+            sandbox,
+        }
+    }
+
+    /// `fixtures/<fixture>` in a directory no git repository holds.
+    fn outside_git(label: &str, fixture_name: &str) -> Self {
+        let scratch = Scratch::new(label);
+        let home = scratch.home("h");
+        let root = scratch.copy(fixture_name, "plain");
+        let _ = fs::remove_file(root.join("expected.json"));
+        let sandbox = Sandbox::new(scratch.path());
         Self {
             scratch,
             home,
@@ -437,6 +481,20 @@ fn wide(label: &str) -> Project {
     }
 }
 
+/// The untracked file of [`untracked_many`].
+const MANY: &str = "pkg/w/src/many.rs";
+
+/// 900 untracked items in the wide project: a `since` delta past the cut.
+fn untracked_many(project: &Project) {
+    let mut many = String::new();
+    for n in 0..900 {
+        many.push_str(&format!(
+            "pub fn an_untracked_function_with_a_long_name_{n:04}() -> u32 {{\n    {n}\n}}\n"
+        ));
+    }
+    write(&project.root, MANY, many);
+}
+
 /// The `get_impact` tool of a fresh server's `tools/list`.
 fn listed_tool(era: Era) -> Value {
     let mut session = Session::open(era, &[], None, Home::Fresh);
@@ -542,19 +600,20 @@ fn impact_schema() -> Value {
 
 // ------------------------------------------------------------------ RD-8
 
-/// RD-8 (docs/features/impact.md "MCP `get_impact`"): `get_impact` is
-/// listed in both eras as a read (the reads' annotations, `_meta`, an
-/// object `outputSchema` without `$ref`); its input is exactly `{id?,
-/// symbol?, depth?}`: `id`, `symbol` string or null, `depth` integer or
-/// null (`format: int64`), nothing required, `additionalProperties:
-/// false`, no root `oneOf`, the field docs verbatim (the reads' flat
-/// input rule too); its description is the spec's, verbatim, 1 898 ASCII
-/// bytes, holding the determinism sentence and its CLI twin, the cut it
-/// states the CLI's. M: a writer's hints; `id` required; a root `oneOf`;
-/// the description reworded.
+/// RD-8 (docs/features/impact.md "MCP `get_impact`"), TE-5
+/// (docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0"):
+/// `get_impact` is listed in both eras as a read (the reads' annotations,
+/// `_meta`, an object `outputSchema` without `$ref`); its input is exactly
+/// `{id?, symbol?, since?, depth?}`: `id`, `symbol`, `since` string or
+/// null, `depth` integer or null (`format: int64`), nothing required,
+/// `additionalProperties: false`, no root `oneOf`, the four field docs
+/// verbatim (the reads' flat input rule too); its description is the
+/// spec's, verbatim, 2 043 ASCII bytes, holding the determinism sentence
+/// and its CLI twin, the cut it states the CLI's. M: a writer's hints;
+/// `id` required; a root `oneOf`; the description reworded.
 #[test]
 fn get_impact_is_listed_as_a_read() {
-    assert_eq!(IMPACT_DESCRIPTION.len(), 1898, "the spec's figure");
+    assert_eq!(IMPACT_DESCRIPTION.len(), 2043, "the spec's figure");
     for era in ERAS {
         let listed = listed_tool(era);
         assert_eq!(
@@ -583,8 +642,12 @@ fn get_impact_is_listed_as_a_read() {
         }
         assert_eq!(
             keys_at(input),
-            set(&["id", "symbol", "depth"]),
+            set(&["id", "symbol", "since", "depth"]),
             "{era:?}: {input}"
+        );
+        assert_eq!(
+            types_of(&input["properties"]["since"]),
+            set(&["null", "string"])
         );
         assert_eq!(
             types_of(&input["properties"]["id"]),
@@ -615,7 +678,7 @@ fn get_impact_is_listed_as_a_read() {
         assert_eq!(description, IMPACT_DESCRIPTION, "{era:?}: the spec's text");
         assert!(description.is_ascii());
         assert!(description.contains(DETERMINISM));
-        assert!(description.contains("spec impact REF | --symbol QPATH [--depth N]"));
+        assert!(description.contains("spec impact REF | --symbol QPATH | --since REV [--depth N]"));
         assert!(
             description.contains(&format!("above {OUTPUT_CAP_CHARS} characters")),
             "the cut is the CLI's"
@@ -625,11 +688,12 @@ fn get_impact_is_listed_as_a_read() {
 
 // ------------------------------------------------------------------ RD-2
 
-/// RD-2 (the MCP half): none of `id` and `symbol`, both, or both `null`
-/// (a `null` is absent) is the tool's form error, exactly, no document,
-/// before discovery: the same from a server whose directory holds no
-/// project; `{id: null, symbol: ...}` is the `symbol` form. M2: both
-/// inputs accepted.
+/// RD-2 (the MCP half), TE-5
+/// (docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0"): none of
+/// `id`, `symbol` and `since`, two or three of them, or all `null` (a `null` is
+/// absent) is the tool's form error, exactly, no document, before discovery:
+/// the same from a server whose directory holds no project; one non-null among
+/// `null`s is that form. M2: two inputs accepted.
 #[test]
 fn impact_takes_exactly_one_input() {
     let project = ferry("im-mcp-one");
@@ -649,8 +713,38 @@ fn impact_takes_exactly_one_input() {
             form,
         ),
         call(
+            "all null",
+            json!({"id": null, "symbol": null, "since": null}),
+            form,
+        ),
+        call(
+            "id, since",
+            json!({"id": "ROUTE-CROSSING", "since": "HEAD"}),
+            form,
+        ),
+        call(
+            "symbol, since",
+            json!({"symbol": "opens", "since": "HEAD"}),
+            form,
+        ),
+        call(
+            "all three",
+            json!({"id": "ROUTE-CROSSING", "symbol": "opens", "since": "HEAD"}),
+            form,
+        ),
+        call(
+            "a guarded since beside an id",
+            json!({"id": "ROUTE-CROSSING", "since": "-x"}),
+            form,
+        ),
+        call(
             "symbol, id null",
             json!({"id": null, "symbol": "opens"}),
+            Want::Answered,
+        ),
+        call(
+            "since, the others null",
+            json!({"id": null, "symbol": null, "since": "HEAD"}),
             Want::Answered,
         ),
         call(
@@ -669,27 +763,36 @@ fn impact_takes_exactly_one_input() {
             json!({}),
             json!({"id": null, "symbol": null}),
             json!({"id": "ROUTE-CROSSING", "symbol": "opens"}),
+            json!({"id": "ROUTE-CROSSING", "since": "HEAD"}),
+            json!({"symbol": "opens", "since": "-x"}),
         ] {
             let reply = session.call("get_impact", args.clone());
             Want::Form(GET_IMPACT_ONE_FORM).check(result(&reply), &format!("{era:?} {args}"));
         }
         // One input: discovery's exit 2.
-        let reply = session.call("get_impact", json!({"id": "ROUTE-CROSSING"}));
+        for args in [json!({"id": "ROUTE-CROSSING"}), json!({"since": "HEAD"})] {
+            let reply = session.call("get_impact", args.clone());
+            let answered = result(&reply);
+            Want::CannotRun.check(answered, &format!("{era:?} discovery {args}"));
+            assert!(
+                content_text(answered).contains("specengine.toml"),
+                "{era:?}: discovery's line: {}",
+                content_text(answered)
+            );
+        }
+        // The guard comes before discovery too.
+        let reply = session.call("get_impact", json!({"since": "-x"}));
         let answered = result(&reply);
-        Want::CannotRun.check(answered, &format!("{era:?} discovery"));
-        assert!(
-            content_text(answered).contains("specengine.toml"),
-            "{era:?}: discovery's line: {}",
-            content_text(answered)
-        );
+        Want::CannotRun.check(answered, &format!("{era:?} the guard, no project"));
+        assert_eq!(content_text(answered), refused("-x"), "{era:?}");
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }
 }
 
 /// RD-2: the argument names are the CLI's flags (`id` the REF, as
-/// `get_node`): `{id}` and `{symbol}` answer; 07's `node_id` and `qpath`,
-/// 7b-2's `since`, a wrong type and an unknown key are rmcp's
+/// `get_node`): `{id}`, `{symbol}` and (7b-2) `{since}` answer; 07's
+/// `node_id` and `qpath`, a wrong type and an unknown key are rmcp's
 /// `failed to deserialize parameters` results naming the field. M:
 /// `node_id` or `qpath` names.
 #[test]
@@ -698,9 +801,15 @@ fn get_impact_arguments_are_the_flag_names() {
     project.answers(&[
         call("id", json!({"id": "ROUTE-CROSSING"}), Want::Answered),
         call("symbol", json!({"symbol": "opens"}), Want::Answered),
+        call("since", json!({"since": "HEAD"}), Want::Answered),
         call(
             "depth",
             json!({"id": "ROUTE-CROSSING", "depth": 1}),
+            Want::Answered,
+        ),
+        call(
+            "since, depth",
+            json!({"since": "HEAD", "depth": 0}),
             Want::Answered,
         ),
     ]);
@@ -709,8 +818,9 @@ fn get_impact_arguments_are_the_flag_names() {
         for (args, needle) in [
             (json!({"node_id": "ROUTE-CROSSING"}), "node_id"),
             (json!({"qpath": "opens"}), "qpath"),
-            (json!({"since": "HEAD"}), "since"),
-            (json!({"id": "ROUTE-CROSSING", "since": "HEAD"}), "since"),
+            (json!({"revision": "HEAD"}), "revision"),
+            (json!({"since": 7}), ""),
+            (json!({"since": ["HEAD"]}), ""),
             (json!({"id": "ROUTE-CROSSING", "with": ["links"]}), "with"),
             (json!({"id": 7}), ""),
             (json!({"id": ["ROUTE-CROSSING"]}), ""),
@@ -809,7 +919,29 @@ fn get_impact_equals_the_cli() {
             json!({"id": "ROUTE-CROSSING", "depth": -1}),
             Want::CannotRun,
         ),
+        call("since HEAD", json!({"since": "HEAD"}), Want::Answered),
+        call(
+            "since, depth 0",
+            json!({"since": "HEAD", "depth": 0}),
+            Want::Answered,
+        ),
+        call("since a branch", json!({"since": "main"}), Want::Answered),
+        call("since no commit", json!({"since": "nope"}), Want::NotFound),
+        call(
+            "since a tree",
+            json!({"since": "HEAD^{tree}"}),
+            Want::NotFound,
+        ),
+        call("since -x", json!({"since": "-x"}), Want::CannotRun),
+        call(
+            "since a control",
+            json!({"since": "a\u{1}b"}),
+            Want::CannotRun,
+        ),
     ];
+    let head = project
+        .sandbox
+        .git_text(&project.root, &["rev-parse", "HEAD"]);
     for results in project.answers(&calls) {
         let doc = |label: &str| &pick(&calls, &results, label)["structuredContent"];
         let text = |label: &str| content_text(pick(&calls, &results, label));
@@ -841,6 +973,32 @@ fn get_impact_equals_the_cli() {
             "the summary first: {:?}",
             text("document")
         );
+        // docs/features/impact-since.md "Output": `since`'s typed keys.
+        let since = doc("since HEAD");
+        assert_eq!(since["revision"], json!(head), "the full OID");
+        assert_eq!(since["input"]["since"], json!("HEAD"));
+        assert_eq!(since["seeds"]["symbols"], Value::Null);
+        assert!(
+            since["delta"]["changed"]
+                .as_array()
+                .is_some_and(|items| !items.is_empty()),
+            "code moved past HEAD: {}",
+            since["delta"]
+        );
+        assert_eq!(since["delta"]["renamed"], Value::Null);
+        assert!(
+            text("since HEAD").starts_with(&format!("since {}: ", &head[..7])),
+            "the header first: {:?}",
+            text("since HEAD")
+        );
+        assert_eq!(doc("since a branch")["delta"], since["delta"]);
+        let missing = doc("since no commit");
+        assert_eq!(missing["reason"], json!("--since `nope` is not a commit"));
+        for key in ["revision", "delta"] {
+            assert_eq!(missing[key], Value::Null, "exit 1: {key} null");
+        }
+        assert_eq!(text("since -x"), refused("-x"), "the guard's line");
+        assert_eq!(text("since a control"), refused("a\\u{1}b"));
     }
 
     // A walk gap: `symbol` exit 2 naming the file; the REF form answers.
@@ -880,16 +1038,28 @@ fn get_impact_equals_the_cli() {
     let calls = [
         call("REF", json!({"id": "docs/spec/fees.md"}), Want::Answered),
         call("symbol", json!({"symbol": "fee"}), Want::CannotRun),
+        call("since", json!({"since": "HEAD"}), Want::CannotRun),
     ];
     for results in genre.answers(&calls) {
         let answered = &pick(&calls, &results, "REF")["structuredContent"];
         for key in ["symbols", "tests", "code"] {
             assert_eq!(answered[key], Value::Null, "spec-c: {key} null");
         }
-        assert!(
-            content_text(pick(&calls, &results, "symbol")).contains("[code]"),
-            "the [code] line"
-        );
+        for label in ["symbol", "since"] {
+            assert!(
+                content_text(pick(&calls, &results, label)).contains("[code]"),
+                "{label}: the [code] line"
+            );
+        }
+    }
+
+    // `since` outside a git repository: exit 2, one line.
+    let outside = Project::outside_git("im-mcp-outside", FIXTURE);
+    let calls = [call("since", json!({"since": "HEAD"}), Want::CannotRun)];
+    for results in outside.answers(&calls) {
+        let text = content_text(pick(&calls, &results, "since"));
+        assert_eq!(text.lines().count(), 1, "one line: {text:?}");
+        assert!(text.starts_with("spec: "), "{text:?}");
     }
 
     // Past the cut: a REF (its `truncated.seeds` null) and a `--symbol`
@@ -941,6 +1111,32 @@ fn get_impact_equals_the_cli() {
             "a list not cut 0, a null list null: {ticks}"
         );
     }
+    // `since` past the cut: 900 untracked items, the delta cut last.
+    untracked_many(&wide);
+    let calls = [call("since, cut", json!({"since": "HEAD"}), Want::Answered)];
+    for results in wide.answers(&calls) {
+        let result = pick(&calls, &results, "since, cut");
+        let tail = content_text(result)
+            .lines()
+            .last()
+            .unwrap_or_default()
+            .to_owned();
+        assert!(
+            tail.starts_with("[truncated: ") && tail.ends_with(SINCE_TAIL),
+            "the tail names a later --since REV: {tail:?}"
+        );
+        let truncated = &result["structuredContent"]["truncated"];
+        assert!(
+            truncated["delta"].as_u64() > Some(0),
+            "the delta cut: {truncated}"
+        );
+        assert_eq!(
+            truncated["seeds"],
+            Value::Null,
+            "since: seeds null: {truncated}"
+        );
+    }
+    fs::remove_file(wide.root.join(MANY)).expect("many.rs removed");
     let config = read_text(&wide.root, "specengine.toml");
     write(
         &wide.root,
@@ -973,8 +1169,11 @@ fn get_impact_equals_the_cli() {
 /// shape walked against the output schema once more by name: an uncut REF
 /// answer (`truncated` null), a no-`[code]` answer (`symbols`, `tests`,
 /// `code` null), a cut `--symbol` answer (`truncated` counting its
-/// matches) and a cut REF answer (`truncated.seeds` null), each as the
-/// server answers it. M: `truncated` or one of its counts not nullable.
+/// matches) and a cut REF answer (`truncated.seeds` null); TE-5
+/// (docs/features/impact-since.md "Output"): an uncut `since` answer, an
+/// exit-1 one (`delta` null) and a cut one (`truncated.delta` counting),
+/// each as the server answers it. M: `truncated` or one of its counts not
+/// nullable; `delta` not nullable.
 #[test]
 fn get_impact_schema_meets_every_answer_shape() {
     let schema = impact_schema();
@@ -1005,6 +1204,15 @@ fn get_impact_schema_meets_every_answer_shape() {
         ),
         ("a cut --symbol", answer(&wide, json!({"symbol": "tick"}))),
         ("a cut REF", answer(&wide, json!({"id": "HUB-CORE"}))),
+        ("an uncut --since", answer(&ferry, json!({"since": "HEAD"}))),
+        (
+            "an exit-1 --since",
+            answer(&ferry, json!({"since": "nope"})),
+        ),
+        ("a cut --since", {
+            untracked_many(&wide);
+            answer(&wide, json!({"since": "HEAD"}))
+        }),
     ];
     for (shape, document) in &shapes {
         if let Err(problem) = conforms(&schema, document, "$") {
@@ -1030,17 +1238,27 @@ fn get_impact_schema_meets_every_answer_shape() {
         Value::Null,
         "a REF: seeds null"
     );
+    assert!(shapes[4].1["delta"].is_object(), "since: a delta");
+    assert_eq!(shapes[5].1["delta"], Value::Null, "exit 1: delta null");
+    assert!(
+        shapes[6].1["truncated"]["delta"].as_u64() > Some(0),
+        "the delta cut"
+    );
 }
 
-/// RD-8 (docs/features/impact.md "MCP `get_impact`", **Mirror**): the
-/// output schema's key sets are `spec impact --json`'s, named here (a key
-/// dropped from both the mirror and the CLI still fails): the 14 top
+/// RD-8 (docs/features/impact.md "MCP `get_impact`", **Mirror**), TE-5
+/// (docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0"):
+/// the output schema's key sets are `spec impact --json`'s, named here (a
+/// key dropped from both the mirror and the CLI still fails): the 14 top
 /// keys, `input`, `seeds`, a match, `left_out`, a node (graph's), a row
-/// (`BindingRowShape`), a task, `truncated`, `code`; `input.since`,
-/// `revision`, `delta` and `truncated.delta` exactly `{"type": "null"}`
-/// (`AlwaysNull`); a match's `tier` the lookup's three tiers, a task's
-/// `status` every `TaskStatus`; `seeds.symbols`, `symbols`, `tests`,
-/// `truncated`, `code` nullable. M: a key's mirror missing; `since` typed.
+/// (`BindingRowShape`), a task, `truncated`, `code`, `delta` and a delta
+/// item; `input.since` and `revision` a string or null, `delta` an object
+/// or null whose three lists hold `{file, symbol, item_kind, line}` (three
+/// strings, an integer, none null) and whose `renamed` is exactly `{"type":
+/// "null"}` (`AlwaysNull`), `truncated.delta` an integer or null; a
+/// match's `tier` the lookup's three tiers, a task's `status` every
+/// `TaskStatus`; `seeds.symbols`, `symbols`, `tests`, `truncated`, `code`
+/// nullable. M: a key's mirror missing; `since` left `AlwaysNull`.
 #[test]
 fn get_impact_mirror_is_impact_json() {
     let schema = impact_schema();
@@ -1089,14 +1307,62 @@ fn get_impact_mirror_is_impact_json() {
         keys_at(schema_at(&schema, "code")),
         set(&["files", "rs", "ron", "skipped"])
     );
-    for path in ["input.since", "revision", "delta", "truncated.delta"] {
-        let at = schema_at(&schema, path);
-        let mut bare = at.clone();
-        if let Some(object) = bare.as_object_mut() {
-            object.remove("description");
-        }
-        assert_eq!(bare, json!({"type": "null"}), "{path}: AlwaysNull: {at}");
+    for path in ["input.since", "revision"] {
+        assert_eq!(
+            types_of(schema_at(&schema, path)),
+            set(&["null", "string"]),
+            "{path}: a string or null"
+        );
     }
+    assert_eq!(
+        types_of(schema_at(&schema, "delta")),
+        set(&["null", "object"]),
+        "delta: an object or null"
+    );
+    assert_eq!(
+        keys_at(schema_at(&schema, "delta")),
+        set(&["added", "removed", "changed", "renamed"])
+    );
+    for list in ["added", "removed", "changed"] {
+        assert_eq!(
+            types_of(schema_at(&schema, &format!("delta.{list}"))),
+            set(&["array"]),
+            "delta.{list}: a list"
+        );
+        let item = format!("delta.{list}[]");
+        assert_eq!(
+            keys_at(schema_at(&schema, &item)),
+            set(&["file", "symbol", "item_kind", "line"]),
+            "{item}"
+        );
+        for (key, kind) in [
+            ("file", "string"),
+            ("symbol", "string"),
+            ("item_kind", "string"),
+            ("line", "integer"),
+        ] {
+            assert_eq!(
+                types_of(schema_at(&schema, &format!("{item}.{key}"))),
+                set(&[kind]),
+                "{item}.{key}"
+            );
+        }
+    }
+    let renamed = schema_at(&schema, "delta.renamed");
+    let mut bare = renamed.clone();
+    if let Some(object) = bare.as_object_mut() {
+        object.remove("description");
+    }
+    assert_eq!(
+        bare,
+        json!({"type": "null"}),
+        "delta.renamed: AlwaysNull: {renamed}"
+    );
+    assert_eq!(
+        types_of(schema_at(&schema, "truncated.delta")),
+        set(&["integer", "null"]),
+        "truncated.delta: a count or null"
+    );
     assert_eq!(
         enum_values(schema_at(&schema, "seeds.symbols[].tier")),
         Some(set(&["exact", "suffix", "name"])),
@@ -1158,9 +1424,10 @@ fn get_impact_mirror_is_impact_json() {
 /// output schema, every key required): across the parity runs each
 /// nullable key is met with a value and with `null`: `reason`, `depth`,
 /// `seeds.symbols`, `symbols`, `tests`, `truncated`, `code`, a node's
-/// `id` and `kind` (a feature document holds none), a task's `title`, and
-/// the row keys of [`ROW_NULLABLE`]. M: a mirror key's type narrower than
-/// the CLI's.
+/// `id` and `kind` (a feature document holds none), a task's `title`, the
+/// row keys of [`ROW_NULLABLE`], and (TE-5, docs/features/impact-since.md
+/// "Output") `revision`, `delta`, `input.since`, a cut answer's
+/// `truncated.delta`. M: a mirror key's type narrower than the CLI's.
 #[test]
 fn get_impact_documents_meet_every_key() {
     let project = ferry("im-mcp-keys");
@@ -1173,13 +1440,16 @@ fn get_impact_documents_meet_every_key() {
         ),
         call("symbol", json!({"symbol": "reach"}), Want::Answered),
         call("no node", json!({"id": "ROUTE-NOWHERE"}), Want::NotFound),
+        call("since", json!({"since": "HEAD"}), Want::Answered),
+        call("since no commit", json!({"since": "nope"}), Want::NotFound),
     ];
     let wide = wide("im-mcp-keys-wide");
-    let wide_calls = [call(
-        "hub",
-        json!({"id": "HUB-CORE", "depth": 0}),
-        Want::Answered,
-    )];
+    untracked_many(&wide);
+    let wide_calls = [
+        call("hub", json!({"id": "HUB-CORE", "depth": 0}), Want::Answered),
+        call("ticks", json!({"symbol": "tick"}), Want::Answered),
+        call("since, cut", json!({"since": "HEAD"}), Want::Answered),
+    ];
     let genre = Project::new("im-mcp-keys-genre", "spec-c");
     let genre_calls = [call(
         "REF",
@@ -1249,12 +1519,28 @@ fn get_impact_documents_meet_every_key() {
             rows.iter().map(|row| &row[key]).collect(),
         );
     }
-    for document in &documents {
-        for key in ["revision", "delta"] {
-            assert_eq!(document[key], Value::Null, "{key}: always null");
-        }
-        assert_eq!(document["input"]["since"], Value::Null, "input.since");
+    // docs/features/impact-since.md "Output": `since`'s keys typed.
+    for key in ["revision", "delta"] {
+        met(
+            key,
+            documents.iter().map(|document| &document[key]).collect(),
+        );
     }
+    met(
+        "input.since",
+        documents
+            .iter()
+            .map(|document| &document["input"]["since"])
+            .collect(),
+    );
+    met(
+        "truncated.delta",
+        documents
+            .iter()
+            .filter(|document| document["truncated"].is_object())
+            .map(|document| &document["truncated"]["delta"])
+            .collect(),
+    );
     assert!(
         rows.iter()
             .any(|row| row["kind"].is_null() && row["node"] == "FARE-02"),
@@ -1266,4 +1552,162 @@ fn get_impact_documents_meet_every_key() {
             "the scratch kept to the end"
         );
     }
+}
+
+// ------------------------------------------------------------------ RD-1
+
+/// A `git` at `program` appending its argv (one line per process) to
+/// `log`, then running `real`.
+fn logging_git(program: &std::path::Path, log: &std::path::Path, real: &std::path::Path) {
+    let log = log.to_str().expect("a UTF-8 scratch path");
+    let real = real.to_str().expect("a UTF-8 git path");
+    assert!(
+        !log.contains('\'') && !real.contains('\''),
+        "a quote in a path"
+    );
+    fs::write(
+        program,
+        format!("#!/bin/sh\nprintf '%s\\n' \"$*\" >> '{log}'\nexec '{real}' \"$@\"\n"),
+    )
+    .expect("the shim");
+    fs::set_permissions(program, fs::Permissions::from_mode(0o755)).expect("chmod the shim");
+}
+
+/// One server in `root` (`HOME` `home`, `PATH` `path`, nothing else),
+/// initialized in the legacy era, then each `get_impact` arguments in
+/// turn: their results.
+fn calls_with_path(
+    root: &std::path::Path,
+    home: &std::path::Path,
+    path: &str,
+    calls: &[Value],
+) -> Vec<Value> {
+    use std::io::{BufRead as _, BufReader, Write as _};
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::time::Duration;
+    let mut child = Command::new(BIN)
+        .env_clear()
+        .env("HOME", home)
+        .env("PATH", path)
+        .current_dir(root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn specengine-mcp");
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    let (sender, lines) = mpsc::channel();
+    std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines() {
+            let Ok(line) = line else { break };
+            if sender.send(line).is_err() {
+                break;
+            }
+        }
+    });
+    let send = |stdin: &mut std::process::ChildStdin, message: Value| {
+        let mut line = serde_json::to_string(&message).expect("a message");
+        line.push('\n');
+        stdin.write_all(line.as_bytes()).expect("write");
+        stdin.flush().expect("flush");
+    };
+    let reply = |id: u64| -> Value {
+        loop {
+            let line = lines
+                .recv_timeout(Duration::from_secs(60))
+                .unwrap_or_else(|_| panic!("no reply to request {id} within a minute"));
+            let message = parse_message(&line);
+            if message.get("id") == Some(&json!(id)) {
+                return message;
+            }
+        }
+    };
+    send(
+        &mut stdin,
+        json!({"jsonrpc": "2.0", "id": 0, "method": "initialize", "params": {
+            "protocolVersion": LEGACY_VERSION,
+            "capabilities": {},
+            "clientInfo": {"name": "specengine-mcp-tests", "version": "0.0.0"}
+        }}),
+    );
+    result(&reply(0));
+    send(
+        &mut stdin,
+        json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+    );
+    let mut results = Vec::new();
+    for (at, arguments) in calls.iter().enumerate() {
+        let id = at as u64 + 1;
+        send(
+            &mut stdin,
+            json!({"jsonrpc": "2.0", "id": id, "method": "tools/call", "params": {
+                "name": "get_impact", "arguments": arguments
+            }}),
+        );
+        results.push(result(&reply(id)).clone());
+    }
+    drop(stdin);
+    for _ in 0..1_000 {
+        if child.try_wait().expect("wait").is_some() {
+            return results;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+    panic!("the server outlived its stdin by ten seconds");
+}
+
+/// RD-1, TE-6 (the MCP half;
+/// docs/features/impact-since.md "Command and guard"): a server whose `PATH`
+/// starts with a `git` shim logging argv answers `{since: <REV>}` with a
+/// leading `-` or a control character (LF and DEL among them) with an error
+/// result whose content is the guard's line (every control `\u{XX}`), no
+/// `structuredContent`, and the shim logs no call; `{since: "HEAD"}` reaches
+/// the shim (the premise). M1: the guard removed.
+#[test]
+fn get_impact_refuses_an_option_like_since_before_git() {
+    let project = ferry("im-mcp-guard");
+    let shim = project.scratch.dir("shim");
+    let log = shim.join("argv.log");
+    logging_git(&shim.join("git"), &log, project.sandbox.git_program());
+    let path = format!("{}:/usr/bin:/bin", shim.display());
+    for (since, shown) in [
+        ("-x", "-x"),
+        ("--all", "--all"),
+        ("a\u{1}b", "a\\u{1}b"),
+        ("HEAD\n", "HEAD\\u{a}"),
+        ("\u{7f}HEAD", "\\u{7f}HEAD"),
+    ] {
+        let _ = fs::remove_file(&log);
+        let results = calls_with_path(
+            &project.root,
+            &project.home,
+            &path,
+            &[json!({"since": since})],
+        );
+        let answered = &results[0];
+        assert_eq!(answered["isError"], json!(true), "{since:?}: {answered}");
+        assert_eq!(content_text(answered), refused(shown), "{since:?}");
+        assert!(
+            answered.get("structuredContent").is_none(),
+            "{since:?}: no document"
+        );
+        let logged = fs::read_to_string(&log).unwrap_or_default();
+        assert_eq!(logged, "", "{since:?}: no git child");
+    }
+    let _ = fs::remove_file(&log);
+    let results = calls_with_path(
+        &project.root,
+        &project.home,
+        &path,
+        &[json!({"since": "HEAD"})],
+    );
+    assert_eq!(results[0]["isError"], json!(false), "{}", results[0]);
+    assert!(
+        fs::read_to_string(&log).is_ok_and(|logged| logged.contains("rev-parse")),
+        "premise: the shim logs the server's git"
+    );
 }

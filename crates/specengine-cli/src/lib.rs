@@ -186,6 +186,7 @@ mod bump;
 mod bundle;
 mod cap;
 mod check;
+mod code_delta;
 mod code_index;
 mod code_walk;
 mod corpus;
@@ -401,8 +402,8 @@ pub use task::{
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{
-    VerifiedTree, VerifyAnchor, VerifyLevels, VerifyLock, VerifyMarker, VerifyNode, VerifyOutcome,
-    VerifyPlace, VerifyRequest, VerifyRow, verify,
+    VerifiedTree, VerifyAnchor, VerifyFormat, VerifyLevels, VerifyLock, VerifyMarker, VerifyNode,
+    VerifyOutcome, VerifyPlace, VerifyRequest, VerifyRow, verify, verify_as,
 };
 pub use verify_tests::{
     VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest, VerifyTestsRow,

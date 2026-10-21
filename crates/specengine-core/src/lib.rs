@@ -86,7 +86,10 @@
 //!   `roadmap-items`, ADR-0052), its lines and the view (`roadmap-view`);
 //!   [`plan_tasks`]: its join with a repository's task rows, pure
 //!   (`roadmap-position`); [`task_item`], [`next_order`]: one task's item,
-//!   `next`'s order by the plan (`roadmap-surfaces`).
+//!   `next`'s order by the plan (`roadmap-surfaces`);
+//! - [`symbol_delta`] — the code items added, removed and changed between
+//!   two sides, over records the caller made (task spec `impact-since`):
+//!   `spec impact --since` and `spec verify --changed`'s `delta.symbols`.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -116,6 +119,7 @@ pub mod roadmap;
 pub mod roadmap_toml;
 pub mod round;
 pub mod scheme_toml;
+pub mod symbol_delta;
 pub mod task;
 pub mod tokens;
 pub mod verify;

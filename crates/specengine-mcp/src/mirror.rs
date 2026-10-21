@@ -10,7 +10,8 @@
 //! integer, never an enum of the code layer's words; `spec verify --node`,
 //! `check_binding`'s: `docs/features/check-binding.md` "Data"), and of
 //! `get_impact` (`spec impact`'s document: `docs/features/impact.md`
-//! "Data"; graph's node object, the read rows' [`BindingRowShape`]).
+//! "Data", `docs/features/impact-since.md` "Output"; graph's node object,
+//! the read rows' [`BindingRowShape`]).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -94,8 +95,7 @@ fn require_all(schema: &mut Value) {
 
 /// `"type": "null"`: a key the CLI always writes as `null` (`bundle`'s
 /// Phase 2 `task`; `spec verify --node`'s `base`, `task`, `delta.symbols`,
-/// `delta.tests_reaching`; `spec impact`'s `input.since`, `revision`,
-/// `delta`, `truncated.delta`).
+/// `delta.tests_reaching`; `spec impact`'s `delta.renamed`).
 pub(crate) struct AlwaysNull;
 
 impl JsonSchema for AlwaysNull {
@@ -1177,11 +1177,11 @@ pub(crate) struct RoadmapPoolTask {
 
 // ------------------------------------------------------------------ impact
 //
-// `spec impact REF | --symbol QPATH [--depth N] --json`, `get_impact`'s
-// document: the nodes as `spec graph`'s node object, the rows as the reads
-// show them; a node's kind, an item's kind and a layer are free strings.
-// `--since` is not taken: `input.since`, `revision`, `delta` and
-// `truncated.delta` are always `null`.
+// `spec impact REF | --symbol QPATH | --since REV [--depth N] --json`,
+// `get_impact`'s document: the nodes as `spec graph`'s node object, the
+// rows as the reads show them; a node's kind, an item's kind and a layer
+// are free strings. `revision`, `delta` and `truncated.delta` are
+// `--since`'s; `delta.renamed` is always `null`.
 
 /// `spec impact --json`.
 #[derive(JsonSchema)]
@@ -1190,11 +1190,15 @@ pub(crate) struct ImpactDocument {
     /// Why the REF or the symbol names nothing (the result is then an
     /// error); `null` otherwise.
     pub reason: Option<String>,
-    pub revision: AlwaysNull,
+    /// `since`'s commit, its full ID; `null` for `id` and `symbol`, and
+    /// when the result is an error.
+    pub revision: Option<String>,
     /// `depth` as given; `null`: unbounded.
     pub depth: Option<usize>,
     pub seeds: ImpactSeeds,
-    pub delta: AlwaysNull,
+    /// `since`'s printed code items changed since the commit; `null` for
+    /// `id` and `symbol`, and when the result is an error.
+    pub delta: Option<ImpactDelta>,
     /// Links of a followed type written in generated or Tier 3 files, not
     /// followed.
     pub left_out: LeftOut,
@@ -1221,13 +1225,35 @@ pub(crate) struct ImpactDocument {
     pub code: Option<CodeCount>,
 }
 
-/// The input as given: one of `ref` and `symbol`.
+/// The input as given: one of `ref`, `symbol` and `since`.
 #[derive(JsonSchema)]
 pub(crate) struct ImpactInput {
     #[schemars(rename = "ref")]
     pub reference: Option<String>,
     pub symbol: Option<String>,
-    pub since: AlwaysNull,
+    pub since: Option<String>,
+}
+
+/// The code items the commit and the files on disk differ by, each list
+/// in file, line and symbol order.
+#[derive(JsonSchema)]
+pub(crate) struct ImpactDelta {
+    pub added: Vec<ImpactDeltaItem>,
+    pub removed: Vec<ImpactDeltaItem>,
+    pub changed: Vec<ImpactDeltaItem>,
+    /// Never filled.
+    pub renamed: AlwaysNull,
+}
+
+/// A code item, or a file compared whole (its path as `symbol`).
+#[derive(JsonSchema)]
+pub(crate) struct ImpactDeltaItem {
+    pub file: String,
+    pub symbol: String,
+    /// The item's kind as the code layer names it.
+    pub item_kind: String,
+    /// The disk's line; the commit's for a removed item.
+    pub line: usize,
 }
 
 #[derive(JsonSchema)]
@@ -1235,7 +1261,7 @@ pub(crate) struct ImpactSeeds {
     /// The printed nodes at distance 0, by ID, else path.
     pub nodes: Vec<String>,
     /// The printed code items `symbol` names at the lookup's best tier;
-    /// `null` for `id`.
+    /// `null` for `id` and `since`.
     pub symbols: Option<Vec<ImpactSeedSymbol>>,
 }
 
@@ -1280,7 +1306,7 @@ pub(crate) struct ImpactTruncated {
     pub tests: Option<usize>,
     pub tasks: usize,
     pub seeds: Option<usize>,
-    pub delta: AlwaysNull,
+    pub delta: Option<usize>,
 }
 
 // -------------------------------------------------------------------- code

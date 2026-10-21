@@ -189,6 +189,7 @@ pub(crate) fn verify_node(
         messages,
         label,
         tests: None,
+        symbols: None,
     }))
 }
 

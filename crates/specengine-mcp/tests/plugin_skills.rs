@@ -1180,8 +1180,8 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/check-binding.md; 0.13.0 since
     // docs/features/show-bindings.md; 0.14.0 since
     // docs/features/bundle-bindings.md; 0.15.0 since
-    // docs/features/impact.md.
-    assert_eq!(manifest["version"], "0.15.0");
+    // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md.
+    assert_eq!(manifest["version"], "0.16.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1266,8 +1266,8 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/check-binding.md; 0.13.0 since
     // docs/features/show-bindings.md; 0.14.0 since
     // docs/features/bundle-bindings.md; 0.15.0 since
-    // docs/features/impact.md.
-    assert_eq!(manifest["version"], "0.15.0");
+    // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md.
+    assert_eq!(manifest["version"], "0.16.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1370,11 +1370,11 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.15.0",
+        manifest["version"], "0.16.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
-         bundle-bindings: 0.14.0; impact: 0.15.0"
+         bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1701,7 +1701,9 @@ const IMPACT_STEP_1: &str = "1. **Read the task.** Call `get_task` with its `tas
 /// somewhere); its step 1 is the spec's text, word for word, before the
 /// claim's line; the step numbers kept (`check-binding`'s step 5 as
 /// pinned); no state word; the body 3 284 bytes, within 4 096. M:
-/// `get_impact` unnamed; the step reworded.
+/// `get_impact` unnamed; the step reworded. docs/features/impact-since.md
+/// "MCP, INSTRUCTIONS, plugin 0.16.0": step 6 names it too (two lines),
+/// the body 3 414 bytes ([`impact_since_implement_reports_with_since`]).
 #[test]
 fn impact_implement_names_get_impact() {
     let skills = committed();
@@ -1729,8 +1731,8 @@ fn impact_implement_names_get_impact() {
             .iter()
             .filter(|line| line.contains("`get_impact`"))
             .count(),
-        1,
-        "get_impact named once"
+        2,
+        "get_impact named in steps 1 and 6"
     );
     assert!(
         lines.contains(&CHECK_STEP),
@@ -1745,13 +1747,16 @@ fn impact_implement_names_get_impact() {
         .expect("a front-matter and a body");
     assert_eq!(
         body.len(),
-        3_284,
-        "the body's bytes as the spec measures them"
+        3_414,
+        "the body's bytes as docs/features/impact-since.md measures them"
     );
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
 
     // M: `get_impact` unnamed.
-    let unnamed = edited(&skills, "implement", "`get_impact`", "the radius tool");
+    // Every occurrence (steps 1 and 6 since docs/features/impact-since.md).
+    let mut unnamed = skills.clone();
+    let text = unnamed["implement"].replace("`get_impact`", "the radius tool");
+    unnamed.insert("implement".to_owned(), text);
     assert_names(
         &ac11_problems(&unnamed),
         "implement: `get_impact` not backticked",
@@ -1773,6 +1778,74 @@ fn impact_implement_names_get_impact() {
         !reworded["implement"]
             .lines()
             .any(|line| line == IMPACT_STEP_1),
+        "the mutation is seen"
+    );
+}
+
+// --------------------------------------------------- impact-since (7b-2)
+
+/// docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
+/// `implement`'s step 6, verbatim.
+const IMPACT_SINCE_STEP_6: &str = "6. **Report the run.** First call `get_impact` once with `since` the commit your work started from: run the tests it lists and name its open tasks. Then call `report_run` with the `task_id`, its `outcome`, a `summary` of what the run did and the `changed_files`. The task stays in progress after the report, and its writes still pass.";
+
+/// docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0" (Q-J):
+/// `implement`'s step 6 is the spec's text word for word, once, right
+/// after check-binding's step 5 and before step 7 (`complete_task`); it
+/// backticks `get_impact`, `since` and `report_run`; the body 3 414 bytes,
+/// within 4 096; `implement` stays the one skill naming `get_impact`. M:
+/// the step reworded; `since` unnamed.
+#[test]
+fn impact_since_implement_reports_with_since() {
+    let skills = committed();
+    let implement = &skills["implement"];
+    let lines: Vec<&str> = implement.lines().collect();
+    let step = lines
+        .iter()
+        .position(|line| *line == IMPACT_SINCE_STEP_6)
+        .expect("the spec's step 6, word for word");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| **line == IMPACT_SINCE_STEP_6)
+            .count(),
+        1,
+        "once"
+    );
+    assert_eq!(lines[step - 1], CHECK_STEP, "after check-binding's step 5");
+    assert!(
+        lines[step + 1].starts_with("7. ") && lines[step + 1].contains("`complete_task`"),
+        "before step 7: {}",
+        lines[step + 1]
+    );
+    for span in ["get_impact", "since", "report_run"] {
+        assert!(
+            backticked(lines[step]).iter().any(|named| named == span),
+            "step 6 backticks {span}"
+        );
+    }
+    let naming: Vec<&String> = skills
+        .iter()
+        .filter(|(_, text)| backticked(text).iter().any(|span| span == "get_impact"))
+        .map(|(skill, _)| skill)
+        .collect();
+    assert_eq!(naming, ["implement"], "the one skill naming `get_impact`");
+    let body = implement
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert_eq!(body.len(), 3_414, "the spec's figure");
+    assert!(body.len() <= 4096);
+    // M: the step reworded.
+    let reworded = edited(
+        &skills,
+        "implement",
+        "with `since` the commit",
+        "with the commit",
+    );
+    assert!(
+        !reworded["implement"]
+            .lines()
+            .any(|line| line == IMPACT_SINCE_STEP_6),
         "the mutation is seen"
     );
 }

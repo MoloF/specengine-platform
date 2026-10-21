@@ -36,7 +36,7 @@ use std::path::Path;
 use specengine_core::WalkScope;
 use specengine_core::check::Cause;
 
-use crate::git::{Blob, Entry, EntryKind, GitEnv, IndexFailure, Staged};
+use crate::git::{Blob, Entry, EntryKind, GitEnv, IndexFailure, RevAnswer, Staged};
 use crate::source::walk_index;
 
 /// The label of the git index's listing ([`VerifyGit::staged`]), where a
@@ -239,10 +239,24 @@ impl VerifyGit {
 
     /// The tree under the root of the commit `rev` names (`HEAD`; any
     /// commit-ish), listed; `None` when it names none (an unborn `HEAD`).
+    /// Strict: an answer of git that is not one OID or nothing is a failure.
     pub fn list_commit(&mut self, rev: &str) -> Result<Option<CommitListing>, Cause> {
+        self.list(rev, RevAnswer::Strict)
+    }
+
+    /// [`VerifyGit::list_commit`] for a revision as a user gave it (`spec
+    /// impact --since`): a range (`A..B`), a negation (`^REV`) or anything
+    /// else that is not one commit is `None`, never a failure; only an
+    /// answer that cannot be read is.
+    pub fn list_revision(&mut self, rev: &str) -> Result<Option<CommitListing>, Cause> {
+        self.list(rev, RevAnswer::Named)
+    }
+
+    /// The commit `rev` names, its answer read as `answer` says, listed.
+    fn list(&mut self, rev: &str, answer: RevAnswer) -> Result<Option<CommitListing>, Cause> {
         let Some(commit) = self
             .staged
-            .commit_named(rev)
+            .commit_named(rev, answer)
             .map_err(|failure| failure.cause())?
         else {
             return Ok(None);

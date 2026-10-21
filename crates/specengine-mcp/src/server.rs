@@ -42,7 +42,8 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// the `spec init` aside (34 bytes; the no-project error result names
 /// it); task spec `impact` (Q-B) adds `get_impact` to the reads (40
 /// bytes) and drops the probes paragraph, so every build sends this text
-/// alone: 2 017 bytes, 1 879 without the tasks line.
+/// alone; task spec `impact-since` adds `|since` (6 bytes): 2 023 bytes,
+/// 1 885 without the tasks line.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
@@ -52,7 +53,7 @@ Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
-get_impact(id|symbol, depth?) = impact.
+get_impact(id|symbol|since, depth?) = impact.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):

@@ -151,6 +151,12 @@ impl HeadSide {
     pub(crate) fn is_unborn(&self) -> bool {
         self.listing.is_none()
     }
+
+    /// The commit's code tree, `walk` when it is equal; `None` unborn.
+    pub(crate) fn code<'a>(&'a self, walk: &'a CodeTree) -> Option<&'a CodeTree> {
+        self.listing.as_ref()?;
+        Some(self.tree.as_ref().unwrap_or(walk))
+    }
 }
 
 /// One judged row.
@@ -1466,9 +1472,10 @@ impl LineStarts {
 
 /// The base: `HEAD`'s side read through `git`'s one session
 /// (canon `spec-verify`, "Base"): its documents as `spec check
-/// --changed`'s base lists them, the `.rs` and `.ron` files under the code
-/// roots, every `Cargo.toml` under a root or at or above one, `spec.lock`
-/// and the config (`config_path`, root-relative: its mode only). Judged
+/// --changed`'s base lists them, `spec.lock` and the config
+/// (`config_path`, root-relative: its mode only), then its code half by
+/// [`read_code`]: the `.rs` and `.ron` files under the code roots, every
+/// `Cargo.toml` under a root or at or above one. Judged
 /// with the current config, scheme and `[code]`; a document's parse and a
 /// code file's binding are reused when its bytes are equal, the whole
 /// walk when every code file and every manifest the naming read is. An
@@ -1501,24 +1508,9 @@ pub(crate) fn read_head(
         });
     };
     let project = walked.project;
-    let code = walked.code;
     let documents = listing.documents(&project.config.paths.walk_scope());
-    let mut code_files: Vec<String> = Vec::new();
-    let mut manifests: Vec<String> = Vec::new();
-    for (path, entry) in listing.entries() {
-        if entry.kind != CommitEntryKind::Regular {
-            continue;
-        }
-        if is_code_path(code, path) {
-            code_files.push(path.to_owned());
-        } else if is_manifest(code, path) {
-            manifests.push(path.to_owned());
-        }
-    }
     let mut wanted: BTreeSet<&str> = BTreeSet::new();
     wanted.extend(documents.iter().map(String::as_str));
-    wanted.extend(code_files.iter().map(String::as_str));
-    wanted.extend(manifests.iter().map(String::as_str));
     wanted.insert(LOCK_FILE);
     if let Some(config) = config_path {
         wanted.insert(config);
@@ -1549,16 +1541,14 @@ pub(crate) fn read_head(
         read.insert(path, CommitFile::Bytes(bytes));
     }
 
-    // A partial base judges nothing.
-    let mut partial = Vec::new();
-    for path in documents.iter().chain(&code_files).chain(&manifests) {
-        if let Some(CommitFile::Unreadable(why)) = read.get(path) {
-            partial.push(format!("HEAD's `{path}`: {why}"));
-        }
-    }
-    if let Some(first) = partial.into_iter().next() {
+    // A partial base judges nothing: its documents first, then its code.
+    if let Some(first) = documents.iter().find_map(|path| match read.get(path) {
+        Some(CommitFile::Unreadable(why)) => Some(format!("HEAD's `{path}`: {why}")),
+        _ => None,
+    }) {
         return Err(RunCause::new(CAUSE_BASE, first));
     }
+    let code = read_code(&listing, walked.code, git, "HEAD", index)?;
 
     // The lock at HEAD (the index side's when it shares it), or the judged
     // lock in its place when HEAD's is only unrebased.
@@ -1634,49 +1624,7 @@ pub(crate) fn read_head(
 
     // HEAD's code tree: the walk's when every code file and every
     // manifest the naming read are equal, else bound from HEAD's blobs.
-    let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    for path in &code_files {
-        if let Some(CommitFile::Bytes(bytes)) = read.remove(path) {
-            blobs.insert(path.clone(), bytes);
-        }
-    }
-    let mut seen: BTreeMap<String, ManifestSeen> = BTreeMap::new();
-    for path in &manifests {
-        let dir = path
-            .strip_suffix(MANIFEST)
-            .map(|dir| dir.strip_suffix('/').unwrap_or(dir))
-            .unwrap_or_default();
-        let manifest = match read.remove(path) {
-            Some(CommitFile::Bytes(bytes)) => ManifestSeen::Bytes(bytes),
-            _ => ManifestSeen::Unreadable,
-        };
-        seen.insert(dir.to_owned(), manifest);
-    }
-    let tree = walked.tree;
-    let walked_paths = tree.rust.len() + tree.ron.len() + tree.not_utf8.len();
-    let same_files = tree.not_utf8.is_empty()
-        && blobs.len() == walked_paths
-        && tree
-            .rust
-            .iter()
-            .map(|file| (&file.path, &file.text))
-            .chain(tree.ron.iter().map(|file| (&file.path, &file.text)))
-            .all(|(path, text)| {
-                blobs
-                    .get(path)
-                    .is_some_and(|bytes| bytes == text.as_bytes())
-            });
-    let same_manifests = tree
-        .manifests
-        .iter()
-        .all(|(dir, walked)| seen.get(dir).unwrap_or(&ManifestSeen::Absent) == walked);
-    let tree = if same_files && same_manifests {
-        None
-    } else {
-        Some(tree_of_blobs(blobs, &seen, tree).map_err(|gap| {
-            RunCause::new(CAUSE_BASE, format!("HEAD's code walk is incomplete: {gap}"))
-        })?)
-    };
+    let tree = code.tree(walked.tree, "HEAD")?;
     Ok(HeadSide {
         listing: Some(listing),
         input,
@@ -1685,6 +1633,137 @@ pub(crate) fn read_head(
         mode,
         lock_note,
     })
+}
+
+/// A listed commit's code half under the current `[code]`, read by
+/// [`read_code`]: its regular `.rs` and `.ron` files the walk would read
+/// there and every regular `Cargo.toml` under a root or at or above one,
+/// with their bytes.
+pub(crate) struct CommitCode {
+    code_files: Vec<String>,
+    manifests: Vec<String>,
+    read: BTreeMap<String, CommitFile>,
+}
+
+/// The code half of any listed commit (`HEAD` for [`read_head`], `spec
+/// impact --since`'s REV, task spec `impact-since`): its code files and
+/// manifests under `code` (the current `[code]`) read through `git`'s
+/// session, nothing else of it (its documents, `spec.lock` and config are
+/// [`read_head`]'s own). Over the index's side (`share`), a file whose
+/// (path, OID) the index holds as a regular file is given the index side's
+/// bytes, never read from git. Causes: git's (4); a listed object missing
+/// or no blob (7), `rev` naming the commit.
+pub(crate) fn read_code(
+    listing: &CommitListing,
+    code: &CodeConfig,
+    git: &mut VerifyGit,
+    rev: &str,
+    share: Option<&IndexShare<'_>>,
+) -> Result<CommitCode, RunCause> {
+    let git_cause = |cause: specengine_core::check::Cause| RunCause::new(CAUSE_GIT, cause.message);
+    let mut code_files: Vec<String> = Vec::new();
+    let mut manifests: Vec<String> = Vec::new();
+    for (path, entry) in listing.entries() {
+        if entry.kind != CommitEntryKind::Regular {
+            continue;
+        }
+        if is_code_path(code, path) {
+            code_files.push(path.to_owned());
+        } else if is_manifest(code, path) {
+            manifests.push(path.to_owned());
+        }
+    }
+    let mut wanted: BTreeSet<&str> = BTreeSet::new();
+    wanted.extend(code_files.iter().map(String::as_str));
+    wanted.extend(manifests.iter().map(String::as_str));
+    let mut given: Vec<(String, Vec<u8>)> = Vec::new();
+    if let Some(share) = share {
+        wanted.retain(|path| {
+            if !share.shares(listing, path) {
+                return true;
+            }
+            match share.bytes(path) {
+                Some(bytes) => {
+                    given.push(((*path).to_owned(), bytes));
+                    false
+                }
+                None => true,
+            }
+        });
+    }
+    let mut read = git.read_files(listing, wanted).map_err(git_cause)?;
+    for (path, bytes) in given {
+        read.insert(path, CommitFile::Bytes(bytes));
+    }
+    if let Some(first) = code_files
+        .iter()
+        .chain(&manifests)
+        .find_map(|path| match read.get(path) {
+            Some(CommitFile::Unreadable(why)) => Some(format!("{rev}'s `{path}`: {why}")),
+            _ => None,
+        })
+    {
+        return Err(RunCause::new(CAUSE_BASE, first));
+    }
+    Ok(CommitCode {
+        code_files,
+        manifests,
+        read,
+    })
+}
+
+impl CommitCode {
+    /// The commit's code tree: `None` when every code file and every
+    /// manifest the naming read equals the walk's (`tree`), else bound
+    /// from the commit's bytes, a file's binding reused when its text is
+    /// the walk's. Cause (7), `rev` naming the commit: a Rust file the
+    /// parser gives no tree.
+    pub(crate) fn tree(mut self, tree: &CodeTree, rev: &str) -> Result<Option<CodeTree>, RunCause> {
+        let mut blobs: BTreeMap<String, Vec<u8>> = BTreeMap::new();
+        for path in self.code_files {
+            if let Some(CommitFile::Bytes(bytes)) = self.read.remove(&path) {
+                blobs.insert(path, bytes);
+            }
+        }
+        let mut seen: BTreeMap<String, ManifestSeen> = BTreeMap::new();
+        for path in &self.manifests {
+            let dir = path
+                .strip_suffix(MANIFEST)
+                .map(|dir| dir.strip_suffix('/').unwrap_or(dir))
+                .unwrap_or_default();
+            let manifest = match self.read.remove(path) {
+                Some(CommitFile::Bytes(bytes)) => ManifestSeen::Bytes(bytes),
+                _ => ManifestSeen::Unreadable,
+            };
+            seen.insert(dir.to_owned(), manifest);
+        }
+        let walked_paths = tree.rust.len() + tree.ron.len() + tree.not_utf8.len();
+        let same_files = tree.not_utf8.is_empty()
+            && blobs.len() == walked_paths
+            && tree
+                .rust
+                .iter()
+                .map(|file| (&file.path, &file.text))
+                .chain(tree.ron.iter().map(|file| (&file.path, &file.text)))
+                .all(|(path, text)| {
+                    blobs
+                        .get(path)
+                        .is_some_and(|bytes| bytes == text.as_bytes())
+                });
+        let same_manifests = tree
+            .manifests
+            .iter()
+            .all(|(dir, walked)| seen.get(dir).unwrap_or(&ManifestSeen::Absent) == walked);
+        if same_files && same_manifests {
+            return Ok(None);
+        }
+        tree_of_blobs(blobs, &seen, tree).map(Some).map_err(|gap| {
+            RunCause::new(
+                CAUSE_BASE,
+                format!("{rev}'s code walk is incomplete: {gap}"),
+            )
+        })
+    }
 }
 
 /// `HEAD`'s lock, read in a rebase's order (task spec `lock-rebase`,

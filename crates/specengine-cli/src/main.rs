@@ -43,7 +43,7 @@ use specengine_cli::{
     SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES,
     TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
     TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, UnmappedRequest,
-    VerifiedTree, VerifyRequest, VerifyTestsRequest, render_json, render_text,
+    VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -145,7 +145,7 @@ enum Command {
         #[arg(long)]
         archive: bool,
     },
-    /// Show what a change to a node or a code symbol reaches: nodes, bound code with its sync, tests, open tasks; read-only.
+    /// Show what a change to a node, a code symbol or the code since a revision reaches: nodes, bound code with its sync, tests, open tasks; read-only.
     Impact {
         /// Any form `show` takes.
         #[arg(value_name = "REF")]
@@ -153,6 +153,9 @@ enum Command {
         /// Looked up as `spec symbols QUERY`.
         #[arg(long, value_name = "QPATH")]
         symbol: Option<String>,
+        /// The code changed since this git revision, against the files on disk.
+        #[arg(long, value_name = "REV", allow_hyphen_values = true)]
+        since: Option<String>,
         /// Distance from REF at most; default unbounded.
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         depth: Option<i64>,
@@ -872,6 +875,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         Command::Impact {
             reference,
             symbol,
+            since,
             depth,
         } => Outcome::Impact(Box::new(specengine_cli::impact(
             env,
@@ -879,6 +883,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             &ImpactRequest {
                 reference,
                 symbol,
+                since,
                 depth,
                 git: process_git(env),
             },
@@ -1009,7 +1014,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             } else {
                 VerifiedTree::WorkingTree
             };
-            Outcome::Verify(Box::new(specengine_cli::verify(
+            Outcome::Verify(Box::new(specengine_cli::verify_as(
                 env,
                 globals,
                 &VerifyRequest {
@@ -1018,6 +1023,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     node,
                     symbol,
                     git: process_git(env),
+                },
+                if json {
+                    VerifyFormat::Json
+                } else {
+                    VerifyFormat::Text
                 },
             )?))
         }
