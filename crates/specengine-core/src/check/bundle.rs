@@ -19,7 +19,8 @@
 //! - Layer 4, criteria: a source of `verifies` linked in, or an ID section
 //!   whose prefix is `scope = "feature"` linked in by any type.
 //! - Layers 6, 7, 8: [`BUNDLE_LINK_TYPES`].
-//! - Layers 5 and 9 (bindings, tests): none until Phase 3.
+//! - Layers 5 and 9 (bindings, tests): no candidate here; the CLI fills
+//!   them with code binding rows by node (task spec `bundle-bindings`).
 //!
 //! A node is a candidate once, in its first layer; within a layer by (path,
 //! position), ancestors nearest first per target.
@@ -37,12 +38,13 @@ pub enum BundleLayer {
     OpenQuestions,
     Ancestors,
     Criteria,
-    /// Phase 3: always empty.
+    /// The targets' code binding rows (the CLI's; no candidate here).
     Bindings,
     Decisions,
     Neighbours,
     Terms,
-    /// Phase 3: always empty.
+    /// The `verifies` rows of the targets and criteria (the CLI's; no
+    /// candidate here).
     Tests,
 }
 

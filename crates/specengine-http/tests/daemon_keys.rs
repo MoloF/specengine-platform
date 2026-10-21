@@ -120,6 +120,13 @@
 //! an object; the package's keys `TaskPackage`'s). The ten are the key
 //! sets of docs/canon/spec-roadmap-screen.md "Rules". M: a key dropped from
 //! a roadmap set of the fixture.
+//!
+//! RD-8 of docs/features/bundle-bindings.md (7a-2), its Rust half
+//! ("UI and daemon keys"): one set more, 67 in all, last: `BindingRow`
+//! (docs/canon/code-reads.md "The binding row", 14 keys in order), from
+//! the rows of a package's `bindings` on `code-health` (T-0001 on
+//! `GOAL-01`, made by [`health_code_repo`]); `TaskPackage` stays at 26
+//! keys. M: a row key dropped from the fixture.
 
 mod common;
 mod task_state;
@@ -128,7 +135,7 @@ use std::fmt;
 use std::fs;
 
 use common::{
-    Scratch, Server, ask, propose_update, repository_root, run_product, spec_bin, spec_json,
+    Scratch, Server, ask, propose_update, repository_root, run_product, spec, spec_bin, spec_json,
 };
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 
@@ -511,6 +518,14 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 .to_owned()
         })
         .collect();
+    // bundle-bindings: code-health's task, its package's binding rows.
+    let code_package = vec![
+        server
+            .get("/api/projects/code-health/tasks/T-0001")
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -620,6 +635,11 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let assumed_proposals = objects(&with_object(&assumes_rows, "proposal"), "proposal");
     let assumed_nodes = objects(&with_object(&assumes_rows, "node"), "node");
     let unbound_markers = items(&unbound_rows, "markers");
+    let binding_rows = items(&code_package, "bindings");
+    assert!(
+        !binding_rows.is_empty(),
+        "BindingRow: code-health's package lists rows: {code_package:?}"
+    );
     for (name, found) in [
         ("AssumedProposal", &assumed_proposals),
         ("AssumedNode", &assumed_nodes),
@@ -949,6 +969,10 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "TaskRoadmap",
             one_key_set("TaskRoadmap", &task_roadmaps, keys_of),
         ),
+        (
+            "BindingRow",
+            one_key_set("BindingRow", &binding_rows, keys_of),
+        ),
     ]
 }
 
@@ -1077,6 +1101,24 @@ fn health_code_repo(scratch: &Scratch, home: &std::path::Path) -> std::path::Pat
         "Is the count shared between threads?",
     );
     assert_eq!(id, "PR-0001");
+    // bundle-bindings: a task on GOAL-01, whose package lists its rows.
+    let made = spec(
+        home,
+        &root,
+        &[
+            "--root",
+            root.to_str().expect("UTF-8 root"),
+            "task",
+            "new",
+            "--nodes",
+            "GOAL-01",
+            "--title",
+            "Check the cap",
+            "--goal",
+            "Read the code bound to the objective.",
+        ],
+    );
+    made.code(0);
     root
 }
 
@@ -1228,9 +1270,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        66,
+        67,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
-         health-code: 56; roadmap-screen: 66)"
+         health-code: 56; roadmap-screen: 66; bundle-bindings: 67)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1447,7 +1489,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // roadmap-screen's ten, last (TE-1): `docs/canon/spec-roadmap.md`
     // "Command"'s JSON, every key present, in order; the package's
     // `roadmap` as `docs/canon/task-package.md` "Package" sends it.
-    let roadmap: Vec<(&str, Vec<String>)> = sets[56..].to_vec();
+    let roadmap: Vec<(&str, Vec<String>)> = sets[56..66].to_vec();
     let want: [(&str, &[&str]); 10] = [
         (
             "RoadmapDocument",
@@ -1507,6 +1549,29 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             .collect::<Vec<_>>(),
         [15, 2, 4, 3, 8, 11, 2, 2, 4, 7]
     );
+    // bundle-bindings' one, last (RD-8): the binding row's 14 keys in
+    // `docs/canon/code-reads.md` "The binding row"'s order; the package
+    // keeps its 26.
+    assert_eq!(sets[66].0, "BindingRow");
+    assert_eq!(
+        sets[66].1,
+        [
+            "node",
+            "relation",
+            "file",
+            "kind",
+            "symbol",
+            "item_kind",
+            "line",
+            "end_line",
+            "signature",
+            "layer",
+            "sync",
+            "category",
+            "detail",
+            "anchor",
+        ]
+    );
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1527,12 +1592,13 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 66 sets (41 until
+/// unchanged, no new key): the fixture holds 67 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
-/// docs/features/health-code.md its ten, AC-9, and
-/// docs/features/roadmap-screen.md its ten, TE-1); a decision
+/// docs/features/health-code.md its ten, AC-9,
+/// docs/features/roadmap-screen.md its ten, TE-1, and
+/// docs/features/bundle-bindings.md its `BindingRow`, RD-8); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -1546,10 +1612,11 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        66,
-        "66 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        67,
+        "67 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
-         health-code's ten (AC-9) and roadmap-screen's ten (TE-1)"
+         health-code's ten (AC-9), roadmap-screen's ten (TE-1) and \
+         bundle-bindings' `BindingRow` (RD-8)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1663,13 +1730,14 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 66 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 67 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
-/// docs/features/health-code.md its ten, AC-9, and
+/// docs/features/health-code.md its ten, AC-9,
 /// docs/features/roadmap-screen.md its ten, TE-1, the key sets of
-/// docs/canon/spec-roadmap-screen.md "Rules"); the amendment of
+/// docs/canon/spec-roadmap-screen.md "Rules", and
+/// docs/features/bundle-bindings.md its `BindingRow`, RD-8); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -1686,10 +1754,11 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        66,
-        "66 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        67,
+        "67 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
-         health-code's ten (AC-9) and roadmap-screen's ten (TE-1)"
+         health-code's ten (AC-9), roadmap-screen's ten (TE-1) and \
+         bundle-bindings' `BindingRow` (RD-8)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

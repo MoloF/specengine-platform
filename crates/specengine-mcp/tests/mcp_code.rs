@@ -2652,7 +2652,9 @@ fn queue_rows(env: &Env, git: &GitEnv) -> (Vec<String>, String, String) {
 /// `spec.lock`; every code tool called valid and invalid (forms, exits 0,
 /// 1, 2, bad arguments; `check_binding` since docs/features/check-binding.md
 /// TE-3; `get_node` with `with: ["bindings"]` since
-/// docs/features/show-bindings.md TE-5) in both eras from a subdirectory;
+/// docs/features/show-bindings.md TE-5; `get_context_bundle` with its
+/// code rows and `get_task` on a draft task of GOAL-01 since
+/// docs/features/bundle-bindings.md TE-5) in both eras from a subdirectory;
 /// then `git
 /// status --porcelain=v1 -z --untracked-files=all` is as before (empty),
 /// `.git/index`'s mtime and `spec.lock`'s bytes unchanged, the tree
@@ -2676,6 +2678,25 @@ fn te2_code_tools_write_nothing_under_the_root() {
     // The index and queue exist before the snapshots (the library's
     // `spec index`: it writes the data directory only).
     index_with_library(&env, &Globals::default());
+    // docs/features/bundle-bindings.md TE-5: a draft task whose package
+    // lists rows, made before the snapshots.
+    let task = specengine_cli::task_new(
+        &env,
+        &Globals::default(),
+        &specengine_cli::TaskNewRequest {
+            nodes: vec!["GOAL-01".to_owned()],
+            title: Some("Check the cap".to_owned()),
+            goal: Some("Read the code bound to the objective.".to_owned()),
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: "2026-10-21T09:00:00Z".to_owned(),
+            git: git.clone(),
+        },
+    )
+    .expect("task new")
+    .id
+    .expect("an ID");
     let queue = queue_rows(&env, &git);
     let status = porcelain(&sandbox, &root);
     assert_eq!(status, b"", "committed clean");
@@ -2744,6 +2765,21 @@ fn te2_code_tools_write_nothing_under_the_root() {
             json!({"id": "PIECE-LIMITS", "with": ["bindings"]}),
         ),
         ("get_node", json!({"id": "LAW-NOPE", "with": ["bindings"]})),
+        // docs/features/bundle-bindings.md TE-5: bundles with their rows
+        // judged (a document, two REFs, rows left out, naming nothing) and
+        // the task's package with its rows.
+        ("get_context_bundle", json!({"node_ids": ["PIECE-COUNTER"]})),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["GOAL-01", "LAW-STEP"], "budget": 10000}),
+        ),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["LAW-BOUND"], "budget": 300}),
+        ),
+        ("get_context_bundle", json!({"node_ids": ["LAW-NOPE"]})),
+        ("get_task", json!({"task_id": task})),
+        ("get_task", json!({"next": true})),
     ];
     let invalid = [
         ("find_symbols", json!({"query": 5})),
@@ -2755,6 +2791,11 @@ fn te2_code_tools_write_nothing_under_the_root() {
         ("check_binding", json!({"node": 7})),
         ("check_binding", json!({"node": "LAW-STEP", "bogus": true})),
         ("get_node", json!({"id": "LAW-STEP", "with": ["history"]})),
+        ("get_context_bundle", json!({"node_ids": "GOAL-01"})),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["GOAL-01"], "budget": "all"}),
+        ),
     ];
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&cwd), Home::At(&home));

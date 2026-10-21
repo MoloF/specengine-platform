@@ -1176,8 +1176,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
     // docs/features/roadmap-surfaces.md; 0.12.0 since
     // docs/features/check-binding.md; 0.13.0 since
-    // docs/features/show-bindings.md.
-    assert_eq!(manifest["version"], "0.13.0");
+    // docs/features/show-bindings.md; 0.14.0 since
+    // docs/features/bundle-bindings.md.
+    assert_eq!(manifest["version"], "0.14.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1260,8 +1261,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
     // docs/features/roadmap-surfaces.md; 0.12.0 since
     // docs/features/check-binding.md; 0.13.0 since
-    // docs/features/show-bindings.md.
-    assert_eq!(manifest["version"], "0.13.0");
+    // docs/features/show-bindings.md; 0.14.0 since
+    // docs/features/bundle-bindings.md.
+    assert_eq!(manifest["version"], "0.14.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1364,10 +1366,11 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.13.0",
+        manifest["version"], "0.14.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
-         roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0"
+         roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
+         bundle-bindings: 0.14.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1736,6 +1739,67 @@ fn read_spec_names_the_bindings_read() {
         !reworded["read-spec"]
             .lines()
             .any(|line| line == READ_SPEC_NODE_BULLET),
+        "the mutation is seen"
+    );
+}
+
+/// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
+/// `read-spec`'s step 1, word for word.
+const READ_SPEC_BUNDLE_STEP: &str = "1. **The bundle first.** Call `get_context_bundle` with the IDs (or root-relative `.md` paths) your task names, in `node_ids`. One answer holds the targets, their open questions, ancestors, criteria, the code bound to them with each binding's `sync`, decisions, neighbours, terms and the tests bound to them or their criteria; what did not fit the budget is named by ID (a binding by its symbol, else its file) with its cost.";
+
+/// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
+/// `read-spec`'s step 1 names the bundle's code bindings and tests (the
+/// spec's text, once, the first step of "Order"), the bundle's layer order
+/// kept (criteria, the code, decisions; terms, then the tests); its
+/// description, the bindings read of step 2 and the code reads unchanged;
+/// no state word; the body within 4 096 bytes (3 444 B). M: the step
+/// missing or reworded.
+#[test]
+fn read_spec_names_the_bundles_code_and_tests() {
+    let skills = committed();
+    assert_eq!(rd9_problems(&skills), Vec::<String>::new());
+    let text = &skills["read-spec"];
+    let lines: Vec<&str> = text.lines().collect();
+    let at = lines
+        .iter()
+        .position(|line| *line == READ_SPEC_BUNDLE_STEP)
+        .expect("the spec's step 1, word for word");
+    assert_eq!(
+        lines[at - 2],
+        "## Order",
+        "the first step of Order: after {:?}",
+        lines[at - 2]
+    );
+    assert!(
+        lines.contains(&READ_SPEC_NODE_BULLET),
+        "step 2's bindings read kept"
+    );
+    let step = READ_SPEC_BUNDLE_STEP;
+    let place = |words: &str| step.find(words).unwrap_or_else(|| panic!("{words}"));
+    assert!(
+        place("criteria, the code bound") < place("decisions, neighbours, terms and the tests"),
+        "the code between criteria and decisions, the tests last"
+    );
+    for word in STATE_WORDS {
+        assert!(!has_word(text, word), "{word:?} in read-spec");
+    }
+    let body = text.splitn(3, "---\n").nth(2).expect("a body");
+    assert!(body.len() <= 4096, "the body is {} bytes", body.len());
+    assert_eq!(
+        text.len(),
+        3_444,
+        "SKILL.md's bytes as the spec measures them"
+    );
+    let reworded = edited(
+        &skills,
+        "read-spec",
+        "the code bound to them with each binding's `sync`, ",
+        "",
+    );
+    assert!(
+        !reworded["read-spec"]
+            .lines()
+            .any(|line| line == READ_SPEC_BUNDLE_STEP),
         "the mutation is seen"
     );
 }

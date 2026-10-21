@@ -51,10 +51,15 @@ pub const DIFFS_TOTAL_MAX: usize = 262_144;
 pub const CRITERION_TEXT_MAX: usize = 8192;
 /// The characters a package's JSON and its `note:` lines may hold
 /// together: past it, the `snapshot_diff` texts, then the criteria
-/// references' texts, are left out from the last (a note each kind). With
+/// references' texts, then the code binding rows, are left out from the
+/// last (a note each kind). With
 /// the brief's 40 000 characters it is MCP's result size
 /// (`docs/canon/task-package.md` "Caps").
 pub const PACKAGE_BUDGET: usize = 460_000;
+/// The most code binding rows a package lists (task spec
+/// `bundle-bindings`): past it one note; `spec show --bindings` lists
+/// them all.
+pub const PACKAGE_BINDINGS_MAX: usize = 64;
 /// The budget of a task's bundle without `[budgets] bundle_task`, in
 /// estimated tokens (05 §6: a task bundle, 10k).
 pub const DEFAULT_TASK_BUDGET: u32 = 10_000;

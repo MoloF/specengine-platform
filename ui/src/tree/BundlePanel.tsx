@@ -1,13 +1,13 @@
 import { useId, useRef, useState, type MouseEvent, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useBundle } from "../api/queries";
-import type { BundleItem, BundleView } from "../api/types";
+import type { BindingPlace, BundleBindingRow, BundleItem, BundleLayers, BundleView, TailEntry } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { directionLabel, formLabel, LAYER_HEADINGS, layerHeading, linkStateLook } from "./labels";
+import { directionLabel, formLabel, isCodeLayer, LAYER_HEADINGS, layerHeading, linkStateLook, syncLook } from "./labels";
 
 const DIGITS = /^\d*$/;
 /** The largest budget the daemon takes (`u32::MAX`, `docs/canon/spec-cli-bundle.md` "Command"). */
@@ -63,6 +63,136 @@ function ItemRow({ project, item, onFollow }: { project: string; item: BundleIte
   );
 }
 
+/** A row's place as `spec show --bindings` prints it: `<file>:<line>-<end_line>`, `<file>:<line>` or `<file>`. */
+function placeOf(row: BundleBindingRow): string {
+  if (row.line === null) {
+    return row.file;
+  }
+  return row.end_line === null ? `${row.file}:${String(row.line)}` : `${row.file}:${String(row.line)}-${String(row.end_line)}`;
+}
+
+/** A binding as verify names it: `<kind> <symbol>[ <item_kind>]` (a keyless row has none: "No symbol"). */
+function bindingOf(place: Pick<BindingPlace, "kind" | "symbol" | "item_kind">): string {
+  return place.item_kind === null ? `${place.kind} ${place.symbol}` : `${place.kind} ${place.symbol} ${place.item_kind}`;
+}
+
+/**
+ * One code binding row of layer 5 or 9 as lines: its node and relation, its place, its binding and
+ * layer, its sync (verify's state, labelled; category and detail raw), its signature, where it moved
+ * from or might be. Nothing in it is a link: a row's node may be unresolved and its symbol is a
+ * qpath, neither a tree node (docs/features/bundle-bindings.md "UI and daemon keys").
+ */
+function BindingLine({ row }: { row: BundleBindingRow }) {
+  const judgement = [row.category, row.detail].filter((word) => word !== null).join(" ");
+  const key = row.kind !== null && row.symbol !== null ? bindingOf({ kind: row.kind, symbol: row.symbol, item_kind: row.item_kind }) : null;
+  const from = row.anchor?.from ?? null;
+  const candidates = row.anchor?.candidates ?? [];
+  return (
+    <li className="bundle-item">
+      <p className="bundle-item-head">
+        <span className="mono">{row.node === "" ? "-" : row.node}</span>
+        <span className="kind-tag">{row.relation}</span>
+        <span className="mono">{placeOf(row)}</span>
+      </p>
+      <p className="bundle-item-meta">
+        {key === null ? <span>No symbol</span> : <span className="mono">{key}</span>}
+        {row.layer !== null && <span>layer {row.layer}</span>}
+        <span>{row.tokens_est} tokens</span>
+      </p>
+      <p className="bundle-item-meta">
+        <Badge name="Sync" look={syncLook(row.sync)} />
+        {judgement !== "" && <span className="mono">{judgement}</span>}
+      </p>
+      {row.signature !== null && (
+        <p className="bundle-item-meta">
+          <span>Signature:</span>
+          <span className="mono">{row.signature}</span>
+        </p>
+      )}
+      {from !== null && (
+        <p className="bundle-item-meta">
+          <span>Moved from</span>
+          <span className="mono">
+            {from.file} | {bindingOf(from)}
+          </span>
+        </p>
+      )}
+      {candidates.map((candidate) => (
+        <p key={`${candidate.file}|${bindingOf(candidate)}`} className="bundle-item-meta">
+          <span>Candidate</span>
+          <span className="mono">
+            {candidate.file} | {bindingOf(candidate)}
+          </span>
+        </p>
+      ))}
+    </li>
+  );
+}
+
+/**
+ * What tells two rows apart: their place in the layer, then verify's key and, for a keyless row,
+ * its state and category (`docs/canon/spec-verify.md` "Rows"). A listed row has neither
+ * (`docs/canon/code-reads.md` "Degrade"), so two keyless ones on one node, relation and file
+ * differ by the index alone, as the tail's entries do.
+ */
+function rowKey(row: BundleBindingRow, index: number): string {
+  return [String(index), row.node, row.relation, row.file, row.kind, row.symbol, row.item_kind, row.sync, row.category]
+    .map((part) => part ?? "")
+    .join("\u0000");
+}
+
+/** A layer's entries: nodes as items linked to the tree, code rows as lines. */
+function LayerList({
+  project,
+  layers,
+  layer,
+  onFollow,
+}: {
+  project: string;
+  layers: BundleLayers;
+  layer: keyof BundleLayers;
+  onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
+}) {
+  if (isCodeLayer(layer)) {
+    return (
+      <ul className="bundle-items">
+        {layers[layer].map((row, index) => (
+          <BindingLine key={rowKey(row, index)} row={row} />
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ul className="bundle-items">
+      {layers[layer].map((item) => (
+        <ItemRow key={`${item.path}:${String(item.line)}`} project={project} item={item} onFollow={onFollow} />
+      ))}
+    </ul>
+  );
+}
+
+/** A left-out entry: a node linked to the tree; a code row named, with its place, never linked. */
+function TailLine({ project, entry, onFollow }: { project: string; entry: TailEntry; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  if (isCodeLayer(entry.layer)) {
+    return (
+      <li>
+        <span className="mono">{entry.name}</span> <span>{entry.title ?? "-"}</span>{" "}
+        <span className="muted">
+          | <span className="mono">{entry.path}:{entry.line}</span> | {entry.tokens_est} tokens | {layerHeading(entry.layer)}
+        </span>
+      </li>
+    );
+  }
+  return (
+    <li>
+      <a className="mono" href={sectionHash(project, "tree", entry.name)} onClick={onFollow}>
+        {entry.name}
+      </a>{" "}
+      <span>{entry.title ?? "-"}</span> <span className="muted">| {entry.tokens_est} tokens | {layerHeading(entry.layer)}</span>
+    </li>
+  );
+}
+
 function BundleBody({ project, bundle, onFollow }: { project: string; bundle: BundleView; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   if (bundle.reason !== null) {
     return (
@@ -97,24 +227,16 @@ function BundleBody({ project, bundle, onFollow }: { project: string; bundle: Bu
         LAYER_HEADINGS.filter(([key]) => layers[key].length > 0).map(([key, heading]) => (
           <section key={key} className="bundle-layer">
             <h2 className="card-section-title">{heading}</h2>
-            <ul className="bundle-items">
-              {layers[key].map((item) => (
-                <ItemRow key={`${item.path}:${String(item.line)}`} project={project} item={item} onFollow={onFollow} />
-              ))}
-            </ul>
+            <LayerList project={project} layers={layers} layer={key} onFollow={onFollow} />
           </section>
         ))}
       {(tail.length > 0 || more > 0) && (
         <section className="bundle-layer">
           <h2 className="card-section-title">Not included</h2>
           <ul className="bundle-tail">
-            {tail.map((entry) => (
-              <li key={`${entry.path}:${String(entry.line)}`}>
-                <a className="mono" href={sectionHash(project, "tree", entry.name)} onClick={onFollow}>
-                  {entry.name}
-                </a>{" "}
-                <span>{entry.title ?? "-"}</span> <span className="muted">| {entry.tokens_est} tokens | {layerHeading(entry.layer)}</span>
-              </li>
+            {tail.map((entry, index) => (
+              // A code row's place may repeat (two relations, one symbol): the index keeps keys distinct.
+              <TailLine key={`${String(index)}:${entry.path}:${String(entry.line)}`} project={project} entry={entry} onFollow={onFollow} />
             ))}
             {more > 0 && <li className="muted">{more} more</li>}
           </ul>

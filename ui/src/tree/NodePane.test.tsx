@@ -4,7 +4,8 @@ import appCss from "../styles/app.css?raw";
 import { ClientError } from "../api/client";
 import { App } from "../app/App";
 import type { NodeView, ShownLinks } from "../api/types";
-import { aBundle, aBundleItem, aLink, aNode, aProposal, aSearchHit, aSearchResults, aTreeView, someLayers } from "../test/builders";
+import { aBundle, aBundleItem, aBundleRow, aLink, aNode, aProposal, aSearchHit, aSearchResults, aTreeView, someLayers } from "../test/builders";
+import { takeConsoleCalls } from "../test/console";
 import { renderApp } from "../test/render";
 import { argsOf, type StubClient } from "../test/stubClient";
 import { LINKS, textOf, TREE, treeClient } from "../test/treeStub";
@@ -576,6 +577,166 @@ describe("the bundle (AC-10)", () => {
     expect(panel.textContent).toContain("not included 5");
     expect(panel.querySelector("details pre")?.textContent).toBe("# Bundle: DOC-A\n\n## Targets\n<b>not bold</b>\n");
     expect(panel.querySelector("b")).toBeNull();
+  });
+});
+
+/** A non-Latin file name, escaped (ADR-0024): shown as written. */
+const NON_LATIN_FILE = "src/\u0433\u0430\u0432\u0430\u043d\u044c.rs";
+
+/** Layers 5 and 9 as the daemon sends them: an item, a keyless marker, a RON value, a moved and an ambiguous row, one not judged, one that cannot be verified; a test. */
+function codeLayers() {
+  return someLayers({
+    targets: [aBundleItem({ name: "DOC-A", form: "text" })],
+    criteria: [aBundleItem({ name: "AC-1", form: "text" })],
+    bindings: [
+      aBundleRow({ node: "DOC-A", relation: "binds_any", file: NON_LATIN_FILE, kind: null, symbol: null, item_kind: null, line: null, end_line: null, signature: null, layer: null, sync: "bad_marker", category: "unanchored", anchor: null }),
+      aBundleRow({ node: "DOC-A", sync: "code_ahead", category: "code_changed", detail: "body", signature: "pub fn run(depth: u8) -> Result<(), Error>", tokens_est: 31 }),
+      aBundleRow({ node: "SEC-A1", relation: "configures_any", file: "assets/data/a.ron", kind: "ron", symbol: "root.a.limit", item_kind: null, line: 4, end_line: null, signature: null, layer: null, sync: "spec_ahead", category: "marker_behind" }),
+      aBundleRow({
+        node: "SEC-A1",
+        file: "src/b.rs",
+        symbol: "crate::b::walk",
+        sync: "ok",
+        anchor: { state: "moved", from: { file: "src/old.rs", kind: "item", symbol: "crate::old::walk", item_kind: "function_item" }, candidates: null },
+      }),
+      aBundleRow({
+        node: "SEC-A1",
+        file: "src/c.rs",
+        symbol: "crate::c::step",
+        sync: "cannot_verify",
+        category: "ambiguous_symbol",
+        detail: "duplicate",
+        anchor: {
+          state: "ambiguous",
+          from: null,
+          candidates: [
+            { file: "src/c.rs", kind: "item", symbol: "crate::c::step", item_kind: "function_item" },
+            { file: "src/d.rs", kind: "item", symbol: "crate::d::step", item_kind: null },
+          ],
+        },
+      }),
+      aBundleRow({ node: "DOC-A", file: "src/e.rs", symbol: "crate::e::listed", sync: null, category: null, detail: null, anchor: null }),
+    ],
+    neighbours: [aBundleItem({ name: "N-1", form: "summary" })],
+    tests: [aBundleRow({ node: "AC-1", relation: "checks_any", file: "tests/a.rs", symbol: "a::runs_once", line: 3, end_line: 9, signature: "fn runs_once()" })],
+  });
+}
+
+/** A layer's section by its heading. */
+function layerSection(panel: HTMLElement, heading: string): HTMLElement {
+  const section = within(panel).getByRole("heading", { name: heading }).closest("section");
+  if (section === null) {
+    throw new Error(`no section for ${heading}`);
+  }
+  return section;
+}
+
+describe("the bundle's code rows (UI-2 of bundle-bindings)", () => {
+  it("shows layers 5 and 9 as lines in canon order: node, relation, place, binding, layer, tokens, sync, signature, anchors", async () => {
+    const client = treeClient();
+    client.getBundle.mockResolvedValue(aBundle(["DOC-A"], { layers: codeLayers() }));
+    await openNode(client);
+    const panel = await openTab("Bundle");
+    await within(panel).findByText("Bindings");
+    expect(Array.from(panel.querySelectorAll(".bundle-layer h2"), (heading) => heading.textContent)).toEqual(["Targets", "Criteria", "Bindings", "Neighbours", "Tests"]);
+    const bindings = layerSection(panel, "Bindings");
+    const lines = Array.from(bindings.querySelectorAll("li"), (line) => Array.from(line.querySelectorAll("p"), (part) => part.textContent));
+    expect(lines).toEqual([
+      [`DOC-Abinds_any${NON_LATIN_FILE}`, "No symbol12 tokens", "Sync: Bad markerunanchored"],
+      ["DOC-Aimplementssrc/a.rs:10-20", "item crate::a::run function_itemlayer a31 tokens", "Sync: Code aheadcode_changed body", "Signature:pub fn run(depth: u8) -> Result<(), Error>"],
+      ["SEC-A1configures_anyassets/data/a.ron:4", "ron root.a.limit12 tokens", "Sync: Spec aheadmarker_behind"],
+      ["SEC-A1implementssrc/b.rs:10-20", "item crate::b::walk function_itemlayer a12 tokens", "Sync: In sync", "Signature:pub fn run()", "Moved fromsrc/old.rs | item crate::old::walk function_item"],
+      [
+        "SEC-A1implementssrc/c.rs:10-20",
+        "item crate::c::step function_itemlayer a12 tokens",
+        "Sync: Cannot verifyambiguous_symbol duplicate",
+        "Signature:pub fn run()",
+        "Candidatesrc/c.rs | item crate::c::step function_item",
+        "Candidatesrc/d.rs | item crate::d::step",
+      ],
+      ["DOC-Aimplementssrc/e.rs:10-20", "item crate::e::listed function_itemlayer a12 tokens", "Sync: Not judged", "Signature:pub fn run()"],
+    ]);
+    const tests = layerSection(panel, "Tests");
+    expect(Array.from(tests.querySelectorAll("li > p"), (part) => part.textContent)).toEqual([
+      "AC-1checks_anytests/a.rs:3-9",
+      "item a::runs_once function_itemlayer a12 tokens",
+      "Sync: In sync",
+      "Signature:fn runs_once()",
+    ]);
+    expect(panel.textContent).not.toMatch(/undefined|NaN|\[object/);
+  });
+
+  it("links nothing in a row: neither its node, nor its symbol, nor its file is a tree node", async () => {
+    const client = treeClient();
+    client.getBundle.mockResolvedValue(aBundle(["DOC-A"], { layers: codeLayers() }));
+    await openNode(client);
+    const panel = await openTab("Bundle");
+    await within(panel).findByText("Bindings");
+    expect(layerSection(panel, "Bindings").querySelectorAll("a")).toHaveLength(0);
+    expect(layerSection(panel, "Tests").querySelectorAll("a")).toHaveLength(0);
+    // The nodes of the other layers stay links to the tree.
+    expect(within(layerSection(panel, "Criteria")).getByRole("link", { name: "AC-1" }).getAttribute("href")).toBe("#/alpha/tree/AC-1");
+    expect(within(layerSection(panel, "Neighbours")).getByRole("link", { name: "N-1" }).getAttribute("href")).toBe("#/alpha/tree/N-1");
+  });
+
+  it("draws a row not judged and one that cannot be verified each in its own role, neither like a row in sync", async () => {
+    const client = treeClient();
+    client.getBundle.mockResolvedValue(aBundle(["DOC-A"], { layers: codeLayers() }));
+    await openNode(client);
+    const panel = await openTab("Bundle");
+    await within(panel).findByText("Bindings");
+    const tone = (label: string) => within(panel).getAllByText(label)[0]?.closest(".badge")?.getAttribute("data-tone");
+    expect([tone("In sync"), tone("Not judged"), tone("Cannot verify"), tone("Bad marker")]).toEqual(["sync-ok", "sync-not-judged", "sync-cannot-verify", "sync-bad-marker"]);
+    // Besides its colour and icon, cannot-verify's badge is dotted and a row not judged dashed, as Health's are.
+    const ruled = (style: string) =>
+      Array.from(appCss.matchAll(new RegExp(`([^{}]*)\\{\\s*border-style: ${style};\\s*\\}`, "g")), (match) => match[1] ?? "").join(",");
+    expect(ruled("dotted")).toContain(".tone-sync-cannot-verify");
+    expect(ruled("dashed")).toContain(".tone-sync-not-judged");
+    expect(ruled("dotted")).not.toContain(".tone-sync-ok");
+    expect(ruled("dashed")).not.toContain(".tone-sync-ok");
+  });
+
+  it("names left-out rows in the tail with their place and layer, unlinked; a left-out node stays a link", async () => {
+    const client = treeClient();
+    client.getBundle.mockResolvedValue(
+      aBundle(["DOC-A"], {
+        tail: [
+          { name: "crate::a::run", title: "implements DOC-A", path: "src/a.rs", line: 10, tokens_est: 31, layer: "bindings" },
+          { name: "T-1", title: "Left behind", path: "docs/spec/t.md", line: 1, tokens_est: 900, layer: "terms" },
+          { name: "tests/a.rs", title: "checks_any AC-1", path: "tests/a.rs", line: 1, tokens_est: 20, layer: "tests" },
+        ],
+        more: 2,
+      }),
+    );
+    await openNode(client);
+    const panel = await openTab("Bundle");
+    await within(panel).findByText("Not included");
+    const tail = within(layerSection(panel, "Not included"));
+    const entries = tail.getAllByRole("listitem").map((entry) => [entry.textContent, entry.querySelectorAll("a").length]);
+    expect(entries).toEqual([
+      ["crate::a::run implements DOC-A | src/a.rs:10 | 31 tokens | Bindings", 0],
+      ["T-1 Left behind | 900 tokens | Terms", 1],
+      ["tests/a.rs checks_any AC-1 | tests/a.rs:1 | 20 tokens | Tests", 0],
+      ["2 more", 0],
+    ]);
+    expect(tail.getByRole("link", { name: "T-1" }).getAttribute("href")).toBe("#/alpha/tree/T-1");
+    expect(panel.textContent).toContain("not included 5");
+  });
+
+  it("renders two listed keyless rows on one node, relation and file without React's duplicate-key error (degrade causes 4-6)", async () => {
+    // A row listed but not judged has no state and no category (docs/canon/code-reads.md "Degrade"):
+    // two keyless ones on one node, relation and file differ in nothing else.
+    const listed = { kind: null, symbol: null, item_kind: null, line: null, end_line: null, signature: null, layer: null, sync: null, category: null, detail: null, anchor: null };
+    const client = treeClient();
+    client.getBundle.mockResolvedValue(
+      aBundle(["DOC-A"], { layers: someLayers({ bindings: [aBundleRow({ node: "DOC-A", ...listed }), aBundleRow({ node: "DOC-A", ...listed })] }) }),
+    );
+    await openNode(client);
+    const panel = await openTab("Bundle");
+    await within(panel).findByText("Bindings");
+    expect(layerSection(panel, "Bindings").querySelectorAll("li")).toHaveLength(2);
+    expect(within(panel).getAllByText("Not judged")).toHaveLength(2);
+    expect(takeConsoleCalls()).toEqual([]);
   });
 });
 

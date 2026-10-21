@@ -8,20 +8,19 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 25 open, 5 done; current mvp; to mvp 2-3 days; total 31-53 days
+roadmap: 24 open, 6 done; current mvp; to mvp 2-3 days; total 28-48 days
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
 1. [RM-0001](../roadmap/RM-0001.md) | Live check: real tasks of each pilot through the full cycle | draft | must | 2-3
 
-## release v1 | 6 open, 5 done | 16-27 days
+## release v1 | 5 open, 6 done | 13-22 days
 
-1. [RM-0006](../roadmap/RM-0006.md) | bundle-bindings (7a): an agent's reads carry its nodes' code bindings | draft | should | 3-5
-2. [RM-0007](../roadmap/RM-0007.md) | impact (7b): the blast radius of a node, a symbol or a revision | draft | should | 3-5 | waits on RM-0006
-3. [RM-0008](../roadmap/RM-0008.md) | tested-evidence (8b): a passing test run becomes evidence in spec.lock | draft | should | 3-5 | waits on RM-0007
-4. [RM-0009](../roadmap/RM-0009.md) | health-drift (9b): Health shows drift between spec.lock and the tree | draft | should | 2-4 | waits on RM-0006, RM-0008
-5. [RM-0010](../roadmap/RM-0010.md) | layer-c-reads (11a-3): monikers in spec symbols and find_symbols | draft | should | 2-3
-6. [RM-0011](../roadmap/RM-0011.md) | Drift screens in the web UI (Phase 4) | draft | could | 3-5 | waits on RM-0009
+1. [RM-0007](../roadmap/RM-0007.md) | impact (7b): the blast radius of a node, a symbol or a revision | draft | should | 3-5
+2. [RM-0008](../roadmap/RM-0008.md) | tested-evidence (8b): a passing test run becomes evidence in spec.lock | draft | should | 3-5 | waits on RM-0007
+3. [RM-0009](../roadmap/RM-0009.md) | health-drift (9b): Health shows drift between spec.lock and the tree | draft | should | 2-4 | waits on RM-0008
+4. [RM-0010](../roadmap/RM-0010.md) | layer-c-reads (11a-3): monikers in spec symbols and find_symbols | draft | should | 2-3
+5. [RM-0011](../roadmap/RM-0011.md) | Drift screens in the web UI (Phase 4) | draft | could | 3-5 | waits on RM-0009
 
 ## release v2 | 7 open, 0 done | 13-23 days
 
@@ -39,7 +38,7 @@ roadmap: 25 open, 5 done; current mvp; to mvp 2-3 days; total 31-53 days
 - [RM-0019](../roadmap/RM-0019.md) | roadmap-moves (Phase 6, 3b): moves from the Roadmap screen | draft | could | -
 - [RM-0021](../roadmap/RM-0021.md) | bevy-dump (10b): the project's schedule dump annotates symbols | draft | could | 3-5
 - [RM-0024](../roadmap/RM-0024.md) | machine-bindings (12b): a string constant binds its node without a marker | draft | could | -
-- [RM-0025](../roadmap/RM-0025.md) | constant-reach (12c): what reaches a bound constant, listed, never evidence | draft | could | - | waits on RM-0024, RM-0006
+- [RM-0025](../roadmap/RM-0025.md) | constant-reach (12c): what reaches a bound constant, listed, never evidence | draft | could | - | waits on RM-0024
 - [RM-0026](../roadmap/RM-0026.md) | spec mcp: the MCP stdio bridge | draft | could | 1-2
 - [RM-0027](../roadmap/RM-0027.md) | Queue export to Beads or Task Master | draft | could | 2-3
 - [RM-0028](../roadmap/RM-0028.md) | Spec digest into AGENTS.md or CLAUDE.md for external reviewers | draft | could | 1-2

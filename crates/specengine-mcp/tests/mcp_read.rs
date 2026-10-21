@@ -1216,3 +1216,224 @@ fn te8_get_node_norm_hash_parity_and_schema() {
     let done = session.finish();
     assert!(done.status.success(), "{}", done.stderr);
 }
+
+// ------------------------------------------- bundle-bindings RD-8, TE-4
+
+/// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
+/// `BUNDLE_DESCRIPTION`'s list and its paragraph before the errors'.
+const BUNDLE_LIST: &str = "Markdown body: the targets, their open questions, ancestors, criteria, code bindings (each with its sync: the state spec verify --node gives), decisions, neighbours, terms and the tests bound to them or their criteria, in that order; what did not fit is named by ID (a binding by its symbol, else its file) with its cost.";
+const BUNDLE_CODE_LINE: &str = "Code bindings and tests need a [code] table; a code layer that cannot be read gives a note, never an error.\n";
+
+/// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
+/// `get_context_bundle`'s description holds the spec's list and its
+/// paragraph (before the errors'), 1 305 bytes, ASCII, in both eras. M: a
+/// line missing or reworded.
+#[test]
+fn get_context_bundle_description_names_the_code() {
+    for era in ERAS {
+        let mut session = Session::open(era, &[], None, Home::Fresh);
+        let list = session.tools();
+        let description = tool(&list, "get_context_bundle")["description"]
+            .as_str()
+            .expect("a description")
+            .to_owned();
+        assert_eq!(
+            description.matches(BUNDLE_LIST).count(),
+            1,
+            "{era:?}: {description}"
+        );
+        assert!(
+            description.contains(&format!("\n\n{BUNDLE_CODE_LINE}\nA REF naming nothing")),
+            "{era:?}: the code paragraph before the errors': {description}"
+        );
+        assert!(description.is_ascii());
+        assert_eq!(description.len(), 1305, "{era:?}: the spec's figure");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}
+
+/// docs/features/bundle-bindings.md RD-8 (the walker over
+/// `get_context_bundle`): over code-a's golden with drift, every call
+/// answers what `spec bundle` answers through the library (content the
+/// text, `structuredContent` the JSON, walked against the `outputSchema`:
+/// every key mirrored, every key required), both eras: a document's
+/// bundle, a section's, a record's, two REFs, a budget that leaves rows
+/// out, a REF naming nothing. Its layers 5 and 9 hold rows of the 14 keys
+/// and `tokens_est`, the `anchor` object's three; a left-out row is a tail
+/// entry of layer `bindings` or `tests`. Over spec-a (no `[code]`) both
+/// layers `[]`, no note. Not counted: a key without its mirror (7a-1's M7
+/// proved the walker).
+#[test]
+fn get_context_bundle_with_rows_equals_bundle() {
+    let project = Project::golden();
+    // Twelve long-signature functions bound to GOAL-01: some budget leaves
+    // one out as a tail entry (the least such budget, found through the
+    // library).
+    let mut wide = String::new();
+    for at in 0..12 {
+        wide.push_str(&format!(
+            "// @implements GOAL-01\npub fn widened_step_{at:02}(count: u32, cap: u32, step: u32, floor: u32, ceiling: u32) -> u32 {{\n    count.saturating_add(step).clamp(floor, ceiling.min(cap))\n}}\n\n"
+        ));
+    }
+    write(&project.root, "crates/tally/src/wide.rs", wide);
+    let env = project.env();
+    let tailed = (100..3_000u64)
+        .step_by(10)
+        .find(|budget| {
+            let args = json!({"node_ids": ["GOAL-01"], "budget": budget});
+            let want =
+                common::read::library("get_context_bundle", &args, &env, &Globals::default());
+            want.document.is_some_and(|document| {
+                document["tail"]
+                    .as_array()
+                    .is_some_and(|tail| tail.iter().any(|entry| entry["layer"] == "bindings"))
+            })
+        })
+        .expect("a budget that names a left-out row");
+    let calls = [
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["PIECE-COUNTER"], "budget": 10000}),
+        ),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["LAW-BOUND"], "budget": 4294967295u64}),
+        ),
+        ("get_context_bundle", json!({"node_ids": ["GOAL-01"]})),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["GOAL-01", "LAW-STEP"], "budget": 10000}),
+        ),
+        ("get_context_bundle", json!({"node_ids": ["LAW-NOPE"]})),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["PIECE-COUNTER"], "budget": 300}),
+        ),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["PIECE-COUNTER"], "budget": 450}),
+        ),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["PIECE-COUNTER"], "budget": 700}),
+        ),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["LAW-BOUND"], "budget": 200}),
+        ),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["LAW-BOUND"], "budget": 300}),
+        ),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["GOAL-01"], "budget": tailed}),
+        ),
+    ];
+    let results = project.parity(&calls);
+    for era in &results {
+        let mut rows = 0;
+        let mut entries = 0;
+        for (at, call) in calls.iter().enumerate() {
+            let document = &era[at]["structuredContent"];
+            if at == 4 {
+                assert_eq!(era[at]["isError"], json!(true), "REF naming nothing");
+                continue;
+            }
+            for layer in ["bindings", "tests"] {
+                for row in document["layers"][layer].as_array().expect("a layer") {
+                    let mut keys: Vec<&str> = BINDING_ROW_KEYS.to_vec();
+                    keys.push("tokens_est");
+                    assert_eq!(key_set(row, "a placed row"), set_of(&keys), "{call:?}");
+                    rows += 1;
+                }
+            }
+            for entry in document["tail"]
+                .as_array()
+                .expect("tail")
+                .iter()
+                .filter(|entry| entry["layer"] == "bindings" || entry["layer"] == "tests")
+            {
+                assert_eq!(
+                    key_set(entry, "a tail entry"),
+                    set_of(&["name", "title", "path", "line", "tokens_est", "layer"])
+                );
+                entries += 1;
+            }
+        }
+        assert!(rows > 20, "rows placed: {rows}");
+        assert!(entries > 0, "a left-out row named in a tail");
+        let anchored = era[0]["structuredContent"]["layers"]["bindings"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .find(|row| row["anchor"].is_object())
+            .expect("a row with its anchor")
+            .clone();
+        assert_eq!(
+            key_set(&anchored["anchor"], "anchor"),
+            set_of(&["state", "from", "candidates"])
+        );
+    }
+    assert_eq!(
+        without_result_type(&results[0]),
+        without_result_type(&results[1]),
+        "both eras give the same results"
+    );
+
+    let a = Project::new("spec-a");
+    let results = a.parity(&[(
+        "get_context_bundle",
+        json!({"node_ids": ["MEC-STAMINA"], "budget": 10000}),
+    )]);
+    for era in &results {
+        let document = &era[0]["structuredContent"];
+        assert_eq!(document["layers"]["bindings"], json!([]));
+        assert_eq!(document["layers"]["tests"], json!([]));
+        assert!(
+            !content_text(&era[0]).contains("bindings"),
+            "no [code]: no note, no heading"
+        );
+    }
+}
+
+/// docs/features/bundle-bindings.md TE-4, the MCP half: `fixtures/spec-c`
+/// (a Python service, no `[code]`): every bundle of its IDs is the CLI's
+/// in both eras, layers 5 and 9 `[]`, no bindings note or heading.
+#[test]
+fn get_context_bundle_on_spec_c_has_no_code_layer() {
+    let project = Project::new("spec-c");
+    let calls: Vec<(&str, Value)> = [
+        "AREA-HIRE",
+        "JRN-UNLOCK",
+        "JRN-RETURN",
+        "FEE-RIDE",
+        "FEE-LATE-RETURN",
+        "FEE-DAY-CAP",
+    ]
+    .iter()
+    .map(|id| {
+        (
+            "get_context_bundle",
+            json!({"node_ids": [id], "budget": 10000}),
+        )
+    })
+    .collect();
+    let results = project.parity(&calls);
+    for era in &results {
+        for result in era {
+            let document = &result["structuredContent"];
+            assert_eq!(document["layers"]["bindings"], json!([]));
+            assert_eq!(document["layers"]["tests"], json!([]));
+            let text = content_text(result);
+            assert!(
+                !text.contains("## Bindings")
+                    && !text.contains("## Tests")
+                    && !text.contains("bindings:"),
+                "{}",
+                clip(text)
+            );
+        }
+    }
+}

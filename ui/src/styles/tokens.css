@@ -84,6 +84,13 @@
   --sync-unbound: #a8b6cd;
   --sync-predated: #f59ac2;
   --sync-cannot-verify: #c2b0f5;
+  /* A binding row's sync (docs/features/bundle-bindings.md): verify's other two states take
+     existing roles (a bad marker a fix's, as Health's look-alike marker; unlocked a low check's);
+     a row not judged and an unknown word are neutral, never ok's or cannot-verify's. */
+  --sync-bad-marker: var(--sync-conflict);
+  --sync-unlocked: var(--severity-low);
+  --sync-not-judged: var(--severity-unknown);
+  --sync-unknown: var(--severity-unknown);
 
   /* Link states (spec show --links); unchecked takes cannot-verify's colour, never ok's. */
   --link-resolved: var(--sync-ok);

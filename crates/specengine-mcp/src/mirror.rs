@@ -358,18 +358,51 @@ pub(crate) struct BundleDocument {
     pub more: Option<usize>,
 }
 
-/// Every layer, in print order, its items (`[]` when empty).
+/// Every layer, in print order, its items (`[]` when empty); bindings and
+/// tests their code rows placed in the body.
 #[derive(JsonSchema)]
 pub(crate) struct BundleLayers {
     pub targets: Vec<BundleItem>,
     pub open_questions: Vec<BundleItem>,
     pub ancestors: Vec<BundleItem>,
     pub criteria: Vec<BundleItem>,
-    pub bindings: Vec<BundleItem>,
+    /// The targets' code bindings and those of the nodes within them,
+    /// their tests aside, empty without a `[code]` table.
+    pub bindings: Vec<BundleRowShape>,
     pub decisions: Vec<BundleItem>,
     pub neighbours: Vec<BundleItem>,
     pub terms: Vec<BundleItem>,
-    pub tests: Vec<BundleItem>,
+    /// The tests bound to the targets, the nodes within them and the
+    /// criteria; never run here.
+    pub tests: Vec<BundleRowShape>,
+}
+
+/// A code binding placed in the body: a binding row, key for key, then
+/// its lines' estimated tokens.
+#[derive(JsonSchema)]
+pub(crate) struct BundleRowShape {
+    pub node: String,
+    pub relation: MarkerRelation,
+    pub file: String,
+    pub kind: Option<VerifyKind>,
+    pub symbol: Option<String>,
+    /// The item's kind as the code layer names it.
+    pub item_kind: Option<String>,
+    /// The stored symbol's first line; a RON value's: its first marker's.
+    pub line: Option<usize>,
+    pub end_line: Option<usize>,
+    pub signature: Option<String>,
+    /// The layer whose rules made the stored symbol's row.
+    pub layer: Option<String>,
+    /// The state; `null` when the code layer could not judge it (a note
+    /// says why).
+    pub sync: Option<VerifyState>,
+    pub category: Option<String>,
+    pub detail: Option<String>,
+    /// `null` without a lock entry, when the row cannot be verified, or
+    /// when it was not judged.
+    pub anchor: Option<VerifyAnchor>,
+    pub tokens_est: u32,
 }
 
 #[derive(JsonSchema)]
@@ -835,8 +868,10 @@ pub(crate) struct TaskPackage {
     pub assumptions: Vec<PackageAssumption>,
     pub open_proposals: Vec<PackageProposal>,
     pub owner_notes: Vec<OwnerNote>,
-    /// `[]` until code bindings exist.
-    pub bindings: Vec<Binding>,
+    /// The code bindings of the targets, the affected nodes and their
+    /// sections, read at the reading root; past the cap a note names how
+    /// many were left out. `[]` without a `[code]` table.
+    pub bindings: Vec<BindingRowShape>,
     pub spec_snapshot: Option<SpecSnapshot>,
     /// `[]` when not stale, `null` when staleness cannot be told.
     pub snapshot_diff: Option<Vec<SnapshotDiff>>,
@@ -935,25 +970,6 @@ pub(crate) struct PackageProposal {
 pub(crate) struct OwnerNote {
     pub at: String,
     pub note: String,
-}
-
-/// A code binding of a node: none until they exist.
-pub(crate) struct Binding;
-
-impl JsonSchema for Binding {
-    fn inline_schema() -> bool {
-        true
-    }
-
-    fn schema_name() -> Cow<'static, str> {
-        Cow::Borrowed("Binding")
-    }
-
-    fn json_schema(_generator: &mut SchemaGenerator) -> Schema {
-        let mut object = JsonObject::new();
-        object.insert("type".to_owned(), Value::String("object".to_owned()));
-        Schema::from(object)
-    }
 }
 
 #[derive(JsonSchema)]

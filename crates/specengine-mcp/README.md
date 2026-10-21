@@ -28,7 +28,7 @@ rmcp has no server-side lifecycle mode (`ClientLifecycleMode::Auto` is client-on
 
 ## Claude Code client
 
-Verified on v2.1.283 by script and by hand (Phase 0); the read-tool items checked by hand on 2.1.288 (2026-10-03, `docs/canon/mcp-read.md` "Owner's check"); re-verify on an upgrade with the `probes` build.
+Verified on v2.1.283 by script and by hand (Phase 0); the read-tool items checked by hand on 2.1.288 (2026-10-03, `mcp-read.md` "Owner's check"); re-verify on an upgrade with the `probes` build.
 
 - A stdio server gets the legacy handshake (2025-11-25) by default; `MCP_PROTOCOL_NEGOTIATION=auto` negotiates 2026-07-28: hence both eras. Project scope: `.mcp.json` in the repository, read at session start; transports `stdio | http | ws` (`sse` deprecated).
 - The output cap counts characters: 48 000 pass inline with no warning reaching the model, 104 000 are rejected (2.1.288: 60 000 too, the result stored in a file), `MAX_MCP_OUTPUT_TOKENS` does not raise it. Tool descriptions and `instructions` are truncated at 2 048 characters; tool search is on by default, so `instructions` is the server's most important text.
@@ -56,13 +56,13 @@ The measurement build, never default: the consent demo below (its `requestState`
 | Module | What it does |
 |---|---|
 | `lib.rs` | crate doc; re-exports `Lifecycle`, `SpecEngineServer`, `serve_stdio`, `ServeError`, `INSTRUCTIONS`, `MAX_RESULT_CHARS`; under `probes` `ReviewOutcome`, `FormAction`, `Decision`, `Era` |
-| `server.rs` | `SpecEngineServer` (`ServerHandler`, no project state): `INSTRUCTIONS` (bytes: `docs/canon/mcp-read.md` **Texts**) and their asserts, the tool routers (`read_tools`, `code_tools`, `intake_tools`, `task_tools`, `review_tools`), `get_info` (tools, resources), `Lifecycle` -> `supported_protocol_versions`, `list_resource{s,_templates}`, `read_resource` (blocking pool, 2026-07-28 cache hints); `serve_stdio` (clean exit on closed stdin, `ServeError`) |
-| `read.rs` | the read tools (`read_tools` router): argument types (`get_node` bindings: `code-reads.md`), descriptions and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `Answer` -> the tool result; text helpers shared with `intake.rs` |
+| `server.rs` | `SpecEngineServer` (`ServerHandler`, no project state): `INSTRUCTIONS` (bytes: `mcp-read.md` **Texts**) and their asserts, the tool routers (`read_tools`, `code_tools`, `intake_tools`, `task_tools`, `review_tools`), `get_info` (tools, resources), `Lifecycle` -> `supported_protocol_versions`, `list_resource{s,_templates}`, `read_resource` (blocking pool, 2026-07-28 cache hints); `serve_stdio` (clean exit on closed stdin, `ServeError`) |
+| `read.rs` | the read tools (`read_tools` router): argument types (bindings: `code-reads.md`), descriptions and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `Answer` -> the tool result; text helpers shared with `intake.rs` |
 | `code.rs` | the code tools (`code_tools`): arguments, the form checks before any call, descriptions, asserts; `read.rs`' `call` |
 | `intake.rs` | the queue tools (`intake_tools` router): argument types (one level of closed inline objects; `ChangeKind`: `proposal-kinds.md`), descriptions (the path form, `spec approve` too) and their asserts (each cap, `INTAKE_MATCHES_MAX`, `DISTINCT_MAX`), one CLI library call each with `author_role` always passed, `utc_now`, `process_git` |
 | `tasks.rs` | the task tools (`task_tools`): arguments, descriptions, asserts |
 | `resources.rs` | `list` (200 per page), the node template, `parse`, `read`, `percent_encode`, `percent_decode`, the error codes |
-| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (the review, intake, drift and code documents too, a record's keys, a one-key `Choice`; `kind` free), schema only |
+| `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (review, intake, drift, code documents, a record's keys, a one-key `Choice`, `BundleRowShape` (`BindingRowShape` + `tokens_est`); `kind` free), schema only |
 | `review.rs` | `probes` only: `review_tools` router, `check_proposal_id`, form capability check, `ask_legacy` (raced with cancellation), `ask_stateless` / `resume` (`RequestStateCodec`), `finish` -> `ReviewOutcome` + prose |
 | `probes.rs` | `probes` only: `probe_output`, `probe_sleep` |
 | `main.rs` | clap CLI, the quiet panic hook, current-thread tokio runtime, exit codes |
@@ -72,7 +72,7 @@ The measurement build, never default: the consent demo below (its `requestState`
 - Cancelling a legacy call does not withdraw its outstanding form (fix: `send_cancellable_request` + `handle.cancel`).
 - `check_proposal_id` echoes an unbounded ID into its error; the owner's `comment` is echoed unbounded twice (prose and `structuredContent`).
 - rmcp's stdio codec has no maximum line length: revisit with the daemon bridge.
-- The read path's open items: `docs/canon/mcp-read.md` "Open".
+- The read path's open items: `mcp-read.md` "Open".
 
 ## Tests
 

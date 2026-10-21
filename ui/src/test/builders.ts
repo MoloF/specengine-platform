@@ -2,6 +2,8 @@ import type {
   AssumedNode,
   AssumedProposal,
   AssumesRow,
+  BindingRow,
+  BundleBindingRow,
   BundleItem,
   BundleLayers,
   BundleView,
@@ -190,6 +192,7 @@ export function aNode(fields: Partial<ShownNode> & Pick<ShownNode, "id">): Shown
     truncated: false,
     omitted: null,
     links: null,
+    bindings: null,
     ...fields,
   };
 }
@@ -285,6 +288,32 @@ export function aBundleItem(fields: Partial<BundleItem> & Pick<BundleItem, "name
     archived: false,
     ...fields,
   };
+}
+
+/** One code binding row for tests: an item judged in sync, exactly anchored; omitted keys as given. */
+export function aBindingRow(fields: Partial<BindingRow> & Pick<BindingRow, "node">): BindingRow {
+  return {
+    relation: "implements",
+    file: "src/a.rs",
+    kind: "item",
+    symbol: "crate::a::run",
+    item_kind: "function_item",
+    line: 10,
+    end_line: 20,
+    signature: "pub fn run()",
+    layer: "a",
+    sync: "ok",
+    category: null,
+    detail: null,
+    anchor: { state: "exact", from: null, candidates: null },
+    ...fields,
+  };
+}
+
+/** A row the bundle placed for tests: the row, then its token estimate. */
+export function aBundleRow(fields: Partial<BundleBindingRow> & Pick<BundleBindingRow, "node">): BundleBindingRow {
+  const { tokens_est: tokens, ...row } = fields;
+  return { ...aBindingRow(row), tokens_est: tokens ?? 12 };
 }
 
 /** The nine layers, empty unless given. */

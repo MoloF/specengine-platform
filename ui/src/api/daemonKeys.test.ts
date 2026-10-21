@@ -6,6 +6,7 @@ import type {
   AssumesCounts,
   AssumesRow,
   Author,
+  BindingRow,
   BundleView,
   CheckCause,
   CheckCounts,
@@ -94,10 +95,12 @@ import type {
 // `UnboundMarker`); roadmap-surfaces adds a key, no set (UI-1 of docs/features/roadmap-surfaces.md:
 // the package's `roadmap` after `bundle`, 26 keys); roadmap-screen's ten (UI-1, TE-1 of
 // docs/features/roadmap-screen.md: the plan document, its counts, cut, sums, groups, items,
-// estimates, item tasks, pool tasks, and the package's `TaskRoadmap`, the sixty-sixth and last). A
-// key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key
-// the file already names fails. While that file is absent the comparison is skipped, saying so;
-// once it exists it names all sixty-six, in the slices' order.
+// estimates, item tasks, pool tasks, and the package's `TaskRoadmap`, the sixty-sixth);
+// bundle-bindings' one (UI-1, RD-8 of docs/features/bundle-bindings.md: `BindingRow`, a package's
+// `bindings` row, the sixty-seventh and last; the package keeps its 26 keys). A key the types carry
+// ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already
+// names fails. While that file is absent the comparison is skipped, saying so; once it exists it
+// names all sixty-seven, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -509,6 +512,24 @@ const KEYS = {
     priority: true,
     waits_on: true,
   } satisfies Record<keyof TaskRoadmap, true>,
+  // docs/canon/code-reads.md "The binding row": a package's `bindings` row, its 14 keys in order
+  // (docs/features/bundle-bindings.md "UI and daemon keys").
+  BindingRow: {
+    node: true,
+    relation: true,
+    file: true,
+    kind: true,
+    symbol: true,
+    item_kind: true,
+    line: true,
+    end_line: true,
+    signature: true,
+    layer: true,
+    sync: true,
+    category: true,
+    detail: true,
+    anchor: true,
+  } satisfies Record<keyof BindingRow, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -593,6 +614,7 @@ const CITED: Record<Named, string> = {
   RoadmapItemTask: "id, status",
   RoadmapPoolTask: "id, status, title, targets",
   TaskRoadmap: "item, group, release, position, of, priority, waits_on",
+  BindingRow: "node, relation, file, kind, symbol, item_kind, line, end_line, signature, layer, sync, category, detail, anchor",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -694,8 +716,14 @@ const ROADMAP_SCREEN: readonly Named[] = [
   "TaskRoadmap",
 ];
 
+/** The sixty-six types the fixture named before bundle-bindings. */
+const BEFORE_BUNDLE_BINDINGS: readonly Named[] = [...BEFORE_ROADMAP_SCREEN, ...ROADMAP_SCREEN];
+
+/** bundle-bindings' one: a package's `bindings` row (docs/features/bundle-bindings.md "UI and daemon keys", UI-1). */
+const BUNDLE_BINDINGS: readonly Named[] = ["BindingRow"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_ROADMAP_SCREEN, ...ROADMAP_SCREEN];
+const ALL: readonly Named[] = [...BEFORE_BUNDLE_BINDINGS, ...BUNDLE_BINDINGS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -719,7 +747,7 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * roadmap-screen's TE-1 wrote its ten sets (docs/features/roadmap-screen.md).
+ * bundle-bindings' RD-8 wrote BindingRow, the sixty-seventh set (docs/features/bundle-bindings.md).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -754,7 +782,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(Object.keys(KEYS.InboxEntry)).not.toContain("drift");
     expect(BEFORE_HEALTH_CODE.at(-1)).toBe("DriftEvidence");
     expect(BEFORE_ROADMAP_SCREEN.at(-1)).toBe("UnboundMarker");
-    expect(ALL.at(-1)).toBe("TaskRoadmap");
+    expect(BEFORE_BUNDLE_BINDINGS.at(-1)).toBe("TaskRoadmap");
+    expect(ALL.at(-1)).toBe("BindingRow");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -773,7 +802,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since roadmap-screen's TE-1 wrote its ten sets into the file", () => {
+  it("lists ahead of the fixture only keys their types serve, none since bundle-bindings' RD-8 wrote BindingRow into the file", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -833,8 +862,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_DRIFT_QUEUE).toHaveLength(45);
     expect(BEFORE_HEALTH_CODE).toHaveLength(46);
     expect(BEFORE_ROADMAP_SCREEN).toHaveLength(56);
-    expect(ALL).toHaveLength(66);
-    expect(new Set(ALL).size).toBe(66);
+    expect(BEFORE_BUNDLE_BINDINGS).toHaveLength(66);
+    expect(ALL).toHaveLength(67);
+    expect(new Set(ALL).size).toBe(67);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -846,9 +876,24 @@ describe("the daemon's document types (AC-09)", () => {
     expect(NAMES.filter((name) => name.includes("Roadmap"))).toEqual([...ROADMAP_SCREEN]);
   });
 
+  it("counts bundle-bindings' one: a package row's 14 keys in the canon's order, declared so, the last set; the package's bindings stays its 16th of 26 keys (UI-1 of bundle-bindings)", () => {
+    expect(BUNDLE_BINDINGS.map((name) => served(name).length)).toEqual([14]);
+    expect(ALL.slice(BEFORE_BUNDLE_BINDINGS.length)).toEqual([...BUNDLE_BINDINGS]);
+    expect(declaredKeys("BindingRow")).toEqual(Object.keys(KEYS.BindingRow));
+    expect(served("TaskPackage").indexOf("bindings")).toBe(15);
+    expect(served("TaskPackage")).toHaveLength(26);
+    expect(source).toMatch(/^ {2}bindings: BindingRow\[\];$/m);
+  });
+
+  it('BindingRow cites `docs/canon/code-reads.md` "The binding row" (UI-1 of bundle-bindings)', () => {
+    const at = source.indexOf("export interface BindingRow ");
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/code-reads.md` "The binding row"');
+  });
+
   it("counts roadmap-screen's ten: 15, 2, 4, 3, 8, 11, 2, 2, 4, 7, after health-code's (UI-1 of roadmap-screen)", () => {
     expect(ROADMAP_SCREEN.map((name) => served(name).length)).toEqual([15, 2, 4, 3, 8, 11, 2, 2, 4, 7]);
-    expect(ALL.slice(BEFORE_ROADMAP_SCREEN.length)).toEqual([...ROADMAP_SCREEN]);
+    expect(BEFORE_BUNDLE_BINDINGS.slice(BEFORE_ROADMAP_SCREEN.length)).toEqual([...ROADMAP_SCREEN]);
     expect(served("RoadmapItem").slice(-2)).toEqual(["cycle", "tasks"]);
     expect(served("RoadmapCut").slice(1)).toEqual(served("RoadmapSum"));
   });
@@ -998,12 +1043,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the sixty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten", () => {
+  it("names exactly the sixty-seven types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all sixty-six, in the slices' order.
+    // None is ahead of the file today: it names all sixty-seven, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(66);
+    expect(Object.keys(sets)).toHaveLength(67);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1033,7 +1078,7 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(BEFORE_DRIFT_QUEUE.length);
     expect(Object.keys(sets).indexOf("DriftEvidence")).toBe(45);
     expect(Object.keys(sets).at(BEFORE_ROADMAP_SCREEN.length - 1)).toBe("UnboundMarker");
-    expect(Object.keys(sets).at(-1)).toBe("TaskRoadmap");
+    expect(Object.keys(sets).at(BEFORE_BUNDLE_BINDINGS.length - 1)).toBe("TaskRoadmap");
     expect(sets.InboxEntry).not.toContain("drift");
   });
 
@@ -1052,10 +1097,16 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(HEALTH_CODE.map((name) => sets[name])).toEqual(HEALTH_CODE.map((name) => served(name)));
   });
 
-  it("names roadmap-screen's ten after UnboundMarker, last, in the types' order and with their keys (UI-1, TE-1 of roadmap-screen)", () => {
-    expect(Object.keys(sets).slice(BEFORE_ROADMAP_SCREEN.length)).toEqual([...ROADMAP_SCREEN]);
+  it("names roadmap-screen's ten after UnboundMarker, before bundle-bindings' one, in the types' order and with their keys (UI-1, TE-1 of roadmap-screen)", () => {
+    expect(Object.keys(sets).slice(BEFORE_ROADMAP_SCREEN.length, BEFORE_BUNDLE_BINDINGS.length)).toEqual([...ROADMAP_SCREEN]);
     expect(ROADMAP_SCREEN.map((name) => sets[name])).toEqual(ROADMAP_SCREEN.map((name) => served(name)));
     expect(ROADMAP_SCREEN.map((name) => sets[name]?.length)).toEqual([15, 2, 4, 3, 8, 11, 2, 2, 4, 7]);
+  });
+
+  it("names bundle-bindings' BindingRow after TaskRoadmap, last, with a package row's 14 keys in the types' order; the package keeps 26 (UI-1, RD-8 of bundle-bindings)", () => {
+    expect(Object.keys(sets).slice(BEFORE_BUNDLE_BINDINGS.length)).toEqual(expected.slice(BEFORE_BUNDLE_BINDINGS.length));
+    expect(sets.BindingRow ?? []).toEqual(compared("BindingRow"));
+    expect(sets.TaskPackage).toHaveLength(26);
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {

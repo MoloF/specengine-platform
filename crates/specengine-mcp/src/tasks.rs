@@ -15,9 +15,9 @@ use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use specengine_cli::{
     AFFECTED_MAX, AUTHOR_FIELD_MAX, CHANGED_FILE_MAX, CHANGED_FILES_MAX, CRITERIA_MAX,
-    CRITERION_MAX, OUTPUT_CAP_CHARS, Outcome, PLAN_MAX, ProposedText, RUN_SUMMARY_MAX,
-    TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
-    process_git, utc_now,
+    CRITERION_MAX, OUTPUT_CAP_CHARS, Outcome, PACKAGE_BINDINGS_MAX, PLAN_MAX, ProposedText,
+    RUN_SUMMARY_MAX, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest, TaskReportRequest,
+    TaskShowRequest, process_git, utc_now,
 };
 
 use crate::mirror::{TaskDocument, TaskPackage, input_schema, output_schema};
@@ -40,8 +40,12 @@ const GET_TASK_DESCRIPTION: &str = concat!(
 show --next` (next: true: the first ready task in the roadmap's order of the items the tasks \
 execute, as get_roadmap lists them, then by number; without `[roadmap]`, the lowest-numbered). \
 content is the brief (goal, criteria, targets, assumptions, open proposals, owner notes, plan, \
-spec changes since approval, runs, bundle), cut at 40000 characters; structuredContent the \
-versioned task package (--json), every key present, absent null.
+spec changes since approval, runs, code bindings, bundle), cut at 40000 characters; \
+structuredContent the versioned task package (--json), every key present, absent null.
+
+bindings: the code bound to the targets, the affected nodes and their sections, each with its \
+sync (the state spec verify --node gives), at most 64 (a note names the rest); [] without a \
+[code] table. A code layer that cannot be read gives a note, never an error.
 
 stale: true when a node the owner approved (spec_snapshot) changed or went in the compared \
 place (the claimed worktree, else the snapshot's): snapshot_diff holds the diffs from the \
@@ -126,6 +130,12 @@ const _: () = assert!(holds_number(
     "cut at ",
     OUTPUT_CAP_CHARS,
     " characters"
+));
+const _: () = assert!(holds_number(
+    GET_TASK_DESCRIPTION,
+    "verify --node gives), at most ",
+    PACKAGE_BINDINGS_MAX,
+    " (a note"
 ));
 const _: () = assert!(holds_number(
     CLAIM_DESCRIPTION,

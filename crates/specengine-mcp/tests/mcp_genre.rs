@@ -523,3 +523,92 @@ fn kind_amendment_the_four_change_kinds_and_amends_are_no_literal_of_the_server(
     let sample = "    kind: \"amendment\",\n    // \"amends\"\n";
     assert_eq!(literals(sample), [(1, "amendment".to_owned())]);
 }
+
+/// docs/features/bundle-bindings.md TE-4 (genre): the garden corpus with a
+/// `[code]` table and a small crate of its own (watering routines bound to
+/// `CROP-TOMATO`, `CARE-WATER` and the criterion `watering/CHK-01` by
+/// markers), committed: `get_context_bundle` places rows in both code
+/// layers and `get_task` lists them, and no answer names a P2-3 word; the
+/// rows' item kinds, layers and qpaths are the project's data. M: a stack
+/// word in a row's text.
+#[test]
+fn a_garden_with_code_gets_rows_and_no_stack_word() {
+    let scratch = Scratch::new("genre-code");
+    let home = scratch.home("h");
+    let root = scratch.dir("garden");
+    garden(&root);
+    let config = fs::read_to_string(root.join("specengine.toml")).expect("config");
+    write(
+        &root,
+        "specengine.toml",
+        format!("{config}\n[code]\nroots = [\"beds\"]\n"),
+    );
+    write(
+        &root,
+        "beds/drip/Cargo.toml",
+        "[package]\nname = \"drip\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    );
+    write(
+        &root,
+        "beds/drip/src/lib.rs",
+        "//! Drip lines for the raised beds.\n\n// @implements CROP-TOMATO\npub fn sunny_bed() -> u32 {\n    3\n}\n\n\
+         // @implements CARE-WATER\npub fn water_at_dawn(litres: u32) -> u32 {\n    litres\n}\n\n\
+         // @verifies CROP-TOMATO\npub fn roots_stay_moist() -> bool {\n    true\n}\n\n\
+         // @verifies watering/CHK-01\npub fn soil_after_a_dry_week() -> bool {\n    true\n}\n",
+    );
+    let sandbox = git::Sandbox::new(scratch.path());
+    sandbox.init(&root);
+    sandbox.add_all(&root);
+    sandbox.commit(&root, "the garden and its drip lines");
+    let env = common::read::cli_env(&root, Some(&home));
+    let id = specengine_cli::task_new(
+        &env,
+        &specengine_cli::Globals::default(),
+        &specengine_cli::TaskNewRequest {
+            nodes: vec!["CROP-TOMATO".to_owned()],
+            title: Some("Water the tomatoes".to_owned()),
+            goal: Some("Keep the soil moist.".to_owned()),
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: "2026-10-21T09:00:00Z".to_owned(),
+            git: specengine_cli::GitEnv::new(&root, sandbox.vars()),
+        },
+    )
+    .expect("task new")
+    .id
+    .expect("an ID");
+    for era in ERAS {
+        let mut session = Session::open(era, &[], Some(&root), Home::At(&home));
+        let bundle = session.call(
+            "get_context_bundle",
+            json!({"node_ids": ["CROP-TOMATO"], "budget": 10000}),
+        );
+        let document = &result(&bundle)["structuredContent"];
+        for layer in ["bindings", "tests"] {
+            assert!(
+                !document["layers"][layer]
+                    .as_array()
+                    .expect("a layer")
+                    .is_empty(),
+                "{era:?}: rows in {layer}: {document}"
+            );
+        }
+        let task = session.call("get_task", json!({"task_id": id}));
+        let package = &result(&task)["structuredContent"];
+        assert!(
+            !package["bindings"].as_array().expect("bindings").is_empty(),
+            "{era:?}: the package's rows: {package}"
+        );
+        for text in [bundle.to_string(), task.to_string()] {
+            assert_eq!(
+                stack_words(&text),
+                Vec::<&str>::new(),
+                "{era:?}: {}",
+                clip(&text)
+            );
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}

@@ -64,5 +64,6 @@
   "RoadmapEstimate": ["min", "max"],
   "RoadmapItemTask": ["id", "status"],
   "RoadmapPoolTask": ["id", "status", "title", "targets"],
-  "TaskRoadmap": ["item", "group", "release", "position", "of", "priority", "waits_on"]
+  "TaskRoadmap": ["item", "group", "release", "position", "of", "priority", "waits_on"],
+  "BindingRow": ["node", "relation", "file", "kind", "symbol", "item_kind", "line", "end_line", "signature", "layer", "sync", "category", "detail", "anchor"]
 }

@@ -229,6 +229,17 @@ describe("getBundle", () => {
     const bundle = await mock().getBundle("harbor-sim", { node_ids: ["R-404"] });
     expect(bundle).toMatchObject({ refs: ["R-404"], reason: "`R-404` resolves to no ID and no alias", budget: null, body: null, layers: null });
   });
+
+  it("serves no code rows, as without [code]: layers 5 and 9 empty, no heading, no note; a shown node's bindings null (bundle-bindings)", async () => {
+    const client = mock();
+    for (const [project, ref] of [["harbor-sim", "MEC-TIDES"], ["ledger-api", "SVC-LEDGER"]] as const) {
+      const bundle = await client.getBundle(project, { node_ids: [ref] });
+      expect([project, bundle.layers?.bindings, bundle.layers?.tests, bundle.notes]).toEqual([project, [], [], []]);
+      expect(bundle.body).not.toMatch(/^## (Bindings|Tests)$/m);
+      const view = await client.getNode(project, ref);
+      expect(view.nodes.map((node) => node.bindings)).toEqual(view.nodes.map(() => null));
+    }
+  });
 });
 
 describe("scenarios and decisions", () => {

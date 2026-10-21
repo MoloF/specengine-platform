@@ -78,6 +78,11 @@ const SYNC = [
   "unbound",
   "predated",
   "cannot-verify",
+  // docs/features/bundle-bindings.md: a binding row's two other states, a row not judged, an unknown word.
+  "bad-marker",
+  "unlocked",
+  "not-judged",
+  "unknown",
 ];
 const LINK = ["resolved", "dangling", "skipped", "unchecked", "unknown"];
 // docs/features/ui-tasks.md: run outcomes and the staleness of a task's frozen spec.
@@ -220,6 +225,15 @@ describe("tokens.css (AC-09)", () => {
         expect([role, surface, contrast(`--roadmap-${role}`, surface) >= 3]).toEqual([role, surface, true]);
       }
     }
+  });
+
+  it("never gives a binding row ok's colour unless it is in sync, nor one not judged cannot-verify's (bundle-bindings)", () => {
+    const ok = resolve("--sync-ok").toLowerCase();
+    for (const state of SYNC.filter((value) => value !== "ok")) {
+      expect([state, resolve(`--sync-${state}`).toLowerCase() === ok]).toEqual([state, false]);
+    }
+    expect(resolve("--sync-not-judged").toLowerCase()).not.toBe(resolve("--sync-cannot-verify").toLowerCase());
+    expect(resolve("--sync-not-judged").toLowerCase()).toBe(resolve("--severity-unknown").toLowerCase());
   });
 
   it("gives cannot-verify its own colour, never ok's or another sync state's", () => {

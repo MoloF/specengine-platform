@@ -560,6 +560,27 @@ fn binding_text(key: &RowKey) -> String {
     }
 }
 
+/// A row's binding from the row alone (the brief's Bindings section, task
+/// spec `bundle-bindings`): `<kind> <symbol>[ <item_kind>]`; a keyless
+/// row's `<sync> <category>` when judged (`<sync>` alone without a
+/// category), else `-` (its key's state and category are no keys of the
+/// row).
+pub(crate) fn row_binding(row: &BindingRow) -> String {
+    keyed_binding(
+        row.kind.as_deref(),
+        row.symbol.as_deref(),
+        row.item_kind.as_deref(),
+    )
+    .or_else(|| {
+        let sync = one_line(row.sync.as_deref()?);
+        Some(match row.category.as_deref() {
+            Some(category) => format!("{sync} {}", one_line(category)),
+            None => sync,
+        })
+    })
+    .unwrap_or_else(|| "-".to_owned())
+}
+
 /// A judged row as a read shows it: its key and place, verify's state,
 /// category, detail and anchor.
 pub(crate) fn binding_row(row: &Row, symbols: &BTreeMap<String, Vec<StoredSymbol>>) -> BindingRow {
@@ -648,5 +669,64 @@ fn place_of(place: &VerifyPlace) -> BindingPlace {
         kind: place.kind.to_owned(),
         symbol: place.symbol.clone(),
         item_kind: place.item_kind.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! The brief's binding of a row, from the row alone (`row_binding`):
+    //! its key, else its judgement, else `-`.
+
+    use specengine_model::BindingRow;
+
+    use super::row_binding;
+
+    /// A row of GOAL-01 in `src/lib.rs`, keyed or keyless as given.
+    fn row(
+        kind: Option<&str>,
+        symbol: Option<&str>,
+        sync: Option<&str>,
+        category: Option<&str>,
+    ) -> BindingRow {
+        BindingRow {
+            node: "GOAL-01".to_owned(),
+            relation: "implements".to_owned(),
+            file: "src/lib.rs".to_owned(),
+            kind: kind.map(str::to_owned),
+            symbol: symbol.map(str::to_owned),
+            item_kind: kind.map(|_| "function_item".to_owned()),
+            line: None,
+            end_line: None,
+            signature: None,
+            layer: None,
+            sync: sync.map(str::to_owned),
+            category: category.map(str::to_owned),
+            detail: None,
+            anchor: None,
+        }
+    }
+
+    /// Keyed: `<kind> <symbol> <item_kind>`, whatever its judgement; a
+    /// keyless row judged: `<sync> <category>`, `<sync>` alone without a
+    /// category (iteration 2's (b)); never judged: `-`. M: a judged keyless
+    /// row without a category printed `-`.
+    #[test]
+    fn a_rows_brief_binding_is_its_key_else_its_judgement() {
+        let keyed = row(Some("item"), Some("lib::step"), Some("ok"), None);
+        assert_eq!(row_binding(&keyed), "item lib::step function_item");
+        let unjudged_keyed = row(Some("item"), Some("lib::step"), None, None);
+        assert_eq!(row_binding(&unjudged_keyed), "item lib::step function_item");
+        let keyless = row(None, None, Some("bad_marker"), Some("unanchored"));
+        assert_eq!(row_binding(&keyless), "bad_marker unanchored");
+        let no_category = row(None, None, Some("cannot_verify"), None);
+        assert_eq!(row_binding(&no_category), "cannot_verify");
+        let unjudged = row(None, None, None, None);
+        assert_eq!(row_binding(&unjudged), "-");
+        let category_alone = row(None, None, None, Some("unanchored"));
+        assert_eq!(
+            row_binding(&category_alone),
+            "-",
+            "a category without a sync"
+        );
     }
 }

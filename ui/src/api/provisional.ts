@@ -583,6 +583,81 @@ export interface ShownNode {
   truncated: boolean;
   omitted: Omitted | null;
   links: ShownLinks | null;
+  /**
+   * The node's code bindings, after `links`: null without `with=bindings` (the UI never asks yet),
+   * without `[code]` or under a cause that lists no row. Source: `docs/canon/code-reads.md` "spec show --bindings".
+   */
+  bindings: ShownBindings | null;
+}
+
+// Code in reads (docs/canon/code-reads.md): a node's code bindings as rows whose `sync` is the
+// state `spec verify --node` gives them; every word (relation, kind, item kind, layer, state,
+// category, detail) travels as data, shown raw or labelled, never a hold on work (ADR-0012).
+
+/** verify's nine state words, in its table's order. Source: `docs/canon/spec-verify.md` "States". */
+export type KnownSyncState =
+  | "cannot_verify"
+  | "predated"
+  | "bad_marker"
+  | "broken_binding"
+  | "unlocked"
+  | "spec_ahead"
+  | "code_ahead"
+  | "conflict"
+  | "ok";
+
+/** A row's sync: one of verify's states, or any other word, shown raw. Source: `docs/canon/spec-verify.md` "States". */
+export type SyncState = KnownSyncState | Unlisted;
+
+/** Where verify's anchor puts a binding. Source: `docs/canon/spec-verify-output.md` "JSON". */
+export type AnchorState = "exact" | "moved" | "ambiguous" | "lost" | Unlisted;
+
+/** A binding's place as an anchor names it: its key less the row's node and relation. Source: `docs/canon/code-reads.md` "The binding row". */
+export interface BindingPlace {
+  file: string;
+  kind: string;
+  symbol: string;
+  item_kind: string | null;
+}
+
+/**
+ * verify's anchor of a row: `from` a moved row's old place, `candidates` an ambiguous row's, in
+ * key order, else null. Sources: `docs/canon/code-reads.md` "The binding row"; `docs/canon/spec-verify-output.md` "JSON".
+ */
+export interface BindingAnchor {
+  state: AnchorState;
+  from: BindingPlace | null;
+  candidates: BindingPlace[] | null;
+}
+
+/**
+ * One code binding of a node, its 14 keys in this order, all present, absent null: verify's row key
+ * (`node` the canonical cited ID, unresolved as written, a bare marker `""`; a keyless row's `kind`,
+ * `symbol`, `item_kind` null), the stored symbol's lines, signature and layer (a RON value: `line`
+ * its first marker's), then verify's state, category, detail and anchor, each null when the row was
+ * not judged (never `ok`). Source: `docs/canon/code-reads.md` "The binding row".
+ */
+export interface BindingRow {
+  node: string;
+  relation: string;
+  file: string;
+  kind: string | null;
+  symbol: string | null;
+  item_kind: string | null;
+  line: number | null;
+  end_line: number | null;
+  signature: string | null;
+  layer: string | null;
+  sync: SyncState | null;
+  category: string | null;
+  detail: string | null;
+  anchor: BindingAnchor | null;
+}
+
+/** A shown node's rows and how many the cap left out. Source: `docs/canon/code-reads.md` "spec show --bindings". */
+export interface ShownBindings {
+  rows: BindingRow[];
+  omitted: number;
 }
 
 /** `spec show --json`: the nodes, or the reason there are none. Source: `crates/specengine-cli/README.md` "Output and the cap". */
@@ -939,20 +1014,35 @@ export interface BundleItem {
   archived: boolean;
 }
 
-/** The nine layers in print order, each `[]` when empty. Sources: `docs/canon/spec-cli-bundle.md` "Layers", "Output". */
+/**
+ * A code binding row the bundle placed in layer 5 or 9: the row, then its `tokens_est` (15 keys).
+ * Source: `docs/features/bundle-bindings.md` "Layers 5 and 9".
+ */
+export type BundleBindingRow = BindingRow & { tokens_est: number };
+
+/**
+ * The nine layers in print order, each `[]` when empty; `bindings` (5) and `tests` (9) hold code
+ * binding rows, not nodes, both empty without `[code]`. Sources: `docs/canon/spec-cli-bundle.md` "Layers", "Output";
+ * `docs/features/bundle-bindings.md` "Layers 5 and 9".
+ */
 export interface BundleLayers {
   targets: BundleItem[];
   open_questions: BundleItem[];
   ancestors: BundleItem[];
   criteria: BundleItem[];
-  bindings: BundleItem[];
+  bindings: BundleBindingRow[];
   decisions: BundleItem[];
   neighbours: BundleItem[];
   terms: BundleItem[];
-  tests: BundleItem[];
+  tests: BundleBindingRow[];
 }
 
-/** A node the budget left out, named for a follow-up read. Source: `docs/canon/spec-cli-bundle.md` "Output". */
+/**
+ * Something the budget left out, named for a follow-up read: a node; or, in layer `bindings` or
+ * `tests`, a code row (`name` its symbol, else its file; `title` `<relation> <node>`; `path` the
+ * file; `line` its line, else 1), never a tree node. Sources: `docs/canon/spec-cli-bundle.md` "Output";
+ * `docs/features/bundle-bindings.md` "Layers 5 and 9".
+ */
 export interface TailEntry {
   name: string;
   title: string | null;
@@ -1196,8 +1286,11 @@ export interface TaskPackage {
   assumptions: TaskAssumption[];
   open_proposals: TaskProposal[];
   owner_notes: OwnerNote[];
-  /** Empty until Phase 3. */
-  bindings: unknown[];
+  /**
+   * The code rows of the targets, the affected nodes and their sections, in row order, at most 64
+   * (a note says how many more); `[]` without `[code]` (`docs/features/bundle-bindings.md` "Task package").
+   */
+  bindings: BindingRow[];
   spec_snapshot: SpecSnapshot | null;
   snapshot_diff: SnapshotDiff[] | null;
   claim: TaskClaim | null;

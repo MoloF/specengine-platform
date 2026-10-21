@@ -298,6 +298,124 @@ fn show_bindings_refresh_the_code_index() {
     );
 }
 
+/// docs/features/bundle-bindings.md RD-5 (freshness): with `[code]`,
+/// `bundle` and `task show` refresh the code index once (as `show
+/// --bindings`): a git repository of code-a with the golden lock, indexed;
+/// a new test file bound to LAW-BOUND and no `spec index`: the bundle's
+/// layer 9 lists its `unlocked` row and the index equals a fresh rebuild;
+/// another new file, and a task's package on LAW-BOUND lists its row too.
+/// Without `[code]` neither reads code: after a code edit the code tables
+/// stay as they were. M: the bundle reading the index the last `spec
+/// index` left; the code refreshed without `[code]`.
+#[test]
+fn bundle_and_task_show_refresh_the_code_index_only_with_code() {
+    let repo = LockRepo::of("cf-bundle-bindings", CODE_A, "repo", &[]);
+    repo.write(
+        "spec.lock",
+        fs::read(common::fixture("spec-lock").join("code-a.lock")).expect("the golden lock"),
+    );
+    repo.commit_all("the lock");
+    repo.spec_piped(&repo.root, &["index"]).code(0);
+    let made = repo.spec_piped(
+        &repo.root,
+        &[
+            "task",
+            "new",
+            "--nodes",
+            "LAW-BOUND",
+            "--title",
+            "Bound",
+            "--goal",
+            "Keep the cap.",
+        ],
+    );
+    made.code(0);
+    let indexed = code_lines(&dump(&repo.home, &repo.root, CODE_A_SLUG));
+    let fresh = "crates/tally/tests/fresh.rs";
+    repo.write(
+        fresh,
+        "// @verifies LAW-BOUND@2\n#[test]\nfn fresh_bound() {}\n",
+    );
+    let bundle = repo.spec_piped(
+        &repo.root,
+        &["bundle", "LAW-BOUND", "--budget", "10000", "--json"],
+    );
+    bundle.code(0);
+    let tests = bundle.json()["layers"]["tests"]
+        .as_array()
+        .expect("layer 9")
+        .clone();
+    let row = tests
+        .iter()
+        .find(|row| row["file"] == fresh)
+        .unwrap_or_else(|| panic!("the new file's row without spec index: {tests:#?}"));
+    assert_eq!(row["sync"], "unlocked", "{row}");
+    assert_ne!(
+        code_lines(&dump(&repo.home, &repo.root, CODE_A_SLUG)),
+        indexed,
+        "the bundle refreshed the code index"
+    );
+    code_index_common::assert_equals_fresh(
+        &repo.scratch,
+        &repo.home,
+        &repo.root,
+        CODE_A_SLUG,
+        "after bundle",
+    );
+    let again = "crates/tally/tests/again.rs";
+    repo.write(
+        again,
+        "// @verifies LAW-BOUND@2\n#[test]\nfn bound_again() {}\n",
+    );
+    let package = repo.spec_piped(&repo.root, &["task", "show", "T-0001", "--json"]);
+    package.code(0);
+    let rows = package.json()["bindings"]
+        .as_array()
+        .expect("bindings")
+        .clone();
+    assert!(
+        rows.iter()
+            .any(|row| row["file"] == again && row["sync"] == "unlocked"),
+        "the package lists the newer file's row without spec index: {rows:#?}"
+    );
+    code_index_common::assert_equals_fresh(
+        &repo.scratch,
+        &repo.home,
+        &repo.root,
+        CODE_A_SLUG,
+        "after task show",
+    );
+
+    // Without `[code]`: never read.
+    let config = repo.read("specengine.toml");
+    let start = config.find("\n[code]\n").expect("a [code] table");
+    repo.write("specengine.toml", &config[..=start]);
+    let before = code_lines(&dump(&repo.home, &repo.root, CODE_A_SLUG));
+    repo.write(
+        "crates/tally/tests/third.rs",
+        "// @verifies LAW-BOUND@2\n#[test]\nfn third() {}\n",
+    );
+    for args in [
+        &["bundle", "LAW-BOUND", "--budget", "10000"][..],
+        &["bundle", "LAW-BOUND", "--json"],
+        &["task", "show", "T-0001"],
+        &["task", "show", "T-0001", "--json"],
+    ] {
+        let run = repo.spec_piped(&repo.root, args);
+        run.code(0);
+        assert!(
+            !run.stderr.contains("bindings"),
+            "{args:?}: no note\n{}",
+            run.show()
+        );
+        assert_eq!(
+            code_lines(&dump(&repo.home, &repo.root, CODE_A_SLUG)),
+            before,
+            "{args:?} read code without [code]"
+        );
+    }
+}
+
 // ------------------------------------------------------------ RD-10, TE-5
 
 /// `(path, size, mtime ns, BLAKE3)` of every code file and manifest under

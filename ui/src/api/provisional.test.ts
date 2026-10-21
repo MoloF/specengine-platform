@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import source from "./provisional.ts?raw";
 import { KNOWN_CHECK_VERDICTS } from "./types";
 import type {
+  BindingAnchor,
+  BindingPlace,
+  BindingRow,
+  BundleBindingRow,
   BundleItem,
   BundleLayers,
   BundleVia,
@@ -21,6 +25,7 @@ import type {
   RevisionChange,
   SearchHit,
   SearchResults,
+  ShownBindings,
   ShownNode,
   Snippet,
   SnapshotDiff,
@@ -197,7 +202,8 @@ const KEYS = {
     tests: true,
   } satisfies Record<keyof BundleLayers, true>,
   // crates/specengine-cli/README.md "Output and the cap": a shown node, `span_hash` included;
-  // docs/features/norm-hash.md "Data": `norm_hash` right before it.
+  // docs/features/norm-hash.md "Data": `norm_hash` right before it; docs/canon/code-reads.md
+  // "spec show --bindings": `bindings`, its 19th key, after `links`.
   ShownNode: {
     id: true,
     kind: true,
@@ -217,7 +223,10 @@ const KEYS = {
     truncated: true,
     omitted: true,
     links: true,
+    bindings: true,
   } satisfies Record<keyof ShownNode, true>,
+  // docs/canon/code-reads.md "spec show --bindings": a node's `bindings` {rows, omitted}.
+  ShownBindings: { rows: true, omitted: true } satisfies Record<keyof ShownBindings, true>,
 };
 
 /**
@@ -298,8 +307,11 @@ const CITED: Record<keyof typeof KEYS, string> = {
   WorkingAnswer: "name, written, path, line, state",
   TailEntry: "name, title, path, line, tokens_est, layer",
   BundleLayers: "targets, open_questions, ancestors, criteria, bindings, decisions, neighbours, terms, tests",
-  // docs/features/norm-hash.md "Data": JSON node {id, ..., sections, norm_hash, span_hash, ...}.
-  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links",
+  // docs/features/norm-hash.md "Data": JSON node {id, ..., sections, norm_hash, span_hash, ...};
+  // docs/canon/code-reads.md "spec show --bindings": `bindings` after `links`.
+  ShownNode:
+    "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links, bindings",
+  ShownBindings: "rows, omitted",
 };
 
 /** An interface's keys in the order `provisional.ts` declares them (its own lines, two-space indented). */
@@ -696,5 +708,144 @@ describe("the revision types (UI-4 of rev-discipline)", () => {
     const editorial: Extract<StageChoice, { decision: "approve" }>["editorial"][] = [true, null];
     expect(editorial).toEqual([true, null]);
     expect(source).toMatch(/^  editorial: true \| null;$/m);
+  });
+});
+
+/**
+ * UI-1 of docs/features/bundle-bindings.md: the row of
+ * `docs/canon/code-reads.md` "The binding row" (14 keys, verify's order), its anchor and place; a
+ * bundle row is it plus `tokens_est` (15 keys) in layers 5 and 9; a shown node's `bindings`
+ * {rows, omitted} after `links`; the package's `bindings` a list of rows.
+ */
+const ROW_KEYS = {
+  BindingRow: {
+    node: true,
+    relation: true,
+    file: true,
+    kind: true,
+    symbol: true,
+    item_kind: true,
+    line: true,
+    end_line: true,
+    signature: true,
+    layer: true,
+    sync: true,
+    category: true,
+    detail: true,
+    anchor: true,
+  } satisfies Record<keyof BindingRow, true>,
+  BindingAnchor: { state: true, from: true, candidates: true } satisfies Record<keyof BindingAnchor, true>,
+  BindingPlace: { file: true, kind: true, symbol: true, item_kind: true } satisfies Record<keyof BindingPlace, true>,
+};
+
+/** The key lists as the canon writes them: the table's rows joined, the anchor as verify's JSON gives it. */
+const ROW_CITED: Record<keyof typeof ROW_KEYS, string> = {
+  BindingRow: "node, relation, file, kind, symbol, item_kind, line, end_line, signature, layer, sync, category, detail, anchor",
+  BindingAnchor: "state, from, candidates",
+  BindingPlace: "file, kind, symbol, item_kind",
+};
+
+const BINDING_ROW = '`docs/canon/code-reads.md` "The binding row"';
+
+describe("the binding row types (UI-1 of bundle-bindings)", () => {
+  it.each(Object.keys(ROW_KEYS) as (keyof typeof ROW_KEYS)[])("%s has exactly the canon's keys, declared in its order", (name) => {
+    expect(Object.keys(ROW_KEYS[name]).join(", ")).toBe(ROW_CITED[name]);
+    expect(declaredKeys(name).join(", ")).toBe(ROW_CITED[name]);
+  });
+
+  it("counts a row's 14 keys, a bundle row's 15: the row, then tokens_est", () => {
+    expect(Object.keys(ROW_KEYS.BindingRow)).toHaveLength(14);
+    const placed: BundleBindingRow = {
+      node: "MEC-TIDES",
+      relation: "implements",
+      file: "src/sim/tide.rs",
+      kind: "item",
+      symbol: "harbor_sim::tide::TideClock",
+      item_kind: "struct_item",
+      line: 5,
+      end_line: 14,
+      signature: "pub struct TideClock",
+      layer: "a",
+      sync: "ok",
+      category: null,
+      detail: null,
+      anchor: { state: "exact", from: null, candidates: null },
+      tokens_est: 30,
+    };
+    expect(Object.keys(placed)).toEqual([...ROW_CITED.BindingRow.split(", "), "tokens_est"]);
+    expect(source).toMatch(/^export type BundleBindingRow = BindingRow & \{ tokens_est: number \};$/m);
+  });
+
+  it.each(["BindingRow", "BindingAnchor", "BindingPlace"])("%s cites the canon's binding row", (type) => {
+    expect(commentOf(type)).toContain(BINDING_ROW);
+  });
+
+  it("cites the slice's layers for the bundle row, the layers and the tail; the show heading for a node's bindings", () => {
+    for (const type of ["BundleBindingRow", "BundleLayers", "TailEntry"]) {
+      expect([type, commentOf(type).includes('`docs/features/bundle-bindings.md` "Layers 5 and 9"')]).toEqual([type, true]);
+    }
+    expect(commentOf("ShownBindings")).toContain('`docs/canon/code-reads.md` "spec show --bindings"');
+    expect(commentOf("KnownSyncState")).toContain('`docs/canon/spec-verify.md` "States"');
+  });
+
+  it("types layers 5 and 9 as bundle rows and every other layer as nodes", () => {
+    const layers = source.slice(source.indexOf("export interface BundleLayers {"), source.indexOf("\n}\n", source.indexOf("export interface BundleLayers {")));
+    expect(Array.from(layers.matchAll(/^ {2}(\w+): (\w+)\[\];$/gm), (match) => `${match[1] ?? ""} ${match[2] ?? ""}`)).toEqual([
+      "targets BundleItem",
+      "open_questions BundleItem",
+      "ancestors BundleItem",
+      "criteria BundleItem",
+      "bindings BundleBindingRow",
+      "decisions BundleItem",
+      "neighbours BundleItem",
+      "terms BundleItem",
+      "tests BundleBindingRow",
+    ]);
+  });
+
+  it("gives a shown node its bindings after links, null or {rows, omitted}; the package its rows, never unknown", () => {
+    expect(source).toMatch(/^ {2}links: ShownLinks \| null;\n(?: {2}\/\*\*[\s\S]*?\*\/\n)? {2}bindings: ShownBindings \| null;\n\}$/m);
+    const none: Pick<ShownNode, "bindings"> = { bindings: null };
+    const some: Pick<ShownNode, "bindings"> = { bindings: { rows: [], omitted: 3 } };
+    expect([none.bindings, some.bindings?.omitted]).toEqual([null, 3]);
+    expect(source).toMatch(/^ {2}bindings: BindingRow\[\];$/m);
+    expect(source).not.toMatch(/^ {2}bindings: unknown\[\];$/m);
+    const pkg: Pick<TaskPackage, "bindings"> = { bindings: [] };
+    expect(pkg.bindings).toEqual([]);
+  });
+
+  it("keeps the judgement nullable: a row not judged has sync, category, detail and anchor null, never ok", () => {
+    const listed: Pick<BindingRow, "sync" | "category" | "detail" | "anchor"> = { sync: null, category: null, detail: null, anchor: null };
+    expect(Object.values(listed)).toEqual([null, null, null, null]);
+    expect(source).toMatch(/^ {2}sync: SyncState \| null;$/m);
+  });
+
+  it("lists verify's nine states in its table's order and still takes any other word", () => {
+    const declared = /export type KnownSyncState =([^;]+);/.exec(source)?.[1] ?? "";
+    expect(Array.from(declared.matchAll(/"(\w+)"/g), (match) => match[1])).toEqual([
+      "cannot_verify",
+      "predated",
+      "bad_marker",
+      "broken_binding",
+      "unlocked",
+      "spec_ahead",
+      "code_ahead",
+      "conflict",
+      "ok",
+    ]);
+    const other: BindingRow["sync"] = "drifting";
+    expect(other).toBe("drifting");
+  });
+
+  it("keeps a row's words plain strings: relation, kind, item kind, layer, category, detail", () => {
+    const row: Pick<BindingRow, "relation" | "kind" | "item_kind" | "layer" | "category" | "detail"> = {
+      relation: "any-relation",
+      kind: "any-kind",
+      item_kind: "any_item",
+      layer: "z",
+      category: "any_category",
+      detail: "any detail",
+    };
+    expect(Object.values(row)).toHaveLength(6);
   });
 });

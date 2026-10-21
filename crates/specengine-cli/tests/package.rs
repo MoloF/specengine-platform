@@ -15,12 +15,21 @@
 //! time. 07 s1.2 P2-5 runs on `fixtures/spec-c` (`common::NON_RUST`: a web
 //! service whose code is Python), copied the same way.
 //!
+//! docs/features/bundle-bindings.md RD-7 (the package's `bindings`: the
+//! cap, the budget, the set, the brief) over a git repository of
+//! `fixtures/code-a` with its golden lock (`verify_common::golden`), the
+//! oracle `spec verify --node` (`bindings_common`).
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
 
+mod bindings_common;
+mod code_index_common;
 mod common;
+mod lock_common;
 mod task_common;
+mod verify_common;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -1937,4 +1946,266 @@ fn m2_the_package_sheds_diffs_then_reference_texts_within_460000() {
     let brief = pair.brief(&root, &id);
     assert!(brief.chars().count() <= 40_000);
     assert_eq!(pair.package_text(&root, &id), text, "byte-identical");
+}
+
+// ------------------------------------------------- bundle-bindings RD-7
+
+/// `count` functions bound to GOAL-01 in one new file, each name
+/// `width` characters long (its qpath with it: the row's `symbol`).
+fn goal_bindings(repo: &lock_common::LockRepo, count: usize, width: usize) {
+    let mut many = String::new();
+    for at in 0..count {
+        let stem = format!("bound_{at:03}_");
+        let name = format!("{stem}{}", "w".repeat(width.saturating_sub(stem.len())));
+        many.push_str(&format!(
+            "// @implements GOAL-01\npub fn {name}() -> u32 {{\n    {at}\n}}\n\n"
+        ));
+    }
+    repo.write("crates/tally/src/many.rs", many);
+}
+
+/// docs/features/bundle-bindings.md RD-7, the cap and the budget: a task
+/// on GOAL-01 over the golden, its rows grown by functions bound to it in
+/// one new file. At 64 rows the package lists them all, no note; at 65, the
+/// first 64 in verify's order and one note, last, `bindings: 1 more row(s)
+/// left out; spec show <node> --bindings lists them` (the first left-out
+/// row's node), on stderr too; the package `schema_version` 1 with its 26
+/// keys; the brief's Bindings section the package's rows. Then, approved
+/// with a criterion's reference and GOAL-01's text edited, 64 rows whose
+/// symbols are 9 000 characters each: the diff text and the reference
+/// text leave first, then rows from the last until the package and its
+/// note lines fit 460 000 characters, one note counting every row left
+/// out. M7: no cap (`schema_version` 2 asserted too).
+#[test]
+fn package_bindings_are_capped_with_a_note() {
+    let repo = verify_common::golden("pk-bb-cap");
+    let vars = bindings_common::vars_of(&repo);
+    let task = verify_common::new_task(&repo, &["GOAL-01"]);
+    let base = bindings_common::verify_rows(&repo, "GOAL-01").len();
+    let max = specengine_core::task::PACKAGE_BINDINGS_MAX;
+    assert_eq!(max, bindings_common::PACKAGE_BINDINGS_MAX, "the spec's 64");
+    assert!(base < max, "premise: {base} rows");
+    let mut short: Vec<Value> = Vec::new();
+    for total in [max, max + 1] {
+        goal_bindings(&repo, total - base, 24);
+        let mut oracle = bindings_common::Oracle::new(&repo);
+        let want = oracle.set_rows(
+            &repo,
+            &bindings_common::holder_set(&repo.root, &["GOAL-01"], &vars),
+        );
+        assert_eq!(want.len(), total, "premise: {total} rows of GOAL-01");
+        short = want.iter().map(|expected| expected.row.clone()).collect();
+        let read = bindings_common::task_show_in(&repo.root, &task, &vars);
+        read.answered();
+        let context = format!("{total} rows");
+        bindings_common::assert_package_rows(&repo, &read, &want[..total.min(max)], &context);
+        let package = read.json();
+        let notes = bindings_common::package_binding_notes(&package);
+        if total <= max {
+            assert_eq!(notes, Vec::<String>::new(), "{context}: no note at the cap");
+            assert_eq!(read.binding_notes(), Vec::<String>::new(), "{context}");
+        } else {
+            let note = format!(
+                "bindings: 1 more row(s) left out; spec show {} --bindings lists them",
+                want[max].row["node"].as_str().unwrap()
+            );
+            assert_eq!(
+                notes,
+                std::slice::from_ref(&note),
+                "{context}: one note\n{}",
+                read.show()
+            );
+            assert_eq!(
+                package["notes"].as_array().unwrap().last(),
+                Some(&json!(note)),
+                "{context}: the note last"
+            );
+            assert_eq!(read.binding_notes(), [format!("note: {note}")], "{context}");
+        }
+    }
+
+    // The budget: texts first, then rows from the last.
+    verify_common::plan_task(&repo, &task, &["cap-check/PASS-01"], &[]);
+    verify_common::approve_task(&repo, &task);
+    repo.replace(
+        "docs/records/GOAL-01.md",
+        "the count stops at the cap.",
+        "the count stops at the cap, always.",
+    );
+    goal_bindings(&repo, max, 9_000);
+    // The long rows' order is the short rows' (one file, the same names
+    // but their tails): verify's JSON, cut at 40 000 characters, cannot
+    // list them all.
+    let many = "crates/tally/src/many.rs";
+    let mut expected: Vec<String> = Vec::new();
+    for row in &short {
+        if row["file"] == many {
+            if expected.iter().any(|key| key.contains(many)) {
+                continue;
+            }
+            for at in 0..max {
+                let stem = format!("bound_{at:03}_");
+                let name = format!("{stem}{}", "w".repeat(9_000 - stem.len()));
+                expected.push(bindings_common::key_of(&json!({
+                    "node": "GOAL-01",
+                    "relation": "implements",
+                    "file": many,
+                    "kind": "item",
+                    "symbol": format!("crates/tally::many::{name}"),
+                    "item_kind": "function_item",
+                })));
+            }
+        } else {
+            expected.push(bindings_common::key_of(row));
+        }
+    }
+    let judged = bindings_common::judged_with(&repo.root, "GOAL-01", &vars).document;
+    let listed = judged["rows"].as_array().unwrap().clone();
+    assert_eq!(
+        listed.len() + judged["omitted"]["rows"].as_u64().unwrap() as usize,
+        expected.len(),
+        "premise: the long rows"
+    );
+    let read = bindings_common::task_show_in(&repo.root, &task, &vars);
+    read.answered();
+    let package = read.json();
+    let kept = package["bindings"].as_array().unwrap().clone();
+    let rows = kept.len();
+    assert!(rows < max, "the budget left rows out: {rows} kept");
+    assert_eq!(
+        kept.iter().map(bindings_common::key_of).collect::<Vec<_>>(),
+        expected[..rows],
+        "the first rows kept, in row order"
+    );
+    let first = listed.len().min(rows);
+    assert!(first > 0, "premise: verify lists a row");
+    assert_eq!(
+        kept[..first]
+            .iter()
+            .map(bindings_common::shown_view)
+            .collect::<Vec<_>>(),
+        listed[..first]
+            .iter()
+            .map(bindings_common::judged_view)
+            .collect::<Vec<_>>(),
+        "judged as verify --node judges them"
+    );
+    let total = weight(&read.json_run.stdout, &package);
+    assert!(total <= 460_000, "within the budget: {total}");
+    assert!(
+        total + 9_000 > 460_000,
+        "rows leave only while it does not fit: {total} + a row's 9 000-character symbol"
+    );
+    let diffs = package["snapshot_diff"].as_array().unwrap();
+    assert!(
+        !diffs.is_empty() && diffs.iter().all(|diff| diff["diff"].is_null()),
+        "the diff texts left out first: {diffs:?}"
+    );
+    assert_eq!(
+        package["criteria"][0],
+        json!({"ref": "cap-check/PASS-01", "text": ""}),
+        "the reference text left out first"
+    );
+    let note = format!(
+        "bindings: {} more row(s) left out; spec show GOAL-01 --bindings lists them",
+        expected.len() - rows
+    );
+    assert_eq!(
+        bindings_common::package_binding_notes(&package),
+        std::slice::from_ref(&note),
+        "one note for the cap and the budget"
+    );
+    assert_eq!(
+        package["notes"].as_array().unwrap().last(),
+        Some(&json!(note)),
+        "the note last"
+    );
+    assert_eq!(package["schema_version"], json!(1));
+}
+
+/// docs/features/bundle-bindings.md RD-7, the set (Q-H): a task on
+/// GOAL-01, planned with the criterion `cap-check/PASS-01` (linked to
+/// GOAL-01) and LAW-STEP and PIECE-LIMITS affected, over the golden with
+/// markers on PIECE-LIMITS and its sections: its `bindings` are the rows of
+/// GOAL-01, LAW-STEP, PIECE-LIMITS and its sections, every relation, in
+/// verify's order, never the criterion's or LAW-STEP's parent's; its
+/// `bundle.bundle_hash` is `spec bundle GOAL-01 --budget 10000`'s, rows and
+/// all; approved and claimed, the same rows. M: the criteria refs in the
+/// set; rows by file.
+#[test]
+fn package_bindings_are_the_targets_affected_nodes_and_sections() {
+    let repo = verify_common::golden("pk-bb-set");
+    bindings_common::nested(&repo);
+    bindings_common::criterion(&repo, 0);
+    repo.commit_all("nested markers, a criterion");
+    let vars = bindings_common::vars_of(&repo);
+    let task = verify_common::new_task(&repo, &["GOAL-01"]);
+    verify_common::plan_task(
+        &repo,
+        &task,
+        &["cap-check/PASS-01"],
+        &["LAW-STEP", "PIECE-LIMITS"],
+    );
+    let set =
+        bindings_common::holder_set(&repo.root, &["GOAL-01", "LAW-STEP", "PIECE-LIMITS"], &vars);
+    assert_eq!(
+        set,
+        [
+            "GOAL-01",
+            "LAW-STEP",
+            "PIECE-LIMITS",
+            "LAW-SOURCE",
+            "LAW-DEFAULT"
+        ],
+        "premise: the package's set"
+    );
+    let mut oracle = bindings_common::Oracle::new(&repo);
+    let want = oracle.set_rows(&repo, &set);
+    assert!(
+        want.len() < bindings_common::PACKAGE_BINDINGS_MAX,
+        "premise: under the cap"
+    );
+    assert!(
+        !oracle.rows(&repo, "cap-check/PASS-01").is_empty(),
+        "premise: the criterion has rows"
+    );
+    for (context, step) in [
+        ("planned", None),
+        (
+            "approved",
+            Some(verify_common::approve_task as fn(&lock_common::LockRepo, &str)),
+        ),
+        (
+            "claimed",
+            Some(verify_common::claim_task as fn(&lock_common::LockRepo, &str)),
+        ),
+    ] {
+        if let Some(step) = step {
+            step(&repo, &task);
+        }
+        let read = bindings_common::task_show_in(&repo.root, &task, &vars);
+        read.answered();
+        bindings_common::assert_package_rows(&repo, &read, &want, context);
+        let package = read.json();
+        let nodes = bindings_common::nodes_of(package["bindings"].as_array().unwrap());
+        assert!(
+            !nodes.contains("cap-check/PASS-01") && !nodes.contains("PIECE-COUNTER"),
+            "{context}: never a criterion's or a parent's rows: {nodes:?}"
+        );
+        assert_eq!(
+            bindings_common::package_binding_notes(&package),
+            Vec::<String>::new(),
+            "{context}"
+        );
+        let bundle = bindings_common::bundle_of(&repo, &["GOAL-01"], "10000");
+        assert!(
+            !bundle.layer("bindings").is_empty(),
+            "premise: the task's bundle places rows"
+        );
+        assert_eq!(
+            package["bundle"]["bundle_hash"],
+            bundle.json()["bundle_hash"],
+            "{context}: the package's bundle is `spec bundle`'s, rows and all"
+        );
+    }
 }

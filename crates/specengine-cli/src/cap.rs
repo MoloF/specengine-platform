@@ -227,27 +227,10 @@ fn chars(lines: &[String]) -> usize {
 }
 
 /// A row's line and the lines under it: `sig`, a moved row's old place,
-/// an ambiguous row's candidates.
-fn row_lines(row: &BindingRow, binding: &str) -> Vec<String> {
-    let place = match (row.line, row.end_line) {
-        (Some(line), Some(end)) => format!("{}:{line}-{end}", one_line(&row.file)),
-        (Some(line), None) => format!("{}:{line}", one_line(&row.file)),
-        _ => one_line(&row.file),
-    };
-    let mut sync = row.sync.as_deref().map_or_else(|| "-".to_owned(), one_line);
-    for part in [&row.category, &row.detail].into_iter().flatten() {
-        sync.push(' ');
-        sync.push_str(&one_line(part));
-    }
-    let mut lines = vec![format!(
-        "  {} | {} | {place} | {} | layer {} | sync {sync}",
-        one_line(&row.node),
-        one_line(&row.relation),
-        one_line(binding),
-        row.layer
-            .as_deref()
-            .map_or_else(|| "-".to_owned(), one_line),
-    )];
+/// an ambiguous row's candidates. Also the brief's Bindings section (task
+/// spec `bundle-bindings`).
+pub(crate) fn row_lines(row: &BindingRow, binding: &str) -> Vec<String> {
+    let mut lines = vec![format!("  {}", row_line(row, binding))];
     if let Some(signature) = &row.signature {
         lines.push(format!("    sig {}", one_line(signature)));
     }
@@ -260,6 +243,32 @@ fn row_lines(row: &BindingRow, binding: &str) -> Vec<String> {
         }
     }
     lines
+}
+
+/// A row's line without its indent: `<node> | <relation> | <place> |
+/// <binding> | layer <layer> | sync <sync>[ <category>][ <detail>]`, `-`
+/// for `null` (also a bundle row's first line, task spec
+/// `bundle-bindings`).
+pub(crate) fn row_line(row: &BindingRow, binding: &str) -> String {
+    let place = match (row.line, row.end_line) {
+        (Some(line), Some(end)) => format!("{}:{line}-{end}", one_line(&row.file)),
+        (Some(line), None) => format!("{}:{line}", one_line(&row.file)),
+        _ => one_line(&row.file),
+    };
+    let mut sync = row.sync.as_deref().map_or_else(|| "-".to_owned(), one_line);
+    for part in [&row.category, &row.detail].into_iter().flatten() {
+        sync.push(' ');
+        sync.push_str(&one_line(part));
+    }
+    format!(
+        "{} | {} | {place} | {} | layer {} | sync {sync}",
+        one_line(&row.node),
+        one_line(&row.relation),
+        one_line(binding),
+        row.layer
+            .as_deref()
+            .map_or_else(|| "-".to_owned(), one_line),
+    )
 }
 
 /// `<file> | <kind> <symbol>[ <item_kind>]`.

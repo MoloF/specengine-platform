@@ -258,8 +258,8 @@ pub use apply::{
 };
 pub use bump::{BumpOutcome, BumpRequest, bump};
 pub use bundle::{
-    BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, DEFAULT_BUNDLE_BUDGET,
-    ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
+    BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, BundleRow,
+    DEFAULT_BUNDLE_BUDGET, ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
 };
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
@@ -363,7 +363,8 @@ pub use specengine_core::task::FollowUp;
 pub use specengine_core::task::{
     AFFECTED_MAX, CHANGED_FILE_MAX, CHANGED_FILES_MAX, CRITERIA_MAX, CRITERION_MAX,
     CRITERION_TEXT_MAX, DEFAULT_TASK_BUDGET, DIFF_MAX, DIFFS_TOTAL_MAX, GOAL_MAX, NODES_MAX,
-    NOTE_MAX, PACKAGE_BUDGET, PLAN_MAX, RUN_SUMMARY_MAX, SNAPSHOT_MAX, TITLE_MAX,
+    NOTE_MAX, PACKAGE_BINDINGS_MAX, PACKAGE_BUDGET, PLAN_MAX, RUN_SUMMARY_MAX, SNAPSHOT_MAX,
+    TITLE_MAX,
 };
 /// The task package and its parts (the model's), for the bridges.
 pub use specengine_model::{RunOutcome, TaskPackage, TaskStatus};

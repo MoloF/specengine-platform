@@ -5,14 +5,20 @@
 //! (determinism). Scratch copies of `fixtures/spec-a` and `-b`, each run
 //! with its own `HOME`; the fixtures are only read. The hash is checked
 //! with a BLAKE3 written in `common/bundle.rs` from the specification.
+//! docs/features/bundle-bindings.md RD-4: the budget bound with code rows
+//! in layers 5 and 9, over a git repository of `fixtures/code-a` with its
+//! golden lock (`verify_common::golden`).
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
 
 mod common;
+mod lock_common;
+mod verify_common;
 
 use std::collections::BTreeSet;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -762,5 +768,226 @@ fn a_frame_over_the_ceiling_is_refused() {
             .contains("the default budget of 2000 is below this bundle's minimum of "),
         "{}",
         run.show()
+    );
+}
+
+// ------------------------------------------------- bundle-bindings RD-4
+
+/// A row's identity: the whole placed row (keyless rows of one file share
+/// a key; their judgement tells them apart).
+fn row_key(row: &Value) -> String {
+    row.to_string()
+}
+
+/// The tail entry a left-out row is (docs/features/bundle-bindings.md
+/// "Layers 5 and 9", **Left out**), its estimate the placed row's.
+fn row_entry(placed: &Value, layer: &str) -> Value {
+    serde_json::json!({
+        "name": placed["symbol"].as_str().unwrap_or_else(|| placed["file"].as_str().unwrap()),
+        "title": format!(
+            "{} {}",
+            placed["relation"].as_str().unwrap(),
+            placed["node"].as_str().unwrap()
+        ),
+        "path": placed["file"],
+        "line": placed["line"].as_u64().unwrap_or(1),
+        "tokens_est": placed["tokens_est"],
+        "layer": layer,
+    })
+}
+
+/// docs/features/bundle-bindings.md RD-4 (the fit with rows): code-a's
+/// golden with a criterion of GOAL-01 and 24 more bindings of it (twelve
+/// functions with long signatures, twelve marked tests): for the minimum
+/// and 40 budgets up to the whole bundle, `tokens` is `tokens_est` of the
+/// printed body and within the budget, `chars` within 40 000, the hash the
+/// body's BLAKE3, the text's body and totals line the JSON's; every
+/// candidate and row is in exactly one place (placed, a tail entry, or
+/// `more`); each layer's placed rows and the left-out rows' entries follow
+/// the whole bundle's row order, an entry `{name, title, path, line,
+/// tokens_est, layer}` as the spec writes it; some budget leaves a row out
+/// as a tail entry while a later item is placed. M: a row placed without
+/// counting it in the budget, or the reserve without rows.
+#[test]
+fn rows_keep_every_budget_and_each_has_one_place() {
+    let repo = verify_common::golden("bundle-fit-rows");
+    repo.replace(
+        "docs/features/cap-check.md",
+        "it reads 10.",
+        "it reads 10. It keeps GOAL-01.",
+    );
+    let mut wide = String::new();
+    let mut tests = String::new();
+    for at in 0..12 {
+        wide.push_str(&format!(
+            "// @implements GOAL-01\npub fn widened_step_{at:02}(count: u32, cap: u32, step: u32, floor: u32, ceiling: u32) -> u32 {{\n    count.saturating_add(step).clamp(floor, ceiling.min(cap))\n}}\n\n"
+        ));
+        tests.push_str(&format!(
+            "// @verifies GOAL-01\n#[test]\nfn stops_at_the_cap_{at:02}() {{}}\n\n"
+        ));
+    }
+    repo.write("crates/tally/src/wide.rs", wide);
+    repo.write("crates/tally/tests/wide.rs", tests);
+    let mut vars: Vec<(OsString, OsString)> = repo
+        .git
+        .vars()
+        .into_iter()
+        .filter(|(name, _)| name != "HOME")
+        .collect();
+    vars.push(("HOME".into(), repo.home.clone().into_os_string()));
+    let env: Vec<(&str, &OsStr)> = vars
+        .iter()
+        .map(|(name, value)| (name.to_str().unwrap(), value.as_os_str()))
+        .collect();
+    let run = |args: &[&str]| common::spec_with(&repo.root, args, &env);
+
+    let whole = run(&["bundle", "GOAL-01", "--budget", "4294967295", "--json"]);
+    whole.code(0);
+    let whole = whole.json();
+    assert_eq!(whole["tail"], serde_json::json!([]), "premise: all placed");
+    let mut universe_rows: Vec<(String, &str, Value)> = Vec::new();
+    for layer in ["bindings", "tests"] {
+        for placed in whole["layers"][layer].as_array().unwrap() {
+            universe_rows.push((row_key(placed), layer, placed.clone()));
+        }
+    }
+    let item_layers: Vec<&str> = LAYERS[1..]
+        .iter()
+        .copied()
+        .filter(|layer| *layer != "bindings" && *layer != "tests")
+        .collect();
+    let universe_items: BTreeSet<String> = item_layers
+        .iter()
+        .flat_map(|layer| names(&whole, layer))
+        .collect();
+    assert!(
+        universe_rows.len() > 30 && universe_items.contains("PASS-01"),
+        "premise: rows and a criterion: {whole}"
+    );
+
+    let low = {
+        let below = run(&["bundle", "GOAL-01", "--budget", "1"]);
+        below.code(2);
+        below
+            .stderr
+            .split("minimum of ")
+            .nth(1)
+            .and_then(|tail| tail.split(' ').next())
+            .and_then(|n| n.parse::<u64>().ok())
+            .unwrap_or_else(|| panic!("no minimum: {}", below.show()))
+    };
+    let top = whole["tokens"].as_u64().unwrap() + 50;
+    let mut budgets: Vec<u64> = vec![low];
+    budgets.extend((1..=40).map(|step| low + (top - low) * step / 40));
+    let mut row_tails = 0;
+    let mut later_placed = 0;
+    for budget in budgets {
+        let budget = budget.to_string();
+        let text = run(&["bundle", "GOAL-01", "--budget", &budget]);
+        text.code(0);
+        let json = run(&["bundle", "GOAL-01", "--budget", &budget, "--json"]);
+        json.code(0);
+        let json = json.json();
+        let body = json["body"].as_str().unwrap().to_owned();
+        let tokens = json["tokens"].as_u64().unwrap();
+        assert_eq!(tokens, u64::from(tokens_est(&body)), "{budget}: tokens");
+        assert!(
+            tokens <= budget.parse::<u64>().unwrap(),
+            "{budget}: {tokens}"
+        );
+        assert!(body.chars().count() <= CAP, "{budget}: chars");
+        assert_eq!(
+            json["chars"].as_u64().unwrap() as usize,
+            body.chars().count()
+        );
+        assert_eq!(json["bytes"].as_u64().unwrap() as usize, body.len());
+        let hash = format!("b3:{}", blake3_hex(body.as_bytes()));
+        assert_eq!(json["bundle_hash"], hash.as_str(), "{budget}: the hash");
+        let printed = split_text(&text.stdout);
+        assert_eq!(
+            printed.body, body,
+            "{budget}: the text's body is the JSON's"
+        );
+        assert_eq!(printed.hash, hash);
+        let tail = json["tail"].as_array().unwrap().clone();
+        let more = json["more"].as_u64().unwrap() as usize;
+        assert_eq!(
+            printed.totals,
+            format!(
+                "tokens {tokens} of {budget}, chars {}, bytes {}, not included {}",
+                body.chars().count(),
+                body.len(),
+                tail.len() + more
+            ),
+            "{budget}: the totals"
+        );
+
+        let mut placed_rows: BTreeSet<String> = BTreeSet::new();
+        for layer in ["bindings", "tests"] {
+            let order: Vec<&(String, &str, Value)> = universe_rows
+                .iter()
+                .filter(|(_, of, _)| *of == layer)
+                .collect();
+            let mut from = 0;
+            for placed in json["layers"][layer].as_array().unwrap() {
+                let key = row_key(placed);
+                let at = order[from..]
+                    .iter()
+                    .position(|(want, _, row)| *want == key && row == placed)
+                    .unwrap_or_else(|| panic!("{budget}: {placed}: a row of {layer}, in order"));
+                from += at + 1;
+                assert!(placed_rows.insert(key), "{budget}: a row placed twice");
+            }
+        }
+        let placed_items: Vec<String> = item_layers
+            .iter()
+            .flat_map(|layer| names(&json, layer))
+            .collect();
+        // GOAL-01 has no child section: its form adds none to the list.
+        let left: Vec<Value> = universe_rows
+            .iter()
+            .filter(|(key, _, _)| !placed_rows.contains(key))
+            .map(|(_, layer, row)| row_entry(row, layer))
+            .collect();
+        let mut from = 0;
+        let mut seen: BTreeSet<String> = placed_items.iter().cloned().collect();
+        for entry in &tail {
+            let layer = entry["layer"].as_str().unwrap();
+            if layer == "bindings" || layer == "tests" {
+                let at = left[from..]
+                    .iter()
+                    .position(|want| want == entry)
+                    .unwrap_or_else(|| {
+                        panic!("{budget}: {entry}: a left-out row's entry, in order")
+                    });
+                from += at + 1;
+                row_tails += 1;
+            } else {
+                let name = entry["name"].as_str().unwrap().to_owned();
+                assert!(universe_items.contains(&name), "{budget}: {name}");
+                assert!(seen.insert(name), "{budget}: an item twice");
+            }
+        }
+        assert_eq!(
+            placed_items.len() + placed_rows.len() + tail.len() + more,
+            universe_items.len() + universe_rows.len(),
+            "{budget}: each candidate and row once: placed {placed_items:?}, {} rows, tail {}, more {more}",
+            placed_rows.len(),
+            tail.len()
+        );
+        let rows_left = universe_rows.len() - placed_rows.len();
+        if rows_left > 0
+            && json["layers"]["tests"]
+                .as_array()
+                .is_some_and(|tests| !tests.is_empty())
+            && placed_rows.len() < universe_rows.len()
+        {
+            later_placed += 1;
+        }
+    }
+    assert!(row_tails > 0, "some budget lists a left-out row");
+    assert!(
+        later_placed > 0,
+        "some budget leaves a row out and places a later one (the greedy)"
     );
 }

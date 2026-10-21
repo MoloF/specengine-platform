@@ -336,6 +336,8 @@ function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null)
     truncated: false,
     omitted: null,
     links,
+    // The UI never asks for `with=bindings` (no screen yet: docs/canon/code-reads.md "Twins").
+    bindings: null,
   };
 }
 
@@ -590,8 +592,15 @@ const LAYERS: readonly [keyof BundleLayers, string][] = [
   ["tests", "Tests"],
 ];
 
+/**
+ * The layers of nodes: every layer but 5 and 9, which hold code rows. The mock has no code, so
+ * those two stay empty, with no heading and no note, as without `[code]`
+ * (docs/features/bundle-bindings.md "UI and daemon keys").
+ */
+type NodeLayer = Exclude<keyof BundleLayers, "bindings" | "tests">;
+
 /** Which links bring a candidate into which layer, in the target's direction. */
-const BY_LINK: readonly [keyof BundleLayers, string, "in" | "out" | "both"][] = [
+const BY_LINK: readonly [NodeLayer, string, "in" | "out" | "both"][] = [
   ["criteria", "verifies", "in"],
   ["decisions", "canon", "in"],
   ["neighbours", "depends_on", "out"],
@@ -602,7 +611,7 @@ const BY_LINK: readonly [keyof BundleLayers, string, "in" | "out" | "both"][] = 
 
 interface Candidate {
   node: MockNode;
-  layer: keyof BundleLayers;
+  layer: NodeLayer;
   via: BundleVia[];
 }
 
@@ -677,7 +686,7 @@ export function bundleOf(corpus: MockCorpus, options: BundleOptions): BundleView
 
   // Candidates: each node once, in its first layer.
   const candidates: Candidate[] = [];
-  const add = (node: MockNode, layer: keyof BundleLayers, via: BundleVia | null) => {
+  const add = (node: MockNode, layer: NodeLayer, via: BundleVia | null) => {
     if (covered(node) || !isLive(corpus, node)) {
       return;
     }

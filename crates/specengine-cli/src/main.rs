@@ -404,7 +404,7 @@ enum TaskCommand {
         #[arg(long, value_name = "ID")]
         run: Option<String>,
     },
-    /// Print a task's brief (`--json`: its package): goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, bundle.
+    /// Print a task's brief (`--json`: its package): goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, code bindings, bundle.
     Show {
         #[arg(
             value_name = "T",

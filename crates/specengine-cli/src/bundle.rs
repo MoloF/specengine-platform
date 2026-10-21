@@ -11,12 +11,26 @@
 //!   header, the summary and `working answer: <header>`; criteria as a
 //!   header and their text; ancestors, decisions, neighbours and terms as a
 //!   header and a document's summary (a section: its header alone).
+//! - **Code rows** (task spec `bundle-bindings`): with a `[code]` table,
+//!   the binding rows of one judge ([`set_bindings`], `sync` as `spec
+//!   verify --node` gives it) over the targets, the nodes within them and
+//!   layer 4's candidates, kept by node, never by file: layer 5 (bindings)
+//!   the rows of the targets and the nodes within them whose relation is
+//!   not `verifies`, layer 9 (tests) the `verifies` rows of those and of
+//!   layer 4's candidates. A row prints as `spec show --bindings`' row
+//!   line without its indent, then `  sig <signature>`; left out, it is a
+//!   not-included line named by its symbol (else its file), titled
+//!   `<relation> <node>`. A code layer that cannot be read is one `note:
+//!   bindings: <cause>`, never the bundle's failure; without `[code]`
+//!   nothing is read and nothing said. `spec task show` reads its
+//!   package's rows from the same judge ([`Beside`]).
 //! - **Budget**: `--budget N`, else `[budgets] bundle_node` (read alone,
 //!   [`bundle_node_from_toml`]), else [`DEFAULT_BUNDLE_BUDGET`]. The body as
 //!   printed stays within it ([`tokens_est`] of the whole text) and within
 //!   [`OUTPUT_CAP_CHARS`]: the frame (title, target headers marked
-//!   ` | outline`, the not-included reserve) is the minimum (below it: exit
-//!   2); then each item, in order, enters iff the body with it, the frame
+//!   ` | outline`, the not-included reserve, its count every candidate and
+//!   row) is the minimum (below it: exit 2); then each item and row, in
+//!   layer order, enters iff the body with it, the frame
 //!   parts not placed yet and the reserve still fits. A target degrades
 //!   (text → outline → its header alone), never cut; the not-included list
 //!   (an outlined target's child ID sections first) prints at most
@@ -37,6 +51,14 @@
 //! <summary or text>
 //! [working answer: <header>]
 //!
+//! ## Bindings
+//! <node> | <relation> | <place> | <binding> | layer <layer> | sync <sync>[ <category>][ <detail>]
+//! [  sig <signature>]
+//!
+//! ## Tests
+//! <node> | <relation> | <place> | <binding> | layer <layer> | sync <sync>[ <category>][ <detail>]
+//! [  sig <signature>]
+//!
 //! ## Not included
 //! - <name> | <title or -> | <n> tokens
 //! - <k> more
@@ -44,22 +66,31 @@
 //! tokens <t> of <budget>, chars <c>, bytes <b>, not included <n>
 //! ```
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde::Serialize;
 use serde::ser::SerializeMap as _;
 use specengine_core::check::{
-    BundleCandidate, BundleLayer, BundleLayers, Endpoint, LinkState, NodeAt, SpecGraph,
+    BundleCandidate, BundleLayer, BundleLayers, CheckInput, Endpoint, LinkState, NodeAt, SpecGraph,
     bundle_layers, bundle_node_from_toml,
 };
-use specengine_core::tokens_est;
-use specengine_store::{GitEnv, b3_hash};
+use specengine_core::lock::LockRelation;
+use specengine_core::{CodeConfig, tokens_est};
+use specengine_model::BindingRow;
+use specengine_store::{GitEnv, SqliteIndex, b3_hash};
 
-use crate::cap::{OUTPUT_CAP_CHARS, header as show_header};
-use crate::corpus::{holders_warning, indexed, locate};
+use crate::bindings::{SetRow, set_bindings};
+use crate::cap::{OUTPUT_CAP_CHARS, header as show_header, row_line};
+use crate::corpus::{holders_warning, indexed_in, locate};
 use crate::graph::FollowedType;
 use crate::links::state_suffix;
-use crate::project::discover_with_text;
+use crate::location::open_index;
+use crate::node_set::named_set;
+use crate::project::{ProjectRoot, discover_with_text};
+use crate::refs::{Corpus, NodeKey};
 use crate::search::notes;
 use crate::show::{ShownNode, classify, shown};
+use crate::verify::unprefixed;
 use crate::{CliError, Env, Globals, Message, one_line};
 
 /// The budget without `--budget` or `[budgets] bundle_node`, in estimated
@@ -77,8 +108,8 @@ pub struct BundleRequest {
     /// `--budget N`, estimated tokens; `None`: the config's, else the
     /// default.
     pub budget: Option<i64>,
-    /// Git's environment: passed from task spec `show-bindings` on, read
-    /// by its layers of code rows (task spec `bundle-bindings`).
+    /// Git's environment: layers 5 and 9 judge their rows with it (task
+    /// spec `bundle-bindings`).
     pub git: GitEnv,
 }
 
@@ -109,8 +140,13 @@ pub struct Bundle {
     pub bundle_hash: String,
     /// The text printed before the two closing lines.
     pub body: String,
-    /// Every layer in print order, with the items placed in it.
+    /// Every layer in print order, with the items placed in it (layers 5
+    /// and 9 hold rows, never items: [`Self::bindings`], [`Self::tests`]).
     pub layers: Vec<(BundleLayer, Vec<BundleItem>)>,
+    /// Layer 5's rows placed in the body, in verify's row order.
+    pub bindings: Vec<BundleRow>,
+    /// Layer 9's rows placed in the body, in verify's row order.
+    pub tests: Vec<BundleRow>,
     /// The not-included lines printed.
     pub tail: Vec<TailEntry>,
     /// Not included and not listed: the `- <k> more` line's `k` (0: none).
@@ -118,10 +154,37 @@ pub struct Bundle {
 }
 
 impl Bundle {
-    /// Every node not included: the tail lines and the `more` count.
+    /// Every node and row not included: the tail lines and the `more`
+    /// count.
     pub fn not_included(&self) -> usize {
         self.tail.len() + self.more
     }
+
+    /// The items or rows placed in `layer`.
+    pub fn placed(&self, layer: BundleLayer) -> usize {
+        let items: usize = self
+            .layers
+            .iter()
+            .filter(|(placed, _)| *placed == layer)
+            .map(|(_, items)| items.len())
+            .sum();
+        let rows = match layer {
+            BundleLayer::Bindings => self.bindings.len(),
+            BundleLayer::Tests => self.tests.len(),
+            _ => 0,
+        };
+        items + rows
+    }
+}
+
+/// A code binding row placed in layer 5 or 9 (task spec
+/// `bundle-bindings`): the row as `spec show --bindings` gives it, and
+/// what its lines cost.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BundleRow {
+    pub row: BindingRow,
+    /// The row's lines' estimate, as printed in the body.
+    pub tokens_est: u32,
 }
 
 /// How an item is shown.
@@ -174,7 +237,8 @@ pub struct WorkingAnswer {
     pub state: LinkState,
 }
 
-/// A not-included line.
+/// A not-included line: a node, or a code row (its symbol, else its file;
+/// titled `<relation> <node>`; its place; its lines' estimate).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TailEntry {
     pub name: String,
@@ -185,6 +249,28 @@ pub struct TailEntry {
     pub tokens_est: u32,
     /// The layer it stood in (an outlined target's section: targets).
     pub layer: BundleLayer,
+}
+
+/// A node set read beside a bundle from the bundle's one code read (task
+/// spec `bundle-bindings`, "Task package": `spec task show` refreshes the
+/// code index once, its bundle and its package's rows from one judge).
+pub(crate) struct Beside<'a> {
+    /// The REFs naming it, each with every section it contains.
+    pub refs: &'a [String],
+    /// Its rows, set once the bundle reads the code layer (without
+    /// `[code]` too); `None`: the bundle stopped before, [`beside_rows`]
+    /// reads them.
+    pub rows: Option<BesideRows>,
+}
+
+/// A node set's rows read beside a bundle, and the read's one note.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct BesideRows {
+    /// In verify's row order; none without `[code]` or when no row could
+    /// be read.
+    pub rows: Vec<BindingRow>,
+    /// `bindings: <cause>`; none without `[code]`.
+    pub note: Option<String>,
 }
 
 /// Where the budget came from, named in the minimum's error.
@@ -206,11 +292,22 @@ impl BudgetSource {
     }
 }
 
-/// `spec bundle`: updates the index, resolves every `REF`, assembles.
+/// `spec bundle`: updates the index, resolves every `REF`, reads the code
+/// rows, assembles.
 pub fn bundle(
     env: &Env,
     globals: &Globals,
     request: &BundleRequest,
+) -> Result<BundleOutcome, CliError> {
+    bundle_with(env, globals, request, None)
+}
+
+/// [`bundle`], with `beside`'s rows read by its code read too.
+pub(crate) fn bundle_with(
+    env: &Env,
+    globals: &Globals,
+    request: &BundleRequest,
+    beside: Option<&mut Beside<'_>>,
 ) -> Result<BundleOutcome, CliError> {
     let flag = budget_of(request.budget)?;
     if request.references.is_empty() {
@@ -271,7 +368,10 @@ pub fn bundle(
         return Ok(not_found(outcome, reason, messages));
     }
 
-    let input = indexed(env, &project, &mut messages, true)?;
+    // One handle for the spec index and the code index (as `spec show
+    // --bindings`).
+    let mut open = open_index(env, &project)?;
+    let input = indexed_in(&mut open.index, &project, &mut messages, true)?;
     let graph = SpecGraph::new(&input, scheme, &project.config.paths);
     let mut targets = Vec::new();
     for (written, target) in &asked {
@@ -296,9 +396,168 @@ pub fn bundle(
             graph.name(outer)
         )));
     }
-    outcome.bundle = Some(assemble(&graph, &layers, budget, &source)?);
+    // Layers 5 and 9, the read's note after the bundle's own messages.
+    let read = CodeRead {
+        project: &project,
+        text: &text,
+        git: &request.git,
+        input: &input,
+    };
+    let code = code_rows(&read, &mut open.index, &graph, &layers, beside);
+    messages.extend(code.note.clone().map(Message::Note));
+    outcome.bundle = Some(assemble(&graph, &layers, &code, budget, &source)?);
     outcome.messages = messages;
     Ok(outcome)
+}
+
+/// What the code rows read beside the graph: the project, its config's
+/// text, git's environment, the spec corpus read again (every file's
+/// bytes, from the handle the code index is read with).
+struct CodeRead<'a> {
+    project: &'a ProjectRoot,
+    text: &'a str,
+    git: &'a GitEnv,
+    input: &'a CheckInput,
+}
+
+/// Layers 5 and 9's rows, and the read's one note.
+#[derive(Default)]
+struct CodeRows {
+    bindings: Vec<SetRow>,
+    tests: Vec<SetRow>,
+    note: Option<String>,
+}
+
+/// The rows of layers 5 and 9 (see the module documentation) from one
+/// judge over the targets, the nodes within them and layer 4's candidates
+/// (and `beside`'s set, its rows given to it); without `[code]` none, no
+/// note, the code index untouched.
+fn code_rows(
+    read: &CodeRead<'_>,
+    index: &mut SqliteIndex,
+    graph: &SpecGraph<'_>,
+    layers: &BundleLayers,
+    beside: Option<&mut Beside<'_>>,
+) -> CodeRows {
+    if matches!(CodeConfig::from_toml(read.text), Ok(None)) {
+        if let Some(beside) = beside {
+            beside.rows = Some(BesideRows::default());
+        }
+        return CodeRows::default();
+    }
+    let project = read.project;
+    let scheme = &project.config.scheme;
+    let corpus = Corpus::new(read.input, scheme, &project.config.paths);
+    // A graph node as the corpus keys it: the same input, by path.
+    let files: BTreeMap<&str, usize> = corpus
+        .resolver
+        .paths()
+        .iter()
+        .enumerate()
+        .map(|(file, path)| (*path, file))
+        .collect();
+    let key = |at: NodeAt| -> Option<NodeKey> {
+        let path = graph.paths().get(at.file)?;
+        files.get(path).map(|&file| NodeKey { file, ord: at.ord })
+    };
+    let targets: BTreeSet<NodeKey> = layers
+        .targets
+        .iter()
+        .flat_map(|&at| graph.within(at))
+        .filter_map(key)
+        .collect();
+    let criteria: BTreeSet<NodeKey> = layers
+        .candidates
+        .iter()
+        .filter(|candidate| candidate.layer == BundleLayer::Criteria)
+        .filter_map(|candidate| key(candidate.node))
+        .collect();
+    let package: BTreeSet<NodeKey> = beside
+        .as_ref()
+        .map(|beside| named_set(&corpus, scheme, beside.refs))
+        .unwrap_or_default();
+    drop(corpus);
+    let keys: Vec<NodeKey> = targets
+        .iter()
+        .chain(&criteria)
+        .chain(&package)
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+
+    let read_rows = set_bindings(project, read.text, read.git, index, read.input, &keys);
+    let rows = read_rows.rows.unwrap_or_default();
+    if let Some(beside) = beside {
+        beside.rows = Some(BesideRows {
+            rows: rows
+                .iter()
+                .filter(|row| !row.nodes.is_disjoint(&package))
+                .map(|row| row.row.clone())
+                .collect(),
+            note: read_rows.note.clone(),
+        });
+    }
+    let (tests, bindings): (Vec<SetRow>, Vec<SetRow>) = rows.into_iter().partition(|row| {
+        LockRelation::from_name(&row.row.relation) == Some(LockRelation::Verifies)
+    });
+    CodeRows {
+        bindings: bindings
+            .into_iter()
+            .filter(|row| !row.nodes.is_disjoint(&targets))
+            .collect(),
+        tests: tests
+            .into_iter()
+            .filter(|row| !row.nodes.is_disjoint(&targets) || !row.nodes.is_disjoint(&criteria))
+            .collect(),
+        note: read_rows.note,
+    }
+}
+
+/// [`Beside`]'s rows when its bundle stopped before reading the code
+/// layer: the set's own read of it, the command's one code refresh (the
+/// spec index read again, its messages not given: the command's are its
+/// own). Never a failure: what cannot be read is the note.
+pub(crate) fn beside_rows(
+    env: &Env,
+    globals: &Globals,
+    git: &GitEnv,
+    refs: &[String],
+) -> BesideRows {
+    let unread = |error: CliError| BesideRows {
+        rows: Vec::new(),
+        note: Some(format!("bindings: {}", one_line(&unprefixed(&error)))),
+    };
+    let (project, text) = match discover_with_text(env, globals) {
+        Ok(found) => found,
+        Err(error) => return unread(error),
+    };
+    if matches!(CodeConfig::from_toml(&text), Ok(None)) {
+        return BesideRows::default();
+    }
+    let mut open = match open_index(env, &project) {
+        Ok(open) => open,
+        Err(error) => return unread(error),
+    };
+    let mut ignored = Vec::new();
+    let input = match indexed_in(&mut open.index, &project, &mut ignored, true) {
+        Ok(input) => input,
+        Err(error) => return unread(error),
+    };
+    let scheme = &project.config.scheme;
+    let corpus = Corpus::new(&input, scheme, &project.config.paths);
+    let keys: Vec<NodeKey> = named_set(&corpus, scheme, refs).into_iter().collect();
+    drop(corpus);
+    let read = set_bindings(&project, &text, git, &mut open.index, &input, &keys);
+    BesideRows {
+        rows: read
+            .rows
+            .unwrap_or_default()
+            .into_iter()
+            .map(|row| row.row)
+            .collect(),
+        note: read.note,
+    }
 }
 
 /// `--budget N`: a whole number from 1 to `u32::MAX`.
@@ -339,12 +598,18 @@ struct TargetForms {
     children: Vec<TailEntry>,
 }
 
-/// A candidate ready to fit.
+/// A candidate or a code row ready to fit.
 struct Prepared {
     layer: BundleLayer,
-    item: BundleItem,
+    placed: Placed,
     text: String,
     entry: TailEntry,
+}
+
+/// What a placed candidate adds to its layer.
+enum Placed {
+    Item(BundleItem),
+    Row(BundleRow),
 }
 
 /// The frame, the minimum, then the greedy fit (see the module
@@ -352,6 +617,7 @@ struct Prepared {
 fn assemble(
     graph: &SpecGraph<'_>,
     layers: &BundleLayers,
+    code: &CodeRows,
     budget: u32,
     source: &BudgetSource,
 ) -> Result<Bundle, CliError> {
@@ -360,11 +626,23 @@ fn assemble(
         .iter()
         .map(|&at| target_forms(graph, at))
         .collect();
-    let candidates: Vec<Prepared> = layers
+    let mut candidates: Vec<Prepared> = layers
         .candidates
         .iter()
         .map(|candidate| prepare(graph, candidate))
+        .chain(
+            code.bindings
+                .iter()
+                .map(|row| prepare_row(row, BundleLayer::Bindings)),
+        )
+        .chain(
+            code.tests
+                .iter()
+                .map(|row| prepare_row(row, BundleLayer::Tests)),
+        )
         .collect();
+    // Layers 1-4, 5, 6-8, 9; within a layer the order given (stable).
+    candidates.sort_by_key(|candidate| candidate.layer);
 
     let names: Vec<String> = layers
         .targets
@@ -452,9 +730,11 @@ fn assemble(
         placed[0].1.push(item);
     }
 
-    // Layers 2 to 8, in order: an item enters iff the body with it and the
-    // reserve fits.
+    // Layers 2 to 9, in order: an item or a row enters iff the body with
+    // it and the reserve fits.
     let mut current: Option<BundleLayer> = None;
+    let mut bindings = Vec::new();
+    let mut tests = Vec::new();
     for candidate in candidates {
         let heading = if current == Some(candidate.layer) {
             "\n".to_owned()
@@ -465,11 +745,17 @@ fn assemble(
             body.push_str(&heading);
             body.push_str(&candidate.text);
             current = Some(candidate.layer);
-            if let Some((_, items)) = placed
-                .iter_mut()
-                .find(|(layer, _)| *layer == candidate.layer)
-            {
-                items.push(candidate.item);
+            match candidate.placed {
+                Placed::Item(item) => {
+                    if let Some((_, items)) = placed
+                        .iter_mut()
+                        .find(|(layer, _)| *layer == candidate.layer)
+                    {
+                        items.push(item);
+                    }
+                }
+                Placed::Row(row) if candidate.layer == BundleLayer::Tests => tests.push(row),
+                Placed::Row(row) => bindings.push(row),
             }
         } else {
             not_included.push(candidate.entry);
@@ -513,6 +799,8 @@ fn assemble(
         bundle_hash: b3_hash(body.as_bytes()),
         body,
         layers: placed,
+        bindings,
+        tests,
         tail,
         more,
     })
@@ -699,9 +987,45 @@ fn prepare(graph: &SpecGraph<'_>, candidate: &BundleCandidate) -> Prepared {
     };
     Prepared {
         layer,
-        item,
+        placed: Placed::Item(item),
         text,
         entry: tail_entry(graph, at, layer),
+    }
+}
+
+/// A code row's text (`spec show --bindings`' row line without its
+/// indent, then `  sig <signature>`; one form, in or out), its placed row
+/// and its not-included entry (its symbol, else its file; `<relation>
+/// <node>`; its line, else 1).
+fn prepare_row(row: &SetRow, layer: BundleLayer) -> Prepared {
+    let binding = &row.row;
+    let mut text = format!("{}\n", row_line(binding, &row.binding));
+    if let Some(signature) = &binding.signature {
+        text.push_str(&format!("  sig {}\n", one_line(signature)));
+    }
+    let tokens = tokens_est(&text);
+    let entry = TailEntry {
+        name: binding
+            .symbol
+            .clone()
+            .unwrap_or_else(|| binding.file.clone()),
+        title: Some(format!("{} {}", binding.relation, binding.node)),
+        path: binding.file.clone(),
+        line: binding
+            .line
+            .and_then(|line| usize::try_from(line).ok())
+            .unwrap_or(1),
+        tokens_est: tokens,
+        layer,
+    };
+    Prepared {
+        layer,
+        placed: Placed::Row(BundleRow {
+            row: binding.clone(),
+            tokens_est: tokens,
+        }),
+        text,
+        entry,
     }
 }
 
@@ -835,15 +1159,33 @@ struct BundleJson<'a> {
     more: Option<usize>,
 }
 
-/// Every layer's key, in print order, its items (`[]` when empty).
-struct LayersJson<'a>(&'a [(BundleLayer, Vec<BundleItem>)]);
+/// Every layer's key, in print order, its items (`[]` when empty); layers
+/// 5 and 9 their placed rows.
+struct LayersJson<'a>(&'a Bundle);
 
 impl Serialize for LayersJson<'_> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let mut map = serializer.serialize_map(Some(BundleLayer::ALL.len()))?;
         for layer in BundleLayer::ALL {
+            let rows = match layer {
+                BundleLayer::Bindings => Some(&self.0.bindings),
+                BundleLayer::Tests => Some(&self.0.tests),
+                _ => None,
+            };
+            if let Some(rows) = rows {
+                let rows: Vec<RowJson<'_>> = rows
+                    .iter()
+                    .map(|placed| RowJson {
+                        row: &placed.row,
+                        tokens_est: placed.tokens_est,
+                    })
+                    .collect();
+                map.serialize_entry(layer_key(layer), &rows)?;
+                continue;
+            }
             let items: Vec<ItemJson<'_>> = self
                 .0
+                .layers
                 .iter()
                 .filter(|(placed, _)| *placed == layer)
                 .flat_map(|(_, items)| items)
@@ -853,6 +1195,14 @@ impl Serialize for LayersJson<'_> {
         }
         map.end()
     }
+}
+
+/// A placed row: its 14 keys, then `tokens_est`.
+#[derive(Serialize)]
+struct RowJson<'a> {
+    #[serde(flatten)]
+    row: &'a BindingRow,
+    tokens_est: u32,
 }
 
 #[derive(Serialize)]
@@ -927,7 +1277,7 @@ fn view(outcome: &BundleOutcome) -> BundleJson<'_> {
         bytes: bundle.map(|bundle| bundle.bytes),
         bundle_hash: bundle.map(|bundle| bundle.bundle_hash.as_str()),
         body: bundle.map(|bundle| bundle.body.as_str()),
-        layers: bundle.map(|bundle| LayersJson(&bundle.layers)),
+        layers: bundle.map(LayersJson),
         tail: bundle.map(|bundle| {
             bundle
                 .tail

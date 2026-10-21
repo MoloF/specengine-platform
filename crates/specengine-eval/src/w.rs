@@ -510,7 +510,8 @@ struct BundleDetail {
     not_included: usize,
     more: usize,
     bundle_hash: String,
-    /// Items placed per layer, by the layer's JSON key.
+    /// Items (layers 5 and 9: code rows) placed per layer, by the layer's
+    /// JSON key.
     layers: BTreeMap<&'static str, usize>,
     /// The targets layer: each item's form.
     forms: Vec<FormDetail>,
@@ -1041,7 +1042,7 @@ fn bundle_detail(bundle: &Bundle) -> BundleDetail {
         layers: bundle
             .layers
             .iter()
-            .map(|(layer, items)| (layer_key(*layer), items.len()))
+            .map(|(layer, _)| (layer_key(*layer), bundle.placed(*layer)))
             .collect(),
         forms: bundle
             .layers

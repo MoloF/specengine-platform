@@ -8,7 +8,7 @@ reviewed: 2026-10-21
 
 # Code in reads: binding rows, their sync, the degrade
 
-A read of nodes carries each of their code bindings as one row whose `sync` is the state `spec verify --node` gives it, by construction; the read never fails on the code layer (`architecture-code.md#sync-in-reads`, ADR-0046). Built: `spec show --bindings`, its twins, `delta.tests_reaching` (`docs/features/show-bindings.md`, 7a-1); the bundle and package (7a-2) and `impact` (7b) reuse row, seam and degrade. Code: CLI `bindings.rs`, `show.rs`, `cap.rs`; model `task.rs`; store `code.rs`.
+A read of nodes carries each of their code bindings as one row whose `sync` is the state `spec verify --node` gives it, by construction; the read never fails on the code layer (`architecture-code.md#sync-in-reads`, ADR-0046). Built: `spec show --bindings`, its twins, `delta.tests_reaching` (7a-1, `docs/features/show-bindings.md`); the bundle's layers 5 and 9, the package's `bindings` (7a-2, `docs/features/bundle-bindings.md`); `impact` (7b) reuses row, seam and degrade. Code: CLI `bindings.rs`, `show.rs`, `cap.rs`, `bundle.rs`, `package.rs`, `node_set.rs`; model `task.rs`; store `code.rs`.
 
 ## The binding row
 
@@ -46,7 +46,7 @@ CLI `bindings.rs`, one judge for `verify --node` and the reads:
 
 ## Degrade
 
-A read never changes its exit or its spec part because of code. Causes: verify's run causes, numbered as in `spec-verify.md` "Verdict and exit"; `[verify]` is never read.
+A read's exit never changes because of `sync` or a degrade cause; `show --bindings`' spec part never because of code (the bundle's rows are items of its fit: "The bundle and the package"). Causes: verify's run causes, numbered as in `spec-verify.md` "Verdict and exit"; `[verify]` is never read.
 
 | Cause | Rows | Note |
 |---|---|---|
@@ -76,11 +76,22 @@ A node's block follows its header and links block, before its bytes:
 - Cap (`spec-cli-read.md` "The cap"): the block counts with the links block; a cut in it falls after the last whole row (with its lines) or the closing line that fits, the text unshown; the tail gains `; bindings not shown: <k>` when any node's `bindings` is not `null`. The daemon's `View::Browser`: uncut.
 - Below the cap the spec part (the text without bindings blocks; the JSON without `bindings` and the note) and the exit are `spec show REF`'s. Near it the block takes the text's room, and the JSON follows the text's cut whenever a node's `links` or `bindings` is not `null`: `rows` the printed, `omitted` the tail's `<k>` on the cut node, 0 elsewhere. Without `[code]`: `spec show REF`'s output plus the note.
 
+## The bundle and the package
+
+`spec bundle` and `spec task show`, with their twins, carry rows; layers and fit: `spec-cli-bundle.md`; key, brief, caps: `task-package.md`.
+
+- **Sets**, by node, never by file: layer 5 `bindings`, the non-`verifies` rows of each target and every node within it (`SpecGraph::within`); layer 9 `tests`, the `verifies` rows of those and of every layer-4 candidate, placed or not; the package's `bindings`, every relation, of `targets`, `affected_nodes` and the sections each contains (`node_set.rs` `named_set`, resolved now as `spec show` resolves a REF; one naming nothing adds none; criteria refs not: layer 9 has their tests). A row is a set's as "The node sets" says, in verify's order; tests never run.
+- **One read**: with `[code]` one index handle (`open_index`, `indexed_in`) for the spec read and the one code refresh, one `set_bindings` over the union (`bundle.rs` `code_rows`), the package's set in it (`bundle_with(…, Some(&mut Beside {refs, rows}))`). A bundle stopping before its code read (a target naming nothing now) leaves `rows` `None`, and `beside_rows` reads the set alone; one stopping after (the minimum, the ceiling) keeps its rows. Rows are the reading root's, as `bundle_hash`. Without `[code]` code is never read: no rows, heading or note, every output as before.
+- **Degrade**: one `bindings: <cause>` note per command; (1), (3), (8): no rows, body and hash the no-`[code]` bundle's; (4)-(6): rows `sync -`, fitted as judged ones.
+- **Bundle form**: `spec show --bindings`' row line without its indent (`cap.rs` `row_line`), then `  sig <signature>` when not `null` (`anchor` in the JSON only); an empty line between rows. An item, in or out whole; JSON: the 14 keys, `tokens_est` (its lines'); left out, a tail entry named by its symbol, else its file.
+- **Package cap**: at most `PACKAGE_BINDINGS_MAX` 64 (core `task.rs`), the first in row order; past `PACKAGE_BUDGET` rows leave from the last, after the diff and reference texts (`within_budget`); both in one note, last: `bindings: <n> more row(s) left out; spec show <node> --bindings lists them`, `<node>` the first left-out row's.
+- **Brief**: Bindings, 10th of 11 sections, before Bundle (bulky rows never push earlier sections past the cut), only with rows: `Bindings: <n>`, each row as `cap.rs` `row_lines` prints it (`sig`, `moved from`, `candidate` too). It renders the JSON alone (`render_brief(&TaskPackage)`): a binding is `row_binding`'s: the key, else `<sync>[ <category>]`, `-` unjudged (body, `show`: verify's text).
+
 ## Twins
 
-- MCP `get_node {id, with?, archive?}`: `with` items the enum `["links", "bindings"]`; `archive` with `"links"` only. Mirror: `ShowNode.bindings` `Option<ShowBindings {rows, omitted}>`, `BindingRowShape` key for key (`relation`, `kind`, `sync`, `anchor` verify's enums; the rest free). `NODE_DESCRIPTION` 1 527 B; `process_git(env)` inside `call`. The resource `spec://<slug>/node/<REF>` carries none.
-- Daemon: `nodes/{*ref}?with=bindings`, repeatable with `with=links`: the CLI's JSON, `View::Browser`; another value: 400 `` `with=<value>`: the values are `links` and `bindings` ``. No screen yet (7a-2, RM-0011).
-- Plugin 0.13.0: `read-spec` names `with: ["bindings"]` (`plugin.md` "Skills").
+- MCP `get_node {id, with?, archive?}`: `with` items the enum `["links", "bindings"]`; `archive` with `"links"` only. Mirror: `ShowNode.bindings` `Option<ShowBindings {rows, omitted}>`, `BindingRowShape` key for key (`relation`, `kind`, `sync`, `anchor` verify's enums; the rest free). `NODE_DESCRIPTION` 1 527 B; `process_git(env)` inside `call`. `get_context_bundle`'s `layers.bindings`, `.tests`: `BundleRowShape` (`BindingRowShape`'s keys, then `tokens_est`); `get_task`'s `bindings`: `BindingRowShape`. The resource `spec://<slug>/node/<REF>` carries none.
+- Daemon: `nodes/{*ref}?with=bindings`, repeatable with `with=links`: the CLI's JSON, `View::Browser`; another value: 400 `` `with=<value>`: the values are `links` and `bindings` ``. The bundle's and task's JSON carry rows; the Bundle tab prints them as lines with a Sync badge, no link (`docs/features/bundle-bindings.md` "UI and daemon keys"); no node screen (RM-0011).
+- Plugin: `read-spec` names `with: ["bindings"]` (0.13.0), the bundle's rows and their `sync` (0.14.0, step 1; `plugin.md` "Skills").
 
 ## delta.tests_reaching
 
@@ -89,4 +100,4 @@ A node's block follows its header and links block, before its bytes:
 ## Known limits
 
 - Tree counters (`spec tree`, `get_tree`, the daemon's tree; ADR-0046 names them) are deferred to RM-0011, opt-in: by default every tree load would judge the whole tree.
-- Cost, release, warm, `fixtures/code-a` plus 1 000 files (`show_bindings_cost`, `#[ignore]`): `show --bindings` 51 ms, `verify --node` 52, plain verify 64, plain `show` 6. Plain verify builds the spec graph per run for `tests_reaching`, text mode too.
+- Cost, release, warm, `fixtures/code-a` plus 1 000 files (`show_bindings_cost`, `#[ignore]`): `show --bindings` 51 ms, `verify --node` 52, plain verify 64, plain `show` 6. With 10 000 files (`bundle_bindings_cost`): `bundle` 219 ms (7 without `[code]`), `task show` 237, plain verify 365. Plain verify builds the spec graph per run for `tests_reaching`, text mode too.

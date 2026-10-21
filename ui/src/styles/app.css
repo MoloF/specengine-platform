@@ -483,6 +483,18 @@ textarea.field {
 .tone-roadmap-status { --badge-color: var(--roadmap-status); }
 .tone-unbound-relation { --badge-color: var(--unbound-relation); }
 .tone-unbound-unknown { --badge-color: var(--unbound-unknown); }
+/* A binding row's sync (docs/features/bundle-bindings.md): verify's nine states, not judged, unknown. */
+.tone-sync-cannot-verify { --badge-color: var(--sync-cannot-verify); }
+.tone-sync-predated { --badge-color: var(--sync-predated); }
+.tone-sync-bad-marker { --badge-color: var(--sync-bad-marker); }
+.tone-sync-broken-binding { --badge-color: var(--sync-broken-binding); }
+.tone-sync-unlocked { --badge-color: var(--sync-unlocked); }
+.tone-sync-spec-ahead { --badge-color: var(--sync-spec-ahead); }
+.tone-sync-code-ahead { --badge-color: var(--sync-code-ahead); }
+.tone-sync-conflict { --badge-color: var(--sync-conflict); }
+.tone-sync-ok { --badge-color: var(--sync-ok); }
+.tone-sync-not-judged { --badge-color: var(--sync-not-judged); }
+.tone-sync-unknown { --badge-color: var(--sync-unknown); }
 
 .tone-severity-unknown,
 .tone-proposal-unknown,
@@ -494,14 +506,17 @@ textarea.field {
 .tone-check-unknown,
 .tone-finding-unknown,
 .tone-assumed-unknown,
-.tone-unbound-unknown {
+.tone-unbound-unknown,
+.tone-sync-not-judged,
+.tone-sync-unknown {
   border-style: dashed;
 }
 
 /* cannot-check is never drawn like clean: a dotted border besides its own colour and icon; a
-   marker that cannot be verified likewise. */
+   marker or a binding that cannot be verified likewise. */
 .tone-check-cannot-check,
-.tone-unbound-cannot-verify {
+.tone-unbound-cannot-verify,
+.tone-sync-cannot-verify {
   border-style: dotted;
 }
 

@@ -204,7 +204,7 @@ The coverage requirement is set **on the node**, not globally (OpenFastTrace `Ne
 
 ## 6. Context bundle (`get_context_bundle`)
 
-Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, budget, fitting, the tail and `bundle_hash`: `docs/canon/spec-cli-bundle.md`. Not delivered yet: open proposals in layer 2 and task bundles (`--task`, `bundle_task` 10k tokens, Phase 2); ancestors' invariants, criteria's named mutations; target bindings (`qpath`, file, **signature**, layer, `sync`) and `@verifies` tests as layers 5 and 9 (Phase 3); the `bundles` log and the follow-up-reads signal: over three follow-up reads after a bundle are recorded in `runs` as "bundle/tree incomplete".
+Shipped in Phase 1 as `spec bundle` (CLI pass 4): layers by link type, budget, fitting, the tail and `bundle_hash`: `docs/canon/spec-cli-bundle.md`; in Phase 3 (7a-2) target bindings (`qpath`, file, **signature**, layer, `sync`) and `@verifies` tests as layers 5 and 9: `docs/canon/code-reads.md`. Not delivered yet: open proposals in layer 2 and task bundles (`--task`, `bundle_task` 10k tokens, Phase 2); ancestors' invariants, criteria's named mutations; the `bundles` log and the follow-up-reads signal: over three follow-up reads after a bundle are recorded in `runs` as "bundle/tree incomplete".
 
 ## 7. Proposals, owner queue and gates
 

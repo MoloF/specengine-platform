@@ -420,6 +420,34 @@ const PACKAGE_V1: &[&str] = &[
     "owner_notes[].at",
     "owner_notes[].note",
     "bindings",
+    // docs/features/bundle-bindings.md "Task package", **Schema**: the
+    // row's 25 paths, added at version 1 (the stub `{"type": "object"}`
+    // filled).
+    "bindings[].node",
+    "bindings[].relation",
+    "bindings[].file",
+    "bindings[].kind",
+    "bindings[].symbol",
+    "bindings[].item_kind",
+    "bindings[].line",
+    "bindings[].end_line",
+    "bindings[].signature",
+    "bindings[].layer",
+    "bindings[].sync",
+    "bindings[].category",
+    "bindings[].detail",
+    "bindings[].anchor",
+    "bindings[].anchor.state",
+    "bindings[].anchor.from",
+    "bindings[].anchor.from.file",
+    "bindings[].anchor.from.kind",
+    "bindings[].anchor.from.symbol",
+    "bindings[].anchor.from.item_kind",
+    "bindings[].anchor.candidates",
+    "bindings[].anchor.candidates[].file",
+    "bindings[].anchor.candidates[].kind",
+    "bindings[].anchor.candidates[].symbol",
+    "bindings[].anchor.candidates[].item_kind",
     "spec_snapshot",
     "spec_snapshot.at",
     "spec_snapshot.place",
@@ -1394,4 +1422,152 @@ fn get_task_at_every_cap_stays_within_max_result_chars() {
         "{notes:?}"
     );
     drop(session.finish());
+}
+
+// ------------------------------------------------- bundle-bindings RD-8
+
+/// A git repository of `fixtures/code-a` with its golden lock, committed,
+/// a linked worktree on `t1` ([`Repo::new`]'s).
+fn code_repo(label: &str) -> Repo {
+    let repo = Repo::new(label, "code-a");
+    let _ = fs::remove_file(repo.main.join("expected.json"));
+    fs::copy(
+        repository_root().join("fixtures/spec-lock/code-a.lock"),
+        repo.main.join("spec.lock"),
+    )
+    .expect("the golden lock");
+    repo.git.add_all(&repo.main);
+    repo.git.commit(&repo.main, "the lock");
+    repo
+}
+
+/// docs/features/bundle-bindings.md RD-7's `p2_2` leg: a real package with
+/// rows (code-a's golden, a task on GOAL-01 and PIECE-COUNTER, LAW-STEP
+/// affected: rows with an `anchor` object among them) holds no key path the
+/// schema lacks, every row path of [`PACKAGE_V1`] among its paths but the
+/// anchor's `from` and `candidates` ones, which no row of the golden
+/// reaches, and reports `schema_version` 1. M: `schema_version` 2; a row
+/// key unmirrored.
+#[test]
+fn p2_2_a_package_with_rows_keeps_version_1_and_its_paths() {
+    let repo = code_repo("mt-p22-rows");
+    let id = repo.ready(&repo.home, &["GOAL-01", "PIECE-COUNTER"], &["LAW-STEP"]);
+    let mut session = Session::open(Era::Legacy, &[], Some(&repo.main), Home::At(&repo.home));
+    let list = session.tools();
+    let mut schema = BTreeSet::new();
+    schema_paths(&tool(&list, "get_task")["outputSchema"], "", &mut schema);
+    let reply = session.call("get_task", json!({"task_id": id}));
+    let package = &result(&reply)["structuredContent"];
+    assert_eq!(package["schema_version"], json!(1), "{reply}");
+    let rows = package["bindings"].as_array().expect("bindings");
+    assert!(rows.len() > 10, "premise: rows: {package}");
+    let mut held = BTreeSet::new();
+    value_paths(package, "", &mut held);
+    let unknown: Vec<&String> = held.difference(&schema).collect();
+    assert!(unknown.is_empty(), "keys the schema lacks: {unknown:?}");
+    let row_paths: Vec<&&str> = PACKAGE_V1
+        .iter()
+        .filter(|path| path.starts_with("bindings[]."))
+        .collect();
+    assert_eq!(row_paths.len(), 25, "the spec's 25 row paths");
+    let reached: Vec<&&&str> = row_paths
+        .iter()
+        .filter(|path| !path.contains(".from.") && !path.contains(".candidates[]."))
+        .filter(|path| !held.contains(***path))
+        .collect();
+    assert!(reached.is_empty(), "row paths no row holds: {reached:?}");
+    drop(session.finish());
+}
+
+/// docs/features/bundle-bindings.md RD-8 (the walker over `get_task` on
+/// `code-a`): a ready task on GOAL-01 (LAW-STEP affected) and the same by
+/// `next`: `get_task` answers what `spec task show` answers through the
+/// library (content the brief, `structuredContent` the package, walked
+/// against the `outputSchema`), both eras; its `bindings` rows of the 14
+/// keys, the brief's Bindings section after Runs, before Bundle (10th of
+/// 11). Not counted.
+#[test]
+fn get_task_with_rows_equals_task_show() {
+    let repo = code_repo("mt-rows");
+    let id = repo.ready(&repo.home, &["GOAL-01"], &["LAW-STEP"]);
+    let env = cli_env(&repo.main, Some(&repo.home));
+    let globals = Globals::default();
+    for era in ERAS {
+        let mut session = Session::open(era, &[], Some(&repo.main), Home::At(&repo.home));
+        let schemas = output_schemas(&session.tools());
+        for args in [json!({"task_id": id}), json!({"next": true})] {
+            let reply = session.call("get_task", args.clone());
+            let want = task_library(
+                "get_task",
+                &args,
+                &env,
+                &globals,
+                CLOCK,
+                &repo.git_env(&repo.main),
+            );
+            assert_parity(
+                &reply,
+                &want,
+                &schemas["get_task"],
+                &format!("{era:?} {args}"),
+            );
+            let package = &result(&reply)["structuredContent"];
+            let rows = package["bindings"].as_array().expect("bindings");
+            assert!(!rows.is_empty(), "{era:?}: rows");
+            for row in rows {
+                let keys: BTreeSet<&str> = row
+                    .as_object()
+                    .expect("a row")
+                    .keys()
+                    .map(String::as_str)
+                    .collect();
+                assert_eq!(keys.len(), 14, "{era:?}: a row's 14 keys: {row}");
+            }
+            let content = content_text(result(&reply));
+            assert!(
+                content.contains(&format!("\n\nBindings: {}\n", rows.len())),
+                "{era:?}: the brief's Bindings section: {content}"
+            );
+            let runs = content.find("\n\nRuns: ").expect("Runs");
+            let bindings = content.find("\n\nBindings: ").expect("Bindings");
+            let bundle = content.find("\n\nBundle:").expect("Bundle");
+            assert!(
+                runs < bindings && bindings < bundle,
+                "{era:?}: after Runs, before Bundle"
+            );
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}
+
+/// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
+/// `get_task`'s brief list names the code bindings and its `bindings`
+/// paragraph follows it, 64 the package's cap; 1 754 bytes, ASCII, both
+/// eras. M: the paragraph missing or reworded.
+const TASK_BINDINGS_LINE: &str = "bindings: the code bound to the targets, the affected nodes and their sections, each with its sync (the state spec verify --node gives), at most 64 (a note names the rest); [] without a [code] table. A code layer that cannot be read gives a note, never an error.\n";
+
+#[test]
+fn get_task_description_names_the_bindings() {
+    assert_eq!(specengine_cli::PACKAGE_BINDINGS_MAX, 64);
+    for era in ERAS {
+        let mut session = Session::open(era, &[], None, Home::Fresh);
+        let list = session.tools();
+        let description = tool(&list, "get_task")["description"]
+            .as_str()
+            .expect("a description")
+            .to_owned();
+        assert!(
+            description.contains("(goal, criteria, targets, assumptions, open proposals, owner notes, plan, spec changes since approval, runs, code bindings, bundle)"),
+            "{era:?}: the brief's list: {description}"
+        );
+        assert!(
+            description.contains(&format!("absent null.\n\n{TASK_BINDINGS_LINE}\nstale: ")),
+            "{era:?}: the paragraph after the list's: {description}"
+        );
+        assert!(description.is_ascii());
+        assert_eq!(description.len(), 1754, "{era:?}: the spec's figure");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
 }

@@ -11,7 +11,7 @@ Use this before you read or change behaviour the spec describes, and whenever yo
 
 ## Order
 
-1. **The bundle first.** Call `get_context_bundle` with the IDs (or root-relative `.md` paths) your task names, in `node_ids`. One answer holds the targets, their open questions, ancestors, criteria, decisions, neighbours and terms; what did not fit the budget is named by ID with its cost.
+1. **The bundle first.** Call `get_context_bundle` with the IDs (or root-relative `.md` paths) your task names, in `node_ids`. One answer holds the targets, their open questions, ancestors, criteria, the code bound to them with each binding's `sync`, decisions, neighbours, terms and the tests bound to them or their criteria; what did not fit the budget is named by ID (a binding by its symbol, else its file) with its cost.
    With no ID known, as for "what does the spec say about this?", call `search` first with a `query` of plain words, then bundle the hits you need by their IDs (else their paths).
 2. **Then narrow, only where the bundle is not enough:**
    - one node's current text: `get_node` with its `id`; add `with: ["links"]` for its links when you need what it points at and what points at it, `with: ["bindings"]` for the code bound to it and whether that code still matches the spec (each binding's `sync`);

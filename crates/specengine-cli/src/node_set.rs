@@ -205,6 +205,25 @@ pub(crate) fn task_set(
     NodeSet::of(corpus, scheme, keys)
 }
 
+/// The nodes `refs` name now, each resolved as `spec show` resolves a REF,
+/// and every section each contains; a ref naming nothing now adds none,
+/// silently (task spec `bundle-bindings`: the package's set, its targets
+/// and affected nodes).
+pub(crate) fn named_set(
+    corpus: &Corpus<'_>,
+    scheme: &IdScheme,
+    refs: &[String],
+) -> BTreeSet<NodeKey> {
+    let mut keys = BTreeSet::new();
+    for written in refs {
+        for key in resolved_now(corpus, scheme, written) {
+            keys.insert(key);
+            keys.extend(contained(corpus, key));
+        }
+    }
+    keys
+}
+
 /// The nodes `written` names now, as `spec show` resolves a REF; none when
 /// it names nothing (or cannot be read as a REF of this project).
 fn resolved_now(corpus: &Corpus<'_>, scheme: &IdScheme, written: &str) -> Vec<NodeKey> {

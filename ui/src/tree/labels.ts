@@ -1,9 +1,9 @@
-import type { BundleForm, BundleLayers, Direction, LinkState, TreeMark } from "../api/types";
+import type { BundleForm, BundleLayers, Direction, KnownSyncState, LinkState, SyncState, TreeMark } from "../api/types";
 import type { Look } from "../ui/Badge";
 
 // The closed tables the tree and node views label: link states, tree marks, bundle forms, layer
-// keys, directions. Known literals get a label (and for states and marks a colour role and an
-// icon); any other string is shown raw, never mapped to a known value. Kinds, spec statuses and
+// keys, directions, a binding row's sync. Known literals get a label (and for states and marks a
+// colour role and an icon); any other string is shown raw, never mapped to a known value. Kinds, spec statuses and
 // link types are project or corpus vocabulary: shown as written, never quoted here.
 
 function lookup<K extends string, V>(table: Record<K, V>, value: string): V | null {
@@ -75,6 +75,37 @@ export const LAYER_HEADINGS: readonly (readonly [keyof BundleLayers, string])[] 
 /** A tail entry's layer key as its heading; the raw key when unknown. */
 export function layerHeading(key: string): string {
   return LAYER_HEADINGS.find(([known]) => known === key)?.[1] ?? key;
+}
+
+/** The layers of code binding rows, not nodes (`docs/features/bundle-bindings.md` "Layers 5 and 9"). */
+const CODE_LAYERS = ["bindings", "tests"] as const satisfies readonly (keyof BundleLayers)[];
+
+/** Whether a layer key names a layer of code rows: its entries are drawn as lines and never linked as tree nodes. */
+export function isCodeLayer(key: string): key is (typeof CODE_LAYERS)[number] {
+  return (CODE_LAYERS as readonly string[]).includes(key);
+}
+
+const SYNC: Record<KnownSyncState, Look> = {
+  cannot_verify: { label: "Cannot verify", tone: "sync-cannot-verify", icon: "cannotCheck" },
+  predated: { label: "Predated", tone: "sync-predated", icon: "deferred" },
+  bad_marker: { label: "Bad marker", tone: "sync-bad-marker", icon: "findingWarning" },
+  broken_binding: { label: "Broken binding", tone: "sync-broken-binding", icon: "linkDangling" },
+  unlocked: { label: "Unlocked", tone: "sync-unlocked", icon: "open" },
+  spec_ahead: { label: "Spec ahead", tone: "sync-spec-ahead", icon: "specChanged" },
+  code_ahead: { label: "Code ahead", tone: "sync-code-ahead", icon: "changes" },
+  conflict: { label: "Conflict", tone: "sync-conflict", icon: "checkFails" },
+  ok: { label: "In sync", tone: "sync-ok", icon: "checkClean" },
+};
+
+/** A row the read listed but could not judge (`docs/canon/code-reads.md` "Degrade"): never ok's look. */
+const NOT_JUDGED: Look = { label: "Not judged", tone: "sync-not-judged", icon: "stub" };
+
+/** A binding row's sync: verify's state as a label, colour role and icon; null not judged; any other word raw, neutral. */
+export function syncLook(sync: SyncState | null): Look {
+  if (sync === null) {
+    return NOT_JUDGED;
+  }
+  return lookup(SYNC, sync) ?? { label: sync, tone: "sync-unknown", icon: "unknown" };
 }
 
 /** The weak link type (`docs/canon/spec-cli-graph.md` "Link types"): listed after the strong ones. */

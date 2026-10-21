@@ -48,7 +48,8 @@ pub(crate) const MAX_RESULT_SIZE_KEY: &str = "anthropic/maxResultSizeChars";
 /// character into at most 6; the measured adversarial maximum is about
 /// 268 000. `get_task`'s package and its notes keep within
 /// [`PACKAGE_BUDGET`] (460 000) by leaving out diff texts, then criteria
-/// references' texts, each such text cut at 8 192 B beforehand; its brief
+/// references' texts, each such text cut at 8 192 B beforehand, then its
+/// code binding rows (at most 64 before it); its brief
 /// adds at most 40 000. Not bounded by it, the corpus-defect residue: many
 /// holders of one ID (plain `show` JSON, without `--links`, keeps every
 /// holder's node: about 1 700 holders of one ID pass 500 000) and the
@@ -142,8 +143,10 @@ A call that cannot run: an error result with its one line. ",
 
 const BUNDLE_DESCRIPTION: &str = concat!(
     "The context of the named nodes within a budget of estimated tokens, as one \
-Markdown body: the targets, their open questions, ancestors, criteria, decisions, \
-neighbours and terms, in that order; what did not fit is named by ID with its cost. \
+Markdown body: the targets, their open questions, ancestors, criteria, code bindings \
+(each with its sync: the state spec verify --node gives), decisions, neighbours, terms \
+and the tests bound to them or their criteria, in that order; what did not fit is \
+named by ID (a binding by its symbol, else its file) with its cost. \
 The body is named by its bundle_hash (BLAKE3 of the body): the same state and \
 request give the same hash. The same as `spec bundle REF... [--budget N]`: content \
 is the command's output (its note and warning lines first), structuredContent its \
@@ -152,6 +155,9 @@ is the command's output (its note and warning lines first), structuredContent it
 node_ids: one or more REFs, any form get_node takes; bundled together.
 budget: estimated tokens at most. Absent: `[budgets] bundle_node` of the project's \
 config, else 2000. Below the minimum the targets need: an error naming it.
+
+Code bindings and tests need a [code] table; a code layer that cannot be read gives \
+a note, never an error.
 
 A REF naming nothing: an error result with the reason, and the document. A call \
 that cannot run: an error result with its one line. ",

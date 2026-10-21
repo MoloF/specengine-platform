@@ -24,6 +24,13 @@
 //!   the recommended options of those with (discrepancies); the
 //!   **bundle** by reference: the targets, `[budgets] bundle_task` else
 //!   [`DEFAULT_TASK_BUDGET`], `spec bundle`'s hash now.
+//! - **Bindings** (task spec `bundle-bindings`): the code binding rows of
+//!   the targets, the affected nodes and the sections they contain, read
+//!   at the reading root in the bundle's one code read (`sync` as `spec
+//!   verify --node` gives it), in verify's row order; at most
+//!   [`PACKAGE_BINDINGS_MAX`], the rest one note naming `spec show
+//!   --bindings`; a code layer that cannot be read one `bindings:` note;
+//!   without `[code]` `[]`, no note.
 //! - **Roadmap**: the task's place on the plan of the reading root's
 //!   `[roadmap]` items ([`reading_plan`], as the bundle reads that root):
 //!   the open item an open task executes, as `spec roadmap` lists it
@@ -33,7 +40,8 @@
 //!   state, claim or gate reads it.
 //! - **Size**: the JSON and its `note:` lines within [`PACKAGE_BUDGET`]
 //!   characters ([`within_budget`]): past it the diff texts, then the
-//!   criteria references' texts, are left out from the last, a note each.
+//!   criteria references' texts, then the binding rows, are left out from
+//!   the last, a note each kind (the rows' note the cap's).
 //! - **Determinism**: one database and tree state give byte-identical
 //!   JSON; no read time is in it.
 //!
@@ -54,13 +62,14 @@ use specengine_core::check::{CheckInput, bundle_task_from_toml};
 use specengine_core::patch::{locate, span_bytes};
 use specengine_core::proposal::{Author, AuthorType};
 use specengine_core::task::{
-    CRITERION_TEXT_MAX, DEFAULT_TASK_BUDGET, DIFF_MAX, DIFFS_TOTAL_MAX, PACKAGE_BUDGET,
+    CRITERION_TEXT_MAX, DEFAULT_TASK_BUDGET, DIFF_MAX, DIFFS_TOTAL_MAX, PACKAGE_BINDINGS_MAX,
+    PACKAGE_BUDGET,
 };
 use specengine_core::{GroupKind, Plan, PlanTask, RoadmapConfig, plan, task_item};
 use specengine_model::{
-    IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackageProposal, PackageTarget,
-    SnapshotDiff, SnapshotNode, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor,
-    TaskAuthorType, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
+    BindingRow, IdScheme, OwnerNote, PackageAssumption, PackageBundle, PackageProposal,
+    PackageTarget, SnapshotDiff, SnapshotNode, SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION,
+    TaskAuthor, TaskAuthorType, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
 };
 use specengine_store::{
     GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
@@ -68,8 +77,9 @@ use specengine_store::{
 };
 
 use crate::amend::amended_ids;
-use crate::bundle::{BundleRequest, bundle};
-use crate::cap::OUTPUT_CAP_CHARS;
+use crate::bindings::row_binding;
+use crate::bundle::{Beside, BesideRows, BundleRequest, beside_rows, bundle_with};
+use crate::cap::{OUTPUT_CAP_CHARS, row_lines};
 use crate::corpus::{add_bytes, indexed};
 use crate::preflight::recorded_project;
 use crate::project::{CONFIG_FILE, ProjectRoot};
@@ -77,8 +87,9 @@ use crate::proposals::{QueueContext, queue_cannot};
 use crate::propose::{is_path_target, resolved_node};
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line};
 
-/// The brief's sections, in print order.
-pub const SECTIONS: [&str; 10] = [
+/// The brief's sections, in print order; Bindings only when the package
+/// lists a row.
+pub const SECTIONS: [&str; 11] = [
     "Goal",
     "Criteria",
     "Targets",
@@ -88,6 +99,7 @@ pub const SECTIONS: [&str; 10] = [
     "Plan",
     "Spec changes since approval",
     "Runs",
+    "Bindings",
     "Bundle",
 ];
 
@@ -694,7 +706,11 @@ pub(crate) fn assemble(
         });
     }
 
-    let (budget, bundle_hash) = bundle_of(env, globals, context, task, git_env, roots, &mut notes)?;
+    let (budget, bundle_hash, beside) =
+        bundle_of(env, globals, context, task, git_env, roots, &mut notes)?;
+    notes.extend(beside.note);
+    let mut bindings = beside.rows;
+    let past_cap = bindings.split_off(bindings.len().min(PACKAGE_BINDINGS_MAX));
     let roadmap = task_roadmap(reading_plan(env, context, roots), task, &mut notes);
     let snapshot_diff = match compared.stale {
         None => None,
@@ -723,7 +739,7 @@ pub(crate) fn assemble(
                 note: note.note.clone(),
             })
             .collect(),
-        bindings: Vec::new(),
+        bindings,
         spec_snapshot: task.snapshot.as_ref().map(|snapshot| SpecSnapshot {
             at: snapshot.at.clone(),
             place: snapshot.place.clone(),
@@ -763,7 +779,7 @@ pub(crate) fn assemble(
         updated_at: task.updated_at.clone(),
         notes,
     };
-    within_budget(&mut package);
+    within_budget(&mut package, past_cap);
     Ok(package)
 }
 
@@ -783,16 +799,38 @@ fn weight(package: &TaskPackage) -> usize {
             .sum::<usize>()
 }
 
-/// The room the budget's two notes take, counted twice (JSON and line).
+/// What `note` adds to [`weight`]: its JSON string and a comma, and its
+/// `note:` line.
+fn note_weight(note: &str) -> usize {
+    json_chars(&note) + 1 + "note: \n".len() + escape_controls(&one_line(note)).chars().count()
+}
+
+/// The note of the binding rows left out (task spec `bundle-bindings`,
+/// "Task package"), by the cap and the budget together: their count, and
+/// the first one's node, which `spec show --bindings` reads them from.
+fn rows_note(left_out: &[BindingRow]) -> Option<String> {
+    let first = left_out.first()?;
+    Some(format!(
+        "bindings: {} more row(s) left out; spec show {} --bindings lists them",
+        left_out.len(),
+        one_line(&first.node)
+    ))
+}
+
+/// The room the budget's notes take, counted twice (JSON and line).
 const BUDGET_NOTES_ROOM: usize = 1_000;
 
-/// The package within [`PACKAGE_BUDGET`]: past it, the `snapshot_diff`
-/// texts are left out from the last (`diff` `null`, `cut` `true`), then
-/// the criteria references' texts (`""`), each kind counted in one note.
-/// Agent-written fields and the lists are never cut here.
-fn within_budget(package: &mut TaskPackage) {
-    let mut total = weight(package);
+/// The package within [`PACKAGE_BUDGET`], `past_cap` the binding rows the
+/// cap left out (their note counted from the start): past it, the
+/// `snapshot_diff` texts are left out from the last (`diff` `null`, `cut`
+/// `true`), then the criteria references' texts (`""`), then the binding
+/// rows, each kind counted in one note (the rows' with the cap's).
+/// Agent-written fields and the other lists are never cut here.
+fn within_budget(package: &mut TaskPackage, past_cap: Vec<BindingRow>) {
+    let mut left_out = past_cap;
+    let mut total = weight(package) + rows_note(&left_out).map_or(0, |note| note_weight(&note));
     if total <= PACKAGE_BUDGET {
+        package.notes.extend(rows_note(&left_out));
         return;
     }
     let over = |total: usize| total + BUDGET_NOTES_ROOM > PACKAGE_BUDGET;
@@ -823,6 +861,18 @@ fn within_budget(package: &mut TaskPackage) {
         total = total + json_chars(criterion) - before;
         texts += 1;
     }
+    let mut dropped = Vec::new();
+    while over(total) {
+        let before = json_chars(&package.bindings);
+        let Some(row) = package.bindings.pop() else {
+            break;
+        };
+        total = total + json_chars(&package.bindings) - before;
+        dropped.push(row);
+    }
+    dropped.reverse();
+    dropped.append(&mut left_out);
+    let left_out = dropped;
     if diffs > 0 {
         package.notes.push(format!(
             "snapshot_diff: {diffs} more diff(s) left out to keep the package within \
@@ -835,6 +885,7 @@ fn within_budget(package: &mut TaskPackage) {
              {PACKAGE_BUDGET} characters; spec show reads them"
         ));
     }
+    package.notes.extend(rows_note(&left_out));
 }
 
 fn task_author(author: &Author) -> TaskAuthor {
@@ -850,8 +901,11 @@ fn task_author(author: &Author) -> TaskAuthor {
 }
 
 /// The bundle's budget (`[budgets] bundle_task` of the reading root, read
-/// alone: a bad value exits 2 as `spec bundle`'s does) and `spec bundle`'s
-/// hash of the targets now (`None` with a note when it cannot be made).
+/// alone: a bad value exits 2 as `spec bundle`'s does), `spec bundle`'s
+/// hash of the targets now (`None` with a note when it cannot be made),
+/// and the binding rows of the targets, the affected nodes and their
+/// sections, from the bundle's code read (its one refresh; read alone
+/// when the bundle stops before it).
 fn bundle_of(
     env: &Env,
     globals: &Globals,
@@ -860,7 +914,7 @@ fn bundle_of(
     git_env: &GitEnv,
     roots: &mut Roots,
     notes: &mut Vec<String>,
-) -> Result<(u32, Option<String>), CliError> {
+) -> Result<(u32, Option<String>, BesideRows), CliError> {
     let text = roots.config_text(context).map_err(CliError::spec)?;
     let budget = match bundle_task_from_toml(text) {
         Ok(Some(found)) => found.tokens,
@@ -878,7 +932,17 @@ fn bundle_of(
         budget: Some(i64::from(budget)),
         git: git_env.clone(),
     };
-    let hash = match bundle(env, globals, &request) {
+    let refs: Vec<String> = task
+        .targets
+        .iter()
+        .chain(&task.affected_nodes)
+        .cloned()
+        .collect();
+    let mut beside = Beside {
+        refs: &refs,
+        rows: None,
+    };
+    let hash = match bundle_with(env, globals, &request, Some(&mut beside)) {
         Ok(outcome) => match outcome.bundle {
             Some(made) => Some(made.bundle_hash),
             None => {
@@ -899,7 +963,11 @@ fn bundle_of(
             None
         }
     };
-    Ok((budget, hash))
+    let rows = match beside.rows {
+        Some(rows) => rows,
+        None => beside_rows(env, globals, git_env, &refs),
+    };
+    Ok((budget, hash, rows))
 }
 
 /// The `snapshot_diff` entries of `changes`, in snapshot order (see the
@@ -1032,6 +1100,7 @@ pub(crate) fn render_brief(package: &TaskPackage) -> String {
     let header = escape_controls(&header);
     let sections: Vec<(&str, String)> = SECTIONS
         .iter()
+        .filter(|&&name| name != "Bindings" || !package.bindings.is_empty())
         .map(|&name| (name, escape_controls(&section(package, name))))
         .collect();
     cut_brief(&package.id, header, &sections)
@@ -1095,6 +1164,15 @@ fn section(package: &TaskPackage, name: &str) -> String {
                     or_dash(target.title.as_deref()),
                     or_dash(target.path.as_deref())
                 ));
+            }
+        }
+        "Bindings" => {
+            out.push_str(&format!(" {}\n", package.bindings.len()));
+            for row in &package.bindings {
+                for line in row_lines(row, &row_binding(row)) {
+                    out.push_str(&line);
+                    out.push('\n');
+                }
             }
         }
         "Assumptions" => {

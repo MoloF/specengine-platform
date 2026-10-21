@@ -108,7 +108,7 @@ rust-developer, M: mutation -> the test turning red:
 - [ ] RD-5 -- M: the exact item only -> `symbol_impact_reaches_the_enclosing_binding`.
 - [ ] RD-6 -- delta. M: filled in plain mode -> `plain_verify_has_no_symbol_delta`; `renamed` set -> `renamed_stays_null`.
 - [ ] RD-7 -- M: no tail -> `impact_cut_names_narrowing`; a terminal task listed -> `impact_lists_open_tasks_only`.
-- [ ] RD-8 -- M: `mcp_door` without `get_impact {since}` -> `mcp_door.rs`'s tool coverage; `INSTRUCTIONS` over 2 048 B, `probes` included -> `server.rs`'s compile-time asserts; a git library in MCP -> `build_graph.rs`'s dependency count (7); `git status` -> `reads_leave_git_index_and_objects_untouched` (7a's RD-12, with `impact`).
+- [ ] RD-8 -- M: `mcp_door` without `get_impact {since}` -> `mcp_door.rs`'s tool coverage; `INSTRUCTIONS` over 2 048 B, `probes` included -> `server.rs`'s compile-time asserts; a git library in MCP -> `build_graph.rs`'s dependency count (7); `git status` -> `reads_leave_git_index_and_objects_untouched` (new, the form of 7a-1's `show_bindings_writes_nothing_under_the_root`).
 
 test-engineer:
 

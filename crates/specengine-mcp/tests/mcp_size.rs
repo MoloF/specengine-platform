@@ -38,6 +38,15 @@
 //! JSON's `bindings.rows` the printed ones and `omitted` k; its maximum is
 //! printed with the others (`get_node` re-measured with rows).
 //!
+//! docs/features/bundle-bindings.md TE-5: over the same corpus (3 000
+//! rows of `LANE-WIDE`) and 64 more bound items with 9 000-character names
+//! sorting first, `get_context_bundle` at u32::MAX (rows past the ceiling,
+//! the body within 40 000 characters, the JSON its placed rows) and at the
+//! default budget, and `get_task` on a task of `LANE-WIDE` (its 64 long
+//! rows past `PACKAGE_BUDGET`, rows leaving from the last), each the CLI
+//! library's and within `MAX_RESULT_CHARS`; the maxima printed
+//! (`bundle_and_task_with_rows_stay_under_the_declared_cap`).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -533,4 +542,113 @@ fn find_symbols_over_code_bevy_records_its_maxima() {
     let largest = measure("code-bevy", &root, &home, &calls);
     eprintln!("bevy-roles-reads TE-8 find_symbols maximum on code-bevy: {largest}");
     assert!(largest > 0, "measured");
+}
+
+/// docs/features/bundle-bindings.md TE-5 (`mcp_size` maxima with rows):
+/// [`wide_code`] committed, plus `pkg/w/src/a_long.rs` with 64 items bound
+/// to `LANE-WIDE` whose names are 9 000 characters (their rows sort first)
+/// and a draft task on `LANE-WIDE`: `get_context_bundle` at u32::MAX and at
+/// the default budget, and `get_task`, each the CLI library's (parity and
+/// the output schema), within `OUTPUT_CAP_CHARS` before the tail (a
+/// bundle: its body) and `MAX_RESULT_CHARS` in all (characters and UTF-16
+/// units); the bundle places rows and leaves the rest out, the package
+/// keeps fewer than 64 rows (the budget) and names the rest in one note.
+/// The maxima are printed.
+#[test]
+fn bundle_and_task_with_rows_stay_under_the_declared_cap() {
+    let scratch = Scratch::new("size-rows");
+    let home = scratch.home("h");
+    let root = scratch.dir("wide");
+    wide_code(&root);
+    let lib = read_text(&root, "pkg/w/src/lib.rs");
+    write(&root, "pkg/w/src/lib.rs", format!("pub mod a_long;\n{lib}"));
+    let mut long = String::new();
+    for n in 0..64 {
+        let stem = format!("long_{n:02}_");
+        long.push_str(&format!(
+            "// @implements LANE-WIDE@1\npub fn {stem}{}() -> u32 {{\n    {n}\n}}\n",
+            "l".repeat(9_000 - stem.len())
+        ));
+    }
+    write(&root, "pkg/w/src/a_long.rs", long);
+    let sandbox = git::Sandbox::new(scratch.path());
+    sandbox.init(&root);
+    sandbox.add_all(&root);
+    sandbox.commit(&root, "the wide corpus");
+    let env = cli_env(&root, Some(&home));
+    let made = specengine_cli::task_new(
+        &env,
+        &Globals::default(),
+        &specengine_cli::TaskNewRequest {
+            nodes: vec!["LANE-WIDE".to_owned()],
+            title: Some("Widen the lane".to_owned()),
+            goal: Some("Read the code bound to the lane.".to_owned()),
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: "2026-10-21T09:00:00Z".to_owned(),
+            git: specengine_cli::GitEnv::new(&root, sandbox.vars()),
+        },
+    )
+    .expect("task new");
+    let id = made.id.expect("an ID");
+    let largest = measure(
+        "bundle-bindings TE-5",
+        &root,
+        &home,
+        &[
+            (
+                "get_context_bundle",
+                json!({"node_ids": ["LANE-WIDE"], "budget": 4294967295u64}),
+            ),
+            ("get_context_bundle", json!({"node_ids": ["LANE-WIDE"]})),
+            ("get_task", json!({"task_id": id})),
+        ],
+    );
+    eprintln!("bundle-bindings TE-5 maximum: {largest}");
+    let globals = Globals::default();
+    let mut session = Session::open(Era::Legacy, &[], Some(&root), Home::At(&home));
+    let schemas = output_schemas(&session.tools());
+    let bundle = checked_call(
+        &mut session,
+        &schemas,
+        "get_context_bundle",
+        json!({"node_ids": ["LANE-WIDE"], "budget": 4294967295u64}),
+        &env,
+        &globals,
+    );
+    let document = &bundle["structuredContent"];
+    let placed = document["layers"]["bindings"]
+        .as_array()
+        .expect("rows")
+        .len();
+    let left = document["tail"].as_array().expect("tail").len()
+        + document["more"].as_u64().expect("more") as usize;
+    assert!(
+        placed > 0 && left > 0,
+        "rows past the ceiling: {placed} placed, {left} left"
+    );
+    assert_eq!(placed + left, 3_064, "each row once");
+    let task = session.call("get_task", json!({"task_id": id}));
+    let package = &result(&task)["structuredContent"];
+    let rows = package["bindings"].as_array().expect("bindings").len();
+    assert!(rows > 0 && rows < 64, "the budget keeps {rows} long rows");
+    let notes: Vec<&str> = package["notes"]
+        .as_array()
+        .expect("notes")
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|note| note.starts_with("bindings: "))
+        .collect();
+    assert_eq!(
+        notes,
+        [format!(
+            "bindings: {} more row(s) left out; spec show LANE-WIDE --bindings lists them",
+            3_064 - rows
+        )
+        .as_str()],
+        "one note for the cap and the budget"
+    );
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
 }
