@@ -111,7 +111,9 @@ id: a REF: an ID, an alias (`aliases:` or a configured legacy prefix), `slug/ID`
 of them, with a warning.
 with: [\"links\"] lists each node's links, outgoing and incoming, before its text.
 with: [\"bindings\"] lists each node's code bindings, its sections' too, each with its sync \
-(the state spec verify --node gives), after its links; without a [code] table they are null, \
+(the state spec verify --node gives), after its links, with tested: the owner's test evidence \
+for the node and its sections, as plain spec verify judges it now ([] when none, null when not \
+judged); without a [code] table they are null, \
 and a code layer that cannot be read gives a note, never an error.
 archive: with [\"links\"] only: links written in Tier 3 (archived) documents too.
 
@@ -159,8 +161,9 @@ node_ids: one or more REFs, any form get_node takes; bundled together.
 budget: estimated tokens at most. Absent: `[budgets] bundle_node` of the project's \
 config, else 2000. Below the minimum the targets need: an error naming it.
 
-Code bindings and tests need a [code] table; a code layer that cannot be read gives \
-a note, never an error.
+Code bindings, tests and the tested lines under a placed target's or criterion's header (the \
+owner's test evidence, as plain spec verify judges it now) need a [code] table; a code layer \
+that cannot be read gives a note, never an error.
 
 A REF naming nothing: an error result with the reason, and the document. A call \
 that cannot run: an error result with its one line. ",

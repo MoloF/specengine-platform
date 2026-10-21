@@ -45,7 +45,9 @@ structuredContent the versioned task package (--json), every key present, absent
 
 bindings: the code bound to the targets, the affected nodes and their sections, each with its \
 sync (the state spec verify --node gives), at most 64 (a note names the rest); [] without a \
-[code] table. A code layer that cannot be read gives a note, never an error.
+[code] table. tested: the owner's test evidence for these nodes and the criteria's, as spec \
+verify --task judges it now, never cut ([] when none, null when not judged). A code layer that \
+cannot be read gives a note, never an error.
 
 stale: true when a node the owner approved (spec_snapshot) changed or went in the compared \
 place (the claimed worktree, else the snapshot's): snapshot_diff holds the diffs from the \

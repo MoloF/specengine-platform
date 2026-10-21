@@ -429,6 +429,7 @@ export function aTaskPackage(fields: Partial<TaskPackage> & Pick<TaskPackage, "i
     open_proposals: fields.open_proposals ?? [],
     owner_notes: fields.owner_notes ?? [],
     bindings: fields.bindings ?? [],
+    tested: fields.tested ?? null,
     spec_snapshot: fields.spec_snapshot ?? null,
     snapshot_diff: fields.snapshot_diff ?? null,
     claim: fields.claim ?? null,

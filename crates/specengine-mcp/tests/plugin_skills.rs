@@ -1181,8 +1181,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/show-bindings.md; 0.14.0 since
     // docs/features/bundle-bindings.md; 0.15.0 since
     // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md;
-    // 0.17.0 since docs/features/tested-evidence.md.
-    assert_eq!(manifest["version"], "0.17.0");
+    // 0.17.0 since docs/features/tested-evidence.md; 0.18.0 since
+    // docs/features/tested-reads.md.
+    assert_eq!(manifest["version"], "0.18.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1268,8 +1269,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/show-bindings.md; 0.14.0 since
     // docs/features/bundle-bindings.md; 0.15.0 since
     // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md;
-    // 0.17.0 since docs/features/tested-evidence.md.
-    assert_eq!(manifest["version"], "0.17.0");
+    // 0.17.0 since docs/features/tested-evidence.md; 0.18.0 since
+    // docs/features/tested-reads.md.
+    assert_eq!(manifest["version"], "0.18.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1372,11 +1374,12 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.17.0",
+        manifest["version"], "0.18.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
-         bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0"
+         bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0; \
+         tested-reads: 0.18.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1601,7 +1604,9 @@ fn rd10_analyze_names_get_roadmap() {
 }
 
 /// docs/features/check-binding.md "Plugin": `implement`'s step 5, exactly
-/// (696 bytes with its line feed).
+/// (696 bytes with its line feed), with docs/features/tested-reads.md
+/// "Plugin 0.18.0"'s sentence ([`IMPLEMENT_TESTED`]) after "never hide
+/// them." (964 bytes).
 const CHECK_STEP: &str = "5. **Check the bindings.** Before the report, call `check_binding` once per \
 target, its `id` (else its `path`) as `node`; it judges this session's \
 worktree. Mend what your change broke: a binding that no longer reaches its \
@@ -1609,9 +1614,21 @@ code, spec and code that both changed, a marker naming a revision its node \
 has not reached, or one it cannot verify; else raise it with \
 `report_discrepancy` and keep working on your `working_answer`. The owner \
 settles code that moved ahead of its spec, a spec ahead of its code and a \
-binding not yet locked: name them in the report, never hide them. An error \
+binding not yet locked: name them in the report, never hide them. A node's \
+`tested` (in `get_task`, `get_impact` and `check_binding`) is the owner's own \
+test evidence: an edit to the node or its bound code can void it, so name \
+each such node in the report for the owner to run its tests again, and never \
+claim that evidence yourself. An error \
 result with a report is a finding, not a failed call; where the project \
 binds no code, the report says so: go on.";
+
+/// docs/features/tested-reads.md "Plugin 0.18.0": `implement`'s step 5
+/// sentence, one space before it.
+const IMPLEMENT_TESTED: &str = " A node's `tested` (in `get_task`, `get_impact` and `check_binding`) is the owner's own test evidence: an edit to the node or its bound code can void it, so name each such node in the report for the owner to run its tests again, and never claim that evidence yourself.";
+
+/// docs/features/tested-reads.md "Plugin 0.18.0": `read-spec`'s second
+/// bullet of "Using what you read".
+const READ_SPEC_TESTED: &str = "- A node's `tested`, in `get_node` with its bindings, in `get_task`, in `get_impact` and as lines under a bundle's headers, says whether the owner's own passing test run still vouches for that node, judged now: evidence to read, never yours to claim, and nothing waits on it.";
 
 /// The row states of `spec verify` (docs/canon/spec-verify.md "States")
 /// a skill never names: the skill says what they mean, in words.
@@ -1660,7 +1677,12 @@ fn check_binding_implement_names_the_tool() {
         claim < step && step < report,
         "the check comes after the claim and before the report"
     );
-    assert_eq!(CHECK_STEP.len() + 1, 696, "the spec's figure");
+    assert_eq!(
+        CHECK_STEP.replacen(IMPLEMENT_TESTED, "", 1).len() + 1,
+        696,
+        "check-binding's figure"
+    );
+    assert_eq!(CHECK_STEP.len() + 1, 964, "with tested-reads' sentence");
     assert_eq!(lines[step], CHECK_STEP, "the spec's step 5");
     for words in ["this session's worktree", "owner", "report_discrepancy"] {
         assert!(
@@ -1679,7 +1701,11 @@ fn check_binding_implement_names_the_tool() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
 
     // M: `check_binding` unnamed.
-    let unnamed = edited(&skills, "implement", "`check_binding`", "the binding check");
+    // Every occurrence (step 5 and, since docs/features/tested-reads.md,
+    // its `tested` sentence).
+    let mut unnamed = skills.clone();
+    let text = unnamed["implement"].replace("`check_binding`", "the binding check");
+    unnamed.insert("implement".to_owned(), text);
     assert_names(
         &ac11_problems(&unnamed),
         "implement: `check_binding` not backticked",
@@ -1715,7 +1741,13 @@ fn impact_implement_names_get_impact() {
         .filter(|(_, text)| backticked(text).iter().any(|span| span == "get_impact"))
         .map(|(skill, _)| skill)
         .collect();
-    assert_eq!(naming, ["implement"], "the skills naming `get_impact`");
+    // docs/features/tested-reads.md "Plugin 0.18.0": `read-spec`'s bullet
+    // on `tested` names `get_impact` too.
+    assert_eq!(
+        naming,
+        ["implement", "read-spec"],
+        "the skills naming `get_impact`"
+    );
     let implement = &skills["implement"];
     let lines: Vec<&str> = implement.lines().collect();
     assert_eq!(IMPACT_STEP_1.len() + 1, 660, "the spec's figure");
@@ -1733,8 +1765,8 @@ fn impact_implement_names_get_impact() {
             .iter()
             .filter(|line| line.contains("`get_impact`"))
             .count(),
-        2,
-        "get_impact named in steps 1 and 6"
+        3,
+        "get_impact named in steps 1, 5 (tested-reads' sentence) and 6"
     );
     assert!(
         lines.contains(&CHECK_STEP),
@@ -1749,8 +1781,8 @@ fn impact_implement_names_get_impact() {
         .expect("a front-matter and a body");
     assert_eq!(
         body.len(),
-        3_414,
-        "the body's bytes as docs/features/impact-since.md measures them"
+        3_682,
+        "the body's bytes as docs/features/tested-reads.md measures them (3 414 before)"
     );
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
 
@@ -1764,6 +1796,10 @@ fn impact_implement_names_get_impact() {
         "implement: `get_impact` not backticked",
         "get_impact unnamed",
     );
+    // AC-06 holds while `read-spec` names it (docs/features/tested-reads.md
+    // "Plugin 0.18.0"): unnamed there too, it is backticked nowhere.
+    let text = unnamed["read-spec"].replace("`get_impact`", "the radius tool");
+    unnamed.insert("read-spec".to_owned(), text);
     assert_names(
         &ac06_problems(&unnamed, &listed()),
         "tool `get_impact` backticked nowhere",
@@ -1830,12 +1866,16 @@ fn impact_since_implement_reports_with_since() {
         .filter(|(_, text)| backticked(text).iter().any(|span| span == "get_impact"))
         .map(|(skill, _)| skill)
         .collect();
-    assert_eq!(naming, ["implement"], "the one skill naming `get_impact`");
+    assert_eq!(
+        naming,
+        ["implement", "read-spec"],
+        "`implement` and, since docs/features/tested-reads.md, `read-spec`"
+    );
     let body = implement
         .splitn(3, "---\n")
         .nth(2)
         .expect("a front-matter and a body");
-    assert_eq!(body.len(), 3_414, "the spec's figure");
+    assert_eq!(body.len(), 3_682, "tested-reads' figure (3 414 before)");
     assert!(body.len() <= 4096);
     // M: the step reworded.
     let reworded = edited(
@@ -1955,8 +1995,8 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        3_444,
-        "SKILL.md's bytes as the spec measures them"
+        3_720,
+        "SKILL.md's bytes as docs/features/tested-reads.md measures them (3 444 before)"
     );
     let reworded = edited(
         &skills,
@@ -1968,6 +2008,110 @@ fn read_spec_names_the_bundles_code_and_tests() {
         !reworded["read-spec"]
             .lines()
             .any(|line| line == READ_SPEC_BUNDLE_STEP),
+        "the mutation is seen"
+    );
+}
+
+// ------------------------------------------------- tested-reads (8b-2)
+
+/// docs/features/tested-reads.md "Plugin 0.18.0": `read-spec`'s second
+/// bullet of "Using what you read" is the spec's text, once, after the
+/// citing bullet; `implement`'s step 5 holds the spec's sentence once,
+/// right after "never hide them."; neither sentence holds a digit or a
+/// `tested` state or category word, and each backticks only tools and
+/// `tools/list` properties; the bytes: `read-spec` body 3 399, file 3 720;
+/// `implement` body 3 682, file 3 923. M: the bullet or the sentence
+/// missing or reworded.
+#[test]
+fn tested_reads_skills_name_tested() {
+    let skills = committed();
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    let read_spec = &skills["read-spec"];
+    let lines: Vec<&str> = read_spec.lines().collect();
+    let at = lines
+        .iter()
+        .position(|line| *line == READ_SPEC_TESTED)
+        .expect("the spec's bullet, word for word");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| **line == READ_SPEC_TESTED)
+            .count(),
+        1,
+        "once"
+    );
+    assert!(
+        lines[at - 1].starts_with("- Cite the IDs"),
+        "the second bullet: after {:?}",
+        lines[at - 1]
+    );
+    assert_eq!(
+        lines[..at]
+            .iter()
+            .rev()
+            .find(|line| line.starts_with("## ")),
+        Some(&"## Using what you read"),
+        "under Using what you read"
+    );
+    let implement = &skills["implement"];
+    assert_eq!(implement.matches(IMPLEMENT_TESTED).count(), 1, "once");
+    assert!(
+        implement.contains(&format!(
+            "name them in the report, never hide them.{IMPLEMENT_TESTED} An error result"
+        )),
+        "after never hide them., before the error sentence"
+    );
+    let step = implement
+        .lines()
+        .find(|line| line.contains(IMPLEMENT_TESTED))
+        .expect("the step");
+    assert!(step.starts_with("5. **Check the bindings.**"), "step 5");
+    let listed = listed();
+    for sentence in [READ_SPEC_TESTED, IMPLEMENT_TESTED] {
+        assert!(
+            !sentence.chars().any(|ch| ch.is_ascii_digit()),
+            "no digit: {sentence}"
+        );
+        for word in [
+            "verified",
+            "stale",
+            "unverifiable",
+            "node_gone",
+            "spec_changed",
+            "code_changed",
+            "spec_ahead",
+        ] {
+            assert!(!has_word(sentence, word), "{word:?} in {sentence}");
+        }
+        for span in backticked(sentence) {
+            assert!(
+                listed.tools.contains(&span) || listed.properties.contains(&span),
+                "{span:?}: a tool or a tools/list property"
+            );
+        }
+    }
+    let body = |text: &str| -> usize {
+        text.splitn(3, "---\n")
+            .nth(2)
+            .expect("a front-matter and a body")
+            .len()
+    };
+    assert_eq!(
+        (body(read_spec), read_spec.len()),
+        (3_399, 3_720),
+        "read-spec's bytes"
+    );
+    assert_eq!(
+        (body(implement), implement.len()),
+        (3_682, 3_923),
+        "implement's bytes"
+    );
+    // M: the bullet reworded.
+    let reworded = edited(&skills, "read-spec", "never yours to claim", "yours to use");
+    assert!(
+        !reworded["read-spec"]
+            .lines()
+            .any(|line| line == READ_SPEC_TESTED),
         "the mutation is seen"
     );
 }

@@ -31,6 +31,14 @@
 //!   [`PACKAGE_BINDINGS_MAX`], the rest one note naming `spec show
 //!   --bindings`; a code layer that cannot be read one `bindings:` note;
 //!   without `[code]` `[]`, no note.
+//! - **Tested** (task spec `tested-reads`): from the same read, the
+//!   `[[tested]]` blocks of `spec verify --task`'s set (the targets, the
+//!   criteria refs, the affected nodes and their sections), by node bytes,
+//!   as `spec verify` judges them; never capped nor cut; `null` without
+//!   `[code]`, when the rows were not judged or the blocks could not be (a
+//!   note says why). The brief's Bindings section prints with rows or
+//!   blocks, one `  tested | <state>[ <category>] | <node>` line each
+//!   after the rows.
 //! - **Roadmap**: the task's place on the plan of the reading root's
 //!   `[roadmap]` items ([`reading_plan`], as the bundle reads that root):
 //!   the open item an open task executes, as `spec roadmap` lists it
@@ -85,6 +93,7 @@ use crate::preflight::recorded_project;
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{QueueContext, queue_cannot};
 use crate::propose::{is_path_target, resolved_node};
+use crate::tested::tested_line;
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line};
 
 /// The brief's sections, in print order; Bindings only when the package
@@ -709,6 +718,7 @@ pub(crate) fn assemble(
     let (budget, bundle_hash, beside) =
         bundle_of(env, globals, context, task, git_env, roots, &mut notes)?;
     notes.extend(beside.note);
+    let tested = beside.tested;
     let mut bindings = beside.rows;
     let past_cap = bindings.split_off(bindings.len().min(PACKAGE_BINDINGS_MAX));
     let roadmap = task_roadmap(reading_plan(env, context, roots), task, &mut notes);
@@ -740,6 +750,7 @@ pub(crate) fn assemble(
             })
             .collect(),
         bindings,
+        tested,
         spec_snapshot: task.snapshot.as_ref().map(|snapshot| SpecSnapshot {
             at: snapshot.at.clone(),
             place: snapshot.place.clone(),
@@ -904,8 +915,9 @@ fn task_author(author: &Author) -> TaskAuthor {
 /// alone: a bad value exits 2 as `spec bundle`'s does), `spec bundle`'s
 /// hash of the targets now (`None` with a note when it cannot be made),
 /// and the binding rows of the targets, the affected nodes and their
-/// sections, from the bundle's code read (its one refresh; read alone
-/// when the bundle stops before it).
+/// sections, with the `[[tested]]` blocks of those and of the criteria
+/// refs, from the bundle's code read (its one refresh; read alone when the
+/// bundle stops before it).
 fn bundle_of(
     env: &Env,
     globals: &Globals,
@@ -938,8 +950,15 @@ fn bundle_of(
         .chain(&task.affected_nodes)
         .cloned()
         .collect();
+    // `tested`'s set is `spec verify --task`'s: the criteria refs too.
+    let criteria: Vec<String> = task
+        .criteria
+        .iter()
+        .filter_map(|criterion| criterion.reference.clone())
+        .collect();
     let mut beside = Beside {
         refs: &refs,
+        tested_refs: &criteria,
         rows: None,
     };
     let hash = match bundle_with(env, globals, &request, Some(&mut beside)) {
@@ -965,7 +984,7 @@ fn bundle_of(
     };
     let rows = match beside.rows {
         Some(rows) => rows,
-        None => beside_rows(env, globals, git_env, &refs),
+        None => beside_rows(env, globals, git_env, &refs, &criteria),
     };
     Ok((budget, hash, rows))
 }
@@ -1100,7 +1119,14 @@ pub(crate) fn render_brief(package: &TaskPackage) -> String {
     let header = escape_controls(&header);
     let sections: Vec<(&str, String)> = SECTIONS
         .iter()
-        .filter(|&&name| name != "Bindings" || !package.bindings.is_empty())
+        .filter(|&&name| {
+            name != "Bindings"
+                || !package.bindings.is_empty()
+                || package
+                    .tested
+                    .as_ref()
+                    .is_some_and(|tested| !tested.is_empty())
+        })
         .map(|&name| (name, escape_controls(&section(package, name))))
         .collect();
     cut_brief(&package.id, header, &sections)
@@ -1173,6 +1199,9 @@ fn section(package: &TaskPackage, name: &str) -> String {
                     out.push_str(&line);
                     out.push('\n');
                 }
+            }
+            for row in package.tested.iter().flatten() {
+                out.push_str(&format!("  {}\n", tested_line(row)));
             }
         }
         "Assumptions" => {

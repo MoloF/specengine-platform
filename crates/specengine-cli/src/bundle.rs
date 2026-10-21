@@ -24,6 +24,14 @@
 //!   bindings: <cause>`, never the bundle's failure; without `[code]`
 //!   nothing is read and nothing said. `spec task show` reads its
 //!   package's rows from the same judge ([`Beside`]).
+//! - **`tested`** (task spec `tested-reads`): the same read's
+//!   `[[tested]]` blocks, as `spec verify` judges them, one `tested |
+//!   <state>[ <category>] | <node>` line each, by node bytes, under the
+//!   header of a target in its text or outline form (its blocks and those
+//!   of the nodes within it) and of a placed criterion (its own); never
+//!   under a target's header alone nor in the frame, so the minimum never
+//!   depends on them; part of the item they are under, in its fit. No
+//!   JSON key: the body, its counts and `bundle_hash` move with them.
 //! - **Budget**: `--budget N`, else `[budgets] bundle_node` (read alone,
 //!   [`bundle_node_from_toml`]), else [`DEFAULT_BUNDLE_BUDGET`]. The body as
 //!   printed stays within it ([`tokens_est`] of the whole text) and within
@@ -44,10 +52,12 @@
 //!
 //! ## Targets
 //! <spec show's header>[ | outline]
+//! [tested | <state>[ <category>] | <node>]
 //! <text, or a document's summary when outlined>
 //!
 //! ## <Layer>
 //! <name> | <kind or -> | <title or -> | <path>:<line>[ | status <s>][ | via <type> <in|out>, …]
+//! [tested | <state>[ <category>] | <node>]
 //! <summary or text>
 //! [working answer: <header>]
 //!
@@ -76,10 +86,10 @@ use specengine_core::check::{
 };
 use specengine_core::lock::LockRelation;
 use specengine_core::{CodeConfig, tokens_est};
-use specengine_model::BindingRow;
+use specengine_model::{BindingRow, TestedRow};
 use specengine_store::{GitEnv, SqliteIndex, b3_hash};
 
-use crate::bindings::{SetRow, set_bindings};
+use crate::bindings::{SetRow, set_bindings_with, tested_of};
 use crate::cap::{OUTPUT_CAP_CHARS, header as show_header, row_line};
 use crate::corpus::{holders_warning, indexed_in, locate};
 use crate::graph::FollowedType;
@@ -90,6 +100,7 @@ use crate::project::{ProjectRoot, discover_with_text};
 use crate::refs::{Corpus, NodeKey};
 use crate::search::notes;
 use crate::show::{ShownNode, classify, shown};
+use crate::tested::tested_line;
 use crate::verify::unprefixed;
 use crate::{CliError, Env, Globals, Message, one_line};
 
@@ -257,19 +268,29 @@ pub struct TailEntry {
 pub(crate) struct Beside<'a> {
     /// The REFs naming it, each with every section it contains.
     pub refs: &'a [String],
+    /// More REFs whose `[[tested]]` blocks it shows, never their rows
+    /// (task spec `tested-reads`: the package's criteria refs, so its
+    /// `tested` is `spec verify --task`'s set's), each with every section
+    /// it contains; judged only when the lock holds a block.
+    pub tested_refs: &'a [String],
     /// Its rows, set once the bundle reads the code layer (without
     /// `[code]` too); `None`: the bundle stopped before, [`beside_rows`]
     /// reads them.
     pub rows: Option<BesideRows>,
 }
 
-/// A node set's rows read beside a bundle, and the read's one note.
+/// A node set's rows read beside a bundle, the blocks of it and of its
+/// `tested_refs`, and the read's one note.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct BesideRows {
     /// In verify's row order; none without `[code]` or when no row could
     /// be read.
     pub rows: Vec<BindingRow>,
-    /// `bindings: <cause>`; none without `[code]`.
+    /// By node bytes, as `spec verify` judges them; `None` without
+    /// `[code]`, when the rows were not judged or the blocks could not
+    /// be (the note says why).
+    pub tested: Option<Vec<TestedRow>>,
+    /// `bindings: <cause>`, or `tested: <cause>`; none without `[code]`.
     pub note: Option<String>,
 }
 
@@ -420,12 +441,29 @@ struct CodeRead<'a> {
     input: &'a CheckInput,
 }
 
-/// Layers 5 and 9's rows, and the read's one note.
+/// Layers 5 and 9's rows, the `[[tested]]` blocks printed under the
+/// targets' and the criteria's headers, and the read's one note.
 #[derive(Default)]
 struct CodeRows {
     bindings: Vec<SetRow>,
     tests: Vec<SetRow>,
+    /// Per target: the blocks of it and of the nodes within it; per
+    /// layer-4 candidate: its own. None when not judged.
+    tested: BTreeMap<(BundleLayer, NodeAt), Vec<TestedRow>>,
     note: Option<String>,
+}
+
+impl CodeRows {
+    /// The lines under the header of `at` in `layer`: one `tested | …` per
+    /// block, each with its line end.
+    fn tested_lines(&self, layer: BundleLayer, at: NodeAt) -> String {
+        self.tested
+            .get(&(layer, at))
+            .into_iter()
+            .flatten()
+            .map(|row| format!("{}\n", tested_line(row)))
+            .collect()
+    }
 }
 
 /// The rows of layers 5 and 9 (see the module documentation) from one
@@ -476,6 +514,32 @@ fn code_rows(
         .as_ref()
         .map(|beside| named_set(&corpus, scheme, beside.refs))
         .unwrap_or_default();
+    let also: Vec<NodeKey> = beside
+        .as_ref()
+        .map(|beside| named_set(&corpus, scheme, beside.tested_refs))
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let package_tested: BTreeSet<NodeKey> = package.iter().chain(&also).copied().collect();
+    // Each target's nodes and each criterion, for their blocks.
+    let headed: Vec<((BundleLayer, NodeAt), BTreeSet<NodeKey>)> = layers
+        .targets
+        .iter()
+        .map(|&at| {
+            let within = graph.within(at).into_iter().filter_map(key).collect();
+            ((BundleLayer::Targets, at), within)
+        })
+        .chain(
+            layers
+                .candidates
+                .iter()
+                .filter(|candidate| candidate.layer == BundleLayer::Criteria)
+                .map(|candidate| {
+                    let own = key(candidate.node).into_iter().collect();
+                    ((BundleLayer::Criteria, candidate.node), own)
+                }),
+        )
+        .collect();
     drop(corpus);
     let keys: Vec<NodeKey> = targets
         .iter()
@@ -486,18 +550,31 @@ fn code_rows(
         .into_iter()
         .collect();
 
-    let read_rows = set_bindings(project, read.text, read.git, index, read.input, &keys);
-    let rows = read_rows.rows.unwrap_or_default();
+    let read_rows = set_bindings_with(
+        project, read.text, read.git, index, read.input, &keys, &also,
+    );
+    let tested = match &read_rows.tested {
+        Some(tested) => headed
+            .into_iter()
+            .map(|(at, nodes)| (at, tested_of(tested, &nodes)))
+            .filter(|(_, rows)| !rows.is_empty())
+            .collect(),
+        None => BTreeMap::new(),
+    };
     if let Some(beside) = beside {
         beside.rows = Some(BesideRows {
-            rows: rows
+            rows: read_rows
+                .rows
                 .iter()
+                .flatten()
                 .filter(|row| !row.nodes.is_disjoint(&package))
                 .map(|row| row.row.clone())
                 .collect(),
+            tested: read_rows.tested_of(&package_tested),
             note: read_rows.note.clone(),
         });
     }
+    let rows = read_rows.rows.unwrap_or_default();
     let (tests, bindings): (Vec<SetRow>, Vec<SetRow>) = rows.into_iter().partition(|row| {
         LockRelation::from_name(&row.row.relation) == Some(LockRelation::Verifies)
     });
@@ -510,6 +587,7 @@ fn code_rows(
             .into_iter()
             .filter(|row| !row.nodes.is_disjoint(&targets) || !row.nodes.is_disjoint(&criteria))
             .collect(),
+        tested,
         note: read_rows.note,
     }
 }
@@ -523,9 +601,11 @@ pub(crate) fn beside_rows(
     globals: &Globals,
     git: &GitEnv,
     refs: &[String],
+    tested_refs: &[String],
 ) -> BesideRows {
     let unread = |error: CliError| BesideRows {
         rows: Vec::new(),
+        tested: None,
         note: Some(format!("bindings: {}", one_line(&unprefixed(&error)))),
     };
     let (project, text) = match discover_with_text(env, globals) {
@@ -546,14 +626,28 @@ pub(crate) fn beside_rows(
     };
     let scheme = &project.config.scheme;
     let corpus = Corpus::new(&input, scheme, &project.config.paths);
-    let keys: Vec<NodeKey> = named_set(&corpus, scheme, refs).into_iter().collect();
+    let set = named_set(&corpus, scheme, refs);
+    let also = named_set(&corpus, scheme, tested_refs);
     drop(corpus);
-    let read = set_bindings(&project, &text, git, &mut open.index, &input, &keys);
+    let keys: Vec<NodeKey> = set.iter().copied().collect();
+    let also_keys: Vec<NodeKey> = also.iter().copied().collect();
+    let read = set_bindings_with(
+        &project,
+        &text,
+        git,
+        &mut open.index,
+        &input,
+        &keys,
+        &also_keys,
+    );
+    let all: BTreeSet<NodeKey> = set.union(&also).copied().collect();
     BesideRows {
+        tested: read.tested_of(&all),
         rows: read
             .rows
             .unwrap_or_default()
             .into_iter()
+            .filter(|row| !row.nodes.is_disjoint(&set))
             .map(|row| row.row)
             .collect(),
         note: read.note,
@@ -624,12 +718,15 @@ fn assemble(
     let targets: Vec<TargetForms> = layers
         .targets
         .iter()
-        .map(|&at| target_forms(graph, at))
+        .map(|&at| target_forms(graph, at, &code.tested_lines(BundleLayer::Targets, at)))
         .collect();
     let mut candidates: Vec<Prepared> = layers
         .candidates
         .iter()
-        .map(|candidate| prepare(graph, candidate))
+        .map(|candidate| {
+            let tested = code.tested_lines(candidate.layer, candidate.node);
+            prepare(graph, candidate, &tested)
+        })
         .chain(
             code.bindings
                 .iter()
@@ -850,13 +947,14 @@ fn tail_line(entry: &TailEntry) -> String {
 }
 
 /// A target's forms: `spec show`'s header and text, the marked header, the
-/// outline.
-fn target_forms(graph: &SpecGraph<'_>, at: NodeAt) -> TargetForms {
+/// outline; `tested` (its blocks' lines, task spec `tested-reads`) under
+/// the header of the text and of the outline, never of the header alone.
+fn target_forms(graph: &SpecGraph<'_>, at: NodeAt, tested: &str) -> TargetForms {
     let node = shown_node(graph, at);
     let head = show_header(&node);
-    let full = format!("{head}\n{}", with_line_end(&node.text));
+    let full = format!("{head}\n{tested}{}", with_line_end(&node.text));
     let marked = format!("{head} | outline");
-    let outline = summary(graph, at).map(|summary| format!("{marked}\n{summary}"));
+    let outline = summary(graph, at).map(|summary| format!("{marked}\n{tested}{summary}"));
     let children = graph
         .children(at)
         .iter()
@@ -921,8 +1019,9 @@ fn shown_node(graph: &SpecGraph<'_>, at: NodeAt) -> ShownNode {
     }
 }
 
-/// A candidate's item, text and not-included entry.
-fn prepare(graph: &SpecGraph<'_>, candidate: &BundleCandidate) -> Prepared {
+/// A candidate's item, text and not-included entry; `tested` (a
+/// criterion's blocks' lines, task spec `tested-reads`) under its header.
+fn prepare(graph: &SpecGraph<'_>, candidate: &BundleCandidate, tested: &str) -> Prepared {
     let at = candidate.node;
     let layer = candidate.layer;
     let node = graph.node(at);
@@ -950,7 +1049,7 @@ fn prepare(graph: &SpecGraph<'_>, candidate: &BundleCandidate) -> Prepared {
             .collect();
         header.push_str(&format!(" | via {}", pairs.join(", ")));
     }
-    let mut text = format!("{header}\n");
+    let mut text = format!("{header}\n{tested}");
     let form = if layer == BundleLayer::Criteria {
         text.push_str(&with_line_end(&node_text(graph, at)));
         ItemForm::Text

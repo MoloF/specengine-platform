@@ -26,6 +26,11 @@
 //! (`verify_common::ecs`, an ECS game crate with RON data) and `spec-c`
 //! (another genre, no `[code]`). Each repository has its own `HOME`.
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
+//!
+//! docs/features/tested-reads.md (8b-2): a node's `bindings` is `{rows,
+//! omitted, tested}` (`tested` `[]` over every corpus above: none holds a
+//! block); RD-5 `show_cut_keeps_tested_with_closing` over the evidence
+//! kiln (`tested_kiln::evidence_kiln`).
 
 #![cfg(unix)]
 
@@ -33,7 +38,10 @@ mod anchor_common;
 mod code_index_common;
 mod common;
 mod lock_common;
+mod tested_common;
+mod tested_kiln;
 mod verify_common;
+mod verify_tests_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::{OsStr, OsString};
@@ -147,7 +155,7 @@ impl Show {
         list(&self.json()["nodes"])
     }
 
-    /// The `at`th node's `bindings`: `{rows, omitted}` or `null`.
+    /// The `at`th node's `bindings`: `{rows, omitted, tested}` or `null`.
     fn bindings(&self, at: usize) -> Value {
         self.nodes()[at]["bindings"].clone()
     }
@@ -161,8 +169,8 @@ impl Show {
             .unwrap_or_default();
         assert_eq!(
             keys,
-            ["omitted", "rows"],
-            "{}: node {at}'s bindings are {{rows, omitted}}, not {bindings}\n{}",
+            ["omitted", "rows", "tested"],
+            "{}: node {at}'s bindings are {{rows, omitted, tested}} (docs/features/tested-reads.md), not {bindings}\n{}",
             self.what,
             self.show()
         );
@@ -2968,4 +2976,192 @@ fn write_feature(root: &Path) {
 #[test]
 fn show_bindings_leave_spec_c_unchanged() {
     assert_no_code_is_show("spec-c");
+}
+
+// ------------------------------------------------- docs/features/tested-reads.md
+
+/// The characters of `text` before its line starting `start`, if any.
+fn chars_before_line(text: &str, start: &str) -> Option<usize> {
+    let mut at = 0;
+    for line in text.split_inclusive('\n') {
+        if line.starts_with(start) {
+            return Some(at);
+        }
+        at += line.chars().count();
+    }
+    None
+}
+
+/// docs/features/tested-reads.md RD-5 **M5** (the closing line printed
+/// without its tested lines, or they without it): over the evidence kiln,
+/// KILN-COOL bound by many marked tests in one file (KILN-HOLD's and
+/// KILN-RAMP's blocks `verified`), `show KILN-FIRING --bindings` with the
+/// last test's name grown one character at a time so the end of the rows
+/// walks across 40 000: the text before the tail never passes 40 000; the
+/// closing line and its two `  tested | …` lines print together or not at
+/// all; the JSON's `tested` holds the printed entries (plain verify's, or
+/// `[]` once they are cut); at the first cut the closing line alone would
+/// still have fitted (the rows' count found from row 2's cost, fewer until
+/// all print with the unit at pad 0). (`View::Browser`, the daemon's uncut
+/// view: the HTTP half.)
+#[test]
+fn show_cut_keeps_tested_with_closing() {
+    let kiln = tested_kiln::evidence_kiln("sb-tested-cut");
+    let repo = &kiln.repo;
+    let many = "crates/kiln/tests/many.rs";
+    let write = |count: usize, pad: usize| {
+        let mut text = String::new();
+        for at in 0..count {
+            let extra = if at + 1 == count {
+                "x".repeat(pad)
+            } else {
+                String::new()
+            };
+            text.push_str(&format!(
+                "// @verifies KILN-COOL@2\n#[test]\nfn cools_in_steps_{at:04}{extra}() {{}}\n\n"
+            ));
+        }
+        repo.write(many, text);
+    };
+    let by_node = tested_common::entries_by_node(&tested_common::plain(repo, &[]));
+    let want: Vec<Value> = ["KILN-HOLD", "KILN-RAMP"]
+        .iter()
+        .map(|node| by_node[*node].clone())
+        .collect();
+    assert!(
+        want.iter().all(|entry| entry["state"] == "verified"),
+        "premise: the evidence holds: {want:?}"
+    );
+    let unit: Vec<String> = want
+        .iter()
+        .map(|entry| format!("  {}", tested_common::entry_line(entry)))
+        .collect();
+    let closing_of =
+        |read: &Show| -> Option<usize> { chars_before_line(read.text(), "  bindings ") };
+
+    // The cost of one row (its line and its `sig` line), uncut.
+    write(1, 0);
+    let one = bound(repo, "KILN-FIRING");
+    write(2, 0);
+    let two = bound(repo, "KILN-FIRING");
+    let (one_at, two_at) = (
+        closing_of(&one).expect("uncut: the closing line"),
+        closing_of(&two).expect("uncut: the closing line"),
+    );
+    let row = two_at - one_at;
+    let unit_chars: usize = unit
+        .iter()
+        .map(|line| line.chars().count() + 1)
+        .sum::<usize>()
+        + "  bindings 1000, 1000 check\n".len();
+    // A row's cost grows with its line numbers' digits: an estimate from
+    // row 2's, then fewer rows until every row and the closing unit print
+    // at pad 0; the pad that brings the rows' end near the cut follows from
+    // the room left (each pad character costs two: the row's symbol and
+    // its `sig` line).
+    let mut count = (CAP - (one_at - row) - unit_chars - 16) / row;
+    assert!(count > 100, "premise: many rows: {count}");
+    let room = loop {
+        write(count, 0);
+        let read = bound(repo, "KILN-FIRING");
+        match closing_of(&read) {
+            Some(at) if read.rows(0).len() == count + 7 => break CAP - at,
+            _ => count -= 1,
+        }
+    };
+    assert!(
+        room >= unit_chars,
+        "premise: the unit fits at pad 0: {room}"
+    );
+    let first_pad = (room - unit_chars).saturating_sub(16) / 2;
+
+    let mut seen: Vec<(usize, bool)> = Vec::new();
+    // From about 16 characters of room past the unit down to about 4: the
+    // last row always fits.
+    for pad in first_pad..=first_pad + (unit_chars + 12) / 2 {
+        write(count, pad);
+        let read = bound(repo, "KILN-FIRING");
+        read.answered();
+        let context = format!("{count} rows, pad {pad}");
+        let lines: Vec<&str> = read.text().lines().collect();
+        if let Some(tail) = lines.last().filter(|line| line.starts_with("[truncated: ")) {
+            let before: usize = read.text()[..read.text().len() - tail.len() - 1]
+                .chars()
+                .count();
+            assert!(
+                before <= CAP,
+                "{context}: {before} characters before the tail"
+            );
+        }
+        let rows = read.rows(0);
+        assert_eq!(rows.len(), count + 7, "{context}: every row printed");
+        let tested_at: Vec<usize> = lines
+            .iter()
+            .enumerate()
+            .filter(|(_, line)| line.starts_with("  tested | "))
+            .map(|(at, _)| at)
+            .collect();
+        let tested = read.bindings(0)["tested"].clone();
+        let end_of_rows = match closing_of(&read) {
+            Some(at) => {
+                let closing = lines
+                    .iter()
+                    .position(|line| line.starts_with("  bindings "))
+                    .expect("the closing line");
+                assert_eq!(
+                    lines[closing + 1..closing + 1 + unit.len()].to_vec(),
+                    unit,
+                    "{context}: the closing line with its tested lines\n{}",
+                    read.show()
+                );
+                assert_eq!(
+                    tested_at.len(),
+                    unit.len(),
+                    "{context}: no other tested line"
+                );
+                assert_eq!(list(&tested), want, "{context}: the printed entries");
+                seen.push((at, true));
+                at
+            }
+            None => {
+                assert!(
+                    tested_at.is_empty(),
+                    "{context}: no tested line without its closing line\n{}",
+                    read.show()
+                );
+                assert_eq!(
+                    tested,
+                    json!([]),
+                    "{context}: none printed, none in the JSON"
+                );
+                let tail = lines.last().expect("a tail");
+                let at = read.text()[..read.text().len() - tail.len() - 1]
+                    .chars()
+                    .count();
+                seen.push((at, false));
+                at
+            }
+        };
+        assert!(end_of_rows <= CAP, "{context}");
+    }
+    let first_cut = seen
+        .iter()
+        .find(|(_, printed)| !printed)
+        .unwrap_or_else(|| panic!("the sweep reaches the cut: {seen:?}"));
+    assert!(
+        seen.iter().any(|(_, printed)| *printed),
+        "the sweep starts uncut: {seen:?}"
+    );
+    assert!(
+        seen.iter()
+            .skip_while(|(_, printed)| *printed)
+            .all(|(_, printed)| !printed),
+        "printed, then cut, never back: {seen:?}"
+    );
+    let closing_alone = format!("  bindings {}, {} check\n", count + 7, count + 7).len();
+    assert!(
+        CAP - first_cut.0 >= closing_alone,
+        "at the first cut the closing line alone would fit ({} characters left, the line {closing_alone}): {seen:?}",
+        CAP - first_cut.0
+    );
 }

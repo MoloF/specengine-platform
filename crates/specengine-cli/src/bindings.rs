@@ -31,6 +31,14 @@
 //!   lines, signature and layer (the symbol at the key's qpath and item
 //!   kind in the BLAKE3-checked file), a RON row its first marker's line;
 //!   `sync` the state word, `category`, `detail`, `anchor` verify's.
+//! - **A read's blocks** (task spec `tested-reads`): with the rows judged,
+//!   the `[[tested]]` blocks of the set's nodes (by their canonical IDs),
+//!   judged by `spec verify`'s one function ([`tested_entries`]) over the
+//!   judge's tree, the uncut lock and the same git session, before it
+//!   ends; nothing read when the lock holds no block. A failure to judge
+//!   them is the read's note `tested: <cause>`, `tested` `None`; any cause
+//!   (the session's end failing too) leaves `tested` `None` and only the
+//!   `bindings:` note.
 //!
 //! Nothing is written but the data directory (the index refreshes, as
 //! `spec refs`).
@@ -43,7 +51,7 @@ use specengine_core::CodeConfig;
 use specengine_core::check::CheckInput;
 use specengine_core::lock::{LOCK_FILE, Lock, LockKind, parse_lock};
 use specengine_core::verify::{Class, RowBinding, RowKey};
-use specengine_model::{BindingAnchor, BindingPlace, BindingRow};
+use specengine_model::{BindingAnchor, BindingPlace, BindingRow, TestedRow};
 use specengine_store::{
     CodeFileState, CodeRefs, CodeSelection, GitEnv, SqliteIndex, StoredName, StoredNames,
     StoredSymbol, VerifyGit,
@@ -56,6 +64,7 @@ use crate::node_set::NodeSet;
 use crate::project::ProjectRoot;
 use crate::refs::{CodeCount, Corpus, NodeKey, no_code_table, stored_count};
 use crate::store_error;
+use crate::tested::{tested_entries, tested_note_text};
 use crate::verify::{
     CAUSE_DATA, CAUSE_UNMERGED, VerifyAnchor, VerifyPlace, key_set_nodes, keyed_binding, shown,
     unprefixed,
@@ -99,7 +108,8 @@ pub(crate) struct SetWalk {
 }
 
 /// A read's rows of a node set and its one note (task spec
-/// `show-bindings`, "Degrade").
+/// `show-bindings`, "Degrade"), and the set's `[[tested]]` blocks (task
+/// spec `tested-reads`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct SetBindings {
     /// `None`: no row could be read (no `[code]`, causes (1), (3), (8));
@@ -107,11 +117,42 @@ pub(crate) struct SetBindings {
     pub rows: Option<Vec<SetRow>>,
     /// The rows were judged; `false`: listed under a cause (4)-(6).
     pub judged: bool,
-    /// `bindings: <cause>`, the first cause in verify's order.
+    /// `bindings: <cause>`, the first cause in verify's order; else, the
+    /// rows judged, `tested: <cause>` when the blocks could not be.
     pub note: Option<String>,
     /// The code files the read's walk covered, as `spec refs` counts them;
     /// `None` when no row could be read.
     pub code: Option<CodeCount>,
+    /// Each block of a set node, by node bytes, judged by `spec verify`'s
+    /// one function over the judge's tree and the uncut lock; `None`
+    /// unless the rows were judged, and when the blocks could not be (the
+    /// note says why).
+    pub tested: Option<Vec<SetTested>>,
+}
+
+/// One `[[tested]]` block of a read and the set nodes it is of (those
+/// whose canonical ID is its node).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SetTested {
+    pub row: TestedRow,
+    pub nodes: BTreeSet<NodeKey>,
+}
+
+impl SetBindings {
+    /// The blocks of the nodes `of` (`None` when not judged), by node
+    /// bytes.
+    pub(crate) fn tested_of(&self, of: &BTreeSet<NodeKey>) -> Option<Vec<TestedRow>> {
+        self.tested.as_ref().map(|tested| tested_of(tested, of))
+    }
+}
+
+/// The blocks of `tested` of the nodes `of`, in their order.
+pub(crate) fn tested_of(tested: &[SetTested], of: &BTreeSet<NodeKey>) -> Vec<TestedRow> {
+    tested
+        .iter()
+        .filter(|entry| !entry.nodes.is_disjoint(of))
+        .map(|entry| entry.row.clone())
+        .collect()
 }
 
 /// One row of a read, the set nodes it belongs to, its binding as verify
@@ -279,8 +320,8 @@ fn cut_lock(lock: &Lock, set: &NodeSet, corpus: &mut Corpus<'_>) -> Lock {
         })
         .map(|(key, verified)| (key.clone(), verified.clone()))
         .collect();
-    // The reads judge entries alone: a `[[tested]]` block is no row
-    // (its reads are task spec `tested-reads`').
+    // The judge reads entries alone: a `[[tested]]` block is no row (a
+    // read's blocks are judged apart, over the uncut lock: `set_tested`).
     Lock {
         format: lock.format,
         recipes: lock.recipes.clone(),
@@ -380,11 +421,29 @@ pub(crate) fn set_bindings(
     input: &CheckInput,
     keys: &[NodeKey],
 ) -> SetBindings {
+    set_bindings_with(project, text, git_env, index, input, keys, &[])
+}
+
+/// [`set_bindings`], with `tested_also`: more nodes whose blocks the read
+/// shows (the package's criteria refs). They join the judge's keys only
+/// when the lock holds a block: an evidence-free read judges `keys` alone.
+/// A row's set nodes may then hold them: a read keeps its rows by its own
+/// set.
+pub(crate) fn set_bindings_with(
+    project: &ProjectRoot,
+    text: &str,
+    git_env: &GitEnv,
+    index: &mut SqliteIndex,
+    input: &CheckInput,
+    keys: &[NodeKey],
+    tested_also: &[NodeKey],
+) -> SetBindings {
     let unknown = |cause: RunCause| SetBindings {
         rows: None,
         judged: false,
         note: Some(note(&cause)),
         code: None,
+        tested: None,
     };
     let label = &project.config_label;
     // (2), (1): `[code]` alone; `[verify]` is never read.
@@ -443,8 +502,23 @@ pub(crate) fn set_bindings(
         }
     };
 
+    let mut tested = None;
+    let mut tested_cause = None;
     let judged = match (causes.is_empty(), &lock, &git) {
         (true, Some(lock), Some(open)) => {
+            let joined: Vec<NodeKey>;
+            let keys = if lock.tested.is_empty() || tested_also.is_empty() {
+                keys
+            } else {
+                joined = keys
+                    .iter()
+                    .chain(tested_also)
+                    .copied()
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .collect();
+                &joined
+            };
             let scope = SetScope {
                 project,
                 code: &code,
@@ -453,7 +527,16 @@ pub(crate) fn set_bindings(
                 keys,
             };
             match judge_set(&scope, index, open, &mut messages, 0) {
-                Ok(judged) => Some(judged),
+                Ok(judged) => {
+                    // `tested` (task spec `tested-reads`): the set's blocks
+                    // by verify's one function, over the judge's tree, the
+                    // uncut lock and the open session; never a second judge.
+                    match set_tested(project, input, &judged.tree, lock, open, keys) {
+                        Ok(entries) => tested = Some(entries),
+                        Err(cause) => tested_cause = Some(tested_note_text(&cause)),
+                    }
+                    Some(judged)
+                }
                 Err(cause) => {
                     causes.push(cause);
                     None
@@ -474,8 +557,9 @@ pub(crate) fn set_bindings(
         return SetBindings {
             rows: Some(judged.as_ref().map(judged_rows).unwrap_or_default()),
             judged: true,
-            note: None,
+            note: tested_cause,
             code: judged.map(|judged| count(judged.walk)),
+            tested,
         };
     }
 
@@ -503,13 +587,51 @@ pub(crate) fn set_bindings(
             Err(cause) => causes.push(cause),
         }
     }
+    // Any cause, the session's end failing too: `tested` not judged, its
+    // note dropped (the `bindings:` note covers the read).
     causes.sort_by_key(|cause| cause.order);
     SetBindings {
         rows,
         judged: false,
         note: causes.first().map(note),
         code: counted,
+        tested: None,
     }
+}
+
+/// The set's blocks (`keys` kept by their canonical IDs, as
+/// [`tested_entries`] names a block's node), each with the set nodes it is
+/// of; none read when the lock holds no block.
+fn set_tested(
+    project: &ProjectRoot,
+    input: &CheckInput,
+    tree: &CodeTree,
+    lock: &Lock,
+    git: &VerifyGit,
+    keys: &[NodeKey],
+) -> Result<Vec<SetTested>, String> {
+    if lock.tested.is_empty() {
+        return Ok(Vec::new());
+    }
+    let scheme = &project.config.scheme;
+    let corpus = Corpus::new(input, scheme, &project.config.paths);
+    let set = NodeSet::of(&corpus, scheme, keys.iter().copied());
+    drop(corpus);
+    let mut of: BTreeMap<&str, BTreeSet<NodeKey>> = BTreeMap::new();
+    for key in set.keys() {
+        if let Some(id) = set.canonical(key) {
+            of.entry(id).or_default().insert(key);
+        }
+    }
+    let keep = |node: &str| of.contains_key(node);
+    let entries = tested_entries(project, input, tree, lock, git, &keep)?;
+    Ok(entries
+        .into_iter()
+        .map(|row| SetTested {
+            nodes: of.get(row.node.as_str()).cloned().unwrap_or_default(),
+            row,
+        })
+        .collect())
 }
 
 /// Whether a cause leaves no row at all: (1), (2), (3), (8).

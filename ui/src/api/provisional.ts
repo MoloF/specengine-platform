@@ -654,10 +654,45 @@ export interface BindingRow {
   anchor: BindingAnchor | null;
 }
 
-/** A shown node's rows and how many the cap left out. Source: `docs/canon/code-reads.md` "spec show --bindings". */
+/**
+ * A `[[tested]]` block's state now, judged on each read by plain verify's one function, never stored,
+ * never a verdict, exit or hold on work (ADR-0044, ADR-0012): `verified` the owner's passing run
+ * still vouches; `stale` the spec or the bound code changed since; `unverifiable` the revision, the
+ * hash or a binding not judgeable now; `node_gone` no node holds the ID (never in a read, whose set
+ * holds present nodes only). Any other word, shown raw.
+ * Sources: `docs/canon/spec-lock-tested.md` "The state"; `docs/canon/spec-lock-tested.md` "Reads".
+ */
+export type TestedState = "verified" | "stale" | "unverifiable" | "node_gone" | Unlisted;
+
+/**
+ * One `[[tested]]` block of a read's set and its state now, plain verify's entry, its 7 keys in this
+ * order, all present: `node` the canonical ID; `category` a stale block's `spec_changed` or
+ * `code_changed`, an unverifiable one's word, else null; `rev`, `commit`, `verified_at` the block's
+ * (the revision vouched for, the commit the tests passed at, the run's UTC date); `node_rev` the
+ * node's revision now, null when gone or unreadable. Evidence to read, never a hold on work.
+ * Source: `docs/canon/spec-lock-tested.md` "Reads".
+ */
+export interface TestedRow {
+  node: string;
+  state: TestedState;
+  category: string | null;
+  rev: number;
+  node_rev: number | null;
+  commit: string;
+  verified_at: string;
+}
+
+/**
+ * A shown node's rows, how many the cap left out, and the `[[tested]]` entries of the node and its
+ * sections by node bytes: `tested` null when not judged (rows listed under a cause, or the blocks
+ * not judgeable, a note says why), [] with no block in its set, and [] too on a node the CLI's cap
+ * cut before its closing line (the daemon's view is uncut). Sources: `docs/canon/code-reads.md` "spec show --bindings";
+ * `docs/canon/spec-lock-tested.md` "Reads".
+ */
 export interface ShownBindings {
   rows: BindingRow[];
   omitted: number;
+  tested: TestedRow[] | null;
 }
 
 /** `spec show --json`: the nodes, or the reason there are none. Source: `crates/specengine-cli/README.md` "Output and the cap". */
@@ -1291,6 +1326,12 @@ export interface TaskPackage {
    * (a note says how many more); `[]` without `[code]` (`docs/features/bundle-bindings.md` "Task package").
    */
   bindings: BindingRow[];
+  /**
+   * The `[[tested]]` entries of `spec verify --task T`'s set (targets, criteria refs, affected nodes,
+   * their sections), by node bytes, never cut: null when not judged (no `[code]`, a cause, the blocks
+   * not judgeable), [] with no block. Source: `docs/canon/spec-lock-tested.md` "Reads".
+   */
+  tested: TestedRow[] | null;
   spec_snapshot: SpecSnapshot | null;
   snapshot_diff: SnapshotDiff[] | null;
   claim: TaskClaim | null;

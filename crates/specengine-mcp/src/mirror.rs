@@ -196,11 +196,17 @@ pub(crate) struct ShowNode {
 }
 
 /// A node's code bindings and its sections', in verify's row order: those
-/// printed, and the rows the cut left out.
+/// printed, and the rows the cut left out; the `[[tested]]` blocks of the
+/// node and its sections printed.
 #[derive(JsonSchema)]
 pub(crate) struct ShowBindings {
     pub rows: Vec<BindingRowShape>,
     pub omitted: usize,
+    /// Each `[[tested]]` block of the node and its sections, by node, as
+    /// `spec verify` judges it now; never a verdict or an exit. `null`
+    /// when the rows were not judged or the blocks could not be (a note
+    /// says why).
+    pub tested: Option<Vec<VerifyTested>>,
 }
 
 /// One code binding as a read shows it (the model's `BindingRow`, key for
@@ -875,6 +881,12 @@ pub(crate) struct TaskPackage {
     /// sections, read at the reading root; past the cap a note names how
     /// many were left out. `[]` without a `[code]` table.
     pub bindings: Vec<BindingRowShape>,
+    /// Each `[[tested]]` block of the targets, the criteria refs, the
+    /// affected nodes and their sections, by node, as `spec verify --task`
+    /// judges it now; never cut, never a state or a gate. `null` without a
+    /// `[code]` table, when the rows were not judged or the blocks could
+    /// not be (a note says why).
+    pub tested: Option<Vec<VerifyTested>>,
     pub spec_snapshot: Option<SpecSnapshot>,
     /// `[]` when not stale, `null` when staleness cannot be told.
     pub snapshot_diff: Option<Vec<SnapshotDiff>>,
@@ -1205,6 +1217,12 @@ pub(crate) struct ImpactDocument {
     /// The printed nodes by distance, path and position; distance 0 the
     /// seeds.
     pub nodes: Vec<ImpactNode>,
+    /// The printed `[[tested]]` blocks of the reached nodes and the
+    /// sections within them, by node, as `spec verify` judges them now;
+    /// `null` without a `[code]` table, when the rows were not judged or
+    /// the blocks could not be (a note says why), and when the result is
+    /// an error.
+    pub tested: Option<Vec<VerifyTested>>,
     /// The printed code bindings of any relation but `verifies`, in
     /// verify's row order; `null` without a `[code]` table or when the
     /// code layer could not be read (a note says why).
@@ -1302,6 +1320,7 @@ pub(crate) struct ImpactTask {
 #[derive(JsonSchema)]
 pub(crate) struct ImpactTruncated {
     pub nodes: usize,
+    pub tested: Option<usize>,
     pub symbols: Option<usize>,
     pub tests: Option<usize>,
     pub tasks: usize,

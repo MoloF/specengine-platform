@@ -483,9 +483,10 @@ describe("the Package tab and the version guard (AC-10)", () => {
     showTab(/^Package/);
     const text = document.querySelector(".task-json")?.textContent ?? "";
     expect(JSON.parse(text)).toStrictEqual(pkg);
-    expect(Object.keys(JSON.parse(text) as object)).toHaveLength(26);
+    expect(Object.keys(JSON.parse(text) as object)).toHaveLength(27);
     expect(text).toContain('"goal": null');
     expect(text).toContain('"bindings": []');
+    expect(text).toContain('"tested": null');
     expect(text).toContain('"roadmap": null');
     fireEvent.click(screen.getByRole("button", { name: "Copy package of T-0050 as JSON" }));
     await waitFor(() => {

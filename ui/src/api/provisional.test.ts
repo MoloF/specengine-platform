@@ -48,6 +48,8 @@ import type {
   TaskRoadmap,
   TaskRun,
   TaskTarget,
+  TestedRow,
+  TestedState,
   TreeNode,
   TreeView,
   WorkingAnswer,
@@ -225,8 +227,9 @@ const KEYS = {
     links: true,
     bindings: true,
   } satisfies Record<keyof ShownNode, true>,
-  // docs/canon/code-reads.md "spec show --bindings": a node's `bindings` {rows, omitted}.
-  ShownBindings: { rows: true, omitted: true } satisfies Record<keyof ShownBindings, true>,
+  // docs/canon/code-reads.md "spec show --bindings": a node's `bindings` {rows, omitted}, then
+  // docs/canon/spec-lock-tested.md "Reads": `tested` after `omitted`.
+  ShownBindings: { rows: true, omitted: true, tested: true } satisfies Record<keyof ShownBindings, true>,
 };
 
 /**
@@ -311,7 +314,7 @@ const CITED: Record<keyof typeof KEYS, string> = {
   // docs/canon/code-reads.md "spec show --bindings": `bindings` after `links`.
   ShownNode:
     "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links, bindings",
-  ShownBindings: "rows, omitted",
+  ShownBindings: "rows, omitted, tested",
 };
 
 /** An interface's keys in the order `provisional.ts` declares them (its own lines, two-space indented). */
@@ -383,6 +386,7 @@ const TASK_KEYS = {
     open_proposals: true,
     owner_notes: true,
     bindings: true,
+    tested: true,
     spec_snapshot: true,
     snapshot_diff: true,
     claim: true,
@@ -431,7 +435,7 @@ const TASK_CITED: Record<keyof typeof TASK_KEYS, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -473,12 +477,12 @@ describe("the task types (AC-02 of ui-tasks, AC-13 of ui-live-tasks)", () => {
     expect(Object.keys(TASK_KEYS[name]).join(", ")).toBe(TASK_CITED[name]);
   });
 
-  it("count 26 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document, 7 roadmap keys", () => {
+  it("count 27 package keys, 6 list keys, 7 run keys, 2 note keys, 2 keys of the exit-1 document, 7 roadmap keys", () => {
     expect(
       [TASK_KEYS.TaskPackage, TASK_KEYS.TaskListEntry, TASK_KEYS.TaskRun, TASK_KEYS.OwnerNote, TASK_KEYS.TaskNotFound, TASK_KEYS.TaskRoadmap].map(
         (keys) => Object.keys(keys).length,
       ),
-    ).toEqual([26, 6, 7, 2, 2, 7]);
+    ).toEqual([27, 6, 7, 2, 2, 7]);
   });
 
   it.each(Object.keys(TASK_KEYS))("%s cites the canon's heading", (type) => {
@@ -715,7 +719,7 @@ describe("the revision types (UI-4 of rev-discipline)", () => {
  * UI-1 of docs/features/bundle-bindings.md: the row of
  * `docs/canon/code-reads.md` "The binding row" (14 keys, verify's order), its anchor and place; a
  * bundle row is it plus `tokens_est` (15 keys) in layers 5 and 9; a shown node's `bindings`
- * {rows, omitted} after `links`; the package's `bindings` a list of rows.
+ * {rows, omitted, tested} after `links` (`tested` since tested-reads); the package's `bindings` a list of rows.
  */
 const ROW_KEYS = {
   BindingRow: {
@@ -803,10 +807,10 @@ describe("the binding row types (UI-1 of bundle-bindings)", () => {
     ]);
   });
 
-  it("gives a shown node its bindings after links, null or {rows, omitted}; the package its rows, never unknown", () => {
+  it("gives a shown node its bindings after links, null or {rows, omitted, tested}; the package its rows, never unknown", () => {
     expect(source).toMatch(/^ {2}links: ShownLinks \| null;\n(?: {2}\/\*\*[\s\S]*?\*\/\n)? {2}bindings: ShownBindings \| null;\n\}$/m);
     const none: Pick<ShownNode, "bindings"> = { bindings: null };
-    const some: Pick<ShownNode, "bindings"> = { bindings: { rows: [], omitted: 3 } };
+    const some: Pick<ShownNode, "bindings"> = { bindings: { rows: [], omitted: 3, tested: null } };
     expect([none.bindings, some.bindings?.omitted]).toEqual([null, 3]);
     expect(source).toMatch(/^ {2}bindings: BindingRow\[\];$/m);
     expect(source).not.toMatch(/^ {2}bindings: unknown\[\];$/m);
@@ -847,5 +851,84 @@ describe("the binding row types (UI-1 of bundle-bindings)", () => {
       detail: "any detail",
     };
     expect(Object.values(row)).toHaveLength(6);
+  });
+});
+
+/**
+ * UI of docs/features/tested-reads.md (types only, no display: Q-J): plain verify's entry, as
+ * `docs/canon/spec-lock-tested.md` "Reads" puts it in the reads, 7 keys in verify's order; its four
+ * states; a shown node's `bindings.tested` after `omitted`; the package's `tested` after `bindings`;
+ * each null when not judged, [] with no block.
+ */
+const TESTED_KEYS = {
+  TestedRow: {
+    node: true,
+    state: true,
+    category: true,
+    rev: true,
+    node_rev: true,
+    commit: true,
+    verified_at: true,
+  } satisfies Record<keyof TestedRow, true>,
+};
+
+/** The key list as the canon writes the entry, copied verbatim. */
+const TESTED_CITED: Record<keyof typeof TESTED_KEYS, string> = {
+  TestedRow: "node, state, category, rev, node_rev, commit, verified_at",
+};
+
+const TESTED_READS = '`docs/canon/spec-lock-tested.md` "Reads"';
+
+describe("the tested types (UI of tested-reads)", () => {
+  it.each(Object.keys(TESTED_KEYS) as (keyof typeof TESTED_KEYS)[])("%s has exactly the canon's 7 keys, declared in its order", (name) => {
+    expect(Object.keys(TESTED_KEYS[name]).join(", ")).toBe(TESTED_CITED[name]);
+    expect(declaredKeys(name).join(", ")).toBe(TESTED_CITED[name]);
+    expect(Object.keys(TESTED_KEYS[name])).toHaveLength(7);
+  });
+
+  it.each(["TestedState", "TestedRow", "ShownBindings"])("%s cites the canon's Reads", (type) => {
+    expect(commentOf(type)).toContain(TESTED_READS);
+  });
+
+  it("cites the canon's Reads right above the package's tested", () => {
+    const at = source.indexOf("\n  tested: TestedRow[] | null;\n", source.indexOf("export interface TaskPackage {"));
+    expect(at).toBeGreaterThan(source.indexOf("export interface TaskPackage {"));
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain(TESTED_READS);
+  });
+
+  it("lists 8b-1's four states in its mirror's order and still takes any other word", () => {
+    const declared = /export type TestedState =([^;]+);/.exec(source)?.[1] ?? "";
+    expect(Array.from(declared.matchAll(/"(\w+)"/g), (match) => match[1])).toEqual(["verified", "stale", "unverifiable", "node_gone"]);
+    expect(declared.trim().endsWith("| Unlisted")).toBe(true);
+    const other: TestedState = "pending";
+    const state: TestedRow["state"] = other;
+    expect(state).toBe("pending");
+  });
+
+  it("gives a shown node's bindings tested after omitted, the package tested after bindings: null not judged, [] none", () => {
+    expect(declaredKeys("ShownBindings")).toEqual(["rows", "omitted", "tested"]);
+    const pkg = declaredKeys("TaskPackage");
+    expect(pkg.slice(pkg.indexOf("bindings"), pkg.indexOf("bindings") + 3)).toEqual(["bindings", "tested", "spec_snapshot"]);
+    expect(source.match(/^ {2}tested: TestedRow\[\] \| null;$/gm)).toHaveLength(2);
+    const entry: TestedRow = {
+      node: "R-12",
+      state: "stale",
+      category: "code_changed",
+      rev: 3,
+      node_rev: 3,
+      commit: "a0cea48".padEnd(40, "0"),
+      verified_at: "2026-10-21",
+    };
+    const shown: ShownBindings = { rows: [], omitted: 0, tested: [entry] };
+    const unjudged: Pick<TaskPackage, "tested"> = { tested: null };
+    const none: Pick<TaskPackage, "tested"> = { tested: [] };
+    expect([shown.tested?.map((row) => row.state), unjudged.tested, none.tested]).toEqual([["stale"], null, []]);
+  });
+
+  it("keeps the node's revision now nullable and the category a plain word, null but for stale and unverifiable", () => {
+    const gone: TestedRow = { node: "R-9", state: "node_gone", category: null, rev: 2, node_rev: null, commit: "c".repeat(40), verified_at: "2026-10-21" };
+    const unverifiable: Pick<TestedRow, "state" | "category"> = { state: "unverifiable", category: "spec_ahead" };
+    expect([gone.node_rev, gone.category, unverifiable.category]).toEqual([null, null, "spec_ahead"]);
+    expect(source).toMatch(/^ {2}category: string \| null;\n {2}rev: number;\n {2}node_rev: number \| null;\n {2}commit: string;\n {2}verified_at: string;\n\}$/m);
   });
 });

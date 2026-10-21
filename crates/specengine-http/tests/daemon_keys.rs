@@ -127,6 +127,17 @@
 //! the rows of a package's `bindings` on `code-health` (T-0001 on
 //! `GOAL-01`, made by [`health_code_repo`]); `TaskPackage` stays at 26
 //! keys. M: a row key dropped from the fixture.
+//!
+//! TE-5 of docs/features/tested-reads.md (8b-2), its Rust half ("Daemon
+//! and UI"): `TaskPackage` holds `tested` after `bindings` (27 keys, the
+//! 17th); one set more, 68 in all, last: `TestedRow` (`node, state,
+//! category, rev, node_rev, commit, verified_at`), from the package of
+//! code-health's T-0001, its repository holding code-a's golden lock plus
+//! a made-up `[[tested]]` block on `GOAL-01` ([`health_code_repo`]). M: an
+//! entry key dropped from the fixture.
+//! TE-1's daemon half: `tested_reads_daemon_equals_the_cli` (the kiln
+//! with its golden format-3 lock: `nodes/{*ref}?with=bindings`, `bundle`,
+//! `tasks/T-0001` are the CLI's documents byte for byte).
 
 mod common;
 mod task_state;
@@ -640,6 +651,11 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         !binding_rows.is_empty(),
         "BindingRow: code-health's package lists rows: {code_package:?}"
     );
+    let tested_rows = items(&code_package, "tested");
+    assert!(
+        !tested_rows.is_empty(),
+        "TestedRow: code-health's package lists GOAL-01's block: {code_package:?}"
+    );
     for (name, found) in [
         ("AssumedProposal", &assumed_proposals),
         ("AssumedNode", &assumed_nodes),
@@ -973,6 +989,7 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "BindingRow",
             one_key_set("BindingRow", &binding_rows, keys_of),
         ),
+        ("TestedRow", one_key_set("TestedRow", &tested_rows, keys_of)),
     ]
 }
 
@@ -1119,6 +1136,27 @@ fn health_code_repo(scratch: &Scratch, home: &std::path::Path) -> std::path::Pat
         ],
     );
     made.code(0);
+    // tested-reads (TE-5): code-a's golden lock, format 3 with a made-up
+    // block on GOAL-01 (a node of T-0001's set), committed.
+    let golden = fs::read_to_string(repository_root().join("fixtures/spec-lock/code-a.lock"))
+        .expect("code-a's golden lock");
+    assert_eq!(
+        golden.matches("\nformat = 2\n").count(),
+        1,
+        "a format-2 golden"
+    );
+    let head = git.run(&root, &["rev-parse", "HEAD"]).trim().to_owned();
+    let made_up = format!("b3:{}", "7".repeat(64));
+    fs::write(
+        root.join("spec.lock"),
+        format!(
+            "{}\n[[tested]]\nnode = \"GOAL-01\"\nrev = 1\nspec_hash = \"{made_up}\"\nbound_hash = \"{made_up}\"\ntests = [\n  {{ file = \"tests/made_up.rs\", symbol = \"made_up::a_test\" }},\n]\ncommit = \"{head}\"\nverified_at = \"2026-10-16\"\n",
+            golden.replacen("\nformat = 2\n", "\nformat = 3\n", 1)
+        ),
+    )
+    .expect("the lock");
+    git.run(&root, &["add", "-A"]);
+    git.run(&root, &["commit", "-q", "-m", "the lock and its evidence"]);
     root
 }
 
@@ -1270,9 +1308,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        67,
+        68,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
-         health-code: 56; roadmap-screen: 66; bundle-bindings: 67)"
+         health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1315,7 +1353,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ("TaskList", 2),
             ("TaskListEntry", 6),
             ("TaskNotFound", 2),
-            ("TaskPackage", 26),
+            ("TaskPackage", 27),
             ("TaskTarget", 4),
             ("TaskCriterion", 2),
             ("TaskAssumption", 2),
@@ -1332,8 +1370,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         ]
     );
     assert_eq!(sets[18].1[..2], ["schema_version", "id"]);
-    assert_eq!(sets[18].1[20..22], ["bundle", "roadmap"]);
-    assert_eq!(sets[18].1[25], "notes");
+    // docs/features/tested-reads.md "Daemon and UI": `tested` the 17th,
+    // after `bindings`.
+    assert_eq!(sets[18].1[15..17], ["bindings", "tested"]);
+    assert_eq!(sets[18].1[21..23], ["bundle", "roadmap"]);
+    assert_eq!(sets[18].1[26], "notes");
     assert_eq!(
         sets[29].1,
         [
@@ -1572,6 +1613,21 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "anchor",
         ]
     );
+    // tested-reads' one, last (TE-5): 8b-1's entry, its seven keys in
+    // order.
+    assert_eq!(sets[67].0, "TestedRow");
+    assert_eq!(
+        sets[67].1,
+        [
+            "node",
+            "state",
+            "category",
+            "rev",
+            "node_rev",
+            "commit",
+            "verified_at",
+        ]
+    );
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1592,13 +1648,14 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 67 sets (41 until
+/// unchanged, no new key): the fixture holds 68 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
 /// docs/features/health-code.md its ten, AC-9,
 /// docs/features/roadmap-screen.md its ten, TE-1, and
-/// docs/features/bundle-bindings.md its `BindingRow`, RD-8); a decision
+/// docs/features/bundle-bindings.md its `BindingRow`, RD-8, and
+/// docs/features/tested-reads.md its `TestedRow`, TE-5); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -1612,11 +1669,11 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        67,
-        "67 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        68,
+        "68 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
-         health-code's ten (AC-9), roadmap-screen's ten (TE-1) and \
-         bundle-bindings' `BindingRow` (RD-8)"
+         health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
+         bundle-bindings' `BindingRow` (RD-8) and tested-reads' `TestedRow` (TE-5)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1730,14 +1787,15 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 67 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 68 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
 /// docs/features/health-code.md its ten, AC-9,
 /// docs/features/roadmap-screen.md its ten, TE-1, the key sets of
 /// docs/canon/spec-roadmap-screen.md "Rules", and
-/// docs/features/bundle-bindings.md its `BindingRow`, RD-8); the amendment of
+/// docs/features/bundle-bindings.md its `BindingRow`, RD-8, and
+/// docs/features/tested-reads.md its `TestedRow`, TE-5); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -1754,11 +1812,11 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        67,
-        "67 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        68,
+        "68 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
-         health-code's ten (AC-9), roadmap-screen's ten (TE-1) and \
-         bundle-bindings' `BindingRow` (RD-8)"
+         health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
+         bundle-bindings' `BindingRow` (RD-8) and tested-reads' `TestedRow` (TE-5)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1882,5 +1940,86 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
         raw_items(&round, "items").is_empty(),
         "never on the sheet: {round}"
     );
+    drop(server);
+}
+
+/// docs/features/tested-reads.md TE-1, the daemon's half: over the kiln
+/// (`fixtures/verify-tests`) with its golden format-3 lock committed
+/// (four blocks, each `verified`) and a task on KILN-RAMP, served as
+/// `kiln-works`: `GET nodes/{*ref}?with=bindings` (the document KILN-FIRING,
+/// the criterion `glaze-check/GLZ-01`), `GET bundle?node_ids=KILN-HOLD&budget=10000`
+/// and `GET tasks/T-0001` answer the CLI's `--json` documents byte for
+/// byte, each holding its entries (`verified`). M: the daemon's own view of
+/// the evidence.
+#[test]
+fn tested_reads_daemon_equals_the_cli() {
+    let scratch = Scratch::new("daemon-tested-reads");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let root = scratch.copy("verify-tests", "kiln");
+    let _ = fs::remove_file(root.join("expected.json"));
+    fs::copy(
+        repository_root().join("fixtures/spec-lock/verify-tests.tested.lock"),
+        root.join("spec.lock"),
+    )
+    .expect("the golden lock");
+    let git = scratch.git();
+    git.run(
+        &root,
+        &["init", "-q", "--template=", "--initial-branch=main"],
+    );
+    git.quiet(&root);
+    git.run(&root, &["add", "-A"]);
+    git.run(&root, &["commit", "-q", "-m", "the kiln and its evidence"]);
+    let made = spec(
+        &home,
+        &root,
+        &[
+            "--root",
+            root.to_str().expect("UTF-8 root"),
+            "task",
+            "new",
+            "--nodes",
+            "KILN-RAMP",
+            "--title",
+            "Fire the glaze",
+            "--goal",
+            "A glaze that survives the hold.",
+        ],
+    );
+    made.code(0);
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let base = "/api/projects/kiln-works";
+    let pairs: [(String, Vec<&str>); 4] = [
+        (
+            format!("{base}/nodes/KILN-FIRING?with=bindings"),
+            vec!["show", "KILN-FIRING", "--bindings"],
+        ),
+        (
+            format!(
+                "{base}/nodes/{}?with=bindings",
+                common::encode_component("glaze-check/GLZ-01")
+            ),
+            vec!["show", "glaze-check/GLZ-01", "--bindings"],
+        ),
+        (
+            format!("{base}/bundle?node_ids=KILN-HOLD&budget=10000"),
+            vec!["bundle", "KILN-HOLD", "--budget", "10000"],
+        ),
+        (
+            format!("{base}/tasks/T-0001"),
+            vec!["task", "show", "T-0001"],
+        ),
+    ];
+    for (path, args) in &pairs {
+        let run = spec_json(&home, &cwd, &root, args);
+        assert_eq!(run.code, 0, "{args:?}\n{}", run.show());
+        let reply = server.get(path).status(200).text().to_owned();
+        assert_eq!(reply, run.document(), "{path}: the CLI's document");
+        assert!(
+            reply.contains("\"state\":\"verified\"") || reply.contains("tested | verified | "),
+            "{path}: the evidence shows: {reply}"
+        );
+    }
     drop(server);
 }

@@ -37,6 +37,10 @@
 //! crate with RON data), `spec-a`, `spec-b`, `spec-c`; edits are written
 //! into scratch copies. Each repository has its own `HOME`. Non-Latin
 //! characters in Rust sources are Unicode escapes (ADR-0024).
+//!
+//! docs/features/tested-reads.md (8b-2) RD-6 `bundle_minimum_ignores_tested`
+//! over the evidence kiln (`tested_kiln::evidence_kiln`) and its
+//! evidence-free twin: the `tested | ` lines live in the body only.
 
 #![cfg(unix)]
 
@@ -45,7 +49,10 @@ mod bindings_common;
 mod code_index_common;
 mod common;
 mod lock_common;
+mod tested_common;
+mod tested_kiln;
 mod verify_common;
+mod verify_tests_common;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::ffi::OsString;
@@ -2277,4 +2284,195 @@ fn rows_past_the_ceiling_are_left_out_whole() {
         Some(lines),
         "the not-included lines"
     );
+}
+
+// ------------------------------------------------- docs/features/tested-reads.md
+
+/// A bundle's JSON without the keys a body line moves (`body`, `tokens`,
+/// `chars`, `bytes`, `bundle_hash`).
+fn without_body_keys(document: &Value) -> Value {
+    let mut copy = document.clone();
+    for key in ["body", "tokens", "chars", "bytes", "bundle_hash"] {
+        copy.as_object_mut().expect("an object").remove(key);
+    }
+    copy
+}
+
+/// The header line each `tested | ` line of `body` sits under (the last
+/// line before it that is not a tested line).
+fn tested_headers(body: &str) -> Vec<(String, String)> {
+    let lines: Vec<&str> = body.lines().collect();
+    let mut out = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        if line.starts_with("tested | ") {
+            let header = lines[..at]
+                .iter()
+                .rev()
+                .find(|above| !above.starts_with("tested | "))
+                .expect("a line above");
+            out.push(((*header).to_owned(), (*line).to_owned()));
+        }
+    }
+    out
+}
+
+/// docs/features/tested-reads.md RD-6 **M6** (a `tested` line in the
+/// header form): over the evidence kiln and its evidence-free twin, in
+/// states whose lines differ in length (`verified`, `stale spec_changed`,
+/// `unverifiable spec_ahead`), for KILN-HOLD (GLZ-01 its criterion), the
+/// document KILN-FIRING and CONE-01 with KILN-RAMP: the minimum is the
+/// twin's, at it the body is the twin's byte for byte (the frame carries no
+/// line) and one token less exits 2 for both; with room, each line sits
+/// right under a target's (text or outline) or a placed criterion's
+/// header, before its text, and names that node or one within it, one
+/// line per placed node holding a block; with room for everything the
+/// JSON's keys and every item value are the twin's (only `body`, `tokens`,
+/// `chars`, `bytes`, `bundle_hash` move), and `bundle_hash` moves with the
+/// state where the body differs only by the lines.
+#[test]
+fn bundle_minimum_ignores_tested() {
+    let with = tested_kiln::evidence_kiln("bb-tested-with");
+    let without = tested_kiln::evidence_kiln("bb-tested-without");
+    tested_kiln::without_evidence(&without);
+    let (with_vars, without_vars) = (vars_of(&with.repo), vars_of(&without.repo));
+    let groups: [&[&str]; 3] = [&["KILN-HOLD"], &["KILN-FIRING"], &["CONE-01", "KILN-RAMP"]];
+    let mut outlined = false;
+    for state in [
+        tested_kiln::EvidenceState::Verified,
+        tested_kiln::EvidenceState::SpecChanged,
+        tested_kiln::EvidenceState::Unverifiable,
+    ] {
+        state.write(&with);
+        state.write(&without);
+        for refs in groups {
+            let context = format!("{state:?} {refs:?}");
+            let low = minimum_in(with.root(), refs, &with_vars);
+            assert_eq!(
+                low,
+                minimum_in(without.root(), refs, &without_vars),
+                "{context}: the minimum is the twin's"
+            );
+            let at_low = bundle_in(with.root(), refs, &low.to_string(), &with_vars);
+            at_low.answered();
+            let twin = bundle_in(without.root(), refs, &low.to_string(), &without_vars);
+            assert_eq!(
+                at_low.bytes(),
+                twin.bytes(),
+                "{context}: at the minimum, the twin's bytes\n{}",
+                at_low.show()
+            );
+            assert!(
+                !at_low.text.stdout.contains("tested | "),
+                "{context}: the frame carries no line"
+            );
+            let below = (low - 1).to_string();
+            for (root, vars) in [(with.root(), &with_vars), (without.root(), &without_vars)] {
+                let mut args = vec!["bundle"];
+                args.extend_from_slice(refs);
+                args.extend_from_slice(&["--budget", &below]);
+                let run = run_with(root, &args, vars);
+                assert_eq!(run.code, 2, "{context}: below the minimum\n{}", run.show());
+            }
+
+            // Every budget from the minimum up to the whole: the lines sit
+            // under placed text or outline targets and placed criteria.
+            let mut budgets: Vec<u32> = (0..12).map(|step| low + step * 40).collect();
+            budgets.push(10_000);
+            for budget in budgets {
+                let read = bundle_in(with.root(), refs, &budget.to_string(), &with_vars);
+                read.answered();
+                let document = read.json();
+                if budget == 10_000 {
+                    // With room for every item: a line moves no item.
+                    let twin = bundle_in(without.root(), refs, "10000", &without_vars);
+                    assert_eq!(
+                        without_body_keys(&document),
+                        without_body_keys(&twin.json()),
+                        "{context}: keys and item values are the twin's"
+                    );
+                }
+                assert!(
+                    !read.json_run.stdout.contains("\"tested\":"),
+                    "{context}: no JSON key"
+                );
+                let mut headed: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+                for target in read.layer("targets") {
+                    let form = text(&target["form"]).to_owned();
+                    if form == "outline" {
+                        outlined = true;
+                    }
+                    if form == "header" {
+                        continue;
+                    }
+                    let name = text(&target["name"]).to_owned();
+                    let set: BTreeSet<String> =
+                        holder_set(with.root(), &[name.as_str()], &with_vars)
+                            .into_iter()
+                            .collect();
+                    headed.insert(name, set);
+                }
+                for criterion in read.layer("criteria") {
+                    let name = text(&criterion["name"]).to_owned();
+                    headed.insert(
+                        name.clone(),
+                        BTreeSet::from([reference_of(
+                            with.root(),
+                            text(&criterion["path"]),
+                            &name,
+                        )]),
+                    );
+                }
+                for (header, line) in tested_headers(&read.body()) {
+                    let node = line.rsplit(" | ").next().expect("a node").to_owned();
+                    let owner = headed
+                        .iter()
+                        .find(|(name, _)| header.starts_with(&format!("{name} | ")))
+                        .unwrap_or_else(|| {
+                            panic!(
+                                "{context} at {budget}: {line:?} under {header:?}, not a placed text, outline or criterion header\n{}",
+                                read.show()
+                            )
+                        });
+                    assert!(
+                        owner.1.contains(&node),
+                        "{context} at {budget}: {line:?} under {}'s header names a node of it",
+                        owner.0
+                    );
+                }
+                let lines = tested_common::read_tested_lines(&read.body());
+                let nodes: BTreeSet<String> = lines
+                    .iter()
+                    .map(|line| line.rsplit(" | ").next().expect("a node").to_owned())
+                    .collect();
+                let want: BTreeSet<String> = headed
+                    .values()
+                    .flatten()
+                    .filter(|node| {
+                        ["CONE-01", "KILN-HOLD", "KILN-RAMP", "glaze-check/GLZ-01"]
+                            .contains(&node.as_str())
+                    })
+                    .cloned()
+                    .collect();
+                assert_eq!(
+                    nodes, want,
+                    "{context} at {budget}: a line per placed node with a block"
+                );
+                assert_eq!(lines.len(), nodes.len(), "{context}: each once");
+            }
+        }
+        state.undo(&with);
+        state.undo(&without);
+    }
+    assert!(outlined, "premise: an outline target met on the way");
+
+    // `bundle_hash` moves with the state where only the lines differ.
+    let hash = |kiln: &verify_tests_common::Kiln, vars: &[(OsString, OsString)]| {
+        bundle_in(kiln.root(), &["KILN-HOLD"], ALL, vars).json()["bundle_hash"].clone()
+    };
+    let calm = (hash(&with, &with_vars), hash(&without, &without_vars));
+    tested_kiln::EvidenceState::CodeChanged.write(&with);
+    tested_kiln::EvidenceState::CodeChanged.write(&without);
+    let moved = (hash(&with, &with_vars), hash(&without, &without_vars));
+    assert_eq!(moved.1, calm.1, "premise: the twin's body does not move");
+    assert_ne!(moved.0, calm.0, "`bundle_hash` moves with the state");
 }

@@ -31,10 +31,11 @@ use crate::common::proposal::{NOW, Pair};
 /// The clock of every task command unless a test names another.
 pub const CLOCK: &str = "2026-10-07T09:00:00Z";
 
-/// The package's 26 keys, in order (docs/canon/task-package.md
+/// The package's 27 keys, in order (docs/canon/task-package.md
 /// "Package"); `roadmap` after `bundle` since
-/// docs/features/roadmap-surfaces.md (Q-D).
-pub const PACKAGE_KEYS: [&str; 26] = [
+/// docs/features/roadmap-surfaces.md (Q-D); `tested` after `bindings`
+/// (the 17th) since docs/features/tested-reads.md "Per read".
+pub const PACKAGE_KEYS: [&str; 27] = [
     "schema_version",
     "id",
     "project",
@@ -51,6 +52,7 @@ pub const PACKAGE_KEYS: [&str; 26] = [
     "open_proposals",
     "owner_notes",
     "bindings",
+    "tested",
     "spec_snapshot",
     "snapshot_diff",
     "claim",

@@ -130,7 +130,9 @@
 //!   `verify-tests`), the `@verifies` tests run by the project's own
 //!   command after the owner's [`Consent`], Unix only; a completed run's
 //!   evidence committed to `spec.lock` under that one consent (task spec
-//!   `tested-evidence`), judged on every plain verify ([`TestedEntry`]);
+//!   `tested-evidence`), judged on every plain verify and shown by the
+//!   reads of a node's code (task spec `tested-reads`;
+//!   [`specengine_model::TestedRow`]);
 //! - [`symbols`], [`unmapped`]: `spec symbols` (task spec `symbol-reads`:
 //!   a QUERY's items in tiers, a node's, a file's or a line's targets,
 //!   each with its markers; a `--node` naming nothing is an outcome with
@@ -402,7 +404,6 @@ pub use task::{
     TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes, task_claim,
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
-pub use tested::TestedEntry;
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{

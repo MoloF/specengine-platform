@@ -77,11 +77,10 @@ use specengine_core::check::{
     CheckInput, Endpoint, Mode, NodeAt, Resolver, SpecGraph, canonical_id,
 };
 use specengine_core::drift::raises;
-use specengine_core::lock::{
-    EntryKey, LOCK_FILE, LockLevel, LockRelation, TestedState, key_problem,
-};
+use specengine_core::lock::{EntryKey, LOCK_FILE, LockLevel, LockRelation, key_problem};
 use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, verify_from_toml};
 use specengine_core::{CodeConfig, ProjectConfig};
+use specengine_model::TestedRow;
 use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
 
 use crate::cap::OUTPUT_CAP_CHARS;
@@ -94,7 +93,7 @@ use crate::node_set::{Named, NodeSet, named_task, task_set};
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text, locate};
 use crate::proposals::{escaped_error, open_context};
 use crate::refs::{Corpus, NodeKey};
-use crate::tested::{TestedEntry, tested_entries, tested_note};
+use crate::tested::{is_verified, tested_entries, tested_line, tested_note};
 use crate::verify_node::verify_node;
 use crate::verify_rows::{
     Anchor, CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, CommitConfig, HeadMode,
@@ -293,7 +292,7 @@ pub struct VerifyOutcome {
     /// `--changed`, `--staged` and with a run cause (nothing hashed), and
     /// when the blocks cannot be judged (a note says why). Never a
     /// finding, a count, a hint, the verdict or the exit.
-    pub tested: Option<Vec<TestedEntry>>,
+    pub tested: Option<Vec<TestedRow>>,
 }
 
 /// A `verifies` row and the nodes it reaches, by canonical ID (task spec
@@ -780,7 +779,7 @@ pub(crate) struct Gathered<'a> {
     /// `delta.symbols`: `--changed`'s alone.
     pub symbols: Option<CodeDelta>,
     /// `tested`: plain's, `--task`'s, `--node`'s; `None` in a base mode.
-    pub tested: Option<Vec<TestedEntry>>,
+    pub tested: Option<Vec<TestedRow>>,
 }
 
 /// The outcome: the mode the verdict uses, shown as such whether rows were
@@ -1609,18 +1608,11 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
     // Each block not `verified` (task spec `tested-evidence`), outside
     // `--node`'s cut.
     for entry in outcome.tested.iter().flatten() {
-        if entry.state == TestedState::Verified {
+        if is_verified(entry) {
             continue;
         }
-        let state = match entry.state.category() {
-            Some(category) => format!("{} {category}", entry.state.as_str()),
-            None => entry.state.as_str().to_owned(),
-        };
-        out.push_str(&format!(
-            "tested | {} | {}\n",
-            one_line(&state),
-            one_line(&entry.node)
-        ));
+        out.push_str(&tested_line(entry));
+        out.push('\n');
     }
     let counts = counts(outcome);
     let mode = outcome
@@ -1777,18 +1769,6 @@ struct OmittedJson {
     rows: usize,
 }
 
-/// One `[[tested]]` block's state in the JSON's `tested`.
-#[derive(Serialize)]
-struct TestedJson<'a> {
-    node: &'a str,
-    state: &'static str,
-    category: Option<&'a str>,
-    rev: u32,
-    node_rev: Option<u32>,
-    commit: &'a str,
-    verified_at: &'a str,
-}
-
 #[derive(Serialize)]
 struct VerifyJson<'a> {
     mode: Option<&'static str>,
@@ -1807,7 +1787,7 @@ struct VerifyJson<'a> {
     delta: VerifyDeltaJson<'a>,
     /// Each block's state by node bytes; `null` under a base or a run
     /// cause (task spec `tested-evidence`).
-    tested: Option<Vec<TestedJson<'a>>>,
+    tested: Option<&'a [TestedRow]>,
     cannot: &'a [String],
     notes: Vec<String>,
     /// `--node`'s rows not printed; `null` without `--node`.
@@ -1918,20 +1898,7 @@ impl Serialize for VerifyOutcome {
                 affected_nodes: affected.into_iter().collect(),
                 tests_reaching,
             },
-            tested: self.tested.as_ref().map(|entries| {
-                entries
-                    .iter()
-                    .map(|entry| TestedJson {
-                        node: &entry.node,
-                        state: entry.state.as_str(),
-                        category: entry.state.category(),
-                        rev: entry.rev,
-                        node_rev: entry.node_rev,
-                        commit: &entry.commit,
-                        verified_at: &entry.verified_at,
-                    })
-                    .collect()
-            }),
+            tested: self.tested.as_deref(),
             cannot: &self.cannot,
             notes: self.notes(),
             omitted,

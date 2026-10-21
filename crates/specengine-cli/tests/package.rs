@@ -20,6 +20,10 @@
 //! `fixtures/code-a` with its golden lock (`verify_common::golden`), the
 //! oracle `spec verify --node` (`bindings_common`).
 //!
+//! docs/features/tested-reads.md (8b-2) RD-7 `package_tested_is_verify_tasks`
+//! over the evidence kiln (`tested_kiln::evidence_kiln`): the package's
+//! `tested`, the 27th key, is `spec verify --task T --json`'s.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -29,7 +33,10 @@ mod code_index_common;
 mod common;
 mod lock_common;
 mod task_common;
+mod tested_common;
+mod tested_kiln;
 mod verify_common;
+mod verify_tests_common;
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -2208,4 +2215,146 @@ fn package_bindings_are_the_targets_affected_nodes_and_sections() {
             "{context}: the package's bundle is `spec bundle`'s, rows and all"
         );
     }
+}
+
+// ------------------------------------------------- docs/features/tested-reads.md
+
+/// `spec verify --task <task> --json`'s `tested` from `kiln`'s root.
+fn verify_task_tested(kiln: &verify_tests_common::Kiln, task: &str) -> Value {
+    let run = bindings_common::run_with(
+        kiln.root(),
+        &["verify", "--task", task, "--json"],
+        &bindings_common::vars_of(&kiln.repo),
+    );
+    common::one_json_document(&run.stdout)
+        .unwrap_or_else(|problem| panic!("verify --task: {problem}\n{}", run.show()))["tested"]
+        .clone()
+}
+
+/// docs/features/tested-reads.md RD-7 **M7** (the `bindings` set used,
+/// criteria refs left out): over the evidence kiln in its mixed state
+/// (committed), a task on KILN-RAMP planned with the criterion
+/// `glaze-check/GLZ-01` and KILN-HOLD affected: planned, approved and
+/// claimed, the package's `tested` is `spec verify --task T --json`'s, the
+/// criterion's block included (never in `bindings`), its 27 keys in order
+/// with `tested` after `bindings`, `schema_version` 1; the brief's
+/// Bindings section is `Bindings: <rows>`, the rows, then each entry's
+/// line two spaces in. A task on CONE-01 whose markers are gone (its block
+/// `stale code_changed`, no row) prints the section with `Bindings: 0` and
+/// the line alone; its evidence-free twin prints no section.
+#[test]
+fn package_tested_is_verify_tasks() {
+    let kiln = tested_kiln::evidence_kiln("pk-tested");
+    let task = kiln.new_task(&["KILN-RAMP"]);
+    kiln.plan_task(&task, &["glaze-check/GLZ-01"], &["KILN-HOLD"]);
+    tested_kiln::EvidenceState::Mixed.write(&kiln);
+    kiln.repo.commit_all("the mixed state");
+    let vars = bindings_common::vars_of(&kiln.repo);
+    for (context, step) in [
+        ("planned", None),
+        (
+            "approved",
+            Some(verify_tests_common::Kiln::approve_task as fn(&verify_tests_common::Kiln, &str)),
+        ),
+        (
+            "claimed",
+            Some(verify_tests_common::Kiln::claim_task as fn(&verify_tests_common::Kiln, &str)),
+        ),
+    ] {
+        if let Some(step) = step {
+            step(&kiln, &task);
+        }
+        let read = bindings_common::task_show_in(kiln.root(), &task, &vars);
+        read.answered();
+        let package = read.json();
+        let want = verify_task_tested(&kiln, &task);
+        assert_eq!(
+            package["tested"],
+            want,
+            "{context}: verify --task's\n{}",
+            read.show()
+        );
+        let entries = bindings_common::list(&want);
+        let nodes: Vec<&str> = entries
+            .iter()
+            .map(|entry| bindings_common::text(&entry["node"]))
+            .collect();
+        assert_eq!(
+            nodes,
+            ["KILN-HOLD", "KILN-RAMP", "glaze-check/GLZ-01"],
+            "{context}: the target, the criterion ref and the affected node"
+        );
+        assert_eq!(
+            entries[2]["state"],
+            json!("unverifiable"),
+            "{context}: the criterion's own block, judged"
+        );
+        let rows = bindings_common::list(&package["bindings"]);
+        assert!(
+            !bindings_common::nodes_of(&rows).contains("glaze-check/GLZ-01"),
+            "{context}: the criterion ref is never in `bindings`"
+        );
+        assert_eq!(
+            task_common::keys(&read.json_run.stdout),
+            PACKAGE_KEYS,
+            "{context}"
+        );
+        assert_eq!(package["schema_version"], json!(1), "{context}");
+        let mut section = bindings_common::brief_bindings(&rows);
+        section.extend(
+            entries
+                .iter()
+                .map(|entry| format!("  {}", tested_common::entry_line(entry))),
+        );
+        assert_eq!(
+            bindings_common::brief_block(&read.text.stdout, "Bindings"),
+            Some(section),
+            "{context}: the brief's Bindings section\n{}",
+            read.show()
+        );
+    }
+
+    // Entries and no row: CONE-01's markers removed.
+    let bare = tested_kiln::evidence_kiln("pk-tested-no-row");
+    let twin = tested_kiln::evidence_kiln("pk-tested-no-row-twin");
+    tested_kiln::without_evidence(&twin);
+    for repo in [&bare, &twin] {
+        repo.repo
+            .replace(verify_tests_common::RAMP, "    // @verifies CONE-01\n", "");
+        repo.repo
+            .replace(verify_tests_common::RAMP, "    // @verifies PYRO-01\n", "");
+        repo.repo.commit_all("CONE-01 unbound");
+    }
+    let task = bare.new_task(&["CONE-01"]);
+    assert_eq!(twin.new_task(&["CONE-01"]), task, "the same task");
+    let read =
+        bindings_common::task_show_in(bare.root(), &task, &bindings_common::vars_of(&bare.repo));
+    read.answered();
+    let package = read.json();
+    assert_eq!(
+        package["bindings"],
+        json!([]),
+        "premise: no row\n{}",
+        read.show()
+    );
+    assert_eq!(package["tested"], verify_task_tested(&bare, &task));
+    assert_eq!(
+        bindings_common::brief_block(&read.text.stdout, "Bindings"),
+        Some(vec![
+            "Bindings: 0".to_owned(),
+            "  tested | stale code_changed | CONE-01".to_owned(),
+        ]),
+        "the section prints with an entry and no row\n{}",
+        read.show()
+    );
+    let read =
+        bindings_common::task_show_in(twin.root(), &task, &bindings_common::vars_of(&twin.repo));
+    read.answered();
+    assert_eq!(read.json()["tested"], json!([]), "the twin: no block");
+    assert_eq!(
+        bindings_common::brief_block(&read.text.stdout, "Bindings"),
+        None,
+        "no row, no entry: no section\n{}",
+        read.show()
+    );
 }

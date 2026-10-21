@@ -3,14 +3,14 @@ class: canon
 tier: 0
 scope: [root]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # SpecEngine
 
 A local specification engine for projects built with AI agents; Rust first, including ECS-style game code. It keeps a business-logic tree and atomic records (requirements, assumptions, questions, decisions, criteria) in git next to the code, binds them to code symbols through markers and AST hashes, surfaces drift, and runs a proposal queue for the owner. Interfaces: CLI, MCP for Claude Code agents, a web UI. The goal: the context cost of a task does not grow with the size of the project.
 
-State: shipped: Phases 0-1 (parser, index, reads, graph, bundle, check, shards, layer A, pilot W), Phase 2 slices 1-7, `daemon-read`, `decision-staging`, `plugin-*`, `round`, `spec-serve`, `kind-*`, `health-left`, Phase 3 `code-refs`, `norm-hash`, `spec-lock`, `spec-verify`, `rev-discipline`, `rev-rule`, `drift-queue`, `drift-follow-up`, `hash-levels`, `hash-levels-ron`, `hash-levels-eval`, `hash-levels-use-lists`, `lock-levels`, `lock-rebase`, `lock-levels-verify`, `anchor-states`, `symbol-discriminator`, `symbol-index`, `symbol-reads`, `code-tools`, `bevy-roles`, `bevy-roles-reads`, `verify-tests`, `verify-task`, `verify-node`, `check-binding`, `show-bindings`, `bundle-bindings`, `impact`, `impact-since`, `tested-evidence`, `health-code`, `health-code-ui`, `health-ui-follow-up`, `citation-sweep`, `constant-census`, `layer-c`, `layer-c-resolve`, Phase 4 `ui-*`, Phase 6 `roadmap-items`, `roadmap-view`, `roadmap-position`, `roadmap-surfaces`, `roadmap-screen`. Plan: `spec roadmap` (items in `docs/roadmap/`, the view `docs/generated/roadmap.md`), `docs/specs/specengine-platform/08-roadmap.md`.
+State: shipped: Phases 0-1 (parser, index, reads, graph, bundle, check, shards, layer A, pilot W), Phase 2 slices 1-7, `daemon-read`, `decision-staging`, `plugin-*`, `round`, `spec-serve`, `kind-*`, `health-left`, Phase 3 `code-refs`, `norm-hash`, `spec-lock`, `spec-verify`, `rev-discipline`, `rev-rule`, `drift-queue`, `drift-follow-up`, `hash-levels`, `hash-levels-ron`, `hash-levels-eval`, `hash-levels-use-lists`, `lock-levels`, `lock-rebase`, `lock-levels-verify`, `anchor-states`, `symbol-discriminator`, `symbol-index`, `symbol-reads`, `code-tools`, `bevy-roles`, `bevy-roles-reads`, `verify-tests`, `verify-task`, `verify-node`, `check-binding`, `show-bindings`, `bundle-bindings`, `impact`, `impact-since`, `tested-evidence`, `tested-reads`, `health-code`, `health-code-ui`, `health-ui-follow-up`, `citation-sweep`, `constant-census`, `layer-c`, `layer-c-resolve`, Phase 4 `ui-*`, Phase 6 `roadmap-items`, `roadmap-view`, `roadmap-position`, `roadmap-surfaces`, `roadmap-screen`. Plan: `spec roadmap` (items in `docs/roadmap/`, the view `docs/generated/roadmap.md`), `docs/specs/specengine-platform/08-roadmap.md`.
 
 ## How to read
 

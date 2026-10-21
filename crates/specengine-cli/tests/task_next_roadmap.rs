@@ -728,8 +728,9 @@ fn package_roadmap_places_the_task() {
                 "{context}: two reads byte-identical"
             );
             assert_eq!(task_common::keys(&text), PACKAGE_KEYS, "{context}");
-            assert_eq!(PACKAGE_KEYS[20], "bundle");
-            assert_eq!(PACKAGE_KEYS[21], "roadmap");
+            // `tested` the 17th since docs/features/tested-reads.md.
+            assert_eq!(PACKAGE_KEYS[21], "bundle");
+            assert_eq!(PACKAGE_KEYS[22], "roadmap");
             let package: Value = serde_json::from_str(&text).unwrap();
             assert_eq!(package["schema_version"], json!(1), "{context}");
             assert_eq!(roadmap_notes(&package), Vec::<String>::new(), "{context}");

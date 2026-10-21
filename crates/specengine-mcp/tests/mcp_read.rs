@@ -97,6 +97,31 @@ impl Project {
         }
     }
 
+    /// A git repository of `fixtures/verify-tests` (the kiln) with the
+    /// golden format-3 lock (`fixtures/spec-lock/verify-tests.tested.lock`:
+    /// four blocks, each `verified` at the fixture's state), committed
+    /// (docs/features/tested-reads.md "Acceptance criteria").
+    fn kiln() -> Self {
+        let scratch = Scratch::new("read-kiln");
+        let home = scratch.home("h");
+        let root = scratch.copy("verify-tests", "copy");
+        let _ = std::fs::remove_file(root.join("expected.json"));
+        std::fs::copy(
+            fixture("spec-lock").join("verify-tests.tested.lock"),
+            root.join("spec.lock"),
+        )
+        .expect("the golden lock");
+        let sandbox = git::Sandbox::new(scratch.path());
+        sandbox.init(&root);
+        sandbox.add_all(&root);
+        sandbox.commit(&root, "the kiln and its evidence");
+        Self {
+            _scratch: scratch,
+            home,
+            root,
+        }
+    }
+
     fn new(fixture: &str) -> Self {
         let scratch = Scratch::new(&format!("read-{fixture}"));
         let home = scratch.home("h");
@@ -860,12 +885,17 @@ fn ac14_every_mostly_null_key_is_non_null_once_with_its_exact_keys() {
         assert_eq!(answer["name"], json!("ASM-01"));
     }
     // docs/features/show-bindings.md RD-7: code-a's golden, `bindings`
-    // `{rows, omitted}`, a row's 14 keys, an `anchor` object's three.
+    // `{rows, omitted, tested}` (docs/features/tested-reads.md
+    // "Per read"), a row's 14 keys, an `anchor` object's three.
     let golden = Project::golden();
     let results = golden.parity(&[bindings("LAW-BOUND", &["bindings"])]);
     for era in &results {
         let shown = &era[0]["structuredContent"]["nodes"][0]["bindings"];
-        assert_eq!(key_set(shown, "bindings"), set_of(&["rows", "omitted"]));
+        assert_eq!(
+            key_set(shown, "bindings"),
+            set_of(&["rows", "omitted", "tested"])
+        );
+        assert_eq!(shown["tested"], json!([]), "the golden holds no block");
         let rows = shown["rows"].as_array().expect("rows");
         assert!(!rows.is_empty(), "LAW-BOUND's rows");
         for row in rows {
@@ -884,9 +914,10 @@ fn ac14_every_mostly_null_key_is_non_null_once_with_its_exact_keys() {
 
 /// docs/features/show-bindings.md "MCP get_node", **Description**: the
 /// spec's line, the twin `spec show REF [--links] [--bindings] [--archive]`,
-/// 1 527 bytes (1 264 before), ASCII, in both eras. M: the line missing or
-/// reworded.
-const BINDINGS_LINE: &str = "with: [\"bindings\"] lists each node's code bindings, its sections' too, each with its sync (the state spec verify --node gives), after its links; without a [code] table they are null, and a code layer that cannot be read gives a note, never an error.\n";
+/// ASCII, in both eras. M: the line missing or reworded.
+/// docs/features/tested-reads.md "MCP": the line names `tested` (1 527 ->
+/// 1 670 bytes).
+const BINDINGS_LINE: &str = "with: [\"bindings\"] lists each node's code bindings, its sections' too, each with its sync (the state spec verify --node gives), after its links, with tested: the owner's test evidence for the node and its sections, as plain spec verify judges it now ([] when none, null when not judged); without a [code] table they are null, and a code layer that cannot be read gives a note, never an error.\n";
 
 #[test]
 fn get_node_description_names_bindings() {
@@ -913,7 +944,7 @@ fn get_node_description_names_bindings() {
             "{era:?}: {description}"
         );
         assert!(description.is_ascii());
-        assert_eq!(description.len(), 1527, "{era:?}: the spec's figure");
+        assert_eq!(description.len(), 1670, "{era:?}: the spec's figure");
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }
@@ -1057,8 +1088,8 @@ fn get_node_with_bindings_equals_show_bindings() {
         );
         assert_eq!(
             era[4]["structuredContent"]["nodes"][0]["bindings"],
-            json!({"rows": [], "omitted": 0}),
-            "no binding: rows []"
+            json!({"rows": [], "omitted": 0, "tested": []}),
+            "no binding: rows [], no block: tested []"
         );
         assert_eq!(
             era[5]["structuredContent"]["nodes"]
@@ -1222,7 +1253,9 @@ fn te8_get_node_norm_hash_parity_and_schema() {
 /// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
 /// `BUNDLE_DESCRIPTION`'s list and its paragraph before the errors'.
 const BUNDLE_LIST: &str = "Markdown body: the targets, their open questions, ancestors, criteria, code bindings (each with its sync: the state spec verify --node gives), decisions, neighbours, terms and the tests bound to them or their criteria, in that order; what did not fit is named by ID (a binding by its symbol, else its file) with its cost.";
-const BUNDLE_CODE_LINE: &str = "Code bindings and tests need a [code] table; a code layer that cannot be read gives a note, never an error.\n";
+/// docs/features/tested-reads.md "MCP": the paragraph names the tested
+/// lines (1 305 -> 1 433 bytes).
+const BUNDLE_CODE_LINE: &str = "Code bindings, tests and the tested lines under a placed target's or criterion's header (the owner's test evidence, as plain spec verify judges it now) need a [code] table; a code layer that cannot be read gives a note, never an error.\n";
 
 /// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
 /// `get_context_bundle`'s description holds the spec's list and its
@@ -1247,7 +1280,7 @@ fn get_context_bundle_description_names_the_code() {
             "{era:?}: the code paragraph before the errors': {description}"
         );
         assert!(description.is_ascii());
-        assert_eq!(description.len(), 1305, "{era:?}: the spec's figure");
+        assert_eq!(description.len(), 1433, "{era:?}: the spec's figure");
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }
@@ -1436,4 +1469,111 @@ fn get_context_bundle_on_spec_c_has_no_code_layer() {
             );
         }
     }
+}
+
+// ------------------------------------------------- docs/features/tested-reads.md
+
+/// The seven keys of a `tested` entry (docs/features/tested-reads.md
+/// "The entry: model `TestedRow`").
+const TESTED_KEYS: [&str; 7] = [
+    "node",
+    "state",
+    "category",
+    "rev",
+    "node_rev",
+    "commit",
+    "verified_at",
+];
+
+/// docs/features/tested-reads.md RD-8 **M8** (a mirror without `tested`)
+/// and TE-1's MCP half: over the kiln with its golden format-3 lock,
+/// `get_node` with `with: ["bindings"]` (the document KILN-FIRING, the
+/// feature document, the criterion `glaze-check/GLZ-01`, the alias
+/// PYRO-01) and `get_context_bundle` (KILN-HOLD, GLZ-01 its criterion)
+/// answer what `spec show --bindings` and `spec bundle` answer through
+/// the library, both eras, each walked against its `outputSchema` (a key
+/// the mirror lacks is refused); each shown node's `tested` holds its own
+/// and its sections' entries (`verified`, the seven keys), the text a `
+/// tested | verified | <node>` line per entry; the bundle's body the
+/// target's line once, its JSON no `tested` key.
+#[test]
+fn get_node_and_bundle_carry_tested() {
+    let project = Project::kiln();
+    let calls = [
+        bindings("KILN-FIRING", &["bindings"]),
+        bindings("docs/features/glaze-check.md", &["links", "bindings"]),
+        bindings("glaze-check/GLZ-01", &["bindings"]),
+        bindings("PYRO-01", &["bindings"]),
+        (
+            "get_context_bundle",
+            json!({"node_ids": ["KILN-HOLD"], "budget": 10000}),
+        ),
+    ];
+    let results = project.parity(&calls);
+    let wanted: [&[&str]; 4] = [
+        &["KILN-HOLD", "KILN-RAMP"],
+        &["glaze-check/GLZ-01"],
+        &["glaze-check/GLZ-01"],
+        &["CONE-01"],
+    ];
+    for era in &results {
+        for (at, nodes) in wanted.iter().enumerate() {
+            let shown = &era[at]["structuredContent"]["nodes"][0]["bindings"];
+            assert_eq!(
+                key_set(shown, "bindings"),
+                set_of(&["rows", "omitted", "tested"])
+            );
+            let tested = shown["tested"].as_array().expect("tested, a list");
+            let names: Vec<&str> = tested
+                .iter()
+                .filter_map(|entry| entry["node"].as_str())
+                .collect();
+            assert_eq!(&names, nodes, "{:?}", calls[at]);
+            for entry in tested {
+                assert_eq!(key_set(entry, "an entry"), set_of(&TESTED_KEYS));
+                assert_eq!(entry["state"], json!("verified"), "{entry}");
+            }
+            let text = content_text(&era[at]);
+            let lines: Vec<String> = text
+                .lines()
+                .filter(|line| line.starts_with("  tested | "))
+                .map(str::to_owned)
+                .collect();
+            let want: Vec<String> = nodes
+                .iter()
+                .map(|node| format!("  tested | verified | {node}"))
+                .collect();
+            assert_eq!(lines, want, "{:?}: the lines\n{}", calls[at], clip(text));
+        }
+        let bundle = &era[4];
+        let body = bundle["structuredContent"]["body"]
+            .as_str()
+            .expect("a body");
+        assert_eq!(
+            body.lines()
+                .filter(|line| *line == "tested | verified | KILN-HOLD")
+                .count(),
+            1,
+            "the bundle's line for its target: {}",
+            clip(body)
+        );
+        assert!(
+            body.lines()
+                .filter(|line| line.starts_with("tested | "))
+                .all(|line| line.starts_with("tested | verified | ")),
+            "every line the evidence's: {}",
+            clip(body)
+        );
+        assert!(
+            !bundle["structuredContent"]
+                .to_string()
+                .contains("\"tested\":"),
+            "no `tested` key in the bundle's document"
+        );
+    }
+    assert_eq!(
+        without_result_type(&results[0]),
+        without_result_type(&results[1]),
+        "both eras give the same results"
+    );
 }

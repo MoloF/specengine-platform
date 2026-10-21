@@ -1,14 +1,14 @@
 ---
 class: canon
 tier: 2
-scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-mcp]
+scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-model, crates/specengine-mcp]
 owner: owner
 reviewed: 2026-10-21
 ---
 
 # `[[tested]]`: test evidence in `spec.lock`
 
-What the owner's passing `spec verify --tests` leaves in `spec.lock` (ADR-0044; the lock's second writer, ADR-0041): a block per node, pinned by its revision, `norm_hash` and a hash of its bound code, judged on each read by one pure function; never stored, never a verdict, exit, status or gate input. No agent writes it (no MCP tool, route, hook, CI step or role; `report_run` changes nothing). Code: core `lock` (`Tested`, `bound_bytes` over `Bound` pairs, `tested_state`, `merge_tested`, `rebase_tested`); CLI `tested.rs`, `lock.rs` (`LockSubject::Tests`, `LockMode::Tests`, `node_bindings`), `verify_tests.rs`; MCP `mirror.rs`. The file, its entries, the reader's texts: `spec-lock.md`.
+What the owner's passing `spec verify --tests` leaves in `spec.lock` (ADR-0044; the lock's second writer, ADR-0041): a block per node, pinned by its revision, `norm_hash` and a hash of its bound code, judged on each read by one pure function; never stored, never a verdict, exit, status or gate input. No agent writes it (no MCP tool, route, hook, CI step or role; `report_run` changes nothing). Code: core `lock` (`Tested`, `bound_bytes` over `Bound` pairs, `tested_state`, `merge_tested`, `rebase_tested`); CLI `tested.rs`, `bindings.rs` (`set_tested`), `lock.rs` (`LockSubject::Tests`, `LockMode::Tests`, `node_bindings`), `verify_tests.rs`; MCP `mirror.rs`. The file, its entries, the reader's texts: `spec-lock.md`.
 
 ## The block
 
@@ -90,9 +90,22 @@ A block is one entry of its node in every count but the rebase's; its row `<chan
 - **Rebase** re-derives a block only under proof, else drops it (`spec-lock-rebase.md`).
 - **Drift** hashes entries alone: no item for stale evidence (ADR-0045).
 
+## Reads
+
+`show --bindings`, the bundle, the package and `impact`, with their MCP and HTTP twins, show these entries as computed state (ADR-0046). **Seam**: in `set_bindings_with(.., tested_also)`'s judged branch (`set_bindings` passes `&[]`), before the session's `finish()`, only when the uncut lock holds a block, `set_tested` calls `tested_entries` (`verify --node`'s call) for the canonical IDs of the read's keys and `tested_also`; each read takes its part of `SetBindings.tested` (`tested_of`). No second judge: a read and plain verify agree key for key.
+
+- **Entry**: model `TestedRow`, plain verify's seven keys; a list by `node` bytes, `null` not judged, `[]` no block; never `node_gone`. **Line** (`tested_line`): `tested | <state>[ <category>] | <node>`, each entry, `verified` too.
+- **show**: each shown node's own set; lines after its closing `  bindings` line, two spaces in, cut with it (`closing_cost`); JSON `bindings` `{rows, omitted, tested}`.
+- **bundle**: layer 9's set; lines under a text or outline target's header (it and the nodes within it) and a placed criterion's, in its fit; never in the header form, so the minimum and exit 2 ignore them. No JSON key; `bundle_hash` moves.
+- **package**: `task_set`, equal to `verify --task T`'s (criteria refs join only with a block); `tested` the 17th of 27 keys, after `bindings`, never capped or cut; the brief's Bindings prints with rows or entries.
+- **impact**: the rows' set; the 9th of 15 keys, after `nodes`; lines after the `node` lines, cut as one list (tail `<e> tested`, `truncated.tested`); `null` at exit 1.
+- **Degrade**: no `--bindings`, no `[code]` or a listed cause: `null`, no line, only the `bindings:` note. Blocks not judgeable: `null`, note `tested: <cause>` in that slot (stderr, `notes`). Degraded, never `verified`; exit, rows, spec part unchanged; plain `show` never reads the lock.
+- **Cost**: no block, nothing more read; else `verify --node`'s (`tested-reads.md` "Cost").
+
 ## Readings
 
 - ADR-0043's "entries that vouched" include a block: the rule `rev-not-raised`, `spec bump`, a review's `lock_entries` and the editorial approve count and refresh it as one entry.
+- ADR-0046's computed state per read includes the evidence: judged as `sync` is, never stored, never a failure; `bundle_hash` moves with it.
 - ADR-0050's "never … into an older format" is about how entries are recorded: a rebase, a failing run or a drop removing the last block writes format 2, byte for byte as before; no downgrade.
 
 ## Known limits
@@ -103,4 +116,7 @@ A block is one entry of its node in every count but the rebase's; its row `<chan
 - A hand-written block reads `verified`; the gate skips `spec.lock` (ADR-0034).
 - A grammar that fails to load fails every judged node's evidence, even a node whose bindings would reuse entries: `tested` `null` and the note.
 - Markers are judged once per holder: a file is parsed once, its markers sorted again for each judged node.
-- The reads (`show --bindings`, bundle, package, `impact`) drop blocks (`cut_lock`) until 8b-2 (`tested-reads.md`).
+- A duplicate ID is judged on its first holder by path; every shown holder lists that entry, as `verify --node`.
+- The package's `tested` is never cut: many blocks can push `get_task` past `PACKAGE_BUDGET` (`mcp-read.md` "Size").
+- A header-only target (the bundle's frame) carries no line.
+- A node `show` cuts before its closing line has `tested` `[]`, marked by its own `truncated` or `omitted`.

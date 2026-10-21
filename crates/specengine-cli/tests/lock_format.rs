@@ -511,16 +511,171 @@ fn verify_answer(repo: &LockRepo, extra: &[&str]) -> String {
     )
 }
 
-/// A binary read's answer: the exit, text and JSON stdout.
+/// A binary read's answer with its evidence set aside
+/// (docs/features/tested-reads.md TE-4): the exit, the text without its
+/// `tested | ` lines (any indent) and with the bundle's hash and token
+/// lines masked, the JSON without its `tested` keys, a body's lines and
+/// its hash and counts masked; before that, its entries are checked
+/// against plain verify's ([`assert_tested_is_verifys`]).
 fn read_answer(repo: &LockRepo, args: &[&str]) -> String {
     let text = repo.spec_piped(&repo.root, args);
     let mut json_args = args.to_vec();
     json_args.push("--json");
     let json = repo.spec_piped(&repo.root, &json_args);
+    let document = json.json();
+    assert_tested_is_verifys(repo, args, &text.stdout, &document);
     format!(
         "exit {}\n{}\nexit {}\n{}",
-        text.code, text.stdout, json.code, json.stdout
+        text.code,
+        without_evidence_text(&text.stdout),
+        json.code,
+        without_evidence_json(document)
     )
+}
+
+/// `text` without its `tested | ` lines, the bundle's `bundle_hash`,
+/// `tokens` and the brief's `Bundle:` lines masked.
+fn without_evidence_text(text: &str) -> String {
+    let mut out = String::new();
+    for line in text.split_inclusive('\n') {
+        if line.trim_start().starts_with("tested | ") {
+            continue;
+        }
+        let masked = ["bundle_hash ", "tokens ", "Bundle: "]
+            .into_iter()
+            .find(|start| line.starts_with(start));
+        match masked {
+            Some(start) => out.push_str(&format!("{start}<masked>\n")),
+            None => out.push_str(line),
+        }
+    }
+    out
+}
+
+/// `value` without any `tested` key, each `body`'s `tested | ` lines
+/// dropped, a bundle's `bundle_hash`, `tokens`, `chars`, `bytes` masked.
+fn without_evidence_json(mut value: serde_json::Value) -> String {
+    fn walk(value: &mut serde_json::Value) {
+        match value {
+            serde_json::Value::Object(object) => {
+                object.remove("tested");
+                if object.contains_key("bundle_hash") {
+                    for key in ["bundle_hash", "tokens", "chars", "bytes"] {
+                        if let Some(slot) = object.get_mut(key) {
+                            *slot = json!("<masked>");
+                        }
+                    }
+                }
+                if let Some(serde_json::Value::String(body)) = object.get_mut("body") {
+                    *body = without_evidence_text(body);
+                }
+                for (_, inner) in object.iter_mut() {
+                    walk(inner);
+                }
+            }
+            serde_json::Value::Array(items) => items.iter_mut().for_each(walk),
+            _ => {}
+        }
+    }
+    walk(&mut value);
+    value.to_string()
+}
+
+/// A node's ID and its sections, as `spec show ID --json` lists them.
+fn node_and_sections(repo: &LockRepo, id: &str) -> Vec<String> {
+    let shown = repo.spec_piped(&repo.root, &["show", id, "--json"]).json();
+    let mut out = Vec::new();
+    for node in shown["nodes"].as_array().into_iter().flatten() {
+        out.extend(node["id"].as_str().map(str::to_owned));
+        out.extend(
+            node["sections"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|section| section.as_str().map(str::to_owned)),
+        );
+    }
+    out
+}
+
+/// docs/features/tested-reads.md TE-4, "assert equal to verify": a read's
+/// entries over `repo` are plain verify's for its set (show: each node and
+/// its sections; the bundle's lines: the targets, the nodes within and the
+/// placed criteria; the package: `verify --task T`'s; impact: the reached
+/// nodes and the nodes within).
+fn assert_tested_is_verifys(
+    repo: &LockRepo,
+    args: &[&str],
+    text: &str,
+    document: &serde_json::Value,
+) {
+    let plain = repo.spec_piped(&repo.root, &["verify", "--json"]).json();
+    let entries: Vec<serde_json::Value> = plain["tested"]
+        .as_array()
+        .cloned()
+        .expect("verify's `tested`");
+    let of = |set: &[String]| -> Vec<serde_json::Value> {
+        entries
+            .iter()
+            .filter(|entry| set.iter().any(|id| entry["node"] == id.as_str()))
+            .cloned()
+            .collect()
+    };
+    match args[0] {
+        "show" => {
+            for node in document["nodes"].as_array().expect("nodes") {
+                let id = node["id"].as_str().expect("an ID");
+                assert_eq!(
+                    node["bindings"]["tested"],
+                    json!(of(&node_and_sections(repo, id))),
+                    "{args:?}: {id}'s entries are verify's"
+                );
+            }
+        }
+        "bundle" => {
+            let mut set: Vec<String> = args[1..]
+                .iter()
+                .filter(|arg| !arg.starts_with("--"))
+                .flat_map(|id| node_and_sections(repo, id))
+                .collect();
+            for criterion in document["layers"]["criteria"]
+                .as_array()
+                .into_iter()
+                .flatten()
+            {
+                set.extend(criterion["name"].as_str().map(str::to_owned));
+            }
+            let mut want: Vec<String> = of(&set).iter().map(tested_common::entry_line).collect();
+            let mut got = tested_common::read_tested_lines(text);
+            want.sort();
+            got.sort();
+            assert_eq!(got, want, "{args:?}: the bundle's lines are verify's");
+        }
+        "task" => {
+            let task = repo
+                .spec_piped(&repo.root, &["verify", "--task", args[2], "--json"])
+                .json();
+            assert_eq!(
+                document["tested"], task["tested"],
+                "{args:?}: verify --task's"
+            );
+        }
+        "impact" => {
+            let set: Vec<String> = document["nodes"]
+                .as_array()
+                .expect("nodes")
+                .iter()
+                .filter_map(|node| node["id"].as_str())
+                .flat_map(|id| node_and_sections(repo, id))
+                .collect();
+            assert_eq!(
+                document["tested"],
+                json!(of(&set)),
+                "{args:?}: the reached nodes' entries are verify's"
+            );
+        }
+        other => panic!("not a read: {other}"),
+    }
 }
 
 /// One reader of RD-2's table: what it needs first, and its answer.
@@ -748,7 +903,9 @@ const READERS: [Reader; 17] = [
 /// rows and lock, the blocks aside); rebase `nothing to change`; `spec
 /// bump`, the rule, the review's count, the editorial approve (its commit
 /// and entries); `spec propose drift`; `show --bindings`, `bundle`, `task
-/// show`, `impact` byte for byte (never cause (6), never `sync -`).
+/// show`, `impact` byte for byte once their evidence is set aside (never
+/// cause (6), never `sync -`), their entries plain verify's
+/// (docs/features/tested-reads.md TE-4: [`read_answer`]).
 #[test]
 fn every_lock_reader_reads_format_3() {
     let mut failures = Vec::new();

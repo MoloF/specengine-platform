@@ -32,6 +32,11 @@
 //!   never an exit. `--symbol` and `--since` take the code as their
 //!   input: no `[code]`, a bad one or an incomplete walk is exit 2, and
 //!   for `--since` no git, a git failure or a blob missing too.
+//! - **Tested** (task spec `tested-reads`): from the same read, the
+//!   `[[tested]]` blocks of every reached node and the sections within
+//!   each, by node bytes, as `spec verify` judges them; `null` without
+//!   `[code]`, when the rows were not judged or the blocks could not be
+//!   (a note says why), and at exit 1. Never an exit.
 //! - **Tasks**: this repository's open tasks whose targets and affected
 //!   nodes (each resolved now, with the sections it contains) meet a
 //!   reached node or a section within one, by number, each with the
@@ -42,6 +47,7 @@
 //! [since <7 hex>: <f> files, <c> changed, <a> added, <r> removed]
 //! impact: nodes <n>, symbols <s or ->, tests <t or ->, tasks <k>[; code files <f> (.rs <r>, .ron <o>), skipped <s>][; left out: <g> generated, <a> archived]
 //! node <distance> <name> | <kind or -> | <title or -> | <path>:<line>[ | archived]
+//! tested | <state>[ <category>] | <node>
 //! symbol <row>
 //! [  sig <signature>]
 //! test <row>
@@ -53,7 +59,7 @@
 //! ```
 //!
 //! The cut: the seed header and the summary always print; then nodes,
-//! symbol rows, test rows (each with its lines), tasks, the seed matches
+//! tested blocks, symbol rows, test rows (each with its lines), tasks, the seed matches
 //! and the delta's items, each whole, while the text stays within
 //! [`crate::OUTPUT_CAP_CHARS`] (the first item whole whatever its size);
 //! the first item that does not fit and every later one are not shown.
@@ -66,7 +72,7 @@ use specengine_code::query_name;
 use specengine_core::CodeConfig;
 use specengine_core::check::{CheckInput, NodeAt, SpecGraph};
 use specengine_core::lock::LockRelation;
-use specengine_model::{BindingRow, TaskStatus};
+use specengine_model::{BindingRow, TaskStatus, TestedRow};
 use specengine_store::{
     CodeSnapshot, GitEnv, SnapshotSymbols, SqliteIndex, StoredSymbol, VerifyGit,
 };
@@ -86,6 +92,7 @@ use crate::roadmap::{GitPlace, open_tasks, others_note};
 use crate::search::notes;
 use crate::show::{Target, classify};
 use crate::symbols::maps;
+use crate::tested::tested_line;
 use crate::unmapped::{Seeds, reached};
 use crate::verify_rows::read_code;
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line, store_error};
@@ -138,6 +145,11 @@ pub struct ImpactOutcome {
     pub left_out: LeftOut,
     /// By (distance, path, position): distance 0 the seeds.
     pub nodes: Vec<GraphNode>,
+    /// The `[[tested]]` blocks of the reached nodes and the sections
+    /// within them, by node bytes, as `spec verify` judges them (task spec
+    /// `tested-reads`); `None` without `[code]`, when the rows were not
+    /// judged or the blocks could not be (a note says why), and at exit 1.
+    pub tested: Option<Vec<TestedRow>>,
     /// The rows of any relation but `verifies`, in verify's row order;
     /// `None` without `[code]` or when no row could be read.
     pub symbols: Option<Vec<ImpactRow>>,
@@ -192,6 +204,7 @@ pub struct ImpactTask {
 struct Shown {
     seeds: usize,
     nodes: usize,
+    tested: usize,
     symbols: usize,
     tests: usize,
     tasks: usize,
@@ -214,6 +227,7 @@ impl ImpactOutcome {
             seeds: request.symbol.as_ref().map(|_| Vec::new()),
             left_out: LeftOut::default(),
             nodes: Vec::new(),
+            tested: None,
             symbols: None,
             tests: None,
             tasks: Vec::new(),
@@ -235,6 +249,7 @@ impl ImpactOutcome {
         let shown = self.shown;
         shown.seeds < self.seeds.as_ref().map_or(0, Vec::len)
             || shown.nodes < self.nodes.len()
+            || shown.tested < self.tested.as_ref().map_or(0, Vec::len)
             || shown.symbols < self.symbols.as_ref().map_or(0, Vec::len)
             || shown.tests < self.tests.as_ref().map_or(0, Vec::len)
             || shown.tasks < self.tasks.len()
@@ -746,6 +761,10 @@ fn radius(
     }
     let rows = set_bindings(project, read.text, read.git, index, read.input, &keys);
     messages.extend(rows.note.map(Message::Note));
+    // `tested`: every block of the rows' set.
+    outcome.tested = rows
+        .tested
+        .map(|tested| tested.into_iter().map(|entry| entry.row).collect());
     // `--symbol`'s lookup walk counts when the judge's read none.
     if rows.code.is_some() {
         outcome.code = rows.code;
@@ -909,11 +928,17 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
             .map(|row| cost(&row_text(word, row)))
             .collect()
     };
-    let lists: [Vec<usize>; 6] = [
+    let lists: [Vec<usize>; 7] = [
         outcome
             .nodes
             .iter()
             .map(|node| node_text(node).chars().count() + 1)
+            .collect(),
+        outcome
+            .tested
+            .iter()
+            .flatten()
+            .map(|row| tested_line(row).chars().count() + 1)
             .collect(),
         rows(&outcome.symbols, "symbol"),
         rows(&outcome.tests, "test"),
@@ -937,7 +962,7 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
     ];
     let mut used = cost(&fixed);
     let mut cut = false;
-    let mut fits = [0usize; 6];
+    let mut fits = [0usize; 7];
     for (at, costs) in lists.iter().enumerate() {
         if cut {
             break;
@@ -948,10 +973,11 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
         used = now;
         cut = fit < costs.len();
     }
-    let [nodes, symbols, tests, tasks, seeds, delta] = fits;
+    let [nodes, tested, symbols, tests, tasks, seeds, delta] = fits;
     Shown {
         seeds,
         nodes,
+        tested,
         symbols,
         tests,
         tasks,
@@ -967,6 +993,7 @@ fn first<T>(items: &[T], shown: usize) -> &[T] {
 /// What the cut left out of each list; `None` for a `null` list.
 struct NotShown {
     nodes: usize,
+    tested: Option<usize>,
     symbols: Option<usize>,
     tests: Option<usize>,
     tasks: usize,
@@ -979,6 +1006,10 @@ fn not_shown(outcome: &ImpactOutcome) -> NotShown {
     let rest = |len: usize, shown: usize| len.saturating_sub(shown);
     NotShown {
         nodes: rest(outcome.nodes.len(), shown.nodes),
+        tested: outcome
+            .tested
+            .as_ref()
+            .map(|rows| rest(rows.len(), shown.tested)),
         symbols: outcome
             .symbols
             .as_ref()
@@ -1006,6 +1037,7 @@ fn tail(outcome: &ImpactOutcome) -> String {
     let rest = not_shown(outcome);
     let parts: Vec<String> = [
         (Some(rest.nodes), "nodes"),
+        (rest.tested, "tested"),
         (rest.symbols, "symbols"),
         (rest.tests, "tests"),
         (Some(rest.tasks), "tasks"),
@@ -1039,6 +1071,9 @@ pub(crate) fn render_text(outcome: &ImpactOutcome) -> String {
     lines.extend(header(outcome));
     lines.push(summary(outcome));
     lines.extend(first(&outcome.nodes, shown.nodes).iter().map(node_text));
+    if let Some(tested) = &outcome.tested {
+        lines.extend(first(tested, shown.tested).iter().map(tested_line));
+    }
     for (rows, count, word) in [
         (&outcome.symbols, shown.symbols, "symbol"),
         (&outcome.tests, shown.tests, "test"),
@@ -1082,6 +1117,8 @@ struct ImpactJson<'a> {
     delta: Option<DeltaJson<'a>>,
     left_out: LeftOut,
     nodes: Vec<NodeJson<'a>>,
+    /// The printed `[[tested]]` blocks.
+    tested: Option<&'a [TestedRow]>,
     symbols: Option<&'a [&'a BindingRow]>,
     tests: Option<&'a [&'a BindingRow]>,
     tasks: &'a [ImpactTask],
@@ -1110,6 +1147,7 @@ struct SeedsJson<'a> {
 #[derive(Serialize)]
 struct TruncatedJson {
     nodes: usize,
+    tested: Option<usize>,
     symbols: Option<usize>,
     tests: Option<usize>,
     tasks: usize,
@@ -1136,6 +1174,7 @@ impl Serialize for ImpactOutcome {
             let rest = not_shown(self);
             TruncatedJson {
                 nodes: rest.nodes,
+                tested: rest.tested,
                 symbols: rest.symbols,
                 tests: rest.tests,
                 tasks: rest.tasks,
@@ -1166,6 +1205,10 @@ impl Serialize for ImpactOutcome {
                 .map(|delta| DeltaJson::printed(delta, Some(shown.delta))),
             left_out: self.left_out,
             nodes: nodes.iter().map(NodeJson::of).collect(),
+            tested: self
+                .tested
+                .as_deref()
+                .map(|tested| first(tested, shown.tested)),
             symbols: symbols.as_deref(),
             tests: tests.as_deref(),
             tasks: first(&self.tasks, shown.tasks),

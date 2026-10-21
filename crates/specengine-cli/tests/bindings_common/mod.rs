@@ -1166,8 +1166,10 @@ pub fn package_spec_part(package: &Value) -> Value {
 
 // ------------------------------------------------------------- the package
 
-/// The 26 keys of a package, in order (`task-package.md` "Package").
-pub const PACKAGE_KEY_ORDER: [&str; 26] = [
+/// The 27 keys of a package, in order (`task-package.md` "Package";
+/// `tested` after `bindings` since docs/features/tested-reads.md
+/// "Per read").
+pub const PACKAGE_KEY_ORDER: [&str; 27] = [
     "schema_version",
     "id",
     "project",
@@ -1184,6 +1186,7 @@ pub const PACKAGE_KEY_ORDER: [&str; 26] = [
     "open_proposals",
     "owner_notes",
     "bindings",
+    "tested",
     "spec_snapshot",
     "snapshot_diff",
     "claim",
@@ -1206,7 +1209,7 @@ pub fn assert_package_rows(repo: &LockRepo, read: &Read, want: &[Expected], cont
     assert_eq!(
         raw_order(&read.json_run.stdout, 0),
         PACKAGE_KEY_ORDER,
-        "{context}: the 26 keys in order"
+        "{context}: the 27 keys in order"
     );
     let rows = list(&package["bindings"]);
     let shown: Vec<Value> = rows.iter().map(shown_view).collect();

@@ -761,3 +761,59 @@ pub fn without_entries(text: &str, node: &str) -> String {
     }
     out
 }
+
+// ------------------------------------------------- 8b-2: the reads
+
+/// The keys of a read's `tested` entry, in order: 8b-1's plain-verify
+/// entry (docs/features/tested-reads.md "Data": the model's `TestedRow`).
+pub const READ_TESTED_KEYS: [&str; 7] = TESTED_KEYS;
+
+/// The one line of an entry, verify's and every read's
+/// (docs/features/tested-reads.md "Data"): `tested | <state>[ <category>]
+/// | <node>`, no indent, no line end.
+pub fn entry_line(entry: &Value) -> String {
+    tested_line(
+        entry["state"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a state: {entry}")),
+        entry["category"].as_str(),
+        entry["node"]
+            .as_str()
+            .unwrap_or_else(|| panic!("a node: {entry}")),
+    )
+}
+
+/// Plain verify's entries by node.
+pub fn entries_by_node(run: &Verify) -> std::collections::BTreeMap<String, Value> {
+    tested(run)
+        .into_iter()
+        .map(|entry| (entry["node"].as_str().expect("a node").to_owned(), entry))
+        .collect()
+}
+
+/// `json` (one compact document of a read) without the `tested` keys
+/// docs/features/tested-reads.md adds: each `,"tested":[]` and
+/// `,"tested":null`, exactly `count` of them: what a build before 8b-2
+/// printed for an evidence-free read.
+pub fn without_read_tested(json: &str, count: usize) -> String {
+    let mut out = json.to_owned();
+    let mut found = 0;
+    for key in [",\"tested\":[]", ",\"tested\":null"] {
+        found += out.matches(key).count();
+        out = out.replace(key, "");
+    }
+    assert_eq!(
+        found, count,
+        "{count} empty or null `tested` keys, not {found}, in {json}"
+    );
+    out
+}
+
+/// The text's `tested | ` lines (any indent), each without its indent.
+pub fn read_tested_lines(text: &str) -> Vec<String> {
+    text.lines()
+        .map(str::trim_start)
+        .filter(|line| line.starts_with("tested | "))
+        .map(str::to_owned)
+        .collect()
+}

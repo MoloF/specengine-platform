@@ -39,22 +39,27 @@
 //! cap with it: one line per row (`  <node> | <relation> | <place> |
 //! <binding> | layer <layer> | sync <sync>[ <category>][ <detail>]`), the
 //! lines under it four spaces in (`sig`, `moved from`, `candidate`), then
-//! the closing count. When the cut falls in the block it falls after the
-//! last whole row (its line and the lines under it), or after the closing
-//! line, that fits; the text is not shown and the tail gains `; bindings
-//! not shown: <k>` after its links part (every row of the cut node and of
-//! the nodes after it that is not printed). JSON then takes the text's
-//! cut: a node's `bindings` `{rows, omitted}` holds the printed rows,
-//! `omitted` the tail's `<k>` on the cut node, 0 on the others.
+//! the closing count, then one `  tested | <state>[ <category>] | <node>`
+//! line per `[[tested]]` block of the node and its sections (task spec
+//! `tested-reads`), by node bytes, counted with the closing line as one
+//! unit. When the cut falls in the block it falls after the last whole
+//! row (its line and the lines under it), or after the closing unit, that
+//! fits; the text is not shown and the tail gains `; bindings not shown:
+//! <k>` after its links part (every row of the cut node and of the nodes
+//! after it that is not printed). JSON then takes the text's cut: a
+//! node's `bindings` `{rows, omitted, tested}` holds the printed rows,
+//! `omitted` the tail's `<k>` on the cut node, 0 on the others, and the
+//! printed blocks (`null` when not judged).
 
 use serde::Serialize;
 use specengine_core::verify::Class;
-use specengine_model::{BindingPlace, BindingRow};
+use specengine_model::{BindingPlace, BindingRow, TestedRow};
 
 use crate::links::{LinksJson, block_lines, links_json};
 use crate::one_line;
 use crate::search::notes;
 use crate::show::{NestedSection, ShowOutcome, ShownBindings, ShownNode};
+use crate::tested::tested_line;
 use crate::verify::keyed_binding;
 
 /// The most characters a `show` or `search` answer prints before its tail
@@ -182,10 +187,12 @@ fn block(node: &ShownNode) -> Vec<String> {
 }
 
 /// A node's bindings block (none without `--bindings` or when no row was
-/// read): each row's lines, then the closing line.
+/// read): each row's lines, then the closing line and its `tested` lines.
 struct BindingsBlock {
     rows: Vec<Vec<String>>,
-    closing: Option<String>,
+    /// The closing line, then one line per block (task spec
+    /// `tested-reads`): one unit of the cap.
+    closing: Vec<String>,
 }
 
 impl BindingsBlock {
@@ -193,7 +200,7 @@ impl BindingsBlock {
         let Some(bindings) = &node.bindings else {
             return Self {
                 rows: Vec::new(),
-                closing: None,
+                closing: Vec::new(),
             };
         };
         let rows = bindings
@@ -202,10 +209,15 @@ impl BindingsBlock {
             .zip(&bindings.shown)
             .map(|(row, (binding, _))| row_lines(row, binding))
             .collect();
-        Self {
-            rows,
-            closing: Some(closing_line(bindings)),
-        }
+        let mut closing = vec![closing_line(bindings)];
+        closing.extend(
+            bindings
+                .tested
+                .iter()
+                .flatten()
+                .map(|row| format!("  {}", tested_line(row))),
+        );
+        Self { rows, closing }
     }
 
     /// Each row's characters, line ends included.
@@ -213,11 +225,10 @@ impl BindingsBlock {
         self.rows.iter().map(|lines| chars(lines)).collect()
     }
 
-    /// The closing line's characters, its line end included.
+    /// The closing line's and its `tested` lines' characters, line ends
+    /// included.
     fn closing_cost(&self) -> usize {
-        self.closing
-            .as_ref()
-            .map_or(0, |line| line.chars().count() + 1)
+        chars(&self.closing)
     }
 }
 
@@ -553,12 +564,11 @@ pub(crate) fn render_text(outcome: &ShowOutcome) -> String {
             out.push_str(line);
             out.push('\n');
         }
-        if let Some(closing) = rows
-            .closing
-            .filter(|_| this_cut.is_none_or(|cut| cut.closing))
-        {
-            out.push_str(&closing);
-            out.push('\n');
+        if this_cut.is_none_or(|cut| cut.closing) {
+            for line in &rows.closing {
+                out.push_str(line);
+                out.push('\n');
+            }
         }
         let text = match this_cut {
             Some(cut) => &node.text[..cut.shown],
@@ -634,11 +644,13 @@ struct NodeJson<'a> {
 }
 
 /// A node's rows: those printed, and the rows the cap cut (0 when none
-/// was).
+/// was); its `[[tested]]` blocks printed (none when the cap cut its
+/// closing line), `null` when not judged.
 #[derive(Serialize)]
 struct BindingsJson<'a> {
     rows: &'a [BindingRow],
     omitted: usize,
+    tested: Option<&'a [TestedRow]>,
 }
 
 #[derive(Serialize)]
@@ -714,10 +726,15 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                     Some(cut) => BindingsJson {
                         rows: &bindings.rows[..cut.rows.min(bindings.rows.len())],
                         omitted: bindings_not_shown(nodes, cut),
+                        tested: bindings
+                            .tested
+                            .as_deref()
+                            .map(|tested| if cut.closing { tested } else { &[] }),
                     },
                     None => BindingsJson {
                         rows: &bindings.rows,
                         omitted: 0,
+                        tested: bindings.tested.as_deref(),
                     },
                 }),
             }

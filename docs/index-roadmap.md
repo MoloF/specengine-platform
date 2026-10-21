@@ -35,4 +35,3 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0028.md](roadmap/RM-0028.md) Spec digest into AGENTS.md or CLAUDE.md for external reviewers · crates/specengine-cli · draft
 - [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) Hygiene pass: the review nits of 5b-1b, 5c and 8a-2 · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0031.md](roadmap/RM-0031.md) symbol-renamed: delta.symbols.renamed from the anchor pairing · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0032.md](roadmap/RM-0032.md) tested-reads (8b-2): the reads show each node's tested state · crates/specengine-cli, crates/specengine-model, crates/specengine-mcp, crates/specengine-http, ui, plugin · draft

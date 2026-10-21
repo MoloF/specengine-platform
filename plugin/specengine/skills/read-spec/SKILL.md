@@ -25,6 +25,7 @@ Use this before you read or change behaviour the spec describes, and whenever yo
 ## Using what you read
 
 - Cite the IDs you relied on: in your answer, your plan and your report.
+- A node's `tested`, in `get_node` with its bindings, in `get_task`, in `get_impact` and as lines under a bundle's headers, says whether the owner's own passing test run still vouches for that node, judged now: evidence to read, never yours to claim, and nothing waits on it.
 - The answers are deterministic: the same files and the same request give the same answer, so reading an unchanged node again only spends context.
 - An answer cut for size says how to narrow the request: follow it instead of asking for everything again.
 - A reference that names nothing is an error with the reason: check the ID, or `search` for it. A look-alike or mixed-script ID is refused with its Latin fix: use the fix.

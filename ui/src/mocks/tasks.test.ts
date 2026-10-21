@@ -176,6 +176,7 @@ describe("the cases the slice names (Data, Mock)", () => {
       "open_proposals",
       "owner_notes",
       "bindings",
+      "tested",
       "spec_snapshot",
       "snapshot_diff",
       "claim",
@@ -187,6 +188,13 @@ describe("the cases the slice names (Data, Mock)", () => {
       "updated_at",
       "notes",
     ]);
+  });
+
+  it("serve no code and no evidence, as without [code]: every package's bindings [] and tested null (tested-reads)", () => {
+    const stored = [...mockTasks("harbor-sim").tasks, ...mockTasks("ledger-api").tasks, ...largeTasks()];
+    const served = stored.map((entry) => packageOf(entry, []));
+    expect(served.length).toBeGreaterThan(300);
+    expect(served.filter((pkg) => pkg.bindings.length > 0 || pkg.tested !== null).map((pkg) => pkg.id)).toEqual([]);
   });
 
   it("place two harbor-sim tasks on the plan: T-0109 (in progress) and T-0112 (ready) execute items, every other package's roadmap is null (Q-8 of roadmap-screen)", async () => {

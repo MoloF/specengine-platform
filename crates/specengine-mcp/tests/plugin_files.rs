@@ -314,7 +314,25 @@ const PINS: &[(&str, &str)] = &[
         "0.17.0",
         "b4d6b1ce9caeaaf63e9afa9c157d9b8856d3eebb9bb40ceac796cb4aa506ab48",
     ),
+    // docs/features/tested-reads.md "Plugin 0.18.0" (0.17.0 -> 0.18.0,
+    // MINOR: a key three tools return): `read-spec` gains its second bullet
+    // of "Using what you read", `implement`'s step 5 one sentence; the tree
+    // with the version set back and [`READ_SPEC_TESTED_0_18_0`] and
+    // [`IMPLEMENT_TESTED_0_18_0`] taken out hashes as 0.17.0's pin.
+    (
+        "0.18.0",
+        "73ecc1ffddbc74dc4a2bc336b6526e225f54455a91eb6e5c7b686165550c5040",
+    ),
 ];
+
+/// `read-spec`'s bullet docs/features/tested-reads.md "Plugin 0.18.0" adds
+/// (its line, LF-ended).
+const READ_SPEC_TESTED_0_18_0: &str = "- A node's `tested`, in `get_node` with its bindings, in `get_task`, in `get_impact` and as lines under a bundle's headers, says whether the owner's own passing test run still vouches for that node, judged now: evidence to read, never yours to claim, and nothing waits on it.\n";
+
+/// `implement`'s step 5 sentence docs/features/tested-reads.md
+/// "Plugin 0.18.0" adds after "name them in the report, never hide them."
+/// (one space first).
+const IMPLEMENT_TESTED_0_18_0: &str = " A node's `tested` (in `get_task`, `get_impact` and `check_binding`) is the owner's own test evidence: an edit to the node or its bound code can void it, so name each such node in the report for the owner to run its tests again, and never claim that evidence yourself.";
 
 /// The tester's "Your results are a claim" paragraph as 0.16.0 shipped it.
 const TESTER_CLAIM_0_16_0: &str = "What you report is your claim until the project verifies it: report exactly what ran and what it gave, never a test you did not run, never a red result as green. A test that could not run is reported as not run, not as passed.\n";
@@ -419,6 +437,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.17.0",
         "f7ad111402de9303c392390a6fa83e1a2835d531b18a82eb9815b33e240d37a7",
+    ),
+    // docs/features/tested-reads.md "MCP": `ShowBindings.tested`,
+    // `TaskPackage.tested`, `ImpactDocument.tested` and
+    // `ImpactTruncated.tested`, the three descriptions' clauses
+    // ([`as_of_0_17_0`] takes them back).
+    (
+        "0.18.0",
+        "1625003965b328803c615290dad61575ebde1cb1919b6abb7c97874e5eaeafa3",
     ),
 ];
 
@@ -1542,20 +1568,59 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     // docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
     // 0.16.0, after impact's 0.15.0. M: the
     // version unchanged.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.17.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.16.0");
-    assert_eq!(PINS[PINS.len() - 3].0, "0.15.0");
-    assert_eq!(PINS[PINS.len() - 4].0, "0.14.0");
-    assert_eq!(PINS[PINS.len() - 5].0, "0.13.0");
-    assert_eq!(PINS[PINS.len() - 6].0, "0.12.0");
-    assert_eq!(PINS[PINS.len() - 7].0, "0.11.0");
-    assert_eq!(PINS[PINS.len() - 8].0, "0.10.0");
-    assert_eq!(PINS[PINS.len() - 9].0, "0.9.0");
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.18.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.17.0");
+    assert_eq!(PINS[PINS.len() - 3].0, "0.16.0");
+    assert_eq!(PINS[PINS.len() - 4].0, "0.15.0");
+    assert_eq!(PINS[PINS.len() - 5].0, "0.14.0");
+    assert_eq!(PINS[PINS.len() - 6].0, "0.13.0");
+    assert_eq!(PINS[PINS.len() - 7].0, "0.12.0");
+    assert_eq!(PINS[PINS.len() - 8].0, "0.11.0");
+    assert_eq!(PINS[PINS.len() - 9].0, "0.10.0");
+    assert_eq!(PINS[PINS.len() - 10].0, "0.9.0");
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.17.0"),
+        json!("0.18.0"),
         "plugin.json's version"
     );
+    // docs/features/tested-reads.md "Plugin 0.18.0": 0.18.0 changes
+    // plugin.json's version, `read-spec`'s second bullet of "Using what you
+    // read" and `implement`'s step 5 sentence alone: all set back, the tree
+    // is 0.17.0's pinned content (`as_of_0_17_0`'s twin for the files).
+    let read_spec_now = String::from_utf8(tree.files[READ_SPEC].clone()).expect("UTF-8");
+    assert_eq!(
+        read_spec_now.matches(READ_SPEC_TESTED_0_18_0).count(),
+        1,
+        "the spec's read-spec bullet"
+    );
+    let implement_now = String::from_utf8(tree.files[IMPLEMENT].clone()).expect("UTF-8");
+    assert_eq!(
+        implement_now.matches(IMPLEMENT_TESTED_0_18_0).count(),
+        1,
+        "the spec's step 5 sentence"
+    );
+    let at_0_17_0 = edited(
+        &edited(
+            &edited(
+                &tree,
+                PLUGIN_JSON,
+                "\"version\": \"0.18.0\"",
+                "\"version\": \"0.17.0\"",
+            ),
+            READ_SPEC,
+            READ_SPEC_TESTED_0_18_0,
+            "",
+        ),
+        IMPLEMENT,
+        IMPLEMENT_TESTED_0_18_0,
+        "",
+    );
+    assert_eq!(
+        content_hash(&at_0_17_0),
+        PINS[PINS.len() - 2].1,
+        "0.18.0 changes plugin.json's version, read-spec's bullet and implement's sentence only"
+    );
+    let tree = at_0_17_0;
     // docs/features/tested-evidence.md: 0.17.0 changes plugin.json's
     // version and the tester's claim paragraph alone (Q-G's sentence
     // appended): both set back, the tree is 0.16.0's pinned content.
@@ -1578,7 +1643,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_16_0),
-        PINS[PINS.len() - 2].1,
+        PINS[PINS.len() - 3].1,
         "0.17.0 changes plugin.json's version and the tester's paragraph only"
     );
     // impact-since's restated: 0.16.0 changes plugin.json's version and
@@ -1603,7 +1668,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_15_0),
-        PINS[PINS.len() - 3].1,
+        PINS[PINS.len() - 4].1,
         "0.16.0 changes plugin.json's version and implement's step 6 only"
     );
     // impact's restated (docs/features/impact.md "Plugin 0.15.0"): 0.15.0
@@ -1627,7 +1692,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_14_0),
-        PINS[PINS.len() - 4].1,
+        PINS[PINS.len() - 5].1,
         "0.15.0 changes plugin.json's version and implement's step 1 only"
     );
     // bundle-bindings' restated (docs/features/bundle-bindings.md
@@ -1653,7 +1718,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_13_0),
-        PINS[PINS.len() - 5].1,
+        PINS[PINS.len() - 6].1,
         "0.14.0 changes plugin.json's version and read-spec's step 1 only"
     );
     // show-bindings' restated (docs/features/show-bindings.md
@@ -1678,7 +1743,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_12_0),
-        PINS[PINS.len() - 6].1,
+        PINS[PINS.len() - 7].1,
         "0.13.0 changes plugin.json's version and read-spec's bullet only"
     );
     // check-binding's restated (docs/features/check-binding.md "Plugin"):
@@ -1698,7 +1763,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_11_0),
-        PINS[PINS.len() - 7].1,
+        PINS[PINS.len() - 8].1,
         "0.12.0 changes plugin.json's version and implement's check step only"
     );
     // roadmap-surfaces' restated (docs/features/roadmap-surfaces.md
@@ -1713,7 +1778,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     let back = edited(&back, ANALYZE, ANALYZE_ROADMAP, "");
     assert_eq!(
         content_hash(&back),
-        PINS[PINS.len() - 8].1,
+        PINS[PINS.len() - 9].1,
         "0.11.0 changes plugin.json's version and analyze's roadmap text only"
     );
     // bevy-roles-reads' restated (docs/features/bevy-roles-reads.md
@@ -1727,7 +1792,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&older),
-        PINS[PINS.len() - 9].1,
+        PINS[PINS.len() - 10].1,
         "0.10.0 changes plugin.json's version only"
     );
     // A renamed file with the same bytes changes the hash too.
@@ -1883,6 +1948,86 @@ fn as_of_0_16_0(schemas: &mut Value) {
     if let Some(required) = output.get_mut("required").and_then(Value::as_array_mut) {
         required.retain(|key| key != "tested");
     }
+}
+
+/// `ShowBindings`' doc as 0.17.0 listed it (docs/features/tested-reads.md
+/// "MCP" appends the blocks to it).
+const SHOW_BINDINGS_DOC_0_17_0: &str = "A node's code bindings and its sections', in verify's row order: those printed, and the rows the cut left out.";
+
+/// `object`'s property `key` and its `required` entry taken out: whether
+/// it was there.
+fn without_property(object: &mut Value, key: &str) -> bool {
+    let removed = object
+        .get_mut("properties")
+        .and_then(Value::as_object_mut)
+        .is_some_and(|properties| properties.remove(key).is_some());
+    if let Some(required) = object.get_mut("required").and_then(Value::as_array_mut) {
+        required.retain(|name| name != key);
+    }
+    removed
+}
+
+/// Every object schema under `value` holding the properties `rows` and
+/// `omitted` (a `ShowBindings`), `visit`ed; their number.
+fn visit_show_bindings(value: &mut Value, visit: &mut dyn FnMut(&mut Value)) -> usize {
+    let mut found = 0;
+    if value
+        .get("properties")
+        .and_then(Value::as_object)
+        .is_some_and(|properties| {
+            properties.contains_key("rows") && properties.contains_key("omitted")
+        })
+    {
+        visit(value);
+        found += 1;
+    }
+    match value {
+        Value::Object(object) => {
+            for (_, inner) in object.iter_mut() {
+                found += visit_show_bindings(inner, visit);
+            }
+        }
+        Value::Array(items) => {
+            for inner in items {
+                found += visit_show_bindings(inner, visit);
+            }
+        }
+        _ => {}
+    }
+    found
+}
+
+/// `schemas` as 0.17.0 listed them, docs/features/tested-reads.md "MCP":
+/// `get_node`'s `ShowBindings` without `tested` (its doc as it was),
+/// `get_task`'s package without `tested`, `get_impact`'s document without
+/// `tested` and `truncated.tested`. No other tool's schema changed (the
+/// descriptions are not schemas).
+fn as_of_0_17_0(schemas: &mut Value) {
+    let shown = visit_show_bindings(&mut schemas["get_node"]["outputSchema"], &mut |object| {
+        assert!(
+            without_property(object, "tested"),
+            "ShowBindings lists tested"
+        );
+        if let Some(Value::String(doc)) = object.get_mut("description")
+            && doc.starts_with(SHOW_BINDINGS_DOC_0_17_0.trim_end_matches('.'))
+        {
+            *doc = SHOW_BINDINGS_DOC_0_17_0.to_owned();
+        }
+    });
+    assert!(shown > 0, "get_node's ShowBindings found");
+    assert!(
+        without_property(&mut schemas["get_task"]["outputSchema"], "tested"),
+        "the package lists tested"
+    );
+    let impact = &mut schemas["get_impact"]["outputSchema"];
+    assert!(
+        without_property(impact, "tested"),
+        "the impact document lists tested"
+    );
+    assert!(
+        without_property(&mut impact["properties"]["truncated"], "tested"),
+        "truncated counts tested"
+    );
 }
 
 /// `schemas` as 0.15.0 listed them,
@@ -2102,17 +2247,32 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[6].0, "0.15.0", "an entry for 0.15.0");
     assert_eq!(SCHEMA_PINS[7].0, "0.16.0", "an entry for 0.16.0");
     assert_eq!(SCHEMA_PINS[8].0, "0.17.0", "an entry for 0.17.0");
-    assert_eq!(SCHEMA_PINS.len(), 9, "0.17.0 the last entry");
+    assert_eq!(SCHEMA_PINS[9].0, "0.18.0", "an entry for 0.18.0");
+    assert_eq!(SCHEMA_PINS.len(), 10, "0.18.0 the last entry");
+    // docs/features/tested-reads.md "MCP": 0.17.0's schemas are today's
+    // without the reads' `tested` (get_node's, get_task's, get_impact's and
+    // its `truncated.tested`).
+    let mut at_0_17_0 = schemas.clone();
+    as_of_0_17_0(&mut at_0_17_0);
+    let at_0_17_0_hash = schema_hash(&at_0_17_0);
+    assert_eq!(
+        at_0_17_0_hash, SCHEMA_PINS[8].1,
+        "0.17.0's schemas are today's without the reads' tested"
+    );
+    assert_ne!(
+        at_0_17_0_hash, current,
+        "the reads' tested changed the schemas"
+    );
     // docs/features/tested-evidence.md **Mirror**: 0.16.0's schemas are
-    // today's without `check_binding`'s `tested`.
-    let mut at_0_16_0 = schemas.clone();
+    // 0.17.0's without `check_binding`'s `tested`.
+    let mut at_0_16_0 = at_0_17_0.clone();
     as_of_0_16_0(&mut at_0_16_0);
     let at_0_16_0_hash = schema_hash(&at_0_16_0);
     assert_eq!(
         at_0_16_0_hash, SCHEMA_PINS[7].1,
-        "0.16.0's schemas are today's without check_binding's tested"
+        "0.16.0's schemas are 0.17.0's without check_binding's tested"
     );
-    assert_ne!(at_0_16_0_hash, current, "tested changed the schemas");
+    assert_ne!(at_0_16_0_hash, at_0_17_0_hash, "tested changed the schemas");
     // docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
     // 0.15.0's schemas are 0.16.0's with `get_impact`'s `since` out and its
     // document's keys back to `null`.

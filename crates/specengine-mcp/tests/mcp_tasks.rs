@@ -450,6 +450,16 @@ const PACKAGE_V1: &[&str] = &[
     "bindings[].anchor.candidates[].kind",
     "bindings[].anchor.candidates[].symbol",
     "bindings[].anchor.candidates[].item_kind",
+    // docs/features/tested-reads.md "MCP": `tested` and its entry's seven
+    // paths, added at version 1.
+    "tested",
+    "tested[].node",
+    "tested[].state",
+    "tested[].category",
+    "tested[].rev",
+    "tested[].node_rev",
+    "tested[].commit",
+    "tested[].verified_at",
     "spec_snapshot",
     "spec_snapshot.at",
     "spec_snapshot.place",
@@ -1545,9 +1555,10 @@ fn get_task_with_rows_equals_task_show() {
 
 /// docs/features/bundle-bindings.md "Descriptions and plugin 0.14.0":
 /// `get_task`'s brief list names the code bindings and its `bindings`
-/// paragraph follows it, 64 the package's cap; 1 754 bytes, ASCII, both
-/// eras. M: the paragraph missing or reworded.
-const TASK_BINDINGS_LINE: &str = "bindings: the code bound to the targets, the affected nodes and their sections, each with its sync (the state spec verify --node gives), at most 64 (a note names the rest); [] without a [code] table. A code layer that cannot be read gives a note, never an error.\n";
+/// paragraph follows it, 64 the package's cap; ASCII, both eras. M: the
+/// paragraph missing or reworded. docs/features/tested-reads.md "MCP":
+/// the paragraph names `tested` (1 754 -> 1 909 bytes).
+const TASK_BINDINGS_LINE: &str = "bindings: the code bound to the targets, the affected nodes and their sections, each with its sync (the state spec verify --node gives), at most 64 (a note names the rest); [] without a [code] table. tested: the owner's test evidence for these nodes and the criteria's, as spec verify --task judges it now, never cut ([] when none, null when not judged). A code layer that cannot be read gives a note, never an error.\n";
 
 #[test]
 fn get_task_description_names_the_bindings() {
@@ -1568,7 +1579,185 @@ fn get_task_description_names_the_bindings() {
             "{era:?}: the paragraph after the list's: {description}"
         );
         assert!(description.is_ascii());
-        assert_eq!(description.len(), 1754, "{era:?}: the spec's figure");
+        assert_eq!(description.len(), 1909, "{era:?}: the spec's figure");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}
+
+// ------------------------------------------------- docs/features/tested-reads.md
+
+/// The seven keys of a `tested` entry, in order
+/// (docs/features/tested-reads.md "The entry: model `TestedRow`").
+const TESTED_KEYS: [&str; 7] = [
+    "node",
+    "state",
+    "category",
+    "rev",
+    "node_rev",
+    "commit",
+    "verified_at",
+];
+
+/// A git repository of `fixtures/verify-tests` (the kiln) with the
+/// golden format-3 lock (`fixtures/spec-lock/verify-tests.tested.lock`:
+/// four blocks, each `verified` at the fixture's state), committed; a
+/// task on KILN-RAMP planned with the criterion `glaze-check/GLZ-01` and
+/// KILN-HOLD affected, approved: the repository and the task.
+fn kiln_task(label: &str) -> (Repo, String) {
+    let repo = Repo::new(label, "verify-tests");
+    let _ = fs::remove_file(repo.main.join("expected.json"));
+    fs::copy(
+        repository_root().join("fixtures/spec-lock/verify-tests.tested.lock"),
+        repo.main.join("spec.lock"),
+    )
+    .expect("the golden lock");
+    repo.git.add_all(&repo.main);
+    repo.git.commit(&repo.main, "the evidence");
+    let env = cli_env(&repo.main, Some(&repo.home));
+    let made = task_new(
+        &env,
+        &Globals::default(),
+        &TaskNewRequest {
+            nodes: vec!["KILN-RAMP".to_owned()],
+            title: Some("Fire the glaze".to_owned()),
+            goal: Some("A glaze that survives the hold.".to_owned()),
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: CLOCK.to_owned(),
+            git: repo.git_env(&repo.main),
+        },
+    )
+    .expect("task new");
+    let id = made.id.clone().expect("an ID");
+    let planned = task_plan(
+        &env,
+        &Globals::default(),
+        &TaskPlanRequest {
+            id: id.clone(),
+            plan: specengine_cli::ProposedText::Given(b"1. Fire.\n".to_vec()),
+            criteria: vec!["glaze-check/GLZ-01".to_owned()],
+            affected: vec!["KILN-HOLD".to_owned()],
+            now: CLOCK.to_owned(),
+            git: repo.git_env(&repo.main),
+        },
+    )
+    .expect("task plan");
+    assert_eq!(planned.exit(), Exit::Answered, "{planned:?}");
+    let mut yes = |_: &str| true;
+    let approved = task_approve(
+        &env,
+        &Globals::default(),
+        &TaskDecisionRequest {
+            id: id.clone(),
+            note: None,
+            now: CLOCK.to_owned(),
+            git: repo.git_env(&repo.main),
+        },
+        &mut yes,
+    )
+    .expect("task approve");
+    assert_eq!(approved.exit(), Exit::Answered, "{approved:?}");
+    (repo, id)
+}
+
+/// docs/features/tested-reads.md RD-8 **M8** (a mirror without `tested`)
+/// and TE-1's MCP half: over the kiln with its golden format-3 lock, a
+/// ready task on KILN-RAMP (GLZ-01 its criterion, KILN-HOLD affected):
+/// `get_task` by ID and by `next` answers what `spec task show` answers
+/// through the library (content the brief, `structuredContent` the
+/// package, walked against the `outputSchema`: a key the mirror lacks is
+/// refused), both eras; its `tested` the target's, the criterion ref's
+/// and the affected node's entries, each `verified` with the seven keys
+/// in order, the brief's Bindings section ending with their lines; the
+/// package's paths every `tested[]` path of [`PACKAGE_V1`], none the
+/// schema lacks, `schema_version` 1.
+#[test]
+fn get_task_carries_tested() {
+    let (repo, id) = kiln_task("mt-tested");
+    let env = cli_env(&repo.main, Some(&repo.home));
+    let globals = Globals::default();
+    for era in ERAS {
+        let mut session = Session::open(era, &[], Some(&repo.main), Home::At(&repo.home));
+        let list = session.tools();
+        let schemas = output_schemas(&list);
+        let mut schema = BTreeSet::new();
+        schema_paths(&tool(&list, "get_task")["outputSchema"], "", &mut schema);
+        for args in [json!({"task_id": id}), json!({"next": true})] {
+            let reply = session.call("get_task", args.clone());
+            let want = task_library(
+                "get_task",
+                &args,
+                &env,
+                &globals,
+                CLOCK,
+                &repo.git_env(&repo.main),
+            );
+            assert_parity(
+                &reply,
+                &want,
+                &schemas["get_task"],
+                &format!("{era:?} {args}"),
+            );
+            let package = &result(&reply)["structuredContent"];
+            assert_eq!(package["schema_version"], json!(1), "{era:?}");
+            let tested = package["tested"].as_array().expect("tested, a list");
+            let nodes: Vec<&str> = tested
+                .iter()
+                .filter_map(|entry| entry["node"].as_str())
+                .collect();
+            assert_eq!(
+                nodes,
+                ["KILN-HOLD", "KILN-RAMP", "glaze-check/GLZ-01"],
+                "{era:?}: the task's set"
+            );
+            for entry in tested {
+                let keys: Vec<&str> = entry
+                    .as_object()
+                    .expect("an entry")
+                    .keys()
+                    .map(String::as_str)
+                    .collect();
+                let mut want_keys = TESTED_KEYS.to_vec();
+                want_keys.sort_unstable();
+                let mut sorted = keys.clone();
+                sorted.sort_unstable();
+                assert_eq!(sorted, want_keys, "{era:?}: an entry's keys: {entry}");
+                assert_eq!(entry["state"], json!("verified"), "{era:?}: {entry}");
+            }
+            let content = content_text(result(&reply));
+            let section = content
+                .split("\n\n")
+                .find(|block| block.starts_with("Bindings: "))
+                .unwrap_or_else(|| panic!("{era:?}: the Bindings section: {content}"));
+            assert!(
+                section.ends_with(
+                    "\n  tested | verified | KILN-HOLD\n  tested | verified | KILN-RAMP\n  tested | verified | glaze-check/GLZ-01"
+                ),
+                "{era:?}: the lines after the rows: {section}"
+            );
+            let mut held = BTreeSet::new();
+            value_paths(package, "", &mut held);
+            let unknown: Vec<&String> = held.difference(&schema).collect();
+            assert!(
+                unknown.is_empty(),
+                "{era:?}: keys the schema lacks: {unknown:?}"
+            );
+            let tested_paths: Vec<&&str> = PACKAGE_V1
+                .iter()
+                .filter(|path| path.starts_with("tested"))
+                .collect();
+            assert_eq!(tested_paths.len(), 8, "the spec's 8 paths");
+            let unheld: Vec<&&&str> = tested_paths
+                .iter()
+                .filter(|path| !held.contains(***path))
+                .collect();
+            assert!(
+                unheld.is_empty(),
+                "{era:?}: paths no entry holds: {unheld:?}"
+            );
+        }
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }

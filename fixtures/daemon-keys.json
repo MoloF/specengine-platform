@@ -17,7 +17,7 @@
   "TaskList": ["tasks", "notes"],
   "TaskListEntry": ["id", "status", "title", "targets", "stale", "updated_at"],
   "TaskNotFound": ["id", "reason"],
-  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "roadmap", "author", "created_at", "updated_at", "notes"],
+  "TaskPackage": ["schema_version", "id", "project", "status", "title", "goal", "profile", "stale", "targets", "criteria", "affected_nodes", "plan", "assumptions", "open_proposals", "owner_notes", "bindings", "tested", "spec_snapshot", "snapshot_diff", "claim", "runs", "bundle", "roadmap", "author", "created_at", "updated_at", "notes"],
   "TaskTarget": ["id", "path", "kind", "title"],
   "TaskCriterion": ["ref", "text"],
   "TaskAssumption": ["proposal", "text"],
@@ -65,5 +65,6 @@
   "RoadmapItemTask": ["id", "status"],
   "RoadmapPoolTask": ["id", "status", "title", "targets"],
   "TaskRoadmap": ["item", "group", "release", "position", "of", "priority", "waits_on"],
-  "BindingRow": ["node", "relation", "file", "kind", "symbol", "item_kind", "line", "end_line", "signature", "layer", "sync", "category", "detail", "anchor"]
+  "BindingRow": ["node", "relation", "file", "kind", "symbol", "item_kind", "line", "end_line", "signature", "layer", "sync", "category", "detail", "anchor"],
+  "TestedRow": ["node", "state", "category", "rev", "node_rev", "commit", "verified_at"]
 }

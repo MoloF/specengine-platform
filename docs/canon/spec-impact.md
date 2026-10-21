@@ -58,6 +58,7 @@ seed symbol <QPATH>: <n> at <tier>
 since <7 hex>: <f> files, <c> changed, <a> added, <r> removed
 impact: nodes <N>, symbols <S|->, tests <T|->, tasks <K>[; code files <f> (.rs <r>, .ron <o>), skipped <s>][; left out: <g> generated, <a> archived]
 node <graph's node line>
+tested | <state>[ <category>] | <node>
 symbol <row line>
   sig <signature>
 test <row line>
@@ -69,11 +70,11 @@ seed <qpath> | <item_kind> | <path>:<start>-<end>
 
 A header under `--symbol` or `--since` only (`<7 hex>` `revision`'s first seven, never git's abbreviation; totals before the cut); the summary's totals, the code part when `code` is set, zero `left out` parts omitted; rows `cap.rs` `row_line`, then `row_lines`' `sig`, `moved from`, `candidate` lines; a task's names ID, else path; delta lines last, `changed`, `added`, `removed`, each in the comparer's order. `--since`'s tail ends `lower --depth N or name a later --since REV`.
 
-JSON, every key present, absent `null`: `{input {ref, symbol, since}, reason, revision, depth, seeds {nodes, symbols}, delta, left_out {generated, tier3}, nodes, symbols, tests, tasks, notes, truncated, code}`. `input` as given; `revision` `--since`'s OID. `seeds.nodes` the printed distance-0 names; `seeds.symbols` the printed matches `{qpath, item_kind, path, start_line, end_line, tier}`, `null` for REF and `--since`. `delta` under `--since`: `{added, removed, changed: [{file, symbol, item_kind, line}], renamed: null}`, the printed items (`symbol` the qpath, a RON file's path; `line` a removed one's old). A node graph's object; `tasks` `{id, status, title, nodes}`. `truncated`: `null` uncut, else `{nodes, symbols, tests, tasks, seeds, delta}` not shown (0 for a list not cut, `null` for a `null` list). Exit 1: `input`, `depth`, `reason`, `notes` set, `left_out` zeros, `nodes`, `tasks`, `seeds.nodes` `[]`, `seeds.symbols` `[]` under `--symbol`, the rest `null`.
+JSON, every key present, absent `null`: `{input {ref, symbol, since}, reason, revision, depth, seeds {nodes, symbols}, delta, left_out {generated, tier3}, nodes, tested, symbols, tests, tasks, notes, truncated, code}`; `tested`: `spec-lock-tested.md` "Reads". `input` as given; `revision` `--since`'s OID. `seeds.nodes` the printed distance-0 names; `seeds.symbols` the printed matches `{qpath, item_kind, path, start_line, end_line, tier}`, `null` for REF and `--since`. `delta` under `--since`: `{added, removed, changed: [{file, symbol, item_kind, line}], renamed: null}`, the printed items (`symbol` the qpath, a RON file's path; `line` a removed one's old). A node graph's object; `tasks` `{id, status, title, nodes}`. `truncated`: `null` uncut, else `{nodes, tested, symbols, tests, tasks, seeds, delta}` not shown (0 for a list not cut, `null` for a `null` list). Exit 1: `input`, `depth`, `reason`, `notes` set, `left_out` zeros, `nodes`, `tasks`, `seeds.nodes` `[]`, `seeds.symbols` `[]` under `--symbol`, the rest `null`.
 
 ## Cut
 
-`OUTPUT_CAP_CHARS` 40 000: the header and summary always print; then nodes, symbol rows, test rows (each with its lines), tasks, seed matches, delta items, each whole, while the text stays within the cap (`lines_within`, the first item whole); the first item that does not fit and all later ones are cut. The tail's parts `<n> nodes`, `<s> symbols`, `<t> tests`, `<k> tasks`, `<m> seed matches`, `<d> delta items`, zero parts omitted. The JSON holds exactly the printed items.
+`OUTPUT_CAP_CHARS` 40 000: the header and summary always print; then nodes, tested lines, symbol rows (each with its lines), tasks, seed matches, delta items, each whole, while the text stays within the cap (`lines_within`, the first item whole); the first item that does not fit and all later ones are cut. The tail's parts `<n> nodes`, `<e> tested`, `<s> symbols`, `<t> tests`, `<k> tasks`, `<m> seed matches`, `<d> delta items`, zero parts omitted. The JSON holds exactly the printed items.
 
 ## Exits and degrade
 
@@ -83,7 +84,7 @@ Text and JSON byte-identical across roots, clones, cwd, creation order and CRLF 
 
 ## MCP get_impact
 
-`{id?, symbol?, since?, depth?}` (`ImpactArgs`, unknown fields refused), each nullable; no root `oneOf`. Not exactly one non-null of `id`, `symbol`, `since`, before discovery: an error result ``spec: get_impact takes exactly one of `id`, `symbol` and `since` `` + LF, no `structuredContent`. Then one `call`: content the output, `structuredContent` the document; read annotations. `IMPACT_DESCRIPTION` 2 043 B, ASCII, its figures asserted. Mirror `ImpactDocument` (`Impact{Input,Seeds,SeedSymbol,Node,Task,Truncated,Delta,DeltaItem}`, `BindingRowShape`, `CodeCount`): a key the JSON may set `null` nullable, `delta.renamed` `AlwaysNull`. `INSTRUCTIONS`' reads line ends `get_impact(id|symbol|since, depth?) = impact.` (`mcp-read.md` "Tools"). Plugin 0.16.0: `implement` calls it per target before the first edit, with `since` the start commit before `report_run` (`plugin.md` "Skills").
+`{id?, symbol?, since?, depth?}` (`ImpactArgs`, unknown fields refused), each nullable; no root `oneOf`. Not exactly one non-null of `id`, `symbol`, `since`, before discovery: an error result ``spec: get_impact takes exactly one of `id`, `symbol` and `since` `` + LF, no `structuredContent`. Then one `call`: content the output, `structuredContent` the document; read annotations. `IMPACT_DESCRIPTION` 2 043 B, ASCII, its figures asserted. Mirror `ImpactDocument` (`Impact{Input,Seeds,SeedSymbol,Node,Task,Truncated,Delta,DeltaItem}`, `BindingRowShape`, `CodeCount`): a key the JSON may set `null` nullable, `delta.renamed` `AlwaysNull`. `INSTRUCTIONS`' reads line ends `get_impact(id|symbol|since, depth?) = impact.` (`mcp-read.md` "Tools"). Plugin: `plugin.md` "Skills".
 
 ## Tests
 

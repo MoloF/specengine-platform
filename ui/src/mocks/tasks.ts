@@ -31,6 +31,8 @@ import { DEEP_BERTH_ITEM, TIDE_TABLES_ITEM } from "./roadmap";
 // docs/features/roadmap-screen.md): T-0109 and T-0112 each target a plan item, which it executes;
 // the stored `roadmap` stays null and the mock's package takes it from the plan when read
 // (docs/canon/task-package.md "Package"); every other open task executes no item, a pool task.
+// The mocks serve no code and no evidence, as a project without `[code]`: every package's
+// `bindings` [] and `tested` null (docs/canon/spec-lock-tested.md "Reads").
 
 /** A diff's cap and the package's total over its diffs, in bytes (`docs/canon/task-package.md` "Caps"). */
 const DIFF_MAX = 8192;
@@ -87,6 +89,7 @@ export function task(fields: Pick<StoredTask, "id" | "project" | "status" | "cre
     plan: fields.plan ?? null,
     owner_notes: fields.owner_notes ?? [],
     bindings: fields.bindings ?? [],
+    tested: fields.tested ?? null,
     spec_snapshot: fields.spec_snapshot ?? null,
     snapshot_diff: fields.snapshot_diff ?? null,
     claim: fields.claim ?? null,
@@ -702,6 +705,7 @@ export function packageOf(stored: StoredTask, proposals: readonly MockProposal[]
     open_proposals: open,
     owner_notes: stored.owner_notes,
     bindings: stored.bindings,
+    tested: stored.tested,
     spec_snapshot: stored.spec_snapshot,
     snapshot_diff: stored.snapshot_diff,
     claim: stored.claim,

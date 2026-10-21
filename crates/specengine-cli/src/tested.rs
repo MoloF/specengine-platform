@@ -1,10 +1,12 @@
-//! A `[[tested]]` block's bound hash and its state on a read (task spec
-//! `tested-evidence`, "Bound hash", "The state", "Plain verify"): the one
-//! hashing function the test run's write and every read call
-//! ([`bound_hash`]: store `b3_hash` of core's `bound_bytes`), and verify's
-//! `tested` entries ([`tested_entries`]), each judged by core's one
-//! `tested_state`. Never stored, never a finding, a class, a count, a hint,
-//! a verdict or an exit; nothing is written.
+//! A `[[tested]]` block's bound hash and its state on a read (task specs
+//! `tested-evidence`, "Bound hash", "The state", "Plain verify";
+//! `tested-reads`): the one hashing function the test run's write and
+//! every read call ([`bound_hash`]: store `b3_hash` of core's
+//! `bound_bytes`), the `tested` entries of verify and of the reads that
+//! show a node's code ([`tested_entries`], each a [`TestedRow`] judged by
+//! core's one `tested_state`) and their one line ([`tested_line`]). Never
+//! stored, never a finding, a class, a count, a hint, a verdict or an
+//! exit; nothing is written.
 //!
 //! On a read a block's node is the one whose canonical ID is the block's
 //! (several: the first in path and source order); its bindings are its
@@ -25,6 +27,7 @@ use specengine_core::lock::{
     tested_state,
 };
 use specengine_core::{norm_input, revision};
+use specengine_model::TestedRow;
 use specengine_store::{VerifyGit, b3_hash};
 
 use crate::code_walk::CodeTree;
@@ -71,20 +74,28 @@ pub(crate) fn first_refusal(bindings: &Bindings) -> Option<String> {
 /// The one note of a run whose blocks could not be judged (its `tested`
 /// `null`): `tested: <cause>`.
 pub(crate) fn tested_note(cause: &str) -> Message {
-    Message::Note(format!("tested: {}", one_line(cause)))
+    Message::Note(tested_note_text(cause))
 }
 
-/// One block as verify reports it: its node, its state now, its `rev`,
-/// the node's revision now (`None`: gone or unreadable), its `commit` and
-/// `verified_at`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestedEntry {
-    pub node: String,
-    pub state: TestedState,
-    pub rev: u32,
-    pub node_rev: Option<u32>,
-    pub commit: String,
-    pub verified_at: String,
+/// [`tested_note`]'s text, for a read's one note.
+pub(crate) fn tested_note_text(cause: &str) -> String {
+    format!("tested: {}", one_line(cause))
+}
+
+/// One block's line, verify's and every read's, without an indent or a
+/// line end: `tested | <state>[ <category>] | <node>`, no path, date or
+/// commit in it.
+pub(crate) fn tested_line(row: &TestedRow) -> String {
+    let state = match &row.category {
+        Some(category) => format!("{} {category}", row.state),
+        None => row.state.clone(),
+    };
+    format!("tested | {} | {}", one_line(&state), one_line(&row.node))
+}
+
+/// Whether a block's state now is `verified`.
+pub(crate) fn is_verified(row: &TestedRow) -> bool {
+    row.state == TestedState::Verified.as_str()
 }
 
 /// The blocks of `lock` whose node `keep` keeps, by node bytes, each
@@ -105,7 +116,7 @@ pub(crate) fn tested_entries(
     lock: &Lock,
     git: &VerifyGit,
     keep: &dyn Fn(&str) -> bool,
-) -> Result<Vec<TestedEntry>, String> {
+) -> Result<Vec<TestedRow>, String> {
     let blocks: Vec<_> = lock.tested.iter().filter(|(node, _)| keep(node)).collect();
     if blocks.is_empty() {
         return Ok(Vec::new());
@@ -239,9 +250,10 @@ pub(crate) fn tested_entries(
                     .unwrap_or_default())
             },
         );
-        entries.push(TestedEntry {
+        entries.push(TestedRow {
             node: node.clone(),
-            state,
+            state: state.as_str().to_owned(),
+            category: state.category().map(str::to_owned),
             rev: block.rev,
             node_rev: found.and_then(|(_, rev, _)| *rev),
             commit: block.commit.clone(),

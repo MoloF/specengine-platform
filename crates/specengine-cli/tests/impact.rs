@@ -28,6 +28,9 @@
 //! yes), the states this build never enters set through the system's
 //! `sqlite3`. Non-Latin characters in Rust sources are Unicode escapes
 //! (ADR-0024).
+//!
+//! docs/features/tested-reads.md (8b-2): `tested`, the 9th of 15 keys,
+//! after `nodes`; `truncated.tested`; RD-9 `impact_tested_is_cut_as_a_list`.
 
 #![cfg(unix)]
 
@@ -36,6 +39,7 @@ mod bindings_common;
 mod code_index_common;
 mod common;
 mod lock_common;
+mod tested_common;
 mod verify_common;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -80,8 +84,9 @@ const TASK_CLOCK: &str = "2026-10-21T09:00:00Z";
 const CROSSING_LOOK_ALIKE: &str = "R\u{41E}UTE-CROSSING";
 
 /// The top-level keys of the JSON document, in order (A5: `since`,
-/// `revision` and `delta` present, null): docs/features/impact.md "JSON"
-const TOP_KEYS: [&str; 14] = [
+/// `revision` and `delta` present, null): docs/features/impact.md "JSON";
+/// `tested` after `nodes` since docs/features/tested-reads.md "Per read".
+const TOP_KEYS: [&str; 15] = [
     "input",
     "reason",
     "revision",
@@ -90,6 +95,7 @@ const TOP_KEYS: [&str; 14] = [
     "delta",
     "left_out",
     "nodes",
+    "tested",
     "symbols",
     "tests",
     "tasks",
@@ -413,7 +419,15 @@ fn assert_names_nothing(read: &Read, reason: Option<&str>, symbol: bool, context
         if symbol { json!([]) } else { Value::Null },
         "{context}: seeds.symbols"
     );
-    for key in ["revision", "delta", "symbols", "tests", "truncated", "code"] {
+    for key in [
+        "revision",
+        "delta",
+        "tested",
+        "symbols",
+        "tests",
+        "truncated",
+        "code",
+    ] {
         assert_eq!(document[key], Value::Null, "{context}: {key} null");
     }
 }
@@ -872,6 +886,8 @@ struct Printed {
     seed_header: Option<String>,
     matches: Vec<String>,
     nodes: Vec<String>,
+    /// The `tested | ` lines (docs/features/tested-reads.md "The line").
+    tested: Vec<String>,
     symbols: usize,
     tests: usize,
     tasks: Vec<String>,
@@ -895,6 +911,8 @@ fn printed(stdout: &str) -> Printed {
             out.tests += 1;
         } else if line.starts_with("node ") {
             out.nodes.push(line.to_owned());
+        } else if line.starts_with("tested | ") {
+            out.tested.push(line.to_owned());
         } else if line.starts_with("task ") {
             out.tasks.push(line.to_owned());
         } else if line.starts_with("impact: ") {
@@ -2438,6 +2456,7 @@ fn shown_chars(stdout: &str) -> usize {
 fn tail_word(key: &str) -> &'static str {
     match key {
         "nodes" => "nodes",
+        "tested" => "tested",
         "symbols" => "symbols",
         "tests" => "tests",
         "tasks" => "tasks",
@@ -2490,6 +2509,7 @@ fn assert_cut(read: &Read, totals: &[(&str, usize)], context: &str) {
     let lines = |key: &str| -> usize {
         match key {
             "nodes" => shown.nodes.len(),
+            "tested" => shown.tested.len(),
             "symbols" => shown.symbols,
             "tests" => shown.tests,
             "tasks" => shown.tasks.len(),
@@ -2525,6 +2545,16 @@ fn assert_cut(read: &Read, totals: &[(&str, usize)], context: &str) {
     assert_eq!(
         shown.nodes, nodes,
         "{context}: the printed nodes are the JSON's"
+    );
+    let tested: Vec<String> = document["tested"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(tested_common::entry_line)
+        .collect();
+    assert_eq!(
+        shown.tested, tested,
+        "{context}: the printed tested lines are the JSON's"
     );
     let matches: Vec<String> = document["seeds"]["symbols"]
         .as_array()
@@ -3204,4 +3234,184 @@ fn impact_text_prints_its_json() {
         format!("{}\n", want.join("\n")),
         "the keyless row prints verify's binding words"
     );
+}
+
+// ------------------------------------------------- docs/features/tested-reads.md
+
+/// A hub and `spokes` records leaning on it (`impact_cut_names_narrowing`'s
+/// shape, long titles), a `[code]` table over a crate binding nothing,
+/// committed; then a format-3 lock of a made-up block per node (each
+/// `stale spec_changed`), committed. The root.
+fn evidence_radius(scratch: &common::Scratch, git: &Sandbox, spokes: usize) -> PathBuf {
+    let root = scratch.dir("radius");
+    let write = |relative: &str, body: String| {
+        let path = root.join(relative);
+        fs::create_dir_all(path.parent().expect("a parent")).expect("mkdir");
+        fs::write(path, body).expect("write");
+    };
+    write(
+        "specengine.toml",
+        "[project]\nslug = \"tested-radius\"\n\n[ids]\nHUB = { kind = \"hub\", shape = \"name\" }\n\
+         SPOKE = { kind = \"spoke\", width = 4 }\n\n[code]\nroots = [\"pkg\"]\n"
+            .to_owned(),
+    );
+    write(
+        "docs/spec/hub.md",
+        "---\nclass: canon\nid: HUB-CORE\nowner: owner\nreviewed: 2026-10-21\n---\n\n# Core\n\nThe hub every spoke leans on.\n".to_owned(),
+    );
+    for n in 0..spokes {
+        write(
+            &format!("docs/records/SPOKE-{n:04}.md"),
+            format!(
+                "---\nclass: canon\nid: SPOKE-{n:04}\nowner: owner\nreviewed: 2026-10-21\nlinks:\n  depends_on: [HUB-CORE]\n---\n\n\
+                 # Spoke {n:04} of the wide radius, its title written long to fill a line\n\nIt leans on the hub.\n"
+            ),
+        );
+    }
+    write(
+        "pkg/w/Cargo.toml",
+        "[package]\nname = \"w\"\nversion = \"0.0.0\"\nedition = \"2024\"\npublish = false\n"
+            .to_owned(),
+    );
+    write(
+        "pkg/w/src/lib.rs",
+        "pub fn unbound() -> u32 {\n    1\n}\n".to_owned(),
+    );
+    git.init(&root);
+    git.add_all(&root);
+    git.commit(&root, "the radius");
+    let head = git.head(&root).expect("a HEAD");
+    let mut blocks = vec![tested_common::made_up_block("HUB-CORE", 1, '6', &head)];
+    for n in 0..spokes {
+        blocks.push(tested_common::made_up_block(
+            &format!("SPOKE-{n:04}"),
+            1,
+            '7',
+            &head,
+        ));
+    }
+    fs::write(
+        root.join("spec.lock"),
+        tested_common::lock_with(&[], &blocks),
+    )
+    .expect("the lock");
+    git.add_all(&root);
+    git.commit(&root, "the evidence");
+    root
+}
+
+/// docs/features/tested-reads.md RD-9 (uncounted; "Per read", "impact
+/// cut"): the reached nodes' entries are one list, one line one item,
+/// after the `node` lines. Over a hub and 260 spokes, each holding a
+/// block: the nodes print whole and the tested lines are cut inside their
+/// list: the text before the tail within 40 000; the JSON's `tested` the
+/// printed entries (plain verify's first ones, in its order),
+/// `truncated.tested` the rest, the tail `<e> tested`, the summary
+/// unchanged; `--depth 0` prints the hub's entry uncut. Over 400 spokes the
+/// nodes are cut and every entry with them (the tail `<n> nodes, <e>
+/// tested`); without `[code]` `tested` and `truncated.tested` are `null`.
+#[test]
+fn impact_tested_is_cut_as_a_list() {
+    let scratch = common::Scratch::new("im-tested-cut");
+    let git = Sandbox::new(scratch.path());
+    let home = scratch.home("h");
+    let mut vars: Vec<(OsString, OsString)> = git
+        .vars()
+        .into_iter()
+        .filter(|(name, _)| name != "HOME")
+        .collect();
+    vars.push(("HOME".into(), home.clone().into_os_string()));
+    let root = evidence_radius(&scratch, &git, 260);
+    let plain = run_with(&root, &["verify", "--json"], &vars);
+    let plain = common::one_json_document(&plain.stdout).expect("verify's JSON");
+    let all = list(&plain["tested"]);
+    assert_eq!(all.len(), 261, "premise: a block per node");
+    assert!(
+        all.iter().all(|entry| entry["state"] == "stale"),
+        "premise: made-up hashes"
+    );
+
+    let read = impact_in(&root, &["HUB-CORE"], &vars);
+    assert_cut(&read, &[("nodes", 261), ("tested", 261)], "HUB-CORE");
+    let document = read.json();
+    let shown = list(&document["tested"]);
+    assert!(
+        !shown.is_empty() && shown.len() < all.len(),
+        "the cut falls inside the tested list: {} of {}\n{}",
+        shown.len(),
+        all.len(),
+        read.show()
+    );
+    assert_eq!(
+        shown,
+        all[..shown.len()].to_vec(),
+        "the printed entries are plain verify's first"
+    );
+    assert_eq!(
+        document["truncated"]["nodes"],
+        json!(0),
+        "the nodes print whole"
+    );
+    let tail = printed_lines_tail(&read);
+    assert!(
+        tail.starts_with(&format!(
+            "[truncated: {} tested not shown;",
+            all.len() - shown.len()
+        )),
+        "the tail's part, no zero part: {tail}"
+    );
+
+    let narrow = impact_in(&root, &["HUB-CORE", "--depth", "0"], &vars);
+    narrow.answered();
+    assert_eq!(narrow.json()["truncated"], Value::Null, "uncut");
+    assert_eq!(
+        list(&narrow.json()["tested"]),
+        vec![all[0].clone()],
+        "the hub's own entry"
+    );
+    assert_eq!(
+        printed(&narrow.text.stdout).tested,
+        vec![tested_common::entry_line(&all[0])]
+    );
+
+    let wide = common::Scratch::new("im-tested-cut-wide");
+    let wide_git = Sandbox::new(wide.path());
+    let wide_root = evidence_radius(&wide, &wide_git, 400);
+    let read = impact_in(&wide_root, &["HUB-CORE"], &vars);
+    assert_cut(&read, &[("nodes", 401), ("tested", 401)], "400 spokes");
+    let document = read.json();
+    assert_eq!(document["tested"], json!([]), "cut with the nodes");
+    assert_eq!(document["truncated"]["tested"], json!(401));
+    let tail = printed_lines_tail(&read);
+    assert!(
+        tail.contains(" nodes, 401 tested not shown;"),
+        "the tested part after the nodes': {tail}"
+    );
+
+    let config = fs::read_to_string(wide_root.join("specengine.toml")).expect("the config");
+    fs::write(
+        wide_root.join("specengine.toml"),
+        config.replace("\n[code]\nroots = [\"pkg\"]\n", "\n"),
+    )
+    .expect("no [code]");
+    let read = impact_in(&wide_root, &["HUB-CORE"], &vars);
+    read.answered();
+    assert_eq!(
+        read.json()["tested"],
+        Value::Null,
+        "no [code]: `tested` null"
+    );
+    assert_eq!(
+        read.json()["truncated"]["tested"],
+        Value::Null,
+        "no [code]: `truncated.tested` null"
+    );
+    assert!(printed(&read.text.stdout).tested.is_empty());
+}
+
+/// A cut read's tail line.
+fn printed_lines_tail(read: &Read) -> String {
+    printed(&read.text.stdout)
+        .tail
+        .unwrap_or_else(|| panic!("a tail\n{}", read.show()))
 }

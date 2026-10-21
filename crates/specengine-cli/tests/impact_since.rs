@@ -68,8 +68,9 @@ const NO_CODE: &str =
 /// "Cut").
 const SINCE_TAIL: &str = " not shown; lower --depth N or name a later --since REV]";
 
-/// The top-level keys of the document (docs/canon/spec-impact.md "Output").
-const TOP_KEYS: [&str; 14] = [
+/// The top-level keys of the document (docs/canon/spec-impact.md "Output";
+/// `tested` after `nodes` since docs/features/tested-reads.md "Per read").
+const TOP_KEYS: [&str; 15] = [
     "input",
     "reason",
     "revision",
@@ -78,6 +79,7 @@ const TOP_KEYS: [&str; 14] = [
     "delta",
     "left_out",
     "nodes",
+    "tested",
     "symbols",
     "tests",
     "tasks",

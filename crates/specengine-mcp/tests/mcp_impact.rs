@@ -110,8 +110,9 @@ fn refused(shown: &str) -> String {
 /// The tail's narrowing under `since` (docs/features/impact-since.md "Cut").
 const SINCE_TAIL: &str = " not shown; lower --depth N or name a later --since REV]";
 
-/// The document's keys (docs/features/impact.md "JSON").
-const TOP_KEYS: [&str; 14] = [
+/// The document's keys (docs/features/impact.md "JSON"; `tested` after
+/// `nodes` since docs/features/tested-reads.md "Per read").
+const TOP_KEYS: [&str; 15] = [
     "input",
     "reason",
     "revision",
@@ -120,6 +121,7 @@ const TOP_KEYS: [&str; 14] = [
     "delta",
     "left_out",
     "nodes",
+    "tested",
     "symbols",
     "tests",
     "tasks",
@@ -1301,7 +1303,38 @@ fn get_impact_mirror_is_impact_json() {
     );
     assert_eq!(
         keys_at(schema_at(&schema, "truncated")),
-        set(&["nodes", "symbols", "tests", "tasks", "seeds", "delta"])
+        set(&[
+            "nodes", "tested", "symbols", "tests", "tasks", "seeds", "delta"
+        ])
+    );
+    // docs/features/tested-reads.md "MCP": `tested` a list of 8b-1's
+    // entries or null, `truncated.tested` a count or null.
+    assert_eq!(
+        keys_at(schema_at(&schema, "tested[]")),
+        set(&[
+            "node",
+            "state",
+            "category",
+            "rev",
+            "node_rev",
+            "commit",
+            "verified_at"
+        ])
+    );
+    assert_eq!(
+        types_of(schema_at(&schema, "tested")),
+        set(&["array", "null"]),
+        "tested: a list or null"
+    );
+    assert_eq!(
+        types_of(schema_at(&schema, "truncated.tested")),
+        set(&["integer", "null"]),
+        "truncated.tested: a count or null"
+    );
+    let states = enum_values(schema_at(&schema, "tested[].state")).expect("a closed enum");
+    assert!(
+        set(&["verified", "stale", "unverifiable"]).is_subset(&states),
+        "8b-1's states: {states:?}"
     );
     assert_eq!(
         keys_at(schema_at(&schema, "code")),
@@ -1710,4 +1743,120 @@ fn get_impact_refuses_an_option_like_since_before_git() {
         fs::read_to_string(&log).is_ok_and(|logged| logged.contains("rev-parse")),
         "premise: the shim logs the server's git"
     );
+}
+
+// ------------------------------------------------- docs/features/tested-reads.md
+
+/// docs/features/tested-reads.md RD-8 **M8** (a mirror without `tested`)
+/// and TE-1's MCP half: over the kiln (`fixtures/verify-tests`) with its
+/// golden format-3 lock committed, `get_impact` for KILN-RAMP, the
+/// document KILN-FIRING and the criterion `glaze-check/GLZ-01` answers
+/// what `spec impact` answers through the library, both eras, each
+/// document walked against the `outputSchema` (a key the mirror lacks is
+/// refused): `tested` the 9th of 15 keys, its entries `verified` with the
+/// seven keys, by node bytes, the reached nodes' and those within them;
+/// the content a `tested | verified | <node>` line per entry, after the
+/// `node` lines and before any `symbol` line; uncut.
+#[test]
+fn get_impact_carries_tested() {
+    let project = Project::new("im-mcp-tested", "verify-tests");
+    fs::copy(
+        repository_root().join("fixtures/spec-lock/verify-tests.tested.lock"),
+        project.root.join("spec.lock"),
+    )
+    .expect("the golden lock");
+    project.sandbox.add_all(&project.root);
+    project.sandbox.commit(&project.root, "the evidence");
+    let calls = [
+        call("section", json!({"id": "KILN-RAMP"}), Want::Answered),
+        call("document", json!({"id": "KILN-FIRING"}), Want::Answered),
+        call(
+            "criterion",
+            json!({"id": "glaze-check/GLZ-01"}),
+            Want::Answered,
+        ),
+    ];
+    let results = project.answers(&calls);
+    for era in &results {
+        for (call, result) in calls.iter().zip(era) {
+            let document = &result["structuredContent"];
+            let keys: Vec<&str> = document
+                .as_object()
+                .expect("a document")
+                .keys()
+                .map(String::as_str)
+                .collect();
+            assert_eq!(keys.len(), 15, "{}: 15 keys", call.label);
+            let tested = document["tested"].as_array().expect("tested, a list");
+            assert!(!tested.is_empty(), "{}: the evidence reached", call.label);
+            let nodes: Vec<&str> = tested
+                .iter()
+                .filter_map(|entry| entry["node"].as_str())
+                .collect();
+            let mut sorted = nodes.clone();
+            sorted.sort_unstable();
+            assert_eq!(nodes, sorted, "{}: by node bytes", call.label);
+            for entry in tested {
+                assert_eq!(
+                    keys_of_entry(entry),
+                    set(&[
+                        "node",
+                        "state",
+                        "category",
+                        "rev",
+                        "node_rev",
+                        "commit",
+                        "verified_at"
+                    ])
+                );
+                assert_eq!(entry["state"], json!("verified"), "{entry}");
+            }
+            assert_eq!(document["truncated"], Value::Null, "{}: uncut", call.label);
+            let text = content_text(result);
+            let lines: Vec<&str> = text.lines().collect();
+            let printed: Vec<&str> = lines
+                .iter()
+                .copied()
+                .filter(|line| line.starts_with("tested | "))
+                .collect();
+            let want: Vec<String> = nodes
+                .iter()
+                .map(|node| format!("tested | verified | {node}"))
+                .collect();
+            assert_eq!(printed, want, "{}: the lines\n{text}", call.label);
+            let first = lines
+                .iter()
+                .position(|line| line.starts_with("tested | "))
+                .expect("a line");
+            assert!(
+                lines[first - 1].starts_with("node "),
+                "{}: after the node lines\n{text}",
+                call.label
+            );
+            assert!(
+                !lines[first..]
+                    .iter()
+                    .skip(printed.len())
+                    .any(|line| line.starts_with("node ")),
+                "{}: no node line after them\n{text}",
+                call.label
+            );
+        }
+    }
+    assert!(
+        results[0][0]["structuredContent"]["tested"]
+            .as_array()
+            .is_some_and(|tested| tested.iter().any(|entry| entry["node"] == "KILN-RAMP")),
+        "KILN-RAMP's own entry"
+    );
+}
+
+/// An entry's key set.
+fn keys_of_entry(entry: &Value) -> BTreeSet<String> {
+    entry
+        .as_object()
+        .expect("an entry")
+        .keys()
+        .cloned()
+        .collect()
 }

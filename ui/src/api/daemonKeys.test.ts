@@ -65,6 +65,7 @@ import type {
   TaskRoadmap,
   TaskRun,
   TaskTarget,
+  TestedRow,
   UnappliedAmendment,
   UnboundCounts,
   UnboundMarker,
@@ -97,10 +98,12 @@ import type {
 // docs/features/roadmap-screen.md: the plan document, its counts, cut, sums, groups, items,
 // estimates, item tasks, pool tasks, and the package's `TaskRoadmap`, the sixty-sixth);
 // bundle-bindings' one (UI-1, RD-8 of docs/features/bundle-bindings.md: `BindingRow`, a package's
-// `bindings` row, the sixty-seventh and last; the package keeps its 26 keys). A key the types carry
-// ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already
-// names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all sixty-seven, in the slices' order.
+// `bindings` row, the sixty-seventh; the package keeps its 26 keys); tested-reads' one (UI, TE-5 of
+// docs/features/tested-reads.md: `TestedRow`, a package's `tested` entry, the sixty-eighth and last,
+// with the package's `tested` after `bindings`, 27 keys). A key the types carry ahead of the file is
+// listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that
+// file is absent the comparison is skipped, saying so; once it exists it names all sixty-eight, in
+// the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -287,7 +290,8 @@ const KEYS = {
   TaskListEntry: { id: true, status: true, title: true, targets: true, stale: true, updated_at: true } satisfies Record<keyof TaskListEntry, true>,
   TaskNotFound: { id: true, reason: true } satisfies Record<keyof TaskNotFound, true>,
   // docs/canon/task-package.md "Package": the package and each of its parts, `author` among them;
-  // docs/features/roadmap-surfaces.md "Data" `roadmap` after `bundle` (its `TaskRoadmap` set: 3a).
+  // docs/features/roadmap-surfaces.md "Data" `roadmap` after `bundle` (its `TaskRoadmap` set: 3a);
+  // docs/canon/spec-lock-tested.md "Reads" `tested` after `bindings` (its `TestedRow` set: 8b-2).
   TaskPackage: {
     schema_version: true,
     id: true,
@@ -305,6 +309,7 @@ const KEYS = {
     open_proposals: true,
     owner_notes: true,
     bindings: true,
+    tested: true,
     spec_snapshot: true,
     snapshot_diff: true,
     claim: true,
@@ -530,6 +535,17 @@ const KEYS = {
     detail: true,
     anchor: true,
   } satisfies Record<keyof BindingRow, true>,
+  // docs/canon/spec-lock-tested.md "Reads": a package's `tested` entry, plain verify's 7 keys in order
+  // (docs/features/tested-reads.md, UI and TE-5).
+  TestedRow: {
+    node: true,
+    state: true,
+    category: true,
+    rev: true,
+    node_rev: true,
+    commit: true,
+    verified_at: true,
+  } satisfies Record<keyof TestedRow, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -568,7 +584,7 @@ const CITED: Record<Named, string> = {
   TaskListEntry: "id, status, title, targets, stale, updated_at",
   TaskNotFound: "id, reason",
   TaskPackage:
-    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
+    "schema_version, id, project, status, title, goal, profile, stale, targets, criteria, affected_nodes, plan, assumptions, open_proposals, owner_notes, bindings, tested, spec_snapshot, snapshot_diff, claim, runs, bundle, roadmap, author, created_at, updated_at, notes",
   TaskTarget: "id, path, kind, title",
   TaskCriterion: "ref, text",
   TaskAssumption: "proposal, text",
@@ -615,6 +631,7 @@ const CITED: Record<Named, string> = {
   RoadmapPoolTask: "id, status, title, targets",
   TaskRoadmap: "item, group, release, position, of, priority, waits_on",
   BindingRow: "node, relation, file, kind, symbol, item_kind, line, end_line, signature, layer, sync, category, detail, anchor",
+  TestedRow: "node, state, category, rev, node_rev, commit, verified_at",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -722,8 +739,14 @@ const BEFORE_BUNDLE_BINDINGS: readonly Named[] = [...BEFORE_ROADMAP_SCREEN, ...R
 /** bundle-bindings' one: a package's `bindings` row (docs/features/bundle-bindings.md "UI and daemon keys", UI-1). */
 const BUNDLE_BINDINGS: readonly Named[] = ["BindingRow"];
 
+/** The sixty-seven types the fixture named before tested-reads. */
+const BEFORE_TESTED_READS: readonly Named[] = [...BEFORE_BUNDLE_BINDINGS, ...BUNDLE_BINDINGS];
+
+/** tested-reads' one: a package's `tested` entry (docs/canon/spec-lock-tested.md "Reads"; docs/features/tested-reads.md TE-5). */
+const TESTED_READS: readonly Named[] = ["TestedRow"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_BUNDLE_BINDINGS, ...BUNDLE_BINDINGS];
+const ALL: readonly Named[] = [...BEFORE_TESTED_READS, ...TESTED_READS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -747,7 +770,8 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * bundle-bindings' RD-8 wrote BindingRow, the sixty-seventh set (docs/features/bundle-bindings.md).
+ * tested-reads' TE-5 wrote the package's `tested` and TestedRow, the sixty-eighth set
+ * (docs/features/tested-reads.md).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -783,7 +807,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HEALTH_CODE.at(-1)).toBe("DriftEvidence");
     expect(BEFORE_ROADMAP_SCREEN.at(-1)).toBe("UnboundMarker");
     expect(BEFORE_BUNDLE_BINDINGS.at(-1)).toBe("TaskRoadmap");
-    expect(ALL.at(-1)).toBe("BindingRow");
+    expect(BEFORE_TESTED_READS.at(-1)).toBe("BindingRow");
+    expect(ALL.at(-1)).toBe("TestedRow");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -802,7 +827,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since bundle-bindings' RD-8 wrote BindingRow into the file", () => {
+  it("lists ahead of the fixture only keys their types serve, none since tested-reads' TE-5 wrote TestedRow and the package's tested into the file", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -853,8 +878,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect([...ALL].sort()).toEqual([...NAMES].sort());
   });
 
-  it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 26, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks, UI-1 of roadmap-surfaces)", () => {
-    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 26, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
+  it("counts the daemon's keys of ui-live-tasks' seventeen: 2, 6, 2, 27, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4 (AC-07 of ui-live-tasks, UI-1 of roadmap-surfaces, UI of tested-reads)", () => {
+    expect(UI_LIVE_TASKS.map((name) => served(name).length)).toEqual([2, 6, 2, 27, 4, 2, 2, 6, 2, 3, 4, 3, 5, 4, 7, 3, 4]);
     expect(UI_LIVE_TASKS).toHaveLength(17);
     expect(BEFORE_ROUND).toHaveLength(34);
     expect(BEFORE_HEALTH_LEFT).toHaveLength(41);
@@ -863,8 +888,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HEALTH_CODE).toHaveLength(46);
     expect(BEFORE_ROADMAP_SCREEN).toHaveLength(56);
     expect(BEFORE_BUNDLE_BINDINGS).toHaveLength(66);
-    expect(ALL).toHaveLength(67);
-    expect(new Set(ALL).size).toBe(67);
+    expect(BEFORE_TESTED_READS).toHaveLength(67);
+    expect(ALL).toHaveLength(68);
+    expect(new Set(ALL).size).toBe(68);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -876,13 +902,29 @@ describe("the daemon's document types (AC-09)", () => {
     expect(NAMES.filter((name) => name.includes("Roadmap"))).toEqual([...ROADMAP_SCREEN]);
   });
 
-  it("counts bundle-bindings' one: a package row's 14 keys in the canon's order, declared so, the last set; the package's bindings stays its 16th of 26 keys (UI-1 of bundle-bindings)", () => {
+  it("counts bundle-bindings' one: a package row's 14 keys in the canon's order, declared so, the sixty-seventh set; the package's bindings stays its 16th key (UI-1 of bundle-bindings)", () => {
     expect(BUNDLE_BINDINGS.map((name) => served(name).length)).toEqual([14]);
-    expect(ALL.slice(BEFORE_BUNDLE_BINDINGS.length)).toEqual([...BUNDLE_BINDINGS]);
+    expect(BEFORE_TESTED_READS.slice(BEFORE_BUNDLE_BINDINGS.length)).toEqual([...BUNDLE_BINDINGS]);
     expect(declaredKeys("BindingRow")).toEqual(Object.keys(KEYS.BindingRow));
     expect(served("TaskPackage").indexOf("bindings")).toBe(15);
-    expect(served("TaskPackage")).toHaveLength(26);
     expect(source).toMatch(/^ {2}bindings: BindingRow\[\];$/m);
+  });
+
+  it("counts tested-reads' one: an entry's 7 keys in the canon's order, declared so, the last set; the package's tested its 17th of 27 keys, right after bindings, declared so (UI of tested-reads)", () => {
+    expect(TESTED_READS.map((name) => served(name))).toEqual([["node", "state", "category", "rev", "node_rev", "commit", "verified_at"]]);
+    expect(ALL.slice(BEFORE_TESTED_READS.length)).toEqual([...TESTED_READS]);
+    expect(declaredKeys("TestedRow")).toEqual(Object.keys(KEYS.TestedRow));
+    const pkg = served("TaskPackage");
+    expect([pkg.indexOf("tested"), pkg.length]).toEqual([16, 27]);
+    expect(pkg.slice(pkg.indexOf("bindings"), pkg.indexOf("bindings") + 3)).toEqual(["bindings", "tested", "spec_snapshot"]);
+    expect(declaredKeys("TaskPackage")).toEqual(pkg);
+    expect(source).toMatch(/^ {2}tested: TestedRow\[\] \| null;$/m);
+  });
+
+  it('TestedRow cites `docs/canon/spec-lock-tested.md` "Reads" (UI of tested-reads)', () => {
+    const at = source.indexOf("export interface TestedRow ");
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/spec-lock-tested.md` "Reads"');
   });
 
   it('BindingRow cites `docs/canon/code-reads.md` "The binding row" (UI-1 of bundle-bindings)', () => {
@@ -1043,12 +1085,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the sixty-seven types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one", () => {
+  it("names exactly the sixty-eight types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all sixty-seven, in the slices' order.
+    // None is ahead of the file today: it names all sixty-eight, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(67);
+    expect(Object.keys(sets)).toHaveLength(68);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1082,9 +1124,9 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.InboxEntry).not.toContain("drift");
   });
 
-  it("names the package's 26 keys in the types' order: roadmap after bundle, before author (UI-1 of roadmap-surfaces)", () => {
+  it("names the package's 27 keys in the types' order: roadmap after bundle, before author; tested after bindings (UI-1 of roadmap-surfaces, UI of tested-reads)", () => {
     expect(sets.TaskPackage).toEqual(served("TaskPackage"));
-    expect(sets.TaskPackage).toHaveLength(26);
+    expect(sets.TaskPackage).toHaveLength(27);
   });
 
   it("names health-left's keys in the document's order: the health document's three, then health-code's three, an amendment's six (AC-T2; UI-1 of health-code)", () => {
@@ -1103,10 +1145,19 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(ROADMAP_SCREEN.map((name) => sets[name]?.length)).toEqual([15, 2, 4, 3, 8, 11, 2, 2, 4, 7]);
   });
 
-  it("names bundle-bindings' BindingRow after TaskRoadmap, last, with a package row's 14 keys in the types' order; the package keeps 26 (UI-1, RD-8 of bundle-bindings)", () => {
-    expect(Object.keys(sets).slice(BEFORE_BUNDLE_BINDINGS.length)).toEqual(expected.slice(BEFORE_BUNDLE_BINDINGS.length));
-    expect(sets.BindingRow ?? []).toEqual(compared("BindingRow"));
-    expect(sets.TaskPackage).toHaveLength(26);
+  it("names bundle-bindings' BindingRow after TaskRoadmap, the sixty-seventh, with a package row's 14 keys in the types' order (UI-1, RD-8 of bundle-bindings)", () => {
+    expect(Object.keys(sets).at(BEFORE_TESTED_READS.length - 1)).toBe("BindingRow");
+    expect(sets.BindingRow).toEqual(served("BindingRow"));
+  });
+
+  it("names tested-reads' TestedRow after BindingRow, last, with an entry's 7 keys in the types' order, and the package's tested right after bindings, its 17th (UI, TE-5 of tested-reads)", () => {
+    expect(Object.keys(sets).slice(BEFORE_TESTED_READS.length)).toEqual(expected.slice(BEFORE_TESTED_READS.length));
+    expect(Object.keys(sets).at(-1)).toBe("TestedRow");
+    expect(sets.TestedRow ?? []).toEqual(compared("TestedRow"));
+    expect(sets.TestedRow).toEqual(["node", "state", "category", "rev", "node_rev", "commit", "verified_at"]);
+    const pkg = sets.TaskPackage ?? [];
+    expect(pkg.slice(pkg.indexOf("bindings"), pkg.indexOf("bindings") + 2)).toEqual(["bindings", "tested"]);
+    expect(pkg.indexOf("tested")).toBe(16);
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {

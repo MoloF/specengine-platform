@@ -36,6 +36,9 @@
 //! the exit and the spec part unchanged. Without `[code]` the code layer
 //! is not read: the read is `spec show REF`'s, each node's rows `None`, and
 //! the note. Without `--bindings` the code index is never touched.
+//! With the rows judged, each node also carries the `[[tested]]` blocks
+//! of it and its sections, as `spec verify` judges them (task spec
+//! `tested-reads`); without `--bindings` the lock is never read.
 
 use std::panic::{self, AssertUnwindSafe};
 
@@ -44,7 +47,7 @@ use std::collections::BTreeSet;
 use specengine_core::check::{NodeAt, Resolution, Resolver, SpecGraph, is_tier3_file};
 use specengine_core::{CodeConfig, DOCUMENT_EXTENSION, is_clean_relative, tokens_est};
 use specengine_model::script::normalize_char;
-use specengine_model::{BindingRow, IdScheme, IdScript, ParsedFile, Reference, grammar};
+use specengine_model::{BindingRow, IdScheme, IdScript, ParsedFile, Reference, TestedRow, grammar};
 use specengine_store::{GitEnv, Source as _, WorkingTree, b3_hash, span_hash};
 
 use crate::bindings::{SetRow, no_code_note, set_bindings};
@@ -140,6 +143,11 @@ pub struct ShownBindings {
     pub judged: bool,
     /// Per row: its binding as verify prints it, and its class.
     pub(crate) shown: Vec<(String, Option<&'static str>)>,
+    /// The `[[tested]]` blocks of the node and its sections, by node
+    /// bytes, as `spec verify` judges them (task spec `tested-reads`);
+    /// `None` when the rows were not judged or the blocks could not be (a
+    /// note says why).
+    pub tested: Option<Vec<TestedRow>>,
 }
 
 /// An ID section inside a shown node.
@@ -406,6 +414,7 @@ fn add_bindings(
                     .iter()
                     .map(|row| (row.binding.clone(), row.class))
                     .collect(),
+                tested: read_rows.tested_of(set),
             });
         }
     }

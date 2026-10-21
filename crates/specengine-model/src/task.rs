@@ -236,6 +236,25 @@ pub struct BindingPlace {
     pub item_kind: Option<String>,
 }
 
+/// One `[[tested]]` block of `spec.lock` as `spec verify` and the reads
+/// show it (task specs `tested-evidence`, `tested-reads`): the node's
+/// canonical ID, the block's state now (`verified`, `stale`,
+/// `unverifiable`, `node_gone`) and its `category` (a stale block's
+/// `spec_changed` or `code_changed`, an unverifiable one's word; else
+/// `null`), the revision it vouches for, the node's revision now (`null`
+/// when gone or unreadable), the commit the tests passed at and when.
+/// Computed per read, never stored; no state, claim or approval reads it.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct TestedRow {
+    pub node: String,
+    pub state: String,
+    pub category: Option<String>,
+    pub rev: u32,
+    pub node_rev: Option<u32>,
+    pub commit: String,
+    pub verified_at: String,
+}
+
 /// Where the snapshot was frozen: the approving worktree, the root in it,
 /// its branch and `HEAD`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -353,6 +372,11 @@ pub struct TaskPackage {
     pub open_proposals: Vec<PackageProposal>,
     pub owner_notes: Vec<OwnerNote>,
     pub bindings: Vec<BindingRow>,
+    /// Per read, never stored: the `[[tested]]` blocks of the task's set
+    /// (`spec verify --task`'s: targets, criteria refs, affected nodes and
+    /// their sections), by node; `[]` without one, `null` when they could
+    /// not be judged (a note says why). Never cut.
+    pub tested: Option<Vec<TestedRow>>,
     pub spec_snapshot: Option<SpecSnapshot>,
     /// `[]` when not stale, `null` when staleness cannot be told.
     pub snapshot_diff: Option<Vec<SnapshotDiff>>,
