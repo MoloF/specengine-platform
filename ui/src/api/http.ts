@@ -16,6 +16,7 @@ import type {
   GraphView,
   HealthReport,
   Inbox,
+  LockDiffView,
   NodeView,
   Project,
   Proposal,
@@ -37,8 +38,8 @@ import type {
 // graph and the check `docs/features/ui-live.md` "Data", the tasks
 // `docs/features/ui-live-tasks.md` "Data", the stage `docs/canon/decision-staging.md` "Daemon",
 // the question round `docs/features/ui-round.md` "Data", the unapplied amendments
-// `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints"):
-// `fetch` and `EventSource`, no package.
+// `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
+// the lock diff `docs/features/lock-diff.md` "Route"): `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -359,6 +360,18 @@ export class HttpClient implements SpecEngineClient {
       ["pool", options?.pool === true ? true : undefined],
     ]);
     return (await request("GET", `${projectPath(project)}/roadmap${query}`, { signal })) as RoadmapDocument;
+  }
+
+  /**
+   * `spec lock diff REF --json`, uncut (`docs/features/lock-diff.md` "Route"): `ref` the one query,
+   * the REF as given, encoded once (`#` as %23, `/` as %2F, a `%` as %25). A 404 is the exit-1
+   * document (a REF naming nothing: `reason` set, `nodes` empty), resolved as data; a 400 (the
+   * query refused), a 503 (exit 2: a look-alike ID, the config, the store) and an older daemon's
+   * 404 error body reject in the daemon's words. Takes its query's AbortSignal.
+   */
+  async getLockDiff(project: string, ref: string, signal?: AbortSignal): Promise<LockDiffView> {
+    const query = queryOf([["ref", ref]]);
+    return (await request("GET", `${projectPath(project)}/lock-diff${query}`, { signal })) as LockDiffView;
   }
 
   /**

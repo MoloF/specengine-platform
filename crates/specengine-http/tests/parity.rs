@@ -697,3 +697,206 @@ fn ac02_a_document_over_40000_characters_comes_whole_while_spec_show_cuts() {
         small.document()
     );
 }
+
+// -------------------------------------------------------------- lock-diff
+
+/// `GET <path>` against `spec --root <root> <args> --json`: exit 0 a 200,
+/// exit 1 a 404, the body the CLI's document byte for byte less its LF,
+/// JSON, `no-store`, the same bytes repeated.
+fn lock_diff_same(
+    server: &Server,
+    home: &Path,
+    cwd: &Path,
+    root: &Path,
+    path: &str,
+    args: &[&str],
+) -> Reply {
+    let run = spec_json(home, cwd, root, args);
+    let reply = server.get(path);
+    let want = if run.code == 0 { 200 } else { 404 };
+    assert_eq!(
+        reply.status,
+        want,
+        "{path} vs spec {args:?} (exit {}): {}",
+        run.code,
+        reply.text()
+    );
+    assert_eq!(
+        reply.text(),
+        run.document(),
+        "{path} is byte-equal to `spec --root {} {} --json`",
+        root.display(),
+        args.join(" ")
+    );
+    assert_eq!(
+        reply.header("content-type"),
+        Some("application/json; charset=utf-8"),
+        "{path}"
+    );
+    assert_eq!(reply.header("cache-control"), Some("no-store"), "{path}");
+    let again = server.get(path);
+    assert_eq!(
+        (again.status, again.text()),
+        (reply.status, reply.text()),
+        "{path}: a repeat answers the same bytes"
+    );
+    reply
+}
+
+/// docs/features/lock-diff.md RD-7 ("Route"): `GET
+/// /api/projects/code-a/lock-diff?ref=<REF>` over a git copy of
+/// `fixtures/code-a` holding the golden lock, every entry's `commit` set to
+/// the fixture's commit (so both sides are shown), LAW-BOUND's sentence
+/// and `CAP` edited, uncommitted. Each 400 of "Route" first, nothing run
+/// (the fresh `HOME` holds nothing beyond the daemon's); each 200 body is
+/// `spec --root R lock diff REF --json` byte for byte less its final LF
+/// (LAW-BOUND, its document, a path REF, a written `@rev`, a REF with
+/// blanks; two REFs, two bodies); a REF naming nothing a 404 with the
+/// exit-1 document; a look-alike and a `project:` REF a 503 with the CLI's
+/// exit-2 line. M7 (the route ignoring `ref`) red.
+#[test]
+fn rd7_lock_diff_is_the_clis_document_byte_for_byte() {
+    let scratch = Scratch::new("parity-lock-diff");
+    let root = scratch.repo("code-a", "code", "main");
+    let git = scratch.git();
+    let head = git.run(&root, &["rev-parse", "HEAD"]).trim().to_owned();
+    let golden = common::read_text(&common::fixture("spec-lock"), "code-a.lock");
+    assert!(
+        golden.contains("\ncommit = \""),
+        "premise: the golden's commits"
+    );
+    let lock: String = golden
+        .lines()
+        .map(|line| {
+            if line.starts_with("commit = ") {
+                format!("commit = \"{head}\"\n")
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect();
+    write(&root, "spec.lock", &lock);
+    git.run(&root, &["add", "-A"]);
+    git.run(&root, &["commit", "-q", "-m", "the lock"]);
+    common::replace(
+        &root,
+        "docs/spec/counter.md",
+        "The count never exceeds the cap.",
+        "The count never exceeds the cap, twelve by default.",
+    );
+    common::replace(
+        &root,
+        "crates/tally/src/counter.rs",
+        "CAP: u32 = 10;",
+        "CAP: u32 = 12;",
+    );
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let p = "/api/projects/code-a/lock-diff";
+
+    // 400, nothing run.
+    for (query, message) in [
+        ("", "`ref` is required"),
+        (
+            "?ref=LAW-BOUND&ref=LAW-STEP",
+            "`ref` is given 2 times: it takes one value",
+        ),
+        (
+            "?ref=LAW-BOUND&x=1",
+            "`x` is no query name of lock-diff: it takes ref",
+        ),
+        (
+            "?ref=LAW-BOUND&json=true",
+            "`json` is no query name of lock-diff: it takes ref",
+        ),
+    ] {
+        let path = format!("{p}{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+        assert_eq!(reply.header("cache-control"), Some("no-store"), "{path}");
+        assert_eq!(reply.error_message(), message, "{path}");
+    }
+    for query in ["?ref=LAW%2", "?ref=%FF"] {
+        let path = format!("{p}{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+        let message = reply.error_message();
+        assert!(message.contains("`ref`"), "{path}: {message}");
+    }
+    assert!(
+        common::beyond_daemon(&home).is_empty(),
+        "a 400 runs no call: the fresh HOME holds {:?}",
+        common::beyond_daemon(&home)
+    );
+
+    // 200: the CLI's exit-0 document.
+    let mut bodies = Vec::new();
+    for (query, reference) in [
+        ("LAW-BOUND", "LAW-BOUND"),
+        ("PIECE-COUNTER", "PIECE-COUNTER"),
+        ("docs%2Fspec%2Fcounter.md", "docs/spec/counter.md"),
+        ("LAW-BOUND%402", "LAW-BOUND@2"),
+        ("%20LAW-BOUND%20", " LAW-BOUND "),
+    ] {
+        let reply = lock_diff_same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{p}?ref={query}"),
+            &["lock", "diff", reference],
+        );
+        assert_eq!(reply.status, 200, "{query}");
+        assert_eq!(reply.json()["ref"], reference, "`ref` echoed raw");
+        bodies.push(reply.text().to_owned());
+    }
+    assert_ne!(bodies[0], bodies[1], "premise: two REFs, two documents");
+    assert!(
+        bodies[0].contains("\"spec\":{\"commit\":")
+            && bodies[0].contains("\"code\":{\"blob\":")
+            && bodies[0].contains("\"diff\":\"@@"),
+        "premise: both sides shown: {}",
+        bodies[0]
+    );
+
+    // 404: the CLI's exit-1 document.
+    for (query, reference) in [("NOPE-9", "NOPE-9"), ("", "")] {
+        let reply = lock_diff_same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{p}?ref={query}"),
+            &["lock", "diff", reference],
+        );
+        assert_eq!(reply.status, 404, "{query:?}");
+        let document = reply.json();
+        assert!(document["reason"].is_string(), "{}", reply.text());
+        assert_eq!(document["nodes"], json!([]), "{}", reply.text());
+    }
+
+    // 503: the CLI cannot run; its line verbatim.
+    let lookalike = "L\u{410}W-BOUND";
+    for (query, reference) in [
+        (encode_component(lookalike), lookalike),
+        ("other%3ALAW-BOUND".to_owned(), "other:LAW-BOUND"),
+    ] {
+        let path = format!("{p}?ref={query}");
+        let root_text = root.to_str().expect("UTF-8 root");
+        let run = common::spec(
+            &home,
+            &cwd,
+            &["--root", root_text, "lock", "diff", reference, "--json"],
+        );
+        run.code(2);
+        assert_eq!(run.stdout, "", "exit 2 prints no document: {}", run.show());
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 503, "{path}: {}", reply.text());
+        assert_eq!(
+            reply.error_message(),
+            run.stderr.trim_end_matches('\n'),
+            "{path}: the CLI's line verbatim"
+        );
+    }
+}

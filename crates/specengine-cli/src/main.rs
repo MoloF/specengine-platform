@@ -37,9 +37,9 @@ use specengine_cli::{
     Exit, ExportIndexRequest, ExportStateRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress,
     GateRequest, GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES,
     ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity,
-    IntakeSource, InterpretRequest, LockAcceptRequest, LockPrompt, LockRebaseRequest,
-    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
-    RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
+    IntakeSource, InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt,
+    LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest,
+    RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
     RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
     SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
     TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
@@ -395,6 +395,12 @@ enum LockCommand {
     Regen,
     /// Carry spec.lock into this build's format and code recipe: each entry's hashes made again from its own committed blob, its revision, spec hash, blob, commit and date kept; an entry that cannot be made again is dropped and named. Lists the entries, asks [y/N] on the terminal, commits spec.lock alone. Exit 0 committed or nothing to change, 1 refused (a dirty input, no lock, not confirmed, the commit failed or unverified), 2 cannot run.
     Rebase,
+    /// What moved since REF's lock entries: for each drifted binding the lock holds, the node's text at the entry's commit and the code at its blob, each against the working tree, as git's hunks; a read, no question, nothing written. Exit 0 answered, 1 REF names nothing, 2 cannot run.
+    Diff {
+        /// Any form `show` takes.
+        #[arg(value_name = "REF")]
+        reference: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -1500,6 +1506,17 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &mut consent,
             )?))
         }
+        // A read: no terminal asked for.
+        Command::Lock {
+            command: LockCommand::Diff { reference },
+        } => Outcome::LockDiff(Box::new(specengine_cli::lock_diff(
+            env,
+            globals,
+            &LockDiffRequest {
+                reference,
+                git: process_git(env),
+            },
+        )?)),
         Command::Task { command } => run_task(env, globals, command)?,
         // Run apart, before the environment is read (`run_gate`).
         Command::Gate { .. } => {

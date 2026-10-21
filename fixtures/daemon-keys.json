@@ -74,5 +74,10 @@
   "DriftLock": ["rev", "commit", "verified_at"],
   "DriftLevels": ["lock", "markers", "changed"],
   "ShownNode": ["id", "kind", "title", "path", "line", "end_line", "status", "rev", "tokens_est", "archived", "utf8", "sections", "norm_hash", "span_hash", "text", "truncated", "omitted", "links", "bindings"],
-  "ShownBindings": ["rows", "omitted", "tested"]
+  "ShownBindings": ["rows", "omitted", "tested"],
+  "LockDiffView": ["ref", "reason", "notes", "nodes"],
+  "LockDiffNode": ["id", "path", "line", "rows"],
+  "LockDiffRow": ["row", "spec", "code"],
+  "LockDiffSpecSide": ["commit", "path", "diff"],
+  "LockDiffCodeSide": ["blob", "file", "diff"]
 }

@@ -31,6 +31,10 @@
 //!   lines, signature and layer (the symbol at the key's qpath and item
 //!   kind in the BLAKE3-checked file), a RON row its first marker's line;
 //!   `sync` the state word, `category`, `detail`, `anchor` verify's.
+//! - **A read's judged set** ([`with_judged_set`], task spec `lock-diff`):
+//!   the same code layer and judge, the judged set and the open git
+//!   session handed to the read before the session ends; any cause, the
+//!   session's end failing too, the read's one `bindings:` note.
 //! - **A read's blocks** (task spec `tested-reads`): with the rows judged,
 //!   the `[[tested]]` blocks of the set's nodes (by their canonical IDs),
 //!   judged by `spec verify`'s one function ([`tested_entries`]) over the
@@ -551,24 +555,15 @@ pub(crate) fn set_bindings_with(
         code: None,
         tested: None,
     };
-    let label = &project.config_label;
-    // (2), (1): `[code]` alone; `[verify]` is never read.
-    let code = match CodeConfig::from_toml(text) {
-        Ok(Some(code)) => code,
-        Ok(None) => {
-            let sentence = unprefixed(&no_code_table(label));
-            return unknown(RunCause::new(CAUSE_NO_CODE, sentence));
-        }
-        Err(error) => return unknown(RunCause::new(CAUSE_CONFIG, error.at(label))),
-    };
-    if let Err(error) = known_frameworks(&code, label) {
-        return unknown(RunCause::new(CAUSE_CONFIG, unprefixed(&error)));
-    }
-
-    // (3), (8): the code index refreshed, its gap anywhere a cause.
     let mut messages = Vec::new();
-    let skipped = match refreshed_code(index, project, &code, &mut messages) {
-        Ok(skipped) => skipped,
+    let ReadOpened {
+        code,
+        skipped,
+        git,
+        lock,
+        mut causes,
+    } = match open_read(project, text, git_env, index, &mut messages) {
+        Ok(opened) => opened,
         Err(cause) => return unknown(cause),
     };
     // The latest refresh's skipped names and files: the judge's own when
@@ -579,33 +574,6 @@ pub(crate) fn set_bindings_with(
             ..CodeRefs::default()
         };
         stored_count(&refs, walk.skipped.unwrap_or(skipped))
-    };
-
-    // (4), (5), (6): git, the lock's unmerged stages, the lock.
-    let mut causes: Vec<RunCause> = Vec::new();
-    let mut git = match VerifyGit::open(&project.root, git_env) {
-        Ok(git) => Some(git),
-        Err(cause) => {
-            causes.push(RunCause::new(CAUSE_GIT, cause.message));
-            None
-        }
-    };
-    if let Some(open) = &mut git {
-        match open.is_unmerged(LOCK_FILE) {
-            Ok(false) => {}
-            Ok(true) => causes.push(RunCause::new(
-                CAUSE_UNMERGED,
-                format!("{LOCK_FILE} is unmerged: run spec lock regen"),
-            )),
-            Err(cause) => causes.push(RunCause::new(CAUSE_GIT, cause.message)),
-        }
-    }
-    let lock = match read_lock(&project.root, &build_recipes()) {
-        Ok(read) => Some(read.lock),
-        Err(error) => {
-            causes.push(RunCause::new(CAUSE_LOCK, unprefixed(&error)));
-            None
-        }
     };
 
     let mut tested = None;
@@ -702,6 +670,141 @@ pub(crate) fn set_bindings_with(
         note: causes.first().map(note),
         code: counted,
         tested: None,
+    }
+}
+
+/// What a read's code layer opened before its judge: `[code]`, the
+/// refresh's skipped names and files, the git session, the lock parsed
+/// with this build's recipes, and the causes (4)-(6) found, in the order
+/// found.
+struct ReadOpened {
+    code: CodeConfig,
+    skipped: usize,
+    git: Option<VerifyGit>,
+    lock: Option<Lock>,
+    causes: Vec<RunCause>,
+}
+
+/// A read's code layer opened ("Degrade"): `Err`, a cause that leaves no
+/// row: no `[code]` (2), a bad `[code]` or an unknown `frameworks` name
+/// (1), a walk gap (3), the data directory (8); the code index's notes
+/// added to `messages`. Then git, the lock's unmerged stages and the lock,
+/// each failure a cause (4)-(6). `[verify]` is never read.
+fn open_read(
+    project: &ProjectRoot,
+    text: &str,
+    git_env: &GitEnv,
+    index: &mut SqliteIndex,
+    messages: &mut Vec<Message>,
+) -> Result<ReadOpened, RunCause> {
+    let label = &project.config_label;
+    // (2), (1): `[code]` alone.
+    let code = match CodeConfig::from_toml(text) {
+        Ok(Some(code)) => code,
+        Ok(None) => {
+            let sentence = unprefixed(&no_code_table(label));
+            return Err(RunCause::new(CAUSE_NO_CODE, sentence));
+        }
+        Err(error) => return Err(RunCause::new(CAUSE_CONFIG, error.at(label))),
+    };
+    if let Err(error) = known_frameworks(&code, label) {
+        return Err(RunCause::new(CAUSE_CONFIG, unprefixed(&error)));
+    }
+
+    // (3), (8): the code index refreshed, its gap anywhere a cause.
+    let skipped = refreshed_code(index, project, &code, messages)?;
+
+    // (4), (5), (6): git, the lock's unmerged stages, the lock.
+    let mut causes: Vec<RunCause> = Vec::new();
+    let mut git = match VerifyGit::open(&project.root, git_env) {
+        Ok(git) => Some(git),
+        Err(cause) => {
+            causes.push(RunCause::new(CAUSE_GIT, cause.message));
+            None
+        }
+    };
+    if let Some(open) = &mut git {
+        match open.is_unmerged(LOCK_FILE) {
+            Ok(false) => {}
+            Ok(true) => causes.push(RunCause::new(
+                CAUSE_UNMERGED,
+                format!("{LOCK_FILE} is unmerged: run spec lock regen"),
+            )),
+            Err(cause) => causes.push(RunCause::new(CAUSE_GIT, cause.message)),
+        }
+    }
+    let lock = match read_lock(&project.root, &build_recipes()) {
+        Ok(read) => Some(read.lock),
+        Err(error) => {
+            causes.push(RunCause::new(CAUSE_LOCK, unprefixed(&error)));
+            None
+        }
+    };
+    Ok(ReadOpened {
+        code,
+        skipped,
+        git,
+        lock,
+        causes,
+    })
+}
+
+/// The set `keys` judged as a read's rows are ([`set_bindings`]'s code
+/// layer and judge, task spec `lock-diff`), and `then` run on the judged
+/// set and the still open git session (its blobs by OID); the session
+/// ends after it. `Err`: the read's note `bindings: <cause>`, the first
+/// cause in plain verify's order, any cause (1)-(8) or the session's end
+/// failing; the code index's own notes are the refresh's, never the
+/// read's.
+pub(crate) fn with_judged_set<T>(
+    project: &ProjectRoot,
+    text: &str,
+    git_env: &GitEnv,
+    index: &mut SqliteIndex,
+    input: &CheckInput,
+    keys: &[NodeKey],
+    then: impl FnOnce(&SetJudged, &mut VerifyGit) -> T,
+) -> Result<T, String> {
+    let mut messages = Vec::new();
+    let ReadOpened {
+        code,
+        mut git,
+        lock,
+        mut causes,
+        ..
+    } = open_read(project, text, git_env, index, &mut messages).map_err(|cause| note(&cause))?;
+    let mut answer = None;
+    if causes.is_empty()
+        && let (Some(lock), Some(open)) = (&lock, git.as_mut())
+    {
+        let scope = SetScope {
+            project,
+            code: &code,
+            input,
+            lock,
+            keys,
+        };
+        match judge_set(&scope, index, open, &mut messages, 0) {
+            Ok(judged) => answer = Some(then(&judged, open)),
+            Err(cause) => causes.push(cause),
+        }
+    }
+    // The session's end is no cause of its own when one is listed already.
+    if let Some(open) = git
+        && let Err(cause) = open.finish()
+        && causes.is_empty()
+    {
+        causes.push(RunCause::new(CAUSE_GIT, cause.message));
+    }
+    causes.sort_by_key(|cause| cause.order);
+    match (causes.first(), answer) {
+        (None, Some(answer)) => Ok(answer),
+        (Some(cause), _) => Err(note(cause)),
+        // No cause leaves git and the lock both read: not reached.
+        (None, None) => Err(note(&RunCause::new(
+            CAUSE_GIT,
+            "the code layer was not judged".to_owned(),
+        ))),
     }
 }
 

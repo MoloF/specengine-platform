@@ -158,6 +158,18 @@
 //! keys, `bindings` null); that read's rows are more `BindingRow`
 //! instances, its entries more `TestedRow` ones. M: `tested` dropped from
 //! the fixture's `ShownBindings`.
+//!
+//! TE-2 of docs/features/lock-diff.md (RM-0033, slice 1), "Daemon keys":
+//! five sets more, 81 in all, last, after `ShownBindings`: `LockDiffView`
+//! (`ref, reason, notes, nodes`), `LockDiffNode` (`id, path, line, rows`),
+//! `LockDiffRow` (`row, spec, code`), `LockDiffSpecSide` (`commit, path,
+//! diff`) and `LockDiffCodeSide` (`blob, file, diff`), from `GET
+//! …/lock-diff?ref=LAW-BOUND` on code-a ([`drift_repo`], its `CAP` commit,
+//! LAW-BOUND's sentence then edited uncommitted: the golden lock's
+//! `commit` is no object there, so the spec sides' `diff` is null, their
+//! keys present) and the exit-1 document of `?ref=NOPE-1`; each `row` is
+//! one more `DriftRow` instance. M8: `diff` dropped from the fixture's
+//! `LockDiffCodeSide`.
 
 mod common;
 mod task_state;
@@ -566,6 +578,26 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .text()
             .to_owned(),
     ];
+    // lock-diff (TE-2): code-a's LAW-BOUND after the drift reviews, its
+    // sentence edited uncommitted over the committed `CAP`: a `conflict`
+    // row with both sides, the spec side's `diff` null (the golden's
+    // `commit` names no object here); then the exit-1 document.
+    common::replace(
+        &code.0,
+        "docs/spec/counter.md",
+        "The count never exceeds the cap.",
+        "The count never exceeds the cap, twelve by default.",
+    );
+    let lock_diffs: Vec<String> = [("LAW-BOUND", 200), ("NOPE-1", 404)]
+        .iter()
+        .map(|(reference, status)| {
+            server
+                .get(&format!("/api/projects/code-a/lock-diff?ref={reference}"))
+                .status(*status)
+                .text()
+                .to_owned()
+        })
+        .collect();
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -740,6 +772,29 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     );
     let binding_rows = [binding_rows, shown_rows].concat();
     let tested_rows = [tested_rows, drift_tested, shown_tested].concat();
+    // lock-diff: the view's holders, their kept rows, each row's sides;
+    // every `row` one more `DriftRow`.
+    let lock_diff_nodes = items(&lock_diffs, "nodes");
+    let lock_diff_rows = items(&lock_diff_nodes, "rows");
+    let lock_diff_specs = objects(&with_object(&lock_diff_rows, "spec"), "spec");
+    let lock_diff_codes = objects(&with_object(&lock_diff_rows, "code"), "code");
+    assert!(
+        !lock_diff_specs.is_empty() && !lock_diff_codes.is_empty(),
+        "LAW-BOUND's conflict serves both sides: {lock_diffs:?}"
+    );
+    for side in &lock_diff_specs {
+        assert!(
+            side.ends_with(",\"diff\":null}"),
+            "the golden's commit is no object here: {side}"
+        );
+    }
+    assert!(
+        lock_diff_codes
+            .iter()
+            .any(|side| side.contains(",\"diff\":\"@@")),
+        "CAP's code side holds hunks: {lock_diff_codes:?}"
+    );
+    let drift_rows = [drift_rows, objects(&lock_diff_rows, "row")].concat();
     for (name, found) in [
         ("AssumedProposal", &assumed_proposals),
         ("AssumedNode", &assumed_nodes),
@@ -1097,6 +1152,26 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "ShownBindings",
             one_key_set("ShownBindings", &shown_bindings, keys_of),
         ),
+        (
+            "LockDiffView",
+            one_key_set("LockDiffView", &lock_diffs, keys_of),
+        ),
+        (
+            "LockDiffNode",
+            one_key_set("LockDiffNode", &lock_diff_nodes, keys_of),
+        ),
+        (
+            "LockDiffRow",
+            one_key_set("LockDiffRow", &lock_diff_rows, keys_of),
+        ),
+        (
+            "LockDiffSpecSide",
+            one_key_set("LockDiffSpecSide", &lock_diff_specs, keys_of),
+        ),
+        (
+            "LockDiffCodeSide",
+            one_key_set("LockDiffCodeSide", &lock_diff_codes, keys_of),
+        ),
     ]
 }
 
@@ -1423,10 +1498,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        76,
+        81,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
-         health-drift: 74; ui-node-bindings: 76)"
+         health-drift: 74; ui-node-bindings: 76; lock-diff: 81)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1825,6 +1900,19 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     );
     assert_eq!(sets[75].0, "ShownBindings");
     assert_eq!(sets[75].1, ["rows", "omitted", "tested"]);
+    // lock-diff's five, last (TE-2): "Daemon keys"' order and keys.
+    let five: Vec<(&str, Vec<String>)> = sets[76..81].to_vec();
+    let want: [(&str, &[&str]); 5] = [
+        ("LockDiffView", &["ref", "reason", "notes", "nodes"]),
+        ("LockDiffNode", &["id", "path", "line", "rows"]),
+        ("LockDiffRow", &["row", "spec", "code"]),
+        ("LockDiffSpecSide", &["commit", "path", "diff"]),
+        ("LockDiffCodeSide", &["blob", "file", "diff"]),
+    ];
+    for ((name, keys), (want_name, want_keys)) in five.iter().zip(want) {
+        assert_eq!(*name, want_name);
+        assert_eq!(keys, want_keys, "{name}");
+    }
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1845,7 +1933,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 76 sets (41 until
+/// unchanged, no new key): the fixture holds 81 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -1853,8 +1941,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/roadmap-screen.md its ten, TE-1, and
 /// docs/features/bundle-bindings.md its `BindingRow`, RD-8, and
 /// docs/features/tested-reads.md its `TestedRow`, TE-5,
-/// docs/features/health-drift.md its six, TE-5, and
-/// docs/features/ui-node-bindings.md its two, TE-1); a decision
+/// docs/features/health-drift.md its six, TE-5,
+/// docs/features/ui-node-bindings.md its two, TE-1, and
+/// docs/features/lock-diff.md its five, TE-2); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -1868,12 +1957,13 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        76,
-        "76 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        81,
+        "81 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
-         health-drift's six (TE-5) and ui-node-bindings' two (TE-1)"
+         health-drift's six (TE-5), ui-node-bindings' two (TE-1) and \
+         lock-diff's five (TE-2)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -1987,7 +2077,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 76 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 81 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -1996,8 +2086,9 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/canon/spec-roadmap-screen.md "Rules", and
 /// docs/features/bundle-bindings.md its `BindingRow`, RD-8, and
 /// docs/features/tested-reads.md its `TestedRow`, TE-5,
-/// docs/features/health-drift.md its six, TE-5, and
-/// docs/features/ui-node-bindings.md its two, TE-1); the amendment of
+/// docs/features/health-drift.md its six, TE-5,
+/// docs/features/ui-node-bindings.md its two, TE-1, and
+/// docs/features/lock-diff.md its five, TE-2); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -2014,12 +2105,13 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        76,
-        "76 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        81,
+        "81 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
-         health-drift's six (TE-5) and ui-node-bindings' two (TE-1)"
+         health-drift's six (TE-5), ui-node-bindings' two (TE-1) and \
+         lock-diff's five (TE-2)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

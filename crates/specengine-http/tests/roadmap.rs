@@ -222,8 +222,9 @@ fn unknown_route_lists_roadmap() {
             message.starts_with(&format!("no route {path}: the routes are /api/projects ")),
             "{path}: {message}"
         );
+        // docs/features/lock-diff.md "Route": `lock-diff` after `roadmap`.
         assert!(
-            message.contains(" health, roadmap, inbox, "),
+            message.contains(" health, roadmap, lock-diff, inbox, "),
             "{path}: {message}"
         );
     }

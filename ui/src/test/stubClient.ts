@@ -16,6 +16,7 @@ import type {
   GraphView,
   HealthReport,
   Inbox,
+  LockDiffView,
   NodeView,
   Project,
   Proposal,
@@ -147,6 +148,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     // The plan: one release, current, holding one open item (docs/features/roadmap-screen.md).
     getRoadmap: vi.fn<(project: string, options?: RoadmapOptions, signal?: AbortSignal) => Promise<RoadmapDocument>>(() =>
       Promise.resolve(aRoadmap([aRoadmapGroup("release", "beta", [aRoadmapItem({ id: "RM-0001", title: "First item" })], { current: true })])),
+    ),
+    // The lock diff (docs/features/lock-diff.md "Data"): the REF's one holder, no drifted row with a lock entry.
+    getLockDiff: vi.fn<(project: string, ref: string, signal?: AbortSignal) => Promise<LockDiffView>>((_project, ref) =>
+      Promise.resolve({ ref, reason: null, notes: [], nodes: [{ id: ref, path: "docs/spec/doc-1.md", line: 5, rows: [] }] }),
     ),
     getRound: vi.fn<(project: string, options?: RoundOptions, signal?: AbortSignal) => Promise<RoundSheet>>(() =>
       Promise.resolve(structuredClone(state.round)),

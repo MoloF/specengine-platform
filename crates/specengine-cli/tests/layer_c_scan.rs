@@ -137,8 +137,11 @@ const BEFORE: &[&str] = &[
 
 /// The CLI's and the store's modules later slices added: not the slice's,
 /// so outside its punctuation rule (verify-node's `#` is the RON
-/// `<file>#<symbol>` separator of `--symbol`, docs/features/verify-node.md).
+/// `<file>#<symbol>` separator of `--symbol`, docs/features/verify-node.md;
+/// lock-diff's `/` joins a root's place below its worktree's top,
+/// docs/features/lock-diff.md "Sides").
 const LATER: &[&str] = &[
+    "crates/specengine-cli/src/lock_diff.rs",
     "crates/specengine-cli/src/lock_rebase.rs",
     "crates/specengine-cli/src/roadmap.rs",
     "crates/specengine-cli/src/verify_node.rs",

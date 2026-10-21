@@ -28,7 +28,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 | Method, path | Query | Answer |
 |---|---|---|
-| GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order (CLI `project_entry`): `name` or `null`, `root` canonical, `branch` current, `null` detached or outside git |
+| GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order (CLI `project_entry`): `name` or `null`, `root` canonical, `branch` current or `null` (detached, no git) |
 | GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json`, browser view |
 | GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json`, browser view |
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
@@ -37,6 +37,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../check` | -- | `spec check --json`, the plain run |
 | GET `.../health` | -- | `spec health --json` (`health*.md`) |
 | GET `.../roadmap` | `release`, `pool` | `spec roadmap --json`, browser view |
+| GET `.../lock-diff` | `ref` | `spec lock diff REF --json` |
 | GET `.../inbox` | -- | `spec inbox --json` |
 | GET `.../proposals/:id` | -- | `spec review PR --json` (not `--brief`) |
 | GET `.../tasks` | `status` | `spec task list --json` |
@@ -54,9 +55,9 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 
 One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {root}`, `render_json`), the config found again first (a changed slug, a config `discover` refuses -> 503 with the reason, `check` too: no cannot-check report; `/api/projects` 503 if any). Exit 0 -> 200, the document; 1 -> 404, the exit-1 document (`reason` set: data, not an error); 2 -> 503, the error body, `message` the `CliError` line(s) verbatim. **The exceptions** (`answered`), never a verdict word: `Outcome::Check` (a report), `Outcome::RoundAnswers` 200 whatever the exit; `Outcome::Stage` by its cause (`decision-staging.md` "Daemon"); a `CliError` 503. **Error body** `{"status":<code>,"message":"..."}`, exactly two keys: 400, 403, 404 (an unknown slug or route, listing the served ones), 405, 413, 415, 500 (a caught panic), 503. Bodies `application/json; charset=utf-8`, the CLI's stdout less the final LF; stderr not carried (a read's notes: JSON `notes`).
 
-**One door.** The write routes only stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps. No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and `Staged`, `Changed`, `baseline`, `RoundTerminal`, `WalkOutcome`, `AnswerOutcome`. No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, all in the data directory: stages in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`); nothing under a root changes.
+**One door.** The write routes only stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps. No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and six more names. No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, all in the data directory: stages in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`); nothing under a root changes.
 
-**Worktrees**: `tree`, `nodes`, `search`, `bundle`, `graph`, `check`, `health`, `roadmap` read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, `check` no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
+**Worktrees**: `tree`, `nodes`, `search`, `bundle`, `graph`, `check`, `health`, `roadmap`, `lock-diff` read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, `check` no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
 
 ## Live tail
 
@@ -79,4 +80,4 @@ One request per project at a time, projects in parallel, beside the CLI's and MC
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 76 key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs` (a drift item served, its stage 409), `turn.rs` (a dropped request unrun, reads wait per project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test (reaped on drop, alarm 300), raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 81 key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs` (a drift item served, its stage 409), `turn.rs` (a dropped request unrun, waits per project), `methods.rs`, `stage.rs`, `round.rs`, `projects.rs` (route and slug lists), `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").

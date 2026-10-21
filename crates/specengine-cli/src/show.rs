@@ -159,6 +159,9 @@ pub struct NestedSection {
     pub heading_end: usize,
 }
 
+/// Why a written `@rev` is ignored (`spec lock diff` gives this note too).
+pub(crate) const SHOW_REV_IGNORED: &str = "`spec show` prints the current text";
+
 /// What `REF` names.
 pub(crate) enum Target {
     /// A root-relative `.md` path.
@@ -194,12 +197,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
     let written = request.reference.trim();
     let scheme = &project.config.scheme;
     let mut messages = Vec::new();
-    let target = match classify(
-        written,
-        scheme,
-        &mut messages,
-        "`spec show` prints the current text",
-    )? {
+    let target = match classify(written, scheme, &mut messages, SHOW_REV_IGNORED)? {
         Ok(target) => target,
         Err(reason) => return Ok(not_found(request, reason, messages)),
     };

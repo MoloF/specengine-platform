@@ -395,7 +395,7 @@ function entry(rev: number, commit: string, verified_at: string): DriftLock {
 }
 
 /** The two commits harbor-sim's lock entries and tests vouched at. */
-const LOCKED_AT = "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4";
+export const LOCKED_AT = "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4";
 export const TESTED_AT = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
 
 /** An item of harbor-sim's code as an anchor names it. */

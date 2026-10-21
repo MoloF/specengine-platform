@@ -123,7 +123,7 @@ spec verify (a project's hook / CI / an agent; never a daemon raising)
        [reject]                → spec reject PR --follow-up code: a draft task, the code back to the spec
 ```
 
-`conflict` (both spec and code changed) opens in the diff inspector: spec `git diff <lock.commit>..HEAD` by section, code by the symbol's range.
+Before deciding, `spec lock diff REF` (the daemon's `lock-diff?ref=`; the inspector in the node's Bindings tab, RM-0033) shows what moved since each drifted row's lock entry, against the working tree, never `HEAD`: the node's section since the entry's `commit`, the bound item since its `file_blob`, as git's hunks (ADR-0053, `docs/canon/spec-lock-diff.md`).
 
 ## 5. Question round for the owner
 

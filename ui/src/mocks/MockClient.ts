@@ -17,6 +17,7 @@ import type {
   GraphView,
   HealthReport,
   Inbox,
+  LockDiffView,
   NodeView,
   Project,
   Proposal,
@@ -41,6 +42,7 @@ import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
 import { ledgerApi } from "./ledger-api/fixtures";
+import { lockDiffOf } from "./lockDiff";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
@@ -219,6 +221,18 @@ export class MockClient implements SpecEngineClient {
       return structuredClone({ ...whole, release, reason: `no release "${release}" in [roadmap] releases (${names.join(", ")})`, groups: [] });
     }
     return structuredClone({ ...whole, release, groups: kept });
+  }
+
+  /**
+   * The project's lock diff for the scenario (src/mocks/lockDiff.ts), read only; the daemon serves
+   * its own (`docs/features/lock-diff.md` "Route"). REF resolved as the node read resolves it: one
+   * naming nothing answers the exit-1 document, as data; a look-alike is refused 503 in the CLI's
+   * words.
+   */
+  async getLockDiff(project: string, ref: string): Promise<LockDiffView> {
+    await this.read();
+    const shown = nodeViewOf(this.project(project).corpus, ref);
+    return structuredClone(lockDiffOf(project, this.scenario, shown));
   }
 
   /** The project's plan document now, its tasks joined; null without `[roadmap]`. */

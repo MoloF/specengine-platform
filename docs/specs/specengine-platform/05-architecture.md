@@ -173,7 +173,7 @@ Following a rename and telling copies apart takes three fingerprints, not one (c
 | no | no | `ok` | — |
 | yes | no | `spec_ahead` | a `drift` item (`docs/canon/proposal-drift.md`): approve, `--editorial` for `same_revision`, or reject; a "bring code to spec" task: `reject --follow-up code` (`docs/canon/proposal-completion.md` "Reject") |
 | no | yes | `code_ahead` | a `drift` item: approve accepts the code (lock) or reject (`--follow-up code`: a task to fix the code; `--follow-up spec`: a task to propose a spec edit) |
-| yes | yes | `conflict` | UI: spec-section and symbol-span diffs since `lock.commit`, side by side |
+| yes | yes | `conflict` | a `drift` item; `spec lock diff REF`: git's hunks of both sides since the lock entry (ADR-0053) |
 | — | symbol not found | `broken_binding` | marker removed or symbol renamed, not followed (§5.2); a `drift` item, its approve locking what accept finds |
 | node accepted, no bindings | | `unbound` | `spec health` row 5, the nodes `[[health.bound]]` selects (`docs/canon/health-code.md`) |
 | marker `@N` > node `rev` | | `predated` | error: reference to a non-existent revision |
@@ -181,7 +181,7 @@ Following a rename and telling copies apart takes three fingerprints, not one (c
 
 `spec verify` verdicts follow the amiss discipline: **Fix** (broken by this change), **Check** (a human should re-read), **Pre-existing** (predates the change, goes to the backlog). Exit codes: **0** — nothing blocks, **1** — a Fix finding blocks, only under the project's own `[verify] mode` (ADR-0042), **2** — the run cannot be trusted, no verdict (`docs/canon/spec-verify.md` "Verdict and exit"; the backlog: `spec propose drift`, `docs/canon/proposal-drift.md`). Changing spec and code in the same change is not drift; it is a `conflict` only when revisions disagree.
 
-Git as the truth gives "since verification" diffs for free: the old spec text and the old code come from the commit recorded in the lock.
+Git as the truth gives "since verification" diffs: an entry's `commit` and `file_blob` hold the old spec text and code; `spec lock diff` compares them with the working tree (ADR-0053).
 
 ### 5.4. Tests as evidence
 

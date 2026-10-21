@@ -1019,6 +1019,75 @@ export interface DriftLevels {
   changed: string[] | null;
 }
 
+// `spec lock diff REF --json` (docs/features/lock-diff.md "Data"; `docs/canon/spec-lock-diff.md`
+// "The read"): for each binding the lock holds for REF's holders whose state raises drift, what
+// moved since the owner accepted it, as git's hunks against the working tree. A read computed per
+// request, never stored, never a verdict: no exit, claim or approval depends on a row, side or
+// note (ADR-0012). Words raw; hunks exactly as git gave them, never re-made here.
+
+/**
+ * The lock diff document, keys in this order, all present: `ref` the REF as given, raw; `reason`
+ * null, or `show`'s reason when the REF names nothing (exit 1, a 404 resolved as data, `nodes`
+ * []); `notes` the `note:` texts in the daemon's order (`show`'s, then the one `bindings:` cause,
+ * then one per side not shown), never `warning:` lines; `nodes` REF's holders in `show`'s order.
+ * Source: `docs/features/lock-diff.md` "Data".
+ */
+export interface LockDiffView {
+  ref: string;
+  reason: string | null;
+  notes: string[];
+  nodes: LockDiffNode[];
+}
+
+/**
+ * One holder of REF, keys in this order: `id` its canonical ID (null: an ID-less document),
+ * `path` root-relative, `line` its 1-based first line, as `show`; `rows` the kept rows in verify's
+ * order, [] none, null not judged (a run cause of the code layer, its one `bindings:` note), never
+ * a count. Source: `docs/features/lock-diff.md` "Data".
+ */
+export interface LockDiffNode {
+  id: string | null;
+  path: string;
+  line: number;
+  rows: LockDiffRow[] | null;
+}
+
+/**
+ * One kept row, keys in this order: `row` verify's 17-key row verbatim (`pre_existing` always
+ * false), `spec` null when the node did not move since its entry, `code` null when the code did
+ * not; which sides a state has: `docs/features/lock-diff.md` "Sides".
+ * Source: `docs/features/lock-diff.md` "Data".
+ */
+export interface LockDiffRow {
+  row: DriftRow;
+  spec: LockDiffSpecSide | null;
+  code: LockDiffCodeSide | null;
+}
+
+/**
+ * The node's side: `commit` the entry's, full; `path` the root-relative file holding the row's
+ * node now, read at `commit`; `diff` git's hunks of its span, from the first `@@`, LF-terminated
+ * as git gives them, "" equal, null not shown (one note says why: never "" for a side not read).
+ * Source: `docs/features/lock-diff.md` "Data".
+ */
+export interface LockDiffSpecSide {
+  commit: string;
+  path: string;
+  diff: string | null;
+}
+
+/**
+ * The code's side: `blob` the entry's `file_blob`, full; `file` the entry's file (a moved row's
+ * old one); `diff` git's hunks of the item then against now (a module, a RON value or an item not
+ * found: the whole file, with a note), "" equal, null not shown (one note says why).
+ * Source: `docs/features/lock-diff.md` "Data".
+ */
+export interface LockDiffCodeSide {
+  blob: string;
+  file: string;
+  diff: string | null;
+}
+
 /** Why a tree row is a root although its document declares a parent. Source: `docs/canon/spec-cli-graph.md` "spec tree". */
 export type TreeMark = "dangling-parent" | "parent-cycle" | Unlisted;
 

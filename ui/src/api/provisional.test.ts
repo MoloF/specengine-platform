@@ -27,6 +27,11 @@ import type {
   GraphView,
   HealthDrift,
   HealthReport,
+  LockDiffCodeSide,
+  LockDiffNode,
+  LockDiffRow,
+  LockDiffSpecSide,
+  LockDiffView,
   OwnerNote,
   Proposal,
   RevisionChange,
@@ -1115,5 +1120,95 @@ describe("the drift types (UI-1 of health-drift)", () => {
     expect(Object.keys(keyless)).toEqual(DRIFT_CITED.DriftRow.split(", "));
     expect(source).toMatch(/^ {2}line: number;\n {2}rev: number \| null;\n\}$/m);
     expect(source).toMatch(/^ {2}lock: string\[\];\n {2}markers: string\[\];\n {2}changed: string\[\] \| null;\n\}$/m);
+  });
+});
+
+/**
+ * UI-1 of docs/features/lock-diff.md (types and the client call only; the panel is
+ * docs/features/lock-diff-ui.md): `spec lock diff REF --json`'s document, a holder, a kept row and
+ * its two sides, keys as "Data" lists them; a kept row's `row` is verify's DriftRow, no copy of it.
+ */
+const LOCK_DIFF_KEYS = {
+  LockDiffView: { ref: true, reason: true, notes: true, nodes: true } satisfies Record<keyof LockDiffView, true>,
+  LockDiffNode: { id: true, path: true, line: true, rows: true } satisfies Record<keyof LockDiffNode, true>,
+  LockDiffRow: { row: true, spec: true, code: true } satisfies Record<keyof LockDiffRow, true>,
+  LockDiffSpecSide: { commit: true, path: true, diff: true } satisfies Record<keyof LockDiffSpecSide, true>,
+  LockDiffCodeSide: { blob: true, file: true, diff: true } satisfies Record<keyof LockDiffCodeSide, true>,
+};
+
+/** The key lists as the spec's "UI provisional types" and "Daemon keys" write them, copied verbatim. */
+const LOCK_DIFF_CITED: Record<keyof typeof LOCK_DIFF_KEYS, string> = {
+  LockDiffView: "ref, reason, notes, nodes",
+  LockDiffNode: "id, path, line, rows",
+  LockDiffRow: "row, spec, code",
+  LockDiffSpecSide: "commit, path, diff",
+  LockDiffCodeSide: "blob, file, diff",
+};
+
+const LOCK_DIFF_NAMES = Object.keys(LOCK_DIFF_KEYS) as (keyof typeof LOCK_DIFF_KEYS)[];
+
+const LOCK_DIFF_DATA = '`docs/features/lock-diff.md` "Data"';
+
+/** The spec's example, CAP's `conflict` on LAW-BOUND, its sides' OIDs invented. */
+function aLockDiffRow(): LockDiffRow {
+  return {
+    row: { ...aConflictRow(), node: "LAW-BOUND", relation: "configures", file: "crates/tally/src/counter.rs", symbol: "crates/tally::counter::CAP", item_kind: "const_item" },
+    spec: {
+      commit: "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4",
+      path: "docs/spec/counter.md",
+      diff: "@@ -1,4 +1,4 @@\n ## Bound {#LAW-BOUND rev=2}\n \n-The count never exceeds the cap.\n+The count never exceeds the cap, twelve by default.\n \n",
+    },
+    code: {
+      blob: "b6e2d94a1f0c38e75a2d6b9c4e1f7a0358c2d6e9",
+      file: "crates/tally/src/counter.rs",
+      diff: "@@ -1 +1 @@\n-pub const CAP: u32 = 10; // @configures LAW-BOUND@2\n+pub const CAP: u32 = 12; // @configures LAW-BOUND@2\n",
+    },
+  };
+}
+
+describe("the lock diff types (UI-1 of lock-diff)", () => {
+  it.each(LOCK_DIFF_NAMES)("%s has exactly the cited keys, declared in their order", (name) => {
+    expect(Object.keys(LOCK_DIFF_KEYS[name]).join(", ")).toBe(LOCK_DIFF_CITED[name]);
+    expect(declaredKeys(name).join(", ")).toBe(LOCK_DIFF_CITED[name]);
+  });
+
+  it("counts the document's 4 keys, a holder's 4, a kept row's 3, each side's 3", () => {
+    expect(LOCK_DIFF_NAMES.map((name) => Object.keys(LOCK_DIFF_KEYS[name]).length)).toEqual([4, 4, 3, 3, 3]);
+    expect(Object.keys(aLockDiffRow())).toEqual(LOCK_DIFF_CITED.LockDiffRow.split(", "));
+  });
+
+  it.each(LOCK_DIFF_NAMES)("%s cites the spec's Data, the path and heading on one line", (name) => {
+    expect(commentOf(name).split("\n").some((line) => line.includes(LOCK_DIFF_DATA))).toBe(true);
+  });
+
+  it("reuses verify's row for a kept row: no lock-diff copy of DriftRow or of its parts", () => {
+    expect(source).toMatch(/^ {2}row: DriftRow;\n {2}spec: LockDiffSpecSide \| null;\n {2}code: LockDiffCodeSide \| null;\n\}$/m);
+    expect(source).not.toMatch(/^export (?:interface|type) LockDiff(?!View\b|Node\b|Row\b|SpecSide\b|CodeSide\b)\w*/m);
+    const row = aLockDiffRow();
+    expect(Object.keys(row.row)).toEqual(DRIFT_CITED.DriftRow.split(", "));
+  });
+
+  it("types the exit-1 document: reason set, notes and nodes lists, nodes empty", () => {
+    const missing: LockDiffView = { ref: "NOPE-1", reason: "`NOPE-1` resolves to no ID and no alias", notes: [], nodes: [] };
+    expect(Object.keys(missing)).toEqual(LOCK_DIFF_CITED.LockDiffView.split(", "));
+    expect(source).toMatch(/^ {2}ref: string;\n {2}reason: string \| null;\n {2}notes: string\[\];\n {2}nodes: LockDiffNode\[\];\n\}$/m);
+  });
+
+  it("keeps a holder's id null for an ID-less document and its rows null when not judged, [] when none: never a count", () => {
+    const notJudged: LockDiffNode = { id: null, path: "docs/spec/berths/draft-limits.md", line: 1, rows: null };
+    const none: LockDiffNode = { id: "LAW-BOUND", path: "docs/spec/counter.md", line: 13, rows: [] };
+    const judged: LockDiffNode = { ...none, rows: [aLockDiffRow()] };
+    expect([notJudged.rows, none.rows, judged.rows?.length]).toEqual([null, [], 1]);
+    expect(source).toMatch(/^ {2}id: string \| null;\n {2}path: string;\n {2}line: number;\n {2}rows: LockDiffRow\[\] \| null;\n\}$/m);
+  });
+
+  it("keeps each side null when its side did not move, and a side's diff null when not shown, apart from an equal side's \"\"", () => {
+    const codeOnly: LockDiffRow = { ...aLockDiffRow(), spec: null };
+    const specOnly: LockDiffRow = { ...aLockDiffRow(), code: null };
+    const notShown: LockDiffSpecSide = { commit: "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4", path: "docs/spec/counter.md", diff: null };
+    const equal: LockDiffCodeSide = { blob: "b6e2d94a1f0c38e75a2d6b9c4e1f7a0358c2d6e9", file: "crates/tally/src/counter.rs", diff: "" };
+    expect([codeOnly.spec, specOnly.code, notShown.diff, equal.diff]).toEqual([null, null, null, ""]);
+    expect(source).toMatch(/^ {2}commit: string;\n {2}path: string;\n {2}diff: string \| null;\n\}$/m);
+    expect(source).toMatch(/^ {2}blob: string;\n {2}file: string;\n {2}diff: string \| null;\n\}$/m);
   });
 });

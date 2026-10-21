@@ -19,7 +19,7 @@ import {
 import { apiErrorOf, ClientError, isNotServed } from "./client";
 import { errorBodyOf, HttpClient, QUEUE_EVENT_TYPES, refusedReasonOf, REOPEN_FIRST_MS, REOPEN_MAX_MS } from "./http";
 import httpSource from "./http.ts?raw";
-import type { QueueEvent } from "./types";
+import type { LockDiffView, QueueEvent } from "./types";
 
 // AC-09 of docs/features/daemon-read.md: the browser side of the daemon, over a stubbed `fetch`
 // and `EventSource`. Each method hits its URL, a REF encoded once; a 404 document resolves as data;
@@ -33,7 +33,10 @@ import type { QueueEvent } from "./types";
 // document rejects with its last note; the tail listens to the seven `proposal.*` types, the
 // stage's two after `apply_failed`, sixteen in all. AC-U1 and AC-U4 of docs/features/health-left.md:
 // the health read GETs its one URL with no AbortSignal; zero amendments is a 200 resolved as data;
-// a 503, an older daemon's 404 and no response reject, never read as none.
+// a 503, an older daemon's 404 and no response reject, never read as none. UI-2 of
+// docs/features/lock-diff.md: the lock diff GETs its one path, `ref` its one query encoded once
+// (`#` as %23, `/` as %2F); a 404 document resolves as data; a 400, a 503 and an older daemon's
+// 404 error body reject in the daemon's words.
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   try {
@@ -159,6 +162,34 @@ describe("each method hits its URL (AC-09)", () => {
       "/api/projects/a%20b/roadmap?release=v1%20%26%20%CE%B1",
     ],
     ["getRoadmap: `pool=true`", (client) => client.getRoadmap("harbor-sim", { pool: true }), "/api/projects/harbor-sim/roadmap?pool=true"],
+    // UI-2 of docs/features/lock-diff.md: `ref` the one query, the REF encoded once.
+    ["getLockDiff: the REF, the one query", (client) => client.getLockDiff("alpha", "LAW-BOUND"), "/api/projects/alpha/lock-diff?ref=LAW-BOUND"],
+    [
+      "getLockDiff: `#` as %23",
+      (client) => client.getLockDiff("harbor-sim", "MEC-TIDES#RULE-TIDE-WINDOW"),
+      "/api/projects/harbor-sim/lock-diff?ref=MEC-TIDES%23RULE-TIDE-WINDOW",
+    ],
+    [
+      "getLockDiff: a path REF's `/` as %2F",
+      (client) => client.getLockDiff("alpha", "docs/spec/counter.md"),
+      "/api/projects/alpha/lock-diff?ref=docs%2Fspec%2Fcounter.md",
+    ],
+    ["getLockDiff: slug/ID, `/` as %2F", (client) => client.getLockDiff("alpha", "counter/LAW-BOUND"), "/api/projects/alpha/lock-diff?ref=counter%2FLAW-BOUND"],
+    [
+      "getLockDiff: a REF holding %23 encoded once, never decoded first",
+      (client) => client.getLockDiff("alpha", "LAW-BOUND%23X"),
+      "/api/projects/alpha/lock-diff?ref=LAW-BOUND%2523X",
+    ],
+    [
+      "getLockDiff: `&`, `=`, `?` and a space kept inside the one value; `+` as %2B (the daemon reads a bare `+` as a space)",
+      (client) => client.getLockDiff("alpha", "A&ref=B? C+D"),
+      "/api/projects/alpha/lock-diff?ref=A%26ref%3DB%3F%20C%2BD",
+    ],
+    [
+      "getLockDiff: non-Latin text as UTF-8, sent as typed (the daemon names a look-alike's Latin form), the slug encoded too",
+      (client) => client.getLockDiff("a b", `${String.fromCodePoint(0x417, 0x435)}-1`),
+      "/api/projects/a%20b/lock-diff?ref=%D0%97%D0%B5-1",
+    ],
   ])("%s", async (_name, call, url) => {
     await call(new HttpClient());
     expect(urlsOf(fetchStub)).toEqual([url]);
@@ -221,6 +252,7 @@ describe("each method hits its URL (AC-09)", () => {
     ["getTasks", (client, signal) => client.getTasks("alpha", signal)],
     ["getTask", (client, signal) => client.getTask("alpha", "T-0001", signal)],
     ["getRoadmap", (client, signal) => client.getRoadmap("alpha", undefined, signal)],
+    ["getLockDiff", (client, signal) => client.getLockDiff("alpha", "R-1", signal)],
   ])("%s hands the caller's AbortSignal to fetch (ui-live-tasks: a superseded read is aborted)", async (_name, call) => {
     const controller = new AbortController();
     await call(new HttpClient(), controller.signal);
@@ -366,6 +398,105 @@ describe("answers (AC-09)", () => {
     const error = await rejection(new HttpClient().getRoadmap("alpha"));
     expect(error.status).toBe(0);
     expect(error.message).toBe("GET /api/projects/alpha/roadmap: no response from the daemon (Failed to fetch)");
+  });
+
+  it("resolves the lock diff's 200 as sent, uncut: hunks byte for byte, a side null, a diff null or \"\", rows null not judged, [] none (UI-2 of lock-diff)", async () => {
+    const lockDiff: LockDiffView = {
+      ref: " LAW-BOUND ",
+      reason: null,
+      notes: [
+        "lock diff: LAW-BOUND | configures | crates/tally/src/counter.rs | item crates/tally::counter::LABEL const_item: no code diff: blob 0000000000000000000000000000000000000000 of crates/tally/src/counter.rs cannot be read",
+      ],
+      nodes: [
+        {
+          id: "LAW-BOUND",
+          path: "docs/spec/counter.md",
+          line: 13,
+          rows: [
+            {
+              row: {
+                node: "LAW-BOUND",
+                relation: "configures",
+                file: "crates/tally/src/counter.rs",
+                kind: "item",
+                symbol: "crates/tally::counter::CAP",
+                item_kind: "const_item",
+                state: "conflict",
+                category: null,
+                detail: null,
+                class: "fix",
+                pre_existing: false,
+                markers: [{ line: 8, rev: 2 }],
+                node_rev: 2,
+                lock: { rev: 2, commit: "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4", verified_at: "2026-10-21" },
+                compared: "ast",
+                levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: ["body"] },
+                anchor: { state: "exact", from: null, candidates: null },
+              },
+              spec: {
+                commit: "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4",
+                path: "docs/spec/counter.md",
+                diff: "@@ -1,4 +1,4 @@\n ## Bound {#LAW-BOUND rev=2}\n \n-The count never exceeds the cap.\n+The count never exceeds the cap, twelve by default.\n \n",
+              },
+              // A CRLF working copy against an LF blob, a tab and a trailing space, kept as sent.
+              code: {
+                blob: "b6e2d94a1f0c38e75a2d6b9c4e1f7a0358c2d6e9",
+                file: "crates/tally/src/counter.rs",
+                diff: "@@ -1 +1 @@\n-pub const CAP: u32 = 10; // @configures LAW-BOUND@2\n+pub const CAP: u32 = 12;\t// @configures LAW-BOUND@2 \r\n",
+              },
+            },
+          ],
+        },
+        { id: null, path: "docs/spec/limits.md", line: 1, rows: [] },
+      ],
+    };
+    const notJudged: LockDiffView = {
+      ref: "LAW-BOUND",
+      reason: null,
+      notes: ["bindings: specengine.toml has no [code] table: the code layer is off (add [code] with roots)"],
+      nodes: [{ id: "LAW-BOUND", path: "docs/spec/counter.md", line: 13, rows: null }],
+    };
+    stubFetch((url) => jsonAnswer(200, url.includes("ledger") ? notJudged : lockDiff));
+    const client = new HttpClient();
+    const answer = await client.getLockDiff("alpha", " LAW-BOUND ");
+    expect(answer).toEqual(lockDiff);
+    expect(answer.nodes[0]?.rows?.[0]?.code?.diff).toBe(lockDiff.nodes[0]?.rows?.[0]?.code?.diff);
+    expect(await client.getLockDiff("ledger", "LAW-BOUND")).toEqual(notJudged);
+  });
+
+  it("resolves the lock diff's 404 exit-1 document as data: reason set, notes and nodes empty (UI-2 of lock-diff)", async () => {
+    const missing: LockDiffView = { ref: "NOPE-1", reason: "`NOPE-1` resolves to no ID and no alias", notes: [], nodes: [] };
+    const fetchStub = stubFetch(() => jsonAnswer(404, missing));
+    expect(await new HttpClient().getLockDiff("alpha", "NOPE-1")).toEqual(missing);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/alpha/lock-diff?ref=NOPE-1"]);
+  });
+
+  it.each<[string, number, string]>([
+    ["a query name refused (400)", 400, "`x` is no query name of lock-diff: it takes ref"],
+    ["no `ref` (400)", 400, "`ref` is required"],
+    ["`ref` twice (400)", 400, "`ref` is given 2 times: it takes one value"],
+    ["a bad `%` (400)", 400, "the value of `ref` (`%G1`): the `%` at byte 0 is not followed by two hex digits"],
+    ["a look-alike ID (503, exit 2), two lines verbatim", 503, "spec: `LAW-B\u041eUND` mixes scripts or uses look-alike letters; IDs are Latin only: write `LAW-BOUND`\nsecond line"],
+    ["the store (503, exit 2)", 503, "spec: the index cannot be read: database is locked"],
+    [
+      "a 404 error body in the unknown route's words (lock-diff listed after roadmap)",
+      404,
+      "no route /api/projects/alpha/lock-diff: the routes are /api/projects and /api/projects/<slug>/{tree, nodes/<REF>, search, bundle, graph, check, health, roadmap, lock-diff, inbox, proposals/<id>, tasks, tasks/<id>, round, events}; the web UI: / and /assets/<file>",
+    ],
+  ])("rejects the lock diff's %s with a ClientError, the daemon's message verbatim, never as data (UI-2 of lock-diff)", async (_name, status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    const error = await rejection(new HttpClient().getLockDiff("alpha", "LAW-BOUND"));
+    expect(error).toBeInstanceOf(ClientError);
+    expect([error.status, error.message, error.notServed]).toEqual([status, message, false]);
+    expect(apiErrorOf(error)).toEqual({ status, message });
+  });
+
+  it("rejects the lock diff's read with status 0 when no response came (UI-2 of lock-diff)", async () => {
+    stubFetch(() => {
+      throw new TypeError("Failed to fetch");
+    });
+    const error = await rejection(new HttpClient().getLockDiff("alpha", "MEC-TIDES#RULE-TIDE-WINDOW"));
+    expect([error.status, error.message]).toEqual([0, "GET /api/projects/alpha/lock-diff?ref=MEC-TIDES%23RULE-TIDE-WINDOW: no response from the daemon (Failed to fetch)"]);
   });
 
   it("resolves the graph's 404 exit-1 document as data, its reason set (AC-03 of ui-live)", async () => {

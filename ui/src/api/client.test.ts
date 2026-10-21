@@ -48,6 +48,8 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
       "getRoadmap",
       '/** GET /api/projects/:p/roadmap (crates/specengine-http/README.md "Endpoints"; = spec roadmap --json, the browser view, uncut; 404 the exit-1 document) */',
     ],
+    // UI-2 of docs/features/lock-diff.md: the route its "Route" names, until the daemon's README lists it at shipping.
+    ["getLockDiff", '/** GET /api/projects/:p/lock-diff (docs/features/lock-diff.md "Route"; = spec lock diff REF --json, uncut; 404 the exit-1 document) */'],
   ])("%s says %s", (method, comment) => {
     expect(commentAbove(method)).toBe(comment);
   });
@@ -131,5 +133,14 @@ describe("the health read (AC-U1 of health-left)", () => {
     expect(source).toContain("getHealth(project: string): Promise<HealthReport>;");
     expect(source).not.toMatch(/getHealth\([^)]*signal/);
     expect(source).not.toContain("MISSING ENDPOINT");
+  });
+});
+
+describe("the lock diff's read (UI-2 of lock-diff)", () => {
+  it("is one read typed as the lock diff document, taking the REF and its query's AbortSignal; no member writes the lock or accepts a binding", () => {
+    expect(source).toContain("getLockDiff(project: string, ref: string, signal?: AbortSignal): Promise<LockDiffView>;");
+    const block = /export interface SpecEngineClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? "";
+    const names = [...block.matchAll(/^\s+(?:readonly\s+)?(\w+)\??[(:]/gm)].map((match) => match[1] ?? "");
+    expect(names.filter((name) => /lock|accept|drift/i.test(name))).toEqual(["getLockDiff"]);
   });
 });

@@ -343,8 +343,9 @@ fn ac_r6_a_query_another_method_an_unknown_slug_or_route_and_the_fence() {
             "{unknown}: {message}"
         );
         assert!(
-            // docs/features/roadmap-surfaces.md: `roadmap` after `health`.
-            message.contains("graph, check, health, roadmap, inbox,"),
+            // docs/features/roadmap-surfaces.md: `roadmap` after `health`;
+            // docs/features/lock-diff.md "Route": `lock-diff` after it.
+            message.contains("graph, check, health, roadmap, lock-diff, inbox,"),
             "{unknown}: the list names health: {message}"
         );
         assert_plain(&reply, unknown);

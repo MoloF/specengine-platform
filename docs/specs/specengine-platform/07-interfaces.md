@@ -112,6 +112,7 @@ spec bump [--staged] [--json]                       # read-only: nodes to raise 
 spec lock accept REF [--editorial]                  # shipped: docs/canon/spec-lock-accept.md
 spec lock regen                                     # a merge conflicting in spec.lock: docs/canon/spec-lock.md
 spec lock rebase [--json]                           # an older format or code_recipe (shipped: docs/canon/spec-lock-rebase.md)
+spec lock diff REF [--json]                         # what moved since REF's lock entries, read-only (shipped: docs/canon/spec-lock-diff.md, ADR-0053)
 spec gate --worktree DIR --path FILE [--json] | --stdin  # shipped: docs/canon/gate.md
 spec resolve [--timeout S] [--json]                 # layer C on request (shipped: docs/canon/layer-c.md, ADR-0049)
 
@@ -133,7 +134,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 ## 3. HTTP (daemon)
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` by `spec serve` (`docs/canon/serve.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|health|roadmap|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols` to come
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|check|health|roadmap|lock-diff|inbox|proposals/:id|tasks|tasks/:id|round` (built); `symbols` to come
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), on a trigger and only with GET/SSE (see §1.1)

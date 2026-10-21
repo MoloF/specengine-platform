@@ -37,10 +37,11 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
-    BundleRequest, CheckRequest, GraphRequest, HealthRequest, InboxRequest, Outcome, ReviewRequest,
-    RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
-    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TreeRequest,
-    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, utc_now,
+    BundleRequest, CheckRequest, GraphRequest, HealthRequest, InboxRequest, LockDiffRequest,
+    Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
+    SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest,
+    TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit,
+    utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -108,6 +109,7 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/health", read(health))
         .route("/api/projects/{p}/roadmap", read(roadmap))
+        .route("/api/projects/{p}/lock-diff", read(lock_diff))
         .route("/api/projects/{p}/inbox", read(inbox))
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
         .route("/api/projects/{p}/tasks", read(tasks))
@@ -266,8 +268,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
-             nodes/<REF>, search, bundle, graph, check, health, roadmap, inbox, proposals/<id>, \
-             tasks, tasks/<id>, round, events}}; the web UI: / and /assets/<file>",
+             nodes/<REF>, search, bundle, graph, check, health, roadmap, lock-diff, inbox, \
+             proposals/<id>, tasks, tasks/<id>, round, events}}; the web UI: / and /assets/<file>",
             uri.path()
         ),
     )
@@ -440,6 +442,27 @@ async fn health(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
             },
         )
         .map(Outcome::Health)
+    })
+    .await)
+}
+
+/// `GET …/lock-diff`: `spec lock diff REF --json` (docs/features/lock-diff.md
+/// "Route"), in the project's turn; `ref` required, one value. It reads the
+/// root's working tree and repository objects, git read-only (`cat-file`,
+/// `diff --no-index` over scratch files in the data directory) through the
+/// daemon's environment; a REF naming nothing: the exit-1 document, a 404;
+/// the CLI's exit 2: a 503. Nothing is cut.
+async fn lock_diff(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("lock-diff", &["ref"], &uri)?;
+    let reference = args.required_text("ref").map_err(Refusal::bad_request)?;
+    Ok(run(project, move |env, globals| {
+        let request = LockDiffRequest {
+            reference,
+            git: process_git(env),
+        };
+        specengine_cli::lock_diff(env, globals, &request)
+            .map(|outcome| Outcome::LockDiff(Box::new(outcome)))
     })
     .await)
 }

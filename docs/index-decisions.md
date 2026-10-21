@@ -61,3 +61,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0050](decisions/ADR-0050.md) spec lock rebase re-hashes the lock from the bytes the owner accepted · architecture · accepted
 - [ADR-0051](decisions/ADR-0051.md) Health's code rows read the code index the call refreshes, as spec refs does · architecture · accepted
 - [ADR-0052](decisions/ADR-0052.md) Plan items are files in git; tasks execute them; position is computed · architecture · accepted
+- [ADR-0053](decisions/ADR-0053.md) Reads show what changed since a lock entry · architecture · accepted

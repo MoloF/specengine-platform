@@ -24,7 +24,7 @@ Visibility only: no check finding, rule or gate; nothing blocks (ADR-0012, ADR-0
 
 ## Document
 
-`{documents, amendments, notes, code, assumes, unbound, drift}`, the first three row 3's (`health.md` "spec health"), `drift` row 6's; every key present, absent `null`, uncut; key sets in `fixtures/daemon-keys.json` (76).
+`{documents, amendments, notes, code, assumes, unbound, drift}`, the first three row 3's (`health.md` "spec health"), `drift` row 6's; every key present, absent `null`, uncut; key sets in `fixtures/daemon-keys.json` (81).
 
 - `code` (`HealthCode`): `{files, rs, ron, skipped}`, `spec refs`' count of the stored files; `null` unless the index was read.
 - A row (`HealthAssumes`, `HealthUnbound`): `{state, causes, counts, rows}`: `state` `measured`, `off`, `not_configured` (row 5) or `cannot`; `causes` the lines behind any other state, else `[]`; `counts`, `rows` `null` unless `measured`, never a 0.
@@ -126,4 +126,4 @@ Rows 4-5 `cannot`, `code` null, row 3 measured, exit 0: a bad `[code]` (`<config
 
 ## Tests
 
-CLI `tests/health.rs`, `health_rows/` (parity, failures, read-only, determinism, genre), `code_refs_walk.rs` (`NEW_MODULES` 18); store `queue_bare_reads.rs`; http `tests/health.rs`, `daemon_keys.rs` (76 sets); UI `daemonKeys.test.ts`. TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs`.
+CLI `tests/health.rs`, `health_rows/` (parity, failures, read-only, determinism, genre), `code_refs_walk.rs` (`NEW_MODULES` 18); store `queue_bare_reads.rs`; http `tests/health.rs`, `daemon_keys.rs` (81 sets); UI `daemonKeys.test.ts`. TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs`.

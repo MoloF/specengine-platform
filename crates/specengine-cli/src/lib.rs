@@ -29,7 +29,9 @@
 //! [`LockConsent`] and extra [`LockTrailer`]s: canon
 //! `spec-lock-accept`, "Steps"), `spec lock regen` ([`lock_regen`]:
 //! canon `spec-lock`, "`spec lock regen`") and `spec lock rebase`
-//! ([`lock_rebase`]: task spec `lock-rebase`); `spec verify [--changed |
+//! ([`lock_rebase`]: task spec `lock-rebase`); `spec lock diff`
+//! ([`lock_diff`]: task spec `lock-diff`), a read: what moved since each
+//! drifted binding's entry, as git's hunks; `spec verify [--changed |
 //! --staged]` ([`verify`]: canon `spec-verify`, "Rows", "Verdict and
 //! exit"; `--task T [--changed]`: task spec `verify-task`; `--node REF`:
 //! task spec `verify-node`), drift between
@@ -224,6 +226,7 @@ mod layer_c_run;
 mod links;
 mod location;
 mod lock;
+mod lock_diff;
 mod lock_rebase;
 mod lock_regen;
 mod node_set;
@@ -319,6 +322,10 @@ pub use location::{OpenIndex, checked_data_dir, data_dir, db_path, open_index, p
 pub use lock::{
     LockAcceptRequest, LockConsent, LockMode, LockOutcome, LockPrompt, LockRow, LockTrailer,
     LockWritten, lock_accept,
+};
+pub use lock_diff::{
+    LockDiffCodeSide, LockDiffNode, LockDiffOutcome, LockDiffRequest, LockDiffRow,
+    LockDiffSpecSide, lock_diff,
 };
 pub use lock_rebase::{
     LockRebaseRequest, RebaseCounts, RebaseOutcome, RebaseRow, RebaseSide, lock_rebase,
@@ -579,6 +586,8 @@ pub enum Outcome {
     /// `lock rebase`: `spec.lock` carried into this build's format and
     /// recipes, committed.
     LockRebase(Box<RebaseOutcome>),
+    /// `lock diff`: what moved since each drifted binding's entry.
+    LockDiff(Box<LockDiffOutcome>),
     /// `verify`: drift between `spec.lock` and the tree.
     Verify(Box<VerifyOutcome>),
     /// `verify --tests`: the bound tests run by the project's command.
@@ -631,6 +640,7 @@ impl Outcome {
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
             Self::LockRebase(rebase) => rebase.exit(),
+            Self::LockDiff(diff) => diff.exit(),
             Self::Verify(verify) => verify.exit(),
             Self::VerifyTests(run) => run.exit(),
             Self::Check(check) => check.exit(),
@@ -672,6 +682,7 @@ impl Outcome {
             Self::Lock(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::LockRegen(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::LockRebase(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::LockDiff(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Verify(outcome) => (&outcome.messages, None),
             Self::VerifyTests(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
@@ -724,6 +735,7 @@ impl Outcome {
                 | Self::Lock(_)
                 | Self::LockRegen(_)
                 | Self::LockRebase(_)
+                | Self::LockDiff(_)
                 | Self::Verify(_)
                 | Self::VerifyTests(_)
                 | Self::Intake(_)
@@ -769,6 +781,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Lock(outcome) => lock::render_text(outcome),
         Outcome::LockRegen(outcome) => lock_regen::render_text(outcome),
         Outcome::LockRebase(outcome) => lock_rebase::render_text(outcome),
+        Outcome::LockDiff(outcome) => lock_diff::render_text(outcome),
         Outcome::Verify(outcome) => verify::render_text(outcome),
         Outcome::VerifyTests(outcome) => verify_tests::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
@@ -812,6 +825,7 @@ impl serde::Serialize for Outcome {
             Self::Lock(outcome) => outcome.serialize(serializer),
             Self::LockRegen(outcome) => outcome.serialize(serializer),
             Self::LockRebase(outcome) => outcome.serialize(serializer),
+            Self::LockDiff(outcome) => outcome.serialize(serializer),
             Self::Verify(outcome) => outcome.serialize(serializer),
             Self::VerifyTests(outcome) => outcome.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),

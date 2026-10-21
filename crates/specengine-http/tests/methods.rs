@@ -286,9 +286,10 @@ fn an_unknown_path_is_a_404_for_every_method() {
                 message.starts_with(&format!("no route {path}: the routes are /api/projects ")),
                 "{context}: {message}"
             );
-            // docs/features/roadmap-surfaces.md: `roadmap` after `health`.
+            // docs/features/roadmap-surfaces.md: `roadmap` after `health`;
+            // docs/features/lock-diff.md "Route": `lock-diff` after it.
             assert!(
-                message.contains(" health, roadmap, inbox, "),
+                message.contains(" health, roadmap, lock-diff, inbox, "),
                 "{context}: the list names roadmap: {message}"
             );
         }

@@ -64,4 +64,4 @@ Health's "What is left" (`ui/src/health/`): "Proposals in the queue" (rows 1-2),
 
 ## Tests
 
-CLI `tests/health.rs` (rule, links parity, keys and text, gaps, notes, read-only and determinism, genre; rows 4-5: `health-code.md` "Tests"); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (76 key sets); UI `health.smoke`, `health.live` (triggers, the trailing read, a failed walk), `HealthView`, `mocks/health`, `daemonKeys`, `policy` (`round/text` confined to `src/round/`), `labels`, `tokens` (nine `--assumed-*`), `MockClient`, `ui/text` (U-09) tests.
+CLI `tests/health.rs` (rule, links parity, keys and text, gaps, notes, read-only and determinism, genre; rows 4-5: `health-code.md` "Tests"); http `tests/health.rs` (parity, refusals, 503s), `turn.rs`, `door.rs`, `daemon_keys.rs` (81 key sets); UI `health.smoke`, `health.live` (triggers, the trailing read, a failed walk), `HealthView`, `mocks/health`, `daemonKeys`, `policy` (`round/text` confined to `src/round/`), `labels`, `tokens` (nine `--assumed-*`), `MockClient`, `ui/text` (U-09) tests.

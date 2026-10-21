@@ -30,6 +30,11 @@ import type {
   HealthUnbound,
   InboxEntry,
   Interpretation,
+  LockDiffCodeSide,
+  LockDiffNode,
+  LockDiffRow,
+  LockDiffSpecSide,
+  LockDiffView,
   NodeView,
   OwnerNote,
   Project,
@@ -110,12 +115,14 @@ import type {
 // docs/features/tested-reads.md: `TestedRow`, a package's `tested` entry, the sixty-eighth and last,
 // with the package's `tested` after `bindings`, 27 keys); health-drift's six (UI-1 of
 // docs/features/health-drift.md: the health document's `drift` after `unbound`, row 6, verify's
-// counts, its row, the row's marker, lock and levels, the seventy-fourth `DriftLevels`); and
+// counts, its row, the row's marker, lock and levels, the seventy-fourth `DriftLevels`);
 // ui-node-bindings' two (UI-8, TE-1 of docs/features/ui-node-bindings.md: a shown node's 19 keys,
-// `bindings` after `links`, and its `ShownBindings`, the seventy-sixth and last). A key the types
+// `bindings` after `links`, and its `ShownBindings`, the seventy-sixth); and lock-diff's five
+// (UI-1, TE-2 of docs/features/lock-diff.md: the lock diff document, a holder, a kept row, the
+// spec side and the code side, the eighty-first and last `LockDiffCodeSide`). A key the types
 // carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already
 // names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all seventy-six, in the slices' order.
+// names all eighty-one, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -618,6 +625,13 @@ const KEYS = {
     bindings: true,
   } satisfies Record<keyof ShownNode, true>,
   ShownBindings: { rows: true, omitted: true, tested: true } satisfies Record<keyof ShownBindings, true>,
+  // docs/features/lock-diff.md "Daemon keys": the five sets after `ShownBindings`, keys in "Data"'s
+  // order; a kept row's `row` is DriftRow's 17, pinned already.
+  LockDiffView: { ref: true, reason: true, notes: true, nodes: true } satisfies Record<keyof LockDiffView, true>,
+  LockDiffNode: { id: true, path: true, line: true, rows: true } satisfies Record<keyof LockDiffNode, true>,
+  LockDiffRow: { row: true, spec: true, code: true } satisfies Record<keyof LockDiffRow, true>,
+  LockDiffSpecSide: { commit: true, path: true, diff: true } satisfies Record<keyof LockDiffSpecSide, true>,
+  LockDiffCodeSide: { blob: true, file: true, diff: true } satisfies Record<keyof LockDiffCodeSide, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -712,6 +726,11 @@ const CITED: Record<Named, string> = {
   DriftLevels: "lock, markers, changed",
   ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links, bindings",
   ShownBindings: "rows, omitted, tested",
+  LockDiffView: "ref, reason, notes, nodes",
+  LockDiffNode: "id, path, line, rows",
+  LockDiffRow: "row, spec, code",
+  LockDiffSpecSide: "commit, path, diff",
+  LockDiffCodeSide: "blob, file, diff",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -841,8 +860,17 @@ const BEFORE_UI_NODE_BINDINGS: readonly Named[] = [...BEFORE_HEALTH_DRIFT, ...HE
 /** ui-node-bindings' two: a shown node and its bindings (docs/features/ui-node-bindings.md UI-8, TE-1). */
 const UI_NODE_BINDINGS: readonly Named[] = ["ShownNode", "ShownBindings"];
 
+/** The seventy-six types the fixture named before lock-diff. */
+const BEFORE_LOCK_DIFF: readonly Named[] = [...BEFORE_UI_NODE_BINDINGS, ...UI_NODE_BINDINGS];
+
+/**
+ * lock-diff's five: the document, a holder, a kept row, the spec side, the code side, in "Daemon
+ * keys"' order (docs/features/lock-diff.md UI-1, TE-2).
+ */
+const LOCK_DIFF: readonly Named[] = ["LockDiffView", "LockDiffNode", "LockDiffRow", "LockDiffSpecSide", "LockDiffCodeSide"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_UI_NODE_BINDINGS, ...UI_NODE_BINDINGS];
+const ALL: readonly Named[] = [...BEFORE_LOCK_DIFF, ...LOCK_DIFF];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -866,8 +894,8 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * ui-node-bindings' TE-1 wrote `ShownNode` and `ShownBindings`, the seventy-sixth and last
- * (docs/features/ui-node-bindings.md).
+ * lock-diff's TE-2 wrote its five sets, the seventy-seventh to eighty-first and last
+ * (docs/features/lock-diff.md "Daemon keys").
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -906,7 +934,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_TESTED_READS.at(-1)).toBe("BindingRow");
     expect(BEFORE_HEALTH_DRIFT.at(-1)).toBe("TestedRow");
     expect(BEFORE_UI_NODE_BINDINGS.at(-1)).toBe("DriftLevels");
-    expect(ALL.at(-1)).toBe("ShownBindings");
+    expect(BEFORE_LOCK_DIFF.at(-1)).toBe("ShownBindings");
+    expect(ALL.at(-1)).toBe("LockDiffCodeSide");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -935,7 +964,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(76);
+    expect(ALL).toHaveLength(81);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -946,11 +975,40 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since ui-node-bindings' TE-1 wrote ShownNode and ShownBindings into the file", () => {
+  it("lists ahead of the fixture only keys their types serve, none since lock-diff's TE-2 wrote its five sets into the file (UI-1 of lock-diff)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
+    expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
+  });
+
+  it("counts lock-diff's five: 4, 4, 3, 3, 3, after ui-node-bindings' two, the seventy-seventh to eighty-first sets, declared so (UI-1 of lock-diff)", () => {
+    expect(LOCK_DIFF.map((name) => served(name).length)).toEqual([4, 4, 3, 3, 3]);
+    expect(ALL.slice(BEFORE_LOCK_DIFF.length)).toEqual([...LOCK_DIFF]);
+    expect(ALL.indexOf("LockDiffView")).toBe(76);
+    for (const name of LOCK_DIFF) {
+      expect([name, declaredKeys(name)]).toEqual([name, Object.keys(KEYS[name])]);
+    }
+    // The document is `spec show`'s envelope: the node read's four keys, its nodes the holders.
+    expect(served("LockDiffView")).toEqual(served("NodeView"));
+    // The two sides differ in their first two keys only: five sets, not four.
+    expect(served("LockDiffSpecSide").slice(2)).toEqual(served("LockDiffCodeSide").slice(2));
+    expect(served("LockDiffSpecSide").slice(0, 2)).not.toEqual(served("LockDiffCodeSide").slice(0, 2));
+  });
+
+  it("types the five as the spec's \"UI provisional types\": rows null when not judged, an id null for an ID-less document, each side and its diff nullable, a kept row's row verify's DriftRow (UI-1 of lock-diff)", () => {
+    expect(source).toMatch(/^export interface LockDiffView \{\n {2}ref: string;\n {2}reason: string \| null;\n {2}notes: string\[\];\n {2}nodes: LockDiffNode\[\];\n\}$/m);
+    expect(source).toMatch(/^export interface LockDiffNode \{\n {2}id: string \| null;\n {2}path: string;\n {2}line: number;\n {2}rows: LockDiffRow\[\] \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface LockDiffRow \{\n {2}row: DriftRow;\n {2}spec: LockDiffSpecSide \| null;\n {2}code: LockDiffCodeSide \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface LockDiffSpecSide \{\n {2}commit: string;\n {2}path: string;\n {2}diff: string \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface LockDiffCodeSide \{\n {2}blob: string;\n {2}file: string;\n {2}diff: string \| null;\n\}$/m);
+  });
+
+  it.each<Named>(LOCK_DIFF)('%s cites `docs/features/lock-diff.md` "Data" on one line (UI-1 of lock-diff)', (type) => {
+    const at = source.indexOf(`export interface ${type} `);
+    expect(at).toBeGreaterThan(0);
+    expect(source.slice(source.lastIndexOf("/**", at), at).split("\n").some((line) => line.includes('`docs/features/lock-diff.md` "Data"'))).toBe(true);
   });
 
   it("gives the review document its revisions right after conflict, and the approve stage its editorial right after canon (UI-4 of rev-discipline)", () => {
@@ -1010,8 +1068,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_TESTED_READS).toHaveLength(67);
     expect(BEFORE_HEALTH_DRIFT).toHaveLength(68);
     expect(BEFORE_UI_NODE_BINDINGS).toHaveLength(74);
-    expect(ALL).toHaveLength(76);
-    expect(new Set(ALL).size).toBe(76);
+    expect(BEFORE_LOCK_DIFF).toHaveLength(76);
+    expect(ALL).toHaveLength(81);
+    expect(new Set(ALL).size).toBe(81);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1050,7 +1109,7 @@ describe("the daemon's document types (AC-09)", () => {
 
   it("counts ui-node-bindings' two: a shown node's 19 keys, bindings its 19th after links, and ShownBindings' 3, declared so, the seventy-fifth and seventy-sixth sets (UI-8 of ui-node-bindings)", () => {
     expect(UI_NODE_BINDINGS.map((name) => served(name).length)).toEqual([19, 3]);
-    expect(ALL.slice(BEFORE_UI_NODE_BINDINGS.length)).toEqual([...UI_NODE_BINDINGS]);
+    expect(ALL.slice(BEFORE_UI_NODE_BINDINGS.length, BEFORE_LOCK_DIFF.length)).toEqual([...UI_NODE_BINDINGS]);
     expect(declaredKeys("ShownNode")).toEqual(Object.keys(KEYS.ShownNode));
     expect(declaredKeys("ShownBindings")).toEqual(Object.keys(KEYS.ShownBindings));
     expect(served("ShownNode").slice(-2)).toEqual(["links", "bindings"]);
@@ -1252,12 +1311,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the seventy-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two", () => {
+  it("names exactly the eighty-one types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all seventy-six, in the slices' order.
+    // None is ahead of the file today: it names all eighty-one, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(76);
+    expect(Object.keys(sets)).toHaveLength(81);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1336,15 +1395,25 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect([health.indexOf("drift"), health.length]).toEqual([6, 7]);
   });
 
-  it("names ui-node-bindings' two after DriftLevels, last: a shown node's 19 keys, bindings after links, and ShownBindings' 3, in the types' order (UI-8, TE-1 of ui-node-bindings)", () => {
-    expect(Object.keys(sets).slice(BEFORE_UI_NODE_BINDINGS.length)).toEqual([...UI_NODE_BINDINGS]);
+  it("names ui-node-bindings' two after DriftLevels, before lock-diff's five: a shown node's 19 keys, bindings after links, and ShownBindings' 3, in the types' order (UI-8, TE-1 of ui-node-bindings)", () => {
+    expect(Object.keys(sets).slice(BEFORE_UI_NODE_BINDINGS.length, BEFORE_LOCK_DIFF.length)).toEqual([...UI_NODE_BINDINGS]);
     expect(Object.keys(sets).indexOf("ShownNode")).toBe(74);
-    expect(Object.keys(sets).at(-1)).toBe("ShownBindings");
+    expect(Object.keys(sets).at(BEFORE_LOCK_DIFF.length - 1)).toBe("ShownBindings");
     expect(UI_NODE_BINDINGS.map((name) => sets[name])).toEqual(UI_NODE_BINDINGS.map((name) => served(name)));
     expect(sets.ShownBindings).toEqual(["rows", "omitted", "tested"]);
     const node = sets.ShownNode ?? [];
     expect([node.indexOf("bindings"), node.length]).toEqual([18, 19]);
     expect(node.slice(-2)).toEqual(["links", "bindings"]);
+  });
+
+  it("names lock-diff's five after ShownBindings, last: 4, 4, 3, 3, 3 keys in the types' order, the two sides' first two keys apart (UI-1, TE-2 of lock-diff)", () => {
+    expect(Object.keys(sets).slice(BEFORE_LOCK_DIFF.length)).toEqual([...LOCK_DIFF]);
+    expect(Object.keys(sets).indexOf("LockDiffView")).toBe(76);
+    expect(Object.keys(sets).at(-1)).toBe("LockDiffCodeSide");
+    expect(LOCK_DIFF.map((name) => sets[name])).toEqual(LOCK_DIFF.map((name) => served(name)));
+    expect(LOCK_DIFF.map((name) => sets[name]?.length)).toEqual([4, 4, 3, 3, 3]);
+    expect(sets.LockDiffSpecSide).toEqual(["commit", "path", "diff"]);
+    expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
   it("names kind-interpretation's keys: the review document's interpretation after staged_at, the Interpretation set (AC-T4)", () => {

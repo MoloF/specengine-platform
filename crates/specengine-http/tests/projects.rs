@@ -337,6 +337,12 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
                 "{path}: the routes name `{route}`: {message}"
             );
         }
+        // docs/features/lock-diff.md RD-7 ("Route"): `lock-diff` after
+        // `roadmap`.
+        assert!(
+            message.contains(" roadmap, lock-diff, "),
+            "{path}: the routes name `lock-diff` after `roadmap`: {message}"
+        );
         assert!(
             message.ends_with("; the web UI: / and /assets/<file>"),
             "{path}: the routes end with the web UI's: {message}"

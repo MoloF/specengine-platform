@@ -71,9 +71,9 @@ use std::path::Path;
 
 use serde::Serialize;
 use specengine_code::{
-    Anchor, DEFAULT_LEVELS, LevelState, Levels, MOD_KIND, NamedFile, RECIPE, RonValues, RustParser,
-    bind_tree, comment_anchors, grammar_info, hash_bound_items, item_levels, markers_in,
-    module_levels, placed_name_file, value_hashes,
+    Anchor, DEFAULT_LEVELS, FileAnalysis, LevelState, Levels, MOD_KIND, NamedFile, RECIPE,
+    RonValues, RustBinding, RustParser, bind_tree, comment_anchors, grammar_info, hash_bound_items,
+    item_levels, markers_in, module_levels, placed_name_file, value_hashes,
 };
 use specengine_core::lock::{
     BINDING_FORMAT, DropReason, EntryCode, EntryKey, LOCK_FILE, LevelCode, Lock, LockFormat,
@@ -521,19 +521,24 @@ struct BlobMarker<U> {
 /// A Rust unit of a blob: an item, or a module (the file's, `None`, or an
 /// inline `mod`'s by its item).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Unit {
+pub(crate) enum Unit {
     Item(usize),
     Module(Option<usize>),
 }
 
 /// Which node a marker's ID names: its bytes, or its resolution in the
 /// working-tree corpus (as accept's).
-struct NodeNames<'c, 'a> {
+pub(crate) struct NodeNames<'c, 'a> {
     corpus: &'c mut Corpus<'a>,
     project: &'c ProjectRoot,
 }
 
-impl NodeNames<'_, '_> {
+impl<'c, 'a> NodeNames<'c, 'a> {
+    /// Names judged over `corpus`, the working tree's, of `project`.
+    pub(crate) fn new(corpus: &'c mut Corpus<'a>, project: &'c ProjectRoot) -> Self {
+        Self { corpus, project }
+    }
+
     /// The marker ID `id` names the node `node` (its canonical cited ID).
     fn names(&mut self, id: &str, node: &str) -> bool {
         if id == node {
@@ -626,33 +631,28 @@ fn ends_with_path(symbol: &str, path: &str) -> bool {
             .is_some_and(|head| head.ends_with("::"))
 }
 
-/// What one entry of a Rust blob was located as, before hashing.
-enum Found {
-    Dropped(DropReason),
-    At {
-        unit: Unit,
-        levels: BTreeSet<LockLevel>,
-    },
+/// What "Location" reads of one Rust file's bytes (a blob here; `spec lock
+/// diff` locates an entry in its blob and a row in the working tree's
+/// bytes with it too): each item's in-file path, named over the file in no
+/// package, the file's `mod` declarations, and the markers of its comments
+/// by the unit each binds.
+pub(crate) struct BlobUnits {
+    /// Per item: every segment of its path but the package.
+    in_file: Vec<Option<String>>,
+    /// Each `mod name;` declaration: its name, inline `mod` chain, line.
+    declarations: BTreeSet<(String, Vec<String>, usize)>,
+    markers: Vec<BlobMarker<Unit>>,
 }
 
-/// The entries of one Rust blob, re-derived from it: parsed once (no tree:
-/// exit 2), named in no package, each entry located, its levels taken and
-/// its unit hashed, every item's levels in one call; a panic in any of it:
-/// exit 2, ``re-deriving `<file>` at blob <oid> failed``.
-fn rederive_rust(
-    blob: &Blob<'_>,
-    parser: &mut RustParser,
-    entries: &[(&EntryKey, &Verified)],
-    names: &mut NodeNames<'_, '_>,
-) -> Result<Vec<(EntryKey, Rederived)>, CliError> {
-    let text = blob.text;
-    let run = panic::catch_unwind(AssertUnwindSafe(|| {
-        let tree = parser.parse(text)?;
-        let binding = bind_tree(&tree, text);
+impl BlobUnits {
+    /// The units of `binding`, the comment binding of `text`, the file
+    /// `file` named in no package. May panic as the naming may (the caller
+    /// catches it).
+    pub(crate) fn of(binding: &RustBinding, file: &str, text: &str) -> Self {
         let analysis = &binding.analysis;
         let placed = placed_name_file(
             &NamedFile {
-                path: Path::new(blob.file),
+                path: Path::new(file),
                 package: None,
                 analysis,
             },
@@ -672,13 +672,13 @@ fn rederive_rust(
                     .and_then(|at| suffixes.get(at).cloned())
             })
             .collect();
-        let declarations: BTreeSet<(&str, &[String], usize)> = analysis
+        let declarations = analysis
             .mod_declarations
             .iter()
             .map(|declared| {
                 (
-                    declared.name.as_str(),
-                    declared.mod_path.as_slice(),
+                    declared.name.clone(),
+                    declared.mod_path.clone(),
                     declared.line,
                 )
             })
@@ -707,54 +707,102 @@ fn rederive_rust(
                 });
             }
         }
+        Self {
+            in_file,
+            declarations,
+            markers,
+        }
+    }
+
+    /// `key` located in the file `analysis` is of (this one's binding's):
+    /// an `item` entry's candidates are the items of its `item_kind` whose
+    /// in-file path is the symbol or ends it after a `::`; a `module`
+    /// entry's, the file's module and each inline `mod` whose in-file path
+    /// so ends it; a `ron` entry has none here. None: `symbol_gone`; of
+    /// several, the one a marker giving the key binds, else `ambiguous`.
+    pub(crate) fn locate(
+        &self,
+        analysis: &FileAnalysis,
+        key: &EntryKey,
+        names: &mut NodeNames<'_, '_>,
+    ) -> Result<Unit, DropReason> {
+        let matches = |index: usize| {
+            self.in_file
+                .get(index)
+                .and_then(Option::as_deref)
+                .is_some_and(|path| ends_with_path(&key.symbol, path))
+        };
+        let candidates: Vec<Unit> = match key.kind {
+            LockKind::Item => analysis
+                .items
+                .iter()
+                .enumerate()
+                .filter(|(index, item)| {
+                    key.item_kind.as_deref() == Some(item.kind.as_str()) && matches(*index)
+                })
+                .map(|(index, _)| Unit::Item(index))
+                .collect(),
+            LockKind::Module => std::iter::once(Unit::Module(None))
+                .chain(
+                    analysis
+                        .items
+                        .iter()
+                        .enumerate()
+                        .filter(|(index, item)| {
+                            item.kind == MOD_KIND
+                                && !self.declarations.contains(&(
+                                    item.name.clone().unwrap_or_default(),
+                                    item.mod_path.clone(),
+                                    item.line,
+                                ))
+                                && matches(*index)
+                        })
+                        .map(|(index, _)| Unit::Module(Some(index))),
+                )
+                .collect(),
+            LockKind::Ron => Vec::new(),
+        };
+        if candidates.is_empty() {
+            return Err(DropReason::SymbolGone);
+        }
+        located(&candidates, &self.markers, key, names).ok_or(DropReason::Ambiguous)
+    }
+}
+
+/// What one entry of a Rust blob was located as, before hashing.
+enum Found {
+    Dropped(DropReason),
+    At {
+        unit: Unit,
+        levels: BTreeSet<LockLevel>,
+    },
+}
+
+/// The entries of one Rust blob, re-derived from it: parsed once (no tree:
+/// exit 2), named in no package, each entry located, its levels taken and
+/// its unit hashed, every item's levels in one call; a panic in any of it:
+/// exit 2, ``re-deriving `<file>` at blob <oid> failed``.
+fn rederive_rust(
+    blob: &Blob<'_>,
+    parser: &mut RustParser,
+    entries: &[(&EntryKey, &Verified)],
+    names: &mut NodeNames<'_, '_>,
+) -> Result<Vec<(EntryKey, Rederived)>, CliError> {
+    let text = blob.text;
+    let run = panic::catch_unwind(AssertUnwindSafe(|| {
+        let tree = parser.parse(text)?;
+        let binding = bind_tree(&tree, text);
+        let units = BlobUnits::of(&binding, blob.file, text);
 
         // Located, and the levels.
         let found: Vec<Found> = entries
             .iter()
             .map(|(key, verified)| {
-                let matches = |index: usize| {
-                    in_file
-                        .get(index)
-                        .and_then(Option::as_deref)
-                        .is_some_and(|path| ends_with_path(&key.symbol, path))
+                let unit = match units.locate(&binding.analysis, key, names) {
+                    Ok(unit) => unit,
+                    Err(reason) => return Found::Dropped(reason),
                 };
-                let candidates: Vec<Unit> = match key.kind {
-                    LockKind::Item => analysis
-                        .items
-                        .iter()
-                        .enumerate()
-                        .filter(|(index, item)| {
-                            key.item_kind.as_deref() == Some(item.kind.as_str()) && matches(*index)
-                        })
-                        .map(|(index, _)| Unit::Item(index))
-                        .collect(),
-                    LockKind::Module => std::iter::once(Unit::Module(None))
-                        .chain(
-                            analysis
-                                .items
-                                .iter()
-                                .enumerate()
-                                .filter(|(index, item)| {
-                                    item.kind == MOD_KIND
-                                        && !declarations.contains(&(
-                                            item.name.as_deref().unwrap_or_default(),
-                                            item.mod_path.as_slice(),
-                                            item.line,
-                                        ))
-                                        && matches(*index)
-                                })
-                                .map(|(index, _)| Unit::Module(Some(index))),
-                        )
-                        .collect(),
-                    LockKind::Ron => Vec::new(),
-                };
-                if candidates.is_empty() {
-                    return Found::Dropped(DropReason::SymbolGone);
-                }
-                let Some(unit) = located(&candidates, &markers, key, names) else {
-                    return Found::Dropped(DropReason::Ambiguous);
-                };
-                match entry_levels(verified, &unit, &markers, key, names) {
+                match entry_levels(verified, &unit, &units.markers, key, names) {
                     Ok(levels) => Found::At { unit, levels },
                     Err(reason) => Found::Dropped(reason),
                 }

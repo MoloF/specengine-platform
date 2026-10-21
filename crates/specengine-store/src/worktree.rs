@@ -346,8 +346,9 @@ impl WorktreeGit {
     }
 
     /// A read-only command whose output must not depend on the user's or
-    /// the system's git config (`diff`, `merge-file`):
-    /// `GIT_CONFIG_GLOBAL=/dev/null`, `GIT_CONFIG_NOSYSTEM=1`.
+    /// the system's git config (`merge-file`; [`Self::diff_hunks`] isolates
+    /// its own further): `GIT_CONFIG_GLOBAL=/dev/null`,
+    /// `GIT_CONFIG_NOSYSTEM=1`.
     fn output_isolated(&self, args: &[&OsStr]) -> Result<Output, GitError> {
         let mut command = self.command(args, true);
         command
@@ -697,28 +698,46 @@ impl WorktreeGit {
         }
     }
 
-    /// The hunks of `git diff --no-index --no-color --no-ext-diff
-    /// --diff-algorithm=myers -U3` from `old` to `new` (scratch files in
-    /// `scratch`, neither the global nor the system git config read): every
-    /// line from the first `@@` on, the headers dropped; empty when they are
-    /// equal.
+    /// The hunks of `git -c core.attributesFile=/dev/null diff --no-index
+    /// --no-color --no-ext-diff --no-textconv --diff-algorithm=myers -U3`
+    /// from `old` to `new` (scratch files in `scratch`, where the callers'
+    /// handles run): no config but git's defaults and no attributes file
+    /// (neither the global nor the system config, `GIT_ATTR_NOSYSTEM=1`,
+    /// and `GIT_CEILING_DIRECTORIES` the scratch directory's parent, so no
+    /// enclosing repository's config or attributes apply): every line from
+    /// the first `@@` on, the headers dropped; empty when they are equal,
+    /// or when git shows no hunk (a binary pair). `GIT_DIFF_OPTS` is
+    /// removed: a caller's `-u0` would override `-U3`.
     pub fn diff_hunks(&self, scratch: &Path, old: &[u8], new: &[u8]) -> Result<Vec<u8>, GitError> {
         const COMMAND: &str = "diff";
+        let dir = std::path::absolute(scratch).map_err(|error| GitError::io(scratch, error))?;
         let mut files = Scratch::default();
-        let old = files.write(scratch, "base", old)?;
-        let new = files.write(scratch, "proposed", new)?;
-        let args: [&OsStr; 9] = [
+        let old = files.write(&dir, "base", old)?;
+        let new = files.write(&dir, "proposed", new)?;
+        let args: [&OsStr; 12] = [
+            OsStr::new("-c"),
+            OsStr::new("core.attributesFile=/dev/null"),
             OsStr::new("diff"),
             OsStr::new("--no-index"),
             OsStr::new("--no-color"),
             OsStr::new("--no-ext-diff"),
+            OsStr::new("--no-textconv"),
             OsStr::new("--diff-algorithm=myers"),
             OsStr::new("-U3"),
             OsStr::new("--"),
             old.as_os_str(),
             new.as_os_str(),
         ];
-        let output = self.output_isolated(&args)?;
+        let mut command = self.command(&args, true);
+        command
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_ATTR_NOSYSTEM", "1")
+            .env_remove("GIT_DIFF_OPTS");
+        if let Some(parent) = dir.parent() {
+            command.env("GIT_CEILING_DIRECTORIES", parent);
+        }
+        let output = run(command, self.deadline)?;
         drop(files);
         match output.status.code() {
             Some(0) => Ok(Vec::new()),
