@@ -547,6 +547,17 @@ fn delta_of(plain: &Value, rows: &[Value], case: Option<&Case<'_>>) -> Value {
             })
             .collect(),
     );
+    // docs/features/show-bindings.md "delta.tests_reaching": plain lists
+    // the tests reaching its affected nodes (kept as plain's for its own
+    // premise, `case` `None`); under `--node` it stays `null` (Q-E: only
+    // the node's own files are judged).
+    assert!(
+        plain["tests_reaching"].is_array(),
+        "premise: plain's tests_reaching is a list: {plain}"
+    );
+    if case.is_some() {
+        delta["tests_reaching"] = Value::Null;
+    }
     delta
 }
 

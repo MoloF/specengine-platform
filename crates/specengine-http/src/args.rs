@@ -3,7 +3,7 @@
 //! tool has, its JSON echo keys: docs/features/ui-live.md "Data"); an
 //! array repeats its key
 //! (`kinds=a&kinds=b`), an integer is decimal, a boolean `true` or
-//! `false`, `with` only `links`. 400: a name the endpoint does not take
+//! `false`, `with` `links` or `bindings`. 400: a name the endpoint does not take
 //! (listing its names), a scalar given twice, a bad value, a required
 //! name missing. A REF is the rest of the path after `nodes/`,
 //! percent-decoded once as UTF-8 (a bad `%` or non-UTF-8: 400).
@@ -14,6 +14,9 @@
 //! parameter, never passed on as written or as U+FFFD.
 
 use specengine_cli::TaskStatus;
+
+/// `with`'s values: MCP `get_node`'s, `spec show --links`, `--bindings`.
+const WITH_VALUES: [&str; 2] = ["links", "bindings"];
 
 /// An endpoint's query, its names checked.
 pub(crate) struct Args {
@@ -120,13 +123,21 @@ impl Args {
             .collect()
     }
 
-    /// `with`: each value `links`; given at least once.
-    pub(crate) fn with_links(&self) -> Result<bool, String> {
+    /// `with`: each value `links` or `bindings`; whether each is given at
+    /// least once, `(links, bindings)`.
+    pub(crate) fn with(&self) -> Result<(bool, bool), String> {
         let values = self.texts("with");
-        if let Some(value) = values.iter().find(|value| value.as_str() != "links") {
-            return Err(format!("`with={value}`: the only value is `links`"));
+        if let Some(value) = values
+            .iter()
+            .find(|value| !WITH_VALUES.contains(&value.as_str()))
+        {
+            return Err(format!(
+                "`with={value}`: the values are `{}` and `{}`",
+                WITH_VALUES[0], WITH_VALUES[1]
+            ));
         }
-        Ok(!values.is_empty())
+        let given = |wanted: &str| values.iter().any(|value| value == wanted);
+        Ok((given(WITH_VALUES[0]), given(WITH_VALUES[1])))
     }
 }
 

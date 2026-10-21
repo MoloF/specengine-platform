@@ -27,23 +27,38 @@
 //! links, one hop both ways, from the index-fed spec graph
 //! ([`crate::links`]); `--archive` (only with `--links`) admits links
 //! written in Tier 3 files.
+//!
+//! `--bindings` (task spec `show-bindings`): each shown node also carries
+//! its code binding rows and its contained sections', judged as `spec
+//! verify --node` judges them ([`crate::bindings`]), over the code index
+//! refreshed after the spec index, through one database handle; never a
+//! failure of the read: a code-layer cause is one `note: bindings:` line,
+//! the exit and the spec part unchanged. Without `[code]` the code layer
+//! is not read: the read is `spec show REF`'s, each node's rows `None`, and
+//! the note. Without `--bindings` the code index is never touched.
 
 use std::panic::{self, AssertUnwindSafe};
 
-use specengine_core::check::{NodeAt, Resolution, Resolver, SpecGraph, is_tier3_file};
-use specengine_core::{DOCUMENT_EXTENSION, is_clean_relative, tokens_est};
-use specengine_model::script::normalize_char;
-use specengine_model::{IdScheme, IdScript, ParsedFile, Reference, grammar};
-use specengine_store::{Source as _, WorkingTree, b3_hash, span_hash};
+use std::collections::BTreeSet;
 
+use specengine_core::check::{NodeAt, Resolution, Resolver, SpecGraph, is_tier3_file};
+use specengine_core::{CodeConfig, DOCUMENT_EXTENSION, is_clean_relative, tokens_est};
+use specengine_model::script::normalize_char;
+use specengine_model::{BindingRow, IdScheme, IdScript, ParsedFile, Reference, grammar};
+use specengine_store::{GitEnv, Source as _, WorkingTree, b3_hash, span_hash};
+
+use crate::bindings::{SetRow, no_code_note, set_bindings};
 use crate::cap::View;
-use crate::corpus::{Admission, indexed};
+use crate::corpus::{Admission, indexed, indexed_in};
 use crate::links::{ShownLinks, node_links};
-use crate::project::discover;
+use crate::location::open_index;
+use crate::node_set::contained;
+use crate::project::discover_with_text;
+use crate::refs::{Corpus, NodeKey};
 use crate::{CliError, Env, Globals, Message, one_line, store_error};
 
 /// `spec show` options.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShowRequest {
     /// `REF` as given.
     pub reference: String,
@@ -52,6 +67,11 @@ pub struct ShowRequest {
     /// `--archive`: links written in Tier 3 files too; only with
     /// `--links`.
     pub archive: bool,
+    /// `--bindings`: each node's code binding rows and its contained
+    /// sections' (task spec `show-bindings`).
+    pub bindings: bool,
+    /// Git's environment: `--bindings` judges the rows with it.
+    pub git: GitEnv,
 }
 
 /// What `spec show` found: nodes, or the reason there are none (exit 1).
@@ -104,6 +124,22 @@ pub struct ShownNode {
     pub text: String,
     /// Its links with `--links`, else `None`.
     pub links: Option<ShownLinks>,
+    /// Its code binding rows and its contained sections' with
+    /// `--bindings`; `None` without the flag or when no row could be read
+    /// (no `[code]`, a `[code]` error, a walk gap, the data directory).
+    pub bindings: Option<ShownBindings>,
+}
+
+/// A shown node's code binding rows (task spec `show-bindings`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShownBindings {
+    /// In verify's row order: the node's and its sections'.
+    pub rows: Vec<BindingRow>,
+    /// The rows were judged; `false`: listed under a git or lock cause,
+    /// `sync` `null` on each.
+    pub judged: bool,
+    /// Per row: its binding as verify prints it, and its class.
+    pub(crate) shown: Vec<(String, Option<&'static str>)>,
 }
 
 /// An ID section inside a shown node.
@@ -145,7 +181,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
             "--archive applies to --links only: add --links, or drop --archive",
         ));
     }
-    let project = discover(env, globals)?;
+    let (project, text) = discover_with_text(env, globals)?;
     project.slug()?;
     let written = request.reference.trim();
     let scheme = &project.config.scheme;
@@ -160,7 +196,18 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         Err(reason) => return Ok(not_found(request, reason, messages)),
     };
 
-    let input = indexed(env, &project, &mut messages, request.links)?;
+    // `--bindings` with `[code]`: one handle for the spec index and the
+    // code index, the spec corpus read again whole (the judge's spec side).
+    // Without `[code]` (cause (2)) the read is `spec show REF`'s and a note.
+    let no_code = request.bindings && matches!(CodeConfig::from_toml(&text), Ok(None));
+    let mut open = match request.bindings && !no_code {
+        true => Some(open_index(env, &project)?),
+        false => None,
+    };
+    let input = match open.as_mut() {
+        Some(open) => indexed_in(&mut open.index, &project, &mut messages, true)?,
+        None => indexed(env, &project, &mut messages, request.links)?,
+    };
     let resolver = Resolver::new(&input, scheme, &project.config.paths);
     let holders: Vec<String> = match &target {
         Target::Path(path) => {
@@ -209,6 +256,8 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
 
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let mut nodes = Vec::new();
+    // Each node's place in its fresh parse: `None` for a whole file.
+    let mut places: Vec<Option<usize>> = Vec::new();
     let mut citations = Vec::new();
     // Holders left out because they could not be read or parsed.
     let mut unread = 0;
@@ -245,6 +294,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
                 let mut node = whole_file(path, &bytes, archived, utf8);
                 node.links = links_of(path, 0, None);
                 nodes.push(node);
+                places.push(None);
                 citations.push(path.clone());
             }
             continue;
@@ -258,6 +308,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
                 _ => path.clone(),
             });
             nodes.push(node);
+            places.push(Some(ord));
         }
     }
     if nodes.is_empty() {
@@ -268,6 +319,20 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         };
         return Ok(not_found(request, reason, messages));
     }
+    // `--bindings`, once REF named a node: the code layer, its note after
+    // `show`'s own messages.
+    let note = match open.as_mut() {
+        Some(open) => {
+            let read = BindingsRead {
+                project: &project,
+                text: &text,
+                git: &request.git,
+                input: &input,
+            };
+            add_bindings(&read, &mut open.index, &mut nodes, &places)
+        }
+        None => no_code.then(|| no_code_note(&project)),
+    };
     if nodes.len() > 1 {
         messages.push(Message::Warning(format!(
             "`{written}` has {} holders, all shown: {}",
@@ -275,6 +340,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
             citations.join(", ")
         )));
     }
+    messages.extend(note.map(Message::Note));
     Ok(ShowOutcome {
         reference: request.reference.clone(),
         reason: None,
@@ -282,6 +348,89 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         nodes,
         view: View::Capped,
     })
+}
+
+/// What `--bindings` reads beside the shown nodes: the project, its
+/// config's text, git's environment, the spec corpus read again.
+struct BindingsRead<'a> {
+    project: &'a crate::project::ProjectRoot,
+    text: &'a str,
+    git: &'a GitEnv,
+    input: &'a specengine_core::check::CheckInput,
+}
+
+/// Each shown node's rows (`places`: its position in its fresh parse): the
+/// rows of its node in the corpus and of the sections within it, from one
+/// judge over the union of the shown nodes' sets; the read's note.
+fn add_bindings(
+    read: &BindingsRead<'_>,
+    index: &mut specengine_store::SqliteIndex,
+    nodes: &mut [ShownNode],
+    places: &[Option<usize>],
+) -> Option<String> {
+    let project = read.project;
+    let corpus = Corpus::new(read.input, &project.config.scheme, &project.config.paths);
+    let sets: Vec<BTreeSet<NodeKey>> = nodes
+        .iter()
+        .zip(places)
+        .map(|(node, place)| {
+            let Some(key) =
+                place.and_then(|ord| corpus_key(&corpus, &node.path, ord, node.id.as_deref()))
+            else {
+                return BTreeSet::new();
+            };
+            let mut set: BTreeSet<NodeKey> = contained(&corpus, key).into_iter().collect();
+            set.insert(key);
+            set
+        })
+        .collect();
+    drop(corpus);
+    let keys: Vec<NodeKey> = sets
+        .iter()
+        .flatten()
+        .copied()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let read_rows = set_bindings(project, read.text, read.git, index, read.input, &keys);
+    if let Some(rows) = &read_rows.rows {
+        for (node, set) in nodes.iter_mut().zip(&sets) {
+            let own: Vec<&SetRow> = rows
+                .iter()
+                .filter(|row| !row.nodes.is_disjoint(set))
+                .collect();
+            node.bindings = Some(ShownBindings {
+                rows: own.iter().map(|row| row.row.clone()).collect(),
+                judged: read_rows.judged,
+                shown: own
+                    .iter()
+                    .map(|row| (row.binding.clone(), row.class))
+                    .collect(),
+            });
+        }
+    }
+    read_rows.note
+}
+
+/// The corpus node of a node read fresh from `path` at position `ord`: the
+/// same position when it holds the same ID, else the first node with that
+/// ID (the file changed in between); none when the corpus holds no such
+/// node (the node then lists no row).
+fn corpus_key(corpus: &Corpus<'_>, path: &str, ord: usize, id: Option<&str>) -> Option<NodeKey> {
+    let file = corpus
+        .resolver
+        .paths()
+        .iter()
+        .position(|candidate| *candidate == path)?;
+    let parsed = corpus.files.get(file)?.parsed.as_ref()?;
+    let nodes = &parsed.nodes;
+    if nodes.get(ord).is_some_and(|node| node.id.as_deref() == id) {
+        return Some(NodeKey { file, ord });
+    }
+    let ord = nodes
+        .iter()
+        .position(|node| id.is_some() && node.id.as_deref() == id)?;
+    Some(NodeKey { file, ord })
 }
 
 /// Exit 1. The reason is one line (it may quote a path or `REF` as
@@ -570,6 +719,7 @@ pub(crate) fn shown(
         span_hash: span_hash(bytes, node),
         text,
         links: None,
+        bindings: None,
     }
 }
 
@@ -593,6 +743,7 @@ fn whole_file(path: &str, bytes: &[u8], archived: bool, utf8: bool) -> ShownNode
         span_hash: b3_hash(bytes),
         text,
         links: None,
+        bindings: None,
     }
 }
 

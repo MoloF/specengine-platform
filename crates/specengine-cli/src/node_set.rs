@@ -222,7 +222,7 @@ fn resolved_now(corpus: &Corpus<'_>, scheme: &IdScheme, written: &str) -> Vec<No
 
 /// Every section of `key`'s file whose span lies within `key`'s (a
 /// document: every section of it).
-fn contained(corpus: &Corpus<'_>, key: NodeKey) -> Vec<NodeKey> {
+pub(crate) fn contained(corpus: &Corpus<'_>, key: NodeKey) -> Vec<NodeKey> {
     let Some(parsed) = corpus
         .files
         .get(key.file)

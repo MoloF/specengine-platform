@@ -327,15 +327,17 @@ async fn nodes(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
         .ok_or_else(|| unknown_route_of(&uri))?;
     let reference = percent_decode(raw).map_err(Refusal::bad_request)?;
     let args = args("nodes", &["with", "archive"], &uri)?;
-    let request = (|| {
-        Ok::<_, String>(ShowRequest {
-            reference,
-            links: args.with_links()?,
-            archive: args.boolean("archive")?.unwrap_or(false),
-        })
-    })()
-    .map_err(Refusal::bad_request)?;
+    let ((links, bindings), archive) =
+        (|| Ok::<_, String>((args.with()?, args.boolean("archive")?.unwrap_or(false))))()
+            .map_err(Refusal::bad_request)?;
     Ok(run(project, move |env, globals| {
+        let request = ShowRequest {
+            reference,
+            links,
+            archive,
+            bindings,
+            git: process_git(env),
+        };
         specengine_cli::show_with_view(env, globals, &request, View::Browser).map(Outcome::Show)
     })
     .await)
@@ -365,14 +367,15 @@ async fn search(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
 async fn bundle(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     let args = args("bundle", &["node_ids", "budget"], &uri)?;
-    let request = (|| {
-        Ok::<_, String>(BundleRequest {
-            references: args.required_texts("node_ids")?,
-            budget: args.integer("budget")?,
-        })
-    })()
-    .map_err(Refusal::bad_request)?;
+    let (references, budget) =
+        (|| Ok::<_, String>((args.required_texts("node_ids")?, args.integer("budget")?)))()
+            .map_err(Refusal::bad_request)?;
     Ok(run(project, move |env, globals| {
+        let request = BundleRequest {
+            references,
+            budget,
+            git: process_git(env),
+        };
         specengine_cli::bundle(env, globals, &request).map(Outcome::Bundle)
     })
     .await)

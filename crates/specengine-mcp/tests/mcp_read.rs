@@ -24,11 +24,21 @@
 //! strings, `limit` an integer as `search`'s, `refs` requiring `id`,
 //! `unmapped` requiring nothing). M: a nested or `oneOf` input.
 //!
+//! RD-7 of docs/features/show-bindings.md (7a-1):
+//! `get_node_with_bindings_equals_show_bindings` over a git repository of
+//! `fixtures/code-a` with the golden lock (drift edits) and over spec-a
+//! (no `[code]`); AC-13 with `with`'s enum `["links", "bindings"]`; AC-14
+//! with `bindings` non-null once, its keys and a row's 14. M7: `with:
+//! ["bindings"]` ignored. Variant: a CLI key without its mirror.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
 
 mod common;
+
+#[path = "../../specengine-cli/tests/common/git.rs"]
+mod git;
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -50,6 +60,43 @@ struct Project {
 }
 
 impl Project {
+    /// A git repository of `fixtures/code-a` with the golden lock
+    /// committed, then verify_node.rs' drift edits written (uncommitted):
+    /// rows of every class.
+    fn golden() -> Self {
+        let scratch = Scratch::new("read-golden");
+        let home = scratch.home("h");
+        let root = scratch.copy("code-a", "copy");
+        let _ = std::fs::remove_file(root.join("expected.json"));
+        std::fs::copy(
+            fixture("spec-lock").join("code-a.lock"),
+            root.join("spec.lock"),
+        )
+        .expect("the golden lock");
+        let sandbox = git::Sandbox::new(scratch.path());
+        sandbox.init(&root);
+        sandbox.add_all(&root);
+        sandbox.commit(&root, "code-a and its lock");
+        replace(
+            &root,
+            "crates/tally/src/counter.rs",
+            "CAP: u32 = 10;",
+            "CAP: u32 = 12;",
+        );
+        replace(&root, "data/limits.ron", "cap: 10,", "cap: 12,");
+        replace(
+            &root,
+            "docs/spec/counter.md",
+            "The count never exceeds the cap.",
+            "The count never exceeds the cap, ever.",
+        );
+        Self {
+            _scratch: scratch,
+            home,
+            root,
+        }
+    }
+
     fn new(fixture: &str) -> Self {
         let scratch = Scratch::new(&format!("read-{fixture}"));
         let home = scratch.home("h");
@@ -393,6 +440,15 @@ fn ac05_errors_are_the_clis_and_the_session_goes_on() {
             ("get_node", json!({"id": "R-12", "archive": true})),
             "--links",
         ),
+        // docs/features/show-bindings.md: `archive` still with "links"
+        // only.
+        (
+            (
+                "get_node",
+                json!({"id": "R-12", "with": ["bindings"], "archive": true}),
+            ),
+            "--links",
+        ),
     ];
     // Schema-invalid arguments and what rmcp's message names.
     let invalid = [
@@ -402,8 +458,8 @@ fn ac05_errors_are_the_clis_and_the_session_goes_on() {
             "unknown field `bogus`",
         ),
         (
-            ("get_node", json!({"id": "R-12", "with": ["bindings"]})),
-            "unknown variant `bindings`",
+            ("get_node", json!({"id": "R-12", "with": ["history"]})),
+            "unknown variant `history`",
         ),
         (("get_node", json!({})), "missing field `id`"),
         (("search", json!({"query": 7})), "invalid type"),
@@ -551,9 +607,11 @@ fn ac13_every_input_schema_is_flat() {
         assert_eq!(properties("get_node"), ["archive", "id", "with"]);
         assert_eq!(properties("search"), ["archive", "kinds", "limit", "query"]);
         assert_eq!(properties("get_context_bundle"), ["budget", "node_ids"]);
+        // docs/features/show-bindings.md "MCP get_node": the enum in that
+        // order.
         assert_eq!(
             tool(&list, "get_node")["inputSchema"]["properties"]["with"]["items"],
-            json!({"type": "string", "enum": ["links"]})
+            json!({"type": "string", "enum": ["links", "bindings"]})
         );
     }
 }
@@ -800,6 +858,240 @@ fn ac14_every_mostly_null_key_is_non_null_once_with_its_exact_keys() {
             set_of(&["name", "written", "path", "line", "state"])
         );
         assert_eq!(answer["name"], json!("ASM-01"));
+    }
+    // docs/features/show-bindings.md RD-7: code-a's golden, `bindings`
+    // `{rows, omitted}`, a row's 14 keys, an `anchor` object's three.
+    let golden = Project::golden();
+    let results = golden.parity(&[bindings("LAW-BOUND", &["bindings"])]);
+    for era in &results {
+        let shown = &era[0]["structuredContent"]["nodes"][0]["bindings"];
+        assert_eq!(key_set(shown, "bindings"), set_of(&["rows", "omitted"]));
+        let rows = shown["rows"].as_array().expect("rows");
+        assert!(!rows.is_empty(), "LAW-BOUND's rows");
+        for row in rows {
+            assert_eq!(key_set(row, "a binding row"), set_of(&BINDING_ROW_KEYS));
+        }
+        let anchored = rows
+            .iter()
+            .find(|row| row["anchor"].is_object())
+            .expect("a row with its anchor");
+        assert_eq!(
+            key_set(&anchored["anchor"], "anchor"),
+            set_of(&["state", "from", "candidates"])
+        );
+    }
+}
+
+/// docs/features/show-bindings.md "MCP get_node", **Description**: the
+/// spec's line, the twin `spec show REF [--links] [--bindings] [--archive]`,
+/// 1 527 bytes (1 264 before), ASCII, in both eras. M: the line missing or
+/// reworded.
+const BINDINGS_LINE: &str = "with: [\"bindings\"] lists each node's code bindings, its sections' too, each with its sync (the state spec verify --node gives), after its links; without a [code] table they are null, and a code layer that cannot be read gives a note, never an error.\n";
+
+#[test]
+fn get_node_description_names_bindings() {
+    for era in ERAS {
+        let mut session = Session::open(era, &[], None, Home::Fresh);
+        let list = session.tools();
+        let description = tool(&list, "get_node")["description"]
+            .as_str()
+            .expect("a description")
+            .to_owned();
+        assert_eq!(
+            description.matches(BINDINGS_LINE).count(),
+            1,
+            "{era:?}: {description}"
+        );
+        assert!(
+            description.contains(&format!(
+                "lists each node's links, outgoing and incoming, before its text.\n{BINDINGS_LINE}archive: "
+            )),
+            "{era:?}: after the links line, before archive's: {description}"
+        );
+        assert!(
+            description.contains("`spec show REF [--links] [--bindings] [--archive]`"),
+            "{era:?}: {description}"
+        );
+        assert!(description.is_ascii());
+        assert_eq!(description.len(), 1527, "{era:?}: the spec's figure");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}
+
+/// docs/features/show-bindings.md TE-4, the MCP half: `fixtures/spec-c`
+/// (a Python service, no `[code]`): `get_node` with `with: ["bindings"]` is
+/// the CLI's in both eras; every node's `bindings` `null`; the content is
+/// `get_node`'s without it after the one `[code]` note, the document the
+/// same but that note, last in `notes`.
+#[test]
+fn get_node_with_bindings_on_spec_c_is_get_node_and_the_note() {
+    let project = Project::new("spec-c");
+    let note = "bindings: specengine.toml has no [code] table: the code layer is off (add [code] with roots)";
+    let ids = ["AREA-HIRE", "JRN-UNLOCK", "FEE-DAY-CAP", "OPEN-01"];
+    let mut calls = Vec::new();
+    for id in ids {
+        calls.push(bindings(id, &["bindings"]));
+        calls.push(node(id));
+    }
+    for era in project.parity(&calls) {
+        for pair in era.chunks(2) {
+            let (read, plain) = (&pair[0], &pair[1]);
+            assert_eq!(read["isError"], json!(false), "{read}");
+            assert_eq!(
+                content_text(read),
+                format!("note: {note}\n{}", content_text(plain)),
+                "the content is get_node's after the note"
+            );
+            let mut document = read["structuredContent"].clone();
+            for node in document["nodes"].as_array().expect("nodes") {
+                assert_eq!(node["bindings"], Value::Null, "{node}");
+            }
+            let notes = document["notes"].as_array_mut().expect("notes");
+            assert_eq!(notes.pop(), Some(json!(note)), "the note last");
+            assert_eq!(document, plain["structuredContent"], "the same document");
+        }
+    }
+}
+
+/// The 14 keys of a binding row: docs/features/show-bindings.md
+/// "The binding row".
+const BINDING_ROW_KEYS: [&str; 14] = [
+    "node",
+    "relation",
+    "file",
+    "kind",
+    "symbol",
+    "item_kind",
+    "line",
+    "end_line",
+    "signature",
+    "layer",
+    "sync",
+    "category",
+    "detail",
+    "anchor",
+];
+
+/// `get_node` with `with` as given.
+fn bindings(id: &str, with: &[&str]) -> (&'static str, Value) {
+    ("get_node", json!({"id": id, "with": with}))
+}
+
+/// docs/features/show-bindings.md RD-7 ("MCP get_node"): `get_node` with
+/// `with: ["bindings"]` (alone, beside `"links"` in either order, with
+/// `archive`) answers what `spec show REF --bindings [--links]` answers
+/// through the library (content = the text, `structuredContent` = the JSON
+/// document, walked against the `outputSchema`), both eras, over code-a's
+/// golden with drift: a document holding its sections' rows, a section, a
+/// path, a node without bindings (`rows` `[]`), two holders, REF naming
+/// nothing (exit 1); over spec-a (no `[code]`): `bindings` `null` and the
+/// note. Without `"bindings"` every node's `bindings` is `null`. M7: `with:
+/// ["bindings"]` ignored (its `bindings` `null`, no block). Variant: a CLI
+/// key without its mirror (the walker).
+#[test]
+fn get_node_with_bindings_equals_show_bindings() {
+    let project = Project::golden();
+    // A second holder of PREM-001, uncommitted.
+    let premise = read_text(&project.root, "docs/records/PREM-001.md");
+    write(&project.root, "docs/records/PREM-001-twin.md", &premise);
+    let calls = [
+        bindings("PIECE-COUNTER", &["bindings"]),
+        bindings("LAW-BOUND", &["bindings"]),
+        bindings("docs/spec/counter.md", &["links", "bindings"]),
+        bindings("PIECE-COUNTER#LAW-BOUND", &["bindings", "links"]),
+        bindings("PIECE-LIMITS", &["bindings"]),
+        bindings("PREM-001", &["bindings"]),
+        bindings("cap-check/PASS-01", &["bindings"]),
+        bindings("LAW-NOPE", &["bindings"]),
+        (
+            "get_node",
+            json!({"id": "LAW-STEP", "with": ["links", "bindings"], "archive": true}),
+        ),
+        bindings("LAW-BOUND", &[]),
+        node("LAW-BOUND"),
+    ];
+    let results = project.parity(&calls);
+    for era in &results {
+        for (at, call) in calls.iter().enumerate() {
+            let asked = call.1["with"]
+                .as_array()
+                .is_some_and(|with| with.contains(&json!("bindings")));
+            let nodes = era[at]["structuredContent"]["nodes"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            for node in &nodes {
+                assert_eq!(
+                    node["bindings"].is_object(),
+                    asked,
+                    "{call:?}: bindings an object exactly when asked: {node}"
+                );
+            }
+            let text = content_text(&era[at]);
+            assert_eq!(
+                text.lines().any(|line| line.starts_with("  bindings ")),
+                asked && !nodes.is_empty(),
+                "{call:?}: the block's closing line exactly when asked: {}",
+                clip(text)
+            );
+        }
+        let document = &era[0]["structuredContent"]["nodes"][0];
+        let nodes: std::collections::BTreeSet<&str> = document["bindings"]["rows"]
+            .as_array()
+            .expect("rows")
+            .iter()
+            .filter_map(|row| row["node"].as_str())
+            .collect();
+        assert!(
+            nodes.contains("PIECE-COUNTER") && nodes.contains("LAW-BOUND"),
+            "the document holds its sections' rows: {nodes:?}"
+        );
+        assert!(
+            document["bindings"]["rows"]
+                .as_array()
+                .expect("rows")
+                .iter()
+                .all(|row| row["sync"].is_string()),
+            "every row judged (the server's git found): {document}"
+        );
+        assert_eq!(
+            era[4]["structuredContent"]["nodes"][0]["bindings"],
+            json!({"rows": [], "omitted": 0}),
+            "no binding: rows []"
+        );
+        assert_eq!(
+            era[5]["structuredContent"]["nodes"]
+                .as_array()
+                .map(Vec::len),
+            Some(2),
+            "two holders"
+        );
+        assert_eq!(era[7]["isError"], json!(true), "REF naming nothing");
+    }
+    assert_eq!(
+        without_result_type(&results[0]),
+        without_result_type(&results[1]),
+        "both eras give the same results"
+    );
+
+    // No `[code]`: `bindings` null, the note in the text and the document.
+    let a = Project::new("spec-a");
+    let results = a.parity(&[bindings("MEC-STAMINA", &["bindings"])]);
+    let note = "bindings: specengine.toml has no [code] table: the code layer is off (add [code] with roots)";
+    for era in &results {
+        let document = &era[0]["structuredContent"];
+        assert_eq!(document["nodes"][0]["bindings"], Value::Null);
+        assert_eq!(
+            document["notes"].as_array().and_then(|notes| notes.last()),
+            Some(&json!(note)),
+            "{document}"
+        );
+        assert!(
+            content_text(&era[0]).contains(&format!("note: {note}\n")),
+            "{}",
+            clip(content_text(&era[0]))
+        );
     }
 }
 

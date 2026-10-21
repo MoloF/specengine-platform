@@ -1083,6 +1083,8 @@ fn ac14_both_fixtures_give_one_key_set() {
             "truncated",
             "omitted",
             "links",
+            // docs/features/show-bindings.md "spec show --bindings".
+            "bindings",
         ])
     );
     let search = spec30(&home, &root, &["--json", "search", "stamina"]).json();

@@ -178,9 +178,63 @@ pub struct OwnerNote {
     pub note: String,
 }
 
-/// A code binding of a node: Phase 3; the list stays `[]` until then.
+/// One code binding of a node as a read shows it (task spec
+/// `show-bindings`; `spec show --bindings`, and the package's `bindings`):
+/// a lock key (`node`, `relation`, `file`, `kind`, `symbol`, `item_kind`;
+/// a keyless one's `kind`, `symbol`, `item_kind` `null`), where its symbol
+/// lies as the code index stores it, and `spec verify --node`'s judgement
+/// of it. Every word travels as data: the code layer's item kinds and
+/// layers, verify's states and categories.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum PackageBinding {}
+pub struct BindingRow {
+    /// The canonical cited ID its markers or its lock entry resolve to;
+    /// an unresolved ID as written.
+    pub node: String,
+    /// The marker's relation.
+    pub relation: String,
+    /// Root-relative.
+    pub file: String,
+    /// `item`, `module`, `ron`; `null` without a key.
+    pub kind: Option<String>,
+    pub symbol: Option<String>,
+    pub item_kind: Option<String>,
+    /// The stored symbol's first and last line (1-based); a RON value's
+    /// `line` its first marker's, `end_line` `null`; `null` when no stored
+    /// symbol is the key's.
+    pub line: Option<u64>,
+    pub end_line: Option<u64>,
+    /// The stored symbol's signature, if it has one.
+    pub signature: Option<String>,
+    /// The layer whose rules made the stored symbol's row.
+    pub layer: Option<String>,
+    /// Verify's state word; `null` when the row could not be judged.
+    pub sync: Option<String>,
+    pub category: Option<String>,
+    pub detail: Option<String>,
+    /// Verify's anchor of a row with a lock entry; `null` without one,
+    /// when the row cannot be verified, or when it was not judged.
+    pub anchor: Option<BindingAnchor>,
+}
+
+/// Where a row's binding is, as `spec verify` shows it: `state` `exact`,
+/// `moved`, `ambiguous` or `lost`; `from` a moved row's old place,
+/// `candidates` an ambiguous row's, in key order, else `null`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BindingAnchor {
+    pub state: String,
+    pub from: Option<BindingPlace>,
+    pub candidates: Option<Vec<BindingPlace>>,
+}
+
+/// A binding's place as an anchor names it: its key without the node and
+/// relation, which are the row's.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BindingPlace {
+    pub file: String,
+    pub kind: String,
+    pub symbol: String,
+    pub item_kind: Option<String>,
+}
 
 /// Where the snapshot was frozen: the approving worktree, the root in it,
 /// its branch and `HEAD`.
@@ -298,7 +352,7 @@ pub struct TaskPackage {
     pub assumptions: Vec<PackageAssumption>,
     pub open_proposals: Vec<PackageProposal>,
     pub owner_notes: Vec<OwnerNote>,
-    pub bindings: Vec<PackageBinding>,
+    pub bindings: Vec<BindingRow>,
     pub spec_snapshot: Option<SpecSnapshot>,
     /// `[]` when not stale, `null` when staleness cannot be told.
     pub snapshot_diff: Option<Vec<SnapshotDiff>>,

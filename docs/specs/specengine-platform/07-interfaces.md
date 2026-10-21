@@ -23,7 +23,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 ### 1.2. Tools (`core` set)
 
-`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`); `find_symbols`, `refs`, `unmapped` as reads of the code index, `check_binding` as `spec verify --node` (`docs/canon/mcp-code.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: bindings | history | proposals`, `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `report_drift`: `docs/canon/proposal-drift.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
+`get_tree`, `get_node`, `search`, `get_context_bundle` ship as reads over the CLI (`docs/canon/mcp-read.md`); `find_symbols`, `refs`, `unmapped` as reads of the code index, `check_binding` as `spec verify --node` (`docs/canon/mcp-code.md`). Still to come for them: `get_tree`'s `sync` and open-proposal counters, `get_node` `with: history | proposals` (`bindings` built: `docs/canon/code-reads.md`), `get_context_bundle {task_id}` and its log (05 §6). Intake (`propose_change`, `report_discrepancy`, `report_decision`, `ask_question`, `get_proposal`) shipped: `docs/canon/agent-intake.md`; `report_drift`: `docs/canon/proposal-drift.md`; `task_id` on them: `tasks.md`; a deciding item approved as a decision record shipped: `docs/canon/decision-record.md`; kinds `create`, `interpretation`, `decision`, `amendment`: `docs/canon/proposal-*.md`.
 
 | Tool | Input | Output | Notes |
 |---|---|---|---|
@@ -76,7 +76,7 @@ spec mcp                                 # on a trigger: MCP stdio bridge
 
 # tree and nodes
 spec tree [ROOT] [--depth N] [--kind K] [--archive]  # shipped: docs/canon/spec-cli-graph.md
-spec show ID [--links [--archive]] [--bindings --history]
+spec show ID [--links [--archive]] [--bindings] [--history]  # --bindings shipped: docs/canon/code-reads.md
 spec new KIND [--parent ID] [TITLE]      # unbuilt: the registry issues the ID, opens $EDITOR
 spec edit ID                             # unbuilt: owner edit = instantly applied proposal
 spec search "query"

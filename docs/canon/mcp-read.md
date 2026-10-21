@@ -19,7 +19,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 | Tool (types as the flags) | ≙ `spec` |
 |---|---|
 | `get_tree {root?, depth?, kinds?, archive?}` | `tree [ROOT] [--depth N] [--kind K]… [--archive]` |
-| `get_node {id, with?: ["links"], archive?}` | `show REF [--links] [--archive]`; `span_hash` a proposal's base, `norm_hash` not (`node-revision.md`) |
+| `get_node {id, with?, archive?}` | `show REF [--links] [--bindings] [--archive]`; `span_hash` a proposal's base, `norm_hash` not (`node-revision.md`) |
 | `search {query, kinds?, limit?, archive?}` | `search "QUERY" [--kind K]… [--limit N] [--archive]`, `query` one term |
 | `get_context_bundle {node_ids: [REF…], budget?}` | `bundle REF… [--budget N]` |
 
@@ -27,9 +27,9 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Annotations** of the reads exactly `readOnlyHint: true`, `destructiveHint: false`, `openWorldHint: false`; `_meta {"anthropic/maxResultSizeChars": 500000}` (Size).
 
-**Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
+**Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue, the tasks, REF, the cut, the resources and the rules (`server.rs`): 1 978 B, 1 840 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`), 2 037 with `probes`' 59 B paragraph: 11 B left. Each description <= 2 048, ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue, the tasks, REF, the cut, the resources and the rules (`server.rs`): 1 977 B, 1 839 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`), 2 036 with `probes`' 59 B paragraph: 12 B left. Each description <= 2 048 (`get_node` 1 527), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
@@ -63,7 +63,7 @@ AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Rec
 - The four tools work: `search` "bundle budget" 12 hits; `get_node ADR-0031` ± `with: ["links"]`; `get_context_bundle ADR-0031` budget 2 000: 385 tokens.
 - `structuredContent` reaches the model: it gave `end_line` 18, `utf8` `true` of `get_node ADR-0031` (JSON only; `wc -l` 18).
 - Content only (`probe_output`, no lever): 48 000 characters inline; 60 000, 104 000, 200 000 stored in a file, `result (<N> characters across <M> lines) exceeds maximum allowed tokens`: the content cap lies in 48 000-60 000 (Phase 0: 48 000 in, 104 000 out).
-- Above it in total, `get_node` of 05 (text ≈ 40 000 characters, `truncated: false`, the same text in `structuredContent`, whose `truncated`, `sections` the model reported) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished. Read tools pass at this size: Q3's fallback not triggered.
+- Above it in total, `get_node` of 05 (text ≈ 40 000 characters, `truncated: false`, the same text in `structuredContent`, whose `truncated`, `sections` the model reported) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished. Read tools pass at this size: Q3's fallback untriggered.
 - `@specengine:` lists the template and documents by path; the `tree` resource was not seen.
 - Not verified: which explanation holds (a probe with the lever; one with small text, large `structuredContent`); UTF-16 counting; the adversarial maxima (to ~268 000 combined, Size); `nextCursor` (< 200 resources here); inserting a node by `@`-mention.
 
@@ -75,6 +75,6 @@ AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Rec
 
 - AC-16's "not verified" items (Owner's check); 500 000 stays the working answer (A12).
 - Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` -> `null`), untriggered so far, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
-- `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a small fix to make (CLI/core links).
+- `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a CLI/core fix.
 - A panic in the async wrapper, outside `spawn_blocking`, gets no response (low).
 - The Size residue. `resources/list` over a busy, corrupt or read-only database is untested.

@@ -81,6 +81,14 @@
 //!   the steps renumbered back, hashes as 0.11.0's pin, and the 0.11.0
 //!   ties restated below it); a `SCHEMA_PINS` entry 0.12.0, 0.11.0's
 //!   schemas today's without `check_binding`. M: the version kept.
+//! - docs/features/show-bindings.md "Plugin 0.13.0": 0.12.0 -> 0.13.0
+//!   (MINOR: `get_node`'s schemas changed); `read-spec`'s first bullet of
+//!   step 2 names `with: ["bindings"]` ([`READ_SPEC_BULLET_0_12_0`] the
+//!   bullet before: the tree with the version set back and that bullet
+//!   back hashes as 0.12.0's pin, and the 0.12.0 ties restated below it); a
+//!   `SCHEMA_PINS` entry 0.13.0, 0.12.0's schemas today's with `get_node`'s
+//!   `with` back to `["links"]` and its node without `bindings`
+//!   ([`as_of_0_12_0`]). M: the version kept.
 //!
 //! The repository is only read.
 
@@ -240,7 +248,21 @@ const PINS: &[(&str, &str)] = &[
         "0.12.0",
         "9ac6cc17275049f32555b00fb3c8af577188d9005d26e3828b2c87e591818ebf",
     ),
+    // docs/features/show-bindings.md "Plugin 0.13.0" (0.12.0 -> 0.13.0,
+    // MINOR: a tool's schema changed): `read-spec`'s first bullet of step
+    // 2 names `with: ["bindings"]`; the tree with the version set back and
+    // [`READ_SPEC_BULLET_0_12_0`] back hashes as 0.12.0's pin.
+    (
+        "0.13.0",
+        "c80be32c32617d7ff5bfa3e690d854e235ecad5ab4027af1e5e4b5cb077ec046",
+    ),
 ];
+
+/// `read-spec`'s first bullet of step 2 as 0.12.0 shipped it.
+const READ_SPEC_BULLET_0_12_0: &str = "   - one node's current text: `get_node` with its `id`; add `with` for its links when you need what it points at and what points at it;";
+
+/// The bullet as docs/features/show-bindings.md "Plugin 0.13.0" writes it.
+const READ_SPEC_BULLET_0_13_0: &str = "   - one node's current text: `get_node` with its `id`; add `with: [\"links\"]` for its links when you need what it points at and what points at it, `with: [\"bindings\"]` for the code bound to it and whether that code still matches the spec (each binding's `sync`);";
 
 /// `(version, hash)` of the tools' wire schemas (docs/features/bevy-roles-reads.md
 /// "Plugin", SR7): the BLAKE3 of [`canonical`] over every tool's
@@ -276,6 +298,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.12.0",
         "5af6b592b5d09daeed6aabd5b5111df952ae1533aabe44b50431a8441e4e68a7",
+    ),
+    // docs/features/show-bindings.md "Plugin 0.13.0": `get_node`'s `with`
+    // enum and doc, its node's `bindings` ([`as_of_0_12_0`] takes them
+    // out).
+    (
+        "0.13.0",
+        "3570759ad9043289caf320d306b367d0d50a97c48d95945504bca34682808f10",
     ),
 ];
 
@@ -1395,22 +1424,49 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
-    // The pin of check-binding (docs/features/check-binding.md "Plugin"):
-    // 0.12.0, after roadmap-surfaces' 0.11.0. M: the version unchanged.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.12.0"));
-    assert_eq!(PINS[PINS.len() - 2].0, "0.11.0");
-    assert_eq!(PINS[PINS.len() - 3].0, "0.10.0");
-    assert_eq!(PINS[PINS.len() - 4].0, "0.9.0");
+    // The pin of show-bindings, docs/features/show-bindings.md
+    // "Plugin 0.13.0": 0.13.0, after check-binding's 0.12.0. M: the
+    // version unchanged.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.13.0"));
+    assert_eq!(PINS[PINS.len() - 2].0, "0.12.0");
+    assert_eq!(PINS[PINS.len() - 3].0, "0.11.0");
+    assert_eq!(PINS[PINS.len() - 4].0, "0.10.0");
+    assert_eq!(PINS[PINS.len() - 5].0, "0.9.0");
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.12.0"),
+        json!("0.13.0"),
         "plugin.json's version"
     );
+    // 0.13.0 changes plugin.json's version and `read-spec`'s first bullet
+    // of step 2 alone: both set back, the tree is 0.12.0's pinned content.
+    let read_spec = String::from_utf8(tree.files[READ_SPEC].clone()).expect("UTF-8");
+    assert_eq!(
+        read_spec.matches(READ_SPEC_BULLET_0_13_0).count(),
+        1,
+        "the spec's bullet"
+    );
+    let at_0_12_0 = edited(
+        &edited(
+            &tree,
+            PLUGIN_JSON,
+            "\"version\": \"0.13.0\"",
+            "\"version\": \"0.12.0\"",
+        ),
+        READ_SPEC,
+        READ_SPEC_BULLET_0_13_0,
+        READ_SPEC_BULLET_0_12_0,
+    );
+    assert_eq!(
+        content_hash(&at_0_12_0),
+        PINS[PINS.len() - 2].1,
+        "0.13.0 changes plugin.json's version and read-spec's bullet only"
+    );
+    // check-binding's restated (docs/features/check-binding.md "Plugin"):
     // 0.12.0 changes plugin.json's version and `implement`'s check step
     // alone (the later steps renumbered): both set back, the tree is
     // 0.11.0's pinned content.
     let mut at_0_11_0 = edited(
-        &tree,
+        &at_0_12_0,
         PLUGIN_JSON,
         "\"version\": \"0.12.0\"",
         "\"version\": \"0.11.0\"",
@@ -1422,7 +1478,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_11_0),
-        PINS[PINS.len() - 2].1,
+        PINS[PINS.len() - 3].1,
         "0.12.0 changes plugin.json's version and implement's check step only"
     );
     // roadmap-surfaces' restated (docs/features/roadmap-surfaces.md
@@ -1437,7 +1493,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     let back = edited(&back, ANALYZE, ANALYZE_ROADMAP, "");
     assert_eq!(
         content_hash(&back),
-        PINS[PINS.len() - 3].1,
+        PINS[PINS.len() - 4].1,
         "0.11.0 changes plugin.json's version and analyze's roadmap text only"
     );
     // bevy-roles-reads' restated (docs/features/bevy-roles-reads.md
@@ -1451,7 +1507,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&older),
-        PINS[PINS.len() - 4].1,
+        PINS[PINS.len() - 5].1,
         "0.10.0 changes plugin.json's version only"
     );
     // A renamed file with the same bytes changes the hash too.
@@ -1587,6 +1643,37 @@ fn without_roles(schema: &mut Value) -> usize {
 
 /// `schemas` (the wire schemas by tool) as 0.11.0 listed them
 /// (docs/features/check-binding.md "Plugin"): no `check_binding`.
+/// `get_node.with`'s doc as 0.12.0 listed it.
+const WITH_DOC_0_12_0: &str = "`[\"links\"]`: each node's links, outgoing and incoming.";
+
+/// `schemas` as 0.12.0 listed them, docs/features/show-bindings.md
+/// "Plugin 0.13.0": `get_node`'s `with` items `["links"]` with its 0.12.0
+/// doc, its node without the `bindings` property and `required` entry.
+fn as_of_0_12_0(schemas: &mut Value) {
+    let node = &mut schemas["get_node"];
+    let with = &mut node["inputSchema"]["properties"]["with"];
+    assert_eq!(
+        with["items"]["enum"],
+        json!(["links", "bindings"]),
+        "the enum in that order"
+    );
+    with["items"]["enum"] = json!(["links"]);
+    with["description"] = json!(WITH_DOC_0_12_0);
+    let item = &mut node["outputSchema"]["properties"]["nodes"]["items"];
+    assert!(
+        item["properties"]
+            .as_object_mut()
+            .expect("the node's properties")
+            .remove("bindings")
+            .is_some(),
+        "the node's bindings"
+    );
+    let required = item["required"].as_array_mut().expect("required");
+    let before = required.len();
+    required.retain(|key| key != "bindings");
+    assert_eq!(required.len() + 1, before, "bindings required");
+}
+
 fn as_of_0_11_0(schemas: &mut Value) {
     let tools = schemas.as_object_mut().expect("schemas by tool");
     assert!(
@@ -1699,16 +1786,30 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[1].0, "0.10.0", "an entry for 0.10.0");
     assert_eq!(SCHEMA_PINS[2].0, "0.11.0", "an entry for 0.11.0");
     assert_eq!(SCHEMA_PINS[3].0, "0.12.0", "an entry for 0.12.0");
-    // docs/features/check-binding.md "Plugin": 0.11.0's schemas are
-    // today's without `check_binding`.
-    let mut at_0_11_0 = schemas.clone();
+    assert_eq!(SCHEMA_PINS[4].0, "0.13.0", "an entry for 0.13.0");
+    // docs/features/show-bindings.md "Plugin 0.13.0": 0.12.0's schemas
+    // are today's with `get_node`'s `with` and node as they were.
+    let mut at_0_12_0 = schemas.clone();
+    as_of_0_12_0(&mut at_0_12_0);
+    let at_0_12_0_hash = schema_hash(&at_0_12_0);
+    assert_eq!(
+        at_0_12_0_hash, SCHEMA_PINS[3].1,
+        "0.12.0's schemas are today's without get_node's bindings"
+    );
+    assert_ne!(at_0_12_0_hash, current, "the bindings changed the schemas");
+    // docs/features/check-binding.md "Plugin", restated: 0.11.0's schemas
+    // are 0.12.0's without `check_binding`.
+    let mut at_0_11_0 = at_0_12_0.clone();
     as_of_0_11_0(&mut at_0_11_0);
     let at_0_11_0_hash = schema_hash(&at_0_11_0);
     assert_eq!(
         at_0_11_0_hash, SCHEMA_PINS[2].1,
         "0.11.0's schemas are today's without check_binding"
     );
-    assert_ne!(at_0_11_0_hash, current, "check_binding changed the schemas");
+    assert_ne!(
+        at_0_11_0_hash, at_0_12_0_hash,
+        "check_binding changed the schemas"
+    );
     // docs/features/roadmap-surfaces.md RD-10, restated: 0.10.0's schemas
     // are 0.11.0's without `get_roadmap`, the package's `roadmap` and
     // `next`'s new doc.
@@ -1760,6 +1861,12 @@ fn tool_schemas_follow_the_plugin_version() {
         &schema_pin_problems(SCHEMA_PINS, &current, "0.11.0"),
         "above plugin.json's",
         "plugin.json kept at 0.11.0",
+    );
+    // docs/features/show-bindings.md: the version kept at 0.12.0.
+    assert_names(
+        &schema_pin_problems(SCHEMA_PINS, &current, "0.12.0"),
+        "above plugin.json's",
+        "plugin.json kept at 0.12.0",
     );
     let (last, hash) = *SCHEMA_PINS.last().expect("an entry");
     let repeated: Vec<(&str, &str)> = SCHEMA_PINS.iter().copied().chain([(last, hash)]).collect();

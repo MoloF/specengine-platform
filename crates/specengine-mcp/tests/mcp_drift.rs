@@ -470,6 +470,8 @@ fn get_proposal_counts_format_1_entries() {
             reference: "PIECE-COUNTER".to_owned(),
             links: false,
             archive: false,
+            bindings: false,
+            git: git.clone(),
         },
     )
     .expect("show PIECE-COUNTER");

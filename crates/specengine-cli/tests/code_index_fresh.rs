@@ -6,7 +6,10 @@
 //! directory is written: `index` and `refs` leave a git worktree's status
 //! and every code file's size, mtime and BLAKE3 as they were), TE-4
 //! (`refs` byte-identical from two roots, another cwd, a reverse creation
-//! order and a CRLF copy).
+//! order and a CRLF copy). docs/features/show-bindings.md RD-4: `show`
+//! without `--bindings` still never refreshes the code index (RD-9's
+//! test), and `show --bindings` refreshes it before it reads
+//! (`show_bindings_refresh_the_code_index`).
 //!
 //! Over scratch copies of `fixtures/code-index` and `fixtures/code-a`
 //! (git repositories made at test time where git is the subject); the code
@@ -220,6 +223,78 @@ fn verify_leaves_the_code_index_untouched() {
         code_lines(&dump(&repo.home, &repo.root, SLUG)),
         before,
         "spec index sees the edit"
+    );
+}
+
+/// docs/features/show-bindings.md RD-4. M4: `show` without `--bindings`
+/// refreshes the code index (above, RD-9); here, M: `show --bindings`
+/// reading the index the last `spec index` left. A git repository of
+/// code-a with the golden lock, indexed; then a new test file with a
+/// marker of LAW-BOUND and no `spec index`: `show LAW-BOUND --bindings`
+/// (text and JSON) lists the new file's `unlocked` row, located as its
+/// item, and leaves the index equal to a fresh rebuild; a marker edited
+/// away again drops the row, still without `spec index`.
+#[test]
+fn show_bindings_refresh_the_code_index() {
+    let repo = LockRepo::of("cf-show-bindings", CODE_A, "repo", &[]);
+    repo.write(
+        "spec.lock",
+        fs::read(common::fixture("spec-lock").join("code-a.lock")).expect("the golden lock"),
+    );
+    repo.commit_all("the lock");
+    repo.spec_piped(&repo.root, &["index"]).code(0);
+    let indexed = code_lines(&dump(&repo.home, &repo.root, CODE_A_SLUG));
+    let fresh = "crates/tally/tests/fresh.rs";
+    repo.write(
+        fresh,
+        "// @verifies LAW-BOUND@2\n#[test]\nfn fresh_bound() {}\n",
+    );
+    let rows_of = |args: &[&str]| -> Vec<serde_json::Value> {
+        let run = repo.spec_piped(&repo.root, args);
+        run.code(0);
+        run.json()["nodes"][0]["bindings"]["rows"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{args:?}: bindings rows\n{}", run.show()))
+            .clone()
+    };
+    let rows = rows_of(&["show", "LAW-BOUND", "--bindings", "--json"]);
+    let new_row = rows
+        .iter()
+        .find(|row| row["file"] == fresh)
+        .unwrap_or_else(|| panic!("the new file's row without spec index: {rows:#?}"));
+    assert_eq!(new_row["sync"], "unlocked", "{new_row}");
+    assert_eq!(new_row["relation"], "verifies");
+    assert_eq!(
+        new_row["line"], 3,
+        "located as its stored item (the attribute aside): {new_row}"
+    );
+    assert_eq!(new_row["end_line"], 3, "{new_row}");
+    let text = repo.spec_piped(&repo.root, &["show", "LAW-BOUND", "--bindings"]);
+    text.code(0);
+    assert!(
+        text.stdout.lines().any(|line| line
+            .starts_with(&format!("  LAW-BOUND | verifies | {fresh}:3-3 | "))
+            && line.ends_with(" | sync unlocked")),
+        "the text lists it too\n{}",
+        text.show()
+    );
+    assert_ne!(
+        code_lines(&dump(&repo.home, &repo.root, CODE_A_SLUG)),
+        indexed,
+        "the read refreshed the code index"
+    );
+    code_index_common::assert_equals_fresh(
+        &repo.scratch,
+        &repo.home,
+        &repo.root,
+        CODE_A_SLUG,
+        "after show --bindings",
+    );
+    repo.write(fresh, "#[test]\nfn fresh_bound() {}\n");
+    let rows = rows_of(&["show", "LAW-BOUND", "--bindings", "--json"]);
+    assert!(
+        rows.iter().all(|row| row["file"] != fresh),
+        "the marker gone, the row gone, still without spec index: {rows:#?}"
     );
 }
 

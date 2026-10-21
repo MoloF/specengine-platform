@@ -1576,7 +1576,9 @@ fn code_mirrors_pin_the_q35_types() {
 /// docs/features/roadmap-surfaces.md ("Data"): the reads' line ends with
 /// [`ROADMAP_READ`] (40 bytes). 1 978 since docs/features/check-binding.md
 /// ("INSTRUCTIONS", Q31, Q-C): the code line ends with [`CHECK_BINDING_CLAUSE`]
-/// (46 bytes).
+/// (46 bytes). 1 977 since docs/features/show-bindings.md (Q-F): the
+/// hints gain [`BINDINGS_HINT`] after `--links is with ["links"]` (33
+/// bytes) and the REF paragraph loses [`NO_PROJECT_GLOSS`] (34 bytes).
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1600,10 +1602,10 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "show|claim|plan|report|complete; the three above take task_id.\n",
     "\n",
     "REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: ",
-    "--kind is kinds, ROOT is root, --links is with [\"links\"]. Answers are cut at 40000 ",
-    "characters, with a tail on narrowing. A REF naming nothing or a call that cannot run ",
-    "(no specengine.toml: `spec init`) is an error result with the reason. Resources: ",
-    "spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.\n",
+    "--kind is kinds, ROOT is root, --links is with [\"links\"], --bindings is with ",
+    "[\"bindings\"]. Answers are cut at 40000 characters, with a tail on narrowing. A REF ",
+    "naming nothing or a call that cannot run is an error result with the reason. ",
+    "Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.\n",
     "\n",
     "Rules:\n",
     "- Deterministic: one state, one result; no LLM inside.\n",
@@ -1620,6 +1622,25 @@ const ROADMAP_READ: &str = "; get_roadmap(release?, pool?) = roadmap";
 /// docs/features/check-binding.md "INSTRUCTIONS": what the code line gains,
 /// before its full stop (46 bytes).
 const CHECK_BINDING_CLAUSE: &str = "; check_binding(node, symbol?) = verify --node";
+
+/// docs/features/show-bindings.md "INSTRUCTIONS" (Q-F): what the hints
+/// gain right after `--links is with ["links"]` (33 bytes).
+const BINDINGS_HINT: &str = ", --bindings is with [\"bindings\"]";
+
+/// docs/features/show-bindings.md "INSTRUCTIONS" (Q-F): what the REF
+/// paragraph loses right after "a call that cannot run" (34 bytes; the
+/// no-project error result names `spec init` itself).
+const NO_PROJECT_GLOSS: &str = " (no specengine.toml: `spec init`)";
+
+/// check-binding's text (1 978 bytes) out of `instructions`: [`BINDINGS_HINT`]
+/// taken out and [`NO_PROJECT_GLOSS`] put back.
+fn as_of_check_binding(instructions: &str) -> String {
+    instructions.replacen(BINDINGS_HINT, "", 1).replacen(
+        "a call that cannot run is",
+        &format!("a call that cannot run{NO_PROJECT_GLOSS} is"),
+        1,
+    )
+}
 
 /// The code tools' line, its LF included (104 + 1 bytes; 151 since
 /// docs/features/check-binding.md: [`CHECK_BINDING_CLAUSE`] before the stop).
@@ -1638,22 +1659,29 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// `blake3_hex(PLANNED_INSTRUCTIONS)`: the hash of the spec's text built
 /// here, never of the server's; `mcp_path.rs` and `mcp_decision.rs` pin
 /// the same value against `INSTRUCTIONS` (re-pinned by
-/// docs/features/roadmap-surfaces.md and docs/features/check-binding.md).
-const PLANNED_BLAKE3: &str = "d4194b2b26224e59dfcda9fa3853af96a119fd5015cd524cb39bdbfad9bb17bf";
+/// docs/features/roadmap-surfaces.md, docs/features/check-binding.md and
+/// docs/features/show-bindings.md).
+const PLANNED_BLAKE3: &str = "0be8933f33543d7aafd9ab2c9419f5b5ae6b1702e07ce755a83c15ed799061f4";
 
-/// roadmap-surfaces' text (1 932 bytes), [`PLANNED_INSTRUCTIONS`] less
+/// check-binding's text (1 978 bytes), [`as_of_check_binding`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/show-bindings.md.
+const CHECK_BINDING_BLAKE3: &str =
+    "d4194b2b26224e59dfcda9fa3853af96a119fd5015cd524cb39bdbfad9bb17bf";
+
+/// roadmap-surfaces' text (1 932 bytes), check-binding's less
 /// [`CHECK_BINDING_CLAUSE`]: its `PLANNED_BLAKE3` before
 /// docs/features/check-binding.md.
 const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb3399dc942201de37e";
 
-/// code-tools' text (1 892 bytes), [`PLANNED_INSTRUCTIONS`] less
-/// [`ROADMAP_READ`] and [`CHECK_BINDING_CLAUSE`]: its `PLANNED_BLAKE3` before
-/// docs/features/roadmap-surfaces.md.
+/// code-tools' text (1 892 bytes), roadmap-surfaces' less [`ROADMAP_READ`]:
+/// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`].
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 839
+/// bytes); check-binding's 1 840 was `dc019aa4…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "dc019aa43be4ede2b6ac5a8bf24e15d3711e67b7a3d04ea0226bd345bf95d547";
+    "54d160f1bc427778ddf3efaff9a66ed89be04df9f0cd89f396e4a3408a1eeb72";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -1667,22 +1695,34 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// gains [`CHECK_BINDING_CLAUSE`] before its stop and the probes paragraph loses
 /// ` (owner's checks)`: 1 978 bytes, 1 840 less the tasks line, 2 037 with
 /// the 59-byte paragraph, 11 left (70 in the default build).
+/// docs/features/show-bindings.md (RD-7, Q-F): the hints gain
+/// [`BINDINGS_HINT`] right after `--links is with ["links"]` and the REF
+/// paragraph loses [`NO_PROJECT_GLOSS`]: 1 977 bytes, 1 839 less the tasks
+/// line, 2 036 with the 59-byte paragraph, 12 left (71 in the default
+/// build). M: the hint or the cut missing; the text changed, a pin kept.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 1978, "the spec's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 1977, "the spec's figure");
     assert_eq!(ROADMAP_READ.len(), 40);
     assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
+    assert_eq!(BINDINGS_HINT.len(), 33);
+    assert_eq!(NO_PROJECT_GLOSS.len(), 34);
     assert_eq!(CODE_LINE.len(), 151);
     assert_eq!(TASKS_LINE.len(), 138);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 1978);
-    assert_eq!(2048 - instructions.len(), 70, "the default build's room");
+    assert_eq!(instructions.len(), 1977);
+    assert_eq!(2048 - instructions.len(), 71, "the default build's room");
     assert!(instructions.is_ascii());
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
     assert_eq!(instructions.matches(CHECK_BINDING_CLAUSE).count(), 1);
+    assert_eq!(instructions.matches(BINDINGS_HINT).count(), 1);
+    assert!(
+        !instructions.contains(NO_PROJECT_GLOSS) && !instructions.contains("spec init"),
+        "the no-project gloss is cut: its error result names `spec init`"
+    );
     assert!(
         instructions.contains(&format!(
             "unmapped(path?) = unmapped{CHECK_BINDING_CLAUSE}.\nQueue ("
@@ -1697,7 +1737,16 @@ fn rd5_instructions_are_the_planned_text() {
     );
     assert!(instructions.contains("Hints use flags: --kind is kinds"));
     assert!(!instructions.contains("CLI flags"));
-    assert!(instructions.contains("--links is with [\"links\"]"));
+    assert!(
+        instructions.contains(&format!(
+            "--links is with [\"links\"]{BINDINGS_HINT}. Answers are cut"
+        )),
+        "the bindings hint follows the links hint and ends the hints"
+    );
+    assert!(
+        instructions.contains("A REF naming nothing or a call that cannot run is an error result"),
+        "the cut joins the sentence"
+    );
     for name in TOOLS {
         assert!(has_word(instructions, name), "{name} unnamed");
     }
@@ -1705,17 +1754,26 @@ fn rd5_instructions_are_the_planned_text() {
         assert!(instructions.contains(&format!("{name}(")), "{name}(");
     }
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1840, "1 978 less 138");
+    assert_eq!(less.len(), 1839, "1 977 less 138");
     let with_probes = instructions.len() + PROBES_PARAGRAPH.len();
-    assert_eq!(with_probes, 2037);
+    assert_eq!(with_probes, 2036);
     assert_eq!(
         2048 - with_probes,
-        11,
-        "the room docs/features/check-binding.md states"
+        12,
+        "the room docs/features/show-bindings.md states"
+    );
+    // The text before docs/features/show-bindings.md: check-binding's
+    // 1 978.
+    let check_binding = as_of_check_binding(instructions);
+    assert_eq!(check_binding.len(), 1978);
+    assert_eq!(
+        blake3_hex(check_binding.as_bytes()),
+        CHECK_BINDING_BLAKE3,
+        "only the bindings hint was added and the no-project gloss cut"
     );
     // The text before docs/features/check-binding.md: roadmap-surfaces'
     // 1 932.
-    let roadmap = instructions.replacen(CHECK_BINDING_CLAUSE, "", 1);
+    let roadmap = check_binding.replacen(CHECK_BINDING_CLAUSE, "", 1);
     assert_eq!(roadmap.len(), 1932);
     assert_eq!(
         blake3_hex(roadmap.as_bytes()),
@@ -1744,8 +1802,12 @@ fn rd5_planned_instructions_hashes() {
         PLANNED_LESS_TASKS_BLAKE3
     );
     assert_eq!(
+        blake3_hex(as_of_check_binding(PLANNED_INSTRUCTIONS).as_bytes()),
+        CHECK_BINDING_BLAKE3
+    );
+    assert_eq!(
         blake3_hex(
-            PLANNED_INSTRUCTIONS
+            as_of_check_binding(PLANNED_INSTRUCTIONS)
                 .replacen(CHECK_BINDING_CLAUSE, "", 1)
                 .as_bytes()
         ),
@@ -2589,7 +2651,9 @@ fn queue_rows(env: &Env, git: &GitEnv) -> (Vec<String>, String, String) {
 /// with `fixtures/spec-lock/code-a.lock` as it stands committed as
 /// `spec.lock`; every code tool called valid and invalid (forms, exits 0,
 /// 1, 2, bad arguments; `check_binding` since docs/features/check-binding.md
-/// TE-3) in both eras from a subdirectory; then `git
+/// TE-3; `get_node` with `with: ["bindings"]` since
+/// docs/features/show-bindings.md TE-5) in both eras from a subdirectory;
+/// then `git
 /// status --porcelain=v1 -z --untracked-files=all` is as before (empty),
 /// `.git/index`'s mtime and `spec.lock`'s bytes unchanged, the tree
 /// (`.git` included) byte-identical, the queue's proposals, tasks and
@@ -2665,6 +2729,21 @@ fn te2_code_tools_write_nothing_under_the_root() {
         ("check_binding", json!({"node": "LAW-BOUND"})),
         ("check_binding", json!({"node": "LAW-NOPE"})),
         ("check_binding", json!({"node": "L\u{0410}W-STEP"})),
+        // docs/features/show-bindings.md TE-5: `get_node` with its rows
+        // judged (a document, a section, links too, none, naming nothing).
+        (
+            "get_node",
+            json!({"id": "PIECE-COUNTER", "with": ["bindings"]}),
+        ),
+        (
+            "get_node",
+            json!({"id": "LAW-BOUND", "with": ["links", "bindings"], "archive": true}),
+        ),
+        (
+            "get_node",
+            json!({"id": "PIECE-LIMITS", "with": ["bindings"]}),
+        ),
+        ("get_node", json!({"id": "LAW-NOPE", "with": ["bindings"]})),
     ];
     let invalid = [
         ("find_symbols", json!({"query": 5})),
@@ -2675,6 +2754,7 @@ fn te2_code_tools_write_nothing_under_the_root() {
         ("check_binding", json!({})),
         ("check_binding", json!({"node": 7})),
         ("check_binding", json!({"node": "LAW-STEP", "bogus": true})),
+        ("get_node", json!({"id": "LAW-STEP", "with": ["history"]})),
     ];
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&cwd), Home::At(&home));

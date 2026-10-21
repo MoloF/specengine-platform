@@ -323,22 +323,72 @@ impl Building {
     }
 }
 
+/// A row listed, never judged (task spec `show-bindings`, "Degrade"): its
+/// key, its markers, and whether a lock entry gives it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Listed {
+    pub key: RowKey,
+    pub markers: Vec<MarkerFact>,
+    pub entry: bool,
+}
+
+/// The rows a walked tree and `lock` give (an empty lock: the markers'
+/// alone), by key, as the judge builds them before it judges any: nothing
+/// hashed, git never asked, no pairing (an entry and the binding it would
+/// be paired with are two rows).
+pub(crate) fn list_rows(
+    input: &CheckInput,
+    tree: &CodeTree,
+    lock: &Lock,
+    project: &ProjectRoot,
+) -> Vec<Listed> {
+    let mut corpus = Corpus::new(input, &project.config.scheme, &project.config.paths);
+    gather(tree, lock, &mut corpus, project)
+        .building
+        .into_iter()
+        .map(|(key, row)| Listed {
+            key,
+            markers: row.markers,
+            entry: row.entry.is_some(),
+        })
+        .collect()
+}
+
+/// One side's rows before any is judged: each marker's added to its key's
+/// row, each lock entry's; the markers skipped; the keyless broken
+/// bindings (node, relation, file), for an entry alone's category.
+struct Gathering {
+    building: BTreeMap<RowKey, Building>,
+    skipped: usize,
+    keyless_broken: BTreeSet<(String, &'static str, String)>,
+}
+
 /// Every row of one side, judged, and the markers skipped.
 fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize), RunCause> {
     let scheme = &project.config.scheme;
     let mut corpus = Corpus::new(side.input, scheme, &project.config.paths);
+    let Gathering {
+        building,
+        skipped,
+        keyless_broken,
+    } = gather(side.tree, side.lock, &mut corpus, project);
+    judge_gathered(side, project, &corpus, &building, &keyless_broken, skipped)
+}
+
+/// [`Gathering`] of a tree and a lock.
+fn gather(
+    tree: &CodeTree,
+    lock: &Lock,
+    corpus: &mut Corpus<'_>,
+    project: &ProjectRoot,
+) -> Gathering {
     let mut building: BTreeMap<RowKey, Building> = BTreeMap::new();
     let mut skipped = 0;
     let mut keyless_broken: BTreeSet<(String, &'static str, String)> = BTreeSet::new();
 
-    for (index, file) in side.tree.rust.iter().enumerate() {
-        let names = side
-            .tree
-            .names
-            .items
-            .get(index)
-            .map_or(&[][..], Vec::as_slice);
-        let module = side.tree.names.modules.get(index);
+    for (index, file) in tree.rust.iter().enumerate() {
+        let names = tree.names.items.get(index).map_or(&[][..], Vec::as_slice);
+        let module = tree.names.modules.get(index);
         let lines = LineStarts::new(&file.text);
         for comment in &file.binding.comments {
             let Some(text) = file.text.get(comment.range.clone()) else {
@@ -370,7 +420,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
                     line: lines.line(comment.range.start + marker.offset),
                     file: &file.path,
                 };
-                if let Some((row_key, node)) = marker_row(&mut corpus, project, &found, &target) {
+                if let Some((row_key, node)) = marker_row(corpus, project, &found, &target) {
                     if matches!(&row_key.binding, RowBinding::Keyless { state, .. } if state == CANNOT_VERIFY)
                     {
                         keyless_broken.insert((
@@ -386,7 +436,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             }
         }
     }
-    for (index, file) in side.tree.ron.iter().enumerate() {
+    for (index, file) in tree.ron.iter().enumerate() {
         let lines = LineStarts::new(&file.text);
         for anchor in &file.anchors {
             let Some(text) = file.text.get(anchor.comment.clone()) else {
@@ -408,7 +458,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
                     line: lines.line(anchor.comment.start + marker.offset),
                     file: &file.path,
                 };
-                if let Some((row_key, node)) = marker_row(&mut corpus, project, &found, &target) {
+                if let Some((row_key, node)) = marker_row(corpus, project, &found, &target) {
                     add(&mut building, row_key, node, code_ref.clone(), &found);
                 } else {
                     skipped += 1;
@@ -416,21 +466,36 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             }
         }
     }
-    for (key, verified) in &side.lock.entries {
+    for (key, verified) in &lock.entries {
         building
             .entry(RowKey::of_entry(key))
             .or_insert_with(Building::new)
             .entry = Some(verified.clone());
     }
+    Gathering {
+        building,
+        skipped,
+        keyless_broken,
+    }
+}
 
+/// The rows of `building` judged on `side`, and the markers skipped.
+fn judge_gathered(
+    side: &Side<'_>,
+    project: &ProjectRoot,
+    corpus: &Corpus<'_>,
+    building: &BTreeMap<RowKey, Building>,
+    keyless_broken: &BTreeSet<(String, &'static str, String)>,
+    skipped: usize,
+) -> Result<(Vec<Row>, usize), RunCause> {
     // Each row's node as the spec reads it now. A bound row waits for the
     // cascade; every other row, an entry alone too, is judged at once.
-    let canonical = canonical_nodes(&corpus, project);
+    let canonical = canonical_nodes(corpus, project);
     let mut spec_side: BTreeMap<NodeKey, (Option<u32>, Option<String>)> = BTreeMap::new();
     let mut rows = Vec::with_capacity(building.len());
     let mut waiting: Vec<(&RowKey, &Building, NodeSide)> = Vec::new();
-    for (key, row) in &building {
-        let node = node_of(row.node, key, &canonical, &corpus, &mut spec_side);
+    for (key, row) in building {
+        let node = node_of(row.node, key, &canonical, corpus, &mut spec_side);
         let code = match &row.code {
             Some(CodeRef::Bound(_)) => {
                 waiting.push((key, row, node));
@@ -439,7 +504,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             Some(CodeRef::Ambiguous(reason)) => CodeFact::Ambiguous((*reason).to_owned()),
             Some(CodeRef::Unanchored(category)) => CodeFact::Unanchored((*category).to_owned()),
             Some(CodeRef::ItemError(category)) => CodeFact::ItemError((*category).to_owned()),
-            None => CodeFact::Unbound(unbound(side, key, &keyless_broken)),
+            None => CodeFact::Unbound(unbound(side, key, keyless_broken)),
         };
         let facts = RowFacts {
             key: key.clone(),
@@ -466,7 +531,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
         .filter(|(_, print)| print.body_bytes >= TRIVIAL_BODY_BYTES)
         .map(|(at, _)| &rows[*at].key)
         .collect();
-    let pairable = select_bindings(&lone_keys, &building);
+    let pairable = select_bindings(&lone_keys, building);
     let units: Vec<&Unit> = pairable
         .iter()
         .filter_map(
@@ -476,7 +541,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
             },
         )
         .collect();
-    let (mut comparisons, made) = cascade(side, &building, &units)?;
+    let (mut comparisons, made) = cascade(side, building, &units)?;
     // Each binding of B as accept would record it now; one refused, not
     // hashed, or in a file whose tree has an error (`ERROR` or `MISSING`:
     // its place there is the parser's recovery, never followed) is no

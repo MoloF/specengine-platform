@@ -929,6 +929,7 @@ fn call_bundle(
     let request = BundleRequest {
         references: task.refs.clone(),
         budget: Some(i64::from(budget)),
+        git: specengine_cli::process_git(env),
     };
     let started = Instant::now();
     let answer = specengine_cli::bundle(env, globals, &request);
@@ -963,6 +964,8 @@ fn show(env: &Env, globals: &Globals, reference: &str) -> Shown {
         reference: reference.to_owned(),
         links: false,
         archive: false,
+        bindings: false,
+        git: specengine_cli::process_git(env),
     };
     match specengine_cli::show(env, globals, &request) {
         Ok(outcome) => match &outcome.reason {

@@ -225,6 +225,8 @@ fn shown(pair: &Pair, cwd: &Path, reference: &str) -> Result<usize, String> {
             reference: reference.to_owned(),
             links: false,
             archive: false,
+            bindings: false,
+            git: pair.git_env(cwd),
         },
     )
     .unwrap_or_else(|error| panic!("show {reference}: {error}"));

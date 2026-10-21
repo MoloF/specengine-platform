@@ -694,7 +694,7 @@ pub(crate) fn assemble(
         });
     }
 
-    let (budget, bundle_hash) = bundle_of(env, globals, context, task, roots, &mut notes)?;
+    let (budget, bundle_hash) = bundle_of(env, globals, context, task, git_env, roots, &mut notes)?;
     let roadmap = task_roadmap(reading_plan(env, context, roots), task, &mut notes);
     let snapshot_diff = match compared.stale {
         None => None,
@@ -857,6 +857,7 @@ fn bundle_of(
     globals: &Globals,
     context: &QueueContext,
     task: &Task,
+    git_env: &GitEnv,
     roots: &mut Roots,
     notes: &mut Vec<String>,
 ) -> Result<(u32, Option<String>), CliError> {
@@ -875,6 +876,7 @@ fn bundle_of(
     let request = BundleRequest {
         references: task.targets.clone(),
         budget: Some(i64::from(budget)),
+        git: git_env.clone(),
     };
     let hash = match bundle(env, globals, &request) {
         Ok(outcome) => match outcome.bundle {

@@ -27,7 +27,7 @@ use std::process::Output;
 use import_support::*;
 use serde_json::{Value, json};
 use specengine_cli::{
-    Bundle, BundleOutcome, BundleRequest, CliError, Env, Exit, Globals, ItemForm, Outcome,
+    Bundle, BundleOutcome, BundleRequest, CliError, Env, Exit, GitEnv, Globals, ItemForm, Outcome,
     ShowRequest, render_text,
 };
 use specengine_core::check::BundleLayer;
@@ -342,6 +342,7 @@ fn library_bundle(
         &BundleRequest {
             references,
             budget: Some(i64::from(budget)),
+            git: GitEnv::new(tree, [("HOME", home.as_os_str())]),
         },
     )
 }
@@ -368,6 +369,8 @@ fn library_show(tree: &Path, home: &Path, reference: &str) -> (usize, bool) {
             reference: reference.to_owned(),
             links: false,
             archive: false,
+            bindings: false,
+            git: GitEnv::new(tree, [("HOME", home.as_os_str())]),
         },
     )
     .unwrap_or_else(|error| panic!("spec show {reference}: {}", error.message));

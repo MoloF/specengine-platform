@@ -60,13 +60,15 @@
 //! judges only the files the code index picks; its text prints `ok` rows
 //! too, cut at [`OUTPUT_CAP_CHARS`] as its JSON's `rows` are.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 use serde::Serialize;
-use specengine_core::check::Mode;
+use specengine_core::check::{
+    CheckInput, Endpoint, Mode, NodeAt, Resolver, SpecGraph, canonical_id,
+};
 use specengine_core::drift::raises;
-use specengine_core::lock::{EntryKey, LOCK_FILE, LockLevel, key_problem};
+use specengine_core::lock::{EntryKey, LOCK_FILE, LockLevel, LockRelation, key_problem};
 use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, verify_from_toml};
 use specengine_core::{CodeConfig, ProjectConfig};
 use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
@@ -88,7 +90,7 @@ use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// The run causes of "Verdict and exit", by place (the others are the
 /// judge's, `verify_rows`).
-const CAUSE_UNMERGED: u8 = 5;
+pub(crate) const CAUSE_UNMERGED: u8 = 5;
 pub(crate) const CAUSE_DATA: u8 = 8;
 
 /// `--task` with `--staged`, as the library refuses it (`main`: clap's
@@ -262,6 +264,94 @@ pub struct VerifyOutcome {
     /// The run causes, in order.
     pub cannot: Vec<String>,
     pub messages: Vec<Message>,
+    /// `delta.tests_reaching`'s candidates ([`ReachingTest`]), over every
+    /// row the run judged (`--task`: before its filter); none with a run
+    /// cause; `None` under `--node` (its JSON `null`).
+    pub(crate) tests: Option<Vec<ReachingTest>>,
+}
+
+/// A `verifies` row and the nodes it reaches, by canonical ID (task spec
+/// `show-bindings`, `delta.tests_reaching`): its `node`, and each node a
+/// node it names holds a resolved `verifies` link to (an `out verifies`
+/// line of `spec show --links` for it: its own span, a document's
+/// front-matter and sections).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ReachingTest {
+    pub row: VerifyRow,
+    pub reaches: BTreeSet<String>,
+}
+
+/// The link type a node names what it verifies by (a member of the
+/// model's shared [`specengine_model::LINK_TYPES`]).
+const VERIFIES_LINK: &str = "verifies";
+
+/// [`ReachingTest`]s of `rows` (any state, Pre-existing too), judged over
+/// `input`: each `verifies` row, in row order, with what it reaches.
+pub(crate) fn reaching_tests(
+    rows: &[Row],
+    input: &CheckInput,
+    project: &ProjectRoot,
+) -> Vec<ReachingTest> {
+    let tests: Vec<&Row> = rows
+        .iter()
+        .filter(|row| row.key.relation == LockRelation::Verifies)
+        .collect();
+    if tests.is_empty() {
+        return Vec::new();
+    }
+    let scheme = &project.config.scheme;
+    let paths = &project.config.paths;
+    let resolver = Resolver::new(input, scheme, paths);
+    let graph = SpecGraph::new(input, scheme, paths);
+    let canonical = |at: NodeAt| -> Option<String> {
+        let path = graph.paths().get(at.file)?;
+        let id = graph.node(at)?.id.as_deref()?;
+        Some(canonical_id(&resolver, scheme, path, id, None))
+    };
+    // Every node with an ID, by its canonical cited ID.
+    let mut named: BTreeMap<String, Vec<NodeAt>> = BTreeMap::new();
+    for (file, _) in graph.paths().iter().enumerate() {
+        for ord in 0..graph.nodes(file).len() {
+            let at = NodeAt { file, ord };
+            if let Some(id) = canonical(at) {
+                named.entry(id).or_default().push(at);
+            }
+        }
+    }
+    // A named node's resolved `verifies` targets, its span's links.
+    let mut targets: BTreeMap<&str, BTreeSet<String>> = BTreeMap::new();
+    let mut reaches_of = |node: &str| -> BTreeSet<String> {
+        if let Some(found) = targets.get(node) {
+            return found.clone();
+        }
+        let mut found = BTreeSet::new();
+        for &at in named.get(node).into_iter().flatten() {
+            for &(edge, _) in &graph.links(at, |_| true).outgoing {
+                let edge = &graph.edges()[edge];
+                if edge.link_type != VERIFIES_LINK || edge.names_source {
+                    continue;
+                }
+                if let Endpoint::Nodes(ends) = &edge.target {
+                    found.extend(ends.iter().filter_map(|&end| canonical(end)));
+                }
+            }
+        }
+        if let Some((key, _)) = named.get_key_value(node) {
+            targets.insert(key.as_str(), found.clone());
+        }
+        found
+    };
+    tests
+        .into_iter()
+        .map(|row| {
+            let mut reaches = reaches_of(&row.key.node);
+            reaches.insert(row.key.node.clone());
+            ReachingTest {
+                row: shown(row),
+                reaches,
+            }
+        })
+        .collect()
 }
 
 impl VerifyOutcome {
@@ -362,6 +452,7 @@ pub fn verify(
     let mut base = changed.then_some("HEAD");
     let mut head_mode = HeadMode::Absent;
     let mut judged = None;
+    let mut tests = Vec::new();
     match (causes.is_empty(), code, tree, lock, input, git) {
         (true, Some(code), Some(tree), Some(lock), Some(input), Some(mut open)) => {
             let walked = Walked {
@@ -385,8 +476,12 @@ pub fn verify(
             if let Err(cause) = open.finish() {
                 causes.push(RunCause::new(CAUSE_GIT, cause.message));
             }
-            // `--task`: the rows judged, kept to the task's nodes before the
-            // verdict; a run cause is the whole run's, never filtered.
+            // The tests reaching, over every row judged; then `--task`: the
+            // rows kept to the task's nodes before the verdict; a run cause
+            // is the whole run's, never filtered.
+            if let (Some(rows), true) = (judged.as_ref(), causes.is_empty()) {
+                tests = reaching_tests(&rows.rows, &input, &project);
+            }
             if let (Some(task), Some(rows), true) = (&task, judged.as_mut(), causes.is_empty()) {
                 keep_task_rows(rows, task, &input, &project, &mut messages);
             }
@@ -408,6 +503,7 @@ pub fn verify(
         causes,
         messages,
         label,
+        tests: Some(tests),
     }))
 }
 
@@ -548,7 +644,25 @@ pub(crate) fn row_set_nodes(
     set: &NodeSet,
     corpus: &mut Corpus<'_>,
 ) -> BTreeSet<NodeKey> {
-    let (markers, entry) = row_halves(row);
+    key_set_nodes(
+        &row.key.node,
+        !row.markers.is_empty(),
+        row.entry.is_some(),
+        set,
+        corpus,
+    )
+}
+
+/// [`row_set_nodes`] of a row by its key's node, whether it has markers
+/// and whether it has an entry (a row listed, never judged, too).
+pub(crate) fn key_set_nodes(
+    node: &str,
+    markers: bool,
+    entry: bool,
+    set: &NodeSet,
+    corpus: &mut Corpus<'_>,
+) -> BTreeSet<NodeKey> {
+    let (markers, entry) = halves(node, markers, entry);
     set.row_nodes(corpus, markers.as_slice(), entry)
 }
 
@@ -556,13 +670,13 @@ pub(crate) fn row_set_nodes(
 /// its markers' ID (none without a marker), and as its entry's node (none
 /// without an entry).
 fn row_halves(row: &Row) -> (Vec<&str>, Option<&str>) {
-    let node = row.key.node.as_str();
-    let markers = if row.markers.is_empty() {
-        Vec::new()
-    } else {
-        vec![node]
-    };
-    (markers, row.entry.as_ref().map(|_| node))
+    halves(&row.key.node, !row.markers.is_empty(), row.entry.is_some())
+}
+
+/// [`row_halves`] by a key's node and what the row has.
+fn halves(node: &str, markers: bool, entry: bool) -> (Vec<&str>, Option<&str>) {
+    let marker_half = if markers { vec![node] } else { Vec::new() };
+    (marker_half, entry.then_some(node))
 }
 
 /// What a run gathered before its verdict.
@@ -582,6 +696,9 @@ pub(crate) struct Gathered<'a> {
     pub messages: Vec<Message>,
     /// The config as named.
     pub label: &'a str,
+    /// `delta.tests_reaching`'s candidates over every row judged (none
+    /// when none was); `None` under `--node`.
+    pub tests: Option<Vec<ReachingTest>>,
 }
 
 /// The outcome: the mode the verdict uses, shown as such whether rows were
@@ -598,11 +715,13 @@ pub(crate) fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
         mut causes,
         mut messages,
         label,
+        tests,
     } = gathered;
     let mode = configured
         .map(|configured| judged_mode(configured, has_base, &head_mode, label, &mut messages));
 
     causes.sort_by_key(|cause| cause.order);
+    let causes_empty = causes.is_empty();
     let (rows, skipped): (Vec<VerifyRow>, usize) = match judged {
         Some(judged) if causes.is_empty() => {
             (judged.rows.iter().map(shown).collect(), judged.skipped)
@@ -626,6 +745,7 @@ pub(crate) fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
             .into_iter()
             .map(|cause| one_line(&cause.message))
             .collect(),
+        tests: tests.map(|tests| if causes_empty { tests } else { Vec::new() }),
         messages,
     }
 }
@@ -717,17 +837,19 @@ fn verify_staged(
     let mut base = Some("HEAD");
     let mut head_mode = HeadMode::Absent;
     let mut judged = None;
+    let mut tests = Vec::new();
     match (causes.is_empty(), project, code, opened) {
         (true, Some(project), Some(code), Some((mut git, listing))) => {
             let config = staged_text.as_deref().map(str::as_bytes);
             match judge_index(env, globals, &project, code, &mut git, listing, config) {
-                Ok((rows, at_head, unborn, lock_note)) => {
-                    if unborn {
+                Ok(index) => {
+                    if index.unborn {
                         base = Some("unborn");
                     }
-                    head_mode = at_head;
-                    judged = Some(rows);
-                    messages.extend(lock_note.map(Message::Note));
+                    head_mode = index.head_mode;
+                    judged = Some(index.judged);
+                    tests = index.tests;
+                    messages.extend(index.lock_note.map(Message::Note));
                 }
                 Err(cause) => causes.push(cause),
             }
@@ -752,6 +874,7 @@ fn verify_staged(
         causes,
         messages,
         label,
+        tests: Some(tests),
     }))
 }
 
@@ -779,10 +902,20 @@ fn staged_config(
     }
 }
 
+/// What `--staged`'s judge gives: the rows, their tests reaching (over
+/// the index's documents), `HEAD`'s mode, whether it is unborn, and the
+/// note when `HEAD`'s lock gave way to the index's.
+struct IndexJudged {
+    judged: Judged,
+    tests: Vec<ReachingTest>,
+    head_mode: HeadMode,
+    unborn: bool,
+    lock_note: Option<String>,
+}
+
 /// The index's side read through the one-commit seam, `HEAD`'s read over
 /// it, and its rows judged against `HEAD`'s; `config` the index's config
-/// bytes when it is the config judged. `HEAD`'s mode, whether it is
-/// unborn, and the note when `HEAD`'s lock gave way to the index's.
+/// bytes when it is the config judged.
 fn judge_index(
     env: &Env,
     globals: &Globals,
@@ -791,7 +924,7 @@ fn judge_index(
     git: &mut VerifyGit,
     listing: CommitListing,
     config: Option<&[u8]>,
-) -> Result<(Judged, HeadMode, bool, Option<String>), RunCause> {
+) -> Result<IndexJudged, RunCause> {
     let side = read_commit(project, git, CommitConfig::of_index(listing, code.clone()))?;
     let config_path = config_path(env, globals, project);
     let share = IndexShare {
@@ -805,8 +938,14 @@ fn judge_index(
         Some(&share),
     )?;
     let judged = judge_commit(&side, project, Some(&head))?;
-    let unborn = head.is_unborn();
-    Ok((judged, head.mode, unborn, head.lock_note))
+    let tests = reaching_tests(&judged.rows, side.input(), project);
+    Ok(IndexJudged {
+        judged,
+        tests,
+        unborn: head.is_unborn(),
+        head_mode: head.mode,
+        lock_note: head.lock_note,
+    })
 }
 
 /// A state as its name.
@@ -1429,6 +1568,27 @@ struct KeyJson<'a> {
 }
 
 impl<'a> KeyJson<'a> {
+    /// Its six fields, compared.
+    fn fields(
+        &self,
+    ) -> (
+        &'a str,
+        &'a str,
+        &'a str,
+        Option<&'a str>,
+        Option<&'a str>,
+        Option<&'a str>,
+    ) {
+        (
+            self.node,
+            self.relation,
+            self.file,
+            self.kind,
+            self.symbol,
+            self.item_kind,
+        )
+    }
+
     fn of(row: &'a VerifyRow) -> Self {
         Self {
             node: &row.node,
@@ -1478,7 +1638,9 @@ struct DeltaJson<'a> {
     symbols: Option<()>,
     bindings: BindingsJson<'a>,
     affected_nodes: Vec<&'a str>,
-    tests_reaching: Option<()>,
+    /// The keys of the `verifies` rows reaching an affected node; `null`
+    /// under `--node`.
+    tests_reaching: Option<Vec<KeyJson<'a>>>,
 }
 
 /// The rows `--node`'s cut leaves out (task spec `verify-node`).
@@ -1527,6 +1689,22 @@ impl Serialize for VerifyOutcome {
             .filter(|row| row.class.is_some() && row.resolved)
             .map(|row| row.node.as_str())
             .collect();
+        // Over every row judged (`--task`: before its filter): a test
+        // whose node is affected or holds a `verifies` link into one.
+        let tests_reaching = self.tests.as_ref().map(|tests| {
+            let mut seen = BTreeSet::new();
+            tests
+                .iter()
+                .filter(|test| {
+                    test.reaches
+                        .iter()
+                        .any(|node| affected.contains(node.as_str()))
+                })
+                .map(|test| KeyJson::of(&test.row))
+                // Distinct six-field keys: keyless rows of one place share one.
+                .filter(|key| seen.insert(key.fields()))
+                .collect()
+        });
         // `--node`: the rows its text prints; plain and `--task`: every row.
         let (rows, omitted) = match &self.node {
             Some(_) => {
@@ -1592,7 +1770,7 @@ impl Serialize for VerifyOutcome {
                     }),
                 },
                 affected_nodes: affected.into_iter().collect(),
-                tests_reaching: None,
+                tests_reaching,
             },
             cannot: &self.cannot,
             notes: self.notes(),

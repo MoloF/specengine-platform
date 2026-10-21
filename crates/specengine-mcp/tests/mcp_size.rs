@@ -32,6 +32,12 @@
 //! whole `delta`; one QPATH narrows it to one row, uncut. Its maximum is
 //! printed with the others.
 //!
+//! docs/features/show-bindings.md TE-5: `get_node {id: "LANE-WIDE", with:
+//! ["bindings"]}` (and with `"links"` too) joins the same test: its 3 000
+//! rows pass the CLI's cut, the tail ends `; bindings not shown: <k>`, the
+//! JSON's `bindings.rows` the printed ones and `omitted` k; its maximum is
+//! printed with the others (`get_node` re-measured with rows).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -399,6 +405,11 @@ fn code_tools_cut_stay_under_the_declared_cap() {
         ("unmapped", json!({"path": "pkg/w/src/loose.rs"})),
         ("unmapped", json!({"path": "pkg/w/src/many"})),
         ("check_binding", json!({"node": "LANE-WIDE"})),
+        ("get_node", json!({"id": "LANE-WIDE", "with": ["bindings"]})),
+        (
+            "get_node",
+            json!({"id": "LANE-WIDE", "with": ["links", "bindings"]}),
+        ),
         // A few lines each: the name of two items, a root's rows, one
         // binding.
         ("find_symbols", json!({"query": wide_name(7), "limit": 200})),
@@ -408,8 +419,8 @@ fn code_tools_cut_stay_under_the_declared_cap() {
             json!({"node": "LANE-WIDE", "symbol": format!("pkg/w::bound::{}", wide_name(7))}),
         ),
     ];
-    // The first seven pass the CLI's cut.
-    let cut = 7;
+    // The first nine pass the CLI's cut.
+    let cut = 9;
     let mut session = Session::open(Era::Legacy, &[], Some(&root), Home::At(&home));
     let schemas = output_schemas(&session.tools());
     let mut largest: Vec<(String, usize)> = Vec::new();
@@ -446,6 +457,23 @@ fn code_tools_cut_stay_under_the_declared_cap() {
             let want = if index < cut { 3_000 } else { 1 };
             assert_eq!(rows, want, "{args}");
             assert_eq!(omitted > 0, index < cut, "{args}: omitted {omitted}");
+        }
+        if *tool == "get_node" {
+            // docs/features/show-bindings.md "spec show --bindings": the
+            // printed rows, `omitted` the rest, the tail's count.
+            let bindings = &result["structuredContent"]["nodes"][0]["bindings"];
+            let printed = bindings["rows"].as_array().expect("rows").len() as u64;
+            let omitted = bindings["omitted"].as_u64().expect("omitted");
+            assert_eq!(printed + omitted, 3_000, "{args}: printed and omitted rows");
+            assert!(printed > 0 && omitted > 0, "{args}: cut in the rows");
+            let tail = shown
+                .lines()
+                .find(|line| line.starts_with("[truncated: "))
+                .expect("a tail");
+            assert!(
+                tail.ends_with(&format!("; bindings not shown: {omitted}]")),
+                "{args}: {tail}"
+            );
         }
         assert!(
             before_tail(shown).chars().count() <= OUTPUT_CAP_CHARS + 1_000,

@@ -187,6 +187,47 @@ pub(crate) struct ShowNode {
     pub omitted: Option<ShowOmitted>,
     /// `null` without `with: ["links"]`.
     pub links: Option<ShowLinks>,
+    /// `null` without `with: ["bindings"]`, without a `[code]` table, or
+    /// when the code layer could not be read (a note says why).
+    pub bindings: Option<ShowBindings>,
+}
+
+/// A node's code bindings and its sections', in verify's row order: those
+/// printed, and the rows the cut left out.
+#[derive(JsonSchema)]
+pub(crate) struct ShowBindings {
+    pub rows: Vec<BindingRowShape>,
+    pub omitted: usize,
+}
+
+/// One code binding as a read shows it (the model's `BindingRow`, key for
+/// key): a lock key (a keyless one: `kind`, `symbol`, `item_kind`
+/// `null`), where its symbol lies, and its state as `check_binding`
+/// judges it. An item's kind, a layer, a category and a detail are free
+/// strings.
+#[derive(JsonSchema)]
+pub(crate) struct BindingRowShape {
+    pub node: String,
+    pub relation: MarkerRelation,
+    pub file: String,
+    pub kind: Option<VerifyKind>,
+    pub symbol: Option<String>,
+    /// The item's kind as the code layer names it.
+    pub item_kind: Option<String>,
+    /// The stored symbol's first line; a RON value's: its first marker's.
+    pub line: Option<usize>,
+    pub end_line: Option<usize>,
+    pub signature: Option<String>,
+    /// The layer whose rules made the stored symbol's row.
+    pub layer: Option<String>,
+    /// The state; `null` when the code layer could not judge it (a note
+    /// says why).
+    pub sync: Option<VerifyState>,
+    pub category: Option<String>,
+    pub detail: Option<String>,
+    /// `null` without a lock entry, when the row cannot be verified, or
+    /// when it was not judged.
+    pub anchor: Option<VerifyAnchor>,
 }
 
 #[derive(JsonSchema)]

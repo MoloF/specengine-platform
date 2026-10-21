@@ -84,6 +84,8 @@ impl Repo {
                 reference: reference.to_owned(),
                 links: false,
                 archive: false,
+                bindings: false,
+                git: GitEnv::new(&self.linked, [("HOME", self.home.as_os_str())]),
             },
         )
         .unwrap_or_else(|error| panic!("show {reference}: {error}"));
@@ -367,14 +369,18 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     // ("INSTRUCTIONS": `; check_binding(node, symbol?) = verify --node` on
     // the code line, 46 bytes); the values `mcp_code.rs`' re-pinned
     // `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1840);
+    // 1 839 and 1 977 since docs/features/show-bindings.md ("INSTRUCTIONS",
+    // Q-F: `, --bindings is with ["bindings"]` after the links hint, +33;
+    // ` (no specengine.toml: `spec init`)` cut, -34); the values
+    // `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1839);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "dc019aa43be4ede2b6ac5a8bf24e15d3711e67b7a3d04ea0226bd345bf95d547"
+        "54d160f1bc427778ddf3efaff9a66ed89be04df9f0cd89f396e4a3408a1eeb72"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1978);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1977);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "d4194b2b26224e59dfcda9fa3853af96a119fd5015cd524cb39bdbfad9bb17bf"
+        "0be8933f33543d7aafd9ab2c9419f5b5ae6b1702e07ce755a83c15ed799061f4"
     );
 }

@@ -107,6 +107,9 @@ enum Command {
         /// With --links: links written in Tier 3 (archived) documents too.
         #[arg(long)]
         archive: bool,
+        /// Also list each node's code bindings and its sections', each with its state as `verify --node` judges it.
+        #[arg(long)]
+        bindings: bool,
     },
     /// Print the containment tree (`parent:` and section nesting) from ROOT, or from the roots under `[paths] spec`.
     Tree {
@@ -810,6 +813,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             reference,
             links,
             archive,
+            bindings,
         } => Outcome::Show(specengine_cli::show(
             env,
             globals,
@@ -817,6 +821,8 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 reference,
                 links,
                 archive,
+                bindings,
+                git: process_git(env),
             },
         )?),
         Command::Tree {
@@ -854,7 +860,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         Command::Bundle { references, budget } => Outcome::Bundle(specengine_cli::bundle(
             env,
             globals,
-            &BundleRequest { references, budget },
+            &BundleRequest {
+                references,
+                budget,
+                git: process_git(env),
+            },
         )?),
         Command::Check {
             staged,

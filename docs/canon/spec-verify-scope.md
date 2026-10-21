@@ -8,7 +8,7 @@ reviewed: 2026-10-21
 
 # `spec verify`'s scopes: a node set's rows
 
-A scope keeps plain verify's report (`spec-verify.md`, `spec-verify-output.md`) to a node set. `--task T` judges the whole tree, then filters its rows; `--node REF` narrows the files judged to the node's own. `--tests [--task T]` runs tests: `spec-verify-tests.md`. Code: CLI `verify.rs` (`keep_task_rows`, `row_set_nodes`), `verify_node.rs`, `node_set.rs`, `code_walk.rs` `partial_tree`; store `code_selection`.
+A scope keeps plain verify's report (`spec-verify.md`, `spec-verify-output.md`) to a node set. `--task T` judges the whole tree, then filters its rows; `--node REF` narrows the files judged to the node's own. `--tests [--task T]` runs tests: `spec-verify-tests.md`. Code: CLI `verify.rs` (`keep_task_rows`, `row_set_nodes`), `verify_node.rs`, `bindings.rs`, `node_set.rs`, `code_walk.rs` `partial_tree`; store `code_selection`.
 
 ## `--task`
 
@@ -34,7 +34,7 @@ Exit 1 only from a kept Fix row under `enforce*` (plain: `enforce-introduced` as
 6. Plain's judge, pairing per node; rows kept by `row_set_nodes` over `NodeSet::of(H)`, as `--task`. `--symbol QPATH` keeps a row whose `symbol`, RON `<file>#<symbol>` or moved `anchor.from` (either form) is QPATH byte for byte; never a keyless row; no tiers, no suffix.
 7. Counts, cascade, `delta`, hints, `(m moved)`, verdict, exit over the kept rows; `base` `null`, `skipped` 0, `enforce-introduced` as `enforce` with plain's no-base note. No row: `clean`, exit 0, `note: verify: <REF> has no binding[ on <QPATH>]`, after the refresh's notes, before the mode note.
 
-MCP: `check_binding` (`mcp-code.md`). Output (`spec-verify-output.md`): every kept row prints, `ok` too, so the JSON's `rows`, the printed ones, keep the text's bound: whole blocks within `OUTPUT_CAP_CHARS` (40 000, counted before escaping), then a tail naming `--symbol`; a first block over it prints no row. Counts and hints cover every kept row; JSON `node` the holders' IDs, `symbol` QPATH, `omitted` the unprinted.
+Steps 4-6 are CLI `bindings.rs` `judge_set`, the seam shared with the reads' bindings (`code-reads.md` "The seam"). MCP: `check_binding` (`mcp-code.md`). Output (`spec-verify-output.md`): every kept row prints, `ok` too, so the JSON's `rows`, the printed ones, keep the text's bound: whole blocks within `OUTPUT_CAP_CHARS` (40 000, counted before escaping), then a tail naming `--symbol`; a first block over it prints no row. Counts and hints cover every kept row; JSON `node` the holders' IDs, `symbol` QPATH, `omitted` the unprinted.
 
 ## Known limits
 

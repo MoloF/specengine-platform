@@ -1045,6 +1045,8 @@ fn a_root_below_the_top_applies_at_its_top_relative_path() {
             reference: "EDGE-SPRINT-EMPTY".to_owned(),
             links: false,
             archive: false,
+            bindings: false,
+            git: genv(&linked.join("proj")),
         },
     )
     .unwrap();

@@ -21,7 +21,7 @@ use rmcp::ErrorData;
 use rmcp::model::{Resource, ResourceContents, ResourceTemplate};
 use specengine_cli::{
     CliError, DocumentEntry, Env, Exit, Globals, Outcome, ShowRequest, TreeRequest, data_dir,
-    discover, documents, locate,
+    discover, documents, locate, process_git,
 };
 
 use crate::read::outcome_text;
@@ -191,6 +191,8 @@ pub(crate) fn read(
                     reference: reference.clone(),
                     links: false,
                     archive: false,
+                    bindings: false,
+                    git: process_git(env),
                 },
             )
             .map(Outcome::Show),

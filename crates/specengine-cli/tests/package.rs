@@ -241,6 +241,7 @@ fn ac03_both_fixtures_give_the_same_versioned_package() {
         &specengine_cli::BundleRequest {
             references: vec!["MEC-STAMINA".to_owned()],
             budget: Some(10_000),
+            git: a.git_env(&a.main),
         },
     )
     .expect("bundle")
@@ -674,6 +675,7 @@ fn ac03_a_non_rust_project_gets_no_stack_word() {
         &specengine_cli::BundleRequest {
             references: vec!["FEE-LATE-RETURN".to_owned()],
             budget: Some(10_000),
+            git: pair.git_env(&main),
         },
     )
     .expect("bundle");
@@ -1611,6 +1613,7 @@ fn the_bundle_budget_is_bundle_task() {
         &specengine_cli::BundleRequest {
             references: vec!["MEC-STAMINA".to_owned(), "MEC-SPRINT".to_owned()],
             budget: Some(2000),
+            git: pair.git_env(&main),
         },
     )
     .expect("bundle")

@@ -926,6 +926,8 @@ fn a_root_below_the_top_completes_by_its_commit() {
             reference: case.target.to_owned(),
             links: false,
             archive: false,
+            bindings: false,
+            git: genv(&linked.join("proj")),
         },
     )
     .unwrap()

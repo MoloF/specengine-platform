@@ -98,14 +98,17 @@ project, bad argument value): an error result with its one line. ",
 const NODE_DESCRIPTION: &str = concat!(
     "A node's current text: a document's whole file or an ID section's span, read \
 from disk now, with a header line (ID, kind, title, path:lines, status, rev, \
-estimated tokens) per node. The same as `spec show REF [--links] [--archive]`: \
-content is the command's output (its note and warning lines first), \
+estimated tokens) per node. The same as `spec show REF [--links] [--bindings] \
+[--archive]`: content is the command's output (its note and warning lines first), \
 structuredContent its --json document.
 
 id: a REF: an ID, an alias (`aliases:` or a configured legacy prefix), `slug/ID`, \
 `ID#SECTION`, or a root-relative `.md` path. An ID several documents hold gives all \
 of them, with a warning.
 with: [\"links\"] lists each node's links, outgoing and incoming, before its text.
+with: [\"bindings\"] lists each node's code bindings, its sections' too, each with its sync \
+(the state spec verify --node gives), after its links; without a [code] table they are null, \
+and a code layer that cannot be read gives a note, never an error.
 archive: with [\"links\"] only: links written in Tier 3 (archived) documents too.
 
 An answer above 40000 characters is cut, with a tail naming the lines not shown and \
@@ -377,7 +380,7 @@ pub(crate) struct TreeArgs {
 pub(crate) struct NodeArgs {
     /// An ID, an alias, `slug/ID`, `ID#SECTION` or a root-relative `.md` path.
     pub id: String,
-    /// `["links"]`: each node's links, outgoing and incoming.
+    #[schemars(description = WITH_DOC)]
     pub with: Option<Vec<With>>,
     /// With `["links"]` only: links written in Tier 3 (archived) documents too.
     pub archive: Option<bool>,
@@ -389,10 +392,12 @@ pub(crate) struct NodeArgs {
 pub(crate) enum With {
     /// `spec show --links`.
     Links,
+    /// `spec show --bindings`.
+    Bindings,
 }
 
-/// `{"type": "string", "enum": ["links"]}`, inlined (the derive would write
-/// a `oneOf` of `const`s).
+/// `{"type": "string", "enum": ["links", "bindings"]}`, inlined (the
+/// derive would write a `oneOf` of `const`s).
 impl schemars::JsonSchema for With {
     fn inline_schema() -> bool {
         true
@@ -405,10 +410,17 @@ impl schemars::JsonSchema for With {
     fn json_schema(_generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
         let mut object = JsonObject::new();
         object.insert("type".to_owned(), Value::from("string"));
-        object.insert("enum".to_owned(), Value::from(vec![Value::from("links")]));
+        object.insert(
+            "enum".to_owned(),
+            Value::from(vec![Value::from("links"), Value::from("bindings")]),
+        );
         schemars::Schema::from(object)
     }
 }
+
+/// The input schema's description of `get_node.with`.
+const WITH_DOC: &str = "`[\"links\"]`: each node's links, outgoing and incoming; `[\"bindings\"]`: \
+each node's code bindings with their sync.";
 
 /// The input schema's description of `search.query`.
 const QUERY_DOC: &str = "The words to find (terms of 3 or more characters).";
@@ -496,13 +508,17 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<NodeArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let request = ShowRequest {
-            reference: args.id,
-            links: args.with.is_some_and(|with| with.contains(&With::Links)),
-            archive: args.archive.unwrap_or(false),
-        };
+        let with = args.with.unwrap_or_default();
+        let (reference, archive) = (args.id, args.archive.unwrap_or(false));
         Ok(self
             .call(move |env, globals| {
+                let request = ShowRequest {
+                    reference,
+                    links: with.contains(&With::Links),
+                    archive,
+                    bindings: with.contains(&With::Bindings),
+                    git: process_git(env),
+                };
                 specengine_cli::show(env, globals, &request).map(Outcome::Show)
             })
             .await
@@ -548,12 +564,14 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<BundleArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let request = BundleRequest {
-            references: args.node_ids,
-            budget: args.budget,
-        };
+        let (references, budget) = (args.node_ids, args.budget);
         Ok(self
             .call(move |env, globals| {
+                let request = BundleRequest {
+                    references,
+                    budget,
+                    git: process_git(env),
+                };
                 specengine_cli::bundle(env, globals, &request).map(Outcome::Bundle)
             })
             .await

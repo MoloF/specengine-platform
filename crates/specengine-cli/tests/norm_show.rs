@@ -288,6 +288,8 @@ fn te7_json_keys_in_order() {
         "truncated",
         "omitted",
         "links",
+        // docs/features/show-bindings.md "spec show --bindings": last.
+        "bindings",
     ];
     for reference in [
         "MEC-STAMINA",

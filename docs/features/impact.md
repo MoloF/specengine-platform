@@ -12,7 +12,7 @@ adrs: [ADR-0046]
 
 08:131 promises the blast radius through `get_impact` (07 s1.2: `node_id | qpath | since: <commit>` -> nodes, symbols, tests, tasks); only `spec graph --impact` exists, nodes only, from one node. An agent about to change code, or handing in a branch, has no single call for what its change reaches, and reads graphs and files instead.
 
-Delivered: `spec impact` and MCP `get_impact` over 7a's rows and sync (`bundle-bindings.md`), and `spec verify`'s `delta.symbols`. Slice 7 split (Q1): 7a first, 7b this. ADR-0046 (`architecture.md#control`, `architecture-code.md#sync-in-reads`).
+Delivered: `spec impact` and MCP `get_impact` over 7a's rows and sync (`docs/canon/code-reads.md`), and `spec verify`'s `delta.symbols`. Slice 7 split (Q1): 7a first, 7b this. ADR-0046 (`architecture.md#control`, `architecture-code.md#sync-in-reads`).
 
 **In scope:** `spec impact REF | --symbol QPATH | --since REV`; `get_impact`; the tasks in the radius; `delta.symbols`; the `INSTRUCTIONS` line; `mcp_door` coverage; fixtures.
 
@@ -49,7 +49,7 @@ Q7, WA-11.
 
 ### Output
 
-Text: seeds, the four lists, the summary; a row is 7a's line (`bundle-bindings.md` "The binding row"):
+Text: seeds, the four lists, the summary; a row is 7a's line (`docs/canon/code-reads.md` "The binding row"):
 
 ```
 since a0cea48: 1 file, 1 changed, 1 added, 0 removed
@@ -80,7 +80,7 @@ A REF seed prints no seed line; `--symbol` prints `symbol <q>: <n> at <tier>` an
 | 1 | REF names nothing (`show`'s reason); `--symbol` names no symbol; REV is not a commit |
 | 2, stdout empty | usage (inputs, `--depth`, an option-like or control-character REV); discovery; config; a look-alike ID; `--symbol` or `--since` without `[code]` (`code-refs.md`'s sentence), with a bad `[code]` or a walk gap; `--since` without git or on a git failure |
 
-The REF form degrades as 7a's reads (`bundle-bindings.md` "Degrade"): no `[code]`: `symbols`, `tests` null, silent; a code-layer cause: nodes and tasks unchanged, rows per 7a's table, one note. `--symbol` and `--since` take code as their input, so its failures exit 2 as `spec symbols`; a lock cause still only marks rows `sync -` with one note (ADR-0046).
+The REF form degrades as 7a's reads (`docs/canon/code-reads.md` "Degrade"): no `[code]`: `symbols`, `tests` null, silent; a code-layer cause: nodes and tasks unchanged, rows per 7a's table, one note. `--symbol` and `--since` take code as their input, so its failures exit 2 as `spec symbols`; a lock cause still only marks rows `sync -` with one note (ADR-0046).
 
 ### delta.symbols
 

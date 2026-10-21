@@ -51,7 +51,7 @@ use specengine_core::check::{
     bundle_layers, bundle_node_from_toml,
 };
 use specengine_core::tokens_est;
-use specengine_store::b3_hash;
+use specengine_store::{GitEnv, b3_hash};
 
 use crate::cap::{OUTPUT_CAP_CHARS, header as show_header};
 use crate::corpus::{holders_warning, indexed, locate};
@@ -70,13 +70,16 @@ pub const DEFAULT_BUNDLE_BUDGET: u32 = 2_000;
 pub const BUNDLE_TAIL_LINES: usize = 20;
 
 /// `spec bundle` options.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BundleRequest {
     /// Each `REF` as given, in order; at least one.
     pub references: Vec<String>,
     /// `--budget N`, estimated tokens; `None`: the config's, else the
     /// default.
     pub budget: Option<i64>,
+    /// Git's environment: passed from task spec `show-bindings` on, read
+    /// by its layers of code rows (task spec `bundle-bindings`).
+    pub git: GitEnv,
 }
 
 /// What `spec bundle` answered: a bundle, or why a `REF` names nothing
@@ -625,6 +628,7 @@ fn shown_node(graph: &SpecGraph<'_>, at: NodeAt) -> ShownNode {
             span_hash: b3_hash(&[]),
             text: String::new(),
             links: None,
+            bindings: None,
         },
     }
 }

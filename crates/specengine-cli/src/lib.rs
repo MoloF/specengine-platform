@@ -181,6 +181,7 @@
 
 mod amend;
 mod apply;
+mod bindings;
 mod bump;
 mod bundle;
 mod cap;
@@ -338,7 +339,9 @@ pub use serve::{
     DaemonFile, DaemonProject, Serve, ServeRequest, daemon_text, read_daemon_file, serve,
     unpublished_daemon,
 };
-pub use show::{NestedSection, ShowOutcome, ShowRequest, ShownNode, show, show_with_view};
+pub use show::{
+    NestedSection, ShowOutcome, ShowRequest, ShownBindings, ShownNode, show, show_with_view,
+};
 pub use specengine_core::ProjectConfig;
 /// The intake's input types, enums and caps (core's), for the bridges;
 /// the names of the kinds `propose_change` takes and of a decision, and a

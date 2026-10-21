@@ -101,6 +101,8 @@ impl Repo {
                 reference: reference.to_owned(),
                 links: false,
                 archive: false,
+                bindings: false,
+                git: GitEnv::new(&self.linked, self.git.vars()),
             },
         )
         .unwrap_or_else(|error| panic!("show {reference}: {error}"));
@@ -392,10 +394,12 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // "INSTRUCTIONS" (the code tools' line), the change line unchanged;
     // 1 932 since docs/features/roadmap-surfaces.md (`get_roadmap`'s 40
     // bytes on the reads' line); 1 978 since docs/features/check-binding.md
-    // (`check_binding`'s 46 bytes on the code line).
+    // (`check_binding`'s 46 bytes on the code line); 1 977 since
+    // docs/features/show-bindings.md (the 33-byte bindings hint in, the
+    // 34-byte no-project gloss out).
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1978);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1977);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -417,6 +421,8 @@ fn ac17_the_instructions_name_create_within_their_budget() {
 /// 80 left. M: the 157-byte paragraph kept; the text changed, the pin kept.
 /// docs/features/check-binding.md "INSTRUCTIONS" (Q-C): ` (owner's checks)`
 /// cut, the paragraph 59 bytes; 2 037 on the wire, 11 left.
+/// docs/features/show-bindings.md "INSTRUCTIONS" (Q-F): 1 977 and the
+/// paragraph, 2 036 on the wire, 12 left.
 #[test]
 #[cfg(feature = "probes")]
 fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
@@ -431,9 +437,10 @@ fn ac17_the_probes_build_sends_the_short_probe_paragraph() {
     // (1 892 and the 76-byte paragraph); 2 008 since
     // docs/features/roadmap-surfaces.md (1 932 and the paragraph); 2 037
     // since docs/features/check-binding.md (1 978 and the 59-byte
-    // paragraph).
-    assert_eq!(sent.len(), 2037);
-    assert_eq!(2048 - sent.len(), 11, "the room the spec states");
+    // paragraph); 2 036 since docs/features/show-bindings.md (1 977 and
+    // the paragraph).
+    assert_eq!(sent.len(), 2036);
+    assert_eq!(2048 - sent.len(), 12, "the room the spec states");
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());
 }

@@ -76,6 +76,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/roadmap-view.md](features/roadmap-view.md) shipped
 - [docs/features/roadmap.md](features/roadmap.md) abandoned
 - [docs/features/round.md](features/round.md) shipped
+- [docs/features/show-bindings.md](features/show-bindings.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
 - [docs/features/spec-check-process.md](features/spec-check-process.md) shipped

@@ -246,8 +246,9 @@ fn ac14_the_task_tools_and_their_schemas() {
     // two lines, the second the code tools; `Hints use flags:`); 1 932
     // since docs/features/roadmap-surfaces.md (`get_roadmap` on the reads'
     // line); 1 978 since docs/features/check-binding.md (`check_binding`
-    // on the code line).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1978);
+    // on the code line); 1 977 since docs/features/show-bindings.md (the
+    // bindings hint in, the no-project gloss out).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 1977);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();

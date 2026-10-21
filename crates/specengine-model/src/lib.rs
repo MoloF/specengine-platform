@@ -39,9 +39,9 @@ pub use scheme::{IdScheme, IdScope, PrefixSpec, SchemeError, SchemeField, Scheme
 pub use script::IdScript;
 pub use span::Span;
 pub use task::{
-    OwnerNote, PackageAssumption, PackageBinding, PackageBundle, PackageProposal, PackageTarget,
-    RunOutcome, SnapshotDiff, SnapshotNode, SnapshotPlace, SpecSnapshot,
-    TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskClaim, TaskCriterion, TaskPackage,
-    TaskRoadmap, TaskRun, TaskStatus,
+    BindingAnchor, BindingPlace, BindingRow, OwnerNote, PackageAssumption, PackageBundle,
+    PackageProposal, PackageTarget, RunOutcome, SnapshotDiff, SnapshotNode, SnapshotPlace,
+    SpecSnapshot, TASK_PACKAGE_SCHEMA_VERSION, TaskAuthor, TaskAuthorType, TaskClaim,
+    TaskCriterion, TaskPackage, TaskRoadmap, TaskRun, TaskStatus,
 };
 pub use value::{FmValue, OrderedMap};

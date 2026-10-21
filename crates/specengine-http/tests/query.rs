@@ -7,6 +7,10 @@
 //! `%2B` a plus: `C%2B%2B` reaches the CLI as `C++`, `stamina+regen` as
 //! `stamina regen`. M: lossy UTF-8 decoding; a bad `%` passed on as
 //! written; `+` left a plus.
+//!
+//! docs/features/show-bindings.md RD-7 "HTTP":
+//! `nodes_with_bindings_equals_show_bindings` (`with=bindings`, with
+//! `with=links` in either order, and the 400 of any other value).
 
 mod common;
 
@@ -183,4 +187,122 @@ fn a_plus_is_a_space_and_an_encoded_plus_a_plus() {
     let (_, plus) = searched(&server, &format!("{P}/search?query=stamina%2Bregen"));
     assert!(!spaced.is_empty(), "`stamina regen` has hits in A");
     assert_ne!(spaced, plus, "a space and a plus search differently in A");
+}
+
+/// A git repository of `fixtures/code-a` with the golden lock committed
+/// (`fixtures/spec-lock/code-a.lock`), then LAW-BOUND's text edited
+/// (uncommitted): rows judged, some drifted.
+fn code_a_repo(scratch: &Scratch) -> std::path::PathBuf {
+    let root = scratch.copy("code-a", "code");
+    let _ = std::fs::remove_file(root.join("expected.json"));
+    std::fs::copy(
+        common::fixture("spec-lock").join("code-a.lock"),
+        root.join("spec.lock"),
+    )
+    .expect("the golden lock");
+    let git = scratch.git();
+    git.run(
+        &root,
+        &["init", "-q", "--template=", "--initial-branch=main"],
+    );
+    git.quiet(&root);
+    git.run(&root, &["add", "-A"]);
+    git.run(&root, &["commit", "-q", "-m", "code-a and its lock"]);
+    common::replace(
+        &root,
+        "docs/spec/counter.md",
+        "The count never exceeds the cap.",
+        "The count never exceeds the cap, ever.",
+    );
+    root
+}
+
+/// docs/features/show-bindings.md RD-7 "HTTP": `GET
+/// /api/projects/<slug>/nodes/{*ref}?with=bindings`, repeatable with
+/// `with=links` in either order, is the CLI's `spec --root R show REF
+/// --bindings [--links] --json` byte for byte (a document holding its
+/// sections' rows, a section, a path, a node without bindings, REF naming
+/// nothing as a 404), its rows judged; `with=<other>` is a 400 `` `with=<value>`:
+/// the values are `links` and `bindings` `` before any call (a fresh `HOME`
+/// stays empty). M: `with=bindings` ignored (its `bindings` `null`).
+#[test]
+fn nodes_with_bindings_equals_show_bindings() {
+    let scratch = Scratch::new("query-bindings");
+    let root = code_a_repo(&scratch);
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let base = "/api/projects/code-a";
+    for reference in [
+        "PIECE-COUNTER",
+        "LAW-BOUND",
+        "docs/spec/counter.md",
+        "PIECE-COUNTER#LAW-BOUND",
+        "PIECE-LIMITS",
+        "LAW-NOPE",
+    ] {
+        let encoded = common::encode_component(reference);
+        for (query, flags) in [
+            ("with=bindings", &["--bindings"][..]),
+            ("with=links&with=bindings", &["--links", "--bindings"]),
+            ("with=bindings&with=links", &["--links", "--bindings"]),
+        ] {
+            let mut args = vec!["show", reference];
+            args.extend_from_slice(flags);
+            let run = spec_json(&home, &cwd, &root, &args);
+            let reply = server.get(&format!("{base}/nodes/{encoded}?{query}"));
+            let want = if run.code == 0 { 200 } else { 404 };
+            assert_eq!(reply.status, want, "{reference} {query}: {}", reply.text());
+            assert_eq!(
+                reply.text(),
+                run.document(),
+                "{reference} {query}: the CLI's document"
+            );
+            if run.code == 0 {
+                let document = reply.json();
+                for node in document["nodes"].as_array().expect("nodes") {
+                    let rows = node["bindings"]["rows"]
+                        .as_array()
+                        .unwrap_or_else(|| panic!("{reference} {query}: rows: {node}"));
+                    assert_eq!(node["bindings"]["omitted"], 0, "the daemon's view is uncut");
+                    assert!(
+                        rows.iter().all(|row| row["sync"].is_string()),
+                        "{reference} {query}: every row judged"
+                    );
+                }
+            }
+        }
+    }
+    let piece = server
+        .get(&format!("{base}/nodes/PIECE-COUNTER?with=bindings"))
+        .json();
+    assert!(
+        piece["nodes"][0]["bindings"]["rows"]
+            .as_array()
+            .is_some_and(|rows| rows.iter().any(|row| row["node"] == "LAW-BOUND")),
+        "the document holds its sections' rows: {piece}"
+    );
+    let plain = server.get(&format!("{base}/nodes/PIECE-COUNTER")).json();
+    assert_eq!(
+        plain["nodes"][0]["bindings"],
+        Value::Null,
+        "without with=bindings"
+    );
+
+    let fresh = scratch.home("fresh");
+    let other = Server::serve(&fresh, &cwd, &[&root]);
+    for value in ["history", "Bindings", ""] {
+        let reply = other.get(&format!("{base}/nodes/LAW-BOUND?with={value}"));
+        assert_eq!(reply.status, 400, "with={value}: {}", reply.text());
+        assert_eq!(
+            reply.error_message(),
+            format!("`with={value}`: the values are `links` and `bindings`"),
+            "with={value}"
+        );
+    }
+    assert!(
+        beyond_daemon(&fresh).is_empty(),
+        "a refused query ran no call: the fresh HOME holds {:?}",
+        beyond_daemon(&fresh)
+    );
 }

@@ -682,6 +682,8 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
                 reference: text("id").expect("get_node id"),
                 links: strings(&args["with"]).iter().any(|with| with == "links"),
                 archive: flag("archive"),
+                bindings: strings(&args["with"]).iter().any(|with| with == "bindings"),
+                git: server_git(env),
             },
         )
         .map(Outcome::Show),
@@ -702,6 +704,7 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             &BundleRequest {
                 references: strings(&args["node_ids"]),
                 budget: number("budget"),
+                git: server_git(env),
             },
         )
         .map(Outcome::Bundle),

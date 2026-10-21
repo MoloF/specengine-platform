@@ -21,6 +21,12 @@
 //! [`NODE_SAMPLE_EVERY`]th of the sorted marker IDs, at most
 //! [`NODE_SAMPLES`]) against 1 s, plain `spec verify --json` alongside;
 //! the IDs are numbered, never printed. It decides 6c.
+//!
+//! docs/features/show-bindings.md TE-6 (`pilot_show_bindings_latency`),
+//! alike: warm `spec show <ID> --bindings --json` per sampled marker ID
+//! against 1 s, `spec show <ID> --json` alongside; every answer exit 0 or
+//! 1, its rows counted by `sync` (a degraded read's note counted); the
+//! clone and the project unchanged. Figures only.
 
 mod common;
 mod lock_common;
@@ -302,4 +308,113 @@ fn pilot_verify_node_latency() {
         "verify --node wrote the clone's lock"
     );
     assert_eq!(state(&pilot_git, &top), before, "the project changed");
+}
+
+/// docs/features/show-bindings.md TE-6: warm `spec show <ID> --bindings
+/// --json` per sampled marker ID in a scratch clone, the median of five
+/// against [`NODE_BOUND`], the same read without `--bindings` alongside;
+/// every read answers (exit 0 or 1, never 2: no code cause fails a read);
+/// the clone's and the project's HEAD, status and index and the clone's
+/// lock unchanged. Prints figures only: no ID, project name or path.
+#[test]
+#[ignore = "manual (show-bindings TE-6): set SPECENGINE_PILOT_DIR to a project root; read-only"]
+fn pilot_show_bindings_latency() {
+    let (repo, clone, pilot_git, top, before) = pilot_clone("show-bindings-pilot");
+    let ids: Vec<String> = marker_ids(&repo.git, &clone)
+        .into_iter()
+        .step_by(NODE_SAMPLE_EVERY)
+        .take(NODE_SAMPLES)
+        .collect();
+    assert!(!ids.is_empty(), "the project holds marker IDs");
+    let clone_before = state(&repo.git, &clone);
+    let lock_before = repo.lock();
+    let index = repo.spec_piped(&repo.root, &["index"]);
+    assert_eq!(index.code, 0, "spec index warms the indexes");
+
+    let root_text = repo.root.display().to_string();
+    let mut slowest = Duration::ZERO;
+    let mut over = 0;
+    let mut by_sync: BTreeMap<String, usize> = BTreeMap::new();
+    let mut notes = 0;
+    for (number, id) in ids.iter().enumerate() {
+        let mut rows = 0;
+        let mut code = 0;
+        let took = median(|| {
+            let started = Instant::now();
+            let run = repo.spec_piped(&repo.root, &["show", id, "--bindings", "--json"]);
+            let took = started.elapsed();
+            assert!(
+                [0, 1].contains(&run.code),
+                "sample {number}: exit {}, never a code cause",
+                run.code
+            );
+            assert!(
+                !run.stdout.contains(&root_text) && !run.stderr.contains(&root_text),
+                "sample {number}: an absolute path printed"
+            );
+            code = run.code;
+            rows = 0;
+            if run.code == 0 {
+                let json = run.json();
+                for node in json["nodes"].as_array().expect("nodes") {
+                    for row in node["bindings"]["rows"].as_array().into_iter().flatten() {
+                        rows += 1;
+                        *by_sync
+                            .entry(row["sync"].as_str().unwrap_or("-").to_owned())
+                            .or_default() += 1;
+                    }
+                }
+            }
+            took
+        });
+        if run_has_note(&repo, id) {
+            notes += 1;
+        }
+        let plain = median(|| {
+            let started = Instant::now();
+            let run = repo.spec_piped(&repo.root, &["show", id, "--json"]);
+            let took = started.elapsed();
+            assert!(
+                [0, 1].contains(&run.code),
+                "sample {number}: exit {}",
+                run.code
+            );
+            took
+        });
+        slowest = slowest.max(took);
+        if took > NODE_BOUND {
+            over += 1;
+        }
+        eprintln!(
+            "TE-6 sample {number}: exit {code}, {rows} rows, warm median of 5 {} ms (show alone {} ms){}",
+            took.as_millis(),
+            plain.as_millis(),
+            if took > NODE_BOUND { " (over 1 s)" } else { "" }
+        );
+    }
+    eprintln!(
+        "TE-6 show --bindings: {} samples, slowest {} ms, {over} over 1 s, {notes} with a bindings note; rows by sync (five runs each) {by_sync:?}",
+        ids.len(),
+        slowest.as_millis()
+    );
+    assert_eq!(
+        state(&repo.git, &clone),
+        clone_before,
+        "show --bindings changed the clone"
+    );
+    assert_eq!(
+        repo.lock(),
+        lock_before,
+        "show --bindings wrote the clone's lock"
+    );
+    assert_eq!(state(&pilot_git, &top), before, "the project changed");
+}
+
+/// Whether `spec show <id> --bindings` notes a code cause
+/// (`note: bindings: `).
+fn run_has_note(repo: &LockRepo, id: &str) -> bool {
+    repo.spec_piped(&repo.root, &["show", id, "--bindings"])
+        .stderr
+        .lines()
+        .any(|line| line.starts_with("note: bindings: "))
 }

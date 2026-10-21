@@ -1175,8 +1175,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     .expect("JSON");
     // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
     // docs/features/roadmap-surfaces.md; 0.12.0 since
-    // docs/features/check-binding.md.
-    assert_eq!(manifest["version"], "0.12.0");
+    // docs/features/check-binding.md; 0.13.0 since
+    // docs/features/show-bindings.md.
+    assert_eq!(manifest["version"], "0.13.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1258,8 +1259,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     .expect("JSON");
     // 0.10.0 since docs/features/bevy-roles-reads.md; 0.11.0 since
     // docs/features/roadmap-surfaces.md; 0.12.0 since
-    // docs/features/check-binding.md.
-    assert_eq!(manifest["version"], "0.12.0");
+    // docs/features/check-binding.md; 0.13.0 since
+    // docs/features/show-bindings.md.
+    assert_eq!(manifest["version"], "0.13.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1362,10 +1364,10 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.12.0",
+        manifest["version"], "0.13.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
-         roadmap-surfaces: 0.11.0; check-binding: 0.12.0"
+         roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1676,5 +1678,64 @@ fn check_binding_implement_names_the_tool() {
         &ac06_problems(&unnamed, &listed()),
         "tool `check_binding` backticked nowhere",
         "check_binding unnamed (AC-06)",
+    );
+}
+
+// ------------------------------------------------- show-bindings (7a-1)
+
+/// docs/features/show-bindings.md "Plugin 0.13.0": `read-spec`'s step 2,
+/// its first bullet, word for word.
+const READ_SPEC_NODE_BULLET: &str = "   - one node's current text: `get_node` with its `id`; add `with: [\"links\"]` for its links when you need what it points at and what points at it, `with: [\"bindings\"]` for the code bound to it and whether that code still matches the spec (each binding's `sync`);";
+
+/// docs/features/show-bindings.md "Plugin 0.13.0": `read-spec` names the
+/// bindings read in its step 2's first bullet (the spec's text, once, the
+/// first bullet after "Then narrow", before the code reads'); its
+/// description and the code reads (RD-9) unchanged; no state word; the
+/// body within 4 096 bytes. M: the bullet missing or reworded.
+#[test]
+fn read_spec_names_the_bindings_read() {
+    let skills = committed();
+    assert_eq!(rd9_problems(&skills), Vec::<String>::new());
+    let text = &skills["read-spec"];
+    let lines: Vec<&str> = text.lines().collect();
+    let at = lines
+        .iter()
+        .position(|line| *line == READ_SPEC_NODE_BULLET)
+        .expect("the spec's bullet, word for word");
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|line| line.contains("with: [\"bindings\"]"))
+            .count(),
+        1,
+        "the bindings read named once"
+    );
+    assert!(
+        lines[at - 1].contains("Then narrow"),
+        "the first bullet of step 2: after {:?}",
+        lines[at - 1]
+    );
+    let symbols = lines
+        .iter()
+        .position(|line| line.contains("`find_symbols`"))
+        .expect("find_symbols' bullet");
+    assert!(at < symbols, "before the code reads");
+    for word in STATE_WORDS {
+        assert!(!has_word(text, word), "{word:?} in read-spec");
+    }
+    let body = text.splitn(3, "---\n").nth(2).expect("a body");
+    assert!(body.len() <= 4096, "the body is {} bytes", body.len());
+    // M: the bullet reworded.
+    let reworded = edited(
+        &skills,
+        "read-spec",
+        "`with: [\"bindings\"]` for the code bound to it",
+        "`with` for its code",
+    );
+    assert!(
+        !reworded["read-spec"]
+            .lines()
+            .any(|line| line == READ_SPEC_NODE_BULLET),
+        "the mutation is seen"
     );
 }

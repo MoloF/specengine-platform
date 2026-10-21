@@ -341,8 +341,8 @@ pub struct StoredNames {
 }
 
 /// One stored file a selection picked
-/// ([`SqliteIndex::code_selection`]): its names and the BLAKE3 of the
-/// bytes its rows were derived from.
+/// ([`SqliteIndex::code_selection`]): its names, its symbols and the
+/// BLAKE3 of the bytes its rows were derived from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SelectedFile {
     pub path: String,
@@ -351,6 +351,11 @@ pub struct SelectedFile {
     /// As [`SqliteIndex::stored_names`] gives them: `None` for a file of
     /// another language, unreadable or not UTF-8.
     pub names: Option<StoredNames>,
+    /// Its stored symbols by `ord`, as [`SqliteIndex::file_symbols`] gives
+    /// them, read in the selection's transaction (task spec
+    /// `show-bindings`: a binding row's lines, signature and layer); none
+    /// for a file without names.
+    pub symbols: Vec<StoredSymbol>,
 }
 
 impl SelectedFile {
@@ -507,8 +512,9 @@ impl SqliteIndex {
     /// "Crates and seams", 6b's partial tree): [`Self::code_refs`]' files,
     /// markers and mentions, then, in the same transaction, each stored
     /// file of the paths `select` picks from them with its names
-    /// ([`Self::stored_names`]) and the BLAKE3 its rows were derived from
-    /// ([`SelectedFile::holds`]), by path; a path not stored is absent.
+    /// ([`Self::stored_names`]), its symbols ([`Self::file_symbols`]) and
+    /// the BLAKE3 its rows were derived from ([`SelectedFile::holds`]), by
+    /// path; a path not stored is absent.
     /// `Ok(None)` when no code is indexed (`select` is not called).
     pub fn code_selection(
         &self,
@@ -780,6 +786,7 @@ fn selected_in(
             path: path.to_owned(),
             blake3,
             names: None,
+            symbols: Vec::new(),
         }));
     };
     let facts = FileFacts {
@@ -804,9 +811,11 @@ fn selected_in(
         .db()?
         .collect::<Result<Vec<_>, _>>()
         .db()?;
+    let symbols = file_symbols_in(tx, wt, path)?;
     Ok(Some(SelectedFile {
         path: path.to_owned(),
         blake3,
+        symbols,
         names: Some(StoredNames {
             module: StoredName {
                 qpath: module,

@@ -60,6 +60,11 @@
 //! without its calls here. Its own door over `fixtures/code-a` with its
 //! lock: `mcp_code.rs`.
 //!
+//! TE-5 of docs/features/show-bindings.md: `get_node` with `with:
+//! ["bindings"]` joins the door (spec-a has no `[code]`: `bindings` null,
+//! the note); its door over `fixtures/code-a` with its lock, rows judged:
+//! `mcp_code.rs` `te2_code_tools_write_nothing_under_the_root`.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -149,8 +154,12 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"id": "docs/spec/game.md"}),
                 json!({"id": "MEC-NOPE"}),
                 json!({"id": "M\u{0415}C-STAMINA"}),
+                // docs/features/show-bindings.md TE-5: no `[code]` here,
+                // `bindings` null and the note.
+                json!({"id": "MEC-STAMINA", "with": ["bindings"]}),
+                json!({"id": "MEC-STAMINA", "with": ["links", "bindings"], "archive": true}),
             ],
-            vec![json!({}), json!({"id": "R-12", "with": ["bindings"]})],
+            vec![json!({}), json!({"id": "R-12", "with": ["history"]})],
         ),
         "search" => (
             vec![

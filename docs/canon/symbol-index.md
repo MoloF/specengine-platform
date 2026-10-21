@@ -8,7 +8,7 @@ reviewed: 2026-10-21
 
 # Symbol index: stored code rows, the refresh, `spec index`, `spec refs`
 
-The code index stores every `[code]` file's rows beside the same worktree's spec index (the slug's DB outside the repository: ADR-0001, ADR-0003): its items with names, lines, signatures and level digests, `#[path]` declarations, markers and mentions with what each binds. **After any sequence of file, manifest, `[code]`, `[ids]` or stamp changes it equals a fresh rebuild, row for row** (canonical dumps), and `spec refs` from it prints what the walk prints, byte for byte (`code-bindings.md`). Only `spec index`, `refs`, `symbols`, `unmapped`, `health` (9a-1), `verify --node`, their MCP twins (`mcp-code.md`) and `resolve` (`layer-c.md`) refresh it. `verify`'s other modes, `lock accept`, `propose drift` and a drift item's approve keep a fresh walk or a commit's blobs; `show`, `search`, `graph`, the other MCP tools and daemon routes never touch code (`architecture-code.md#sync-in-reads`, `#health`). Names: `symbol-names.md`; lookup, `symbols`, `unmapped`: `symbol-reads.md`. Built by `docs/features/symbol-index.md`.
+The code index stores every `[code]` file's rows beside the same worktree's spec index (the slug's DB outside the repository: ADR-0001, ADR-0003): its items with names, lines, signatures and level digests, `#[path]` declarations, markers and mentions with what each binds. **After any sequence of file, manifest, `[code]`, `[ids]` or stamp changes it equals a fresh rebuild, row for row** (canonical dumps), and `spec refs` from it prints what the walk prints, byte for byte (`code-bindings.md`). Only `spec index`, `refs`, `symbols`, `unmapped`, `health` (9a-1), `verify --node`, `show --bindings`, their twins (`mcp-code.md`) and `resolve` (`layer-c.md`) refresh it. `verify`'s other modes, `lock accept`, `propose drift` and a drift item's approve keep a fresh walk or a commit's blobs; `show`, `search`, `graph`, the other MCP tools and daemon routes never touch code (`architecture-code.md#sync-in-reads`, `#health`). Names: `symbol-names.md`; lookup, `symbols`, `unmapped`: `symbol-reads.md`. Built by `docs/features/symbol-index.md`.
 
 ## Crates and seams
 
@@ -72,7 +72,7 @@ Judged in release on the pilots: `hash_ms` × 300 / `kloc` ≤ 2 000, `one_file_
 - Only the data directory is written; the analyzer only reads; a no-op refresh writes nothing.
 - Two roots, cwds, creation orders, LF or CRLF copies: equal rows, equal `refs` bytes; no order follows rowid.
 - Nothing blocks: `index` exits 0 on a gap; only the reads needing the whole tree refuse.
-- No command reads the level digests yet (7a's `sync` will); `verify`, `lock accept` and the drift writers hash afresh, never from these columns.
+- No command reads the level digests: `verify`, a read's `sync` (lines: `SelectedFile.symbols`), `lock accept`, the drift writers hash afresh.
 
 ## Known limits
 

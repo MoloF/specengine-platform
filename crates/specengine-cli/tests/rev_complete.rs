@@ -105,6 +105,8 @@ fn propose_piece(repo: &LockRepo) -> String {
             reference: PIECE.to_owned(),
             links: false,
             archive: false,
+            bindings: false,
+            git: repo.git_env(&repo.root),
         },
     )
     .expect("show");

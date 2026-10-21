@@ -50,7 +50,7 @@ The mirror equals the CLI key for key: `c_state`, `moniker` free strings or null
 
 ### Plugin
 
-P1 (`plugin-files.md` "Changing it"): a key a tool returns is a MINOR. This part takes the next MINOR at shipping (0.13.0: 2b `roadmap-surfaces.md` took 0.11.0, 6b-2b `check-binding.md` 0.12.0), a `PINS` line and a `SCHEMA_PINS` entry (L2).
+P1 (`plugin-files.md` "Changing it"): a key a tool returns is a MINOR. This part takes the next MINOR after 7a's at shipping (0.15.0 if 7a-1 `show-bindings.md`, 0.13.0, and 7a-2 `bundle-bindings.md`, 0.14.0, ship first; 2b `roadmap-surfaces.md` took 0.11.0, 6b-2b `check-binding.md` 0.12.0), a `PINS` line and a `SCHEMA_PINS` entry (L2).
 
 ## Rules and edge cases
 

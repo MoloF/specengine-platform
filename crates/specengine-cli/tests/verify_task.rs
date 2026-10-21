@@ -433,8 +433,13 @@ fn verdict_of(mode: &Value, rows: &[Value]) -> (&'static str, i32) {
 
 /// `delta` over `rows`: plain's lists, each kept to the keys of `rows`
 /// (`moved` by its `to`), `affected_nodes` to the nodes of `rows` not
-/// `ok` and not Pre-existing.
-fn delta_of(plain: &Value, rows: &[Value], case: Option<&Case<'_>>) -> Value {
+/// `ok` and not Pre-existing; `tests_reaching` (docs/features/show-bindings.md
+/// "delta.tests_reaching") over `all`, every row the run judged (before
+/// `--task`'s filter): the six-field keys, distinct, in row order, of the
+/// `verifies` rows whose node is affected. These corpora hold no
+/// `verifies` link, so the linked half adds none (plain's own premise
+/// checks it).
+fn delta_of(plain: &Value, rows: &[Value], all: &[Value], case: Option<&Case<'_>>) -> Value {
     let keys: Vec<String> = rows.iter().map(key_of).collect();
     let mut delta = plain.clone();
     let bindings = &plain["bindings"];
@@ -466,6 +471,22 @@ fn delta_of(plain: &Value, rows: &[Value], case: Option<&Case<'_>>) -> Value {
             })
             .collect(),
     );
+    let affected = list(&delta["affected_nodes"]);
+    let mut reaching: Vec<Value> = Vec::new();
+    for row in all.iter().filter(|row| row["relation"] == "verifies") {
+        let key = json!({
+            "node": row["node"],
+            "relation": row["relation"],
+            "file": row["file"],
+            "kind": row["kind"],
+            "symbol": row["symbol"],
+            "item_kind": row["item_kind"],
+        });
+        if affected.contains(&row["node"]) && !reaching.contains(&key) {
+            reaching.push(key);
+        }
+    }
+    delta["tests_reaching"] = Value::Array(reaching);
     delta
 }
 
@@ -670,7 +691,7 @@ fn plain_premises(plain: &Run) {
         plain.show()
     );
     assert_eq!(
-        delta_of(&document["delta"], &rows, None),
+        delta_of(&document["delta"], &rows, &rows, None),
         document["delta"],
         "premise: delta"
     );
@@ -724,7 +745,7 @@ fn differential(plain: &Run, run: &Run, case: &Case<'_>) -> Vec<Value> {
     assert_eq!(document["cascade"], cascade_of(&kept), "{context}: cascade");
     assert_eq!(
         document["delta"],
-        delta_of(&base["delta"], &kept, Some(case)),
+        delta_of(&base["delta"], &kept, &plain.rows(), Some(case)),
         "{context}: delta over the kept rows"
     );
 

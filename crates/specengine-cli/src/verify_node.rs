@@ -12,15 +12,16 @@
 //! reads it), (3) the refreshed code index's first gap anywhere in the
 //! tree, its text the walk's, (8) the code index's refresh failing.
 //!
-//! With no cause, the selection, from one read snapshot of the refreshed
-//! code index ([`SqliteIndex::code_selection`]): the files of the stored
+//! With no cause, the node-set judge ([`crate::bindings::judge_set`], the
+//! one a read's bindings take) over the holders: the selection, from one
+//! read snapshot of the refreshed code index: the files of the stored
 //! markers whose ID `spec refs` lists under a holder, and of the lock
 //! entries of the rows that can be the holders' (the lock is cut to them,
 //! so no other node's entry is judged `file_gone`). Each selected file is
 //! read again, its BLAKE3 compared with the stored one (a file edited since
 //! the refresh: the code index is refreshed once more and the selection
 //! read again; edited again: (3)); then bound or anchored afresh, its Rust
-//! names the stored ones ([`partial_tree`]), and judged by plain's judge
+//! names the stored ones (`partial_tree`), and judged by plain's judge
 //! (`judge_walk`: levels hashed afresh, never the index's columns; the
 //! pairing per node, so the node's own files suffice). The rows kept are
 //! "A row in a set" over the holders, both halves, never their sections or
@@ -30,34 +31,26 @@
 //! `skipped` 0; no row: `clean`, with a note. Nothing is written but the
 //! data directory (the index refreshes, as `spec refs`).
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::fs;
+use std::collections::BTreeSet;
 
-use specengine_code::{Ambiguity, Name};
-use specengine_core::CodeConfig;
-use specengine_core::check::CheckInput;
-use specengine_core::lock::{Lock, LockKind};
+use specengine_core::lock::LockKind;
 use specengine_core::verify::RowBinding;
-use specengine_store::{CodeRefs, CodeSelection, SqliteIndex, StoredName, StoredNames, VerifyGit};
 
-use crate::code_index::{known_frameworks, refresh_code};
-use crate::code_walk::{PartialGap, partial_tree};
+use crate::bindings::{SetScope, judge_set, refreshed_code};
+use crate::code_index::known_frameworks;
 use crate::corpus::indexed_in;
 use crate::location::open_index;
 use crate::node_set::NodeSet;
-use crate::project::{ProjectRoot, discover_with_text};
+use crate::project::discover_with_text;
 use crate::proposals::escaped_error;
 use crate::refs::{Corpus, NodeKey};
 use crate::show::classify;
 use crate::verify::{
-    CAUSE_DATA, Gathered, PlainReads, VerifyNode, VerifyOutcome, VerifyRequest, concluded,
-    plain_reads, row_set_nodes, unprefixed,
+    Gathered, PlainReads, VerifyNode, VerifyOutcome, VerifyRequest, concluded, plain_reads,
+    unprefixed,
 };
-use crate::verify_rows::{
-    Anchor, CAUSE_CONFIG, CAUSE_GIT, CAUSE_WALK, HeadMode, Judged, Row, RunCause, Walked,
-    judge_walk,
-};
-use crate::{CliError, Env, Globals, Message, one_line, store_error};
+use crate::verify_rows::{Anchor, CAUSE_CONFIG, CAUSE_GIT, HeadMode, Row, RunCause};
+use crate::{CliError, Env, Globals, Message, one_line};
 
 /// Why a written `@rev` is ignored.
 const REV_IGNORED: &str = "`spec verify --node` judges each binding against the node as it is now";
@@ -147,15 +140,15 @@ pub(crate) fn verify_node(
     let mut judged = None;
     match (causes.is_empty() && refreshed, code, lock, git) {
         (true, Some(code), Some(lock), Some(git)) => {
-            let scope = Scope {
+            let scope = SetScope {
                 project: &project,
                 code: &code,
                 input: &input,
                 lock: &lock,
-                holders: &holders,
+                keys: &holders,
             };
-            match judge_node(&scope, &mut open.index, &git, &mut messages, notes_at) {
-                Ok(rows) => judged = Some(rows),
+            match judge_set(&scope, &mut open.index, &git, &mut messages, notes_at) {
+                Ok(set) => judged = Some(set.judged),
                 Err(cause) => causes.push(cause),
             }
             if let Err(cause) = git.finish() {
@@ -195,203 +188,13 @@ pub(crate) fn verify_node(
         causes,
         messages,
         label,
+        tests: None,
     }))
 }
 
 /// A REF that names nothing: exit 2, its reason on one line.
 fn refused(reason: String) -> CliError {
     escaped_error(CliError::spec(one_line(&reason)))
-}
-
-/// What `--node` judges over: the project, its `[code]`, the spec corpus
-/// read now, the whole lock, REF's holders.
-struct Scope<'a> {
-    project: &'a ProjectRoot,
-    code: &'a CodeConfig,
-    input: &'a CheckInput,
-    lock: &'a Lock,
-    holders: &'a [NodeKey],
-}
-
-/// The code index refreshed (`refresh_code`, as `spec refs` calls it), its
-/// notes added to `messages`. Causes: its first gap (3), worded as the
-/// walk's; the refresh failing (8).
-fn refreshed_code(
-    index: &mut SqliteIndex,
-    project: &ProjectRoot,
-    code: &CodeConfig,
-    messages: &mut Vec<Message>,
-) -> Result<(), RunCause> {
-    let refreshed = refresh_code(
-        index,
-        &project.root,
-        code,
-        &project.config_label,
-        &project.config.scheme,
-        false,
-    )
-    .map_err(|error| RunCause::new(CAUSE_DATA, unprefixed(&error)))?;
-    messages.extend(refreshed.messages.iter().cloned());
-    match refreshed.gap() {
-        Some(gap) => Err(walk_gap(gap)),
-        None => Ok(()),
-    }
-}
-
-/// The walk's gap as plain verify words it.
-fn walk_gap(gap: &str) -> RunCause {
-    RunCause::new(CAUSE_WALK, format!("the code walk is incomplete: {gap}"))
-}
-
-/// The holders' rows: the selection read, its files read again and
-/// checked against the stored BLAKE3 (a mismatch: one more refresh, its
-/// notes in place of the first's from `notes_at`), the partial tree judged
-/// against the cut lock, the rows kept to the holders.
-fn judge_node(
-    scope: &Scope<'_>,
-    index: &mut SqliteIndex,
-    git: &VerifyGit,
-    messages: &mut Vec<Message>,
-    notes_at: usize,
-) -> Result<Judged, RunCause> {
-    let project = scope.project;
-    let scheme = &project.config.scheme;
-    let mut corpus = Corpus::new(scope.input, scheme, &project.config.paths);
-    let set = NodeSet::of(&corpus, scheme, scope.holders.iter().copied());
-    let cut = cut_lock(scope.lock, &set, &mut corpus);
-
-    let mut again = false;
-    let tree = loop {
-        if again {
-            messages.truncate(notes_at);
-            refreshed_code(index, project, scope.code, messages)?;
-        }
-        let selection = index
-            .code_selection(|refs| selected(refs, &cut, &set, &mut corpus))
-            .map_err(|error| RunCause::new(CAUSE_DATA, unprefixed(&store_error(error))))?
-            .unwrap_or_default();
-        match fresh_tree(project, &selection) {
-            Ok(tree) => break tree,
-            Err(Fresh::Gap(gap)) => return Err(walk_gap(&gap)),
-            Err(Fresh::Changed(path)) if again => {
-                return Err(walk_gap(&format!(
-                    "`{path}` changed while it was read; run it again"
-                )));
-            }
-            Err(Fresh::Changed(_)) => again = true,
-        }
-    };
-    let walked = Walked {
-        project,
-        code: scope.code,
-        input: scope.input,
-        tree: &tree,
-        lock: &cut,
-    };
-    let mut judged = judge_walk(&walked, git, None)?;
-    judged
-        .rows
-        .retain(|row| !row_set_nodes(row, &set, &mut corpus).is_empty());
-    Ok(judged)
-}
-
-/// The lock cut to the entries whose row can be a holder's: its key's node
-/// names a holder as a marker's ID would, or is a holder's canonical ID.
-fn cut_lock(lock: &Lock, set: &NodeSet, corpus: &mut Corpus<'_>) -> Lock {
-    let entries = lock
-        .entries
-        .iter()
-        .filter(|(key, _)| {
-            let node = key.node.as_str();
-            !set.row_nodes(corpus, &[node], Some(node)).is_empty()
-        })
-        .map(|(key, verified)| (key.clone(), verified.clone()))
-        .collect();
-    Lock {
-        format: lock.format,
-        recipes: lock.recipes.clone(),
-        entries,
-    }
-}
-
-/// The files judged: each cut entry's, and each stored marker's whose ID
-/// `spec refs` lists under a holder.
-fn selected(
-    refs: &CodeRefs,
-    cut: &Lock,
-    set: &NodeSet,
-    corpus: &mut Corpus<'_>,
-) -> BTreeSet<String> {
-    let mut paths: BTreeSet<String> = cut.entries.keys().map(|key| key.file.clone()).collect();
-    for marker in &refs.markers {
-        if !paths.contains(&marker.path)
-            && !set
-                .row_nodes(corpus, &[marker.id.as_str()], None)
-                .is_empty()
-        {
-            paths.insert(marker.path.clone());
-        }
-    }
-    paths
-}
-
-/// Why the selected files gave no tree.
-enum Fresh {
-    /// The walk's gap: a file that cannot be parsed.
-    Gap(String),
-    /// A file whose bytes, or whose names, are not those the code index
-    /// holds: edited since the refresh.
-    Changed(String),
-}
-
-/// The selection's stored files read again, each checked against its
-/// stored BLAKE3, and bound into a partial tree named by the stored names.
-fn fresh_tree(
-    project: &ProjectRoot,
-    selection: &CodeSelection,
-) -> Result<crate::code_walk::CodeTree, Fresh> {
-    let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
-    let mut names: BTreeMap<&str, (Name, Vec<Name>)> = BTreeMap::new();
-    for file in &selection.files {
-        let changed = || Fresh::Changed(file.path.clone());
-        let bytes = fs::read(project.root.join(&file.path)).map_err(|_| changed())?;
-        if !file.holds(&bytes) {
-            return Err(changed());
-        }
-        if let Some(stored) = &file.names {
-            names.insert(&file.path, file_names(stored).ok_or_else(changed)?);
-        }
-        files.insert(file.path.clone(), bytes);
-    }
-    partial_tree(files, |path| names.remove(path)).map_err(|gap| match gap {
-        PartialGap::Walk(gap) => Fresh::Gap(gap),
-        PartialGap::Names(path) => Fresh::Changed(path),
-    })
-}
-
-/// A file's stored names as the walk's: its module's, then its items';
-/// `None` when an ambiguity is not one the walk names.
-fn file_names(stored: &StoredNames) -> Option<(Name, Vec<Name>)> {
-    let module = name(&stored.module)?;
-    let items = stored.items.iter().map(name).collect::<Option<Vec<_>>>()?;
-    Some((module, items))
-}
-
-/// One stored name as the walk's.
-fn name(stored: &StoredName) -> Option<Name> {
-    let ambiguity = match stored.ambiguity.as_deref() {
-        None => None,
-        Some(word) => Some(
-            Ambiguity::ALL
-                .into_iter()
-                .find(|ambiguity| ambiguity.as_str() == word)?,
-        ),
-    };
-    Some(Name {
-        qpath: stored.qpath.clone(),
-        ambiguity,
-        discriminator: stored.discriminator.clone(),
-    })
 }
 
 /// Whether `--symbol`'s QPATH names a row: its key's symbol, byte for byte

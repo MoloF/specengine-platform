@@ -37,8 +37,11 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// flags:` and cuts the probes paragraph to 76 bytes; task spec
 /// `roadmap-surfaces` adds `get_roadmap` to the reads (40 bytes); task
 /// spec `check-binding` (Q-C) adds `check_binding` to the code line (46
-/// bytes) and cuts the probes paragraph to 59 bytes: 1 978 bytes, 1 840
-/// without the tasks line, 2 037 with the probes paragraph.
+/// bytes) and cuts the probes paragraph to 59 bytes; task spec
+/// `show-bindings` (Q-F) adds the `--bindings` hint (33 bytes) and drops
+/// the `spec init` aside (34 bytes; the no-project error result names
+/// it): 1 977 bytes, 1 839 without the tasks line, 2 036 with the probes
+/// paragraph.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
@@ -63,9 +66,9 @@ computed, never typed.
     "
 
 REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: --kind \
-is kinds, ROOT is root, --links is with [\"links\"]. Answers are cut at 40000 characters, with \
-a tail on narrowing. A REF naming nothing or a call that cannot run (no specengine.toml: \
-`spec init`) is an error result with the reason. Resources: spec://<slug>/tree, \
+is kinds, ROOT is root, --links is with [\"links\"], --bindings is with [\"bindings\"]. \
+Answers are cut at 40000 characters, with a tail on narrowing. A REF naming nothing or a call \
+that cannot run is an error result with the reason. Resources: spec://<slug>/tree, \
 spec://<slug>/node/<REF, percent-encoded>.
 
 Rules:

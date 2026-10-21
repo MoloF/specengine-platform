@@ -176,6 +176,8 @@ impl Pair {
                 reference: reference.to_owned(),
                 links: false,
                 archive: false,
+                bindings: false,
+                git: self.git_env(cwd),
             },
         )
         .unwrap_or_else(|error| panic!("show {reference}: {error}"));

@@ -93,6 +93,8 @@ fn shown(repo: &LockRepo, reference: &str) -> (String, String) {
             reference: reference.to_owned(),
             links: false,
             archive: false,
+            bindings: false,
+            git: repo.git_env(&repo.root),
         },
     )
     .unwrap_or_else(|error| panic!("show {reference}: {error}"));

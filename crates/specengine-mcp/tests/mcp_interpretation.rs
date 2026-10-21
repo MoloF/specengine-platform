@@ -91,6 +91,8 @@ impl Repo {
                 reference: reference.to_owned(),
                 links: false,
                 archive: false,
+                bindings: false,
+                git: GitEnv::new(&self.linked, self.git.vars()),
             },
         )
         .unwrap_or_else(|error| panic!("show {reference}: {error}"));
