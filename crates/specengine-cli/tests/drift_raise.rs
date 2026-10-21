@@ -34,6 +34,7 @@ mod anchor_common;
 mod common;
 mod drift_common;
 mod lock_common;
+mod tested_common;
 mod verify_common;
 
 use std::fs;
@@ -1738,4 +1739,37 @@ fn insert_task_refusal_notes_on_both_streams() {
             .count(),
         "no item stored"
     );
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-7
+
+/// RD-7 **drift_ignores_tested_blocks** (docs/features/tested-evidence.md
+/// "Out of scope": no drift items for stale evidence; M: a stale block
+/// raises a drift item): over the ECS corpus with a block per state (its
+/// entries all `ok`), `spec propose drift` raises nothing, named or not:
+/// PERK-DRAIN's (`stale code_changed`) and PERK-REGEN's (`stale
+/// spec_changed`) blocks are noted `no drift at HEAD`, GONE-01's never
+/// named; nothing stored. A real drift of TUNE-01's entries raises
+/// TUNE-01 alone.
+#[test]
+fn drift_ignores_tested_blocks() {
+    let (repo, _, _) = tested_common::ecs_with_blocks("dr-tested");
+    let all = raised(&repo, &[]);
+    assert_eq!(all.created(), [], "{}", all.text());
+    let named = raised(&repo, &["PERK-DRAIN", "PERK-REGEN"]);
+    assert_eq!(named.created(), []);
+    assert_eq!(
+        named.notes(),
+        [
+            "PERK-DRAIN: no drift at HEAD",
+            "PERK-REGEN: no drift at HEAD"
+        ]
+    );
+    assert!(proposals(&repo, "verify-ecs").is_empty(), "nothing stored");
+    assert!(!all.text().contains("GONE-01"), "{}", all.text());
+
+    repo.replace(MOVEMENT, "regen_per_second: 2.5,", "regen_per_second: 3.0,");
+    repo.commit_all("a new regen rate");
+    let drifted = raised(&repo, &[]);
+    assert_eq!(drifted.created_nodes(), ["TUNE-01"], "{}", drifted.text());
 }

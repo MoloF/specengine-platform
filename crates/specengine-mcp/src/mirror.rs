@@ -1686,10 +1686,44 @@ pub(crate) struct VerifyDocument {
     /// The rows printed, `ok` ones too, in key order.
     pub rows: Vec<VerifyRowShape>,
     pub delta: VerifyDelta,
+    /// Each `[[tested]]` block of the nodes the REF names, by node: its
+    /// state now, judged over all their bindings; never a verdict, a count
+    /// or an exit. `null` with a run cause, or when the blocks could not be
+    /// judged (a hashing failure: one note `tested: <cause>`).
+    pub tested: Option<Vec<VerifyTested>>,
     /// The run causes, in order.
     pub cannot: Vec<String>,
     pub notes: Vec<String>,
     pub omitted: VerifyOmitted,
+}
+
+/// One `[[tested]]` block: the evidence of SpecEngine's own passing test
+/// run, and its state now.
+#[derive(JsonSchema)]
+pub(crate) struct VerifyTested {
+    /// The node's canonical ID.
+    pub node: String,
+    pub state: VerifyTestedState,
+    /// A stale block's `spec_changed` or `code_changed`, an unverifiable
+    /// one's word; `null` otherwise.
+    pub category: Option<String>,
+    /// The revision the block vouches for.
+    pub rev: u32,
+    /// The node's revision now; `null` when gone or unreadable.
+    pub node_rev: Option<u32>,
+    /// The commit the tests passed at.
+    pub commit: String,
+    pub verified_at: String,
+}
+
+/// A `[[tested]]` block's state now.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum VerifyTestedState {
+    Verified,
+    Stale,
+    Unverifiable,
+    NodeGone,
 }
 
 /// A verify mode.

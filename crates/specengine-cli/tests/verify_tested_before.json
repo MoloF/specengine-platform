@@ -1,0 +1,8 @@
+{"recorded_with": "spec at 3c9fe6f (7b-2 shipped, 8b-1 not started)",
+"cases": [
+{"case":"code-a plain","exit":2,"json":"b3:136d73cc62d072df494a7a90224f8339c8dc1a526c966e9a9759a8af917b6e25","text":"b3:7a6056a3b0182a01d48f1b51a1830d75974b46b40cc6b5ab1960ba862021b00f"},
+{"case":"code-a --node","exit":0,"json":"b3:f23573f98ae901ce3c7198ca03d31ec0c6477911423ee360bf8c0cca2704d481","text":"b3:ef62bfe343a66d8a72df9cd4a718295c5b1546fe8dff9f92be4cee24c8d3f96f"},
+{"case":"code-a --changed","exit":2,"json":"b3:d41ba3a844adc97b423db8700e1bf2e6eee08fd6eb2b4e84424995d7cf2242ef","text":"b3:c63b9a6d3041a5acf5b574094402293a7c0942bbd452ef1a8894e1e8af199e48"},
+{"case":"ecs plain","exit":0,"json":"b3:f2a218ab279ec0e8fbf10b85743f9588d1121d4b6af5065a23cb09dd1b0e0f81","text":"b3:659c443efc6bfbd6d205dfb6252427420615a3b7877fe8c60e182f35795accb2"},
+{"case":"ecs --node","exit":0,"json":"b3:7cf368033a6f96abdb97ca3e0606343c328939415c335063bbbeabc21bc7f558","text":"b3:e70d9bb1de8ab67b8aef89b27769988394bbea82ce3ce3ab11f29f57695b07bb"}
+]}

@@ -13,6 +13,10 @@
 //! docs/features/lock-rebase.md RD-1..RD-3 ("The plan", R9): the format-1
 //! golden planned into format 2 with each entry's code given (the
 //! format-2 golden's digests) renders as the format-2 golden.
+//! docs/features/tested-evidence.md (8b-1) RD-1 ("Format 3 and the
+//! block"): format 3 is format 2 plus `[[tested]]` blocks, written only
+//! while one remains; the golden of the blocks is
+//! `fixtures/spec-lock/verify-tests.tested.lock`.
 
 use specengine_core::lock::{
     AcceptInput, Change, DropReason, EntryCode, EntryKey, Fingerprints, LOCK_HEADER, LevelCode,
@@ -942,18 +946,23 @@ fn body_bytes_is_a_decimal_u32() {
     }
 }
 
-/// RD-1, Q27 (1): a `format` past 2 is newer, one below 1 not this
+/// RD-1, Q27 (1): a `format` past 3 is newer, one below 1 not this
 /// build's; both at the `format` line, with the build's recipes and
-/// without.
+/// without (docs/features/tested-evidence.md "Format 3 and the block",
+/// **Reader**: format 3 is read, so a format-2 lock claiming 3 holds no
+/// block: `format_3_without_a_block_is_refused`).
 #[test]
 fn other_formats_are_refused_by_their_text() {
     for (number, message) in [
-        (3, "format 3 is newer than this build's 2"),
-        (9, "format 9 is newer than this build's 2"),
-        (0, "format 0 is not this build's: it reads formats 1 and 2"),
+        (4, "format 4 is newer than this build's 3"),
+        (9, "format 9 is newer than this build's 3"),
+        (
+            0,
+            "format 0 is not this build's: it reads formats 1, 2 and 3",
+        ),
         (
             -1,
-            "format -1 is not this build's: it reads formats 1 and 2",
+            "format -1 is not this build's: it reads formats 1, 2 and 3",
         ),
     ] {
         let text = golden().replacen("format = 2\n", &format!("format = {number}\n"), 1);
@@ -1083,11 +1092,11 @@ fn the_build_refuses_in_q27_order() {
             norm_text("specengine-norm/v2", 3),
         ),
         (
-            "format 3 of another norm_recipe",
+            "format 4 of another norm_recipe",
             golden()
-                .replacen("format = 2\n", "format = 3\n", 1)
+                .replacen("format = 2\n", "format = 4\n", 1)
                 .replacen(NORM, "specengine-norm/v2", 1),
-            "spec.lock:2: format 3 is newer than this build's 2".to_owned(),
+            "spec.lock:2: format 4 is newer than this build's 3".to_owned(),
         ),
     ];
     let mut failures = Vec::new();
@@ -1605,4 +1614,531 @@ fn the_rebase_plan_stops_at_the_first_error() {
     assert_eq!(asked, 3);
     let error = result.expect_err("the third entry's error");
     assert!(error.starts_with("cannot parse "), "{error}");
+}
+
+// ------------------------------------------------- format 3 (tested-evidence)
+
+/// docs/features/tested-evidence.md (8b-1) "Format 3 and the block": the
+/// golden of the first lock a passing `spec verify --tests` run writes in a
+/// scratch copy of `fixtures/verify-tests` (no binding, four blocks).
+fn tested_golden() -> String {
+    std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/spec-lock/verify-tests.tested.lock"),
+    )
+    .expect("fixtures/spec-lock/verify-tests.tested.lock")
+}
+
+/// A fixture lock of 5b's (`fixtures/spec-lock/<name>`).
+fn spec_lock_fixture(name: &str) -> String {
+    std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../fixtures/spec-lock")
+            .join(name),
+    )
+    .unwrap_or_else(|error| panic!("fixtures/spec-lock/{name}: {error}"))
+}
+
+/// One `[[tested]]` block as "Format 3 and the block" shows it: its keys
+/// in order, `tests = [`, one `{ file = <s>, symbol = <s> },` per line two
+/// spaces in, `]` alone; made-up digests of block `digit`.
+fn tested_block(node: &str, rev: u32, digit: char, tests: &[(&str, &str)]) -> String {
+    let mut out = format!(
+        "[[tested]]\nnode = \"{node}\"\nrev = {rev}\nspec_hash = \"b3:{}\"\nbound_hash = \"{}\"\ntests = [\n",
+        hex(digit, 64),
+        digest('f', digit)
+    );
+    for (file, symbol) in tests {
+        out.push_str(&format!(
+            "  {{ file = \"{file}\", symbol = \"{symbol}\" }},\n"
+        ));
+    }
+    out.push_str(&format!(
+        "]\ncommit = \"{}\"\nverified_at = \"2026-10-21\"\n",
+        hex(digit, 40)
+    ));
+    out
+}
+
+/// One test of a block, the golden's own tests file.
+const STAMINA_TEST: (&str, &str) = ("crates/game/tests/stamina.rs", "game::test:stamina::regen");
+
+/// The format-2 golden's entries, then `tested`, under `format = <format>`.
+fn with_tested(format: i64, tested: &[String]) -> String {
+    let mut out = with_blocks(&golden_blocks()).replacen(
+        "\nformat = 2\n",
+        &format!("\nformat = {format}\n"),
+        1,
+    );
+    for block in tested {
+        out.push('\n');
+        out.push_str(block);
+    }
+    out
+}
+
+/// The 1-based line of the `n`-th (0-based) line of `text` equal to `line`.
+fn nth_line_of(text: &str, line: &str, n: usize) -> usize {
+    text.lines()
+        .enumerate()
+        .filter(|(_, candidate)| *candidate == line)
+        .nth(n)
+        .map(|(index, _)| index + 1)
+        .unwrap_or_else(|| panic!("no line {line:?} #{n}"))
+}
+
+/// RD-1 **M1** (`format = 3`, or any byte changed, without a block): a lock
+/// with no block is format 2, byte for byte 5b's. 5b's goldens
+/// (`code-a.lock`, `code-a.rebased.lock`) and this file's format-2 golden
+/// read with the build's recipes and render back unchanged, `format = 2`,
+/// no block; an empty lock is the header and the three keys; the last
+/// block removed from a format-3 lock writes format 2 again (the canon
+/// reading of ADR-0050: not a downgrade), the entries' bytes as before.
+#[test]
+fn evidence_free_lock_bytes_unchanged() {
+    for name in ["code-a.lock", "code-a.rebased.lock"] {
+        let text = spec_lock_fixture(name);
+        let lock = parse(&text);
+        assert!(lock.tested.is_empty(), "{name}: no block");
+        assert_eq!(lock.format, LockFormat::Two, "{name}");
+        assert_eq!(text.lines().nth(1), Some("format = 2"), "{name}");
+        assert_eq!(render_lock(&lock), text, "{name}: byte for byte");
+    }
+    let text = golden();
+    assert_eq!(render_lock(&parse(&text)), text);
+    assert_eq!(render_lock(&Lock::empty(build())), preamble());
+
+    let mut lock = parse(&with_tested(
+        3,
+        &[tested_block("R-12", 3, '9', &[STAMINA_TEST])],
+    ));
+    assert_eq!(lock.tested.len(), 1);
+    lock.tested.clear();
+    assert_eq!(
+        render_lock(&lock),
+        golden(),
+        "the last block removed: format 2"
+    );
+
+    let mut lock = parse(&tested_golden());
+    assert_eq!(lock.tested.len(), 4);
+    lock.tested.clear();
+    assert_eq!(
+        render_lock(&lock),
+        preamble(),
+        "an evidence-only lock emptied"
+    );
+}
+
+/// RD-1 (M: a block accepted under format 2): `[[tested]]` under format 1
+/// or 2 is refused at the block's line, `[[tested]] needs format 3`, with
+/// the build's recipes (format 2) and without (formats 1 and 2).
+#[test]
+fn tested_needs_format_3() {
+    let block = tested_block("R-12", 3, '9', &[STAMINA_TEST]);
+    let two = with_tested(2, std::slice::from_ref(&block));
+    let line = line_of(&two, "[[tested]]");
+    let want = format!("spec.lock:{line}: [[tested]] needs format 3");
+    assert_eq!(refusal(&two), want, "format 2, the build's recipes");
+    assert_eq!(refusal_under(&two, None), want, "format 2, no build");
+
+    let mut one = golden_format_1();
+    one.push('\n');
+    one.push_str(&block);
+    let line = line_of(&one, "[[tested]]");
+    assert_eq!(
+        refusal_under(&one, None),
+        format!("spec.lock:{line}: [[tested]] needs format 3"),
+        "format 1, no build"
+    );
+}
+
+/// RD-1 (M: format 3 accepted with no block): `format = 3` without a block
+/// is refused at the `format` line, `format 3 holds no [[tested]] block`,
+/// with the build's recipes and without; with a block it reads, its
+/// entries format 2's.
+#[test]
+fn format_3_without_a_block_is_refused() {
+    let text = with_tested(3, &[]);
+    for build in [Some(build()), None] {
+        assert_eq!(
+            refusal_under(&text, build.as_ref()),
+            "spec.lock:2: format 3 holds no [[tested]] block",
+            "{build:?}"
+        );
+    }
+    let read = parse(&with_tested(
+        3,
+        &[tested_block("R-12", 3, '9', &[STAMINA_TEST])],
+    ));
+    assert_eq!(read.format, LockFormat::Two, "a format-3 lock's entries");
+    assert_eq!(read.entries.len(), 8);
+    assert_eq!(read.tested.keys().collect::<Vec<_>>(), ["R-12"]);
+    let without = parse_lock(
+        &with_tested(3, &[tested_block("R-12", 3, '9', &[STAMINA_TEST])]),
+        None,
+    )
+    .unwrap_or_else(|error| panic!("format 3 without the build: {error}"));
+    assert_eq!(without, read, "the spec side reads format 3 alike");
+}
+
+/// RD-1 (M: a duplicate `node` accepted): a second block of one node is
+/// refused at its line, ``a second [[tested]] for `<node>` ``; blocks of
+/// two nodes read.
+#[test]
+fn duplicate_tested_node_is_refused() {
+    let text = with_tested(
+        3,
+        &[
+            tested_block("R-12", 3, '8', &[STAMINA_TEST]),
+            tested_block("R-12", 3, '9', &[STAMINA_TEST]),
+        ],
+    );
+    let line = nth_line_of(&text, "[[tested]]", 1);
+    assert_eq!(
+        refusal(&text),
+        format!("spec.lock:{line}: a second [[tested]] for `R-12`")
+    );
+    let two = parse(&with_tested(
+        3,
+        &[
+            tested_block("R-2", 1, '8', &[STAMINA_TEST]),
+            tested_block("R-12", 3, '9', &[STAMINA_TEST]),
+        ],
+    ));
+    assert_eq!(two.tested.len(), 2);
+}
+
+/// RD-1 (M: `tests` unsorted or written inline): the golden of
+/// `fixtures/verify-tests` reads and renders back byte for byte (`format =
+/// 3`, no binding, the blocks by `node` bytes, `tests` one item per line);
+/// the same lock in another layout (keys reordered, `tests` inline on one
+/// line, an array of inline tables, the blocks in reverse) renders as the
+/// golden; `tests` out of (file, symbol) order is refused.
+#[test]
+fn tested_block_bytes_match_the_golden() {
+    let golden = tested_golden();
+    let lock = parse(&golden);
+    assert_eq!(lock.format, LockFormat::Two);
+    assert!(lock.entries.is_empty(), "no binding");
+    assert_eq!(
+        lock.tested.keys().map(String::as_str).collect::<Vec<_>>(),
+        ["CONE-01", "KILN-HOLD", "KILN-RAMP", "glaze-check/GLZ-01"]
+    );
+    assert_eq!(render_lock(&lock), golden, "byte for byte");
+    assert_eq!(golden.lines().nth(1), Some("format = 3"));
+    assert!(
+        golden.contains("\ntests = [\n  { file = \"crates/kiln/src/ramp.rs\", symbol = \"crates/kiln::ramp::tests::peak_is_capped #cfg(test,not(unix))\" },\n  { file = \"crates/kiln/src/ramp.rs\", symbol = \"crates/kiln::ramp::tests::peak_is_capped #cfg(test,unix)\" },\n]\n"),
+        "CONE-01's twins, one per line, by symbol bytes"
+    );
+    let parse_none = parse_lock(&golden, None).unwrap_or_else(|error| panic!("{error}"));
+    assert_eq!(parse_none, lock, "without the build alike");
+
+    // Another layout: header first, blocks reversed, keys reversed, `tests`
+    // one inline line with literal strings.
+    let (preamble, rest) = golden.split_once("\n[[tested]]\n").expect("a block");
+    let mut blocks: Vec<String> = format!("[[tested]]\n{rest}")
+        .split("\n[[tested]]\n")
+        .map(|block| block.trim_start_matches("[[tested]]\n").to_owned())
+        .collect();
+    blocks.reverse();
+    let mut respaced = format!("{preamble}\n");
+    for block in &blocks {
+        let lines: Vec<&str> = block.lines().filter(|line| !line.is_empty()).collect();
+        let open = lines
+            .iter()
+            .position(|line| *line == "tests = [")
+            .expect("tests");
+        let close = lines.iter().position(|line| *line == "]").expect("]");
+        let items: Vec<String> = lines[open + 1..close]
+            .iter()
+            .map(|item| item.trim().trim_end_matches(',').replace('"', "'"))
+            .collect();
+        respaced.push_str("\n[[tested]]\n");
+        let mut keys: Vec<String> = lines[..open]
+            .iter()
+            .chain(lines[close + 1..].iter())
+            .map(|line| format!("  {line}"))
+            .collect();
+        keys.push(format!("tests=[{}]", items.join(" ,")));
+        keys.reverse();
+        for key in keys {
+            respaced.push_str(&key);
+            respaced.push('\n');
+        }
+    }
+    assert_eq!(
+        render_lock(&parse(&respaced)),
+        golden,
+        "another layout:\n{respaced}"
+    );
+
+    let unsorted = with_tested(
+        3,
+        &[tested_block(
+            "R-12",
+            3,
+            '9',
+            &[("b.rs", "a::f"), ("a.rs", "a::g")],
+        )],
+    );
+    let line = line_of(&unsorted, "tests = [");
+    assert_eq!(
+        refusal(&unsorted),
+        format!("spec.lock:{line}: `tests` is not in (file, symbol) order")
+    );
+    let by_symbol = with_tested(
+        3,
+        &[tested_block(
+            "R-12",
+            3,
+            '9',
+            &[("a.rs", "a::g"), ("a.rs", "a::f")],
+        )],
+    );
+    assert!(
+        refusal(&by_symbol).ends_with(": `tests` is not in (file, symbol) order"),
+        "symbol bytes within one file"
+    );
+}
+
+/// RD-1 "Reader": every form a block's keys and `tests` items refuse, each
+/// at its line with "Data"'s text; the other keys by an entry's forms.
+#[test]
+fn tested_block_refuses_every_wrong_form() {
+    let block = tested_block("R-12", 3, '9', &[("a.rs", "a::f"), ("a.rs", "a::g")]);
+    let base = with_tested(3, std::slice::from_ref(&block));
+    let block_line = line_of(&base, "[[tested]]");
+    let tests_line = line_of(&base, "tests = [");
+    // `from` replaced inside the block, never in an entry.
+    let first = |from: &str, to: &str| {
+        assert!(block.contains(from), "{from:?}");
+        with_tested(3, &[block.replacen(from, to, 1)])
+    };
+    let commit = hex('9', 40);
+    let cases: Vec<(&str, String, usize, String)> = vec![
+        (
+            "an unknown key",
+            first(
+                "rev = 3\nspec_hash",
+                "rev = 3\nlevels = [\"sig\"]\nspec_hash",
+            ),
+            block_line + 3,
+            "unknown key `levels` in a [[tested]]".to_owned(),
+        ),
+        (
+            "verified_by is not a block's",
+            first(
+                "verified_at = \"2026-10-21\"\n",
+                "verified_at = \"2026-10-21\"\nverified_by = \"owner\"\n",
+            ),
+            nth_line_of(&base, "verified_at = \"2026-10-21\"", 0) + 1,
+            "unknown key `verified_by` in a [[tested]]".to_owned(),
+        ),
+        (
+            "without bound_hash",
+            first(&format!("bound_hash = \"{}\"\n", digest('f', '9')), ""),
+            block_line,
+            "a [[tested]] without `bound_hash`".to_owned(),
+        ),
+        (
+            "without tests",
+            first(
+                "tests = [\n  { file = \"a.rs\", symbol = \"a::f\" },\n  { file = \"a.rs\", symbol = \"a::g\" },\n]\n",
+                "",
+            ),
+            block_line,
+            "a [[tested]] without `tests`".to_owned(),
+        ),
+        (
+            "without commit",
+            first(&format!("commit = \"{commit}\"\n"), ""),
+            block_line,
+            "a [[tested]] without `commit`".to_owned(),
+        ),
+        (
+            "tests empty",
+            first(
+                "tests = [\n  { file = \"a.rs\", symbol = \"a::f\" },\n  { file = \"a.rs\", symbol = \"a::g\" },\n]\n",
+                "tests = []\n",
+            ),
+            tests_line,
+            "`tests` is empty".to_owned(),
+        ),
+        (
+            "tests a string",
+            first(
+                "tests = [\n  { file = \"a.rs\", symbol = \"a::f\" },\n  { file = \"a.rs\", symbol = \"a::g\" },\n]\n",
+                "tests = \"a.rs\"\n",
+            ),
+            tests_line,
+            "`tests` is a string, not an array".to_owned(),
+        ),
+        (
+            "an item a string",
+            first(
+                "  { file = \"a.rs\", symbol = \"a::f\" },\n",
+                "  \"a.rs\",\n",
+            ),
+            tests_line,
+            "a `tests` item is a string, not an inline table".to_owned(),
+        ),
+        (
+            "an item's unknown key",
+            first(
+                "{ file = \"a.rs\", symbol = \"a::f\" }",
+                "{ file = \"a.rs\", symbol = \"a::f\", kind = \"item\" }",
+            ),
+            tests_line,
+            "unknown key `kind` in a `tests` item".to_owned(),
+        ),
+        (
+            "an item without symbol",
+            first(
+                "{ file = \"a.rs\", symbol = \"a::f\" }",
+                "{ file = \"a.rs\" }",
+            ),
+            tests_line,
+            "a `tests` item without `symbol`".to_owned(),
+        ),
+        (
+            "an item without file",
+            first(
+                "{ file = \"a.rs\", symbol = \"a::f\" }",
+                "{ symbol = \"a::f\" }",
+            ),
+            tests_line,
+            "a `tests` item without `file`".to_owned(),
+        ),
+        (
+            "a test twice",
+            first(
+                "  { file = \"a.rs\", symbol = \"a::g\" },\n",
+                "  { file = \"a.rs\", symbol = \"a::f\" },\n",
+            ),
+            tests_line,
+            "a second test `a.rs` `a::f` in `tests`".to_owned(),
+        ),
+    ];
+    let mut failures = Vec::new();
+    for (context, text, line, message) in cases {
+        let want = format!("spec.lock:{line}: {message}");
+        let got = match parse_lock(&text, Some(&build())) {
+            Ok(_) => "read".to_owned(),
+            Err(error) => error.to_string(),
+        };
+        if got != want {
+            failures.push(format!("{context}:\n  want {want}\n  got  {got}"));
+        }
+    }
+    // Strings by an entry's forms: refused, at their line, whatever the
+    // words (the entry's texts).
+    for (context, from, to, at) in [
+        (
+            "rev 0",
+            "rev = 3\nspec_hash",
+            "rev = 0\nspec_hash",
+            "rev = 0",
+        ),
+        (
+            "a spec_hash without its prefix",
+            "spec_hash = \"b3:",
+            "spec_hash = \"",
+            "spec_hash",
+        ),
+        (
+            "a bound_hash in capitals",
+            &format!("bound_hash = \"{}\"", digest('f', '9')),
+            &format!("bound_hash = \"b3:{}\"", hex('F', 64)),
+            "bound_hash",
+        ),
+        (
+            "a short commit",
+            &format!("commit = \"{commit}\""),
+            "commit = \"9999999\"",
+            "commit",
+        ),
+        (
+            "a day that is no date",
+            "verified_at = \"2026-10-21\"",
+            "verified_at = \"2026-02-30\"",
+            "verified_at",
+        ),
+        (
+            "a file that climbs",
+            "{ file = \"a.rs\", symbol = \"a::f\" }",
+            "{ file = \"../a.rs\", symbol = \"a::f\" }",
+            "tests = [",
+        ),
+        (
+            "an empty symbol",
+            "{ file = \"a.rs\", symbol = \"a::f\" }",
+            "{ file = \"a.rs\", symbol = \"\" }",
+            "tests = [",
+        ),
+        (
+            "a node with a control character",
+            "node = \"R-12\"",
+            "node = \"R-1\\u0007\"",
+            "node = ",
+        ),
+        ("an empty node", "node = \"R-12\"", "node = \"\"", "node = "),
+    ] {
+        let text = first(from, to);
+        let line = text
+            .lines()
+            .enumerate()
+            .skip(block_line)
+            .find(|(_, line)| line.starts_with(at))
+            .map(|(index, _)| index + 1)
+            .unwrap_or_else(|| panic!("{context}: no line {at:?}"));
+        match parse_lock(&text, Some(&build())) {
+            Ok(_) => failures.push(format!("{context}: read")),
+            Err(error) if error.line != Some(line) => {
+                failures.push(format!(
+                    "{context}: at {:?}, not {line}: {error}",
+                    error.line
+                ));
+            }
+            Err(_) => {}
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// RD-1 "Bytes": a format-3 lock renders every `[[binding]]` first, then
+/// the blocks by `node` bytes (`R-12` < `R-2` < `stamina/AC-07`), an empty
+/// line before each, LF and a final LF; a block's `tests` by (file,
+/// symbol) bytes, distinct. M: the blocks before the entries, or in
+/// insertion order.
+#[test]
+fn tested_blocks_follow_the_entries_by_node_bytes() {
+    let blocks = [
+        tested_block("stamina/AC-07", 1, '7', &[STAMINA_TEST]),
+        tested_block("R-2", 1, '8', &[("a.rs", "a::f")]),
+        tested_block("R-12", 3, '9', &[("a.rs", "a::f"), ("b.rs", "a::f")]),
+    ];
+    let mut sorted = blocks.to_vec();
+    sorted.sort_by(|a, b| {
+        let node = |block: &str| block.lines().nth(1).unwrap_or_default().to_owned();
+        node(a).as_bytes().cmp(node(b).as_bytes())
+    });
+    let want = with_tested(3, &sorted);
+    assert!(
+        want.find("[[tested]]\nnode = \"R-12\"") < want.find("[[tested]]\nnode = \"R-2\""),
+        "R-12 before R-2 by bytes"
+    );
+    assert_eq!(render_lock(&parse(&with_tested(3, &blocks))), want);
+    let mut reversed = blocks.to_vec();
+    reversed.reverse();
+    assert_eq!(render_lock(&parse(&with_tested(3, &reversed))), want);
+    let rendered = render_lock(&parse(&want));
+    assert!(rendered.ends_with('\n') && !rendered.ends_with("\n\n"));
+    let last_binding = rendered.rfind("[[binding]]").expect("an entry");
+    let first_block = rendered.find("[[tested]]").expect("a block");
+    assert!(last_binding < first_block, "every entry first");
+    assert!(
+        rendered.contains("\n\n[[tested]]\n"),
+        "an empty line before a block"
+    );
 }

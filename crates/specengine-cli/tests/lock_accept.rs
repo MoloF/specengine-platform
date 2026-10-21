@@ -24,6 +24,8 @@
 
 mod common;
 mod lock_common;
+mod tested_common;
+mod verify_common;
 
 use std::fs;
 use std::path::Path;
@@ -1686,4 +1688,183 @@ fn the_golden_lives_in_fixtures() {
         golden.file_name().and_then(|name| name.to_str()),
         Some("spec.lock")
     );
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-7
+
+const STAMINA_RS: &str = "crates/game/src/stamina.rs";
+const STAMINA_MD: &str = "docs/spec/stamina.md";
+
+/// The blocks of a lock's text, by node.
+fn blocks_of(text: &str) -> Vec<(String, String)> {
+    tested_common::tested_blocks(text)
+}
+
+/// The JSON accept prints for `outcome`.
+fn accept_json(outcome: &specengine_cli::LockOutcome) -> serde_json::Value {
+    let text =
+        specengine_cli::render_json(&specengine_cli::Outcome::Lock(Box::new(outcome.clone())));
+    serde_json::from_str(text.trim_end()).expect("accept's document")
+}
+
+/// RD-7 (docs/features/tested-evidence.md "Other lock writers", accept:
+/// kept byte for byte; M: accept rewrites a block): over the ECS corpus
+/// with a block per node state, PERK-DRAIN's code changed and accepted:
+/// its entry refreshed, every block (its own too) byte for byte, `format
+/// = 3`; its block's row `kept | tested` after the entries' rows, the
+/// ninth JSON key `tested` `"kept"`.
+#[test]
+fn accept_keeps_tested_bytes() {
+    let (repo, _, _) = tested_common::ecs_with_blocks("la-tested-keep");
+    let before = repo.lock_text();
+    repo.replace(
+        STAMINA_RS,
+        "(stamina.current - cost * dt).max(0.0)",
+        "(stamina.current - cost * dt * 2.0).max(0.0)",
+    );
+    repo.commit_all("drain doubles");
+    let attempt = repo.accept("PERK-DRAIN", true);
+    let outcome = attempt.committed("PERK-DRAIN").clone();
+    let after = repo.lock_text();
+    assert_eq!(after.lines().nth(1), Some("format = 3"));
+    assert_eq!(blocks_of(&after), blocks_of(&before), "every block kept");
+    assert_ne!(
+        node_blocks(&after, "PERK-DRAIN"),
+        node_blocks(&before, "PERK-DRAIN"),
+        "its entry refreshed"
+    );
+    assert_eq!(outcome.tested, Some("kept"));
+    let rows = attempt.rows();
+    assert_eq!(rows.lines().last(), Some("kept | tested"), "{rows}");
+    assert_eq!(accept_json(&outcome)["tested"], "kept");
+    // A node without a block: no row, `null`.
+    repo.replace(
+        STAMINA_RS,
+        "pub const BASE_REGEN: f32 = 2.5;",
+        "pub const BASE_REGEN: f32 = 3.5;",
+    );
+    repo.commit_all("a new base regen");
+    let attempt = repo.accept("TUNE-01", true);
+    let outcome = attempt.committed("TUNE-01").clone();
+    assert_eq!(outcome.tested, None);
+    assert!(!attempt.rows().contains("| tested"), "{}", attempt.rows());
+    assert_eq!(accept_json(&outcome)["tested"], serde_json::Value::Null);
+}
+
+/// RD-7 (accept: "the node's block at R with another `spec_hash` refuses as
+/// an entry"; M: a block at R with another hash passes accept): PERK-REGEN
+/// holding a block and no entry, its text changed without a raise and
+/// committed: accept refuses as over an entry (exit 1, `--editorial`,
+/// nothing written, no question), its parenthesis `([[tested]]: spec_hash
+/// <old>, now <new>)`.
+#[test]
+fn accept_refuses_text_changed_under_a_block() {
+    let repo = verify_common::ecs("la-tested-text");
+    let text = repo.lock_text();
+    let block = tested_common::vouching_block(&text, "PERK-REGEN", &repo.head());
+    let old = block.spec_hash.clone();
+    repo.write(
+        "spec.lock",
+        tested_common::with_blocks_added(
+            &tested_common::without_entries(&text, "PERK-REGEN"),
+            &[block],
+        ),
+    );
+    repo.commit_all("PERK-REGEN's evidence alone");
+    repo.replace(
+        STAMINA_MD,
+        "Stamina regains a fixed amount per second while the runner rests.",
+        "Stamina regains a fixed amount each second while the runner rests.",
+    );
+    repo.commit_all("a new meaning, no raise");
+    let new = repo.norm_hash("PERK-REGEN");
+    assert_ne!(new, old);
+    let before = repo.state();
+    let attempt = repo.accept("PERK-REGEN", true);
+    let refusal = attempt.refused("text changed under a block");
+    assert!(attempt.prompts.is_empty(), "asked: {:?}", attempt.prompts);
+    for part in [
+        "PERK-REGEN".to_owned(),
+        "--editorial".to_owned(),
+        "nothing written".to_owned(),
+        format!("([[tested]]: spec_hash {old}, now {new})"),
+    ] {
+        assert!(refusal.contains(&part), "{part:?} not in {refusal}");
+    }
+    assert_eq!(repo.state(), before);
+}
+
+/// RD-7 (a gone node: "dropped with the entries, `dropped | tested`; a
+/// block alone makes the node gone"; M: a gone node's block kept):
+/// PERK-DRAIN's section deleted: accept drops its entry and its block, the
+/// question counting the block as an entry (`gone: 2 dropped`), its rows
+/// the entry's then `dropped | tested`; the other blocks byte for byte;
+/// GONE-01, holding a block alone, is gone too: `gone: 1 dropped`; the
+/// last block dropped writes format 2.
+#[test]
+fn gone_accept_drops_tested() {
+    let (repo, _, _) = tested_common::ecs_with_blocks("la-tested-gone");
+    let before = repo.lock_text();
+    repo.replace(
+        STAMINA_MD,
+        "## Drain {#PERK-DRAIN}\n\nSprinting drains stamina; at zero the runner walks.\n",
+        "",
+    );
+    repo.commit_all("PERK-DRAIN deleted");
+    let head = repo.head();
+    let attempt = repo.accept("PERK-DRAIN", true);
+    let outcome = attempt.committed("gone PERK-DRAIN").clone();
+    assert_eq!(
+        attempt.question(),
+        format!(
+            "lock PERK-DRAIN (gone: 2 dropped){}",
+            at(&head, "main", &repo.root)
+        )
+    );
+    let rows = attempt.rows();
+    assert!(rows.starts_with("dropped | implements | "), "{rows}");
+    assert_eq!(rows.lines().last(), Some("dropped | tested"), "{rows}");
+    assert_eq!(outcome.tested, Some("dropped"));
+    let after = repo.lock_text();
+    assert!(tested_common::block_of(&after, "PERK-DRAIN").is_none());
+    assert!(node_blocks(&after, "PERK-DRAIN").is_empty());
+    for node in ["GONE-01", "PERK-REGEN", "PERK-STAMINA"] {
+        assert_eq!(
+            tested_common::block_of(&after, node),
+            tested_common::block_of(&before, node),
+            "{node}"
+        );
+    }
+
+    let head = repo.head();
+    let attempt = repo.accept("GONE-01", true);
+    attempt.committed("gone GONE-01, a block alone");
+    assert_eq!(
+        attempt.question(),
+        format!(
+            "lock GONE-01 (gone: 1 dropped){}",
+            at(&head, "main", &repo.root)
+        )
+    );
+    assert_eq!(attempt.rows(), "dropped | tested\n");
+    assert!(tested_common::block_of(&repo.lock_text(), "GONE-01").is_none());
+
+    // The last block dropped: format 2, the entries' bytes as before.
+    let repo = verify_common::ecs("la-tested-gone-last");
+    let text = repo.lock_text();
+    repo.write(
+        "spec.lock",
+        tested_common::with_blocks_added(
+            &text,
+            &[tested_common::made_up_block(
+                "GONE-01",
+                1,
+                '9',
+                &repo.head(),
+            )],
+        ),
+    );
+    repo.commit_all("one block");
+    repo.accept("GONE-01", true).committed("the last block");
+    assert_eq!(repo.lock_text(), text, "format 2 again, byte for byte");
 }

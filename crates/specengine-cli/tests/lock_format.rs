@@ -24,6 +24,13 @@
 //!
 //! The variants are made from the format-2 golden
 //! (`fixtures/spec-lock/code-a.lock`), never hand-written digests.
+//!
+//! docs/features/tested-evidence.md (8b-1) RD-2 and TE-5: every reader of
+//! the lock reads format 3 (the golden's entries plus `[[tested]]` blocks)
+//! and answers what it answers over the format-2 golden: each reader runs
+//! over two repositories alike but for the blocks, its answer compared
+//! with the commits' OIDs masked (`every_lock_reader_reads_format_3`);
+//! format 4 is newer than this build's 3 (`format_4_is_newer_than_this_build`).
 
 #![cfg(unix)]
 
@@ -32,6 +39,7 @@ mod drift_common;
 mod lock_common;
 mod rev_common;
 mod rev_rule_common;
+mod tested_common;
 mod verify_common;
 
 use std::fs;
@@ -320,12 +328,19 @@ fn format_1_text_is_the_same_everywhere() {
 }
 
 /// TE-1: every refusing caller × another `code_recipe`, another
-/// `norm_recipe`, `format = 3` (format 1: [`format_1_text_is_the_same_everywhere`]):
-/// exit 2 with the text of Q27's first failing check, nothing changed.
+/// `norm_recipe`, `format = 3` without a block, `format = 4`
+/// (docs/features/tested-evidence.md **Reader**; format 1:
+/// [`format_1_text_is_the_same_everywhere`]): exit 2 with the text of
+/// Q27's first failing check, nothing changed.
 #[test]
 fn every_refusing_caller_refuses_every_variant() {
     let mut failures = Vec::new();
-    for variant in [Variant::OtherCode, Variant::OtherNorm, Variant::Format3] {
+    for variant in [
+        Variant::OtherCode,
+        Variant::OtherNorm,
+        Variant::Format3,
+        Variant::Format4,
+    ] {
         let want = variant.message();
         for (caller, message) in refusals(variant) {
             if !message.contains(&want) {
@@ -448,5 +463,339 @@ fn review_counts_format_1_entries() {
     assert_eq!(
         counts[1],
         json!([rev_common::revision_entry(PIECE, 3, 4, Some(4))])
+    );
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-2
+
+/// The golden's format-3 twin: its entries, then blocks that vouch for
+/// nothing (made-up `spec_hash` and `bound_hash`) of PIECE-COUNTER (at
+/// its revision), of LAW-STEP (at another) and of a gone node, so no
+/// count, vouching or verdict can change by them.
+fn format_3_text(golden_text: &str, commit: &str) -> String {
+    tested_common::with_blocks_added(
+        golden_text,
+        &[
+            tested_common::made_up_block(PIECE, 3, '7', commit),
+            tested_common::made_up_block("LAW-STEP", 9, '8', commit),
+            tested_common::made_up_block("GONE-77", 1, '9', commit),
+        ],
+    )
+}
+
+/// `answer` with `repo`'s commit OIDs (every ref's history, newest first)
+/// masked by their place, the root's path and the scratch's masked.
+fn masked(repo: &LockRepo, answer: &str) -> String {
+    let mut out = answer.replace(&repo.root.display().to_string(), "<root>");
+    let oids = repo.git_text(&["rev-list", "--all", "--topo-order"]);
+    for (at, oid) in oids.lines().enumerate() {
+        out = out.replace(oid, &format!("<commit {at}>"));
+    }
+    out
+}
+
+/// A plain-verify answer: the exit, the text without its `tested | `
+/// lines and the JSON without its `tested` key (8b-1's own output).
+fn verify_answer(repo: &LockRepo, extra: &[&str]) -> String {
+    let mut args = vec!["verify"];
+    args.extend_from_slice(extra);
+    let text = repo.spec_piped(&repo.root, &args);
+    args.push("--json");
+    let json = repo.spec_piped(&repo.root, &args);
+    format!(
+        "exit {} {}\n{}\n{}",
+        text.code,
+        json.code,
+        tested_common::without_tested_lines(&text.stdout),
+        tested_common::without_tested_key(&json.json())
+    )
+}
+
+/// A binary read's answer: the exit, text and JSON stdout.
+fn read_answer(repo: &LockRepo, args: &[&str]) -> String {
+    let text = repo.spec_piped(&repo.root, args);
+    let mut json_args = args.to_vec();
+    json_args.push("--json");
+    let json = repo.spec_piped(&repo.root, &json_args);
+    format!(
+        "exit {}\n{}\nexit {}\n{}",
+        text.code, text.stdout, json.code, json.stdout
+    )
+}
+
+/// One reader of RD-2's table: what it needs first, and its answer.
+struct Reader {
+    name: &'static str,
+    prepare: fn(&LockRepo),
+    run: fn(&LockRepo) -> String,
+}
+
+fn nothing(_: &LockRepo) {}
+
+fn task_on_bound(repo: &LockRepo) {
+    let id = verify_common::new_task(repo, &["LAW-BOUND"]);
+    assert_eq!(id, "T-0001");
+}
+
+fn cap_edited(repo: &LockRepo) {
+    drift_common::cap_changed(repo);
+}
+
+fn cap_staged(repo: &LockRepo) {
+    drift_common::cap_changed(repo);
+    repo.git(&["add", "-A"]);
+}
+
+fn cap_committed(repo: &LockRepo) {
+    drift_common::cap_changed(repo);
+    repo.commit_all("the cap");
+}
+
+fn bound_edited(repo: &LockRepo) {
+    repo.replace(
+        COUNTER_MD,
+        rev_rule_common::BOUND_EDIT.0,
+        rev_rule_common::BOUND_EDIT.1,
+    );
+}
+
+fn bound_staged(repo: &LockRepo) {
+    bound_edited(repo);
+    rev_rule_common::stage_all(repo);
+}
+
+/// A merge of two branches whose `verified_at` of the first entry differs
+/// (`2026-10-09` theirs, `2026-10-10` ours): `spec.lock` conflicts, the
+/// blocks the same on both sides.
+fn lock_conflict(repo: &LockRepo) {
+    let text = repo.lock_text();
+    let day = "verified_at = \"2026-10-08\"";
+    assert!(text.contains(day), "the golden's day");
+    repo.git(&["switch", "-q", "-c", "theirs"]);
+    repo.write(LOCK, text.replacen(day, "verified_at = \"2026-10-09\"", 1));
+    repo.commit_all("their day");
+    repo.git(&["switch", "-q", "main"]);
+    repo.write(LOCK, text.replacen(day, "verified_at = \"2026-10-10\"", 1));
+    repo.commit_all("our day");
+    let merge = repo
+        .git
+        .git_output(&repo.root, &["merge", "-q", "--no-edit", "theirs"], &[]);
+    assert!(!merge.status.success(), "spec.lock conflicts");
+}
+
+const READERS: [Reader; 17] = [
+    Reader {
+        name: "spec verify",
+        prepare: nothing,
+        run: |repo| verify_answer(repo, &[]),
+    },
+    Reader {
+        name: "spec verify --node",
+        prepare: nothing,
+        run: |repo| verify_answer(repo, &["--node", PIECE]),
+    },
+    Reader {
+        name: "spec verify --task",
+        prepare: task_on_bound,
+        run: |repo| verify_answer(repo, &["--task", "T-0001"]),
+    },
+    Reader {
+        name: "spec verify --changed (HEAD's lock the base)",
+        prepare: cap_edited,
+        run: |repo| verify_answer(repo, &["--changed"]),
+    },
+    Reader {
+        name: "spec verify --staged (the index's lock, HEAD's the base)",
+        prepare: cap_staged,
+        run: |repo| verify_answer(repo, &["--staged"]),
+    },
+    Reader {
+        name: "spec lock accept",
+        prepare: nothing,
+        run: |repo| {
+            let attempt = repo.accept("LAW-BOUND", false);
+            let outcome = attempt
+                .outcome
+                .as_ref()
+                .unwrap_or_else(|error| panic!("accept refused: {error}"));
+            let questions: Vec<&str> = attempt
+                .prompts
+                .iter()
+                .map(|prompt| prompt.question.as_str())
+                .collect();
+            format!(
+                "{:?} {}\n{}\n{questions:?}",
+                outcome.exit(),
+                outcome.unchanged,
+                attempt.rows()
+            )
+        },
+    },
+    Reader {
+        name: "spec lock regen",
+        prepare: lock_conflict,
+        run: |repo| {
+            let attempt = repo.regen(true);
+            if let Err(error) = &attempt.outcome {
+                panic!("regen refused: {error}");
+            }
+            let all = attempt.rows();
+            let rows: Vec<&str> = all
+                .lines()
+                .filter(|row| !row.ends_with(" | tested"))
+                .collect();
+            format!(
+                "{}\n{}",
+                rows.join("\n"),
+                tested_common::without_blocks(&repo.lock_text())
+            )
+        },
+    },
+    Reader {
+        name: "spec lock rebase (nothing to change)",
+        prepare: nothing,
+        run: |repo| {
+            let attempt = repo.rebase(true);
+            attempt.unchanged("rebase");
+            "nothing to change".to_owned()
+        },
+    },
+    Reader {
+        name: "spec bump",
+        prepare: bound_edited,
+        run: |repo| {
+            let bump = rev_rule_common::bump(repo, &[]);
+            format!(
+                "exit {}\n{}\n{}",
+                bump.code(),
+                bump.text.stdout,
+                bump.json_run.stdout
+            )
+        },
+    },
+    Reader {
+        name: "the rule (spec check --staged)",
+        prepare: bound_staged,
+        run: |repo| {
+            let check = rev_rule_common::staged(repo);
+            format!(
+                "exit {}\n{:?}\n{}",
+                check.code(),
+                check.subjects(),
+                check.finding("LAW-BOUND")
+            )
+        },
+    },
+    Reader {
+        name: "the review's count",
+        prepare: nothing,
+        run: |repo| {
+            let id = propose_edit(repo, PIECE, MEANING);
+            let (text, value) = review_at(&at(repo), &id);
+            format!("{text}\n{}", value["revisions"])
+        },
+    },
+    Reader {
+        name: "the editorial approve",
+        prepare: nothing,
+        run: |repo| {
+            let id = propose_edit(repo, PIECE, MEANING);
+            let asked = approve_at(&at(repo), &id, true, true);
+            asked.applied("an editorial approve");
+            let head = repo.head();
+            format!(
+                "{}\n{}",
+                repo.message(&head),
+                tested_common::without_blocks(&repo.lock_text())
+            )
+        },
+    },
+    Reader {
+        name: "spec propose drift",
+        prepare: cap_committed,
+        run: |repo| {
+            let raised = drift_common::raised(repo, &[]);
+            format!("{}\n{:?}", raised.text(), raised.created_nodes())
+        },
+    },
+    Reader {
+        name: "spec show --bindings",
+        prepare: nothing,
+        run: |repo| read_answer(repo, &["show", "--bindings", PIECE]),
+    },
+    Reader {
+        name: "spec bundle",
+        prepare: nothing,
+        run: |repo| read_answer(repo, &["bundle", PIECE]),
+    },
+    Reader {
+        name: "spec task show",
+        prepare: task_on_bound,
+        run: |repo| read_answer(repo, &["task", "show", "T-0001"]),
+    },
+    Reader {
+        name: "spec impact",
+        prepare: nothing,
+        run: |repo| read_answer(repo, &["impact", PIECE]),
+    },
+];
+
+/// RD-2 **M2** (format 3 refused under `Some`) and TE-5 (M: a read
+/// degrading to `sync -`): every reader of the lock reads format 3 and
+/// answers over it what it answers over the format-2 golden, the commits
+/// masked: verify plain, `--node`, `--task`, the `--changed` and
+/// `--staged` base; accept (the question and rows); regen (its entries'
+/// rows and lock, the blocks aside); rebase `nothing to change`; `spec
+/// bump`, the rule, the review's count, the editorial approve (its commit
+/// and entries); `spec propose drift`; `show --bindings`, `bundle`, `task
+/// show`, `impact` byte for byte (never cause (6), never `sync -`).
+#[test]
+fn every_lock_reader_reads_format_3() {
+    let mut failures = Vec::new();
+    for (index, reader) in READERS.iter().enumerate() {
+        let two = golden(&format!("lf3-{index}-two"));
+        let three = golden(&format!("lf3-{index}-three"));
+        let text = three.lock_text();
+        let head = three.head();
+        three.write(LOCK, format_3_text(&text, &head));
+        three.commit_all("the blocks");
+        two.write("notes.txt", "the blocks' place\n");
+        two.commit_all("the blocks");
+        three.write("notes.txt", "the blocks' place\n");
+        three.commit_all("a note");
+        two.write("notes2.txt", "a note\n");
+        two.commit_all("a note");
+        (reader.prepare)(&two);
+        (reader.prepare)(&three);
+        let over_two = masked(&two, &(reader.run)(&two));
+        let over_three = masked(&three, &(reader.run)(&three));
+        if over_two != over_three {
+            failures.push(format!(
+                "{}:\n--- over format 2\n{over_two}\n--- over format 3\n{over_three}",
+                reader.name
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+/// RD-2 (M: format 4 not refused): a lock claiming `format = 4` is newer
+/// than this build's 3 for every reader, the spec side's too: verify's
+/// first cause, accept's and the review's refusal text, nothing changed.
+#[test]
+fn format_4_is_newer_than_this_build() {
+    let want = Variant::Format4.message();
+    assert_eq!(want, "spec.lock:2: format 4 is newer than this build's 3");
+    let repo = repo_with("lf-format-4", Variant::Format4);
+    let before = repo.state();
+    assert_eq!(verify_plain(&repo), want, "verify");
+    assert!(accept(&repo).contains(&want), "accept");
+    assert_eq!(repo.state(), before, "nothing changed");
+    bound_edited(&repo);
+    let bump = rev_rule_common::bump(&repo, &[]);
+    assert!(
+        bump.text.stdout.contains(&want) || bump.text.stderr.contains(&want),
+        "spec bump names it:\n{}",
+        bump.show()
     );
 }

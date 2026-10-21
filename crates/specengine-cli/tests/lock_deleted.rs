@@ -2,9 +2,16 @@
 //! review item): a lock commit that deletes `spec.lock` fails step 10's
 //! check, exit 1 naming the commit, the failed check and the undo; never
 //! "made but cannot be verified".
+//!
+//! docs/features/tested-evidence.md (8b-1) RD-6 ("Else accept's checks"):
+//! the evidence commit of `spec verify --tests` is checked alike.
 
 mod common;
 mod lock_common;
+mod tested_common;
+mod tested_kiln;
+mod verify_common;
+mod verify_tests_common;
 
 use lock_common::LockRepo;
 use specengine_cli::Exit;
@@ -63,4 +70,59 @@ fn lock_commit_deleting_the_lock_fails_a_check() {
         "the undo: {refusal}"
     );
     assert!(!refusal.contains("cannot be verified"), "{refusal}");
+}
+
+/// RD-6 (the evidence commit: accept's four checks; M: absent read as
+/// unreadable, or a `committed` line): after a pass, KILN-RAMP's code
+/// edited and committed, a pre-commit hook drops `spec.lock` from the
+/// evidence commit, which therefore deletes it: exit 1 with every verdict
+/// kept, `lock.refusal` naming the commit, `it has no spec.lock` and `git
+/// reset --soft <commit>^`, `lock.commit` and the event's `lock_commit`
+/// null; the commit stays as git made it.
+#[test]
+fn evidence_commit_deleting_the_lock_fails_a_check() {
+    let kiln = verify_tests_common::Kiln::new("lock-deleted-tests");
+    tested_kiln::pass(&kiln);
+    kiln.repo.replace(
+        verify_tests_common::RAMP,
+        "(now + rate).min(peak)",
+        "now.saturating_add(rate).min(peak)",
+    );
+    kiln.repo.commit_all("the ramp saturates");
+    kiln.repo.hook("pre-commit", "git rm --cached -q spec.lock");
+    let head = kiln.repo.head();
+    let run = kiln.run();
+    run.code(1);
+    assert_eq!(
+        run.node("KILN-RAMP")["verdict"],
+        "verified",
+        "the verdict kept"
+    );
+    let after = kiln.repo.head();
+    assert_ne!(after, head, "the scenario: git made a commit");
+    assert_eq!(kiln.repo.parents(&after), vec![head]);
+    assert_eq!(kiln.repo.changed(&after), ["spec.lock"]);
+    let document = run.json();
+    let refusal = document["lock"]["refusal"]
+        .as_str()
+        .unwrap_or_else(|| panic!("a refusal: {}", run.show()))
+        .to_owned();
+    assert!(refusal.contains(&after), "names the commit: {refusal}");
+    assert!(refusal.contains("it has no spec.lock"), "{refusal}");
+    assert!(
+        refusal.contains(&format!("git reset --soft {after}^")),
+        "the undo: {refusal}"
+    );
+    assert_eq!(document["lock"]["commit"], serde_json::Value::Null);
+    assert!(
+        !run.lines()
+            .iter()
+            .any(|line| line.starts_with("committed ")),
+        "{}",
+        run.show()
+    );
+    let events = kiln.events();
+    let last: serde_json::Value =
+        serde_json::from_str(events.last().expect("the event")).expect("JSON");
+    assert_eq!(last["lock_commit"], serde_json::Value::Null);
 }

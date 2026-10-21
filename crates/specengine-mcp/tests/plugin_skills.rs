@@ -1180,8 +1180,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/check-binding.md; 0.13.0 since
     // docs/features/show-bindings.md; 0.14.0 since
     // docs/features/bundle-bindings.md; 0.15.0 since
-    // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md.
-    assert_eq!(manifest["version"], "0.16.0");
+    // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md;
+    // 0.17.0 since docs/features/tested-evidence.md.
+    assert_eq!(manifest["version"], "0.17.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1266,8 +1267,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/check-binding.md; 0.13.0 since
     // docs/features/show-bindings.md; 0.14.0 since
     // docs/features/bundle-bindings.md; 0.15.0 since
-    // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md.
-    assert_eq!(manifest["version"], "0.16.0");
+    // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md;
+    // 0.17.0 since docs/features/tested-evidence.md.
+    assert_eq!(manifest["version"], "0.17.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1370,11 +1372,11 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.16.0",
+        manifest["version"], "0.17.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
-         bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0"
+         bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();

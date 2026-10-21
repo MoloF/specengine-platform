@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # `spec verify --tests`: bound tests run by the project's own command
 
-`spec verify --tests [--task T] [--json]` (+ `--root`) runs the tests `@verifies` binds to the selected nodes through the project's `[verify] tests` argv template, once per distinct argv, only on the owner's terminal after one `[y/N]`, over a clean committed tree (ADR-0044, `architecture-code.md#tests`). No agent starts it (no MCP tool, route, UI, hook, CI step or role). It writes only the data directory (index, queue, the `verify.tests` event), never `spec.lock` (8b), a task or `runs` row; the project's command may write anything. SpecEngine names no runner, parses no output (ADR-0008). Code: core `verify` (`TestTemplate`, `node_verdict`, `tests_verdict`), store `status_all`, `B3Stream`, `record_verify_tests`, CLI `verify_tests.rs`, `test_runner.rs` (`#[cfg(unix)]`), `node_set.rs`. Texts, text and JSON: `spec-verify-output.md` "`--tests`".
+`spec verify --tests [--task T] [--json]` (+ `--root`) runs the tests `@verifies` binds to the selected nodes through the project's `[verify] tests` argv template, once per distinct argv, only on the owner's terminal after one `[y/N]`, over a clean committed tree (ADR-0044, `architecture-code.md#tests`). No agent starts it (no MCP tool, route, UI, hook, CI step or role). It writes the data directory (index, queue, the `verify.tests` event) and, after a completed run, its evidence to `spec.lock` in its own commit (`spec-lock-tested.md`), never a task or `runs` row; the project's command may write anything. SpecEngine names no runner, parses no output (ADR-0008). Code: core `verify` (`TestTemplate`, `node_verdict`, `tests_verdict`), store `status_all`, `B3Stream`, `record_verify_tests`, CLI `verify_tests.rs`, `test_runner.rs` (`#[cfg(unix)]`), `node_set.rs`. Texts, text and JSON: `spec-verify-output.md` "`--tests`".
 
 ## The `[verify]` keys
 
@@ -36,7 +36,7 @@ From the structured name (`placed_name_file`), never a split qpath: `{file}` roo
 
 **Runnable**: a free `function_item` of a rooted, non-`shared:` unit in a file `HEAD` holds, each used value free of U+0000-U+001F, U+007F. Else `not run`, the first of: `not committed`, `module`, `ron`, `unrooted`, `shared unit`, `member`, `not a function` (a keyless binding too: kind its state, symbol its category), `control character`, `no value {<name>}`, `node not verifiable`. Core never looks for `#[test]`.
 
-**Verifiable**: accept's predicate, CLI `lock.rs` `committed_bindings` over the marker files naming the node, `HEAD`'s bytes, `node_at_head`'s `rev` and an empty old lock, gives no `unlockable` or `keyless` entry. Else `not verifiable <state>`, its first refusal (keyed, then keyless) in its words; the node's file or a marker file not in `HEAD`: `not committed`; `node_at_head` refusing: `rev_unknown` if the corpus cannot read the revision, else `hash_null`. A predicate error (a `HEAD` blob not UTF-8, `HEAD` and disk giving other items): `cannot`.
+**Verifiable**: accept's predicate, CLI `lock.rs` `committed_bindings` over the marker files naming the node, `HEAD`'s bytes, `node_at_head`'s `rev` and an empty old lock, gives no `unlockable` or `keyless` entry. Else `not verifiable <state>`, its first refusal (keyed, then keyless) in its words; the node's file or a marker file not in `HEAD`: `not committed`; `node_at_head` refusing: `rev_unknown` if the corpus cannot read the revision, else `hash_null`. A predicate error (a `HEAD` blob not UTF-8, `HEAD` and disk giving other items): `cannot`. Then per node, against step 6's lock: an entry or its `[[tested]]` block at R with another `spec_hash` -> `not verifiable text_changed`; the block stays, its tests run only for another node.
 
 ## Order
 
@@ -45,11 +45,11 @@ From the structured name (`placed_name_file`), never a split qpath: `{file}` roo
 3. A worktree, `HEAD` born, a branch, no operation in progress: else `cannot`.
 4. `status_all`, no pathspec: an entry -> `dirty`. The root's `specengine.toml`, whatever `--config` names (another `--config`: `cannot` at 5), not a blob of `HEAD` (ignored) -> `cannot`; a git error: `git: <error>`.
 5. `committer_ident`; the queue as `spec task` opens it (a newer schema, another `--config`: `cannot`); the task (dirty wins).
-6. The corpus, the code walk (a gap: `cannot`), the set, runnable, verifiable. A distinct program of the planned argv, probes too, relative with a `/` and not a file of `HEAD` -> `cannot`. Element 0 is read from the worktree top through the root's path: `.` and empty segments dropped; a `..` only before the first written name, popping a root segment; a `..` after a name or past the top: not a file of `HEAD` (`../tools/run-test` from `sub/` runs; `scripts/../scripts/run-test`, `target/x/../../scripts/run-test` are `cannot`). A committed symlink is a file of `HEAD`; its target is what it calls. Nothing to run -> `empty`.
-7. The listing and the question on stderr: the counts, the template run, the timeout, worktree, branch, commit. Only `y`, `yes`, no `--yes`; else `declined`. Ctrl-C here ends `spec`.
+6. The lock, as accept's `read_lock` (the disk's bytes, `HEAD`'s on a clean tree; absent: empty), `parse_lock(Some(build))`: unreadable, format 1, other recipes -> `cannot` (verify's cause (6) texts); not in `HEAD` and git-ignored -> `cannot` `spec.lock is ignored by git: the lock is committed, so un-ignore it first`. The corpus, the code walk (a gap: `cannot`), the set, runnable, verifiable. A distinct program of the planned argv, probes too, relative with a `/` and not a file of `HEAD` -> `cannot`. Element 0 is read from the worktree top through the root's path: `.` and empty segments dropped; a `..` only before the first written name, popping a root segment; a `..` after a name or past the top: not a file of `HEAD` (`../tools/run-test` from `sub/` runs; `scripts/../scripts/run-test`, `target/x/../../scripts/run-test` are `cannot`). A committed symlink is a file of `HEAD`; its target is what it calls. Nothing to run -> `empty`.
+7. The listing and the question on stderr: the counts, the template run, the timeout, worktree, branch, commit, then the evidence commit: one consent for both. Only `y`, `yes`, no `--yes`; else `declined`. Ctrl-C here ends `spec`.
 8. Probes, one per distinct probe argv (`{test}` `specengine_verify_probe_no_such_test`, `{qpath}` the test's with it last), in order of first use, stopping at the first refusal. One passing or timing out -> `refused`.
 9. Each distinct argv once, by its first (`file`, `symbol`). A program that cannot start (8 too) -> `refused`.
-10. After a completed 9: `HEAD`, branch, `status_all` again; a difference or a git failure -> `changed`.
+10. After a completed 9: `HEAD`, branch, `status_all` again; a difference or a git failure -> `changed`. Else the evidence written and committed (`Lock-mode: tests`, `Test-command:`; `spec-lock-tested.md` "The run's write", "The commit").
 11. The event, then stdout.
 
 ## Runner
@@ -70,12 +70,13 @@ A test: `passed` (exit 0 in time), `failed` (`exit <n>`, `signal <n>`), `timed o
 | `verified` | 0 | every reported node verified |
 | `unverified` | 1 | a reported node not verified |
 | `dirty`, `empty`, `declined`, `changed` | 1 | steps 4, 6, 7, 10 |
+| `verified`, its evidence write or commit failed | 1 | after 10: verdicts kept, `lock.refusal` |
 | `refused`, `interrupted` | 2 | steps 8-9 |
 | `cannot` | 2 | steps 2-6 |
 
 Exit 1 is "not verified", outside ADR-0042's judge, never a Fix. `nodes` is `[]` but for `verified`, `unverified`, `empty`.
 
-**`verify.tests`** for `verified`, `unverified`, `changed`, `refused`, `interrupted`, last, by `record_verify_tests` (one `Immediate` transaction, this build's schema); failing: `warning: verify.tests not recorded: <error>`, exit kept. Keys: `task`, `worktree`, `branch`, `commit`, `command`, `timeout`, `verdict`, `probes` (started: `argv`, `exit`, `signal`, `outcome`, `output_hash`), `tests` (`file`, `symbol`, `nodes`, `argv`, `exit`, `signal`, `outcome`, `output_hash` `b3:` or null, `tail` of `failed`, `timed out`), `nodes` (`id`, `verdict`, `state`), `lock_commit` (null until 8b), `by` (committer, no date).
+**`verify.tests`** for `verified`, `unverified`, `changed`, `refused`, `interrupted`, last, by `record_verify_tests` (one `Immediate` transaction, this build's schema); failing: `warning: verify.tests not recorded: <error>`, exit kept. Keys: `task`, `worktree`, `branch`, `commit`, `command`, `timeout`, `verdict`, `probes` (started: `argv`, `exit`, `signal`, `outcome`, `output_hash`), `tests` (`file`, `symbol`, `nodes`, `argv`, `exit`, `signal`, `outcome`, `output_hash` `b3:` or null, `tail` of `failed`, `timed out`), `nodes` (`id`, `verdict`, `state`), `lock_commit` (the verified evidence commit, else null), `by` (committer, no date).
 
 ## Known limits
 

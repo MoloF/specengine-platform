@@ -50,16 +50,24 @@ fn assert_document_keys(run: &TestsRun, context: &str) {
 /// runnable test passing gives `expected.json`'s listing, question,
 /// stdout, counts, nodes and rows: each test's file, kind, symbol, set
 /// nodes, argv (the template expanded from the structured name) and
-/// outcome or reason; `task` null, `branch` `main`, `commit` HEAD, the
-/// template and the default timeout, `lock` null, no cause, no note. M:
-/// any row, line or count off the spec.
+/// outcome or reason; `task` null, `branch` `main`, `commit` the run's
+/// HEAD, the template and the default timeout, `lock` the evidence's rows
+/// and commit (docs/features/tested-evidence.md, R7), the lock the golden,
+/// no cause, no note. M: any row, line or count off the spec.
 #[test]
 fn fixture_run_matches_expected_json() {
     let kiln = Kiln::new("vt-oracle");
     let expected = expected();
     let all = &expected["all_passed"];
+    let run_head = kiln.repo.head();
     let run = kiln.run();
     run.code(i32::try_from(all["exit"].as_i64().expect("an exit")).expect("small"));
+    // The evidence commit (docs/features/tested-evidence.md R7).
+    let evidence = kiln.repo.head();
+    assert_ne!(evidence, run_head, "the evidence committed");
+    let at_evidence = |value: &Value| -> Value {
+        serde_json::from_str(&value.to_string().replace("<evidence>", &evidence)).expect("JSON")
+    };
 
     assert_eq!(run.listing(), strings(&expected["listing"]), "the listing");
     let question = run.question();
@@ -67,7 +75,7 @@ fn fixture_run_matches_expected_json() {
     let (head, rest) = template.split_once("<template>").expect("<template>");
     let tail = rest
         .replace("<worktree>", &kiln.root().display().to_string())
-        .replace("<commit>", &kiln.repo.head());
+        .replace("<commit>", &run_head);
     assert!(
         question.starts_with(head) && question.ends_with(&tail),
         "{question}\nwanted {head}…{tail}"
@@ -75,9 +83,15 @@ fn fixture_run_matches_expected_json() {
 
     assert_eq!(
         run.lines(),
-        strings(&all["stdout"]),
+        strings(&at_evidence(&all["stdout"])),
         "stdout:\n{}",
         run.text()
+    );
+    assert_eq!(
+        kiln.repo.lock_text().as_bytes(),
+        std::fs::read(crate::common::fixture("spec-lock").join("verify-tests.tested.lock"))
+            .expect("the golden"),
+        "lock_file"
     );
 
     let doc = run.json();
@@ -97,12 +111,12 @@ fn fixture_run_matches_expected_json() {
         (
             &Value::Null,
             &json!("main"),
-            &json!(kiln.repo.head()),
+            &json!(run_head),
             &expected["command"],
             &expected["timeout"],
             &all["verdict"],
             &Value::Null,
-            &Value::Null,
+            &at_evidence(&all["lock"]),
             &json!([]),
             &json!([]),
         )
@@ -177,11 +191,14 @@ fn verify_tests_json_every_key_present() {
 /// duration. M: timing in the document.
 #[test]
 fn verify_tests_json_has_no_timing() {
+    // Two repositories alike: each run its repository's first, so both
+    // write the same evidence (docs/features/tested-evidence.md).
     let kiln = Kiln::new("vt-timing");
     kiln.plan(&[(RAMP_STOPS_TEST, "slow")]);
     let slow = kiln.run();
-    kiln.plan(&[]);
-    let fast = kiln.run();
+    let other = Kiln::at("vt-timing-fast", "elsewhere");
+    other.plan(&[]);
+    let fast = other.run();
     assert_eq!(slow.text(), fast.text(), "text");
     assert_eq!(slow.json_text(), fast.json_text(), "JSON");
     let lower = fast.json_text().to_lowercase();
@@ -199,6 +216,10 @@ fn verify_tests_output_is_byte_identical_across_roots_and_order() {
     let first = Kiln::new("vt-det-a");
     let second = Kiln::at("vt-det-b", "elsewhere/deeper");
     let third = Kiln::reversed("vt-det-c");
+    // A run commits its evidence (docs/features/tested-evidence.md), so
+    // each compared run is a repository's first, and the repeat runs (every
+    // block `unchanged`) are compared with each other.
+    let fourth = Kiln::at("vt-det-d", "elsewhere/again");
     assert_eq!(second.repo.head(), first.repo.head(), "the same commits");
     assert_eq!(third.repo.head(), first.repo.head(), "the same commits");
     let reference = first.run();
@@ -208,15 +229,27 @@ fn verify_tests_output_is_byte_identical_across_roots_and_order() {
     };
     let reference_question = question(&first, &reference);
     let runs = [
-        ("a repeat run", &first, first.run()),
         ("another root", &second, second.run()),
         (
             "another cwd",
-            &second,
-            second.run_with(&second.root().join("crates").join("kiln"), None, true, &[]),
+            &fourth,
+            fourth.run_with(&fourth.root().join("crates").join("kiln"), None, true, &[]),
         ),
         ("reverse creation order", &third, third.run()),
     ];
+    let repeat = first.run();
+    let repeat_elsewhere = second.run();
+    assert_eq!(repeat.text(), repeat_elsewhere.text(), "a repeat run: text");
+    assert_eq!(
+        repeat.json_text(),
+        repeat_elsewhere.json_text(),
+        "a repeat run: JSON"
+    );
+    assert_eq!(
+        repeat.listing(),
+        reference.listing(),
+        "a repeat run: listing"
+    );
     for (context, kiln, run) in &runs {
         assert_eq!(run.text(), reference.text(), "{context}: text");
         assert_eq!(run.json_text(), reference.json_text(), "{context}: JSON");
@@ -247,7 +280,9 @@ fn verify_tests_output_is_byte_identical_across_roots_and_order() {
 /// keys in order at every level; each run test's `output_hash` is the
 /// BLAKE3 of its whole (here empty) output and its `tail` null; a test
 /// not run has no hash; the node verdicts are the document's; `by` the
-/// committer, `worktree` the root. M: a key dropped or the order changed.
+/// committer, `worktree` the root, `lock_commit` the evidence commit
+/// (docs/features/tested-evidence.md "The run's write"). M: a key dropped or the
+/// order changed.
 #[test]
 fn event_payload_keys_follow_the_spec() {
     let kiln = Kiln::new("vt-event-keys");
@@ -280,7 +315,8 @@ fn event_payload_keys_follow_the_spec() {
             &json!(TEMPLATE),
             &json!(COMMITTER),
             &json!("unverified"),
-            &Value::Null,
+            // The evidence commit (docs/features/tested-evidence.md "The run's write").
+            &json!(kiln.repo.head()),
         )
     );
     assert_eq!(event["nodes"], run.json()["nodes"]);

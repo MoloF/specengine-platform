@@ -36,7 +36,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 | `claim_task` | `task_id`, `role`, `worktree` | ok \| refusal with reason | shipped; only `ready`; opens a run |
 | `submit_plan` | `task_id`, `plan_md`, `criteria[]`, `affected_nodes[]` | task status | shipped; -> `review` |
 | `check_binding` | `node`, `symbol?` | `spec verify --node --json`: each binding's state, class, levels and anchor, the counts, `delta`, the verdict | shipped; formerly `bind_code_symbol`, check only; the session's worktree, no base (`docs/canon/mcp-code.md`) |
-| `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | shipped; `verified` is set by `spec verify`, not by this call |
+| `report_run` | `task_id`, `outcome`, `summary`, `changed_files[]` | ok | shipped; `verified` comes from the owner's `spec verify --tests` evidence (`check_binding`'s `tested`), never this call |
 | `complete_task` | `task_id` | task status | shipped; run reported -> `done` |
 
 **Task package** (ADR-0027; shipped: `docs/canon/task-package.md`). One type in `specengine-model`, its schema pinned by a test; a removed, renamed or re-meant key raises `schema_version`. Every key always present, absent = `null`; `compact` shortens only `content`. The bundle comes by reference (`bundle_hash` -> `get_context_bundle`): a 10k-token bundle collides with the 48,000-character cap. `claim_task.role` is the project's own role name, verbatim. Stack wording, tracker tickets and routing belong to the project's skills (06 §8); a task stores no ticket key.

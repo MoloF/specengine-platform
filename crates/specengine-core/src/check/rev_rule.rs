@@ -17,9 +17,10 @@
 //! - **The rule** ([`judge`]): a changed node whose revision is not above
 //!   `HEAD`'s (or is unreadable) is a row; `required` when `HEAD`'s lock
 //!   holds an entry vouching for it ([`vouches`]: at `HEAD`'s revision, its
-//!   `spec_hash` `HEAD`'s meaning hash) and the checked lock does not carry
-//!   the new hash on each such entry (the same key, at the same revision),
-//!   which is the finding; else `suggested`.
+//!   `spec_hash` `HEAD`'s meaning hash), or a `[[tested]]` block so (one
+//!   entry in each count), and the checked lock does not carry the new
+//!   hash on each such entry and block (the same key or node, at the same
+//!   revision), which is the finding; else `suggested`.
 //! - **The raise** a row advises: `HEAD`'s revision plus one, written as
 //!   an apply writes it ([`raised_line`]); none, and only the
 //!   `--editorial` way out, where an apply refuses it: `HEAD`'s revision
@@ -245,7 +246,8 @@ pub struct BumpRow {
     /// unreadable or the largest, a document of a closed class that admits
     /// no `rev`, a line that cannot be written.
     pub to: Option<u32>,
-    /// `HEAD`'s lock entries vouching for its old text.
+    /// `HEAD`'s lock entries vouching for its old text, its `[[tested]]`
+    /// block counted as one.
     pub lock_entries: usize,
     /// The raised line, without its ending; `None` exactly when `to` is.
     pub write: Option<String>,
@@ -277,20 +279,30 @@ pub fn judge(
     let mut texts: BTreeMap<&str, FileText<'_>> = BTreeMap::new();
     for node in changed.iter().filter(|node| !node.raised()) {
         let head_rev = node.head_rev.number();
-        let vouching: Vec<_> = match (head_lock, head_rev, node.head_hash.as_deref()) {
-            (Some(lock), Some(rev), Some(old)) => lock
-                .entries_of(&node.id)
-                .filter(|(key, verified)| vouches(key, verified, &node.id, rev, old))
-                .map(|(key, _)| key)
-                .collect(),
-            _ => Vec::new(),
-        };
+        let (vouching, block): (Vec<_>, bool) =
+            match (head_lock, head_rev, node.head_hash.as_deref()) {
+                (Some(lock), Some(rev), Some(old)) => (
+                    lock.entries_of(&node.id)
+                        .filter(|(key, verified)| vouches(key, verified, &node.id, rev, old))
+                        .map(|(key, _)| key)
+                        .collect(),
+                    // A `[[tested]]` block vouches as one entry does.
+                    lock.tested
+                        .get(&node.id)
+                        .is_some_and(|block| block.vouches(rev, old)),
+                ),
+                _ => (Vec::new(), false),
+            };
         let refreshed = vouching.iter().all(|key| {
             checked_lock
                 .and_then(|lock| lock.entries.get(*key))
                 .is_some_and(|now| Some(now.rev) == head_rev && now.spec_hash == node.hash)
-        });
-        let need = if vouching.is_empty() || refreshed {
+        }) && (!block
+            || checked_lock
+                .and_then(|lock| lock.tested.get(&node.id))
+                .is_some_and(|now| Some(now.rev) == head_rev && now.spec_hash == node.hash));
+        let vouchers = vouching.len() + usize::from(block);
+        let need = if vouchers == 0 || refreshed {
             Need::Suggested
         } else {
             Need::Required
@@ -325,7 +337,7 @@ pub fn judge(
                 line,
                 rev: head_rev,
                 to,
-                lock_entries: vouching.len(),
+                lock_entries: vouchers,
                 write: fix.map(|fix| fix.text.trim_end_matches(['\n', '\r']).to_owned()),
             });
         }

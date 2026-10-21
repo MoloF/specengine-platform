@@ -109,15 +109,20 @@ pub fn norm_recipe_text(its: &str) -> String {
     )
 }
 
-/// Q27 (1): a `format` above 2.
+/// Q27 (1): a `format` above 3 (docs/features/tested-evidence.md
+/// "Format 3 and the block", **Reader**).
 pub fn newer_format_text(format: i64) -> String {
-    format!("format {format} is newer than this build's 2")
+    format!("format {format} is newer than this build's 3")
 }
 
 /// Q27 (1): a `format` below 1.
 pub fn older_format_text(format: i64) -> String {
-    format!("format {format} is not this build's: it reads formats 1 and 2")
+    format!("format {format} is not this build's: it reads formats 1, 2 and 3")
 }
+
+/// docs/features/tested-evidence.md **Reader**: `format = 3` without a
+/// `[[tested]]` block, at the `format` line.
+pub const FORMAT_3_EMPTY: &str = "format 3 holds no [[tested]] block";
 
 /// Regen's one text (Q28) for a format-1 stage and for stages of two
 /// `code_recipe`s.
@@ -135,16 +140,20 @@ pub enum Variant {
     OtherCode,
     /// A format-2 lock, its `norm_recipe` another.
     OtherNorm,
-    /// A format-2 lock claiming `format = 3`.
+    /// A format-2 lock claiming `format = 3`: no `[[tested]]` block
+    /// (docs/features/tested-evidence.md **Reader**).
     Format3,
+    /// A format-2 lock claiming `format = 4`: newer than this build's 3.
+    Format4,
 }
 
 impl Variant {
-    pub const ALL: [Self; 4] = [
+    pub const ALL: [Self; 5] = [
         Self::Format1,
         Self::OtherCode,
         Self::OtherNorm,
         Self::Format3,
+        Self::Format4,
     ];
 
     /// Another grammar's `code_recipe` (OtherCode).
@@ -159,6 +168,7 @@ impl Variant {
             Self::OtherCode => "another code_recipe",
             Self::OtherNorm => "another norm_recipe",
             Self::Format3 => "format 3",
+            Self::Format4 => "format 4",
         }
     }
 
@@ -174,6 +184,7 @@ impl Variant {
             Self::OtherCode => format_2.replacen(CODE_RECIPE, Self::OTHER_CODE, 1),
             Self::OtherNorm => format_2.replacen(NORM_RECIPE, Self::OTHER_NORM, 1),
             Self::Format3 => format_2.replacen("\nformat = 2\n", "\nformat = 3\n", 1),
+            Self::Format4 => format_2.replacen("\nformat = 2\n", "\nformat = 4\n", 1),
         }
     }
 
@@ -183,7 +194,8 @@ impl Variant {
             Self::Format1 => format!("spec.lock:2: {}", format_1_text(CODE_RECIPE_FORMAT_1)),
             Self::OtherCode => format!("spec.lock:4: {}", code_recipe_text(Self::OTHER_CODE)),
             Self::OtherNorm => format!("spec.lock:3: {}", norm_recipe_text(Self::OTHER_NORM)),
-            Self::Format3 => format!("spec.lock:2: {}", newer_format_text(3)),
+            Self::Format3 => format!("spec.lock:2: {FORMAT_3_EMPTY}"),
+            Self::Format4 => format!("spec.lock:2: {}", newer_format_text(4)),
         }
     }
 

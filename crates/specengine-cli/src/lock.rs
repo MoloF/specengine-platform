@@ -74,6 +74,17 @@
 //!    path as a quoted literal pathspec ([`crate::pathspec_word`]), the
 //!    worktree it runs in named.
 //!
+//! A node's `[[tested]]` block (format 3, task spec `tested-evidence`,
+//! "Other lock writers"): accept keeps it byte for byte (`kept | tested`)
+//! and refuses one at the node's revision with another `spec_hash` as it
+//! refuses an entry; `--editorial` refreshes one at R (an entry at R); a
+//! gone node's drop drops it (a block alone makes a node gone). Its row
+//! reads `<change> | tested` after the entries', counted as one entry in
+//! the question; `--json`'s ninth key `tested` is its change. The lock is
+//! written format 3 iff a block remains. `spec verify --tests` commits its
+//! evidence through this same commit under [`LockSubject::Tests`]
+//! (`Lock-mode: tests`, outside [`LockMode::TRAILERS`]).
+//!
 //! Writes the data directory (the index refresh, the commit message's
 //! scratch file), `spec.lock` and one commit; no queue row or event.
 
@@ -87,8 +98,9 @@ use std::path::Path;
 use serde::Serialize;
 use specengine_code::{
     Anchor, Binding, Digest, FileAnalysis, LEVEL_RECIPE, Level, LevelHashes, LevelState, Levels,
-    MOD_KIND, Marker, Name, Relation, RonValues, RustParser, bind_tree, comment_anchors,
-    empty_deps_digest, grammar_info, item_levels, markers_in, module_levels, value_hashes,
+    MOD_KIND, Marker, Name, Relation, RonValues, RustBinding, RustParser, bind_tree,
+    comment_anchors, empty_deps_digest, grammar_info, item_levels, markers_in, module_levels,
+    value_hashes,
 };
 use specengine_core::check::resolve::feature_stem;
 use specengine_core::check::{CheckInput, Resolver, canonical_id, feature_scoped};
@@ -198,11 +210,14 @@ pub enum LockMode {
     /// `spec lock rebase` (`Lock-mode: rebase`): no accept's, so outside
     /// [`LockMode::TRAILERS`].
     Rebase,
+    /// `spec verify --tests`' evidence (`Lock-mode: tests`): no accept's,
+    /// so outside [`LockMode::TRAILERS`] (no drift item completes on it).
+    Tests,
 }
 
 impl LockMode {
     /// Every `Lock-mode:` value an accept's commit carries (a drift item's
-    /// completion takes these alone; never a rebase's).
+    /// completion takes these alone; never a rebase's or a test run's).
     pub(crate) const TRAILERS: [&'static str; 2] =
         [Self::Accept.trailer(), Self::Editorial.trailer()];
 
@@ -212,9 +227,13 @@ impl LockMode {
             Self::Accept | Self::Gone => "accept",
             Self::Editorial => EDITORIAL,
             Self::Rebase => "rebase",
+            Self::Tests => "tests",
         }
     }
 }
+
+/// The nodes a test run's evidence commit names before ` and <n> more`.
+const SUBJECT_NODES: usize = 3;
 
 /// What a lock commit is of: its message's subject line and `Lock:`
 /// trailer, its third check, the words of a refusal when the lock changed
@@ -228,15 +247,37 @@ pub(crate) enum LockSubject<'a> {
     /// A rebase: `spec: lock rebase`, no `Lock:` trailer, checked for
     /// `Lock-mode: rebase` and no `Lock:`; its own rows' text.
     Rebase { rows: &'a str },
+    /// A test run's evidence (task spec `tested-evidence`, "The commit"):
+    /// `spec: verify tests A, B, C and <n> more` over `nodes` (those whose
+    /// block changed, by bytes), a `Lock:` per node, checked for each and
+    /// for `Lock-mode: tests`; its own rows' text.
+    Tests { nodes: &'a [String], rows: &'a str },
 }
 
 impl LockSubject<'_> {
     /// The message up to its `Lock-mode:` trailer: the subject line, the
-    /// empty line, an accept's `Lock:` trailer.
+    /// empty line, an accept's `Lock:` trailer (a test run's, one per
+    /// node).
     fn message_head(&self) -> String {
         match self {
             Self::Node(node) => format!("spec: lock {node}\n\n{LOCK_TRAILER}: {node}\n"),
             Self::Rebase { .. } => "spec: lock rebase\n\n".to_owned(),
+            Self::Tests { nodes, .. } => {
+                let mut named = nodes
+                    .iter()
+                    .take(SUBJECT_NODES)
+                    .map(|node| one_line(node))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                if nodes.len() > SUBJECT_NODES {
+                    named.push_str(&format!(" and {} more", nodes.len() - SUBJECT_NODES));
+                }
+                let mut head = format!("spec: verify tests {named}\n\n");
+                for node in *nodes {
+                    head.push_str(&format!("{LOCK_TRAILER}: {}\n", one_line(node)));
+                }
+                head
+            }
         }
     }
 
@@ -245,6 +286,7 @@ impl LockSubject<'_> {
         match self {
             Self::Node(_) => "accepted",
             Self::Rebase { .. } => "rebased",
+            Self::Tests { .. } => "written",
         }
     }
 }
@@ -299,6 +341,10 @@ pub struct LockOutcome {
     pub mode: LockMode,
     /// In key order.
     pub rows: Vec<LockRow>,
+    /// The node's `[[tested]]` block's row, after the entries' (`<change>
+    /// | tested`): accept `kept`, `--editorial` `refreshed` or `unchanged`,
+    /// a gone node `dropped`; `None` without one.
+    pub tested: Option<&'static str>,
     /// The lock's commit, when one was made and named: also when it fails
     /// step 10's check or cannot be verified (exit 1, the refusal naming
     /// it).
@@ -313,7 +359,7 @@ pub struct LockOutcome {
     /// consent prompt showed it.
     #[serde(skip)]
     pub report: Option<String>,
-    /// What the run left written (not in `--json`: its eight keys stay).
+    /// What the run left written (not in `--json`: its nine keys stay).
     #[serde(skip)]
     pub written: LockWritten,
     /// Step 7: nothing to change, and why (every binding locked as it is,
@@ -334,6 +380,12 @@ impl LockOutcome {
         Self::blank(String::new(), LockMode::Rebase)
     }
 
+    /// The outcome a test run's evidence commit runs under
+    /// ([`crate::verify_tests`] maps what it gets back).
+    pub(crate) fn of_tests() -> Self {
+        Self::blank(String::new(), LockMode::Tests)
+    }
+
     fn blank(reference: String, mode: LockMode) -> Self {
         Self {
             reference,
@@ -341,6 +393,7 @@ impl LockOutcome {
             rev: None,
             mode,
             rows: Vec::new(),
+            tested: None,
             commit: None,
             unchanged: false,
             refusal: None,
@@ -567,8 +620,9 @@ pub fn lock_accept(
     let recipes = build_recipes();
     let read = read_lock(&project.root, &recipes)?;
     let gone_id = without_rev(written);
-    let gone = read.lock.entries_of(gone_id).next().is_some()
-        && !canonical_ids(&input, scheme, &project).contains(gone_id);
+    // A block alone makes a node gone too.
+    let gone =
+        read.lock.holds(gone_id) && !canonical_ids(&input, scheme, &project).contains(gone_id);
     if gone {
         // Gone only when `HEAD` agrees: a node deleted from the working
         // tree alone is an uncommitted change of its file.
@@ -999,33 +1053,43 @@ fn accept(
     };
     let merge = match merge_accept(&read.lock, &merge_input) {
         Ok(merge) => merge,
-        Err(AcceptRefusal::TextChanged {
-            key,
-            locked,
-            current,
-        }) => {
+        Err(refusal) => {
             // A drift item's approve names its own way (canon
             // `proposal-drift`).
             let editorial = match &request.proposal {
                 Some(id) => format!("spec approve {id} --editorial"),
                 None => format!("spec lock accept {} --editorial", node.canonical),
             };
+            // What vouched for the old text: an entry, or the node's
+            // `[[tested]]` block.
+            let vouched = match refusal {
+                AcceptRefusal::TextChanged {
+                    key,
+                    locked,
+                    current,
+                } => format!(
+                    "{} {} `{}`: spec_hash {locked}, now {current}",
+                    key.relation.as_str(),
+                    key.kind.as_str(),
+                    key.symbol,
+                ),
+                AcceptRefusal::TestedChanged { locked, current } => {
+                    format!("[[tested]]: spec_hash {locked}, now {current}")
+                }
+            };
             let reason = format!(
                 "`{}` rev {rev}: its text changed since spec.lock vouched for it at this revision \
-                 ({} {} `{}`: spec_hash {locked}, now {current}): raise its `rev` by hand, commit, \
-                 then accept; or `--editorial` for an editorial change (`{editorial}`); nothing \
-                 written",
+                 ({vouched}): raise its `rev` by hand, commit, then accept; or `--editorial` for \
+                 an editorial change (`{editorial}`); nothing written",
                 node.canonical,
-                key.relation.as_str(),
-                key.kind.as_str(),
-                key.symbol,
             );
             return Ok(outcome.refused(&reason));
         }
     };
     outcome.rows = merge.rows.iter().map(accept_row).collect();
+    outcome.tested = merge.tested.map(Change::as_str);
     if !merge.writes() {
-        let rows = rows_text(&outcome.rows);
+        let rows = outcome_rows(&outcome);
         outcome.report = Some(rows);
         if merge.count(Change::Unchanged) > 0 {
             outcome.nothing = Some("every lockable binding is locked as it is".to_owned());
@@ -1102,7 +1166,9 @@ pub(crate) struct Facts<'a> {
 /// file's module's (`module_levels`), a RON file's value hashes paired
 /// with their comments by range (task spec `lock-levels`, "Accept").
 /// `spec verify --tests` calls it as accept's own predicate (canon
-/// `spec-verify-tests`, "Runnable and verifiable").
+/// `spec-verify-tests`, "Runnable and verifiable"); its fresh entries are
+/// what the run's evidence hashes (task spec `tested-evidence`, "Bound
+/// hash"). [`node_bindings`] over [`Source::Head`].
 pub(crate) fn committed_bindings(
     repo: &Repo,
     tree: &CodeTree,
@@ -1112,26 +1178,112 @@ pub(crate) fn committed_bindings(
     old: &Lock,
     facts: &Facts<'_>,
 ) -> Result<Bindings, CliError> {
-    let rev = facts.rev;
+    let one = [NodeFiles {
+        node,
+        facts,
+        files: marker_files,
+    }];
+    let bindings = node_bindings(&Source::Head(repo), tree, &one, corpus, old)?;
+    Ok(bindings.into_iter().next().unwrap_or_default())
+}
+
+/// Where [`node_bindings`] reads a marker file.
+pub(crate) enum Source<'a> {
+    /// Each file's `HEAD` blob (`blob_at`, no filter), bound afresh and its
+    /// items checked against the walk's: accept, `spec verify --tests`.
+    Head(&'a Repo),
+    /// The working tree as walked: each file's text and binding the
+    /// walk's, `blobs` its blob OIDs on disk (`hash-object`, every marker
+    /// file hashed). A lockable binding whose entry in the old lock holds
+    /// that blob takes the entry's digests (verify's cascade step 2); a
+    /// file whose every lockable binding does is never parsed. A read's
+    /// bound hash (task spec `tested-evidence`, "Bound hash").
+    Disk { blobs: &'a BTreeMap<String, String> },
+}
+
+/// One node whose bindings [`node_bindings`] sorts: the node, what each
+/// fresh entry of it shares (`rev` the revision its markers are judged
+/// against), its marker files.
+pub(crate) struct NodeFiles<'a> {
+    pub(crate) node: &'a NodeAt,
+    pub(crate) facts: &'a Facts<'a>,
+    pub(crate) files: &'a BTreeSet<String>,
+}
+
+/// [`committed_bindings`] over either [`Source`] and any number of nodes,
+/// one [`Bindings`] each, in `nodes`' order: the same markers sorted by
+/// the same rows, hashed by the same functions. Each marker file is read
+/// and bound once, its units of every node hashed in one pass (each Rust
+/// file parsed at most once, by one parser): a node's result is the one a
+/// call for it alone gives.
+pub(crate) fn node_bindings(
+    source: &Source<'_>,
+    tree: &CodeTree,
+    nodes: &[NodeFiles<'_>],
+    corpus: &mut Corpus<'_>,
+    old: &Lock,
+) -> Result<Vec<Bindings>, CliError> {
     let file_index: BTreeMap<&str, usize> = tree
         .rust
         .iter()
         .enumerate()
         .map(|(index, file)| (file.path.as_str(), index))
         .collect();
-    let mut parser = RustParser::new()
-        .map_err(|error| CliError::spec(format!("the Rust grammar cannot be loaded: {error}")))?;
-    let mut bindings = Bindings::default();
-    for path in marker_files {
-        let bytes = repo.blob(path)?;
-        let text = String::from_utf8(bytes).map_err(|_| {
-            CliError::spec(format!(
-                "`{path}` at HEAD is not UTF-8 (a git filter?): its committed bytes cannot be \
-                 bound"
-            ))
-        })?;
-        let blob = repo.blob_oid(path)?;
-        let mut found = Vec::new();
+    let ron_index: BTreeMap<&str, usize> = tree
+        .ron
+        .iter()
+        .enumerate()
+        .map(|(index, file)| (file.path.as_str(), index))
+        .collect();
+    let mut parser: Option<RustParser> = None;
+    let mut all: Vec<Bindings> = nodes.iter().map(|_| Bindings::default()).collect();
+    let paths: BTreeSet<&String> = nodes.iter().flat_map(|node| node.files.iter()).collect();
+    for path in paths {
+        // The nodes this file holds a marker of, by their place in `nodes`.
+        let holders: Vec<usize> = nodes
+            .iter()
+            .enumerate()
+            .filter(|(_, node)| node.files.contains(path))
+            .map(|(at, _)| at)
+            .collect();
+        // The file's text and blob: `HEAD`'s, or the walk's and the disk's.
+        let head_text: String;
+        let (text, blob): (&str, String) = match source {
+            Source::Head(repo) => {
+                let bytes = repo.blob(path)?;
+                head_text = String::from_utf8(bytes).map_err(|_| {
+                    CliError::spec(format!(
+                        "`{path}` at HEAD is not UTF-8 (a git filter?): its committed bytes \
+                         cannot be bound"
+                    ))
+                })?;
+                (head_text.as_str(), repo.blob_oid(path)?)
+            }
+            Source::Disk { blobs } => {
+                let walked = file_index
+                    .get(path.as_str())
+                    .map(|&index| tree.rust[index].text.as_str())
+                    .or_else(|| {
+                        ron_index
+                            .get(path.as_str())
+                            .map(|&index| tree.ron[index].text.as_str())
+                    });
+                match (walked, blobs.get(path)) {
+                    (Some(text), Some(blob)) => (text, blob.clone()),
+                    (walked, blob) => {
+                        // Unreachable: a read's marker files are files of the
+                        // walk, and it hashes each of them.
+                        debug_assert!(
+                            walked.is_some() && blob.is_some(),
+                            "`{path}`: a marker file with no walked text or no blob"
+                        );
+                        continue;
+                    }
+                }
+            }
+        };
+        // Each holder's markers in the file, in `holders`' order.
+        let mut found: Vec<Vec<Found>> = holders.iter().map(|_| Vec::new()).collect();
         let mut codes = FileCodes::default();
         // The keys of this file's items with a parse error: a marker on
         // one binds `cannot_verify`, and the old entry of its key is kept.
@@ -1141,38 +1293,26 @@ pub(crate) fn committed_bindings(
                 continue;
             };
             let walked = &tree.rust[index];
-            let parsed = parser.parse(&text).ok_or_else(|| {
-                CliError::spec(format!(
-                    "the code walk is incomplete: `{path}` at HEAD cannot be parsed (the parser \
-                     gave no tree)"
-                ))
-            })?;
-            let binding = bind_tree(&parsed, &text);
-            let same_items = binding.analysis.items.len() == walked.binding.analysis.items.len()
-                && binding
-                    .analysis
-                    .items
-                    .iter()
-                    .zip(&walked.binding.analysis.items)
-                    .all(|(committed, worktree)| {
-                        (
-                            &committed.kind,
-                            &committed.label,
-                            &committed.mod_path,
-                            &committed.owner,
-                        ) == (
-                            &worktree.kind,
-                            &worktree.label,
-                            &worktree.mod_path,
-                            &worktree.owner,
-                        )
-                    });
-            if !same_items {
-                return Err(CliError::spec(format!(
-                    "`{path}`: its bytes at HEAD and in the working tree give other items (a git \
-                     filter?): cannot name them; nothing written"
-                )));
-            }
+            let head_binding: RustBinding;
+            let (binding, mut parsed) = match source {
+                Source::Head(_) => {
+                    let parsed = grammar(&mut parser)?.parse(text).ok_or_else(|| {
+                        CliError::spec(format!(
+                            "the code walk is incomplete: `{path}` at HEAD cannot be parsed (the \
+                             parser gave no tree)"
+                        ))
+                    })?;
+                    head_binding = bind_tree(&parsed, text);
+                    if !same_items(&head_binding, &walked.binding) {
+                        return Err(CliError::spec(format!(
+                            "`{path}`: its bytes at HEAD and in the working tree give other items \
+                             (a git filter?): cannot name them; nothing written"
+                        )));
+                    }
+                    (&head_binding, Some(parsed))
+                }
+                Source::Disk { .. } => (&walked.binding, None),
+            };
             let module = tree.names.modules.get(index);
             let names = tree.names.items.get(index).map_or(&[][..], Vec::as_slice);
             for (item, name) in binding.analysis.items.iter().zip(names) {
@@ -1194,14 +1334,28 @@ pub(crate) fn committed_bindings(
                     range: comment.range.clone(),
                     target: &target,
                 };
-                node_markers(&at, corpus, node.key, rev, &mut found);
+                for (slot, &held) in holders.iter().enumerate() {
+                    let node = &nodes[held];
+                    node_markers(&at, corpus, node.node.key, node.facts.rev, &mut found[slot]);
+                }
             }
-            // Only what a lockable marker binds is hashed: an item's or an
-            // inline `mod`'s levels by its index, the file's module's once.
+            if let Source::Disk { .. } = source {
+                codes.reused = reused_codes(nodes, &holders, &found, path, &blob, old);
+            }
+            // Only what a lockable marker binds is hashed, every holder's
+            // in one pass: an item's or an inline `mod`'s levels by its
+            // index, the file's module's once (on disk, none an entry gives
+            // at this blob).
+            let shared = &codes;
             let lockable = || {
-                found
-                    .iter()
-                    .filter(|found| found.refused.is_none() && found.target.ambiguity().is_none())
+                holders.iter().zip(&found).flat_map(|(&held, found)| {
+                    let canonical = nodes[held].node.canonical.as_str();
+                    found.iter().filter(move |found| {
+                        found.refused.is_none()
+                            && found.target.ambiguity().is_none()
+                            && !shared.reuses(found, canonical, path)
+                    })
+                })
             };
             let wanted: Vec<usize> = lockable()
                 .filter_map(|found| match found.target {
@@ -1214,16 +1368,37 @@ pub(crate) fn committed_bindings(
                 .collect::<BTreeSet<_>>()
                 .into_iter()
                 .collect();
-            for (index, levels) in wanted.iter().zip(item_levels(&parsed, &text, &wanted)) {
-                if let Some(levels) = levels {
-                    codes.items.insert(*index, levels);
+            let module_wanted =
+                lockable().any(|found| matches!(found.target, Target::Module { item: None, .. }));
+            if (!wanted.is_empty() || module_wanted) && parsed.is_none() {
+                parsed = grammar(&mut parser)?.parse(text);
+            }
+            // On disk the walk read it: no tree leaves its units unhashed.
+            if let Some(parsed) = &parsed {
+                let mut items = BTreeMap::new();
+                for (index, levels) in wanted.iter().zip(item_levels(parsed, text, &wanted)) {
+                    if let Some(levels) = levels {
+                        items.insert(*index, levels);
+                    }
+                }
+                codes.items = items;
+                if module_wanted {
+                    codes.module = Some(module_levels(parsed, text));
                 }
             }
-            if lockable().any(|found| matches!(found.target, Target::Module { item: None, .. })) {
-                codes.module = Some(module_levels(&parsed, &text));
-            }
         } else if path.ends_with(RON_EXTENSION) {
-            for anchor in comment_anchors(&text) {
+            let head_anchors;
+            let anchors = match source {
+                Source::Head(_) => {
+                    head_anchors = comment_anchors(text);
+                    head_anchors.as_slice()
+                }
+                Source::Disk { .. } => match ron_index.get(path.as_str()) {
+                    Some(&index) => tree.ron[index].anchors.as_slice(),
+                    None => continue,
+                },
+            };
+            for anchor in anchors {
                 let Some(comment_text) = text.get(anchor.comment.clone()) else {
                     continue;
                 };
@@ -1233,36 +1408,129 @@ pub(crate) fn committed_bindings(
                     range: anchor.comment.clone(),
                     target: &target,
                 };
-                node_markers(&at, corpus, node.key, rev, &mut found);
+                for (slot, &held) in holders.iter().enumerate() {
+                    let node = &nodes[held];
+                    node_markers(&at, corpus, node.node.key, node.facts.rev, &mut found[slot]);
+                }
             }
-            let wanted = found.iter().any(|found| {
-                found.refused.is_none()
-                    && matches!(
-                        found.target,
-                        Target::Ron {
-                            ambiguity: None,
-                            ..
-                        }
-                    )
+            if let Source::Disk { .. } = source {
+                codes.reused = reused_codes(nodes, &holders, &found, path, &blob, old);
+            }
+            let wanted = holders.iter().zip(&found).any(|(&held, found)| {
+                let canonical = nodes[held].node.canonical.as_str();
+                found.iter().any(|found| {
+                    found.refused.is_none()
+                        && matches!(
+                            found.target,
+                            Target::Ron {
+                                ambiguity: None,
+                                ..
+                            }
+                        )
+                        && !codes.reuses(found, canonical, path)
+                })
             });
             if wanted {
-                codes.ron = Some(value_hashes(&text));
+                codes.ron = Some(value_hashes(text));
             }
         }
-        bindings.any_marker |= !found.is_empty();
-        keep_broken(&found, &broken, &node.canonical, path, old, &mut bindings);
-        let pair = Pair { facts, blob: &blob };
-        for found in found {
-            classify_found(found, &node.canonical, path, &pair, &codes, &mut bindings);
+        for (&held, found) in holders.iter().zip(found) {
+            let node = &nodes[held];
+            let Some(bindings) = all.get_mut(held) else {
+                continue;
+            };
+            let canonical = node.node.canonical.as_str();
+            bindings.any_marker |= !found.is_empty();
+            keep_broken(&found, &broken, canonical, path, old, bindings);
+            let pair = Pair {
+                facts: node.facts,
+                blob: &blob,
+            };
+            for found in found {
+                classify_found(found, canonical, path, &pair, &codes, bindings);
+            }
         }
     }
-    let Bindings {
-        fresh, unlockable, ..
-    } = &mut bindings;
-    for key in unlockable.keys() {
-        fresh.remove(key);
+    for bindings in &mut all {
+        let Bindings {
+            fresh, unlockable, ..
+        } = bindings;
+        for key in unlockable.keys() {
+            fresh.remove(key);
+        }
     }
-    Ok(bindings)
+    Ok(all)
+}
+
+/// The Rust grammar, loaded once.
+fn grammar(parser: &mut Option<RustParser>) -> Result<&mut RustParser, CliError> {
+    if parser.is_none() {
+        *parser = Some(RustParser::new().map_err(|error| {
+            CliError::spec(format!("the Rust grammar cannot be loaded: {error}"))
+        })?);
+    }
+    parser
+        .as_mut()
+        .ok_or_else(|| CliError::spec("the Rust grammar cannot be loaded"))
+}
+
+/// A file's items at `HEAD` and in the working tree are the same: kind,
+/// label, module path and owner, in order.
+fn same_items(committed: &RustBinding, worktree: &RustBinding) -> bool {
+    committed.analysis.items.len() == worktree.analysis.items.len()
+        && committed
+            .analysis
+            .items
+            .iter()
+            .zip(&worktree.analysis.items)
+            .all(|(committed, worktree)| {
+                (
+                    &committed.kind,
+                    &committed.label,
+                    &committed.mod_path,
+                    &committed.owner,
+                ) == (
+                    &worktree.kind,
+                    &worktree.label,
+                    &worktree.mod_path,
+                    &worktree.owner,
+                )
+            })
+}
+
+/// On disk, the code of each keyed marker of each holder (`found` in step
+/// with `holders`, places in `nodes`) whose entry in `old` holds the
+/// file's `blob` (format 2's digests): its bytes are the ones the entry
+/// was hashed from.
+fn reused_codes(
+    nodes: &[NodeFiles<'_>],
+    holders: &[usize],
+    found: &[Vec<Found>],
+    path: &str,
+    blob: &str,
+    old: &Lock,
+) -> BTreeMap<EntryKey, LevelCode> {
+    let mut reused = BTreeMap::new();
+    let marked = holders.iter().zip(found).flat_map(|(&held, found)| {
+        found
+            .iter()
+            .map(move |found| (nodes[held].node.canonical.as_str(), found))
+    });
+    for (node, found) in marked {
+        let Ok(key) = found.target.key(node, found.relation, path) else {
+            continue;
+        };
+        if let Some(Verified {
+            code: EntryCode::Levels(code),
+            file_blob,
+            ..
+        }) = old.entries.get(&key)
+            && file_blob == blob
+        {
+            reused.insert(key, code.clone());
+        }
+    }
+    reused
 }
 
 /// A `cannot_verify` marker in a file keeps the old entries of the keys
@@ -1321,6 +1589,9 @@ struct FileCodes {
     module: Option<LevelState>,
     /// A RON file's value hashes by comment range, or its refusal.
     ron: Option<RonValues>,
+    /// On disk ([`Source::Disk`]): the code of each key whose entry holds
+    /// the file's blob, taken instead of hashing.
+    reused: BTreeMap<EntryKey, LevelCode>,
 }
 
 /// A lockable binding's digests: an item's or a module's levels and
@@ -1331,6 +1602,15 @@ pub(crate) enum Hashed<'a> {
 }
 
 impl FileCodes {
+    /// `found`'s key takes an entry's code ([`FileCodes::reused`]).
+    fn reuses(&self, found: &Found, node: &str, path: &str) -> bool {
+        !self.reused.is_empty()
+            && found
+                .target
+                .key(node, found.relation, path)
+                .is_ok_and(|key| self.reused.contains_key(&key))
+    }
+
     /// What `found` binds, hashed; `Err`: its `cannot_verify` state (a
     /// parse error in the item, or anywhere in a module's file; a RON file
     /// its analysis rejects).
@@ -1428,17 +1708,27 @@ fn classify_found(
             return;
         }
     };
+    let verified = |code: LevelCode| Verified {
+        rev: pair.facts.rev,
+        spec_hash: pair.facts.spec_hash.to_owned(),
+        code: EntryCode::Levels(code),
+        file_blob: pair.blob.to_owned(),
+        commit: pair.facts.commit.to_owned(),
+        verified_at: pair.facts.today.to_owned(),
+    };
     let result = match (&found.refused, found.target.ambiguity()) {
         (Some(state), _) => Err(state.clone()),
         (None, Some(reason)) => Err(format!("{AMBIGUOUS} {reason}")),
-        (None, None) => codes.of(&found).map(|hashed| Verified {
-            rev: pair.facts.rev,
-            spec_hash: pair.facts.spec_hash.to_owned(),
-            code: EntryCode::Levels(level_code(found.levels, &hashed)),
-            file_blob: pair.blob.to_owned(),
-            commit: pair.facts.commit.to_owned(),
-            verified_at: pair.facts.today.to_owned(),
-        }),
+        // On disk, an entry at this blob: its digests, the markers' levels.
+        (None, None) => match codes.reused.get(&key) {
+            Some(code) => Ok(verified(LevelCode {
+                levels: found.levels,
+                ..code.clone()
+            })),
+            None => codes
+                .of(&found)
+                .map(|hashed| verified(level_code(found.levels, &hashed))),
+        },
     };
     // A key the lock could not read back (a path with a TAB) is never
     // written: core's one check, the reader's too.
@@ -1756,7 +2046,8 @@ fn editorial(
     };
     outcome.rev = Some(rev);
     let refreshed = refresh_editorial(&read.lock, &node.canonical, rev, &spec_hash, None);
-    if refreshed.at_rev.is_empty() {
+    // The node's block at R is an entry at R.
+    if refreshed.is_empty() {
         let plain = match proposal {
             Some(id) => format!("spec approve {id}"),
             None => format!("spec lock accept {}", node.canonical),
@@ -1782,9 +2073,16 @@ fn editorial(
         })
         .map(|row| accept_row(&row))
         .collect();
+    outcome.tested = refreshed.tested.map(|changed| {
+        if changed {
+            Change::Refreshed.as_str()
+        } else {
+            Change::Unchanged.as_str()
+        }
+    });
     let count = refreshed.refreshed();
     if count == 0 {
-        outcome.report = Some(rows_text(&outcome.rows));
+        outcome.report = Some(outcome_rows(&outcome));
         outcome.nothing = Some(format!(
             "every entry at rev {rev} holds the node's spec_hash"
         ));
@@ -1848,9 +2146,11 @@ fn drop_gone(
             })
         })
         .collect();
+    let block = read.lock.tested.contains_key(written);
+    outcome.tested = block.then_some(Change::Dropped.as_str());
     let question = format!(
         "lock {written} (gone: {} dropped){} at {} on {} in {}? [y/N]",
-        dropped.len(),
+        dropped.len() + usize::from(block),
         for_item(proposal),
         repo.head,
         repo.branch,
@@ -1890,8 +2190,8 @@ pub(crate) fn write_and_commit(
     trailers: &[LockTrailer],
 ) -> Result<LockOutcome, CliError> {
     let rows = match subject {
-        LockSubject::Node(_) => rows_text(&outcome.rows),
-        LockSubject::Rebase { rows } => (*rows).to_owned(),
+        LockSubject::Node(_) => outcome_rows(&outcome),
+        LockSubject::Rebase { rows } | LockSubject::Tests { rows, .. } => (*rows).to_owned(),
     };
     let decided_by = repo.git.committer_ident().map_err(|error| {
         CliError::spec(format!(
@@ -2253,6 +2553,30 @@ fn check_lock_commit(
                 }
             }
         }
+        // A test run's: a `Lock:` per node whose block changed, and
+        // `Lock-mode: tests`.
+        LockSubject::Tests { nodes, .. } => {
+            let mode = LockMode::Tests.trailer();
+            match (
+                repo.git.trailer_values(commit, LOCK_TRAILER),
+                repo.git.trailer_values(commit, LOCK_MODE_TRAILER),
+            ) {
+                (Ok(named), Ok(modes)) => {
+                    for node in *nodes {
+                        let node = one_line(node);
+                        if !named.contains(&node) {
+                            wrong.push(format!("it has no `{LOCK_TRAILER}: {node}` trailer"));
+                        }
+                    }
+                    if !modes.iter().any(|value| value == mode) {
+                        wrong.push(format!("it has no `{LOCK_MODE_TRAILER}: {mode}` trailer"));
+                    }
+                }
+                (Err(error), _) | (_, Err(error)) => {
+                    unread.push(format!("its trailers cannot be read: {error}"));
+                }
+            }
+        }
     }
     // A commit deleting the file fails this check (it may pass the
     // changed paths', which a deletion of `spec.lock` alone satisfies).
@@ -2399,6 +2723,16 @@ fn accept_row(row: &AcceptRow) -> LockRow {
         item_kind: row.place.item_kind.clone(),
         state: row.state.clone(),
     }
+}
+
+/// The outcome's rows: the entries' ([`rows_text`]), then the node's
+/// `[[tested]]` block's, `<change> | tested`.
+fn outcome_rows(outcome: &LockOutcome) -> String {
+    let mut out = rows_text(&outcome.rows);
+    if let Some(change) = outcome.tested {
+        out.push_str(&format!("{change} | tested\n"));
+    }
+    out
 }
 
 /// `<change> | <relation> | <file> | <kind> <symbol>[ <item_kind>][ |

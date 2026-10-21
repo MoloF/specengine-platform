@@ -19,12 +19,13 @@
 //!   writes (task spec `rev-discipline` Q15). `--editorial` keeps them.
 //! - **Step 3 under `--editorial`** ([`step_3_lock`]): `<root>/spec.lock`
 //!   read: none, the text alone; else tracked and equal to `HEAD` (exit
-//!   1), parsed without the build's recipes (formats 1 and 2) and its
+//!   1), parsed without the build's recipes (formats 1 to 3) and its
 //!   `norm_recipe` compared (exit 2); `code_recipe` is not compared: the
 //!   refresh writes no code field. At step 6 each changed node's vouching
-//!   entries (at its revision, its old `spec_hash`) take the new one (core
-//!   `refresh_editorial` with the vouching filter); any other entry stays
-//!   byte for byte. A format-1 lock is never rendered: when an entry would
+//!   entries and `[[tested]]` block (at its revision, its old `spec_hash`)
+//!   take the new one (core `refresh_editorial` with the vouching filter; a
+//!   `Lock:` per node whose entries or block changed); any other entry or
+//!   block stays byte for byte. A format-1 lock is never rendered: when an entry would
 //!   be refreshed, exit 2 with the writers' text naming `spec lock rebase`
 //!   (task spec `lock-levels` Q29); else it is left untouched.
 //! - **Steps 8 to 10**: the lock re-read and written after the text, both
@@ -150,9 +151,9 @@ pub(crate) struct LockWrite {
     pub bytes: Vec<u8>,
     /// What step 8 writes.
     pub rendered: String,
-    /// The nodes whose entries change, in file order.
+    /// The nodes whose entries or block change, in file order.
     pub locked: Vec<String>,
-    /// How many entries change.
+    /// How many entries change, a block counted as one.
     pub entries: usize,
 }
 
@@ -260,7 +261,7 @@ pub(crate) fn apply_trailers<'a>(
 /// worktree's top), its state against `head`. None in the worktree nor at
 /// `head`: `None`, the text alone. Tracked and equal to `head`, else exit
 /// 1 naming its state; read by core's `parse_lock` without the build's
-/// recipes (formats 1 and 2), its `norm_recipe` this build's, else exit 2
+/// recipes (formats 1 to 3), its `norm_recipe` this build's, else exit 2
 /// (`code_recipe` is not compared: the refresh writes no code field); a
 /// format-1 lock's refusal kept for step 6 ([`LockRead::unrebased`]).
 pub(crate) fn step_3_lock(
@@ -747,12 +748,21 @@ pub(crate) fn rows(
             lock_entries: match lock {
                 Err(_) => None,
                 Ok(None) => Some(0),
+                // A vouching `[[tested]]` block counts as one entry.
                 Ok(Some(lock)) => Some(match node.refreshable() {
                     None => 0,
-                    Some((old, _)) => lock
-                        .entries_of(&node.id)
-                        .filter(|(key, verified)| vouches(key, verified, &node.id, node.rev, old))
-                        .count(),
+                    Some((old, _)) => {
+                        lock.entries_of(&node.id)
+                            .filter(|(key, verified)| {
+                                vouches(key, verified, &node.id, node.rev, old)
+                            })
+                            .count()
+                            + usize::from(
+                                lock.tested
+                                    .get(&node.id)
+                                    .is_some_and(|block| block.vouches(node.rev, old)),
+                            )
+                    }
                 }),
             },
             refused: node.refused(),

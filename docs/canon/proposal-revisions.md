@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # Proposal apply: revisions and the editorial approve
@@ -30,11 +30,11 @@ Question `apply PR-0007 to docs/spec/combat.md on main in /w (applies; raises R-
 `spec approve PR --editorial [--note T]` (`approve_editorial`), or a staged `editorial: true` ("Stage and UI"), keeps every revision. On a kind writing no existing node: exit 2 `` `--editorial` keeps the revisions of the nodes an apply changes; `PR` is a <kind>, which writes no existing node: `spec approve PR` without it; nothing changed ``. No node's meaning changing: the note `no node's meaning changes; --editorial changes nothing`, above the question and in the outcome's notes.
 
 - **Step 3** also reads `<root>/spec.lock`: none, the text alone; modified, staged, deleted, untracked or not tracked -> exit 1 `` `spec.lock` <state>: --editorial sets its entries from its committed bytes; commit it first; nothing written ``; parsed by `parse_lock(text, None)`, another `norm_recipe` -> exit 2 naming both. `code_recipe` is not compared, unlike accept's `read_lock`: no code field is written.
-- **Step 6, the refresh**: each changed node's **vouching** entries (core `vouches`: at its revision R, `spec_hash` its old `norm_hash`) take the new one (`refresh_editorial` with that filter; `spec lock accept --editorial` passes none: every entry at R). A node with a null hash refreshes none. An entry at R with another `spec_hash` (an earlier unreviewed change), the code fields, `file_blob`, `commit`, `verified_*`, other entries and the header stay byte-identical. Format 1 is never rendered: an entry to refresh exits 2 at step 6, accept's format-1 text (`spec-lock.md` "Entry"); none, it stays untouched.
+- **Step 6, the refresh**: each changed node's **vouching** entries (core `vouches`: at its revision R, `spec_hash` its old `norm_hash`) and vouching `[[tested]]` block (`Tested::vouches`; `spec-lock-tested.md` "Readings": one entry in every count) take the new one (`refresh_editorial` with that filter; `spec lock accept --editorial` passes none: every entry at R). A node with a null hash refreshes none. An entry at R with another `spec_hash` (an earlier unreviewed change), the code fields, `file_blob`, `commit`, `verified_*`, other entries and the header stay byte-identical. Format 1 is never rendered: an entry to refresh exits 2 at step 6, accept's format-1 text (`spec-lock.md` "Entry"); none, it stays untouched.
 - **Question** `apply … (rebases, editorial: R-12 stays 3; spec.lock: 2 entries)? [y/N]`, the lock part only when entries change; none: the text alone is written and committed, as a meaning approve.
 - **Step 8**: the lock read again (changed: exit 1 `spec.lock changed while being applied; nothing written`), the text written, then the lock. A failed lock write restores the text only while it holds this run's bytes: ``cannot write spec.lock: <error>; `<path>` restored; nothing committed``.
 - **Step 9**: `git commit --only … -- :(literal)<path> :(literal)<root>/spec.lock`. No commit made: each file restored only while it holds this run's bytes (accept's rule, CLI `lock.rs` `Undo`): `their bytes restored`, else per file `` `<path>` restored ``, `` … was changed meanwhile, so it is left as it is, not restored ``, `` … is not restored (see the warning) ``. A failed restore warns `` cannot restore `<top path>` in <worktree>: <error>; `git checkout -- ':(literal)<top path>'` restores it ``.
-- **Step 10**: one parent, the old `HEAD`; exactly the two paths changed; a `Lock:` trailer per refreshed node; the committed `spec.lock` blob the confirmed bytes (a hook rewriting it, a commit deleting it fail); each refreshed `spec_hash` the committed text blob's `norm_hash`. Else it stays `approved`, exit 1. A commit made with branch and `HEAD` unmoved (Q16; a hook resetting it): nothing restored, the refusal ending ``; `<path>` and `spec.lock` stay as the commit left them in <worktree>: `git reset -q -- 'A' 'B'`, then `git checkout -- 'A' 'B'` puts them back``, A and B `':(literal)<top path>'`, an embedded `'` as `'\''` (`pathspec_word`); `HEAD` moved elsewhere: the one-path text.
+- **Step 10**: one parent, the old `HEAD`; exactly the two paths changed; a `Lock:` trailer per node whose entries or block were refreshed; the committed `spec.lock` blob the confirmed bytes (a hook rewriting it, a commit deleting it fail); each refreshed `spec_hash` the committed text blob's `norm_hash`. Else it stays `approved`, exit 1. A commit made with branch and `HEAD` unmoved (Q16; a hook resetting it): nothing restored, the refusal ending ``; `<path>` and `spec.lock` stay as the commit left them in <worktree>: `git reset -q -- 'A' 'B'`, then `git checkout -- 'A' 'B'` puts them back``, A and B `':(literal)<top path>'`, an embedded `'` as `'\''` (`pathspec_word`); `HEAD` moved elsewhere: the one-path text.
 
 ```
 Base-commit: <hex>
@@ -43,7 +43,7 @@ Lock: R-12
 Lock-mode: editorial
 ```
 
-`Revision: <ID> <rev> (editorial)` per changed node, file order; `Lock:` per node whose entries changed, then one `Lock-mode: editorial`.
+`Revision: <ID> <rev> (editorial)` per changed node, file order; `Lock:` per node whose entries or block changed, then one `Lock-mode: editorial`.
 
 ## Completion and reject
 
@@ -51,7 +51,7 @@ The trailer lookup (`proposal-completion.md` "Completion") completes, and reject
 
 ## Review
 
-The review document's `revisions` after `conflict` (`proposal-review.md`): `null` when the kind writes no existing node or the preview `conflicts` or is `unavailable`; else per node whose `norm_hash` changes, file order, `{id, rev, to, lock_entries, refused}` (core `RevisionRow`): `to` the meaning approve's, `null` when refused; `lock_entries` the vouching entries of the worktree's `spec.lock` an editorial approve refreshes (0 without one; unreadable: `null`, note `lock_entries unknown: <why>`); `refused` `null`, else the step-6 reason as printed after `(step 6): `. Text `revisions: R-12 3 -> 4 (2 lock entries), ADR-0007 1 -> refused (0 lock entries)`, `1 lock entry` for one, `none` for `[]`; notes `lock_entries unknown` first, then per refused node `meaning approve not applicable (step 6): <refused>`. MCP `get_proposal`'s schema: `RevisionShape`. `fixtures/daemon-keys.json`: `RevisionRow`.
+The review document's `revisions` after `conflict` (`proposal-review.md`): `null` when the kind writes no existing node or the preview `conflicts` or is `unavailable`; else per node whose `norm_hash` changes, file order, `{id, rev, to, lock_entries, refused}` (core `RevisionRow`): `to` the meaning approve's, `null` when refused; `lock_entries` the vouching entries (a block one) of the worktree's `spec.lock` an editorial approve refreshes (0 without one; unreadable: `null`, note `lock_entries unknown: <why>`); `refused` `null`, else the step-6 reason as printed after `(step 6): `. Text `revisions: R-12 3 -> 4 (2 lock entries), ADR-0007 1 -> refused (0 lock entries)`, `1 lock entry` for one, `none` for `[]`; notes `lock_entries unknown` first, then per refused node `meaning approve not applicable (step 6): <refused>`. MCP `get_proposal`'s schema: `RevisionShape`. `fixtures/daemon-keys.json`: `RevisionRow`.
 
 ## Stage and UI
 

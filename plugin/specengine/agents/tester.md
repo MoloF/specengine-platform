@@ -25,7 +25,7 @@ Load the skills `specengine:read-spec` and `specengine:ask-owner` with the Skill
 
 ## Your results are a claim
 
-What you report is your claim until the project verifies it: report exactly what ran and what it gave, never a test you did not run, never a red result as green. A test that could not run is reported as not run, not as passed.
+What you report is your claim until the project verifies it: report exactly what ran and what it gave, never a test you did not run, never a red result as green. A test that could not run is reported as not run, not as passed. The machine verdict is the owner's own test run through SpecEngine, never your report: its evidence shows as `tested` in `check_binding`, and an edit to a node or its bound code turns it stale.
 
 ## A refused write
 

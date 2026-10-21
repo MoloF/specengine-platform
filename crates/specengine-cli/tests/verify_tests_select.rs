@@ -359,6 +359,9 @@ fn verifiable_is_accepts_predicate() {
     let kiln = Kiln::new("vt-predicate");
     add_edges(&kiln);
     let run = kiln.run();
+    // The run's evidence (docs/features/tested-evidence.md): the lock the
+    // accepts below (consent `n`) must leave as it is.
+    let written = kiln.repo.lock();
     let deep = run.node("KILN-DEEP");
     assert_eq!(
         deep,
@@ -425,7 +428,7 @@ fn verifiable_is_accepts_predicate() {
             }
         }
     }
-    assert!(kiln.repo.lock().is_none(), "no lock written");
+    assert_eq!(kiln.repo.lock(), written, "accept wrote no lock");
 }
 
 /// docs/features/lock-levels.md TE-3 (S3): "Verifiable" is accept's
@@ -446,6 +449,7 @@ fn a_bad_levels_only_marker_is_not_verifiable() {
     kiln.repo
         .commit_all("a check of the lid under an invalid list");
     let run = kiln.run();
+    let written = kiln.repo.lock();
     assert_eq!(
         run.node("KILN-LID"),
         json!({"id": "KILN-LID", "verdict": "not_verifiable", "state": "bad_levels"})
@@ -482,7 +486,7 @@ fn a_bad_levels_only_marker_is_not_verifiable() {
         .collect();
     assert_eq!(refused.len(), 1, "{:#?}", outcome.rows);
     assert_eq!(refused[0].state.as_deref(), Some("bad_levels"));
-    assert!(kiln.repo.lock().is_none(), "no lock written");
+    assert_eq!(kiln.repo.lock(), written, "accept wrote no lock");
 }
 
 // -------------------------------------------------------------------- TE-4

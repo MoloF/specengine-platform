@@ -17,17 +17,29 @@
 //!    else `dirty`, nothing more read; `specengine.toml` a file of `HEAD`;
 //! 5. the committer; the queue opened as `spec task` opens it; with
 //!    `--task` the task ([`crate::node_set::task_set`]);
-//! 6. the corpus, the code walk, the set, the tests ("Runnable") and the
-//!    reported nodes ("Verifiable": accept's own predicate,
-//!    [`crate::lock::committed_bindings`]); each planned program run from
-//!    the root's tree a file of `HEAD`; nothing to run: `empty`;
-//! 7. the listing and the question; anything but `y`: `declined`;
+//! 6. the lock read as accept reads it (unreadable, format 1, other
+//!    recipes, or not in `HEAD` and ignored by git: `cannot`, nothing
+//!    run); the corpus, the code walk, the set, the tests ("Runnable") and
+//!    the reported nodes ("Verifiable": accept's own predicate,
+//!    [`crate::lock::committed_bindings`], over that lock; then an entry or
+//!    the node's `[[tested]]` block at its revision with another
+//!    `spec_hash`: `text_changed`); each planned program run from the
+//!    root's tree a file of `HEAD`; nothing to run: `empty`;
+//! 7. the listing and the question, which names the evidence commit too:
+//!    one consent for the run and the write; anything but `y`: `declined`;
 //! 8. the probes (`{test}` a test no project has): one exiting 0 or timing
 //!    out, or a program that cannot start: `refused`;
 //! 9. each distinct argv once, by its first test's (`file`, `symbol`);
 //! 10. `HEAD`, the branch and the status read again: a difference is
-//!     `changed`;
-//! 11. the event, then stdout.
+//!     `changed`. Then, after a completed run (`verified`, `unverified`),
+//!     the evidence (task spec `tested-evidence`, "The run's write"): per
+//!     reported node its block added, refreshed, kept or removed (core
+//!     [`merge_tested`]), written and committed alone as accept commits
+//!     ([`crate::lock::write_and_commit`] under [`LockSubject::Tests`],
+//!     its consent step 7's `y`, never asked again); only `unchanged` rows:
+//!     no commit; a write or commit that fails keeps every verdict and
+//!     sets the lock's refusal (exit 1);
+//! 11. the event (its `lock_commit` the verified commit), then stdout.
 //!
 //! Nodes get a verdict only under `verified`, `unverified` (step 9 done,
 //! step 10 unchanged) and `empty`; every other end reports none.
@@ -35,9 +47,10 @@
 //! From step 8 to the end of step 9 a `SIGINT`, `SIGTERM` or `SIGHUP` to
 //! `spec` is forwarded to the running group: `interrupted`, exit 2. Exit 1
 //! means "not verified" (the owner's test run, outside verify's judge),
-//! never a Fix finding. Writes only the data directory (the index refresh,
-//! the queue when absent, the event); what the project's command writes is
-//! its own (step 10 sees it).
+//! or evidence not committed, never a Fix finding. Writes the data
+//! directory (the index refresh, the queue when absent, the event) and, on
+//! the owner's `y` after a completed run, `spec.lock` and its one commit;
+//! what the project's command writes is its own (step 10 sees it).
 
 // Off Unix only the refusal is built; the rest is the runner's.
 #![cfg_attr(not(unix), allow(dead_code, unused_imports))]
@@ -48,12 +61,16 @@ use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
 use serde::Serialize;
+use serde::ser::SerializeStruct;
 use specengine_code::{
     FileRole, NamedFile, PackageTargets, PlacedNames, QPath, Relation, Target as CargoTarget,
     TargetIndex, UnitKind, markers_in, placed_name_file,
 };
 use specengine_core::CodeConfig;
-use specengine_core::lock::Lock;
+use specengine_core::lock::{
+    HASH_NULL, LOCK_FILE, Lock, REV_UNKNOWN, Tested, TestedChange, TestedRun, TestedTest,
+    merge_tested,
+};
 use specengine_core::verify::{
     NodeVerdict, PROBE_TEST, PlaceholderValues, RunVerdict, TestOutcome, TestTemplate,
     node_verdict, tests_verdict, verify_from_toml,
@@ -64,11 +81,15 @@ use specengine_store::{GitEnv, PlaceError, StatusEntry, Task, WorktreeGit};
 use crate::apply::Consent;
 use crate::code_walk::{CodeTree, FilePackage, read_tree, tree_packages};
 use crate::corpus::indexed;
-use crate::lock::{Facts, NodeAt, Repo, Target, build_recipes, committed_bindings, node_at_head};
+use crate::lock::{
+    Facts, LockOutcome, LockSubject, LockTrailer, LockWritten, NodeAt, ReadLock, Repo, Target,
+    build_recipes, committed_bindings, node_at_head, read_lock, write_and_commit,
+};
 use crate::node_set::{NodeSet, canonical_of, named_task, task_set};
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text};
 use crate::proposals::{QueueContext, checked_now, escaped_error, open_context};
 use crate::refs::{Corpus, NodeKey, RON};
+use crate::tested::fresh_bound_hash;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// The refusal off Unix ("Order" step 1).
@@ -98,10 +119,18 @@ const MEMBER: &str = "member";
 const NOT_A_FUNCTION: &str = "not a function";
 const NODE_NOT_VERIFIABLE: &str = "node not verifiable";
 
-/// A node whose `HEAD` revision cannot be read, or whose `norm_hash` is
-/// null there (canon `spec-verify`, "States").
-const REV_UNKNOWN: &str = "rev_unknown";
-const HASH_NULL: &str = "hash_null";
+/// A node whose text changed at its revision since the lock at `HEAD`
+/// vouched for it (an entry or its `[[tested]]` block): no evidence over it
+/// (task spec `tested-evidence`, Q-C).
+const TEXT_CHANGED: &str = "text_changed";
+
+/// The evidence commit's trailer naming the template the owner confirmed
+/// (a caller's trailer, checked with its value).
+const TEST_COMMAND_TRAILER: &str = "Test-command";
+
+/// Step 6's refusal of a first lock git ignores.
+const IGNORED_LOCK: &str =
+    "spec.lock is ignored by git: the lock is committed, so un-ignore it first";
 
 /// `spec verify --tests` options.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -160,6 +189,44 @@ pub struct VerifyTestsProbe {
     pub output_hash: Option<String>,
 }
 
+/// What a completed run wrote to `spec.lock` (task spec `tested-evidence`,
+/// "The run's write"): a row per node whose block it adds, refreshes, keeps
+/// or removes, by node bytes; the verified evidence commit; whether every
+/// row is `unchanged` (no commit); why nothing was committed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerifyTestsLock {
+    pub rows: Vec<(String, TestedChange)>,
+    /// The verified commit's OID; `None` unchanged or refused.
+    pub commit: Option<String>,
+    pub unchanged: bool,
+    /// The write or the commit failed: the run keeps its verdicts, exit 1.
+    pub refusal: Option<String>,
+}
+
+impl Serialize for VerifyTestsLock {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        #[derive(Serialize)]
+        struct Row<'a> {
+            node: &'a str,
+            change: &'static str,
+        }
+        let rows: Vec<Row<'_>> = self
+            .rows
+            .iter()
+            .map(|(node, change)| Row {
+                node,
+                change: change.as_str(),
+            })
+            .collect();
+        let mut document = serializer.serialize_struct("VerifyTestsLock", 4)?;
+        document.serialize_field("rows", &rows)?;
+        document.serialize_field("commit", &self.commit)?;
+        document.serialize_field("unchanged", &self.unchanged)?;
+        document.serialize_field("refusal", &self.refusal)?;
+        document.end()
+    }
+}
+
 /// What `spec verify --tests` found and ran.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerifyTestsOutcome {
@@ -182,17 +249,24 @@ pub struct VerifyTestsOutcome {
     pub tests: Vec<VerifyTestsRow>,
     /// By ID bytes; only under `verified`, `unverified` and `empty`.
     pub nodes: Vec<VerifyTestsNode>,
+    /// What a completed run wrote; `None` without a row.
+    pub lock: Option<VerifyTestsLock>,
     /// The cause of a `cannot`.
     pub cannot: Vec<String>,
     pub messages: Vec<Message>,
 }
 
 impl VerifyTestsOutcome {
-    /// 0 verified; 1 not verified; 2 refused, interrupted, cannot.
+    /// 0 verified; 1 not verified, or its evidence not committed; 2
+    /// refused, interrupted, cannot.
     pub fn exit(&self) -> Exit {
+        let refused = self
+            .lock
+            .as_ref()
+            .is_some_and(|lock| lock.refusal.is_some());
         match self.verdict.exit_code() {
-            0 => Exit::Answered,
-            1 => Exit::NotFound,
+            0 if !refused => Exit::Answered,
+            0 | 1 => Exit::NotFound,
             _ => Exit::CannotRun,
         }
     }
@@ -210,6 +284,7 @@ impl VerifyTestsOutcome {
             probes_planned: 0,
             tests: Vec::new(),
             nodes: Vec::new(),
+            lock: None,
             cannot: Vec::new(),
             messages: Vec::new(),
         }
@@ -278,6 +353,21 @@ struct Prepared {
     probes: Vec<Vec<String>>,
     /// Per reported node (by ID): verifiable, and its runnable tests.
     nodes: Vec<(String, Option<String>, Vec<usize>)>,
+    /// The project, for the evidence commit.
+    project: ProjectRoot,
+    /// The lock step 6 read, the evidence's base.
+    read: ReadLock,
+    /// Per verifiable node (by ID): what its block would vouch for.
+    evidence: BTreeMap<String, Evidence>,
+}
+
+/// What a verifiable node's block vouches for, read at step 6: its
+/// revision and `norm_hash` at `HEAD`, the bound hash of its fresh entries.
+#[derive(Debug, Clone)]
+struct Evidence {
+    rev: u32,
+    spec_hash: String,
+    bound_hash: String,
 }
 
 #[cfg(unix)]
@@ -309,9 +399,10 @@ fn run(
         .iter()
         .filter(|(_, state, _)| state.is_none())
         .count();
+    // One consent for the run and the evidence's write: never asked again.
     lines.push(escape_controls(&one_line(&format!(
-        "run {} bound tests of {verifiable} nodes as {} (timeout {} s each) in {} on {} at {}? \
-         [y/N]",
+        "run {} bound tests of {verifiable} nodes as {} (timeout {} s each) in {} on {} at {}, \
+         then commit their evidence to {LOCK_FILE}? [y/N]",
         prepared.runs.len(),
         shown_template(prepared.template.written()),
         prepared.timeout,
@@ -343,6 +434,8 @@ fn run(
                 None => {
                     finish_nodes(&mut outcome, &prepared);
                     outcome.verdict = tests_verdict(outcome.nodes.iter().map(|node| node.verdict));
+                    // 10a: a completed run's evidence, under step 7's `y`.
+                    outcome.lock = write_evidence(env, request, &prepared, &mut outcome);
                 }
             }
         }
@@ -359,7 +452,7 @@ fn run(
         }
     }
 
-    // 11: the event, then stdout.
+    // 11: the event, after the evidence commit, then stdout.
     let event = Event::of(&outcome, &prepared.repo.worktree, &prepared.by);
     if let Err(error) = prepared
         .context
@@ -471,7 +564,26 @@ fn prepare(
         outcome.task = Some(task.id.clone());
     }
 
-    // 6: the corpus, the walk, the set, the tests, the nodes.
+    // 6: the lock as accept reads it (the disk's bytes, `HEAD`'s on this
+    // clean tree), before anything runs; then the corpus, the walk, the
+    // set, the tests, the nodes.
+    let read = match read_lock(&project.root, &build_recipes()) {
+        Ok(read) => read,
+        Err(error) => return end(outcome, unprefixed(&error)),
+    };
+    let top_lock = repo.top(LOCK_FILE);
+    let ignored = repo
+        .git
+        .blob_oid(&repo.head, &top_lock)
+        .and_then(|at_head| match at_head {
+            Some(_) => Ok(false),
+            None => repo.git.is_ignored(&top_lock),
+        });
+    match ignored {
+        Ok(false) => {}
+        Ok(true) => return end(outcome, IGNORED_LOCK.to_owned()),
+        Err(error) => return end(outcome, format!("git: {error}")),
+    }
     let mut messages = Vec::new();
     let input = match indexed(env, &project, &mut messages, false) {
         Ok(input) => input,
@@ -495,6 +607,7 @@ fn prepare(
         repo: &repo,
         template: &template,
         now: &request.now,
+        lock: &read.lock,
     }
     .select(&mut corpus, task.as_ref(), &mut messages);
     outcome.messages.append(&mut messages);
@@ -540,6 +653,9 @@ fn prepare(
         runs: selected.runs,
         probes: selected.probes,
         nodes: selected.nodes,
+        project,
+        read,
+        evidence: selected.evidence,
     }))
 }
 
@@ -601,6 +717,8 @@ struct Selection<'a> {
     repo: &'a Repo,
     template: &'a TestTemplate,
     now: &'a str,
+    /// The lock at `HEAD` (step 6's): the predicate's old lock.
+    lock: &'a Lock,
 }
 
 /// What step 6 found.
@@ -609,6 +727,8 @@ struct Selected {
     runs: Vec<(Vec<String>, Vec<usize>)>,
     probes: Vec<Vec<String>>,
     nodes: Vec<(String, Option<String>, Vec<usize>)>,
+    /// Per verifiable node (by ID): what its block would vouch for.
+    evidence: BTreeMap<String, Evidence>,
 }
 
 /// A runnable test's argv, and its probe's.
@@ -741,13 +861,20 @@ impl Selection<'_> {
             }
         }
 
-        // Each reported node's state ("Verifiable").
+        // Each reported node's state ("Verifiable"), over the lock at
+        // `HEAD`; a verifiable one's evidence.
         let mut tracked = Tracked::new(self.repo);
-        let empty_lock = Lock::empty(build_recipes());
         let mut states: BTreeMap<NodeKey, Option<String>> = BTreeMap::new();
+        let mut evidence: BTreeMap<String, Evidence> = BTreeMap::new();
         for &key in &reported {
             let files = marker_files.get(&key).cloned().unwrap_or_default();
-            let state = self.refusal(corpus, &set, key, &files, &empty_lock, &mut tracked)?;
+            let state = match self.refusal(corpus, &set, key, &files, &mut tracked)? {
+                Ok((canonical, found)) => {
+                    evidence.insert(canonical, found);
+                    None
+                }
+                Err(state) => Some(state),
+            };
             states.insert(key, state);
         }
 
@@ -854,20 +981,22 @@ impl Selection<'_> {
             runs,
             probes,
             nodes,
+            evidence,
         })
     }
 
-    /// The node's first refusal by accept's own predicate ("Verifiable");
-    /// `None`: verifiable.
+    /// The node's first refusal by accept's own predicate over the lock at
+    /// `HEAD` ("Verifiable"), then `text_changed` (an entry or the node's
+    /// block at its revision vouching for another `spec_hash`); `Ok`:
+    /// verifiable, its canonical ID and what its block would vouch for.
     fn refusal(
         &self,
         corpus: &mut Corpus<'_>,
         set: &NodeSet,
         key: NodeKey,
         marker_files: &BTreeSet<String>,
-        empty_lock: &Lock,
         tracked: &mut Tracked<'_>,
-    ) -> Result<Option<String>, String> {
+    ) -> Result<Result<(String, Evidence), String>, String> {
         let path = corpus.resolver.paths()[key.file].to_owned();
         let Some(id) = corpus
             .files
@@ -876,15 +1005,15 @@ impl Selection<'_> {
             .and_then(|parsed| parsed.nodes.get(key.ord))
             .and_then(|node| node.id.clone())
         else {
-            return Ok(Some(REV_UNKNOWN.to_owned()));
+            return Ok(Err(REV_UNKNOWN.to_owned()));
         };
         // Accept's "tracked and clean": a file `HEAD` lacks.
         if !tracked.at_head(&path)? {
-            return Ok(Some(NOT_COMMITTED.to_owned()));
+            return Ok(Err(NOT_COMMITTED.to_owned()));
         }
         for file in marker_files {
             if !tracked.at_head(file)? {
-                return Ok(Some(NOT_COMMITTED.to_owned()));
+                return Ok(Err(NOT_COMMITTED.to_owned()));
             }
         }
         let canonical = set
@@ -907,7 +1036,7 @@ impl Selection<'_> {
                     } else {
                         HASH_NULL
                     };
-                    return Ok(Some(state.to_owned()));
+                    return Ok(Err(state.to_owned()));
                 }
             };
         let today = self.now.get(..10).unwrap_or(self.now);
@@ -923,15 +1052,35 @@ impl Selection<'_> {
             marker_files,
             corpus,
             &node,
-            empty_lock,
+            self.lock,
             &facts,
         )
         .map_err(|error| unprefixed(&error))?;
-        Ok(bindings
-            .unlockable
-            .into_values()
-            .next()
-            .or_else(|| bindings.keyless.into_iter().next().map(|(_, state)| state)))
+        if let Some(state) = crate::tested::first_refusal(&bindings) {
+            return Ok(Err(state));
+        }
+        // The text changed at R since the lock at `HEAD` vouched for it.
+        let changed_entry = self
+            .lock
+            .entries_of(&node.canonical)
+            .any(|(_, held)| held.rev == rev && held.spec_hash != spec_hash);
+        let changed_block = self
+            .lock
+            .tested
+            .get(&node.canonical)
+            .is_some_and(|block| block.rev == rev && block.spec_hash != spec_hash);
+        if changed_entry || changed_block {
+            return Ok(Err(TEXT_CHANGED.to_owned()));
+        }
+        let bound_hash = fresh_bound_hash(&bindings.fresh);
+        Ok(Ok((
+            node.canonical,
+            Evidence {
+                rev,
+                spec_hash,
+                bound_hash,
+            },
+        )))
     }
 
     /// The test's argv and its probe's, or why it is not run ("Runnable",
@@ -1367,6 +1516,114 @@ fn changed(repo: &Repo) -> Option<String> {
     (!reasons.is_empty()).then(|| reasons.join("; "))
 }
 
+/// Step 10a (task spec `tested-evidence`, "The run's write"), after a
+/// completed run: each reported node verified (its block vouching for its
+/// revision, `norm_hash` and bound hash at step 6, the tests that ran and
+/// passed, `HEAD`, the run's day) or failed (its block removed) merged into
+/// step 6's lock by core's [`merge_tested`], every other node untouched;
+/// the entries and the header but `format` kept. No row: `None`; only
+/// `unchanged` rows: no commit. Else the lock written and committed alone
+/// as accept commits it, under step 7's `y` (the consent answers yes,
+/// unasked); a failure is the lock's refusal, the verdicts kept.
+fn write_evidence(
+    env: &Env,
+    request: &VerifyTestsRequest,
+    prepared: &Prepared,
+    outcome: &mut VerifyTestsOutcome,
+) -> Option<VerifyTestsLock> {
+    let today = request.now.get(..10).unwrap_or(&request.now);
+    let mut runs: Vec<(String, TestedRun)> = Vec::new();
+    for (id, _, runnable) in &prepared.nodes {
+        let verdict = outcome
+            .nodes
+            .iter()
+            .find(|node| node.id == *id)
+            .map(|node| node.verdict);
+        let run = match (verdict, prepared.evidence.get(id)) {
+            (Some(NodeVerdict::Verified), Some(evidence)) => TestedRun::Verified(Tested {
+                rev: evidence.rev,
+                spec_hash: evidence.spec_hash.clone(),
+                bound_hash: evidence.bound_hash.clone(),
+                tests: runnable
+                    .iter()
+                    .filter_map(|&index| outcome.tests.get(index))
+                    .map(|row| TestedTest {
+                        file: row.file.clone(),
+                        symbol: row.symbol.clone(),
+                    })
+                    .collect(),
+                commit: prepared.repo.head.clone(),
+                verified_at: today.to_owned(),
+            }),
+            (Some(NodeVerdict::Failed), _) => TestedRun::Failed,
+            _ => continue,
+        };
+        runs.push((id.clone(), run));
+    }
+    let merge = merge_tested(&prepared.read.lock, runs);
+    if merge.rows.is_empty() {
+        return None;
+    }
+    let mut lock = VerifyTestsLock {
+        rows: merge.rows.clone(),
+        commit: None,
+        unchanged: merge.unchanged(),
+        refusal: None,
+    };
+    if lock.unchanged {
+        return Some(lock);
+    }
+    let changed: Vec<String> = merge.changed().into_iter().map(str::to_owned).collect();
+    let rows = lock_lines(&lock.rows);
+    let question = format!(
+        "commit the evidence of {} nodes to {LOCK_FILE} at {}? [y/N]",
+        changed.len(),
+        prepared.repo.head
+    );
+    let trailers = [LockTrailer {
+        key: TEST_COMMAND_TRAILER.to_owned(),
+        value: shown_template(prepared.template.written()),
+    }];
+    // Step 7's `y` covers the write: never a second question.
+    let mut consent = |_: &crate::lock::LockPrompt<'_>| true;
+    let written = write_and_commit(
+        env,
+        &prepared.project,
+        &prepared.repo,
+        &prepared.read,
+        &merge.lock,
+        &LockSubject::Tests {
+            nodes: &changed,
+            rows: &rows,
+        },
+        question,
+        LockOutcome::of_tests(),
+        &mut consent,
+        &trailers,
+    );
+    match written {
+        Ok(done) => {
+            outcome.messages.extend(done.messages);
+            match (done.written, done.refusal) {
+                (LockWritten::Committed, None) => lock.commit = done.commit,
+                (_, Some(refusal)) => lock.refusal = Some(refusal),
+                (_, None) => {
+                    lock.refusal = Some(format!("the commit of {LOCK_FILE} was not verified"));
+                }
+            }
+        }
+        Err(error) => lock.refusal = Some(one_line(&unprefixed(&error))),
+    }
+    Some(lock)
+}
+
+/// The lock's rows: `lock | <change> | <node>` each, by node bytes.
+fn lock_lines(rows: &[(String, TestedChange)]) -> String {
+    rows.iter()
+        .map(|(node, change)| format!("lock | {} | {}\n", change.as_str(), one_line(node)))
+        .collect()
+}
+
 // ---------------------------------------------------------------- output
 
 /// The template as the question shows it: each element a JSON string.
@@ -1531,6 +1788,15 @@ pub(crate) fn render_text(outcome: &VerifyTestsOutcome) -> String {
         "verify --tests{task}: {}: {tail}\n",
         outcome.verdict.as_str()
     ));
+    // The evidence's rows, then its commit or why none was made.
+    if let Some(lock) = &outcome.lock {
+        out.push_str(&lock_lines(&lock.rows));
+        match (&lock.commit, &lock.refusal) {
+            (Some(commit), _) => out.push_str(&format!("committed {commit}\n")),
+            (None, Some(refusal)) => out.push_str(&format!("lock: {}\n", one_line(refusal))),
+            (None, None) => {}
+        }
+    }
     escape_controls(&out)
 }
 
@@ -1567,7 +1833,7 @@ struct VerifyTestsJson<'a> {
     counts: CountsJson,
     tests: Vec<TestJson<'a>>,
     nodes: &'a [VerifyTestsNode],
-    lock: Option<()>,
+    lock: Option<&'a VerifyTestsLock>,
     cannot: &'a [String],
     notes: Vec<String>,
 }
@@ -1601,7 +1867,7 @@ impl Serialize for VerifyTestsOutcome {
                 })
                 .collect(),
             nodes: &self.nodes,
-            lock: None,
+            lock: self.lock.as_ref(),
             cannot: &self.cannot,
             notes: self.notes(),
         }
@@ -1624,8 +1890,8 @@ struct Event<'a> {
     probes: Vec<ProbeEvent<'a>>,
     tests: Vec<TestEvent<'a>>,
     nodes: &'a [VerifyTestsNode],
-    /// `null` until slice 8b writes the run's evidence.
-    lock_commit: Option<()>,
+    /// The verified evidence commit's OID; `null` without one.
+    lock_commit: Option<&'a str>,
     by: &'a str,
 }
 
@@ -1688,7 +1954,10 @@ impl<'a> Event<'a> {
                 })
                 .collect(),
             nodes: &outcome.nodes,
-            lock_commit: None,
+            lock_commit: outcome
+                .lock
+                .as_ref()
+                .and_then(|lock| lock.commit.as_deref()),
             by,
         }
     }

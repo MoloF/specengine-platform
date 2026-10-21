@@ -68,10 +68,11 @@ pub const MODES: [&str; 3] = ["observe", "enforce-introduced", "enforce"];
 /// since docs/features/verify-task.md "spec verify --task", **JSON**;
 /// `node`, `symbol` after `task` and `omitted` last since
 /// docs/features/verify-node.md "spec verify --node", **JSON**: `null`
-/// in every other mode).
-pub const TOP_KEYS: [&str; 13] = [
+/// in every other mode; `tested` the 11th, between `delta` and `cannot`,
+/// since docs/features/tested-evidence.md "Plain verify").
+pub const TOP_KEYS: [&str; 14] = [
     "mode", "base", "task", "node", "symbol", "verdict", "counts", "cascade", "rows", "delta",
-    "cannot", "notes", "omitted",
+    "tested", "cannot", "notes", "omitted",
 ];
 
 /// The keys of a row, in order ("Output"; `levels` after `compared` since

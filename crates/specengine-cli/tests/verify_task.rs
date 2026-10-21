@@ -25,10 +25,14 @@
 //! (`verify_common::ecs`). Each repository has its own `HOME`, so the
 //! tasks of one test number from `T-0001`. Non-Latin characters in Rust
 //! sources are Unicode escapes (ADR-0024).
+//!
+//! docs/features/tested-evidence.md (8b-1) RD-4: `--task T`'s `tested` is
+//! plain's entries of its set (the differential, `task_tested_is_its_sets`).
 
 mod anchor_common;
 mod common;
 mod lock_common;
+mod tested_common;
 mod verify_common;
 
 use std::collections::BTreeMap;
@@ -563,10 +567,15 @@ fn summary_of(document: &Value) -> String {
 
 /// Plain's text split: each non-`ok` row's block (its line and the
 /// `moved from` / `candidate` lines under it), the `cannot:` lines, the
-/// hints.
-fn plain_parts(plain: &Run) -> (Vec<String>, Vec<String>, Vec<String>) {
-    let (mut blocks, mut causes, mut hints): (Vec<String>, Vec<String>, Vec<String>) =
-        (Vec::new(), Vec::new(), Vec::new());
+/// hints, the `tested | …` lines (after the hints, before the summary:
+/// docs/features/tested-evidence.md "Plain verify").
+fn plain_parts(plain: &Run) -> (Vec<String>, Vec<String>, Vec<String>, Vec<String>) {
+    let (mut blocks, mut causes, mut hints, mut tested): (
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+        Vec<String>,
+    ) = (Vec::new(), Vec::new(), Vec::new(), Vec::new());
     let text = plain.text();
     let mut lines: Vec<&str> = text.lines().collect();
     lines.pop(); // the summary
@@ -575,6 +584,8 @@ fn plain_parts(plain: &Run) -> (Vec<String>, Vec<String>, Vec<String>) {
             causes.push(line.to_owned());
         } else if line.starts_with("hint: ") {
             hints.push(line.to_owned());
+        } else if line.starts_with("tested | ") {
+            tested.push(line.to_owned());
         } else if line.starts_with("  ") {
             let block = blocks
                 .last_mut()
@@ -585,14 +596,21 @@ fn plain_parts(plain: &Run) -> (Vec<String>, Vec<String>, Vec<String>) {
             blocks.push(format!("{line}\n"));
         }
     }
-    (blocks, causes, hints)
+    (blocks, causes, hints, tested)
 }
 
 /// The text `rows` (a subsequence of plain's) print under `prefix`:
 /// plain's blocks of those rows, plain's `cannot:` lines, plain's hints
-/// those rows keep, the summary of `document`.
-fn text_of(plain: &Run, keep: impl Fn(&Value) -> bool, prefix: &str, document: &Value) -> String {
-    let (blocks, causes, hints) = plain_parts(plain);
+/// those rows keep, plain's `tested` lines of the nodes `node_kept` keeps,
+/// the summary of `document`.
+fn text_of(
+    plain: &Run,
+    keep: impl Fn(&Value) -> bool,
+    node_kept: impl Fn(&str) -> bool,
+    prefix: &str,
+    document: &Value,
+) -> String {
+    let (blocks, causes, hints, tested) = plain_parts(plain);
     let findings: Vec<Value> = plain
         .rows()
         .into_iter()
@@ -614,6 +632,11 @@ fn text_of(plain: &Run, keep: impl Fn(&Value) -> bool, prefix: &str, document: &
     for line in causes
         .iter()
         .chain(hints.iter().filter(|line| hint_kept(line, &kept)))
+        .chain(
+            tested
+                .iter()
+                .filter(|line| line.rsplit(" | ").next().is_some_and(&node_kept)),
+        )
     {
         out.push_str(line);
         out.push('\n');
@@ -697,7 +720,7 @@ fn plain_premises(plain: &Run) {
     );
     assert_eq!(
         plain.text(),
-        text_of(plain, |_| true, "verify: ", &document),
+        text_of(plain, |_| true, |_| true, "verify: ", &document),
         "premise: plain's text"
     );
 }
@@ -734,6 +757,20 @@ fn differential(plain: &Run, run: &Run, case: &Case<'_>) -> Vec<Value> {
     for key in ["mode", "base", "cannot"] {
         assert_eq!(document[key], base[key], "{context}: `{key}` is plain's");
     }
+    // docs/features/tested-evidence.md "Plain verify": `--task T`'s
+    // `tested` is plain's entries of its set (`null` under `--changed`).
+    let set_tested = base["tested"].as_array().map(|entries| {
+        entries
+            .iter()
+            .filter(|entry| case.set.iter().any(|id| entry["node"] == *id))
+            .cloned()
+            .collect::<Vec<Value>>()
+    });
+    assert_eq!(
+        document["tested"],
+        json!(set_tested),
+        "{context}: `tested` is plain's of the set"
+    );
     let (verdict, code) = verdict_of(&document["mode"], &kept);
     assert_eq!(document["verdict"], verdict, "{context}: the verdict");
     assert_eq!(run.code, code, "{context}: the exit\n{}", run.show());
@@ -781,6 +818,7 @@ fn differential(plain: &Run, run: &Run, case: &Case<'_>) -> Vec<Value> {
         text_of(
             plain,
             |row| case.keeps(row),
+            |node| case.set.contains(&node),
             &format!("verify --task {}: ", case.id),
             &document
         ),
@@ -1813,5 +1851,45 @@ fn spawn_spec(
         code: status.code().expect("spec exited, not killed by a signal"),
         stdout: String::from_utf8(out.join().expect("stdout reader")).expect("UTF-8 stdout"),
         stderr: String::from_utf8(err.join().expect("stderr reader")).expect("UTF-8 stderr"),
+    }
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-4
+
+/// RD-4 ("Plain verify": `--task T: its set's`; M: every block listed
+/// under a task, or a set node's block missing): over the ECS corpus with
+/// a block per state (`tested_common::ecs_with_blocks`), PERK-STAMINA's
+/// task (its sections PERK-REGEN and PERK-DRAIN in its set) lists the
+/// three blocks of its set, plain's entries, never GONE-01's; TUNE-01's
+/// task `[]`; under `--changed` `null`; the verdict, counts and exit as
+/// the differential derives them from plain's rows.
+#[test]
+fn task_tested_is_its_sets() {
+    let (repo, _, _) = tested_common::ecs_with_blocks("vt8-tested-sets");
+    let stamina = new_task(&repo, &["PERK-STAMINA"]);
+    let tune = new_task(&repo, &["TUNE-01"]);
+    let cases = [
+        Case::of(&stamina, &["PERK-STAMINA", "PERK-REGEN", "PERK-DRAIN"]),
+        Case::of(&tune, &["TUNE-01"]),
+    ];
+    let reference = plain(&repo, VerifiedTree::WorkingTree);
+    assert_eq!(list(&reference.json()["tested"]).len(), 4);
+    let runs = compare(&repo, GAME, VerifiedTree::WorkingTree, &cases);
+    let nodes: Vec<Value> = list(&runs[0].json()["tested"])
+        .iter()
+        .map(|entry| entry["node"].clone())
+        .collect();
+    assert_eq!(
+        nodes,
+        [
+            json!("PERK-DRAIN"),
+            json!("PERK-REGEN"),
+            json!("PERK-STAMINA")
+        ]
+    );
+    assert_eq!(runs[1].json()["tested"], json!([]));
+    let changed = compare(&repo, GAME, VerifiedTree::Changed, &cases);
+    for run in &changed {
+        assert_eq!(run.json()["tested"], Value::Null, "--changed: null");
     }
 }

@@ -448,26 +448,47 @@ fn runs_follow_the_order_of_their_first_test() {
     }
 }
 
-/// TE-2 (AC-8 so far): a task's tests that all pass give `verified`, exit
-/// 0, the event `verified`; `spec.lock` stays absent and the repository
-/// (HEAD, refs, status, index, files) as it was (8b writes the lock). M: a
+/// TE-2 (AC-8, docs/features/tested-evidence.md RD-5): a task's tests that
+/// all pass give `verified`, exit 0, the event `verified`; the run commits
+/// its evidence: one commit on top of `HEAD` changing `spec.lock` alone,
+/// KILN-RAMP's block in it (no other node's), JSON `lock` its row and the
+/// commit, the event's `lock_commit` that commit, the tree clean. M: no
 /// lock written, or a passing set not `verified`.
 #[test]
-fn passing_task_is_verified_and_writes_no_lock() {
+fn passing_task_commits_its_evidence() {
     let kiln = Kiln::new("vt-verified");
     let task = kiln.new_task(&["KILN-RAMP"]);
-    let before = kiln.repo.state();
+    let head = kiln.repo.head();
     let run = kiln.run_task(&task);
     run.code(0);
     assert_eq!(run.verdict(), "verified");
-    assert_eq!(run.json()["lock"], Value::Null);
     assert_eq!(run.node("KILN-RAMP")["verdict"], "verified");
-    assert!(kiln.repo.lock().is_none(), "no spec.lock");
-    assert_eq!(kiln.repo.state(), before, "the repository is untouched");
+    let commit = kiln.repo.head();
+    assert_ne!(commit, head, "the evidence committed");
+    assert_eq!(kiln.repo.parents(&commit), [head]);
+    assert_eq!(kiln.repo.changed(&commit), ["spec.lock"]);
+    let lock = kiln.repo.lock_text();
+    assert_eq!(lock.lines().nth(1), Some("format = 3"));
+    assert_eq!(lock.matches("\n[[tested]]\n").count(), 1, "{lock}");
+    assert!(
+        lock.contains("\n[[tested]]\nnode = \"KILN-RAMP\"\n"),
+        "{lock}"
+    );
+    assert!(!lock.contains("[[binding]]"), "no entry");
+    assert_eq!(
+        run.json()["lock"],
+        json!({
+            "rows": [{"node": "KILN-RAMP", "change": "added"}],
+            "commit": commit,
+            "unchanged": false,
+            "refusal": null,
+        })
+    );
+    assert!(kiln.repo.porcelain().is_empty(), "the tree is clean");
     let event = kiln.one_event();
     assert_eq!(
         (&event["verdict"], &event["task"], &event["lock_commit"]),
-        (&json!("verified"), &json!(task), &Value::Null)
+        (&json!("verified"), &json!(task), &json!(commit))
     );
 }
 

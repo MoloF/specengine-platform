@@ -12,26 +12,35 @@
 //! ADR-0050, `docs/canon/architecture-code.md#spec-lock`.
 //!
 //! - **Formats** ([`LockFormat`]): this build writes format 2
-//!   ([`LOCK_FORMAT`]: each entry's `levels`, `sig_hash`, `body_hash`,
-//!   `deps_hash`, an item's or a module's fingerprints) and never format 1
-//!   (one v2 `ast_hash` per item). A [`Lock`] knows its format; no reader
-//!   upgrades one in memory.
+//!   ([`BINDING_FORMAT`]: each entry's `levels`, `sig_hash`, `body_hash`,
+//!   `deps_hash`, an item's or a module's fingerprints) and format 3
+//!   ([`LOCK_FORMAT`]: format 2 plus one `[[tested]]` block per node a
+//!   passing `spec verify --tests` run vouched for, [`Tested`]), the latter
+//!   iff a block remains ([`Lock::format_number`]); never format 1 (one v2
+//!   `ast_hash` per item). A [`Lock`] knows its format; no reader upgrades
+//!   one in memory.
 //! - **Bytes** ([`render_lock`]): the header comment, `format`,
 //!   `norm_recipe`, `code_recipe`, then one `[[binding]]` block per entry
-//!   in key order, an empty line before each; keys in the order of
-//!   [`ENTRY_KEYS`] (`item_kind` only for an item, the fingerprints only
-//!   for an item or a module); LF and a final LF; basic strings escaping
+//!   in key order, then one `[[tested]]` block per node by `node` bytes, an
+//!   empty line before each; keys in the order of [`ENTRY_KEYS`]
+//!   (`item_kind` only for an item, the fingerprints only for an item or a
+//!   module) and [`TESTED_KEYS`]; LF and a final LF; basic strings escaping
 //!   only `"`, `\` and U+0000–U+001F, U+007F. Never `toml`'s serializer.
 //! - **Key** ([`EntryKey`]): `node` bytes, `relation` as listed
 //!   ([`LockRelation`]), then `file`, `kind`, `symbol`, `item_kind` bytes.
 //! - **Reader** ([`parse_lock`]): any TOML layout; every refusal is a
 //!   [`LockError`] at its line, `spec.lock:<line>: <message>`. Without the
-//!   build's recipes formats 1 and 2 are read, each by its own rules (a
-//!   reader of the spec side alone); with them, format 2 at those recipes
-//!   only, format 1 and another `code_recipe` refused by a text naming
-//!   `spec lock rebase` (every writer and code judge). A key's strings pass
-//!   [`key_problem`], the writer's check too: whatever is written reads
-//!   back.
+//!   build's recipes formats 1 to 3 are read, each by its own rules (a
+//!   reader of the spec side alone); with them, formats 2 and 3 at those
+//!   recipes only, format 1 and another `code_recipe` refused by a text
+//!   naming `spec lock rebase` (every writer and code judge). A key's
+//!   strings pass [`key_problem`], the writer's check too: whatever is
+//!   written reads back.
+//! - **Evidence** (task spec `tested-evidence`): [`bound_bytes`] builds what
+//!   a block's `bound_hash` hashes (the CLI hashes it: no hash here),
+//!   [`tested_state`] judges a block on every read and is never stored,
+//!   [`merge_tested`] is the test run's write; every other writer keeps,
+//!   refreshes, drops, merges or re-derives a block by its own rule.
 
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
@@ -47,9 +56,15 @@ use super::walk_scope::is_clean_relative;
 /// The file's name, at the project root.
 pub const LOCK_FILE: &str = "spec.lock";
 
-/// The format this build writes, and the only one a writer or a code judge
-/// reads ([`parse_lock`] with the build's recipes).
-pub const LOCK_FORMAT: i64 = 2;
+/// The newest format this build reads and writes: format 2 plus
+/// `[[tested]]` blocks, written only while a block remains
+/// ([`Lock::format_number`]). A writer or a code judge reads it and
+/// [`BINDING_FORMAT`] ([`parse_lock`] with the build's recipes).
+pub const LOCK_FORMAT: i64 = 3;
+
+/// The format of a lock with no `[[tested]]` block: its entries' format,
+/// the one format 1 is rebased into, byte for byte as before evidence.
+pub const BINDING_FORMAT: i64 = 2;
 
 /// The step every writer and code judge names for a lock of format 1 or of
 /// another `code_recipe` (task spec `lock-levels` Q11): one text, every
@@ -60,8 +75,21 @@ pub const REBASE_STEP: &str = "run spec lock rebase on a terminal";
 pub const LOCK_HEADER: &str = "# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit";
 
 /// The one `verified_by` of a binding entry: a test run's evidence is not
-/// an entry (slice 8b's `[[tested]]`, a later format).
+/// an entry but a `[[tested]]` block of format 3 ([`Tested`]), which has
+/// no `verified_by`.
 pub const VERIFIED_BY: &str = "owner";
+
+/// The first line of a block's bound bytes ([`bound_bytes`]).
+pub const BOUND_TAG: &str = "specengine-tested/v1";
+
+/// A block's node whose revision cannot be read now, or whose `norm_hash`
+/// is null (the test run's `not verifiable` words too).
+pub const REV_UNKNOWN: &str = "rev_unknown";
+pub const HASH_NULL: &str = "hash_null";
+
+/// A stale block's categories ([`tested_state`]).
+pub const SPEC_CHANGED: &str = "spec_changed";
+pub const CODE_CHANGED: &str = "code_changed";
 
 /// The prefix of a `spec_hash` and of every code digest.
 pub const HASH_PREFIX: &str = "b3:";
@@ -69,8 +97,23 @@ pub const HASH_PREFIX: &str = "b3:";
 /// The largest revision a lock holds.
 pub const REV_MAX: u32 = 999_999_999;
 
-/// The top-level keys, in render order (`binding` the blocks).
-const TOP_KEYS: [&str; 4] = ["format", "norm_recipe", "code_recipe", "binding"];
+/// The top-level keys, in render order (`binding` the entries, `tested`
+/// the evidence blocks).
+const TOP_KEYS: [&str; 5] = ["format", "norm_recipe", "code_recipe", "binding", "tested"];
+
+/// A `[[tested]]` block's keys, in render order.
+pub const TESTED_KEYS: [&str; 7] = [
+    "node",
+    "rev",
+    "spec_hash",
+    "bound_hash",
+    "tests",
+    "commit",
+    "verified_at",
+];
+
+/// A `tests` item's keys, in render order.
+const TEST_KEYS: [&str; 2] = ["file", "symbol"];
 
 /// A format-2 binding block's keys, in render order.
 pub const ENTRY_KEYS: [&str; 19] = [
@@ -118,32 +161,38 @@ const FORMAT_1_ITEM_ONLY_KEYS: [&str; 2] = ["item_kind", "ast_hash"];
 /// The fingerprint keys of a format-2 entry, an item's or a module's only.
 const FINGERPRINT_KEYS: [&str; 3] = ["skeleton_hash", "quote_hash", "body_bytes"];
 
-/// A lock's format: what its entries record of the code.
+/// A lock's format: what its entries record of the code. Format 3 is
+/// format 2 plus `[[tested]]` blocks: its entries are [`LockFormat::Two`]'s,
+/// and the number a lock is written with is [`Lock::format_number`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum LockFormat {
     /// Format 1 (`docs/canon/spec-lock.md` "Entry"): an item's whole v2
     /// digest (`ast_hash`), a module or a RON value by `file_blob` alone.
     /// Read where only the spec side counts; never written.
     One,
-    /// Format 2: every entry's levels and their digests, an item's or a
-    /// module's fingerprints. This build's ([`LOCK_FORMAT`]).
+    /// Formats 2 and 3: every entry's levels and their digests, an item's
+    /// or a module's fingerprints. This build's ([`BINDING_FORMAT`], and
+    /// [`LOCK_FORMAT`] with a block).
     Two,
 }
 
 impl LockFormat {
-    /// The number written as `format`.
-    pub const fn number(self) -> i64 {
+    /// The entries' format number (1 or 2), never the file's: a lock
+    /// holding a block is written format 3 with format-2 entries. The
+    /// number a lock is written with is [`Lock::format_number`].
+    pub const fn entries_number(self) -> i64 {
         match self {
             Self::One => 1,
-            Self::Two => 2,
+            Self::Two => BINDING_FORMAT,
         }
     }
 
-    /// The format numbered `number`.
+    /// The entries' format of a lock numbered `number` (3: format 2's
+    /// entries).
     pub const fn of(number: i64) -> Option<Self> {
         match number {
             1 => Some(Self::One),
-            2 => Some(Self::Two),
+            2 | 3 => Some(Self::Two),
             _ => None,
         }
     }
@@ -350,23 +399,67 @@ pub struct Verified {
     pub verified_at: String,
 }
 
-/// A whole lock: its format, its recipes and its entries by key. Every
-/// entry's code is of the lock's format ([`parse_lock`] reads it so; a
-/// writer gives format-2 entries to a format-2 lock only).
+/// One test a `[[tested]]` block names: a `@verifies` binding key's `file`
+/// and `symbol`. Ordered by `file` bytes, then `symbol` bytes.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TestedTest {
+    /// Root-relative, `/`-separated ([`key_problem`]'s `file` rule).
+    pub file: String,
+    /// The binding key's `symbol`: non-empty.
+    pub symbol: String,
+}
+
+/// A `[[tested]]` block (task spec `tested-evidence`, "Format 3 and the
+/// block"): SpecEngine's own run saw every runnable bound test of its node
+/// pass at `commit`, for revision `rev`, `norm_hash` `spec_hash` and the
+/// bound code `bound_hash` ([`bound_bytes`]). Judged on every read by
+/// [`tested_state`], never stored as a state; written only by the owner's
+/// `spec verify --tests` ([`merge_tested`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tested {
+    pub rev: u32,
+    /// `b3:` + 64 lowercase hex: the node's `norm_hash` at `commit`.
+    pub spec_hash: String,
+    /// `b3:` + 64 lowercase hex: the hash of [`bound_bytes`] at `commit`.
+    pub bound_hash: String,
+    /// The tests that ran and passed: non-empty, distinct, in order.
+    pub tests: BTreeSet<TestedTest>,
+    /// The run's `HEAD` (40 or 64 lowercase hex): the evidence commit's
+    /// parent.
+    pub commit: String,
+    /// The run's UTC date, `YYYY-MM-DD`.
+    pub verified_at: String,
+}
+
+impl Tested {
+    /// The block vouches for `rev` and `norm_hash` as an entry does
+    /// ([`vouches`]): a block counts as one entry wherever entries vouch.
+    pub fn vouches(&self, rev: u32, norm_hash: &str) -> bool {
+        self.rev == rev && self.spec_hash == norm_hash
+    }
+}
+
+/// A whole lock: its format, its recipes, its entries by key and its
+/// `[[tested]]` blocks by node (canonical ID bytes). Every entry's code is
+/// of the lock's format ([`parse_lock`] reads it so; a writer gives
+/// format-2 entries to a format-2 lock only); a block is only a
+/// [`LockFormat::Two`] lock's, which is then written as format 3.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Lock {
     pub format: LockFormat,
     pub recipes: Recipes,
     pub entries: BTreeMap<EntryKey, Verified>,
+    pub tested: BTreeMap<String, Tested>,
 }
 
 impl Lock {
-    /// A format-2 lock with no entry.
+    /// A format-2 lock with no entry and no block.
     pub fn empty(recipes: Recipes) -> Self {
         Self {
             format: LockFormat::Two,
             recipes,
             entries: BTreeMap::new(),
+            tested: BTreeMap::new(),
         }
     }
 
@@ -376,6 +469,22 @@ impl Lock {
         node: &'a str,
     ) -> impl Iterator<Item = (&'a EntryKey, &'a Verified)> + 'a {
         self.entries.iter().filter(move |(key, _)| key.node == node)
+    }
+
+    /// Some entry or the block of `node` is held: what a gone node's drop
+    /// takes away.
+    pub fn holds(&self, node: &str) -> bool {
+        self.entries_of(node).next().is_some() || self.tested.contains_key(node)
+    }
+
+    /// The number written as `format`: 1 for format 1, 3 when a block
+    /// remains, else 2 (the bytes before evidence).
+    pub fn format_number(&self) -> i64 {
+        match self.format {
+            LockFormat::One => LockFormat::One.entries_number(),
+            LockFormat::Two if self.tested.is_empty() => BINDING_FORMAT,
+            LockFormat::Two => LOCK_FORMAT,
+        }
     }
 }
 
@@ -406,23 +515,27 @@ type RawTable = BTreeMap<Spanned<String>, Spanned<toml::Value>>;
 struct RawBlocks {
     #[serde(default)]
     binding: Option<Vec<Spanned<RawTable>>>,
+    #[serde(default)]
+    tested: Option<Vec<Spanned<RawTable>>>,
 }
 
-/// Reads a lock in any TOML layout. Refused: a `format` neither 1 nor 2;
-/// an unknown, missing or repeated key; a duplicate entry key; a value of
-/// the wrong form.
+/// Reads a lock in any TOML layout. Refused: a `format` neither 1, 2 nor
+/// 3; an unknown, missing or repeated key; a duplicate entry key; a
+/// `[[tested]]` block under format 1 or 2 (`[[tested]] needs format 3`, its
+/// line), format 3 without one (`format 3 holds no [[tested]] block`, the
+/// `format` line), a second block of one node; a value of the wrong form.
 ///
 /// - `build` `None` (a reader of the spec side alone: the rule
 ///   `rev-not-raised`, `spec bump`, a review's vouching count, an
-///   editorial approve, regen per stage): formats 1 and 2, each by its own
+///   editorial approve, regen per stage): formats 1 to 3, each by its own
 ///   rules, recipes never compared.
-/// - `Some(build)` (every writer and code judge): format 2 at the build's
-///   recipes only, checked in this order, the first failing one the error
-///   (task spec `lock-levels` Q27): (1) unreadable (the TOML, `format`, a
-///   recipe key) or a `format` neither 1 nor 2; (2) another
+/// - `Some(build)` (every writer and code judge): formats 2 and 3 at the
+///   build's recipes only, checked in this order, the first failing one the
+///   error (task spec `lock-levels` Q27): (1) unreadable (the TOML,
+///   `format`, a recipe key) or a `format` neither 1, 2 nor 3; (2) another
 ///   `norm_recipe`, no step (no rebase crosses it); (3) format 1; (4)
-///   another `code_recipe`; (5) the entries. (3) and (4) name
-///   [`REBASE_STEP`].
+///   another `code_recipe`; (5) the entries and the blocks. (3) and (4)
+///   name [`REBASE_STEP`].
 pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError> {
     let at = |span: Option<Range<usize>>, message: String| LockError {
         line: span.map(|span| line_of(text, span.start)),
@@ -446,9 +559,9 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
 
     let format_value = value("format").ok_or_else(|| missing("format"))?;
     let format_span = format_value.span();
-    let format = match format_value.get_ref() {
+    let (format, written) = match format_value.get_ref() {
         toml::Value::Integer(number) => match LockFormat::of(*number) {
-            Some(format) => format,
+            Some(format) => (format, *number),
             None if *number > LOCK_FORMAT => {
                 return Err(at(
                     Some(format_span),
@@ -458,7 +571,10 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
             None => {
                 return Err(at(
                     Some(format_span),
-                    format!("format {number} is not this build's: it reads formats 1 and 2"),
+                    format!(
+                        "format {number} is not this build's: it reads formats 1, 2 and \
+                         {LOCK_FORMAT}"
+                    ),
                 ));
             }
         },
@@ -497,9 +613,8 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
             return Err(at(
                 Some(format_span),
                 format!(
-                    "format {} (\"{code}\"), this build's is {LOCK_FORMAT} (\"{}\"): \
+                    "format {written} (\"{code}\"), this build's is {BINDING_FORMAT} (\"{}\"): \
                      {REBASE_STEP}",
-                    format.number(),
                     build.code
                 ),
             ));
@@ -540,11 +655,185 @@ pub fn parse_lock(text: &str, build: Option<&Recipes>) -> Result<Lock, LockError
         }
         entries.insert(key, verified);
     }
+    let blocks = blocks.tested.unwrap_or_default();
+    if written != LOCK_FORMAT
+        && let Some(block) = blocks.first()
+    {
+        return Err(at(
+            Some(block.span()),
+            format!("[[tested]] needs format {LOCK_FORMAT}"),
+        ));
+    }
+    if written == LOCK_FORMAT && blocks.is_empty() {
+        return Err(at(
+            Some(format_span),
+            format!("format {LOCK_FORMAT} holds no [[tested]] block"),
+        ));
+    }
+    let mut tested = BTreeMap::new();
+    for block in blocks {
+        let span = block.span();
+        let (node, read) = tested_block(text, block.get_ref(), span.clone())?;
+        if tested.contains_key(&node) {
+            return Err(at(Some(span), format!("a second [[tested]] for `{node}`")));
+        }
+        tested.insert(node, read);
+    }
     Ok(Lock {
         format,
         recipes: Recipes { norm, code },
         entries,
+        tested,
     })
+}
+
+/// One `[[tested]]` block read: its node and what it vouches for. Its
+/// strings by an entry's rules (`node` [`key_problem`]'s, the hashes `b3:`
+/// and 64 lowercase hex, `commit` a full OID, `verified_at` a date); its
+/// `tests` a non-empty array of inline tables of `file` (a key's `file`)
+/// and `symbol` (non-empty), by (`file`, `symbol`) bytes, distinct. A
+/// problem inside `tests` is at its value's line.
+fn tested_block(
+    text: &str,
+    table: &RawTable,
+    span: Range<usize>,
+) -> Result<(String, Tested), LockError> {
+    let at = |span: Range<usize>, message: String| LockError {
+        line: Some(line_of(text, span.start)),
+        message,
+    };
+    for key in table.keys() {
+        if !TESTED_KEYS.contains(&key.get_ref().as_str()) {
+            return Err(at(
+                key.span(),
+                format!("unknown key `{}` in a [[tested]]", key.get_ref()),
+            ));
+        }
+    }
+    let without = |name: &str| at(span.clone(), format!("a [[tested]] without `{name}`"));
+    let required = |name: &str| -> Result<(&str, Range<usize>), LockError> {
+        match table.get(name) {
+            None => Err(without(name)),
+            Some(value) => match value.get_ref() {
+                toml::Value::String(text) => Ok((text.as_str(), value.span())),
+                other => Err(at(
+                    value.span(),
+                    format!("`{name}` is a {}, not a string", other.type_str()),
+                )),
+            },
+        }
+    };
+    let refused = |problem: KeyProblem, value: &str, span: Range<usize>| {
+        at(span, format!("{problem}: \"{value}\""))
+    };
+    let (node, node_span) = required("node")?;
+    if let Some(problem) = node_problem(node) {
+        return Err(refused(problem, node, node_span));
+    }
+    let rev = match table.get("rev") {
+        None => return Err(without("rev")),
+        Some(value) => match value.get_ref() {
+            toml::Value::Integer(rev) => u32::try_from(*rev)
+                .ok()
+                .filter(|rev| (1..=REV_MAX).contains(rev))
+                .ok_or_else(|| {
+                    at(
+                        value.span(),
+                        format!("`rev` {rev} is not a revision (1 to {REV_MAX})"),
+                    )
+                })?,
+            other => {
+                return Err(at(
+                    value.span(),
+                    format!("`rev` is a {}, not an integer", other.type_str()),
+                ));
+            }
+        },
+    };
+    let (spec_hash, spec_span) = required("spec_hash")?;
+    hash_form("spec_hash", spec_hash).map_err(|message| at(spec_span, message))?;
+    let (bound_hash, bound_span) = required("bound_hash")?;
+    hash_form("bound_hash", bound_hash).map_err(|message| at(bound_span, message))?;
+    let tests = match table.get("tests") {
+        None => return Err(without("tests")),
+        Some(value) => match value.get_ref() {
+            toml::Value::Array(items) => {
+                tested_tests(items).map_err(|message| at(value.span(), message))?
+            }
+            other => {
+                return Err(at(
+                    value.span(),
+                    format!("`tests` is a {}, not an array", other.type_str()),
+                ));
+            }
+        },
+    };
+    let (commit, commit_span) = required("commit")?;
+    oid_form("commit", commit).map_err(|message| at(commit_span, message))?;
+    let (verified_at, at_span) = required("verified_at")?;
+    if !is_calendar_date(verified_at) {
+        return Err(at(
+            at_span,
+            format!("`verified_at` \"{verified_at}\" is not a date (YYYY-MM-DD)"),
+        ));
+    }
+    Ok((
+        node.to_owned(),
+        Tested {
+            rev,
+            spec_hash: spec_hash.to_owned(),
+            bound_hash: bound_hash.to_owned(),
+            tests,
+            commit: commit.to_owned(),
+            verified_at: verified_at.to_owned(),
+        },
+    ))
+}
+
+/// A block's `tests` read, or the first problem's message.
+fn tested_tests(items: &[toml::Value]) -> Result<BTreeSet<TestedTest>, String> {
+    if items.is_empty() {
+        return Err("`tests` is empty".to_owned());
+    }
+    let mut tests: Vec<TestedTest> = Vec::with_capacity(items.len());
+    for item in items {
+        let toml::Value::Table(item) = item else {
+            return Err(format!(
+                "a `tests` item is a {}, not an inline table",
+                item.type_str()
+            ));
+        };
+        if let Some(key) = item.keys().find(|key| !TEST_KEYS.contains(&key.as_str())) {
+            return Err(format!("unknown key `{key}` in a `tests` item"));
+        }
+        let string = |name: &str| -> Result<String, String> {
+            match item.get(name) {
+                None => Err(format!("a `tests` item without `{name}`")),
+                Some(toml::Value::String(text)) => Ok(text.clone()),
+                Some(other) => Err(format!("`{name}` is a {}, not a string", other.type_str())),
+            }
+        };
+        let file = string("file")?;
+        if let Some(problem) = file_problem(&file) {
+            return Err(format!("{problem}: \"{file}\""));
+        }
+        let symbol = string("symbol")?;
+        if let Some(problem) = symbol_problem(&symbol) {
+            return Err(format!("{problem}: \"{symbol}\""));
+        }
+        tests.push(TestedTest { file, symbol });
+    }
+    if tests.windows(2).any(|pair| pair[0] > pair[1]) {
+        return Err("`tests` is not in (file, symbol) order".to_owned());
+    }
+    // In order: a test twice is two equal neighbours.
+    if let Some(pair) = tests.windows(2).find(|pair| pair[0] == pair[1]) {
+        return Err(format!(
+            "a second test `{}` `{}` in `tests`",
+            pair[1].file, pair[1].symbol
+        ));
+    }
+    Ok(tests.into_iter().collect())
 }
 
 /// One block of a lock of `format` read: its key and what it vouches for.
@@ -1007,14 +1296,19 @@ fn line_of(text: &str, offset: usize) -> usize {
 
 // ---------------------------------------------------------------- render
 
-/// The lock's canonical bytes, of its own format. A writer renders a
-/// format-2 lock only: one reading a format-1 lock refuses before it
-/// renders (task spec `lock-levels` "Readers").
+/// The lock's canonical bytes, of its own format: format 3 iff a block
+/// remains, else format 2 byte for byte as before evidence. A writer
+/// renders a format-2 lock only: one reading a format-1 lock refuses before
+/// it renders (task spec `lock-levels` "Readers").
 pub fn render_lock(lock: &Lock) -> String {
+    debug_assert!(
+        lock.tested.is_empty() || lock.format == LockFormat::Two,
+        "a [[tested]] block in a format-1 lock"
+    );
     let mut out = String::new();
     out.push_str(LOCK_HEADER);
     out.push('\n');
-    out.push_str(&format!("format = {}\n", lock.format.number()));
+    out.push_str(&format!("format = {}\n", lock.format_number()));
     out.push_str(&format!("norm_recipe = {}\n", basic(&lock.recipes.norm)));
     out.push_str(&format!("code_recipe = {}\n", basic(&lock.recipes.code)));
     for (key, verified) in &lock.entries {
@@ -1028,6 +1322,34 @@ pub fn render_lock(lock: &Lock) -> String {
         out.push('\n');
         out.push_str(&render_block(key, verified));
     }
+    for (node, tested) in &lock.tested {
+        out.push('\n');
+        out.push_str(&render_tested(node, tested));
+    }
+    out
+}
+
+/// One `[[tested]]` block, its last line ended: the keys of
+/// [`TESTED_KEYS`], `tests = [`, one `{ file = <s>, symbol = <s> },` per
+/// test two spaces in, `]` alone.
+pub fn render_tested(node: &str, tested: &Tested) -> String {
+    debug_assert!(!tested.tests.is_empty(), "a [[tested]] block with no test");
+    let mut out = String::from("[[tested]]\n");
+    out.push_str(&format!("node = {}\n", basic(node)));
+    out.push_str(&format!("rev = {}\n", tested.rev));
+    out.push_str(&format!("spec_hash = {}\n", basic(&tested.spec_hash)));
+    out.push_str(&format!("bound_hash = {}\n", basic(&tested.bound_hash)));
+    out.push_str("tests = [\n");
+    for test in &tested.tests {
+        out.push_str(&format!(
+            "  {{ file = {}, symbol = {} }},\n",
+            basic(&test.file),
+            basic(&test.symbol)
+        ));
+    }
+    out.push_str("]\n");
+    out.push_str(&format!("commit = {}\n", basic(&tested.commit)));
+    out.push_str(&format!("verified_at = {}\n", basic(&tested.verified_at)));
     out
 }
 
@@ -1153,6 +1475,251 @@ fn basic(text: &str) -> String {
     out
 }
 
+// -------------------------------------------------------------- evidence
+
+/// One binding as [`bound_bytes`] reads it: its key and its digests.
+pub type Bound<'a> = (&'a EntryKey, &'a LevelCode);
+
+/// What a block's `bound_hash` hashes (task spec `tested-evidence`, "Bound
+/// hash"; the caller hashes it, store `b3_hash`): [`BOUND_TAG`], then per
+/// binding of `bindings` (every relation naming one node, a key from
+/// several markers once: the first given) in key order its key's lines
+/// (`node`, `relation`, `file`, `kind`, `symbol`, `item_kind` when present)
+/// and its `sig_hash`, `body_hash`, `deps_hash` lines as [`render_block`]
+/// writes them, then an empty line; every line LF-ended. Never a level
+/// list, a fingerprint, `body_bytes`, `file_blob`, `rev`, `spec_hash`, a
+/// commit or a date: no git OID, so a SHA-256 repository hashes alike.
+pub fn bound_bytes<'a>(
+    bindings: impl IntoIterator<Item = (&'a EntryKey, &'a LevelCode)>,
+) -> String {
+    let mut sorted: BTreeMap<&EntryKey, &LevelCode> = BTreeMap::new();
+    for (key, code) in bindings {
+        sorted.entry(key).or_insert(code);
+    }
+    let mut out = String::from(BOUND_TAG);
+    out.push('\n');
+    for (key, code) in sorted {
+        let mut line = |name: &str, value: String| {
+            out.push_str(name);
+            out.push_str(" = ");
+            out.push_str(&value);
+            out.push('\n');
+        };
+        line("node", basic(&key.node));
+        line("relation", basic(key.relation.as_str()));
+        line("file", basic(&key.file));
+        line("kind", basic(key.kind.as_str()));
+        line("symbol", basic(&key.symbol));
+        if let Some(item_kind) = &key.item_kind {
+            line("item_kind", basic(item_kind));
+        }
+        line("sig_hash", basic(&code.sig_hash));
+        line("body_hash", basic(&code.body_hash));
+        line("deps_hash", basic(&code.deps_hash));
+        out.push('\n');
+    }
+    out
+}
+
+/// A block's node as a read finds it now.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TestedNode<'a> {
+    /// No node has the block's `node` as its canonical ID.
+    Gone,
+    /// Its revision R now (`None`: unreadable) and its `norm_hash` H now
+    /// (`None`: null).
+    Found {
+        rev: Option<u32>,
+        norm_hash: Option<&'a str>,
+    },
+}
+
+/// A block's state on a read ([`tested_state`]): never stored, never a
+/// verdict, a count, a class or an exit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TestedState {
+    /// None of the others applies.
+    Verified,
+    /// [`SPEC_CHANGED`] or [`CODE_CHANGED`].
+    Stale(&'static str),
+    /// Its word: [`REV_UNKNOWN`], [`HASH_NULL`], or the first binding of the
+    /// node not lockable now in its words (`spec_ahead`, `bad_levels`,
+    /// `cannot_verify …`).
+    Unverifiable(String),
+    NodeGone,
+}
+
+impl TestedState {
+    /// `verified`, `stale`, `unverifiable` or `node_gone`.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Stale(_) => "stale",
+            Self::Unverifiable(_) => "unverifiable",
+            Self::NodeGone => "node_gone",
+        }
+    }
+
+    /// A stale block's category or an unverifiable one's word; else none.
+    pub fn category(&self) -> Option<&str> {
+        match self {
+            Self::Stale(category) => Some(category),
+            Self::Unverifiable(word) => Some(word),
+            Self::Verified | Self::NodeGone => None,
+        }
+    }
+}
+
+/// The one judge of a block (task spec `tested-evidence`, "The state"),
+/// pure: per block the first that applies, `node_gone`; `unverifiable` (the
+/// revision unreadable, the hash null, else `lockable`'s first binding of
+/// the node not lockable now); `stale spec_changed` (R and H not the
+/// block's `rev` and `spec_hash`); `stale code_changed` (`bound_hash`, the
+/// hash of the node's [`bound_bytes`] now, not the block's); `verified`.
+/// `lockable` and `bound_hash` are asked only when no earlier state
+/// applies, each at most once; their error ends the judge. Never an input:
+/// an agent's report, the run's event, the tests reaching a change.
+pub fn tested_state<E>(
+    block: &Tested,
+    node: TestedNode<'_>,
+    lockable: impl FnOnce() -> Result<Option<String>, E>,
+    bound_hash: impl FnOnce() -> Result<String, E>,
+) -> Result<TestedState, E> {
+    let (rev, norm_hash) = match node {
+        TestedNode::Gone => return Ok(TestedState::NodeGone),
+        TestedNode::Found { rev, norm_hash } => (rev, norm_hash),
+    };
+    let Some(rev) = rev else {
+        return Ok(TestedState::Unverifiable(REV_UNKNOWN.to_owned()));
+    };
+    let Some(norm_hash) = norm_hash else {
+        return Ok(TestedState::Unverifiable(HASH_NULL.to_owned()));
+    };
+    if let Some(word) = lockable()? {
+        return Ok(TestedState::Unverifiable(word));
+    }
+    if !block.vouches(rev, norm_hash) {
+        return Ok(TestedState::Stale(SPEC_CHANGED));
+    }
+    if bound_hash()? != block.bound_hash {
+        return Ok(TestedState::Stale(CODE_CHANGED));
+    }
+    Ok(TestedState::Verified)
+}
+
+/// What the test run's write did to a node's block.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TestedChange {
+    /// Verified, no block: one added.
+    Added,
+    /// Verified, the block differs on `rev`, `spec_hash`, `bound_hash` or
+    /// `tests`: replaced.
+    Refreshed,
+    /// Verified and equal on those four: kept byte for byte (`commit`,
+    /// `verified_at` too).
+    Unchanged,
+    /// Failed (a time-out too) with a block: removed.
+    Removed,
+}
+
+impl TestedChange {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Added => "added",
+            Self::Refreshed => "refreshed",
+            Self::Unchanged => "unchanged",
+            Self::Removed => "removed",
+        }
+    }
+}
+
+/// A reported node's end in a completed test run, as its write reads it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TestedRun {
+    /// Every runnable test passed: the block the run vouches for.
+    Verified(Tested),
+    /// A test failed or timed out.
+    Failed,
+}
+
+/// The test run's write: the new lock and a row per node whose block it
+/// adds, refreshes, keeps or removes, by node bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestedMerge {
+    pub lock: Lock,
+    pub rows: Vec<(String, TestedChange)>,
+}
+
+impl TestedMerge {
+    /// Every row is `unchanged` (no row: false).
+    pub fn unchanged(&self) -> bool {
+        !self.rows.is_empty()
+            && self
+                .rows
+                .iter()
+                .all(|(_, change)| *change == TestedChange::Unchanged)
+    }
+
+    /// The nodes whose block changed, by bytes.
+    pub fn changed(&self) -> Vec<&str> {
+        self.rows
+            .iter()
+            .filter(|(_, change)| *change != TestedChange::Unchanged)
+            .map(|(node, _)| node.as_str())
+            .collect()
+    }
+}
+
+/// Merges a completed run (task spec `tested-evidence`, "The run's
+/// write") into `old`: a verified node's block added, refreshed or kept
+/// byte for byte when equal on `rev`, `spec_hash`, `bound_hash` and
+/// `tests`; a failed node's block removed; a failed node without a block
+/// gives no row. Nodes not given (not verifiable, no runnable test, not
+/// selected) are untouched. `[[binding]]` entries, the recipes and the
+/// entries' format are `old`'s.
+pub fn merge_tested(
+    old: &Lock,
+    runs: impl IntoIterator<Item = (String, TestedRun)>,
+) -> TestedMerge {
+    let mut lock = old.clone();
+    let mut rows: BTreeMap<String, TestedChange> = BTreeMap::new();
+    for (node, run) in runs {
+        let held = old.tested.get(&node);
+        let change = match (run, held) {
+            (TestedRun::Verified(now), None) => {
+                lock.tested.insert(node.clone(), now);
+                TestedChange::Added
+            }
+            (TestedRun::Verified(now), Some(held)) if same_evidence(held, &now) => {
+                TestedChange::Unchanged
+            }
+            (TestedRun::Verified(now), Some(_)) => {
+                lock.tested.insert(node.clone(), now);
+                TestedChange::Refreshed
+            }
+            (TestedRun::Failed, Some(_)) => {
+                lock.tested.remove(&node);
+                TestedChange::Removed
+            }
+            (TestedRun::Failed, None) => continue,
+        };
+        rows.insert(node, change);
+    }
+    TestedMerge {
+        lock,
+        rows: rows.into_iter().collect(),
+    }
+}
+
+/// Equal on what a block vouches for: `rev`, `spec_hash`, `bound_hash`,
+/// `tests`; never `commit` or `verified_at`.
+fn same_evidence(held: &Tested, now: &Tested) -> bool {
+    held.rev == now.rev
+        && held.spec_hash == now.spec_hash
+        && held.bound_hash == now.bound_hash
+        && held.tests == now.tests
+}
+
 // ---------------------------------------------------------------- accept
 
 /// What an accept did to one key of the node, or to a binding it could
@@ -1273,19 +1840,27 @@ pub enum AcceptRefusal {
         locked: String,
         current: String,
     },
+    /// The node's `[[tested]]` block at its revision vouches for another
+    /// `spec_hash`: refused as an entry is (no entry refused first).
+    TestedChanged { locked: String, current: String },
 }
 
-/// An accept's merge: the new lock, every row in key order.
+/// An accept's merge: the new lock, every row in key order, and the
+/// node's block's row.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AcceptMerge {
     pub lock: Lock,
     pub rows: Vec<AcceptRow>,
+    /// The node's `[[tested]]` block, kept byte for byte: `kept`; none
+    /// without one.
+    pub tested: Option<Change>,
 }
 
 impl AcceptMerge {
-    /// Rows with `change`.
+    /// Rows with `change`, the block's counted as one entry.
     pub fn count(&self, change: Change) -> usize {
         self.rows.iter().filter(|row| row.change == change).count()
+            + usize::from(self.tested == Some(change))
     }
 
     /// The lock's bytes change.
@@ -1299,9 +1874,10 @@ impl AcceptMerge {
 /// (`rev`, `spec_hash`, `levels`, the three digests, `file_blob`; never a
 /// fingerprint); one not lockable now keeps its old entry; one bound no
 /// more is dropped. Refused: an old entry at the revision with another
-/// `spec_hash`. Other nodes' entries are untouched; the lock keeps `old`'s
-/// format, which a writer reads as format 2 (`parse_lock` with the build's
-/// recipes), so the fresh entries are of it.
+/// `spec_hash`, then the node's `[[tested]]` block so. Other nodes' entries
+/// and every block are untouched (the node's: a `kept` row); the lock keeps
+/// `old`'s format, which a writer reads as format 2 or 3 (`parse_lock`
+/// with the build's recipes), so the fresh entries are of it.
 pub fn merge_accept(old: &Lock, input: &AcceptInput) -> Result<AcceptMerge, AcceptRefusal> {
     if let Some((key, verified)) = old
         .entries_of(&input.node)
@@ -1310,6 +1886,16 @@ pub fn merge_accept(old: &Lock, input: &AcceptInput) -> Result<AcceptMerge, Acce
         return Err(AcceptRefusal::TextChanged {
             key: Box::new(key.clone()),
             locked: verified.spec_hash.clone(),
+            current: input.spec_hash.clone(),
+        });
+    }
+    let block = old.tested.get(&input.node);
+    if let Some(block) = block
+        && block.rev == input.rev
+        && block.spec_hash != input.spec_hash
+    {
+        return Err(AcceptRefusal::TestedChanged {
+            locked: block.spec_hash.clone(),
             current: input.spec_hash.clone(),
         });
     }
@@ -1370,7 +1956,11 @@ pub fn merge_accept(old: &Lock, input: &AcceptInput) -> Result<AcceptMerge, Acce
         });
     }
     rows.sort_by(|a, b| a.place.cmp(&b.place).then(a.change.cmp(&b.change)));
-    Ok(AcceptMerge { lock, rows })
+    Ok(AcceptMerge {
+        lock,
+        rows,
+        tested: block.map(|_| Change::Kept),
+    })
 }
 
 /// Equal on `rev`, `spec_hash`, the judged code and `file_blob`: format
@@ -1403,7 +1993,7 @@ pub fn vouches(key: &EntryKey, verified: &Verified, node: &str, rev: u32, norm_h
 }
 
 /// An editorial refresh: the new lock and the node's entries at the
-/// revision, each with whether its `spec_hash` changed.
+/// revision, each with whether its `spec_hash` changed, and its block so.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Editorial {
     pub lock: Lock,
@@ -1411,22 +2001,33 @@ pub struct Editorial {
     /// for the old text only), in key order: `true` when its `spec_hash`
     /// was set.
     pub at_rev: Vec<(EntryKey, bool)>,
+    /// The node's `[[tested]]` block at the revision, filtered as the
+    /// entries are: `Some(true)` when its `spec_hash` was set; `None`:
+    /// none such.
+    pub tested: Option<bool>,
 }
 
 impl Editorial {
-    /// Entries whose `spec_hash` was set.
+    /// Entries whose `spec_hash` was set, the block counted as one.
     pub fn refreshed(&self) -> usize {
         self.at_rev.iter().filter(|(_, changed)| *changed).count()
+            + usize::from(self.tested == Some(true))
+    }
+
+    /// No entry and no block at the revision.
+    pub fn is_empty(&self) -> bool {
+        self.at_rev.is_empty() && self.tested.is_none()
     }
 }
 
 /// `--editorial`: `spec_hash` set to `spec_hash` on the node's entries at
-/// `rev`, nothing else (code hashes, `file_blob`, `commit`, `verified_*`
-/// kept). `vouching`, the node's old `norm_hash`, filters them: only the
-/// entries that vouched for the old text ([`vouches`]) are set, any other
-/// at `rev` is left byte for byte and not listed (`spec approve
-/// --editorial`, task spec `rev-discipline` Q10); `None`: every entry at
-/// `rev` (`spec lock accept --editorial`).
+/// `rev` and on its `[[tested]]` block at `rev` (an entry at R), nothing
+/// else (code hashes, `bound_hash`, `tests`, `file_blob`, `commit`,
+/// `verified_*` kept). `vouching`, the node's old `norm_hash`, filters
+/// them: only those that vouched for the old text ([`vouches`],
+/// [`Tested::vouches`]) are set, any other at `rev` is left byte for byte
+/// and not listed (`spec approve --editorial`, task spec `rev-discipline`
+/// Q10); `None`: every one at `rev` (`spec lock accept --editorial`).
 pub fn refresh_editorial(
     old: &Lock,
     node: &str,
@@ -1451,16 +2052,34 @@ pub fn refresh_editorial(
         }
         at_rev.push((key.clone(), changed));
     }
-    Editorial { lock, at_rev }
+    let tested = match lock.tested.get_mut(node) {
+        Some(block)
+            if block.rev == rev && vouching.is_none_or(|old_hash| block.vouches(rev, old_hash)) =>
+        {
+            let changed = block.spec_hash != spec_hash;
+            if changed {
+                block.spec_hash = spec_hash.to_owned();
+            }
+            Some(changed)
+        }
+        _ => None,
+    };
+    Editorial {
+        lock,
+        at_rev,
+        tested,
+    }
 }
 
-/// A gone node's entries dropped: the new lock and the dropped keys.
+/// A gone node's entries and `[[tested]]` block dropped: the new lock and
+/// the dropped keys (the block's drop: `old.tested` holds the node).
 pub fn drop_node(old: &Lock, node: &str) -> (Lock, Vec<EntryKey>) {
     let mut lock = old.clone();
     let dropped: Vec<EntryKey> = old.entries_of(node).map(|(key, _)| key.clone()).collect();
     for key in &dropped {
         lock.entries.remove(key);
     }
+    lock.tested.remove(node);
     (lock, dropped)
 }
 
@@ -1520,13 +2139,45 @@ pub struct RebaseRow {
     pub result: Result<BTreeSet<LockLevel>, DropReason>,
 }
 
-/// A rebase: the new lock and a row per old entry, in key order.
+/// Why `spec lock rebase` drops a `[[tested]]` block (task spec
+/// `tested-evidence`, "Rebase"): the first that applies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TestedDrop {
+    /// The node's old entries do not give the block's `bound_hash`: never
+    /// accepted, or at other code.
+    Unproven,
+    /// An entry of the node was dropped.
+    EntryDropped,
+}
+
+impl TestedDrop {
+    /// `unproven`, `entry_dropped`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Unproven => "unproven",
+            Self::EntryDropped => "entry_dropped",
+        }
+    }
+}
+
+/// What a rebase did to one block: re-derived, or why it is dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestedRebaseRow {
+    pub node: String,
+    pub result: Result<(), TestedDrop>,
+}
+
+/// A rebase: the new lock, a row per old entry, in key order, and a row
+/// per old block, by node ([`rebase_tested`]).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RebasePlan {
-    /// Format 2 at the build's recipes, every kept entry's key, `rev`,
-    /// `spec_hash`, `file_blob`, `commit` and `verified_at` as they were.
+    /// Format 2 at the build's recipes (3 with a block re-derived), every
+    /// kept entry's key, `rev`, `spec_hash`, `file_blob`, `commit` and
+    /// `verified_at` as they were.
     pub lock: Lock,
     pub rows: Vec<RebaseRow>,
+    /// Empty until [`rebase_tested`].
+    pub tested: Vec<TestedRebaseRow>,
 }
 
 impl RebasePlan {
@@ -1538,6 +2189,16 @@ impl RebasePlan {
     /// Entries dropped.
     pub fn dropped(&self) -> usize {
         self.rows.iter().filter(|row| row.result.is_err()).count()
+    }
+
+    /// Blocks re-derived.
+    pub fn tested_rebased(&self) -> usize {
+        self.tested.iter().filter(|row| row.result.is_ok()).count()
+    }
+
+    /// Blocks dropped.
+    pub fn tested_dropped(&self) -> usize {
+        self.tested.iter().filter(|row| row.result.is_err()).count()
     }
 }
 
@@ -1579,7 +2240,68 @@ pub fn plan_rebase<E>(
             result,
         });
     }
-    Ok(RebasePlan { lock, rows })
+    Ok(RebasePlan {
+        lock,
+        rows,
+        tested: Vec::new(),
+    })
+}
+
+/// The blocks of `old` carried into `plan`, re-derived only under proof, each
+/// by the first that applies: `bound_hash` (the caller's one bound-hash
+/// function over [`bound_bytes`]) of its node's old entries (format 2's
+/// digests; a format-1 entry gives none) is not its `bound_hash`: dropped
+/// [`TestedDrop::Unproven`]; an entry of the node dropped by the plan:
+/// [`TestedDrop::EntryDropped`]; else its `bound_hash` re-derived from the
+/// node's rebased entries, `rev`, `spec_hash`, `tests`, `commit` and
+/// `verified_at` kept. Never more code than its entries vouched for.
+pub fn rebase_tested(
+    old: &Lock,
+    plan: &mut RebasePlan,
+    bound_hash: &dyn Fn(&[Bound<'_>]) -> String,
+) {
+    plan.tested.clear();
+    for (node, block) in &old.tested {
+        let held: Option<Vec<(&EntryKey, &LevelCode)>> = old
+            .entries_of(node)
+            .map(|(key, verified)| match &verified.code {
+                EntryCode::Levels(code) => Some((key, code)),
+                EntryCode::Whole(_) => None,
+            })
+            .collect();
+        let proven = held.is_some_and(|held| bound_hash(&held) == block.bound_hash);
+        let dropped = || {
+            plan.rows
+                .iter()
+                .any(|row| row.key.node == *node && row.result.is_err())
+        };
+        let result = if !proven {
+            Err(TestedDrop::Unproven)
+        } else if dropped() {
+            Err(TestedDrop::EntryDropped)
+        } else {
+            let now: Vec<(&EntryKey, &LevelCode)> = plan
+                .lock
+                .entries_of(node)
+                .filter_map(|(key, verified)| match &verified.code {
+                    EntryCode::Levels(code) => Some((key, code)),
+                    EntryCode::Whole(_) => None,
+                })
+                .collect();
+            plan.lock.tested.insert(
+                node.clone(),
+                Tested {
+                    bound_hash: bound_hash(&now),
+                    ..block.clone()
+                },
+            );
+            Ok(())
+        };
+        plan.tested.push(TestedRebaseRow {
+            node: node.clone(),
+            result,
+        });
+    }
 }
 
 // ----------------------------------------------------------------- regen
@@ -1615,21 +2337,27 @@ impl RegenChoice {
     }
 }
 
-/// A merge of a conflict's stages: the lock and each key's choice, in key
-/// order.
+/// A merge of a conflict's stages: the lock, each key's choice, in key
+/// order, and each block's, by node.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Regen {
     pub lock: Lock,
     pub rows: Vec<(EntryKey, RegenChoice)>,
+    pub tested: Vec<(String, RegenChoice)>,
 }
 
 impl Regen {
-    /// Keys chosen by `verified_at` or bytes.
+    /// Keys and blocks chosen by `verified_at` or bytes (a block counted as
+    /// one entry).
     pub fn by_date_or_bytes(&self) -> usize {
-        self.rows
-            .iter()
-            .filter(|(_, choice)| matches!(choice, RegenChoice::Later | RegenChoice::Bytes))
-            .count()
+        let later =
+            |choice: &RegenChoice| matches!(choice, RegenChoice::Later | RegenChoice::Bytes);
+        self.rows.iter().filter(|(_, choice)| later(choice)).count()
+            + self
+                .tested
+                .iter()
+                .filter(|(_, choice)| later(choice))
+                .count()
     }
 }
 
@@ -1646,13 +2374,14 @@ pub enum RegenRefusal {
     Unrebased,
 }
 
-/// Merges the stages of a conflict per entry key (`base` absent: an
-/// add/add; a side absent: every entry deleted there). Side-symmetric:
-/// swapping `ours` and `theirs` gives the same lock. Reads no code, no
-/// spec, computes no hash: every entry kept is one an owner accepted.
-/// Every stage present is format 2 of one pair of recipes (the build's not
-/// required), the `norm_recipe` compared first; the merged lock is of
-/// them.
+/// Merges the stages of a conflict per entry key, and their `[[tested]]`
+/// blocks per node by the same table (`base` absent: an add/add; a side
+/// absent: every entry and block deleted there). Side-symmetric: swapping
+/// `ours` and `theirs` gives the same lock. Reads no code, no spec,
+/// computes no hash: every entry kept is one an owner accepted, every block
+/// one a run wrote. Every stage present is format 2 or 3 of one pair of
+/// recipes (the build's not required), the `norm_recipe` compared first;
+/// the merged lock is of them, format 3 iff a block remains.
 pub fn merge_stages(
     base: Option<&Lock>,
     ours: Option<&Lock>,
@@ -1681,16 +2410,46 @@ pub fn merge_stages(
     {
         return Err(RegenRefusal::Unrebased);
     }
+    let mut lock = Lock::empty(recipes);
+    let rows = merge_map(
+        base.map(|lock| &lock.entries),
+        ours.map(|lock| &lock.entries),
+        theirs.map(|lock| &lock.entries),
+        |verified| verified.verified_at.as_str(),
+        render_block,
+        &mut lock.entries,
+    );
+    let tested = merge_map(
+        base.map(|lock| &lock.tested),
+        ours.map(|lock| &lock.tested),
+        theirs.map(|lock| &lock.tested),
+        |block| block.verified_at.as_str(),
+        |node: &String, block| render_tested(node, block),
+        &mut lock.tested,
+    );
+    Ok(Regen { lock, rows, tested })
+}
+
+/// [`merge_stages`]' table over one map of the stages (entries by key,
+/// blocks by node), the kept values into `merged`: each key's choice, in
+/// key order. `date` a value's `verified_at`, `bytes` its block's text.
+fn merge_map<K: Ord + Clone, V: Clone + PartialEq>(
+    base: Option<&BTreeMap<K, V>>,
+    ours: Option<&BTreeMap<K, V>>,
+    theirs: Option<&BTreeMap<K, V>>,
+    date: impl Fn(&V) -> &str,
+    bytes: impl Fn(&K, &V) -> String,
+    merged: &mut BTreeMap<K, V>,
+) -> Vec<(K, RegenChoice)> {
     let none = BTreeMap::new();
-    let base = base.map_or(&none, |lock| &lock.entries);
-    let ours = ours.map_or(&none, |lock| &lock.entries);
-    let theirs = theirs.map_or(&none, |lock| &lock.entries);
-    let keys: BTreeSet<&EntryKey> = base
+    let base = base.unwrap_or(&none);
+    let ours = ours.unwrap_or(&none);
+    let theirs = theirs.unwrap_or(&none);
+    let keys: BTreeSet<&K> = base
         .keys()
         .chain(ours.keys())
         .chain(theirs.keys())
         .collect();
-    let mut lock = Lock::empty(recipes);
     let mut rows = Vec::new();
     for key in keys {
         let (b, o, t) = (base.get(key), ours.get(key), theirs.get(key));
@@ -1707,23 +2466,19 @@ pub fn merge_stages(
             },
             (Some(o), None) => (RegenChoice::Ours, Some(o)),
             (None, Some(t)) => (RegenChoice::Theirs, Some(t)),
-            (Some(o), Some(t)) => match o.verified_at.cmp(&t.verified_at) {
+            (Some(o), Some(t)) => match date(o).cmp(date(t)) {
                 Ordering::Greater => (RegenChoice::Later, Some(o)),
                 Ordering::Less => (RegenChoice::Later, Some(t)),
                 Ordering::Equal => {
-                    let first = if render_block(key, o) <= render_block(key, t) {
-                        o
-                    } else {
-                        t
-                    };
+                    let first = if bytes(key, o) <= bytes(key, t) { o } else { t };
                     (RegenChoice::Bytes, Some(first))
                 }
             },
         };
         if let Some(kept) = kept {
-            lock.entries.insert(key.clone(), kept.clone());
+            merged.insert(key.clone(), kept.clone());
         }
         rows.push((key.clone(), choice));
     }
-    Ok(Regen { lock, rows })
+    rows
 }

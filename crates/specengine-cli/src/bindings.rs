@@ -84,6 +84,9 @@ pub(crate) struct SetJudged {
     pub nodes: Vec<BTreeSet<NodeKey>>,
     pub symbols: BTreeMap<String, Vec<StoredSymbol>>,
     pub walk: SetWalk,
+    /// The partial tree judged: every marker file of the set's nodes
+    /// (`spec verify --node`'s `tested` reads their bindings in it).
+    pub tree: CodeTree,
 }
 
 /// Every stored code file of the selection's snapshot (the walk's files,
@@ -202,6 +205,7 @@ pub(crate) fn judge_set(
         nodes,
         symbols: files.symbols,
         walk: files.walk,
+        tree: files.tree,
     })
 }
 
@@ -275,10 +279,13 @@ fn cut_lock(lock: &Lock, set: &NodeSet, corpus: &mut Corpus<'_>) -> Lock {
         })
         .map(|(key, verified)| (key.clone(), verified.clone()))
         .collect();
+    // The reads judge entries alone: a `[[tested]]` block is no row
+    // (its reads are task spec `tested-reads`').
     Lock {
         format: lock.format,
         recipes: lock.recipes.clone(),
         entries,
+        tested: BTreeMap::new(),
     }
 }
 

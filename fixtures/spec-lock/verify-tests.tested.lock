@@ -1,0 +1,50 @@
+# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit
+format = 3
+norm_recipe = "specengine-norm/v1"
+code_recipe = "specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15"
+
+[[tested]]
+node = "CONE-01"
+rev = 1
+spec_hash = "b3:e795eb1ccbe76e24b7952c9ee9a7b37c6fb4bc78f067d2843db9054d6db6b877"
+bound_hash = "b3:ebed9462818dadf0c91c3459e66da2cb23387d9a86ac924eec4577a0397c9058"
+tests = [
+  { file = "crates/kiln/src/ramp.rs", symbol = "crates/kiln::ramp::tests::peak_is_capped #cfg(test,not(unix))" },
+  { file = "crates/kiln/src/ramp.rs", symbol = "crates/kiln::ramp::tests::peak_is_capped #cfg(test,unix)" },
+]
+commit = "d684dafac5fee51610ae48ff997b59d9a7dd8989"
+verified_at = "2026-10-16"
+
+[[tested]]
+node = "KILN-HOLD"
+rev = 1
+spec_hash = "b3:bbe91dc4e650e54b6602736404dabd9abace783bb8e463b5ffb6ad210a5b2553"
+bound_hash = "b3:29728b38a6fb138e2946281302a954467580f20ad58de613aca745ec2c382867"
+tests = [
+  { file = "crates/kiln/tests/schedule.rs", symbol = "crates/kiln::test:schedule::hold_follows_the_ramp" },
+]
+commit = "d684dafac5fee51610ae48ff997b59d9a7dd8989"
+verified_at = "2026-10-16"
+
+[[tested]]
+node = "KILN-RAMP"
+rev = 1
+spec_hash = "b3:469ca27a1d4978afae08d11b6a4417adfbe6cd23bd8b168715d1ae9116f676b7"
+bound_hash = "b3:d11a91eafa0f9df9d43b412c11660d44ee40cb619f5f444420d5608fee951bd8"
+tests = [
+  { file = "crates/kiln/src/ramp.rs", symbol = "crates/kiln::ramp::tests::ramp_stops_at_peak" },
+  { file = "crates/kiln/tests/schedule.rs", symbol = "crates/kiln::test:schedule::hold_follows_the_ramp" },
+]
+commit = "d684dafac5fee51610ae48ff997b59d9a7dd8989"
+verified_at = "2026-10-16"
+
+[[tested]]
+node = "glaze-check/GLZ-01"
+rev = 1
+spec_hash = "b3:3a68a59042793649d56b3d345f1e7d183fe5c6cc59f6e00fda6181dab57fdfbf"
+bound_hash = "b3:fd26f97f8d5bf7b48edf5ef194fcd88abdbb3c282c9bd9f630c1ccd48f4633ce"
+tests = [
+  { file = "crates/kiln/tests/schedule.rs", symbol = "crates/kiln::test:schedule::glaze_survives_the_hold" },
+]
+commit = "d684dafac5fee51610ae48ff997b59d9a7dd8989"
+verified_at = "2026-10-16"

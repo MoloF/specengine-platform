@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # Node revision and meaning hash
@@ -34,7 +34,7 @@ Core `revision(parsed, ord) -> Revision {Written(u32), Unwritten, Unreadable}`, 
 ADR-0043 (`architecture.md#layout`, `#apply`), built by slices 4b-1 (approval) and 4b-2 (the rule, `spec bump`; `verify --staged`: `spec-verify.md` "Base").
 
 - **Approval** (`proposal-revisions.md`): `apply_proposal` raises, at step 6, each node whose `norm_hash` its change alters, never lowering one; refused: a meaning approve at `REV_MAX`, of a closed class admitting no `rev` or a raise it cannot write, any at an unreadable revision; `spec approve --editorial` keeps revisions and refreshes the node's vouching `spec.lock` entries in the same commit; a proposal changing a revision is refused at creation.
-- **The rule `rev-not-raised`** (core `check::rev_rule`, pure; store `check.rs`), in `spec check --staged` and `--changed`, never plain. Changed: a node whose canonical ID (`slug/ID` when feature-scoped) is at `HEAD` and in the checked tree, paired by ID, never by path (the k-th holder at `HEAD` with the k-th checked, each by path, then source order), its checked `norm_hash` non-null and unlike `HEAD`'s; a heading rename or a moved section is none. Not raised: the checked revision unreadable or not above `HEAD`'s. An error, always introduced (`[check] mode` decides, debt covers it), when `HEAD`'s `spec.lock` holds an entry vouching for the old text (`lock::vouches`) and the checked lock (absent: none) does not carry the new hash at that revision on every such key. Unlocked nodes, `@N` pins, marker-only bindings: never judged; escapes (`--no-verify`, `observe`, no hook, CI's plain check) show in `spec verify` as `spec_ahead same_revision`, which `spec propose drift` queues.
+- **The rule `rev-not-raised`** (core `check::rev_rule`, pure; store `check.rs`), in `spec check --staged` and `--changed`, never plain. Changed: a node whose canonical ID (`slug/ID` when feature-scoped) is at `HEAD` and in the checked tree, paired by ID, never by path (the k-th holder at `HEAD` with the k-th checked, each by path, then source order), its checked `norm_hash` non-null and unlike `HEAD`'s; a heading rename or a moved section is none. Not raised: the checked revision unreadable or not above `HEAD`'s. An error, always introduced (`[check] mode` decides, debt covers it), when `HEAD`'s `spec.lock` holds an entry vouching for the old text (`lock::vouches`; a `[[tested]]` block too: `spec-lock-tested.md`) and the checked lock (absent: none) does not carry the new hash at that revision on every such key. Unlocked nodes, `@N` pins, marker-only bindings: never judged; escapes (`--no-verify`, `observe`, no hook, CI's plain check) show in `spec verify` as `spec_ahead same_revision`, which `spec propose drift` queues.
 - **The finding**, at the heading or `id:` line, subject the canonical ID, `fix` the line apply writes (core `raise::raised_line`: the heading or `rev:` line rewritten, else a `rev:` line inserted after `id:`); a document's says `(rev: 4)`:
 
 ```
@@ -49,7 +49,7 @@ error  docs/spec/combat.md:14: rev-not-raised: `R-12` changed at rev 3, which sp
 required | R-12 | docs/spec/combat.md:14 | rev 3 -> 4 | 2 lock entries | ## Cost {#R-12 rev=4}
 ```
 
-  `rev ?` for an unreadable revision; `rev N` alone and `-` (JSON `to`, `write` null) where no raise can be written: `REV_MAX`, a document of a closed class admitting no `rev`, a line that cannot be written. Then `hint: required: …` (its ways out), `hint: suggested: raising it makes markers naming it lag`; none: `nothing to raise`. JSON `{rows: [{need, id, path, line, rev, to, lock_entries, write}]}`, `cannot` when not empty. Exit 0 when run; 2 on the check's causes (`cannot: <path>: <message>`); `--editorial` a usage error.
+  `rev ?` for an unreadable revision; `rev N` alone and `-` (JSON `to`, `write` null) where no raise can be written (above). Then `hint: required: …` (its ways out), `hint: suggested: raising it makes markers naming it lag`; none: `nothing to raise`. JSON `{rows: [{need, id, path, line, rev, to, lock_entries, write}]}`, `cannot` when not empty. Exit 0 when run; 2 on the check's causes (`cannot: <path>: <message>`); `--editorial` a usage error.
 
 ## The recipe
 

@@ -28,7 +28,8 @@
 //!   of the bytes read (`norm_input`, `b3_hash`), never the index's
 //!   column.
 //! - **Cascade** (canon `spec-verify`, "States", "Cascade"): a bound row
-//!   with an entry (lock format 2, the only one a code judge reads) is
+//!   with an entry (lock format 2, or 3 with its `[[tested]]` blocks, the
+//!   only entries a code judge reads; a block is no row) is
 //!   judged by its levels, L_lock the entry's, L_mark its markers' united,
 //!   C their union without `path`. A marker's list malformed: not
 //!   compared (`bad_marker bad_levels`). Then the file's blob OID (on disk
@@ -1790,7 +1791,7 @@ fn head_lock(text: &str, judged: &Lock) -> Result<(Lock, Option<String>), RunCau
     }
     let note = format!(
         "HEAD's {LOCK_FILE} is format {} (\"{}\"): judged with the current lock",
-        old.format.number(),
+        old.format_number(),
         old.recipes.code
     );
     Ok((judged.clone(), Some(note)))

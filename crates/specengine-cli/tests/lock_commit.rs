@@ -2,10 +2,19 @@
 //! a failing hook), RD-10, RD-11 and RD-15: the lock commit and what else
 //! an accept writes, over scratch repositories of `fixtures/code-a`.
 //!
+//! docs/features/tested-evidence.md (8b-1) RD-6 ("The run's write", **The
+//! commit**): the evidence commit `spec verify --tests` makes under its one
+//! `[y/N]`, over scratch repositories of `fixtures/verify-tests` with 8a's
+//! fake runner (`verify_tests_common`).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 mod common;
 mod lock_common;
+mod tested_common;
+mod tested_kiln;
+mod verify_common;
+mod verify_tests_common;
 
 use std::fs;
 
@@ -888,5 +897,188 @@ fn accept_in_a_linked_worktree_commits_on_its_branch() {
         fs::read(linked.join("spec.lock")).expect("the linked lock"),
         twin.lock().expect("the twin's lock"),
         "the same commit gives the same lock"
+    );
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-6
+
+/// The `Lock:` trailer values of `commit`, in order (git's own parse).
+fn lock_trailers(repo: &LockRepo, commit: &str) -> Vec<String> {
+    repo.git_text(&[
+        "log",
+        "-1",
+        "--format=%(trailers:key=Lock,valueonly,separator=%x0a)",
+        commit,
+    ])
+    .lines()
+    .map(str::to_owned)
+    .collect()
+}
+
+/// A trailer's values of `commit`.
+fn trailer(repo: &LockRepo, commit: &str, key: &str) -> Vec<String> {
+    repo.git_text(&[
+        "log",
+        "-1",
+        &format!("--format=%(trailers:key={key},valueonly,separator=%x0a)"),
+        commit,
+    ])
+    .lines()
+    .map(str::to_owned)
+    .collect()
+}
+
+/// RD-6 **M6** (a second question, or `--yes`): one consent covers the run
+/// and the write: the library asks once, the listing and then the
+/// question ending `, then commit their evidence to spec.lock? [y/N]`, and
+/// commits without asking again; the binary refuses `--yes` as a usage
+/// error (exit 2, nothing started, nothing written).
+#[test]
+fn one_question_covers_the_write() {
+    let kiln = verify_tests_common::Kiln::new("lc-tested-one-question");
+    let head = kiln.repo.head();
+    let run = kiln.run();
+    assert_eq!(run.prompts.len(), 1, "one question:\n{}", run.show());
+    assert!(
+        run.question().ends_with(tested_common::QUESTION_TAIL),
+        "{}",
+        run.question()
+    );
+    assert!(
+        run.question()
+            .contains(&format!(" on main at {head}, then commit their evidence")),
+        "{}",
+        run.question()
+    );
+    assert_ne!(kiln.repo.head(), head, "committed, unasked again");
+
+    let kiln = verify_tests_common::Kiln::new("lc-tested-yes");
+    let before = kiln.repo.state();
+    let refused = kiln
+        .repo
+        .spec_piped(kiln.root(), &["verify", "--tests", "--yes"]);
+    assert_eq!(refused.code, 2, "{}", refused.show());
+    assert!(refused.stdout.is_empty(), "{}", refused.show());
+    kiln.assert_nothing_started("--yes");
+    assert_eq!(kiln.repo.state(), before, "--yes: nothing written");
+}
+
+/// RD-6 (M: one `Lock:` trailer for several nodes): the evidence commit
+/// carries a `Lock:` trailer per node whose block changed, by node bytes,
+/// `Lock-mode: tests` once, `Decided-by:` the committer, `Test-command:`
+/// the question's template, no `Proposal:`; a node `unchanged` gets none.
+#[test]
+fn test_lock_commit_names_each_node() {
+    let kiln = verify_tests_common::Kiln::new("lc-tested-names");
+    let (run, commit) = tested_kiln::pass(&kiln);
+    assert_eq!(
+        lock_trailers(&kiln.repo, &commit),
+        tested_common::BLOCK_NODES
+    );
+    assert_eq!(trailer(&kiln.repo, &commit, "Lock-mode"), ["tests"]);
+    assert_eq!(trailer(&kiln.repo, &commit, "Decided-by"), [DECIDER]);
+    assert_eq!(
+        trailer(&kiln.repo, &commit, "Test-command"),
+        [tested_common::template_of(&run.question())]
+    );
+    assert!(trailer(&kiln.repo, &commit, "Proposal").is_empty());
+
+    kiln.repo.replace(
+        verify_tests_common::RAMP,
+        "(now + rate).min(peak)",
+        "now.saturating_add(rate).min(peak)",
+    );
+    kiln.repo.commit_all("the ramp saturates");
+    let (_, commit) = tested_kiln::pass(&kiln);
+    assert_eq!(
+        lock_trailers(&kiln.repo, &commit),
+        ["KILN-RAMP"],
+        "the refreshed node alone"
+    );
+}
+
+/// RD-6 ("The subject"; M: the subject uncapped or unsorted): the nodes
+/// whose block changed by bytes, `, `-joined; past three the first three
+/// and ` and <n> more`: four blocks `spec: verify tests CONE-01,
+/// KILN-HOLD, KILN-RAMP and 1 more`; three (KILN-RAMP failing, no block)
+/// `spec: verify tests CONE-01, KILN-HOLD, glaze-check/GLZ-01`; one
+/// `spec: verify tests KILN-RAMP`.
+#[test]
+fn test_lock_commit_subject_is_capped() {
+    let subject = |kiln: &verify_tests_common::Kiln| -> String {
+        kiln.repo
+            .git_text(&["log", "-1", "--format=%s"])
+            .trim()
+            .to_owned()
+    };
+    let four = verify_tests_common::Kiln::new("lc-tested-four");
+    tested_kiln::pass(&four);
+    assert_eq!(
+        subject(&four),
+        "spec: verify tests CONE-01, KILN-HOLD, KILN-RAMP and 1 more"
+    );
+
+    let three = verify_tests_common::Kiln::new("lc-tested-three");
+    three.plan(&[(verify_tests_common::RAMP_STOPS_TEST, "fail")]);
+    tested_kiln::pass(&three);
+    assert_eq!(
+        subject(&three),
+        "spec: verify tests CONE-01, KILN-HOLD, glaze-check/GLZ-01"
+    );
+
+    let one = verify_tests_common::Kiln::new("lc-tested-one");
+    let task = one.new_task(&["KILN-RAMP"]);
+    let head = one.repo.head();
+    one.run_task(&task).code(0);
+    assert_ne!(one.repo.head(), head);
+    assert_eq!(subject(&one), "spec: verify tests KILN-RAMP");
+}
+
+/// RD-6 (M: `--no-verify`): the evidence commit runs the repository's
+/// hooks: a `pre-commit` and a `commit-msg` hook each leave a mark outside
+/// the worktree, the latter the message it was given (with `Lock-mode:
+/// tests`).
+#[test]
+fn test_lock_commit_runs_hooks() {
+    let kiln = verify_tests_common::Kiln::new("lc-tested-hooks");
+    let marks = kiln.repo.scratch.dir("marks");
+    kiln.repo.hook(
+        "pre-commit",
+        &format!("touch '{}'", marks.join("pre-commit").display()),
+    );
+    kiln.repo.hook(
+        "commit-msg",
+        &format!("cp \"$1\" '{}'", marks.join("commit-msg").display()),
+    );
+    tested_kiln::pass(&kiln);
+    assert!(marks.join("pre-commit").exists(), "pre-commit ran");
+    let message = fs::read_to_string(marks.join("commit-msg")).expect("commit-msg ran");
+    assert!(message.contains("\nLock-mode: tests\n"), "{message}");
+}
+
+/// RD-6 ("Event": written after the commit; M: the event written before
+/// the commit): the event's `lock_commit` is the evidence commit, and a
+/// `pre-commit` hook reading the queue during that commit finds no
+/// `verify.tests` event yet.
+#[test]
+fn event_names_the_lock_commit() {
+    let kiln = verify_tests_common::Kiln::new("lc-tested-event");
+    let seen = kiln.repo.scratch.dir("marks").join("seen");
+    let db = kiln.db();
+    kiln.repo.hook(
+        "pre-commit",
+        &format!(
+            "if [ -f '{db}' ]; then /usr/bin/sqlite3 -readonly '{db}' \"select count(*) from events where type = 'verify.tests'\"; else echo 0; fi > '{seen}'",
+            db = db.display(),
+            seen = seen.display()
+        ),
+    );
+    let (_, commit) = tested_kiln::pass(&kiln);
+    let event = kiln.one_event();
+    assert_eq!(event["lock_commit"], serde_json::json!(commit), "{event}");
+    assert_eq!(
+        fs::read_to_string(&seen).expect("the hook ran").trim(),
+        "0",
+        "no event before the commit"
     );
 }

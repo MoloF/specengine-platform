@@ -25,6 +25,7 @@
 mod common;
 mod drift_common;
 mod lock_common;
+mod tested_common;
 mod verify_common;
 
 use std::fs;
@@ -1071,14 +1072,20 @@ fn other_norm_recipe_exits_2() {
 }
 
 /// RD-4 (step 4): a lock `parse_lock` without the build cannot read exits
-/// 2 with that error: `format = 3`, `format = 0`, not TOML.
+/// 2 with that error: `format = 3` without a block and `format = 4`
+/// (docs/features/tested-evidence.md **Reader**), `format = 0`, not TOML.
 #[test]
 fn unreadable_and_other_format_locks_exit_2() {
     let cases = [
         (
             "format 3",
             Variant::Format3.text(&golden_text()),
-            format!("spec.lock:2: {}", newer_format_text(3)),
+            Variant::Format3.message(),
+        ),
+        (
+            "format 4",
+            Variant::Format4.text(&golden_text()),
+            format!("spec.lock:2: {}", newer_format_text(4)),
         ),
         (
             "format 0",
@@ -1641,17 +1648,22 @@ fn levels_of(text: &str, named: (&str, &str, &str)) -> Value {
 
 /// TE-1 (`lock_rebase_json_keeps_its_keys`): `--json` prints one document
 /// for exits 0 and 1, none for 2, every key present in order (`from`,
-/// `to`, `counts`, `rows`, `commit`, `unchanged`, `refusal`), absent
+/// `to`, `counts`, `rows`, `tested`, `commit`, `unchanged`, `refusal`;
+/// `counts` with `tested_rebased` and `tested_dropped` since
+/// docs/features/tested-evidence.md "Rebase"), absent
 /// `null`; each row `change`, `node`, `relation`, `file`, `kind`,
 /// `symbol`, `item_kind`, `levels`, `reason` (a dropped row's `levels`
 /// `null`, a rebased row's `reason` `null`).
 #[test]
 fn lock_rebase_json_keeps_its_keys() {
-    const KEYS: [&str; 7] = [
+    // `tested` after `rows` since docs/features/tested-evidence.md
+    // "Rebase".
+    const KEYS: [&str; 8] = [
         "from",
         "to",
         "counts",
         "rows",
+        "tested",
         "commit",
         "unchanged",
         "refusal",
@@ -1704,7 +1716,11 @@ fn lock_rebase_json_keeps_its_keys() {
         document["to"],
         json!({"format": 2, "code_recipe": CODE_RECIPE})
     );
-    assert_eq!(document["counts"], json!({"rebased": 9, "dropped": 2}));
+    assert_eq!(
+        document["counts"],
+        json!({"rebased": 9, "dropped": 2, "tested_rebased": 0, "tested_dropped": 0})
+    );
+    assert_eq!(document["tested"], json!([]), "no block in the old lock");
     assert_eq!(document["commit"], json!(repo.head()));
     assert_eq!(document["unchanged"], json!(false));
     assert_eq!(document["refusal"], Value::Null);
@@ -2078,4 +2094,152 @@ fn the_rebased_golden_lives_in_fixtures() {
     );
     let (preamble, chunked) = chunks(&text);
     assert_eq!(joined(&preamble, &chunked), text, "chunks round-trip");
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-7
+
+/// LAW-BOUND's four keys in the golden.
+const BOUND_KEYS: [Named; 4] = [FMT, STOPS, CAP, RON_CAP];
+
+/// A simulated grammar bump over a lock holding blocks (lock-rebase.md
+/// TE-3's pattern; docs/features/tested-evidence.md "Rebase"): the golden's
+/// entries under another grammar's `code_recipe`, LAW-BOUND's digests that
+/// grammar's (made up; the rebase re-derives them from each entry's blob),
+/// PIECE-COUNTER's module entry at a blob no object has (dropped
+/// `blob_missing`), and three blocks: LAW-BOUND's proven over its old
+/// entries, PIECE-COUNTER's proven too, GOAL-01's over no code of its
+/// entries (`unproven`). The repository, the old text, LAW-BOUND's block.
+fn bumped_with_blocks(label: &str) -> (LockRepo, String, tested_common::Block) {
+    let mut text = golden_text();
+    for (index, key) in BOUND_KEYS.iter().enumerate() {
+        let digit = char::from_digit(u32::try_from(index).expect("small") + 1, 16).expect("hex");
+        text = edit_block(&text, *key, |block| {
+            let block = set_string(block, "sig_hash", &lock_common::fake_b3(digit));
+            let block = set_string(&block, "body_hash", &lock_common::fake_b3(digit));
+            set_string(&block, "deps_hash", &lock_common::fake_b3(digit))
+        });
+    }
+    let missing = fake_oid('d');
+    text = edit_block(&text, LIB_MODULE, |block| {
+        set_string(block, "file_blob", &missing)
+    });
+    let commit = fake_oid('c');
+    let proven = |node: &str| {
+        let mut block = tested_common::vouching_block(&text, node, &commit);
+        block.bound_hash = tested_common::bound_hash(&tested_common::entry_bounds(&text, node));
+        block
+    };
+    let bound = proven("LAW-BOUND");
+    let piece = proven("PIECE-COUNTER");
+    let mut goal = proven("GOAL-01");
+    goal.bound_hash = lock_common::fake_b3('e');
+    let old = tested_common::with_blocks_added(&text, &[bound.clone(), piece, goal]).replacen(
+        CODE_RECIPE,
+        Variant::OTHER_CODE,
+        1,
+    );
+    let repo = LockRepo::with_lock(label, &old);
+    (repo, old, bound)
+}
+
+/// RD-7 **rebase_rederives_bound_hash** (M: rebase keeps the old hash):
+/// after the entries, LAW-BOUND's block, proven over its old entries
+/// (their digests the other grammar's), is re-derived from the rebased
+/// entries: its `bound_hash` the one "Bound hash" spells over the golden's
+/// LAW-BOUND entries, every other key as written; the lock is the golden
+/// without the dropped entry plus that block, `format = 3`; its row
+/// `rebased | LAW-BOUND | tested` after the entries'; the question ends
+/// its counts with `; tested: 1 rebased, 2 dropped`.
+#[test]
+fn rebase_rederives_bound_hash() {
+    let (repo, _, bound) = bumped_with_blocks("lr-tested-rederive");
+    let head = repo.head();
+    let attempt = repo.rebase(true);
+    attempt.committed("a grammar bump with blocks");
+    let mut rederived = bound.clone();
+    rederived.bound_hash =
+        tested_common::bound_hash(&tested_common::entry_bounds(&golden_text(), "LAW-BOUND"));
+    assert_ne!(rederived.bound_hash, bound.bound_hash, "the scenario");
+    let want =
+        tested_common::with_blocks_added(&without_block(&golden_text(), LIB_MODULE), &[rederived]);
+    assert_eq!(repo.lock_text(), want);
+    let rows = attempt.rows();
+    let lines: Vec<&str> = rows.lines().collect();
+    let tested: Vec<&str> = lines
+        .iter()
+        .copied()
+        .filter(|line| line.contains(" | tested"))
+        .collect();
+    assert_eq!(
+        tested,
+        [
+            "dropped | GOAL-01 | tested | unproven",
+            "rebased | LAW-BOUND | tested",
+            "dropped | PIECE-COUNTER | tested | entry_dropped",
+        ],
+        "{rows}"
+    );
+    assert_eq!(
+        &lines[lines.len() - 3..],
+        tested.as_slice(),
+        "after the entries' rows"
+    );
+    assert_eq!(
+        attempt.question(),
+        format!(
+            "rebase spec.lock (format 3 -> 3, \"{}\" -> \"{CODE_RECIPE}\": 8 rebased, 1 dropped; tested: 1 rebased, 2 dropped){}",
+            Variant::OTHER_CODE,
+            lock_common::at(&head, "main", &repo.root)
+        )
+    );
+}
+
+/// RD-7 **M8** `rebase_drops_unproven_tested` (a block re-derived without
+/// the proof): GOAL-01's block, whose `bound_hash` is not the bound bytes
+/// of its old entries, is dropped `unproven` (never re-derived, so never
+/// more code than its entries vouched for); PIECE-COUNTER's, proven but
+/// one of its entries dropped, `entry_dropped`; neither stays in the lock.
+#[test]
+fn rebase_drops_unproven_tested() {
+    let (repo, _, _) = bumped_with_blocks("lr-tested-unproven");
+    let attempt = repo.rebase(true);
+    attempt.committed("a grammar bump with blocks");
+    let lock = repo.lock_text();
+    assert!(
+        tested_common::block_of(&lock, "GOAL-01").is_none(),
+        "{lock}"
+    );
+    assert!(
+        tested_common::block_of(&lock, "PIECE-COUNTER").is_none(),
+        "{lock}"
+    );
+    assert_eq!(tested_common::block_nodes(&lock), ["LAW-BOUND"]);
+    let rows = attempt.rows();
+    assert!(
+        rows.contains("dropped | GOAL-01 | tested | unproven\n"),
+        "{rows}"
+    );
+    assert!(
+        rows.contains("dropped | PIECE-COUNTER | tested | entry_dropped\n"),
+        "{rows}"
+    );
+}
+
+/// RD-7 ("Rebase": a format-3 lock of this build's recipes is `nothing to
+/// change`; JSON `counts` and `tested`): no question, nothing written.
+#[test]
+fn a_format_3_lock_of_this_build_is_nothing_to_change() {
+    let text = golden_text();
+    let blocks = [tested_common::vouching_block(
+        &text,
+        "LAW-BOUND",
+        &fake_oid('c'),
+    )];
+    let repo = LockRepo::with_lock(
+        "lr-tested-nothing",
+        &tested_common::with_blocks_added(&text, &blocks),
+    );
+    let before = repo.state();
+    repo.rebase(true).unchanged("format 3 of this build");
+    assert_eq!(repo.state(), before);
 }

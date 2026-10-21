@@ -15,10 +15,16 @@
 //! docs/features/show-bindings.md RD-6 ("delta.tests_reaching"):
 //! `tests_reaching_lists_bound_tests` over the modes; `verify_json_every_key_present`
 //! with `tests_reaching` a list of six-field keys.
+//! docs/features/tested-evidence.md (8b-1) RD-4 ("Plain verify"): the
+//! `tested` key and lines over a format-3 lock never change an exit, a
+//! verdict, a count, a class, a hint or a row; null in the base modes and
+//! under a run cause; an evidence-free run prints 5b's bytes
+//! (`verify_tested_before.json`, recorded with the binary before 8b-1).
 
 mod anchor_common;
 mod common;
 mod lock_common;
+mod tested_common;
 mod verify_common;
 
 use std::collections::BTreeMap;
@@ -509,7 +515,7 @@ fn verify_json_every_key_present() {
     assert_eq!(raw_order(raw, 0), TOP_KEYS);
     // docs/canon/spec-verify-output.md "JSON": `node`, `symbol`, `omitted`
     // `null` in every mode but `--node` (verify-node), plain too.
-    for key in ["task", "node", "symbol", "omitted"] {
+    for key in ["task", "node", "symbol", "omitted", "tested"] {
         assert_eq!(json[key], Value::Null, "`{key}` under --changed");
     }
     let whole = verify(&repo, &[]);
@@ -517,6 +523,8 @@ fn verify_json_every_key_present() {
     for key in ["task", "node", "symbol", "omitted"] {
         assert_eq!(whole.json[key], Value::Null, "plain's `{key}`");
     }
+    // docs/features/tested-evidence.md "Plain verify": no block, `[]`.
+    assert_eq!(whole.json["tested"], json!([]), "plain's `tested`");
     let object_keys = |value: &Value| -> Vec<String> {
         let mut keys: Vec<String> = value.as_object().expect("object").keys().cloned().collect();
         keys.sort();
@@ -1090,4 +1098,419 @@ fn repository_hook_runs_check_only() {
         commands.iter().all(|line| !line.contains("verify")),
         "{commands:?}"
     );
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-4
+
+use tested_common::ecs_with_blocks;
+
+/// `repo` with `spec.lock` replaced by `text`, committed as `message`
+/// (nothing committed when the bytes and the config are as they were).
+fn relock(repo: &LockRepo, text: &str, message: &str) {
+    repo.write("spec.lock", text);
+    if !repo.porcelain().is_empty() {
+        repo.commit_all(message);
+    }
+}
+
+/// The text of `with` is the text of `without` with `with`'s `tested`
+/// lines just before the summary, nothing else changed; the JSON documents
+/// equal but for `tested`; the exits alike.
+fn same_but_tested(with: &Verify, without: &Verify, context: &str) {
+    assert_eq!(with.code(), without.code(), "{context}: exit");
+    assert_eq!(
+        tested_common::without_tested_key(&with.json),
+        tested_common::without_tested_key(&without.json),
+        "{context}: every key but `tested`"
+    );
+    assert_eq!(
+        tested_common::without_tested_lines(&with.text.stdout),
+        without.text.stdout,
+        "{context}: the text but the `tested` lines"
+    );
+    let lines = with.lines();
+    let tested = tested_common::tested_lines(with);
+    let at = lines.len() - 1 - tested.len();
+    assert_eq!(
+        lines[at..lines.len() - 1].to_vec(),
+        tested.iter().map(String::as_str).collect::<Vec<_>>(),
+        "{context}: the `tested` lines last before the summary:\n{}",
+        with.text.stdout
+    );
+    assert_eq!(with.text.stderr, without.text.stderr, "{context}: stderr");
+}
+
+/// RD-4 **M4** (a block changing exit, verdict, counts, class or hints):
+/// over two corpora of different nature (the ECS game, clean; `code-a`'s
+/// library with every binding problem, blocked or observed) and in every
+/// mode (`observe`, `enforce`), plain verify and `--node` over a lock with
+/// blocks in every state print what they print over the same entries with
+/// no block, but for `tested`: the exit, the verdict, the counts, every
+/// row and class, the cascade, the hints and notes; the text but the
+/// `tested | …` lines.
+#[test]
+fn tested_never_changes_verify_exit() {
+    let (repo, text, commit) = ecs_with_blocks("vo-tested-exit-ecs");
+    let with_blocks = repo.lock_text();
+    let golden_repo = golden("vo-tested-exit-golden");
+    let golden_text = golden_repo.lock_text();
+    let golden_blocks: Vec<tested_common::Block> = ["GOAL-01", "LAW-BOUND", "PIECE-COUNTER"]
+        .iter()
+        .map(|node| tested_common::vouching_block(&golden_text, node, &commit))
+        .chain([tested_common::made_up_block("GONE-01", 1, '9', &commit)])
+        .collect();
+    let golden_with = tested_common::with_blocks_added(&golden_text, &golden_blocks);
+    for (corpus, repo, without, with, node) in [
+        (
+            "ecs",
+            &repo,
+            text.as_str(),
+            with_blocks.as_str(),
+            "PERK-STAMINA",
+        ),
+        (
+            "code-a",
+            &golden_repo,
+            golden_text.as_str(),
+            golden_with.as_str(),
+            "LAW-BOUND",
+        ),
+    ] {
+        for mode in [None, Some("enforce")] {
+            if let Some(mode) = mode {
+                set_mode(&repo.root, mode);
+            }
+            for extra in [&[][..], &["--node", node][..]] {
+                relock(repo, without, "no block");
+                let plain = verify(repo, extra);
+                relock(repo, with, "blocks");
+                let tested = verify(repo, extra);
+                let context = format!("{corpus} {mode:?} {extra:?}");
+                assert!(
+                    !tested_common::tested(&tested).is_empty(),
+                    "{context}: blocks listed"
+                );
+                assert_eq!(plain.json["tested"], json!([]), "{context}");
+                same_but_tested(&tested, &plain, &context);
+            }
+        }
+    }
+}
+
+/// RD-4 ("Plain verify", **JSON**, text): `tested` is the 11th of 14 keys,
+/// between `delta` and `cannot`; plain lists every block by `node` bytes,
+/// each `{node, state, category, rev, node_rev, commit, verified_at}` in
+/// that order, `rev`, `commit`, `verified_at` the block's, `node_rev` the
+/// node's revision now (`null` gone); the text a `tested | <state>
+/// [<category>] | <node>` line per entry not `verified`, by node bytes,
+/// after the hints and before the summary. M: a `verified` entry printed,
+/// another order, a key missing.
+#[test]
+fn plain_verify_lists_every_block() {
+    let (repo, _, commit) = ecs_with_blocks("vo-tested-plain");
+    let run = verify(&repo, &[]);
+    assert_eq!(raw_order(&run.json_run.stdout, 0), TOP_KEYS);
+    let entry = |node: &str, state: &str, category: Value, node_rev: Value| {
+        json!({
+            "node": node,
+            "state": state,
+            "category": category,
+            "rev": if node == "GONE-01" { json!(1) } else { node_rev.clone() },
+            "node_rev": node_rev,
+            "commit": commit,
+            "verified_at": tested_common::DAY,
+        })
+    };
+    let rev = |node: &str| -> Value {
+        let row = run
+            .rows()
+            .into_iter()
+            .find(|row| row["node"] == node)
+            .unwrap_or_else(|| panic!("a row of {node}"))
+            .clone();
+        row["node_rev"].clone()
+    };
+    assert_eq!(
+        run.json["tested"],
+        json!([
+            entry("GONE-01", "node_gone", Value::Null, Value::Null),
+            entry(
+                "PERK-DRAIN",
+                "stale",
+                json!("code_changed"),
+                rev("PERK-DRAIN")
+            ),
+            entry(
+                "PERK-REGEN",
+                "stale",
+                json!("spec_changed"),
+                rev("PERK-REGEN")
+            ),
+            entry("PERK-STAMINA", "verified", Value::Null, rev("PERK-STAMINA")),
+        ])
+    );
+    let tested_at = value_at(&run.json_run.stdout, "tested");
+    assert_eq!(&run.json_run.stdout[tested_at..=tested_at], "[");
+    assert_eq!(
+        raw_order(&run.json_run.stdout, tested_at + 1),
+        tested_common::TESTED_KEYS,
+        "an entry's keys in order"
+    );
+    assert_eq!(
+        tested_common::tested_lines(&run),
+        [
+            "tested | node_gone | GONE-01",
+            "tested | stale code_changed | PERK-DRAIN",
+            "tested | stale spec_changed | PERK-REGEN",
+        ]
+    );
+    let lines = run.lines();
+    assert_eq!(
+        lines[lines.len() - 4..lines.len() - 1],
+        [
+            "tested | node_gone | GONE-01",
+            "tested | stale code_changed | PERK-DRAIN",
+            "tested | stale spec_changed | PERK-REGEN",
+        ],
+        "before the summary"
+    );
+}
+
+/// RD-4 (Q-B; M: a non-null value under `--changed` or `--staged`, or
+/// under a run cause): `tested` is `null` and no `tested |` line prints
+/// under `--changed`, under `--staged` and under any run cause (here a
+/// config error, cause 1), the lock holding blocks; nothing is hashed for
+/// them; plain over the same lock lists them.
+#[test]
+fn base_modes_tested_is_null() {
+    let (repo, _, _) = ecs_with_blocks("vo-tested-null");
+    assert_eq!(tested_common::tested(&verify(&repo, &[])).len(), 4);
+    repo.replace(STAMINA, "2.5", "3.5");
+    for extra in [&["--changed"][..], &["--staged"][..]] {
+        if extra == ["--staged"] {
+            repo.git(&["add", "-A"]);
+        }
+        let run = verify(&repo, extra);
+        assert_eq!(run.json["tested"], Value::Null, "{extra:?}");
+        assert!(tested_common::tested_lines(&run).is_empty(), "{extra:?}");
+    }
+    set_mode(&repo.root, "bogus");
+    for extra in [&[][..], &["--node", "PERK-STAMINA"][..]] {
+        let run = verify(&repo, extra);
+        assert_eq!(run.code(), 2, "a run cause: {}", run.text.show());
+        assert!(!run.json["cannot"].as_array().expect("cannot").is_empty());
+        assert_eq!(run.json["tested"], Value::Null, "a run cause {extra:?}");
+        assert!(tested_common::tested_lines(&run).is_empty());
+    }
+}
+
+/// The record of the bytes before 8b-1, beside this test.
+fn tested_before_file() -> std::path::PathBuf {
+    repository_root().join("crates/specengine-cli/tests/verify_tested_before.json")
+}
+
+/// The evidence-free cases: `(case, repository, args)`, each repository a
+/// lock without a block: `code-a`'s golden plain, `--node`, `--changed`
+/// over the drift scenario; the ECS corpus plain and `--node`.
+fn evidence_free_cases() -> Vec<(String, LockRepo, Vec<&'static str>)> {
+    let mut out = Vec::new();
+    for (case, args) in [
+        ("code-a plain", vec!["verify"]),
+        ("code-a --node", vec!["verify", "--node", "PIECE-COUNTER"]),
+        ("code-a --changed", vec!["verify", "--changed"]),
+    ] {
+        let repo = golden(&format!("vo-before-{}", out.len()));
+        if case.ends_with("--changed") {
+            drift(&repo);
+        }
+        out.push((case.to_owned(), repo, args));
+    }
+    for (case, args) in [
+        ("ecs plain", vec!["verify"]),
+        ("ecs --node", vec!["verify", "--node", "PERK-STAMINA"]),
+    ] {
+        out.push((
+            case.to_owned(),
+            ecs(&format!("vo-before-{}", out.len())),
+            args,
+        ));
+    }
+    out
+}
+
+/// The b3 of each case's text and JSON stdout and its exit, by
+/// `program`; `strip` the `tested` key off the JSON first.
+fn before_record(program: &Path, strip: bool) -> Vec<Value> {
+    let mut out = Vec::new();
+    for (case, repo, args) in evidence_free_cases() {
+        let (code, text) = tested_common::spec_program(program, &repo, &repo.root, &args);
+        let mut json_args = args.clone();
+        json_args.push("--json");
+        let (json_code, json) = tested_common::spec_program(program, &repo, &repo.root, &json_args);
+        assert_eq!(code, json_code, "{case}");
+        let json = if strip {
+            tested_common::json_without_tested(&json)
+        } else {
+            json
+        };
+        out.push(json!({
+            "case": case,
+            "exit": code,
+            "text": specengine_store::b3_hash(text.as_bytes()),
+            "json": specengine_store::b3_hash(json.as_bytes()),
+        }));
+    }
+    out
+}
+
+/// Records [`tested_before_file`] with `SPECENGINE_BEFORE_SPEC`, the `spec`
+/// binary of 3c9fe6f (7b-2 shipped, 8b-1 not started); never re-recorded
+/// from a later binary.
+#[test]
+#[ignore = "records the bytes before 8b-1: SPECENGINE_BEFORE_SPEC names that binary"]
+fn record_the_bytes_before_tested_evidence() {
+    let program = std::path::PathBuf::from(
+        std::env::var_os("SPECENGINE_BEFORE_SPEC").expect("SPECENGINE_BEFORE_SPEC: the binary"),
+    );
+    let cases = before_record(&program, false);
+    assert_eq!(cases, before_record(&program, false), "stable answers");
+    let lines: Vec<String> = cases.iter().map(Value::to_string).collect();
+    fs::write(
+        tested_before_file(),
+        format!(
+            "{{\"recorded_with\": \"spec at 3c9fe6f (7b-2 shipped, 8b-1 not started)\",\n\"cases\": [\n{}\n]}}\n",
+            lines.join(",\n")
+        ),
+    )
+    .expect("the record");
+}
+
+/// RD-4 **evidence_free_verify_text_unchanged** ("Rules": WHEN no block
+/// exists, verify's stdout SHALL equal 5b's; M: an evidence-free run's
+/// text changed): over locks without a block, plain verify, `--node` and
+/// `--changed` print the bytes the binary before 8b-1 printed (its
+/// record), the exit alike; the JSON gains only `"tested":[]` (`null`
+/// under `--changed`).
+#[test]
+fn evidence_free_verify_text_unchanged() {
+    let record: Value = serde_json::from_str(
+        &fs::read_to_string(tested_before_file()).expect("verify_tested_before.json"),
+    )
+    .expect("the record parses");
+    let program = Path::new(common::SPEC);
+    assert_eq!(
+        Value::Array(before_record(program, true)),
+        record["cases"],
+        "the bytes before 8b-1"
+    );
+}
+
+/// `spec verify <args>` (text, then `--json`) in `repo` with a `git`
+/// first on `PATH` that refuses `hash-object` (exit 128) and runs the
+/// sandbox's git for everything else.
+fn verify_with_failing_hash(repo: &LockRepo, args: &[&str]) -> (i32, String, String, Value) {
+    let bin = repo.scratch.dir("failing-git");
+    let real = repo.git.git_program().display().to_string();
+    let wrapper = bin.join("git");
+    fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nfor arg in \"$@\"; do\n  if [ \"$arg\" = hash-object ]; then\n    echo 'fatal: hash-object refused by the test' >&2\n    exit 128\n  fi\ndone\nexec '{real}' \"$@\"\n"
+        ),
+    )
+    .expect("the wrapper");
+    let mut permissions = fs::metadata(&wrapper).expect("the wrapper").permissions();
+    std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+    fs::set_permissions(&wrapper, permissions).expect("executable");
+    let run = |extra: Option<&str>| {
+        let mut command = std::process::Command::new(common::SPEC);
+        command
+            .env_clear()
+            .current_dir(&repo.root)
+            .arg("verify")
+            .args(args)
+            .args(extra)
+            .stdin(std::process::Stdio::null());
+        for (name, value) in repo.git.vars() {
+            if name == "PATH" {
+                let mut path = std::ffi::OsString::from(bin.as_os_str());
+                path.push(":");
+                path.push(&value);
+                command.env(name, path);
+            } else if name != "HOME" {
+                command.env(name, value);
+            }
+        }
+        command.env("HOME", &repo.home);
+        command.output().expect("spec verify")
+    };
+    let text = run(None);
+    let json = run(Some("--json"));
+    assert_eq!(
+        text.status.code(),
+        json.status.code(),
+        "text and JSON exit alike"
+    );
+    let document: Value = serde_json::from_slice(&json.stdout)
+        .unwrap_or_else(|error| panic!("{error}: {}", String::from_utf8_lossy(&json.stdout)));
+    (
+        text.status.code().unwrap_or(-1),
+        String::from_utf8(text.stdout).expect("UTF-8"),
+        String::from_utf8(text.stderr).expect("UTF-8"),
+        document,
+    )
+}
+
+/// 8b-1 iteration 2 (owner-approved): a failure while hashing a tested
+/// node's bound code (git refusing `hash-object`; here over a lock of
+/// blocks and no entry, so only the evidence's read hashes) never changes
+/// verify's exit, verdict, counts or rows, plain or `--node`: `tested` is
+/// `null` with one note `tested: <cause>` (on stderr too), no `tested |`
+/// line; the same corpus without the blocks gives the rest alike. M: the
+/// failure a run cause (exit 2), or a block judged without its hash.
+#[test]
+fn tested_hash_failure_never_changes_verify_exit() {
+    let repo = LockRepo::of("vo-tested-hash-failure", "verify-tests", "repo", &[]);
+    let text = tested_common::lock_with(
+        &[],
+        &[tested_common::made_up_block(
+            "KILN-RAMP",
+            1,
+            '7',
+            &repo.head(),
+        )],
+    );
+    repo.write("spec.lock", &text);
+    repo.commit_all("evidence alone");
+    let plain = LockRepo::of("vo-tested-hash-failure-none", "verify-tests", "repo", &[]);
+    for args in [&[][..], &["--node", "KILN-RAMP"][..]] {
+        let (with_code, with_text, with_stderr, with) = verify_with_failing_hash(&repo, args);
+        let (code, without_text, _, without) = verify_with_failing_hash(&plain, args);
+        assert_ne!(
+            code, 2,
+            "{args:?}: premise: verify hashes nothing without blocks:\n{without_text}"
+        );
+        assert_eq!(with_code, code, "{args:?}: the exit\n{with_text}\n{with}");
+        assert_eq!(with["tested"], Value::Null, "{args:?}: {with}");
+        let notes: Vec<&str> = with["notes"]
+            .as_array()
+            .expect("notes")
+            .iter()
+            .filter_map(Value::as_str)
+            .filter(|note| note.starts_with("tested: "))
+            .collect();
+        assert_eq!(notes.len(), 1, "{args:?}: one note: {with}");
+        assert_eq!(
+            with_stderr
+                .lines()
+                .filter(|line| *line == format!("note: {}", notes[0]))
+                .count(),
+            1,
+            "{args:?}: the note on stderr:\n{with_stderr}"
+        );
+        assert!(!with_text.contains("\ntested | "), "{args:?}: {with_text}");
+        for key in ["verdict", "counts", "rows", "cannot"] {
+            assert_eq!(with[key], without[key], "{args:?}: {key}");
+        }
+    }
 }

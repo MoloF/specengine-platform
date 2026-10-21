@@ -7,6 +7,9 @@
 //! tool, HTTP route, UI call, hook, CI step or plugin text names the
 //! library's entry or `verify --tests`. Each test names the mutation that
 //! turns it red (`M:`).
+//!
+//! docs/features/tested-evidence.md (8b-1) RD-6: only the owner's terminal
+//! run writes a `[[tested]]` block (`only_terminal_run_writes_tested`).
 
 mod common;
 
@@ -159,6 +162,93 @@ fn mcp_and_http_never_run_tests() {
     assert!(
         offences.is_empty(),
         "a door to the runner:\n{}",
+        offences.join("\n")
+    );
+}
+
+/// The writer of `[[tested]]` blocks: the core merge, the CLI's commit
+/// subject and mode (docs/features/tested-evidence.md "The run's write";
+/// `merge_tested`, `TestedRun` are the developer's names, PHASE-B).
+const WRITER: [&str; 4] = [
+    "merge_tested",
+    "TestedRun",
+    "LockMode::Tests",
+    "LockSubject::Tests",
+];
+
+/// The only sources that may name [`WRITER`]: where it is defined and the
+/// test run that calls it.
+const WRITER_HOMES: [&str; 3] = [
+    "crates/specengine-core/src/lock.rs",
+    "crates/specengine-cli/src/lock.rs",
+    "crates/specengine-cli/src/verify_tests.rs",
+];
+
+/// RD-6 (ADR-0044; M: MCP, HTTP, the daemon, `check`, the gate or `spec
+/// task report` reaching the writer): no Rust source of any crate names the
+/// block writer but its homes, and `verify_tests.rs`, the terminal run,
+/// does (`merge_tested`, `LockSubject::Tests`: the scan is not vacuous);
+/// the daemon (`serve.rs`, the HTTP
+/// crate), `check` (core `check/`, CLI `check.rs`), the gate (`gate.rs`)
+/// and `spec task report` (`task.rs`) name neither the writer nor the
+/// run's entry.
+#[test]
+fn only_terminal_run_writes_tested() {
+    let root = repository_root();
+    let run = scanned(&root.join("crates/specengine-cli/src/verify_tests.rs"));
+    for name in ["merge_tested", "LockSubject::Tests"] {
+        assert!(
+            run.contains(name),
+            "the terminal run names `{name}` (PHASE-B names)"
+        );
+    }
+    let mut offences = Vec::new();
+    let crates = fs::read_dir(root.join("crates")).expect("crates/");
+    let mut dirs: Vec<PathBuf> = crates
+        .flatten()
+        .map(|entry| entry.path().join("src"))
+        .collect();
+    dirs.sort();
+    for dir in dirs {
+        for path in files(&dir, &is_rust) {
+            let relative = path
+                .strip_prefix(&root)
+                .unwrap_or(&path)
+                .display()
+                .to_string();
+            if WRITER_HOMES.contains(&relative.as_str()) {
+                continue;
+            }
+            let text = scanned(&path);
+            for name in WRITER {
+                if text.contains(name) {
+                    offences.push(format!("{relative}: {name}"));
+                }
+            }
+        }
+    }
+    let mut doors: Vec<PathBuf> = vec![
+        root.join("crates/specengine-cli/src/serve.rs"),
+        root.join("crates/specengine-cli/src/check.rs"),
+        root.join("crates/specengine-cli/src/gate.rs"),
+        root.join("crates/specengine-cli/src/task.rs"),
+    ];
+    doors.extend(files(
+        &root.join("crates/specengine-core/src/check"),
+        &is_rust,
+    ));
+    doors.extend(files(&root.join("crates/specengine-http/src"), &is_rust));
+    doors.extend(files(&root.join("crates/specengine-mcp/src"), &is_rust));
+    for path in &doors {
+        assert!(path.exists(), "a door's source: {}", path.display());
+        let text = scanned(path);
+        if has_identifier(&text, ENTRY) || text.contains("VerifyTestsRequest") {
+            offences.push(format!("{}: the run's entry", path.display()));
+        }
+    }
+    assert!(
+        offences.is_empty(),
+        "a path to the block writer:\n{}",
         offences.join("\n")
     );
 }

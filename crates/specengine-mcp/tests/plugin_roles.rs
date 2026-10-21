@@ -115,10 +115,23 @@ const ROLE_NAMES: [(&str, &[&str]); 5] = [
     ),
     (
         "tester",
-        &["get_task", "report_discrepancy", "task_id", "CLAUDE.md"],
+        // `check_binding`, `tested`: docs/features/tested-evidence.md
+        // (Q-G), the claim paragraph's last sentence.
+        &[
+            "get_task",
+            "report_discrepancy",
+            "task_id",
+            "CLAUDE.md",
+            "check_binding",
+            "tested",
+        ],
     ),
     ("reviewer", &["get_task", "report_discrepancy", "task_id"]),
 ];
+
+/// docs/features/tested-evidence.md (Q-G): the sentence ending the
+/// tester's "Your results are a claim" paragraph, verbatim.
+const TESTER_VERDICT: &str = "The machine verdict is the owner's own test run through SpecEngine, never your report: its evidence shows as `tested` in `check_binding`, and an edit to a node or its bound code turns it stale.";
 
 /// R-6: what the skill backticks.
 const SKILL_NAMES: [&str; 8] = [
@@ -1359,10 +1372,10 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0;
     // roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings:
     // 0.13.0; bundle-bindings: 0.14.0; impact: 0.15.0; impact-since:
-    // 0.16.0.
-    if plugin["version"] != "0.16.0" {
+    // 0.16.0; tested-evidence: 0.17.0.
+    if plugin["version"] != "0.17.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.16.0",
+            "plugin.json: version {}, not 0.17.0",
             plugin["version"]
         ));
     }
@@ -1432,7 +1445,37 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.16.0\"", "\"0.2.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.16.0");
-    assert_names(&r2_problems(&older, &market), "not 0.16.0", "0.2.0");
+    let older = plugin.replacen("\"0.17.0\"", "\"0.16.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.17.0");
+    assert_names(&r2_problems(&older, &market), "not 0.17.0", "0.16.0");
+}
+
+/// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old
+/// line kept): the tester's "Your results are a claim" paragraph ends with
+/// the spec's sentence, verbatim, once; no other role says it.
+#[test]
+fn tester_names_the_machine_verdict() {
+    let tester = fs::read_to_string(plugin_dir().join("specengine/agents/tester.md"))
+        .expect("agents/tester.md");
+    let section = tester
+        .split("\n## Your results are a claim\n")
+        .nth(1)
+        .expect("the claim section")
+        .split("\n## ")
+        .next()
+        .expect("its body");
+    let paragraph = section.trim();
+    assert!(
+        paragraph.ends_with(TESTER_VERDICT),
+        "the paragraph ends with the sentence:\n{paragraph}"
+    );
+    assert_eq!(tester.matches(TESTER_VERDICT).count(), 1);
+    for (stem, _) in ROLES {
+        if stem == "tester" {
+            continue;
+        }
+        let text = fs::read_to_string(plugin_dir().join(format!("specengine/agents/{stem}.md")))
+            .expect("a role");
+        assert!(!text.contains(TESTER_VERDICT), "{stem} says it");
+    }
 }

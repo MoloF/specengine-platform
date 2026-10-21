@@ -16,6 +16,7 @@
 mod common;
 mod lock_common;
 mod rev_rule_common;
+mod tested_common;
 mod verify_common;
 
 use rev_rule_common::{
@@ -540,4 +541,47 @@ fn rev_max_finding_keeps_the_largest_revision_text() {
         "{line:?} not printed:\n{}",
         check.show()
     );
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-7
+
+/// RD-7 **tested_block_vouches_like_an_entry** (4b-2's rule, Q-E; M: the
+/// rule ignores a block): LAW-STEP holds no entry in the golden; a block
+/// vouching for its text (revision 1, its `norm_hash`) committed makes its
+/// staged change without a raise a `rev-not-raised` finding, exit 1, as an
+/// entry would; a block at another `spec_hash` vouches for nothing.
+#[test]
+fn tested_block_vouches_like_an_entry() {
+    for (label, vouching) in [("rr-tested-vouching", true), ("rr-tested-other", false)] {
+        let repo = golden(label);
+        let spec_hash = if vouching {
+            repo.norm_hash("LAW-STEP")
+        } else {
+            fake_hash()
+        };
+        let text = repo.lock_text();
+        repo.write(
+            LOCK,
+            tested_common::with_blocks_added(
+                &text,
+                &[tested_common::block_at(
+                    "LAW-STEP",
+                    1,
+                    &spec_hash,
+                    '7',
+                    &repo.head(),
+                )],
+            ),
+        );
+        repo.commit_all("LAW-STEP's evidence");
+        repo.replace(COUNTER_MD, STEP_EDIT.0, STEP_EDIT.1);
+        stage_all(&repo);
+        let check = staged(&repo);
+        if vouching {
+            assert_eq!(check.subjects(), ["LAW-STEP"], "{}", check.show());
+            assert_eq!(check.code(), 1, "{}", check.show());
+        } else {
+            assert_silent(&check, "a block vouching for another text");
+        }
+    }
 }

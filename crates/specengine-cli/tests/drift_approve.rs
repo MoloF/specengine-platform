@@ -1296,10 +1296,12 @@ fn editorial_after_a_no_verify_text_commit_reads_ok() {
 }
 
 /// RD-6 ("Accept's seams": `written` is `#[serde(skip)]`): `spec --json
-/// lock accept` on a terminal still prints the document's eight keys in
-/// order, `reference`, `node`, `rev`, `mode`, `rows`, `commit`,
-/// `unchanged`, `refusal`; neither `written` nor `nothing`. M: `written`
-/// serialized.
+/// lock accept` on a terminal still prints the document's keys in order,
+/// `reference`, `node`, `rev`, `mode`, `rows`, `commit`, `unchanged`,
+/// `refusal`, and since docs/features/tested-evidence.md ("Other lock
+/// writers") the ninth, `tested` (the block row's change, `null` without a
+/// block); neither `written` nor `nothing`. M: `written` serialized, or
+/// `tested` missing.
 #[test]
 fn lock_accept_json_keeps_its_keys() {
     let repo = LockRepo::code_a("da-json-keys");
@@ -1329,11 +1331,14 @@ fn lock_accept_json_keeps_its_keys() {
             "refusal",
             "rev",
             "rows",
+            "tested",
             "unchanged"
         ],
         "{document}"
     );
     let printed = run.stdout.trim_end();
+    // The eight keys keep their order; the spec gives `tested` no place
+    // ("a ninth key"), so its position is not pinned here.
     let order = [
         "reference",
         "node",
@@ -1350,6 +1355,7 @@ fn lock_accept_json_keeps_its_keys() {
         .collect();
     assert!(at.windows(2).all(|pair| pair[0] < pair[1]), "{printed}");
     assert_eq!(document["commit"], json!(repo.head()));
+    assert_eq!(document["tested"], Value::Null, "no block: null");
 }
 
 // ------------------------------------------------------------- RD-20
@@ -1955,4 +1961,36 @@ fn killed_editorial_drift_approve_completes_by_trailer() {
     let stored = proposal(&repo, SLUG, &id);
     assert_eq!(stored.status, ProposalStatus::Applied);
     assert_eq!(stored.applied_commit.as_deref(), Some(commit.as_str()));
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-6
+
+/// RD-6 **M7** (`tests` added to `LockMode::TRAILERS`): a lock commit with
+/// every trailer an accept's carries (`Lock`, `Decided-by`, `Proposal`)
+/// but `Lock-mode: tests`, the evidence commit's mode
+/// (docs/features/tested-evidence.md "The run's write": no drift item
+/// completes on it), never completes a drift item: ``has no `Lock-mode: accept` or
+/// `editorial` trailer``, the item `open`, the approve finding nothing to
+/// accept.
+#[test]
+fn drift_completion_ignores_a_test_lock_commit() {
+    let repo = drifted("da-complete-tests", cap_changed);
+    let raised = drift_common::raised(&repo, &[]);
+    let id = item_of(&raised, "LAW-BOUND");
+    let made = killed_lock_commit(&repo, "LAW-BOUND", &id, false);
+    let message = repo.message(&made);
+    assert!(message.contains("\nLock-mode: accept\n"), "{message}");
+    let rewritten = message.replace("Lock-mode: accept\n", "Lock-mode: tests\n");
+    let commit = commit_message(&repo, &rewritten, true);
+    assert_eq!(repo.changed(&commit), ["spec.lock"]);
+    let carried = repo.message(&commit);
+    assert!(carried.contains("\nLock-mode: tests\n"), "{carried}");
+    assert!(carried.contains(&format!("Proposal: {id}")), "{carried}");
+    not_completed_by(
+        &repo,
+        &id,
+        &commit,
+        "has no `Lock-mode: accept` or `editorial` trailer",
+        false,
+    );
 }

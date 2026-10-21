@@ -35,11 +35,16 @@
 //! index's level digests are tampered through the system's `sqlite3`
 //! (`code_index_common`). Each repository has its own `HOME`. Non-Latin
 //! characters in Rust sources are Unicode escapes (ADR-0024).
+//!
+//! docs/features/tested-evidence.md (8b-1) RD-4: `tested` under `--node` is
+//! plain's entries of its holders (the differential), judged by the one
+//! function over all their bindings (`tested_state_is_one_function`).
 
 mod anchor_common;
 mod code_index_common;
 mod common;
 mod lock_common;
+mod tested_common;
 mod verify_common;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -642,6 +647,10 @@ fn plain_parts(plain: &Verify) -> (Vec<String>, Vec<String>, Vec<String>) {
             causes.push(line.to_owned());
         } else if line.starts_with("hint: ") {
             hints.push(line.to_owned());
+        } else if line.starts_with("tested | ") {
+            // docs/features/tested-evidence.md: never a row's block (the
+            // evidence-free corpora here print none).
+            continue;
         } else if line.starts_with("  ") {
             let block = blocks
                 .last_mut()
@@ -896,6 +905,20 @@ fn differential(plain: &Verify, run: &Verify, case: &Case<'_>) -> Vec<Value> {
     for key in ["mode", "base", "task", "cannot"] {
         assert_eq!(document[key], base[key], "{context}: `{key}` is plain's");
     }
+    // docs/features/tested-evidence.md "Plain verify": `--node`'s `tested`
+    // is plain's entries of its holders, over all their bindings.
+    let holders_tested = base["tested"].as_array().map(|entries| {
+        entries
+            .iter()
+            .filter(|entry| case.holders.iter().any(|holder| entry["node"] == *holder))
+            .cloned()
+            .collect::<Vec<Value>>()
+    });
+    assert_eq!(
+        document["tested"],
+        json!(holders_tested),
+        "{context}: `tested` is plain's of the holders"
+    );
     let (verdict, code) = verdict_of(&document["mode"], &kept);
     assert_eq!(document["verdict"], verdict, "{context}: the verdict");
     assert_eq!(run.code(), code, "{context}: the exit\n{}", run.show());
@@ -2410,4 +2433,80 @@ fn verify_node_cost() {
         node.as_millis()
     );
     assert!(node < whole, "--node {node:?} below plain {whole:?}");
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-4
+
+/// RD-4 **tested_state_is_one_function** (M: plain and `--node` disagreeing
+/// on one node): over the ECS corpus with a block per state
+/// (`tested_common::ecs_with_blocks`), `--node X` gives exactly plain's
+/// entry of X for every block's node (`verified`, `stale code_changed`,
+/// `stale spec_changed`), `--node X --symbol QPATH` too (the holders'
+/// blocks over all their bindings, never the kept rows), a node without a
+/// block `[]`; the text prints plain's line of X before the summary, none
+/// for a `verified` X.
+#[test]
+fn tested_state_is_one_function() {
+    let (repo, _, _) = tested_common::ecs_with_blocks("vn-tested-one");
+    let reference = plain(&repo);
+    let entries = list(&reference.json()["tested"]);
+    assert_eq!(entries.len(), 4, "{}", reference.show());
+    let entry_of = |node: &str| -> Value {
+        entries
+            .iter()
+            .find(|entry| entry["node"] == node)
+            .cloned()
+            .unwrap_or_else(|| panic!("plain's entry of {node}"))
+    };
+    let line_of = |node: &str| -> Option<String> {
+        reference
+            .text()
+            .lines()
+            .find(|line| line.starts_with("tested | ") && line.ends_with(&format!(" | {node}")))
+            .map(str::to_owned)
+    };
+    for node in ["PERK-DRAIN", "PERK-REGEN", "PERK-STAMINA"] {
+        let run = verify_at(&repo, &repo.root, &["--node", node]);
+        assert_eq!(
+            run.json()["tested"],
+            json!([entry_of(node)]),
+            "--node {node}: plain's entry\n{}",
+            run.show()
+        );
+        let printed: Vec<&str> = run
+            .text()
+            .lines()
+            .filter(|line| line.starts_with("tested | "))
+            .collect();
+        match line_of(node) {
+            Some(line) => {
+                assert_eq!(printed, [line.as_str()], "--node {node}");
+                let lines: Vec<&str> = run.text().lines().collect();
+                assert_eq!(
+                    lines[lines.len() - 2],
+                    line,
+                    "--node {node}: before the summary"
+                );
+            }
+            None => assert!(printed.is_empty(), "--node {node}: verified, no line"),
+        }
+    }
+    let narrowed = verify_at(
+        &repo,
+        &repo.root,
+        &[
+            "--node",
+            "PERK-DRAIN",
+            "--symbol",
+            "crates/game::stamina::drain_system",
+        ],
+    );
+    assert_eq!(
+        narrowed.json()["tested"],
+        json!([entry_of("PERK-DRAIN")]),
+        "--symbol: the holder's block over all its bindings\n{}",
+        narrowed.show()
+    );
+    let none = verify_at(&repo, &repo.root, &["--node", "TUNE-01"]);
+    assert_eq!(none.json()["tested"], json!([]), "no block: []");
 }

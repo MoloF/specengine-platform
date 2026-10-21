@@ -4,10 +4,17 @@
 //! synthetic: valid forms, made-up digests), over scratch repositories of
 //! `fixtures/code-a` (its `[code]` table; no code or spec file is read).
 //!
+//! docs/features/tested-evidence.md (8b-1) RD-7 (regen: "per node by
+//! `spec-lock.md`'s table; stages of formats 2 and 3 of one `code_recipe`
+//! merge; `<choice> | <node> | tested`"): `regen_merges_tested_per_node`,
+//! `regen_merges_format_2_and_3_stages`.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 mod common;
 mod lock_common;
+mod tested_common;
+mod verify_common;
 
 use std::fs;
 
@@ -541,4 +548,250 @@ fn regen_on_a_terminal() {
         )
     );
     assert_eq!(repo.lock_text(), result);
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-7
+
+/// A synthetic block of `node`, version `v` (its hashes and commit made of
+/// `v`), verified on `date`.
+fn tested(node: &str, v: char, date: &str) -> tested_common::Block {
+    tested_common::Block {
+        node: node.to_owned(),
+        rev: 1,
+        spec_hash: fake_b3(v),
+        bound_hash: fake_b3(v),
+        tests: vec![(
+            "crates/tally/tests/bounds.rs".to_owned(),
+            "crates/tally::test:bounds::stops_at_cap".to_owned(),
+        )],
+        commit: fake_oid(v),
+        verified_at: date.to_owned(),
+    }
+}
+
+/// The lock of `entries` and `blocks` (format 3 iff a block).
+fn with(entries: &[String], blocks: &[tested_common::Block]) -> String {
+    tested_common::lock_with(entries, blocks)
+}
+
+/// The row of `node`'s block as regen prints it.
+fn tested_row(choice: &str, node: &str) -> String {
+    format!("{choice} | {node} | tested\n")
+}
+
+/// RD-7 **regen_merges_tested_per_node** (M: regen loses a side): one merge
+/// holding every per-node case of `spec-lock.md`'s table for blocks (the
+/// same on both; changed on one side; deleted on one side, unchanged or
+/// changed on the other; changed differently, by `verified_at` or by
+/// bytes; add/add without a base): regen writes exactly the hand-derived
+/// lock, a `<choice> | <node> | tested` row per block after the entries'
+/// rows, the question counting each block as an entry; symmetric.
+#[test]
+fn regen_merges_tested_per_node() {
+    let keep = entry("AAA-01", '1', BASE_DAY);
+    let base = with(
+        std::slice::from_ref(&keep),
+        &[
+            tested("AAA-01", '1', BASE_DAY),
+            tested("BBB-01", '1', BASE_DAY),
+            tested("CCC-01", '1', BASE_DAY),
+            tested("DDD-01", '1', BASE_DAY),
+            tested("EEE-01", '1', BASE_DAY),
+            tested("FFF-01", '1', BASE_DAY),
+            tested("GGG-01", '1', BASE_DAY),
+        ],
+    );
+    let ours = with(
+        std::slice::from_ref(&keep),
+        &[
+            tested("AAA-01", '1', BASE_DAY),
+            tested("BBB-01", '2', "2026-10-05"),
+            tested("CCC-01", '1', BASE_DAY),
+            tested("EEE-01", '4', "2026-10-04"),
+            tested("FFF-01", '5', "2026-10-09"),
+            tested("GGG-01", '8', "2026-10-08"),
+            tested("HHH-01", '9', "2026-10-09"),
+        ],
+    );
+    let theirs = with(
+        std::slice::from_ref(&keep),
+        &[
+            tested("AAA-01", '1', BASE_DAY),
+            tested("BBB-01", '1', BASE_DAY),
+            tested("CCC-01", '3', "2026-10-04"),
+            tested("DDD-01", '1', BASE_DAY),
+            tested("FFF-01", '6', "2026-10-07"),
+            tested("GGG-01", '7', "2026-10-08"),
+            tested("HHH-01", 'a', "2026-10-08"),
+        ],
+    );
+    let result = with(
+        std::slice::from_ref(&keep),
+        &[
+            tested("AAA-01", '1', BASE_DAY),
+            tested("BBB-01", '2', "2026-10-05"),
+            tested("CCC-01", '3', "2026-10-04"),
+            tested("EEE-01", '4', "2026-10-04"),
+            tested("FFF-01", '5', "2026-10-09"),
+            tested("GGG-01", '7', "2026-10-08"),
+            tested("HHH-01", '9', "2026-10-09"),
+        ],
+    );
+    let rows = |ours: &str, theirs: &str| {
+        [
+            row("both", "AAA-01"),
+            tested_row("both", "AAA-01"),
+            tested_row(ours, "BBB-01"),
+            tested_row(theirs, "CCC-01"),
+            tested_row("deleted", "DDD-01"),
+            tested_row(ours, "EEE-01"),
+            tested_row("later", "FFF-01"),
+            tested_row("bytes", "GGG-01"),
+            tested_row("later", "HHH-01"),
+        ]
+        .concat()
+    };
+    let case = Case {
+        base: Some(base),
+        ours: Some(ours),
+        theirs: Some(theirs),
+    };
+    let (repo, clean) = merged("lock-regen-tested", &case, "main");
+    assert!(!clean, "the merge conflicts in spec.lock");
+    let attempt = repo.regen(true);
+    attempt.written("blocks");
+    assert_eq!(attempt.rows(), rows("ours", "theirs"));
+    assert_eq!(
+        attempt.question(),
+        format!(
+            "merge spec.lock (8 entries, 3 by verified_at or bytes) in {}? [y/N]",
+            repo.root.display()
+        )
+    );
+    assert_eq!(repo.lock_text(), result);
+
+    let (two, _) = merged("lock-regen-tested-sym", &case, "theirs");
+    let second = two.regen(true);
+    second.written("theirs <- main");
+    assert_eq!(second.rows(), rows("theirs", "ours"));
+    assert_eq!(two.lock_text(), result, "side-symmetric");
+}
+
+/// RD-7 **regen_merges_format_2_and_3_stages** (M: regen refuses format 2
+/// against 3): a base and one side of format 2, the other side format 3 (a
+/// block added, an entry kept) of one `code_recipe` merge: the block from
+/// its side, the other side's changed entry, `format = 3`; both ways
+/// round the same file. A last block deleted on one side writes format 2.
+#[test]
+fn regen_merges_format_2_and_3_stages() {
+    let base = lock_of(&[
+        entry("AAA-01", '1', BASE_DAY),
+        entry("BBB-01", '1', BASE_DAY),
+    ]);
+    let ours = with(
+        &[
+            entry("AAA-01", '1', BASE_DAY),
+            entry("BBB-01", '1', BASE_DAY),
+        ],
+        &[tested("AAA-01", '2', "2026-10-05")],
+    );
+    let theirs = lock_of(&[
+        entry("AAA-01", '1', BASE_DAY),
+        entry("BBB-01", '3', "2026-10-04"),
+    ]);
+    let result = with(
+        &[
+            entry("AAA-01", '1', BASE_DAY),
+            entry("BBB-01", '3', "2026-10-04"),
+        ],
+        &[tested("AAA-01", '2', "2026-10-05")],
+    );
+    assert!(ours.contains("\nformat = 3\n") && theirs.contains("\nformat = 2\n"));
+    let case = Case {
+        base: Some(base),
+        ours: Some(ours),
+        theirs: Some(theirs),
+    };
+    for into in ["main", "theirs"] {
+        let (repo, clean) = merged(&format!("lock-regen-2-3-{into}"), &case, into);
+        assert!(!clean, "{into}: conflicts");
+        let attempt = repo.regen(true);
+        attempt.written(into);
+        assert_eq!(repo.lock_text(), result, "{into}");
+        let side = if into == "main" { "ours" } else { "theirs" };
+        assert!(
+            attempt.rows().contains(&tested_row(side, "AAA-01")),
+            "{into}: {}",
+            attempt.rows()
+        );
+    }
+
+    // The only block deleted on one side, unchanged on the other (the
+    // entries conflicting): deleted, and the lock format 2 again.
+    let base = with(
+        &[entry("AAA-01", '1', BASE_DAY)],
+        &[tested("AAA-01", '1', BASE_DAY)],
+    );
+    let ours = lock_of(&[entry("AAA-01", '2', "2026-10-05")]);
+    let theirs = with(
+        &[entry("AAA-01", '3', "2026-10-04")],
+        &[tested("AAA-01", '1', BASE_DAY)],
+    );
+    let case = Case {
+        base: Some(base),
+        ours: Some(ours.clone()),
+        theirs: Some(theirs),
+    };
+    let (repo, clean) = merged("lock-regen-last-block", &case, "main");
+    assert!(!clean, "the entries conflict");
+    let attempt = repo.regen(true);
+    attempt.written("the last block deleted");
+    assert_eq!(repo.lock_text(), ours, "format 2 again");
+    assert!(
+        attempt.rows().contains(&tested_row("deleted", "AAA-01")),
+        "{}",
+        attempt.rows()
+    );
+}
+
+/// 8b-1 iteration 2 (owner-approved): `spec lock regen --json` gains
+/// `tested`, its block rows `{choice, node}` by node bytes, as the text's
+/// `<choice> | <node> | tested` rows (M: the array missing or a block row
+/// in `rows`).
+#[test]
+fn regen_json_lists_the_block_rows() {
+    let base = with(
+        &[entry("AAA-01", '1', BASE_DAY)],
+        &[tested("AAA-01", '1', BASE_DAY)],
+    );
+    let ours = with(
+        &[entry("AAA-01", '2', "2026-10-05")],
+        &[
+            tested("AAA-01", '1', BASE_DAY),
+            tested("BBB-01", '2', "2026-10-05"),
+        ],
+    );
+    let theirs = with(
+        &[entry("AAA-01", '3', "2026-10-04")],
+        &[tested("AAA-01", '3', "2026-10-04")],
+    );
+    let case = Case {
+        base: Some(base),
+        ours: Some(ours),
+        theirs: Some(theirs),
+    };
+    let (repo, clean) = merged("lock-regen-json-tested", &case, "main");
+    assert!(!clean, "conflicts");
+    let run = repo.spec_pty(&repo.root, &["--json", "lock", "regen"], Some("y"));
+    run.code(0);
+    let document: serde_json::Value = serde_json::from_str(run.stdout.trim_end())
+        .unwrap_or_else(|error| panic!("{error}: {}", run.show()));
+    assert_eq!(
+        document["tested"],
+        serde_json::json!([
+            {"choice": "theirs", "node": "AAA-01"},
+            {"choice": "ours", "node": "BBB-01"},
+        ]),
+        "{document}"
+    );
 }

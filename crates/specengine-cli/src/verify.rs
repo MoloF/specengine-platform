@@ -59,6 +59,15 @@
 //! `--staged` and `--task` excluded, usage errors): [`crate::verify_node`]
 //! judges only the files the code index picks; its text prints `ok` rows
 //! too, cut at [`OUTPUT_CAP_CHARS`] as its JSON's `rows` are.
+//!
+//! `tested` (task spec `tested-evidence`, "Plain verify"): plain, `--task`
+//! and `--node` judge each `[[tested]]` block of their nodes by core's one
+//! `tested_state` ([`crate::tested`]), the JSON's 11th key and a text line
+//! per block not `verified` after the hints (outside `--node`'s cut);
+//! `null` under `--changed`, `--staged` and any run cause, and when the
+//! blocks cannot be judged (a hashing failure: one note `tested: <cause>`,
+//! never a cause). No finding, class, count, hint, verdict or exit depends
+//! on it.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -68,7 +77,9 @@ use specengine_core::check::{
     CheckInput, Endpoint, Mode, NodeAt, Resolver, SpecGraph, canonical_id,
 };
 use specengine_core::drift::raises;
-use specengine_core::lock::{EntryKey, LOCK_FILE, LockLevel, LockRelation, key_problem};
+use specengine_core::lock::{
+    EntryKey, LOCK_FILE, LockLevel, LockRelation, TestedState, key_problem,
+};
 use specengine_core::verify::{Finding, RowBinding, State, Verdict, verdict, verify_from_toml};
 use specengine_core::{CodeConfig, ProjectConfig};
 use specengine_store::{CommitFile, CommitListing, GitEnv, IndexRefusal, VerifyGit};
@@ -83,6 +94,7 @@ use crate::node_set::{Named, NodeSet, named_task, task_set};
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text, locate};
 use crate::proposals::{escaped_error, open_context};
 use crate::refs::{Corpus, NodeKey};
+use crate::tested::{TestedEntry, tested_entries, tested_note};
 use crate::verify_node::verify_node;
 use crate::verify_rows::{
     Anchor, CAUSE_CONFIG, CAUSE_GIT, CAUSE_LOCK, CAUSE_NO_CODE, CAUSE_WALK, CommitConfig, HeadMode,
@@ -275,6 +287,13 @@ pub struct VerifyOutcome {
     /// or not (`--task`: unfiltered); `None` in every other mode and with
     /// a run cause.
     pub(crate) symbols: Option<CodeDelta>,
+    /// `tested` (task spec `tested-evidence`, "Plain verify"): each
+    /// `[[tested]]` block's state now, by node bytes (plain: every block;
+    /// `--task`: its set's; `--node`: its holders'); `None` under
+    /// `--changed`, `--staged` and with a run cause (nothing hashed), and
+    /// when the blocks cannot be judged (a note says why). Never a
+    /// finding, a count, a hint, the verdict or the exit.
+    pub tested: Option<Vec<TestedEntry>>,
 }
 
 /// A `verifies` row and the nodes it reaches, by canonical ID (task spec
@@ -484,6 +503,7 @@ pub fn verify_as(
     let mut judged = None;
     let mut tests = Vec::new();
     let mut symbols = None;
+    let mut tested = None;
     match (causes.is_empty(), code, tree, lock, input, git) {
         (true, Some(code), Some(tree), Some(lock), Some(input), Some(mut open)) => {
             let walked = Walked {
@@ -504,6 +524,30 @@ pub fn verify_as(
                     messages.extend(ran.lock_note.map(Message::Note));
                 }
                 Err(cause) => causes.push(cause),
+            }
+            // `tested`, plain and `--task` alone (a base hashes nothing):
+            // every block, or the task's set's.
+            // A failure to judge them is one note, `tested` null: never a
+            // cause (hash-object runs apart from the session `finish`
+            // ends).
+            if !changed && causes.is_empty() {
+                // The task's set only when a block can be kept by it.
+                let set = task
+                    .as_ref()
+                    .filter(|_| !lock.tested.is_empty())
+                    .map(|task| {
+                        let scheme = &project.config.scheme;
+                        let corpus = Corpus::new(&input, scheme, &project.config.paths);
+                        let set = task_set(task, &corpus, scheme, &mut Vec::new());
+                        set.keys()
+                            .filter_map(|key| set.canonical(key).map(str::to_owned))
+                            .collect::<BTreeSet<String>>()
+                    });
+                let keep = |node: &str| set.as_ref().is_none_or(|set| set.contains(node));
+                match tested_entries(&project, &input, &tree, &lock, &open, &keep) {
+                    Ok(entries) => tested = Some(entries),
+                    Err(cause) => messages.push(tested_note(&cause)),
+                }
             }
             if let Err(cause) = open.finish() {
                 causes.push(RunCause::new(CAUSE_GIT, cause.message));
@@ -537,6 +581,7 @@ pub fn verify_as(
         label,
         tests: Some(tests),
         symbols,
+        tested,
     }))
 }
 
@@ -734,6 +779,8 @@ pub(crate) struct Gathered<'a> {
     pub tests: Option<Vec<ReachingTest>>,
     /// `delta.symbols`: `--changed`'s alone.
     pub symbols: Option<CodeDelta>,
+    /// `tested`: plain's, `--task`'s, `--node`'s; `None` in a base mode.
+    pub tested: Option<Vec<TestedEntry>>,
 }
 
 /// The outcome: the mode the verdict uses, shown as such whether rows were
@@ -752,6 +799,7 @@ pub(crate) fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
         label,
         tests,
         symbols,
+        tested,
     } = gathered;
     let mode = configured
         .map(|configured| judged_mode(configured, has_base, &head_mode, label, &mut messages));
@@ -783,6 +831,7 @@ pub(crate) fn concluded(gathered: Gathered<'_>) -> VerifyOutcome {
             .collect(),
         tests: tests.map(|tests| if causes_empty { tests } else { Vec::new() }),
         symbols: symbols.filter(|_| causes_empty),
+        tested: tested.filter(|_| causes_empty),
         messages,
     }
 }
@@ -913,6 +962,7 @@ fn verify_staged(
         label,
         tests: Some(tests),
         symbols: None,
+        tested: None,
     }))
 }
 
@@ -1556,6 +1606,22 @@ pub(crate) fn render_text(outcome: &VerifyOutcome) -> String {
         out.push_str(&hint);
         out.push('\n');
     }
+    // Each block not `verified` (task spec `tested-evidence`), outside
+    // `--node`'s cut.
+    for entry in outcome.tested.iter().flatten() {
+        if entry.state == TestedState::Verified {
+            continue;
+        }
+        let state = match entry.state.category() {
+            Some(category) => format!("{} {category}", entry.state.as_str()),
+            None => entry.state.as_str().to_owned(),
+        };
+        out.push_str(&format!(
+            "tested | {} | {}\n",
+            one_line(&state),
+            one_line(&entry.node)
+        ));
+    }
     let counts = counts(outcome);
     let mode = outcome
         .mode
@@ -1711,6 +1777,18 @@ struct OmittedJson {
     rows: usize,
 }
 
+/// One `[[tested]]` block's state in the JSON's `tested`.
+#[derive(Serialize)]
+struct TestedJson<'a> {
+    node: &'a str,
+    state: &'static str,
+    category: Option<&'a str>,
+    rev: u32,
+    node_rev: Option<u32>,
+    commit: &'a str,
+    verified_at: &'a str,
+}
+
 #[derive(Serialize)]
 struct VerifyJson<'a> {
     mode: Option<&'static str>,
@@ -1727,6 +1805,9 @@ struct VerifyJson<'a> {
     /// The rows the text prints (`--node`) or every row, `ok` too.
     rows: Vec<&'a VerifyRow>,
     delta: VerifyDeltaJson<'a>,
+    /// Each block's state by node bytes; `null` under a base or a run
+    /// cause (task spec `tested-evidence`).
+    tested: Option<Vec<TestedJson<'a>>>,
     cannot: &'a [String],
     notes: Vec<String>,
     /// `--node`'s rows not printed; `null` without `--node`.
@@ -1837,6 +1918,20 @@ impl Serialize for VerifyOutcome {
                 affected_nodes: affected.into_iter().collect(),
                 tests_reaching,
             },
+            tested: self.tested.as_ref().map(|entries| {
+                entries
+                    .iter()
+                    .map(|entry| TestedJson {
+                        node: &entry.node,
+                        state: entry.state.as_str(),
+                        category: entry.state.category(),
+                        rev: entry.rev,
+                        node_rev: entry.node_rev,
+                        commit: &entry.commit,
+                        verified_at: &entry.verified_at,
+                    })
+                    .collect()
+            }),
             cannot: &self.cannot,
             notes: self.notes(),
             omitted,

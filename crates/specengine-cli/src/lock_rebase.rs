@@ -25,7 +25,11 @@
 //!    given its levels and hashed into format 2, or dropped with the first
 //!    reason that applies (core [`DropReason`]); core's [`plan_rebase`]
 //!    keeps every key, `rev`, `spec_hash`, `file_blob`, `commit` and
-//!    `verified_at` as they were;
+//!    `verified_at` as they were; then each `[[tested]]` block (core
+//!    [`rebase_tested`], re-derived only under proof): its node's old entries not
+//!    giving its `bound_hash`, dropped `unproven`; an entry of its node
+//!    dropped, `entry_dropped`; else its `bound_hash` re-derived from the
+//!    rebased entries, the rest kept (the result format 3 iff one remains);
 //! 7. the rows, the committer identity, the one `[y/N]`, `HEAD`, the branch
 //!    and the lock's bytes read again, then the lock commit accept's (canon
 //!    `spec-lock-accept`, "The lock commit") under its rebase subject:
@@ -72,8 +76,9 @@ use specengine_code::{
     module_levels, placed_name_file, value_hashes,
 };
 use specengine_core::lock::{
-    DropReason, EntryCode, EntryKey, LOCK_FILE, LOCK_FORMAT, LevelCode, Lock, LockFormat, LockKind,
-    LockLevel, LockRelation, Recipes, Rederived, Verified, parse_lock, plan_rebase,
+    BINDING_FORMAT, DropReason, EntryCode, EntryKey, LOCK_FILE, LevelCode, Lock, LockFormat,
+    LockKind, LockLevel, LockRelation, Recipes, Rederived, TestedDrop, Verified, parse_lock,
+    plan_rebase, rebase_tested,
 };
 use specengine_store::{GitEnv, ObjectBlob, VerifyGit};
 
@@ -86,6 +91,7 @@ use crate::lock::{
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text};
 use crate::proposals::require_root_config;
 use crate::refs::{Corpus, code_config};
+use crate::tested::bound_hash;
 use crate::verify_rows::node_id;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
@@ -109,11 +115,25 @@ pub struct RebaseSide {
     pub code_recipe: String,
 }
 
-/// Entries kept and dropped.
+/// Entries kept and dropped; `[[tested]]` blocks re-derived and dropped,
+/// apart (no block is counted as an entry here).
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize)]
 pub struct RebaseCounts {
     pub rebased: usize,
     pub dropped: usize,
+    pub tested_rebased: usize,
+    pub tested_dropped: usize,
+}
+
+/// One `[[tested]]` block: `rebased | <node> | tested` or `dropped |
+/// <node> | tested | <reason>` (task spec `tested-evidence`, "Rebase").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RebaseTestedRow {
+    /// `rebased`, `dropped`.
+    pub change: &'static str,
+    pub node: String,
+    /// `unproven`, `entry_dropped`; `None` when rebased.
+    pub reason: Option<&'static str>,
 }
 
 /// One entry: `rebased|dropped | <node> | <relation> | <file> | <kind>
@@ -136,17 +156,19 @@ pub struct RebaseRow {
     pub reason: Option<String>,
 }
 
-/// What `spec lock rebase` did; `--json` prints its seven keys, every one
+/// What `spec lock rebase` did; `--json` prints its eight keys, every one
 /// present, an absent value null.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RebaseOutcome {
     /// The lock read (`None` before it is: a dirty input, no lock).
     pub from: Option<RebaseSide>,
-    /// This build's.
+    /// This build's: the result's format (3 iff a block remains).
     pub to: RebaseSide,
     pub counts: RebaseCounts,
     /// In key order.
     pub rows: Vec<RebaseRow>,
+    /// The old lock's blocks, by node.
+    pub tested: Vec<RebaseTestedRow>,
     /// The lock's commit, when one was made and named: also when it fails
     /// a check or cannot be verified (exit 1, the refusal naming it).
     pub commit: Option<String>,
@@ -166,11 +188,12 @@ impl RebaseOutcome {
         Self {
             from: None,
             to: RebaseSide {
-                format: LOCK_FORMAT,
+                format: BINDING_FORMAT,
                 code_recipe: build.code.clone(),
             },
             counts: RebaseCounts::default(),
             rows: Vec::new(),
+            tested: Vec::new(),
             commit: None,
             unchanged: false,
             refusal: None,
@@ -198,7 +221,7 @@ impl RebaseOutcome {
 impl RebaseSide {
     fn of(lock: &Lock) -> Self {
         Self {
-            format: lock.format.number(),
+            format: lock.format_number(),
             code_recipe: lock.recipes.code.clone(),
         }
     }
@@ -263,6 +286,7 @@ pub fn lock_rebase(
         Read::Old(old) => old,
         Read::Current(current) => {
             outcome.from = Some(RebaseSide::of(&current));
+            outcome.to.format = current.format_number();
             outcome.unchanged = true;
             return Ok(outcome);
         }
@@ -336,8 +360,9 @@ pub fn lock_rebase(
         answers.extend(rederived);
     }
 
-    // The plan: every entry answered above, in key order.
-    let plan = plan_rebase(&old, &build, |key, _| {
+    // The plan: every entry answered above, in key order; then each block
+    // re-derived under proof or dropped.
+    let mut plan = plan_rebase(&old, &build, |key, _| {
         answers.remove(key).ok_or_else(|| {
             CliError::spec(format!(
                 "`{}` {} `{}` was not re-derived; nothing written",
@@ -347,20 +372,45 @@ pub fn lock_rebase(
             ))
         })
     })?;
+    // The one bound-hash function of the write and every read.
+    rebase_tested(&old, &mut plan, &|bindings| {
+        bound_hash(bindings.iter().copied())
+    });
     outcome.rows = plan
         .rows
         .iter()
         .map(|row| shown(&row.key, &row.result))
         .collect();
+    outcome.tested = plan
+        .tested
+        .iter()
+        .map(|row| RebaseTestedRow {
+            change: if row.result.is_ok() { REBASED } else { DROPPED },
+            node: row.node.clone(),
+            reason: row.result.err().map(TestedDrop::as_str),
+        })
+        .collect();
     outcome.counts = RebaseCounts {
         rebased: plan.rebased(),
         dropped: plan.dropped(),
+        tested_rebased: plan.tested_rebased(),
+        tested_dropped: plan.tested_dropped(),
     };
-    let rows = rows_text(&outcome.rows);
+    outcome.to.format = plan.lock.format_number();
+    let rows = rows_text(&outcome.rows, &outcome.tested);
+    let tested = if old.tested.is_empty() {
+        String::new()
+    } else {
+        format!(
+            "; tested: {} rebased, {} dropped",
+            outcome.counts.tested_rebased, outcome.counts.tested_dropped
+        )
+    };
     let question = format!(
-        "rebase {LOCK_FILE} (format {} -> {LOCK_FORMAT}, \"{}\" -> \"{}\": {} rebased, {} dropped) \
+        "rebase {LOCK_FILE} (format {} -> {}, \"{}\" -> \"{}\": {} rebased, {} dropped{tested}) \
          at {} on {} in {}? [y/N]",
-        old.format.number(),
+        old.format_number(),
+        outcome.to.format,
         old.recipes.code,
         build.code,
         outcome.counts.rebased,
@@ -945,8 +995,27 @@ fn shown(key: &EntryKey, result: &Result<BTreeSet<LockLevel>, DropReason>) -> Re
 }
 
 /// `<change> | <node> | <relation> | <file> | <kind> <symbol>[
-/// <item_kind>][ | <reason>]`, one line each.
-fn rows_text(rows: &[RebaseRow]) -> String {
+/// <item_kind>][ | <reason>]`, one line each, then each block's
+/// `<change> | <node> | tested[ | <reason>]`.
+fn rows_text(rows: &[RebaseRow], tested: &[RebaseTestedRow]) -> String {
+    let mut out = entry_rows(rows);
+    for row in tested {
+        out.push_str(&format!(
+            "{} | {} | tested",
+            row.change,
+            one_line(&row.node)
+        ));
+        if let Some(reason) = row.reason {
+            out.push_str(" | ");
+            out.push_str(reason);
+        }
+        out.push('\n');
+    }
+    out
+}
+
+/// The entries' rows of [`rows_text`].
+fn entry_rows(rows: &[RebaseRow]) -> String {
     let mut out = String::new();
     for row in rows {
         let mut binding = format!("{} {}", row.kind, one_line(&row.symbol));

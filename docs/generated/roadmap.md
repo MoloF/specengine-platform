@@ -8,17 +8,17 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 24 open, 7 done; current mvp; to mvp 2-3 days; total 25-43 days
+roadmap: 24 open, 8 done; current mvp; to mvp 2-3 days; total 24-41 days
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
 1. [RM-0001](../roadmap/RM-0001.md) | Live check: real tasks of each pilot through the full cycle | draft | must | 2-3
 
-## release v1 | 4 open, 7 done | 10-17 days
+## release v1 | 4 open, 8 done | 9-15 days
 
-1. [RM-0008](../roadmap/RM-0008.md) | tested-evidence (8b): a passing test run becomes evidence in spec.lock | draft | should | 3-5
-2. [RM-0009](../roadmap/RM-0009.md) | health-drift (9b): Health shows drift between spec.lock and the tree | draft | should | 2-4 | waits on RM-0008
-3. [RM-0010](../roadmap/RM-0010.md) | layer-c-reads (11a-3): monikers in spec symbols and find_symbols | draft | should | 2-3
+1. [RM-0009](../roadmap/RM-0009.md) | health-drift (9b): Health shows drift between spec.lock and the tree | draft | should | 2-4
+2. [RM-0010](../roadmap/RM-0010.md) | layer-c-reads (11a-3): monikers in spec symbols and find_symbols | draft | should | 2-3
+3. [RM-0032](../roadmap/RM-0032.md) | tested-reads (8b-2): the reads show each node's tested state | draft | should | 2-3
 4. [RM-0011](../roadmap/RM-0011.md) | Drift screens in the web UI (Phase 4) | draft | could | 3-5 | waits on RM-0009
 
 ## release v2 | 7 open, 0 done | 13-23 days

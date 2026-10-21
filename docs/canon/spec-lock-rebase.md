@@ -3,20 +3,20 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-21
 ---
 
 # `spec lock rebase`: an old lock carried into this build's
 
-The migration writer (ADR-0050, `architecture-code.md#spec-lock`; CLI `lock_rebase.rs`), named by every `Some` reader (`spec-lock.md` "Entry"): a lock of this build's `norm_recipe`, format 1 or another `code_recipe`, made format 2 at this build's recipes from each entry's `file_blob`.
+The migration writer (ADR-0050, `architecture-code.md#spec-lock`; CLI `lock_rebase.rs`), named by every `Some` reader (`spec-lock.md` "Entry"): a lock of this build's `norm_recipe`, format 1 or another `code_recipe`, made format 2 at this build's recipes from each entry's `file_blob`, its `[[tested]]` blocks re-derived or dropped ("Blocks"; the result format 3 while one remains).
 
 ## Steps
 
 `spec lock rebase [--json]`; accept's refusals (`spec-lock-accept.md` "Exits"): exit 2 off a terminal (nothing read), on usage, config, `[code]`, git, an unmerged lock; 1 if `spec.lock` or the config is not `HEAD`'s. Then:
 
-1. No lock: exit 1 `no spec.lock: nothing to rebase`; this build's: exit 0 `nothing to change`; not UTF-8, unreadable by `None`, another `norm_recipe`: exit 2, the reader's text (the last `Some`'s).
+1. No lock: exit 1 `no spec.lock: nothing to rebase`; this build's (format 2 or 3): exit 0 `nothing to change`; not UTF-8, unreadable by `None`, another `norm_recipe`: exit 2, the reader's text (the last `Some`'s).
 2. Each `file_blob` by OID, one `read_blobs` session (raw `cat-file --batch`, `GIT_NO_LAZY_FETCH`; failing: exit 2); never `HEAD`'s tree, index, working tree or `commit`. A blob parses once; a panic (``re-deriving `<file>` at blob <oid> failed``) or no tree: exit 2 naming file and OID.
-3. Per entry, key order: located, given levels, hashed as accept's, or dropped; all but its code kept.
+3. Per entry, key order: located, given levels, hashed as accept's, or dropped; all but its code kept. Then per block.
 4. Rows, the question, re-reads (changed: exit 1 `spec.lock changed while being rebased; nothing written`), the commit.
 
 ## Location, levels, drops
@@ -27,9 +27,13 @@ Levels: format 2 its own; format 1 the union of the blob's markers giving the ke
 
 Dropped and named (then `unlocked`), first match: `blob_missing` (no object, another type, no OID), `not_utf8`, `symbol_gone` (no candidate), `ambiguous` (ties leave none or several; an `Ambiguous` RON anchor), `bad_levels` (format 1: a marker giving the key, `Invalid` levels), `cannot_verify[ <category>]`, `hash_mismatch` (the cross-check fails or gives no digest).
 
+## Blocks
+
+Per `[[tested]]` block (`spec-lock-tested.md`), the first match: `bound_bytes` over its node's old entries not hashing to its `bound_hash` (through `tested::bound_hash`): dropped `unproven` (never accepted, or at other code); an entry of the node dropped: `entry_dropped`; else its `bound_hash` re-derived from the rebased entries, the rest kept: never more code than its entries vouched for. An evidence-only lock loses every block `unproven`. Removing the last block writes format 2: not "an older format" (ADR-0050 as `spec-lock-tested.md` "Readings" reads it).
+
 ## Output and the commit
 
-stdout: `rebased | <node> | <relation> | <file> | <kind> <symbol>[ <item_kind>]`, `dropped | … | <reason>`; `committed <oid>`. stderr: `rebase spec.lock (format <n> -> 2, "<old>" -> "<new>": <r> rebased, <d> dropped) at <commit> on <branch> in <worktree>? [y/N]`; not `y`, `yes`: exit 1 `not confirmed; nothing written`. `--json` (exits 0, 1): `from{format,code_recipe}` (null: no lock read), `to`, `counts{rebased,dropped}`, `rows[{change,node,relation,file,kind,symbol,item_kind,levels,reason}]`, `commit`, `unchanged`, `refusal`.
+stdout: `rebased | <node> | <relation> | <file> | <kind> <symbol>[ <item_kind>]`, `dropped | … | <reason>`, then per block `rebased | <node> | tested`, `dropped | <node> | tested | <reason>`; `committed <oid>`. stderr: `rebase spec.lock (format <n> -> <m>, "<old>" -> "<new>": <r> rebased, <d> dropped[; tested: <r> rebased, <d> dropped]) at <commit> on <branch> in <worktree>? [y/N]`, `<m>` the result's format, the tail when the old lock holds a block; not `y`, `yes`: exit 1 `not confirmed; nothing written`. `--json` (exits 0, 1), 8 keys: `from{format,code_recipe}` (null: no lock read), `to` (`format` the result's), `counts{rebased,dropped,tested_rebased,tested_dropped}`, `rows[{change,node,relation,file,kind,symbol,item_kind,levels,reason}]`, `tested[{change,node,reason}]`, `commit`, `unchanged`, `refusal`.
 
 Accept's commit (`spec-lock-accept.md` "The lock commit"; exit 0 only verified): `spec: lock rebase`, `Lock-mode: rebase`, `Decided-by: <committer_ident>`, no `Lock:` or `Proposal:` (no `drift` item completed); check 3: ``it has no `Lock-mode: rebase` trailer``, ``it has a `Lock:` trailer``.
 

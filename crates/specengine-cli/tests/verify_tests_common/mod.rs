@@ -465,6 +465,19 @@ impl Kiln {
         answer: bool,
         extra: &[(&str, &str)],
     ) -> TestsRun {
+        self.run_at(cwd, task, answer, extra, CLOCK)
+    }
+
+    /// [`Kiln::run_with`] at the clock `now` (docs/features/tested-evidence.md
+    /// TE-2: another day, another time of day).
+    pub fn run_at(
+        &self,
+        cwd: &Path,
+        task: Option<&str>,
+        answer: bool,
+        extra: &[(&str, &str)],
+        now: &str,
+    ) -> TestsRun {
         self.clear_runner_files();
         let mut prompts: Vec<String> = Vec::new();
         let mut consent = |text: &str| {
@@ -476,7 +489,7 @@ impl Kiln {
             &Globals::default(),
             &VerifyTestsRequest {
                 task: task.map(str::to_owned),
-                now: CLOCK.to_owned(),
+                now: now.to_owned(),
                 git: self.git_env(cwd, extra),
             },
             &mut consent,
@@ -924,9 +937,18 @@ impl TestsRun {
         self.text().lines().map(str::to_owned).collect()
     }
 
-    /// stdout's last line, the summary.
+    /// stdout's summary line: the last starting `verify --tests: ` or
+    /// `verify --tests --task ` (the
+    /// last line before docs/features/tested-evidence.md, whose `lock | …`
+    /// rows and `committed <oid>` or `lock: <refusal>` follow it).
     pub fn summary(&self) -> String {
-        self.lines().last().cloned().unwrap_or_default()
+        self.lines()
+            .into_iter()
+            .rev()
+            .find(|line| {
+                line.starts_with("verify --tests: ") || line.starts_with("verify --tests --task ")
+            })
+            .unwrap_or_default()
     }
 
     /// stdout holds `line` as a whole line.

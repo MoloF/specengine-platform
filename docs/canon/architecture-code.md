@@ -44,7 +44,7 @@ Rule: `architecture.md#apply`. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 Each but a merge's and an editorial apply's is its own commit with provenance. Never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit.
 
-As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. As built (slice 4b-1): the approve writer, its vouching entries refreshed in the apply commit, in `docs/canon/proposal-revisions.md` "Editorial approve". As built (slice 4c-1): a `drift` item's approve running accept, in `docs/canon/proposal-drift.md` "Approve". As built (5b-1a): format 2, the only one written, and format 1 read only where the spec side alone counts, in `spec-lock.md` "Entry". As built (5b-2): the rebase, from blobs by OID alone, its drops, its commit and verify's base rule, in `docs/canon/spec-lock-rebase.md`. The `verify --tests` writer is not built yet.
+As built (slice 3): the file, its entries, lockability and `regen` in `docs/canon/spec-lock.md`; `accept`, its inputs from a clean `HEAD`, its verified commit, `--editorial` and a gone node's drop in `docs/canon/spec-lock-accept.md`. As built (slice 4b-1): the approve writer, its vouching entries refreshed in the apply commit, in `docs/canon/proposal-revisions.md` "Editorial approve". As built (slice 4c-1): a `drift` item's approve running accept, in `docs/canon/proposal-drift.md` "Approve". As built (5b-1a): format 2, and format 1 read only where the spec side alone counts, in `spec-lock.md` "Entry". As built (5b-2): the rebase, from blobs by OID alone, its drops, its commit and verify's base rule, in `docs/canon/spec-lock-rebase.md`. As built (8b-1): the test evidence, format 3, `spec-lock-tested.md`.
 
 <a id="verify"></a>
 ## Drift: `spec verify`
@@ -86,4 +86,4 @@ Rule: `architecture.md#tasks`. ADR-0044.
 
 SpecEngine runs a project's tests only through its `[verify] tests` argv template, on the owner's terminal (`spec verify --tests`, `#spec-lock`). `verified` is computed from `spec.lock`'s evidence, never from an agent's report.
 
-As built (slice 8a-1): `docs/canon/spec-verify-tests.md`: the tree clean before and after the run, the template from files `HEAD` holds and shown in the question, a probe per argv, one `verify.tests` event per started run; the evidence and `verified`: 8b.
+As built (slice 8a-1): `docs/canon/spec-verify-tests.md`: the tree clean before and after the run, the template from files `HEAD` holds and shown in the question, a probe per argv, one `verify.tests` event per started run; evidence: `spec-lock-tested.md`.

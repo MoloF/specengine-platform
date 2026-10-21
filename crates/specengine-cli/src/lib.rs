@@ -128,7 +128,9 @@
 //!   code index picks ([`VerifyNode`]; task spec `verify-node`);
 //!   [`verify_tests`]: `spec verify --tests [--task T]` (task spec
 //!   `verify-tests`), the `@verifies` tests run by the project's own
-//!   command after the owner's [`Consent`], Unix only;
+//!   command after the owner's [`Consent`], Unix only; a completed run's
+//!   evidence committed to `spec.lock` under that one consent (task spec
+//!   `tested-evidence`), judged on every plain verify ([`TestedEntry`]);
 //! - [`symbols`], [`unmapped`]: `spec symbols` (task spec `symbol-reads`:
 //!   a QUERY's items in tiers, a node's, a file's or a line's targets,
 //!   each with its markers; a `--node` naming nothing is an outcome with
@@ -242,6 +244,7 @@ mod symbols;
 mod task;
 #[cfg(unix)]
 mod test_runner;
+mod tested;
 mod tree;
 mod unmapped;
 mod verify;
@@ -314,7 +317,7 @@ pub use lock::{
 pub use lock_rebase::{
     LockRebaseRequest, RebaseCounts, RebaseOutcome, RebaseRow, RebaseSide, lock_rebase,
 };
-pub use lock_regen::{LockRegenRequest, RegenOutcome, RegenRow, lock_regen};
+pub use lock_regen::{LockRegenRequest, RegenOutcome, RegenRow, RegenTestedRow, lock_regen};
 pub use project::{
     CONFIG_FILE, Located, ProjectEntry, ProjectRoot, discover, locate, project_entry,
 };
@@ -399,6 +402,7 @@ pub use task::{
     TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes, task_claim,
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
+pub use tested::TestedEntry;
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
 pub use verify::{
@@ -406,8 +410,8 @@ pub use verify::{
     VerifyOutcome, VerifyPlace, VerifyRequest, VerifyRow, verify, verify_as,
 };
 pub use verify_tests::{
-    VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest, VerifyTestsRow,
-    verify_tests,
+    VerifyTestsLock, VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest,
+    VerifyTestsRow, verify_tests,
 };
 
 /// The exit code of a command (the verdict scheme of `spec check`).

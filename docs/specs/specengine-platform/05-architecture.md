@@ -72,7 +72,7 @@ Operational tables (not recoverable from git, §8): `proposals`, `events`: `docs
 ### 3.4. Status axes
 
 - `spec_status` (front-matter): `draft → review → accepted → superseded | rejected`.
-- `impl_status` (lock/index): `none → planned → in_progress → implemented → verified`; `verified` only from SpecEngine's own run (`spec verify --tests`, shipped 8a-1: `docs/canon/spec-verify-tests.md`; recorded in `spec.lock` from 8b).
+- `impl_status` (lock/index): `none → planned → in_progress → implemented → verified`; `verified` only from SpecEngine's own run (`spec verify --tests`, shipped 8a-1: `docs/canon/spec-verify-tests.md`), its evidence a `[[tested]]` block in `spec.lock` judged on read (shipped 8b-1: `docs/canon/spec-lock-tested.md`).
 - `sync` — **computed only** (§5.3).
 - `acceptance` (feature): `pending → accepted`.
 - `has_open_proposal` — flag from the queue: the node is "in question"; the context bundle shows it.
@@ -92,7 +92,7 @@ file_blob = "5f1c9e…"       # git blob OID of the file: unchanged → binding 
 spec_hash = "b3:9f2c…"      # norm_hash of the node
 ast_hash  = "b3:41aa…"      # canonical symbol hash
 commit    = "a0cea48"
-verified_by = "owner"       # owner only (CI writes nothing) — review record: who, when, against which revision; a test run's evidence: 8b `[[tested]]`
+verified_by = "owner"       # owner only (CI writes nothing) — review record: who, when, against which revision; a test run's evidence: `[[tested]]` (8b-1)
 verified_at = "2026-09-28"
 ```
 
@@ -185,7 +185,7 @@ Git as the truth gives "since verification" diffs for free: the old spec text an
 
 ### 5.4. Tests as evidence
 
-`spec verify --tests [--task T]` (shipped 8a-1: `docs/canon/spec-verify-tests.md`, ADR-0044) runs the tests carrying `@verifies` for the selected nodes through the project's own `[verify] tests` argv template, never a runner SpecEngine names (ADR-0008, ADR-0027): one invocation per distinct argv, a probe first, only on the owner's terminal after one `[y/N]`, over a clean committed tree. Each started run is a `verify.tests` queue event (command, commit, outcomes, output hashes), no `runs` row. The `implemented → verified` transition is made **by SpecEngine from the result** (8b `docs/features/tested-evidence.md`: the evidence in `spec.lock`), not by an agent's self-report.
+`spec verify --tests [--task T]` (shipped 8a-1: `docs/canon/spec-verify-tests.md`, ADR-0044) runs the tests carrying `@verifies` for the selected nodes through the project's own `[verify] tests` argv template, never a runner SpecEngine names (ADR-0008, ADR-0027): one invocation per distinct argv, a probe first, only on the owner's terminal after one `[y/N]`, over a clean committed tree. Each started run is a `verify.tests` queue event (command, commit, outcomes, output hashes), no `runs` row. The `implemented → verified` transition is made **by SpecEngine from the result** (shipped 8b-1: a pass commits its `[[tested]]` evidence to `spec.lock` under the same `[y/N]`, judged on each read, `docs/canon/spec-lock-tested.md`), not by an agent's self-report.
 
 ### 5.5. Node evidence level
 
@@ -193,7 +193,7 @@ Computed, shown in the UI and the context bundle. The answer to "agents get thei
 
 | Level | Evidence |
 |---|---|
-| 1 | a bound **passing test** (`@verifies`) run by SpecEngine (`spec verify --tests`; recorded from 8b) |
+| 1 | a bound **passing test** (`@verifies`) run by SpecEngine (`spec verify --tests`; recorded as `[[tested]]` since 8b-1) |
 | 2 | a **deterministic machine assertion**: e.g. "system X in schedule Update after Y", "component Z requires W" — checked by extracting `add_systems`/`#[require]`; no slice yet (`constant-census.md` D9) |
 | 3 | a fresh binding to a symbol (AST hash matches) |
 | 4 | an LLM-audit verdict with a `file:line` quote |

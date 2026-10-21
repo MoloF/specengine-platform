@@ -4,7 +4,8 @@
 //! by path and line: `required` when the rule `rev-not-raised` finds it
 //! (`HEAD`'s `spec.lock` vouches for its old text and the checked lock does
 //! not carry the new hash), else `suggested`; each with `HEAD`'s revision,
-//! the one a raise writes, the lock entries vouching for it and the line
+//! the one a raise writes, the lock entries vouching for it (its
+//! `[[tested]]` block counted as one, core's rule) and the line
 //! to write, as an apply writes it (neither where an apply refuses the
 //! raise: an unreadable revision, at the largest revision, a document of a
 //! closed class that admits no `rev`, a line that cannot be written).

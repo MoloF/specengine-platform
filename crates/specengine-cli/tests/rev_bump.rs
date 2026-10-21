@@ -14,6 +14,7 @@ mod common;
 mod drift_common;
 mod lock_common;
 mod rev_rule_common;
+mod tested_common;
 mod verify_common;
 
 use std::collections::BTreeMap;
@@ -698,4 +699,51 @@ fn required_hint_without_a_line_names_only_editorial() {
         REQUIRED_HINT_EDITORIAL,
         "unwritable raises"
     );
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-7
+
+/// RD-7 **bump_requires_a_raise_under_a_block** (Q-E: a block counts as
+/// one entry; M: bump ignores a block): LAW-STEP's text changed without a
+/// raise is `suggested` (unlocked) over the golden, `required` with `1
+/// lock entry` once a block vouches for its text.
+#[test]
+fn bump_requires_a_raise_under_a_block() {
+    let repo = golden("rd4-tested-none");
+    repo.replace(COUNTER_MD, STEP_EDIT.0, STEP_EDIT.1);
+    let run = bump(&repo, &[]);
+    assert_eq!(
+        run.needs(),
+        [("LAW-STEP".to_owned(), "suggested".to_owned())],
+        "{}",
+        run.show()
+    );
+
+    let repo = golden("rd4-tested-block");
+    let norm = repo.norm_hash("LAW-STEP");
+    let text = repo.lock_text();
+    repo.write(
+        LOCK,
+        tested_common::with_blocks_added(
+            &text,
+            &[tested_common::block_at(
+                "LAW-STEP",
+                1,
+                &norm,
+                '7',
+                &repo.head(),
+            )],
+        ),
+    );
+    repo.commit_all("LAW-STEP's evidence");
+    repo.replace(COUNTER_MD, STEP_EDIT.0, STEP_EDIT.1);
+    let run = bump(&repo, &[]);
+    assert_eq!(run.code(), 0, "{}", run.show());
+    assert_eq!(
+        run.needs(),
+        [("LAW-STEP".to_owned(), "required".to_owned())],
+        "{}",
+        run.show()
+    );
+    assert_eq!(run.row("LAW-STEP")["lock_entries"], 1);
 }

@@ -28,7 +28,9 @@
 //! parents; `--symbol` keeps those whose key's symbol is QPATH byte for
 //! byte (a RON row's `<file>#<symbol>` too), or whose moved anchor's is.
 //! Counts, cascade, `delta`, hints, verdict and exit are the kept rows';
-//! `skipped` 0; no row: `clean`, with a note. Nothing is written but the
+//! `skipped` 0; no row: `clean`, with a note. `tested` is the holders'
+//! blocks, judged over all their bindings in the partial tree (never
+//! `--symbol`'s cut), as plain judges them. Nothing is written but the
 //! data directory (the index refreshes, as `spec refs`).
 
 use std::collections::BTreeSet;
@@ -45,6 +47,7 @@ use crate::project::discover_with_text;
 use crate::proposals::escaped_error;
 use crate::refs::{Corpus, NodeKey};
 use crate::show::classify;
+use crate::tested::{tested_entries, tested_note};
 use crate::verify::{
     Gathered, PlainReads, VerifyNode, VerifyOutcome, VerifyRequest, concluded, plain_reads,
     unprefixed,
@@ -138,6 +141,7 @@ pub(crate) fn verify_node(
     };
 
     let mut judged = None;
+    let mut tested = None;
     match (causes.is_empty() && refreshed, code, lock, git) {
         (true, Some(code), Some(lock), Some(git)) => {
             let scope = SetScope {
@@ -148,7 +152,18 @@ pub(crate) fn verify_node(
                 keys: &holders,
             };
             match judge_set(&scope, &mut open.index, &git, &mut messages, notes_at) {
-                Ok(set) => judged = Some(set.judged),
+                Ok(set) => {
+                    // `tested`: the holders' blocks over all their bindings
+                    // (never `--symbol`'s cut), in the partial tree holding
+                    // every marker file of theirs; a failure to judge them
+                    // one note, `tested` null, never a cause.
+                    let keep = |id: &str| node.ids.iter().any(|held| held == id);
+                    match tested_entries(&project, &input, &set.tree, &lock, &git, &keep) {
+                        Ok(entries) => tested = Some(entries),
+                        Err(cause) => messages.push(tested_note(&cause)),
+                    }
+                    judged = Some(set.judged);
+                }
                 Err(cause) => causes.push(cause),
             }
             if let Err(cause) = git.finish() {
@@ -190,6 +205,7 @@ pub(crate) fn verify_node(
         label,
         tests: None,
         symbols: None,
+        tested,
     }))
 }
 

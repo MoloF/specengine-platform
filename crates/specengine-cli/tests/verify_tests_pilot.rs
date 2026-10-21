@@ -8,8 +8,8 @@
 //! answer `n`. Nothing starts before `y` (the probe is step 8, after the
 //! question), so no test of the project runs and nothing builds. It prints
 //! the verdict, the counts, the bound tests listed by reason and the
-//! distinct argv the question names (A2 expects 0 bound tests: `empty`),
-//! and checks that the runner never started and that the project's HEAD,
+//! distinct argv the question names (a project without a bound test gives
+//! `empty`, one with bound tests `declined`), and checks that the runner never started and that the project's HEAD,
 //! status and index are unchanged. No project name or path is printed or
 //! written anywhere.
 //!

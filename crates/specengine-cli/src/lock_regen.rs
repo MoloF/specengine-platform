@@ -2,13 +2,15 @@
 //! merge that conflicts in `spec.lock` resolved on the owner's terminal (canon
 //! `architecture-code`, "`spec.lock` writers"). Only while `spec.lock` is
 //! unmerged (`ls-files -u`): each stage present read without the build's
-//! recipes (a format neither 1 nor 2, a key or a form refused: exit 2),
-//! all of one `norm_recipe` (else exit 2), then all format 2 of one
+//! recipes (a format neither 1, 2 nor 3, a key or a form refused: exit 2),
+//! all of one `norm_recipe` (else exit 2), then all format 2 or 3 of one
 //! `code_recipe` (else exit 2, [`UNREBASED`]: the lagging branch is
 //! rebased before the merge, task spec `lock-levels` Q28), merged per entry
-//! key by core's [`merge_stages`] (side-symmetric; no code or spec file
-//! read, no hash computed: every entry kept is one an owner accepted, so
-//! drift may follow, never a false `ok`). After the one `[y/N]` and the
+//! key, and per node for the `[[tested]]` blocks, by core's
+//! [`merge_stages`] (side-symmetric; no code or spec file read, no hash
+//! computed: every entry kept is one an owner accepted, every block one a
+//! run wrote, so drift or a stale block may follow, never a false `ok`;
+//! the result format 3 iff a block remains). After the one `[y/N]` and the
 //! stages and the file read again (a change: exit 1), the worktree file
 //! alone is written; the owner adds it and commits the merge.
 
@@ -52,14 +54,26 @@ pub struct RegenRow {
     pub item_kind: Option<String>,
 }
 
+/// One `[[tested]]` block's node and how it was chosen: `<choice> | <node>
+/// | tested`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct RegenTestedRow {
+    /// `both`, `ours`, `theirs`, `deleted`, `later`, `bytes`.
+    pub choice: &'static str,
+    pub node: String,
+}
+
 /// What `spec lock regen` did.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct RegenOutcome {
     /// Every key of the stages, in key order.
     pub rows: Vec<RegenRow>,
-    /// The merged lock's entries.
+    /// Every `[[tested]]` block's node of the stages and its choice, by
+    /// node bytes: after the entries' rows, in the text and the JSON.
+    pub tested: Vec<RegenTestedRow>,
+    /// The merged lock's entries, a block counted as one.
     pub entries: usize,
-    /// Keys chosen by `verified_at` or bytes.
+    /// Keys and blocks chosen by `verified_at` or bytes.
     pub by_date_or_bytes: usize,
     /// The worktree file was written.
     pub written: bool,
@@ -106,6 +120,7 @@ pub fn lock_regen(
 ) -> Result<RegenOutcome, CliError> {
     let mut outcome = RegenOutcome {
         rows: Vec::new(),
+        tested: Vec::new(),
         entries: 0,
         by_date_or_bytes: 0,
         written: false,
@@ -200,9 +215,17 @@ pub fn lock_regen(
             item_kind: key.item_kind.clone(),
         })
         .collect();
-    outcome.entries = merged.lock.entries.len();
+    outcome.tested = merged
+        .tested
+        .iter()
+        .map(|(node, choice)| RegenTestedRow {
+            choice: choice.as_str(),
+            node: node.clone(),
+        })
+        .collect();
+    outcome.entries = merged.lock.entries.len() + merged.lock.tested.len();
     outcome.by_date_or_bytes = merged.by_date_or_bytes();
-    let rows = rows_text(&outcome.rows);
+    let rows = rows_text(&outcome.rows, &outcome.tested);
     let file_bytes = read_lock_bytes(&project.root)?;
     let question = format!(
         "merge {LOCK_FILE} ({} entries, {} by verified_at or bytes) in {worktree}? [y/N]",
@@ -253,8 +276,8 @@ pub fn lock_regen(
 }
 
 /// `<choice> | <node> | <relation> | <file> | <kind> <symbol>`, one line
-/// each.
-fn rows_text(rows: &[RegenRow]) -> String {
+/// each, then `<choice> | <node> | tested` per block.
+fn rows_text(rows: &[RegenRow], tested: &[RegenTestedRow]) -> String {
     let mut out = String::new();
     for row in rows {
         out.push_str(&format!(
@@ -265,6 +288,13 @@ fn rows_text(rows: &[RegenRow]) -> String {
             one_line(&row.file),
             row.kind,
             one_line(&row.symbol)
+        ));
+    }
+    for row in tested {
+        out.push_str(&format!(
+            "{} | {} | tested\n",
+            row.choice,
+            one_line(&row.node)
         ));
     }
     out

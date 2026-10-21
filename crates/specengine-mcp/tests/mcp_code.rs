@@ -2983,12 +2983,24 @@ const VERIFY_STATES: [&str; 9] = [
     "ok",
 ];
 
-/// The top keys of verify's document (13; `spec-verify-output.md`), the
-/// keys of a row (17), of a binding key and of an anchor's place
-/// (docs/features/check-binding.md "Data", **Mirror**).
-const VERIFY_TOP_KEYS: [&str; 13] = [
+/// The top keys of verify's document (14; `spec-verify-output.md`;
+/// `tested` after `delta` since docs/features/tested-evidence.md
+/// "Plain verify", **Mirror**), the keys of a row (17), of a binding key
+/// and of an anchor's place (docs/features/check-binding.md "Data",
+/// **Mirror**).
+const VERIFY_TOP_KEYS: [&str; 14] = [
     "mode", "base", "task", "node", "symbol", "verdict", "counts", "cascade", "rows", "delta",
-    "cannot", "notes", "omitted",
+    "tested", "cannot", "notes", "omitted",
+];
+/// A `tested` entry's keys (docs/features/tested-evidence.md **Mirror**).
+const VERIFY_TESTED_KEYS: [&str; 7] = [
+    "node",
+    "state",
+    "category",
+    "rev",
+    "node_rev",
+    "commit",
+    "verified_at",
 ];
 const VERIFY_ROW_KEYS: [&str; 17] = [
     "node",
@@ -3773,6 +3785,216 @@ fn check_binding_mirror_is_verify_json() {
         );
     }
     assert_eq!(types("delta.affected_nodes[]"), set(&["string"]));
+
+    // docs/features/tested-evidence.md **Mirror**: `tested` a nullable
+    // array of `{node, state, category, rev, node_rev, commit,
+    // verified_at}`, every key required; `state` the closed enum;
+    // `category` a nullable free string; `node_rev` nullable.
+    assert_eq!(types("tested"), set(&["array", "null"]), "tested");
+    assert_eq!(
+        keys_at(schema_at(&schema, "tested[]")),
+        set(&VERIFY_TESTED_KEYS)
+    );
+    let item = schema_at(&schema, "tested[]");
+    let required: BTreeSet<String> = members(item)
+        .iter()
+        .filter_map(|member| member.get("required").and_then(Value::as_array))
+        .flatten()
+        .filter_map(|key| key.as_str().map(str::to_owned))
+        .collect();
+    assert_eq!(required, set(&VERIFY_TESTED_KEYS), "every key required");
+    assert_eq!(
+        words("tested[].state"),
+        Some(set(&["verified", "stale", "unverifiable", "node_gone"]))
+    );
+    assert_eq!(words("tested[].category"), None, "category: a free string");
+    assert_eq!(types("tested[].category"), set(&["null", "string"]));
+    assert_eq!(types("tested[].node_rev"), set(&["integer", "null"]));
+    assert_eq!(types("tested[].rev"), set(&["integer"]));
+    for path in ["tested[].node", "tested[].commit", "tested[].verified_at"] {
+        assert_eq!(types(path), set(&["string"]), "{path}");
+    }
+}
+
+/// The golden with a format-3 lock: its entries, then blocks for
+/// PIECE-COUNTER (at its revision 3, a made-up text: `stale
+/// spec_changed`), LAW-BOUND (at another revision) and a gone node.
+fn golden_with_blocks() -> Project {
+    let golden = fs::read_to_string(fixture("spec-lock").join(GOLDEN_LOCK)).expect("golden");
+    let block = |node: &str, rev: u32, digit: char| {
+        let hash = format!("b3:{}", digit.to_string().repeat(64));
+        format!(
+            "\n[[tested]]\nnode = \"{node}\"\nrev = {rev}\nspec_hash = \"{hash}\"\nbound_hash = \"{hash}\"\ntests = [\n  {{ file = \"crates/tally/tests/bounds.rs\", symbol = \"crates/tally::test:bounds::stops_at_cap\" }},\n]\ncommit = \"{}\"\nverified_at = \"2026-10-21\"\n",
+            digit.to_string().repeat(40)
+        )
+    };
+    let mut text = golden.replacen("\nformat = 2\n", "\nformat = 3\n", 1);
+    text.push_str(&block("GONE-77", 1, '7'));
+    text.push_str(&block("LAW-BOUND", 9, '8'));
+    text.push_str(&block("PIECE-COUNTER", 3, '9'));
+    let scratch = Scratch::new("cb-tested");
+    let home = scratch.home("h");
+    let root = git_copy(&scratch, "code-a", "repo", false, move |root: &Path| {
+        fs::write(root.join("spec.lock"), &text).expect("spec.lock")
+    });
+    Project {
+        _scratch: scratch,
+        home,
+        root,
+    }
+}
+
+/// docs/features/tested-evidence.md RD-8 and TE-5 (M: `VerifyDocument`
+/// without `tested`, or `check_binding` and `spec verify --node --json`
+/// disagreeing): over a format-3 lock, every `check_binding` answer is the
+/// CLI library's `verify --node` document (parity, both eras) and conforms
+/// to the schema's exact key sets; `tested` lists the holders' blocks
+/// (PIECE-COUNTER's, LAW-BOUND's), each entry the seven keys, its `state`
+/// in the enum; a node without a block `[]`; the gone node's block never
+/// named by a holder's call.
+#[test]
+fn check_binding_tested_is_verify_nodes() {
+    let project = golden_with_blocks();
+    let calls: Vec<Call> = ["PIECE-COUNTER", "LAW-BOUND", "GOAL-01"]
+        .iter()
+        .map(|node| {
+            call(
+                "tested",
+                "check_binding",
+                json!({"node": node}),
+                Want::Parity,
+            )
+        })
+        .collect();
+    for results in project.answers(&calls) {
+        let documents: Vec<&Value> = results
+            .iter()
+            .map(|result| &result["structuredContent"])
+            .collect();
+        let nodes = |document: &Value| -> Vec<String> {
+            document["tested"]
+                .as_array()
+                .unwrap_or_else(|| panic!("`tested` an array: {document}"))
+                .iter()
+                .map(|entry| {
+                    let keys: BTreeSet<String> = entry
+                        .as_object()
+                        .expect("an entry")
+                        .keys()
+                        .cloned()
+                        .collect();
+                    assert_eq!(keys, set(&VERIFY_TESTED_KEYS), "{entry}");
+                    assert!(
+                        ["verified", "stale", "unverifiable", "node_gone"]
+                            .contains(&entry["state"].as_str().unwrap_or_default()),
+                        "{entry}"
+                    );
+                    entry["node"].as_str().expect("a node").to_owned()
+                })
+                .collect()
+        };
+        assert_eq!(nodes(documents[0]), ["PIECE-COUNTER"]);
+        assert_eq!(nodes(documents[1]), ["LAW-BOUND"]);
+        assert_eq!(nodes(documents[2]), Vec::<String>::new(), "no block: []");
+        assert_eq!(documents[0]["tested"][0]["rev"], json!(3));
+        assert_eq!(documents[1]["tested"][0]["rev"], json!(9));
+    }
+}
+
+/// docs/features/tested-evidence.md, 8b-1 iteration 2 (owner-approved): a
+/// failure while hashing the evidence's bound code never changes
+/// `check_binding`'s answer. Over a scratch copy of `fixtures/verify-tests`
+/// whose lock holds a block and no entry, the server run with a `git` first
+/// on `PATH` that refuses `hash-object` answers `isError` false, `tested`
+/// `null`, one `tested: <cause>` note (in `notes` and the text). M: the
+/// failure a run cause (`cannot-verify`, an error result).
+#[test]
+fn check_binding_tested_hash_failure_is_a_note() {
+    let scratch = Scratch::new("cb-tested-hash");
+    let home = scratch.home("h");
+    let lock = format!(
+        "# spec.lock: written only by SpecEngine (spec lock, spec approve, spec verify --tests); do not edit\nformat = 3\nnorm_recipe = \"specengine-norm/v1\"\ncode_recipe = \"specengine-hash/v3 tree-sitter-rust/0.24.2 abi/15\"\n\n[[tested]]\nnode = \"KILN-RAMP\"\nrev = 1\nspec_hash = \"b3:{0}\"\nbound_hash = \"b3:{0}\"\ntests = [\n  {{ file = \"crates/kiln/src/ramp.rs\", symbol = \"crates/kiln::ramp::tests::ramp_stops_at_peak\" }},\n]\ncommit = \"{1}\"\nverified_at = \"2026-10-21\"\n",
+        "7".repeat(64),
+        "7".repeat(40)
+    );
+    let root = git_copy(
+        &scratch,
+        "verify-tests",
+        "repo",
+        false,
+        move |root: &Path| fs::write(root.join("spec.lock"), &lock).expect("spec.lock"),
+    );
+    let real = Sandbox::new(scratch.path()).git_program().to_path_buf();
+    let bin = scratch.dir("failing-git");
+    let wrapper = bin.join("git");
+    fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nfor arg in \"$@\"; do\n  if [ \"$arg\" = hash-object ]; then\n    echo 'fatal: hash-object refused by the test' >&2\n    exit 128\n  fi\ndone\nexec '{}' \"$@\"\n",
+            real.display()
+        ),
+    )
+    .expect("the wrapper");
+    fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).expect("executable");
+
+    let mut command = isolated_command(BIN, &[], &root, Some(&home));
+    command
+        .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let mut child = command.spawn().expect("spawn specengine-mcp");
+    {
+        use std::io::Write as _;
+        let mut stdin = child.stdin.take().expect("stdin");
+        for message in [
+            json!({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+                "protocolVersion": LEGACY_VERSION,
+                "capabilities": {},
+                "clientInfo": {"name": "specengine-mcp-tests", "version": "0.0.0"}}}),
+            json!({"jsonrpc": "2.0", "method": "notifications/initialized"}),
+            json!({"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
+                "name": "check_binding", "arguments": {"node": "KILN-RAMP"}}}),
+        ] {
+            writeln!(stdin, "{message}").expect("a request");
+        }
+    }
+    let started = std::time::Instant::now();
+    while child.try_wait().expect("the server").is_none() {
+        if started.elapsed() > std::time::Duration::from_secs(60) {
+            let _ = child.kill();
+            panic!("the server did not exit within 60 s");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(20));
+    }
+    let output = child.wait_with_output().expect("the server's output");
+    let stdout = String::from_utf8(output.stdout).expect("UTF-8");
+    let reply: Value = stdout
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .find(|message| message["id"] == json!(2))
+        .unwrap_or_else(|| panic!("no reply to the call: {stdout}"));
+    let result = &reply["result"];
+    assert_eq!(result["isError"], json!(false), "{result}");
+    let document = &result["structuredContent"];
+    assert_eq!(document["tested"], Value::Null, "{document}");
+    let notes: Vec<&str> = document["notes"]
+        .as_array()
+        .expect("notes")
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|note| note.starts_with("tested: "))
+        .collect();
+    assert_eq!(notes.len(), 1, "one note: {document}");
+    assert_eq!(document["cannot"], json!([]), "no run cause");
+    let text = content_text(result);
+    assert_eq!(
+        text.lines()
+            .filter(|line| *line == format!("note: {}", notes[0]))
+            .count(),
+        1,
+        "{text}"
+    );
 }
 
 /// TE-2, the walker (docs/features/check-binding.md "Data", **Mirror**):

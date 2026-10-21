@@ -21,6 +21,7 @@
 mod common;
 mod lock_common;
 mod rev_common;
+mod tested_common;
 mod verify_common;
 
 use std::fs;
@@ -1130,4 +1131,171 @@ fn a_third_path_in_the_editorial_commit_fails_step_10() {
     assert!(reason.contains(&head), "names the commit: {reason}");
     assert!(reason.contains("NOTES.txt"), "{reason}");
     assert_eq!(rev_common_status(&repo, &id), "approved");
+}
+
+// ------------------------------------------- tested-evidence (8b-1) RD-7
+
+/// LAW-STEP's own sentence and an editorial change of it (its section in
+/// `counter.md`, revision 1, no entry in the golden).
+const STEP_EDIT: (&str, &str) = ("Each step adds one.", "Each step adds exactly one.");
+
+/// The golden with a block vouching for LAW-STEP (revision 1, its
+/// `norm_hash` now) committed; the block's `spec_hash`.
+fn golden_with_step_block(label: &str) -> (LockRepo, String) {
+    let repo = golden(label);
+    let (_, _, norm) = shown(&repo, "LAW-STEP");
+    let text = repo.lock_text();
+    repo.write(
+        LOCK,
+        tested_common::with_blocks_added(
+            &text,
+            &[tested_common::block_at(
+                "LAW-STEP",
+                1,
+                &norm,
+                '7',
+                &repo.head(),
+            )],
+        ),
+    );
+    repo.commit_all("LAW-STEP's evidence");
+    (repo, norm)
+}
+
+/// RD-7 (`--editorial`: "a block at R takes the new `spec_hash`,
+/// `refreshed`/`unchanged | tested`; it is an entry at R"; M: the block
+/// skipped): over the ECS corpus, PERK-REGEN's text changed editorially
+/// at its revision and committed; `spec lock accept --editorial
+/// PERK-REGEN` gives its entries and its block the new `norm_hash`, the
+/// block's other keys byte for byte, its row `refreshed | tested` last;
+/// a second run changes nothing (`unchanged`); a block at another
+/// revision is not at R: kept.
+#[test]
+fn editorial_refreshes_tested() {
+    let repo = ecs("re-tested-editorial");
+    let text = repo.lock_text();
+    let regen = tested_common::vouching_block(&text, "PERK-REGEN", &repo.head());
+    let drain = tested_common::block_at(
+        "PERK-DRAIN",
+        7,
+        &format!("b3:{}", "6".repeat(64)),
+        '6',
+        &repo.head(),
+    );
+    repo.write(
+        LOCK,
+        tested_common::with_blocks_added(&text, &[regen.clone(), drain]),
+    );
+    repo.commit_all("evidence");
+    let before = repo.lock_text();
+    repo.replace(
+        STAMINA_MD,
+        "Stamina regains a fixed amount per second while the runner rests.",
+        "Stamina regains a fixed amount each second while the runner rests.",
+    );
+    repo.replace(
+        STAMINA_MD,
+        "Sprinting drains stamina; at zero the runner walks.",
+        "Sprinting drains stamina; at zero, the runner walks.",
+    );
+    repo.commit_all("editorial changes");
+    let (_, _, new_norm) = shown(&repo, "PERK-REGEN");
+    let attempt = repo.editorial("PERK-REGEN", true);
+    let outcome = attempt.committed("--editorial PERK-REGEN").clone();
+    assert_eq!(outcome.tested, Some("refreshed"));
+    assert_eq!(attempt.rows().lines().last(), Some("refreshed | tested"));
+    let after = repo.lock_text();
+    let block = tested_common::block_of(&after, "PERK-REGEN").expect("PERK-REGEN's block");
+    let old = tested_common::block_of(&before, "PERK-REGEN").expect("the old block");
+    assert_eq!(
+        block,
+        old.replace(&regen.spec_hash, &new_norm),
+        "the new spec_hash, every other key kept"
+    );
+    for entry in node_blocks(&after, "PERK-REGEN") {
+        assert!(
+            entry.contains(&format!("spec_hash = \"{new_norm}\"")),
+            "{entry}"
+        );
+    }
+    let again = repo.editorial("PERK-REGEN", true);
+    let outcome = again.unchanged("a second --editorial").clone();
+    assert_eq!(outcome.tested, Some("unchanged"));
+
+    // PERK-DRAIN's block is at revision 7, not its R: not an entry at R.
+    let attempt = repo.editorial("PERK-DRAIN", true);
+    if let Ok(outcome) = &attempt.outcome {
+        assert_ne!(outcome.tested, Some("refreshed"), "{outcome:?}");
+    }
+    assert_eq!(
+        tested_common::block_of(&repo.lock_text(), "PERK-DRAIN"),
+        tested_common::block_of(&before, "PERK-DRAIN"),
+        "not at R: kept"
+    );
+}
+
+/// RD-7 (4b-1's editorial approve: "a vouching block refreshed in the
+/// apply commit; a `Lock:` per node whose entries or block changed; step
+/// 10 checks it"; M: the apply skips the block): LAW-STEP holds a block
+/// and no entry; its editorial approve makes one commit of the text and
+/// the lock, the block's `spec_hash` the new `norm_hash` (nothing else of
+/// it changed), `Lock: LAW-STEP`, `Lock-mode: editorial`, `applied`.
+#[test]
+fn editorial_apply_refreshes_tested() {
+    let (repo, old_norm) = golden_with_step_block("re-tested-apply");
+    let before = repo.lock_text();
+    let old_head = repo.head();
+    let id = propose_edit(&repo, "LAW-STEP", STEP_EDIT);
+    let asked = approve_at(&at(&repo), &id, true, true);
+    let outcome = asked.applied("an editorial approve of LAW-STEP");
+    let head = repo.head();
+    assert_eq!(repo.parents(&head), [old_head]);
+    assert_eq!(changed_paths(&repo, &head), [COUNTER_MD, LOCK]);
+    assert_eq!(
+        after_base(&repo.message(&head)),
+        [
+            "Revision: LAW-STEP 1 (editorial)",
+            "Lock: LAW-STEP",
+            "Lock-mode: editorial"
+        ]
+    );
+    let (_, _, new_norm) = shown(&repo, "LAW-STEP");
+    assert_ne!(new_norm, old_norm);
+    assert_eq!(repo.lock_text(), before.replace(&old_norm, &new_norm));
+    assert_eq!(repo.show_blob(&head, LOCK), repo.lock().expect("the lock"));
+    assert_eq!(
+        outcome.document.applied_commit.as_deref(),
+        Some(head.as_str())
+    );
+}
+
+/// RD-7 (Q-E: a block counts as one entry in the review's count): a
+/// meaning update of LAW-STEP, which holds a vouching block and no entry,
+/// reviews as `revisions: LAW-STEP 1 -> 2 (1 lock entry)`; without the
+/// block, no lock entry is named.
+#[test]
+fn review_counts_a_block_as_an_entry() {
+    let (repo, _) = golden_with_step_block("re-tested-review");
+    let id = propose_edit(
+        &repo,
+        "LAW-STEP",
+        ("Each step adds one.", "Each step adds two."),
+    );
+    let (text, value) = rev_common::review_at(&at(&repo), &id);
+    assert!(
+        text.contains("\nrevisions: LAW-STEP 1 -> 2 (1 lock entry)\n"),
+        "{text}"
+    );
+    assert_eq!(
+        value["revisions"],
+        serde_json::json!([rev_common::revision_entry("LAW-STEP", 1, 2, Some(1))])
+    );
+    let plain = golden("re-tested-review-none");
+    let id = propose_edit(
+        &plain,
+        "LAW-STEP",
+        ("Each step adds one.", "Each step adds two."),
+    );
+    let (text, _) = rev_common::review_at(&at(&plain), &id);
+    assert!(!text.contains("(1 lock entry)"), "{text}");
 }

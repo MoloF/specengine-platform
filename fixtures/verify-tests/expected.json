@@ -57,7 +57,7 @@
    "run | crates/kiln/tests/schedule.rs | item crates/kiln::test:schedule::hold_follows_the_ramp | KILN-HOLD, KILN-RAMP",
    "node KILN-COOL: not verifiable spec_ahead"
   ],
- "question": "run 4 bound tests of 4 nodes as <template> (timeout 600 s each) in <worktree> on main at <commit>? [y/N]",
+ "question": "run 4 bound tests of 4 nodes as <template> (timeout 600 s each) in <worktree> on main at <commit>, then commit their evidence to spec.lock? [y/N]",
  "all_passed": {
    "verdict": "unverified",
    "exit": 1,
@@ -74,8 +74,15 @@
      "node KILN-HOLD: verified",
      "node KILN-RAMP: verified",
      "node glaze-check/GLZ-01: verified",
-     "verify --tests: unverified: 5 nodes (4 verified, 0 failed, 1 not verifiable, 0 no runnable test); 7 tests (5 passed, 0 failed, 0 timed out, 2 not run)"
+     "verify --tests: unverified: 5 nodes (4 verified, 0 failed, 1 not verifiable, 0 no runnable test); 7 tests (5 passed, 0 failed, 0 timed out, 2 not run)",
+     "lock | added | CONE-01",
+     "lock | added | KILN-HOLD",
+     "lock | added | KILN-RAMP",
+     "lock | added | glaze-check/GLZ-01",
+     "committed <evidence>"
     ],
+   "lock": {"rows": [{"node": "CONE-01", "change": "added"}, {"node": "KILN-HOLD", "change": "added"}, {"node": "KILN-RAMP", "change": "added"}, {"node": "glaze-check/GLZ-01", "change": "added"}], "commit": "<evidence>", "unchanged": false, "refusal": null},
+   "lock_file": "fixtures/spec-lock/verify-tests.tested.lock",
    "counts": {"nodes": {"verified": 4, "failed": 0, "not_verifiable": 1, "no_runnable_test": 0}, "tests": {"passed": 5, "failed": 0, "timed_out": 0, "not_run": 2}, "probes": 2},
    "nodes": [
      {"id": "CONE-01", "verdict": "verified", "state": null},
@@ -91,6 +98,7 @@
    "R3 JSON `argv` is the expanded template as written (element 0 `scripts/run-test`, not joined to the root): TE-7 wants one JSON from two roots; `command` is the template as a list.",
    "R4 the module binding and a test of an unverifiable node are listed rows (`not run`) and counted in `tests`; `argv` of a row not run is not pinned.",
    "R5 a test's nodes are its set nodes by ID bytes, joined by `, `; node lines by ID bytes (upper case before `glaze-check/`).",
-   "R6 `KILN-COOL`'s only refusal is the `@implements KILN-COOL@1` marker's `spec_ahead` (rev 2 written), a refusal 5b-1 keeps."
+   "R6 `KILN-COOL`'s only refusal is the `@implements KILN-COOL@1` marker's `spec_ahead` (rev 2 written), a refusal 5b-1 keeps.",
+   "R7 (docs/features/tested-evidence.md 'The run's write') the passing run commits its evidence: after 8a's summary a `lock | added | <node>` line per block by node bytes, then `committed <evidence>` (`<evidence>` the evidence commit, `HEAD`'s child); `lock_file` the bytes it writes; `commit` stays the run's `HEAD`; no block for `KILN-COOL`."
   ]
 }
