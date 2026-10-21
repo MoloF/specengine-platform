@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { BindingsPanel } from "../tree/BindingsPanel";
+import { LockDiffPanel } from "../tree/LockDiffPanel";
 import { aCheckFinding, aCheckReport, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage, entryOf } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, openStreams, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import { HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS } from "./http";
@@ -957,5 +958,97 @@ describe("the Bindings tab on the live tail (UI-6 of ui-node-bindings)", () => {
       await screen.findByRole("button", { name: "Read again" });
     }
     expect(methodsOf(fetchStub)).toEqual(["GET", "GET"]);
+  });
+});
+
+describe("the lock diff on the live tail (UI-4 of lock-diff-ui)", () => {
+  const LOCK_DIFF = "/api/projects/alpha/lock-diff?ref=MEC-TIDES";
+
+  /** The panel, collapsed, under alpha's live tail. */
+  function LockDiffTab() {
+    useLiveQueue("alpha");
+    return <LockDiffPanel project="alpha" nodeRef="MEC-TIDES" />;
+  }
+
+  /** Renders the panel over a daemon answering the lock diff (one holder, none kept); alpha's stream open; nothing read yet. */
+  function mounted() {
+    const fetchStub = stubFetch((url) =>
+      url === LOCK_DIFF
+        ? jsonAnswer(200, { ref: "MEC-TIDES", reason: null, notes: [], nodes: [{ id: "MEC-TIDES", path: "docs/spec/tides.md", line: 1, rows: [] }] })
+        : errorAnswer(404, `no route ${url}`),
+    );
+    render(
+      <ApiProvider client={new HttpClient()} queryClient={createQueryClient()}>
+        <LockDiffTab />
+      </ApiProvider>,
+    );
+    const source = stream("/api/projects/alpha/events");
+    source.open();
+    return { fetchStub, source };
+  }
+
+  /** Expands or collapses the panel. */
+  function toggle() {
+    fireEvent.click(screen.getByRole("button", { name: "Changes since the lock" }));
+  }
+
+  /** Every request's method, as sent. */
+  function methodsOf(fetchStub: ReturnType<typeof stubFetch>): string[] {
+    return fetchStub.mock.calls.map(([, init]) => init?.method ?? "GET");
+  }
+
+  async function quiet() {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  }
+
+  it("expanded once, then collapsed: proposal.applied reads it again, once; proposal.created reads nothing", async () => {
+    const { fetchStub, source } = mounted();
+    toggle();
+    await screen.findByText("None: no drifted binding of this node has a lock entry.");
+    expect(urlsOf(fetchStub)).toEqual([LOCK_DIFF]);
+    toggle();
+    fetchStub.mockClear();
+    act(() => {
+      source.emit("proposal.created", '{"id":"PR-0002"}', "130");
+    });
+    await quiet();
+    expect(urlsOf(fetchStub)).toEqual([]);
+    act(() => {
+      source.emit("proposal.applied", '{"id":"PR-0002","commit":"abc1234"}', "131");
+    });
+    await waitFor(() => {
+      expect(urlsOf(fetchStub)).toEqual([LOCK_DIFF]);
+    });
+    await quiet();
+    expect(urlsOf(fetchStub)).toEqual([LOCK_DIFF]);
+    expect(methodsOf(fetchStub)).toEqual(["GET"]);
+  });
+
+  it("never expanded: neither event reads it", async () => {
+    const { fetchStub, source } = mounted();
+    await quiet();
+    expect(urlsOf(fetchStub)).toEqual([]);
+    act(() => {
+      source.emit("proposal.created", '{"id":"PR-0002"}', "132");
+      source.emit("proposal.applied", '{"id":"PR-0002","commit":"abc1234"}', "133");
+    });
+    await quiet();
+    expect(urlsOf(fetchStub)).toEqual([]);
+  });
+
+  it("its Read again sends one GET per click, and only GETs ever", async () => {
+    const { fetchStub } = mounted();
+    toggle();
+    await screen.findByRole("button", { name: "Read again" });
+    for (const times of [2, 3]) {
+      fireEvent.click(screen.getByRole("button", { name: "Read again" }));
+      await waitFor(() => {
+        expect(urlsOf(fetchStub)).toEqual(Array.from({ length: times }, () => LOCK_DIFF));
+      });
+      await screen.findByRole("button", { name: "Read again" });
+    }
+    expect(methodsOf(fetchStub)).toEqual(["GET", "GET", "GET"]);
   });
 });

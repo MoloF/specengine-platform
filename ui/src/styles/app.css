@@ -1782,6 +1782,70 @@ mark {
   overflow-wrap: anywhere;
 }
 
+/* "Changes since the lock" (docs/features/lock-diff-ui.md "Data"): a disclosure under the holders;
+   each drifted row a Health row 6 line carrying its sides, two side by side in equal columns, one
+   full width, stacked below 48em, then its commands. Hunks keep the section diff's rule (pre-wrap,
+   wrapped anywhere, never cut); a side's title wraps anywhere, never widening the pane. */
+.lock-diff,
+.lock-diff-body,
+.lock-diff-holder {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.lock-diff-body {
+  gap: var(--space-4);
+}
+
+.lock-diff-title {
+  font-size: var(--font-size-m);
+}
+
+.lock-diff-toggle {
+  font-weight: 600;
+}
+
+.lock-diff-about {
+  max-width: 72ch;
+  font-size: var(--font-size-s);
+}
+
+.lock-diff-sides {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2) var(--space-3);
+  margin-top: var(--space-1);
+}
+
+@media (max-width: 48em) {
+  .lock-diff-sides {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.lock-diff-side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.lock-diff-side:only-child {
+  grid-column: 1 / -1;
+}
+
+.lock-diff-side-title {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  overflow-wrap: anywhere;
+}
+
+.lock-diff-commands {
+  margin-top: var(--space-1);
+  min-width: 0;
+}
+
 /* Tree node pane: the way to the graph. */
 .node-actions {
   font-size: var(--font-size-s);

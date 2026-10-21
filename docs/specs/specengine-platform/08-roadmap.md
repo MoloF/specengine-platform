@@ -49,7 +49,7 @@ The open work, its order and the time left (open items' estimates summed, the po
 
 ### Phase 4. Web UI
 
-Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` and `ui-markdown` (ADR-0036) 2026-10-06, `ui-health`, `ui-live`, `ui-live-tasks` 2026-10-07, `ui-round` 2026-10-08, `ui-embed` (the UI inside `spec serve`) 2026-10-10. The drift screens (RM-0011), split 2026-10-21 into `ui-node-bindings`, `ui-drift-evidence` and `ui-tree-drift`, UI only, all shipped 2026-10-21 (`docs/canon/drift-screens.md`); the lock diff inspector moved to RM-0033 (ADR-0053): `lock-diff` (`spec lock diff`, the daemon's `lock-diff`, the UI's types) shipped 2026-10-21 (`docs/canon/spec-lock-diff.md`), the panel `lock-diff-ui` next.
+Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell` shipped 2026-10-05, `ui-tree-node`, `ui-graph`, `ui-tasks`, `ui-home` and `ui-markdown` (ADR-0036) 2026-10-06, `ui-health`, `ui-live`, `ui-live-tasks` 2026-10-07, `ui-round` 2026-10-08, `ui-embed` (the UI inside `spec serve`) 2026-10-10. The drift screens (RM-0011), split 2026-10-21 into `ui-node-bindings`, `ui-drift-evidence` and `ui-tree-drift`, UI only, all shipped 2026-10-21 (`docs/canon/drift-screens.md`); the lock diff inspector moved to RM-0033 (ADR-0053): `lock-diff` (`spec lock diff`, the daemon's `lock-diff`, the UI's types) shipped 2026-10-21 (`docs/canon/spec-lock-diff.md`), then the Bindings tab's panel `lock-diff-ui` (`docs/canon/lock-diff-panel.md`), UI only, shipped 2026-10-21: RM-0033 done.
 
 ### Phase 5. Maturity
 

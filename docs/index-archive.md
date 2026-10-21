@@ -54,6 +54,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/layer-a-identity.md](features/layer-a-identity.md) shipped
 - [docs/features/layer-c-resolve.md](features/layer-c-resolve.md) shipped
 - [docs/features/layer-c.md](features/layer-c.md) shipped
+- [docs/features/lock-diff-ui.md](features/lock-diff-ui.md) shipped
 - [docs/features/lock-diff.md](features/lock-diff.md) shipped
 - [docs/features/lock-levels-verify.md](features/lock-levels-verify.md) shipped
 - [docs/features/lock-levels.md](features/lock-levels.md) shipped
@@ -136,4 +137,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0011.md](roadmap/RM-0011.md) shipped
 - [docs/roadmap/RM-0030.md](roadmap/RM-0030.md) shipped
 - [docs/roadmap/RM-0032.md](roadmap/RM-0032.md) shipped
+- [docs/roadmap/RM-0033.md](roadmap/RM-0033.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

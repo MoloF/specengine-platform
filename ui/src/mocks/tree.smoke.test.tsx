@@ -5,8 +5,9 @@ import { oneLine } from "../health/codeRows";
 import { measuredRows, treeDrift } from "../tree/drift";
 import { buildRows } from "../tree/rows";
 import { LARGE_BINDINGS } from "./bindings";
-import { BASIN_NAME_DECOMPOSED, HOSTILE_LINK, HOSTILE_TITLE, LONG_TOKEN } from "./harbor-sim/fixtures";
-import { CODE_GAP_CAUSE, CODE_OFF_CAUSE, harborDrift, LARGE_DRIFT, LOCK_CAUSE, LOOKALIKE_BASIN } from "./health";
+import { BASIN_NAME_DECOMPOSED, DRAFT_FILE, HIGH_WATER_FILE, HOSTILE_LINK, HOSTILE_TITLE, LONG_TOKEN } from "./harbor-sim/fixtures";
+import { CODE_GAP_CAUSE, CODE_OFF_CAUSE, harborDrift, LARGE_DRIFT, LOCK_CAUSE, LOCKED_AT, LOOKALIKE_BASIN } from "./health";
+import { harborLockDiffRows } from "./lockDiff";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
@@ -343,6 +344,93 @@ describe("the Bindings tab over the mock (UI-2, UI-3, UI-4, UI-8 of ui-node-bind
     cleanup();
     const refunds = await bindingsTab("not-configured", "#/ledger-api/tree/SVC-REFUNDS", "1 row");
     expect(lineHeads(refunds)).toEqual([["SVC-REFUNDSimplementssrc/refunds/service.rs", "In sync"]]);
+  });
+});
+
+// "Changes since the lock" over the mock (UI-2, UI-7 of docs/features/lock-diff-ui.md): the four rows
+// of its "Data" on their nodes, each figure's hunks the mock's byte for byte; ledger-api's two states.
+
+/** Opens the Bindings tab of the node at `hash`, waits for its read, expands "Changes since the lock"; its section. */
+async function lockDiffOf(scenario: Scenario, hash: string, ready: string): Promise<HTMLElement> {
+  const panel = await bindingsTab(scenario, hash, ready);
+  const toggle = within(panel).getByRole("button", { name: "Changes since the lock" });
+  fireEvent.click(toggle);
+  const section = toggle.closest("section");
+  if (section === null) {
+    throw new Error("no lock diff section");
+  }
+  await waitFor(() => {
+    expect(section.querySelector(".lock-diff-body")).not.toBeNull();
+  });
+  return section;
+}
+
+/** A figure's `<code>` text, its screen-reader words left out. */
+function hunksOf(figure: Element | undefined): string | null {
+  const code = figure?.querySelector("code")?.cloneNode(true) as Element | undefined;
+  code?.querySelectorAll(".sr-only").forEach((spoken) => {
+    spoken.remove();
+  });
+  return code?.textContent ?? null;
+}
+
+/** The mock's kept row of `node`. */
+function keptOf(node: string) {
+  const found = harborLockDiffRows().find(({ row }) => row.node === node);
+  if (found === undefined) {
+    throw new Error(`no kept row of ${node}`);
+  }
+  return found;
+}
+
+describe("the lock diff over the mock (UI-2, UI-7 of lock-diff-ui)", () => {
+  it("normal: changes since the lock, the four Mocks rows on their nodes", async () => {
+    const tides = await lockDiffOf("normal", "#/harbor-sim/tree/MEC-TIDES", "3 rows");
+    const conflict = keptOf("MEC-TIDES");
+    const figures = await within(tides).findAllByRole("figure");
+    expect(figures.map((figure) => [figure.getAttribute("aria-label"), hunksOf(figure)])).toEqual([
+      [`Node text since the lock: ${conflict.spec?.path ?? ""} at ${LOCKED_AT}`, conflict.spec?.diff],
+      [`Code since the lock: src/sim/tide.rs, blob ${conflict.code?.blob ?? ""}`, conflict.code?.diff],
+    ]);
+    expect(Array.from(tides.querySelector(".lock-diff-sides")?.children ?? [], (side) => side.getAttribute("data-side"))).toEqual(["spec", "code"]);
+    expect(within(tides).getByRole("list", { name: "Commands for the row of MEC-TIDES" })).toBeTruthy();
+    cleanup();
+
+    const mooring = await lockDiffOf("normal", "#/harbor-sim/tree/MEC-MOORING", "4 rows");
+    const moved = keptOf("MEC-MOORING");
+    const [lone] = await within(mooring).findAllByRole("figure");
+    expect([lone?.getAttribute("aria-label"), hunksOf(lone)]).toEqual([`Code since the lock: src/sim/berths.rs, blob ${moved.code?.blob ?? ""}`, moved.code?.diff]);
+    expect(Array.from(mooring.querySelector(".lock-diff-sides")?.children ?? [], (side) => side.getAttribute("data-side"))).toEqual(["code"]);
+    expect(mooring.querySelector(".health-code-row")?.textContent).toContain("Moved from src/sim/berths.rs | item harbor_sim::berths::moor function_item");
+    cleanup();
+
+    const draft = await lockDiffOf("normal", "#/harbor-sim/tree/RULE-BERTH-DRAFT", "1 row");
+    expect(Array.from(draft.querySelectorAll(".lock-diff-side"), (side) => side.textContent)).toEqual([
+      `Node text since the lock: ${DRAFT_FILE} at ${LOCKED_AT}No diff: ${DRAFT_FILE} cannot be read at ${LOCKED_AT}`,
+    ]);
+    expect(within(draft).queryAllByRole("figure")).toHaveLength(0);
+    cleanup();
+
+    const highWater = await lockDiffOf("normal", "#/harbor-sim/tree/RULE-HIGH-WATER", "1 row");
+    const gone = keptOf("RULE-HIGH-WATER");
+    expect(Array.from(highWater.querySelectorAll(".lock-diff-side .lock-diff-side-title, .lock-diff-side .bindings-state"), (part) => part.textContent)).toEqual([
+      `Node text since the lock: ${HIGH_WATER_FILE} at ${LOCKED_AT}`,
+      "No diff: git shows no hunk for bytes that differ",
+      `Code since the lock: src/sim/tide_table.rs, blob ${gone.code?.blob ?? ""}`,
+    ]);
+    const [removed] = within(highWater).getAllByRole("figure");
+    expect(hunksOf(removed)).toBe(gone.code?.diff);
+    expect(within(highWater).getAllByRole("figure")).toHaveLength(1);
+  });
+
+  it("ledger-api: no [code], not judged and its one note, no count; not-configured: none", async () => {
+    const off = await lockDiffOf("normal", "#/ledger-api/tree/SVC-REFUNDS", "Not read");
+    await within(off).findByText("Not judged: the daemon\u2019s note above says why.");
+    expect(within(off).getByRole("list", { name: "Notes from the daemon on the changes since the lock" }).textContent).toBe(`bindings: ${CODE_OFF_CAUSE}`);
+    expect(off.querySelector(".lock-diff-holder")?.textContent).not.toMatch(/\d|None/);
+    cleanup();
+    const none = await lockDiffOf("not-configured", "#/ledger-api/tree/SVC-REFUNDS", "1 row");
+    expect((await within(none).findByText("None: no drifted binding of this node has a lock entry.")).getAttribute("data-diff-state")).toBe("none");
   });
 });
 

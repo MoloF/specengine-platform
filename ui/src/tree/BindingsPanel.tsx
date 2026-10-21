@@ -6,23 +6,23 @@ import { CodeRowList, counted, oneLine } from "../health/codeRows";
 import { TestedLine } from "../health/DriftPart";
 import { Notes } from "../overview/parts";
 import { useAnnounce } from "../ui/announcer";
-import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { BindingLine } from "./BindingLine";
+import { CommandList } from "./CommandList";
 import { nodeCommands } from "./commands";
+import { LockDiffPanel } from "./LockDiffPanel";
 import { placeKey, rowName } from "./rows";
 
 // The Bindings tab (docs/features/ui-node-bindings.md), its data
 // `docs/canon/code-reads.md` "spec show --bindings": per holder, its code bindings and those of
 // the sections within it as rows in the daemon's order, each with the state `spec verify --node`
-// gives it now, and its `[[tested]]` entries; then the node's commands to copy. Visibility only:
-// no row, state or entry holds any work (ADR-0012, ADR-0046); every word goes through the tree's
-// labels, never compared here.
-
-const COPY_FAILED = "Copy failed: select the command and copy it";
+// gives it now, and its `[[tested]]` entries; then "Changes since the lock" (./LockDiffPanel.tsx,
+// docs/features/lock-diff-ui.md), then the node's commands to copy. Visibility only: no row, state
+// or entry holds any work (ADR-0012, ADR-0046); every word goes through the tree's labels, never
+// compared here.
 
 /** How a holder's lists are headed: under the node's h1 with one holder, under each holder's h2 with several. */
 function Heading({ many, children }: { many: boolean; children: string }) {
@@ -194,15 +194,7 @@ function NodeCommands({ nodeRef, holders }: { nodeRef: string; holders: readonly
               need one.
             </p>
           )}
-          <ul className="command-list" aria-label={`Commands for ${nodeRef}`}>
-            {commands.map((command) => (
-              <li key={command.action} className="command" data-action={command.action}>
-                <span className="command-meaning">{command.meaning}</span>
-                <code className="command-text">{command.text}</code>
-                <CopyButton text={command.text} context={`the command: ${command.text}`} failed={COPY_FAILED} />
-              </li>
-            ))}
-          </ul>
+          <CommandList commands={commands} label={`Commands for ${nodeRef}`} />
         </>
       )}
     </section>
@@ -213,7 +205,8 @@ function NodeCommands({ nodeRef, holders }: { nodeRef: string; holders: readonly
  * The Bindings tab: one read, `nodes/<REF>?with=bindings`, made when the tab first opens and kept
  * while the node is shown; read again on Read again, an apply or a gap (the node's query key), never
  * by a code edit, which fires no event. Loading: a skeleton; failed: the daemon's words and Retry;
- * a later failure a note under the last answer.
+ * a later failure a note under the last answer. "Changes since the lock" (./LockDiffPanel.tsx) holds
+ * its own read and its own Read again; this one never reads it.
  */
 export function BindingsPanel({ project, nodeRef, onFollow }: { project: string; nodeRef: string; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   const query = useNodeBindings(project, nodeRef);
@@ -270,6 +263,7 @@ export function BindingsPanel({ project, nodeRef, onFollow }: { project: string;
       {view.nodes.map((holder) => (
         <HolderBindings key={placeKey(holder)} project={project} holder={holder} many={many} onFollow={onFollow} />
       ))}
+      {view.nodes.length > 0 && <LockDiffPanel project={project} nodeRef={nodeRef} onFollow={onFollow} />}
       {view.nodes.length > 0 && <NodeCommands nodeRef={nodeRef} holders={view.nodes} />}
       {query.error !== null && !query.isFetching && (
         <p className="note" role="alert">

@@ -2,15 +2,18 @@ import { describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
 import type { DriftRow, LockDiffRow } from "../api/types";
 import { bindingsNote } from "./bindings";
-import { DRAFT_FILE, TIDE_FILE } from "./harbor-sim/fixtures";
+import { rowKeyOf } from "../tree/lockDiff";
+import { DRAFT_FILE, HIGH_WATER_FILE, TIDE_FILE } from "./harbor-sim/fixtures";
 import { CODE_GAP_CAUSE, CODE_OFF_CAUSE, harborDrift, LOCK_CAUSE } from "./health";
-import { harborLockDiffRows, rowKeyOf, sideNotesOf } from "./lockDiff";
+import { harborLockDiffRows, sideNotesOf } from "./lockDiff";
 import { MockClient } from "./MockClient";
 
 // UI-3 of docs/features/lock-diff.md: the mock's lock diff. harbor-sim's rows are Health's row 6 by
 // key, those a lock entry holds whose state raises drift, and their sides follow "Sides"; a REF's
 // holders are the node read's, each with the rows of its set; a run cause leaves `rows` null with
-// its one note; a REF naming nothing answers the exit-1 document.
+// its one note; a REF naming nothing answers the exit-1 document. UI-7 of
+// docs/features/lock-diff-ui.md: the four mock rows of its "Data", the binary pair added (the gone
+// symbol's spec side).
 
 const NOW = Date.parse("2026-10-05T12:00:00Z");
 const clock = () => NOW;
@@ -132,7 +135,7 @@ describe("harbor-sim's kept rows (UI-3 of lock-diff)", () => {
     }
   });
 
-  it("holds the slice's four cases: a conflict with both sides, a code_ahead with its code side, a side the daemon could not read, a gone symbol", () => {
+  it("holds the four rows of lock-diff-ui's \"Mocks\": a conflict with both sides, a code_ahead with its code side, a gone commit (N1), a gone symbol with a binary pair (N7)", () => {
     const tides = keptOf("MEC-TIDES");
     expect([tides.spec?.path, tides.spec?.diff === null, tides.code?.diff === null]).toEqual([TIDE_FILE, false, false]);
     const mooring = keptOf("MEC-MOORING");
@@ -143,7 +146,17 @@ describe("harbor-sim's kept rows (UI-3 of lock-diff)", () => {
       `lock diff: RULE-BERTH-DRAFT | assumes | data/berths.ron | ron berths[4].draft_m: no spec diff: ${DRAFT_FILE} cannot be read at ${draft.row.lock?.commit ?? ""}`,
     ]);
     const highWater = keptOf("RULE-HIGH-WATER");
-    expect([highWater.spec, highWater.code?.file]).toEqual([null, "src/sim/tide_table.rs"]);
+    expect([highWater.spec?.path, highWater.spec?.commit, highWater.spec?.diff, highWater.code?.file]).toEqual([
+      HIGH_WATER_FILE,
+      highWater.row.lock?.commit,
+      null,
+      "src/sim/tide_table.rs",
+    ]);
+    expect(highWater.code?.diff).toMatch(/^@@ -1,5 \+0,0 @@\n(-[^\n]*\n)+$/);
+    // N7, path-free: git gave no hunk for bytes that differ (a NUL byte), so `diff` null, never "".
+    expect(sideNotesOf(highWater.row)).toEqual([
+      "lock diff: RULE-HIGH-WATER | verifies | src/sim/tide_table.rs | item harbor_sim::tide_table::tests::high_water_holds function_item: no spec diff: git shows no hunk for bytes that differ",
+    ]);
   });
 
   it("names each spec side's file as the node read finds the row's node now", async () => {

@@ -8,7 +8,7 @@ reviewed: 2026-10-21
 
 # `spec lock diff`: what changed since a lock entry
 
-ADR-0053, adding to ADR-0046 (`architecture-code.md#sync-in-reads`): beside a drifted binding, the owner sees what moved on each side since the owner accepted it, before deciding a drift item or an accept. Built by `lock-diff` (`docs/features/lock-diff.md`, shipped 2026-10-21: CLI `lock_diff.rs`, the daemon's route, the UI's types and `getLockDiff`); the browser panel comes with `lock-diff-ui` (RM-0033).
+ADR-0053, adding to ADR-0046 (`architecture-code.md#sync-in-reads`): beside a drifted binding, the owner sees what moved on each side since the owner accepted it, before deciding a drift item or an accept. Built by `lock-diff` (`docs/features/lock-diff.md`, shipped 2026-10-21: CLI `lock_diff.rs`, the daemon's route, the UI's types and `getLockDiff`); the browser panel: `lock-diff-panel.md` (`lock-diff-ui`, RM-0033).
 
 ## The read
 

@@ -64,8 +64,8 @@ const ROUND_TEXT = "/src/round/text";
 /** The two text modules as loaded, for their exports. */
 const textModules = import.meta.glob<Record<string, unknown>>(["/src/round/text.ts", "/src/ui/text.ts"], { eager: true });
 
-/** The Bindings tab's sources (docs/features/ui-node-bindings.md): held to Health's rules for rows (UI-7). */
-const BINDINGS_TAB: readonly string[] = ["/src/tree/BindingsPanel.tsx", "/src/tree/BindingLine.tsx", "/src/tree/commands.ts"];
+/** The Bindings tab's sources (docs/features/ui-node-bindings.md): held to Health's rules for rows (UI-7); its command list shared with the lock diff's rows. */
+const BINDINGS_TAB: readonly string[] = ["/src/tree/BindingsPanel.tsx", "/src/tree/BindingLine.tsx", "/src/tree/commands.ts", "/src/tree/CommandList.tsx"];
 
 /** The drift card's sources (docs/features/ui-drift-evidence.md): its rows held to Health's rules too (UI-6). */
 const DRIFT_CARD: readonly string[] = ["/src/inbox/drift.ts", "/src/inbox/DriftItem.tsx"];
@@ -73,8 +73,11 @@ const DRIFT_CARD: readonly string[] = ["/src/inbox/drift.ts", "/src/inbox/DriftI
 /** The tree's drift badges (docs/features/ui-tree-drift.md): counted and drawn under Health's rules for rows (UI-6). */
 const TREE_DRIFT: readonly string[] = ["/src/tree/drift.ts", "/src/tree/RowContent.tsx", "/src/tree/DriftStatus.tsx"];
 
-/** Health, the Bindings tab, the drift card and the tree's badges: the row sources AC-U6 and the no-sort rule cover. */
-const ROW_SOURCES: readonly string[] = [...BINDINGS_TAB, ...DRIFT_CARD, ...TREE_DRIFT];
+/** The Bindings tab's "Changes since the lock" (docs/features/lock-diff-ui.md): its rows and sides under Health's rules for rows (UI-7). */
+const LOCK_DIFF: readonly string[] = ["/src/tree/LockDiffPanel.tsx", "/src/tree/lockDiff.ts"];
+
+/** Health, the Bindings tab, the drift card, the tree's badges and the lock diff: the row sources AC-U6 and the no-sort rule cover. */
+const ROW_SOURCES: readonly string[] = [...BINDINGS_TAB, ...DRIFT_CARD, ...TREE_DRIFT, ...LOCK_DIFF];
 
 /** The provisional types' module, with or without an extension (as in eslint.config.js). */
 const PROVISIONAL = /(^|\/)provisional(\.[jt]sx?)?$/;
@@ -336,7 +339,7 @@ describe("source policy", () => {
     }
   });
 
-  it("compares no kind, class, status, state, sync, link type, reason, ID state, binding, relation or category in Health, the Bindings tab, the drift card or the tree's badges but in the label maps: rows 3 to 6, binding rows and stored drift rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui, UI-7 of ui-node-bindings, UI-6 of ui-drift-evidence and UI-6 of ui-tree-drift)", () => {
+  it("compares no kind, class, status, state, sync, link type, reason, ID state, binding, relation or category in Health, the Bindings tab, the drift card, the tree's badges or the lock diff but in the label maps: rows 3 to 6, binding rows and stored drift rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui, UI-7 of ui-node-bindings, UI-6 of ui-drift-evidence, UI-6 of ui-tree-drift and UI-7 of lock-diff-ui)", () => {
     const outside = (path: string) => !(path.startsWith("/src/health/") || ROW_SOURCES.includes(path)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
       expect.arrayContaining([
@@ -349,6 +352,7 @@ describe("source policy", () => {
         ...BINDINGS_TAB,
         ...DRIFT_CARD,
         ...TREE_DRIFT,
+        ...LOCK_DIFF,
       ]),
     );
     // `category` since ui-drift-evidence: a stored drift row's category is told apart in labels.ts alone.
@@ -403,6 +407,9 @@ describe("source policy", () => {
       'if (line.class === "fix") {',
       "counts[line.class] += 1;",
       'const fixes = lines.filter((line) => line.class === "fix").length;',
+      // UI-7 of lock-diff-ui: a kept row's state branched on in the panel.
+      'const both = entry.row.state === "conflict";',
+      '{row.state !== "code_ahead" && <SpecSide side={spec} />}',
     ]) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }
@@ -430,14 +437,18 @@ describe("source policy", () => {
       "const judgement = [row.category, row.detail].filter((word) => word !== null).join(\" \");",
       // ui-tree-drift: the class passed to labels.ts, which tells it apart.
       "const known = driftClassOf(line.class);",
+      // lock-diff-ui: a side's presence, and the row's key built from its fields as sent.
+      "{spec !== null && <SpecSide side={spec} why={null} />}",
+      "if (spec === null && code === null) {",
+      "const binding = row.kind === null ? \"\" : ` | ${row.kind} ${row.symbol ?? \"\"}`;",
     ]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
     }
   });
 
-  it("sorts nothing in Health but the findings, nor in the Bindings tab, the drift card or the tree's badges, and keeps every label table in labels.ts: rows 3 to 6, binding rows and stored drift rows drawn in the daemon's order, each word through one map (UI-3 of health-drift-ui, UI-2 of ui-node-bindings, UI-6 of ui-drift-evidence, UI-6 of ui-tree-drift)", () => {
+  it("sorts nothing in Health but the findings, nor in the Bindings tab, the drift card, the tree's badges or the lock diff, and keeps every label table in labels.ts: rows 3 to 6, binding rows, stored drift rows and kept rows drawn in the daemon's order, each word through one map (UI-3 of health-drift-ui, UI-2 of ui-node-bindings, UI-6 of ui-drift-evidence, UI-6 of ui-tree-drift, UI-7 of lock-diff-ui)", () => {
     const parts = (path: string) => !(path.startsWith("/src/health/") || ROW_SOURCES.includes(path)) || /\.test\.tsx?$/.test(path);
-    expect(Object.keys(sources).filter((path) => !parts(path))).toEqual(expect.arrayContaining([...BINDINGS_TAB, ...DRIFT_CARD, ...TREE_DRIFT]));
+    expect(Object.keys(sources).filter((path) => !parts(path))).toEqual(expect.arrayContaining([...BINDINGS_TAB, ...DRIFT_CARD, ...TREE_DRIFT, ...LOCK_DIFF]));
     const sorted = /\.(sort|toSorted|reverse|toReversed)\(/;
     expect(offending(sorted, (path) => parts(path) || path === "/src/health/findings.ts")).toEqual([]);
     // The scope is right: the findings are grouped and ordered by the view (docs/features/ui-health.md).

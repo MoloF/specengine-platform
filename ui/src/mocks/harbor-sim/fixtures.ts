@@ -52,6 +52,8 @@ export const LONG_TOKEN = "tide_table_sample_v3".padEnd(300, "k7Qm2Xr9Lp4Zt8Wn")
 export const TIDE_FILE = "docs/spec/tides/tide-cycle.md";
 /** The ID-less document: the tree names it by its path. */
 export const DRAFT_FILE = "docs/spec/berths/draft-limits.md";
+/** RULE-HIGH-WATER's document: the lock diff's binary pair is its text (src/mocks/lockDiff.ts). */
+export const HIGH_WATER_FILE = "docs/spec/water/high-water.md";
 const PILOT_FILE = "docs/spec/pilotage/boarding.md";
 const HARBOR_FILE = "docs/spec/harbor.md";
 
@@ -605,7 +607,7 @@ function harborCorpus(): MockCorpus {
       ],
     }),
     specFile({
-      path: "docs/spec/water/high-water.md",
+      path: HIGH_WATER_FILE,
       id: "RULE-HIGH-WATER",
       kind: "rule",
       title: "High water",

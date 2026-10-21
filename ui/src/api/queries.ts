@@ -69,6 +69,8 @@ export const queryKeys = {
   round: (project: string, limit: number | null) => ["round", project, { limit }] as const,
   /** The whole plan, `spec roadmap --json` with neither option (`docs/features/roadmap-screen.md`). */
   roadmap: (project: string) => ["roadmap", project] as const,
+  /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
+  lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
 };
 
 /** Every round sheet of a project, whatever its limit. */
@@ -190,12 +192,14 @@ function eventId(payload: unknown): string | null {
 
 /**
  * What an applied proposal changed besides the queue: a spec file, so the project's reads of the
- * spec (every tree, node, search, bundle and graph of it, its check, its unapplied amendments and
- * its plan, each `[read, project, …]`; `docs/features/ui-live.md` "Rules and edge cases",
- * `docs/features/health-left.md` "Description and interactions", `docs/features/roadmap-screen.md`:
- * an item's file is a spec file).
+ * spec (every tree, node, search, bundle and graph of it, its check, its unapplied amendments, its
+ * plan and its lock diffs, each `[read, project, …]`;
+ * `docs/features/ui-live.md` "Rules and edge cases",
+ * `docs/features/health-left.md` "Description and interactions",
+ * `docs/features/roadmap-screen.md`: an item's file is a spec file; `docs/features/lock-diff-ui.md`:
+ * a lock diff's spec side is the node's text against its entry's).
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check", "health", "roadmap"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check", "health", "roadmap", "lock-diff"] as const;
 
 /** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
@@ -254,8 +258,8 @@ const TASK_EVENT = "task.";
  * The project's live tail while `project` is set (`docs/features/daemon-read.md` "Data"): a
  * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
  * every task of it (a task's open proposals and assumptions are the queue's); `proposal.applied`
- * also that project's trees, nodes, searches, bundles, graphs, check and unapplied amendments (a
- * spec file changed; `docs/features/ui-live.md` "Data"); `proposal.approved`, `.rejected` and
+ * also that project's trees, nodes, searches, bundles, graphs, check, unapplied amendments and lock
+ * diffs (a spec file changed; `docs/features/ui-live.md` "Data"); `proposal.approved`, `.rejected` and
  * `.apply_failed` also that project's health read, which row 4 shows (`docs/canon/health.md` "UI").
  * A health read in flight when one of these, an apply or a gap lands is kept, never aborted, and
  * exactly one more is read when it settles, answered or failed, however many landed. A stage
@@ -434,6 +438,22 @@ export type NodeQuery = ReturnType<typeof useNode>;
  */
 export function useNodeBindings(project: string, ref: string) {
   return useNode(project, ref, { with: ["bindings"] });
+}
+
+/**
+ * What moved since each drifted binding of a node was accepted, `lock-diff?ref=<REF>`
+ * (`docs/canon/spec-lock-diff.md` "The read"): the Bindings tab's "Changes since the lock", read
+ * only once `enabled` (its first expanding), never when the tab opens; then kept while the pane
+ * shows the node. Its key, `["lock-diff", project, ref]`, is a read of the spec: an apply and a gap
+ * read it again; no other event does (a code edit fires none: the panel's Read again).
+ */
+export function useLockDiff(project: string, ref: string, enabled: boolean) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.lockDiff(project, ref),
+    queryFn: ({ signal }) => client.getLockDiff(project, ref, signal),
+    enabled,
+  });
 }
 
 /** A search once submitted (`options` null before); a new query never shows the last one's hits. */

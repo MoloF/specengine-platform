@@ -1,4 +1,4 @@
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import type { HealthQuery } from "../api/queries";
 import type { BindingPlace, DriftCounts, DriftLevels, DriftLock, DriftMarker, DriftRow, StoredDriftRow, TestedRow } from "../api/types";
 import { sectionHash } from "../app/routes";
@@ -86,9 +86,23 @@ function LevelsFact({ levels }: { levels: DriftLevels }) {
  * an ambiguous one might be. Every field on one line (`oneLine`); no text says "now": the card's
  * rows are as of the commit judged, Health's as of the working tree. An absent `levels` or `anchor`
  * (an older build's stored row) draws as null. `markEditorial`: the card's, a `spec_ahead
- * same_revision` row marked Editorial (labels.ts says which); Health draws no mark.
+ * same_revision` row marked Editorial (labels.ts says which); Health draws no mark. `onFollow`: the
+ * tree view's, when the line sits in it; `children`: what the line carries after its own parts (the
+ * Bindings tab's lock diff: the row's sides and commands, docs/features/lock-diff-ui.md).
  */
-export function DriftLine({ project, row, markEditorial = false }: { project: string; row: StoredDriftRow; markEditorial?: boolean }) {
+export function DriftLine({
+  project,
+  row,
+  markEditorial = false,
+  onFollow,
+  children,
+}: {
+  project: string;
+  row: StoredDriftRow;
+  markEditorial?: boolean;
+  onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void;
+  children?: ReactNode;
+}) {
   const judgement = [row.category, row.detail].filter((word) => word !== null).join(" ");
   const levels = row.levels ?? null;
   const from = row.anchor?.from ?? null;
@@ -97,7 +111,7 @@ export function DriftLine({ project, row, markEditorial = false }: { project: st
     <li className="health-left-row health-code-row" data-drift={row.node} tabIndex={-1}>
       <p className="health-code-head">
         <Badge name="Class" look={driftClassLook(row.class)} />
-        <NodeLink project={project} node={row.node} />
+        <NodeLink project={project} node={row.node} onFollow={onFollow} />
         <span className="kind-tag">{oneLine(row.relation)}</span>
         {row.pre_existing && <span className="plain-tag">Pre-existing</span>}
         {markEditorial && isEditorialRow(row) && <span className="plain-tag drift-editorial">Editorial</span>}
@@ -147,6 +161,7 @@ export function DriftLine({ project, row, markEditorial = false }: { project: st
           Candidate <span className="mono">{placeOf(candidate)}</span>
         </p>
       ))}
+      {children}
     </li>
   );
 }

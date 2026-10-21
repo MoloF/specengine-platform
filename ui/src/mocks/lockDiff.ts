@@ -1,27 +1,24 @@
 import type { DriftRow, LockDiffNode, LockDiffRow, LockDiffView, NodeView } from "../api/types";
+import { rowKeyOf } from "../tree/lockDiff";
 import { mockCode } from "./bindings";
-import { DRAFT_FILE, TIDE_FILE } from "./harbor-sim/fixtures";
+import { DRAFT_FILE, HIGH_WATER_FILE, TIDE_FILE } from "./harbor-sim/fixtures";
 import { harborDrift, LOCKED_AT } from "./health";
 import type { Scenario } from "./scenario";
 
-// The mock's `spec lock diff REF --json` (docs/features/lock-diff.md "Data"; the panel that draws
-// it comes with docs/features/lock-diff-ui.md). REF is resolved as the node read resolves it; each
-// holder's set is itself and the sections within it, as `show --bindings` groups. harbor-sim's
+// The mock's `spec lock diff REF --json` (docs/features/lock-diff.md "Data"; the panel's cases:
+// docs/features/lock-diff-ui.md "Data"). REF is resolved as the node read resolves it;
+// each holder's set is itself and the sections within it, as `show --bindings` groups. harbor-sim's
 // kept rows are Health's row 6 (src/mocks/health.ts `harborDrift`) by key, those with a lock entry
 // whose state raises drift: MEC-TIDES's `conflict` with both sides, MEC-MOORING's `code_ahead`
 // (moved from berths.rs) with a code side, RULE-BERTH-DRAFT's `marker_behind` with a spec side the
-// daemon could not read at the entry's commit (`diff` null, its one note), RULE-HIGH-WATER's
-// `symbol_gone` with a code side of `-` lines only. Under a run cause of the code layer (ledger-api
-// with no [code]; either project in `code-cannot`) every holder's `rows` is null with the one
-// `bindings:` note `show --bindings` gives; ledger-api in `not-configured` has [code] and no
-// drifted row, so `rows` is []. Hunks are git's, as the daemon would send them, never made here.
-
-/** A kept row's key as verify's text prints it, which the notes name: `<node> | <relation> | <file> | <kind> <symbol>[ <item_kind>]`. */
-export function rowKeyOf(row: DriftRow): string {
-  // A kept row has a lock entry, so a key; a keyless row is never kept.
-  const binding = row.kind === null ? "" : ` | ${row.kind} ${row.symbol ?? ""}${row.item_kind === null ? "" : ` ${row.item_kind}`}`;
-  return `${row.node} | ${row.relation} | ${row.file}${binding}`;
-}
+// daemon could not read at the entry's commit (a gone commit: `diff` null, its N1 note),
+// RULE-HIGH-WATER's `symbol_gone` with a code side of `-` lines only and a spec side git shows no
+// hunk for (a binary pair, a NUL byte in the old text: `diff` null, its N7 note). Under a run
+// cause of the code layer (ledger-api with no [code]; either project in `code-cannot`) every
+// holder's `rows` is null with the one `bindings:` note `show --bindings` gives; ledger-api in
+// `not-configured` has [code] and no drifted row, so `rows` is []. Hunks are git's, as the daemon
+// would send them, never made here; a row's key is the panel's (src/tree/lockDiff.ts `rowKeyOf`),
+// which the notes name.
 
 /** The entries' `file_blob`s: the files as the owner accepted them (invented OIDs). */
 const TIDE_BLOB = "b6e2d94a1f0c38e75a2d6b9c4e1f7a0358c2d6e9";
@@ -87,6 +84,7 @@ const HIGH_WATER_CODE_DIFF = [
 ].join("\n");
 
 const BERTH_DRAFT_KEY = "RULE-BERTH-DRAFT | assumes | data/berths.ron | ron berths[4].draft_m";
+const HIGH_WATER_KEY = "RULE-HIGH-WATER | verifies | src/sim/tide_table.rs | item harbor_sim::tide_table::tests::high_water_holds function_item";
 
 /** harbor-sim's kept rows' sides by key, and the notes each gives (one per side not shown, N1 here), in output order. */
 const HARBOR_SIDES: Readonly<Record<string, Pick<LockDiffRow, "spec" | "code"> & { notes: readonly string[] }>> = {
@@ -105,10 +103,11 @@ const HARBOR_SIDES: Readonly<Record<string, Pick<LockDiffRow, "spec" | "code"> &
     code: null,
     notes: [`lock diff: ${BERTH_DRAFT_KEY}: no spec diff: ${DRAFT_FILE} cannot be read at ${LOCKED_AT}`],
   },
-  "RULE-HIGH-WATER | verifies | src/sim/tide_table.rs | item harbor_sim::tide_table::tests::high_water_holds function_item": {
-    spec: null,
+  // The node's text moved too, a NUL byte in its old bytes: git shows no hunk (N7, path-free).
+  [HIGH_WATER_KEY]: {
+    spec: { commit: LOCKED_AT, path: HIGH_WATER_FILE, diff: null },
     code: { blob: TIDE_TABLE_BLOB, file: "src/sim/tide_table.rs", diff: HIGH_WATER_CODE_DIFF },
-    notes: [],
+    notes: [`lock diff: ${HIGH_WATER_KEY}: no spec diff: git shows no hunk for bytes that differ`],
   },
 };
 

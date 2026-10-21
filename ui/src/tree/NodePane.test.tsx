@@ -989,6 +989,45 @@ describe("the Bindings tab's read (UI-1 of ui-node-bindings)", () => {
   });
 });
 
+describe("the Bindings tab's lock diff read (UI-1 of lock-diff-ui)", () => {
+  /** The calls of the stub's lock diff read, as (project, REF). */
+  function lockDiffReads(client: StubClient) {
+    return argsOf(client.getLockDiff).map(([project, ref]) => [project, ref]);
+  }
+
+  it("reads lock-diff?ref=<REF> once, on the first expanding: none when the tab opens or its read answers, none on collapsing, expanding again or reselecting the tab", async () => {
+    const client = bindingsClient(shown(daemonRows()));
+    await openNode(client);
+    const panel = await openTab("Bindings");
+    const toggle = await within(panel).findByRole("button", { name: "Changes since the lock" });
+    await within(panel).findByText("Code bindings");
+    expect(bindingsReads(client)).toHaveLength(1);
+    expect(lockDiffReads(client)).toEqual([]);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    await within(panel).findByText("None: no drifted binding of this node has a lock entry.");
+    expect(lockDiffReads(client)).toEqual([["alpha", "DOC-A"]]);
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    await within(panel).findByText("None: no drifted binding of this node has a lock entry.");
+    await openTab("Text");
+    await openTab("Bindings");
+    await openTab(/^Proposals/);
+    await openTab("Bindings");
+    expect(lockDiffReads(client)).toHaveLength(1);
+    expect(bindingsReads(client)).toHaveLength(1);
+  });
+
+  it("sits after the holders, before the commands, as an h2 with one holder: no heading level skipped", async () => {
+    await openNode(bindingsClient(shown(daemonRows())));
+    const panel = await openTab("Bindings");
+    await within(panel).findByRole("button", { name: "Changes since the lock" });
+    expect(Array.from(panel.querySelectorAll("h2"), (heading) => heading.textContent)).toEqual(["Code bindings", "Test evidence", "Changes since the lock", "Commands for a terminal"]);
+    expectNoSkippedLevel();
+  });
+});
+
 describe("the Bindings tab's rows (UI-2 of ui-node-bindings)", () => {
   it("shows the rows in the daemon's order, never sorted, each field: node (\"\" as No ID), relation, the three place forms, binding or No symbol, layer, sync, signature, Moved from, Candidate", async () => {
     await openNode(bindingsClient(shown(daemonRows())));
