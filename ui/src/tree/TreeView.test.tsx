@@ -1,15 +1,15 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import type { ShownLinks } from "../api/types";
-import { aLink, aProposal, aSearchHit, aSearchResults, aTreeView } from "../test/builders";
+import type { DriftRow, QueueEvent, ShownLinks } from "../api/types";
+import { aDriftIn, aDriftRow, aHealthReport, aLink, aProposal, aSearchHit, aSearchResults, aTestedRow, aTreeView, measuredDrift } from "../test/builders";
 import { renderApp } from "../test/render";
 import { START_ROWS, TREE, treeClient, viewOf } from "../test/treeStub";
 import { argsOf, type StubClient } from "../test/stubClient";
 
 // docs/features/ui-tree-node.md on a stub client: AC-01 (what a route reads), AC-03 (the tree's
 // rows and ARIA), AC-04 (its keys), AC-11 (search), AC-12 (states of the tree and the search),
-// AC-13 (archive reads again).
+// AC-13 (archive reads again); docs/features/ui-tree-drift.md UI-2, UI-3, UI-4, UI-6, UI-7 (Show drift).
 
 function tree(): HTMLElement {
   return screen.getByRole("tree", { name: "Spec tree" });
@@ -691,5 +691,400 @@ describe("Include archive (AC-13)", () => {
     // The text needs no archive: the daemon refuses archive without links.
     expect(client.getNode.mock.calls.filter((call) => call[2]?.archive === true && call[2].with === undefined)).toEqual([]);
     expect(rows().map(nameOf)).toEqual(START_ROWS);
+  });
+});
+
+// docs/features/ui-tree-drift.md on the stub client: Show drift, off by default and kept per
+// project in this viewer's storage (cleared before each test: src/test/setup.ts), reads Health's
+// row 6 once the tree has answered, draws each line's own rows by class and one status line after
+// the toggles; the tree never waits for it.
+
+/** A look-alike of DOC-A as a marker may write it: a Cyrillic capital A. */
+const LOOKALIKE = "DOC-\u0410";
+
+/** Where the viewer's choice for alpha is kept. */
+const ALPHA_KEY = "specengine.tree.show-drift.alpha";
+
+/** Row 6's rows for the stub tree: DOC-A's own three, a section's, the ID-less document's, and three naming no tree line. */
+const DRIFT: DriftRow[] = [
+  aDriftRow({ node: "", class: "fix", state: "bad_marker", category: "unanchored", kind: null, symbol: null, item_kind: null }),
+  aDriftRow({ node: "DOC-A", class: "fix", state: "conflict" }),
+  aDriftRow({ node: "DOC-A", class: "check" }),
+  aDriftRow({ node: "DOC-A", class: "check", relation: "verifies" }),
+  aDriftRow({ node: LOOKALIKE, class: "fix", state: "bad_marker", category: "homoglyph" }),
+  aDriftRow({ node: "R-404", class: "fix", state: "broken_binding", category: "symbol_gone" }),
+  aDriftRow({ node: "SEC-A1", class: "cannot", state: "cannot_verify", category: "item_error" }),
+  aDriftRow({ node: "docs/spec/b.md", class: "check" }),
+];
+
+/** Health's answer with row 6 measured over `rows`, and a stale test entry the tree never draws. */
+function healthWith(rows: DriftRow[]) {
+  return aHealthReport([], { drift: measuredDrift(rows, { tested: [aTestedRow({ node: "DOC-A" })] }) });
+}
+
+/** The stub's live tail, driven by the test. */
+function withLiveTail(client: StubClient) {
+  const tail: { emit: (event: QueueEvent) => void; gap: () => void } = { emit: () => undefined, gap: () => undefined };
+  client.subscribe = (_project, onEvent, onGap) => {
+    tail.emit = onEvent;
+    tail.gap = onGap ?? (() => undefined);
+    return () => undefined;
+  };
+  return tail;
+}
+
+/** A promise the test settles. */
+function held<T>() {
+  let resolve: (value: T) => void = () => undefined;
+  let reject: (reason: unknown) => void = () => undefined;
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
+}
+
+function driftToggle(): HTMLInputElement {
+  return screen.getByRole<HTMLInputElement>("checkbox", { name: "Show drift" });
+}
+
+/** A line's drift badges' labels, as shown. */
+function badgesOf(item: HTMLElement): string[] {
+  return Array.from(item.querySelectorAll(".tree-drift-badge .badge-label"), (label) => label.textContent);
+}
+
+/** Show drift's status after the toggles, if any. */
+function driftStatus(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(".tree-drift");
+}
+
+/** Its lines' texts, in order. */
+function driftLines(): string[] {
+  return Array.from(document.querySelectorAll(".tree-drift-line"), (line) => line.textContent);
+}
+
+describe("Show drift (ui-tree-drift)", () => {
+  it("is off at entry: the tree and the inbox answer, Health is never read, nor after an approval or a gap (UI-7)", async () => {
+    const client = treeClient();
+    const tail = withLiveTail(client);
+    client.getHealth.mockResolvedValue(healthWith(DRIFT));
+    renderApp(client, "#/alpha/tree/DOC-A");
+    await screen.findByRole("tree", { name: "Spec tree" });
+    await screen.findByRole("tab", { name: "Text" });
+    await waitFor(() => {
+      expect(client.getInbox).toHaveBeenCalled();
+    });
+    expect(driftToggle().checked).toBe(false);
+    act(() => {
+      tail.emit({ seq: 1, type: "proposal.approved", payload: { id: "PR-1" } });
+    });
+    act(() => {
+      tail.gap();
+    });
+    await waitFor(() => {
+      expect(client.getTree.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+    await settle();
+    expect(client.getHealth).not.toHaveBeenCalled();
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    expect(driftStatus()).toBeNull();
+    expect(window.localStorage.getItem(ALPHA_KEY)).toBeNull();
+  });
+
+  it("on: one read, the key holds on; off: no badge or line at once, nothing more read, nor after an approval or a gap, the key gone; another project stays off; on again on return (UI-7)", async () => {
+    const client = treeClient();
+    const tail = withLiveTail(client);
+    client.getHealth.mockResolvedValue(healthWith(DRIFT));
+    await openTree(client);
+    fireEvent.click(driftToggle());
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    expect(argsOf(client.getHealth)).toEqual([["alpha"]]);
+    expect(window.localStorage.getItem(ALPHA_KEY)).toBe("on");
+    cleanup();
+    await openTree(client, "#/beta/tree");
+    expect(driftToggle().checked).toBe(false);
+    cleanup();
+    await openTree(client);
+    expect(driftToggle().checked).toBe(true);
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    expect(argsOf(client.getHealth)).toEqual([["alpha"], ["alpha"]]);
+    fireEvent.click(driftToggle());
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    expect(driftStatus()).toBeNull();
+    expect(window.localStorage.getItem(ALPHA_KEY)).toBeNull();
+    const trees = client.getTree.mock.calls.length;
+    act(() => {
+      tail.emit({ seq: 1, type: "proposal.approved", payload: { id: "PR-1" } });
+    });
+    act(() => {
+      tail.gap();
+    });
+    await waitFor(() => {
+      expect(client.getTree.mock.calls.length).toBeGreaterThan(trees);
+    });
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+    expect(driftStatus()).toBeNull();
+  });
+
+  it("works without storage: getItem and setItem throwing, off at entry, on when asked, nothing thrown or logged (UI-7)", async () => {
+    const refused = () => {
+      throw new DOMException("The operation is insecure.", "SecurityError");
+    };
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(refused);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(refused);
+    vi.spyOn(Storage.prototype, "removeItem").mockImplementation(refused);
+    const client = treeClient();
+    client.getHealth.mockResolvedValue(healthWith(DRIFT));
+    await openTree(client);
+    expect(driftToggle().checked).toBe(false);
+    fireEvent.click(driftToggle());
+    expect(driftToggle().checked).toBe(true);
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    fireEvent.click(driftToggle());
+    expect(driftToggle().checked).toBe(false);
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+  });
+
+  it("draws each line's own rows by class, its icon and `<label> <count>`, never a section's on its parent, never the test evidence (UI-1, UI-6)", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    client.getHealth.mockResolvedValue(healthWith(DRIFT));
+    await openTree(client);
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    expect(badgesOf(row("SEC-A1"))).toEqual(["Cannot verify 1"]);
+    expect(badgesOf(row("docs/spec/b.md"))).toEqual(["Check 1"]);
+    for (const name of ["SEC-DUP", "DOC-C", "DOC-D", "DOC-E", "DOC-F"]) {
+      expect([name, badgesOf(row(name))]).toEqual([name, []]);
+    }
+    const badges = Array.from(document.querySelectorAll<HTMLElement>(".tree-drift-badge .badge"));
+    expect(badges.map((badge) => badge.textContent)).toEqual(["Drift: Fix 1", "Drift: Check 2", "Drift: Cannot verify 1", "Drift: Check 1"]);
+    for (const badge of badges) {
+      expect(badge.querySelector("svg")).not.toBeNull();
+      expect(badge.querySelector(".badge-label")?.textContent).toMatch(/^(Fix|Check|Cannot verify) [1-9]\d*$/);
+    }
+    expect(badges[0]?.getAttribute("data-tone")).toBe("finding-error");
+    expect(tree().textContent).not.toContain("Stale");
+  });
+
+  it("draws the tree first: Health is first read once the tree answered; Measuring drift meanwhile, no badge; then the badges (UI-2)", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    const treeAnswer = held<ReturnType<typeof aTreeView>>();
+    const healthAnswer = held<ReturnType<typeof healthWith>>();
+    client.getTree.mockImplementation(() => treeAnswer.promise);
+    client.getHealth.mockImplementation(() => healthAnswer.promise);
+    renderApp(client, "#/alpha/tree");
+    await screen.findByLabelText("Loading the spec tree of alpha");
+    await settle();
+    expect(client.getHealth).not.toHaveBeenCalled();
+    expect(driftToggle().checked).toBe(true);
+    expect(driftStatus()).toBeNull();
+    await act(async () => {
+      treeAnswer.resolve(aTreeView(TREE.map((node) => ({ ...node }))));
+      await treeAnswer.promise;
+    });
+    await screen.findByRole("tree", { name: "Spec tree" });
+    expect(rows().map(nameOf)).toEqual(START_ROWS);
+    await waitFor(() => {
+      expect(client.getHealth).toHaveBeenCalledTimes(1);
+    });
+    expect(driftLines()).toEqual(["Measuring drift"]);
+    expect(driftStatus()?.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    await act(async () => {
+      healthAnswer.resolve(healthWith(DRIFT));
+      await healthAnswer.promise;
+    });
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    expect(driftLines()).not.toContain("Measuring drift");
+    expect(driftStatus()?.getAttribute("aria-busy")).toBe("false");
+  });
+
+  it("the tree read failed: no drift line and no Retry of its own, even with Health's failure cached; Health is not read for the tree", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    const message = "spec index unavailable: the database is locked (code 5)";
+    client.getHealth.mockRejectedValue(new ClientError({ status: 503, message: "spec: the walk is incomplete" }));
+    // Health entered first: its failed read stays cached for the tree to find.
+    renderApp(client, "#/alpha/health");
+    await waitFor(() => {
+      expect(client.getHealth).toHaveBeenCalledTimes(1);
+    });
+    await settle();
+    client.getTree.mockRejectedValue(new ClientError({ status: 503, message }));
+    await followTo("#/alpha/tree");
+    await screen.findByText("The spec tree could not be loaded");
+    await settle();
+    expect(driftToggle().checked).toBe(true);
+    expect(driftStatus()).toBeNull();
+    expect(screen.queryByText(/Drift could not be read/)).toBeNull();
+    expect(screen.getAllByRole("button", { name: /Retry/ })).toHaveLength(1);
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("a malformed health answer: the tree drawn, the line says no counts, no badge", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    client.getHealth.mockResolvedValue({ ...aHealthReport(), drift: undefined } as unknown as ReturnType<typeof aHealthReport>);
+    await openTree(client);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["No drift badges: the answer holds no counts"]);
+    });
+    expect(rows().map(nameOf)).toEqual(START_ROWS);
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+  });
+
+  it("row 6 off or could not be measured: one not-measured line with the causes, no badge, no digit (UI-3)", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const off = treeClient();
+    off.getHealth.mockResolvedValue(aHealthReport());
+    await openTree(off);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["No drift badges: Code layer off: specengine.toml has no [code] table: the code layer is off (add [code] with roots)"]);
+    });
+    expect(document.querySelector(".tree-drift-line")?.getAttribute("data-drift-state")).toBe("not-measured");
+    expect(driftStatus()?.textContent).not.toMatch(/\d/);
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    cleanup();
+    const cannot = treeClient();
+    cannot.getHealth.mockResolvedValue(
+      aHealthReport([], { drift: aDriftIn("cannot", ["the code walk is incomplete: `src/sim/tide.rs` cannot be read (Permission denied)", "spec.lock: unclosed array,\nexpected `]`"]) }),
+    );
+    await openTree(cannot);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["No drift badges: Could not be measured: the code walk is incomplete: `src/sim/tide.rs` cannot be read (Permission denied); spec.lock: unclosed array, expected `]`"]);
+    });
+    expect(document.querySelector(".tree-drift-line")?.getAttribute("data-drift-state")).toBe("not-measured");
+    expect(driftStatus()?.textContent).not.toMatch(/\d/);
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    expect(rows().map(nameOf)).toEqual(START_ROWS);
+  });
+
+  it("a measured row without counts, a cannot without causes, a measured row with no rows: fixed words, no badge", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    client.getHealth
+      .mockResolvedValueOnce(aHealthReport([], { drift: { ...measuredDrift(DRIFT), counts: null } }))
+      .mockResolvedValueOnce(aHealthReport([], { drift: aDriftIn("cannot", []) }))
+      .mockResolvedValue(healthWith([]));
+    await openTree(client);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["No drift badges: the answer holds no counts"]);
+    });
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    cleanup();
+    await openTree(client);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["No drift badges: Could not be measured"]);
+    });
+    cleanup();
+    await openTree(client);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["No drift: every binding spec verify judges is in sync."]);
+    });
+    expect(document.querySelector(".tree-drift-line")?.getAttribute("data-drift-state")).toBe("none");
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+  });
+
+  it("a failed read: the daemon's words and Retry; every tree row stays", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    const message = "spec: the walk is incomplete: `docs/spec/a.md` cannot be read (Permission denied (os error 13))";
+    client.getHealth.mockRejectedValueOnce(new ClientError({ status: 503, message })).mockResolvedValue(healthWith(DRIFT));
+    await openTree(client);
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toBe(`Drift could not be read${message}`);
+    expect(rows().map(nameOf)).toEqual(START_ROWS);
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+  });
+
+  it("an approval reads Health again: the last line kept in place, busy, nothing added above it, its badges kept; a failed re-read says so under them", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    const tail = withLiveTail(client);
+    const again = held<ReturnType<typeof healthWith>>();
+    client.getHealth.mockResolvedValueOnce(healthWith(DRIFT)).mockImplementationOnce(() => again.promise);
+    await openTree(client);
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    const summary = "3 drift rows name no line of this tree. See them in Health";
+    expect(driftLines()).toEqual([summary]);
+    act(() => {
+      tail.emit({ seq: 1, type: "proposal.approved", payload: { id: "PR-1" } });
+    });
+    await waitFor(() => {
+      expect(driftStatus()?.getAttribute("aria-busy")).toBe("true");
+    });
+    expect(driftLines()).toEqual([summary]);
+    expect(driftStatus()?.children).toHaveLength(1);
+    expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    const message = "spec index unavailable: the database is locked (code 5)";
+    await act(async () => {
+      again.reject(new ClientError({ status: 503, message }));
+      await again.promise.catch(() => undefined);
+    });
+    await waitFor(() => {
+      expect(driftLines()).toEqual([summary, `Drift could not be read again: ${message}`]);
+    });
+    expect(screen.getByRole("alert").textContent).toBe(`Drift could not be read again: ${message}`);
+    expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+  });
+
+  it("sums up in one line the rows naming no tree line, linking to Health; none, no summary (UI-4)", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    client.getHealth.mockResolvedValue(healthWith(DRIFT));
+    await openTree(client);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["3 drift rows name no line of this tree. See them in Health"]);
+    });
+    expect(document.querySelector(".tree-drift-line")?.getAttribute("data-drift-state")).toBe("unmatched");
+    expect(screen.getByRole("link", { name: "See them in Health" }).getAttribute("href")).toBe("#/alpha/health");
+    cleanup();
+    const one = treeClient();
+    one.getHealth.mockResolvedValue(healthWith(DRIFT.filter((line) => line.node !== "" && line.node !== "R-404")));
+    await openTree(one);
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["1 drift row names no line of this tree. See them in Health"]);
+    });
+    cleanup();
+    const none = treeClient();
+    none.getHealth.mockResolvedValue(healthWith(DRIFT.filter((line) => ["DOC-A", "SEC-A1"].includes(line.node))));
+    await openTree(none);
+    await waitFor(() => {
+      expect(badgesOf(row("DOC-A"))).toEqual(["Fix 1", "Check 2"]);
+    });
+    expect(driftLines()).toEqual([]);
+  });
+
+  it("an empty tree: Health still read once the tree answered; its words, never a summary", async () => {
+    window.localStorage.setItem(ALPHA_KEY, "on");
+    const client = treeClient();
+    client.getTree.mockResolvedValue(aTreeView([], { notes: ["no document under [paths] spec"] }));
+    client.getHealth.mockResolvedValue(healthWith(DRIFT));
+    renderApp(client, "#/alpha/tree");
+    await screen.findByRole("heading", { name: "No document in the tree" });
+    await waitFor(() => {
+      expect(client.getHealth).toHaveBeenCalledTimes(1);
+    });
+    await settle();
+    expect(driftLines()).toEqual([]);
   });
 });

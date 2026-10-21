@@ -8,17 +8,16 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 27 open, 10 done; current mvp; to mvp 2-3 days; total 21-35 days
+roadmap: 26 open, 11 done; current mvp; to mvp 2-3 days; total 19-32 days
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
 1. [RM-0001](../roadmap/RM-0001.md) | Live check: real tasks of each pilot through the full cycle | draft | must | 2-3
 
-## release v1 | 3 open, 10 done | 6-9 days
+## release v1 | 2 open, 11 done | 4-6 days
 
 1. [RM-0010](../roadmap/RM-0010.md) | layer-c-reads (11a-3): monikers in spec symbols and find_symbols | draft | should | 2-3
-2. [RM-0011](../roadmap/RM-0011.md) | Drift screens in the web UI (Phase 4) | draft | could | 2-3
-3. [RM-0033](../roadmap/RM-0033.md) | lock-diff: what changed since the lock, beside a drifted binding | draft | could | 2-3 | waits on RM-0011
+2. [RM-0033](../roadmap/RM-0033.md) | lock-diff: what changed since the lock, beside a drifted binding | draft | could | 2-3
 
 ## release v2 | 7 open, 0 done | 13-23 days
 

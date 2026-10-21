@@ -218,6 +218,44 @@ export function driftClassLook(value: string | null): Look {
   return lookup(DRIFT_CLASS, value) ?? rawClass(value);
 }
 
+/** verify's three classes, as the tree's badges count a node's own row 6 rows (docs/features/ui-tree-drift.md). */
+export type DriftClass = keyof typeof DRIFT_CLASS;
+
+/**
+ * Which of verify's three classes a row 6 row is in, for the tree's badges: the word passed in,
+ * never compared elsewhere; null for a word not listed, or none (only `ok` has none, and row 6
+ * lists no `ok`).
+ */
+export function driftClassOf(value: string | null): DriftClass | null {
+  return typeof value === "string" && Object.hasOwn(DRIFT_CLASS, value) ? (value as DriftClass) : null;
+}
+
+/** A node's own row 6 rows by class, as the tree counts them; `unlisted`: any other class word, or none. */
+export interface DriftClassCounts {
+  fix: number;
+  check: number;
+  cannot: number;
+  unlisted: number;
+}
+
+/** The tree's badge for rows of a class row 6 does not list (none today; the word shows raw on Health's row 6): neutral, never ok's. */
+const UNLISTED_CLASS: Look = { label: "Another class", tone: "sync-unknown", icon: "unknown" };
+
+/**
+ * A tree line's drift badges (docs/features/ui-tree-drift.md "Badges"): Fix, Check, Cannot verify
+ * in verify's order, then Another class, each only when its count is above 0 (never a 0), its
+ * class's look with the label `<label> <count>`.
+ */
+export function driftBadgeLooks(counts: Readonly<DriftClassCounts>): Look[] {
+  const each: [Look, number][] = [
+    [DRIFT_CLASS.fix, counts.fix],
+    [DRIFT_CLASS.check, counts.check],
+    [DRIFT_CLASS.cannot, counts.cannot],
+    [UNLISTED_CLASS, counts.unlisted],
+  ];
+  return each.filter(([, count]) => count > 0).map(([look, count]) => ({ ...look, label: `${look.label} ${String(count)}` }));
+}
+
 /** One count of row 6's tally: its key, its look, verify's count. */
 export interface DriftTally {
   key: string;

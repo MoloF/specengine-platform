@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type Ref, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useInbox, useNode, useSearch, useTree } from "../api/queries";
-import type { SearchHit, TreeView as TreeDocument } from "../api/types";
+import { useHealth, useInbox, useNode, useSearch, useTree } from "../api/queries";
+import type { DriftRow, SearchHit, TreeView as TreeDocument } from "../api/types";
 import { movesHere, pushHash, useHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
@@ -14,6 +14,8 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
+import { driftOf, measuredRows, recallShowDrift, rememberShowDrift, treeDrift, type TreeDrift } from "./drift";
+import { DriftStatus } from "./DriftStatus";
 import { leftOutText } from "./LinksPanel";
 import { countFor, targetIndex } from "./matching";
 import { NoNodePane, NodePane, type Arrival } from "./NodePane";
@@ -86,6 +88,26 @@ function TreeFooter({
       )}
     </div>
   );
+}
+
+/**
+ * Row 6 over the tree's lines as of the latest health answer (`drift.ts` `treeDrift`), null with
+ * no measured rows. Each new answer or tree is counted once; a line whose counts are unchanged keeps
+ * the previous answer's object (react.dev "Storing information from previous renders"), so the tree
+ * renders again only the lines whose counts changed (docs/features/ui-tree-drift.md "Matching").
+ */
+function useTreeDrift(rows: readonly TreeRow[], lines: readonly DriftRow[] | null): TreeDrift | null {
+  const [kept, setKept] = useState<{ rows: readonly TreeRow[]; lines: readonly DriftRow[] | null; drift: TreeDrift | null }>(() => ({
+    rows,
+    lines,
+    drift: lines === null ? null : treeDrift(rows, lines, null),
+  }));
+  if (kept.rows === rows && kept.lines === lines) {
+    return kept.drift;
+  }
+  const drift = lines === null ? null : treeDrift(rows, lines, kept.drift);
+  setKept({ rows, lines, drift });
+  return drift;
 }
 
 /**
@@ -171,7 +193,10 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
   const focusLater = useFocusLater();
   const hash = useHash();
   const archiveId = useId();
+  const driftId = useId();
   const [archive, setArchive] = useState(false);
+  // Off by default: the plain tree never pays for the health walk (docs/features/ui-tree-drift.md "Toggle").
+  const [showDrift, setShowDrift] = useState(() => recallShowDrift(project));
   // Rendered or Source, kept from node to node (docs/features/ui-markdown.md AC-09).
   const [textMode, setTextMode] = useState<TextMode>(DEFAULT_TEXT_MODE);
   const [root, setRoot] = useState<string | null>(null);
@@ -182,6 +207,12 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
   const treeFailure = useRetainedFailure(tree.error, tree.isFetching);
   const node = useNode(project, nodeRef ?? "", {}, nodeRef !== null);
   const inbox = useInbox(project);
+  // Health's read, shared with the Health screen, observed (and so read) only while Show drift is on
+  // and once the tree has answered: the daemon serves a project's reads in arrival order, so the
+  // tree goes first and never waits for it
+  // (docs/features/ui-tree-drift.md "Description and interactions").
+  const health = useHealth(project, showDrift && tree.data !== undefined);
+  const healthFailure = useRetainedFailure(health.error, health.isFetching);
   const search = useSearch(project, submitted === null ? null : { query: submitted, archive });
   const searchFailure = useRetainedFailure(search.error, search.isFetching);
 
@@ -210,6 +241,8 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
     const index = targetIndex(inbox.data.proposals);
     return new Map(rows.map((row) => [row.key, countFor(index, row.node)]));
   }, [inbox.data, rows]);
+  const report = showDrift ? health.data : undefined;
+  const drift = useTreeDrift(rows, report === undefined ? null : measuredRows(driftOf(report)));
 
   const takeArrival = useCallback((): Arrival => {
     const now = intent.current;
@@ -333,7 +366,7 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
             Rooted at <span className="mono">{root}</span>
           </p>
         )}
-        <SpecTree rows={rows} current={current} counts={counts} onOpen={openRow} activeRef={setActiveRow} />
+        <SpecTree rows={rows} current={current} counts={counts} drift={drift?.byRow ?? null} onOpen={openRow} activeRef={setActiveRow} />
         <TreeFooter
           tree={tree.data}
           archive={archive}
@@ -407,6 +440,28 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
             Archived documents in the tree and the search, and the links written in them.
           </span>
         </div>
+        <div className="archive-toggle">
+          <input
+            id={driftId}
+            type="checkbox"
+            checked={showDrift}
+            aria-describedby={`${driftId}-hint`}
+            onChange={(event) => {
+              setShowDrift(event.target.checked);
+              rememberShowDrift(project, event.target.checked);
+            }}
+          />
+          <label htmlFor={driftId}>Show drift</label>
+          <span id={`${driftId}-hint`} className="sr-only">
+            Badges on each node for its own bindings in Health&rsquo;s drift row: Fix, Check, Cannot verify. While on, the tree reads Health.
+          </span>
+        </div>
+        {/* Only once the tree has answered: before, no line and no Retry, so nothing can read Health first. */}
+        {showDrift && tree.data !== undefined && (
+          <RegionBoundary name="drift">
+            <DriftStatus project={project} health={health} failure={healthFailure} drift={drift} treeShown={rows.length > 0} />
+          </RegionBoundary>
+        )}
         {showHits && (
           <section className="search-region" aria-label="Search results">
             <RegionBoundary name="search results">{hits}</RegionBoundary>

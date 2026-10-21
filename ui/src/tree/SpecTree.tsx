@@ -1,50 +1,22 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
-import type { TreeNode } from "../api/types";
-import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { useFocusLater } from "../ui/useFocusLater";
-import { markLook } from "./labels";
-import { ancestorsOf, rowName, visibleRows, type TreeRow } from "./rows";
+import type { NodeDrift } from "./drift";
+import { RowContent } from "./RowContent";
+import { ancestorsOf, visibleRows, type TreeRow } from "./rows";
 
 function rootsWithChildren(rows: readonly TreeRow[]): Set<string> {
   return new Set(rows.filter((row) => row.node.depth === 0 && row.children.length > 0).map((row) => row.key));
 }
 
-function RowContent({ node, count }: { node: TreeNode; count: number | null }) {
-  return (
-    <span className="tree-row-content">
-      <span className="tree-row-name mono">{rowName(node)}</span>
-      {node.title !== null && <span className="tree-row-title">{node.title}</span>}
-      <span className="tree-row-meta">
-        <span className="kind-tag">
-          <span className="sr-only">Kind: </span>
-          {node.kind ?? "-"}
-        </span>
-        {node.status !== null && (
-          <span className="status-tag">
-            <span className="sr-only">Status: </span>
-            {node.status}
-          </span>
-        )}
-        {node.rev !== null && <span className="tree-row-rev">rev {node.rev}</span>}
-        {node.archived && (
-          <span className="plain-tag">
-            <Icon name="archived" />
-            archived
-          </span>
-        )}
-        {node.mark !== null && <Badge look={markLook(node.mark)} />}
-        {count !== null && count > 0 && (
-          <span className="count-tag">
-            <Icon name="inbox" />
-            {count} in inbox
-          </span>
-        )}
-      </span>
-    </span>
-  );
-}
+/**
+ * A line's content (`RowContent.tsx`), memoised: with its node, inbox count and drift counts the
+ * same object or number as before, it renders nothing again. A health answer thus renders again
+ * only the lines whose drift counts changed (`drift.ts` `treeDrift` keeps an unchanged line's
+ * object), an inbox answer only those whose count changed (docs/features/ui-tree-drift.md).
+ */
+const ShownContent = memo(RowContent);
 
 /**
  * The containment tree as a WAI-ARIA tree: flat treeitems with level, set size and position,
@@ -52,12 +24,14 @@ function RowContent({ node, count }: { node: TreeNode; count: number | null }) {
  * Right expands or enters, Left collapses or climbs, Home and End jump, Enter opens the row's node
  * (one history entry) and keeps focus here. Keys act only with focus on a row, never with Ctrl,
  * Alt or Cmd. The rows the route opens are marked current and revealed. Memoised: with stable
- * props from the view, a search or an inbox read renders no row again.
+ * props from the view, a search renders no row again; an inbox or health answer renders again only
+ * the lines whose count changed (ShownContent).
  */
 export const SpecTree = memo(function SpecTree({
   rows,
   current,
   counts,
+  drift,
   onOpen,
   activeRef,
 }: {
@@ -66,6 +40,8 @@ export const SpecTree = memo(function SpecTree({
   current: readonly string[];
   /** Inbox items per row key; null while the inbox is unread or failed. */
   counts: ReadonlyMap<string, number> | null;
+  /** Each line's own drift by class, by row key (`drift.ts` `TreeDrift.byRow`); null while "Show drift" is off or row 6 is not measured. */
+  drift: ReadonlyMap<string, NodeDrift> | null;
   onOpen: (row: TreeRow) => void;
   /** Receives the row that has the tab stop, so the view can focus it (Back to tree). */
   activeRef: (element: HTMLElement | null) => void;
@@ -238,7 +214,7 @@ export const SpecTree = memo(function SpecTree({
             <span className="tree-toggle" data-toggle={parent ? "" : undefined} aria-hidden="true">
               {parent && <Icon name={isOpen ? "chevronDown" : "chevronRight"} />}
             </span>
-            <RowContent node={node} count={counts?.get(row.key) ?? null} />
+            <ShownContent node={node} count={counts?.get(row.key) ?? null} drift={drift?.get(row.key) ?? null} />
           </div>
         );
       })}

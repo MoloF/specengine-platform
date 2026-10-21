@@ -32,7 +32,7 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4); `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, no other on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never left on `body` nor under a sticky bar (scroll padding).
 - **Text**: data is text, no HTML sink, each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), anything cut can be seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
 - **Canvas** (`@xyflow/react`, lazy, a hand-written layout): read-only, key options `null`, the wheel scrolls the page; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text.
-- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`); a root error boundary and one per view.
+- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), but the Tree's Show drift in `localStorage`; a root error boundary and one per view.
 
 ## Dependencies
 
@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (first stage or round POST refused), `large` (3000+ nodes), `cannot-check`, `editorial` (`proposal-revisions.md`), `code-cannot` (Health's rows 4-6 `cannot`), `not-configured` (no row-5 rule; ledger-api's row 6 "None"); projects `harbor-sim` (a plan: `spec-roadmap-screen.md`), `ledger-api` (PR-0010 a drift item: `proposal-drift.md`), stages kept to a reload.
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (first stage or round POST refused), `large` (3000+ nodes), `cannot-check`, `editorial` (`proposal-revisions.md`), `code-cannot` (rows 4-6 `cannot`), `not-configured` (no row-5 rule); projects `harbor-sim` (a plan: `spec-roadmap-screen.md`), `ledger-api` (drift items: `proposal-drift.md`), stages kept to a reload.
 3. The slice's checks: its spec's "Owner's manual check".
 
 ## Roles here

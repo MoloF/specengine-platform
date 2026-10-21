@@ -273,7 +273,8 @@ const TASK_EVENT = "task.";
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads and the round sheets of the project again. Only the reads on screen are fetched, once each
  * but the health read's one more after a walk (the check and the health read only while Health
- * shows them: `docs/features/health-left.md` "Description and interactions"); the rest are marked
+ * shows them: `docs/features/health-left.md` "Description and interactions"; the health read also
+ * while the Spec tree shows its drift: `docs/features/ui-tree-drift.md`); the rest are marked
  * stale.
  */
 export function useLiveQueue(project: string | null): { outside: OutsideStage | null; dismiss: () => void } {
@@ -553,13 +554,17 @@ export type CheckQuery = ReturnType<typeof useCheck>;
  * tail's apply, approval, rejection, refused apply or gap (useLiveQueue); never on window focus, a
  * reconnect, an interval, a stage, `proposal.created` or a `task.*` event. A walk of the whole
  * tree: its query's AbortSignal is never taken, a walk in flight is kept and its answer used, then
- * read once more when an event landed during it. The home reads none.
+ * read once more when an event landed during it. The home reads none. The Spec tree observes the
+ * same read while its "Show drift" is on and its tree has answered (`enabled`, true by default;
+ * docs/features/ui-tree-drift.md "Description and interactions"): off, it reads nothing and no
+ * event reads it for the tree.
  */
-export function useHealth(project: string) {
+export function useHealth(project: string, enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.health(project),
     queryFn: () => client.getHealth(project),
+    enabled,
     refetchOnWindowFocus: false,
     refetchOnReconnect: false,
     refetchInterval: false,

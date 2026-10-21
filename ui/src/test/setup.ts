@@ -3,6 +3,8 @@ import { afterEach, beforeEach, vi } from "vitest";
 import { recordConsole, takeConsoleCalls } from "./console";
 
 beforeEach(() => {
+  // The viewer's choices kept in storage (the tree's Show drift, docs/features/ui-tree-drift.md) start each test cleared.
+  window.localStorage.clear();
   takeConsoleCalls();
   vi.spyOn(console, "error").mockImplementation((...values: unknown[]) => {
     recordConsole("error", values);

@@ -2,9 +2,11 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { describe, expect, it } from "vitest";
 import { App } from "../app/App";
 import { oneLine } from "../health/codeRows";
+import { measuredRows, treeDrift } from "../tree/drift";
+import { buildRows } from "../tree/rows";
 import { LARGE_BINDINGS } from "./bindings";
 import { BASIN_NAME_DECOMPOSED, HOSTILE_LINK, HOSTILE_TITLE, LONG_TOKEN } from "./harbor-sim/fixtures";
-import { CODE_GAP_CAUSE, CODE_OFF_CAUSE, LOCK_CAUSE, LOOKALIKE_BASIN } from "./health";
+import { CODE_GAP_CAUSE, CODE_OFF_CAUSE, harborDrift, LARGE_DRIFT, LOCK_CAUSE, LOOKALIKE_BASIN } from "./health";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
@@ -342,4 +344,127 @@ describe("the Bindings tab over the mock (UI-2, UI-3, UI-4, UI-8 of ui-node-bind
     const refunds = await bindingsTab("not-configured", "#/ledger-api/tree/SVC-REFUNDS", "1 row");
     expect(lineHeads(refunds)).toEqual([["SVC-REFUNDSimplementssrc/refunds/service.rs", "In sync"]]);
   });
+});
+
+// Show drift over the mock (UI-8 of docs/features/ui-tree-drift.md): the spec's mock table, row 6 as
+// src/mocks/health.ts serves it in each scenario; `large` within 20 s.
+
+/** Turns Show drift on in the tree on screen. */
+function showDrift() {
+  fireEvent.click(screen.getByRole("checkbox", { name: "Show drift" }));
+}
+
+/** A tree line's drift badges, as shown. */
+function badgesOf(item: HTMLElement): string[] {
+  return Array.from(item.querySelectorAll(".tree-drift-badge .badge-label"), (label) => label.textContent);
+}
+
+/** Show drift's lines after the toggles. */
+function driftLines(): string[] {
+  return Array.from(document.querySelectorAll(".tree-drift-line"), (line) => line.textContent);
+}
+
+describe("Show drift over the mock (UI-8 of ui-tree-drift)", () => {
+  it("normal, harbor-sim: each node's own rows on its line, never its parent's; the look-alike the one row on no line", async () => {
+    renderMock("normal", "#/harbor-sim/tree/RULE-TIDE-WINDOW");
+    await waitFor(() => {
+      expect(currentRows()).toEqual(["RULE-TIDE-WINDOW"]);
+    });
+    showDrift();
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["1 drift row names no line of this tree. See them in Health"]);
+    });
+    expect(badgesOf(row("MEC-TIDES"))).toEqual(["Fix 1"]);
+    expect(badgesOf(row("RULE-TIDE-WINDOW"))).toEqual(["Fix 1"]);
+    expect(badgesOf(row("DOM-WATER"))).toEqual([]);
+    expect(screen.getByRole("link", { name: "See them in Health" }).getAttribute("href")).toBe("#/harbor-sim/health");
+    // The twelve rows: eleven on their nodes' lines, the look-alike as written on none.
+    const client = new MockClient("normal", { delayMs: 0 });
+    const lines = buildRows((await client.getTree("harbor-sim")).nodes);
+    const rows = measuredRows((await client.getHealth("harbor-sim")).drift) ?? [];
+    expect(rows).toHaveLength(harborDrift().length);
+    const drift = treeDrift(lines, rows, null);
+    expect(drift.unmatched).toBe(1);
+    expect([...drift.byRow.values()].reduce((sum, own) => sum + own.fix + own.check + own.cannot + own.unlisted, 0)).toBe(11);
+    expect(rows.find((line) => line.node === LOOKALIKE_BASIN)).toBeDefined();
+  });
+
+  it("normal, ledger-api: the code layer off, its cause, no badge", async () => {
+    renderMock("normal", "#/ledger-api/tree");
+    await screen.findByRole("tree");
+    showDrift();
+    await waitFor(() => {
+      expect(driftLines()).toEqual([`No drift badges: Code layer off: ${CODE_OFF_CAUSE}`]);
+    });
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+  });
+
+  it("code-cannot: could not be measured, the cause on one line, no badge; ledger-api its invalid lock", async () => {
+    renderMock("code-cannot", "#/harbor-sim/tree");
+    await screen.findByRole("tree");
+    showDrift();
+    await waitFor(() => {
+      expect(driftLines()).toEqual([`No drift badges: Could not be measured: ${oneLine(CODE_GAP_CAUSE)}`]);
+    });
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    cleanup();
+    renderMock("code-cannot", "#/ledger-api/tree");
+    await screen.findByRole("tree");
+    showDrift();
+    await waitFor(() => {
+      expect(driftLines()).toEqual([`No drift badges: Could not be measured: ${LOCK_CAUSE}`]);
+    });
+  });
+
+  it("slow: the tree, then Measuring drift, then the badges", async () => {
+    window.history.replaceState(null, "", "/?scenario=slow#/harbor-sim/tree");
+    window.localStorage.setItem("specengine.tree.show-drift.harbor-sim", "on");
+    const client = new MockClient("slow");
+    render(<App client={client} scenario="slow" />);
+    await screen.findByRole("tree", {}, { timeout: 6000 });
+    expect(driftLines()).toEqual(["Measuring drift"]);
+    expect(document.querySelector(".tree-drift-badge")).toBeNull();
+    await waitFor(
+      () => {
+        expect(driftLines()).toEqual(["1 drift row names no line of this tree. See them in Health"]);
+      },
+      { timeout: 6000 },
+    );
+    expect(badgesOf(row("DOM-HARBOR"))).toEqual([]);
+  }, 15000);
+
+  it("empty: the empty tree's note, no drift said so, no summary", async () => {
+    renderMock("empty", "#/harbor-sim/tree");
+    await screen.findByRole("heading", { name: "No document in the tree" });
+    showDrift();
+    await waitFor(() => {
+      expect(driftLines()).toEqual(["No drift: every binding spec verify judges is in sync."]);
+    });
+    expect(screen.getByText('no document under [paths] spec "docs/spec"; give a ROOT')).toBeTruthy();
+  });
+
+  it("large: 3 108 generated nodes against 3 000 rows, each generated row Check 1 on its line, within 20 s", async () => {
+    const client = renderMock("large", "#/harbor-sim/tree");
+    await screen.findByRole("tree");
+    showDrift();
+    await waitFor(
+      () => {
+        expect(badgesOf(row("DOM-GEN-01"))).toEqual(["Check 1"]);
+      },
+      { timeout: 15000 },
+    );
+    expect(badgesOf(row("DOM-GEN-12"))).toEqual(["Check 1"]);
+    expect(driftLines()).toEqual(["1 drift row names no line of this tree. See them in Health"]);
+    const nodes = (await client.getTree("harbor-sim")).nodes;
+    expect(nodes.filter((node) => node.path.startsWith("docs/spec/gen/"))).toHaveLength(3108);
+    const rows = measuredRows((await client.getHealth("harbor-sim")).drift) ?? [];
+    expect(rows).toHaveLength(LARGE_DRIFT);
+    const drift = treeDrift(buildRows(nodes), rows, null);
+    expect(drift.unmatched).toBe(1);
+    const generated = buildRows(nodes).filter((line) => line.node.path.startsWith("docs/spec/gen/") && drift.byRow.has(line.key));
+    expect(generated).toHaveLength(LARGE_DRIFT - harborDrift().length);
+    for (const line of generated) {
+      expect([line.key, drift.byRow.get(line.key)]).toEqual([line.key, { fix: 0, check: 1, cannot: 0, unlisted: 0 }]);
+    }
+  }, 20000);
 });

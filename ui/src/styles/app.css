@@ -1219,6 +1219,32 @@ textarea.field {
   cursor: pointer;
 }
 
+/* Show drift (docs/features/ui-tree-drift.md): its state above the tree, one line each; badges in a line's meta. */
+.tree-drift {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.tree-drift-line {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tree-drift-line .icon {
+  flex: none;
+}
+
+/* A read again: the last line stays in place, dimmed; 0.75 keeps secondary text 5.2:1 and a link 4.9:1 on the panel. */
+.tree-drift[aria-busy="true"] .tree-drift-line {
+  opacity: 0.75;
+  transition: opacity var(--duration-normal) ease-out;
+}
+
+.tree-drift-badge {
+  display: inline-flex;
+}
+
 .tree-region,
 .search-region {
   display: grid;
