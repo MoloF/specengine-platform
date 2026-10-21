@@ -905,7 +905,8 @@ fn corrupt_drift_rows_are_named() {
     // A row's later keys are no defect.
     let later = good.replace(
         "\"compared\":\"ast\"}",
-        "\"compared\":\"ast\",\"levels\":[\"sig\"],\"anchor\":{\"from\":null}}",
+        "\"compared\":\"ast\",\"levels\":{\"lock\":[\"sig\"],\"markers\":[\"sig\"],\
+         \"changed\":null},\"anchor\":{\"from\":null}}",
     );
     assert_ne!(later, good);
     let mut one = row_of("PR-0001");
@@ -1102,7 +1103,8 @@ fn stored_rows_read_back_as_stored() {
          \"detail\":null,\"class\":\"check\",\"pre_existing\":true,\
          \"markers\":[{{\"rev\":2,\"line\":8}},{{\"line\":11,\"rev\":null}}],\"node_rev\":2,\
          \"lock\":{{\"verified_at\":\"2026-10-08\",\"rev\":2,\"commit\":\"{commit}\"}},\
-         \"compared\":\"ast\",\"levels\":[\"sig\",\"body\"],\
+         \"compared\":\"ast\",\"levels\":{{\"lock\":[\"sig\",\"body\"],\
+         \"markers\":[\"sig\",\"body\"],\"changed\":[\"body\"]}},\
          \"anchor\":{{\"to\":{{\"line\":12,\"rev\":3}},\"from\":null}}}}"
     );
     let nulls = "{\"node\":\"LAW-BOUND\",\"relation\":\"implements\",\"file\":\"src/a.rs\",\

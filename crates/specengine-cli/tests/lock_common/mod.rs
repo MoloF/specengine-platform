@@ -43,7 +43,7 @@ use specengine_code::{
 use specengine_store::GitEnv;
 
 use crate::common::git::Sandbox;
-use crate::common::{NORM_SUFFIX, RUN_TIMEOUT, Run, SPEC, Scratch, snapshot, spec_with};
+use crate::common::{NORM_SUFFIX, RUN_TIMEOUT, Run, SPEC, Scratch, program_with, snapshot};
 
 /// `spec lock rebase` (docs/features/lock-rebase.md): `LockRepo::rebase`,
 /// `RebaseAttempt`, the rebased golden.
@@ -490,7 +490,12 @@ impl LockRepo {
     /// `fixtures/<fixture>` at `<scratch>/<dir>`, `git init` with
     /// `init_extra` (`--object-format=sha256`), committed once.
     pub fn of(label: &str, fixture: &str, dir: &str, init_extra: &[&str]) -> Self {
-        let scratch = Scratch::new(label);
+        Self::of_in(Scratch::new(label), fixture, dir, init_extra)
+    }
+
+    /// [`LockRepo::of`] in `scratch` (`Scratch::at`: a path chosen by the
+    /// test).
+    pub fn of_in(scratch: Scratch, fixture: &str, dir: &str, init_extra: &[&str]) -> Self {
         let git = Sandbox::new(scratch.path());
         let root = scratch.copy(fixture, dir);
         let _ = fs::remove_file(root.join("expected.json"));
@@ -790,12 +795,17 @@ impl LockRepo {
 
     /// `spec args` in `cwd` with stdin null (never a terminal).
     pub fn spec_piped(&self, cwd: &Path, args: &[&str]) -> Run {
+        self.spec_piped_with(OsStr::new(SPEC), cwd, args)
+    }
+
+    /// [`LockRepo::spec_piped`] of another `spec` binary, `program`.
+    pub fn spec_piped_with(&self, program: &OsStr, cwd: &Path, args: &[&str]) -> Run {
         let vars = self.spec_vars();
         let env: Vec<(&str, &OsStr)> = vars
             .iter()
             .map(|(name, value)| (name.to_str().expect("UTF-8 name"), value.as_os_str()))
             .collect();
-        spec_with(cwd, args, &env)
+        program_with(program, cwd, args, &env)
     }
 
     /// `spec args` in `cwd` on a pseudo-terminal (`script`): stdout and
@@ -804,6 +814,17 @@ impl LockRepo {
     /// typed so it cannot hang). A watchdog kills a run past
     /// [`RUN_TIMEOUT`].
     pub fn spec_pty(&self, cwd: &Path, args: &[&str], answer: Option<&str>) -> PtyRun {
+        self.spec_pty_with(OsStr::new(SPEC), cwd, args, answer)
+    }
+
+    /// [`LockRepo::spec_pty`] of another `spec` binary, `program`.
+    pub fn spec_pty_with(
+        &self,
+        program: &OsStr,
+        cwd: &Path,
+        args: &[&str],
+        answer: Option<&str>,
+    ) -> PtyRun {
         let n = unique();
         let out = self.scratch.join(&format!("pty-{n}.out"));
         let err = self.scratch.join(&format!("pty-{n}.err"));
@@ -811,11 +832,12 @@ impl LockRepo {
             .into_iter()
             .find(|path| Path::new(path).exists())
             .expect("a `script` program gives `spec` a terminal");
+        let program = program.to_str().expect("a UTF-8 program path");
         let inner: Vec<&str> = [
             "/bin/sh",
             "-c",
             "exec \"$0\" \"$@\" >\"$LOCK_PTY_OUT\" 2>\"$LOCK_PTY_ERR\"",
-            SPEC,
+            program,
         ]
         .into_iter()
         .chain(args.iter().copied())

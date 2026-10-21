@@ -338,7 +338,9 @@ impl Kiln {
         Self::with_runner(repo)
     }
 
-    fn with_runner(repo: LockRepo) -> Self {
+    /// `repo` (the fixture's copy, committed) with the runner committed as
+    /// `the runner`.
+    pub fn with_runner(repo: LockRepo) -> Self {
         let kiln = Self::bare(repo, SLUG);
         kiln.write_runner(RUNNER, 0o755);
         kiln.repo.commit_all("the runner");

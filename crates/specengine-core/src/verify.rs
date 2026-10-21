@@ -824,8 +824,11 @@ fn level_list<'a>(levels: impl IntoIterator<Item = &'a LockLevel>) -> String {
 /// the empty set's). Never a fingerprint or `body_bytes`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LevelDigests<'a> {
+    /// The `sig_hash`.
     pub sig: &'a str,
+    /// The `body_hash`.
     pub body: &'a str,
+    /// The `deps_hash` (for a RON value, the empty set's).
     pub deps: &'a str,
 }
 

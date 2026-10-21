@@ -100,7 +100,7 @@ Following a lost marker (`marker_gone`) or code without a marker (12b); ID renam
 
 ## Later
 
-A hygiene pass, not a scheduled slice; the review's nits: `judge_side` borrows `building`, so every row's `RowKey`, markers and entry are cloned on every side, the no-E path too (drain it by value); `select_bindings` builds `entry_key()` and runs `key_problem` before the cheap group test.
+The review's nits, closed by `hygiene-pass.md` (RM-0029, shipped 2026-10-21). Done: `judge_gathered` owns `building` and moves each row into its facts; only a merged row's E entry is cloned. Already gone: `select_bindings` tests the group before `entry_key()`. Left: the `Merge` pre-pass's sparse `merges` collection (allocation only, no output).
 
 ## Implementation
 

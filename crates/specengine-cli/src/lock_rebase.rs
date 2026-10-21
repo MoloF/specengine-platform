@@ -85,14 +85,14 @@ use specengine_store::{GitEnv, ObjectBlob, VerifyGit};
 use crate::corpus::indexed;
 use crate::lock::{
     Hashed, LockConsent, LockOutcome, LockSubject, ReadLock, Repo, Target, build_recipes,
-    dirty_inputs, dirty_reason, git_error, level_code, lock_digest, lock_level, read_lock_bytes,
-    relation_of, write_and_commit,
+    dirty_inputs, dirty_reason, git_error, level_code, lock_digest, lock_level, paired_value,
+    read_lock_bytes, relation_of, write_and_commit,
 };
+use crate::node_set::canonical_of;
 use crate::project::{CONFIG_FILE, ProjectRoot, discover_with_text};
 use crate::proposals::require_root_config;
 use crate::refs::{Corpus, code_config};
 use crate::tested::bound_hash;
-use crate::verify_rows::node_id;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
 /// Step 3's refusal when there is no lock.
@@ -545,10 +545,11 @@ impl<'c, 'a> NodeNames<'c, 'a> {
             return true;
         }
         let judged = self.corpus.judge(id);
+        let scheme = &self.project.config.scheme;
         judged
             .nodes
             .iter()
-            .any(|&at| node_id(&*self.corpus, self.project, at).as_deref() == Some(node))
+            .any(|&at| canonical_of(&*self.corpus, scheme, at).as_deref() == Some(node))
     }
 }
 
@@ -1003,12 +1004,7 @@ fn rederive_ron(
                     }
                     RonValues::Hashed(hashed) => at_path
                         .first()
-                        .and_then(|anchor| {
-                            hashed
-                                .iter()
-                                .find(|(range, _)| *range == anchor.comment)
-                                .map(|(_, digest)| *digest)
-                        })
+                        .and_then(|anchor| paired_value(hashed, &anchor.comment))
                         .map(|digest| level_code(levels, &Hashed::Ron(digest)))
                         .ok_or(DropReason::CannotVerify(None)),
                 }

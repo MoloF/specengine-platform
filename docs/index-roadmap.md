@@ -31,7 +31,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0026.md](roadmap/RM-0026.md) spec mcp: the MCP stdio bridge · crates/specengine-cli · draft
 - [docs/roadmap/RM-0027.md](roadmap/RM-0027.md) Queue export to Beads or Task Master · crates/specengine-cli · draft
 - [docs/roadmap/RM-0028.md](roadmap/RM-0028.md) Spec digest into AGENTS.md or CLAUDE.md for external reviewers · crates/specengine-cli · draft
-- [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) Hygiene pass: the review nits of 5b-1b, 5c and 8a-2 · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0031.md](roadmap/RM-0031.md) symbol-renamed: delta.symbols.renamed from the anchor pairing · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0034.md](roadmap/RM-0034.md) tree-bindings: opt-in binding counters in spec tree, get_tree and the daemon's tree · crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin · draft
 - [docs/roadmap/RM-0035.md](roadmap/RM-0035.md) node-history: spec show --history and the node's History tab · crates/specengine-cli, crates/specengine-http, ui · draft

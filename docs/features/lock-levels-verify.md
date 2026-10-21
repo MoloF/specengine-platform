@@ -76,7 +76,7 @@ Any lock byte (5b-1a); `spec lock rebase` (5b-2); 5c's anchors and `path` (`anch
 
 ## Later
 
-A future hygiene pass, not a scheduled slice. The review's nits: `verify_rows.rs` `level_code` renders two fingerprints per changed unit never compared (kept: accept's digests by construction); RON pairing is a linear `find` per bound value, in accept and verify alike (a range-keyed map, both together); `verify_rows.rs`' `_ => Unit::FileModule` arm also covers `Keyless`, `Ron` (match `Target::Module { item: None, .. }`); core `LevelDigests`' public fields undocumented; code `lib.rs:163` still says "6a-3's `dir_text` in the CLI"; tests still name `package_label` (`code_tools_reads.rs:18`, `file_place.rs:5`) and keep an array `levels` in old rows (`queue_drift.rs:908`, `mcp_drift.rs:321`, `drift_stored.rs:49`), green. The UI mock's `ROW_KEYS` (`ui/src/mocks/drift.smoke.test.tsx:22`) lists 15 keys: green, stale.
+The review's nits, closed by `hygiene-pass.md` (RM-0029, shipped 2026-10-21). Done: RON pairing is one helper, `lock.rs` `paired_value`, for accept, verify and rebase (the first match kept); `verify_rows.rs`' file-module arm lists `Target::Module { item: None, .. }`, `Ron`, `Keyless`, no `_`; core `LevelDigests`' fields documented; code `lib.rs`' `dir_text` doc current; the tests name `dir_text`, not `package_label`, and old rows carry `VerifyLevels`' object, not an array `levels`. Already gone: the UI mock labels its 15 keys `ROW_KEYS` (older) beside `ROW_KEYS_17`. Left: `level_code`'s two fingerprints never compared (accept's digests by construction); a range-keyed RON map (speed only; it would change first-match).
 
 ## Implementation
 

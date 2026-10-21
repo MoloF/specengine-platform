@@ -74,6 +74,19 @@ impl Scratch {
         }
     }
 
+    /// A scratch directory at exactly `path` (anything there removed
+    /// first), canonical, removed on drop: what a test makes twice at one
+    /// path, one after the other, so both runs print the same paths
+    /// (`identity_base.rs`).
+    pub fn at(path: &Path) -> Self {
+        restore_permissions(path);
+        let _ = fs::remove_dir_all(path);
+        fs::create_dir_all(path).expect("scratch directory");
+        Self {
+            root: fs::canonicalize(path).expect("canonical scratch directory"),
+        }
+    }
+
     pub fn path(&self) -> &Path {
         &self.root
     }
@@ -293,7 +306,13 @@ pub fn one_json_document(text: &str) -> Result<Value, String> {
 
 /// Runs `spec args` in `cwd` with a cleared environment plus `env` only.
 pub fn spec_with(cwd: &Path, args: &[&str], env: &[(&str, &OsStr)]) -> Run {
-    let mut command = Command::new(SPEC);
+    program_with(OsStr::new(SPEC), cwd, args, env)
+}
+
+/// [`spec_with`] of another `spec` binary, `program` (a base build the
+/// workspace's is compared with, `identity_base.rs`).
+pub fn program_with(program: &OsStr, cwd: &Path, args: &[&str], env: &[(&str, &OsStr)]) -> Run {
+    let mut command = Command::new(program);
     command
         .env_clear()
         .current_dir(cwd)

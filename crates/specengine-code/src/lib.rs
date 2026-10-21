@@ -160,10 +160,9 @@ pub use ron::{
 ///
 /// 2: a stored directory's `\` becomes `/` only where it separates
 /// components (`std::path::MAIN_SEPARATOR`); on Unix it is a character of
-/// a name and kept. Two rules: 6a-3's `dir_text` in the CLI (the stored
-/// package and target directories) and 6b-1's [`file_place`] package label
-/// (the package of a qpath and of a name). Rows stored under 1 re-derive
-/// once.
+/// a name and kept. Two rules, one function since 5b-1b: 6a-3's
+/// [`dir_text`] (the CLI's stored directories) and 6b-1's [`file_place`]
+/// package label, which calls it. Rows stored under 1 re-derive once.
 ///
 /// 3: 10a-1's framework role rows: with `[code] frameworks` listed, each
 /// Rust file's [`frameworks::role_facts`] (`code_roles`); the stamp gains

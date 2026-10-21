@@ -78,7 +78,7 @@ P1, P2, P6 decided 2026-10-16 (`verify-tests.md` "Open"); Q1-Q5 2026-10-20, the 
 
 ## Later
 
-Hygiene, no scheduled slice (the review's nit): `Named::of` (`node_set.rs`) re-implements `verify_rows::canonical_nodes`, and Q2's "names no node" must match the judge's `node_gone`: share one helper or tie them with a comment. Tests not covered: Q3 for sections without an ID (no reused fixture has one); Q1's newer schema.
+Closed by `hygiene-pass.md` (RM-0029, shipped 2026-10-21). Done: one `canonical_nodes`, in `node_set.rs` on `canonical_of`, serves the judge, `Named::of` and `tested.rs`, so Q2's "names no node" matches `node_gone` by construction. Left, needing new tests and a fixture: Q3 for sections without an ID; Q1's newer schema.
 
 ## Implementation
 

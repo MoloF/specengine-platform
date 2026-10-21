@@ -1627,10 +1627,8 @@ impl FileCodes {
             Target::Module { item: None, .. } => self.module.as_ref(),
             Target::Ron { .. } => {
                 return match &self.ron {
-                    Some(RonValues::Hashed(values)) => values
-                        .iter()
-                        .find(|(range, _)| *range == found.comment)
-                        .map(|(_, digest)| Hashed::Ron(*digest))
+                    Some(RonValues::Hashed(values)) => paired_value(values, &found.comment)
+                        .map(Hashed::Ron)
                         .ok_or_else(|| refused(None)),
                     Some(RonValues::CannotVerify(category)) => Err(refused(Some(category))),
                     None => Err(refused(None)),
@@ -1646,6 +1644,20 @@ impl FileCodes {
             None => Err(refused(None)),
         }
     }
+}
+
+/// The digest `value_hashes` gives the RON value of the comment at
+/// `comment`, paired by the comment's byte range (canon `code-hash-ron`,
+/// "Entry point"); the first entry at that range; `None`: no entry has it.
+/// Accept, verify and rebase pair by this one function.
+pub(crate) fn paired_value(
+    values: &[(Range<usize>, Digest)],
+    comment: &Range<usize>,
+) -> Option<Digest> {
+    values
+        .iter()
+        .find(|(range, _)| range == comment)
+        .map(|(_, digest)| *digest)
 }
 
 /// `b3:` and a digest's lowercase hex, as the lock writes it.

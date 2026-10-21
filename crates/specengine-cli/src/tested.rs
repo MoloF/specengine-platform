@@ -32,10 +32,10 @@ use specengine_store::{VerifyGit, b3_hash};
 
 use crate::code_walk::CodeTree;
 use crate::lock::{Bindings, Facts, NodeAt, NodeFiles, Source, node_bindings};
+use crate::node_set::canonical_nodes;
 use crate::project::ProjectRoot;
 use crate::refs::{Corpus, NodeKey};
 use crate::verify::unprefixed;
-use crate::verify_rows::node_id;
 use crate::{Message, one_line};
 
 /// A block's `bound_hash` over a node's bindings and their digests: store
@@ -124,22 +124,14 @@ pub(crate) fn tested_entries(
     let scheme = &project.config.scheme;
     let mut corpus = Corpus::new(input, scheme, &project.config.paths);
 
-    // Each block's node now: its holder, R and H.
+    // Each block's node now: its holder (the first node with its ID, in
+    // file then source order), R and H.
     let wanted: BTreeSet<&str> = blocks.iter().map(|(node, _)| node.as_str()).collect();
-    let mut holders: BTreeMap<&str, NodeKey> = BTreeMap::new();
-    for (file, checked) in corpus.files.iter().enumerate() {
-        let Some(parsed) = &checked.parsed else {
-            continue;
-        };
-        for ord in 0..parsed.nodes.len() {
-            let at = NodeKey { file, ord };
-            if let Some(id) = node_id(&corpus, project, at)
-                && let Some(&node) = wanted.get(id.as_str())
-            {
-                holders.entry(node).or_insert(at);
-            }
-        }
-    }
+    let canonical = canonical_nodes(&corpus, scheme);
+    let holders: BTreeMap<&str, NodeKey> = wanted
+        .iter()
+        .filter_map(|&node| Some((node, *canonical.get(node)?.first()?)))
+        .collect();
     let now: BTreeMap<&str, (NodeKey, Option<u32>, Option<String>)> = holders
         .iter()
         .map(|(&node, &at)| {

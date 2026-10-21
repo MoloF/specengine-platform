@@ -318,7 +318,8 @@ const LATER_ROW: &str = "{\"state\":\"code_ahead\",\"node\":\"LAW-BOUND\",\
     \"category\":\"code_changed\",\"detail\":null,\"class\":\"check\",\"pre_existing\":true,\
     \"markers\":[{\"rev\":2,\"line\":8}],\"node_rev\":2,\"lock\":{\"verified_at\":\"2026-10-08\",\
     \"rev\":2,\"commit\":\"8888888888888888888888888888888888888888\"},\"compared\":\"ast\",\
-    \"levels\":[\"sig\",\"body\"],\"anchor\":{\"to\":{\"line\":12,\"rev\":3},\"from\":null,\
+    \"levels\":{\"lock\":[\"sig\",\"body\"],\"markers\":[\"sig\",\"body\"],\
+    \"changed\":[\"body\"]},\"anchor\":{\"to\":{\"line\":12,\"rev\":3},\"from\":null,\
     \"n\":-1}}";
 
 /// The same row with every nullable key `null` (valid: a known key `null`).
@@ -381,7 +382,10 @@ fn get_proposal_keeps_a_later_builds_rows() {
     assert_eq!(drift["more"], json!(4));
     assert_eq!(drift["rows"][0]["anchor"]["to"]["line"], json!(12));
     assert_eq!(drift["rows"][0]["anchor"]["n"], json!(-1));
-    assert_eq!(drift["rows"][0]["levels"], json!(["sig", "body"]));
+    assert_eq!(
+        drift["rows"][0]["levels"],
+        json!({"lock": ["sig", "body"], "markers": ["sig", "body"], "changed": ["body"]})
+    );
     let done = session.finish();
     assert!(done.status.success(), "{}", done.stderr);
 }

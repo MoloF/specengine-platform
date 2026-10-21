@@ -15,7 +15,7 @@
 //!   file of no unit; the root row a directory's.
 //! - `file_place` (and `dir_text`): on Unix a package directory whose name
 //!   holds `\` keeps it in the qpath and in the row, `/` never put in its
-//!   place. M: `package_label` rewriting `\` whatever the separator.
+//!   place. M: `dir_text` rewriting `\` whatever the separator.
 //!
 //! Over scratch copies of `fixtures/code-index` (6a-2's committed
 //! corpus), a scratch `HOME` per index, the `spec` binary.

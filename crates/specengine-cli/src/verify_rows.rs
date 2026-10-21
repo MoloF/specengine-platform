@@ -66,7 +66,7 @@ use specengine_code::{
     markers_in, module_levels, value_hashes,
 };
 use specengine_core::anchor::{Follow, Print, pair};
-use specengine_core::check::{CheckFile, CheckInput, Mode, canonical_id};
+use specengine_core::check::{CheckFile, CheckInput, Mode};
 use specengine_core::lock::{
     EntryCode, EntryKey, LOCK_FILE, LevelCode, Lock, LockKind, LockLevel, LockRelation, Verified,
     key_problem, parse_lock,
@@ -81,8 +81,10 @@ use specengine_store::{CommitEntryKind, CommitFile, CommitListing, VerifyGit, b3
 
 use crate::code_walk::{CodeTree, MANIFEST, ManifestSeen, RustFile, tree_of_blobs};
 use crate::lock::{
-    Hashed, Target, build_recipes, is_code_path, is_manifest, level_code, lock_level, relation_of,
+    Hashed, Target, build_recipes, is_code_path, is_manifest, level_code, lock_level, paired_value,
+    relation_of,
 };
+use crate::node_set::{canonical_nodes, canonical_of};
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::refs::{CANNOT_VERIFY, Corpus, IdState, NodeKey, UNANCHORED};
 
@@ -379,7 +381,7 @@ fn judge_side(side: &Side<'_>, project: &ProjectRoot) -> Result<(Vec<Row>, usize
         skipped,
         keyless_broken,
     } = gather(side.tree, side.lock, &mut corpus, project);
-    judge_gathered(side, project, &corpus, &building, &keyless_broken, skipped)
+    judge_gathered(side, project, &corpus, building, &keyless_broken, skipped)
 }
 
 /// [`Gathering`] of a tree and a lock.
@@ -417,8 +419,12 @@ fn gather(
                     file: index,
                     index: *item,
                 },
-                // The file's module: a Rust comment binds no RON value.
-                _ => Unit::FileModule { file: index },
+                // The file's module. `code_ref` calls this only for a bound
+                // target, and a Rust comment binds no RON value: the other
+                // two never reach it.
+                Target::Module { item: None, .. } | Target::Ron { .. } | Target::Keyless { .. } => {
+                    Unit::FileModule { file: index }
+                }
             });
             for marker in &markers {
                 let found = MarkerAt {
@@ -486,38 +492,43 @@ fn gather(
     }
 }
 
-/// The rows of `building` judged on `side`, and the markers skipped.
+/// The rows of `building` judged on `side`, and the markers skipped. It
+/// owns `building`: a row judged at once moves into its facts; a bound row
+/// is lent to the pairing and the cascade, then moves into its facts.
 fn judge_gathered(
     side: &Side<'_>,
     project: &ProjectRoot,
     corpus: &Corpus<'_>,
-    building: &BTreeMap<RowKey, Building>,
+    building: BTreeMap<RowKey, Building>,
     keyless_broken: &BTreeSet<(String, &'static str, String)>,
     skipped: usize,
 ) -> Result<(Vec<Row>, usize), RunCause> {
     // Each row's node as the spec reads it now. A bound row waits for the
     // cascade; every other row, an entry alone too, is judged at once.
-    let canonical = canonical_nodes(corpus, project);
+    let canonical = canonical_nodes(corpus, &project.config.scheme);
     let mut spec_side: BTreeMap<NodeKey, (Option<u32>, Option<String>)> = BTreeMap::new();
     let mut rows = Vec::with_capacity(building.len());
-    let mut waiting: Vec<(&RowKey, &Building, NodeSide)> = Vec::new();
+    // The bound rows by key, and their nodes in the same order.
+    let mut bound: BTreeMap<RowKey, Building> = BTreeMap::new();
+    let mut bound_nodes: Vec<NodeSide> = Vec::new();
     for (key, row) in building {
-        let node = node_of(row.node, key, &canonical, corpus, &mut spec_side);
+        let node = node_of(row.node, &key, &canonical, corpus, &mut spec_side);
         let code = match &row.code {
             Some(CodeRef::Bound(_)) => {
-                waiting.push((key, row, node));
+                bound.insert(key, row);
+                bound_nodes.push(node);
                 continue;
             }
             Some(CodeRef::Ambiguous(reason)) => CodeFact::Ambiguous((*reason).to_owned()),
             Some(CodeRef::Unanchored(category)) => CodeFact::Unanchored((*category).to_owned()),
             Some(CodeRef::ItemError(category)) => CodeFact::ItemError((*category).to_owned()),
-            None => CodeFact::Unbound(unbound(side, key, keyless_broken)),
+            None => CodeFact::Unbound(unbound(side, &key, keyless_broken)),
         };
         let facts = RowFacts {
-            key: key.clone(),
+            key,
             node: node.fact,
-            entry: row.entry.clone(),
-            markers: row.markers.clone(),
+            entry: row.entry,
+            markers: row.markers,
             code,
         };
         rows.push(judged(facts, node.rev, node.hash, None, node.resolved));
@@ -538,17 +549,17 @@ fn judge_gathered(
         .filter(|(_, print)| print.body_bytes >= TRIVIAL_BODY_BYTES)
         .map(|(at, _)| &rows[*at].key)
         .collect();
-    let pairable = select_bindings(&lone_keys, building);
+    let pairable = select_bindings(&lone_keys, &bound);
     let units: Vec<&Unit> = pairable
         .iter()
         .filter_map(
-            |key| match building.get(*key).and_then(|row| row.code.as_ref()) {
+            |key| match bound.get(*key).and_then(|row| row.code.as_ref()) {
                 Some(CodeRef::Bound(unit)) => Some(unit),
                 _ => None,
             },
         )
         .collect();
-    let (mut comparisons, made) = cascade(side, building, &units)?;
+    let (mut comparisons, made) = cascade(side, &bound, &units)?;
     // Each binding of B as accept would record it now; one refused, not
     // hashed, or in a file whose tree has an error (`ERROR` or `MISSING`:
     // its place there is the parser's recovery, never followed) is no
@@ -556,7 +567,7 @@ fn judge_gathered(
     let now: Vec<(&RowKey, LevelCode)> = pairable
         .iter()
         .filter_map(|key| {
-            let row = building.get(*key)?;
+            let row = bound.get(*key)?;
             let Some(CodeRef::Bound(unit)) = &row.code else {
                 return None;
             };
@@ -600,35 +611,51 @@ fn judge_gathered(
         }
     }
 
-    let mut judged_bound = Vec::with_capacity(waiting.len());
-    let mut gone: BTreeSet<usize> = BTreeSet::new();
-    for (key, row, node) in waiting {
-        // The merged row: b's key and markers judged against e's entry by
-        // b's digests, no blob step.
-        let moved = merged.get(key).and_then(|(at, now)| {
+    // The merged row: b's key and markers judged against e's entry by b's
+    // digests, no blob step. Each bound row's merge, in key order, is taken
+    // while the pairing still borrows the bound rows.
+    let merges: Vec<Option<Merge>> = bound
+        .iter()
+        .map(|(key, row)| {
+            let (at, now) = merged.get(key)?;
             let lone_row = &rows[*at];
             let entry = lone_row.entry.as_ref()?;
             let EntryCode::Levels(held) = &entry.code else {
                 return None;
             };
-            let cascaded = moved_cascade(held, now, &row.levels);
-            Some((*at, entry, cascaded, lone_row.key.entry_key()))
-        });
-        let (entry, cascaded, from) = match moved {
-            Some((at, entry, cascaded, from)) => {
+            Some(Merge {
+                at: *at,
+                entry: entry.clone(),
+                cascaded: moved_cascade(held, now, &row.levels),
+                from: lone_row.key.entry_key(),
+            })
+        })
+        .collect();
+
+    let mut judged_bound = Vec::with_capacity(bound.len());
+    let mut gone: BTreeSet<usize> = BTreeSet::new();
+    debug_assert_eq!(bound.len(), bound_nodes.len());
+    for (((key, row), node), merge) in bound.into_iter().zip(bound_nodes).zip(merges) {
+        let (entry, cascaded, from) = match merge {
+            Some(Merge {
+                at,
+                entry,
+                cascaded,
+                from,
+            }) => {
                 gone.insert(at);
-                (Some(entry.clone()), Some(cascaded), from)
+                (Some(entry), Some(cascaded), from)
             }
-            None => (row.entry.clone(), comparisons.remove(key), None),
+            None => (row.entry, comparisons.remove(&key), None),
         };
         let comparison = cascaded
             .as_ref()
             .map_or(Comparison::NotHashed, |found| found.comparison.clone());
         let facts = RowFacts {
-            key: key.clone(),
+            key,
             node: node.fact,
             entry,
-            markers: row.markers.clone(),
+            markers: row.markers,
             code: CodeFact::Bound(comparison),
         };
         let mut judged_row = judged(facts, node.rev, node.hash, cascaded, node.resolved);
@@ -657,6 +684,16 @@ fn judge_gathered(
         .collect();
     rows.sort_by(|a, b| a.key.cmp(&b.key));
     Ok((rows, skipped))
+}
+
+/// A bound row merged with e's row (canon `spec-verify-anchors`, "The
+/// merged row"): e's row, a clone of e's entry, the cascade against it, and
+/// e's key.
+struct Merge {
+    at: usize,
+    entry: Verified,
+    cascaded: Cascaded,
+    from: Option<EntryKey>,
 }
 
 /// A row's node as the spec reads it now: R, H, and whether it names one
@@ -949,7 +986,8 @@ fn marker_row(
         IdState::Queue | IdState::OtherProject => return None,
         IdState::Resolved | IdState::Alias => match judged.nodes.first() {
             Some(&at) => (
-                node_id(corpus, project, at).unwrap_or_else(|| written.to_owned()),
+                canonical_of(corpus, &project.config.scheme, at)
+                    .unwrap_or_else(|| written.to_owned()),
                 NodeRef::Found(at),
             ),
             None => (written.to_owned(), NodeRef::Dangling),
@@ -1024,44 +1062,6 @@ fn code_ref(target: &Target, unit: impl FnOnce() -> Unit) -> CodeRef {
         }
         Target::Keyless { category, .. } => CodeRef::ItemError(category),
     }
-}
-
-/// The canonical cited ID of the node at `at`; `None` when it has no ID.
-pub(crate) fn node_id(corpus: &Corpus<'_>, project: &ProjectRoot, at: NodeKey) -> Option<String> {
-    let path = corpus.resolver.paths().get(at.file)?;
-    let id = corpus
-        .files
-        .get(at.file)?
-        .parsed
-        .as_ref()?
-        .nodes
-        .get(at.ord)?
-        .id
-        .as_deref()?;
-    Some(canonical_id(
-        &corpus.resolver,
-        &project.config.scheme,
-        path,
-        id,
-        None,
-    ))
-}
-
-/// Every node with an ID, by its canonical cited ID.
-fn canonical_nodes(corpus: &Corpus<'_>, project: &ProjectRoot) -> BTreeMap<String, Vec<NodeKey>> {
-    let mut nodes: BTreeMap<String, Vec<NodeKey>> = BTreeMap::new();
-    for (file, checked) in corpus.files.iter().enumerate() {
-        let Some(parsed) = &checked.parsed else {
-            continue;
-        };
-        for ord in 0..parsed.nodes.len() {
-            let at = NodeKey { file, ord };
-            if let Some(id) = node_id(corpus, project, at) {
-                nodes.entry(id).or_default().push(at);
-            }
-        }
-    }
-    nodes
 }
 
 /// R and H of the node at `at`: its own revision, and the `norm_hash` of
@@ -1428,11 +1428,9 @@ fn digests_of<'a>(made: &'a Made, unit: &Unit) -> Result<Hashed<'a>, Option<Stri
         Unit::FileModule { file } => made.modules.get(file),
         Unit::Ron { file, comment } => {
             return match made.ron.get(file) {
-                Some(RonValues::Hashed(values)) => values
-                    .iter()
-                    .find(|(range, _)| range == comment)
-                    .map(|(_, digest)| Hashed::Ron(*digest))
-                    .ok_or(None),
+                Some(RonValues::Hashed(values)) => {
+                    paired_value(values, comment).map(Hashed::Ron).ok_or(None)
+                }
                 Some(RonValues::CannotVerify(category)) => Err(Some((*category).to_owned())),
                 None => Err(None),
             };

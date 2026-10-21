@@ -41,6 +41,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/health-drift.md](features/health-drift.md) shipped
 - [docs/features/health-left.md](features/health-left.md) shipped
 - [docs/features/health-ui-follow-up.md](features/health-ui-follow-up.md) shipped
+- [docs/features/hygiene-pass.md](features/hygiene-pass.md) shipped
 - [docs/features/impact-since.md](features/impact-since.md) shipped
 - [docs/features/impact.md](features/impact.md) shipped
 - [docs/features/import-gaps.md](features/import-gaps.md) shipped
@@ -135,6 +136,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0008.md](roadmap/RM-0008.md) shipped
 - [docs/roadmap/RM-0009.md](roadmap/RM-0009.md) shipped
 - [docs/roadmap/RM-0011.md](roadmap/RM-0011.md) shipped
+- [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) shipped
 - [docs/roadmap/RM-0030.md](roadmap/RM-0030.md) shipped
 - [docs/roadmap/RM-0032.md](roadmap/RM-0032.md) shipped
 - [docs/roadmap/RM-0033.md](roadmap/RM-0033.md) shipped

@@ -107,23 +107,19 @@ pub(crate) struct Named {
 }
 
 impl Named {
-    /// Every node of `corpus` with an ID, by its canonical cited ID.
+    /// Every node of `corpus` with an ID, by its canonical cited ID: the
+    /// keys of [`canonical_nodes`].
     pub(crate) fn of(corpus: &Corpus<'_>, scheme: &IdScheme) -> Self {
-        let mut ids = BTreeSet::new();
-        for (file, checked) in corpus.files.iter().enumerate() {
-            let Some(parsed) = &checked.parsed else {
-                continue;
-            };
-            ids.extend(
-                (0..parsed.nodes.len())
-                    .filter_map(|ord| canonical_of(corpus, scheme, NodeKey { file, ord })),
-            );
+        Self {
+            ids: canonical_nodes(corpus, scheme).into_keys().collect(),
         }
-        Self { ids }
     }
 
     /// Whether a row names a node now: one of `markers` names one as
-    /// `spec refs` lists it, or `entry` is a node's canonical ID.
+    /// `spec refs` lists it, or `entry` is a node's canonical ID. `entry` is
+    /// checked against [`canonical_nodes`]' keys, the judge's map, so an
+    /// entry-alone row (no `markers`) names no node exactly when the judge
+    /// reads it `node_gone`.
     pub(crate) fn any(
         &self,
         corpus: &mut Corpus<'_>,
@@ -166,6 +162,30 @@ pub(crate) fn canonical_of(corpus: &Corpus<'_>, scheme: &IdScheme, key: NodeKey)
         .id
         .as_deref()?;
     Some(canonical_id(&corpus.resolver, scheme, path, id, None))
+}
+
+/// Every node of `corpus` with an ID, by its canonical cited ID
+/// ([`canonical_of`]); an ID's nodes in the corpus's file order, then
+/// source order. The judge's node of an entry alone, `--task`'s rows
+/// naming a node ([`Named`]) and a `[[tested]]` block's node read this one
+/// map.
+pub(crate) fn canonical_nodes(
+    corpus: &Corpus<'_>,
+    scheme: &IdScheme,
+) -> BTreeMap<String, Vec<NodeKey>> {
+    let mut nodes: BTreeMap<String, Vec<NodeKey>> = BTreeMap::new();
+    for (file, checked) in corpus.files.iter().enumerate() {
+        let Some(parsed) = &checked.parsed else {
+            continue;
+        };
+        for ord in 0..parsed.nodes.len() {
+            let at = NodeKey { file, ord };
+            if let Some(id) = canonical_of(corpus, scheme, at) {
+                nodes.entry(id).or_default().push(at);
+            }
+        }
+    }
+    nodes
 }
 
 /// A task's set (see the module documentation): the refs of its columns,

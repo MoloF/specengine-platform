@@ -46,7 +46,9 @@ fn written_row() -> String {
 /// (non-alphabetical) order, 5b's `levels` and 5c's `anchor` among them.
 fn later_row() -> String {
     format!(
-        "{{\"state\":\"code_ahead\",\"node\":\"LAW-BOUND\",\"levels\":[\"sig\",\"body\"],\
+        "{{\"state\":\"code_ahead\",\"node\":\"LAW-BOUND\",\
+         \"levels\":{{\"lock\":[\"sig\",\"body\"],\"markers\":[\"sig\",\"body\"],\
+         \"changed\":[\"body\"]}},\
          \"relation\":\"configures\",\"compared\":\"ast\",\
          \"file\":\"crates/tally/src/counter.rs\",\"symbol\":\"crates/tally::counter::CAP\",\
          \"kind\":\"item\",\"item_kind\":\"const_item\",\"detail\":null,\
@@ -129,7 +131,10 @@ fn stored_rows_keep_their_key_order_and_later_keys() {
     }
     // The later keys' values are kept whole.
     let later = serde_json::to_value(&stored[0]).unwrap();
-    assert_eq!(later["levels"], json!(["sig", "body"]));
+    assert_eq!(
+        later["levels"],
+        json!({"lock": ["sig", "body"], "markers": ["sig", "body"], "changed": ["body"]})
+    );
     assert_eq!(later["anchor"], json!({"from": null, "to": [1, 2]}));
 }
 

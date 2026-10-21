@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 25 open, 12 done; current mvp; to mvp 2-3 days; total 17-29 days
+roadmap: 24 open, 13 done; current mvp; to mvp 2-3 days; total 17-29 days
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -28,9 +28,8 @@ roadmap: 25 open, 12 done; current mvp; to mvp 2-3 days; total 17-29 days
 6. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | 1-2
 7. [RM-0018](../roadmap/RM-0018.md) | URL-mode elicitation onto UI cards | draft | could | 2-3
 
-## pool | 16 open, 0 done | 8-13 days, 11 unestimated
+## pool | 15 open, 1 done | 7-12 days, 11 unestimated
 
-- [RM-0029](../roadmap/RM-0029.md) | Hygiene pass: the review nits of 5b-1b, 5c and 8a-2 | draft | should | 1
 - [RM-0019](../roadmap/RM-0019.md) | roadmap-moves (Phase 6, 3b): moves from the Roadmap screen | draft | could | -
 - [RM-0021](../roadmap/RM-0021.md) | bevy-dump (10b): the project's schedule dump annotates symbols | draft | could | 3-5
 - [RM-0024](../roadmap/RM-0024.md) | machine-bindings (12b): a string constant binds its node without a marker | draft | could | -

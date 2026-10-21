@@ -1,8 +1,8 @@
 //! docs/features/code-tools.md (6b-1), the developer's iteration 1 and 2
 //! (K1, `CODE_INDEX_FORMAT` 2): `file_place`'s package label rewrites `\`
 //! to `/` only where `\` separates path components; on Unix it is a
-//! character of a directory name and the label keeps it, as the CLI's
-//! `dir_text` does. M: `package_label` rewriting `\` whatever
+//! character of a directory name and the label keeps it, as `naming.rs`'
+//! `dir_text` does. M: `dir_text` rewriting `\` whatever
 //! `MAIN_SEPARATOR` is.
 
 #![cfg(unix)]

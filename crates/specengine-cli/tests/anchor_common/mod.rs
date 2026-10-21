@@ -198,7 +198,12 @@ pub fn sized_text() -> String {
 /// committed, `before_lock` applied and committed when it changes
 /// anything, then every node of [`NODES`] accepted.
 pub fn base_with(label: &str, dir: &str, before_lock: impl Fn(&LockRepo)) -> LockRepo {
-    let repo = LockRepo::of(label, FIXTURE, dir, &[]);
+    based(LockRepo::of(label, FIXTURE, dir, &[]), before_lock)
+}
+
+/// [`base_with`] over `repo`, the fixture's copy just committed (made
+/// where the test chooses: `LockRepo::of_in`).
+pub fn based(repo: LockRepo, before_lock: impl Fn(&LockRepo)) -> LockRepo {
     repo.write(SIZED, sized_text());
     repo.commit_all("the sized bodies");
     before_lock(&repo);
