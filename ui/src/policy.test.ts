@@ -324,10 +324,17 @@ describe("source policy", () => {
     }
   });
 
-  it("compares no kind, class, status, state, link type, reason, ID state, binding or relation in Health but in the label map: rows 3 to 5 shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui)", () => {
+  it("compares no kind, class, status, state, link type, reason, ID state, binding or relation in Health but in the label map: rows 3 to 6 shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui and UI-3 of health-drift-ui)", () => {
     const outside = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
-      expect.arrayContaining(["/src/health/AmendmentsPart.tsx", "/src/health/AssumesPart.tsx", "/src/health/UnboundPart.tsx", "/src/health/codeRows.tsx", "/src/health/labels.ts"]),
+      expect.arrayContaining([
+        "/src/health/AmendmentsPart.tsx",
+        "/src/health/AssumesPart.tsx",
+        "/src/health/UnboundPart.tsx",
+        "/src/health/DriftPart.tsx",
+        "/src/health/codeRows.tsx",
+        "/src/health/labels.ts",
+      ]),
     );
     const field = "\\.(kind|class|status|state|type|reason|id_state|binding|relation)\\b";
     const equality = "([!=]==?)(?!=)";
@@ -340,7 +347,7 @@ describe("source policy", () => {
         `${field}\\s*\\?\\s*[^?.:\\s]`,
         `${field}\\s*(&&|\\|\\|)`,
         `\\[[^\\]]*${field}\\s*\\]`,
-        `\\.(includes|has|indexOf|startsWith|endsWith|test|filter|find|some|every)\\([^)]*${field}`,
+        `\\.(includes|has|get|indexOf|startsWith|endsWith|test|filter|find|some|every)\\([^)]*${field}`,
       ].join("|"),
     );
     expect(offending(compared, outside)).toEqual([]);
@@ -359,6 +366,13 @@ describe("source policy", () => {
       'marker.binding !== "item" && <p />',
       'rows.filter((line) => line.relation === "assumes")',
       "switch (row.state) {",
+      // UI-3 of health-drift-ui: row 6's class, a row's state or an entry's state branched on.
+      'const fix = row.class === "fix";',
+      'row.class !== "cannot" && <p />',
+      'entry.state === "stale" ? a : b',
+      "const look = LOOKS[row.class];",
+      "const look = LOOKS.get(row.class);",
+      'rows.filter((row) => row.state === "conflict")',
     ]) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }
@@ -371,8 +385,33 @@ describe("source policy", () => {
       "if (codeRowLook(row.state).measured && row.counts !== null && row.rows !== null) {",
       "{item.reason !== null && <p>{item.reason}</p>}",
       "<span className=\"kind-tag\">{oneLine(marker.relation)}</span>",
+      "<Badge name=\"Class\" look={driftClassLook(row.class)} />",
+      "<Badge name=\"State\" look={syncLook(row.state)} />",
     ]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  it("sorts nothing in Health but the findings, and keeps every label table in labels.ts: rows 3 to 6 drawn in the daemon's order, each word through one map (UI-3 of health-drift-ui)", () => {
+    const parts = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
+    const sorted = /\.(sort|toSorted|reverse|toReversed)\(/;
+    expect(offending(sorted, (path) => parts(path) || path === "/src/health/findings.ts")).toEqual([]);
+    // The scope is right: the findings are grouped and ordered by the view (docs/features/ui-health.md).
+    expect(sorted.test(sources["/src/health/findings.ts"] ?? "")).toBe(true);
+    for (const line of ["const shown = [...rows].sort((a, b) => byBytes(a.state, b.state));", "rows.toSorted(byClass)", "drift.rows.slice().reverse()"]) {
+      expect([line, sorted.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["<CodeRowList rows={rows} label={label} order={order} render={render} />", "const shown = all ? rows : rows.slice(0, CODE_ROWS_SHOWN);"]) {
+      expect([line, sorted.test(line)]).toEqual([line, false]);
+    }
+    // A second table of words (a class's, a state's, an entry's) lives nowhere but labels.ts. A
+    // heuristic: it sees a table typed `Record<…>` or checked with `satisfies`, not one built
+    // another way (a Map, a switch); M8b's comparison scan above covers those.
+    const table = /\bRecord<|\bsatisfies\b/;
+    expect(offending(table, (path) => parts(path) || path === "/src/health/labels.ts")).toEqual([]);
+    expect(table.test(sources["/src/health/labels.ts"] ?? "")).toBe(true);
+    for (const line of ["const SYNC: Record<string, Look> = {", "} satisfies Record<string, Look>;"]) {
+      expect([line, table.test(line)]).toEqual([line, true]);
     }
   });
 

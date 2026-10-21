@@ -2,9 +2,9 @@ import { focusManager, onlineManager, QueryClient } from "@tanstack/react-query"
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
-import { aCheckReport, aHealthReport, anAmendment, anAssumesRow, measuredAssumes } from "../test/builders";
+import { aCheckReport, aDriftRow, aHealthReport, anAmendment, anAssumesRow, measuredAssumes, measuredDrift } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, openStreams, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
-import { HttpClient, REOPEN_FIRST_MS } from "./http";
+import { HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS } from "./http";
 import { ApiProvider, createQueryClient } from "./provider";
 import { queryKeys, useHealth, useLiveQueue } from "./queries";
 import type { HealthReport } from "./types";
@@ -18,7 +18,8 @@ import type { HealthReport } from "./types";
 // walk in flight is kept, never aborted, and exactly one more read follows it, answered or failed,
 // however many events landed during it; that read failing schedules nothing (UI-4). An event with
 // no walk in flight reads once (UI-5). Off screen, each marks it stale and entering Health reads
-// it once (UI-6). The subscription's cleanup drops a read owed (U2).
+// it once (UI-6). The subscription's cleanup drops a read owed (U2). Row 6 (UI-4 of
+// docs/features/health-drift-ui.md) adds no trigger: it rides the same read and its answer redraws it.
 
 const HEALTH = "/api/projects/alpha/health";
 const STREAM = "/api/projects/alpha/events";
@@ -231,6 +232,24 @@ describe("the health read on the live tail (AC-U5 of health-left)", () => {
     await settle();
     await settle();
     expect(healthReads(fetchStub)).toEqual([]);
+  });
+
+  it("row 6 measured: proposal.applied reads /health once more and the answer's row 6 is drawn; the stream listens to no type of its own (UI-4 of health-drift-ui)", async () => {
+    const drifting = aHealthReport([anAmendment({ path: "docs/features/a.md" })], { drift: measuredDrift([aDriftRow({ node: "R-1", state: "conflict", class: "fix" })], { ok: 3 }) });
+    const settled = aHealthReport([anAmendment({ path: "docs/features/a.md" })], { drift: measuredDrift([], { ok: 4 }) });
+    const { fetchStub } = await onHealth({ next: null, report: (n) => (n === 1 ? drifting : settled) });
+    const drift = () => document.querySelector('[data-row="drift"]');
+    expect(drift()?.querySelector(".health-left-total")?.textContent).toBe("1 of 4 bindings, 0 skipped");
+    expect(Array.from(drift()?.querySelectorAll<HTMLElement>("[data-drift]") ?? [], (line) => line.dataset.drift)).toEqual(["R-1"]);
+    // Row 6 subscribes to nothing of its own: the stream's types are the queue's (src/api/http.ts).
+    expect(stream().types()).toEqual([...QUEUE_EVENT_TYPES]);
+    emit("proposal.applied", '{"id":"PR-0001","commit":"abc1234"}', "71");
+    await waitFor(() => {
+      expect(drift()?.querySelector(".health-code-none")?.textContent).toBe("None: every binding spec verify judges is in sync.");
+    });
+    await settle();
+    expect(healthReads(fetchStub)).toEqual([HEALTH]);
+    expect(drift()?.querySelectorAll("[data-drift]")).toHaveLength(0);
   });
 
   it("proposal.rejected while Health is on screen reads /health once more, never the check or another spec read (UI-3 of health-code-ui)", async () => {

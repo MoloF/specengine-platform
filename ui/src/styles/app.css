@@ -3775,21 +3775,6 @@ mark {
   font-weight: 600;
 }
 
-.health-unmeasured {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.health-unmeasured-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-3);
-}
-
-.health-unmeasured-row dt {
-  min-width: 14rem;
-}
-
 .health-value {
   color: var(--text-secondary);
   font-style: italic;
@@ -3802,7 +3787,7 @@ mark {
 }
 
 /* Row 3, the unapplied amendments (docs/features/health-left.md): a measured count reads as a
-   number, unlike "Not measured yet"; each document's amends links indented under it, as a node's
+   number, unlike "Not measured"; each document's amends links indented under it, as a node's
    Links tab draws them. */
 .health-measured {
   color: var(--text-primary);
@@ -3857,10 +3842,11 @@ mark {
   gap: var(--space-2) var(--space-3);
 }
 
-/* Rows 4 and 5 (docs/features/health-code-ui.md): each line's state, ID and place, its relation and
-   the CLI's tail; row 5's markers indented under their node, as row 3's links are. Paths, IDs and
-   titles of any script wrap anywhere, never widen the column. A row that could not be measured
-   draws its causes as the check's are, in cannot-verify's role, never ok's. */
+/* Rows 4 to 6 (docs/features/health-code-ui.md, docs/features/health-drift-ui.md): each line's
+   state, ID and place, its relation and the CLI's tail; row 5's markers indented under their node,
+   as row 3's links are. Paths, IDs and titles of any script wrap anywhere, never widen the column.
+   A row that could not be measured draws its causes as the check's are, in cannot-verify's role,
+   never ok's. */
 .health-code-head,
 .health-code-meta,
 .health-code-marker {

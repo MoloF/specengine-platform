@@ -13,7 +13,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 ## Specs
 
 - [docs/roadmap/RM-0001.md](roadmap/RM-0001.md) Live check: real tasks of each pilot through the full cycle · plugin, crates/specengine-cli · draft
-- [docs/roadmap/RM-0009.md](roadmap/RM-0009.md) health-drift (9b): Health shows drift between spec.lock and the tree · crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0010.md](roadmap/RM-0010.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols · crates/specengine-cli, crates/specengine-store, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0011.md](roadmap/RM-0011.md) Drift screens in the web UI (Phase 4) · ui · draft
 - [docs/roadmap/RM-0012.md](roadmap/RM-0012.md) MCP staging forms review_proposal, approve_task · crates/specengine-mcp · draft

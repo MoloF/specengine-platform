@@ -4,12 +4,17 @@ import type {
   AssumedState,
   AssumesCounts,
   AssumesRow,
+  BindingPlace,
+  DriftCounts,
+  DriftLock,
+  DriftRow,
   HealthAssumes,
   HealthCode,
   HealthDrift,
   HealthReport,
   HealthUnbound,
   ShownLink,
+  TestedRow,
   UnappliedAmendment,
   UnboundMarker,
   UnboundReason,
@@ -39,9 +44,17 @@ import type { Scenario } from "./scenario";
 // JSON carries them: a control character in a rejection's note and in a cause, which the UI writes
 // `\u{..}` as the CLI's text does.
 //
-// Row 6 (docs/features/health-drift.md "Data"): `off` for either project in every scenario, the
-// code layer's sentence its cause, no counts, rows or tested, no note, until 9b-2 draws the row and
-// its mocks measure it; nothing reads it yet.
+// Row 6 (docs/features/health-drift-ui.md "Data"; docs/canon/health-drift.md "Document"): normal,
+// harbor-sim measured: twelve rows of every class in verify's key order (node bytes, the relation in
+// the lock's order, file bytes, keyless first, kind, symbol, item kind), never by class, state or
+// file, so a sort in the UI would show: a moved anchor, an ambiguous one with two candidates, a
+// look-alike ID in its script, two keyless rows, a lock-only row; the six markers naming its queue
+// items skipped; a stale, an unverifiable and a node_gone entry. ledger-api has no [code] table:
+// off. empty: both measured, none. large: harbor-sim 3 000 rows, its twelve among the generated
+// corpus's, each of those `unlocked` (the flood before a first accept). code-cannot: row 6 could not
+// be measured: harbor-sim the code walk's gap (rows 4-6 alike), ledger-api an invalid spec.lock (row
+// 6 alone; the queue and the rule its rows 4-5 fail on never touch row 6). not-configured:
+// harbor-sim as normal, ledger-api measured, none.
 
 const HARBOR = "harbor-sim";
 
@@ -180,11 +193,6 @@ export const LARGE_UNBOUND = 3000;
 /** Row 4 or 5 not measured: its state and causes, no counts, no rows (both rows share the shape). */
 function notMeasured(state: "off" | "not_configured" | "cannot", causes: readonly string[]): HealthAssumes & HealthUnbound {
   return { state, causes: [...causes], counts: null, rows: null };
-}
-
-/** Row 6, not measured until 9b-2: `off`, the code layer's sentence its cause, never a 0. */
-function driftOff(): HealthDrift {
-  return { state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null, tested: null, notes: [] };
 }
 
 /** The code files each project's rows read, `spec refs`' count. */
@@ -347,6 +355,225 @@ const HARBOR_SELECTED = 14;
 /** The generated corpus's nodes, all selected by the large scenario's third rule (src/mocks/harbor-sim/large.ts). */
 const LARGE_SELECTED = 3108;
 
+/** Why ledger-api's row 6 could not be measured in `code-cannot`: its spec.lock does not parse, as plain verify words it. */
+export const LOCK_CAUSE = "spec.lock:1: unclosed array, expected `]`";
+
+/** Row 6's causes in `code-cannot`, by project: harbor-sim's the code walk's gap, ledger-api's its lock. */
+export const DRIFT_CANNOT_CAUSES: Readonly<Record<string, readonly string[]>> = {
+  "harbor-sim": [CODE_GAP_CAUSE],
+  "ledger-api": [LOCK_CAUSE],
+};
+
+/** The ID a look-alike marker of harbor-sim writes: RULE-BASIN-NAME with a Cyrillic capital A, keyed as written. */
+export const LOOKALIKE_BASIN = "RULE-BASIN-N\u0410ME";
+
+/** How many rows the large scenario's row 6 lists. */
+export const LARGE_DRIFT = 3000;
+
+/** The relations in the lock's order (core `LockRelation`), which verify's key order follows. */
+const RELATIONS = ["implements", "verifies", "configures", "assumes"];
+
+/** verify's key order (core `RowKey`): node bytes, relation, file bytes, a keyless row first (by state, category), kind, symbol, item kind. */
+function byKey(a: DriftRow, b: DriftRow): number {
+  const keyless = (row: DriftRow) => (row.kind === null ? 0 : 1);
+  const keylessOrder = keyless(a) === 0 && keyless(b) === 0 ? byBytes(a.state, b.state) || byBytes(a.category ?? "", b.category ?? "") : 0;
+  return (
+    byBytes(a.node, b.node) ||
+    RELATIONS.indexOf(a.relation) - RELATIONS.indexOf(b.relation) ||
+    byBytes(a.file, b.file) ||
+    keyless(a) - keyless(b) ||
+    keylessOrder ||
+    byBytes(a.kind ?? "", b.kind ?? "") ||
+    byBytes(a.symbol ?? "", b.symbol ?? "") ||
+    byBytes(a.item_kind ?? "", b.item_kind ?? "")
+  );
+}
+
+/** A lock entry of harbor-sim: the revision vouched for, the commit, the UTC date. */
+function entry(rev: number, commit: string, verified_at: string): DriftLock {
+  return { rev, commit, verified_at };
+}
+
+/** The two commits harbor-sim's lock entries and tests vouched at. */
+const LOCKED_AT = "4f1c9a2e7b3d5c8e0a6f1b2d3c4e5f60718293a4";
+const TESTED_AT = "9e8d7c6b5a4f3e2d1c0b9a8f7e6d5c4b3a291807";
+
+/** An item of harbor-sim's code as an anchor names it. */
+function itemPlace(file: string, symbol: string): BindingPlace {
+  return { file, kind: "item", symbol, item_kind: "function_item" };
+}
+
+/** One row 6 line, verify's 17 keys in their order: a keyed binding, unlocked unless given, no lock entry. */
+function driftRow(node: string, relation: string, file: string, binding: [kind: string, symbol: string, itemKind: string | null] | null, fields: Partial<DriftRow>): DriftRow {
+  return {
+    node,
+    relation,
+    file,
+    kind: binding?.[0] ?? null,
+    symbol: binding?.[1] ?? null,
+    item_kind: binding?.[2] ?? null,
+    state: "unlocked",
+    category: null,
+    detail: null,
+    class: "check",
+    pre_existing: false,
+    markers: [],
+    node_rev: null,
+    lock: null,
+    compared: null,
+    levels: null,
+    anchor: null,
+    ...fields,
+  };
+}
+
+/**
+ * harbor-sim's row 6, in verify's key order: every class and the eight non-ok states. MEC-MOORING's
+ * `moor` moved from berths.rs to crew.rs and changed; RULE-HIGH-WATER's test is gone, two of the
+ * same name its candidates; the look-alike, unanchored and cannot-verify markers are row 5's.
+ */
+function harborDrift(): DriftRow[] {
+  const exact = { state: "exact", from: null, candidates: null };
+  return [
+    driftRow("MEC-CARGO-CRANES", "implements", "src/sim/berths.rs", ["module", "harbor_sim::berths", null], { markers: [{ line: 1, rev: 1 }], node_rev: 1 }),
+    driftRow("MEC-FAIRWAY", "configures", "data/fairway.ron", ["ron", "fairway.speed_knots", null], { markers: [{ line: 2, rev: 1 }], node_rev: 1 }),
+    driftRow("MEC-MOORING", "implements", "src/sim/crew.rs", ["item", "harbor_sim::crew::moor", "function_item"], {
+      state: "code_ahead",
+      category: "code_changed",
+      detail: "body",
+      markers: [{ line: 30, rev: 2 }],
+      node_rev: 2,
+      lock: entry(2, LOCKED_AT, "2026-10-02"),
+      compared: "ast",
+      levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: ["body"] },
+      anchor: { state: "moved", from: itemPlace("src/sim/berths.rs", "harbor_sim::berths::moor"), candidates: null },
+    }),
+    driftRow("MEC-TIDES", "implements", "src/sim/tide.rs", ["item", "harbor_sim::tide::tide_window", "function_item"], {
+      state: "conflict",
+      class: "fix",
+      markers: [{ line: 9, rev: 2 }],
+      node_rev: 3,
+      lock: entry(2, LOCKED_AT, "2026-10-02"),
+      compared: "ast",
+      levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: ["sig"] },
+      anchor: exact,
+    }),
+    driftRow(LOOKALIKE_BASIN, "implements", "src/sim/berths.rs", ["item", "harbor_sim::berths::basin_name", "function_item"], {
+      state: "bad_marker",
+      category: "homoglyph",
+      class: "fix",
+      markers: [{ line: 30, rev: 1 }],
+    }),
+    driftRow("RULE-BERTH-DRAFT", "assumes", "data/berths.ron", ["ron", "berths[4].draft_m", null], {
+      state: "spec_ahead",
+      category: "marker_behind",
+      markers: [{ line: 3, rev: 3 }],
+      node_rev: 4,
+      lock: entry(4, LOCKED_AT, "2026-10-02"),
+      compared: "blob",
+      anchor: exact,
+    }),
+    driftRow("RULE-HARBOR-CLOCK", "implements", "src/sim/weather.rs", ["item", "harbor_sim::weather::tick", "function_item"], {
+      state: "cannot_verify",
+      category: "ambiguous_symbol",
+      detail: "duplicate",
+      class: "cannot",
+      markers: [{ line: 52, rev: 4 }],
+      node_rev: 4,
+      lock: entry(4, LOCKED_AT, "2026-10-02"),
+    }),
+    driftRow("RULE-HIGH-WATER", "verifies", "src/sim/tide_table.rs", ["item", "harbor_sim::tide_table::tests::high_water_holds", "function_item"], {
+      state: "broken_binding",
+      category: "symbol_gone",
+      class: "fix",
+      node_rev: 1,
+      lock: entry(1, LOCKED_AT, "2026-10-02"),
+      anchor: {
+        state: "ambiguous",
+        from: null,
+        candidates: [
+          itemPlace("src/sim/tide_table.rs", "harbor_sim::tide_table::tests::high_water_holds_at_neap"),
+          itemPlace("src/sim/tide_table.rs", "harbor_sim::tide_table::tests::high_water_holds_at_spring"),
+        ],
+      },
+    }),
+    driftRow("RULE-MOOR-CREW", "implements", "src/sim/crew.rs", null, { state: "bad_marker", category: "unanchored", class: "fix", markers: [{ line: 21, rev: 2 }], node_rev: 2 }),
+    driftRow("RULE-MOOR-NIGHT", "implements", "src/sim/crew.rs", null, { state: "cannot_verify", category: "item_error", class: "cannot", markers: [{ line: 44, rev: 2 }], node_rev: 2 }),
+    driftRow("RULE-SPRING-WINDOW", "implements", "src/sim/tide_table.rs", ["item", "harbor_sim::tide_table::spring_window", "function_item"], { markers: [{ line: 58, rev: 1 }], node_rev: 1 }),
+    driftRow("RULE-TIDE-WINDOW", "implements", "src/sim/tide.rs", ["item", "harbor_sim::tide::in_window", "function_item"], {
+      state: "predated",
+      class: "fix",
+      markers: [{ line: 21, rev: 4 }],
+      node_rev: 3,
+      lock: entry(3, LOCKED_AT, "2026-10-02"),
+      levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: null },
+      anchor: exact,
+    }),
+  ];
+}
+
+/** harbor-sim's bindings in sync, and the markers naming its queue items (row 4's six), skipped. */
+const HARBOR_OK = 9;
+const HARBOR_SKIPPED = 6;
+
+/** harbor-sim's `[[tested]]` entries not verified, by node bytes: MEC-TIDES's spec changed, RULE-QUAY-LIGHTS gone (DEC-0014 amends it), RULE-TIDE-WINDOW's marker predated. */
+function harborTested(): TestedRow[] {
+  return [
+    { node: "MEC-TIDES", state: "stale", category: "spec_changed", rev: 2, node_rev: 3, commit: TESTED_AT, verified_at: "2026-10-02" },
+    { node: "RULE-QUAY-LIGHTS", state: "node_gone", category: null, rev: 1, node_rev: null, commit: TESTED_AT, verified_at: "2026-10-02" },
+    { node: "RULE-TIDE-WINDOW", state: "unverifiable", category: "predated", rev: 3, node_rev: 3, commit: TESTED_AT, verified_at: "2026-10-02" },
+  ];
+}
+
+/**
+ * The large scenario's row 6: harbor-sim's twelve and, before a first accept, the generated
+ * corpus's nodes by ID but the last of them, each one `implements` marker `unlocked`; in verify's key order.
+ */
+function largeDrift(): DriftRow[] {
+  const generated = largeDocuments()
+    .flatMap((document) => [document.node, ...document.sections])
+    .flatMap((node) => (node.id === null ? [] : [node.id]))
+    .sort(byBytes)
+    .slice(0, LARGE_DRIFT - harborDrift().length)
+    .map((id, index) => {
+      const domain = /-(\d\d)/.exec(id)?.[1] ?? "00";
+      const symbol = `harbor_sim::gen::d${domain}::${id.toLowerCase().replaceAll("-", "_")}`;
+      return driftRow(id, "implements", `src/gen/d${domain}.rs`, ["item", symbol, "function_item"], { markers: [{ line: (index % 400) + 1, rev: 1 }], node_rev: 1 });
+    });
+  return [...harborDrift(), ...generated].sort(byKey);
+}
+
+/** verify's counts of `rows` listed, `ok` in sync and `skipped` markers: one per class, as listed. */
+function driftCounts(rows: readonly DriftRow[], ok: number, skipped: number): DriftCounts {
+  const of = (value: string) => rows.filter((row) => row.class === value).length;
+  return { rows: rows.length + ok, ok, fix: of("fix"), check: of("check"), cannot: of("cannot"), pre_existing: 0, skipped };
+}
+
+function measuredDrift(rows: DriftRow[], ok: number, skipped: number, tested: TestedRow[]): HealthDrift {
+  return { state: "measured", causes: [], counts: driftCounts(rows, ok, skipped), rows, tested, notes: [] };
+}
+
+/** Row 6 not measured: its state and causes; no counts, rows or test evidence, never a 0. */
+function driftNotMeasured(state: "off" | "cannot", causes: readonly string[]): HealthDrift {
+  return { state, causes: [...causes], counts: null, rows: null, tested: null, notes: [] };
+}
+
+/** Row 6 of `project` in `scenario`, as `spec health --json` gives it. */
+function driftOf(project: string, scenario: Scenario): HealthDrift {
+  const harbor = project === HARBOR;
+  const none = measuredDrift([], harbor ? 4 : 2, 0, []);
+  if (scenario === "empty") {
+    return none;
+  }
+  if (scenario === "code-cannot") {
+    return driftNotMeasured("cannot", DRIFT_CANNOT_CAUSES[project] ?? [CODE_GAP_CAUSE]);
+  }
+  if (!harbor) {
+    return scenario === "not-configured" ? none : driftNotMeasured("off", [CODE_OFF_CAUSE]);
+  }
+  return measuredDrift(scenario === "large" ? largeDrift() : harborDrift(), HARBOR_OK, HARBOR_SKIPPED, harborTested());
+}
+
 /** Rows 4-5 and the code count of `project` in `scenario`, as `spec health --json` gives them. */
 function codeRowsOf(project: string, scenario: Scenario): Pick<HealthReport, "code" | "assumes" | "unbound"> {
   const harbor = project === HARBOR;
@@ -385,5 +612,5 @@ export function healthReportOf(project: string, scenario: Scenario): HealthRepor
     amendments = scenario === "large" ? largeAmendments() : harborAmendments();
   }
   const { code, assumes, unbound } = codeRowsOf(project, scenario);
-  return { documents: documentsOf(project, scenario), amendments, notes: [], code, assumes, unbound, drift: driftOff() };
+  return { documents: documentsOf(project, scenario), amendments, notes: [], code, assumes, unbound, drift: driftOf(project, scenario) };
 }

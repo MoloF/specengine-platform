@@ -10,6 +10,7 @@ import type {
   CheckCounts,
   CheckFinding,
   CheckReport,
+  DriftRow,
   GraphEdge,
   GraphNode,
   GraphView,
@@ -33,6 +34,7 @@ import type {
   TaskPackage,
   TaskProposal,
   TaskRun,
+  TestedRow,
   TreeNode,
   TreeView,
   UnappliedAmendment,
@@ -576,6 +578,63 @@ export function anUnboundRow(fields: Partial<UnboundRow> & Pick<UnboundRow, "id"
 /** Row 5 measured for tests: `rows` unbound of `selected` nodes under `rules` rules. */
 export function measuredUnbound(rows: UnboundRow[], selected: number = rows.length + 3, rules = 1): HealthUnbound {
   return { state: "measured", causes: [], counts: { rules, selected, bound: selected - rows.length, unbound: rows.length }, rows };
+}
+
+/**
+ * One row 6 line for tests, `spec verify --json`'s row, its 17 keys in the JSON's order: an
+ * `implements` binding of an item verify finds `unlocked` (class `check`), no lock entry, nothing
+ * compared, no anchor (docs/features/health-drift.md "Data").
+ */
+export function aDriftRow(fields: Partial<DriftRow> & Pick<DriftRow, "node">): DriftRow {
+  const { node, ...rest } = fields;
+  return {
+    node,
+    relation: "implements",
+    file: "src/lib.rs",
+    kind: "item",
+    symbol: "alpha::lib::run",
+    item_kind: "function_item",
+    state: "unlocked",
+    category: null,
+    detail: null,
+    class: "check",
+    pre_existing: false,
+    markers: [{ line: 3, rev: 1 }],
+    node_rev: 1,
+    lock: null,
+    compared: null,
+    levels: null,
+    anchor: null,
+    ...rest,
+  };
+}
+
+/** One `[[tested]]` entry for tests, keys in the JSON's order: stale, the spec changed since the run vouched for rev 1. */
+export function aTestedRow(fields: Partial<TestedRow> & Pick<TestedRow, "node">): TestedRow {
+  const { node, ...rest } = fields;
+  return { node, state: "stale", category: "spec_changed", rev: 1, node_rev: 2, commit: "0123456789abcdef0123456789abcdef01234567", verified_at: "2026-10-08", ...rest };
+}
+
+/**
+ * Row 6 measured for tests: `rows` as given, verify's counts by their classes, `ok` rows in sync and
+ * `skipped` markers as given; the test evidence `[]` and no note unless given.
+ */
+export function measuredDrift(rows: DriftRow[], fields: { ok?: number; skipped?: number; tested?: TestedRow[] | null; notes?: string[] } = {}): HealthDrift {
+  const { ok = 4, skipped = 0, tested = [], notes = [] } = fields;
+  const of = (value: string) => rows.filter((row) => row.class === value).length;
+  return {
+    state: "measured",
+    causes: [],
+    counts: { rows: rows.length + ok, ok, fix: of("fix"), check: of("check"), cannot: of("cannot"), pre_existing: 0, skipped },
+    rows,
+    tested,
+    notes,
+  };
+}
+
+/** Row 6 for tests in a state the daemon does not measure: its causes; no counts, rows or test evidence, no note. */
+export function aDriftIn(state: string, causes: string[]): HealthDrift {
+  return { state, causes, counts: null, rows: null, tested: null, notes: [] };
 }
 
 /** `spec health --json` for tests: the amendments as given over 7 documents (aCheckReport's), no note, rows 4-6 off. */

@@ -1,7 +1,7 @@
 import { Fragment, useRef, useState, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
 import type { HealthQuery } from "../api/queries";
-import type { HealthAssumes, HealthReport, HealthUnbound } from "../api/types";
+import type { HealthAssumes, HealthDrift, HealthReport, HealthUnbound } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { Icon } from "../ui/Icon";
 import { ReadFailure, Skeleton } from "../ui/states";
@@ -11,8 +11,9 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { SHOWN_OPEN } from "./findings";
 import { codeRowLook, MEASURED_WITHOUT_COUNTS } from "./labels";
 
-// What rows 4 and 5 of What is left share (docs/features/health-code-ui.md "Data"): the part's
-// frame and its four states, the fields as `spec health` prints them, and "Show all".
+// What rows 4 to 6 of What is left share (docs/features/health-code-ui.md "Data";
+// docs/features/health-drift-ui.md "Description and interactions"): the part's frame and its four
+// states, the fields as `spec health` prints them, and "Show all".
 
 /** How many lines of a code row are rendered until "Show all": as many as a Findings group shows open. */
 export const CODE_ROWS_SHOWN = SHOWN_OPEN;
@@ -23,7 +24,7 @@ export function counted(count: number, one: string, many: string): string {
 }
 
 /**
- * A field of rows 4-5 as `spec health` prints it (docs/canon/health-code.md "Text"): on one line, a
+ * A field of rows 4-6 as `spec health` prints it (docs/canon/health-code.md "Text"): on one line, a
  * line break written as a space, every other control character and bidirectional mark as `\u{..}`,
  * so a stored text can neither break the row nor reorder what is around it.
  */
@@ -32,13 +33,13 @@ export function oneLine(text: string): string {
 }
 
 /**
- * A code row the daemon did not measure. Off or not configured, and any state word not listed:
- * "Not measured", the state's words and each cause, no digit, no Retry, since asking again cannot
- * change a configuration. A state of measured whose answer holds no counts or no rows (outside the
- * contract): the same, in fixed neutral words, never "Measured". Could not be measured: the causes
- * and a Retry reading the health read alone; no value at all, never 0.
+ * A code row the daemon did not measure (row 4, 5 or 6). Off or not configured, and any state word
+ * not listed: "Not measured", the state's words and each cause, no digit, no Retry, since asking
+ * again cannot change a configuration. A state of measured whose answer holds no counts or no rows
+ * (outside the contract): the same, in fixed neutral words, never "Measured". Could not be
+ * measured: the causes and a Retry reading the health read alone; no value at all, never 0.
  */
-export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes | HealthUnbound; retrying: boolean; onRetry: () => void }) {
+export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes | HealthUnbound | HealthDrift; retrying: boolean; onRetry: () => void }) {
   const look = codeRowLook(row.state);
   const causes =
     row.causes.length === 0 ? null : (
@@ -129,12 +130,13 @@ function RowBody({ report, retry, draw }: { report: HealthReport; retry: () => v
 }
 
 /**
- * Row 4 or 5 of What is left (docs/features/health-code-ui.md "Description and interactions"): its
- * heading and its own boundary, over the view's health read. Being measured: a skeleton, no digit.
- * The read failed (a 503, an older daemon's 404, no response): the daemon's words verbatim, shown
- * but not spoken (row 3 speaks the same failure), and a Retry reading `getHealth` alone. Answered:
- * `children` draws the row from the report, its Retry the same read's; a later failure is a note.
- * `failure` and `busy` are What is left's, computed once for the health read (LeftRegion).
+ * Row 4, 5 or 6 of What is left (docs/features/health-code-ui.md, docs/features/health-drift-ui.md
+ * "Description and interactions"): its heading and its own boundary, over the view's health read.
+ * Being measured: a skeleton, no digit. The read failed (a 503, an older daemon's 404, no
+ * response): the daemon's words verbatim, shown but not spoken (row 3 speaks the same failure), and
+ * a Retry reading `getHealth` alone. Answered: `children` draws the row from the report, its Retry
+ * the same read's; a later failure is a note. `failure` and `busy` are What is left's, computed
+ * once for the health read (LeftRegion).
  */
 export function CodePart({
   health,
@@ -149,7 +151,7 @@ export function CodePart({
   failure: Error | null;
   busy: boolean;
   /** The part's `data-row`: the report's key. */
-  row: "assumes" | "unbound";
+  row: "assumes" | "unbound" | "drift";
   title: string;
   /** The row in a sentence, after "The": "code assuming a decision". */
   what: string;

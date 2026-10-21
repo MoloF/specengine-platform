@@ -898,7 +898,8 @@ export interface UnboundMarker {
 // judgement over the code index the call refreshes, read-only, never its mode or verdict. Its rows
 // are verify's rows but `ok`, verbatim; its counts verify's; its `tested` verify's entries but
 // `verified`. Words raw: a state through verify's states, a class, relation, kind, category,
-// detail, `compared` and a level as sent. Nothing drawn until 9b-2.
+// detail, `compared` and a level as sent. Drawn by src/health/DriftPart.tsx
+// (docs/features/health-drift-ui.md).
 
 /**
  * Row 6, drift: `causes` the cause lines behind any state but `measured`, each without `cannot: `

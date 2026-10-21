@@ -63,7 +63,7 @@ export const queryKeys = {
   tasks: (project: string) => ["tasks", project] as const,
   task: (project: string, id: string) => ["task", project, id] as const,
   check: (project: string) => ["check", project] as const,
-  /** `spec health --json`, rows 3 to 5 of What is left (`docs/features/health-left.md` "Data"; `docs/features/health-code-ui.md` "Data"). */
+  /** `spec health --json`, rows 3 to 6 of What is left (`docs/features/health-left.md`, `docs/features/health-code-ui.md`, `docs/features/health-drift.md` "Data"). */
   health: (project: string) => ["health", project] as const,
   /** The round's sheet; `limit` null: the daemon's default (`docs/features/ui-round.md` "Data"). */
   round: (project: string, limit: number | null) => ["round", project, { limit }] as const,
@@ -537,7 +537,7 @@ export function useCheck(project: string) {
 export type CheckQuery = ReturnType<typeof useCheck>;
 
 /**
- * The project's `spec health` (rows 3 to 5 of What is left; `docs/canon/health.md` "UI"): on
+ * The project's `spec health` (rows 3 to 6 of What is left; `docs/canon/health.md` "UI"): on
  * entering Health, on "Check again" (`refetch`) and, while Health is on screen, after the live
  * tail's apply, approval, rejection, refused apply or gap (useLiveQueue); never on window focus, a
  * reconnect, an interval, a stage, `proposal.created` or a `task.*` event. A walk of the whole

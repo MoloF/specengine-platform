@@ -1,17 +1,21 @@
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import type { HealthReport } from "../api/types";
+import type { DriftRow, HealthReport } from "../api/types";
 import { checkReportOf } from "./check";
 import { nodeViewOf } from "./corpus";
 import { harborSim } from "./harbor-sim/fixtures";
-import { ASSUMED_STATES, UNBOUND_REASONS } from "../health/labels";
+import { ASSUMED_STATES, DRIFT_CLASSES, TESTED_STATES, UNBOUND_REASONS } from "../health/labels";
 import {
   CODE_CANNOT_CAUSES,
   CODE_GAP_CAUSE,
   CODE_OFF_CAUSE,
+  DRIFT_CANNOT_CAUSES,
   healthReportOf,
   LARGE_AMENDMENTS,
+  LARGE_DRIFT,
   LARGE_UNBOUND,
+  LOCK_CAUSE,
+  LOOKALIKE_BASIN,
   NO_RULE_CAUSE,
   REJECTED_NOTE,
   walkGapMessage,
@@ -23,7 +27,9 @@ import { SCENARIOS } from "./scenario";
 // core's order; normal, empty, large and cannot-check as the spec lists them, `error` and `slow`
 // as every read. Rows 4-5 (docs/features/health-code-ui.md "Data", Mocks, UI-4): each object on its
 // type (docs/canon/health-code.md "Document"), every state of either row, code-cannot and
-// not-configured. Row 6 (docs/features/health-drift.md "Data", UI-1): `off` everywhere until 9b-2.
+// not-configured. Row 6 (docs/features/health-drift-ui.md "Data", UI-5): each object on its type
+// (docs/canon/health-drift.md "Document"), every class, a moved and an ambiguous anchor, the test
+// evidence not verified, off, empty, large and code-cannot.
 
 const PROJECTS = ["harbor-sim", "ledger-api"] as const;
 
@@ -39,7 +45,49 @@ const KEYS = {
   UnboundRow: ["id", "kind", "title", "path", "line", "rules", "mentions", "markers"],
   UnboundMarker: ["path", "line", "column", "relation", "id_state", "binding", "reason"],
   HealthDrift: ["state", "causes", "counts", "rows", "tested", "notes"],
+  DriftCounts: ["rows", "ok", "fix", "check", "cannot", "pre_existing", "skipped"],
+  DriftRow: [
+    "node",
+    "relation",
+    "file",
+    "kind",
+    "symbol",
+    "item_kind",
+    "state",
+    "category",
+    "detail",
+    "class",
+    "pre_existing",
+    "markers",
+    "node_rev",
+    "lock",
+    "compared",
+    "levels",
+    "anchor",
+  ],
+  DriftMarker: ["line", "rev"],
+  DriftLock: ["rev", "commit", "verified_at"],
+  DriftLevels: ["lock", "markers", "changed"],
+  BindingAnchor: ["state", "from", "candidates"],
+  BindingPlace: ["file", "kind", "symbol", "item_kind"],
+  TestedRow: ["node", "state", "category", "rev", "node_rev", "commit", "verified_at"],
 };
+
+/** The relations in the lock's order (core `LockRelation`), verify's key order's second field. */
+const RELATIONS = ["implements", "verifies", "configures", "assumes"];
+
+/** verify's key order (core `RowKey`): node bytes, relation, file bytes, keyless first, kind, symbol, item kind. */
+function byKey(a: DriftRow, b: DriftRow): number {
+  return (
+    byBytes(a.node, b.node) ||
+    RELATIONS.indexOf(a.relation) - RELATIONS.indexOf(b.relation) ||
+    byBytes(a.file, b.file) ||
+    (a.kind === null ? 0 : 1) - (b.kind === null ? 0 : 1) ||
+    byBytes(a.kind ?? "", b.kind ?? "") ||
+    byBytes(a.symbol ?? "", b.symbol ?? "") ||
+    byBytes(a.item_kind ?? "", b.item_kind ?? "")
+  );
+}
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   try {
@@ -170,15 +218,155 @@ describe("the mock's health read", () => {
   });
 
   it.each(SCENARIOS.filter((scenario) => scenario !== "cannot-check"))(
-    "%s: row 6 is off for either project, its keys in the JSON's order, the code layer's sentence its cause, nothing counted, never 0 (UI-1 of health-drift)",
+    "%s: every row 6 object holds its type's keys in the JSON's order, nothing else (UI-5 of health-drift-ui)",
     (scenario) => {
       for (const project of PROJECTS) {
         const { drift } = healthReportOf(project, scenario);
-        expect([project, Object.keys(drift)]).toEqual([project, KEYS.HealthDrift]);
-        expect([project, drift]).toEqual([project, { state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null, tested: null, notes: [] }]);
+        const at = (what: string) => `${project} ${scenario} ${what}`;
+        expect([at("drift"), Object.keys(drift)]).toEqual([at("drift"), KEYS.HealthDrift]);
+        if (drift.counts !== null) {
+          expect([at("counts"), Object.keys(drift.counts)]).toEqual([at("counts"), KEYS.DriftCounts]);
+        }
+        for (const row of drift.rows ?? []) {
+          expect([at(row.node), Object.keys(row)]).toEqual([at(row.node), KEYS.DriftRow]);
+          for (const marker of row.markers) {
+            expect([at(row.node), Object.keys(marker)]).toEqual([at(row.node), KEYS.DriftMarker]);
+          }
+          if (row.lock !== null) {
+            expect([at(row.node), Object.keys(row.lock)]).toEqual([at(row.node), KEYS.DriftLock]);
+          }
+          if (row.levels !== null) {
+            expect([at(row.node), Object.keys(row.levels)]).toEqual([at(row.node), KEYS.DriftLevels]);
+          }
+          if (row.anchor !== null) {
+            expect([at(row.node), Object.keys(row.anchor)]).toEqual([at(row.node), KEYS.BindingAnchor]);
+            for (const place of [row.anchor.from, ...(row.anchor.candidates ?? [])].filter((candidate) => candidate !== null)) {
+              expect([at(row.node), Object.keys(place)]).toEqual([at(row.node), KEYS.BindingPlace]);
+            }
+          }
+        }
+        for (const entry of drift.tested ?? []) {
+          expect([at(entry.node), Object.keys(entry)]).toEqual([at(entry.node), KEYS.TestedRow]);
+        }
       }
     },
   );
+
+  it.each(SCENARIOS.filter((scenario) => scenario !== "cannot-check"))(
+    "%s: row 6 measured has counts, rows and test evidence, no cause; any other state none of them, a cause, never 0; verify's counts; the key order; no ok row, no verified entry (UI-5)",
+    (scenario) => {
+      for (const project of PROJECTS) {
+        const { drift } = healthReportOf(project, scenario);
+        expect([project, drift.notes]).toEqual([project, []]);
+        if (drift.state !== "measured") {
+          expect([project, drift.counts, drift.rows, drift.tested, drift.causes.length > 0]).toEqual([project, null, null, null, true]);
+          continue;
+        }
+        expect([project, drift.causes, drift.counts === null, drift.rows === null, drift.tested === null]).toEqual([project, [], false, false, false]);
+        const counts = drift.counts;
+        const rows = drift.rows ?? [];
+        if (counts === null) {
+          throw new Error("measured without counts");
+        }
+        expect([project, counts.pre_existing, counts.fix + counts.check + counts.cannot, counts.rows]).toEqual([project, 0, rows.length, rows.length + counts.ok]);
+        for (const value of DRIFT_CLASSES) {
+          expect([project, value, counts[value as "fix" | "check" | "cannot"]]).toEqual([project, value, rows.filter((row) => row.class === value).length]);
+        }
+        expect(rows.every((row) => row.class !== null && row.state !== "ok" && !row.pre_existing)).toBe(true);
+        expect(rows.map((row) => `${row.node} ${row.relation} ${row.file}`)).toEqual([...rows].sort(byKey).map((row) => `${row.node} ${row.relation} ${row.file}`));
+        const tested = drift.tested ?? [];
+        expect(tested.every((entry) => entry.state !== "verified")).toBe(true);
+        expect(tested.map((entry) => entry.node)).toEqual(tested.map((entry) => entry.node).sort(byBytes));
+      }
+    },
+  );
+
+  it.each(["normal", "error", "slow", "conflict", "large", "editorial"] as const)("%s: ledger-api's row 6 is off, the code layer's sentence its cause, nothing counted", (scenario) => {
+    expect(healthReportOf("ledger-api", scenario).drift).toEqual({ state: "off", causes: [CODE_OFF_CAUSE], counts: null, rows: null, tested: null, notes: [] });
+  });
+
+  it("normal: harbor-sim's row 6 holds every class, a moved and an ambiguous anchor, a look-alike ID, keyless rows; its evidence a stale, an unverifiable and a gone node's", () => {
+    const { drift } = healthReportOf("harbor-sim", "normal");
+    const rows = drift.rows ?? [];
+    expect(rows.map((row) => [row.node, row.class, row.state, row.category])).toEqual([
+      ["MEC-CARGO-CRANES", "check", "unlocked", null],
+      ["MEC-FAIRWAY", "check", "unlocked", null],
+      ["MEC-MOORING", "check", "code_ahead", "code_changed"],
+      ["MEC-TIDES", "fix", "conflict", null],
+      [LOOKALIKE_BASIN, "fix", "bad_marker", "homoglyph"],
+      ["RULE-BERTH-DRAFT", "check", "spec_ahead", "marker_behind"],
+      ["RULE-HARBOR-CLOCK", "cannot", "cannot_verify", "ambiguous_symbol"],
+      ["RULE-HIGH-WATER", "fix", "broken_binding", "symbol_gone"],
+      ["RULE-MOOR-CREW", "fix", "bad_marker", "unanchored"],
+      ["RULE-MOOR-NIGHT", "cannot", "cannot_verify", "item_error"],
+      ["RULE-SPRING-WINDOW", "check", "unlocked", null],
+      ["RULE-TIDE-WINDOW", "fix", "predated", null],
+    ]);
+    expect(new Set(rows.map((row) => row.class))).toEqual(new Set(DRIFT_CLASSES));
+    expect(drift.counts).toEqual({ rows: 21, ok: 9, fix: 5, check: 5, cannot: 2, pre_existing: 0, skipped: 6 });
+    // In key order, so neither class, state nor file is: a sort by any of them in the UI would show.
+    for (const field of ["class", "state", "file"] as const) {
+      const words = rows.map((row) => row[field] ?? "");
+      expect([field, words]).not.toEqual([field, [...words].sort(byBytes)]);
+    }
+    expect(rows.find((row) => row.anchor?.state === "moved")?.anchor?.from).toEqual({ file: "src/sim/berths.rs", kind: "item", symbol: "harbor_sim::berths::moor", item_kind: "function_item" });
+    expect(rows.find((row) => row.anchor?.state === "ambiguous")?.anchor?.candidates).toHaveLength(2);
+    expect(rows.filter((row) => row.kind === null).map((row) => row.node)).toEqual(["RULE-MOOR-CREW", "RULE-MOOR-NIGHT"]);
+    expect(LOOKALIKE_BASIN).toContain(String.fromCodePoint(0x410));
+    expect(drift.tested?.map((entry) => [entry.node, entry.state])).toEqual([
+      ["MEC-TIDES", "stale"],
+      ["RULE-QUAY-LIGHTS", "node_gone"],
+      ["RULE-TIDE-WINDOW", "unverifiable"],
+    ]);
+    expect(new Set([...(drift.tested ?? []).map((entry) => entry.state), "verified"])).toEqual(new Set(TESTED_STATES));
+  });
+
+  it("normal: every node a row 6 line or entry names is a node of harbor-sim's corpus but the look-alike and the gone one", () => {
+    const { corpus } = harborSim(Date.parse("2026-10-09T12:00:00Z"));
+    const { drift } = healthReportOf("harbor-sim", "normal");
+    const named = [...(drift.rows ?? []).map((row) => row.node), ...(drift.tested ?? []).map((entry) => entry.node)];
+    for (const id of new Set(named)) {
+      if (id === LOOKALIKE_BASIN) {
+        // Refused with its Latin fix, as `spec show` refuses a look-alike.
+        expect(() => nodeViewOf(corpus, id)).toThrow(/look-alike letters; IDs are Latin only: write `RULE-BASIN-NAME`/);
+        continue;
+      }
+      const view = nodeViewOf(corpus, id, { with: ["links"], archive: true });
+      expect([id, view.nodes.length]).toEqual([id, id === "RULE-QUAY-LIGHTS" ? 0 : 1]);
+    }
+  });
+
+  it("empty: row 6 measured, none, over the bindings it judged, for either project", () => {
+    for (const project of PROJECTS) {
+      const { drift } = healthReportOf(project, "empty");
+      expect([project, drift.state, drift.rows, drift.tested, drift.counts?.fix, drift.counts?.check, drift.counts?.cannot]).toEqual([project, "measured", [], [], 0, 0, 0]);
+      expect(drift.counts?.rows).toBeGreaterThan(0);
+    }
+  });
+
+  it("large: harbor-sim's row 6 lists 3 000 rows in key order, its twelve among them, each key once, the generated ones unlocked", () => {
+    const { drift } = healthReportOf("harbor-sim", "large");
+    const rows = drift.rows ?? [];
+    expect([rows.length, drift.counts?.rows]).toEqual([LARGE_DRIFT, LARGE_DRIFT + 9]);
+    expect(new Set(rows.map((row) => `${row.node} ${row.relation} ${row.file} ${row.symbol ?? ""}`)).size).toBe(LARGE_DRIFT);
+    const normal = healthReportOf("harbor-sim", "normal").drift.rows ?? [];
+    expect(normal.every((row) => rows.some((listed) => listed.node === row.node && listed.file === row.file))).toBe(true);
+    expect(rows.filter((row) => row.node.includes("-GEN-")).every((row) => row.state === "unlocked" && row.class === "check")).toBe(true);
+  });
+
+  it("code-cannot: row 6 could not be measured for either project, its causes as plain verify words them, raw: harbor-sim's the code walk's gap, ledger-api's its lock", () => {
+    for (const project of PROJECTS) {
+      const { drift } = healthReportOf(project, "code-cannot");
+      expect([project, drift]).toEqual([project, { state: "cannot", causes: DRIFT_CANNOT_CAUSES[project], counts: null, rows: null, tested: null, notes: [] }]);
+    }
+    expect(DRIFT_CANNOT_CAUSES["harbor-sim"]).toEqual([CODE_GAP_CAUSE]);
+    expect(DRIFT_CANNOT_CAUSES["ledger-api"]).toEqual([LOCK_CAUSE]);
+  });
+
+  it("not-configured: row 6 as normal for harbor-sim, measured and none for ledger-api", () => {
+    expect(healthReportOf("harbor-sim", "not-configured").drift).toEqual(healthReportOf("harbor-sim", "normal").drift);
+    expect(healthReportOf("ledger-api", "not-configured").drift.rows).toEqual([]);
+  });
 
   it("normal: harbor-sim's row 4 holds a line in each of the eight states, its row 5 a marker of each reason and a node no marker names", () => {
     const { code, assumes, unbound } = healthReportOf("harbor-sim", "normal");

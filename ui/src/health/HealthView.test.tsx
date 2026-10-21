@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import { KNOWN_CHECK_VERDICTS, type AssumesRow, type CheckReport, type HealthReport, type Proposal, type UnboundRow } from "../api/types";
+import { KNOWN_CHECK_VERDICTS, type AssumesRow, type CheckReport, type DriftRow, type HealthReport, type Proposal, type TestedRow, type UnboundRow } from "../api/types";
 import { App } from "../app/App";
 import { sectionHash } from "../app/routes";
 import { queueOrder } from "../inbox/order";
@@ -9,6 +9,8 @@ import {
   aCheckFinding,
   aCheckReport,
   aCodeRow,
+  aDriftIn,
+  aDriftRow,
   aHealthReport,
   aLink,
   anAmendment,
@@ -18,8 +20,10 @@ import {
   anUnboundMarker,
   anUnboundRow,
   aProposal,
+  aTestedRow,
   entryOf,
   measuredAssumes,
+  measuredDrift,
   measuredUnbound,
 } from "../test/builders";
 import { callsOf } from "../test/homeStub";
@@ -32,9 +36,11 @@ import { argsOf, stubClient } from "../test/stubClient";
 // budgets), AC-09 (reads and states per region), AC-10 (keyboard). docs/features/health-left.md:
 // AC-U3 and AC-U4 (row 3, the unapplied amendments, its three states), AC-U5 (what entering and
 // Check again read), AC-U7 (rows 4 to 6; kind-amendment's AC-U2 tests replaced).
-// docs/features/health-code-ui.md: UI-1 (rows 4 and 5, four states apart each; row 6 alone not
-// measured yet), UI-6 (Show all hands the focus on; an item's ID to its inbox card, a node's to the tree).
-// health-ui-follow-up: UI-7 (a measured row without counts or rows in fixed neutral words).
+// docs/features/health-code-ui.md: UI-1 (rows 4 and 5, four states apart each), UI-6 (Show all
+// hands the focus on; an item's ID to its inbox card, a node's to the tree). health-ui-follow-up:
+// UI-7 (a measured row without counts or rows in fixed neutral words). docs/features/health-drift-ui.md:
+// UI-2 (row 6, drift, its states as rows 4 and 5's, its rows and test evidence; M7: never a 0 for a
+// row not measured), UI-3 (the daemon's order, every word through labels.ts).
 
 const LF = String.fromCharCode(10);
 
@@ -255,12 +261,13 @@ describe("nothing measured is never 0 (AC-04)", () => {
     expect(Array.from(region("Check").querySelectorAll(".check-count"), (item) => item.textContent)).toContain("New debt0");
   });
 
-  it("holds no digit in the value of row 6 and of task W (narrowed from rows 4 to 6 by UI-1 of health-code-ui)", async () => {
+  it("holds no digit in the value of task W, nor in row 6's while the code layer is off (narrowed from rows 4 to 6 by UI-1 of health-code-ui; row 6 drawn by UI-2 of health-drift-ui)", async () => {
     await openHealth();
-    const values = Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-value"), (cell) => cell.textContent);
-    expect(values).toEqual(["Not measured yet"]);
-    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-source"), (cell) => cell.textContent)).toEqual(["Phase 3"]);
-    expect(Array.from(region("What is left").querySelectorAll<HTMLElement>(".health-unmeasured [data-row]"), (row) => row.dataset.row)).toEqual(["drift"]);
+    const drift = region("What is left").querySelector<HTMLElement>('[data-row="drift"]');
+    const values = Array.from(drift?.querySelectorAll(".health-value") ?? [], (cell) => cell.textContent);
+    expect(values).toEqual(["Not measured"]);
+    expect(drift?.querySelector(".health-code-off")?.textContent).toBe("Not measured: Code layer off");
+    expect(region("What is left").textContent).not.toMatch(/Not measured yet|Phase 3/);
     expect(region("Check").querySelector(".check-task-w")?.textContent).toBe("Not measured yet (the bundles log)");
     for (const text of [...values, region("Check").querySelector(".check-task-w")?.textContent ?? "0"]) {
       expect(text).not.toMatch(/\d/);
@@ -276,7 +283,7 @@ describe("what is left (AC-05)", () => {
       "Unapplied amendments",
       "Code assuming a decision",
       "Unbound nodes",
-      "Not measured yet",
+      "Drift",
     ]);
   });
 
@@ -437,9 +444,9 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
     expect(part().querySelector(".health-amendments-none code")?.textContent).toBe("amends");
     expect(part().querySelector(".health-amendments-scope")?.textContent).toBe("Measured over 41 documents.");
     expect(part().querySelector(".health-value")?.textContent).toBe("None");
-    // Measured, so drawn as a measured value, never as row 6's "Not measured yet".
+    // Measured, so drawn as a measured value, never as row 6's "Not measured" (its code layer off).
     expect(part().querySelector(".health-value")?.classList.contains("health-measured")).toBe(true);
-    expect(Array.from(region("What is left").querySelectorAll(".health-unmeasured .health-value"), (cell) => cell.classList.contains("health-measured"))).toEqual([false]);
+    expect(Array.from(region("What is left").querySelectorAll('[data-row="drift"] .health-value'), (cell) => cell.classList.contains("health-measured"))).toEqual([false]);
     expect(part().textContent).not.toMatch(/nothing left|\b0\b/i);
     expect(amendmentRows()).toHaveLength(0);
   });
@@ -550,7 +557,7 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
     await waitFor(() => {
       expect(region("What is left").querySelector(".health-left-total")?.textContent).toBe("7 proposals in the queue");
     });
-    expect(region("What is left").querySelectorAll(".health-unmeasured-row")).toHaveLength(1);
+    expect(within(region("What is left")).getByRole("heading", { level: 3, name: "Drift" })).toBeTruthy();
     expect(caught).toHaveBeenCalled();
   });
 });
@@ -932,6 +939,373 @@ describe("rows 4 and 5: code assuming a decision, unbound nodes (UI-1, UI-6 of h
     await openHealth(healthOf(aHealthReport([], { unbound: measuredUnbound(ten) })));
     expect(lines("unbound")).toHaveLength(10);
     expect(within(codePart("unbound")).queryByRole("button", { name: /^Show all/ })).toBeNull();
+  });
+});
+
+describe("row 6: drift (UI-2, UI-3 of health-drift-ui)", () => {
+  const ESC = String.fromCharCode(0x1b);
+  const RLO = String.fromCodePoint(0x202e);
+  /** A look-alike ID as a marker wrote it: RULE-7 with a Cyrillic capital E. */
+  const LOOKALIKE = "RUL\u0415-7";
+  const OFF = "specengine.toml has no [code] table: the code layer is off (add [code] with roots)";
+
+  /** Row 6's lines in no order the UI could sort them into: by node, class, state, relation or file. */
+  const DRIFT: DriftRow[] = [
+    aDriftRow({
+      node: "R-12",
+      file: "src/zz.rs",
+      symbol: "alpha::zz::regen",
+      state: "conflict",
+      class: "fix",
+      lock: { rev: 2, commit: "a0cea48a0cea48a0cea48a0cea48a0cea48a0cea", verified_at: "2026-10-10" },
+      compared: "ast",
+      levels: { lock: ["sig", "body"], markers: ["sig", "body"], changed: ["body"] },
+      anchor: { state: "exact", from: null, candidates: null },
+    }),
+    aDriftRow({ node: "MEC-ALPHA", relation: "configures", file: "assets/movement.ron", kind: "ron", symbol: "root.stamina.regen", item_kind: null }),
+    aDriftRow({ node: "", file: `src/b${ESC}.rs`, kind: null, symbol: null, item_kind: null, state: "bad_marker", category: "unanchored", class: "fix" }),
+    aDriftRow({
+      node: "Z-9",
+      file: "src/mm.rs",
+      symbol: "alpha::mm::moor",
+      state: "code_ahead",
+      category: "code_changed",
+      detail: "body,deps",
+      anchor: { state: "moved", from: { file: "src/old.rs", kind: "item", symbol: "alpha::old::moor", item_kind: "function_item" }, candidates: null },
+    }),
+    aDriftRow({
+      node: "A-1",
+      file: "src/aa.rs",
+      symbol: "alpha::aa::tick",
+      state: "cannot_verify",
+      category: "ambiguous_symbol",
+      detail: "duplicate",
+      class: "cannot",
+      anchor: {
+        state: "ambiguous",
+        from: null,
+        candidates: [
+          { file: "src/aa.rs", kind: "item", symbol: "alpha::aa::tick", item_kind: "function_item" },
+          { file: "src/ab.rs", kind: "module", symbol: "alpha::ab", item_kind: null },
+        ],
+      },
+    }),
+    aDriftRow({ node: LOOKALIKE, relation: "verifies", file: "src/tests.rs", symbol: `alpha::tests::holds${RLO}`, state: "bad_marker", category: "homoglyph", class: "fix" }),
+  ];
+
+  /** The test evidence not verified, in no order the UI could sort it into. */
+  const TESTED: TestedRow[] = [
+    aTestedRow({ node: "R-12", state: "stale", category: "code_changed", rev: 2, node_rev: 2, commit: "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00", verified_at: "2026-10-09" }),
+    aTestedRow({ node: "A-1", state: "unverifiable", category: "predated", rev: 3, node_rev: 3 }),
+    aTestedRow({ node: "GONE-1", state: "node_gone", category: null, rev: 1, node_rev: null }),
+  ];
+
+  function healthOf(report: HealthReport) {
+    const client = healthClient();
+    client.getHealth.mockImplementation(() => Promise.resolve(structuredClone(report)));
+    return client;
+  }
+
+  function driftPart(): HTMLElement {
+    const found = region("What is left").querySelector<HTMLElement>('[data-row="drift"]');
+    if (found === null) {
+      throw new Error("no drift part");
+    }
+    return found;
+  }
+
+  function lines(): HTMLElement[] {
+    return Array.from(driftPart().querySelectorAll<HTMLElement>("[data-drift]"));
+  }
+
+  function entries(): HTMLElement[] {
+    return Array.from(driftPart().querySelectorAll<HTMLElement>("[data-tested]"));
+  }
+
+  const textOf = (element: Element | null | undefined) => element?.textContent ?? null;
+
+  /** A badge's words and colour role. */
+  function badge(element: Element | null | undefined): [string | null, string | null] {
+    return [textOf(element?.querySelector(".badge-label")), element?.querySelector(".badge")?.getAttribute("data-tone") ?? null];
+  }
+
+  /** The part's text but its causes: what a cause says may hold a digit, the row never does. */
+  function withoutCauses(part: HTMLElement): string {
+    return part.textContent.replace(textOf(part.querySelector(".health-code-causes")) ?? "", "");
+  }
+
+  it("measured: the rows listed of the bindings judged and those skipped, verify's counts by class and ok in sync; the lines in the daemon's order, never sorted here", async () => {
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT, { ok: 8, skipped: 2, tested: TESTED }) })));
+    expect(textOf(driftPart().querySelector(".health-left-total"))).toBe("6 of 14 bindings, 2 skipped");
+    expect(textOf(driftPart().querySelector(".health-value.health-measured"))).toBe("6");
+    const tally = within(driftPart()).getByRole("list", { name: "Bindings by class, as spec verify counts them" });
+    expect(Array.from(tally.children, (item) => [...badge(item), textOf(item.querySelector(".health-tally-count"))])).toEqual([
+      ["Fix", "finding-error", "3"],
+      ["Check", "finding-warning", "2"],
+      ["Cannot verify", "sync-cannot-verify", "1"],
+      ["In sync", "sync-ok", "8"],
+    ]);
+    expect(lines().map((line) => line.dataset.drift)).toEqual(DRIFT.map((row) => row.node));
+    expect(driftPart().textContent).not.toMatch(/block|verdict/i);
+  });
+
+  it("measured: each line's class (cannot verify in its own role, never ok's), the node linked to the tree (a bare marker's as text), the relation; verify's state labelled, category and detail raw; file and binding plain, a keyless row's none; controls written \\u{..}", async () => {
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT) })));
+    expect(lines().map((line) => badge(line.querySelector(".health-code-head")))).toEqual([
+      ["Fix", "finding-error"],
+      ["Check", "finding-warning"],
+      ["Fix", "finding-error"],
+      ["Check", "finding-warning"],
+      ["Cannot verify", "sync-cannot-verify"],
+      ["Fix", "finding-error"],
+    ]);
+    expect(lines().every((line) => line.querySelector(".health-code-head .badge svg") !== null)).toBe(true);
+    expect(
+      lines().map((line) => {
+        const id = line.querySelector(".health-code-id");
+        return [textOf(id), id?.getAttribute("href") ?? null, textOf(line.querySelector(".health-code-head .kind-tag"))];
+      }),
+    ).toEqual([
+      ["R-12", sectionHash("alpha", "tree", "R-12"), "implements"],
+      ["MEC-ALPHA", sectionHash("alpha", "tree", "MEC-ALPHA"), "configures"],
+      ["No ID", null, "implements"],
+      ["Z-9", sectionHash("alpha", "tree", "Z-9"), "implements"],
+      ["A-1", sectionHash("alpha", "tree", "A-1"), "implements"],
+      [LOOKALIKE, sectionHash("alpha", "tree", LOOKALIKE), "verifies"],
+    ]);
+    const metas = lines().map((line) => Array.from(line.querySelectorAll(".health-code-meta")));
+    expect(metas.map(([state]) => [...badge(state), textOf(state?.querySelector(".health-code-word"))])).toEqual([
+      ["Conflict", "sync-conflict", null],
+      ["Unlocked", "sync-unlocked", null],
+      ["Bad marker", "sync-bad-marker", "unanchored"],
+      ["Code ahead", "sync-code-ahead", "code_changed body,deps"],
+      ["Cannot verify", "sync-cannot-verify", "ambiguous_symbol duplicate"],
+      ["Bad marker", "sync-bad-marker", "homoglyph"],
+    ]);
+    expect(metas.map(([, place]) => Array.from(place?.children ?? [], (part) => part.textContent))).toEqual([
+      ["src/zz.rs", "item alpha::zz::regen function_item"],
+      ["assets/movement.ron", "ron root.stamina.regen"],
+      ["src/b\\u{1b}.rs", "No symbol"],
+      ["src/mm.rs", "item alpha::mm::moor function_item"],
+      ["src/aa.rs", "item alpha::aa::tick function_item"],
+      ["src/tests.rs", "item alpha::tests::holds\\u{202e} function_item"],
+    ]);
+    // Only the node is a link: paths and bindings are plain.
+    expect(lines().map((line) => line.querySelectorAll("a").length)).toEqual([1, 1, 0, 1, 1, 1]);
+    expect(driftPart().textContent).not.toMatch(/null|undefined/);
+  });
+
+  it("measured: a moved row's old place and an ambiguous row's candidates beneath it, as verify prints them; no other line has any", async () => {
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT) })));
+    expect(lines().map((line) => Array.from(line.querySelectorAll(".health-code-tail"), (tail) => tail.textContent))).toEqual([
+      [],
+      [],
+      [],
+      ["Moved from src/old.rs | item alpha::old::moor function_item"],
+      ["Candidate src/aa.rs | item alpha::aa::tick function_item", "Candidate src/ab.rs | module alpha::ab"],
+      [],
+    ]);
+  });
+
+  it("measured: beneath the rows, the test evidence not verified in the daemon's order: its state labelled (unverifiable in cannot-verify's role, never verified's), the node linked, the category raw, the revisions, commit and date as stored", async () => {
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT, { tested: TESTED }) })));
+    expect(within(driftPart()).getByRole("heading", { level: 4, name: "Test evidence" })).toBeTruthy();
+    expect(within(driftPart()).getByRole("list", { name: "Test evidence not verified, by node" })).toBeTruthy();
+    expect(
+      entries().map((entry) => [entry.dataset.tested, ...badge(entry.querySelector(".health-code-head")), entry.querySelector("a")?.getAttribute("href") ?? null, textOf(entry.querySelector(".health-code-word"))]),
+    ).toEqual([
+      ["R-12", "Stale", "stale-changed", sectionHash("alpha", "tree", "R-12"), "code_changed"],
+      ["A-1", "Unverifiable", "sync-cannot-verify", sectionHash("alpha", "tree", "A-1"), "predated"],
+      ["GONE-1", "Node gone", "sync-broken-binding", sectionHash("alpha", "tree", "GONE-1"), null],
+    ]);
+    expect(entries().map((entry) => textOf(entry.querySelector(".health-code-meta")))).toEqual([
+      "Vouched for rev 2Now rev 2Commit c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00Tests passed 2026-10-09",
+      "Vouched for rev 3Now rev 3Commit 0123456789abcdef0123456789abcdef01234567Tests passed 2026-10-08",
+      "Vouched for rev 1No revision nowCommit 0123456789abcdef0123456789abcdef01234567Tests passed 2026-10-08",
+    ]);
+    // The rows' lines and the evidence's are apart: evidence is no row.
+    expect(lines()).toHaveLength(6);
+  });
+
+  it("test evidence: none said as such; not judged said so, the row's note verbatim beside it, the rows still drawn", async () => {
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT.slice(0, 1)) })));
+    expect(textOf(driftPart().querySelector(".health-drift-evidence"))).toBe("None: no [[tested]] entry is stale, unverifiable or without its node.");
+    expect(entries()).toHaveLength(0);
+    cleanup();
+    const note = "tested: `git hash-object` could not be run: no `git` program was found on PATH";
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT.slice(0, 1), { tested: null, notes: [note] }) })));
+    expect(textOf(driftPart().querySelector(".health-drift-evidence"))).toBe("Not judged: the test evidence could not be judged on this read.");
+    expect(textOf(within(driftPart()).getByRole("list", { name: "Notes from the daemon on the drift" }))).toBe(note);
+    expect(lines()).toHaveLength(1);
+    expect(entries()).toHaveLength(0);
+  });
+
+  it("zero: None, said as the rule, and what it measured over, as a measured value; no tally, no line; the evidence beside it", async () => {
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift([], { ok: 12, skipped: 3, tested: TESTED.slice(0, 1) }) })));
+    expect(textOf(driftPart().querySelector(".health-code-none"))).toBe("None: every binding spec verify judges is in sync.");
+    expect(textOf(driftPart().querySelector(".health-amendments-scope"))).toBe("Measured over 12 bindings, 3 skipped.");
+    const value = driftPart().querySelector(".health-value");
+    expect([textOf(value), value?.classList.contains("health-measured")]).toEqual(["None", true]);
+    expect(driftPart().querySelector(".health-tally")).toBeNull();
+    expect(lines()).toHaveLength(0);
+    expect(entries().map((entry) => entry.dataset.tested)).toEqual(["R-12"]);
+  });
+
+  it("not measured (off): Not measured, Code layer off, the cause verbatim; no digit, no tally, no line, no Retry, never 0 (M7)", async () => {
+    const client = await openHealth(healthOf(aHealthReport([], { drift: aDriftIn("off", [OFF]) })));
+    expect(textOf(driftPart().querySelector(".health-code-off"))).toBe("Not measured: Code layer off");
+    expect(Array.from(driftPart().querySelectorAll(".health-value"), (cell) => cell.textContent)).toEqual(["Not measured"]);
+    expect(driftPart().querySelector(".health-measured")).toBeNull();
+    expect(Array.from(within(driftPart()).getByRole("list", { name: "Causes, as the daemon gives them" }).children, (item) => item.textContent)).toEqual([OFF]);
+    expect([driftPart().querySelector(".health-tally"), lines().length, entries().length]).toEqual([null, 0, 0]);
+    expect(driftPart().textContent).not.toMatch(/\d/);
+    expect(within(driftPart()).queryByRole("button", { name: "Retry" })).toBeNull();
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("could not be measured: the causes as plain verify words them, one-lined; no value, no count, never 0 (M7); Retry reads getHealth alone, then focus on the part's heading; rows 3 to 5 stand", async () => {
+    const causes = ["spec.lock:1: unclosed array, expected `]`", `\`git\` could not be run: no \`git\` program${ESC} was found${LF}on PATH`];
+    const client = healthOf(
+      aHealthReport([anAmendment({ path: "docs/features/a.md" })], { drift: aDriftIn("cannot", causes), assumes: measuredAssumes([anAssumesRow({ id: "PR-1" })]) }),
+    );
+    await openHealth(client);
+    const part = driftPart();
+    expect(textOf(part.querySelector(".health-code-cannot-title"))).toBe("Could not be measured");
+    expect(Array.from(within(part).getByRole("list", { name: "Causes, as the daemon gives them" }).children, (item) => item.textContent)).toEqual([
+      "spec.lock:1: unclosed array, expected `]`",
+      "`git` could not be run: no `git` program\\u{1b} was found on PATH",
+    ]);
+    expect([part.querySelector(".health-value"), part.querySelector(".health-left-total"), part.querySelector(".health-tally"), lines().length, entries().length]).toEqual([null, null, null, 0, 0]);
+    expect(withoutCauses(part)).not.toMatch(/\d/);
+    expect(within(part).queryByRole("alert")).toBeNull();
+    // Rows 3 and 4 drawn as they are.
+    expect(textOf(region("What is left").querySelector('[data-row="amendments"] .health-left-total'))).toBe("1 unapplied amendment over 7 documents");
+    expect(textOf(region("What is left").querySelector('[data-row="assumes"] .health-left-total'))).toBe("1 row of 1 marker");
+    client.getHealth.mockImplementation(() => Promise.resolve(aHealthReport([], { drift: measuredDrift([], { ok: 3 }) })));
+    const retry = within(part).getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(driftPart().querySelector(".health-code-none")).not.toBeNull();
+    });
+    await focused(within(driftPart()).getByRole("heading", { level: 3, name: "Drift" }));
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+    expect(client.getCheck).toHaveBeenCalledTimes(1);
+    expect(client.getInbox).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ["counts", { counts: null }],
+    ["rows", { rows: null }],
+  ] as const)("measured with no %s (outside the contract): Not measured in fixed neutral words, never Measured; no digit, no line, no Retry", async (_missing, hole) => {
+    await openHealth(healthOf(aHealthReport([], { drift: { ...measuredDrift(DRIFT, { tested: TESTED }), causes: ["cut short"], ...hole } })));
+    expect(textOf(driftPart().querySelector(".health-code-off"))).toBe("Not measured: the answer holds no counts");
+    expect(Array.from(driftPart().querySelectorAll(".health-value"), (value) => value.textContent)).toEqual(["Not measured"]);
+    expect([driftPart().querySelector(".health-measured"), driftPart().querySelector(".health-tally"), lines().length, entries().length]).toEqual([null, null, 0, 0]);
+    expect(driftPart().textContent).not.toMatch(/\d|Measured/);
+    expect(within(driftPart()).queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("the read failing: the daemon's words verbatim, shown, not spoken (row 3 speaks them); no value; its Retry reads getHealth alone", async () => {
+    const message = "spec: the walk is incomplete: the directory `docs/spec/locks` cannot be listed: unapplied amendments not measured";
+    const client = healthClient();
+    client.getHealth.mockRejectedValueOnce(new ClientError({ status: 503, message }));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    await within(driftPart()).findByText(message);
+    expect(textOf(driftPart().querySelector(".error-title"))).toBe("The drift could not be read");
+    expect(within(driftPart()).queryByRole("alert")).toBeNull();
+    expect(driftPart().querySelector(".health-value")).toBeNull();
+    expect(driftPart().getAttribute("aria-busy")).toBe("false");
+    fireEvent.click(within(driftPart()).getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(textOf(driftPart().querySelector(".health-code-off"))).toBe("Not measured: Code layer off");
+    });
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+    expect(client.getCheck).toHaveBeenCalledTimes(1);
+  });
+
+  it("answered, then a read refused: the rows drawn stay, and a note inside the part gives the daemon's words; never an alert, never a 0", async () => {
+    const message = "spec: the walk is incomplete: the directory `docs/spec/locks` cannot be listed: unapplied amendments not measured";
+    const client = await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT, { ok: 8, skipped: 2 }) })));
+    client.getHealth.mockRejectedValueOnce(new ClientError({ status: 503, message }));
+    fireEvent.click(within(region("Check")).getByRole("button", { name: "Check again" }));
+    await waitFor(() => {
+      expect(textOf(driftPart().querySelector(".note"))).toBe(`The drift could not be read again: ${message}`);
+    });
+    expect(within(driftPart()).queryByRole("alert")).toBeNull();
+    expect(textOf(driftPart().querySelector(".health-left-total"))).toBe("6 of 14 bindings, 2 skipped");
+    expect(lines().map((line) => line.dataset.drift)).toEqual(DRIFT.map((row) => row.node));
+    expect(client.getHealth).toHaveBeenCalledTimes(2);
+  });
+
+  it("being measured: a busy skeleton, no digit", async () => {
+    const client = healthClient();
+    client.getHealth.mockImplementation(() => new Promise(() => undefined));
+    renderApp(client, "#/alpha/health");
+    await regionsShown();
+    expect(driftPart().getAttribute("aria-busy")).toBe("true");
+    expect(within(driftPart()).getByRole("status", { name: "Measuring the drift" }).getAttribute("aria-busy")).toBe("true");
+    expect(driftPart().querySelector(".health-value")).toBeNull();
+    expect(driftPart().textContent).not.toMatch(/\d/);
+  });
+
+  it("a word this UI does not know is shown raw and neutral, never fails the part: a class, a state, an entry's state; a row's state not listed: not measured, no Retry", async () => {
+    await openHealth(
+      healthOf(aHealthReport([], { drift: measuredDrift([aDriftRow({ node: "R-1", class: "advisory", state: "drifting" })], { tested: [aTestedRow({ node: "R-1", state: "expired" })] }) })),
+    );
+    const [line] = lines();
+    expect([badge(line?.querySelector(".health-code-head")), badge(line?.querySelector(".health-code-meta"))]).toEqual([
+      ["advisory", "sync-unknown"],
+      ["drifting", "sync-unknown"],
+    ]);
+    expect(badge(entries()[0]?.querySelector(".health-code-head"))).toEqual(["expired", "sync-unknown"]);
+    cleanup();
+    await openHealth(healthOf(aHealthReport([], { drift: aDriftIn("stale", ["the index is older than the code"]) })));
+    expect(textOf(driftPart().querySelector(".health-code-off"))).toBe("Not measured: stale");
+    expect(within(driftPart()).queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("over ten: the first ten rendered, Show all <n> renders the rest and hands the focus to the eleventh line; nothing read", async () => {
+    const many = Array.from({ length: 12 }, (_, index) => aDriftRow({ node: `R-${String(200 - index)}` }));
+    const client = await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(many) })));
+    expect(lines().map((line) => line.dataset.drift)).toEqual(many.slice(0, 10).map((row) => row.node));
+    expect(textOf(driftPart().querySelector(".health-amendments-more .health-amendments-scope"))).toBe("The first 10 of 12, in spec verify's order.");
+    const button = within(driftPart()).getByRole("button", { name: "Show all 12" });
+    button.focus();
+    fireEvent.click(button);
+    expect(lines().map((line) => line.dataset.drift)).toEqual(many.map((row) => row.node));
+    await focused(lines()[10] as HTMLElement);
+    expect(within(driftPart()).queryByRole("button", { name: /^Show all/ })).toBeNull();
+    await settle();
+    expect(client.getHealth).toHaveBeenCalledTimes(1);
+  });
+
+  it("test evidence over ten: the first ten, then Show all <n>, by node; the rows' list apart", async () => {
+    const many = Array.from({ length: 12 }, (_, index) => aTestedRow({ node: `R-${String(100 + index)}` }));
+    await openHealth(healthOf(aHealthReport([], { drift: measuredDrift(DRIFT, { tested: many }) })));
+    expect(entries()).toHaveLength(10);
+    expect(textOf(driftPart().querySelector(".health-amendments-more .health-amendments-scope"))).toBe("The first 10 of 12, by node.");
+    fireEvent.click(within(driftPart()).getByRole("button", { name: "Show all 12" }));
+    expect(entries().map((entry) => entry.dataset.tested)).toEqual(many.map((entry) => entry.node));
+    await focused(entries()[10] as HTMLElement);
+    expect(lines()).toHaveLength(6);
+  });
+
+  it("a row 6 that fails to render fails its part alone: rows 3 and 5 stand beside it", async () => {
+    const broken = { ...aHealthReport([anAmendment({ path: "docs/features/a.md" })], { unbound: measuredUnbound([anUnboundRow({ id: "R-1" })]) }), drift: null } as unknown as HealthReport;
+    const caught = vi.fn();
+    window.history.replaceState(null, "", "/#/alpha/health");
+    render(<App client={healthOf(broken)} scenario={null} />, { onCaughtError: caught });
+    await regionsShown();
+    expect(await within(driftPart()).findByText(/The drift could not be shown/)).toBeTruthy();
+    expect(within(driftPart()).getByRole("heading", { level: 3, name: "Drift" })).toBeTruthy();
+    expect(region("What is left").querySelectorAll("[data-unbound]")).toHaveLength(1);
+    expect(region("What is left").querySelectorAll("[data-amendment]")).toHaveLength(1);
+    expect(caught).toHaveBeenCalled();
   });
 });
 

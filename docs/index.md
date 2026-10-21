@@ -20,7 +20,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/health-drift-ui.md](features/health-drift-ui.md) health-drift-ui (9b-2): Health draws row 6, drift · ui · draft
 - [docs/features/layer-c-reads.md](features/layer-c-reads.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols, the next plugin MINOR · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress

@@ -3,13 +3,16 @@ import {
   type AssumedState,
   type CheckMode,
   type CheckVerdict,
+  type DriftCounts,
   type FindingSeverity,
   type HealthRowState,
   type KnownCheckMode,
   type KnownCheckVerdict,
   type KnownFindingSeverity,
+  type TestedState,
   type UnboundReason,
 } from "../api/types";
+import { syncLook } from "../tree/labels";
 import type { Look } from "../ui/Badge";
 
 // The check's closed tables (`docs/canon/spec-check.md` "Findings, debt, verdict"): a known value
@@ -183,4 +186,68 @@ export function idStateLabel(value: string): string {
 /** The binding's words; any other raw. */
 export function bindingLabel(value: string): string {
   return Object.hasOwn(BINDING, value) ? (BINDING[value] ?? value) : value;
+}
+
+// Row 6 of What is left, drift (docs/features/health-drift-ui.md "Data"; the body:
+// docs/canon/health-drift.md "Document"): a row's class and a `[[tested]]` entry's state go through
+// the two tables below, a row's state through the tree's syncLook (src/tree/labels.ts), never a
+// second table of verify's states. This is the only place row 6 tells one word from another; a word
+// not listed is shown raw and neutral, never fails the part.
+
+const DRIFT_CLASS = {
+  fix: { label: "Fix", tone: "finding-error", icon: "findingError" },
+  check: { label: "Check", tone: "finding-warning", icon: "findingWarning" },
+  cannot: { label: "Cannot verify", tone: "sync-cannot-verify", icon: "cannotCheck" },
+} satisfies Record<string, Look>;
+
+/** verify's three classes, in its summary's order (`docs/canon/spec-verify-output.md` "Text"). */
+export const DRIFT_CLASSES: readonly string[] = Object.keys(DRIFT_CLASS);
+
+/** A class row 6 does not know, or none (only an `ok` row has none, and row 6 lists none): neutral, never ok's. */
+function rawClass(label: string): Look {
+  return { label, tone: "sync-unknown", icon: "unknown" };
+}
+
+/** A row 6 line's class: Fix, Check, or Cannot verify in cannot-verify's role, never ok's; any other word raw, neutral. */
+export function driftClassLook(value: string | null): Look {
+  if (value === null) {
+    return rawClass("No class");
+  }
+  return lookup(DRIFT_CLASS, value) ?? rawClass(value);
+}
+
+/** One count of row 6's tally: its key, its look, verify's count. */
+export interface DriftTally {
+  key: string;
+  look: Look;
+  count: number;
+}
+
+/**
+ * verify's counts as row 6 draws them (`docs/canon/spec-verify-output.md` "Text": `<f> fix, <c>
+ * check, <k> cannot, <o> ok`): one per class in its order, each in its class's look, then `ok` in
+ * the tree's "In sync" look; read from the counts, never counted here.
+ */
+export function driftTally(counts: DriftCounts): DriftTally[] {
+  return [
+    { key: "fix", look: DRIFT_CLASS.fix, count: counts.fix },
+    { key: "check", look: DRIFT_CLASS.check, count: counts.check },
+    { key: "cannot", look: DRIFT_CLASS.cannot, count: counts.cannot },
+    { key: "ok", look: syncLook("ok"), count: counts.ok },
+  ];
+}
+
+const TESTED = {
+  verified: { label: "Verified", tone: "sync-ok", icon: "checkClean" },
+  stale: { label: "Stale", tone: "stale-changed", icon: "deferred" },
+  unverifiable: { label: "Unverifiable", tone: "sync-cannot-verify", icon: "cannotCheck" },
+  node_gone: { label: "Node gone", tone: "sync-broken-binding", icon: "linkDangling" },
+} satisfies Record<string, Look>;
+
+/** A `[[tested]]` entry's four states, in the canon's order (`docs/canon/spec-lock-tested.md` "The state"). */
+export const TESTED_STATES: readonly string[] = Object.keys(TESTED);
+
+/** A `[[tested]]` entry's state: its label, colour role and icon; unverifiable in cannot-verify's role, never verified's; any other word raw, neutral. */
+export function testedLook(value: TestedState): Look {
+  return lookup(TESTED, value) ?? { label: value, tone: "sync-unknown", icon: "unknown" };
 }

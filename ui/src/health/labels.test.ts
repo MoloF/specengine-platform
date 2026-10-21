@@ -2,17 +2,23 @@ import { describe, expect, it } from "vitest";
 import { KNOWN_CHECK_VERDICTS } from "../api/types";
 import appCss from "../styles/app.css?raw";
 import tokensCss from "../styles/tokens.css?raw";
+import { syncLook } from "../tree/labels";
 import {
   ASSUMED_STATES,
   assumedLook,
   bindingLabel,
   codeRowLook,
+  DRIFT_CLASSES,
+  driftClassLook,
+  driftTally,
   findingSeverityLook,
   findingSeverityRank,
   idStateLabel,
   isCannotCheck,
   isClean,
   isKnownMode,
+  TESTED_STATES,
+  testedLook,
   UNBOUND_REASONS,
   unboundReasonLook,
   verdictLook,
@@ -116,6 +122,57 @@ describe("rows 4 and 5's words (health-code-ui)", () => {
 
   it("give every tone of the two rows a badge rule in app.css and a colour role in tokens.css", () => {
     const tones = [...ASSUMED_STATES.map((state) => assumedLook(state).look.tone), "assumed-unknown", ...UNBOUND_REASONS.map((reason) => unboundReasonLook(reason).tone), "unbound-unknown"];
+    for (const tone of tones) {
+      expect([tone, appCss.includes(`.tone-${tone} { --badge-color: var(--${tone}); }`), tokensCss.includes(`--${tone}:`)]).toEqual([tone, true, true]);
+    }
+  });
+});
+
+// docs/features/health-drift-ui.md "Data": row 6's class and a `[[tested]]` entry's state through one
+// map each, a row's state through the tree's syncLook, never a second table; an unknown word raw
+// and neutral (UI-3's other half: the parts compare none and sort nothing, policy.test.ts).
+
+describe("row 6's words (health-drift-ui)", () => {
+  it("label verify's three classes distinctly, cannot in cannot-verify's role and icon, never ok's; any other class raw, neutral; none neutral too", () => {
+    expect(DRIFT_CLASSES).toEqual(["fix", "check", "cannot"]);
+    expect(DRIFT_CLASSES.map(driftClassLook)).toEqual([
+      { label: "Fix", tone: "finding-error", icon: "findingError" },
+      { label: "Check", tone: "finding-warning", icon: "findingWarning" },
+      { label: "Cannot verify", tone: "sync-cannot-verify", icon: "cannotCheck" },
+    ]);
+    // A cannot row looks like a cannot-verify state, never like an ok one.
+    expect(driftClassLook("cannot")).toEqual(syncLook("cannot_verify"));
+    expect(driftClassLook("cannot").tone).not.toBe(syncLook("ok").tone);
+    expect(driftClassLook("advisory")).toEqual({ label: "advisory", tone: "sync-unknown", icon: "unknown" });
+    expect(driftClassLook("constructor").tone).toBe("sync-unknown");
+    expect(driftClassLook(null)).toEqual({ label: "No class", tone: "sync-unknown", icon: "unknown" });
+  });
+
+  it("tally verify's counts in its summary's order, each class in its look, ok in the tree's In sync; the counts as sent, never summed here", () => {
+    const tally = driftTally({ rows: 39, ok: 8, fix: 19, check: 6, cannot: 6, pre_existing: 0, skipped: 2 });
+    expect(tally.map(({ key, look, count }) => [key, look.label, look.tone, count])).toEqual([
+      ["fix", "Fix", "finding-error", 19],
+      ["check", "Check", "finding-warning", 6],
+      ["cannot", "Cannot verify", "sync-cannot-verify", 6],
+      ["ok", "In sync", "sync-ok", 8],
+    ]);
+  });
+
+  it("label the four [[tested]] states distinctly, unverifiable in cannot-verify's role, never verified's; any other raw, neutral", () => {
+    expect(TESTED_STATES).toEqual(["verified", "stale", "unverifiable", "node_gone"]);
+    const looks = TESTED_STATES.map(testedLook);
+    expect(looks.map((look) => look.label)).toEqual(["Verified", "Stale", "Unverifiable", "Node gone"]);
+    expect(new Set(looks.map((look) => look.tone)).size).toBe(4);
+    expect(new Set(looks.map((look) => look.icon)).size).toBe(4);
+    expect(testedLook("unverifiable")).toEqual({ label: "Unverifiable", tone: "sync-cannot-verify", icon: "cannotCheck" });
+    expect(testedLook("unverifiable").tone).not.toBe(testedLook("verified").tone);
+    expect(testedLook("expired")).toEqual({ label: "expired", tone: "sync-unknown", icon: "unknown" });
+    expect(testedLook("toString").tone).toBe("sync-unknown");
+    expect([...looks, ...DRIFT_CLASSES.map(driftClassLook)].map((look) => look.label).join(" ")).not.toMatch(/block/i);
+  });
+
+  it("give every tone of row 6 a badge rule in app.css and a colour role in tokens.css: no new tone", () => {
+    const tones = [...DRIFT_CLASSES.map((value) => driftClassLook(value).tone), driftClassLook("advisory").tone, ...TESTED_STATES.map((state) => testedLook(state).tone), testedLook("expired").tone];
     for (const tone of tones) {
       expect([tone, appCss.includes(`.tone-${tone} { --badge-color: var(--${tone}); }`), tokensCss.includes(`--${tone}:`)]).toEqual([tone, true, true]);
     }

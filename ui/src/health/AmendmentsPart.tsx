@@ -168,7 +168,7 @@ function Amendments({ project, report }: { project: string; report: HealthReport
  * live documents that amend a node, from its own read, `getHealth`, with its own boundary. Three
  * states kept apart: being measured (a skeleton, no digit), could not be measured (the daemon's
  * words verbatim and a Retry reading `getHealth` alone; an older daemon's 404 too, never none), and
- * measured, zero too, a measured value never drawn as "Not measured yet" is. `failure` is the
+ * measured, zero too, a measured value never drawn as row 6's "Not measured" is. `failure` is the
  * read's retained failure and `busy` whether it is being read, both computed by What is left
  * (LeftRegion), which marks itself busy from the same flag.
  */

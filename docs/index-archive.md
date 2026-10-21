@@ -37,6 +37,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/hash-levels.md](features/hash-levels.md) shipped
 - [docs/features/health-code-ui.md](features/health-code-ui.md) shipped
 - [docs/features/health-code.md](features/health-code.md) shipped
+- [docs/features/health-drift-ui.md](features/health-drift-ui.md) shipped
 - [docs/features/health-drift.md](features/health-drift.md) shipped
 - [docs/features/health-left.md](features/health-left.md) shipped
 - [docs/features/health-ui-follow-up.md](features/health-ui-follow-up.md) shipped
@@ -127,6 +128,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0006.md](roadmap/RM-0006.md) shipped
 - [docs/roadmap/RM-0007.md](roadmap/RM-0007.md) shipped
 - [docs/roadmap/RM-0008.md](roadmap/RM-0008.md) shipped
+- [docs/roadmap/RM-0009.md](roadmap/RM-0009.md) shipped
 - [docs/roadmap/RM-0030.md](roadmap/RM-0030.md) shipped
 - [docs/roadmap/RM-0032.md](roadmap/RM-0032.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

@@ -8,7 +8,7 @@ reviewed: 2026-10-21
 
 # Health's row 6: drift
 
-Row 6 of Health's "What is left" (06 s7) in `spec health [--json]` and its route, after rows 4-5 (`health-code.md`): plain `spec verify`'s judgement of the working tree, run in-process over the code index the call already refreshed; its rows but `ok`, its counts, and the `[[tested]]` entries not `verified`. Architecture rule: `architecture-code.md#health` (ADR-0047, ADR-0051; the judge ADR-0046, verdicts ADR-0042, evidence ADR-0044). Row 6 is drawn by 9b-2 (`docs/features/health-drift-ui.md`); until then Health shows it "Not measured yet" (`health.md` "UI").
+Row 6 of Health's "What is left" (06 s7) in `spec health [--json]` and its route, after rows 4-5 (`health-code.md`): plain `spec verify`'s judgement of the working tree, run in-process over the code index the call already refreshed; its rows but `ok`, its counts, and the `[[tested]]` entries not `verified`. Architecture rule: `architecture-code.md#health` (ADR-0047, ADR-0051; the judge ADR-0046, verdicts ADR-0042, evidence ADR-0044). Health draws it with `DriftPart.tsx` ("UI").
 
 ## Rule
 
@@ -81,7 +81,7 @@ Causes as plain words them: `` `git` could not be run: no `git` program was foun
 
 ## UI
 
-Provisional types (ADR-0033), citing `docs/features/health-drift.md` "Data": `HealthReport.drift: HealthDrift`; `HealthDrift {state: HealthRowState, causes, counts: DriftCounts | null, rows: DriftRow[] | null, tested: TestedRow[] | null, notes}`; `DriftRow` (17 keys, `state: SyncState`, `anchor: BindingAnchor | null`), `DriftMarker`, `DriftLock`, `DriftLevels`; words raw. Mocks: `drift` `off` for both projects in every scenario, the code layer's sentence its cause. Nothing reads it yet.
+`ui/src/health/DriftPart.tsx` draws "Drift" after "Unbound nodes" from the same `getHealth` read, with rows 4-5's frame, states, Retry and triggers (`health.md` "UI"; none of its own). Measured: "<rows> of <n> bindings, <skipped> skipped", a tally by class (`driftTally`), zero rows "None: every binding `spec verify` judges is in sync."; rows in the daemon's order, never sorted, 10 then "Show all <n>": class and state badges, the node linked to the tree, relation, category, detail, place, a moved anchor's old place, candidates; then `tested` by node, `[]` "None", `null` "Not judged". Words through `labels.ts` (`driftClassLook`, `testedLook`, `syncLook`), an unlisted one raw, `cannot`/`unverifiable` never ok's look. Texts, looks, mocks: `docs/features/health-drift-ui.md`. Provisional types (ADR-0033; `docs/features/health-drift.md` "Data"): `HealthDrift {state, causes, counts, rows, tested, notes}`, `DriftCounts`, `DriftRow` (17 keys), `DriftMarker`, `DriftLock`, `DriftLevels`.
 
 ## Known limits
 
@@ -103,4 +103,4 @@ Provisional types (ADR-0033), citing `docs/features/health-drift.md` "Data": `He
 
 ## Tests
 
-CLI `tests/health_drift/` (in `tests/health.rs`): parity with plain verify over five corpora, no `ok` row, only unverified `tested`, the prefixed lines, run causes never 0, no exit 1 or verdict under any mode, the index left fresh, the caller's `GitEnv`; `health_drift_cost` (`#[ignore]`); `health_rows/` (read-only, determinism, the scan forbidding `verify_as`), `code_refs_walk.rs` (`NEW_MODULES` 18); http `tests/health.rs` (parity, a `cannot` row 6 a 200, no `git`), `daemon_keys.rs` (74 sets); UI `provisional.test.ts`, `daemonKeys.test.ts`, `mocks/health.test.ts`. TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs` (row 6's state, counts, ms). Untested, no deterministic trigger: the selection's store read (8), a file changed twice (3), a queue cause leaving row 6 measured.
+CLI `tests/health_drift/` (in `tests/health.rs`): parity with plain verify over five corpora, no `ok` row, only unverified `tested`, the prefixed lines, run causes never 0, no exit 1 or verdict under any mode, the index left fresh, the caller's `GitEnv`; `health_drift_cost` (`#[ignore]`); `health_rows/` (read-only, determinism, the scan forbidding `verify_as`), `code_refs_walk.rs` (`NEW_MODULES` 18); http `tests/health.rs` (parity, a `cannot` row 6 a 200, no `git`), `daemon_keys.rs` (74 sets); UI `provisional`, `daemonKeys`, `mocks/health`, `HealthView` ("row 6: drift"), `labels`, `health.smoke`, `health.live`, `policy` (AC-U6; Health sorts only in `findings.ts`). TE-7, manual (`#[ignore]`): CLI and http `health_code_pilot.rs` (row 6's state, counts, ms). Untested, no deterministic trigger: the selection's store read (8), a file changed twice (3), a queue cause leaving row 6 measured.
