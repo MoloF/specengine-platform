@@ -32,6 +32,20 @@
 //!   `unlinked` row and a row on nothing show nowhere; a role changes no
 //!   binding, count or exit. Without the list every target's `roles` is
 //!   `null` and the text is as before.
+//! - **Layer C** (canon `layer-c`, "Join"; only `spec resolve` makes a
+//!   snapshot, a read never spawns or refreshes it): while one is stored,
+//!   the same transaction reads it ([`SqliteIndex::code_snapshot_with_layer_c`]:
+//!   its row, the code tree, the files the form's targets come from), its
+//!   freshness computed from that read ([`LayerCView`]); each item shows a
+//!   `c` line after `sig`, before its roles (state, shown moniker,
+//!   agreement, `stale`; JSON `c_state`, `moniker`, `agrees` after `roles`),
+//!   the summary a `layer c:` line after it (JSON `layer_c`), and a QUERY
+//!   meets the shown monikers in a tier after `exact` (the raw moniker
+//!   searched by the store, the tiers merged here: the store's lookup,
+//!   shared with `spec impact` and role links, keeps its three). Without a
+//!   snapshot the keys are `null`, the text as before and no moniker is
+//!   searched; a snapshot holding a state this build does not know is
+//!   shown as none, with one warning, the exit unchanged.
 //! - **For the bridges**: [`symbols`] with [`SymbolsRequest`] (the form an
 //!   enum, `--at` raw: the one `PATH:LINE` reader is here) and the limit
 //!   bounds [`SYMBOLS_LIMIT_MIN`], [`SYMBOLS_LIMIT_MAX`],
@@ -40,21 +54,24 @@
 //!
 //! [`SqliteIndex::code_snapshot`]: specengine_store::SqliteIndex::code_snapshot
 //! [`SqliteIndex::code_snapshot_with_roles`]: specengine_store::SqliteIndex::code_snapshot_with_roles
+//! [`SqliteIndex::code_snapshot_with_layer_c`]: specengine_store::SqliteIndex::code_snapshot_with_layer_c
 
 use std::cmp::Reverse;
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
+use specengine_code::layer_c::raw_moniker;
 use specengine_code::{frameworks, query_name};
 use specengine_core::Revision;
 use specengine_store::{
-    CodeFileState, CodeRefs, CodeSnapshot, SnapshotSymbols, StoredBinding, StoredMarker,
-    StoredRole, StoredSymbol, SymbolTier,
+    CodeFileState, CodeRefs, CodeSnapshot, LayerCItem, SnapshotSymbols, StoredBinding,
+    StoredMarker, StoredRole, StoredSymbol, SymbolHit, SymbolTier,
 };
 
 use crate::cap::OUTPUT_CAP_CHARS;
 use crate::code_index::{LANG_RON, LANG_RUST, LAYER, RON_AMBIGUOUS, refresh_code};
 use crate::corpus::indexed_in;
+use crate::layer_c::{ItemReading, LayerCState, LayerCView};
 use crate::location::open_index;
 use crate::project::discover_with_text;
 use crate::refs::{
@@ -137,6 +154,10 @@ pub struct SymbolsOutcome {
     pub total: usize,
     /// The code tree read; `None` when REF names nothing.
     pub code: Option<CodeCount>,
+    /// The layer C snapshot shown; `None` without one, when REF names
+    /// nothing, and when it holds a state this build does not know (a
+    /// warning then says so).
+    pub layer_c: Option<SymbolsLayerC>,
 }
 
 /// One target: an item, a file's module or a RON value path, every key
@@ -173,6 +194,17 @@ pub struct SymbolTarget {
     /// line, source, `ord`; `[]` on a module or a RON target; `None`
     /// without `[code] frameworks`.
     pub roles: Option<Vec<SymbolRole>>,
+    /// An item's layer C state while a snapshot is stored: the joined
+    /// row's (`moniker`, `local`, `none`, `unresolved`, `not_loaded`),
+    /// `unmatched` or `unseen`; `None` without a snapshot and on a module
+    /// or a RON target.
+    pub c_state: Option<&'static str>,
+    /// The shown moniker (`<raw> #<value>` for a collision): a `moniker`
+    /// row's only.
+    pub moniker: Option<String>,
+    /// Whether the moniker agrees with layer A's crate and modules;
+    /// `None` where neither is judged.
+    pub agrees: Option<bool>,
 }
 
 /// One role row shown on an item: on it, or naming it (`linked`, each
@@ -318,30 +350,67 @@ pub fn symbols(
         Form::File(path) | Form::At { path, .. } => SnapshotSymbols::File(path),
         Form::Node(_) => SnapshotSymbols::Bound,
     };
-    // With frameworks listed, the role rows beside the symbols too, in the
-    // same transaction.
+    // With frameworks listed, the role rows beside the symbols too, and
+    // the layer C snapshot as this read joins it, in the same transaction:
+    // a QUERY's raw moniker searched, the files its targets may come from
+    // picked (never a spawn: only `spec resolve` makes a snapshot).
     let with_roles = !code.frameworks.is_empty();
-    let snapshot = if with_roles {
-        let kinds = frameworks::item_kinds(&code.frameworks);
-        open.index.code_snapshot_with_roles(wanted, &kinds)
-    } else {
-        open.index.code_snapshot(wanted)
+    let kinds = with_roles.then(|| frameworks::item_kinds(&code.frameworks));
+    let query = match &form {
+        Form::Query { query, .. } => Some(query.as_str()),
+        _ => None,
     };
+    let node_set: BTreeSet<NodeKey> = nodes.into_iter().collect();
+    let pick = |snapshot: &CodeSnapshot, found: &[LayerCItem]| -> BTreeSet<String> {
+        match &form {
+            // The merge only moves a hit up (to the moniker tier), so the
+            // shown targets lie in the found items' files and the first
+            // `limit` hits' files.
+            Form::Query { limit, .. } => snapshot
+                .hits
+                .iter()
+                .take(*limit)
+                .map(|hit| hit.symbol.path.clone())
+                .chain(found.iter().map(|item| item.path.clone()))
+                .collect(),
+            Form::File(path) | Form::At { path, .. } => BTreeSet::from([path.clone()]),
+            Form::Node(_) => node_paths(&node_set, &snapshot.refs, &mut corpus),
+        }
+    };
+    let snapshot =
+        open.index
+            .code_snapshot_with_layer_c(wanted, kinds.as_ref(), query.map(raw_moniker), pick);
     let CodeSnapshot {
         refs: stored,
         hits,
         symbols,
         roles,
+        layer_c,
     } = snapshot.map_err(store_error)?.unwrap_or_default();
-    let marks = Marks::new(&stored)?.with_roles(with_roles.then_some(roles.as_slice()));
+    // A stored state this build does not know: the snapshot is not shown,
+    // one warning says why; nothing else changes.
+    let layer_c = layer_c.and_then(|read| match LayerCView::of(read, &project.root, query) {
+        Ok(view) => Some(view),
+        Err(unknown) => {
+            messages.push(Message::Warning(unknown.warning()));
+            None
+        }
+    });
+    let marks = Marks::new(&stored)?
+        .with_roles(with_roles.then_some(roles.as_slice()))
+        .with_layer_c(layer_c.as_ref());
 
     let (targets, total) = match &form {
         Form::Query { limit, .. } => {
-            let total = hits.len();
-            let targets = hits
+            let found = layer_c
+                .as_ref()
+                .map_or(&[][..], |view| view.found.as_slice());
+            let merged = merged_hits(hits, found);
+            let total = merged.len();
+            let targets = merged
                 .into_iter()
                 .take(*limit)
-                .map(|hit| item_target(hit.symbol, Some(hit.tier), &marks, &mut corpus))
+                .map(|(tier, symbol)| item_target(symbol, Some(tier), &marks, &mut corpus))
                 .collect::<Result<Vec<_>, _>>()?;
             (targets, total)
         }
@@ -379,8 +448,7 @@ pub fn symbols(
             (targets, total)
         }
         Form::Node(_) => {
-            let nodes: BTreeSet<NodeKey> = nodes.into_iter().collect();
-            let targets = node_targets(&nodes, &stored, &marks, &symbols, &mut corpus)?;
+            let targets = node_targets(&node_set, &stored, &marks, &symbols, &mut corpus)?;
             let total = targets.len();
             (targets, total)
         }
@@ -389,7 +457,128 @@ pub fn symbols(
     outcome.symbols = targets;
     outcome.total = total;
     outcome.code = Some(stored_count(&stored, refreshed.report.skipped));
+    outcome.layer_c = layer_c.map(|view| SymbolsLayerC::of(&view));
     Ok(outcome)
+}
+
+/// A QUERY's tiers, the best first: the store's lookup tiers
+/// ([`SymbolTier`]) with the moniker tier after `exact`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum QueryTier {
+    Exact,
+    /// The item's shown layer C moniker is the query.
+    Moniker,
+    Suffix,
+    Name,
+}
+
+/// The moniker tier's word.
+const TIER_MONIKER: &str = "moniker";
+
+impl QueryTier {
+    fn of(tier: SymbolTier) -> Self {
+        match tier {
+            SymbolTier::Exact => Self::Exact,
+            SymbolTier::Suffix => Self::Suffix,
+            SymbolTier::Name => Self::Name,
+        }
+    }
+
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Exact => SymbolTier::Exact.as_str(),
+            Self::Moniker => TIER_MONIKER,
+            Self::Suffix => SymbolTier::Suffix.as_str(),
+            Self::Name => SymbolTier::Name.as_str(),
+        }
+    }
+}
+
+/// The lookup's hits and the moniker tier's items merged: each item once,
+/// at its best tier, by tier, qpath, path, start line, `ord` (the lookup's
+/// own order within a tier). Without a moniker tier item: the hits as the
+/// lookup ordered them.
+fn merged_hits(hits: Vec<SymbolHit>, found: &[StoredSymbol]) -> Vec<(QueryTier, StoredSymbol)> {
+    let mut best: BTreeMap<(String, u32), (QueryTier, StoredSymbol)> = BTreeMap::new();
+    for hit in hits {
+        let key = (hit.symbol.path.clone(), hit.symbol.ord);
+        best.insert(key, (QueryTier::of(hit.tier), hit.symbol));
+    }
+    for symbol in found {
+        let key = (symbol.path.clone(), symbol.ord);
+        let entry = best
+            .entry(key)
+            .or_insert_with(|| (QueryTier::Moniker, symbol.clone()));
+        entry.0 = entry.0.min(QueryTier::Moniker);
+    }
+    let mut merged: Vec<(QueryTier, StoredSymbol)> = best.into_values().collect();
+    merged.sort_by(|a, b| merged_order(a).cmp(&merged_order(b)));
+    merged
+}
+
+/// A merged hit's place: tier, qpath, path, start line, `ord`.
+fn merged_order((tier, symbol): &(QueryTier, StoredSymbol)) -> (QueryTier, &str, &str, u32, u32) {
+    (
+        *tier,
+        symbol.qpath.as_str(),
+        symbol.path.as_str(),
+        symbol.start_line,
+        symbol.ord,
+    )
+}
+
+/// The files of the items a marker listed under one of `nodes` binds (as
+/// [`node_targets`] reads them): the files `--node` joins with layer C.
+fn node_paths(
+    nodes: &BTreeSet<NodeKey>,
+    stored: &CodeRefs,
+    corpus: &mut Corpus<'_>,
+) -> BTreeSet<String> {
+    let mut paths = BTreeSet::new();
+    for marker in &stored.markers {
+        if !matches!(place(&marker.binding), Ok(Place::Item(_))) || paths.contains(&marker.path) {
+            continue;
+        }
+        let judged = corpus.judge(&marker.id);
+        if judged.nodes.iter().any(|key| nodes.contains(key)) {
+            paths.insert(marker.path.clone());
+        }
+    }
+    paths
+}
+
+/// The layer C snapshot a read showed: its freshness and the run's row
+/// (canon `layer-c`, "Tables"), every key present.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct SymbolsLayerC {
+    /// `fresh` or `stale`.
+    pub state: &'static str,
+    pub protocol: u32,
+    pub ra_ap: String,
+    pub host: String,
+    /// The run's workspaces' distinct known toolchains, byte-sorted.
+    pub toolchains: Vec<String>,
+    pub degraded: bool,
+    pub workspaces: u32,
+    pub files: u64,
+    pub items: u64,
+}
+
+impl SymbolsLayerC {
+    fn of(view: &LayerCView) -> Self {
+        let head = &view.head;
+        Self {
+            state: view.state.as_str(),
+            protocol: head.stamp.protocol,
+            ra_ap: head.stamp.ra_ap.clone(),
+            host: head.stamp.host.clone(),
+            toolchains: head.toolchains.clone(),
+            degraded: head.degraded,
+            workspaces: head.workspaces,
+            files: head.files,
+            items: head.items,
+        }
+    }
 }
 
 /// The request read: QUERY joined and its limit checked, `--at` split.
@@ -443,6 +632,7 @@ impl Form {
             symbols: Vec::new(),
             total: 0,
             code: None,
+            layer_c: None,
         };
         match self {
             Self::Query { query, .. } => outcome.query = Some(query.clone()),
@@ -576,6 +766,8 @@ struct Marks<'s> {
     /// (path, ord) → the role rows shown on that item, in
     /// [`SymbolRole::order`]; `None` without `[code] frameworks`.
     roles: Option<BTreeMap<(&'s str, u32), Vec<SymbolRole>>>,
+    /// The layer C snapshot as the read joined it; `None` without one.
+    layer_c: Option<&'s LayerCView>,
 }
 
 impl<'s> Marks<'s> {
@@ -586,6 +778,7 @@ impl<'s> Marks<'s> {
             ron: BTreeMap::new(),
             mentions: BTreeMap::new(),
             roles: None,
+            layer_c: None,
         };
         for marker in &stored.markers {
             let path = marker.path.as_str();
@@ -661,6 +854,18 @@ impl<'s> Marks<'s> {
     /// A module's or a RON target's roles: `[]` with frameworks listed.
     fn no_roles(&self) -> Option<Vec<SymbolRole>> {
         self.roles.as_ref().map(|_| Vec::new())
+    }
+
+    /// The layer C snapshot the read joined (`None`: none stored).
+    fn with_layer_c(mut self, view: Option<&'s LayerCView>) -> Self {
+        self.layer_c = view;
+        self
+    }
+
+    /// The layer C reading of the item at (`path`, `ord`): `None` without
+    /// a snapshot.
+    fn reading_on(&self, path: &str, ord: u32) -> Option<ItemReading> {
+        self.layer_c.map(|view| view.reading(path, ord))
     }
 }
 
@@ -785,13 +990,17 @@ fn bare(target: &'static str, qpath: String, path: &str, line: Option<usize>) ->
         mentions: None,
         bindings: Vec::new(),
         roles: None,
+        c_state: None,
+        moniker: None,
+        agrees: None,
     }
 }
 
-/// An item's target with its direct markers, mentions and roles.
+/// An item's target with its direct markers, mentions, roles and layer C
+/// reading.
 fn item_target(
     symbol: StoredSymbol,
-    tier: Option<SymbolTier>,
+    tier: Option<QueryTier>,
     marks: &Marks<'_>,
     corpus: &mut Corpus<'_>,
 ) -> Result<SymbolTarget, CliError> {
@@ -800,6 +1009,7 @@ fn item_target(
     let bindings = bindings(markers, corpus)?;
     let mentions = marks.mentions.get(&key).copied().unwrap_or(0);
     let roles = marks.roles_on(&symbol.path, symbol.ord);
+    let reading = marks.reading_on(&symbol.path, symbol.ord);
     let ambiguity = symbol
         .ambiguity
         .as_deref()
@@ -817,10 +1027,13 @@ fn item_target(
         signature: symbol.signature,
         ambiguity,
         layer: Some(symbol.layer),
-        tier: tier.map(SymbolTier::as_str),
+        tier: tier.map(QueryTier::as_str),
         mentions: Some(mentions),
         bindings,
         roles,
+        c_state: reading.as_ref().map(|reading| reading.state),
+        agrees: reading.as_ref().and_then(|reading| reading.agrees),
+        moniker: reading.and_then(|reading| reading.moniker),
     })
 }
 
@@ -901,11 +1114,12 @@ fn node_text(judged: &Judged, corpus: &Corpus<'_>) -> Option<String> {
 
 // ------------------------------------------------------------- rendering
 
-/// A target's lines: its own, its signature and its roles (items), its
-/// bindings.
-fn target_lines(target: &SymbolTarget) -> Vec<String> {
+/// A target's lines: its own, its signature, its layer C line (an item
+/// while a snapshot is stored, `stale` its freshness) and its roles
+/// (items), its bindings.
+fn target_lines(target: &SymbolTarget, stale: bool) -> Vec<String> {
     let roles = target.roles.as_deref().unwrap_or_default();
-    let mut lines = Vec::with_capacity(target.bindings.len() + roles.len() + 2);
+    let mut lines = Vec::with_capacity(target.bindings.len() + roles.len() + 3);
     let qpath = one_line(&target.qpath);
     let path = one_line(&target.path);
     match target.target {
@@ -932,6 +1146,7 @@ fn target_lines(target: &SymbolTarget) -> Vec<String> {
                     .as_deref()
                     .map_or_else(|| "-".to_owned(), one_line)
             ));
+            lines.extend(c_line(target, stale));
             lines.extend(roles.iter().map(role_line));
         }
         RON => lines.push(format!(
@@ -942,6 +1157,31 @@ fn target_lines(target: &SymbolTarget) -> Vec<String> {
     }
     lines.extend(target.bindings.iter().map(binding_line));
     lines
+}
+
+/// The words of the `c` line's `agrees`.
+const AGREES: &str = "agrees";
+const DISAGREES: &str = "disagrees";
+
+/// `  c <c_state>[ | <moniker>][ | agrees|disagrees][ | stale]`: an item's
+/// layer C reading, `stale` while the snapshot is; none without a
+/// snapshot. Every field through [`one_line`].
+fn c_line(target: &SymbolTarget, stale: bool) -> Option<String> {
+    let state = target.c_state?;
+    let mut line = format!("  c {}", one_line(state));
+    if let Some(moniker) = &target.moniker {
+        line.push_str(" | ");
+        line.push_str(&one_line(moniker));
+    }
+    match target.agrees {
+        Some(true) => line.push_str(&format!(" | {AGREES}")),
+        Some(false) => line.push_str(&format!(" | {DISAGREES}")),
+        None => {}
+    }
+    if stale {
+        line.push_str(&format!(" | {}", LayerCState::Stale.as_str()));
+    }
+    Some(line)
 }
 
 /// `  role <word> | <layer> | <path>:<line> | <source>[ <form>][ <origin>]
@@ -1016,9 +1256,10 @@ fn binding_line(row: &SymbolBinding) -> String {
 /// the tail stays within [`OUTPUT_CAP_CHARS`] characters (the first
 /// always).
 fn shown(outcome: &SymbolsOutcome) -> usize {
+    let stale = outcome.stale();
     let mut used = 0usize;
     for (index, target) in outcome.symbols.iter().enumerate() {
-        let size: usize = target_lines(target)
+        let size: usize = target_lines(target, stale)
             .iter()
             .map(|line| line.chars().count() + 1)
             .sum();
@@ -1037,9 +1278,10 @@ pub(crate) fn render_text(outcome: &SymbolsOutcome) -> String {
         return String::new();
     };
     let shown = shown(outcome);
+    let stale = outcome.stale();
     let mut out = String::new();
     for target in &outcome.symbols[..shown] {
-        for line in target_lines(target) {
+        for line in target_lines(target, stale) {
             out.push_str(&line);
             out.push('\n');
         }
@@ -1052,7 +1294,27 @@ pub(crate) fn render_text(outcome: &SymbolsOutcome) -> String {
         "symbols: {shown} of {}; code files {} (.rs {}, .ron {}), skipped {}\n",
         outcome.total, code.files, code.rs, code.ron, code.skipped
     ));
+    if let Some(layer_c) = &outcome.layer_c {
+        let ra_ap = one_line(&layer_c.ra_ap);
+        if stale {
+            out.push_str(&format!(
+                "layer c: {} (ra_ap {ra_ap}); spec resolve refreshes it\n",
+                layer_c.state
+            ));
+        } else {
+            out.push_str(&format!("layer c: {} (ra_ap {ra_ap})\n", layer_c.state));
+        }
+    }
     out
+}
+
+impl SymbolsOutcome {
+    /// Whether the shown layer C snapshot is stale.
+    fn stale(&self) -> bool {
+        self.layer_c
+            .as_ref()
+            .is_some_and(|layer_c| layer_c.state == LayerCState::Stale.as_str())
+    }
 }
 
 /// The targets the cap left out.
@@ -1075,6 +1337,7 @@ struct SymbolsJson<'a> {
     total: usize,
     omitted: Option<Omitted>,
     code: Option<CodeCount>,
+    layer_c: Option<&'a SymbolsLayerC>,
 }
 
 impl Serialize for SymbolsOutcome {
@@ -1095,6 +1358,7 @@ impl Serialize for SymbolsOutcome {
                 symbols: self.symbols.len() - shown,
             }),
             code: if answered { self.code } else { None },
+            layer_c: self.layer_c.as_ref().filter(|_| answered),
         }
         .serialize(serializer)
     }

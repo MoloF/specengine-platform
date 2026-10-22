@@ -59,6 +59,38 @@ fn same(a: &Run, b: &Run, context: &str) {
     );
 }
 
+/// docs/features/layer-c-reads.md TE-2 over this file's two corpora (no
+/// layer C snapshot is ever stored here): a `spec symbols` text holds no
+/// `  c ` line and no `layer c:` line; a JSON document's `layer_c` and each
+/// target's `c_state`, `moniker`, `agrees` are `null`.
+fn assert_absent_layer_c(run: &Run, json: bool, context: &str) {
+    if json {
+        let value = run.json();
+        assert_eq!(
+            value.get("layer_c"),
+            Some(&serde_json::Value::Null),
+            "{context}: `layer_c` while absent"
+        );
+        for target in value["symbols"].as_array().expect("symbols") {
+            for key in ["c_state", "moniker", "agrees"] {
+                assert_eq!(
+                    target.get(key),
+                    Some(&serde_json::Value::Null),
+                    "{context}: `{key}` while absent: {target}"
+                );
+            }
+        }
+    } else {
+        assert!(
+            !run.stdout
+                .lines()
+                .any(|line| line.starts_with("  c ") || line.starts_with("layer c:")),
+            "{context}: a layer C line while no snapshot is stored:\n{}",
+            run.stdout
+        );
+    }
+}
+
 /// `text` appended to `root/relative`: the file is re-derived, its rows
 /// written again after every other file's.
 fn append(root: &Path, relative: &str, text: &str) {
@@ -76,7 +108,9 @@ fn append(root: &Path, relative: &str, text: &str) {
 /// root-relative); a copy whose code files are all CRLF; and a copy
 /// indexed, then two of its files re-derived (a comment line appended:
 /// their rows now follow the others' in rowid) — stdout, stderr and exit
-/// byte for byte alike.
+/// byte for byte alike. docs/features/layer-c-reads.md TE-2 (M: a `c` line
+/// while absent): no `symbols` read shows a layer C line or value
+/// ([`assert_absent_layer_c`]).
 #[test]
 fn symbols_and_unmapped_are_byte_identical_across_roots_and_order() {
     for (fixture, reads_of, subdirectory, rederived) in [
@@ -126,6 +160,9 @@ fn symbols_and_unmapped_are_byte_identical_across_roots_and_order() {
                 let a = spec(&home_a, &first, &args);
                 a.code(0);
                 assert!(!a.stdout.is_empty(), "{context}");
+                if read[0] == "symbols" {
+                    assert_absent_layer_c(&a, json, &context);
+                }
                 same(
                     &a,
                     &spec(&home_a, &first, &args),

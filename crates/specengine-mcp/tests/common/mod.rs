@@ -15,6 +15,7 @@
 #![allow(dead_code)]
 
 pub mod blake3;
+pub mod layer_c;
 pub mod read;
 
 use std::collections::BTreeMap;

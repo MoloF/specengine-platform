@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-code]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-22
 ---
 
 # Symbol reads: lookup tiers, `spec symbols`, `spec unmapped`
@@ -26,10 +26,11 @@ The query is the positionals joined by a space. Each tier is one indexed stateme
 | Tier | Matches | Index |
 |---|---|---|
 | `exact` | `symbols.qpath` = query | `symbols_by_qpath` |
+| `moniker` | `spec symbols` only, with a layer C snapshot: the shown moniker = query (`layer-c-reads.md`) | `code_monikers_by_moniker` |
 | `suffix` | a `symbol_suffixes.suffix` = query | `symbol_suffixes_by_suffix` |
 | `name` | `symbols.name` = `query_name(query)` | `symbols_by_name` |
 
-Each symbol once, at its best tier; order: tier (`exact`, `suffix`, `name`), qpath bytes, path bytes, start line, `ord`. A bare name hits `suffix` at depth 1; `name` alone catches only the twins whose discriminator differs. Shells read an unquoted `#2` as a comment: quote it.
+Each symbol once, at its best tier; order: tier (`exact`, `moniker`, `suffix`, `name`), qpath bytes, path bytes, start line, `ord`. A bare name hits `suffix` at depth 1; `name` alone catches only the twins whose discriminator differs. Shells read an unquoted `#2` as a comment: quote it.
 
 `query_name`: the text after the last `::` at bracket depth 0 (`<>`, `()`, `[]`); a segment starting `impl ` runs to the end; the first ` #` at depth 0 drops the rest. The `>` of `->` closes nothing; an unmatched closer counts as none. `crates/x::twins::impl Sheet #2` gives `impl Sheet`, `run #cfg(feature = "a::b")` gives `run`.
 
@@ -51,10 +52,11 @@ symbols: 1 of 1; code files <f> (.rs <r>, .ron <o>), skipped <s>
 - Target: `<qpath> | <item_kind> | <path>:<start>-<end> | layer <l> | mentions <n>[ | ambiguous <reason>][ | <tier>]` (tier for QUERY only), then `  sig <signature>` (`-` when NULL); a module `<qpath> | module | <path>`; a RON path `<path>#<field path> | ron | <path>:<line>`, its first marker's line, no `sig`. `mentions`: those bound to the target itself, not by containment.
 - Binding, by line: `  <relation> | <line>:<column> | <token> | <id_state>[ <fix>] | <rev_state> | <levels> | <node or ->[ | <note>]`, `levels` and `note` as `refs` prints them (`spec-cli-refs.md` "Rows"); `node` the holders' IDs once each, `, `-joined (a look-alike: its fix's node); `rev_state` the holders' common state, else `rev_unknown`. Fields go through `one_line`.
 - Role, after `sig`, before the bindings, one per row on an item (`code-roles.md`): its `symbol_ord`'s, or `linked` to it, or `ambiguous` on it (never `unlinked`, never on nothing): `  role <word> | <layer> | <path>:<line> | <source>[ <form>][ <origin>] | <group or -> | <state>[ <detail>]` (`  role system | a | crates/farm/src/fields.rs:26 | call | Update | ambiguous 3`). `<form>` unless NULL or `frameworks::PATH_FORM`; `<origin>` unless `CODE_ORIGIN`; `<state>` `linked`, `ambiguous`, `certain`, `uncertain`; `<detail>` the candidates' count when `ambiguous`, else the category; `<path>:<line>` the row's own. Order: layer (`b` first), word, path bytes, line, source, `ord`. Fields through `one_line`.
+- Layer C (`layer-c-reads.md`), while a snapshot is stored: an item's `  c <c_state>[ | <moniker>][ | agrees|disagrees][ | stale]` after `sig`, before roles and bindings; `layer c: fresh|stale …` after the summary.
 - Summary: `<shown>` after the cap; `<total>` every target the form names, the limit's cut included; the code counts are the whole walk's.
-- JSON, every key present: `{form, query, node, path, line, reason, notes, symbols: [{target, qpath, name, discriminator, item_kind, path, start_line, end_line, signature, ambiguity, layer, tier, mentions, bindings: [{relation, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, node}], roles: [{role, layer, path, line, source, form, origin, group, state, detail, candidates}]}], total, omitted: {symbols}, code}`. `form` `query` | `node` | `file` | `at`; `line` a number for `--at`, else null; `target` `item` | `module` | `ron`, the fields its text omits null; `tier` null outside QUERY; `roles` null on every target without `frameworks` (absent or `[]`), else a list, `[]` on a module, a RON path or an item with none; a role's `form`, `origin`, `path` as stored, `detail` its category, `candidates` the count when `ambiguous`, else null; `omitted` counts the cap's cut only.
+- JSON, every key present: `{form, query, node, path, line, reason, notes, symbols: [{target, qpath, name, discriminator, item_kind, path, start_line, end_line, signature, ambiguity, layer, tier, mentions, bindings: [{relation, line, column, token, id, rev, id_state, fix, rev_state, levels, levels_state, note, node}], roles: [{role, layer, path, line, source, form, origin, group, state, detail, candidates}], c_state, moniker, agrees}], total, omitted: {symbols}, code, layer_c}` (18 and 12 keys). `form` `query` | `node` | `file` | `at`; `line` a number for `--at`, else null; `target` `item` | `module` | `ron`, the fields its text omits null; `tier` null outside QUERY; `roles` null on every target without `frameworks` (absent or `[]`), else a list, `[]` on a module, a RON path or an item with none; a role's `form`, `origin`, `path` as stored, `detail` its category, `candidates` the count when `ambiguous`, else null; `omitted` counts the cap's cut only.
 - Exits: 0 answered, zero rows too. 1 `--node`'s REF names nothing: stdout empty, `spec: <reason>`; JSON keeps the document, `reason` set, `total` 0, `symbols` `[]`, `code` and `omitted` null; never a `CliError`. 2, stdout empty: usage, discovery, config, no `[code]` (`code-bindings.md` "The `[code]` table"), a refused REF (a look-alike: its Latin fix), PATH not a walked code file, LINE 0 or not a number, a limit out of bounds, a walk gap, a stored word the build does not know; from the library, a QUERY without terms.
-- Cap `OUTPUT_CAP_CHARS`: whole targets, role lines in, the first always, then `[truncated: <k> symbols not shown]`; the JSON holds the printed ones.
+- Cap `OUTPUT_CAP_CHARS`: whole targets, role and `c` lines in, the first always, then `[truncated: <k> symbols not shown]`; the JSON holds the printed ones.
 
 ## spec unmapped
 

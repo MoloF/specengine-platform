@@ -408,7 +408,8 @@ pub use state::{
 pub use state_file::STATE_FORMAT;
 pub use symbols::{
     SYMBOLS_LIMIT_DEFAULT, SYMBOLS_LIMIT_MAX, SYMBOLS_LIMIT_MIN, SymbolBinding, SymbolRole,
-    SymbolTarget, SymbolsForm, SymbolsOutcome, SymbolsRequest, symbols, symbols_limit_error,
+    SymbolTarget, SymbolsForm, SymbolsLayerC, SymbolsOutcome, SymbolsRequest, symbols,
+    symbols_limit_error,
 };
 pub use task::{
     TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListEntry, TaskListOutcome,

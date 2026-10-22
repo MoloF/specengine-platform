@@ -19,7 +19,9 @@
 //!   CLI's one `PATH:LINE` reader: nothing here splits a name or a line.
 //! - **Reads**: each call refreshes the spec index, then the code index,
 //!   inside the CLI read; nothing is kept between calls, nothing under the
-//!   project root is written.
+//!   project root is written. `find_symbols` shows the stored layer C
+//!   snapshot as `spec symbols` does (`docs/features/layer-c-reads.md`):
+//!   its own four tiers, `get_impact` keeping three; no tool makes one.
 //! - **`check_binding`**: `node` and `symbol` passed as written (MCP never
 //!   resolves a REF or matches a path), the working tree judged, no task
 //!   and no base: the server's root, this session's worktree. Nothing reads
@@ -59,8 +61,9 @@ PATH:LINE`: content is the command's output (its note and warning lines first), 
 structuredContent its --json document. Needs a `[code]` table in the project's config: \
 without one, an error result naming it.
 
-query: a qualified path, a suffix of one or a bare name, as one value: exact paths first, \
-then suffixes, then names (tier); an in-file twin's ` #N` is kept.
+query: a qualified path, a suffix of one, a bare name or a layer C moniker, as one value: \
+exact paths first, then monikers, then suffixes, then names (tier); an in-file twin's ` #N` \
+is kept.
 node: a REF, any form get_node takes: the items, modules and data paths its markers bind, \
 by path and line.
 file: a root-relative code file the walk reads: its items in source order.
@@ -70,7 +73,9 @@ limit: with query only: items at most, 1 to 200; absent: 20.
 Give exactly one of query, node, file and at: anything else is an error result naming them.
 
 A target: its qpath, kind, path and lines, signature, layer, mentions and ambiguity (shown, \
-not resolved). Zero items is a result, not an error. An answer above 40000 characters is \
+not resolved). While the owner's `spec resolve` snapshot is stored, an item adds its layer C \
+state, moniker and agreement, marked stale once the tree changed; a read never makes one. \
+Zero items is a result, not an error. An answer above 40000 characters is \
 cut, with a tail counting the items not shown. A node REF naming nothing: an error result \
 with the reason, and the document. A call that cannot run (no `[code]`, a path the walk does \
 not read, a bad line, a limit out of bounds, an incomplete walk): an error result with its \
@@ -145,7 +150,8 @@ document. ",
 );
 
 /// The input schema's description of `find_symbols.query`.
-const QUERY_DOC: &str = "A qualified path, a suffix of one or a bare name, as one value.";
+const QUERY_DOC: &str =
+    "A qualified path, a suffix of one, a bare name or a layer C moniker, as one value.";
 
 /// The input schema's description of `find_symbols.node`.
 const NODE_DOC: &str = "A REF, any form get_node takes: the items its markers bind.";

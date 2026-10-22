@@ -20,6 +20,13 @@
 //! derived JSON holds `roles: null` and a golden never holds a `  role `
 //! line; a role object's keys are [`ROLE_KEYS`].
 //!
+//! docs/features/layer-c-reads.md (11a-3) "JSON": each target gains
+//! `c_state`, `moniker`, `agrees` after `roles`, the document `layer_c`
+//! after `code` ([`SYMBOL_KEYS`] 18, [`SYMBOLS_KEYS`] 12), all `null` while
+//! no layer C snapshot is stored — no golden here has one, so the derived
+//! JSON holds them `null` and a golden never holds a `  c ` or `layer c:`
+//! line (the snapshot's reads: `tests/layer_c_reads.rs`).
+//!
 //! Only the symbol-reads test binaries include this module
 //! (`mod symbol_reads_common;`, after `mod common;`).
 //!
@@ -49,15 +56,19 @@ pub const NO_TABLE: &str =
 
 /// `spec --json symbols`: the document's keys in order. The spec's list
 /// plus `reason` (Q35: a `--node` naming nothing is an outcome with a
-/// reason, as `refs`), placed before `notes` as `refs` places it — L3.
-pub const SYMBOLS_KEYS: [&str; 11] = [
+/// reason, as `refs`), placed before `notes` as `refs` places it — L3;
+/// `layer_c` after `code` since docs/features/layer-c-reads.md "JSON"
+/// (`null` while no layer C snapshot is stored, and at exit 1).
+pub const SYMBOLS_KEYS: [&str; 12] = [
     "form", "query", "node", "path", "line", "reason", "notes", "symbols", "total", "omitted",
-    "code",
+    "code", "layer_c",
 ];
 
 /// One target of `symbols[]`, in order; `roles` after `bindings` since
-/// docs/features/bevy-roles-reads.md "spec symbols".
-pub const SYMBOL_KEYS: [&str; 15] = [
+/// docs/features/bevy-roles-reads.md "spec symbols"; `c_state`, `moniker`,
+/// `agrees` after `roles` since docs/features/layer-c-reads.md "JSON"
+/// (`null` while no snapshot is stored, and on a module or a RON path).
+pub const SYMBOL_KEYS: [&str; 18] = [
     "target",
     "qpath",
     "name",
@@ -73,6 +84,9 @@ pub const SYMBOL_KEYS: [&str; 15] = [
     "mentions",
     "bindings",
     "roles",
+    "c_state",
+    "moniker",
+    "agrees",
 ];
 
 /// One role of `symbols[].roles[]`, in order
@@ -461,6 +475,7 @@ fn target_json(line: &str, stored: &dyn Fn(&str, &str) -> Value) -> Value {
         "item_kind": null, "path": null, "start_line": null, "end_line": null,
         "signature": null, "ambiguity": null, "layer": null, "tier": null,
         "mentions": null, "bindings": [], "roles": null,
+        "c_state": null, "moniker": null, "agrees": null,
     });
     match fields[1] {
         "module" => {
@@ -552,7 +567,7 @@ pub fn symbols_json(lines: &[String], echo: &Value, stored: &dyn Fn(&str, &str) 
         "form": echo["form"], "query": echo["query"], "node": echo["node"],
         "path": echo["path"], "line": echo["line"], "reason": null, "notes": [],
         "symbols": targets, "total": total.parse::<u64>().expect("M"),
-        "omitted": {"symbols": 0}, "code": code_json(code),
+        "omitted": {"symbols": 0}, "code": code_json(code), "layer_c": null,
     })
 }
 

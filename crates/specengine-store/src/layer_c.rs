@@ -18,14 +18,22 @@
 //! - **Strings only**: the store knows no protocol word, Cargo file or
 //!   moniker syntax; it stores what the caller gives and reads it back by
 //!   key.
+//! - **Beside a read** ([`LayerCRead`], `SqliteIndex::code_snapshot_with_layer_c`):
+//!   in the code snapshot's own transaction, the run's row, the code
+//!   index's files and packages, the run's files, the rows whose raw
+//!   moniker equals a given text (one search of `code_monikers_by_moniker`)
+//!   and, for each file the caller picks, its rows and its symbols.
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use rusqlite::{OptionalExtension, Transaction, TransactionBehavior};
 
-use crate::code::{CodePackageRow, stored_code_fp};
+use crate::code::{CodePackageRow, StoredSymbol, stored_code_fp};
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
 use crate::read::{with_worktree, worktree_id};
 use crate::schema;
+use crate::symbols::files_symbols_in;
 
 /// One worktree's layer C snapshot as `spec resolve` stores it and its
 /// readers get it back.
@@ -100,6 +108,45 @@ pub struct CodeTreeRows {
     pub files: Vec<CodeTreeFile>,
     /// By directory.
     pub packages: Vec<CodePackageRow>,
+}
+
+/// The stored run's row: its stamps and what it counted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerCHead {
+    pub stamp: LayerCStamp,
+    /// Byte-sorted.
+    pub toolchains: Vec<String>,
+    pub degraded: bool,
+    pub workspaces: u32,
+    /// The requested files and their items, as stored.
+    pub files: u64,
+    pub items: u64,
+}
+
+/// One file of the snapshot as a read joins it: its stored items by
+/// `start`, and its layer A symbols by `ord`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerCFileRows {
+    pub path: String,
+    pub items: Vec<LayerCItem>,
+    pub symbols: Vec<StoredSymbol>,
+}
+
+/// What a read reads of the worktree's snapshot inside its code snapshot's
+/// transaction (`SqliteIndex::code_snapshot_with_layer_c`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayerCRead {
+    pub head: LayerCHead,
+    /// The code index's files and packages, as
+    /// [`SqliteIndex::code_tree_rows`] reads them.
+    pub tree: CodeTreeRows,
+    /// Every requested file of the run, by path.
+    pub files: Vec<LayerCFile>,
+    /// The items whose raw moniker is the searched text, by (path,
+    /// `start`); none without a search.
+    pub found: Vec<LayerCItem>,
+    /// Each file the caller picked, by path.
+    pub joined: Vec<LayerCFileRows>,
 }
 
 impl SqliteIndex {
@@ -186,50 +233,10 @@ impl SqliteIndex {
     /// `start`); `Ok(None)` when the worktree has none.
     pub fn layer_c_snapshot(&self) -> Result<Option<LayerCSnapshot>, StoreError> {
         with_worktree(self, |tx, wt| {
-            let head = tx
-                .query_row(
-                    "SELECT tree_fp, protocol, ra_ap, host, toolchains, degraded, workspaces
-                     FROM code_resolve WHERE wt = ?1",
-                    [wt],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, u32>(1)?,
-                            row.get::<_, String>(2)?,
-                            row.get::<_, String>(3)?,
-                            row.get::<_, String>(4)?,
-                            row.get::<_, bool>(5)?,
-                            row.get::<_, u32>(6)?,
-                        ))
-                    },
-                )
-                .optional()
-                .db()?;
-            let Some((tree_fp, protocol, ra_ap, host, toolchains, degraded, workspaces)) = head
-            else {
+            let Some(head) = head_in(tx, wt)? else {
                 return Ok(None);
             };
-            let toolchains: Vec<String> = serde_json::from_str(&toolchains)
-                .map_err(|error| StoreError::Sqlite(format!("code_resolve.toolchains: {error}")))?;
-            let files = {
-                let mut statement = tx
-                    .prepare(
-                        "SELECT path, blake3, in_crate FROM code_resolve_files
-                         WHERE wt = ?1 ORDER BY path",
-                    )
-                    .db()?;
-                statement
-                    .query_map([wt], |row| {
-                        Ok(LayerCFile {
-                            path: row.get(0)?,
-                            blake3: row.get(1)?,
-                            in_crate: row.get(2)?,
-                        })
-                    })
-                    .db()?
-                    .collect::<Result<Vec<_>, _>>()
-                    .db()?
-            };
+            let files = resolve_files_in(tx, wt)?;
             let items = {
                 let mut statement = tx
                     .prepare(
@@ -238,28 +245,25 @@ impl SqliteIndex {
                     )
                     .db()?;
                 statement
-                    .query_map([wt], |row| {
-                        Ok(LayerCItem {
-                            path: row.get(0)?,
-                            start: offset(row, 1)?,
-                            end: offset(row, 2)?,
-                            kind: row.get(3)?,
-                            state: row.get(4)?,
-                            moniker: row.get(5)?,
-                        })
-                    })
+                    .query_map([wt], item_row)
                     .db()?
                     .collect::<Result<Vec<_>, _>>()
                     .db()?
             };
+            let LayerCStamp {
+                tree_fp,
+                protocol,
+                ra_ap,
+                host,
+            } = head.stamp;
             Ok(Some(LayerCSnapshot {
                 tree_fp,
                 protocol,
                 ra_ap,
                 host,
-                toolchains,
-                degraded,
-                workspaces,
+                toolchains: head.toolchains,
+                degraded: head.degraded,
+                workspaces: head.workspaces,
                 files,
                 items,
             }))
@@ -274,51 +278,56 @@ impl SqliteIndex {
             if stored_code_fp(tx, wt)?.is_none() {
                 return Ok(None);
             }
-            let files = {
-                let mut statement = tx
-                    .prepare(
-                        "SELECT path, lang, blake3, utf8, read_error, package FROM code_files
-                         WHERE wt = ?1 ORDER BY path",
-                    )
-                    .db()?;
-                statement
-                    .query_map([wt], |row| {
-                        Ok(CodeTreeFile {
-                            path: row.get(0)?,
-                            lang: row.get(1)?,
-                            blake3: row.get(2)?,
-                            utf8: row.get(3)?,
-                            read_error: row.get(4)?,
-                            package: row.get(5)?,
-                        })
-                    })
-                    .db()?
-                    .collect::<Result<Vec<_>, _>>()
-                    .db()?
-            };
-            let packages = {
-                let mut statement = tx
-                    .prepare(
-                        "SELECT dir, manifest_b3, source, targets FROM code_packages
-                         WHERE wt = ?1 ORDER BY dir",
-                    )
-                    .db()?;
-                statement
-                    .query_map([wt], |row| {
-                        Ok(CodePackageRow {
-                            dir: row.get(0)?,
-                            manifest_b3: row.get(1)?,
-                            source: row.get(2)?,
-                            targets: row.get(3)?,
-                        })
-                    })
-                    .db()?
-                    .collect::<Result<Vec<_>, _>>()
-                    .db()?
-            };
-            Ok(Some(CodeTreeRows { files, packages }))
+            Ok(Some(tree_rows_in(tx, wt)?))
         })
     }
+}
+
+/// The code index's files and packages inside the caller's transaction.
+fn tree_rows_in(tx: &Transaction<'_>, wt: i64) -> Result<CodeTreeRows, StoreError> {
+    let files = {
+        let mut statement = tx
+            .prepare(
+                "SELECT path, lang, blake3, utf8, read_error, package FROM code_files
+                 WHERE wt = ?1 ORDER BY path",
+            )
+            .db()?;
+        statement
+            .query_map([wt], |row| {
+                Ok(CodeTreeFile {
+                    path: row.get(0)?,
+                    lang: row.get(1)?,
+                    blake3: row.get(2)?,
+                    utf8: row.get(3)?,
+                    read_error: row.get(4)?,
+                    package: row.get(5)?,
+                })
+            })
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?
+    };
+    let packages = {
+        let mut statement = tx
+            .prepare(
+                "SELECT dir, manifest_b3, source, targets FROM code_packages
+                 WHERE wt = ?1 ORDER BY dir",
+            )
+            .db()?;
+        statement
+            .query_map([wt], |row| {
+                Ok(CodePackageRow {
+                    dir: row.get(0)?,
+                    manifest_b3: row.get(1)?,
+                    source: row.get(2)?,
+                    targets: row.get(3)?,
+                })
+            })
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?
+    };
+    Ok(CodeTreeRows { files, packages })
 }
 
 /// The snapshot's stamp inside the caller's transaction.
@@ -337,6 +346,154 @@ fn stamp_in(tx: &Transaction<'_>, wt: i64) -> Result<Option<LayerCStamp>, StoreE
     )
     .optional()
     .db()
+}
+
+/// The run's row inside the caller's transaction; `None` without a
+/// snapshot.
+fn head_in(tx: &Transaction<'_>, wt: i64) -> Result<Option<LayerCHead>, StoreError> {
+    let head = tx
+        .query_row(
+            "SELECT tree_fp, protocol, ra_ap, host, toolchains, degraded, workspaces, files, items
+             FROM code_resolve WHERE wt = ?1",
+            [wt],
+            |row| {
+                Ok((
+                    LayerCStamp {
+                        tree_fp: row.get(0)?,
+                        protocol: row.get(1)?,
+                        ra_ap: row.get(2)?,
+                        host: row.get(3)?,
+                    },
+                    row.get::<_, String>(4)?,
+                    row.get::<_, bool>(5)?,
+                    row.get::<_, u32>(6)?,
+                    offset(row, 7)?,
+                    offset(row, 8)?,
+                ))
+            },
+        )
+        .optional()
+        .db()?;
+    let Some((stamp, toolchains, degraded, workspaces, files, items)) = head else {
+        return Ok(None);
+    };
+    let toolchains: Vec<String> = serde_json::from_str(&toolchains)
+        .map_err(|error| StoreError::Sqlite(format!("code_resolve.toolchains: {error}")))?;
+    Ok(Some(LayerCHead {
+        stamp,
+        toolchains,
+        degraded,
+        workspaces,
+        files,
+        items,
+    }))
+}
+
+/// Every requested file of the run, by path, inside the caller's
+/// transaction.
+fn resolve_files_in(tx: &Transaction<'_>, wt: i64) -> Result<Vec<LayerCFile>, StoreError> {
+    let mut statement = tx
+        .prepare(
+            "SELECT path, blake3, in_crate FROM code_resolve_files
+             WHERE wt = ?1 ORDER BY path",
+        )
+        .db()?;
+    let files = statement
+        .query_map([wt], |row| {
+            Ok(LayerCFile {
+                path: row.get(0)?,
+                blake3: row.get(1)?,
+                in_crate: row.get(2)?,
+            })
+        })
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()?;
+    Ok(files)
+}
+
+/// An item from a row of `path, start, "end", kind, state, moniker`.
+fn item_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<LayerCItem> {
+    Ok(LayerCItem {
+        path: row.get(0)?,
+        start: offset(row, 1)?,
+        end: offset(row, 2)?,
+        kind: row.get(3)?,
+        state: row.get(4)?,
+        moniker: row.get(5)?,
+    })
+}
+
+/// The search of [`found_in`]: `?1` the raw moniker, `?2` the worktree;
+/// it starts at `code_monikers_by_moniker`, never at the table's key.
+pub(crate) const FOUND_SQL: &str = "SELECT path, start, \"end\", kind, state, moniker
+     FROM code_monikers INDEXED BY code_monikers_by_moniker
+     WHERE moniker = ?1 AND wt = ?2";
+
+/// The statement of one file's items: `?1` the worktree, `?2` the path.
+const FILE_ITEMS_SQL: &str = "SELECT path, start, \"end\", kind, state, moniker
+     FROM code_monikers WHERE wt = ?1 AND path = ?2 ORDER BY start";
+
+/// The items whose raw moniker is `raw`, by (path, `start`), inside the
+/// caller's transaction.
+fn found_in(tx: &Transaction<'_>, wt: i64, raw: &str) -> Result<Vec<LayerCItem>, StoreError> {
+    let mut statement = tx.prepare(FOUND_SQL).db()?;
+    let mut found = statement
+        .query_map((raw, wt), item_row)
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()?;
+    found.sort_by(|a, b| (&a.path, a.start).cmp(&(&b.path, b.start)));
+    Ok(found)
+}
+
+/// [`LayerCRead`] inside the caller's transaction, `None` without a
+/// snapshot (and then no other statement runs): the run's row, the code
+/// index's files and packages, the run's files, the items [`found_in`]
+/// finds for `raw` (no search without one), then each path `pick` chooses
+/// from them, in byte order, with its items and its symbols.
+pub(crate) fn layer_c_read_in(
+    tx: &Transaction<'_>,
+    wt: i64,
+    raw: Option<&str>,
+    pick: impl FnOnce(&[LayerCItem]) -> BTreeSet<String>,
+) -> Result<Option<LayerCRead>, StoreError> {
+    let Some(head) = head_in(tx, wt)? else {
+        return Ok(None);
+    };
+    let tree = tree_rows_in(tx, wt)?;
+    let files = resolve_files_in(tx, wt)?;
+    let found = match raw {
+        Some(raw) => found_in(tx, wt, raw)?,
+        None => Vec::new(),
+    };
+    let paths = pick(&found);
+    let mut symbols: BTreeMap<String, Vec<StoredSymbol>> = BTreeMap::new();
+    for symbol in files_symbols_in(tx, wt, paths.iter().map(String::as_str))? {
+        symbols.entry(symbol.path.clone()).or_default().push(symbol);
+    }
+    let mut statement = tx.prepare(FILE_ITEMS_SQL).db()?;
+    let mut joined = Vec::with_capacity(paths.len());
+    for path in paths {
+        let items = statement
+            .query_map((wt, path.as_str()), item_row)
+            .db()?
+            .collect::<Result<Vec<_>, _>>()
+            .db()?;
+        let symbols = symbols.remove(&path).unwrap_or_default();
+        joined.push(LayerCFileRows {
+            path,
+            items,
+            symbols,
+        });
+    }
+    Ok(Some(LayerCRead {
+        head,
+        tree,
+        files,
+        found,
+        joined,
+    }))
 }
 
 /// A count or offset as a row stores it (SQLite's integers are signed).

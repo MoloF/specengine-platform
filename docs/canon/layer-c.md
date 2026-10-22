@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-code]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-22
 ---
 
 # Layer C: `spec resolve` and the advisory snapshot
 
-`spec resolve [--timeout S] [--json]` is the one command that spawns `specengine-ra` (protocol v1: `layer-c-protocol.md`): one cold load, the reply checked line by line, stored after a complete reply over an unchanged tree as the worktree's one advisory snapshot in the data directory. No other command, read, MCP tool, daemon route or hook spawns it; no read shows the snapshot yet (11a-3, `docs/features/layer-c-reads.md`). The rule: `architecture-code.md#code-identity`, ADR-0049. Code: CLI `layer_c.rs` (steps, freshness, counts, output), `layer_c_run.rs` (a run), `layer_c_reply.rs` (checks), `group.rs` (the process-group core of `verify --tests` too, `spec-verify-tests.md` "Runner"); store `layer_c.rs`; `specengine-code` `layer_c`. Built by `docs/features/layer-c-resolve.md`.
+`spec resolve [--timeout S] [--json]` is the one command that spawns `specengine-ra` (protocol v1: `layer-c-protocol.md`): one cold load, the reply checked line by line, stored after a complete reply over an unchanged tree as the worktree's one advisory snapshot in the data directory. No other command, read, MCP tool, daemon route or hook spawns it; `spec symbols` and `find_symbols` show it (`layer-c-reads.md`). The rule (the marker binds, the moniker displays and finds): `architecture-code.md#code-identity`, ADR-0049. Code: CLI `layer_c.rs` (steps, freshness, counts, output), `layer_c_run.rs` (a run), `layer_c_reply.rs` (checks), `group.rs` (the process-group core of `verify --tests` too, `spec-verify-tests.md` "Runner"); store `layer_c.rs`; `specengine-code` `layer_c`. Built by `docs/features/layer-c-resolve.md`.
 
 ## Run
 
@@ -26,7 +26,7 @@ S: `--timeout` seconds, 1..=3600, default 300 (`RESOLVE_TIMEOUT_{MIN,MAX,DEFAULT
 One line, exactly the six keys in this order, `\n` ended:
 
 ```json
-{"protocol":1,"root":"/abs/root","files":["arena-derive/src/lib.rs","arena/build.rs"],"target_dir":"/abs/data/ra-mini.ra/target","tmp_dir":"/abs/data/ra-mini.ra/tmp","budget_ms":300000}
+{"protocol":1,"root":"/abs/root","files":["arena-derive/src/lib.rs"],"target_dir":"/abs/data/ra-mini.ra/target","tmp_dir":"/abs/data/ra-mini.ra/tmp","budget_ms":300000}
 ```
 
 `root` canonical; `target_dir`, `tmp_dir` `D/target`, `D/tmp`; `budget_ms` S × 1000. A non-UTF-8 path cannot be written (`<path> is not UTF-8: the request names UTF-8 paths only`). `spec` copies none of the binary's request checks: a refusal is reported, never pre-empted.
@@ -75,7 +75,7 @@ A trigger first: `over the budget of <S> s`, `interrupted`, `malformed reply at 
 
 ## Tables
 
-`INDEX_FORMAT` 11 (`symbol-index.md` "Tables"): `STRICT`, in `FORMAT_TABLES` children first, before `code_worktrees`; columns: store `schema.rs`. Outside `CODE_TABLES` and 6a's dump-equals-rebuild: `CODE_INDEX_FORMAT` stays 4.
+`INDEX_FORMAT` 12 (`symbol-index.md` "Tables"): `STRICT`, in `FORMAT_TABLES` children first, before `code_worktrees`; columns: store `schema.rs`. Outside `CODE_TABLES` and 6a's dump-equals-rebuild: `CODE_INDEX_FORMAT` stays 4.
 
 | Table | Key | Columns |
 |---|---|---|
@@ -83,7 +83,7 @@ A trigger first: `over the budget of <S> s`, `interrupted`, `malformed reply at 
 | `code_resolve_files` | `(wt, path)` -> `code_resolve`, cascade | `blake3` (the code index's at the run), `in_crate` |
 | `code_monikers` | `(wt, path, start)` -> `code_resolve`, cascade | `"end"`, `kind`, `state`, `moniker` (raw; index `code_monikers_by_moniker`) |
 
-- **Writes**: `SqliteIndex::replace_layer_c(&LayerCSnapshot)` only: one `Immediate` transaction, delete then insert, rows by `(path, start)`; no `code_worktrees` row: `NotIndexed`. **Reads**: `layer_c_stamp()` (`tree_fp`, `protocol`, `ra_ap`, `host`), `layer_c_snapshot()`, `code_tree_rows()` (the code index's files, packages). The store knows no protocol word, Cargo name or moniker syntax.
+- **Writes**: `SqliteIndex::replace_layer_c(&LayerCSnapshot)` only: one `Immediate` transaction, delete then insert, rows by `(path, start)`; no `code_worktrees` row: `NotIndexed`. **Reads**: `layer_c_stamp()` (`tree_fp`, `protocol`, `ra_ap`, `host`), `layer_c_snapshot()`, `code_tree_rows()` (the code index's files, packages); the reads': `layer-c-reads.md`. The store knows no protocol word, Cargo name or moniker syntax.
 - **Lifetime**: `clear_code` (no `[code]`) and an `INDEX_FORMAT` change drop it; `spec index --full`, an `exclude` change, a `CODE_INDEX_FORMAT` change keep it. No `c_only` column: the join runs per read.
 - **Dump**: `wt` as `(project, root)`; no absolute path or time stored: two roots, runs or creation orders, identical rows.
 
@@ -95,7 +95,7 @@ A trigger first: `over the budget of <S> s`, `interrupted`, `malformed reply at 
 - `["file",path,blake3]` per requested file; `["package",dir,manifest_b3]` per `code_packages` row;
 - per `TREE_FILES` name (`Cargo.lock`, `Cargo.toml`, `rust-toolchain`, `rust-toolchain.toml`, `.cargo/config`, `.cargo/config.toml`) in the root and each directory from a walked file's (any `code_files` row) up to it, never above (`tree_files`; a path with `..`, `.`, an empty part, or absolute adds the root only): `["bytes",name,b3]` for a regular file, `["unreadable",name]` if it cannot be read; absent or a directory: none. A virtual workspace root's `Cargo.toml` is covered. The names are `specengine-code`'s; the CLI hashes bytes.
 
-`layer_c_state(&Env, &Globals) -> LayerCState`, public: the spec and code indexes refreshed first, exit 2 as the reads (no `[code]`, a config error, a walk gap); `absent` (no snapshot), `fresh` (equal), `stale` (any change: every row stale, its values kept); never spawns. `state_in(&SqliteIndex, root)`, crate-private, over an index the caller refreshed: 11a-3's reads, inside their own refresh.
+`layer_c_state(&Env, &Globals) -> LayerCState`, public: the spec and code indexes refreshed first, exit 2 as the reads (no `[code]`, a config error, a walk gap); `absent` (no snapshot), `fresh` (equal), `stale` (any change: every row stale, its values kept); never spawns. `Tree::of` reads the tree once, `Tree::state_of` compares (the reads: in their transaction).
 
 Not covered (stamped at most): cargo configs above the root or in `$CARGO_HOME`; `rustup default`; a workspace root above the project root (`dir` with `..`); a reinstalled binary of the same `ra_ap` and `host`.
 
@@ -103,8 +103,7 @@ Not covered (stamped at most): cargo configs above the root or in `$CARGO_HOME`;
 
 Per file of `code_resolve_files`, layer A's `symbols` rows against its `code_monikers` rows (`specengine_code::layer_c`):
 
-- **Rows**: `join_file`: equal `start` and `end`, `kind_matches` (C's kind, A's); never a line or a name. `joined`, `unmatched` (A rows with none), `c_only` (C rows no A row joins).
+- **Rows**: `join_file` (CLI `join_rows`: the counts, the reads): equal `start` and `end`, `kind_matches` (C's kind, A's); never a line or a name. `joined`, `unmatched` (A rows with none), `c_only` (C rows no A row joins).
 - **`agrees`**, joined `moniker` rows of a file with one target (`target_crate`: `TargetIndex::file_role` over the package's stored `targets`; no unit: the primary target's name, else the unit's; `-` -> `_`): the moniker's crate (before its first space) equals it, and its leading `name/` descriptors before the item's own last (`moniker_modules`: a `mod` row's own `name/` is no module) equal A's modules, the file's module path plus the enclosing inline `mod` names by `parent_ord`; names and owners not compared. A shared or unrooted file, a `path_attribute` or `unrooted` row: neither. False: counted and shown, never fixed or a finding.
-- **Collisions**: `collision_groups`, two or more C rows of one file sharing a raw moniker; `collisions` counts groups. Shown as `<raw> #<value>`: the joined A rows' discriminators when all present and distinct, else the 1-based ordinal by `start` (`collision_values`, `shown_moniker`; ` #` never in raw text).
-- **Precedence**: the marker binds; the qpath names for `spec.lock` and `verify`; the moniker displays and finds.
-- Known limit: `moniker_modules` stops at the first non-namespace descriptor character, so a raw-identifier module `r#name` may miscount (TE-6 watches).
+- **Collisions**: `collision_groups`, two or more C rows of one file sharing a raw moniker; `collisions` counts groups. Shown as `<raw> #<value>`: the joined A rows' discriminators when all present and distinct, else the 1-based ordinal by `start`; two A rows on one C row: the first's by `ord` (`collision_values`, `shown_moniker`; ` #` never in raw text).
+- Known limit: `moniker_modules` stops at the first non-namespace descriptor character, so a raw-identifier module `r#name` would miscount; TE-6: neither pilot has one.

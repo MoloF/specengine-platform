@@ -1,0 +1,448 @@
+[
+   {
+      "args" : [
+         "symbols",
+         "Health"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::Health | struct_item | arena/src/lib.rs:12-15 | layer a | mentions 0 | suffix\n  sig pub struct Health\nsymbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "Health"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"Health\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::Health\",\"name\":\"Health\",\"discriminator\":null,\"item_kind\":\"struct_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":12,\"end_line\":15,\"signature\":\"pub struct Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"suffix\",\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":1,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "arena::Health"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::Health | struct_item | arena/src/lib.rs:12-15 | layer a | mentions 0 | exact\n  sig pub struct Health\nsymbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "arena::Health"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"arena::Health\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::Health\",\"name\":\"Health\",\"discriminator\":null,\"item_kind\":\"struct_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":12,\"end_line\":15,\"signature\":\"pub struct Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"exact\",\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":1,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "arena::impl Health #2"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::impl Health #2 | impl_item | arena/src/lib.rs:23-27 | layer a | mentions 0 | exact\n  sig impl Health\narena::impl Health #1 | impl_item | arena/src/lib.rs:17-21 | layer a | mentions 0 | name\n  sig impl Health\nsymbols: 2 of 2; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "arena::impl Health #2"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"arena::impl Health #2\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::impl Health #2\",\"name\":\"impl Health\",\"discriminator\":\"2\",\"item_kind\":\"impl_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":23,\"end_line\":27,\"signature\":\"impl Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"exact\",\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::impl Health #1\",\"name\":\"impl Health\",\"discriminator\":\"1\",\"item_kind\":\"impl_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":17,\"end_line\":21,\"signature\":\"impl Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"name\",\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":2,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "impl Health"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::impl Health #1 | impl_item | arena/src/lib.rs:17-21 | layer a | mentions 0 | name\n  sig impl Health\narena::impl Health #2 | impl_item | arena/src/lib.rs:23-27 | layer a | mentions 0 | name\n  sig impl Health\nsymbols: 2 of 2; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "impl Health"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"impl Health\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::impl Health #1\",\"name\":\"impl Health\",\"discriminator\":\"1\",\"item_kind\":\"impl_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":17,\"end_line\":21,\"signature\":\"impl Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"name\",\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::impl Health #2\",\"name\":\"impl Health\",\"discriminator\":\"2\",\"item_kind\":\"impl_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":23,\"end_line\":27,\"signature\":\"impl Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"name\",\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":2,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "tick"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::Tick::tick | function_signature_item | arena/src/lib.rs:30-30 | layer a | mentions 0 | suffix\n  sig fn tick(&mut self, dt: f32)\narena::systems::<Health as Tick>::tick | function_item | arena/src/systems.rs:8-12 | layer a | mentions 0 | suffix\n  sig fn tick(&mut self, _dt: f32)\nsymbols: 2 of 2; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "tick"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"tick\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::Tick::tick\",\"name\":\"tick\",\"discriminator\":null,\"item_kind\":\"function_signature_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":30,\"end_line\":30,\"signature\":\"fn tick(&mut self, dt: f32)\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"suffix\",\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::systems::<Health as Tick>::tick\",\"name\":\"tick\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/systems.rs\",\"start_line\":8,\"end_line\":12,\"signature\":\"fn tick(&mut self, _dt: f32)\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"suffix\",\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":2,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--limit",
+         "1",
+         "tick"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::Tick::tick | function_signature_item | arena/src/lib.rs:30-30 | layer a | mentions 0 | suffix\n  sig fn tick(&mut self, dt: f32)\nsymbols: 1 of 2; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--limit",
+         "1",
+         "tick"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"tick\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::Tick::tick\",\"name\":\"tick\",\"discriminator\":null,\"item_kind\":\"function_signature_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":30,\"end_line\":30,\"signature\":\"fn tick(&mut self, dt: f32)\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":\"suffix\",\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":2,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "arena Health#"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "symbols: 0 of 0; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "arena Health#"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"arena Health#\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[],\"total\":0,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "arena impl#[Health]"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "symbols: 0 of 0; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "arena impl#[Health]"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"arena impl#[Health]\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[],\"total\":0,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "arena impl#[Health] #2"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "symbols: 0 of 0; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "arena impl#[Health] #2"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"arena impl#[Health] #2\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[],\"total\":0,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "arena systems/regenerate()."
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "symbols: 0 of 0; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "arena systems/regenerate()."
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"query\",\"query\":\"arena systems/regenerate().\",\"node\":null,\"path\":null,\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[],\"total\":0,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--file",
+         "arena-derive/src/lib.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena-derive::derive_label | function_item | arena-derive/src/lib.rs:6-22 | layer a | mentions 0\n  sig pub fn derive_label(input: TokenStream) -> TokenStream\nsymbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--file",
+         "arena-derive/src/lib.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"file\",\"query\":null,\"node\":null,\"path\":\"arena-derive/src/lib.rs\",\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena-derive::derive_label\",\"name\":\"derive_label\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena-derive/src/lib.rs\",\"start_line\":6,\"end_line\":22,\"signature\":\"pub fn derive_label(input: TokenStream) -> TokenStream\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":1,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--file",
+         "arena/build.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::custom-build:build-script-build::main | function_item | arena/build.rs:8-16 | layer a | mentions 0\n  sig fn main()\nsymbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--file",
+         "arena/build.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"file\",\"query\":null,\"node\":null,\"path\":\"arena/build.rs\",\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::custom-build:build-script-build::main\",\"name\":\"main\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/build.rs\",\"start_line\":8,\"end_line\":16,\"signature\":\"fn main()\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":1,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--file",
+         "arena/src/lib.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::systems | mod_item | arena/src/lib.rs:8-8 | layer a | mentions 0\n  sig pub mod systems\narena::Health | struct_item | arena/src/lib.rs:12-15 | layer a | mentions 0\n  sig pub struct Health\narena::impl Health #1 | impl_item | arena/src/lib.rs:17-21 | layer a | mentions 0\n  sig impl Health\narena::Health::fraction | function_item | arena/src/lib.rs:18-20 | layer a | mentions 0\n  sig pub fn fraction(&self) -> f32\narena::impl Health #2 | impl_item | arena/src/lib.rs:23-27 | layer a | mentions 0\n  sig impl Health\narena::Health::full | function_item | arena/src/lib.rs:24-26 | layer a | mentions 0\n  sig pub fn full(max: u32) -> Health\narena::Tick | trait_item | arena/src/lib.rs:29-35 | layer a | mentions 0\n  sig pub trait Tick\narena::Tick::tick | function_signature_item | arena/src/lib.rs:30-30 | layer a | mentions 0\n  sig fn tick(&mut self, dt: f32)\narena::Tick::tick_twice | function_item | arena/src/lib.rs:31-34 | layer a | mentions 0\n  sig fn tick_twice(&mut self, dt: f32)\narena::Phase | enum_item | arena/src/lib.rs:37-40 | layer a | mentions 0\n  sig pub enum Phase\narena::MAX_ENTITIES | const_item | arena/src/lib.rs:42-42 | layer a | mentions 0\n  sig pub const MAX_ENTITIES: usize\narena::TITLE | static_item | arena/src/lib.rs:43-43 | layer a | mentions 0\n  sig pub static TITLE: &str\narena::Roster | type_item | arena/src/lib.rs:44-44 | layer a | mentions 0\n  sig pub type Roster\narena::doubled | macro_definition | arena/src/lib.rs:46-50 | layer a | mentions 0\n  sig macro_rules! doubled\narena::doubled_regen | function_item | arena/src/lib.rs:52-54 | layer a | mentions 0\n  sig pub fn doubled_regen() -> u32\narena::internal | mod_item | arena/src/lib.rs:56-63 | layer a | mentions 0\n  sig mod internal\narena::internal::seed | function_item | arena/src/lib.rs:57-62 | layer a | mentions 0\n  sig pub fn seed() -> u64\narena::spawn_seed | function_item | arena/src/lib.rs:65-67 | layer a | mentions 0\n  sig pub fn spawn_seed() -> u64\narena::windows_overlay | function_item | arena/src/lib.rs:70-70 | layer a | mentions 0\n  sig pub fn windows_overlay()\narena::tests | mod_item | arena/src/lib.rs:73-78 | layer a | mentions 0\n  sig mod tests\narena::tests::labels_every_component | function_item | arena/src/lib.rs:75-77 | layer a | mentions 0\n  sig fn labels_every_component()\nsymbols: 21 of 21; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--file",
+         "arena/src/lib.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"file\",\"query\":null,\"node\":null,\"path\":\"arena/src/lib.rs\",\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::systems\",\"name\":\"systems\",\"discriminator\":null,\"item_kind\":\"mod_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":8,\"end_line\":8,\"signature\":\"pub mod systems\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Health\",\"name\":\"Health\",\"discriminator\":null,\"item_kind\":\"struct_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":12,\"end_line\":15,\"signature\":\"pub struct Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::impl Health #1\",\"name\":\"impl Health\",\"discriminator\":\"1\",\"item_kind\":\"impl_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":17,\"end_line\":21,\"signature\":\"impl Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Health::fraction\",\"name\":\"fraction\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":18,\"end_line\":20,\"signature\":\"pub fn fraction(&self) -> f32\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::impl Health #2\",\"name\":\"impl Health\",\"discriminator\":\"2\",\"item_kind\":\"impl_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":23,\"end_line\":27,\"signature\":\"impl Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Health::full\",\"name\":\"full\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":24,\"end_line\":26,\"signature\":\"pub fn full(max: u32) -> Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Tick\",\"name\":\"Tick\",\"discriminator\":null,\"item_kind\":\"trait_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":29,\"end_line\":35,\"signature\":\"pub trait Tick\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Tick::tick\",\"name\":\"tick\",\"discriminator\":null,\"item_kind\":\"function_signature_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":30,\"end_line\":30,\"signature\":\"fn tick(&mut self, dt: f32)\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Tick::tick_twice\",\"name\":\"tick_twice\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":31,\"end_line\":34,\"signature\":\"fn tick_twice(&mut self, dt: f32)\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Phase\",\"name\":\"Phase\",\"discriminator\":null,\"item_kind\":\"enum_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":37,\"end_line\":40,\"signature\":\"pub enum Phase\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::MAX_ENTITIES\",\"name\":\"MAX_ENTITIES\",\"discriminator\":null,\"item_kind\":\"const_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":42,\"end_line\":42,\"signature\":\"pub const MAX_ENTITIES: usize\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::TITLE\",\"name\":\"TITLE\",\"discriminator\":null,\"item_kind\":\"static_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":43,\"end_line\":43,\"signature\":\"pub static TITLE: &str\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::Roster\",\"name\":\"Roster\",\"discriminator\":null,\"item_kind\":\"type_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":44,\"end_line\":44,\"signature\":\"pub type Roster\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::doubled\",\"name\":\"doubled\",\"discriminator\":null,\"item_kind\":\"macro_definition\",\"path\":\"arena/src/lib.rs\",\"start_line\":46,\"end_line\":50,\"signature\":\"macro_rules! doubled\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::doubled_regen\",\"name\":\"doubled_regen\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":52,\"end_line\":54,\"signature\":\"pub fn doubled_regen() -> u32\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::internal\",\"name\":\"internal\",\"discriminator\":null,\"item_kind\":\"mod_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":56,\"end_line\":63,\"signature\":\"mod internal\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::internal::seed\",\"name\":\"seed\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":57,\"end_line\":62,\"signature\":\"pub fn seed() -> u64\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::spawn_seed\",\"name\":\"spawn_seed\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":65,\"end_line\":67,\"signature\":\"pub fn spawn_seed() -> u64\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::windows_overlay\",\"name\":\"windows_overlay\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":70,\"end_line\":70,\"signature\":\"pub fn windows_overlay()\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::tests\",\"name\":\"tests\",\"discriminator\":null,\"item_kind\":\"mod_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":73,\"end_line\":78,\"signature\":\"mod tests\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::tests::labels_every_component\",\"name\":\"labels_every_component\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":75,\"end_line\":77,\"signature\":\"fn labels_every_component()\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":21,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--file",
+         "arena/src/stray.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::stray::stray_helper | function_item | arena/src/stray.rs:3-3 | layer a | mentions 0\n  sig pub fn stray_helper()\nsymbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--file",
+         "arena/src/stray.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"file\",\"query\":null,\"node\":null,\"path\":\"arena/src/stray.rs\",\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::stray::stray_helper\",\"name\":\"stray_helper\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/stray.rs\",\"start_line\":3,\"end_line\":3,\"signature\":\"pub fn stray_helper()\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":1,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--file",
+         "arena/src/systems.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::systems::Regeneration | struct_item | arena/src/systems.rs:3-5 | layer a | mentions 0\n  sig pub struct Regeneration\narena::systems::impl <Health as Tick> | impl_item | arena/src/systems.rs:7-13 | layer a | mentions 0\n  sig impl Tick for Health\narena::systems::<Health as Tick>::tick | function_item | arena/src/systems.rs:8-12 | layer a | mentions 0\n  sig fn tick(&mut self, _dt: f32)\narena::systems::regenerate | function_item | arena/src/systems.rs:15-19 | layer a | mentions 0\n  sig pub fn regenerate(roster: &mut [Health])\nsymbols: 4 of 4; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--file",
+         "arena/src/systems.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"file\",\"query\":null,\"node\":null,\"path\":\"arena/src/systems.rs\",\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::systems::Regeneration\",\"name\":\"Regeneration\",\"discriminator\":null,\"item_kind\":\"struct_item\",\"path\":\"arena/src/systems.rs\",\"start_line\":3,\"end_line\":5,\"signature\":\"pub struct Regeneration\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::systems::impl <Health as Tick>\",\"name\":\"impl <Health as Tick>\",\"discriminator\":null,\"item_kind\":\"impl_item\",\"path\":\"arena/src/systems.rs\",\"start_line\":7,\"end_line\":13,\"signature\":\"impl Tick for Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::systems::<Health as Tick>::tick\",\"name\":\"tick\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/systems.rs\",\"start_line\":8,\"end_line\":12,\"signature\":\"fn tick(&mut self, _dt: f32)\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::systems::regenerate\",\"name\":\"regenerate\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/systems.rs\",\"start_line\":15,\"end_line\":19,\"signature\":\"pub fn regenerate(roster: &mut [Health])\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":4,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--file",
+         "tools/probe.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : ".::main | function_item | tools/probe.rs:3-3 | layer a | mentions 0 | ambiguous unrooted\n  sig fn main()\nsymbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--file",
+         "tools/probe.rs"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"file\",\"query\":null,\"node\":null,\"path\":\"tools/probe.rs\",\"line\":null,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\".::main\",\"name\":\"main\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"tools/probe.rs\",\"start_line\":3,\"end_line\":3,\"signature\":\"fn main()\",\"ambiguity\":\"unrooted\",\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":1,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--at",
+         "arena/src/lib.rs:24"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::Health::full | function_item | arena/src/lib.rs:24-26 | layer a | mentions 0\n  sig pub fn full(max: u32) -> Health\narena::impl Health #2 | impl_item | arena/src/lib.rs:23-27 | layer a | mentions 0\n  sig impl Health\nsymbols: 2 of 2; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--at",
+         "arena/src/lib.rs:24"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"at\",\"query\":null,\"node\":null,\"path\":\"arena/src/lib.rs\",\"line\":24,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::Health::full\",\"name\":\"full\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":24,\"end_line\":26,\"signature\":\"pub fn full(max: u32) -> Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::impl Health #2\",\"name\":\"impl Health\",\"discriminator\":\"2\",\"item_kind\":\"impl_item\",\"path\":\"arena/src/lib.rs\",\"start_line\":23,\"end_line\":27,\"signature\":\"impl Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":2,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--at",
+         "arena/src/systems.rs:9"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "arena::systems::<Health as Tick>::tick | function_item | arena/src/systems.rs:8-12 | layer a | mentions 0\n  sig fn tick(&mut self, _dt: f32)\narena::systems::impl <Health as Tick> | impl_item | arena/src/systems.rs:7-13 | layer a | mentions 0\n  sig impl Tick for Health\nsymbols: 2 of 2; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--at",
+         "arena/src/systems.rs:9"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"at\",\"query\":null,\"node\":null,\"path\":\"arena/src/systems.rs\",\"line\":9,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\"arena::systems::<Health as Tick>::tick\",\"name\":\"tick\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"arena/src/systems.rs\",\"start_line\":8,\"end_line\":12,\"signature\":\"fn tick(&mut self, _dt: f32)\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null},{\"target\":\"item\",\"qpath\":\"arena::systems::impl <Health as Tick>\",\"name\":\"impl <Health as Tick>\",\"discriminator\":null,\"item_kind\":\"impl_item\",\"path\":\"arena/src/systems.rs\",\"start_line\":7,\"end_line\":13,\"signature\":\"impl Tick for Health\",\"ambiguity\":null,\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":2,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--at",
+         "arena/src/lib.rs:1"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "symbols: 0 of 0; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--at",
+         "arena/src/lib.rs:1"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"at\",\"query\":null,\"node\":null,\"path\":\"arena/src/lib.rs\",\"line\":1,\"reason\":null,\"notes\":[],\"symbols\":[],\"total\":0,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--at",
+         "tools/probe.rs:3"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : ".::main | function_item | tools/probe.rs:3-3 | layer a | mentions 0 | ambiguous unrooted\n  sig fn main()\nsymbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0\n"
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--at",
+         "tools/probe.rs:3"
+      ],
+      "exit" : 0,
+      "stderr" : "",
+      "stdout" : "{\"form\":\"at\",\"query\":null,\"node\":null,\"path\":\"tools/probe.rs\",\"line\":3,\"reason\":null,\"notes\":[],\"symbols\":[{\"target\":\"item\",\"qpath\":\".::main\",\"name\":\"main\",\"discriminator\":null,\"item_kind\":\"function_item\",\"path\":\"tools/probe.rs\",\"start_line\":3,\"end_line\":3,\"signature\":\"fn main()\",\"ambiguity\":\"unrooted\",\"layer\":\"a\",\"tier\":null,\"mentions\":0,\"bindings\":[],\"roles\":null}],\"total\":1,\"omitted\":{\"symbols\":0},\"code\":{\"files\":6,\"rs\":6,\"ron\":0,\"skipped\":0}}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--node",
+         "VIT-01"
+      ],
+      "exit" : 1,
+      "stderr" : "spec: `VIT-01` resolves to no ID and no alias\n",
+      "stdout" : ""
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--node",
+         "VIT-01"
+      ],
+      "exit" : 1,
+      "stderr" : "spec: `VIT-01` resolves to no ID and no alias\n",
+      "stdout" : "{\"form\":\"node\",\"query\":null,\"node\":\"VIT-01\",\"path\":null,\"line\":null,\"reason\":\"`VIT-01` resolves to no ID and no alias\",\"notes\":[],\"symbols\":[],\"total\":0,\"omitted\":null,\"code\":null}\n"
+   },
+   {
+      "args" : [
+         "symbols",
+         "--file",
+         "nowhere.rs"
+      ],
+      "exit" : 2,
+      "stderr" : "spec: `nowhere.rs` is no code file the `[code]` walk reads (a root-relative `.rs` or `.ron` file)\n",
+      "stdout" : ""
+   },
+   {
+      "args" : [
+         "--json",
+         "symbols",
+         "--file",
+         "nowhere.rs"
+      ],
+      "exit" : 2,
+      "stderr" : "spec: `nowhere.rs` is no code file the `[code]` walk reads (a root-relative `.rs` or `.ron` file)\n",
+      "stdout" : ""
+   }
+]

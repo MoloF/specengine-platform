@@ -33,6 +33,14 @@
 //! a walked file's up to the root that exists (one that cannot be read:
 //! its name alone). [`layer_c_state`]: `absent` (no snapshot), `fresh`
 //! (equal), `stale` (any change).
+//!
+//! **Reads** (`spec symbols`): `LayerCView` over the store's read of the
+//! snapshot inside the read's own code snapshot, the freshness from that
+//! read's tree rows; every item of a picked file joined by `join_rows`,
+//! the one per-file join `spec resolve`'s counts use too: the joined
+//! row's state, else `unmatched`; a file not requested or changed since
+//! the run, `unseen`. A read reaches the view and the join only, never
+//! the run nor [`layer_c_state`].
 
 // Off Unix only the refusal is built; the rest is the run's.
 #![cfg_attr(not(unix), allow(dead_code, unused_imports))]
@@ -44,13 +52,15 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 use serde::Serialize;
-use specengine_code::MOD_KIND;
 use specengine_code::layer_c::{
-    JoinItem, TargetCrate, agrees, collision_groups, join_file, target_crate, tree_files,
+    JoinItem, TargetCrate, agrees, collision_groups, collision_values, join_file, shown_moniker,
+    target_crate, tree_files,
 };
+use specengine_code::{MOD_KIND, PackageTargets};
 use specengine_store::{
     AMBIGUITY_PATH_ATTRIBUTE, AMBIGUITY_UNROOTED, CodeTreeFile, CodeTreeRows, LayerCFile,
-    LayerCItem, LayerCSnapshot, SnapshotSymbols, SqliteIndex, StoredSymbol, b3_hash,
+    LayerCHead, LayerCItem, LayerCRead, LayerCSnapshot, LayerCStamp, SnapshotSymbols, SqliteIndex,
+    StoredSymbol, b3_hash,
 };
 
 use crate::code_index::{LANG_RUST, package_targets, refresh_code};
@@ -221,6 +231,11 @@ impl Tree {
             .code_tree_rows()
             .map_err(store_error)?
             .unwrap_or_default();
+        Ok(Self::of(rows, root))
+    }
+
+    /// The tree of the code index's `rows`, the files under `root`.
+    fn of(rows: CodeTreeRows, root: &Path) -> Self {
         let requested: Vec<usize> = rows
             .files
             .iter()
@@ -229,11 +244,26 @@ impl Tree {
             .map(|(at, _)| at)
             .collect();
         let entries = tree_entries(root, &rows, &requested);
-        Ok(Self {
+        Self {
             rows,
             requested,
             entries,
-        })
+        }
+    }
+
+    /// The freshness of the snapshot `stamp` stands for against this tree.
+    fn state_of(&self, stamp: &LayerCStamp) -> LayerCState {
+        let now = tree_fp(
+            u64::from(stamp.protocol),
+            &stamp.ra_ap,
+            &stamp.host,
+            &self.entries,
+        );
+        if now == stamp.tree_fp {
+            LayerCState::Fresh
+        } else {
+            LayerCState::Stale
+        }
     }
 
     fn requested(&self) -> impl Iterator<Item = &CodeTreeFile> {
@@ -316,34 +346,19 @@ fn refreshed_tree(
 
 /// The snapshot's freshness (see the module documentation), the code
 /// index refreshed first as the reads refresh it: exit 2 as they do (no
-/// `[code]`, a config error, an incomplete walk). Never spawns anything.
+/// `[code]`, a config error, an incomplete walk); the tree read once, by
+/// the refresh. Never spawns anything.
 pub fn layer_c_state(env: &Env, globals: &Globals) -> Result<LayerCState, CliError> {
     let (project, text) = discover_with_text(env, globals)?;
     project.slug()?;
     let code = code_config(&project, &text)?;
     let mut open = open_index(env, &project)?;
     let mut messages = Vec::new();
-    refreshed_tree(&mut open.index, &project, &code, &mut messages)??;
-    state_in(&open.index, &project.root)
-}
-
-/// [`layer_c_state`] over a code index the caller refreshed.
-pub(crate) fn state_in(index: &SqliteIndex, root: &Path) -> Result<LayerCState, CliError> {
-    let Some(stamp) = index.layer_c_stamp().map_err(store_error)? else {
+    let tree = refreshed_tree(&mut open.index, &project, &code, &mut messages)??;
+    let Some(stamp) = open.index.layer_c_stamp().map_err(store_error)? else {
         return Ok(LayerCState::Absent);
     };
-    let tree = Tree::read(index, root)?;
-    let now = tree_fp(
-        u64::from(stamp.protocol),
-        &stamp.ra_ap,
-        &stamp.host,
-        &tree.entries,
-    );
-    Ok(if now == stamp.tree_fp {
-        LayerCState::Fresh
-    } else {
-        LayerCState::Stale
-    })
+    Ok(tree.state_of(&stamp))
 }
 
 #[cfg(unix)]
@@ -572,8 +587,9 @@ struct JoinCounts {
 }
 
 /// Every layer A row of the snapshot's files joined with its rows: the
-/// counts `spec resolve` prints (the code crate's join, agreement and
-/// collisions over the code index's symbols and package tables).
+/// counts `spec resolve` prints, file by file through [`join_rows`], the
+/// join the reads show (the code crate's join, agreement and collisions
+/// over the code index's symbols and package tables).
 fn join_counts(
     index: &SqliteIndex,
     snapshot: &LayerCSnapshot,
@@ -595,79 +611,327 @@ fn join_counts(
     for item in &snapshot.items {
         items.entry(item.path.as_str()).or_default().push(item);
     }
-    let packages: BTreeMap<&str, _> = rows
-        .packages
-        .iter()
-        .map(|row| (row.dir.as_str(), package_targets(row)))
-        .collect();
-    let file_packages: BTreeMap<&str, Option<&str>> = rows
-        .files
-        .iter()
-        .map(|file| (file.path.as_str(), file.package.as_deref()))
-        .collect();
+    let crates = TargetCrates::new(rows);
 
     let mut counts = JoinCounts::default();
     for file in &snapshot.files {
         let path = file.path.as_str();
         let a: &[&StoredSymbol] = by_path.get(path).map_or(&[], Vec::as_slice);
-        let a_by_ord: BTreeMap<u32, &StoredSymbol> =
-            a.iter().map(|symbol| (symbol.ord, *symbol)).collect();
         let c: &[&LayerCItem] = items.get(path).map_or(&[], Vec::as_slice);
-        let a_items: Vec<JoinItem<'_>> = a
-            .iter()
-            .map(|symbol| JoinItem {
-                start: u64::from(symbol.start_byte),
-                end: u64::from(symbol.end_byte),
-                kind: &symbol.item_kind,
-            })
-            .collect();
-        let c_items: Vec<JoinItem<'_>> = c
-            .iter()
-            .map(|item| JoinItem {
-                start: item.start,
-                end: item.end,
-                kind: &item.kind,
-            })
-            .collect();
-        let joins = join_file(&a_items, &c_items);
-        let crate_of_file: Option<TargetCrate> =
-            file_packages.get(path).copied().flatten().and_then(|dir| {
-                let targets = packages.get(dir)?.as_ref()?;
-                let relative = Path::new(path).strip_prefix(dir).ok()?;
-                target_crate(relative, targets)
-            });
-        let mut joined_c: BTreeSet<usize> = BTreeSet::new();
-        for (at, join) in joins.iter().enumerate() {
-            let Some(c_at) = *join else {
+        let join = join_rows(a, c, crates.of(path).as_ref());
+        for row in &join.rows {
+            let Some(row) = row else {
                 counts.unmatched += 1;
                 continue;
             };
             counts.joined += 1;
-            joined_c.insert(c_at);
-            let Some(moniker) = c[c_at].moniker.as_deref() else {
-                continue;
-            };
-            let symbol = a[at];
-            let untargeted = matches!(
-                symbol.ambiguity.as_deref(),
-                Some(AMBIGUITY_PATH_ATTRIBUTE | AMBIGUITY_UNROOTED)
-            );
-            let Some(target) = crate_of_file.as_ref().filter(|_| !untargeted) else {
-                continue;
-            };
-            let mut modules = target.modules.clone();
-            modules.extend(inline_modules(&a_by_ord, symbol));
-            if agrees(moniker, &target.name, &modules) {
-                counts.agrees += 1;
-            } else {
-                counts.disagrees += 1;
+            match row.agrees {
+                Some(true) => counts.agrees += 1,
+                Some(false) => counts.disagrees += 1,
+                None => {}
             }
         }
-        counts.c_only += count(c.len() - joined_c.len());
-        let monikers: Vec<Option<&str>> = c.iter().map(|item| item.moniker.as_deref()).collect();
-        counts.collisions += count(collision_groups(&monikers).len());
+        counts.c_only += count(join.c_only);
+        counts.collisions += count(join.collisions);
     }
     Ok(counts)
+}
+
+/// Each code package's target table and each code file's package, as the
+/// code index stores them: what [`TargetCrates::of`] reads.
+struct TargetCrates<'r> {
+    packages: BTreeMap<&'r str, Option<PackageTargets>>,
+    file_packages: BTreeMap<&'r str, Option<&'r str>>,
+}
+
+impl<'r> TargetCrates<'r> {
+    fn new(rows: &'r CodeTreeRows) -> Self {
+        Self {
+            packages: rows
+                .packages
+                .iter()
+                .map(|row| (row.dir.as_str(), package_targets(row)))
+                .collect(),
+            file_packages: rows
+                .files
+                .iter()
+                .map(|file| (file.path.as_str(), file.package.as_deref()))
+                .collect(),
+        }
+    }
+
+    /// The one target crate of the file at `path` ([`target_crate`]);
+    /// `None` outside every package or without one target.
+    fn of(&self, path: &str) -> Option<TargetCrate> {
+        let dir = self.file_packages.get(path).copied().flatten()?;
+        let targets = self.packages.get(dir)?.as_ref()?;
+        let relative = Path::new(path).strip_prefix(dir).ok()?;
+        target_crate(relative, targets)
+    }
+}
+
+/// What a joined layer C row says of one layer A row (canon `layer-c`,
+/// "Join").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct JoinedRow<'c> {
+    /// The row's state, as stored.
+    pub(crate) state: &'c str,
+    /// Its moniker as shown ([`shown_moniker`]): a `moniker` row's only.
+    pub(crate) moniker: Option<String>,
+    /// Whether the moniker agrees with layer A's crate and modules; `None`
+    /// where neither is judged (no moniker, a file without one target, a
+    /// `path_attribute` or `unrooted` row).
+    pub(crate) agrees: Option<bool>,
+}
+
+/// One file's join: per layer A row, in the order given, the layer C row
+/// it joins (`None`: unmatched); the C rows no A row joins; the groups of
+/// C rows sharing a raw moniker.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct FileJoin<'c> {
+    pub(crate) rows: Vec<Option<JoinedRow<'c>>>,
+    pub(crate) c_only: usize,
+    pub(crate) collisions: usize,
+}
+
+/// The one per-file join `spec resolve`'s counts and the reads share: `a`
+/// a file's layer A rows (every one of the file: the inline modules
+/// enclosing an item are read by `parent_ord`), `c` its layer C rows by
+/// `start`, `target` the file's one target crate.
+pub(crate) fn join_rows<'c>(
+    a: &[&StoredSymbol],
+    c: &[&'c LayerCItem],
+    target: Option<&TargetCrate>,
+) -> FileJoin<'c> {
+    let a_by_ord: BTreeMap<u32, &StoredSymbol> =
+        a.iter().map(|symbol| (symbol.ord, *symbol)).collect();
+    let a_items: Vec<JoinItem<'_>> = a
+        .iter()
+        .map(|symbol| JoinItem {
+            start: u64::from(symbol.start_byte),
+            end: u64::from(symbol.end_byte),
+            kind: &symbol.item_kind,
+        })
+        .collect();
+    let c_items: Vec<JoinItem<'_>> = c
+        .iter()
+        .map(|item| JoinItem {
+            start: item.start,
+            end: item.end,
+            kind: &item.kind,
+        })
+        .collect();
+    let joins = join_file(&a_items, &c_items);
+    // Each C row's joined A row, the first by the A order: its
+    // discriminator tells a collision apart.
+    let mut joined_by: BTreeMap<usize, usize> = BTreeMap::new();
+    for (at, join) in joins.iter().enumerate() {
+        if let Some(c_at) = *join {
+            joined_by.entry(c_at).or_insert(at);
+        }
+    }
+    let monikers: Vec<Option<&str>> = c.iter().map(|item| item.moniker.as_deref()).collect();
+    let discriminators: Vec<Option<&str>> = (0..c.len())
+        .map(|c_at| {
+            joined_by
+                .get(&c_at)
+                .and_then(|&at| a[at].discriminator.as_deref())
+        })
+        .collect();
+    let values = collision_values(&monikers, &discriminators);
+    let rows = joins
+        .iter()
+        .enumerate()
+        .map(|(at, join)| {
+            let c_at = (*join)?;
+            let item = c[c_at];
+            let symbol = a[at];
+            let agrees = item.moniker.as_deref().and_then(|moniker| {
+                let untargeted = matches!(
+                    symbol.ambiguity.as_deref(),
+                    Some(AMBIGUITY_PATH_ATTRIBUTE | AMBIGUITY_UNROOTED)
+                );
+                let target = target.filter(|_| !untargeted)?;
+                let mut modules = target.modules.clone();
+                modules.extend(inline_modules(&a_by_ord, symbol));
+                Some(agrees(moniker, &target.name, &modules))
+            });
+            Some(JoinedRow {
+                state: &item.state,
+                moniker: item
+                    .moniker
+                    .as_deref()
+                    .map(|raw| shown_moniker(raw, values[c_at].as_deref())),
+                agrees,
+            })
+        })
+        .collect();
+    FileJoin {
+        rows,
+        c_only: c.len() - joined_by.len(),
+        collisions: collision_groups(&monikers).len(),
+    }
+}
+
+/// An item's state when its file is unchanged since the run and no row of
+/// the run joins it.
+pub(crate) const UNMATCHED: &str = "unmatched";
+
+/// An item's state when the run did not see its file as it is: not
+/// requested, or its BLAKE3 changed since.
+pub(crate) const UNSEEN: &str = "unseen";
+
+/// What a read shows of the snapshot for one layer A item.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ItemReading {
+    /// The joined row's state (`layer_c_reply::STATES`), [`UNMATCHED`] or
+    /// [`UNSEEN`].
+    pub(crate) state: &'static str,
+    /// The shown moniker: a `moniker` row's only.
+    pub(crate) moniker: Option<String>,
+    pub(crate) agrees: Option<bool>,
+}
+
+impl ItemReading {
+    const UNSEEN: Self = Self {
+        state: UNSEEN,
+        moniker: None,
+        agrees: None,
+    };
+}
+
+/// The snapshot as one read shows it ([`LayerCView::of`]): its freshness
+/// against the tree the read refreshed, its row, each picked file's items
+/// joined, and the items the lookup's moniker tier finds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct LayerCView {
+    /// `fresh` or `stale`.
+    pub(crate) state: LayerCState,
+    pub(crate) head: LayerCHead,
+    /// Each picked file's path → `ord` → its reading: every layer A item
+    /// of the file.
+    readings: BTreeMap<String, BTreeMap<u32, ItemReading>>,
+    /// The items whose shown moniker is the query, by (path, `ord`).
+    pub(crate) found: Vec<StoredSymbol>,
+}
+
+/// A stored state this build does not know (the first, by path and
+/// `ord`): the read shows no snapshot and warns once.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct UnknownState(String);
+
+impl UnknownState {
+    /// The read's warning, its `warning: ` lead aside.
+    pub(crate) fn warning(&self) -> String {
+        format!(
+            "the layer C snapshot holds an unknown state `{}`; run `spec resolve`",
+            escape_controls(&self.0)
+        )
+    }
+}
+
+impl LayerCView {
+    /// The view of `read` (the store's, in the read's code snapshot), the
+    /// state from its own tree rows and the bytes under `root`
+    /// ([`Tree::state_of`]); `query` the lookup's QUERY: in the files of
+    /// the rows found by its raw moniker, the items whose shown moniker is
+    /// the query itself. A picked file the run did not see as it is: every
+    /// item [`UNSEEN`], none found. A joined row's state this build does
+    /// not know: [`UnknownState`], no view.
+    pub(crate) fn of(
+        read: LayerCRead,
+        root: &Path,
+        query: Option<&str>,
+    ) -> Result<Self, UnknownState> {
+        let LayerCRead {
+            head,
+            tree,
+            files,
+            found,
+            joined,
+        } = read;
+        let tree = Tree::of(tree, root);
+        let state = tree.state_of(&head.stamp);
+        let crates = TargetCrates::new(&tree.rows);
+        let run: BTreeMap<&str, Option<&str>> = files
+            .iter()
+            .map(|file| (file.path.as_str(), file.blake3.as_deref()))
+            .collect();
+        let now: BTreeMap<&str, Option<&str>> = tree
+            .rows
+            .files
+            .iter()
+            .map(|file| (file.path.as_str(), file.blake3.as_deref()))
+            .collect();
+        let found_in: BTreeSet<&str> = found.iter().map(|item| item.path.as_str()).collect();
+        let mut readings = BTreeMap::new();
+        let mut hits = Vec::new();
+        for file in &joined {
+            let path = file.path.as_str();
+            let seen = match (run.get(path), now.get(path)) {
+                (Some(Some(then)), Some(Some(current))) => then == current,
+                _ => false,
+            };
+            let mut of_file = BTreeMap::new();
+            if !seen {
+                for symbol in &file.symbols {
+                    of_file.insert(symbol.ord, ItemReading::UNSEEN);
+                }
+                readings.insert(file.path.clone(), of_file);
+                continue;
+            }
+            let a: Vec<&StoredSymbol> = file.symbols.iter().collect();
+            let c: Vec<&LayerCItem> = file.items.iter().collect();
+            let join = join_rows(&a, &c, crates.of(path).as_ref());
+            for (symbol, row) in file.symbols.iter().zip(join.rows) {
+                let reading = match row {
+                    Some(row) => ItemReading {
+                        state: known_state(row.state)?,
+                        moniker: row.moniker,
+                        agrees: row.agrees,
+                    },
+                    None => ItemReading {
+                        state: UNMATCHED,
+                        moniker: None,
+                        agrees: None,
+                    },
+                };
+                if found_in.contains(path)
+                    && query.is_some_and(|query| reading.moniker.as_deref() == Some(query))
+                {
+                    hits.push(symbol.clone());
+                }
+                of_file.insert(symbol.ord, reading);
+            }
+            readings.insert(file.path.clone(), of_file);
+        }
+        Ok(Self {
+            state,
+            head,
+            readings,
+            found: hits,
+        })
+    }
+
+    /// The reading of the item at (`path`, `ord`); every item shown is of
+    /// a picked file (an item of another, [`UNSEEN`]).
+    pub(crate) fn reading(&self, path: &str, ord: u32) -> ItemReading {
+        let of_file = self.readings.get(path);
+        debug_assert!(of_file.is_some(), "{path}: a file the read did not pick");
+        of_file
+            .and_then(|of_file| of_file.get(&ord))
+            .cloned()
+            .unwrap_or(ItemReading::UNSEEN)
+    }
+}
+
+/// A stored state as one of the protocol's words; else [`UnknownState`].
+fn known_state(state: &str) -> Result<&'static str, UnknownState> {
+    crate::layer_c_reply::STATES
+        .iter()
+        .copied()
+        .find(|known| *known == state)
+        .ok_or_else(|| UnknownState(state.to_owned()))
 }
 
 /// The names of the inline modules enclosing `symbol` in its file

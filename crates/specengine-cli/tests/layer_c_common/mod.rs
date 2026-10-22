@@ -1684,3 +1684,388 @@ pub fn refused_line(protocol: u64, reason: &str) -> String {
 pub fn golden_head(n: usize) -> String {
     reply_of(&golden_lines()[..n])
 }
+
+// ------------------------------------------------- reads (11a-3)
+//
+// docs/features/layer-c-reads.md "Data": the `c` line of an item target,
+// the `layer c:` line after the summary, the JSON keys; the oracle that
+// joins a reply to the code index's rows here, apart from the code under
+// test (the kind map is data: `specengine_code::KIND_MAP`).
+
+/// `spec symbols`' last line over a fresh snapshot of the golden (or any
+/// reply this module renders: `ra_ap` 0.0.352).
+pub const LAYER_C_FRESH: &str = "layer c: fresh (ra_ap 0.0.352)";
+
+/// The same over a stale one.
+pub const LAYER_C_STALE: &str = "layer c: stale (ra_ap 0.0.352); spec resolve refreshes it";
+
+/// What starts a `c` line.
+pub const C_PREFIX: &str = "  c ";
+
+/// The `spec symbols` outputs of HEAD e266128 (before 11a-3) over the lab's
+/// ra-mini, every form text and JSON: `{args, exit, stdout, stderr}`.
+pub const HEAD_SYMBOLS: &str = "fixtures/layer-c/symbols-head.json";
+
+/// The `c_state` words (docs/features/layer-c-reads.md "Data").
+pub const C_STATES: [&str; 7] = [
+    "moniker",
+    "local",
+    "none",
+    "unresolved",
+    "not_loaded",
+    "unmatched",
+    "unseen",
+];
+
+/// The keys of the JSON `layer_c` object, in order.
+pub const LAYER_C_KEYS: [&str; 9] = [
+    "state",
+    "protocol",
+    "ra_ap",
+    "host",
+    "toolchains",
+    "degraded",
+    "workspaces",
+    "files",
+    "items",
+];
+
+/// One captured run of [`HEAD_SYMBOLS`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Captured {
+    pub args: Vec<String>,
+    pub exit: i32,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+/// Every run of [`HEAD_SYMBOLS`], in its order.
+pub fn head_symbols() -> Vec<Captured> {
+    let all: Value = serde_json::from_str(&read_text(&repository_root(), HEAD_SYMBOLS))
+        .expect("the HEAD capture is JSON");
+    all.as_array()
+        .expect("a list")
+        .iter()
+        .map(|entry| Captured {
+            args: entry["args"]
+                .as_array()
+                .expect("args")
+                .iter()
+                .map(|arg| arg.as_str().expect("an argument").to_owned())
+                .collect(),
+            exit: i32::try_from(entry["exit"].as_i64().expect("exit")).expect("an exit"),
+            stdout: entry["stdout"].as_str().expect("stdout").to_owned(),
+            stderr: entry["stderr"].as_str().expect("stderr").to_owned(),
+        })
+        .collect()
+}
+
+/// One target of a `spec symbols` text: its line and the lines under it
+/// (`  sig`, `  c`, roles, bindings), in order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShownTarget {
+    pub line: String,
+    pub under: Vec<String>,
+}
+
+impl ShownTarget {
+    /// Its `c` line, if any (exactly one, else a panic).
+    pub fn c_line(&self) -> Option<&str> {
+        let found: Vec<&str> = self
+            .under
+            .iter()
+            .map(String::as_str)
+            .filter(|line| line.starts_with(C_PREFIX))
+            .collect();
+        assert!(found.len() <= 1, "one `c` line at most: {self:?}");
+        found.first().copied()
+    }
+
+    /// The first field: the qpath (or a RON target's `<path>#<field>`).
+    pub fn qpath(&self) -> &str {
+        self.line.split(" | ").next().expect("a field")
+    }
+
+    /// The second field: an item's kind, `module` or `ron`.
+    pub fn kind(&self) -> &str {
+        self.line.split(" | ").nth(1).expect("a kind field")
+    }
+
+    /// An item target's `(path, start line, end line)`.
+    pub fn span(&self) -> Option<(String, u64, u64)> {
+        if matches!(self.kind(), "module" | "ron") {
+            return None;
+        }
+        let field = self.line.split(" | ").nth(2).expect("a place field");
+        let (path, lines) = field.rsplit_once(':').expect("path:start-end");
+        let (start, end) = lines.split_once('-').expect("start-end");
+        Some((
+            path.to_owned(),
+            start.parse().expect("a start line"),
+            end.parse().expect("an end line"),
+        ))
+    }
+
+    /// The tier word a QUERY target's line ends with, if any.
+    pub fn tier(&self) -> Option<&str> {
+        let last = self.line.rsplit(" | ").next().expect("a field");
+        ["exact", "moniker", "suffix", "name"]
+            .into_iter()
+            .find(|tier| *tier == last)
+    }
+}
+
+/// The targets of a `spec symbols` text, and the lines after the last
+/// one's (the summary, the `layer c:` line, a cut's tail). A target line
+/// is any line not indented and not one of the tail's.
+pub fn shown_targets(text: &str) -> (Vec<ShownTarget>, Vec<String>) {
+    let mut targets: Vec<ShownTarget> = Vec::new();
+    let mut tail: Vec<String> = Vec::new();
+    for line in text.lines() {
+        let is_tail = line.starts_with("symbols: ")
+            || line.starts_with("layer c:")
+            || line.starts_with("[truncated:")
+            || !tail.is_empty();
+        if is_tail {
+            tail.push(line.to_owned());
+        } else if line.starts_with("  ") {
+            targets
+                .last_mut()
+                .unwrap_or_else(|| panic!("an indented line before any target: {line:?}"))
+                .under
+                .push(line.to_owned());
+        } else {
+            targets.push(ShownTarget {
+                line: line.to_owned(),
+                under: Vec::new(),
+            });
+        }
+    }
+    (targets, tail)
+}
+
+/// A `c` line read back: `  c <c_state>[ | <moniker>][ | agrees|disagrees][
+/// | stale]`. A moniker never equals `agrees`, `disagrees` or `stale` in
+/// these tests' replies.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CLine {
+    pub state: String,
+    pub moniker: Option<String>,
+    pub agrees: Option<bool>,
+    pub stale: bool,
+}
+
+impl CLine {
+    pub fn parse(line: &str) -> CLine {
+        let body = line
+            .strip_prefix(C_PREFIX)
+            .unwrap_or_else(|| panic!("a `c` line: {line:?}"));
+        let mut fields: Vec<&str> = body.split(" | ").collect();
+        let stale = fields.last() == Some(&"stale") && fields.len() > 1;
+        if stale {
+            fields.pop();
+        }
+        let agrees = match fields.last() {
+            Some(&"agrees") if fields.len() > 1 => Some(true),
+            Some(&"disagrees") if fields.len() > 1 => Some(false),
+            _ => None,
+        };
+        if agrees.is_some() {
+            fields.pop();
+        }
+        assert!(
+            (1..=2).contains(&fields.len()),
+            "`c <state>[ | <moniker>]…`: {line:?}"
+        );
+        assert!(
+            C_STATES.contains(&fields[0]),
+            "a c_state word: {:?} in {line:?}",
+            fields[0]
+        );
+        CLine {
+            state: fields[0].to_owned(),
+            moniker: fields.get(1).map(|moniker| (*moniker).to_owned()),
+            agrees,
+            stale,
+        }
+    }
+
+    /// The line as the spec writes it.
+    pub fn render(&self) -> String {
+        let mut line = format!("{C_PREFIX}{}", self.state);
+        if let Some(moniker) = &self.moniker {
+            line.push_str(" | ");
+            line.push_str(moniker);
+        }
+        match self.agrees {
+            Some(true) => line.push_str(" | agrees"),
+            Some(false) => line.push_str(" | disagrees"),
+            None => {}
+        }
+        if self.stale {
+            line.push_str(" | stale");
+        }
+        line
+    }
+}
+
+/// A layer A row of the code index, as the oracle joins it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ARow {
+    pub path: String,
+    pub qpath: String,
+    pub item_kind: String,
+    pub discriminator: Option<String>,
+    pub start_line: u64,
+    pub end_line: u64,
+    pub start_byte: u64,
+    pub end_byte: u64,
+}
+
+/// Every layer A row of the index at `db`, by path, then start byte.
+pub fn a_rows(db: &Path) -> Vec<ARow> {
+    query(
+        db,
+        "SELECT f.path AS path, s.qpath AS qpath, s.item_kind AS item_kind, \
+         s.discriminator AS discriminator, s.start_line AS start_line, \
+         s.end_line AS end_line, s.start_byte AS start_byte, s.end_byte AS end_byte \
+         FROM symbols s JOIN code_files f ON f.file_id = s.file \
+         ORDER BY f.path, s.start_byte, s.ord",
+    )
+    .into_iter()
+    .map(|row| ARow {
+        path: row["path"].as_str().expect("path").to_owned(),
+        qpath: row["qpath"].as_str().expect("qpath").to_owned(),
+        item_kind: row["item_kind"].as_str().expect("item_kind").to_owned(),
+        discriminator: row["discriminator"].as_str().map(str::to_owned),
+        start_line: row["start_line"].as_u64().expect("start_line"),
+        end_line: row["end_line"].as_u64().expect("end_line"),
+        start_byte: row["start_byte"].as_u64().expect("start_byte"),
+        end_byte: row["end_byte"].as_u64().expect("end_byte"),
+    })
+    .collect()
+}
+
+/// Whether the layer C kind `c` stands for the layer A kind `a`
+/// (docs/canon/layer-c.md "Join", the kind map as data).
+fn kinds_match(c: &str, a: &str) -> bool {
+    match KIND_MAP.iter().find(|(kind, _)| *kind == c) {
+        Some((_, kinds)) => kinds.contains(&a),
+        None => a.strip_suffix("_item") == Some(c),
+    }
+}
+
+/// What the reads must show for one layer A row, `agrees` and `stale`
+/// left to the caller: `(c_state, shown moniker)`.
+pub type Expected = (String, Option<String>);
+
+/// The oracle (docs/canon/layer-c.md "Join", docs/features/layer-c-reads.md
+/// "Data"): for every layer A row of `rows`, keyed by `(path, qpath, start
+/// line)`, the `c_state` and shown moniker a read must give after `reply`
+/// was stored. A file the reply does not name, or one in `changed`, is
+/// `unseen`; else a row joins the C item of equal start and end whose kind
+/// stands for its own, taking its state and its moniker (` #<value>` added
+/// when two or more C items of the file share it: the joined A rows'
+/// discriminators if all present and distinct, else the 1-based ordinal by
+/// start); else `unmatched`.
+pub fn expected_c(
+    rows: &[ARow],
+    reply: &Reply,
+    changed: &[&str],
+) -> BTreeMap<(String, String, u64), Expected> {
+    let mut out = BTreeMap::new();
+    for row in rows {
+        let key = (row.path.clone(), row.qpath.clone(), row.start_line);
+        let file = reply.files.iter().find(|file| file.path == row.path);
+        let Some(file) = file.filter(|_| !changed.contains(&row.path.as_str())) else {
+            out.insert(key, ("unseen".to_owned(), None));
+            continue;
+        };
+        let joined = file.items.iter().position(|item| {
+            item.start == row.start_byte
+                && item.end == row.end_byte
+                && kinds_match(&item.kind, &row.item_kind)
+        });
+        let Some(at) = joined else {
+            out.insert(key, ("unmatched".to_owned(), None));
+            continue;
+        };
+        let item = &file.items[at];
+        let shown = item
+            .moniker
+            .as_ref()
+            .filter(|_| item.state == "moniker")
+            .map(|raw| {
+                let members: Vec<usize> = file
+                    .items
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, other)| other.moniker.as_ref() == Some(raw))
+                    .map(|(index, _)| index)
+                    .collect();
+                if members.len() < 2 {
+                    return raw.clone();
+                }
+                let discriminators: Vec<Option<String>> = members
+                    .iter()
+                    .map(|&index| {
+                        let member = &file.items[index];
+                        rows.iter()
+                            .find(|a| {
+                                a.path == row.path
+                                    && a.start_byte == member.start
+                                    && a.end_byte == member.end
+                                    && kinds_match(&member.kind, &a.item_kind)
+                            })
+                            .and_then(|a| a.discriminator.clone())
+                    })
+                    .collect();
+                let distinct: std::collections::BTreeSet<&Option<String>> =
+                    discriminators.iter().collect();
+                let ordinal = members
+                    .iter()
+                    .position(|&index| index == at)
+                    .expect("a member");
+                let value = if discriminators.iter().all(Option::is_some)
+                    && distinct.len() == members.len()
+                {
+                    discriminators[ordinal].clone().expect("present")
+                } else {
+                    (ordinal + 1).to_string()
+                };
+                format!("{raw} #{value}")
+            });
+        out.insert(key, (item.state.clone(), shown));
+    }
+    out
+}
+
+/// Every `c` line of `text` with its target's `(path, qpath, start line)`;
+/// a target with none is listed with `None` (a module, a RON path, or an
+/// item while no snapshot is stored).
+pub fn c_lines_by_target(text: &str) -> Vec<((String, String, u64), Option<CLine>)> {
+    let (targets, _) = shown_targets(text);
+    targets
+        .iter()
+        .map(|target| {
+            let key = match target.span() {
+                Some((path, start, _)) => (path, target.qpath().to_owned(), start),
+                None => (String::new(), target.qpath().to_owned(), 0),
+            };
+            (key, target.c_line().map(CLine::parse))
+        })
+        .collect()
+}
+
+/// A JSON target's layer C keys as a [`CLine`] (`stale` from the
+/// document's `layer_c.state`); `None` when all three are `null` and
+/// `c_state` is `null`.
+pub fn c_of_json(target: &Value, stale: bool) -> Option<CLine> {
+    let state = target["c_state"].as_str()?;
+    Some(CLine {
+        state: state.to_owned(),
+        moniker: target["moniker"].as_str().map(str::to_owned),
+        agrees: target["agrees"].as_bool(),
+        stale,
+    })
+}

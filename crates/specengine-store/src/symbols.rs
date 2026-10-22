@@ -189,6 +189,9 @@ mod tests {
     //! database shows the plan a large one gets. The rows of the cost test
     //! are made by SQL, every column the schema requires filled from
     //! `PRAGMA table_info`, so the test needs no analyzer.
+    //!
+    //! docs/features/layer-c-reads.md TE-8: the moniker tier's one raw-text
+    //! search is a `SEARCH` of its index too (`moniker_lookup_searches_its_index`).
 
     use std::time::{Duration, Instant};
 
@@ -277,6 +280,42 @@ mod tests {
                 "no tier searches by {column}: {searched:?}"
             );
         }
+    }
+
+    /// docs/features/layer-c-reads.md TE-8 ("Tier moniker" step 2). M: a
+    /// scan, or a search keyed by anything but the raw moniker. The one
+    /// statement the moniker tier adds (`crate::layer_c::FOUND_SQL`) is
+    /// planned as a `SEARCH` of `code_monikers` through
+    /// `code_monikers_by_moniker` on `moniker=?`, with no `SCAN` of a
+    /// table; and the shared lookup's statements stay three, one per tier
+    /// of [`super::SymbolTier::ALL`] (R2: the tier never joins
+    /// `lookup_in`).
+    #[test]
+    fn moniker_lookup_searches_its_index() {
+        let scratch = Scratch::new("moniker-plan");
+        let index = scratch.open();
+        let sql = crate::layer_c::FOUND_SQL;
+        let details = plan(&index, sql);
+        assert!(
+            details.iter().any(|detail| {
+                detail.starts_with("SEARCH")
+                    && detail.contains("code_monikers")
+                    && detail.contains("code_monikers_by_moniker")
+                    && detail.contains("moniker=?")
+            }),
+            "{sql}: no search of code_monikers_by_moniker: {details:?}"
+        );
+        assert!(
+            !details
+                .iter()
+                .any(|detail| detail.starts_with("SCAN") && !detail.contains("CONSTANT ROW")),
+            "{sql}: a scan: {details:?}"
+        );
+        assert_eq!(LOOKUP_SQL.len(), 3, "the shared lookup keeps three tiers");
+        assert!(
+            LOOKUP_SQL.iter().all(|sql| !sql.contains("code_monikers")),
+            "no lookup statement reads layer C"
+        );
     }
 
     /// `(name, type, not null, has a default, primary key position)` of

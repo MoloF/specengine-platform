@@ -53,6 +53,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/kind-decision.md](features/kind-decision.md) shipped
 - [docs/features/kind-interpretation.md](features/kind-interpretation.md) shipped
 - [docs/features/layer-a-identity.md](features/layer-a-identity.md) shipped
+- [docs/features/layer-c-reads.md](features/layer-c-reads.md) shipped
 - [docs/features/layer-c-resolve.md](features/layer-c-resolve.md) shipped
 - [docs/features/layer-c.md](features/layer-c.md) shipped
 - [docs/features/lock-diff-ui.md](features/lock-diff-ui.md) shipped
@@ -136,6 +137,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0007.md](roadmap/RM-0007.md) shipped
 - [docs/roadmap/RM-0008.md](roadmap/RM-0008.md) shipped
 - [docs/roadmap/RM-0009.md](roadmap/RM-0009.md) shipped
+- [docs/roadmap/RM-0010.md](roadmap/RM-0010.md) shipped
 - [docs/roadmap/RM-0011.md](roadmap/RM-0011.md) shipped
 - [docs/roadmap/RM-0012.md](roadmap/RM-0012.md) shipped
 - [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) shipped

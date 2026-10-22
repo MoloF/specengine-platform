@@ -49,6 +49,18 @@ fn case(all: &Value, list: &str, case: &str) -> Value {
         .unwrap_or_else(|| panic!("no reads.{list} case {case}"))
 }
 
+/// docs/features/layer-c-reads.md "JSON": a target read while no layer C
+/// snapshot is stored holds its three layer C keys, each `null`.
+fn assert_no_layer_c(target: &Value, context: &str) {
+    for key in ["c_state", "moniker", "agrees"] {
+        assert_eq!(
+            target.get(key),
+            Some(&Value::Null),
+            "{context}: `{key}` null without a snapshot: {target}"
+        );
+    }
+}
+
 /// The key order of a `spec --json symbols` answer: the document, every
 /// target, every binding, `omitted`, `code`.
 fn assert_symbols_keys(stdout: &str, targets: usize, bindings: usize, context: &str) {
@@ -598,6 +610,12 @@ pub fn dangled() {}\n";
 /// `null` kept as a key (a derive row: `form`, `group`, `detail`,
 /// `candidates`; the `cfg_attr` row: `detail` set; the ambiguous row:
 /// `candidates` set).
+///
+/// docs/features/layer-c-reads.md TE-2 (the keys 18 and 12). M: a layer
+/// C key dropped or not `null` while absent. No layer C snapshot is stored
+/// in either corpus: every target holds `c_state`, `moniker`, `agrees`
+/// `null`, every document `layer_c` `null` (the keys' order:
+/// [`SYMBOL_KEYS`], [`SYMBOLS_KEYS`]).
 #[test]
 fn symbols_json_every_key_present() {
     let scratch = Scratch::new("sr-keys");
@@ -629,6 +647,11 @@ fn symbols_json_every_key_present() {
             .sum();
         assert!(!targets.is_empty() && bindings > 0, "{context}");
         assert_symbols_keys(&json_run.stdout, targets.len(), bindings, &context);
+        assert_eq!(
+            value.get("layer_c"),
+            Some(&Value::Null),
+            "{context}: `layer_c` null without a snapshot"
+        );
         assert_eq!(value["form"], form, "{context}");
         for target in targets {
             assert!(
@@ -640,6 +663,7 @@ fn symbols_json_every_key_present() {
                 Some(&Value::Null),
                 "{context}: `roles` null without `[code] frameworks`: {target}"
             );
+            assert_no_layer_c(target, &context);
             if form == "query" {
                 assert!(target["tier"].is_string(), "{context}: {target}");
             } else {
@@ -728,6 +752,11 @@ fn symbols_json_every_key_present() {
         let value = json_run.json();
         let context = format!("code-bevy {args:?}");
         assert_eq!(value["form"], form, "{context}");
+        assert_eq!(
+            value.get("layer_c"),
+            Some(&Value::Null),
+            "{context}: `layer_c` null without a snapshot"
+        );
         let targets = value["symbols"].as_array().expect("symbols");
         let bindings: usize = targets
             .iter()
@@ -735,6 +764,7 @@ fn symbols_json_every_key_present() {
             .sum();
         let mut roles = 0;
         for target in targets {
+            assert_no_layer_c(target, &context);
             let list = target["roles"]
                 .as_array()
                 .unwrap_or_else(|| panic!("{context}: `roles` a list with the opt-in: {target}"));
@@ -1031,6 +1061,11 @@ fn symbols_node_naming_nothing_keeps_its_document() {
         assert_eq!(value["total"], 0, "the developer's R1: an integer");
         assert_eq!(value["code"], Value::Null);
         assert_eq!(value["omitted"], Value::Null);
+        assert_eq!(
+            value.get("layer_c"),
+            Some(&Value::Null),
+            "docs/features/layer-c-reads.md \"JSON\": exit 1, `layer_c` null as `code`"
+        );
         assert_eq!(value["node"], reference);
         assert_eq!(value["form"], "node");
         assert_key_order(&json_run.stdout, "$", &SYMBOLS_KEYS, 1, reference);

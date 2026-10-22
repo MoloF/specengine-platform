@@ -13,7 +13,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 ## Specs
 
 - [docs/roadmap/RM-0001.md](roadmap/RM-0001.md) Live check: real tasks of each pilot through the full cycle · plugin, crates/specengine-cli · draft
-- [docs/roadmap/RM-0010.md](roadmap/RM-0010.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0013.md](roadmap/RM-0013.md) Full migration of pilot A · crates/specengine-import · draft
 - [docs/roadmap/RM-0014.md](roadmap/RM-0014.md) Full migration of pilot B · crates/specengine-import · draft
 - [docs/roadmap/RM-0015.md](roadmap/RM-0015.md) A shared project linked from several projects · crates/specengine-core, crates/specengine-cli · draft

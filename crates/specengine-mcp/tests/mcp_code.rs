@@ -1104,6 +1104,136 @@ fn bevy_reads() -> Vec<Call> {
     calls
 }
 
+/// docs/features/layer-c-reads.md TE-7: the snapshot written over
+/// code-index ([`common::layer_c::write_snapshot`]): twins.rs' two `impl
+/// Sheet` items share a moniker (a collision, shown `#1`, `#2`); lib.rs'
+/// first three rows are `unresolved`, `local` and `none`, main.rs' first
+/// `not_loaded`; split.rs' first row ends a byte later (its item
+/// `unmatched`); every other row a moniker of its own.
+fn layer_c_plan(row: &common::layer_c::Row) -> (String, Option<String>, i64) {
+    use common::layer_c::{MONIKER_WORD, plain};
+    let gap = |state: &str| (state.to_owned(), None, 0);
+    match (row.path.as_str(), row.qpath.as_str()) {
+        ("crates/inkwell/src/twins.rs", qpath) if qpath.contains("::impl Sheet #") => (
+            "moniker".to_owned(),
+            Some(format!("{MONIKER_WORD} impl#[Sheet]")),
+            0,
+        ),
+        (path, _) => match (path, row.nth) {
+            ("crates/inkwell/src/lib.rs", 1) => gap("unresolved"),
+            ("crates/inkwell/src/lib.rs", 2) => gap("local"),
+            ("crates/inkwell/src/lib.rs", 3) => gap("none"),
+            ("crates/inkwell/src/main.rs", 1) => gap("not_loaded"),
+            ("crates/inkwell/src/split.rs", 1) => {
+                let (state, moniker, _) = plain(row);
+                (state, moniker, 1)
+            }
+            _ => plain(row),
+        },
+    }
+}
+
+/// The shown collision of [`layer_c_plan`]'s twins and its raw form.
+const SHEET_SHOWN: &str = "zzmoniker impl#[Sheet] #2";
+const SHEET_RAW: &str = "zzmoniker impl#[Sheet]";
+
+/// The moniker calls of TE-7: one item's own moniker, the shown collision
+/// form (one item), the raw form (none, Q3); the files [`layer_c_plan`]
+/// gives gaps.
+fn layer_c_calls(page_moniker: &str) -> Vec<Call> {
+    use Want::Answered;
+    vec![
+        call(
+            "c moniker",
+            "find_symbols",
+            json!({"query": page_moniker}),
+            Answered,
+        ),
+        call(
+            "c collision",
+            "find_symbols",
+            json!({"query": SHEET_SHOWN}),
+            Answered,
+        ),
+        call(
+            "c raw",
+            "find_symbols",
+            json!({"query": SHEET_RAW}),
+            Answered,
+        ),
+        call(
+            "c file lib",
+            "find_symbols",
+            json!({"file": "crates/inkwell/src/lib.rs"}),
+            Answered,
+        ),
+        call(
+            "c file main",
+            "find_symbols",
+            json!({"file": "crates/inkwell/src/main.rs"}),
+            Answered,
+        ),
+        call(
+            "c file split",
+            "find_symbols",
+            json!({"file": "crates/inkwell/src/split.rs"}),
+            Answered,
+        ),
+    ]
+}
+
+/// Every `find_symbols` document's layer C keys of one era's `results`:
+/// `layer_c.state` is `state` where a document holds a target list, `null`
+/// at exit 1; a module's and a RON path's keys `null`, an item's
+/// `c_state` a word; the values met, by key.
+fn layer_c_values(
+    calls: &[Call],
+    results: &[Value],
+    state: &str,
+) -> BTreeMap<&'static str, BTreeSet<String>> {
+    let mut met: BTreeMap<&'static str, BTreeSet<String>> = BTreeMap::new();
+    for (call, result) in calls.iter().zip(results) {
+        if call.tool != "find_symbols" {
+            continue;
+        }
+        let Some(document) = result.get("structuredContent") else {
+            continue;
+        };
+        let layer_c = &document["layer_c"];
+        if document["reason"].is_string() {
+            assert_eq!(layer_c, &Value::Null, "{}: exit 1, as `code`", call.label);
+            continue;
+        }
+        assert_eq!(layer_c["state"], json!(state), "{}: {layer_c}", call.label);
+        for target in document["symbols"].as_array().into_iter().flatten() {
+            if target["target"] != json!("item") {
+                for key in ["c_state", "moniker", "agrees"] {
+                    assert_eq!(target[key], Value::Null, "{}: {target}", call.label);
+                }
+                continue;
+            }
+            assert!(target["c_state"].is_string(), "{}: {target}", call.label);
+            for key in ["c_state", "moniker", "agrees"] {
+                let shown = match &target[key] {
+                    Value::String(text) if key == "moniker" => {
+                        if text.contains(" #") {
+                            "collision".to_owned()
+                        } else {
+                            "string".to_owned()
+                        }
+                    }
+                    other => other.to_string(),
+                };
+                met.entry(key).or_default().insert(shown);
+            }
+            if let Some(tier) = target["tier"].as_str() {
+                met.entry("tier").or_default().insert(tier.to_owned());
+            }
+        }
+    }
+    met
+}
+
 /// RD-3 (Q33): every code tool and exit over a code-index copy, both
 /// eras: `content` the CLI's text, `structuredContent` its document (kept
 /// at exit 1 with its `reason`, absent at exit 2), each walked against the
@@ -1123,6 +1253,16 @@ fn bevy_reads() -> Vec<Call> {
 /// `[]` on the module and the RON path; the walker meets each role key
 /// that can be `null` both with a value and `null`, every state, more
 /// than one origin.
+///
+/// docs/features/layer-c-reads.md TE-7. M: a layer C key the mirror drops
+/// or types otherwise; a moniker tier the MCP side computes apart. Over a
+/// code-index copy with a layer C snapshot (`common::layer_c`: every
+/// row's state and moniker planned, a collision, a moved end) the same
+/// calls and three moniker queries answer as the CLI does, fresh and then
+/// stale (page.rs changed): every `c_state` of each step met, `moniker`
+/// met as text, collision and `null`, `agrees` with a value and `null`,
+/// the `moniker` tier; the shown collision finds one item, the raw form
+/// none, an unseen file's moniker none.
 #[test]
 fn code_tools_equal_the_cli() {
     let project = Project::reads();
@@ -1269,6 +1409,89 @@ fn code_tools_equal_the_cli() {
         let chore = document(&calls, &results, "node CHORE-02");
         assert_eq!(symbol_count(chore), 2, "{chore}");
     }
+
+    // docs/features/layer-c-reads.md TE-7: code-index with a layer C
+    // snapshot, fresh, then stale with page.rs changed (its rows
+    // `unseen`): every answer the CLI's and walked against the
+    // `outputSchema`, the layer C keys met with each kind of value, the
+    // moniker tier answering.
+    let project = Project::reads();
+    index_with_library(&project.env(), &Globals::default());
+    let db = data_dir(&project.home).join("inkwell.db");
+    let written = common::layer_c::write_snapshot(&project.root, &db, &layer_c_plan);
+    assert!(written.items > 20, "{} rows", written.items);
+    let page_moniker = written
+        .monikers
+        .iter()
+        .find(|((path, _), _)| path == "crates/inkwell/src/page.rs")
+        .and_then(|(_, (_, moniker))| moniker.clone())
+        .expect("a moniker of page.rs");
+    let page_qpath = written
+        .monikers
+        .values()
+        .find(|(_, moniker)| moniker.as_deref() == Some(page_moniker.as_str()))
+        .map(|(qpath, _)| qpath.clone())
+        .expect("its item");
+    let mut calls = reads();
+    calls.extend(layer_c_calls(&page_moniker));
+    for results in project.answers(&calls) {
+        let met = layer_c_values(&calls, &results, "fresh");
+        assert_eq!(
+            met["c_state"],
+            set(&[
+                "\"local\"",
+                "\"moniker\"",
+                "\"none\"",
+                "\"not_loaded\"",
+                "\"unmatched\"",
+                "\"unresolved\""
+            ]),
+            "every state of a fresh snapshot walked"
+        );
+        assert_eq!(
+            met["moniker"],
+            set(&["collision", "null", "string"]),
+            "{:?}",
+            met["moniker"]
+        );
+        assert!(
+            met["agrees"].contains("null") && met["agrees"].len() > 1,
+            "`agrees` met with a value and null: {:?}",
+            met["agrees"]
+        );
+        assert!(met["tier"].contains("moniker"), "{:?}", met["tier"]);
+        let found = document(&calls, &results, "c moniker");
+        assert_eq!(symbol_count(found), 1, "{found}");
+        assert_eq!(found["symbols"][0]["qpath"], json!(page_qpath), "{found}");
+        assert_eq!(found["symbols"][0]["tier"], json!("moniker"), "{found}");
+        let twin = document(&calls, &results, "c collision");
+        assert_eq!(symbol_count(twin), 1, "{twin}");
+        assert_eq!(
+            twin["symbols"][0]["qpath"],
+            json!("crates/inkwell::twins::impl Sheet #2"),
+            "{twin}"
+        );
+        assert_eq!(twin["symbols"][0]["moniker"], json!(SHEET_SHOWN), "{twin}");
+        assert_eq!(symbol_count(document(&calls, &results, "c raw")), 0);
+    }
+    let page = project.root.join("crates/inkwell/src/page.rs");
+    let mut bytes = fs::read(&page).expect("page.rs");
+    bytes.push(b'\n');
+    fs::write(&page, bytes).expect("page.rs");
+    for results in project.answers(&calls) {
+        let met = layer_c_values(&calls, &results, "stale");
+        assert!(
+            met["c_state"].contains("\"unseen\""),
+            "{:?}",
+            met["c_state"]
+        );
+        assert_eq!(
+            symbol_count(document(&calls, &results, "c moniker")),
+            0,
+            "an unseen file's moniker is found no more"
+        );
+        assert_eq!(symbol_count(document(&calls, &results, "c collision")), 1);
+    }
 }
 
 // ------------------------------------------------------------------ RD-4
@@ -1299,6 +1522,11 @@ fn code_schemas() -> (Value, Value, Value) {
 /// enum of words (as `item_kind`, `layer`): `line` and `candidates`
 /// integers, the nine others strings. M: a role word (`role`, `source`,
 /// `form`, `origin`, `state` …) an enum.
+///
+/// docs/features/layer-c-reads.md RD-4 (R1): `find_symbols`' `tier` the four
+/// words, `get_impact`'s seeds' the three; `c_state` the seven words,
+/// `layer_c.state` `fresh`, `stale`; `moniker` free. M: `CodeTier` gaining
+/// `moniker` (it would reach `get_impact`).
 #[test]
 fn code_mirrors_keep_kinds_free() {
     let (symbols, refs, unmapped) = code_schemas();
@@ -1366,12 +1594,47 @@ fn code_mirrors_keep_kinds_free() {
         enum_values(schema_at(&symbols, "symbols[].target")),
         Some(set(&["item", "module", "ron"]))
     );
+    // docs/features/layer-c-reads.md RD-4: `find_symbols`' own tier enum
+    // gains `moniker`; `get_impact`'s seeds keep the three (R1).
     let tier = schema_at(&symbols, "symbols[].tier");
-    assert_eq!(enum_values(tier), Some(set(&["exact", "name", "suffix"])));
+    assert_eq!(
+        enum_values(tier),
+        Some(set(&["exact", "moniker", "name", "suffix"]))
+    );
     assert!(
         types_of(tier).contains("null"),
         "tier null outside QUERY: {tier}"
     );
+    let impact = {
+        let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
+        let schemas = output_schemas(&session.tools());
+        drop(session.finish());
+        schemas["get_impact"].clone()
+    };
+    assert_eq!(
+        enum_values(schema_at(&impact, "seeds.symbols[].tier")),
+        Some(set(&["exact", "name", "suffix"])),
+        "get_impact's seeds keep three tiers (R1, Q2)"
+    );
+    // The layer C keys: `c_state` and `layer_c.state` the CLI's closed
+    // words, `moniker` a free string (any text the snapshot stored).
+    assert_eq!(
+        enum_values(schema_at(&symbols, "symbols[].c_state")),
+        Some(set(&[
+            "local",
+            "moniker",
+            "none",
+            "not_loaded",
+            "unmatched",
+            "unresolved",
+            "unseen"
+        ]))
+    );
+    assert_eq!(
+        enum_values(schema_at(&symbols, "layer_c.state")),
+        Some(set(&["fresh", "stale"]))
+    );
+    free(&symbols, "symbols[].moniker");
 
     let roles = schema_at(&symbols, "symbols[].roles");
     assert_eq!(enum_values(roles), None, "{roles}");
@@ -1404,6 +1667,9 @@ fn code_mirrors_keep_kinds_free() {
 /// docs/features/bevy-roles-reads.md "find_symbols": a target gains
 /// `roles`, each item exactly [`ROLE_KEYS`]; `form`, `group`, `detail`,
 /// `candidates` admit `null`. M: a role key dropped.
+/// docs/features/layer-c-reads.md "JSON": the document gains `layer_c`
+/// (null or an object of nine keys), a target `c_state`, `moniker`,
+/// `agrees` (nullable). M: a layer C key unmirrored.
 #[test]
 fn code_mirrors_pin_the_q35_types() {
     let (symbols, refs, unmapped) = code_schemas();
@@ -1411,8 +1677,43 @@ fn code_mirrors_pin_the_q35_types() {
         keys_at(&symbols),
         set(&[
             "form", "query", "node", "path", "line", "reason", "notes", "symbols", "total",
-            "omitted", "code"
+            "omitted", "code", "layer_c"
         ])
+    );
+    // docs/features/layer-c-reads.md "JSON": `layer_c` null or the state and
+    // `code_resolve`'s columns; a target's three layer C keys nullable.
+    assert_eq!(
+        keys_at(schema_at(&symbols, "layer_c")),
+        set(&[
+            "state",
+            "protocol",
+            "ra_ap",
+            "host",
+            "toolchains",
+            "degraded",
+            "workspaces",
+            "files",
+            "items"
+        ])
+    );
+    for (path, kinds) in [
+        ("layer_c", &["null", "object"][..]),
+        ("layer_c.protocol", &["integer"][..]),
+        ("layer_c.ra_ap", &["string"][..]),
+        ("layer_c.host", &["string"][..]),
+        ("layer_c.toolchains", &["array"][..]),
+        ("layer_c.degraded", &["boolean"][..]),
+        ("layer_c.workspaces", &["integer"][..]),
+        ("layer_c.files", &["integer"][..]),
+        ("layer_c.items", &["integer"][..]),
+        ("symbols[].moniker", &["null", "string"][..]),
+        ("symbols[].agrees", &["boolean", "null"][..]),
+    ] {
+        assert_eq!(types_of(schema_at(&symbols, path)), set(kinds), "{path}");
+    }
+    assert!(
+        types_of(schema_at(&symbols, "symbols[].c_state")).contains("null"),
+        "c_state null without a snapshot"
     );
     assert_eq!(
         keys_at(schema_at(&symbols, "symbols[]")),
@@ -1431,7 +1732,10 @@ fn code_mirrors_pin_the_q35_types() {
             "tier",
             "mentions",
             "bindings",
-            "roles"
+            "roles",
+            "c_state",
+            "moniker",
+            "agrees"
         ])
     );
     assert_eq!(

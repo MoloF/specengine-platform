@@ -33,6 +33,7 @@ use specengine_model::IdScheme;
 
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
+use crate::layer_c::{LayerCItem, LayerCRead, layer_c_read_in};
 use crate::read::{with_worktree, worktree_id};
 use crate::roles::{StoredRole, roles_on_in};
 use crate::rows::hash_bytes;
@@ -565,7 +566,7 @@ impl SqliteIndex {
         &self,
         symbols: SnapshotSymbols<'_>,
     ) -> Result<Option<CodeSnapshot>, StoreError> {
-        snapshot(self, symbols, None)
+        snapshot(self, symbols, None, None)
     }
 
     /// [`Self::code_snapshot`] and, in the same transaction, the role rows
@@ -580,16 +581,45 @@ impl SqliteIndex {
         symbols: SnapshotSymbols<'_>,
         kinds: &BTreeMap<&str, Vec<&str>>,
     ) -> Result<Option<CodeSnapshot>, StoreError> {
-        snapshot(self, symbols, Some(kinds))
+        snapshot(self, symbols, Some(kinds), None)
+    }
+
+    /// [`Self::code_snapshot`] (with `kinds`: [`Self::code_snapshot_with_roles`])
+    /// and, in the same transaction, the worktree's layer C snapshot as a
+    /// read joins it ([`CodeSnapshot::layer_c`], [`LayerCRead`]): `None`
+    /// without one, and then no other layer C statement runs. With one:
+    /// the run's row, the code index's files and packages, the run's
+    /// files; the items whose raw moniker is `moniker` (one search of
+    /// `code_monikers_by_moniker`; none without a text); then the files
+    /// `pick` chooses, given the snapshot's refs, hits and symbols and
+    /// those items, each with its items and its symbols. The role rows,
+    /// with `kinds`, are read last, beside the picked files' symbols whose
+    /// start and end bytes are a found item's too.
+    pub fn code_snapshot_with_layer_c(
+        &self,
+        symbols: SnapshotSymbols<'_>,
+        kinds: Option<&BTreeMap<&str, Vec<&str>>>,
+        moniker: Option<&str>,
+        pick: impl FnOnce(&CodeSnapshot, &[LayerCItem]) -> BTreeSet<String>,
+    ) -> Result<Option<CodeSnapshot>, StoreError> {
+        snapshot(self, symbols, kinds, Some((moniker, Box::new(pick))))
     }
 }
 
+/// What [`snapshot`] reads of the layer C snapshot: the searched raw
+/// moniker and the pick of files.
+type LayerCWanted<'q, 'p> = (
+    Option<&'q str>,
+    Box<dyn FnOnce(&CodeSnapshot, &[LayerCItem]) -> BTreeSet<String> + 'p>,
+);
+
 /// [`SqliteIndex::code_snapshot`], with the role rows when `kinds` is
-/// given.
+/// given and the layer C read when `layer_c` is.
 fn snapshot(
     index: &SqliteIndex,
     symbols: SnapshotSymbols<'_>,
     kinds: Option<&BTreeMap<&str, Vec<&str>>>,
+    layer_c: Option<LayerCWanted<'_, '_>>,
 ) -> Result<Option<CodeSnapshot>, StoreError> {
     with_worktree(index, |tx, wt| {
         if stored_code_fp(tx, wt)?.is_none() {
@@ -620,12 +650,37 @@ fn snapshot(
             SnapshotSymbols::Bound => snapshot.symbols = bound_symbols(tx, wt)?,
             SnapshotSymbols::All => snapshot.symbols = all_symbols(tx, wt)?,
         }
+        if let Some((moniker, pick)) = layer_c {
+            let read = layer_c_read_in(tx, wt, moniker, |found| pick(&snapshot, found))?;
+            snapshot.layer_c = read;
+        }
         if let Some(kinds) = kinds {
+            // The symbols spanning a found item's bytes: they may be shown
+            // beside the hits.
+            let found: BTreeSet<(&str, u64, u64)> = snapshot
+                .layer_c
+                .iter()
+                .flat_map(|read| &read.found)
+                .map(|item| (item.path.as_str(), item.start, item.end))
+                .collect();
+            let beside = snapshot
+                .layer_c
+                .iter()
+                .flat_map(|read| &read.joined)
+                .flat_map(|file| &file.symbols)
+                .filter(|symbol| {
+                    found.contains(&(
+                        symbol.path.as_str(),
+                        u64::from(symbol.start_byte),
+                        u64::from(symbol.end_byte),
+                    ))
+                });
             let shown = snapshot
                 .hits
                 .iter()
                 .map(|hit| &hit.symbol)
-                .chain(&snapshot.symbols);
+                .chain(&snapshot.symbols)
+                .chain(beside);
             snapshot.roles = roles_on_in(tx, wt, shown, kinds)?;
         }
         Ok(Some(snapshot))
@@ -667,6 +722,9 @@ pub struct CodeSnapshot {
     /// hits or the symbols, by (path, `ord`); none from
     /// [`SqliteIndex::code_snapshot`].
     pub roles: Vec<StoredRole>,
+    /// [`SqliteIndex::code_snapshot_with_layer_c`]'s read of the layer C
+    /// snapshot; `None` without one, and from every other snapshot.
+    pub layer_c: Option<LayerCRead>,
 }
 
 /// Every stored file, marker and mention of the worktree inside the

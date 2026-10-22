@@ -112,6 +112,12 @@
 //!   0.15.0 ties restated below it); a `SCHEMA_PINS` entry 0.16.0, 0.15.0's
 //!   schemas today's with `get_impact`'s `since` out and its document's
 //!   keys back to `null` ([`as_of_0_15_0`]). M: the version kept.
+//! - docs/features/layer-c-reads.md "Description and interactions",
+//!   Plugin (0.20.0, TE-7): a `PINS` entry 0.20.0, the tree with the version
+//!   set back 0.19.0's; a `SCHEMA_PINS` entry 0.20.0, 0.19.0's schemas
+//!   today's with `find_symbols`' layer C keys, fourth tier and query doc
+//!   back ([`as_of_0_19_0`]), `get_impact`'s seed tier 0.19.0's word for
+//!   word (R1). M: the version kept; `CodeTier` changed.
 //!
 //! The repository is only read.
 
@@ -331,6 +337,14 @@ const PINS: &[(&str, &str)] = &[
         "0.19.0",
         "d2d5ce5e3e2d50553e3a2a78594dbbb50a6d57b0e2f5fd3c2c723780383e4abd",
     ),
+    // docs/features/layer-c-reads.md "Description and interactions",
+    // Plugin (0.19.0 -> 0.20.0, MINOR: keys a tool returns, `find_symbols`'
+    // layer C): plugin.json's version alone, `read-spec` unchanged; the tree
+    // with the version set back hashes as 0.19.0's pin.
+    (
+        "0.20.0",
+        "bf7093719f78ab598a3746c22c46d8510cd1b41c4ab580f4ec959c5ad0e672e1",
+    ),
 ];
 
 /// docs/features/review-form.md D7: `ask-owner`'s edits of 0.19.0, each
@@ -480,6 +494,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.19.0",
         "4186f3433ee461e60623351167f73607fdfc780913b955835be191656912815b",
+    ),
+    // docs/features/layer-c-reads.md "Data", "JSON": `find_symbols`' layer
+    // C keys, its four-word tier and `QUERY_DOC` ([`as_of_0_19_0`] takes
+    // them back; `get_impact`'s schema unchanged, R1).
+    (
+        "0.20.0",
+        "225e45efc54a66456277e7f834323386194234d7ac6a00372edccf6f6df58703",
     ),
 ];
 
@@ -1599,11 +1620,33 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/layer-c-reads.md (0.19.0 -> 0.20.0): plugin.json's
+    // version alone; set back, the tree is 0.19.0's pinned content. M: the
+    // version kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.20.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.20.0"),
+        "plugin.json's version"
+    );
+    let at_0_19_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.20.0\"",
+        "\"version\": \"0.19.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_19_0),
+        PINS[PINS.len() - 2].1,
+        "0.20.0 changes plugin.json's version only"
+    );
+    let tree = at_0_19_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/review-form.md D7: 0.19.0 changes plugin.json's
     // version and `ask-owner` alone (its edits): all set back, the
     // tree is 0.18.0's pinned content. M: the version kept; another file
     // changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.19.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.19.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.19.0"),
@@ -1620,11 +1663,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     }
     assert_eq!(
         content_hash(&at_0_18_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.19.0 changes plugin.json's version and ask-owner's edits only"
     );
     let tree = at_0_18_0;
-    let pins_then = &PINS[..PINS.len() - 1];
+    let pins_then = &pins[..pins.len() - 1];
     // The pin of impact-since,
     // docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0":
     // 0.16.0, after impact's 0.15.0. M: the
@@ -2119,6 +2162,45 @@ fn as_of_0_15_0(schemas: &mut Value) {
 
 /// `schemas` as 0.18.0 listed them (docs/features/review-form.md D1): no
 /// `review_proposal`; no other tool's schema changed.
+/// `CodeTier`'s doc as 0.19.0 listed it: `find_symbols`' tier then, and
+/// `get_impact`'s seeds' tier still.
+const TIER_DOC_0_19_0: &str = "How a target meets the query, the best first.";
+
+/// `find_symbols.query`'s doc as 0.19.0 listed it.
+const QUERY_DOC_0_19_0: &str = "A qualified path, a suffix of one or a bare name, as one value.";
+
+/// `schemas` as 0.19.0 listed them (docs/features/layer-c-reads.md "Data",
+/// "JSON"): `find_symbols`' query doc as it was; its document without
+/// `layer_c`, its target without `c_state`, `moniker`, `agrees`, its tier
+/// the three words (`CodeTier`'s, nullable) with `CodeTier`'s doc.
+fn as_of_0_19_0(schemas: &mut Value) {
+    let find = &mut schemas["find_symbols"];
+    let query = &mut find["inputSchema"]["properties"]["query"];
+    assert!(query.is_object(), "find_symbols.query listed");
+    query["description"] = json!(QUERY_DOC_0_19_0);
+    let document = &mut find["outputSchema"];
+    let drop_keys = |object: &mut Value, keys: &[&str]| {
+        let properties = object["properties"]
+            .as_object_mut()
+            .expect("an object schema");
+        for key in keys {
+            assert!(properties.remove(*key).is_some(), "{key} listed");
+        }
+        object["required"]
+            .as_array_mut()
+            .expect("required")
+            .retain(|name| !keys.iter().any(|key| name == *key));
+    };
+    drop_keys(document, &["layer_c"]);
+    let target = &mut document["properties"]["symbols"]["items"];
+    drop_keys(target, &["c_state", "moniker", "agrees"]);
+    target["properties"]["tier"] = json!({
+        "description": "The query form only.",
+        "enum": ["exact", "suffix", "name", null],
+        "type": ["string", "null"]
+    });
+}
+
 fn as_of_0_18_0(schemas: &mut Value) {
     let tools = schemas.as_object_mut().expect("schemas by tool");
     assert!(
@@ -2323,7 +2405,34 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[8].0, "0.17.0", "an entry for 0.17.0");
     assert_eq!(SCHEMA_PINS[9].0, "0.18.0", "an entry for 0.18.0");
     assert_eq!(SCHEMA_PINS[10].0, "0.19.0", "an entry for 0.19.0");
-    assert_eq!(SCHEMA_PINS.len(), 11, "0.19.0 the last entry");
+    assert_eq!(SCHEMA_PINS[11].0, "0.20.0", "an entry for 0.20.0");
+    assert_eq!(SCHEMA_PINS.len(), 12, "0.20.0 the last entry");
+    // docs/features/layer-c-reads.md TE-7: 0.19.0's schemas are today's
+    // with `find_symbols`' layer C keys, its fourth tier and its query doc
+    // taken back; no other tool's schema changed — `get_impact`'s seeds
+    // keep three tiers and their doc (R1).
+    assert_eq!(
+        schemas["get_impact"]["outputSchema"]["properties"]["seeds"]["properties"]["symbols"]["items"]
+            ["properties"]["tier"],
+        json!({
+            "description": TIER_DOC_0_19_0,
+            "enum": ["exact", "suffix", "name"],
+            "type": "string"
+        }),
+        "get_impact's seed tier as 0.19.0 listed it"
+    );
+    let mut at_0_19_0 = schemas.clone();
+    as_of_0_19_0(&mut at_0_19_0);
+    let at_0_19_0_hash = schema_hash(&at_0_19_0);
+    assert_eq!(
+        at_0_19_0_hash, SCHEMA_PINS[10].1,
+        "0.19.0's schemas are today's without find_symbols' layer C"
+    );
+    assert_ne!(
+        at_0_19_0_hash, current,
+        "the layer C keys changed the schemas"
+    );
+    let (schemas, current) = (at_0_19_0, at_0_19_0_hash);
     // docs/features/review-form.md D1: 0.18.0's schemas are today's
     // without `review_proposal`; its output schema is `get_proposal`'s.
     assert_eq!(

@@ -15,7 +15,9 @@
 //!   its leading module descriptors against layer A's target crate and
 //!   modules; names and owners are not compared.
 //! - **Collisions** ([`collision_values`]): a raw moniker several items of
-//!   one file share, told apart for display by [`COLLISION_SEPARATOR`].
+//!   one file share, told apart for display by [`COLLISION_SEPARATOR`];
+//!   a query's raw moniker ([`raw_moniker`]) is cut at that separator, so
+//!   no caller splits a shown moniker itself.
 //!
 //! The words are data of this crate and `specengine-ra` only: the Cargo
 //! file names, the descriptor syntax, the kind map (the genre rule,
@@ -299,4 +301,14 @@ pub fn shown_moniker(raw: &str, collision: Option<&str>) -> String {
         Some(value) => format!("{raw}{COLLISION_SEPARATOR}{value}"),
         None => raw.to_owned(),
     }
+}
+
+/// The raw moniker a query names as a shown moniker: the text before its
+/// first [`COLLISION_SEPARATOR`] (all of it without one); the inverse of
+/// [`shown_moniker`], a raw moniker never holding the separator.
+#[must_use]
+pub fn raw_moniker(query: &str) -> &str {
+    query
+        .split_once(COLLISION_SEPARATOR)
+        .map_or(query, |(raw, _)| raw)
 }

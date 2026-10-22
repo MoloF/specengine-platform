@@ -38,6 +38,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2
 - [docs/canon/import.md](canon/import.md) Import: record model and rules · crates/specengine-import · tier 2
 - [docs/canon/layer-c-protocol.md](canon/layer-c-protocol.md) Layer C protocol v1: the specengine-ra executable · crates/specengine-ra, crates/specengine-code · tier 2
+- [docs/canon/layer-c-reads.md](canon/layer-c-reads.md) Layer C in the reads: spec symbols and find_symbols · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp · tier 2
 - [docs/canon/layer-c.md](canon/layer-c.md) Layer C: spec resolve and the advisory snapshot · crates/specengine-cli, crates/specengine-store, crates/specengine-code · tier 2
 - [docs/canon/lock-diff-panel.md](canon/lock-diff-panel.md) The lock diff panel: "Changes since the lock" in the Bindings tab · ui · tier 2
 - [docs/canon/mcp-code.md](canon/mcp-code.md) MCP code tools: find_symbols, refs, unmapped, check_binding · crates/specengine-mcp, crates/specengine-cli · tier 2

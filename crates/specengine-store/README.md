@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-store]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-22
 ---
 
 # specengine-store -- the spec index
@@ -20,7 +20,7 @@ No `rusqlite` type in a public signature (`architecture.md#distribution`).
 - `trait SpecIndex {files, file -> IndexedFile {parsed?, blake3?, size, read_error?}, lookup_id -> [IdHit {path, ord, node}], search(&SearchQuery {text, kinds, limit, archive}) -> SearchResults {hits: [SearchHit {path, ord, id?, kind?, title?, line, tier3, snippet, snippet_parts}], short_query, tier3_left_out}, indexed_input -> CheckInput}`; `indexed_input`: the stored worktree, one snapshot, empty `bytes` (`spec show`'s resolver).
 - `spec check`, no database (`spec-check-{cli,git}.md`): `load_config(&NamedBytes {name, bytes})` -> `(ProjectConfig, CheckConfig)`; `load_check` (+ the baseline) -> `CheckSetup`, else a `cannot-check` `Box<Report>` naming only `name`; `default_baseline(root)`; `check_input(&dyn Source, &IdScheme)` (a parser panic -> a read error), `check_source`, `check_tree`, `today_utc()`. Wrappers: `check_worktree(root, config, baseline?, today)`; `check_staged_with_notes(root, GivenFile?, GivenFile?, &GitEnv, today) -> StagedCheck {report, notes}`, `check_changed_with_notes` (against `HEAD`: `spec-check-git.md`, `rev-not-raised` inside), `check_staged` (the report); `bump_{staged,changed}` -> `BumpCheck {report, rows}`. `GitEnv::new(cwd, vars)`.
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 12`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
-- Code index (`symbol-{index,reads}.md` seams): `CodeAnalyzer`, `{update,clear}_code`, `stored_names`, `code_{refs,symbols,snapshot{,_with_roles},roles,selection}`, `{lookup,file}_symbols`, `LookupWithFiles` (`spec-impact.md`); `StoredRole`, `RoleCandidate`, `CodeSnapshot.roles` (`code-roles.md`); `CodeSelection {refs, files}`, `SelectedFile {path, names, holds, symbols}` (`spec-verify-scope.md`); layer C's snapshot: `replace_layer_c`, `layer_c_{stamp,snapshot}`, `code_tree_rows` (`layer-c.md` "Tables").
+- Code index (`symbol-{index,reads}.md` seams): `CodeAnalyzer`, `{update,clear}_code`, `stored_names`, `code_{refs,symbols,snapshot{,_with_roles,_with_layer_c},roles,selection}`, `{lookup,file}_symbols`, `LookupWithFiles` (`spec-impact.md`); `StoredRole`, `RoleCandidate`, `CodeSnapshot.roles` (`code-roles.md`); `CodeSelection {refs, files}`, `SelectedFile {path, names, holds, symbols}` (`spec-verify-scope.md`); layer C: `replace_layer_c`, `layer_c_{stamp,snapshot}`, `code_tree_rows` (`layer-c{,-reads}.md`).
 - `b3_hash(&[u8]) -> String`, streaming `B3Stream {new, update, finish}`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form: `bundle_hash`, `span_hash`, `patch_hash`, `norm_hash`.
 - Proposals (`{proposal-*,queue-backup,agent-intake,decision-record,decision-staging}.md`, schemas `proposal-queue.md` "Store"; tasks `tasks.md`, the gate `gate.md`): `ProposalQueue`, `SqliteQueue::open(db, project)`, ops named in those canons, `record_verify_tests` (`spec-verify-tests.md`); `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): methods in those canons and `spec-lock.md`, also `{,is_}intent_to_add`, `remove_cached`, `status_all`; `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"; `list_revision` (`impact --since`): `spec-impact.md` "Since"); the file writes, `span_hash`, `same_repository`, `introduced_findings`: those canons.
 
@@ -28,7 +28,7 @@ No `rusqlite` type in a public signature (`architecture.md#distribution`).
 
 Keyed `(worktree, path, ord)`, `ord` = position in `ParsedFile.{nodes, links, anchors, diagnostics}` (node 0: the document). No key on `id`: absent, repeated, feature-scoped IDs stored as parsed (uniqueness: `spec check`); repeated citations and `R-12@3`/`R-12@4` are separate rows; a mention without `src` stays. `dst`, `parent`, aliases, anchors as written (a resolved row would go stale). NULL `parent_id` = the document contains the node. Query columns + the model value as JSON: `file(path)` rebuilds the `ParsedFile`.
 
-Tables (columns: `schema.rs`), `STRICT`, no `CHECK`: `index_meta`; `worktrees` (+ `scheme_fp`), unique `(project, root)`; `files`, unique `(wt, path)`; per file, keyed `(file_id, ord)`, cascading: `nodes`, `links`, `anchors` (`slug`, `attr`, `html`), `diagnostics`; `aliases`; lookup columns indexed; the code tables (`symbol-index.md` "Tables"), layer C's three (`layer-c.md`). `nodes_fts`, `own_text`: `spec-cli-read.md` "Search index".
+Tables (columns: `schema.rs`), `STRICT`, no `CHECK`: `index_meta`; `worktrees` (+ `scheme_fp`), unique `(project, root)`; `files`, unique `(wt, path)`; per file, keyed `(file_id, ord)`, cascading: `nodes`, `links`, `anchors` (`slug`, `attr`, `html`), `diagnostics`; `aliases`; lookup columns indexed; the code tables (`symbol-index.md` "Tables"), layer C's (`layer-c.md`). `nodes_fts`, `own_text`: `spec-cli-read.md` "Search index".
 
 **Canonical dump** (`dump.rs`): every table (`pragma_table_xinfo` on `main`), surrogate keys replaced by `(project, root)`, `path`, `(path, ord)`, one sorted line per row `<table>\t<JSON array>`, plus `fts5vocab`.
 
@@ -53,7 +53,7 @@ At creation, before the first table: `journal_mode=WAL`, `auto_vacuum=INCREMENTA
 
 ## Open owner questions
 
-Working answer -> the other answer's cost.
+Working answer -> the other's cost.
 
 - Q1 the pins above, transitive ones pending (04 s6) -> `build_graph.rs` changes.
 - Q2 `trigram case_sensitive 0` (`remove_diacritics 1` if `fts.rs` stays green), exact IDs outside FTS -> `unicode61`: prefix, substring, stem tests rewritten; a stemmer by `[project] language`: an ADR on `#universal`.

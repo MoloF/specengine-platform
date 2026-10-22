@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-ra]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-22
 ---
 
 # specengine-ra — layer C: rust-analyzer as a library
@@ -53,7 +53,7 @@ Every cargo call the loader triggers gets the caller's target directory (`CARGO_
 
 ## Known limits
 
-- Items under attribute proc macros (`#[tokio::main]`-style) lose their moniker when the server runs: the scan does not map an item through its attribute expansion (Phase 3 item).
+- Items under attribute proc macros (`#[tokio::main]`-style) lose their moniker when the server runs: the scan does not map an item through its attribute expansion (11b, RM-0022). TE-6 (2026-10-22, `specengine-eval ra`): with the server no item gains one, A loses 1 (0.01 %), B 19 (0.25 %), cold 3.9 and 6.3 times; under 11b's 1 % trigger.
 - On one pilot 2 proc-macro crates were not loaded without a reason in the load errors (unexplained).
 - Memory is near the threshold: the whole-process-group peak reached 3.76 GiB against 4 GiB on the heavier pilot (08 §5); re-measure with `specengine-eval ra` when a pilot grows or `ra_ap` is bumped.
 - Only macOS was verified. The Linux process-group RSS reader lives in `specengine-eval` (`ra/sys.rs`) and is not compiled here.

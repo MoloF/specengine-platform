@@ -19,6 +19,15 @@
 //!   `impl#[`. M: `agrees` split at `/` in the CLI; a `Cargo.lock` literal
 //!   in the CLI.
 //!
+//! docs/features/layer-c-reads.md (11a-3) over the same sources:
+//!
+//! - R7 `reads_split_the_shown_moniker_in_the_code_crate`: no ` #` or lone
+//!   `#` literal in the reads' CLI modules nor the store's `layer_c.rs`. M: a `" #"`
+//!   literal in `symbols.rs`.
+//! - limits `reads_never_call_the_public_layer_c_state`. M: `symbols.rs`
+//!   calling it. TE-6 M8 (`symbols.rs` calls `resolve`) turns
+//!   `only_resolve_spawns_layer_c` red: `symbols.rs` names an entry.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -806,6 +815,76 @@ fn no_scip_or_cargo_literal_outside_code_and_ra() {
         "code_walk.rs' MANIFEST is the one `Cargo.toml`"
     );
     assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+/// docs/features/layer-c-reads.md R7: the reads' modules, whose shown
+/// moniker is `<raw> #<value>`, split and join it only through
+/// `specengine_code::layer_c::COLLISION_SEPARATOR`.
+const READS_SOURCES: [&str; 2] = [
+    "crates/specengine-cli/src/symbols.rs",
+    "crates/specengine-cli/src/layer_c.rs",
+];
+
+/// The store's layer C module: it knows no moniker syntax.
+const STORE_LAYER_C: &str = "crates/specengine-store/src/layer_c.rs";
+
+/// docs/features/layer-c-reads.md R7 (genre: the separator lives in
+/// `specengine-code`). M: a `" #"` literal in `symbols.rs`. The CLI's
+/// `symbols.rs` and `layer_c.rs` and the store's `layer_c.rs` hold no
+/// string literal with ` #` in it and no `#` alone (a char or a string):
+/// the shown moniker is split and joined through
+/// `specengine_code::layer_c::COLLISION_SEPARATOR` only.
+#[test]
+fn reads_split_the_shown_moniker_in_the_code_crate() {
+    let mut offenders = Vec::new();
+    let mut scanned = 0;
+    for file in READS_SOURCES.iter().chain(&[STORE_LAYER_C]) {
+        let (_, literals) = read_source(file);
+        scanned += literals.len();
+        for literal in &literals {
+            // `" #"` (the separator re-spelled, a split or a join of the
+            // shown form) or a lone `#` (a `'#'` char split); a value path's
+            // `"{path}#{field}"` is RON's, not a moniker's.
+            if literal.text.contains(" #") || literal.text == "#" {
+                offenders.push(format!("{file}: the literal {:?}", literal.text));
+            }
+        }
+    }
+    assert!(scanned > 100, "{scanned} literals scanned");
+    assert!(offenders.is_empty(), "{}", offenders.join("\n"));
+}
+
+/// docs/features/layer-c-reads.md "Rules and edge cases", limits: reads
+/// never call the public `layer_c_state()` (it refreshes the indexes a
+/// second time; 11a-3's reads take the crate-private state over their own
+/// refresh). M: `symbols.rs` calling `layer_c_state`. Outside test
+/// modules and comments, only the CLI's `layer_c.rs` (its definition) and
+/// `lib.rs` (its `pub use`) name it, in every crate's `src/` (the daemon's
+/// and MCP's included).
+#[test]
+fn reads_never_call_the_public_layer_c_state() {
+    let sources = engine_sources();
+    assert!(
+        sources
+            .iter()
+            .any(|file| file.starts_with("crates/specengine-mcp/src/")),
+        "MCP's sources are scanned"
+    );
+    let mut namers = Vec::new();
+    for file in &sources {
+        let (code, _) = read_source(file);
+        if !segments(&code, "layer_c_state").is_empty() {
+            namers.push(file.clone());
+        }
+    }
+    assert_eq!(
+        namers,
+        [
+            "crates/specengine-cli/src/layer_c.rs".to_owned(),
+            CLI_LIB.to_owned()
+        ],
+        "only its definition and its re-export name `layer_c_state`"
+    );
 }
 
 /// The lexer the scans stand on: strings, raw strings, chars, lifetimes,

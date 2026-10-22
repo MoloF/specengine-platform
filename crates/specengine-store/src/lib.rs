@@ -63,6 +63,10 @@
 //!   ([`SqliteIndex::code_roles`], [`StoredRole`], [`RoleCandidate`];
 //!   `docs/canon/code-roles.md` "Links"), never a link stored, and beside
 //!   a snapshot's symbols ([`SqliteIndex::code_snapshot_with_roles`]);
+//!   the worktree's layer C snapshot as a read joins it, in the same
+//!   transaction ([`SqliteIndex::code_snapshot_with_layer_c`],
+//!   [`LayerCRead`]: the run's row, the tree, the files a caller picks and
+//!   one raw-text search of `code_monikers_by_moniker`);
 //! - [`b3_hash`]: the `b3:` content address of a byte string, the BLAKE3
 //!   of the index's cache key in the `spec.lock` form (05 §3.5), and
 //!   `spec bundle`'s `bundle_hash` (docs/features/spec-cli-bundle.md).
@@ -140,7 +144,8 @@ pub use error::StoreError;
 pub use git::{GitEnv, same_dir};
 pub use index::{DbSettings, SqliteIndex};
 pub use layer_c::{
-    CodeTreeFile, CodeTreeRows, LayerCFile, LayerCItem, LayerCSnapshot, LayerCStamp,
+    CodeTreeFile, CodeTreeRows, LayerCFile, LayerCFileRows, LayerCHead, LayerCItem, LayerCRead,
+    LayerCSnapshot, LayerCStamp,
 };
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, DriftItem, DriftResult,

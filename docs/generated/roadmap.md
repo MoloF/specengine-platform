@@ -8,15 +8,13 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 24 open, 14 done; current mvp; to mvp 2-3 days; total 18-30 days
+roadmap: 23 open, 15 done; current mvp; to mvp 2-3 days; total 16-27 days
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
 1. [RM-0001](../roadmap/RM-0001.md) | Live check: real tasks of each pilot through the full cycle | draft | must | 2-3
 
-## release v1 | 1 open, 12 done | 2-3 days
-
-1. [RM-0010](../roadmap/RM-0010.md) | layer-c-reads (11a-3): monikers in spec symbols and find_symbols | draft | should | 2-3
+## release v1 | 0 open, 13 done | 0 days
 
 ## release v2 | 7 open, 1 done | 14-24 days
 

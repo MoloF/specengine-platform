@@ -1518,6 +1518,8 @@ pub(crate) enum CodeTarget {
     Ron,
 }
 
+// `get_impact`'s seeds keep these three words; `find_symbols` has its own
+// four (`SymbolsTier`).
 /// How a target meets the query, the best first.
 #[derive(JsonSchema)]
 #[schemars(rename_all = "lowercase")]
@@ -1525,6 +1527,57 @@ pub(crate) enum CodeTier {
     Exact,
     Suffix,
     Name,
+}
+
+/// How a `find_symbols` target meets the query, the best first: the
+/// moniker tier after an exact path.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum SymbolsTier {
+    Exact,
+    Moniker,
+    Suffix,
+    Name,
+}
+
+/// An item's state in the stored advisory snapshot: the joined row's
+/// state, `unmatched` (its file unchanged since the run, no row joins
+/// it) or `unseen` (its file not in the run, or changed since).
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum SnapshotState {
+    Moniker,
+    Local,
+    #[schemars(rename = "none")]
+    NoMoniker,
+    Unresolved,
+    NotLoaded,
+    Unmatched,
+    Unseen,
+}
+
+/// The stored advisory snapshot's freshness against the tree now.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum SnapshotFreshness {
+    Fresh,
+    Stale,
+}
+
+/// The stored advisory snapshot a `find_symbols` answer shows: its
+/// freshness and the run's row.
+#[derive(JsonSchema)]
+pub(crate) struct SymbolsLayerC {
+    pub state: SnapshotFreshness,
+    pub protocol: u32,
+    pub ra_ap: String,
+    pub host: String,
+    /// The run's distinct known toolchains, byte-sorted.
+    pub toolchains: Vec<String>,
+    pub degraded: bool,
+    pub workspaces: u32,
+    pub files: u64,
+    pub items: u64,
 }
 
 /// `spec symbols --json`.
@@ -1550,6 +1603,9 @@ pub(crate) struct SymbolsDocument {
     pub omitted: Option<SymbolsOmitted>,
     /// `null` when the REF names nothing.
     pub code: Option<CodeCount>,
+    /// `null` without a stored advisory snapshot and when the REF names
+    /// nothing.
+    pub layer_c: Option<SymbolsLayerC>,
 }
 
 #[derive(JsonSchema)]
@@ -1569,7 +1625,7 @@ pub(crate) struct SymbolsTarget {
     /// The layer whose rules made the row.
     pub layer: Option<String>,
     /// The query form only.
-    pub tier: Option<CodeTier>,
+    pub tier: Option<SymbolsTier>,
     /// The mentions bound to the target itself.
     pub mentions: Option<usize>,
     pub bindings: Vec<SymbolsBinding>,
@@ -1577,6 +1633,15 @@ pub(crate) struct SymbolsTarget {
     /// empty list on a module or a data path; `null` when the project's
     /// code table lists no frameworks.
     pub roles: Option<Vec<SymbolsRole>>,
+    /// An item's state in the stored advisory snapshot; `null` without
+    /// one and on a module or a data path.
+    pub c_state: Option<SnapshotState>,
+    /// The item's shown moniker, `<raw> #<value>` when several items of
+    /// its file share one; `null` unless `c_state` is moniker.
+    pub moniker: Option<String>,
+    /// Whether the moniker agrees with the item's package target and
+    /// modules; `null` where neither is judged.
+    pub agrees: Option<bool>,
 }
 
 /// One role row of a target, every key present; each value a free string

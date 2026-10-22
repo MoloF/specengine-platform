@@ -7,10 +7,15 @@
 //!   `specengine-ra` beside it and another first on `PATH`; every code
 //!   tool, each form, answers, and neither fake ever starts.
 //! - R12 `mcp_code_tools_equal_with_and_without_a_snapshot`: in both
-//!   protocol eras each code tool's reply line is byte-identical before
-//!   and after a layer C snapshot is in the index (a row of
+//!   protocol eras each reply line of `refs`, `unmapped`, `get_impact`
+//!   (its `symbol` a moniker too) and `check_binding` is byte-identical
+//!   before and after a layer C snapshot is in the index (a row of
 //!   `code_monikers` at every layer A item's bytes), and none shows a
-//!   moniker; the snapshot is still there after the reads.
+//!   moniker but as the query echoed; the snapshot is still there after
+//!   the reads.
+//! - docs/features/layer-c-reads.md TE-6, R3 (the R12 split): `find_symbols`
+//!   left the equal set for `get_impact` and `check_binding` — its replies
+//!   now differ and show the monikers; R5's never-spawn set keeps it.
 //!
 //! PHASE-B: `spec` is not built for this crate's tests, so the snapshot is
 //! written with the system's `sqlite3` in the spec's columns ("Tables":
@@ -49,8 +54,10 @@ const MONIKER_WORD: &str = "zzmoniker";
 /// How long one reply may take.
 const READ_LIMIT: Duration = Duration::from_secs(60);
 
-/// Every code tool, each form.
-fn calls() -> Vec<(&'static str, Value)> {
+/// `find_symbols`, each form: R5 calls it (never spawn); since
+/// docs/features/layer-c-reads.md it shows the snapshot, so R12 checks it
+/// differs.
+fn find_symbols_calls() -> Vec<(&'static str, Value)> {
     vec![
         ("find_symbols", json!({"query": "page"})),
         ("find_symbols", json!({"query": "impl Sheet"})),
@@ -63,11 +70,34 @@ fn calls() -> Vec<(&'static str, Value)> {
             "find_symbols",
             json!({"at": "crates/inkwell/src/page.rs:3"}),
         ),
+    ]
+}
+
+/// The code tools whose replies show no layer C, each form (TE-6, R3:
+/// `find_symbols` swapped for `get_impact` and `check_binding`); with a
+/// `moniker`, `get_impact`'s `symbol` of it too (Q2: three tiers, a moniker
+/// seeds nothing).
+fn equal_calls(moniker: Option<&str>) -> Vec<(&'static str, Value)> {
+    let mut calls = vec![
         ("refs", json!({"id": "TENET-WIDTH"})),
         ("refs", json!({"id": "SLAB-INK"})),
         ("unmapped", json!({})),
         ("unmapped", json!({"path": "crates"})),
-    ]
+        ("get_impact", json!({"id": "TENET-WIDTH"})),
+        ("get_impact", json!({"symbol": "page"})),
+        ("check_binding", json!({"node": "TENET-WIDTH"})),
+    ];
+    if let Some(moniker) = moniker {
+        calls.push(("get_impact", json!({"symbol": moniker})));
+    }
+    calls
+}
+
+/// Every code tool, each form: R5's set (`find_symbols` kept).
+fn calls() -> Vec<(&'static str, Value)> {
+    let mut calls = find_symbols_calls();
+    calls.extend(equal_calls(None));
+    calls
 }
 
 /// A scratch copy of the fixture (its `expected.json` out), a `HOME`, the
@@ -364,13 +394,13 @@ fn write_snapshot(db: &Path) -> u64 {
     items
 }
 
-/// Every code tool's reply line, in both eras, each era a session of its
-/// own (its ids from 1).
-fn answers(root: &Path, home: &Path) -> Vec<String> {
+/// The reply line of each of `calls`, in both eras, each era a session
+/// of its own (its ids from 1).
+fn answers(root: &Path, home: &Path, calls: &[(&'static str, Value)]) -> Vec<String> {
     let mut out = Vec::new();
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(root), Home::At(home));
-        for (tool, arguments) in calls() {
+        for (tool, arguments) in calls {
             out.push(
                 session.request_line("tools/call", json!({"name": tool, "arguments": arguments})),
             );
@@ -380,26 +410,64 @@ fn answers(root: &Path, home: &Path) -> Vec<String> {
     out
 }
 
-/// R12. M: a moniker leaking into a code tool. Each reply line, both eras,
-/// byte for byte the same without and with a snapshot; none shows a
-/// moniker; the snapshot outlives the reads.
+/// The moniker [`write_snapshot`] gives the first item of
+/// `crates/inkwell/src/page.rs`.
+fn page_moniker(db: &Path) -> String {
+    let rows = sqlite(
+        db,
+        "SELECT s.start_byte AS start FROM symbols s JOIN code_files f ON f.file_id = s.file \
+         WHERE f.path = 'crates/inkwell/src/page.rs' ORDER BY s.start_byte LIMIT 1",
+    );
+    let start = rows
+        .first()
+        .and_then(|row| row["start"].as_u64())
+        .expect("an item of page.rs");
+    format!("{MONIKER_WORD} m{start}.")
+}
+
+/// R12. M: a moniker leaking into a code tool (docs/features/layer-c-reads.md
+/// M7: the tier in the store's `lookup_in` seeds `get_impact`). Each reply
+/// line of [`equal_calls`], both eras, byte for byte the same without and
+/// with a snapshot; none shows a moniker but as the query echoed; the
+/// snapshot outlives the reads. TE-6, R3: `find_symbols`, out of the set,
+/// now differs and shows the monikers.
 #[test]
 fn mcp_code_tools_equal_with_and_without_a_snapshot() {
     let scratch = Scratch::new("lcr-mcp-outputs");
     let (root, home) = indexed(&scratch);
-    let before = answers(&root, &home);
     let db = data_dir(&home).join(format!("{SLUG}.db"));
+    let moniker = page_moniker(&db);
+    let equal = equal_calls(Some(&moniker));
+    let before = answers(&root, &home, &equal);
+    let symbols_before = answers(&root, &home, &find_symbols_calls());
     let items = write_snapshot(&db);
     assert!(items > 10, "{items} moniker rows");
-    let after = answers(&root, &home);
+    let after = answers(&root, &home, &equal);
     assert_eq!(before.len(), after.len());
-    for ((was, now), (tool, arguments)) in before.iter().zip(&after).zip(calls().iter().cycle()) {
+    for ((was, now), (tool, arguments)) in before.iter().zip(&after).zip(equal.iter().cycle()) {
         assert_eq!(now, was, "{tool} {arguments}: the same with a snapshot");
         assert!(
-            !now.contains(MONIKER_WORD),
+            !now.replace(&moniker, "<the query>").contains(MONIKER_WORD),
             "{tool} {arguments} shows a moniker: {now}"
         );
     }
+    let symbols_after = answers(&root, &home, &find_symbols_calls());
+    let mut shown = 0;
+    for ((was, now), (tool, arguments)) in symbols_before
+        .iter()
+        .zip(&symbols_after)
+        .zip(find_symbols_calls().iter().cycle())
+    {
+        assert_ne!(now, was, "{tool} {arguments}: shows the snapshot now (R3)");
+        assert!(
+            now.contains("\"layer_c\":{"),
+            "{tool} {arguments}: the document's layer_c: {now}"
+        );
+        if now.contains(MONIKER_WORD) {
+            shown += 1;
+        }
+    }
+    assert!(shown > 0, "find_symbols shows a moniker");
     let kept = sqlite(&db, "SELECT count(*) AS n FROM code_monikers");
     assert_eq!(
         kept[0]["n"].as_u64(),

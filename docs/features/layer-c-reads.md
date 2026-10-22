@@ -1,8 +1,9 @@
 ---
 class: spec
-status: draft
+status: shipped
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin]
-ref: Phase 3 plan, slice 11a-3, split from 11a `layer-c.md` 2026-10-19, refreshed 2026-10-22 after the owner's TE-6 (Q1-Q5 owner pre-approved 2026-10-22, Q4 and L2 earlier; review open); 07 s1.2; 08 s2, AC-10
+ref: Phase 3 plan, slice 11a-3, split from 11a `layer-c.md` 2026-10-19, refreshed 2026-10-22 after the owner's TE-6 (Q1-Q5 owner pre-approved 2026-10-22, Q4 and L2 earlier; review open); 07 s1.2; 08 s2, AC-10; developer 2 iterations, review 2 accepted
+shipped: 2026-10-22
 adrs: [ADR-0049]
 ---
 
@@ -10,81 +11,61 @@ adrs: [ADR-0049]
 
 ## Why
 
-No read shows 11a-2's layer C snapshot. An agent asking about an item sees, beside layer A's qpath, layer C's state and moniker, whether it agrees with layer A's crate and modules, and can query by it; `find_symbols` the same. Only the owner's `spec resolve` makes a snapshot; reads show it. TE-6 (`layer-c-resolve.md`) says build it. Display only, inside ADR-0049 (`architecture.md#code-identity`).
+No read showed 11a-2's layer C snapshot. An agent asking about an item now sees, beside layer A's qpath, layer C's state and moniker, whether it agrees with layer A's crate and modules, and can query by it; `find_symbols` the same. Only the owner's `spec resolve` makes a snapshot; reads show it. TE-6 (`layer-c-resolve.md`) said build it. Display only, inside ADR-0049 (`architecture.md#code-identity`).
 
 ## Description and interactions
 
-- **`spec symbols`**, every form: "Data" while a snapshot exists; without one, today's text byte for byte.
-- **`find_symbols`**: the mirror key for key (`mcp-code.md` "Mirrors"), its own four-word tier enum; `CodeTier` keeps three (`mirror.rs:1294`; R1). The description (1 755 of 2 048 B) gains the tier and the `c` facts; `QUERY_DOC`: "A qualified path, a suffix of one, a bare name or a layer C moniker, as one value." `INSTRUCTIONS`, `TOOLS` (22), other tools unchanged.
-- **Plugin**: a key a tool returns is a MINOR (`plugin-files.md` "Changing it"): the next free one after review-form's 0.19.0, at shipping (0.20.0 if that commits first, A1), a `PINS` line, a `SCHEMA_PINS` entry; `read-spec` unchanged.
+As built: `docs/canon/layer-c-reads.md`; the lookup and `spec symbols`: `symbol-reads.md`; the mirror: `mcp-code.md` "Mirrors"; plugin 0.20.0 (`plugin-files.md` "Changing it"). No other read, tool or route shows a moniker.
 
 ## Data
 
-### spec symbols
-
-`spec symbols 'arena impl#[Health] #2'` on `fixtures/ra-mini`, stale:
-
-```
-arena::impl Health #2 | impl_item | arena/src/lib.rs:23-27 | layer a | mentions 0 | moniker
-  sig impl Health
-  c moniker | arena impl#[Health] #2 | agrees | stale
-symbols: 1 of 1; code files 6 (.rs 6, .ron 0), skipped 0
-layer c: stale (ra_ap 0.0.352); spec resolve refreshes it
-```
-
-- **`c` line**: `  c <c_state>[ | <moniker>][ | agrees|disagrees][ | stale]`, right after `  sig …`, before roles and bindings (`symbol-reads.md` "spec symbols"); item targets only; fields through `one_line`; counted toward `OUTPUT_CAP_CHARS`.
-- **`layer c:` line**, after the summary: `layer c: fresh (ra_ap <v>)`, or the stale form above.
-- **`c_state`**: the joined row's state, `moniker`, `local`, `none`, `unresolved` or `not_loaded` (`join_file`, `layer-c.md` "Join"); `unmatched`, the file unchanged since the run and no row joins; `unseen`, the file not in `code_resolve_files` or its BLAKE3 changed.
-- **`moniker`**: the shown form (`shown_moniker`), `<raw> #<value>` for a collision; null unless the state is `moniker`. **`agrees`** per "Join"; null prints no word.
+Canon `layer-c-reads.md` "Text", "Rows": the `  c <c_state>[ | <moniker>][ | agrees|disagrees][ | stale]` line after `sig`, the `layer c:` line, the seven `c_state` words.
 
 ### JSON
 
-- Each target, after `roles`: `c_state`, `moniker` (string or null), `agrees` (bool or null); `SYMBOL_KEYS` 15 -> 18; null while absent (never the word `absent`) and on `module`, `ron`.
-- Top level, after `code`: `layer_c`, null or `{state, protocol, ra_ap, host, toolchains, degraded, workspaces, files, items}`: `state` `fresh` | `stale`, the rest `code_resolve`'s columns (`layer-c.md` "Tables"), `toolchains` a list; `SYMBOLS_KEYS` 11 -> 12. Exit 1: `layer_c` null, as `code`.
+18 target keys (`c_state`, `moniker`, `agrees` after `roles`), 12 document keys (`layer_c` after `code`), null while absent and on exit 1: canon "JSON".
 
 ### Tier moniker
 
-QUERY only; order `exact`, `moniker`, `suffix`, `name` (`symbol-reads.md` "Lookup"): (1) raw = the query up to its first `layer_c::COLLISION_SEPARATOR` (`" #"`, `specengine-code`'s; R7); (2) `code_monikers` rows with `moniker` = raw, through `code_monikers_by_moniker`; (3) rows of `unseen` files dropped; (4) joined to layer A rows with `join_file`; (5) kept where the shown moniker equals the query. Each item once, at its best tier, ordered as today; the limit after the merge; a stale snapshot answers too. The store adds one raw-text search, the CLI merges; `SymbolTier`, `LOOKUP_SQL`, `lookup_in` unchanged (shared by `impact.rs:450`, store `roles.rs`; R2). Q3: a raw query whose moniker collides finds nothing here; only the shown `<raw> #<v>` does.
+`exact`, `moniker`, `suffix`, `name`; five steps, the limit after the merge, a collision found only by its shown form: canon "Tier moniker".
 
 ## Rules and edge cases
 
-- **Absent** (never resolved; dropped by `clear_code` or an `INDEX_FORMAT` change): WHEN absent, the text SHALL be today's bytes, the new keys null, no moniker statement run.
-- **Stale** (`tree_fp` mismatch, `layer-c.md` "Freshness"): values kept, every `c` line ends `| stale`, changed files' rows `unseen`; the tier answers (R9).
-- **Partial**: a reply ending before `done` is never stored, a failed `spec resolve` keeps the last snapshot; gaps in a complete one (A3): `unseen`, `unmatched`, `unresolved`, `not_loaded`, `layer_c.degraded`.
-- **Determinism**: today's row order; values only from stored rows, stamp and tree bytes, read in `code_snapshot`'s transaction, the state from that read (`state_of`).
-- **Limits**: reads never spawn `specengine-ra` or call the public `layer_c_state()`, write only the data dir, keep every exit code; `INDEX_FORMAT` 11 (A4). A moniker never binds, locks, judges or becomes a finding.
+Absent, stale, partial, an unknown stored state, determinism, limits (never a spawn, `layer_c_state()`, a write under the root or an exit change; `INDEX_FORMAT` 12): canon "States", the intro.
 
 ## Acceptance criteria
 
-M: mutation -> the test turning red.
+M: mutation -> the test turning red. Phase B, iteration 2: every criterion met; M1-M8 8 of 8 red, no survivor (iteration 1 too).
 
-rust-developer (CLI `src/symbols.rs`, `src/layer_c.rs`; store `src/code.rs`, `src/layer_c.rs`, `src/lib.rs`; code `src/layer_c.rs`; MCP `src/mirror.rs`, `src/code.rs`; `plugin.json`):
+rust-developer:
 
-- [ ] RD-1 -- text, keys and tier as in "Data".
-- [ ] RD-2 -- one per-file join, factored out of `join_counts`, serves `resolve`'s counts and the reads.
-- [ ] RD-3 -- the layer C read inside the code snapshot's transaction; `layer_c_state()` reads the tree once.
-- [ ] RD-4 -- MCP as described.
-- [ ] RD-5 -- X0: `git diff --stat 5b79b81 -- crates/specengine-code/src/{levels.rs,hash.rs,ron/}` empty; `Cargo.lock`, `INDEX_FORMAT` 11, `format_history.txt` unchanged.
+- [x] RD-1 -- text, keys and tier as in "Data".
+- [x] RD-2 -- CLI `join_rows` serves `resolve`'s `join_counts` and the reads.
+- [x] RD-3 -- the layer C read inside the code snapshot's transaction; `Tree::of` reads the tree once.
+- [x] RD-4 -- `SymbolsTier` four words, `CodeTier` three (`get_impact`'s schema 0.19.0's), the description, `QUERY_DOC`; `INSTRUCTIONS`, `TOOLS` unchanged.
+- [x] RD-5 -- X0: `git diff --stat HEAD -- crates/specengine-code/src/{levels.rs,hash.rs,ron/} Cargo.lock crates/specengine-store/tests/format_history.txt crates/specengine-cli/tests/code_format_history.txt` empty (2026-10-22).
 
-test-engineer (CLI new `tests/layer_c_reads.rs`, `layer_c_common`, `symbol_reads_common/mod.rs` (18/12 keys), `symbol_reads{,_determinism}.rs`, `layer_c_{outputs,scan}.rs`; store `src/symbols.rs` tests; MCP `mcp_code.rs`, `mcp_layer_c.rs`, `plugin_files.rs`; replies in `fixtures/layer-c/`; snapshots by 11a-2's Perl fake on a scratch `fixtures/ra-mini`; `specengine-ra` never built):
+test-engineer (CLI new `tests/layer_c_reads.rs`, `layer_c_common`, `symbol_reads{,_common,_determinism}`; MCP new `common/layer_c.rs` (the snapshot by `sqlite3`, `tree_fp` per canon); new `fixtures/layer-c/symbols-head.json`; the rest below):
 
-- [ ] TE-1 -- the golden replay's six files: `c` lines tally joined 29, unmatched 0, agrees 26, disagrees 0; the collision shown twice as `… #<v>`. M6 inline modules dropped -> `rows_tally_to_resolve_counts`.
-- [ ] TE-2 -- no snapshot: every form's text HEAD's bytes, new keys null. M1 a `c` line while absent -> `symbols_text_is_unchanged_without_a_snapshot`.
-- [ ] TE-3 -- `Cargo.lock` edited: every line `| stale`, `layer c: stale …`; a byte appended to a file: its rows `c unseen | stale`, its moniker not found. M2 state unread -> `stale_snapshot_marks_every_c_line`; M3 no BLAKE3 check -> `changed_file_rows_are_unseen`.
-- [ ] TE-4 -- the tier after `exact`, fresh and stale; the shown collision form finds one item. M4 after `suffix` -> `moniker_query_ranks_after_exact`; M5 raw matching -> `shown_collision_finds_one_item`.
-- [ ] TE-5 -- the `c` line after `sig`, before the roles (`code-bevy`, `frameworks` set).
-- [ ] TE-6 -- R12 split (R3): `layer_c_outputs.rs` `READS`' equal set drops `symbols`, adds `impact PERK-REGEN`, `impact --symbol '<a moniker>'`, `show --bindings PERK-REGEN`, `lock diff PERK-REGEN`; `mcp_layer_c.rs` `calls()` swaps `find_symbols` for `get_impact`, `check_binding`; R5's never-spawn set keeps both. M7 tier in `lookup_in` -> `outputs_equal_with_and_without_a_snapshot`; M8 `symbols.rs` calls `resolve` -> `reads_mcp_check_gate_verify_never_spawn_layer_c`, `only_resolve_spawns_layer_c`.
-- [ ] TE-7 -- `code_tools_equal_the_cli` (with a snapshot), `mcp_genre` green; `PINS`, `SCHEMA_PINS` appended (`tool_schemas_follow_the_plugin_version`); `get_impact`'s schema the previous version's; `daemon_keys.rs` 81.
-- [ ] TE-8 -- two roots, reversed creation: identical bytes; the moniker statement a SEARCH under `EXPLAIN QUERY PLAN`.
-- [ ] TE-9 -- `layer_c_reads_cost` (`#[ignore]`, release, warm, median of 5), ra-mini: `symbols --file arena/src/lib.rs`, `symbols Health`; a snapshot adds ≤ 10 ms.
+- [x] TE-1 -- the golden replay's six files tally joined 29, unmatched 0, agrees 26, disagrees 0; the collision shown twice: `rows_tally_to_resolve_counts`. M6 inline modules dropped in `join_rows` (`resolve`'s counts shift too) -> red.
+- [x] TE-2 -- no snapshot: HEAD's bytes (`symbols-head.json`, 44 runs, after `clear_code` too), new keys null: `symbols_text_is_unchanged_without_a_snapshot`. M1 `c_state.unwrap_or("unseen")` -> red.
+- [x] TE-3 -- `Cargo.lock` edited: every line `| stale` (`stale_snapshot_marks_every_c_line` pins "Data"'s example); a byte appended: `c unseen | stale`, the moniker not found (`changed_file_rows_are_unseen`). M2 state forced fresh, M3 no BLAKE3 compare -> red.
+- [x] TE-4 -- the tier after `exact`, fresh and stale; the shown collision form finds one item: `moniker_query_ranks_after_exact`, `shown_collision_finds_one_item`. M4 after `suffix`, M5 raw matching -> red.
+- [x] TE-5 -- the `c` line after `sig`, before the roles (`code-bevy`): `c_line_follows_sig_before_roles`.
+- [x] TE-6 -- R12 split: `layer_c_outputs.rs` `EQUAL` drops `symbols`, adds `impact`, `impact --symbol <moniker>`, `show --bindings`, `lock diff`; MCP `get_impact`, `check_binding` for `find_symbols` (`mcp_layer_c.rs`). M7 the moniker search in `lookup_in` -> `outputs_equal_with_and_without_a_snapshot` (`impact --symbol` changed); M8 `symbols()` calls `resolve` -> `reads_mcp_check_gate_verify_never_spawn_layer_c`, `only_resolve_spawns_layer_c`: red.
+- [x] TE-7 -- `mcp_code.rs`: CLI parity fresh and stale, four tiers on `find_symbols`, three on `get_impact`, the enums; `mcp_genre`; `PINS` 0.20.0 `bf709371…72e1`, `SCHEMA_PINS` 0.20.0 `225e45ef…8703`, `as_of_0_19_0` hashing to 0.19.0's pin, `get_impact`'s seed tier 0.19.0's word for word; `daemon_keys` 81.
+- [x] TE-8 -- `symbols_with_a_snapshot_are_byte_identical_across_roots_and_order`; store `moniker_lookup_searches_its_index` (a SEARCH under `EXPLAIN QUERY PLAN`).
+- [x] TE-9 -- `layer_c_reads_cost` (`#[ignore]`, release, warm, median of 5, ra-mini): `symbols --file arena/src/lib.rs` 29.6 -> 27.1 ms, `symbols Health` 25.7 -> 22.8 ms: +0.0, below noise, limit 10 ms.
+- Also `a_limited_query_keeps_its_targets_and_c_lines`, `an_unknown_stored_state_degrades_the_read`, `gaps_show_their_states`, `c_lines_count_toward_the_output_cap`, `reads_leave_the_snapshot_and_the_worktree_untouched`; `layer_c_scan.rs` the R7 split scan, `reads_never_call_the_public_layer_c_state`.
+- Gates: `INDEX_FORMAT` 12; final run: fmt, clippy (`probes` too) clean; nextest 3 903 of 3 905, 71 skipped (eval guards `import_cli`, `layout_cli`: `symbols-head.json` uncommitted); MCP `probes` 97/97; UI lint 0, `pnpm test` 2 546/2 546, build clean; export, check, parity clean; eval quartet 86/86; `Cargo.lock` unchanged.
 
 spec-writer:
 
-- [x] SW-1 -- this refresh, 2026-10-22 (R1-R3, R8, Q1-Q5); RM-0010's scope gains `crates/specengine-code`.
+- [x] SW-1 -- the refresh, 2026-10-22; RM-0010's scope.
 - [x] SW-2 -- TE-6's line in `layer-c-resolve.md`.
-- [ ] SW-3 -- canon at shipping: `layer-c.md` l.11 ("no read shows the snapshot yet"), l.110 with TE-6's finding, the reads' contract (R4); `symbol-reads.md` "Lookup" tier row, "spec symbols" pointer, keys; `mcp-code.md` "Mirrors", "Texts", "Tests"; `plugin-files.md`, `plugin.md` version.
-- [ ] SW-4 -- 07:30, 07:106; 08:42 (TE-6 done), 08:45 (11b not triggered, the figure), 08 AC-10 (9.1 / 10.7 s, 2.76 / 3.46 GiB); RM-0010 shipped; RM-0022's body the figure (Q1).
-- [ ] SW-5 -- READMEs CLI, store, code, MCP, `crates/specengine-ra/README.md` l.56 (the figure); `CLAUDE.md` State; export, check clean.
+- [x] SW-3 -- new Tier 2 `docs/canon/layer-c-reads.md`; `layer-c.md` (intro, "Tables", "Freshness", "Join"); `symbol-reads.md`; `mcp-code.md`; `plugin-files.md`.
+- [x] SW-4 -- 07:30, 07:106; 08:42, :45, :64, AC-10; RM-0010 shipped; RM-0022's figure.
+- [x] SW-5 -- READMEs CLI, store, code, MCP, ra; `CLAUDE.md` State; export, check clean.
 
 ### Owner check
 
@@ -112,15 +93,20 @@ Expected: `resolve` exit 0, `stored fresh`; `c` lines after `sig`, before roles,
 
 ## Out of scope
 
-Monikers in any other read or tool; the daemon (no route serves `spec symbols`; `fixtures/daemon-keys.json` 81), UI, hook, CI, `specengine-ra`; `spec resolve`, its tables, freshness; fixing `agrees`; plugin text; 11b (RM-0022), 11c.
-
-## Decisions and risks
-
-- **Q1** RM-0022 stays `draft`, its body 0.01 % and 0.25 %, re-measured on a new pilot. **Q2** `impact --symbol`, `get_impact` keep three tiers (canon). **Q3** "Tier moniker". **Q4** a `c` line per item (~+50 B; snapshots opt-in). **Q5** A's 17 disagrees: no change, listed by the owner check; a follow-up only if a rule is wrong. **L2** the next MINOR here.
-- **A1** review-form commits first (0.19.0, `TOOLS` 22, pins). **A2** the `r#` reading checked on both pilots. **A3** partial: gaps in a complete snapshot. **A4** no index or format change. **A5** eval's totals are its own scan's.
-- **R1** `CodeTier::Moniker` would change `get_impact`'s outputSchema. **R2** the tier in `lookup_in` would seed `impact`, role links. **R3** two shipped tests red by design (TE-6). **R4** `symbol-reads.md` 11 692, `layer-c.md` 12 268 of 12 288 B: a pointer, likely a new Tier 2 `layer-c-reads.md`. **R5** description 293 B left, `INSTRUCTIONS` none. **R6** fewer targets fit the cap. **R7** no `#` literal in the CLI. **R8** stale draft pointers dropped (:220, 07:104, "0.19.0 now", S6, S7). **R9** while editing, mostly stale. **R10** shared with review-form: `plugin.json`, `tests/plugin_files.rs`, `src/mirror.rs`, `tests/common/read.rs`, MCP, CLI `src/lib.rs`; `plugin-files.md`, `mcp-code.md` "Tests", `plugin.md`; `CLAUDE.md` State; 07 s1.2; 08.
-- **Needs**: 11a-2, TE-6 (done), review-form (RM-0012) committed. From 11a-2's review: `tree_files` to walk deepest-first, stopping at the first known directory.
+Monikers in any other read or tool; the daemon, UI, hook, CI, `specengine-ra`; `spec resolve`, its tables, freshness; fixing `agrees`; plugin text; 11b (RM-0022, not triggered), 11c.
 
 ## Implementation
 
-Not started.
+| Module | What it does |
+|---|---|
+| code `layer_c.rs` | `raw_moniker`: a query up to `COLLISION_SEPARATOR`; the CLI holds no `#` |
+| store `layer_c.rs` | `LayerCRead`, `layer_c_read_in` over `head_in`, `tree_rows_in`, `resolve_files_in`, `found_in` (`FOUND_SQL` `INDEXED BY code_monikers_by_moniker`) and the picked files' rows and symbols |
+| store `code.rs`, `lib.rs` | `code_snapshot_with_layer_c(symbols, kinds, moniker, pick)`, `CodeSnapshot.layer_c`; `code_snapshot` unchanged, so `impact`, `unmapped` and `resolve`'s counts never read layer C |
+| CLI `layer_c.rs` | `Tree::of`, `Tree::state_of` (for `state_in`); `join_rows` over `join_file`; `LayerCView::of` (`unmatched`, `unseen`; of two A rows on one C row the first by `ord` gives the discriminator); `UnknownState` |
+| CLI `symbols.rs`, `lib.rs` | `pick` (QUERY: the first `limit` hits' files plus the found files; a promoted hit only moves up), the role rows beside only the found items' symbols on equal start and end; `QueryTier`, `merged_hits` (the limit after the merge); the `c` and `layer c:` lines; `SymbolsLayerC`, re-exported |
+| MCP `mirror.rs`, `code.rs` | `SymbolsTier` (4), `SnapshotState` (7), `SnapshotFreshness`, `SymbolsLayerC`; `CodeTier` and its doc unchanged; the description 1 957 B, `QUERY_DOC` |
+| `plugin.json` | 0.20.0 |
+
+Deviations: (1) iteration 2, from review: a picked file's joined row holding a state this build does not know hides the snapshot from that read (no `c` lines, `layer c:` line, tier; keys and `layer_c` null) with one ``warning: the layer C snapshot holds an unknown state `<x>`; run `spec resolve` ``, the first by path then `ord`, exit unchanged; nothing is blocked, the snapshot advisory. (2) RD-5's literal baseline 5b79b81 already differs at HEAD (`levels.rs` +73/−8 from d45dfce, e07c352): X0 checked against HEAD. (3) `INDEX_FORMAT` is 12, not 11 (roadmap-items).
+
+Review 1: a major (`CodeTier`'s doc leaking into `get_impact`'s schema), the `pick` cost, the unknown state: fixed in iteration 2. Later: every read builds the whole project's run and current maps and `TargetCrates`. Draft risks the tests cite: R1 the separate enum, R2 the tier outside `lookup_in`, R3 the R12 split, R7 no `#` in the CLI.
