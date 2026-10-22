@@ -20,6 +20,13 @@
 //! `fixtures/import-layout/*/census.toml` configs with their `[layout]`;
 //! each layout rule is non-zero in both layout fixtures' `expected.json`.
 //!
+//! docs/features/import-homes.md (CR) extends the forbidden set to the
+//! third layout convention `fixtures/import-layout/three` (its
+//! `[definitions] home` globs and prefixes, its `[layout] inherit` keys, the
+//! prefixes of its run); the every-rule checks stay over `one` and `two`,
+//! and `three` shows the home and the inherited values non-zero. The home
+//! step and the inherit writer live in files the walk already reads.
+//!
 //! docs/features/pilot-w.md AC-09 extends the scan to the eval `w` module
 //! and the forbidden set to both `fixtures/pilot-w/*` census configs and
 //! tasks configs (their globs, key, paths and `[tier1.paths]` values).
@@ -44,6 +51,9 @@ use import_support::*;
 
 /// The two invented conventions of docs/features/import-layout.md.
 const LAYOUT_FIXTURES: [&str; 2] = ["import-layout/one", "import-layout/two"];
+
+/// The third layout convention, of docs/features/import-homes.md.
+const HOMES_FIXTURE: &str = "import-layout/three";
 
 /// The two invented conventions of docs/features/pilot-w.md.
 const W_FIXTURES: [&str; 2] = ["pilot-w/one", "pilot-w/two"];
@@ -228,7 +238,7 @@ fn forbidden() -> BTreeSet<String> {
         ));
     }
     strings.extend(convention_strings(&generated_config_text()));
-    for name in LAYOUT_FIXTURES {
+    for name in LAYOUT_FIXTURES.iter().chain([&HOMES_FIXTURE]) {
         strings.extend(convention_strings(
             &fs::read_to_string(fixture_config(name)).expect("layout fixture config"),
         ));
@@ -248,7 +258,11 @@ fn forbidden() -> BTreeSet<String> {
     }
     strings.extend(CONSTANTS_WORDS.iter().map(|word| (*word).to_owned()));
     let scratch = Scratch::new("genre");
-    for name in FIXTURES.iter().chain(&CONSTANTS_FIXTURES) {
+    for name in FIXTURES
+        .iter()
+        .chain(&CONSTANTS_FIXTURES)
+        .chain([&HOMES_FIXTURE])
+    {
         let run = ImportRun::new(&fixture_dir(name), &scratch, name, &[]);
         let labels = run.file("labels.json");
         for group in ["classes", "prefixes", "patterns"] {
@@ -644,6 +658,85 @@ fn every_layout_rule_is_non_zero_in_both_layout_fixtures() {
             "{path} is zero in both layout fixtures"
         );
     }
+}
+
+// ------------------------------------------- docs/features/import-homes.md
+
+/// CR: the forbidden set holds the third layout convention's home (its
+/// glob and its prefix, a map key), its `inherit` keys, its `[layout]`
+/// records directory and its other convention strings, and the prefixes of
+/// its run.
+#[test]
+fn the_forbidden_set_holds_the_homes_fixture_conventions() {
+    let forbidden = forbidden();
+    for sample in [
+        "bench/probes.md", // definitions.home glob
+        "XQ",              // definitions.home key, a run prefix
+        "YR",              // a run prefix
+        "bench/units",     // layout.records
+        "rev",             // layout.inherit entry, key-map target
+        "scope",           // layout.inherit entry, key-map target
+        "reviewed",        // layout.inherit entry, key-map target
+        "Holder",          // key-map key
+        "Area",            // key-map key
+        "^Property$",      // front_matter.header_table
+        "^Mark$",          // tables.id_header
+    ] {
+        assert!(
+            forbidden.contains(sample),
+            "{sample:?} is in the forbidden set"
+        );
+    }
+}
+
+/// CR: the home step (`import/mod.rs`), its config (`config.rs`) and the
+/// inherit writer (`layout/`) are read by the walk.
+#[test]
+fn the_scan_covers_the_home_step_and_the_inherit_writer() {
+    let scanned: Vec<String> = scanned_sources()
+        .iter()
+        .map(|path| relative(path))
+        .collect();
+    for wanted in [
+        "crates/specengine-import/src/config.rs",
+        "crates/specengine-import/src/import/mod.rs",
+        "crates/specengine-import/src/import/model.rs",
+        "crates/specengine-import/src/layout/mod.rs",
+        "crates/specengine-import/src/layout/records.rs",
+        "crates/specengine-import/src/layout/header.rs",
+        "crates/specengine-eval/src/import.rs",
+        "crates/specengine-eval/src/layout.rs",
+    ] {
+        assert!(
+            scanned.iter().any(|path| path == wanted),
+            "{wanted} is not scanned: {scanned:?}"
+        );
+    }
+}
+
+/// CR: `three` exercises both new rules: `import` counts a home's
+/// demotion (`references.by_home` > 0) and `layout` compares inherited
+/// values (`headers.json` entries with `record`, all matched).
+#[test]
+fn the_homes_fixture_shows_the_home_and_the_inherited_values_non_zero() {
+    let scratch = Scratch::new("genre-homes");
+    let fixture = fixture_dir(HOMES_FIXTURE);
+    let import = ImportRun::new(&fixture, &scratch, "import", &[]);
+    assert!(import.count("references/by_home") > 0, "{}", import.result);
+    let out = scratch.join("layout");
+    measure("layout", &fixture, &out, &["--today", "2026-10-04"]);
+    let headers = read_json(&out.join("layout/pilot/headers.json"));
+    let inherited: Vec<&serde_json::Value> = headers["field_values"]
+        .as_array()
+        .expect("field_values")
+        .iter()
+        .filter(|value| value.get("record").is_some_and(|record| !record.is_null()))
+        .collect();
+    assert!(!inherited.is_empty(), "no inherited value compared");
+    assert!(
+        inherited.iter().all(|value| value["matched"] == true),
+        "{inherited:?}"
+    );
 }
 
 // ------------------------------------------------ docs/features/pilot-w.md

@@ -128,6 +128,11 @@ pub struct LayoutConfig {
     pub debt_expires_line: Option<usize>,
     /// Per Latin prefix; absent: project scope `file`, feature `section`.
     pub targets: BTreeMap<String, TargetRule>,
+    /// Header keys, under their names in the after-tree, every record file
+    /// takes from its source document's header, in this order
+    /// (`docs/features/import-homes.md`); a key the record holds itself
+    /// wins. Empty: none.
+    pub inherit: Vec<String>,
 }
 
 impl Default for LayoutConfig {
@@ -142,6 +147,7 @@ impl Default for LayoutConfig {
             debt_expires: DEFAULT_DEBT_EXPIRES.to_owned(),
             debt_expires_line: None,
             targets: BTreeMap::new(),
+            inherit: Vec::new(),
         }
     }
 }
@@ -328,10 +334,24 @@ pub struct ImportConfig {
     pub reference_paths: Vec<Regex>,
     /// Over header cells: tables whose IDs are references.
     pub reference_headers: Vec<Regex>,
+    /// Per Latin prefix: its home, globs over corpus-relative paths. An ID
+    /// a home document defines turns its record-position definitions
+    /// outside the home into references (`docs/features/import-homes.md`).
+    pub home: BTreeMap<String, Vec<Regex>>,
     /// Corpus-relative directory a missing file link is retried from.
     pub link_base: Option<PathBuf>,
     pub code: CodeConfig,
     pub documents: DocumentsConfig,
+}
+
+impl ImportConfig {
+    /// Whether `path` (corpus-relative, `/`-separated) is a document of
+    /// `prefix`'s home; `None` when the prefix has no home.
+    pub fn in_home(&self, prefix: &str, path: &str) -> Option<bool> {
+        self.home
+            .get(prefix)
+            .map(|globs| globs.iter().any(|glob| glob.is_match(path)))
+    }
 }
 
 /// A configured regex and its text as written (for `labels.json`).
@@ -424,6 +444,8 @@ struct RawLayout {
     debt_expires: Option<Spanned<String>>,
     #[serde(default)]
     targets: BTreeMap<String, Spanned<Target>>,
+    #[serde(default)]
+    inherit: Vec<Spanned<String>>,
 }
 
 /// One `[layout] classes` entry.
@@ -508,6 +530,10 @@ struct RawDefinitions {
     reference_paths: Vec<Spanned<String>>,
     #[serde(default)]
     reference_headers: Vec<Spanned<String>>,
+    /// Latin prefix → globs over corpus-relative paths: the documents that
+    /// define its IDs (`docs/features/import-homes.md`).
+    #[serde(default)]
+    home: BTreeMap<String, Spanned<Vec<Spanned<String>>>>,
 }
 
 #[derive(Deserialize, Default)]
@@ -911,6 +937,49 @@ fn compile_import(
         .iter()
         .map(|value| non_empty_regex("definitions.reference_headers", value))
         .collect::<Result<Vec<_>, _>>()?;
+    let mut home = BTreeMap::new();
+    for (prefix, globs) in &raw.definitions.home {
+        if !is_latin_prefix(prefix) {
+            return Err(error_at(
+                Some(globs.span()),
+                format!(
+                    "`definitions.home` key `{prefix}` is not a Latin prefix (an ASCII capital, then ASCII capitals or digits)"
+                ),
+            ));
+        }
+        if let Some(target) = legacy.get(prefix) {
+            return Err(error_at(
+                Some(globs.span()),
+                format!(
+                    "`definitions.home` key `{prefix}` is an `ids.legacy` prefix as written: its IDs take the prefix `{target}`"
+                ),
+            ));
+        }
+        if feature_prefixes.contains(prefix) {
+            return Err(error_at(
+                Some(globs.span()),
+                format!(
+                    "`definitions.home.{prefix}` names a home, but `{prefix}` is one of `ids.feature_prefixes`: its IDs are defined per feature document"
+                ),
+            ));
+        }
+        if globs.get_ref().is_empty() {
+            return Err(error_at(
+                Some(globs.span()),
+                format!("`definitions.home.{prefix}` is empty"),
+            ));
+        }
+        let key = format!("definitions.home.{prefix}");
+        let compiled = globs
+            .get_ref()
+            .iter()
+            .map(|value| {
+                filled(&key, value)?;
+                glob(&key, value)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        home.insert(prefix.clone(), compiled);
+    }
 
     let link_base = raw
         .links
@@ -1020,6 +1089,7 @@ fn compile_import(
         separators,
         reference_paths,
         reference_headers,
+        home,
         link_base,
         code,
         documents: DocumentsConfig { id_key, id_path },
@@ -1169,6 +1239,31 @@ fn compile_layout(
         );
     }
 
+    let mut inherit: Vec<String> = Vec::with_capacity(raw.inherit.len());
+    for value in &raw.inherit {
+        let key = value.get_ref();
+        let problem = if key.trim().is_empty() {
+            Some("holds an empty entry".to_owned())
+        } else if key.trim() != key {
+            Some(format!("entry `{key}` has blanks around it"))
+        } else if CoreKey::of(key).is_some() {
+            Some(format!("entry `{key}` is a key the layout writes itself"))
+        } else if task_box_key.as_deref() == Some(key.as_str()) {
+            Some(format!("entry `{key}` is `layout.task_box_key`"))
+        } else if inherit.contains(key) {
+            Some(format!("entry `{key}` is repeated"))
+        } else {
+            None
+        };
+        if let Some(problem) = problem {
+            return Err(error_at(
+                Some(value.span()),
+                format!("`layout.inherit` {problem}"),
+            ));
+        }
+        inherit.push(key.clone());
+    }
+
     Ok(LayoutConfig {
         records,
         features,
@@ -1183,6 +1278,7 @@ fn compile_layout(
         debt_expires,
         debt_expires_line,
         targets,
+        inherit,
     })
 }
 

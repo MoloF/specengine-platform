@@ -1,0 +1,30 @@
+# Import config of the import-layout/three fixture
+# (docs/features/import-homes.md): an invented bench-log convention. The
+# probes register is the home of its prefix, so the notes' earlier
+# restatement of a probe stays a reference; record files inherit header
+# keys (an integer, a list and two text keys) from their source document,
+# a YAML block or a field table. expected.json is the `layout` result
+# without the `*_ms` timings.
+[corpus]
+roots = ["bench"]
+[front_matter]
+class_key = "class"
+header_table = '^Property$'
+[front_matter.key_map]
+"Holder" = "owner"
+"Vetted" = "reviewed"
+"Revision" = "rev"
+"Area" = "scope"
+[ids]
+regex = '^(?P<prefix>[A-Z]{2})-[0-9]{2}$'
+[tables]
+id_header = '^Mark$'
+text_header = '^Phrase$'
+[lists]
+lead_in = true
+separators = [":"]
+[definitions]
+home = { XQ = ["bench/probes.md"] }
+[layout]
+records = "bench/units"
+inherit = ["rev", "scope", "owner", "reviewed"]

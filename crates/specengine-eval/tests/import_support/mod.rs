@@ -346,7 +346,7 @@ pub fn generated_copy(scratch: &Scratch) -> (PathBuf, PathBuf) {
 
 /// Every string of a config that names its convention: the string values at
 /// any depth and the keys of the map tables (`key_map`, `value_map` and its
-/// tables, `ids.legacy`).
+/// tables, `ids.legacy`, `definitions.home`: docs/features/import-homes.md).
 pub fn convention_strings(config_text: &str) -> BTreeSet<String> {
     let table: toml::Table = toml::from_str(config_text).expect("config is TOML");
     let mut out = BTreeSet::new();
@@ -365,8 +365,9 @@ pub fn convention_strings(config_text: &str) -> BTreeSet<String> {
                     if map_keys {
                         out.insert(key.clone());
                     }
-                    let nested_map = matches!(key.as_str(), "key_map" | "value_map" | "legacy")
-                        || (map_keys && value.is_table());
+                    let nested_map =
+                        matches!(key.as_str(), "key_map" | "value_map" | "legacy" | "home")
+                            || (map_keys && value.is_table());
                     walk(value, nested_map, out);
                 }
             }

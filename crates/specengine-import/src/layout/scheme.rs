@@ -22,6 +22,16 @@ enum SchemeScope {
     Feature,
 }
 
+/// The key of a prefix's entry in `[ids]` the layout reads and writes, a
+/// word of the format named by serde like [`SchemeScope`]: a corpus may use
+/// the same word as a header key (`docs/features/import-homes.md`), so no
+/// string literal of the engine holds it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum PrefixKey {
+    Scope,
+}
+
 /// The before scheme: the whole `specengine.toml` table.
 #[derive(Debug, Clone)]
 pub struct Scheme {
@@ -52,7 +62,7 @@ impl Scheme {
         let feature = word(&SchemeScope::Feature);
         self.ids()
             .and_then(|ids| ids.get(prefix))
-            .and_then(|entry| entry.get(SCOPE))
+            .and_then(|entry| entry.get(word(&PrefixKey::Scope)))
             .and_then(Value::as_str)
             .is_some_and(|scope| scope == feature)
     }
@@ -66,7 +76,6 @@ impl Scheme {
 }
 
 const IDS: &str = "ids";
-const SCOPE: &str = "scope";
 const ALIASES_FROM: &str = "aliases_from";
 const PATHS: &str = "paths";
 
@@ -155,7 +164,7 @@ pub fn emit_scheme<'p>(
     let feature = word(&SchemeScope::Feature);
     for prefix in &config.import.feature_prefixes {
         if let Some(Value::Table(entry)) = ids.get_mut(prefix) {
-            entry.insert(SCOPE.to_owned(), Value::String(feature.clone()));
+            entry.insert(word(&PrefixKey::Scope), Value::String(feature.clone()));
         }
     }
     if !ids.is_empty() {

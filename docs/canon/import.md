@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-import]
 owner: owner
-reviewed: 2026-10-04
+reviewed: 2026-10-22
 ---
 
 # Import: record model and rules
@@ -55,6 +55,7 @@ One `[lists] separators` list splits ID from title and title from text.
 
 - IDs in a `reference_paths` document or a `reference_headers` table are references, else definitions.
 - **Precedence**: an ID a document defines turns every record-position definition of it into a `reference` (`references.by_document`); a document-level reference demotes nothing.
+- **Home**, next (`[definitions] home`, per Latin prefix: globs over the source path): an ID a home document defines turns each record-position definition of it outside that home into a `reference` (`references.by_home`), whatever the path order; an ID no home document defines keeps its definitions.
 - A duplicate redefines an ID earlier in (path, line) order, per corpus (per document for `feature_prefixes`); two documents defining one ID → `duplicate_definitions`, the later. `unresolved`: a reference defined nowhere.
 
 ## IDs and tokens

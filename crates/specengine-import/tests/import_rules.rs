@@ -6,7 +6,10 @@
 //! the unclaimed counter over front-matter values, feature scope and
 //! emphasis (`docs/canon/import.md` "IDs and tokens"; AC-06), and the first
 //! definition of a duplicate in (path, line) order
-//! (`docs/canon/import.md` "Roles and precedence").
+//! (`docs/canon/import.md` "Roles and precedence"); the order of the home
+//! step of docs/features/import-homes.md among them (reference roles,
+//! document precedence, the home, duplicates; a document record never
+//! demoted by a home).
 //!
 //! Every corpus is written into a fresh temporary directory by the test; the
 //! convention is invented (prefixes `CRT`, `DEC`). Non-Latin characters are
@@ -511,4 +514,165 @@ fn a_quoted_scalar_after_a_tag_or_an_anchor_is_scanned_and_its_comment_is_not() 
         ]
     );
     assert_eq!(found.files_with_unclaimed(), 1);
+}
+
+// ------------------------------------------- docs/features/import-homes.md
+
+/// `CONFIG` with `ID` / `Text` record tables, `extra` `[definitions]`
+/// lines, a home for `DEC` (every document under `d/reg/`) and `tail`
+/// (another table, e.g. `[documents]`).
+fn homed(extra: &str, tail: &str) -> String {
+    format!(
+        "{CONFIG}[tables]\nid_header = '^ID$'\ntext_header = '^Text$'\n[definitions]\n{extra}\
+         home = {{ DEC = [\"d/reg/**\"] }}\n{tail}"
+    )
+}
+
+fn row_table(rows: &[(&str, &str)]) -> String {
+    let mut text = String::from("# T\n\n| ID | Text |\n|---|---|\n");
+    for (id, body) in rows {
+        text.push_str(&format!("| {id} | {body} |\n"));
+    }
+    text
+}
+
+/// (path, id, role) of every record, in record order.
+fn roles(found: &Import) -> Vec<(String, String, import::Role)> {
+    found
+        .records
+        .iter()
+        .map(|record| (record.path.clone(), record.id.clone(), record.role))
+        .collect()
+}
+
+fn duplicate_paths(found: &Import) -> Vec<(String, String)> {
+    found
+        .duplicates
+        .iter()
+        .map(|duplicate| (duplicate.path.clone(), duplicate.id.clone()))
+        .collect()
+}
+
+/// docs/features/import-homes.md "Rules and edge cases", the order of
+/// `settle`: the reference roles first (a home document under
+/// `reference_paths`, or a home table under `reference_headers`, defines
+/// nothing, so it demotes nothing), the home before the duplicates (a
+/// restatement sorting first is no duplicate), and inside the home the
+/// duplicates as today (the later by (path, line)).
+#[test]
+fn the_home_step_runs_after_the_reference_roles_and_before_the_duplicates() {
+    use import::Role::{Definition, Reference};
+    let documents = [
+        ("a.md", row_table(&[("DEC-0001", "Restated.")])),
+        (
+            "reg/r.md",
+            row_table(&[("DEC-0001", "The rule."), ("DEC-0002", "Two.")]),
+        ),
+        ("reg/s.md", row_table(&[("DEC-0002", "Two again.")])),
+    ];
+    let documents: Vec<(&str, &str)> = documents
+        .iter()
+        .map(|(path, text)| (*path, text.as_str()))
+        .collect();
+    let corpus = Corpus::with("home-order", &documents);
+
+    let found = corpus.import(&homed("", ""));
+    assert_eq!(
+        roles(&found),
+        [
+            ("d/a.md".into(), "DEC-0001".into(), Reference),
+            ("d/reg/r.md".into(), "DEC-0001".into(), Definition),
+            ("d/reg/r.md".into(), "DEC-0002".into(), Definition),
+            ("d/reg/s.md".into(), "DEC-0002".into(), Definition),
+        ]
+    );
+    assert_eq!(found.by_home, 1);
+    assert_eq!(
+        duplicate_paths(&found),
+        [("d/reg/s.md".to_owned(), "DEC-0002".to_owned())],
+        "inside the home, duplicates as today"
+    );
+
+    let found = corpus.import(&homed("reference_paths = [\"d/reg/r.md\"]\n", ""));
+    assert_eq!(found.by_home, 0, "a reference-path home defines nothing");
+    assert_eq!(
+        roles(&found)[0],
+        ("d/a.md".into(), "DEC-0001".into(), Definition)
+    );
+    assert_eq!(duplicate_paths(&found), Vec::<(String, String)>::new());
+
+    let cited = Corpus::with(
+        "home-order-headers",
+        &[
+            ("a.md", documents[0].1),
+            (
+                "reg/r.md",
+                "# T\n\n| ID | Text | Cited |\n|---|---|---|\n| DEC-0001 | The rule. | yes |\n",
+            ),
+        ],
+    );
+    let found = cited.import(&homed("reference_headers = ['^Cited$']\n", ""));
+    assert_eq!(
+        found.by_home, 0,
+        "a reference-header table in the home defines nothing"
+    );
+    assert_eq!(
+        roles(&found),
+        [
+            ("d/a.md".into(), "DEC-0001".into(), Definition),
+            ("d/reg/r.md".into(), "DEC-0001".into(), Reference),
+        ]
+    );
+}
+
+/// docs/features/import-homes.md "Rules and edge cases": the document
+/// precedence runs before the home (a document outside the home defining
+/// an ID demotes the home's row, `by_document`; the home then has no
+/// definition of it left and demotes nothing), and a home never demotes a
+/// `document` record: two documents defining one ID, one in the home,
+/// stay definitions and the later is a duplicate, as today.
+#[test]
+fn the_home_runs_after_the_document_precedence_and_never_demotes_a_document() {
+    use import::Role::{Definition, Reference};
+    let corpus = Corpus::with(
+        "home-documents",
+        &[
+            (
+                "doc-DEC-0003.md",
+                "# Three\n\nThe third rule, a document.\n",
+            ),
+            ("doc-DEC-0004.md", "# Four\n\nThe fourth rule, outside.\n"),
+            (
+                "reg/r.md",
+                row_table(&[("DEC-0003", "The third rule, a row.")]).as_str(),
+            ),
+            (
+                "reg/doc-DEC-0004.md",
+                "# Four\n\nThe fourth rule, at home.\n",
+            ),
+        ],
+    );
+    let found = corpus.import(&homed(
+        "",
+        "[documents]\nid_path = '^d/(?:reg/)?doc-(?P<id>[A-Z]{3}-[0-9]{4})\\.md$'\n",
+    ));
+    assert_eq!(
+        roles(&found),
+        [
+            ("d/doc-DEC-0003.md".into(), "DEC-0003".into(), Definition),
+            ("d/doc-DEC-0004.md".into(), "DEC-0004".into(), Definition),
+            (
+                "d/reg/doc-DEC-0004.md".into(),
+                "DEC-0004".into(),
+                Definition
+            ),
+            ("d/reg/r.md".into(), "DEC-0003".into(), Reference),
+        ]
+    );
+    assert_eq!(found.by_document, 1);
+    assert_eq!(found.by_home, 0);
+    assert_eq!(
+        duplicate_paths(&found),
+        [("d/reg/doc-DEC-0004.md".to_owned(), "DEC-0004".to_owned())]
+    );
 }

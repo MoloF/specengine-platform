@@ -45,7 +45,8 @@
   "references": {
     "total": 6,
     "unresolved": 1,
-    "by_document": 2
+    "by_document": 2,
+    "by_home": 0
   },
   "duplicate_definitions": 1,
   "rows_without_id": {

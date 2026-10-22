@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-import, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-22
 ---
 
 # Import layout: the emitter and the after-tree
@@ -14,7 +14,7 @@ reviewed: 2026-10-20
 
 ## Emission
 
-Definitions only; references and rows without an ID stay. A prefix's target is its `[layout] targets` entry, else `file` for a project prefix, `section` for a feature-scoped one.
+Definitions only; references (a home's demotions too: `docs/canon/import.md` "Roles and precedence") and rows without an ID stay. A prefix's target is its `[layout] targets` entry, else `file` for a project prefix, `section` for a feature-scoped one.
 
 - `file`: any form but a document → `<records>/<P>/<ID>.md`; later duplicates, in (path, line) order, `<ID>-2.md`, `-3`…
 - `section`: a row or item → a reshaped `{#ID}` section of its own document; a section stays in place.
@@ -26,9 +26,11 @@ Definitions only; references and rows without an ID stay. A prefix's target is i
 
 ## Record files
 
-`---`; `id`, `class` (`record_class`) plain; `title` (a titled item, a section); `aliases: ["<written>"]` if written ≠ `id`; the task key (bool); the fields in column order: an ID cell holding text beyond the ID (`id_cell`, key: its column header as written, else `col-N`), each other cell under its header's `key_map` target, else the header as written; a section's other heading attributes (bare → `true`); `---`, a blank line, `text` (a section's minus its heading). A section's title is its heading minus the ATX marker (closing run included) and exactly the `{…}` block the import read, both sides trimmed, joined by one space.
+`---`; `id`, `class` (`record_class`) plain; `title` (a titled item, a section); `aliases: ["<written>"]` if written ≠ `id`; the task key (bool); the fields in column order: an ID cell holding text beyond the ID (`id_cell`, key: its column header as written, else `col-N`), each other cell under its header's `key_map` target, else the header as written; a section's other heading attributes (bare → `true`); the inherited keys (below); `---`, a blank line, `text` (a section's minus its heading). A section's title is its heading minus the ATX marker (closing run included) and exactly the `{…}` block the import read, both sides trimmed, joined by one space.
 
 `- [x] **XQ-12: Short name**: body` → `docs/records/XQ/XQ-12.md`: `id: XQ-12`, `class: canon`, `title: "Short name"`, `done: true`; body `body`.
+
+**Inherited keys** (`[layout] inherit`: tree names, after `key_map`; only `file`-placed records): each key its source document's normalised header ("Headers") holds exactly once under that name and no field or kept attribute of the record holds (the record's own value wins), in `inherit` order, as that header writes the entry: its line, then the lines up to the next entry (continuation lines, comments), less the blank and column-0 comment lines ending them. So core types it as it types the source's. Nothing from a header carried verbatim; rule S never touches it.
 
 ## YAML
 
@@ -74,3 +76,4 @@ Keys read by the import's lenient reader:
 - Decoration after an ID with no letter or ASCII digit (`✓`, non-ASCII digits) is dropped silently; the residue test is the same.
 - The `.md` rename collision test is `to_lowercase`, not macOS case folding or Unicode normalisation; record paths are case-sensitive.
 - `read_sources` leaves `header_unparsed` and `header_not_mapping` `false`: without the caller's core reading nothing is carried verbatim.
+- An inherited entry that is a YAML alias (`*a`) whose anchor is not inherited breaks the record file's YAML: `header.unparseable` and `hashes.missing` show it, never silently.

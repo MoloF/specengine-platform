@@ -1,0 +1,118 @@
+{
+  "before": {
+    "definitions": 6,
+    "documents": 3,
+    "duplicates": 0,
+    "hyphenless": {
+      "definitions": 0,
+      "mentions": 0
+    }
+  },
+  "check": {
+    "baseline": {
+      "entries": 0,
+      "per_code": {}
+    },
+    "emitter_findings": 0,
+    "enforce": "clean",
+    "findings": {
+      "class-missing": {
+        "before": 1,
+        "emitter": 0,
+        "layout": 0,
+        "source": 0
+      },
+      "key-missing": {
+        "before": 4,
+        "emitter": 0,
+        "layout": 0,
+        "source": 0
+      },
+      "mention-dangling": {
+        "before": 7,
+        "emitter": 0,
+        "layout": 0,
+        "source": 0
+      },
+      "unknown-key": {
+        "before": 8,
+        "emitter": 0,
+        "layout": 0,
+        "source": 0
+      }
+    },
+    "observe": "clean",
+    "stale": 0
+  },
+  "code": {
+    "citations_to_moved": 0,
+    "moved_cited": 0
+  },
+  "dangling": {
+    "links": {
+      "after": 0,
+      "before": 0
+    },
+    "mentions": {
+      "after": 0,
+      "before": 7
+    }
+  },
+  "detail": {
+    "diagnostics": 0
+  },
+  "extents": {
+    "residue": 0,
+    "total": 7
+  },
+  "fields": {
+    "matched": 39,
+    "mismatched": 0
+  },
+  "hashes": {
+    "extra": 0,
+    "matched": 6,
+    "mismatched": 0,
+    "missing": 0
+  },
+  "header": {
+    "conflicts": 0,
+    "documents": 3,
+    "keys_dropped": 0,
+    "last_row_comment": 0,
+    "unparseable": 0
+  },
+  "index": {
+    "files": 9,
+    "links": 1,
+    "nodes": 9
+  },
+  "prose": {
+    "documents": 3,
+    "mismatched": 0
+  },
+  "reasons": {
+    "header_unparseable": 0,
+    "path_taken": 0,
+    "prefix_unknown": 0,
+    "reader_boundary": 0,
+    "section_fields": 0,
+    "slug": 0,
+    "unexplained": 0
+  },
+  "task_box": {
+    "carried": 0,
+    "dropped": 0
+  },
+  "titles": {
+    "matched": 0,
+    "mismatched": 0
+  },
+  "tree": {
+    "documents": 9,
+    "feature_documents": 0,
+    "moved": 0,
+    "record_files": 6,
+    "reshaped": 0
+  }
+}

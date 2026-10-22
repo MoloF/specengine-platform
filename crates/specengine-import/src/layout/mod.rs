@@ -840,6 +840,31 @@ fn document(
         }
     }
 
+    // The header first: its `[layout] inherit` values go into every record
+    // file of the document (`docs/features/import-homes.md`). It reports
+    // after the reshaped blocks' diagnostics, as before.
+    let document = in_place_document.map(|index| {
+        let record = plans[index].record;
+        (record.id.as_str(), record.written.as_str())
+    });
+    let document_line = in_place_document.map(|index| plans[index].record.line);
+    let normalised = header::normalise(
+        &header::HeaderPlan {
+            source: &source.path,
+            after,
+            text,
+            front: &front,
+            scan: &scan,
+            field_table: found.as_ref().map(|(index, _)| *index),
+            document,
+            document_line,
+            header_unparsed: source.header_unparsed,
+            header_not_mapping: source.header_not_mapping,
+        },
+        config,
+        diagnostics,
+    );
+
     let mut record_files = Vec::new();
     let heading_raw = |line: usize| {
         scan.lines
@@ -862,6 +887,7 @@ fn document(
                     .map(|heading| heading.attributes)
                     .unwrap_or_default(),
                 body,
+                inherited: &normalised.inherited,
             },
             config,
         );
@@ -885,6 +911,7 @@ fn document(
                 title: plan.record.title.clone(),
                 attributes: Vec::new(),
                 body: document_text(&plan.record.text),
+                inherited: &normalised.inherited,
             },
             config,
         );
@@ -898,27 +925,6 @@ fn document(
         }
     }
 
-    let document = in_place_document.map(|index| {
-        let record = plans[index].record;
-        (record.id.as_str(), record.written.as_str())
-    });
-    let document_line = in_place_document.map(|index| plans[index].record.line);
-    let normalised = header::normalise(
-        &header::HeaderPlan {
-            source: &source.path,
-            after,
-            text,
-            front: &front,
-            scan: &scan,
-            field_table: found.as_ref().map(|(index, _)| *index),
-            document,
-            document_line,
-            header_unparsed: source.header_unparsed,
-            header_not_mapping: source.header_not_mapping,
-        },
-        config,
-        diagnostics,
-    );
     let mut lines = normalised.lines;
     lines.extend(split.residue);
     let residue = if lines.is_empty() {

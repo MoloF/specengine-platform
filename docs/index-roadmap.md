@@ -13,7 +13,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 ## Specs
 
 - [docs/roadmap/RM-0001.md](roadmap/RM-0001.md) Live check: real tasks of each pilot through the full cycle · plugin, crates/specengine-cli · draft
-- [docs/roadmap/RM-0013.md](roadmap/RM-0013.md) Full migration of pilot A · crates/specengine-import · draft
+- [docs/roadmap/RM-0013.md](roadmap/RM-0013.md) SpecEngine replays pilot A alone · crates/specengine-import, crates/specengine-eval, fixtures · draft
 - [docs/roadmap/RM-0014.md](roadmap/RM-0014.md) Full migration of pilot B · crates/specengine-import · draft
 - [docs/roadmap/RM-0015.md](roadmap/RM-0015.md) A shared project linked from several projects · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0016.md](roadmap/RM-0016.md) Metrics and compaction · crates/specengine-cli · draft
@@ -35,3 +35,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0036.md](roadmap/RM-0036.md) impact-daemon: spec impact on the daemon and the graph's impact mode · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0037.md](roadmap/RM-0037.md) evidence-level: each node's evidence level, computed per read · crates/specengine-core, crates/specengine-cli, ui · draft
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
+- [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
+- [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft

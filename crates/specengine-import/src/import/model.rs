@@ -266,6 +266,10 @@ pub struct Import {
     /// Record-position definitions turned into references because a
     /// document defines their ID.
     pub by_document: usize,
+    /// Record-position definitions outside their prefix's home turned into
+    /// references because a home document defines their ID
+    /// (`docs/features/import-homes.md`).
+    pub by_home: usize,
     pub legacy: Legacy,
     /// ID-like tokens whose ID is defined (a feature-scoped one in the
     /// citing document).

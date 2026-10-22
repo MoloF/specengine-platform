@@ -45,6 +45,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/impact-since.md](features/impact-since.md) shipped
 - [docs/features/impact.md](features/impact.md) shipped
 - [docs/features/import-gaps.md](features/import-gaps.md) shipped
+- [docs/features/import-homes.md](features/import-homes.md) shipped
 - [docs/features/import-layout.md](features/import-layout.md) shipped
 - [docs/features/import-records.md](features/import-records.md) shipped
 - [docs/features/index-compaction.md](features/index-compaction.md) shipped

@@ -1,0 +1,12 @@
+# The "before" scheme of the import-layout/three fixture: the bench log's
+# own `specengine.toml`, read by `specengine-eval layout --scheme`.
+[project]
+name = "bench"
+slug = "bench"
+
+[paths]
+roots = ["bench"]
+
+[ids]
+XQ = { kind = "requirement", width = 2 }
+YR = { kind = "rule",        width = 2 }

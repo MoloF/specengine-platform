@@ -6,6 +6,12 @@
 //! in a fixture). The genre test of AC-10 is `import_genre.rs`; the tamper
 //! tests are the `#[cfg(test)]` module of `crates/specengine-eval/src/layout.rs`.
 //!
+//! docs/features/import-homes.md (slice 1 of RM-0013) on the third
+//! invented convention `fixtures/import-layout/three` (a bench log): a home
+//! per prefix (AC-01), the refusals per subcommand (AC-02), inherited
+//! header keys (AC-03; its on-disk tamper is `tamper_tests` in
+//! `src/layout.rs`), and AC-04's regression: the section of that name below.
+//!
 //! Nothing here names a pilot; every run writes only under a scratch `--out`.
 
 mod import_support;
@@ -4947,6 +4953,1099 @@ fn p3_a_repeated_key_whose_key_2_is_taken_is_carried_as_key_3() {
     assert_eq!(run.count("header/conflicts"), 1, "{}", run.result());
     assert_eq!(run.count("fields/mismatched"), 0, "{}", run.result());
     assert_round_trip_clean(&run);
+}
+
+// ------------------------------------ docs/features/import-homes.md (slice 1)
+
+/// The bench-log convention of docs/features/import-homes.md: the probes
+/// register is XQ's home; record files inherit `rev`, `scope`, `owner`,
+/// `reviewed` from a YAML block (probes, notes) or a field table (gauges).
+const THREE: &str = "import-layout/three";
+const THREE_NOTES: &str = "bench/notes.md";
+const THREE_PROBES: &str = "bench/probes.md";
+const THREE_GAUGES: &str = "bench/gauges.md";
+const THREE_HOME_LINE: &str = "home = { XQ = [\"bench/probes.md\"] }\n";
+const THREE_INHERIT_LINE: &str = "inherit = [\"rev\", \"scope\", \"owner\", \"reviewed\"]\n";
+/// The inherited keys, in `inherit` order.
+const THREE_INHERIT: [&str; 4] = ["rev", "scope", "owner", "reviewed"];
+/// The six record files and their source documents.
+const THREE_RECORDS: [(&str, &str); 6] = [
+    ("bench/units/XQ/XQ-11.md", THREE_PROBES),
+    ("bench/units/XQ/XQ-12.md", THREE_PROBES),
+    ("bench/units/XQ/XQ-90.md", THREE_NOTES),
+    ("bench/units/YR/YR-01.md", THREE_GAUGES),
+    ("bench/units/YR/YR-02.md", THREE_GAUGES),
+    ("bench/units/YR/YR-03.md", THREE_GAUGES),
+];
+/// The notes' restatement of XQ-11, a lead-in at line 13.
+const THREE_RESTATEMENT: &str = "- **XQ-11**: The probe touches the plate first.";
+
+/// A tree file split at its front-matter: the lines between the two `---`
+/// and the text after the closing one.
+fn split_front_matter(text: &str) -> (Vec<String>, String) {
+    let rest = text
+        .strip_prefix("---\n")
+        .unwrap_or_else(|| panic!("no front-matter:\n{text}"));
+    let end = rest
+        .find("\n---\n")
+        .unwrap_or_else(|| panic!("front-matter not closed:\n{text}"));
+    let lines = rest[..end].lines().map(str::to_owned).collect();
+    (lines, rest[end + "\n---\n".len()..].to_owned())
+}
+
+/// Front-matter lines grouped per top-level key: (key, its lines), a
+/// continuation line (opening with a blank) with the key above it.
+fn header_entries(lines: &[String]) -> Vec<(String, Vec<String>)> {
+    let mut entries: Vec<(String, Vec<String>)> = Vec::new();
+    for line in lines {
+        if line.starts_with(' ') || line.starts_with('\t') {
+            entries
+                .last_mut()
+                .unwrap_or_else(|| panic!("a continuation first: {lines:?}"))
+                .1
+                .push(line.clone());
+        } else {
+            let key = line.split(':').next().unwrap_or_default().to_owned();
+            entries.push((key, vec![line.clone()]));
+        }
+    }
+    entries
+}
+
+fn keys_of(entries: &[(String, Vec<String>)]) -> Vec<&str> {
+    entries.iter().map(|(key, _)| key.as_str()).collect()
+}
+
+/// A scratch copy of `three` with each of `lines` cut from its census
+/// config.
+fn three_without(scratch: &Scratch, as_name: &str, lines: &[&str]) -> PathBuf {
+    let corpus = copy_of(THREE, scratch, as_name);
+    for line in lines {
+        edit(&corpus.join("census.toml"), line, "");
+    }
+    corpus
+}
+
+/// The `headers.json` `field_values` entries carrying `record` (the
+/// inherited values), as (record, key, entry).
+fn inherited_values(run: &LayoutRun) -> Vec<(String, String, Value)> {
+    run.file("headers.json")["field_values"]
+        .as_array()
+        .expect("headers.json field_values")
+        .iter()
+        .filter(|value| value.get("record").is_some_and(|record| !record.is_null()))
+        .map(|value| {
+            (
+                value["record"]
+                    .as_str()
+                    .expect("record is a path")
+                    .to_owned(),
+                value["key"].as_str().expect("key").to_owned(),
+                value.clone(),
+            )
+        })
+        .collect()
+}
+
+/// The checked tree's findings with `code`, any path.
+fn findings_with(run: &LayoutRun, code: &str) -> Vec<Value> {
+    run.tree_findings()
+        .into_iter()
+        .filter(|finding| finding["code"] == code)
+        .collect()
+}
+
+/// AC-01 / AC-03 base: `layout` on `three` prints its `expected.json`
+/// (timings aside); every definition matches by hash; stdout gains no key
+/// (no `references`, docs/features/import-homes.md "Output") and names no
+/// ID, path or header value of the corpus.
+#[test]
+fn homes_layout_on_three_matches_expected_json() {
+    let scratch = Scratch::new("homes-expected");
+    let run = LayoutRun::of(THREE, &scratch);
+    assert_eq!(
+        without_ms(run.result()),
+        expected(THREE),
+        "result minus *_ms differs from fixtures/import-layout/three/expected.json"
+    );
+    assert!(run.result().get("references").is_none());
+    let stdout = run.stdout();
+    for corpus_string in ["XQ-", "YR-", "bench/", "crew-", "probes", "gauges"] {
+        assert!(
+            !stdout.contains(corpus_string),
+            "{corpus_string:?} on stdout"
+        );
+    }
+    assert_eq!(run.count("hashes/matched"), run.count("before/definitions"));
+    assert!(run.tree().join("specengine.toml").is_file());
+    assert!(run.tree().join(".spec-debt.toml").is_file());
+    for detail in DETAIL_FILES {
+        assert!(run.detail.join(detail).is_file(), "{detail}");
+    }
+    assert_round_trip_clean(&run);
+}
+
+/// AC-01 (M1 home ignored): XQ-11's record file holds the register row's
+/// text, not the notes' earlier restatement; no `XQ-11-2.md` (no record
+/// file `-2` at all) and no `id-taken`; the emission maps XQ-11 from the
+/// register's line.
+#[test]
+fn homes_ac01_the_home_row_is_the_body_and_no_duplicate_file_is_written() {
+    let scratch = Scratch::new("homes-ac01-body");
+    let run = LayoutRun::of(THREE, &scratch);
+    let (header, body) = split_front_matter(&run.tree_text("bench/units/XQ/XQ-11.md"));
+    assert_eq!(header[0], "id: XQ-11");
+    assert_eq!(
+        body, "\nThe probe touches the plate before every reading.\n",
+        "XQ-11's body is the home row's text"
+    );
+    let duplicates: Vec<String> = files_under(&run.tree())
+        .into_iter()
+        .filter(|path| path.ends_with("-2.md"))
+        .collect();
+    assert_eq!(duplicates, Vec::<String>::new(), "no later-duplicate file");
+    assert!(
+        run.result()["check"]["findings"].get("id-taken").is_none(),
+        "no id-taken in check.findings: {}",
+        run.result()["check"]
+    );
+    assert_eq!(findings_with(&run, "id-taken"), Vec::<Value>::new());
+    let entry = run.definition("XQ-11", 15);
+    assert_eq!(entry["path"], THREE_PROBES);
+    assert_eq!(entry["after"], "bench/units/XQ/XQ-11.md");
+    assert_eq!(entry["place"], "file");
+    assert_eq!(run.count("before/duplicates"), 0);
+    assert_eq!(run.count("hashes/matched"), 6);
+    assert_eq!(run.count("hashes/matched"), run.count("before/definitions"));
+}
+
+/// AC-01 (M3 the restatement still cut out): the notes' lead-in of XQ-11
+/// stays in the notes' residue byte for byte, a reference with no
+/// emission entry; the residue is the source body less XQ-90's item only;
+/// the prose check and the extents see nothing amiss, and the restatement
+/// resolves to the record file (no dangling mention after).
+#[test]
+fn homes_ac01_the_restatement_stays_in_its_residue_as_a_reference() {
+    let scratch = Scratch::new("homes-ac01-place");
+    let run = LayoutRun::of(THREE, &scratch);
+    let (_, body) = split_front_matter(&run.tree_text(THREE_NOTES));
+    assert_eq!(
+        body,
+        format!(
+            "\n# Notes\n\nWorking notes of the bench, written before the registers.\n\n\
+             {THREE_RESTATEMENT}\n\nThe notes close with no further record.\n"
+        )
+    );
+    let mapped: Vec<Value> = run
+        .definitions()
+        .into_iter()
+        .filter(|entry| entry["path"] == THREE_NOTES && entry["id"] == "XQ-11")
+        .collect();
+    assert_eq!(mapped, Vec::<Value>::new(), "a reference is not emitted");
+    assert_eq!(run.count("prose/mismatched"), 0);
+    assert_eq!(run.count("extents/residue"), 0);
+    assert_eq!(
+        run.count("extents/total"),
+        7,
+        "six records and one field table"
+    );
+    assert_eq!(run.count("dangling/mentions/after"), 0);
+    assert_eq!(
+        findings_on(&run, "mention-dangling", THREE_NOTES),
+        Vec::<Value>::new()
+    );
+}
+
+/// AC-01 (M2 a home demotes an ID it does not define): XQ-90, defined only
+/// by the notes' lead-in, keeps its record file, mapped from that line.
+#[test]
+fn homes_ac01_an_id_only_the_restating_document_defines_keeps_its_file() {
+    let scratch = Scratch::new("homes-ac01-xq90");
+    let run = LayoutRun::of(THREE, &scratch);
+    let entry = run.definition("XQ-90", 14);
+    assert_eq!(entry["path"], THREE_NOTES);
+    assert_eq!(entry["after"], "bench/units/XQ/XQ-90.md");
+    assert_eq!(entry["place"], "file");
+    let (header, body) = split_front_matter(&run.tree_text("bench/units/XQ/XQ-90.md"));
+    assert_eq!(header[0], "id: XQ-90");
+    assert_eq!(body, "\nA probe the notes alone define.\n");
+}
+
+/// AC-01 (M4 `by_home` always 0): `import` on `three` counts the demoted
+/// restatement in `references.by_home`, within `references.total`;
+/// `records.json` shows it `role: reference`, the home row and XQ-90
+/// definitions; without the home the same corpus has the duplicate and
+/// `by_home` 0.
+#[test]
+fn homes_ac01_import_counts_the_demoted_restatement_by_home() {
+    let scratch = Scratch::new("homes-ac01-import");
+    let run = ImportRun::new(&fixture_dir(THREE), &scratch, "with", &[]);
+    assert_eq!(run.count("references/by_home"), 1, "{}", run.result);
+    assert_eq!(run.count("references/by_document"), 0);
+    assert_eq!(run.count("references/unresolved"), 0);
+    assert!(run.count("references/by_home") <= run.count("references/total"));
+    assert_eq!(run.count("definitions"), 6);
+    assert_eq!(run.count("duplicate_definitions"), 0);
+    let out = scratch.join("stderr");
+    let output = eval()
+        .args([
+            "import",
+            "--pilot",
+            fixture_dir(THREE).to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+        ])
+        .output()
+        .expect("import runs");
+    assert!(output.status.success(), "{}", stderr(&output));
+    assert!(
+        stderr(&output).contains(", 1 by a home)"),
+        "stderr adds `, <n> by a home`: {}",
+        stderr(&output)
+    );
+    let role = |path: &str, line: u64| -> Value {
+        let hits: Vec<Value> = run
+            .records()
+            .into_iter()
+            .filter(|record| record["path"] == path && record["line"] == line)
+            .collect();
+        assert_eq!(hits.len(), 1, "{path}:{line}: {hits:?}");
+        hits[0]["role"].clone()
+    };
+    assert_eq!(role(THREE_NOTES, 13), "reference");
+    assert_eq!(role(THREE_PROBES, 15), "definition");
+    assert_eq!(role(THREE_NOTES, 14), "definition");
+
+    let plain = three_without(&scratch, "plain", &[THREE_HOME_LINE]);
+    let without = ImportRun::new(&plain, &scratch, "without", &[]);
+    assert_eq!(without.count("references/by_home"), 0);
+    assert_eq!(without.count("duplicate_definitions"), 1);
+    assert_eq!(without.count("definitions"), 7);
+}
+
+/// The notes of `three` with a `{#XQ-12}` section appended: XQ-12 is
+/// defined at home, so the section is demoted; the layout run on it.
+fn three_with_a_demoted_section(scratch: &Scratch) -> (LayoutRun, &'static str) {
+    let corpus = copy_of(THREE, scratch, "corpus");
+    let section = "## Wipe {#XQ-12}\n\nThe probe is wiped.\n";
+    edit(
+        &corpus.join(THREE_NOTES),
+        "The notes close with no further record.\n",
+        &format!("The notes close with no further record.\n\n{section}"),
+    );
+    (LayoutRun::new(&corpus, scratch, "out", &[]), section)
+}
+
+/// docs/features/import-homes.md "Rules and edge cases": a demoted `{#ID}`
+/// section stays in place byte for byte and core still reads it: one
+/// `id-taken`, the source's (verifier "Attribution" rule 3); no `-2.md`,
+/// nothing mismatched or unexplained, no emitter finding.
+#[test]
+fn homes_a_demoted_section_stays_in_place_as_the_source_s_id_taken() {
+    let scratch = Scratch::new("homes-section");
+    let (run, section) = three_with_a_demoted_section(&scratch);
+    assert!(
+        run.tree_text(THREE_NOTES)
+            .ends_with(&format!("\n\n{section}"))
+    );
+    let taken = findings_with(&run, "id-taken");
+    assert_eq!(taken.len(), 1, "{taken:?}");
+    assert_eq!(taken[0]["cause"], "source", "{taken:?}");
+    assert_eq!(run.count("check/findings/id-taken/source"), 1);
+    assert_eq!(run.count("hashes/mismatched"), 0);
+    assert_eq!(run.count("reasons/unexplained"), 0);
+    assert_eq!(run.count("check/emitter_findings"), 0);
+    assert!(!run.tree().join("bench/units/XQ/XQ-12-2.md").exists());
+}
+
+/// docs/features/import-homes.md "Rules and edge cases" (the owner's
+/// decision of 2026-10-22): a home-demoted `{#ID}` section is excused in
+/// `hashes.extra`, as a `reference_paths` section is in the shipped
+/// verifier, and counts only in `id-taken` (source, 1).
+#[test]
+fn homes_a_demoted_section_is_excused_in_hashes_extra_and_counts_in_id_taken() {
+    let scratch = Scratch::new("homes-section-extra");
+    let (run, _) = three_with_a_demoted_section(&scratch);
+    assert_eq!(run.count("hashes/extra"), 0, "{}", run.result()["hashes"]);
+    assert_eq!(run.count("check/findings/id-taken/source"), 1);
+    assert_eq!(findings_with(&run, "id-taken").len(), 1);
+}
+
+/// One refusal of docs/features/import-homes.md "Data" (its config refusal
+/// table): the census config text, the 1-based line of the entry and the
+/// message after `<config>:<line>: ` (`None`: the TOML reader's own).
+struct HomeRefusal {
+    what: &'static str,
+    text: String,
+    line: usize,
+    message: Option<String>,
+}
+
+fn line_holding(text: &str, needle: &str) -> usize {
+    text.lines()
+        .position(|line| line.contains(needle))
+        .unwrap_or_else(|| panic!("{needle:?} not in:\n{text}"))
+        + 1
+}
+
+/// Every row of the spec's config refusal table, on `three`'s config.
+fn home_refusals() -> Vec<HomeRefusal> {
+    let base = fs::read_to_string(fixture_config(THREE)).unwrap();
+    let home = |line: &str| replaced(&base, THREE_HOME_LINE, line);
+    let inherit = |line: &str| replaced(&base, THREE_INHERIT_LINE, line);
+    let at = |what, text: String, needle: &str, message: Option<&str>| {
+        let line = line_holding(&text, needle);
+        HomeRefusal {
+            what,
+            text,
+            line,
+            message: message.map(str::to_owned),
+        }
+    };
+    let legacy = replaced(
+        &base,
+        "[tables]\n",
+        "[ids.legacy]\n\"OLD\" = \"XQ\"\n[tables]\n",
+    );
+    let legacy = replaced(
+        &legacy,
+        THREE_HOME_LINE,
+        "home = { OLD = [\"bench/probes.md\"] }\n",
+    );
+    let feature = replaced(
+        &base,
+        "[tables]\n",
+        "feature_prefixes = [\"ZK\"]\n[tables]\n",
+    );
+    let feature = replaced(
+        &feature,
+        THREE_HOME_LINE,
+        "[definitions.home]\nXQ = [\"bench/probes.md\"]\nZK = [\"bench/notes.md\"]\n",
+    );
+    let task = replaced(
+        &base,
+        THREE_INHERIT_LINE,
+        "task_box_key = \"checked\"\ninherit = [\"rev\", \"checked\"]\n",
+    );
+    vec![
+        at(
+            "home key not a Latin prefix",
+            home("home = { x1 = [\"bench/probes.md\"] }\n"),
+            "home = ",
+            Some(
+                "`definitions.home` key `x1` is not a Latin prefix (an ASCII capital, then ASCII capitals or digits)",
+            ),
+        ),
+        at(
+            "home key non-Latin (escaped Cyrillic)",
+            home("home = { \"\\u0416\\u0414\" = [\"bench/probes.md\"] }\n"),
+            "home = ",
+            Some(
+                "`definitions.home` key `\u{0416}\u{0414}` is not a Latin prefix (an ASCII capital, then ASCII capitals or digits)",
+            ),
+        ),
+        at(
+            "home key an ids.legacy key",
+            legacy,
+            "home = ",
+            Some(
+                "`definitions.home` key `OLD` is an `ids.legacy` prefix as written: its IDs take the prefix `XQ`",
+            ),
+        ),
+        at(
+            "home on a feature-scoped prefix",
+            feature,
+            "ZK = ",
+            Some(
+                "`definitions.home.ZK` names a home, but `ZK` is one of `ids.feature_prefixes`: its IDs are defined per feature document",
+            ),
+        ),
+        at(
+            "home with an empty list",
+            home("home = { XQ = [] }\n"),
+            "home = ",
+            Some("`definitions.home.XQ` is empty"),
+        ),
+        at(
+            "home with a blank glob",
+            home("home = { XQ = [\"bench/probes.md\", \" \"] }\n"),
+            "home = ",
+            Some("`definitions.home.XQ` holds an empty entry"),
+        ),
+        at(
+            "home with a blank glob on its own line",
+            home("[definitions.home]\nXQ = [\n  \"bench/probes.md\",\n  \"\",\n]\n"),
+            "  \"\",",
+            Some("`definitions.home.XQ` holds an empty entry"),
+        ),
+        at(
+            "home of the wrong type",
+            home("home = [\"bench/probes.md\"]\n"),
+            "home = ",
+            None,
+        ),
+        at(
+            "inherit with a blank entry",
+            inherit("inherit = [\"rev\", \"\"]\n"),
+            "inherit = ",
+            Some("`layout.inherit` holds an empty entry"),
+        ),
+        at(
+            "inherit entry with blanks around",
+            inherit("inherit = [\"rev\", \" scope\"]\n"),
+            "inherit = ",
+            Some("`layout.inherit` entry ` scope` has blanks around it"),
+        ),
+        at(
+            "inherit of a key the layout writes: id",
+            inherit("inherit = [\"id\"]\n"),
+            "inherit = ",
+            Some("`layout.inherit` entry `id` is a key the layout writes itself"),
+        ),
+        at(
+            "inherit of a key the layout writes: class",
+            inherit("inherit = [\"rev\", \"class\"]\n"),
+            "inherit = ",
+            Some("`layout.inherit` entry `class` is a key the layout writes itself"),
+        ),
+        at(
+            "inherit of a key the layout writes: title",
+            inherit("inherit = [\"title\"]\n"),
+            "inherit = ",
+            Some("`layout.inherit` entry `title` is a key the layout writes itself"),
+        ),
+        at(
+            "inherit of a key the layout writes: aliases",
+            inherit("inherit = [\"aliases\"]\n"),
+            "inherit = ",
+            Some("`layout.inherit` entry `aliases` is a key the layout writes itself"),
+        ),
+        at(
+            "inherit of the task key",
+            task,
+            "inherit = ",
+            Some("`layout.inherit` entry `checked` is `layout.task_box_key`"),
+        ),
+        at(
+            "inherit entry repeated on its own line",
+            inherit("inherit = [\n  \"scope\",\n  \"rev\",\n  \"scope\", # again\n]\n"),
+            "# again",
+            Some("`layout.inherit` entry `scope` is repeated"),
+        ),
+        at(
+            "inherit of the wrong type",
+            inherit("inherit = \"rev\"\n"),
+            "inherit = ",
+            None,
+        ),
+    ]
+}
+
+/// AC-02 (M5 a feature-scoped home accepted): each row of the config
+/// refusal table exits 2 on `census`, `import` and `layout` alike, stderr
+/// `<config>:<line>: <message>` at the entry's line, stdout empty,
+/// `--out` never created, no panic.
+#[test]
+fn homes_ac02_each_refusal_exits_2_at_its_line_on_census_import_and_layout() {
+    let scratch = Scratch::new("homes-ac02");
+    let pilot = fixture_dir(THREE);
+    let mut failures = Vec::new();
+    for (index, refusal) in home_refusals().into_iter().enumerate() {
+        let config = scratch.join(&format!("bad-{index}.toml"));
+        fs::write(&config, &refusal.text).unwrap();
+        let config_arg = config.to_str().unwrap();
+        let wanted = match &refusal.message {
+            Some(message) => format!("{config_arg}:{}: {message}", refusal.line),
+            None => format!("{config_arg}:{}:", refusal.line),
+        };
+        for measurement in ["census", "import", "layout"] {
+            let out = scratch.join(&format!("out-{index}-{measurement}"));
+            let mut args = vec![
+                measurement,
+                "--pilot",
+                pilot.to_str().unwrap(),
+                "--out",
+                out.to_str().unwrap(),
+                "--config",
+                config_arg,
+            ];
+            if measurement == "layout" {
+                args.extend(["--today", TODAY]);
+            }
+            let output = run(&args);
+            let stderr = stderr(&output);
+            let at_line = match &refusal.message {
+                Some(_) => stderr.lines().any(|line| line.ends_with(&wanted)),
+                None => stderr.contains(&wanted),
+            };
+            if output.status.code() != Some(2)
+                || !at_line
+                || out.exists()
+                || !output.stdout.is_empty()
+                || stderr.contains("panicked")
+            {
+                failures.push(format!(
+                    "{measurement} / {}: exit {:?}, want {wanted:?}; stderr: {}",
+                    refusal.what,
+                    output.status.code(),
+                    stderr.trim()
+                ));
+            }
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "expected exit 2 at <config>:<line>: <message>, nothing written:\n{}",
+        failures.join("\n")
+    );
+}
+
+/// AC-02, not vacuous: `three`'s own config, the table form of its home,
+/// an empty home table and an empty `inherit` are accepted by all three.
+#[test]
+fn homes_ac02_valid_homes_and_inherits_are_accepted_by_census_import_and_layout() {
+    let scratch = Scratch::new("homes-ac02-valid");
+    let base = fs::read_to_string(fixture_config(THREE)).unwrap();
+    let texts = [
+        base.clone(),
+        replaced(
+            &base,
+            THREE_HOME_LINE,
+            "[definitions.home]\nXQ = [\"bench/probes.md\", \"**/probes.md\"]\nYR = [\"bench/g*.md\"]\n",
+        ),
+        replaced(&base, THREE_HOME_LINE, "home = {}\n"),
+        replaced(&base, THREE_INHERIT_LINE, "inherit = []\n"),
+    ];
+    for (index, text) in texts.iter().enumerate() {
+        let config = scratch.join(&format!("good-{index}.toml"));
+        fs::write(&config, text).unwrap();
+        for measurement in ["census", "import", "layout"] {
+            let out = scratch.join(&format!("out-{index}-{measurement}"));
+            let mut extra = vec!["--config", config.to_str().unwrap()];
+            if measurement == "layout" {
+                extra.extend(["--today", TODAY]);
+            }
+            let envelope = measure(measurement, &fixture_dir(THREE), &out, &extra);
+            assert_eq!(envelope["measurement"], measurement, "{index}");
+        }
+    }
+}
+
+/// AC-03 (M6 values from the first document): each record file ends its
+/// front-matter with its own source document's normalised header entries
+/// for the `inherit` keys, in `inherit` order, byte for byte as that
+/// document's residue writes them (a YAML block: renamed, the comment
+/// kept; a field table: through "YAML", quoted, the list retyped), a key
+/// the record holds itself left out; the body follows unchanged.
+#[test]
+fn homes_ac03_each_record_file_inherits_its_own_source_s_header_entries() {
+    let scratch = Scratch::new("homes-ac03-values");
+    let run = LayoutRun::of(THREE, &scratch);
+    for (record, source) in THREE_RECORDS {
+        let (record_lines, _) = split_front_matter(&run.tree_text(record));
+        let (source_lines, _) = split_front_matter(&run.tree_text(source));
+        let record_entries = header_entries(&record_lines);
+        let source_entries = header_entries(&source_lines);
+        let first_inherited = record_entries
+            .iter()
+            .position(|(key, _)| THREE_INHERIT.contains(&key.as_str()) && key != "owner")
+            .unwrap_or_else(|| panic!("{record}: no inherited entry: {record_lines:?}"));
+        let own: Vec<&str> = keys_of(&record_entries[..first_inherited]);
+        let wanted: Vec<(String, Vec<String>)> = THREE_INHERIT
+            .iter()
+            .filter(|key| !own.contains(key))
+            .filter_map(|key| {
+                source_entries
+                    .iter()
+                    .find(|(source_key, _)| source_key == key)
+                    .cloned()
+            })
+            .collect();
+        assert_eq!(
+            record_entries[first_inherited..].to_vec(),
+            wanted,
+            "{record}: the inherited entries are {source}'s, in inherit order"
+        );
+    }
+    // The fixture's literal outcome, one file per source form.
+    assert_eq!(
+        run.tree_text("bench/units/XQ/XQ-11.md"),
+        "---\nid: XQ-11\nclass: canon\nrev: 3\nscope: [probes, plates] # where the probes work\n\
+         owner: crew-a\nreviewed: \"2026-09-01\"\n---\n\n\
+         The probe touches the plate before every reading.\n"
+    );
+    assert_eq!(
+        run.tree_text("bench/units/XQ/XQ-90.md"),
+        "---\nid: XQ-90\nclass: canon\nrev: 2\nscope: [notes]\nowner: crew-n\n\
+         reviewed: \"2026-08-30\"\n---\n\nA probe the notes alone define.\n"
+    );
+    assert_eq!(
+        run.tree_text("bench/units/YR/YR-01.md"),
+        "---\nid: YR-01\nclass: canon\nrev: 5\nscope: [\"gauges\"]\nowner: \"crew-b\"\n\
+         reviewed: \"2026-09-15\"\n---\n\nA gauge reads zero before a run.\n"
+    );
+}
+
+/// AC-03 (M8 inherit overrides a cell): YR-02's own `Holder` cell, carried
+/// under `owner`, keeps its value; `owner` is written once and the
+/// inherited keys the row lacks follow it; no header conflict.
+#[test]
+fn homes_ac03_a_row_s_own_cell_keeps_its_value_under_an_inherited_key() {
+    let scratch = Scratch::new("homes-ac03-cell");
+    let run = LayoutRun::of(THREE, &scratch);
+    assert_eq!(
+        run.tree_text("bench/units/YR/YR-02.md"),
+        "---\nid: YR-02\nclass: canon\nowner: \"crew-c\"\nrev: 5\nscope: [\"gauges\"]\n\
+         reviewed: \"2026-09-15\"\n---\n\nA gauge is read twice per run.\n"
+    );
+    let inherited: Vec<String> = inherited_values(&run)
+        .into_iter()
+        .filter(|(record, _, _)| record == "bench/units/YR/YR-02.md")
+        .map(|(_, key, _)| key)
+        .collect();
+    assert_eq!(
+        inherited,
+        ["rev", "scope", "reviewed"],
+        "the cell is no inherited value"
+    );
+    assert_eq!(run.count("header/conflicts"), 0);
+}
+
+/// AC-03: typed as core reads the source's: no `frontmatter-type` and no
+/// `key-missing` on any record file (`findings.json`), the class contract
+/// met where the source meets it; every inherited value compared and
+/// matched, `record` present on exactly those `headers.json` entries, each
+/// naming its source's path and the line of its source entry.
+#[test]
+fn homes_ac03_inherited_values_are_typed_as_core_reads_the_source_s_and_all_match() {
+    let scratch = Scratch::new("homes-ac03-typed");
+    let run = LayoutRun::of(THREE, &scratch);
+    assert_eq!(findings_with(&run, "frontmatter-type"), Vec::<Value>::new());
+    for (record, _) in THREE_RECORDS {
+        assert_eq!(
+            findings_on(&run, "key-missing", record),
+            Vec::<Value>::new(),
+            "{record}"
+        );
+    }
+    assert_eq!(run.count("check/findings/key-missing/source"), 0);
+    let inherited = inherited_values(&run);
+    assert_eq!(
+        inherited.len(),
+        23,
+        "6 files x 4 keys, less YR-02's own owner"
+    );
+    for (record, key, entry) in &inherited {
+        let source = THREE_RECORDS
+            .iter()
+            .find(|(path, _)| path == record)
+            .unwrap_or_else(|| panic!("{record} is no record file"))
+            .1;
+        assert_eq!(entry["path"], source, "{record} {key}: {entry}");
+        assert_eq!(entry["key"], key.as_str());
+        assert_eq!(entry["matched"], true, "{record} {key}: {entry}");
+        assert_eq!(entry["expected"], entry["read"], "{record} {key}: {entry}");
+        let line = entry["line"].as_u64().expect("a source line") as usize;
+        assert!(line >= 1, "{entry}");
+    }
+    let rev_lines: Vec<u64> = inherited
+        .iter()
+        .filter(|(record, key, _)| record == "bench/units/XQ/XQ-11.md" && key == "rev")
+        .map(|(_, _, entry)| entry["line"].as_u64().unwrap())
+        .collect();
+    assert_eq!(rev_lines, [5], "probes' `Revision: 3` is its line 5");
+    // "Output in path, line, source order": the records by their source's
+    // (path, line), each record's values in `inherit` order.
+    let mut order: Vec<(String, Vec<String>)> = Vec::new();
+    for (record, key, _) in &inherited {
+        match order.last_mut() {
+            Some((last, keys)) if last == record => keys.push(key.clone()),
+            _ => order.push((record.clone(), vec![key.clone()])),
+        }
+    }
+    let records: Vec<&str> = order.iter().map(|(record, _)| record.as_str()).collect();
+    assert_eq!(
+        records,
+        [
+            "bench/units/YR/YR-01.md",
+            "bench/units/YR/YR-03.md",
+            "bench/units/YR/YR-02.md",
+            "bench/units/XQ/XQ-90.md",
+            "bench/units/XQ/XQ-11.md",
+            "bench/units/XQ/XQ-12.md",
+        ]
+    );
+    for (record, keys) in &order {
+        let wanted: Vec<&str> = THREE_INHERIT
+            .iter()
+            .copied()
+            .filter(|key| !(record.ends_with("YR-02.md") && *key == "owner"))
+            .collect();
+        assert_eq!(keys, &wanted, "{record}");
+    }
+    assert_eq!(run.count("fields/mismatched"), 0);
+}
+
+/// AC-03 (M7 inherited keys never compared): the inherited values are
+/// what `fields.matched` gains over the same corpus without `inherit`
+/// (23); without it the record files hold none of those keys and miss
+/// their class contract's `owner` and `reviewed` (11 source
+/// `key-missing`, the gap `inherit` closes).
+#[test]
+fn homes_ac03_inherited_values_count_in_fields_matched() {
+    let scratch = Scratch::new("homes-ac03-count");
+    let with = LayoutRun::of(THREE, &scratch);
+    let plain = three_without(&scratch, "plain", &[THREE_INHERIT_LINE]);
+    let without = LayoutRun::new(&plain, &scratch, "without", &[]);
+    assert_eq!(
+        with.count("fields/matched"),
+        without.count("fields/matched") + 23,
+        "with {} / without {}",
+        with.result()["fields"],
+        without.result()["fields"]
+    );
+    assert_eq!(with.count("fields/matched"), 39);
+    assert_eq!(without.count("fields/mismatched"), 0);
+    assert_eq!(inherited_values(&without), Vec::new());
+    assert_eq!(without.count("check/findings/key-missing/source"), 11);
+    let (lines, _) = split_front_matter(&without.tree_text("bench/units/XQ/XQ-11.md"));
+    assert_eq!(lines, ["id: XQ-11", "class: canon"]);
+}
+
+/// docs/features/import-homes.md "Rules and edge cases", not inherited: a
+/// key the source header lacks (notes without `Vetted`: XQ-90 has no
+/// `reviewed`, and its `key-missing` is the source's, rule 4); anything
+/// from a header core cannot parse (carried verbatim: none of the keys).
+#[test]
+fn homes_ac03_a_key_the_source_lacks_or_an_unparsed_header_is_not_inherited() {
+    let scratch = Scratch::new("homes-ac03-absent");
+    let corpus = copy_of(THREE, &scratch, "lacks");
+    edit(&corpus.join(THREE_NOTES), "Vetted: 2026-08-30\n", "");
+    let run = LayoutRun::new(&corpus, &scratch, "lacks-out", &[]);
+    let (lines, _) = split_front_matter(&run.tree_text("bench/units/XQ/XQ-90.md"));
+    assert_eq!(
+        lines,
+        [
+            "id: XQ-90",
+            "class: canon",
+            "rev: 2",
+            "scope: [notes]",
+            "owner: crew-n"
+        ]
+    );
+    let missing = findings_on(&run, "key-missing", "bench/units/XQ/XQ-90.md");
+    assert_eq!(missing.len(), 1, "{missing:?}");
+    assert_eq!(missing[0]["cause"], "source", "{missing:?}");
+    assert_eq!(run.count("check/emitter_findings"), 0);
+    assert_eq!(run.count("fields/mismatched"), 0);
+
+    let corpus = copy_of(THREE, &scratch, "unparsed");
+    edit(
+        &corpus.join(THREE_NOTES),
+        "Area: [notes]\n",
+        "Area: [notes\n",
+    );
+    let run = LayoutRun::new(&corpus, &scratch, "unparsed-out", &[]);
+    assert_eq!(
+        run.count("header/unparseable"),
+        1,
+        "{}",
+        run.result()["header"]
+    );
+    let (lines, _) = split_front_matter(&run.tree_text("bench/units/XQ/XQ-90.md"));
+    assert_eq!(
+        lines,
+        ["id: XQ-90", "class: canon"],
+        "nothing from a verbatim header"
+    );
+    assert!(
+        inherited_values(&run)
+            .iter()
+            .all(|(record, _, _)| record != "bench/units/XQ/XQ-90.md")
+    );
+}
+
+/// "Rules and edge cases": a section moved to a record file keeps its own
+/// heading attribute under an inherited key (the record's value wins) and
+/// inherits the rest; a multi-line value travels with its continuation
+/// lines, byte for byte as the residue writes it.
+#[test]
+fn homes_ac03_a_heading_attribute_wins_and_continuation_lines_travel() {
+    let scratch = Scratch::new("homes-ac03-section");
+    let corpus = copy_of(THREE, &scratch, "corpus");
+    edit(
+        &corpus.join(THREE_PROBES),
+        "Prose after the register names no record.\n",
+        "Prose after the register names no record.\n\n## Plate {#XQ-30 owner=crew-z}\n\n\
+         The plate is cleaned.\n",
+    );
+    edit(
+        &corpus.join(THREE_PROBES),
+        "Vetted: 2026-09-01\n",
+        "Vetted: >-\n  2026-09-01\n",
+    );
+    let run = LayoutRun::new(&corpus, &scratch, "out", &[]);
+    let (lines, _) = split_front_matter(&run.tree_text("bench/units/XQ/XQ-30.md"));
+    let entries = header_entries(&lines);
+    let owners: Vec<&Vec<String>> = entries
+        .iter()
+        .filter(|(key, _)| key == "owner")
+        .map(|(_, lines)| lines)
+        .collect();
+    assert_eq!(owners.len(), 1, "{lines:?}");
+    assert!(owners[0][0].contains("crew-z"), "{lines:?}");
+    let (source, _) = split_front_matter(&run.tree_text(THREE_PROBES));
+    let reviewed = header_entries(&source)
+        .into_iter()
+        .find(|(key, _)| key == "reviewed")
+        .expect("the residue's reviewed");
+    assert_eq!(reviewed.1.len(), 2, "a continuation line: {source:?}");
+    for record in ["bench/units/XQ/XQ-11.md", "bench/units/XQ/XQ-30.md"] {
+        let (lines, _) = split_front_matter(&run.tree_text(record));
+        assert!(
+            header_entries(&lines).contains(&reviewed),
+            "{record}: {lines:?} lacks {reviewed:?}"
+        );
+    }
+    assert_eq!(
+        run.count("fields/mismatched"),
+        0,
+        "{}",
+        run.result()["fields"]
+    );
+    assert_eq!(run.count("check/emitter_findings"), 0);
+}
+
+/// docs/features/import-homes.md "Rules and edge cases" (rule 4, then
+/// verifier "Attribution" rule 5): a source value mistyped for its key
+/// (`Revision: [3]`, a flow list under the integer `rev`) and carried
+/// verbatim into the residue and, inherited, into both of its record
+/// files is core's `frontmatter-type` on each of the three carriers, every
+/// one the source's; no emitter finding, every value still matched.
+#[test]
+fn homes_ac03_a_mistyped_inherited_value_is_the_source_s_frontmatter_type_on_every_carrier() {
+    let scratch = Scratch::new("homes-ac03-mistyped");
+    let corpus = copy_of(THREE, &scratch, "corpus");
+    edit(
+        &corpus.join(THREE_PROBES),
+        "Revision: 3\n",
+        "Revision: [3]\n",
+    );
+    let run = LayoutRun::new(&corpus, &scratch, "out", &[]);
+    let carriers = [
+        THREE_PROBES,
+        "bench/units/XQ/XQ-11.md",
+        "bench/units/XQ/XQ-12.md",
+    ];
+    for carrier in carriers {
+        let (lines, _) = split_front_matter(&run.tree_text(carrier));
+        assert!(
+            lines.iter().any(|line| line == "rev: [3]"),
+            "{carrier} carries the value verbatim: {lines:?}"
+        );
+        let mistyped = findings_on(&run, "frontmatter-type", carrier);
+        assert_eq!(mistyped.len(), 1, "{carrier}: {mistyped:?}");
+        assert_eq!(mistyped[0]["cause"], "source", "{carrier}: {mistyped:?}");
+    }
+    let all = findings_with(&run, "frontmatter-type");
+    assert_eq!(all.len(), 3, "only the three carriers: {all:?}");
+    assert_eq!(run.count("check/findings/frontmatter-type/source"), 3);
+    assert_eq!(run.count("check/findings/frontmatter-type/emitter"), 0);
+    assert_eq!(
+        run.count("check/emitter_findings"),
+        0,
+        "{}",
+        run.result()["check"]
+    );
+    assert_eq!(run.result()["check"]["enforce"], "clean");
+    assert_eq!(run.count("fields/matched"), 39);
+    assert_eq!(run.count("fields/mismatched"), 0);
+}
+
+/// AC-03, genre (ADR-0008, ADR-0024): a header key written in Cyrillic
+/// (mapped to `owner` by a generated `key_map` entry) and a Greek value,
+/// both built from escapes, are inherited byte for byte as the residue
+/// writes them, compared and matched.
+#[test]
+fn homes_ac03_a_non_latin_key_and_value_are_inherited_byte_for_byte() {
+    let scratch = Scratch::new("homes-ac03-genre");
+    let key = "\u{0425}\u{0440}\u{0430}\u{043d}\u{0438}\u{0442}\u{0435}\u{043b}\u{044c}";
+    let value = "\u{03b1}\u{03bb}\u{03c6}\u{03b1}";
+    let corpus = copy_of(THREE, &scratch, "corpus");
+    edit(
+        &corpus.join(THREE_PROBES),
+        "Holder: crew-a\n",
+        &format!("{key}: {value}\n"),
+    );
+    edit(
+        &corpus.join("census.toml"),
+        "\"Holder\" = \"owner\"\n",
+        &format!("\"Holder\" = \"owner\"\n\"{key}\" = \"owner\"\n"),
+    );
+    let run = LayoutRun::new(&corpus, &scratch, "out", &[]);
+    let (source, _) = split_front_matter(&run.tree_text(THREE_PROBES));
+    let owner = header_entries(&source)
+        .into_iter()
+        .find(|(name, _)| name == "owner")
+        .expect("the residue's owner");
+    assert!(owner.1[0].contains(value), "{owner:?}");
+    for record in ["bench/units/XQ/XQ-11.md", "bench/units/XQ/XQ-12.md"] {
+        let (lines, _) = split_front_matter(&run.tree_text(record));
+        assert!(
+            header_entries(&lines).contains(&owner),
+            "{record}: {lines:?}"
+        );
+    }
+    assert_eq!(run.count("fields/mismatched"), 0);
+    assert_eq!(run.count("fields/matched"), 39);
+}
+
+/// AC-04: neither key set: both earlier layout conventions print their
+/// `expected.json`, and those files, `pilot-w`'s and `corpus-mini`'s are
+/// unchanged in git; `three` without `home` and `inherit` shows both gaps
+/// the keys close (XQ-11 from the earlier restatement, the register's row
+/// `XQ-11-2.md`, a source `id-taken`; record files without the class
+/// contract's keys).
+#[test]
+fn homes_ac04_without_the_keys_output_is_as_before() {
+    let scratch = Scratch::new("homes-ac04");
+    for name in LAYOUT_FIXTURES {
+        assert!(
+            !fs::read_to_string(fixture_config(name))
+                .unwrap()
+                .contains("inherit"),
+            "{name}"
+        );
+        let run = LayoutRun::of(name, &scratch);
+        assert_eq!(without_ms(run.result()), expected(name), "{name}");
+        assert!(inherited_values(&run).is_empty(), "{name}");
+    }
+    for path in [
+        "fixtures/import-layout/one/expected.json",
+        "fixtures/import-layout/two/expected.json",
+        "fixtures/pilot-w/one/expected.json",
+        "fixtures/pilot-w/two/expected.json",
+        "fixtures/corpus-mini/expected.json",
+    ] {
+        assert_eq!(git_status(&repository_root(), path), "", "{path} changed");
+    }
+
+    let plain = three_without(&scratch, "plain", &[THREE_HOME_LINE, THREE_INHERIT_LINE]);
+    let run = LayoutRun::new(&plain, &scratch, "plain-out", &[]);
+    let (_, body) = split_front_matter(&run.tree_text("bench/units/XQ/XQ-11.md"));
+    assert_eq!(body, "\nThe probe touches the plate first.\n");
+    let (_, body) = split_front_matter(&run.tree_text("bench/units/XQ/XQ-11-2.md"));
+    assert_eq!(
+        body,
+        "\nThe probe touches the plate before every reading.\n"
+    );
+    assert_eq!(run.count("before/duplicates"), 1);
+    assert_eq!(run.count("check/findings/id-taken/source"), 1);
+    assert_eq!(run.count("check/findings/key-missing/source"), 13);
+    assert_eq!(run.count("fields/matched"), 16);
+    assert!(!run.tree_text(THREE_NOTES).contains(THREE_RESTATEMENT));
+}
+
+/// docs/features/import-homes.md "Description and interactions":
+/// `census` validates both keys and ignores them (frozen), `import`
+/// applies `home` and ignores `inherit`: `census` on `three` prints the
+/// same result without either key, `import` the same without `inherit`.
+#[test]
+fn homes_census_ignores_both_keys_and_import_ignores_inherit() {
+    let scratch = Scratch::new("homes-ignored");
+    let plain = three_without(&scratch, "plain", &[THREE_HOME_LINE, THREE_INHERIT_LINE]);
+    let no_inherit = three_without(&scratch, "no-inherit", &[THREE_INHERIT_LINE]);
+    let census = |corpus: &Path, name: &str| {
+        without_ms(&measure("census", corpus, &scratch.join(name), &[])["result"])
+    };
+    assert_eq!(
+        census(&fixture_dir(THREE), "census-with"),
+        census(&plain, "census-plain")
+    );
+    let with = ImportRun::new(&fixture_dir(THREE), &scratch, "import-with", &[]);
+    let without = ImportRun::new(&no_inherit, &scratch, "import-without", &[]);
+    assert_eq!(without_ms(&with.result), without_ms(&without.result));
+    assert_eq!(with.records(), without.records());
+}
+
+/// docs/features/import-homes.md "Description and interactions": `w`
+/// applies both keys through the emitter: on a copy of `three` with a
+/// tasks config, `w`'s tree holds each record file byte for byte as
+/// `layout`'s, and no `XQ-11-2.md`.
+#[test]
+fn homes_w_writes_the_record_files_layout_writes() {
+    let scratch = Scratch::new("homes-w");
+    let corpus = copy_with(
+        THREE,
+        &scratch,
+        "corpus",
+        &[
+            (
+                "tasks.toml",
+                "[tasks]\ninclude = [\"bench/*.md\"]\n\n[tier1]\nkey = \"area\"\ndefault = \"bench/README.md\"\n",
+            ),
+            ("bench/README.md", "# Bench\n\nThe bench log.\n"),
+        ],
+    );
+    let layout = LayoutRun::new(&corpus, &scratch, "layout-out", &[]);
+    let out = scratch.join("w-out");
+    let envelope = envelope(&run(&[
+        "w",
+        "--pilot",
+        corpus.to_str().unwrap(),
+        "--out",
+        out.to_str().unwrap(),
+        "--today",
+        TODAY,
+    ]));
+    assert_eq!(envelope["measurement"], "w");
+    let w_tree = out.join("w/pilot/tree");
+    for (record, _) in THREE_RECORDS {
+        let written = fs::read_to_string(w_tree.join(record))
+            .unwrap_or_else(|error| panic!("w tree {record}: {error}"));
+        assert_eq!(written, layout.tree_text(record), "{record}");
+    }
+    assert!(!w_tree.join("bench/units/XQ/XQ-11-2.md").exists());
+}
+
+/// Determinism on `three`: two runs print the same result and write the
+/// same bytes (the index aside), the fixture is untouched, nothing lands
+/// under `HOME`.
+#[test]
+fn homes_two_runs_on_three_write_identical_bytes() {
+    let scratch = Scratch::new("homes-determinism");
+    let home = scratch.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let corpus_before = snapshot(&fixture_dir(THREE));
+    let mut runs = Vec::new();
+    for round in ["a", "b"] {
+        let out = scratch.join(&format!("three-{round}"));
+        let output = eval()
+            .env("HOME", &home)
+            .args([
+                "layout",
+                "--pilot",
+                fixture_dir(THREE).to_str().unwrap(),
+                "--out",
+                out.to_str().unwrap(),
+                "--today",
+                TODAY,
+            ])
+            .output()
+            .expect("runs");
+        let envelope = envelope(&output);
+        let mut bytes = snapshot(&out.join("layout/pilot"));
+        bytes.retain(|path, _| !path.to_string_lossy().starts_with("index.db"));
+        runs.push((without_ms(&envelope["result"]), bytes));
+    }
+    assert_eq!(runs[0].0, runs[1].0, "stdout");
+    assert!(runs[0].1.len() > 10);
+    assert_eq!(runs[0].1, runs[1].1, "the written bytes");
+    assert_eq!(snapshot(&fixture_dir(THREE)), corpus_before, "the fixture");
+    assert!(
+        fs::read_dir(&home).unwrap().next().is_none(),
+        "nothing under HOME"
+    );
 }
 
 // --------------------------------------------------- AC-11 (owner-run)

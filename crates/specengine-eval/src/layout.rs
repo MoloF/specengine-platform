@@ -19,6 +19,7 @@
 //! files beside the tree. Nothing is written under the corpus, `HOME` or
 //! the repository.
 
+use std::cell::OnceCell;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
@@ -1563,6 +1564,9 @@ struct SourceSide<'s> {
     cut: Vec<(usize, [usize; 2])>,
     /// Rule S on the heading lines of in-place sections: line → (written, id).
     rule_s: BTreeMap<usize, (String, String)>,
+    /// Core's parse of the source under the before scheme, made once, on
+    /// first use ([`Verifier::source_doc`]).
+    parsed: OnceCell<AfterDoc>,
 }
 
 impl SourceSide<'_> {
@@ -1689,6 +1693,10 @@ struct FieldValue {
     expected: String,
     read: Option<String>,
     matched: bool,
+    /// An inherited value's record file, its tree path; absent on the
+    /// others (`docs/features/import-homes.md`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    record: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1728,6 +1736,9 @@ struct Verified {
     /// document's, under the names they take there (a `key_map` target,
     /// else as written).
     carried_after: BTreeMap<String, BTreeSet<String>>,
+    /// Record file path → the `[layout] inherit` keys it carries from its
+    /// source document's header (`docs/features/import-homes.md`).
+    inherited_at: BTreeMap<String, BTreeSet<String>>,
     unparseable: Vec<String>,
     /// Latin IDs of the definitions found in the tree.
     found: BTreeSet<String>,
@@ -1766,6 +1777,7 @@ fn verify(setup: &Setup, docs: &BTreeMap<String, AfterDoc>) -> Result<Verified, 
     verifier.headers(&mut verified);
     verifier.header_values(&mut verified);
     verifier.field_tables(&mut verified);
+    verifier.inherited(&mut verified);
     Ok(verified)
 }
 
@@ -1776,6 +1788,8 @@ struct Verifier<'a> {
     /// Each definition of the model beside its entry in the emission map.
     definitions: Vec<(&'a ImportRecord, &'a Emitted)>,
     sides: BTreeMap<&'a str, SourceSide<'a>>,
+    /// Source path → the import's detail of the document.
+    details: BTreeMap<&'a str, &'a import::DocumentDetail>,
     /// Per definition: its node's index in its tree file's parse.
     located: Vec<Option<usize>>,
     /// Per tree file: the nodes a definition took.
@@ -1815,9 +1829,16 @@ impl<'a> Verifier<'a> {
                         body: source_body(&setup.config, &source.text),
                         cut: Vec::new(),
                         rule_s: BTreeMap::new(),
+                        parsed: OnceCell::new(),
                     },
                 )
             })
+            .collect();
+        let details = setup
+            .import
+            .documents_detail
+            .iter()
+            .map(|detail| (detail.path.as_str(), detail))
             .collect();
         let mut verifier = Self {
             setup,
@@ -1825,6 +1846,7 @@ impl<'a> Verifier<'a> {
             located: vec![None; definitions.len()],
             definitions,
             sides,
+            details,
             consumed: BTreeMap::new(),
             blocks: BTreeMap::new(),
         };
@@ -1900,6 +1922,15 @@ impl<'a> Verifier<'a> {
                 }
             }
         }
+    }
+
+    /// Core's reading of a source document under the before scheme, parsed
+    /// once for every pass that compares its header.
+    fn source_doc(&self, source: &str) -> Option<&AfterDoc> {
+        let side = self.sides.get(source)?;
+        Some(side.parsed.get_or_init(|| {
+            AfterDoc::new(source, side.text.as_bytes().to_vec(), &self.setup.before)
+        }))
     }
 
     fn blocks_of(&self, path: &str) -> &[(usize, usize)] {
@@ -2355,15 +2386,10 @@ impl Verifier<'_> {
         let setup = self.setup;
         let import = &setup.config.import;
         let id_key = CoreKey::Id.name();
-        let details: BTreeMap<&str, &import::DocumentDetail> = setup
-            .import
-            .documents_detail
-            .iter()
-            .map(|detail| (detail.path.as_str(), detail))
-            .collect();
         for document in &setup.layout.emission.documents {
             let source = document.source.as_str();
-            let (Some(side), Some(detail)) = (self.sides.get(source), details.get(source)) else {
+            let (Some(side), Some(detail)) = (self.sides.get(source), self.details.get(source))
+            else {
                 continue;
             };
             let rows: BTreeSet<usize> = side.body.field_rows.iter().copied().collect();
@@ -2375,10 +2401,12 @@ impl Verifier<'_> {
             if keys.is_empty() {
                 continue;
             }
-            let src = AfterDoc::new(source, side.text.as_bytes().to_vec(), &setup.before);
+            let Some(src) = self.source_doc(source) else {
+                continue;
+            };
             let document_record = self.document_record(source);
             // The names the keys take, in order: (name, kept as written).
-            let names = self.yaml_names(&keys, &src, document_record);
+            let names = self.yaml_names(&keys, src, document_record);
             verified
                 .carried_after
                 .entry(document.after.clone())
@@ -2479,6 +2507,7 @@ impl Verifier<'_> {
                         expected,
                         read,
                         matched,
+                        record: None,
                     },
                     &document.after,
                 );
@@ -2497,12 +2526,6 @@ impl Verifier<'_> {
         let setup = self.setup;
         let import = &setup.config.import;
         let id_key = CoreKey::Id.name();
-        let details: BTreeMap<&str, &import::DocumentDetail> = setup
-            .import
-            .documents_detail
-            .iter()
-            .map(|detail| (detail.path.as_str(), detail))
-            .collect();
         for document in &setup.layout.emission.documents {
             let source = document.source.as_str();
             let Some(side) = self.sides.get(source) else {
@@ -2511,6 +2534,9 @@ impl Verifier<'_> {
             if side.body.field_rows.is_empty() {
                 continue;
             }
+            let Some(src) = self.source_doc(source) else {
+                continue;
+            };
             // The extent opens at the table's header line (AC-04).
             let first = side
                 .body
@@ -2518,7 +2544,7 @@ impl Verifier<'_> {
                 .or_else(|| side.body.field_rows.first().copied())
                 .unwrap_or_default();
             let rows: BTreeSet<usize> = side.body.field_rows.iter().copied().collect();
-            let detail = details.get(source);
+            let detail = self.details.get(source);
             let entries = || detail.into_iter().flat_map(|detail| detail.keys.iter());
             let keys: BTreeMap<usize, &str> = entries()
                 .filter(|entry| rows.contains(&entry.line))
@@ -2542,9 +2568,8 @@ impl Verifier<'_> {
             let header_keys: Vec<&KeyEntry> = entries()
                 .filter(|entry| !rows.contains(&entry.line))
                 .collect();
-            let src = AfterDoc::new(source, side.text.as_bytes().to_vec(), &setup.before);
             let mut seen: BTreeSet<String> = self
-                .yaml_names(&header_keys, &src, document_record)
+                .yaml_names(&header_keys, src, document_record)
                 .into_iter()
                 .map(|(name, _)| name)
                 .collect();
@@ -2619,6 +2644,7 @@ impl Verifier<'_> {
                         key: name,
                         expected,
                         read: read.shown(),
+                        record: None,
                     },
                     &document.after,
                 );
@@ -2637,6 +2663,309 @@ impl Verifier<'_> {
             }
         }
     }
+
+    /// The values a source document's header holds, by the names its keys
+    /// take in the tree, each name held once (`docs/features/import-homes.md`):
+    /// a YAML entry as [`Self::header_values`] reads it (core's reading of
+    /// the source, its `value_map` mapping unless kept as written; a value
+    /// core reads as no scalar by its text after the key), a field table's
+    /// row as [`Self::field_tables`] does (its cell or mapping). From the
+    /// source alone; a header the before check cannot read gives none.
+    fn source_values(&self, source: &str) -> BTreeMap<String, SourceValue> {
+        let setup = self.setup;
+        let import = &setup.config.import;
+        let id_key = CoreKey::Id.name();
+        let mut values = BTreeMap::new();
+        let (Some(side), Some(detail), Some(src)) = (
+            self.sides.get(source),
+            self.details.get(source),
+            self.source_doc(source),
+        ) else {
+            return values;
+        };
+        let rows: BTreeSet<usize> = side.body.field_rows.iter().copied().collect();
+        let header_keys: Vec<&KeyEntry> = detail
+            .keys
+            .iter()
+            .filter(|entry| !rows.contains(&entry.line))
+            .collect();
+        // A header carried verbatim gives nothing (`header_unparsed`,
+        // `header_not_mapping`): neither its YAML block nor its field table.
+        if src.header_failed() {
+            return values;
+        }
+        let document_record = self.document_record(source);
+        let names = self.yaml_names(&header_keys, src, document_record);
+        let mapped_values: BTreeMap<usize, &str> = detail
+            .values
+            .iter()
+            .map(|value| (value.line, value.written.as_str()))
+            .collect();
+        let mapping = |name: &str, line: usize| {
+            mapped_values.get(&line).and_then(|written| {
+                import
+                    .value_map
+                    .get(name)
+                    .and_then(|map| map.get(*written))
+                    .filter(|mapped| mapped.as_str() != *written)
+            })
+        };
+        let mut found: Vec<(String, SourceValue)> = Vec::new();
+        for (entry, (name, kept)) in header_keys.iter().zip(&names) {
+            let once = header_keys
+                .iter()
+                .filter(|other| other.written == entry.written)
+                .count()
+                == 1;
+            let (true, Some(before)) = (
+                once,
+                src.entries.iter().find(|before| before.first == entry.line),
+            ) else {
+                continue;
+            };
+            let expected = match src.read_back(&entry.written) {
+                ReadBack::Scalar(value) => {
+                    let mapped = (!kept).then(|| mapping(name, entry.line)).flatten();
+                    let escaped = mapped.is_none()
+                        && match before.value().chars().next() {
+                            Some('"') => before.value().contains('\\'),
+                            Some('\'') => before.value().contains("''"),
+                            _ => false,
+                        };
+                    Inheritable::Scalar {
+                        text: mapped.cloned().unwrap_or(value),
+                        escaped,
+                    }
+                }
+                read => Inheritable::Written {
+                    rest: before.rest.clone(),
+                    value: before.value().to_owned(),
+                    read,
+                },
+            };
+            // A form the layout does not rewrite, as [`Self::header_values`]
+            // tells it: multi-line, or opening a block, tag, anchor, alias
+            // or flow value.
+            let verbatim_form = before.first != before.last
+                || before
+                    .value()
+                    .starts_with(['|', '>', '!', '&', '*', '[', '{']);
+            found.push((
+                name.clone(),
+                SourceValue {
+                    line: entry.line,
+                    form: HeaderForm::Yaml,
+                    expected,
+                    verbatim_rest: verbatim_form.then(|| before.rest.clone()),
+                },
+            ));
+        }
+        let table_keys: BTreeMap<usize, &str> = detail
+            .keys
+            .iter()
+            .filter(|entry| rows.contains(&entry.line))
+            .map(|entry| (entry.line, entry.written.as_str()))
+            .collect();
+        let mut seen: BTreeSet<String> = names.iter().map(|(name, _)| name.clone()).collect();
+        let mut held: BTreeMap<String, usize> = BTreeMap::new();
+        for (name, _) in &names {
+            *held.entry(name.clone()).or_default() += 1;
+        }
+        for &line in &side.body.field_rows {
+            let Some(key) = table_keys.get(&line) else {
+                continue;
+            };
+            let cells = table_cells(side.raw_line(line));
+            let cell = cells.get(1).copied().unwrap_or_default();
+            let target = import
+                .key_map
+                .get(*key)
+                .cloned()
+                .unwrap_or_else(|| (*key).to_owned());
+            let as_written = target != *key
+                && target == id_key
+                && !document_record
+                    .is_some_and(|(written, _, defining)| defining == line && cell == written);
+            let carried = if as_written {
+                (*key).to_owned()
+            } else {
+                target
+            };
+            let repeat = seen.contains(&carried);
+            let name = if repeat {
+                let mut n = 2;
+                while seen.contains(&format!("{carried}-{n}")) {
+                    n += 1;
+                }
+                format!("{carried}-{n}")
+            } else {
+                carried
+            };
+            seen.insert(name.clone());
+            *held.entry(name.clone()).or_default() += 1;
+            let mapped = (!repeat && !as_written)
+                .then(|| mapping(&name, line))
+                .flatten();
+            found.push((
+                name,
+                SourceValue {
+                    line,
+                    form: HeaderForm::FieldTable,
+                    expected: Inheritable::Scalar {
+                        text: mapped.map_or_else(|| cell.to_owned(), Clone::clone),
+                        escaped: false,
+                    },
+                    verbatim_rest: None,
+                },
+            ));
+        }
+        for (name, value) in found {
+            if held.get(&name) == Some(&1) {
+                values.insert(name, value);
+            }
+        }
+        values
+    }
+
+    /// The `[layout] inherit` keys of each record file found
+    /// (`docs/features/import-homes.md`): each key its source document's
+    /// header holds ([`Self::source_values`]) and no field or kept heading
+    /// attribute of the record takes, read back by core from the record
+    /// file and compared with the source's value. Counted in `fields`,
+    /// detail `headers.json` `field_values`.
+    fn inherited(&self, verified: &mut Verified) {
+        let config = &self.setup.config;
+        if config.layout.inherit.is_empty() {
+            return;
+        }
+        let mut sources: BTreeMap<&str, BTreeMap<String, SourceValue>> = BTreeMap::new();
+        for (index, (record, emitted)) in self.definitions.iter().enumerate() {
+            let (Some(Place::File), Some(after), Some(_)) =
+                (emitted.place, emitted.after.as_deref(), self.located[index])
+            else {
+                continue;
+            };
+            let Some(doc) = self.docs.get(after) else {
+                continue;
+            };
+            let values = sources
+                .entry(record.path.as_str())
+                .or_insert_with(|| self.source_values(&record.path));
+            // The keys the record file holds of its own: a field or a kept
+            // heading attribute wins over an inherited key.
+            let mut taken: BTreeSet<String> = [
+                CoreKey::Id,
+                CoreKey::Class,
+                CoreKey::Title,
+                CoreKey::Aliases,
+            ]
+            .into_iter()
+            .map(CoreKey::name)
+            .collect();
+            taken.extend(config.layout.task_box_key.clone());
+            taken.extend(field_keys(record, config).into_iter().flatten());
+            if record.form == Form::Section
+                && let Some(heading) = self
+                    .sides
+                    .get(record.path.as_str())
+                    .and_then(|side| source_heading(side.raw_line(record.extent[0])))
+            {
+                taken.extend(
+                    kept_attributes(&heading, record, config)
+                        .into_iter()
+                        .map(|token| attribute(token).0.to_owned()),
+                );
+            }
+            for key in &config.layout.inherit {
+                let Some(value) = values.get(key).filter(|_| !taken.contains(key)) else {
+                    continue;
+                };
+                let read = doc.read_back(key);
+                let after_entry = doc.entry(key);
+                // As a residue's YAML entry is compared: a scalar by core's
+                // reading, any other value by its text after the key (and
+                // core's reading of it).
+                let (expected, shown, matched) = match &value.expected {
+                    Inheritable::Scalar { text, escaped } => (
+                        text.clone(),
+                        read.shown(),
+                        after_entry.is_some()
+                            && (read.is(key, text)
+                                || (*escaped
+                                    && core_type(key) == Some(CoreType::ReferenceList)
+                                    && read.is_one_item(text))),
+                    ),
+                    Inheritable::Written {
+                        rest,
+                        value,
+                        read: source_read,
+                    } => (
+                        value.clone(),
+                        after_entry.map(|entry| entry.value().to_owned()),
+                        after_entry.is_some_and(|entry| entry.rest == *rest)
+                            && read == *source_read,
+                    ),
+                };
+                // Carried verbatim, as a residue's entry is (attribution
+                // rule 5): the record file holds the source's text after
+                // the key, in a form the layout does not rewrite.
+                if let (Some(rest), Some(entry)) = (&value.verbatim_rest, after_entry)
+                    && entry.rest == *rest
+                {
+                    verified
+                        .verbatim_keys
+                        .insert((after.to_owned(), key.clone()));
+                }
+                verified
+                    .inherited_at
+                    .entry(after.to_owned())
+                    .or_default()
+                    .insert(key.clone());
+                verified.tally_value(
+                    FieldValue {
+                        path: record.path.clone(),
+                        line: value.line,
+                        form: value.form,
+                        key: key.clone(),
+                        expected,
+                        read: shown,
+                        matched,
+                        record: Some(after.to_owned()),
+                    },
+                    after,
+                );
+            }
+        }
+    }
+}
+
+/// One value of a source document's header a record file may inherit
+/// (`docs/features/import-homes.md`).
+struct SourceValue {
+    /// The key's line in the source.
+    line: usize,
+    form: HeaderForm,
+    expected: Inheritable,
+    /// A YAML entry multi-line or opening a block, tag, anchor, alias or
+    /// flow value: its text after the key, which a record file carrying
+    /// it verbatim holds alike.
+    verbatim_rest: Option<String>,
+}
+
+/// What a record file inheriting a key must read back, from the source.
+enum Inheritable {
+    /// Core's reading of the source's scalar, its `value_map` mapping, or a
+    /// field table's cell or mapping; `escaped`: a quoted scalar holding a
+    /// YAML escape (under a reference-list key one item equal to the whole
+    /// value reads back alike).
+    Scalar { text: String, escaped: bool },
+    /// Any other value: the entry's text after its key, its value as
+    /// written, and core's reading of it.
+    Written {
+        rest: String,
+        value: String,
+        read: ReadBack,
+    },
 }
 
 /// A reshaped block's lines in its tree file: its heading to its span's end.
@@ -3194,6 +3523,14 @@ impl<'a> Attribution<'a> {
                         .map(|token| attribute(token).0.to_owned()),
                 );
             }
+        }
+        // A record file carries its inherited header keys from the corpus
+        // too (`docs/features/import-homes.md`).
+        for (after, keys) in &verified.inherited_at {
+            fields_at
+                .entry(after.as_str())
+                .or_default()
+                .extend(keys.iter().cloned());
         }
         let record_files = layout
             .files
@@ -4928,6 +5265,38 @@ mod tamper_tests {
             });
             assert_eq!(result.fields.mismatched, 1, "{from:?} -> {to:?}");
             assert_eq!(result.hashes.mismatched, 0, "{from:?}");
+            assert_eq!(result.extents.residue, 0, "{from:?}");
+        }
+    }
+
+    // ------------------------------- docs/features/import-homes.md AC-03
+
+    /// AC-03 (M7 inherited keys never compared): one inherited value of
+    /// the third convention changed on disk in one record file — an
+    /// integer, a list — is one mismatched field, one match fewer; no hash,
+    /// prose or extent moves. Untampered, every inherited value matches.
+    #[test]
+    fn an_inherited_value_changed_on_disk_is_one_mismatched_field() {
+        let untampered = tampered("three", |_, _| {});
+        assert_eq!(untampered.fields.mismatched, 0);
+        assert_eq!(untampered.hashes.matched, untampered.before.definitions);
+        for (from, to) in [
+            ("\nrev: 3\n", "\nrev: 4\n"),
+            ("\nscope: [probes, plates]", "\nscope: [probes]"),
+        ] {
+            let result = tampered("three", |tree, layout| {
+                let record = record_with(layout, "The probe is wiped after the run.");
+                edit(tree, record, |text| text.replacen(from, to, 1));
+            });
+            assert_eq!(result.fields.mismatched, 1, "{from:?} -> {to:?}");
+            assert_eq!(
+                result.fields.matched,
+                untampered.fields.matched - 1,
+                "{from:?}"
+            );
+            assert_eq!(result.hashes.mismatched, 0, "{from:?}");
+            assert_eq!(result.hashes.matched, result.before.definitions, "{from:?}");
+            assert_eq!(result.prose.mismatched, 0, "{from:?}");
             assert_eq!(result.extents.residue, 0, "{from:?}");
         }
     }

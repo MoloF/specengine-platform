@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-import]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-22
 ---
 
 # specengine-import — importers of existing spec corpora
@@ -48,6 +48,7 @@ separators = [] # split ID, title and text
 [definitions]
 reference_paths = [] # globs
 reference_headers = [] # over any header cell
+home = {} # PREFIX → globs: its definitions elsewhere become references
 [links]
 wiki = false # also `[[target]]`
 wiki_root = "."
@@ -69,9 +70,10 @@ classes = [] # [{ glob, class }] over the after path, first match
 task_box_key = "done" # a list item's box; absent: dropped
 debt_expires = "9999-12-31" # the emitted baseline's expiry
 targets = {} # PREFIX → "file" | "section"; absent: project file, feature section
+inherit = [] # header keys a record file takes from its source's
 ```
 
-Refused at the key's line: an unknown key, a wrong type, a bad regex or glob; an import regex matching `""`; a `..` or absolute root, `base` or code root, a code root naming the corpus root; a `feature_prefixes` entry or legacy target outside `[A-Z][A-Z0-9]*`, a legacy key not a letter run; a hyphenless pattern twice; an empty map key or target, separator or `strip` entry; an empty `id_key` or one with blanks around it, an `id_path` without group `id`; `records`, `features` off core's `[paths]` rules, equal or nested; a `slug` matching `""` or without group `slug`; a class outside the four; a `task_box_key` empty, blank-padded, `id`, `class`, `title` or `aliases`; a bad `debt_expires`; a `targets` key not `[A-Z][A-Z0-9]*`, a value not `file` / `section`, a `feature_prefixes` entry `file`. At start (`LayoutConfig::check_start`, the caller's exit 2): a `targets` key the before scheme lacks or a feature-scoped one `file`; `debt_expires` before today.
+Refused at the key's line: an unknown key, a wrong type, a bad regex or glob; an import regex matching `""`; a `..` or absolute root, `base` or code root, a code root naming the corpus root; a `feature_prefixes` entry or legacy target outside `[A-Z][A-Z0-9]*`, a legacy key not a letter run; a hyphenless pattern twice; an empty map key or target, separator or `strip` entry; an empty `id_key` or one with blanks around it, an `id_path` without group `id`; `records`, `features` off core's `[paths]` rules, equal or nested; a `slug` matching `""` or without group `slug`; a class outside the four; a `task_box_key` empty, blank-padded, `id`, `class`, `title` or `aliases`; a bad `debt_expires`; a `targets` key not `[A-Z][A-Z0-9]*`, a value not `file` / `section`, a `feature_prefixes` entry `file`; a `home` key not Latin, an `ids.legacy` key or feature-scoped, an empty list or glob; an `inherit` entry empty, blank-padded, a written key, the task key or repeated. At start (`LayoutConfig::check_start`, the caller's exit 2): a `targets` key the before scheme lacks or a feature-scoped one `file`; `debt_expires` before today.
 
 ## Census
 
@@ -83,15 +85,15 @@ Refused at the key's line: an unknown key, a wrong type, a bad regex or glob; an
 
 ## Import
 
-`import::run` → `Import` (`import/`): the record model, positions, titled lead-ins, document records, text and hash, precedence, the import-mode comment rules, header outcomes, the code scan and known limits are `docs/canon/import.md`. `import::document_text` (pub) is the document-text normalisation `import-layout` reuses.
+`import::run` → `Import` (`import/`): its model and rules (precedence and homes included), `docs/canon/import.md`. `import::document_text` (pub) is the document-text normalisation `import-layout` reuses.
 
 ## Layout
 
-`layout::emit(&CensusConfig, &Import, &[SourceDocument], &Scheme) -> Layout` (`layout/`; rules: `docs/canon/import-layout.md`), pure, never fails: `files` (`TreeFile {path, kind: Residue | Record, content}`, sorted), `emission` (`Emitted {path, line, id, form, after, place, reason, conflicts}` per definition, `DocumentPlace {source, after, moved, feature}` per document), `headers` (`HeaderOutcome`), `scheme_toml`, `diagnostics`; `holds(path)`, counters; `Reason::ALL` = the stdout `reasons` keys. Inputs: `import::run_walked`, `layout::read_sources(root, &walk.documents)`, `Scheme::parse` (the before scheme, after core loads it). **The caller sets** each `SourceDocument.header_unparsed` (core's parse of the source under the before scheme fails: `frontmatter-yaml`, `-unclosed`, `-not-mapping`, not UTF-8) and `header_not_mapping` (`frontmatter-not-mapping`); `read_sources` leaves both `false`. For the verifier: `source_body(config, text) -> SourceBody {lines, excluded, headings, field_rows, field_table_line}`, the import's reading of a body; `carried_fields`, `field_keys`, `section_heading`, `s_heading`, `emit_scheme`, `toml_text` (the hand-written TOML writer); `typed_keys() -> Vec<(String, CoreType)>`, the copy of core's `TYPED_KEYS` (30, same order and variant names, `TextOrInteger` for `estimate`, pinned by an eval test), with `core_type`, `parses_as`.
+`layout::emit(&CensusConfig, &Import, &[SourceDocument], &Scheme) -> Layout` (`layout/`; rules: `docs/canon/import-layout.md`), pure, never fails: `files` (`TreeFile {path, kind: Residue | Record, content}`, sorted), `emission` (`Emitted {path, line, id, form, after, place, reason, conflicts}` per definition, `DocumentPlace {source, after, moved, feature}` per document), `headers` (`HeaderOutcome`), `scheme_toml`, `diagnostics`; `holds(path)`, counters; `Reason::ALL` = the stdout `reasons` keys. Inputs: `import::run_walked`, `layout::read_sources(root, &walk.documents)`, `Scheme::parse` (the before scheme, after core loads it). **The caller sets** each `SourceDocument.header_unparsed` (core's parse of the source under the before scheme fails: `frontmatter-yaml`, `-unclosed`, `-not-mapping`, not UTF-8) and `header_not_mapping` (`frontmatter-not-mapping`); `read_sources` leaves both `false`. For the verifier: `source_body(config, text) -> SourceBody {lines, excluded, headings, field_rows, field_table_line}`, the import's reading of a body; `carried_fields`, `field_keys`, `section_heading`, `s_heading`, `emit_scheme`, `toml_text` (the hand-written TOML writer); `typed_keys() -> Vec<(String, CoreType)>`, the copy of core's `TYPED_KEYS` (pinned by an eval test: count, order, variant names), with `core_type`, `parses_as`.
 
 ## Before report
 
-stdout `result`, counts only (`class-N`, `prefix-N`, `pattern-N` by descending count), exactly: `documents{total, per_class}`, `front_matter{yaml, field_table, none, unclosed, non_latin_keys, keys, values}` (each `{mapped, kept, unmapped}`), `records{total, empty_text, titled, per_form{table_row, headerless_row, list_item, section, document}, per_prefix}`, `definitions`, `references{total, unresolved, by_document}`, `duplicate_definitions`, `rows_without_id{local_number, none}`, `legacy{mapped, unmapped, homoglyph_fixes, hyphenless{definitions, mentions, per_pattern}}`, `id_like{claimed, unclaimed, feature_outside, files_with_unclaimed}`, `broken_links{file, wiki, resolved_by_base}`, `code{files, documents_cited, citations, roots_missing}`, `detail{files_skipped, roots_missing, diagnostics, import_ms}`; `titled` counts records with a `title`, `by_document` the record-position definitions a document demoted (within `references.total`). Detail, `--out/import/<label>/*.json` (`import/model.rs` types): `labels` (the mapping), `documents`, `records`, `rows_without_id`, `duplicates` (+ `unresolved_references`), `legacy`, `unclaimed` (cause `unclaimed` · `feature-outside`), `broken_links`, `code_citations`, `diagnostics`.
+stdout `result`, counts only (`class-N`, `prefix-N`, `pattern-N` by descending count), exactly: `documents{total, per_class}`, `front_matter{yaml, field_table, none, unclosed, non_latin_keys, keys, values}` (each `{mapped, kept, unmapped}`), `records{total, empty_text, titled, per_form{table_row, headerless_row, list_item, section, document}, per_prefix}`, `definitions`, `references{total, unresolved, by_document, by_home}`, `duplicate_definitions`, `rows_without_id{local_number, none}`, `legacy{mapped, unmapped, homoglyph_fixes, hyphenless{definitions, mentions, per_pattern}}`, `id_like{claimed, unclaimed, feature_outside, files_with_unclaimed}`, `broken_links{file, wiki, resolved_by_base}`, `code{files, documents_cited, citations, roots_missing}`, `detail{files_skipped, roots_missing, diagnostics, import_ms}`; `titled` counts records with a `title`, `by_document`, `by_home` the record-position definitions a document, a home demoted (within `references.total`). Detail, `--out/import/<label>/*.json` (`import/model.rs` types): `labels` (the mapping), `documents`, `records`, `rows_without_id`, `duplicates` (+ `unresolved_references`), `legacy`, `unclaimed` (cause `unclaimed` · `feature-outside`), `broken_links`, `code_citations`, `diagnostics`.
 
 ## Open minors
 

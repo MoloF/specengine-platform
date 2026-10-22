@@ -43,6 +43,12 @@ pub(super) struct HeaderPlan<'p, 's> {
 pub(super) struct Normalised {
     pub lines: Vec<String>,
     pub outcome: HeaderOutcome,
+    /// Each `[layout] inherit` key the header carries once under that name,
+    /// with its entry's lines as the header writes them (continuation
+    /// lines and comment included), in `inherit` order: what each record
+    /// file of the document takes (`docs/features/import-homes.md`). None
+    /// from a header carried verbatim.
+    pub inherited: Vec<(String, Vec<String>)>,
 }
 
 pub(super) fn normalise(
@@ -83,6 +89,10 @@ pub(super) fn normalise(
     };
     // Keys of the after header, in order.
     let mut keys: Vec<String> = Vec::new();
+    // The same keys, each with its entry's lines as the header writes
+    // them: what a record file inheriting the key carries
+    // (`docs/features/import-homes.md`).
+    let mut named: Vec<(String, Vec<String>)> = Vec::new();
     // `docs/features/import-layout.md` AC-05: a key reaching `id` is renamed
     // only when the import read the document's ID from it and its value is
     // that ID alone; any other is carried under its written name (the `id`
@@ -100,8 +110,14 @@ pub(super) fn normalise(
     // mapping is no header to add a key to; its lines stay as written (core
     // opened it with exactly `---`), core's findings on it the source's.
     let verbatim = plan.header_unparsed || plan.header_not_mapping;
+    // Whether a record file may take anything from this header
+    // (`docs/features/import-homes.md`): `named` and `starts` are kept only
+    // then; nothing from a header carried verbatim.
+    let inheriting = !verbatim && !config.layout.inherit.is_empty();
     // The YAML block, entry lines rewritten in place.
     let mut block: Vec<String> = Vec::new();
+    // The index in `block` of each rewritten entry line, in `named` order.
+    let mut starts: Vec<usize> = Vec::new();
     let mut closing: Option<String> = None;
     if let FrontMatter::Present { body_line, .. } = plan.front {
         outcome.source = HeaderForm::Yaml;
@@ -155,12 +171,35 @@ pub(super) fn normalise(
             if scalar.as_ref().is_some_and(|(_, mapped)| *mapped) {
                 outcome.mapped += 1;
             }
+            if inheriting {
+                starts.push(block.len());
+            }
             block.push(rewrite(entry, key, scalar.map(|(text, _)| text)));
             keys.push(if collides || as_written {
                 entry.key.to_owned()
             } else {
                 target
             });
+            if inheriting {
+                named.push((keys.last().cloned().unwrap_or_default(), Vec::new()));
+            }
+        }
+        // Each entry's lines: its own, then the lines up to the next entry
+        // (continuation lines, comments), less the blank and column-0
+        // comment lines that end them.
+        for (at, &start) in starts.iter().enumerate() {
+            let end = starts.get(at + 1).copied().unwrap_or(block.len());
+            let mut lines: Vec<String> = block.get(start..end).unwrap_or_default().to_vec();
+            while lines.len() > 1
+                && lines
+                    .last()
+                    .is_some_and(|line| line.trim().is_empty() || line.starts_with('#'))
+            {
+                lines.pop();
+            }
+            if let Some((_, slot)) = named.get_mut(at) {
+                *slot = lines;
+            }
         }
         closing = plan
             .text
@@ -229,7 +268,11 @@ pub(super) fn normalise(
             // Under another name than its target: no mapping, no rule S.
             if repeat.is_some() || as_written {
                 let name = repeat.unwrap_or(carried);
-                fields.push(yaml::entry(&name, &typed::value_text(&name, &written)));
+                let field = yaml::entry(&name, &typed::value_text(&name, &written));
+                if inheriting {
+                    named.push((name.clone(), vec![field.clone()]));
+                }
+                fields.push(field);
                 keys.push(name);
                 continue;
             }
@@ -250,7 +293,11 @@ pub(super) fn normalise(
                 }
                 None => rule_s(&written, &target, plan.document, &id_key),
             };
-            fields.push(yaml::entry(&target, &typed::value_text(&target, &text)));
+            let field = yaml::entry(&target, &typed::value_text(&target, &text));
+            if inheriting {
+                named.push((target.clone(), vec![field.clone()]));
+            }
+            fields.push(field);
             keys.push(target);
         }
     }
@@ -323,7 +370,24 @@ pub(super) fn normalise(
         None => {}
     }
     outcome.written = !lines.is_empty();
-    Normalised { lines, outcome }
+    // `named` is empty unless `inheriting`.
+    let inherited = config
+        .layout
+        .inherit
+        .iter()
+        .filter_map(|key| {
+            let mut found = named.iter().filter(|(name, _)| name == key);
+            match (found.next(), found.next()) {
+                (Some((_, lines)), None) => Some((key.clone(), lines.clone())),
+                _ => None,
+            }
+        })
+        .collect();
+    Normalised {
+        lines,
+        outcome,
+        inherited,
+    }
 }
 
 const DELIMITER: &str = "---";

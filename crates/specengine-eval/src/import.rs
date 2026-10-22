@@ -102,6 +102,9 @@ pub struct References {
     pub unresolved: usize,
     /// Record-position definitions a document demoted, within `total`.
     pub by_document: usize,
+    /// Record-position definitions a home demoted, within `total`
+    /// (`docs/features/import-homes.md`).
+    pub by_home: usize,
 }
 
 #[derive(Serialize)]
@@ -271,6 +274,7 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<ImportResult, String
             total: found.role(Role::Reference),
             unresolved: found.unresolved.len(),
             by_document: found.by_document,
+            by_home: found.by_home,
         },
         duplicate_definitions: found.duplicates.len(),
         rows_without_id: RowsWithoutId {
@@ -330,11 +334,12 @@ fn summarize(result: &ImportResult, found: &Import, label: &str, out_dir: &Path)
         forms.document
     );
     eprintln!(
-        "  definitions {}, references {} ({} unresolved, {} demoted by a document), duplicate definitions {}",
+        "  definitions {}, references {} ({} unresolved, {} demoted by a document, {} by a home), duplicate definitions {}",
         result.definitions,
         result.references.total,
         result.references.unresolved,
         result.references.by_document,
+        result.references.by_home,
         result.duplicate_definitions
     );
     eprintln!(

@@ -134,13 +134,19 @@ pub(super) struct RecordFile<'r> {
     pub attributes: Vec<(String, Option<String>)>,
     /// The body, already [`crate::import::document_text`]-normalised.
     pub body: String,
+    /// The `[layout] inherit` keys of its source document's header, each
+    /// with its entry's lines as that header writes them
+    /// (`docs/features/import-homes.md`).
+    pub inherited: &'r [(String, Vec<String>)],
 }
 
 /// A record file's text and its header conflicts: `---`; `id`, `class`
 /// plain; `title`; `aliases` when the ID was written otherwise; the task
 /// key; fields in column order; a section's attributes (bare → `true`);
-/// `---`, a blank line, the body. Strings double-quoted, a typed core
-/// key's value in core's type where it parses (AC-05).
+/// the inherited header keys no field or attribute holds, each entry as
+/// its source's header writes it; `---`, a blank line, the body. Strings
+/// double-quoted, a typed core key's value in core's type where it parses
+/// (AC-05).
 pub(super) fn render(file: &RecordFile<'_>, config: &CensusConfig) -> (String, usize) {
     let record = file.record;
     let mut conflicts = 0;
@@ -187,6 +193,13 @@ pub(super) fn render(file: &RecordFile<'_>, config: &CensusConfig) -> (String, u
             .as_deref()
             .map_or_else(|| true.to_string(), |value| typed::value_text(key, value));
         lines.push(yaml::entry(key, &value));
+    }
+    // The inherited keys last: a key the record holds itself (a field, an
+    // attribute) wins (`docs/features/import-homes.md`).
+    for (key, entry) in file.inherited {
+        if taken.insert(key.clone()) {
+            lines.extend(entry.iter().cloned());
+        }
     }
     lines.push(DELIMITER.to_owned());
     if !file.body.is_empty() {

@@ -19,7 +19,7 @@ use std::ops::RangeInclusive;
 use std::path::Path;
 
 use crate::census::{Diagnostic, LinkCheck, WikiIndex, check_link, clean_cell, heading_anchor};
-use crate::config::CensusConfig;
+use crate::config::{CensusConfig, ImportConfig};
 use crate::frontmatter::{self, FrontMatter};
 use crate::markdown::{self, LinkKind, Scan, Table, cell_ranges};
 use crate::walk::{self, Walk};
@@ -113,7 +113,7 @@ pub fn run_walked(root: &Path, config: &CensusConfig, walk: Walk) -> Import {
     import
         .records
         .sort_by(|a, b| (&a.path, a.line, a.form).cmp(&(&b.path, b.line, b.form)));
-    settle(&mut import, pending);
+    settle(&mut import, pending, &config.import);
     import.code = code::scan(
         root,
         &config.import.code,
@@ -125,7 +125,7 @@ pub fn run_walked(root: &Path, config: &CensusConfig, walk: Walk) -> Import {
 
 /// Precedence, duplicates, unresolved references and claimed tokens, once
 /// every definition is known.
-fn settle(import: &mut Import, pending: Vec<Pending>) {
+fn settle(import: &mut Import, pending: Vec<Pending>, config: &ImportConfig) {
     // An ID a document defines turns every record-position definition of it
     // into a reference (`docs/features/import-gaps.md` AC-03).
     let by_document: HashSet<String> = import
@@ -143,6 +143,7 @@ fn settle(import: &mut Import, pending: Vec<Pending>) {
             import.by_document += 1;
         }
     }
+    settle_homes(import, config);
     let mut first: HashMap<(Option<&str>, &str), (&str, usize)> = HashMap::new();
     let mut duplicates = Vec::new();
     let mut defined: HashSet<&str> = HashSet::new();
@@ -224,6 +225,37 @@ fn settle(import: &mut Import, pending: Vec<Pending>) {
     import.unresolved = unresolved;
     import.claimed = claimed;
     import.unclaimed = unclaimed;
+}
+
+/// The homes of `[definitions] home` (`docs/features/import-homes.md`): an
+/// ID a home document of its prefix defines turns every record-position
+/// definition of it outside that home into a reference
+/// (`references.by_home`); an ID no home document defines keeps its
+/// definitions wherever they stand. After the document precedence: an ID a
+/// document defines has no record-position definition left to weigh.
+fn settle_homes(import: &mut Import, config: &ImportConfig) {
+    if config.home.is_empty() {
+        return;
+    }
+    let homed: HashSet<String> = import
+        .records
+        .iter()
+        .filter(|record| {
+            record.role == Role::Definition
+                && config.in_home(&record.prefix, &record.path) == Some(true)
+        })
+        .map(|record| record.id.clone())
+        .collect();
+    for record in &mut import.records {
+        if record.form != Form::Document
+            && record.role == Role::Definition
+            && config.in_home(&record.prefix, &record.path) == Some(false)
+            && homed.contains(&record.id)
+        {
+            record.role = Role::Reference;
+            import.by_home += 1;
+        }
+    }
 }
 
 /// One document being imported.

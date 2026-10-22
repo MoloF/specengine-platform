@@ -893,8 +893,10 @@ fn out_inside_the_corpus_is_refused_and_nothing_is_created() {
 /// The stdout `result` keys of the "before" report: the whitelist of
 /// docs/features/import-records.md AC-09 plus `records.titled`,
 /// `records.per_form.document` and `references.by_document`
-/// (docs/features/import-gaps.md AC-09); `*` is a map of anonymous labels.
-const WHITELIST: [&str; 50] = [
+/// (docs/features/import-gaps.md AC-09) and `references.by_home`
+/// (docs/features/import-homes.md "Output"); `*` is a map of anonymous
+/// labels.
+const WHITELIST: [&str; 51] = [
     "documents/total",
     "documents/per_class/*",
     "front_matter/yaml",
@@ -921,6 +923,7 @@ const WHITELIST: [&str; 50] = [
     "references/total",
     "references/unresolved",
     "references/by_document",
+    "references/by_home",
     "duplicate_definitions",
     "rows_without_id/local_number",
     "rows_without_id/none",
