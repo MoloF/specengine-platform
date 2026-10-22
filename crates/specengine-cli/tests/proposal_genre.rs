@@ -416,7 +416,8 @@ fn ac20_no_dependency_is_added() {
                 "specengine-cli",
                 "rmcp",
                 "tokio",
-                "getrandom",
+                // docs/features/review-form.md D7: `getrandom` went with the
+                // retired demo's sealed state.
                 "serde",
                 "serde_json",
                 "clap",

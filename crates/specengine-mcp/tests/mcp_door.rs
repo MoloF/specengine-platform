@@ -364,6 +364,24 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
             ],
             vec![json!({}), json!({"proposal_id": 1})],
         ),
+        // docs/features/review-form.md: the owner's form. The door's
+        // sessions declare no form elicitation: an open proposal gets the
+        // no-form line, the rest the CLI's refusals; the accepted form's
+        // door is `review_form_writes_nothing_under_the_project_root`.
+        "review_proposal" => (
+            vec![
+                json!({"proposal_id": "PR-0001"}),
+                json!({"proposal_id": "PR-9999"}),
+                json!({"proposal_id": "\u{0420}R-0001"}),
+                json!({"proposal_id": ""}),
+            ],
+            vec![
+                json!({}),
+                json!({"proposal_id": 1}),
+                json!({"proposal_id": "PR-0001", "option": 1}),
+                json!({"proposal_id": "PR-0001", "choice": "approve"}),
+            ],
+        ),
         // docs/features/task-package.md AC-09: the task tools.
         "get_task" => (
             vec![
@@ -773,4 +791,189 @@ fn ac08_reads_write_nothing_under_the_project_root() {
             .any(|path| path.ends_with("specengine/lantern-keep.db")),
         "the index lives under HOME: {new_paths:?}"
     );
+}
+
+/// One `tools/call` of `name` in `era` on `server` (stateless: `_meta`
+/// declaring form elicitation); the next message must answer it.
+fn form_call(server: &mut Server, era: Era, id: u64, name: &str, arguments: Value) -> Value {
+    let mut params = json!({"name": name, "arguments": arguments});
+    if era == Era::Stateless {
+        params = with_meta(params, &stateless_meta(form_capabilities()));
+    }
+    server.request(id, "tools/call", Some(params))
+}
+
+/// `review_proposal` of `proposal_id` with the owner's `answer`, in `era`,
+/// the client declaring form elicitation: the tool result.
+fn owner_answers(
+    server: &mut Server,
+    era: Era,
+    id: u64,
+    proposal_id: &str,
+    answer: Value,
+) -> Value {
+    let arguments = json!({"proposal_id": proposal_id});
+    match era {
+        Era::Legacy => {
+            server.send(&json!({"jsonrpc": "2.0", "id": id, "method": "tools/call",
+                "params": {"name": "review_proposal", "arguments": arguments}}));
+            let ask = server.recv();
+            assert_eq!(ask["method"], json!("elicitation/create"), "{ask}");
+            server.send(&json!({"jsonrpc": "2.0", "id": ask["id"], "result": answer}));
+            let reply = server.recv();
+            assert_eq!(reply["id"], json!(id), "{reply}");
+            result(&reply).clone()
+        }
+        Era::Stateless => {
+            let first = form_call(server, era, id, "review_proposal", arguments.clone());
+            let first = result(&first).clone();
+            assert_eq!(first["resultType"], json!("input_required"), "{first}");
+            let mut params = with_meta(
+                json!({"name": "review_proposal", "arguments": arguments}),
+                &stateless_meta(form_capabilities()),
+            );
+            params["requestState"] = first["requestState"].clone();
+            params["inputResponses"] = json!({"owner_review": answer});
+            result(&server.request(id + 1, "tools/call", Some(params))).clone()
+        }
+    }
+}
+
+/// docs/features/review-form.md (the door, M7's backstop): the owner's
+/// form accepted in both eras — a question's working answer, a
+/// discrepancy's option with a note, an update as editorial, a reject —
+/// stages each (`get_proposal` shows the stage, the item stays `open`)
+/// and writes nothing under the project root: the tree (`.git` included)
+/// byte-identical, `HEAD` and every ref unchanged, `git status` empty,
+/// every new path under `HOME`.
+#[test]
+fn review_form_writes_nothing_under_the_project_root() {
+    let scratch = Scratch::new("door-form");
+    let home = scratch.home("h");
+    let git_home = scratch.home("git");
+    let root = scratch.copy("spec-a", "repo");
+    git(
+        &root,
+        &git_home,
+        &["init", "-q", "--template=", "-b", "main"],
+    );
+    for (key, value) in scratch_git::QUIET {
+        git(&root, &git_home, &["config", "--local", key, value]);
+    }
+    git(&root, &git_home, &["add", "-A"]);
+    git(&root, &git_home, &["commit", "-q", "-m", "spec-a"]);
+    let refs = |root: &Path| {
+        git(
+            root,
+            &git_home,
+            &["for-each-ref", "--format=%(refname) %(objectname)"],
+        ) + &git(root, &git_home, &["rev-parse", "HEAD"])
+    };
+    let refs_before = refs(&root);
+    let tree_before = snapshot(&root);
+    let paths_before: BTreeSet<String> = snapshot(scratch.path()).into_keys().collect();
+    let cwd = root.join("docs").join("spec");
+
+    let mut ids = Vec::new();
+    for (round, era) in ERAS.into_iter().enumerate() {
+        let mut server = Server::spawn_with(&[], Some(&cwd), Home::At(&home));
+        if era == Era::Legacy {
+            server.initialize(form_capabilities());
+        }
+        let mut next = 10;
+        let mut call = |server: &mut Server, name: &str, arguments: Value| {
+            next += 2;
+            result(&form_call(server, era, next, name, arguments)).clone()
+        };
+        if round == 0 {
+            let base = call(&mut server, "get_node", json!({"id": "RULE-STAM-REGEN"}))
+                ["structuredContent"]["nodes"][0]["span_hash"]
+                .clone();
+            let question = call(
+                &mut server,
+                "ask_question",
+                json!({
+                "node_ids": ["EDGE-STAM-ZERO"], "text": "Does the sprint stop at zero?",
+                "working_answer": "Yes.", "price_of_other": "A new case.",
+                "author_role": "writer"}),
+            );
+            let report = call(
+                &mut server,
+                "report_discrepancy",
+                json!({
+                "node_ids": ["RULE-STAM-REGEN"],
+                "summary": "Regeneration starts while walking.",
+                "gap_type": "contradicts", "severity": "normal",
+                "evidence": [{"file": "src/stamina.rs", "observed": "regenerates while walking",
+                    "documented": "only at rest"}],
+                "options": [{"label": "code", "effect": "fix the code", "price": "1 item"},
+                    {"label": "spec", "effect": "allow walking", "price": "a rebalance"}],
+                "recommendation": 0, "distinct_from": ["DEC-0023"], "author_role": "writer"}),
+            );
+            let update = call(
+                &mut server,
+                "propose_change",
+                json!({
+                "kind": "update", "target": "RULE-STAM-REGEN", "base": base,
+                "text": "## Regeneration {#RULE-STAM-REGEN}\n\nStamina regenerates only at rest.\n",
+                "rationale": "Rest only.", "author_role": "writer"}),
+            );
+            for created in [&question, &report, &update] {
+                ids.push(
+                    created["structuredContent"]["id"]
+                        .as_str()
+                        .unwrap_or_else(|| panic!("stored: {created}"))
+                        .to_owned(),
+                );
+            }
+        }
+        let answers = if round == 0 {
+            [
+                json!({"action": "accept", "content": {"choice": "working-answer"}}),
+                json!({"action": "accept", "content": {"choice": "option-1", "note": "n"}}),
+                json!({"action": "accept", "content": {"choice": "editorial", "note": "typo"}}),
+            ]
+        } else {
+            [
+                json!({"action": "accept", "content": {"choice": "reject", "note": "asked"}}),
+                json!({"action": "accept", "content": {"choice": "option-0"}}),
+                json!({"action": "accept", "content": {"choice": "approve"}}),
+            ]
+        };
+        for (index, (id, answer)) in ids.iter().zip(answers).enumerate() {
+            let answered = owner_answers(&mut server, era, 100 + 10 * index as u64, id, answer);
+            assert_eq!(
+                answered["isError"],
+                json!(false),
+                "{era:?} {id}: {answered}"
+            );
+            let document = &answered["structuredContent"];
+            assert!(document["staged"].is_object(), "{era:?} {id}: {document}");
+            assert_eq!(document["status"], json!("open"), "{era:?} {id}");
+        }
+        let done = server.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+        assert_eq!(done.stderr, "", "{era:?}");
+    }
+    assert_eq!(ids.len(), 3);
+    assert_eq!(snapshot(&root), tree_before, "the repository changed");
+    assert_eq!(refs(&root), refs_before, "HEAD or a ref moved");
+    assert_eq!(
+        git(
+            &root,
+            &git_home,
+            &["--no-optional-locks", "status", "--porcelain", "--ignored"]
+        ),
+        "",
+        "git status after the forms"
+    );
+    let home_prefix = format!("{}/", home.strip_prefix(scratch.path()).unwrap().display());
+    for path in snapshot(scratch.path()).into_keys() {
+        if !paths_before.contains(&path) {
+            assert!(
+                path.starts_with(&home_prefix),
+                "a new path outside HOME: {path}"
+            );
+        }
+    }
 }

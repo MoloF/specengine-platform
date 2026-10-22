@@ -3,7 +3,9 @@
 //! flags `spec approve|reject` would take, kept only in the queue.
 //!
 //! - **Staging** ([`stage`], [`unstage`]: the daemon's decision route
-//!   calls them; [`stage_with`]: `spec round answer` stages each answer
+//!   calls them, and [`stage`] the MCP `review_proposal` form with the
+//!   owner's answer, after [`stage_form`]'s read; [`stage_with`]:
+//!   `spec round answer` stages each answer
 //!   it reads, on a terminal, before that item's own question, canon
 //!   `round`, "Run"). A stage is checked as the terminal checks
 //!   its flags, before anything is stored: the ID and the repository (an
@@ -28,18 +30,18 @@ use serde::{Deserialize, Serialize};
 use specengine_core::proposal::EDITORIAL;
 use specengine_core::record::refused_char;
 use specengine_store::{
-    GitEnv, KindFamily, Proposal, ProposalQueue as _, ProposalStatus, QueueError, Stage,
-    StagedChoice, same_repository,
+    GitEnv, KindFamily, Proposal, ProposalKind, ProposalQueue as _, ProposalStatus, QueueError,
+    Stage, StagedChoice, same_repository,
 };
 
 use crate::apply::{ApproveFlags, ApproveRequest, editorial_refusal, flag_on_apply};
 use crate::decide::first_checks;
 use crate::proposals::{
-    ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, checked_now, elsewhere,
+    ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed, checked_now, elsewhere,
     escaped_error, no_proposal, open_context, option_line, queue_cannot, repository_gone,
     with_diff, written_id,
 };
-use crate::review::{document_with, preview_run, previewed};
+use crate::review::{ReviewRequest, document_with, preview_run, previewed, review_brief};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls};
 
 /// The most bytes of an approval's note and a rejection's reason, typed or
@@ -164,6 +166,17 @@ impl StageOutcome {
             None => Exit::Answered,
             Some(StageCause::Usage) => Exit::CannotRun,
             Some(StageCause::Unknown | StageCause::Refused) => Exit::NotFound,
+        }
+    }
+
+    /// The outcome with its document brief, as `spec review PR --brief`
+    /// gives it (texts, `diff`, `conflict` dropped, introduced findings
+    /// capped, the text cut at the output cap): MCP `review_proposal`'s
+    /// refusals (canon `review-form`, "Result").
+    pub fn brief(self) -> Self {
+        Self {
+            proposal: briefed(self.proposal),
+            cause: self.cause,
         }
     }
 
@@ -401,17 +414,140 @@ fn open_proposal(
         }
     }
     if proposal.status != ProposalStatus::Open {
-        let mut reason = format!(
-            "`{id}` is {}: only an open proposal takes a staged choice",
-            proposal.status
-        );
-        if let Some(commit) = &proposal.applied_commit {
-            reason.push_str(&format!(" (commit {commit})"));
-        }
-        reason.push_str("; nothing changed");
-        return refused(&reason);
+        return refused(&not_open(
+            &id,
+            proposal.status,
+            proposal.applied_commit.as_deref(),
+        ));
     }
     Ok(Ok(proposal))
+}
+
+/// Why a proposal `status` other than `open` takes no stage (an applied
+/// one's naming its `commit`).
+fn not_open(id: &str, status: ProposalStatus, commit: Option<&str>) -> String {
+    let mut reason = format!("`{id}` is {status}: only an open proposal takes a staged choice");
+    if let Some(commit) = commit {
+        reason.push_str(&format!(" (commit {commit})"));
+    }
+    reason.push_str("; nothing changed");
+    reason
+}
+
+/// Why a kind that locks takes no stage.
+fn decided_on_terminal(id: &str, kind: ProposalKind) -> String {
+    format!(
+        "{id} is a {} item, decided on a terminal only; nothing staged",
+        kind.as_str()
+    )
+}
+
+/// What [`stage_form`] answered: `outcome` the brief review document, its
+/// `cause` `None`, with the `form` to ask; or refused as [`stage`] refuses
+/// (`cause` and reason, the brief document), no `form`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StageFormOutcome {
+    pub outcome: StageOutcome,
+    pub form: Option<StageForm>,
+}
+
+impl StageFormOutcome {
+    /// [`StageOutcome::exit`]'s.
+    pub fn exit(&self) -> Exit {
+        self.outcome.exit()
+    }
+}
+
+/// The form a stage of the proposal is asked with, by its kind's
+/// [`KindFamily`], never its name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StageForm {
+    /// A kind that decides: an option or the working answer; else one that
+    /// applies.
+    pub decides: bool,
+    /// An editorial approve applies: a kind that applies, writing an
+    /// existing node (not a new file).
+    pub editorial: bool,
+}
+
+impl Named for ReviewRequest {
+    fn id(&self) -> &str {
+        &self.id
+    }
+
+    fn git(&self) -> &GitEnv {
+        &self.git
+    }
+}
+
+/// The read before the owner is asked for a stage (MCP `review_proposal`'s
+/// form; canon `review-form`), judged as [`stage`] judges, in order, the
+/// first refusal the answer, nothing written: a look-alike ID (exit 2,
+/// its Latin fix, as `spec review` and `spec approve` refuse it); not a
+/// proposal ID, unknown (exit 1); another repository's or one gone, an
+/// orphan (only `spec reject` takes it: refused here); not `open` (an
+/// applied one's naming its commit); a kind that locks. Each refusal is
+/// [`stage`]'s cause and reason with the brief document. Else the brief
+/// review document (`spec review PR --brief`, [`review_brief`]) and the
+/// form's family.
+pub fn stage_form(
+    env: &Env,
+    globals: &Globals,
+    request: &ReviewRequest,
+) -> Result<StageFormOutcome, CliError> {
+    run_stage_form(env, globals, request).map_err(escaped_error)
+}
+
+fn run_stage_form(
+    env: &Env,
+    globals: &Globals,
+    request: &ReviewRequest,
+) -> Result<StageFormOutcome, CliError> {
+    let refused = |outcome: StageOutcome| StageFormOutcome {
+        outcome: outcome.brief(),
+        form: None,
+    };
+    let written = written_id(&request.id)?;
+    let form = {
+        let context = open_context(env, globals, &request.git)?;
+        let proposal = match open_proposal(&context, written, request, false)? {
+            Ok(proposal) => proposal,
+            Err(outcome) => return Ok(refused(outcome)),
+        };
+        let family = proposal.kind.family();
+        if family == KindFamily::Locks {
+            let document = with_diff(&proposal, &request.git, &context.data_dir);
+            let reason = decided_on_terminal(&proposal.id, proposal.kind);
+            return Ok(refused(StageOutcome::refused(
+                StageCause::Refused,
+                document,
+                &reason,
+                Vec::new(),
+            )));
+        }
+        StageForm {
+            decides: family == KindFamily::Decides,
+            editorial: family == KindFamily::Applies && !proposal.new_file(),
+        }
+    };
+    let read = review_brief(env, globals, request)?;
+    // Gone between the two reads: the review's refusal, an unknown one's.
+    if read.refusal.is_some() {
+        return Ok(StageFormOutcome {
+            outcome: StageOutcome {
+                proposal: read,
+                cause: Some(StageCause::Unknown),
+            },
+            form: None,
+        });
+    }
+    Ok(StageFormOutcome {
+        outcome: StageOutcome {
+            proposal: read,
+            cause: None,
+        },
+        form: Some(form),
+    })
 }
 
 /// A refusal of the queue's: a lost compare-and-set or a state that no
@@ -466,11 +602,7 @@ fn checked(
     // `drift-queue`, "Review, inbox, round, stage"): refused before any
     // preview is run; the store refuses its stage too.
     if proposal.kind.family() == KindFamily::Locks {
-        return Err(refused(format!(
-            "{} is a {} item, decided on a terminal only; nothing staged",
-            proposal.id,
-            proposal.kind.as_str()
-        )));
+        return Err(refused(decided_on_terminal(&proposal.id, proposal.kind)));
     }
     match body {
         StageBody::Reject { reason, .. } => {
@@ -763,9 +895,10 @@ pub(crate) fn changed_since(context: &QueueContext, read: &Proposal) -> Option<S
 /// The command a stage stands for, on one line: `spec approve PR-0003
 /// --option 1 --note "n"`, `spec approve PR-0004 --note "typo"
 /// --editorial`, `spec reject PR-0005 --reason "…"` (values [`quoted`]);
-/// the line `spec approve|reject` shows before its question, and a round's
-/// sheet after `Staged <at>:`.
-pub(crate) fn staged_command(id: &str, stage: &Stage) -> String {
+/// the line `spec approve|reject` shows before its question, a round's
+/// sheet after `Staged <at>:`, and MCP `review_proposal`'s form and
+/// outcome (canon `review-form`).
+pub fn staged_command(id: &str, stage: &Stage) -> String {
     match stage {
         Stage::Reject { reason } => format!("spec reject {id} --reason {}", quoted(reason)),
         Stage::Approve {

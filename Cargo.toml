@@ -65,13 +65,14 @@ petgraph = { version = "=0.8.3", default-features = false }
 # MCP server over stdio (spike group 4; 04 §6, 07 §1.1). Stdio-only features: no
 # `server-side-http`, no `transport-streamable-http-*`, so no HTTP stack enters the
 # core graph; no `elicitation` feature (it only adds typed helpers and pulls `url`):
-# the legacy `elicitation/create` request goes through `Peer::send_request`.
-rmcp = { version = "=3.5.0", default-features = false, features = ["server", "macros", "transport-io", "request-state"] }
-# Already in the graph through `rmcp` (tokio; getrandom via `uuid` v4); direct and pinned
-# for the runtime and the per-process `requestState` HMAC key. `schemars` is used through
-# the `rmcp::schemars` re-export (1.2.2, as in 04 §6). Approved by the owner 2026-09-29.
+# the legacy `elicitation/create` request goes through `Peer::send_cancellable_request`.
+# No `request-state` (the sealed-state codec): `review_proposal`'s `requestState` is
+# unsealed JSON.
+rmcp = { version = "=3.5.0", default-features = false, features = ["server", "macros", "transport-io"] }
+# Already in the graph through `rmcp`; direct and pinned for the runtime. `schemars` is
+# used through the `rmcp::schemars` re-export (1.2.2, as in 04 §6). Approved by the owner
+# 2026-09-29.
 tokio = { version = "=1.53.1", default-features = false, features = ["rt", "macros", "io-std", "time"] }
-getrandom = { version = "=0.4.3", default-features = false }
 # The daemon's read surface `specengine-http` (docs/features/daemon-read.md, "Data"; 04 §6):
 # HTTP/1 on tokio and the router only. No default features: no `query` (the daemon
 # decodes the raw query string itself, strictly), `json`, `form`, `tracing`,

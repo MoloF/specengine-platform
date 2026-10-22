@@ -62,3 +62,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0051](decisions/ADR-0051.md) Health's code rows read the code index the call refreshes, as spec refs does · architecture · accepted
 - [ADR-0052](decisions/ADR-0052.md) Plan items are files in git; tasks execute them; position is computed · architecture · accepted
 - [ADR-0053](decisions/ADR-0053.md) Reads show what changed since a lock entry · architecture · accepted
+- [ADR-0054](decisions/ADR-0054.md) The MCP form stages only the owner's answer · architecture, crates/specengine-mcp · accepted

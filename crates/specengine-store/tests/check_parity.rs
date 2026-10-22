@@ -758,14 +758,16 @@ fn the_core_render_is_the_committed_index() {
             "Archive \u{2014} Tier 3, by id only".to_owned(),
         ),
         (&set[2], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[0].1)),
+        // docs/features/review-form.md: the `proposal-*` queue canons.
         (&set[3], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[1].1)),
+        (&set[4], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[2].1)),
         (
-            &set[4],
+            &set[5],
             "## Decisions",
-            format!("`{}`", INDEX_LIVE_SHARDS[2].1),
+            format!("`{}`", INDEX_LIVE_SHARDS[3].1),
         ),
-        (&set[5], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[3].1)),
-        (&set[6], "## Specs", format!("`{}`", INDEX_LIVE_SHARDS[4].1)),
+        (&set[6], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[4].1)),
+        (&set[7], "## Specs", format!("`{}`", INDEX_LIVE_SHARDS[5].1)),
     ] {
         let (path, text) = (output.path.as_str(), output.bytes.as_str());
         assert!(
@@ -791,10 +793,11 @@ fn the_core_render_is_the_committed_index() {
             "{INDEX}: the pointer to {path}"
         );
     }
+    // Seven since docs/features/review-form.md (the `proposal-*` shard).
     assert_eq!(
         section_lines(root, SHARDS).len(),
-        6,
-        "{INDEX}: six pointers"
+        INDEX_SET - 1,
+        "{INDEX}: seven pointers"
     );
     // No plan item in the root: each is claimed or Tier 3.
     assert!(
@@ -1148,7 +1151,7 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     let (root, shard) = (set[0].bytes.as_str(), set[1].bytes.as_str());
     // Three Tier 3 seeds sit under the decisions shard's claim: Tier 3
     // places before the claims.
-    let [_, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
+    let [_, _, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
     assert_eq!(
         COMPACTION_SEEDS
             .iter()
@@ -1359,7 +1362,14 @@ fn each_seed_blocks_exactly_its_target() {
     // unclaimed one the root, a claimed one its shard), a Tier 3 line the
     // archive only, a document turning Tier 3 the output it leaves and the
     // archive, an output edited or deleted itself only.
-    let [(canon_spec, _), (canon, _), (decisions, _), (crates, _), _] = INDEX_LIVE_SHARDS;
+    let [
+        (canon_spec, _),
+        _,
+        (canon, _),
+        (decisions, _),
+        (crates, _),
+        _,
+    ] = INDEX_LIVE_SHARDS;
     for (name, outputs) in [
         ("docs/index.md hand-edited", &[INDEX][..]),
         ("tier: 0 off CLAUDE.md", &[INDEX]),
@@ -1940,7 +1950,7 @@ const SEEDS: &[Seed] = &[
     // `spec-*` one): the shard drifts, the root untouched.
     (
         "a new canon document, not rendered",
-        INDEX_LIVE_SHARDS[1].0,
+        INDEX_LIVE_SHARDS[2].0,
         "index-drift",
         |r| {
             write_new(
@@ -1954,7 +1964,7 @@ const SEEDS: &[Seed] = &[
     // leaves that shard for the archive, the root untouched.
     (
         "ADR-0010 superseded-by ADR-0001, not rendered",
-        INDEX_LIVE_SHARDS[2].0,
+        INDEX_LIVE_SHARDS[3].0,
         "index-drift",
         |r| {
             set_key(

@@ -398,7 +398,8 @@ pub use specengine_store::{
 /// A search hit's snippet as structure (the browser view's).
 pub use specengine_store::{Snippet, SnippetSegment};
 pub use stage::{
-    StageBody, StageCause, StageOutcome, StageRequest, UnstageRequest, stage, unstage,
+    StageBody, StageCause, StageForm, StageFormOutcome, StageOutcome, StageRequest, UnstageRequest,
+    stage, stage_form, staged_command, unstage,
 };
 pub use state::{
     ExportStateOutcome, ExportStateRequest, ImportStateOutcome, ImportStateRequest, export_state,
@@ -905,7 +906,7 @@ pub(crate) fn pathspec_word(top_path: &str) -> String {
 /// (lower-case hex), so agent-written text cannot move the cursor, erase,
 /// recolour or reorder what the owner reads. Everything else is kept (a
 /// CRLF file's lines read as they are).
-pub(crate) fn escape_controls(text: &str) -> String {
+pub fn escape_controls(text: &str) -> String {
     if !text.chars().any(is_escaped) {
         return text.to_owned();
     }

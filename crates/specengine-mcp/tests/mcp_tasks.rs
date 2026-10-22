@@ -249,16 +249,24 @@ fn ac14_the_task_tools_and_their_schemas() {
     // on the code line); 1 977 since docs/features/show-bindings.md (the
     // bindings hint in, the no-project gloss out); 2 017 since
     // docs/features/impact.md (`get_impact` on the reads' line); 2 023
-    // since docs/features/impact-since.md (`|since` in its clause).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2023);
+    // since docs/features/impact-since.md (`|since` in its clause); 2 040
+    // since docs/features/review-form.md (the `review_proposal` line).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
         let names = tool_names(&list);
         assert_eq!(names, TOOLS, "{era:?}");
         for name in &names {
-            for owner in ["approve", "changes", "cancel", "decide", "review_"] {
-                assert!(!name.contains(owner), "{era:?}: an owner's tool {name}");
+            // docs/features/review-form.md: the owner's form for a
+            // proposal (ADR-0054) is no task command; a task's has none
+            // (RM-0038).
+            if common::read::OWNER_TOOLS.contains(&name.as_str()) {
+                assert!(!name.contains("task"), "{era:?}: {name}");
+            } else {
+                for owner in ["approve", "changes", "cancel", "decide", "review_"] {
+                    assert!(!name.contains(owner), "{era:?}: an owner's tool {name}");
+                }
             }
             let description = tool(&list, name)["description"].as_str().unwrap();
             assert!(description.chars().count() <= 2048, "{name}");

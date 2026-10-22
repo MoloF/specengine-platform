@@ -11,12 +11,20 @@
 //! an `outputSchema`, `_meta["anthropic/maxResultSizeChars"]` =
 //! `MAX_RESULT_CHARS` and a description of at most 2 048 characters holding
 //! the determinism sentence; `instructions` are at most 2 048 bytes, name
-//! all eighteen and mention neither `review_proposal` nor a probe. The probe
-//! tools are absent (Phase 0 behaviour kept), and `probes` is no default
-//! feature of the manifest. code-tools RD-1, RD-5, M: a code tool with a
-//! writer's hints; a code tool unnamed in `instructions`.
+//! every tool and mention no probe. The probe tools are absent (Phase 0
+//! behaviour kept), and `probes` is no default feature of the manifest.
+//! code-tools RD-1, RD-5, M: a code tool with a writer's hints; a code
+//! tool unnamed in `instructions`.
 //!
-//! M: the demo in the default build (`default = ["probes"]` in the
+//! docs/features/review-form.md D1, D6, D7: twenty-two tools; the owner's
+//! form `review_proposal` (`OWNER_TOOLS`) in the default build with the
+//! writers' hints and `_meta` exactly the size cap and
+//! `anthropic/requiresUserInteraction: true` (no other tool asks the
+//! human); `instructions` name it; the manifest's `probes = []`, no
+//! `getrandom`. M1: `requiresUserInteraction` dropped. M2: an `option`
+//! argument (`review_proposal`'s input exactly `proposal_id`).
+//!
+//! M: the probes in the default build (`default = ["probes"]` in the
 //! manifest: `probes_is_not_a_default_feature` turns red, the list tests
 //! compile out); a 2 049-character description (the build's const assert
 //! fails; without it `default_build_lists_exactly_its_tools`); a queue
@@ -31,7 +39,9 @@ use common::*;
 
 #[cfg(not(feature = "probes"))]
 mod default_build {
-    use super::common::read::{ERAS, Era, READ_TOOLS, Session, TASK_TOOLS, TOOLS, WRITE_TOOLS};
+    use super::common::read::{
+        ERAS, Era, OWNER_TOOLS, READ_TOOLS, Session, TASK_TOOLS, TOOLS, WRITE_TOOLS,
+    };
     use super::common::*;
     use serde_json::{Value, json};
 
@@ -40,7 +50,8 @@ mod default_build {
     fn assert_tool(tool: &Value, era: Era) {
         let name = tool["name"].as_str().expect("name");
         let moves_a_task = TASK_TOOLS.contains(&name) && name != "get_task";
-        let annotations = if WRITE_TOOLS.contains(&name) || moves_a_task {
+        let owner = OWNER_TOOLS.contains(&name);
+        let annotations = if WRITE_TOOLS.contains(&name) || moves_a_task || owner {
             json!({
                 "readOnlyHint": false,
                 "destructiveHint": false,
@@ -59,11 +70,31 @@ mod default_build {
             json!("object"),
             "{era:?} {name}: outputSchema"
         );
-        assert_eq!(
-            tool["_meta"],
-            json!({"anthropic/maxResultSizeChars": specengine_mcp::MAX_RESULT_CHARS}),
-            "{era:?} {name}: _meta"
-        );
+        let meta = if owner {
+            json!({
+                "anthropic/maxResultSizeChars": specengine_mcp::MAX_RESULT_CHARS,
+                "anthropic/requiresUserInteraction": true
+            })
+        } else {
+            json!({"anthropic/maxResultSizeChars": specengine_mcp::MAX_RESULT_CHARS})
+        };
+        assert_eq!(tool["_meta"], meta, "{era:?} {name}: _meta");
+        if owner {
+            let input = &tool["inputSchema"];
+            assert_eq!(
+                input["properties"]
+                    .as_object()
+                    .map(|p| p.keys().collect::<Vec<_>>()),
+                Some(vec![&"proposal_id".to_owned()]),
+                "{era:?} {name}: the input is the ID alone: {input}"
+            );
+            assert_eq!(input["required"], json!(["proposal_id"]), "{era:?} {name}");
+            assert_eq!(
+                input["additionalProperties"],
+                json!(false),
+                "{era:?} {name}"
+            );
+        }
         assert_eq!(
             specengine_mcp::MAX_RESULT_CHARS,
             500_000,
@@ -93,12 +124,11 @@ mod default_build {
                 "{context}: instructions do not name {name}"
             );
         }
-        for absent in ["review_proposal", "probe_"] {
-            assert!(
-                !instructions.contains(absent),
-                "{context}: instructions mention {absent}"
-            );
-        }
+        assert!(
+            !instructions.contains("probe_"),
+            "{context}: instructions mention a probe"
+        );
+        assert!(instructions.is_ascii(), "{context}: instructions are ASCII");
         assert_eq!(
             instructions,
             specengine_mcp::INSTRUCTIONS,
@@ -138,10 +168,20 @@ mod default_build {
                 "{era:?}: probe_output answered in the default build: {}",
                 clip(&call.to_string())
             );
-            let call = session.call("review_proposal", json!({"proposal_id": "P-0001"}));
+            // docs/features/review-form.md: the owner's form is listed;
+            // outside a project its read refuses before any form.
+            let call = session.call("review_proposal", json!({"proposal_id": "PR-0001"}));
+            assert_eq!(
+                call["result"]["isError"],
+                json!(true),
+                "{era:?}: review_proposal outside a project: {}",
+                clip(&call.to_string())
+            );
             assert!(
-                call.get("error").is_some() || call["result"]["isError"] == json!(true),
-                "{era:?}: review_proposal answered in the default build: {}",
+                call["result"]["content"][0]["text"]
+                    .as_str()
+                    .is_some_and(|text| text.contains("spec init")),
+                "{era:?}: {}",
                 clip(&call.to_string())
             );
             let done = session.finish();
@@ -163,7 +203,9 @@ mod default_build {
     }
 }
 
-/// The manifest keeps the demo out of the default build.
+/// The manifest keeps the probes out of the default build; since
+/// docs/features/review-form.md (D7) `probes = []` and no `getrandom`
+/// (the sealed state of the retired demo).
 #[test]
 fn probes_is_not_a_default_feature() {
     let manifest = read_text(&repository_root(), "crates/specengine-mcp/Cargo.toml");
@@ -182,7 +224,11 @@ fn probes_is_not_a_default_feature() {
         }
     }
     assert!(
-        manifest.contains("probes = [\"dep:getrandom\"]"),
-        "the probes feature enables getrandom"
+        manifest.lines().any(|line| line.trim() == "probes = []"),
+        "the probes feature enables nothing: {manifest}"
+    );
+    assert!(
+        !manifest.contains("getrandom"),
+        "getrandom is gone with the demo's sealed state: {manifest}"
     );
 }

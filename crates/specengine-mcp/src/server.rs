@@ -42,12 +42,15 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// the `spec init` aside (34 bytes; the no-project error result names
 /// it); task spec `impact` (Q-B) adds `get_impact` to the reads (40
 /// bytes) and drops the probes paragraph, so every build sends this text
-/// alone; task spec `impact-since` adds `|since` (6 bytes): 2 023 bytes,
-/// 1 885 without the tasks line.
+/// alone; task spec `impact-since` adds `|since` (6 bytes): 2 023 bytes;
+/// task spec `review-form` adds the `review_proposal` line, its twin and
+/// "only when the owner asks" (85 bytes), and drops ` as Markdown`, `
+/// beside the code`, report_drift's ` for the owner` and `, with a tail on
+/// narrowing` (68 bytes): 2 040 bytes, 1 902 without the tasks line.
 pub const INSTRUCTIONS: &str = concat!(
     "\
-SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a spec \
-command: content its `2>&1` output, structuredContent its --json document.
+SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
+output, structuredContent its --json document.
 
 Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
@@ -62,17 +65,17 @@ against its span_hash; create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
 distinct_from names each; work on your working answer.
-- report_drift = spec propose drift: queues HEAD's lock drift for the owner; evidence \
-computed, never typed.
+- report_drift = spec propose drift: queues HEAD's lock drift; evidence computed, never typed.
+- review_proposal = review --brief after the owner's form; only when the owner asks.
 ",
     tasks_line!(),
     "
 
 REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: --kind \
 is kinds, ROOT is root, --links is with [\"links\"], --bindings is with [\"bindings\"]. \
-Answers are cut at 40000 characters, with a tail on narrowing. A REF naming nothing or a call \
-that cannot run is an error result with the reason. Resources: spec://<slug>/tree, \
-spec://<slug>/node/<REF, percent-encoded>.
+Answers are cut at 40000 characters. A REF naming nothing or a call that cannot run is an \
+error result with the reason. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, \
+percent-encoded>.
 
 Rules:
 - Deterministic: one state, one result; no LLM inside.
@@ -92,6 +95,12 @@ const _: () = assert!(INSTRUCTIONS.len() <= TEXT_LIMIT);
 // line alone.
 const _: () = assert!(tasks_line!().len() < TASKS_LINE_LIMIT);
 const _: () = assert!(holds(INSTRUCTIONS, tasks_line!()));
+// The owner's form is named with its twin, and when it may be called
+// (canon `review-form`, "Tool").
+const _: () = assert!(holds(
+    INSTRUCTIONS,
+    "review_proposal = review --brief after the owner's form; only when the owner asks."
+));
 // The cap the instructions state is the CLI's.
 const _: () = assert!(holds_number(
     INSTRUCTIONS,
@@ -137,26 +146,22 @@ pub struct SpecEngineServer {
     lifecycle: Lifecycle,
     /// `--root`, `--config`: the CLI globals of every read.
     globals: Globals,
-    #[cfg(feature = "probes")]
-    reviewer: crate::review::Reviewer,
     tool_router: ToolRouter<Self>,
 }
 
 impl SpecEngineServer {
     /// A server accepting the eras of `lifecycle`, reading with `globals`.
-    /// Under feature `probes`, draws the per-process `requestState` key of the
-    /// consent demo from the OS; without one, stateless reviews answer with a
-    /// tool error and everything else keeps working.
     pub fn new(lifecycle: Lifecycle, globals: Globals) -> Self {
-        let tool_router =
-            Self::read_tools() + Self::code_tools() + Self::intake_tools() + Self::task_tools();
+        let tool_router = Self::read_tools()
+            + Self::code_tools()
+            + Self::intake_tools()
+            + Self::review_tools()
+            + Self::task_tools();
         #[cfg(feature = "probes")]
-        let tool_router = tool_router + Self::review_tools() + Self::probe_tools();
+        let tool_router = tool_router + Self::probe_tools();
         Self {
             lifecycle,
             globals,
-            #[cfg(feature = "probes")]
-            reviewer: crate::review::Reviewer::new(),
             tool_router,
         }
     }
@@ -164,12 +169,6 @@ impl SpecEngineServer {
     /// The CLI globals of every read.
     pub(crate) fn globals(&self) -> &Globals {
         &self.globals
-    }
-
-    /// The consent demo's reviewer.
-    #[cfg(feature = "probes")]
-    pub(crate) fn reviewer(&self) -> &crate::review::Reviewer {
-        &self.reviewer
     }
 }
 

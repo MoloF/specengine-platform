@@ -4,10 +4,17 @@
 //! scripted: a raw JSON-RPC client drives the real `specengine-mcp` binary
 //! (feature `probes`) over stdio in both protocol eras — (a) legacy `initialize` +
 //! `tools/list` + `tools/call`, (b) stateless 2026-07-28 requests, (c) the
-//! `review_proposal` elicitation round trips, (d) the tool `_meta` and
-//! annotations, (e) a 26 k-token output — plus the edge cases of the stdio
-//! contract. Named mutation: `Lifecycle::Auto` pointed at
-//! `LATEST_WITH_INITIALIZE` turns the (b) and stateless (c) tests red.
+//! owner's form `review_proposal` in the measurement build, (d) the tool
+//! `_meta` and annotations, (e) a 26 k-token output — plus the edge cases
+//! of the stdio contract. Named mutation: `Lifecycle::Auto` pointed at
+//! `LATEST_WITH_INITIALIZE` turns the (b) tests red.
+//!
+//! docs/features/review-form.md retires the Phase 0 consent demo of the
+//! same name (its sealed `requestState`, `getrandom`): the measurement
+//! build lists the default build's twenty-two tools and the two probes,
+//! twenty-four; the form's round trips, refusals and cancellation are
+//! `mcp_review_form.rs`' (every build), here only that the probes build
+//! serves the same tool (its `_meta`, its read before any form).
 //!
 //! Run: `cargo nextest run -p specengine-mcp --features probes --test mcp_stdio`.
 //! Non-Latin characters are Unicode escapes (ADR-0024).
@@ -23,22 +30,17 @@ use serde_json::{Value, json};
 
 const REVIEW_TOOL_META_KEY: &str = "anthropic/requiresUserInteraction";
 
-/// `tools/list` of the measurement build: the four read tools (task spec
-/// `mcp-read`), the four queue tools (task spec `agent-intake`),
-/// `report_decision` (docs/features/kind-decision.md) and `report_drift`
-/// (docs/features/drift-queue.md), the five task tools
-/// (docs/features/task-package.md), the three code tools
-/// (docs/features/code-tools.md), `get_roadmap`
-/// (docs/features/roadmap-surfaces.md), `check_binding`
-/// (docs/features/check-binding.md), the consent demo and the two probes,
-/// in wire order.
-const PROBES_BUILD_TOOLS: [&str; 23] = [
+/// `tools/list` of the measurement build: the default build's
+/// [`common::read::TOOLS`] (twenty-two since docs/features/review-form.md)
+/// and the two probes, in wire order.
+const PROBES_BUILD_TOOLS: [&str; 24] = [
     "ask_question",
     "check_binding",
     "claim_task",
     "complete_task",
     "find_symbols",
     "get_context_bundle",
+    "get_impact",
     "get_node",
     "get_proposal",
     "get_roadmap",
@@ -113,37 +115,26 @@ fn review_args(proposal_id: &str) -> Value {
     json!({"proposal_id": proposal_id})
 }
 
-/// (d): `review_proposal` carries the consent `_meta`, an `outputSchema` and
-/// `readOnlyHint: false`; both probes are read-only.
+/// (d): `review_proposal` carries the owner's `_meta` (the size cap and
+/// `requiresUserInteraction`), the writers' hints and `get_proposal`'s
+/// output schema; both probes are read-only and ask nobody.
 fn assert_tool_surface(list: &Value, era: &str) {
     let review = tool(list, "review_proposal");
     assert_eq!(
         review["_meta"],
-        json!({REVIEW_TOOL_META_KEY: true}),
+        json!({"anthropic/maxResultSizeChars": specengine_mcp::MAX_RESULT_CHARS,
+            REVIEW_TOOL_META_KEY: true}),
         "{era}: review_proposal._meta"
     );
-    let schema = &review["outputSchema"];
     assert_eq!(
-        schema["type"],
-        json!("object"),
-        "{era}: outputSchema: {schema}"
+        review["outputSchema"],
+        tool(list, "get_proposal")["outputSchema"],
+        "{era}: review_proposal's output schema is get_proposal's"
     );
-    for field in [
-        "proposal_id",
-        "action",
-        "decision",
-        "comment",
-        "era",
-        "protocol_version",
-    ] {
-        assert!(
-            schema["properties"].get(field).is_some(),
-            "{era}: outputSchema lacks {field}: {schema}"
-        );
-    }
     assert_eq!(
-        review["annotations"]["readOnlyHint"],
-        json!(false),
+        review["annotations"],
+        json!({"readOnlyHint": false, "destructiveHint": false,
+            "idempotentHint": false, "openWorldHint": false}),
         "{era}: review_proposal.annotations"
     );
     for probe in ["probe_output", "probe_sleep"] {
@@ -152,150 +143,19 @@ fn assert_tool_surface(list: &Value, era: &str) {
             json!(true),
             "{era}: {probe}.annotations"
         );
+        assert!(
+            tool(list, probe)["_meta"]
+                .get(REVIEW_TOOL_META_KEY)
+                .is_none(),
+            "{era}: {probe} asks the human"
+        );
     }
-}
-
-/// The consent form: `decision` (required enum approve/reject), `comment` (string).
-fn assert_review_form(params: &Value) {
-    let schema = &params["requestedSchema"];
-    assert_eq!(schema["type"], json!("object"), "form schema: {params}");
-    assert_eq!(
-        schema["properties"]["decision"]["enum"],
-        json!(["approve", "reject"]),
-        "form schema: {params}"
-    );
-    assert_eq!(
-        schema["properties"]["comment"]["type"],
-        json!("string"),
-        "form schema: {params}"
-    );
-    assert_eq!(
-        schema["required"],
-        json!(["decision"]),
-        "form schema: {params}"
-    );
-    assert!(
-        params["message"].as_str().is_some_and(|m| !m.is_empty()),
-        "form message: {params}"
-    );
-}
-
-fn outcome(
-    proposal_id: &str,
-    action: &str,
-    decision: Value,
-    comment: Value,
-    era: &str,
-    version: &str,
-) -> Value {
-    json!({
-        "proposal_id": proposal_id,
-        "action": action,
-        "decision": decision,
-        "comment": comment,
-        "era": era,
-        "protocol_version": version
-    })
-}
-
-/// Legacy: calls `review_proposal`, answers the server's `elicitation/create`
-/// with `answer`, returns the tool result.
-fn legacy_review(server: &mut Server, id: u64, proposal_id: &str, answer: Value) -> Value {
-    server.send(&json!({
-        "jsonrpc": "2.0",
-        "id": id,
-        "method": "tools/call",
-        "params": call_params("review_proposal", review_args(proposal_id))
-    }));
-    let ask = server.recv();
-    assert_eq!(
-        ask["method"],
-        json!("elicitation/create"),
-        "expected the server's form request, got: {}",
-        clip(&ask.to_string())
-    );
-    assert!(
-        ask.get("id").is_some(),
-        "elicitation/create must be a request: {ask}"
-    );
-    assert_review_form(&ask["params"]);
-    assert!(
-        ask["params"]["message"]
-            .as_str()
-            .is_some_and(|m| m.contains(proposal_id)),
-        "the form names the proposal: {ask}"
-    );
-    server.send(&json!({"jsonrpc": "2.0", "id": ask["id"], "result": answer}));
-    let reply = server.recv();
-    assert_eq!(reply["id"], json!(id), "tool result id: {reply}");
-    result(&reply).clone()
-}
-
-/// Stateless round 1 of `review_proposal`; returns the result.
-fn stateless_ask(server: &mut Server, id: u64, meta: &Value, proposal_id: &str) -> Value {
-    let reply = server.request(
-        id,
-        "tools/call",
-        Some(with_meta(
-            call_params("review_proposal", review_args(proposal_id)),
-            meta,
-        )),
-    );
-    result(&reply).clone()
-}
-
-/// Stateless round 1 that must ask; returns the sealed `requestState`.
-fn stateless_request_state(
-    server: &mut Server,
-    id: u64,
-    meta: &Value,
-    proposal_id: &str,
-) -> String {
-    let first = stateless_ask(server, id, meta, proposal_id);
-    assert_eq!(
-        first["resultType"],
-        json!("input_required"),
-        "round 1: {first}"
-    );
-    first["requestState"]
-        .as_str()
-        .unwrap_or_else(|| panic!("round 1 without requestState: {first}"))
-        .to_owned()
-}
-
-/// Stateless round 2 of `review_proposal`; returns the whole reply.
-fn stateless_answer(
-    server: &mut Server,
-    id: u64,
-    meta: &Value,
-    proposal_id: &str,
-    request_state: Option<&str>,
-    input_responses: Option<Value>,
-) -> Value {
-    let mut params = with_meta(
-        call_params("review_proposal", review_args(proposal_id)),
-        meta,
-    );
-    if let Some(state) = request_state {
-        params["requestState"] = json!(state);
-    }
-    if let Some(responses) = input_responses {
-        params["inputResponses"] = responses;
-    }
-    server.request(id, "tools/call", Some(params))
 }
 
 fn text_of(result: &Value) -> &str {
     result["content"][0]["text"]
         .as_str()
         .unwrap_or_else(|| panic!("no text content: {}", clip(&result.to_string())))
-}
-
-/// Replaces the character at `index` of `text` with a different base64url one.
-fn flip_char(text: &str, index: usize) -> String {
-    let mut chars: Vec<char> = text.chars().collect();
-    chars[index] = if chars[index] == 'A' { 'B' } else { 'A' };
-    chars.into_iter().collect()
 }
 
 // ---------------------------------------------------------------- (a) legacy
@@ -322,6 +182,13 @@ fn a_legacy_initialize_list_and_call() {
         PROBES_BUILD_TOOLS,
         "legacy tools/list"
     );
+    // docs/features/review-form.md D1: `probes` adds only the two probes.
+    let without: Vec<&str> = PROBES_BUILD_TOOLS
+        .iter()
+        .copied()
+        .filter(|name| !name.starts_with("probe_"))
+        .collect();
+    assert_eq!(without, common::read::TOOLS, "the default build's tools");
 
     let call = server.request(
         2,
@@ -436,280 +303,46 @@ fn b_legacy_lifecycle_refuses_stateless_requests() {
     assert_eq!(tool_names(result(&list)), PROBES_BUILD_TOOLS);
 }
 
-// ------------------------------------------------------- (c) elicitation
+// ------------------------------------------------------- (c) the owner's form
 
+/// (c): the measurement build serves the owner's form as every build
+/// does: outside a project its read before any form refuses with the
+/// CLI's `spec init` line — no `elicitation/create`, no `input_required`,
+/// no `requestState` — in both eras, a form-capable client.
 #[test]
-fn c_legacy_elicitation_accept_round_trip() {
-    let (mut server, _) = Server::legacy(&[], form_capabilities());
-    let answer = legacy_review(
-        &mut server,
-        5,
-        "P-0001",
-        json!({"action": "accept", "content": {"decision": "approve", "comment": "ok"}}),
-    );
-    assert_eq!(answer["isError"], json!(false), "{answer}");
-    assert_eq!(
-        answer["structuredContent"],
-        outcome(
-            "P-0001",
-            "accept",
-            json!("approve"),
-            json!("ok"),
-            "legacy",
-            LEGACY_VERSION
-        )
-    );
-    assert!(text_of(&answer).contains("P-0001"), "{answer}");
-
-    let done = server.finish();
-    assert!(
-        done.status.success(),
-        "exit {:?}; stderr: {}",
-        done.status,
-        done.stderr
-    );
-    assert!(
-        done.messages.is_empty(),
-        "unsolicited output: {:?}",
-        done.messages
-    );
-}
-
-#[test]
-fn c_legacy_elicitation_decline_and_cancel() {
-    let (mut server, _) = Server::legacy(&[], form_capabilities());
-    for (id, action) in [(6, "decline"), (7, "cancel")] {
-        let answer = legacy_review(&mut server, id, "P-0002", json!({"action": action}));
-        assert_eq!(answer["isError"], json!(false), "{action}: {answer}");
-        assert_eq!(
-            answer["structuredContent"],
-            outcome(
-                "P-0002",
-                action,
-                Value::Null,
-                Value::Null,
-                "legacy",
-                LEGACY_VERSION
-            ),
-            "{action}"
-        );
-    }
-}
-
-#[test]
-fn c_legacy_without_form_elicitation_is_a_tool_error() {
-    let (mut server, _) = Server::legacy(&[], json!({}));
-    let reply = server.request(
+fn c_review_proposal_reads_before_any_form_in_both_eras() {
+    let (mut legacy, _) = Server::legacy(&[], form_capabilities());
+    let reply = legacy.request(
         1,
         "tools/call",
-        Some(call_params("review_proposal", review_args("P-0001"))),
+        Some(call_params("review_proposal", review_args("PR-0001"))),
     );
     let answer = result(&reply);
     assert_eq!(answer["isError"], json!(true), "{answer}");
-    assert!(
-        answer.get("structuredContent").is_none_or(Value::is_null),
-        "no outcome without a form: {answer}"
-    );
-}
-
-#[test]
-fn c_stateless_elicitation_round_trip() {
-    let mut server = Server::spawn(&[]);
-    let meta = stateless_meta(form_capabilities());
-
-    let first = stateless_ask(&mut server, 1, &meta, "P-0001");
-    assert_eq!(first["resultType"], json!("input_required"), "{first}");
-    let ask = &first["inputRequests"]["owner_review"];
-    assert_eq!(ask["method"], json!("elicitation/create"), "{first}");
-    assert_review_form(&ask["params"]);
-    let state = first["requestState"].as_str().expect("requestState");
-    assert!(state.starts_with("rs1."), "requestState: {state}");
-
-    let reply = stateless_answer(
-        &mut server,
-        2,
-        &meta,
-        "P-0001",
-        Some(state),
-        Some(json!({"owner_review": {"action": "accept", "content": {"decision": "reject"}}})),
-    );
-    let second = result(&reply);
-    assert_eq!(second["resultType"], json!("complete"), "{second}");
-    assert_eq!(second["isError"], json!(false), "{second}");
-    assert_eq!(
-        second["structuredContent"],
-        outcome(
-            "P-0001",
-            "accept",
-            json!("reject"),
-            Value::Null,
-            "stateless",
-            STATELESS_VERSION
-        )
-    );
-
-    // Decline through the same state: decision and comment null.
-    let reply = stateless_answer(
-        &mut server,
-        3,
-        &meta,
-        "P-0001",
-        Some(state),
-        Some(json!({"owner_review": {"action": "decline"}})),
-    );
-    assert_eq!(
-        result(&reply)["structuredContent"],
-        outcome(
-            "P-0001",
-            "decline",
-            Value::Null,
-            Value::Null,
-            "stateless",
-            STATELESS_VERSION
-        )
-    );
-
-    let done = server.finish();
-    assert!(
-        done.status.success(),
-        "exit {:?}; stderr: {}",
-        done.status,
-        done.stderr
-    );
+    assert!(text_of(answer).contains("spec init"), "{answer}");
+    let done = legacy.finish();
+    assert!(done.status.success(), "{}", done.stderr);
     assert!(
         done.messages.is_empty(),
-        "unsolicited output: {:?}",
+        "no form went out: {:?}",
         done.messages
     );
-}
 
-#[test]
-fn c_stateless_request_state_is_deterministic_per_process() {
+    let mut stateless = Server::spawn(&[]);
     let meta = stateless_meta(form_capabilities());
-    let mut server = Server::spawn(&[]);
-    let one = stateless_request_state(&mut server, 1, &meta, "P-0001");
-    let two = stateless_request_state(&mut server, 2, &meta, "P-0001");
-    assert_eq!(
-        one, two,
-        "same proposal, same process, different requestState"
-    );
-    let other = stateless_request_state(&mut server, 3, &meta, "P-0002");
-    assert_ne!(one, other, "two proposals share a requestState");
-    drop(server);
-
-    // The key is per process: a restart invalidates the old state.
-    let mut restarted = Server::spawn(&[]);
-    let fresh = stateless_request_state(&mut restarted, 1, &meta, "P-0001");
-    assert_ne!(one, fresh, "the requestState key survived a restart");
-    let reply = stateless_answer(
-        &mut restarted,
-        2,
-        &meta,
-        "P-0001",
-        Some(&one),
-        Some(json!({"owner_review": {"action": "accept", "content": {"decision": "approve"}}})),
-    );
-    assert_eq!(
-        error_code(&reply),
-        INVALID_PARAMS,
-        "state of another process: {reply}"
-    );
-}
-
-#[test]
-fn c_stateless_tampered_request_state_is_invalid_params() {
-    let meta = stateless_meta(form_capabilities());
-    let mut server = Server::spawn(&[]);
-    let state = stateless_request_state(&mut server, 1, &meta, "P-0001");
-    let parts: Vec<&str> = state.split('.').collect();
-    assert_eq!(
-        parts.len(),
-        3,
-        "requestState is rs1.<payload>.<mac>: {state}"
-    );
-    let payload_start = parts[0].len() + 1;
-    let mac_start = payload_start + parts[1].len() + 1;
-    // Middle characters: all six bits are significant, so the bytes change.
-    let tampered = [
-        flip_char(&state, payload_start + parts[1].len() / 2),
-        flip_char(&state, mac_start + parts[2].len() / 2),
-    ];
-    let answer = json!({"owner_review": {"action": "accept", "content": {"decision": "approve"}}});
-    for (index, bad) in tampered.iter().enumerate() {
-        assert_ne!(bad, &state);
-        let reply = stateless_answer(
-            &mut server,
-            10 + index as u64,
+    let reply = stateless.request(
+        1,
+        "tools/call",
+        Some(with_meta(
+            call_params("review_proposal", review_args("PR-0001")),
             &meta,
-            "P-0001",
-            Some(bad),
-            Some(answer.clone()),
-        );
-        assert_eq!(
-            error_code(&reply),
-            INVALID_PARAMS,
-            "tampered state {bad}: {reply}"
-        );
-    }
-    // The untouched state still opens.
-    let reply = stateless_answer(&mut server, 20, &meta, "P-0001", Some(&state), Some(answer));
-    assert_eq!(result(&reply)["resultType"], json!("complete"), "{reply}");
-}
-
-#[test]
-fn c_stateless_request_state_is_bound_to_its_proposal() {
-    let meta = stateless_meta(form_capabilities());
-    let mut server = Server::spawn(&[]);
-    let state = stateless_request_state(&mut server, 1, &meta, "P-0001");
-    let reply = stateless_answer(
-        &mut server,
-        2,
-        &meta,
-        "P-0002",
-        Some(&state),
-        Some(json!({"owner_review": {"action": "accept", "content": {"decision": "approve"}}})),
+        )),
     );
-    assert_eq!(
-        error_code(&reply),
-        INVALID_PARAMS,
-        "state reused for another proposal: {reply}"
-    );
-}
-
-#[test]
-fn c_stateless_missing_input_responses_is_invalid_params() {
-    let meta = stateless_meta(form_capabilities());
-    let mut server = Server::spawn(&[]);
-    let state = stateless_request_state(&mut server, 1, &meta, "P-0001");
-    let reply = stateless_answer(&mut server, 2, &meta, "P-0001", Some(&state), None);
-    assert_eq!(
-        error_code(&reply),
-        INVALID_PARAMS,
-        "no inputResponses: {reply}"
-    );
-    let reply = stateless_answer(
-        &mut server,
-        3,
-        &meta,
-        "P-0001",
-        Some(&state),
-        Some(json!({"another_key": {"action": "accept", "content": {"decision": "approve"}}})),
-    );
-    assert_eq!(
-        error_code(&reply),
-        INVALID_PARAMS,
-        "no owner_review answer: {reply}"
-    );
-}
-
-#[test]
-fn c_stateless_without_form_elicitation_is_a_tool_error() {
-    let meta = stateless_meta(json!({}));
-    let mut server = Server::spawn(&[]);
-    let answer = stateless_ask(&mut server, 1, &meta, "P-0001");
+    let answer = result(&reply);
     assert_eq!(answer["isError"], json!(true), "{answer}");
     assert_ne!(answer["resultType"], json!("input_required"), "{answer}");
     assert!(answer.get("requestState").is_none(), "{answer}");
+    assert!(text_of(answer).contains("spec init"), "{answer}");
 }
 
 // ------------------------------------------------ (d) tool _meta, annotations
@@ -771,65 +404,6 @@ fn e_output_of_26k_tokens_without_server_error() {
 }
 
 // ------------------------------------------------------------------ extras
-
-#[test]
-fn homoglyph_proposal_id_is_a_tool_error_naming_the_code_point() {
-    // CYRILLIC CAPITAL LETTER ER in place of the Latin P.
-    let homoglyph = "\u{0420}-0001";
-    let (mut legacy, _) = Server::legacy(&[], form_capabilities());
-    let reply = legacy.request(
-        1,
-        "tools/call",
-        Some(call_params("review_proposal", review_args(homoglyph))),
-    );
-    let answer = result(&reply);
-    assert_eq!(answer["isError"], json!(true), "{answer}");
-    assert!(text_of(answer).contains("U+0420"), "{answer}");
-    drop(legacy);
-
-    let mut stateless = Server::spawn(&[]);
-    let meta = stateless_meta(form_capabilities());
-    let answer = stateless_ask(&mut stateless, 1, &meta, homoglyph);
-    assert_eq!(answer["isError"], json!(true), "{answer}");
-    assert!(text_of(&answer).contains("U+0420"), "{answer}");
-    assert!(
-        answer.get("requestState").is_none(),
-        "no form for a bad ID: {answer}"
-    );
-}
-
-#[test]
-fn malformed_proposal_ids_are_tool_errors_before_any_form() {
-    let longest = format!("P{}", "0".repeat(63));
-    let too_long = format!("P{}", "0".repeat(64));
-    let (mut legacy, _) = Server::legacy(&[], form_capabilities());
-    let mut id = 1;
-    for (bad, needle) in [
-        ("", "empty"),
-        ("1-P", "must start with an ASCII letter"),
-        ("P 1", "U+0020"),
-        (too_long.as_str(), "at most 64"),
-    ] {
-        // A form request here would be answered by `recv` as the tool result
-        // and fail the id check: an invalid ID must never reach the owner.
-        let reply = legacy.request(
-            id,
-            "tools/call",
-            Some(call_params("review_proposal", review_args(bad))),
-        );
-        let answer = result(&reply);
-        assert_eq!(answer["isError"], json!(true), "{bad:?}: {answer}");
-        assert!(text_of(answer).contains(needle), "{bad:?}: {answer}");
-        id += 1;
-    }
-    // The 64-byte boundary itself is accepted: the form goes out.
-    let answer = legacy_review(&mut legacy, id, &longest, json!({"action": "cancel"}));
-    assert_eq!(
-        answer["structuredContent"]["action"],
-        json!("cancel"),
-        "{answer}"
-    );
-}
 
 #[test]
 fn cancelled_probe_sleep_gets_no_response() {
@@ -951,12 +525,11 @@ fn full_sessions_leave_the_working_directory_empty() {
         "tools/call",
         Some(call_params("probe_sleep", json!({"seconds": 0}))),
     ));
-    legacy_review(
-        &mut legacy,
+    result(&legacy.request(
         4,
-        "P-0001",
-        json!({"action": "accept", "content": {"decision": "approve", "comment": "ok"}}),
-    );
+        "tools/call",
+        Some(call_params("review_proposal", review_args("PR-0001"))),
+    ));
     let done = legacy.finish();
     assert!(
         done.status.success(),
@@ -968,14 +541,13 @@ fn full_sessions_leave_the_working_directory_empty() {
     let mut stateless = Server::spawn_in(&[], Some(&scratch.0));
     let meta = stateless_meta(form_capabilities());
     result(&stateless.request(1, "server/discover", Some(json!({"_meta": meta}))));
-    let state = stateless_request_state(&mut stateless, 2, &meta, "P-0001");
-    let reply = stateless_answer(
-        &mut stateless,
-        3,
-        &meta,
-        "P-0001",
-        Some(&state),
-        Some(json!({"owner_review": {"action": "accept", "content": {"decision": "approve"}}})),
+    let reply = stateless.request(
+        2,
+        "tools/call",
+        Some(with_meta(
+            call_params("review_proposal", review_args("PR-0001")),
+            &meta,
+        )),
     );
     assert_eq!(result(&reply)["resultType"], json!("complete"));
     let done = stateless.finish();

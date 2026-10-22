@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-22
 ---
 
 # SpecEngine architecture rules
@@ -29,7 +29,7 @@ Directories come from `specengine.toml` `[paths]`, so a consumer's existing `doc
 <a id="apply"></a>
 ## Applying proposals
 
-An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`docs/canon/proposal-apply.md`). Spec files are written only by `apply_proposal` on a decision the owner confirms on a terminal, one `[y/N]` each; the UI, later an MCP form, only stages (`docs/canon/decision-staging.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038.
+An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`docs/canon/proposal-apply.md`). Spec files are written only by `apply_proposal` on a decision the owner confirms on a terminal, one `[y/N]` each; the UI and the owner's MCP form only stage, and no tool takes a choice from an agent (`docs/canon/decision-staging.md`, `review-form.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038, ADR-0054.
 
 A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue, a project's generator its output). ADR-0003, ADR-0013, ADR-0022; owner, Q3, 2026-09-30.
 

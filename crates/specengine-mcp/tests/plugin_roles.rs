@@ -1372,10 +1372,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0;
     // roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings:
     // 0.13.0; bundle-bindings: 0.14.0; impact: 0.15.0; impact-since:
-    // 0.16.0; tested-evidence: 0.17.0; tested-reads: 0.18.0.
-    if plugin["version"] != "0.18.0" {
+    // 0.16.0; tested-evidence: 0.17.0; tested-reads: 0.18.0; review-form:
+    // 0.19.0.
+    if plugin["version"] != "0.19.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.18.0",
+            "plugin.json: version {}, not 0.19.0",
             plugin["version"]
         ));
     }
@@ -1445,9 +1446,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.18.0\"", "\"0.17.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.18.0");
-    assert_names(&r2_problems(&older, &market), "not 0.18.0", "0.17.0");
+    let older = plugin.replacen("\"0.19.0\"", "\"0.18.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.19.0");
+    assert_names(&r2_problems(&older, &market), "not 0.19.0", "0.18.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

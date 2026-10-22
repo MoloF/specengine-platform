@@ -1552,10 +1552,11 @@ fn store_and_cli_normal_dependencies_are_2a1_s() {
 // library only.
 // ---------------------------------------------------------------------------
 
-/// The MCP server's `[dependencies]`, exactly.
-const MCP_DEPENDENCIES: [&str; 7] = [
+/// The MCP server's `[dependencies]`, exactly; six since
+/// docs/features/review-form.md (D7): `getrandom` went with the retired
+/// demo's sealed `requestState`.
+const MCP_DEPENDENCIES: [&str; 6] = [
     "clap",
-    "getrandom",
     "rmcp",
     "serde",
     "serde_json",
@@ -1565,10 +1566,12 @@ const MCP_DEPENDENCIES: [&str; 7] = [
 
 /// `specengine-mcp` declares exactly [`MCP_DEPENDENCIES`]: `specengine-cli`
 /// by path, every other a `[workspace.dependencies]` entry with no version,
-/// feature or default-features of its own (no tokio feature added);
-/// `getrandom` is optional and only feature `probes` enables it, which is no
-/// default feature; no target-specific table. The workspace pins of `rmcp`,
-/// `tokio` and `getrandom` are `main`'s.
+/// feature or default-features of its own (no tokio feature added); feature
+/// `probes` enables nothing (`probes = []`, docs/features/review-form.md
+/// D7) and is no default feature; no optional dependency, no
+/// target-specific table. The workspace pins the server takes are
+/// `main`'s, but rmcp's features (`request-state` gone) and no `getrandom`
+/// (docs/features/review-form.md, iteration 2).
 #[test]
 fn mcp_direct_dependencies_are_the_cli_library_and_the_protocol_crates() {
     let (names, targeted) = declared_normal_dependencies("specengine-mcp");
@@ -1602,31 +1605,23 @@ fn mcp_direct_dependencies_are_the_cli_library_and_the_protocol_crates() {
             Some(true),
             "dependencies.{name} is not a workspace entry: {spec:?}"
         );
-        let allowed: &[&str] = if name == "getrandom" {
-            &["workspace", "optional"]
-        } else {
-            &["workspace"]
-        };
-        let extra: Vec<&String> = spec
-            .keys()
-            .filter(|key| !allowed.contains(&key.as_str()))
-            .collect();
+        let extra: Vec<&String> = spec.keys().filter(|key| *key != "workspace").collect();
         assert!(extra.is_empty(), "dependencies.{name}: {extra:?}");
     }
-    assert_eq!(
-        deps["getrandom"]
-            .get("optional")
-            .and_then(toml::Value::as_bool),
-        Some(true),
-        "getrandom is optional"
-    );
+    for table in ["dependencies", "dev-dependencies", "build-dependencies"] {
+        assert!(
+            manifest
+                .get(table)
+                .and_then(toml::Value::as_table)
+                .is_none_or(|deps| !deps.contains_key("getrandom")),
+            "[{table}] names getrandom"
+        );
+    }
     let features = manifest["features"].as_table().expect("[features]");
     assert_eq!(
         features.get("probes"),
-        Some(&toml::Value::Array(vec![toml::Value::String(
-            "dep:getrandom".to_owned()
-        )])),
-        "probes enables getrandom"
+        Some(&toml::Value::Array(Vec::new())),
+        "probes enables nothing"
     );
     let default: Vec<String> = features
         .get("default")
@@ -1662,7 +1657,31 @@ fn mcp_direct_dependencies_are_the_cli_library_and_the_protocol_crates() {
         &std::fs::read_to_string(workspace_root().join("Cargo.toml")).expect("root manifest"),
     )
     .expect("the root manifest");
-    for name in ["rmcp", "tokio", "getrandom", "clap", "serde", "serde_json"] {
+    // docs/features/review-form.md (iteration 2): rmcp drops
+    // `request-state` with the retired demo's sealed state; its version and
+    // `default-features` stay main's.
+    let rmcp = &now["workspace"]["dependencies"]["rmcp"];
+    assert_eq!(
+        rmcp.get("features"),
+        Some(&toml::Value::Array(
+            ["server", "macros", "transport-io"]
+                .map(|feature| toml::Value::String(feature.to_owned()))
+                .to_vec()
+        )),
+        "[workspace.dependencies].rmcp's features"
+    );
+    for key in ["version", "default-features"] {
+        assert_eq!(
+            rmcp.get(key),
+            on_main["workspace"]["dependencies"]["rmcp"].get(key),
+            "[workspace.dependencies].rmcp.{key} changed against main"
+        );
+    }
+    assert!(
+        now["workspace"]["dependencies"].get("getrandom").is_none(),
+        "the workspace still pins getrandom"
+    );
+    for name in ["tokio", "clap", "serde", "serde_json"] {
         assert_eq!(
             now["workspace"]["dependencies"].get(name),
             on_main["workspace"]["dependencies"].get(name),
@@ -1673,8 +1692,8 @@ fn mcp_direct_dependencies_are_the_cli_library_and_the_protocol_crates() {
 
 /// `rusqlite` and the store reach the MCP server only through the CLI
 /// library: neither is a direct dependency, the store's only dependent in
-/// the MCP graph is `specengine-cli`, rusqlite's is the store; `getrandom`
-/// is direct only with feature `probes`.
+/// the MCP graph is `specengine-cli`, rusqlite's is the store; feature
+/// `probes` adds no direct dependency (docs/features/review-form.md D7).
 #[test]
 fn mcp_reaches_the_store_and_rusqlite_only_through_the_cli() {
     for features in [&[][..], &["--features", "specengine-mcp/probes"][..]] {
@@ -1695,11 +1714,7 @@ fn mcp_reaches_the_store_and_rusqlite_only_through_the_cli() {
             .collect();
         names.sort_unstable();
         names.dedup();
-        let want: Vec<&str> = MCP_DEPENDENCIES
-            .iter()
-            .copied()
-            .filter(|name| !features.is_empty() || *name != "getrandom")
-            .collect();
+        let want: Vec<&str> = MCP_DEPENDENCIES.to_vec();
         assert_eq!(
             names, want,
             "direct dependencies with {features:?}:\n{direct}"

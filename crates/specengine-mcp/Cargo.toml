@@ -18,14 +18,12 @@ path = "src/main.rs"
 specengine-cli = { path = "../specengine-cli" }
 rmcp.workspace = true
 tokio.workspace = true
-getrandom = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 clap.workspace = true
 
 [features]
-# The measurement build: the Phase 0 consent demo `review_proposal` (its
-# `requestState` key needs `getrandom`) and the probe tools `probe_output`,
-# `probe_sleep` for the interactive MCP checks (crates/specengine-mcp/README.md,
+# The measurement build: the probe tools `probe_output`, `probe_sleep` for
+# the interactive MCP checks (crates/specengine-mcp/README.md,
 # "Feature `probes`").
-probes = ["dep:getrandom"]
+probes = []

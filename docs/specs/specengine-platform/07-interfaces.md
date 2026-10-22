@@ -43,14 +43,14 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 Phase 2 contract checks (tested; `task-package.md` "Genre"): P2-1 `get_task` `structuredContent` = `spec task show --json`; P2-2 the pinned schema snapshot fails on a key removed or renamed without a bump; P2-3 a source scan (as core `check_genre.rs`) finds no `cargo`, `nextest`, `clippy`, `bevy`, `pnpm`, `npm`, `nest`, `react`, `jira` or this repository's role names in the package and brief sources or `plugin/**`; P2-4 fixtures `spec-a`, `-b`, `-c` give the same key set and `schema_version`; P2-5 a non-Rust fixture (`fixtures/spec-c`, Python) whose records hold no stack words yields none in JSON or content, whole cycle, CLI and MCP; P2-6 changing `profile` changes only that value; P2-7 `claim_task` with `role = "nest-developer"` succeeds, stored verbatim; P2-8 no key starts with `block` (ADR-0012); P2-9 two projects in one daemon never see each other's tasks, deleting one database leaves the other intact, nothing is written to SpecEngine's repository; P2-10 `get_task` at the 10k budget stays under 48,000 characters; P2-11 the package alone carries the verbatim title, goal, criteria text, target titles and open questions; P2-12 a project without a profile runs `get_task` -> `claim_task` -> `report_run` -> `complete_task` on generic prompts at MCP level.
 
-**Human tools** (`owner` set, `_meta["anthropic/requiresUserInteraction"]: true`; 08 Phase 5) only **stage** (ADR-0035, `docs/canon/decision-staging.md`): `spec approve|reject` on a terminal confirms, so no form carries consent (no nonce, TTL or sealed `requestState` binding).
+**Human tools** (`owner` set, `_meta["anthropic/requiresUserInteraction"]: true`; 08 Phase 5) only **stage** the owner's answer (ADR-0035, ADR-0054; `docs/canon/decision-staging.md`, `docs/canon/review-form.md`): `spec approve|reject` on a terminal confirms, so no form carries consent (no nonce, TTL or sealed `requestState` binding).
 
 | Tool | What it does |
 |---|---|
-| `review_proposal` | URL-mode elicitation to the UI card, or a form (option, note) staging the human's choice |
-| `approve_task` | the same for a task; `spec task approve` on a terminal confirms |
+| `review_proposal` | `proposal_id` only: a form (the choice by kind family, a note) staging the owner's answer; `docs/features/review-form.md` (RM-0012). URL mode onto the UI card: later, if ever |
+| `approve_task` | the same for a task, `spec task approve` on a terminal confirming: RM-0038 `task-stage`, its own ADR (no task stage exists yet) |
 
-The MCP server remembers nothing between calls; a `cancel` stages nothing (the agent never re-opens the form itself), sending `notifications/cancelled` for the outstanding `elicitation/create`. No agent tool stages; `get_proposal` shows a stage.
+The MCP server remembers nothing between calls (the stateless era's `requestState` carries the `updated_at` read, unsealed); a decline or `cancel` stages nothing (the agent never re-opens the form itself); a cancelled call sends `notifications/cancelled` for the outstanding `elicitation/create`. No tool input carries a choice; `get_proposal` shows a stage.
 
 ### 1.3. Resources (for `@`-mentions)
 

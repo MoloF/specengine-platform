@@ -31,7 +31,7 @@ The open work, its order and the time left (open items' estimates summed, the po
 
 - Slices: `proposal-apply` (1: `apply_proposal` for `update`), `queue-export` (2: backup, restore), `agent-intake` (3: MCP intake), `queue-path-targets` (4: path targets), `plugin-skills` (`.mcp.json`, skills; owner's check open) shipped 2026-10-05; `decision-apply` (5: answers as decision records), `daemon-read` (`specengine-http`) shipped 2026-10-06; `proposal-kinds` (6: `create`), `task-package` (7, ADR-0027) shipped 2026-10-07 (UI: Phase 4); `decision-staging` (ADR-0035), `plugin-gate`, `round` (ADR-0038), `ui-round` (Phase 4), `plugin-roles`, `spec-serve` 2026-10-08; `kind-{interpretation,decision,amendment}`, `health-left` (`docs/canon/health.md`) 2026-10-09.
 - MCP lever (Phase 0 spike): `_meta["anthropic/maxResultSizeChars"]` (500 000) declared; open: does it act, the maxima (`docs/canon/mcp-read.md` "Owner's check": 48-60 k on 2.1.288).
-- MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`, `complete_task` shipped; no agent tool stages or decides (ADR-0035); the staging forms `review_proposal`, `approve_task`: Phase 5 (Phase 0's is a demo, `crates/specengine-mcp/README.md`).
+- MCP: `get_task`, `claim_task`, `submit_plan`, `report_run`, `complete_task` shipped; no tool takes a choice from an agent or decides (ADR-0035, ADR-0054); the owner's staging forms: Phase 5.
 - Daemon `spec serve` shipped (the UI inside since Phase 4 `ui-embed`): `specengine-http` per data directory; `spec mcp` on a trigger (05 §1 (6)); no gate needs it (ADR-0039).
 - **Plugin** (06 §8; `docs/canon/plugin.md`): the gate hook, skills, stack-neutral roles, `/specengine:feature` shipped; other hooks (07 §4) later; stack roles from a profile plugin or the project (ADR-0027).
 - Live check: 2-3 real tasks of **each** pilot project go through the full cycle (ADR-0008); stack neutrality done 2026-10-08: `fixtures/spec-c` (07 s1.2 P2-5).
@@ -55,6 +55,7 @@ Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell`
 
 - Full migration of the remaining pilot projects (A migrates first in Phase 2-3, then B; order: Phase 1).
 - A `shared` project (common library) linked from several projects.
+- The owner's staging forms over MCP, form mode (ADR-0054): `review_proposal` (`review-form`, RM-0012), then `approve_task` (`task-stage`, RM-0038, its own ADR).
 - Metrics and compaction, notifications, URL-mode elicitation onto UI cards (staging only, ADR-0035).
 - Optional: queue export to Beads/Task Master, spec digest into `AGENTS.md`/`CLAUDE.md` for external reviewers. No vector search (04 §2.1).
 

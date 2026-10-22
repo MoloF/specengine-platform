@@ -1583,9 +1583,13 @@ fn code_mirrors_pin_the_q35_types() {
 /// line ends with `; get_impact(id|symbol, depth?) = impact` (40 bytes),
 /// the `probes` paragraph gone. 2 023 since docs/features/impact-since.md
 /// ("MCP, INSTRUCTIONS, plugin 0.16.0"): the clause gains [`SINCE_INPUT`]
-/// after `id|symbol`, [`IMPACT_READ`] (46 bytes).
+/// after `id|symbol`, [`IMPACT_READ`] (46 bytes). 2 040 since
+/// docs/features/review-form.md ("INSTRUCTIONS" of the developer's text,
+/// D6): [`REVIEW_LINE`] after the drift line (85 bytes), and
+/// [`MARKDOWN_GLOSS`], [`CODE_GLOSS`], [`DRIFT_GLOSS`] and [`TAIL_GLOSS`]
+/// cut (68 bytes); [`as_of_impact_since`] puts them back.
 const PLANNED_INSTRUCTIONS: &str = concat!(
-    "SpecEngine keeps a project's spec as Markdown in git beside the code. Each tool is a ",
+    "SpecEngine keeps a project's spec in git. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
     "\n",
     "Reads:\n",
@@ -1601,14 +1605,15 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- ask_question, report_discrepancy, report_decision = spec propose ",
     "question|discrepancy|decision: hits are what is decided or asked; stored only if ",
     "distinct_from names each; work on your working answer.\n",
-    "- report_drift = spec propose drift: queues HEAD's lock drift for the owner; evidence ",
-    "computed, never typed.\n",
+    "- report_drift = spec propose drift: queues HEAD's lock drift; evidence computed, never ",
+    "typed.\n",
+    "- review_proposal = review --brief after the owner's form; only when the owner asks.\n",
     "- get_task, claim_task, submit_plan, report_run, complete_task = spec task ",
     "show|claim|plan|report|complete; the three above take task_id.\n",
     "\n",
     "REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: ",
     "--kind is kinds, ROOT is root, --links is with [\"links\"], --bindings is with ",
-    "[\"bindings\"]. Answers are cut at 40000 characters, with a tail on narrowing. A REF ",
+    "[\"bindings\"]. Answers are cut at 40000 characters. A REF ",
     "naming nothing or a call that cannot run is an error result with the reason. ",
     "Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.\n",
     "\n",
@@ -1619,6 +1624,40 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- Nothing is blocked by a discrepancy.\n",
     "- IDs are Latin only; a look-alike is refused with its Latin fix.",
 );
+
+/// docs/features/review-form.md: the owner's form's line, its LF
+/// included (85 bytes), right after the drift line.
+const REVIEW_LINE: &str =
+    "- review_proposal = review --brief after the owner's form; only when the owner asks.\n";
+
+/// docs/features/review-form.md: the cuts that make room for
+/// [`REVIEW_LINE`] (12 + 16 + 14 + 26 = 68 bytes).
+const MARKDOWN_GLOSS: &str = " as Markdown";
+const CODE_GLOSS: &str = " beside the code";
+const DRIFT_GLOSS: &str = " for the owner";
+const TAIL_GLOSS: &str = ", with a tail on narrowing";
+
+/// impact-since's text (2 023 bytes) out of review-form's (2 040):
+/// [`REVIEW_LINE`] taken out, the four glosses put back.
+fn as_of_impact_since(instructions: &str) -> String {
+    instructions
+        .replacen(REVIEW_LINE, "", 1)
+        .replacen(
+            "a project's spec in git.",
+            &format!("a project's spec{MARKDOWN_GLOSS} in git{CODE_GLOSS}."),
+            1,
+        )
+        .replacen(
+            "queues HEAD's lock drift;",
+            &format!("queues HEAD's lock drift{DRIFT_GLOSS};"),
+            1,
+        )
+        .replacen(
+            "cut at 40000 characters.",
+            &format!("cut at 40000 characters{TAIL_GLOSS}."),
+            1,
+        )
+}
 
 /// docs/features/roadmap-surfaces.md "Data": what the reads' line gains,
 /// before its full stop (40 bytes).
@@ -1692,9 +1731,15 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// here, never of the server's; `mcp_path.rs` and `mcp_decision.rs` pin
 /// the same value against `INSTRUCTIONS` (re-pinned by
 /// docs/features/roadmap-surfaces.md, docs/features/check-binding.md,
-/// docs/features/show-bindings.md, docs/features/impact.md and
-/// docs/features/impact-since.md).
-const PLANNED_BLAKE3: &str = "9737b6644b04bf18e3c69b14c83d36ef6de5ca01fff650f6c3f9821072e45b1c";
+/// docs/features/show-bindings.md, docs/features/impact.md,
+/// docs/features/impact-since.md and docs/features/review-form.md).
+const PLANNED_BLAKE3: &str = "47411b2fd929cbb742ee813df864c584f3d39f7294c1c0348f9360ff0d0b05de";
+
+/// impact-since's text (2 023 bytes), [`as_of_impact_since`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/review-form.md.
+const IMPACT_SINCE_BLAKE3: &str =
+    "9737b6644b04bf18e3c69b14c83d36ef6de5ca01fff650f6c3f9821072e45b1c";
 
 /// impact's text (2 017 bytes), [`as_of_impact`] over
 /// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
@@ -1722,11 +1767,12 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 /// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 885
-/// bytes); impact's 1 879 was `523f0715…`, show-bindings' 1 839
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 902
+/// bytes since docs/features/review-form.md); impact-since's 1 885 was
+/// `381344b2…`, impact's 1 879 `523f0715…`, show-bindings' 1 839
 /// `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "381344b2d7db35e5a4ef391cebf5068fcc7a318f26025225d8ef77e0f1127a28";
+    "f0924769b09ff777ad983063624e1721f26a407d448fe5900b311324786ce1c1";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -1754,10 +1800,19 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// impact clause reads `get_impact(id|symbol|since, depth?) = impact`
 /// ([`SINCE_INPUT`], 6 bytes): 2 023 bytes, 1 885 less the tasks line, 25
 /// left. M: `since` unnamed; the text changed, a pin kept.
+/// docs/features/review-form.md (D6): [`REVIEW_LINE`] after the drift line,
+/// the four glosses cut: 2 040 bytes, 1 902 less the tasks line, 8 left;
+/// the text before it is impact-since's byte for byte. M: the line
+/// elsewhere or unnamed; the text changed, a pin kept.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2023, "the spec's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2040, "review-form's figure");
+    assert_eq!(REVIEW_LINE.len(), 85);
+    assert_eq!(
+        MARKDOWN_GLOSS.len() + CODE_GLOSS.len() + DRIFT_GLOSS.len() + TAIL_GLOSS.len(),
+        68
+    );
     assert_eq!(ROADMAP_READ.len(), 40);
     assert_eq!(IMPACT_READ.len(), 46);
     assert_eq!(SINCE_INPUT.len(), 6);
@@ -1769,11 +1824,11 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TASKS_LINE.len(), 138);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 2023);
-    assert_eq!(
-        2048 - instructions.len(),
-        25,
-        "the room docs/features/impact-since.md states"
+    assert_eq!(instructions.len(), 2040);
+    assert_eq!(2048 - instructions.len(), 8, "the room left");
+    assert!(
+        instructions.contains(&format!("never typed.\n{REVIEW_LINE}{TASKS_LINE}")),
+        "the form's line between the drift line and the tasks line"
     );
     assert!(instructions.is_ascii());
     assert!(
@@ -1832,9 +1887,17 @@ fn rd5_instructions_are_the_planned_text() {
     }
     assert!(instructions.contains("get_impact("), "get_impact(");
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1885, "2 023 less 138");
+    assert_eq!(less.len(), 1902, "2 040 less 138");
+    // The text before docs/features/review-form.md: impact-since's 2 023.
+    let impact_since = as_of_impact_since(instructions);
+    assert_eq!(impact_since.len(), 2023);
+    assert_eq!(
+        blake3_hex(impact_since.as_bytes()),
+        IMPACT_SINCE_BLAKE3,
+        "only the form's line was added and the four glosses cut"
+    );
     // The text before docs/features/impact-since.md: impact's 2 017.
-    let impact = as_of_impact(instructions);
+    let impact = as_of_impact(&impact_since);
     assert_eq!(impact.len(), 2017);
     assert_eq!(
         blake3_hex(impact.as_bytes()),
@@ -1888,7 +1951,9 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
-    let impact = as_of_impact(PLANNED_INSTRUCTIONS);
+    let impact_since = as_of_impact_since(PLANNED_INSTRUCTIONS);
+    assert_eq!(blake3_hex(impact_since.as_bytes()), IMPACT_SINCE_BLAKE3);
+    let impact = as_of_impact(&impact_since);
     assert_eq!(blake3_hex(impact.as_bytes()), IMPACT_BLAKE3);
     let show_bindings = as_of_show_bindings(&impact);
     assert_eq!(blake3_hex(show_bindings.as_bytes()), SHOW_BINDINGS_BLAKE3);

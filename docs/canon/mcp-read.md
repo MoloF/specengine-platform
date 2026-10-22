@@ -3,16 +3,16 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-22
 ---
 
 # MCP read tools and resources
 
-The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the spec through their native surface (typed arguments, read-only annotations, tool search, `@`-mentions) and get exactly what the CLI answers. One core, four adapters (05 §1): every tool and resource is one call into the CLI library (`crates/specengine-cli/README.md`), so discovery, freshness, REF resolution, the cut, tails, hints, exits and writes are the CLI's; MCP adds no cap, sort, default or rendering. Eras, stdout, exits, the Claude Code facts relied on, the Phase 0 demo: `crates/specengine-mcp/README.md`.
+The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the spec through their native surface (typed arguments, read-only annotations, tool search, `@`-mentions) and get exactly what the CLI answers. One core, four adapters (05 §1): every tool and resource is one call into the CLI library (`crates/specengine-cli/README.md`), so discovery, freshness, REF resolution, the cut, tails, hints, exits and writes are the CLI's; MCP adds no cap, sort, default or rendering. Eras, stdout, exits, the Claude Code facts relied on: `crates/specengine-mcp/README.md`.
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP") and the resources; feature `probes` (never default) adds the Phase 0 demo `review_proposal` (with `getrandom`), `probe_output` and `probe_sleep`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, `HOME` = `${TMPDIR:-/tmp}/specengine-mcp-home`).
 
 ## Tools
 
@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue, the tasks, REF, the cut, the resources and the rules (`server.rs`): 2 023 B in every build, 1 885 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): 25 B left. Each description <= 2 048 (`get_node` 1 670, `get_context_bundle` 1 433), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue with `review_proposal`, the tasks, REF, the cut, the resources and the rules (`server.rs`), 2 040 B in every build, 1 902 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): 8 B left. Each description <= 2 048 (`get_node` 1 670, `get_context_bundle` 1 433), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
@@ -44,7 +44,7 @@ Text only, for `@`-mentions; one inserts content without a tool call, so no hook
 
 The server starts in both eras with or without a project. **No project** = CLI `locate` fails: an unusable current directory or `--root`, no `specengine.toml` by the walk or in `--root`. Then each tool returns the CLI's exit-2 line (naming `spec init`, or the `--root`), `resources/list` `[]`, a read -32603; an unusable `HOME` likewise (`[]`). Any failure once a project is found -> `resources/list` -32603 with the CLI's line: the config unreadable, not UTF-8 or invalid, no slug, the database busy, corrupt or not writable. The CLI's order holds, config -> slug -> `HOME`: a broken config or a missing slug with `HOME` unset is -32603. Following the CLI's split, `--root nope` -> `[]`, `--config nope.toml` -> -32603 (`locate` reads no `--config`).
 
-Each request finds the project anew from the process's current directory and the globals (`Env::from_process`), runs on the blocking pool (`spawn_blocking`) and keeps nothing (outcome, project, config, DB handle): an edit, a deleted DB, a changed `bundle_node` apply on the next call. A cancelled call runs to its end (its only write: the index), its answer dropped; other requests are answered meanwhile (`ping` in the legacy era only: 2026-07-28 has none). Writes: where the CLI's reads write (the queue tools: the queue), the data directory (`docs/canon/architecture.md#storage`); nothing under the root; no tool exposes `init`, `index`, `check`, `export index` (08 AC-3, the single door). A quiet panic hook (`main.rs`): stdout carries JSON-RPC only.
+Each request finds the project anew from the process's current directory and the globals (`Env::from_process`), runs on the blocking pool (`spawn_blocking`) and keeps nothing (outcome, project, config, DB handle): an edit, a deleted DB, a changed `bundle_node` apply on the next call. A cancelled call runs to its end (its only write: the index), its answer dropped; other requests are answered meanwhile (`ping` in the legacy era only: 2026-07-28 has none). Writes: where the CLI's reads write (the queue tools: the queue), the data directory (`docs/canon/architecture.md#storage`); nothing under the root; no tool exposes `init`, `index`, `check`, `export index` (08 AC-3, the single door). stdout: JSON-RPC only (README "Binary").
 
 ## Size
 
@@ -69,7 +69,7 @@ AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Rec
 
 ## Tests
 
-`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default` (lists, annotations, texts), `mcp_read` (parity, errors, schemas), `mcp_resources`, `mcp_session` (discovery, freshness, cancellation, `HOME`), `mcp_door` (the single door in a git repository), `mcp_intake`, `mcp_tasks` (task tools), `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
+`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default` (lists, annotations, texts), `mcp_read` (parity, errors, schemas), `mcp_resources`, `mcp_session` (discovery, freshness, cancellation, `HOME`), `mcp_door` (the single door in a git repository), `mcp_intake`, `mcp_review_form`, `mcp_stage` (`review-form.md`), `mcp_tasks` (task tools), `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
 
 ## Open
 

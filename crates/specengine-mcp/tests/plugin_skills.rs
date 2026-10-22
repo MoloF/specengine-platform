@@ -109,6 +109,9 @@ const NAMES: [(&str, &[&str]); 6] = [
             "record_id",
             // docs/features/drift-queue.md "report_drift and texts".
             "report_drift",
+            // docs/features/review-form.md D7.
+            "review_proposal",
+            "proposal_id",
         ],
     ),
     ("propose-spec-change", &["propose_change", "span_hash"]),
@@ -362,7 +365,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's twenty-one tools"
+        "the default build's twenty-two tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1182,8 +1185,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/bundle-bindings.md; 0.15.0 since
     // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md;
     // 0.17.0 since docs/features/tested-evidence.md; 0.18.0 since
-    // docs/features/tested-reads.md.
-    assert_eq!(manifest["version"], "0.18.0");
+    // docs/features/tested-reads.md; 0.19.0 since
+    // docs/features/review-form.md.
+    assert_eq!(manifest["version"], "0.19.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1270,8 +1274,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/bundle-bindings.md; 0.15.0 since
     // docs/features/impact.md; 0.16.0 since docs/features/impact-since.md;
     // 0.17.0 since docs/features/tested-evidence.md; 0.18.0 since
-    // docs/features/tested-reads.md.
-    assert_eq!(manifest["version"], "0.18.0");
+    // docs/features/tested-reads.md; 0.19.0 since
+    // docs/features/review-form.md.
+    assert_eq!(manifest["version"], "0.19.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1374,12 +1379,12 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.18.0",
+        manifest["version"], "0.19.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
          bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0; \
-         tested-reads: 0.18.0"
+         tested-reads: 0.18.0; review-form: 0.19.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1505,8 +1510,10 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // docs/features/check-binding.md (`check_binding`, named in
     // `implement`: `check_binding_implement_names_the_tool`); twenty-one
     // since docs/features/impact.md (`get_impact`, named in `implement`:
-    // `impact_implement_names_get_impact`).
-    assert_eq!(TOOLS.len(), 21);
+    // `impact_implement_names_get_impact`); twenty-two since
+    // docs/features/review-form.md (`review_proposal`, named in
+    // `ask-owner`: `review_form_ask_owner_names_review_proposal`).
+    assert_eq!(TOOLS.len(), 22);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
     assert!(
         READ_SPEC_CODE_TOOLS
@@ -2114,4 +2121,95 @@ fn tested_reads_skills_name_tested() {
             .any(|line| line == READ_SPEC_TESTED),
         "the mutation is seen"
     );
+}
+
+/// docs/features/review-form.md D7 (canon `plugin.md` "Skills",
+/// `ask-owner`): `ask-owner` is the one skill naming `review_proposal`, in
+/// one paragraph saying who calls it (the main session, never a role),
+/// when (only when the owner asks to decide a record there), how often
+/// (once, never again after a decline or a dismissed form unless the owner
+/// asks), with its `proposal_id`, and that the form only stages; "Whose
+/// words count" still says a `staged` choice is not an answer; the body
+/// stays within 4 096 bytes. M: the tool unnamed; "once" or the decline
+/// rule dropped; a role allowed to call it.
+#[test]
+fn review_form_ask_owner_names_review_proposal() {
+    let skills = committed();
+    assert_eq!(ac11_problems(&skills), Vec::<String>::new());
+    let naming: Vec<&String> = skills
+        .iter()
+        .filter(|(_, text)| {
+            backticked(text)
+                .iter()
+                .any(|span| span == "review_proposal")
+        })
+        .map(|(skill, _)| skill)
+        .collect();
+    assert_eq!(naming, ["ask-owner"], "the skills naming `review_proposal`");
+    let rules = |text: &str| -> Vec<String> {
+        let mut problems = Vec::new();
+        let Some(paragraph) = text
+            .split("\n\n")
+            .find(|paragraph| paragraph.contains("`review_proposal`"))
+        else {
+            return vec!["ask-owner: no paragraph names `review_proposal`".to_owned()];
+        };
+        for words in [
+            "`proposal_id`",
+            "once",
+            "main session",
+            "never from a role",
+            "only stages",
+            "After a decline or a dismissed form, never again unless the owner asks",
+            "When the owner asks",
+        ] {
+            if !paragraph.contains(words) {
+                problems.push(format!("ask-owner: the form's paragraph lacks {words:?}"));
+            }
+        }
+        let section = text
+            .split("\n## ")
+            .find(|section| section.starts_with("Whose words count"))
+            .unwrap_or_default();
+        if !(section.contains("`staged`") && section.contains("is not an answer")) {
+            problems.push("ask-owner: a `staged` choice no longer \"is not an answer\"".to_owned());
+        }
+        let body = text.splitn(3, "---\n").nth(2).unwrap_or_default();
+        if body.len() > 4096 {
+            problems.push(format!("ask-owner: a body of {} bytes", body.len()));
+        }
+        problems
+    };
+    let text = &skills["ask-owner"];
+    assert_eq!(rules(text), Vec::<String>::new(), "{text}");
+
+    // M: the tool unnamed.
+    let unnamed = edited(&skills, "ask-owner", "`review_proposal`", "the form tool");
+    assert_names(
+        &ac11_problems(&unnamed),
+        "ask-owner: `review_proposal` not backticked",
+        "review_proposal unnamed",
+    );
+    assert_names(
+        &ac06_problems(&unnamed, &listed()),
+        "tool `review_proposal` backticked nowhere",
+        "review_proposal unnamed (AC-06)",
+    );
+    // M: "once" dropped; the decline rule dropped; a role allowed.
+    for (from, to, needle) in [
+        ("`proposal_id`, once,", "`proposal_id`,", "\"once\""),
+        (
+            "After a decline or a dismissed form, never again unless the owner asks.",
+            "Ask again when useful.",
+            "After a decline",
+        ),
+        ("never from a role", "or from a role", "never from a role"),
+    ] {
+        let mutated = edited(&skills, "ask-owner", from, to);
+        let problems = rules(&mutated["ask-owner"]);
+        assert!(
+            problems.iter().any(|problem| problem.contains(needle)),
+            "{from:?} -> {to:?}: {problems:?}"
+        );
+    }
 }

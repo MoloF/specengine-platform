@@ -380,14 +380,17 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     // docs/features/impact-since.md ("MCP, INSTRUCTIONS, plugin 0.16.0":
     // `|since` after `id|symbol`, 6 bytes);
     // the values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1885);
+    // 1 902 and 2 040 since docs/features/review-form.md (D6: the
+    // `review_proposal` line, 85 bytes; four glosses cut, 68); the values
+    // `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1902);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "381344b2d7db35e5a4ef391cebf5068fcc7a318f26025225d8ef77e0f1127a28"
+        "f0924769b09ff777ad983063624e1721f26a407d448fe5900b311324786ce1c1"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2023);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "9737b6644b04bf18e3c69b14c83d36ef6de5ca01fff650f6c3f9821072e45b1c"
+        "47411b2fd929cbb742ee813df864c584f3d39f7294c1c0348f9360ff0d0b05de"
     );
 }

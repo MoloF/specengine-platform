@@ -90,8 +90,9 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// docs/features/code-tools.md (`find_symbols`, `refs`, `unmapped`),
 /// nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`),
 /// twenty since docs/features/check-binding.md (`check_binding`),
-/// twenty-one since docs/features/impact.md (`get_impact`).
-pub const TOOLS: [&str; 21] = [
+/// twenty-one since docs/features/impact.md (`get_impact`), twenty-two
+/// since docs/features/review-form.md ([`OWNER_TOOLS`]).
+pub const TOOLS: [&str; 22] = [
     "ask_question",
     "check_binding",
     "claim_task",
@@ -110,10 +111,18 @@ pub const TOOLS: [&str; 21] = [
     "report_discrepancy",
     "report_drift",
     "report_run",
+    "review_proposal",
     "search",
     "submit_plan",
     "unmapped",
 ];
+
+/// The owner's tools of docs/features/review-form.md (07 §1.2 `owner`
+/// set): `review_proposal`, the staging form, `_meta` with
+/// `anthropic/requiresUserInteraction: true`, writers' hints; its read
+/// before any form `stage_form` (`spec review PR --brief`, refused as
+/// `stage` refuses).
+pub const OWNER_TOOLS: [&str; 1] = ["review_proposal"];
 
 /// docs/canon/mcp-code.md "Tools", Forms: `find_symbols` given not
 /// exactly one of its four forms (a `null` is absent), as `get_task`'s.
@@ -677,6 +686,27 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             &specengine_cli::utc_now(),
             &server_git(env),
         );
+    }
+    if OWNER_TOOLS.contains(&tool) {
+        // docs/features/review-form.md: the read before any form,
+        // `stage_form`, refused as the read tools refuse (exit 2: the
+        // line(s) only); a call it does not refuse asks the owner (no twin).
+        let read = specengine_cli::stage_form(
+            env,
+            globals,
+            &ReviewRequest {
+                id: args["proposal_id"].as_str().unwrap_or_default().to_owned(),
+                git: server_git(env),
+            },
+        );
+        return expected(read.and_then(|answer| {
+            let outcome = Outcome::Stage(Box::new(answer.outcome));
+            if outcome.exit() == Exit::CannotRun {
+                Err(specengine_cli::CliError::lines(outcome.stderr_lines()))
+            } else {
+                Ok(outcome)
+            }
+        }));
     }
     let flag = |key: &str| args[key].as_bool().unwrap_or(false);
     let number = |key: &str| args[key].as_i64();

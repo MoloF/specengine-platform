@@ -10,9 +10,10 @@
 //! `"` on lines outside `//` comments (as core `check_genre.rs`), so a
 //! quoted example (`[\"mechanic\"]`) is a literal of its own. The kind scan
 //! covers the modules of the default build: those `lib.rs` declares under
-//! `#[cfg(feature = "probes")]` (the Phase 0 consent demo `review.rs`, whose
-//! form field is named `decision`, and `probes.rs`) are left out and named
-//! by the test. The P2-3 scan covers every source file; a word is whole
+//! `#[cfg(feature = "probes")]` (`probes.rs`) are left out and named by the
+//! test. Since docs/features/review-form.md the owner's form `review.rs`
+//! is in the default build and scanned (R7: no `"decision"` literal; its
+//! fields follow the kind family). M: a kind literal in `review.rs`. The P2-3 scan covers every source file; a word is whole
 //! (ASCII letters, digits, `_`, `-` are word characters), so
 //! `CARGO_PKG_NAME` is not the word `cargo`. The game-only kinds
 //! `mechanic`, `edge-case` and `domain` must not appear even as words in a
@@ -111,8 +112,12 @@ fn ac12_the_sources_hold_no_fixture_kind_and_no_stack_word() {
     let skipped = probes_only_modules(&src);
     assert_eq!(
         skipped,
-        ["probes.rs", "review.rs"],
-        "the probes-only modules left out of the kind scan"
+        ["probes.rs"],
+        "the probes-only modules left out of the kind scan (review.rs scanned)"
+    );
+    assert!(
+        src.join("review.rs").is_file(),
+        "the owner's form is scanned"
     );
     let mut files: Vec<_> = fs::read_dir(&src)
         .expect("src")

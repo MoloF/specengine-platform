@@ -88,7 +88,7 @@ One queue in three places:
 
 **Web UI → Queue**: a card with evidence (code highlighted), the node's current text, options with price, the diff (`@codemirror/merge`), editable in the card before accepting. Accepting **stages** the choice; the card then shows the `spec approve PR` command to copy (`docs/canon/decision-staging.md`).
 
-**Inside a Claude Code session** (later, 08 Phase 5): URL-mode elicitation opens the UI card, or a form stages the choice as the UI does; neither confirms. No agent tool stages (ADR-0035); a model cannot answer for the human.
+**Inside a Claude Code session** (08 Phase 5): the form of `review_proposal` stages the owner's choice as the UI does (`docs/canon/review-form.md`); URL-mode elicitation onto the UI card later, if ever; neither confirms. No tool takes a choice from an agent (ADR-0035, ADR-0054); a model cannot answer for the human.
 
 ### 3.4. What happens after the decision
 

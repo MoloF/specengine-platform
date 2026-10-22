@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 24 open, 13 done; current mvp; to mvp 2-3 days; total 17-29 days
+roadmap: 24 open, 14 done; current mvp; to mvp 2-3 days; total 18-30 days
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -18,13 +18,13 @@ roadmap: 24 open, 13 done; current mvp; to mvp 2-3 days; total 17-29 days
 
 1. [RM-0010](../roadmap/RM-0010.md) | layer-c-reads (11a-3): monikers in spec symbols and find_symbols | draft | should | 2-3
 
-## release v2 | 7 open, 0 done | 13-23 days
+## release v2 | 7 open, 1 done | 14-24 days
 
 1. [RM-0013](../roadmap/RM-0013.md) | Full migration of pilot A | draft | must | 2-4
-2. [RM-0012](../roadmap/RM-0012.md) | MCP staging forms review_proposal, approve_task | draft | should | 1-2
-3. [RM-0014](../roadmap/RM-0014.md) | Full migration of pilot B | draft | should | 3-5 | waits on RM-0013
-4. [RM-0015](../roadmap/RM-0015.md) | A shared project linked from several projects | draft | should | 2-4
-5. [RM-0016](../roadmap/RM-0016.md) | Metrics and compaction | draft | should | 2-3
+2. [RM-0014](../roadmap/RM-0014.md) | Full migration of pilot B | draft | should | 3-5 | waits on RM-0013
+3. [RM-0015](../roadmap/RM-0015.md) | A shared project linked from several projects | draft | should | 2-4
+4. [RM-0016](../roadmap/RM-0016.md) | Metrics and compaction | draft | should | 2-3
+5. [RM-0038](../roadmap/RM-0038.md) | task-stage: the owner's staging form approve_task | draft | should | 2-3
 6. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | 1-2
 7. [RM-0018](../roadmap/RM-0018.md) | URL-mode elicitation onto UI cards | draft | could | 2-3
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-22
 ---
 
 # Decision staging: UI prepares, terminal confirms
@@ -13,8 +13,8 @@ ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), b
 ## Rule
 
 - A decision on a proposal, approve or reject, is confirmed only on a terminal by **its own `[y/N]`**: `spec approve|reject PR`'s, or `spec round answer`'s per staged answer (ADR-0038). The only control point stays the owner's task approval (ADR-0012, `#control`).
-- Anything else only **stages**: the UI's decision dialog and Questions screen (`round-ui.md`) now, later an MCP form or URL mode onto a UI card (08 Phase 5). A stage is one replaceable choice per `open` proposal, the same flags as the CLI's, kept only in the queue: no file, no git, no apply step. It is an attribute, not a status: a staged proposal is `open`, listed, and blocks nothing; a task's `task_id`, snapshot and package are untouched.
-- Agents never stage: no MCP tool writes one (ADR-0004), `round answer` exits 2 without a terminal; `get_proposal` shows one, `ask-owner` counts it as no answer.
+- Anything else only **stages**: the UI's decision dialog and Questions screen (`round-ui.md`) and the owner's MCP form (`review-form.md`); later perhaps URL mode onto a UI card (08 Phase 5). A stage is one replaceable choice per `open` proposal, the same flags as the CLI's, kept only in the queue: no file, no git, no apply step. It is an attribute, not a status: a staged proposal is `open`, listed, and blocks nothing; a task's `task_id`, snapshot and package are untouched.
+- Agents never choose a stage: no tool takes a choice; `review_proposal` stages only the owner's answer in its form (ADR-0054); `round answer` exits 2 without a terminal; `get_proposal` shows one, `ask-owner` counts it as no answer.
 - Who staged is unknowable (ADR-0034): the commit's provenance stays the terminal's (ADR-0005); the event log keeps every stage.
 
 ## The stage
@@ -79,4 +79,4 @@ A staged `span_hash` other than the target's now (step 5) gives ``staged against
 
 ## Threat model
 
-`serve.md` "Trust": any local process may read and stage, the fence stops other sites' pages, none confirms from an ordinary shell (one faking a terminal can), hosting needs infrastructure first. `specengine-http` is a queue writer. Residual: a reflex `y` on a stage an agent or a page injected. Mitigations: the whole choice and its time on one line before the key, the outside-change alert, the event log, no MCP stage tool, the header rule.
+`serve.md` "Trust": any local process may read and stage, the fence stops other sites' pages, none confirms from an ordinary shell (one faking a terminal can), hosting needs infrastructure first. `specengine-http` is a queue writer. Residual: a reflex `y` on a stage an agent or a page injected. Mitigations: the whole choice and its time on one line before the key, the outside-change alert, the event log, no tool taking a choice (the MCP form behind `requiresUserInteraction`: `review-form.md` "Threat model"), the header rule.

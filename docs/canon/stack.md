@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-10-22
 ---
 
 # Stack: toolchain and pinned crates
@@ -18,8 +18,8 @@ Edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc >= 1.98 (the `r
 
 | Crate | Version | Role / note |
 |---|---|---|
-| `rmcp` | =3.5.0 | official MCP SDK (`#[tool]`/`#[tool_router]`/`#[prompt]`, MRTR, `request-state`; revision 2026-07-28 and older). Features in use: `server`, `macros`, `transport-io`, `request-state`, stdio only; no `elicitation` feature (it pulls `url`): `elicitation/create` goes through `send_request`. Its Streamable HTTP Tower service would mount in axum. Open: the SDK tier |
-| `tokio` / `getrandom` | =1.53.1 (`rt`, `macros`, `io-std`, `time`; `specengine-http` adds `net`, `sync`) / =0.4.3 | MCP and HTTP runtime / per-process `requestState` HMAC key; both already in the graph via `rmcp` |
+| `rmcp` | =3.5.0 | official MCP SDK (`#[tool]`/`#[tool_router]`/`#[prompt]`, MRTR, `request-state`; revision 2026-07-28 and older). Features in use: `server`, `macros`, `transport-io`, stdio only; `request-state` (the sealed-state codec, `hmac`, `zeroize`) dropped with `review-form`'s unsealed `requestState`; no `elicitation` feature (it pulls `url`): `elicitation/create` goes through `send_cancellable_request`. Its Streamable HTTP Tower service would mount in axum. Open: the SDK tier |
+| `tokio` | =1.53.1 (`rt`, `macros`, `io-std`, `time`; `specengine-http` adds `net`, `sync`) | MCP and HTTP runtime, already in the graph via `rmcp`; `getrandom` (the demo's HMAC key) dropped from the workspace with `review-form` |
 | `futures-util` | =0.3.34 (no default features) | the live tail's stream; in the graph via `rmcp` |
 | `axum` | =0.8.9 (no default features; `http1`, `tokio`) | `specengine-http`: HTTP, SSE (no `query`, `json`, `tower-http`) |
 | `rust-embed` | =8.12.0 (no default features; `debug-embed`) | `specengine-http`: `ui/dist` compiled in (`docs/canon/serve-ui.md`). `rust-embed-impl`, `-utils` held at 8.12.0 in the lock (8.13.0 out). New: `mime_guess` 2.0.5 (MIT), compile time only, through `-impl` (a proc macro), not linked; reused: `walkdir`, `same-file`, `sha2` 0.11, `mime`, `unicase`. Recorded under the owner's approval of new dependencies; `mime_guess` and the hold await the owner's confirmation |

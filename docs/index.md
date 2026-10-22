@@ -20,7 +20,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/layer-c-reads.md](features/layer-c-reads.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols, the next plugin MINOR · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
+- [docs/features/layer-c-reads.md](features/layer-c-reads.md) layer-c-reads (11a-3): monikers in spec symbols and find_symbols · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp, plugin · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress
@@ -32,6 +32,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 - [docs/index-archive.md](index-archive.md) Archive — Tier 3, by id only
 - [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`
+- [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`
 - [docs/index-canon.md](index-canon.md) `docs/canon/*.md`
 - [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`
 - [docs/index-crates.md](index-crates.md) `crates/*/README.md`

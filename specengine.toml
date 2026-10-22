@@ -55,14 +55,15 @@ unit       = "days"
 
 [[generators]]
 command = "cargo run -q -p specengine-cli -- export index"
-writes  = ["docs/index.md", "docs/index-archive.md", "docs/index-canon-spec.md", "docs/index-canon.md", "docs/index-decisions.md", "docs/index-crates.md",
-           "docs/index-roadmap.md", "docs/generated/roadmap.md"]
+writes  = ["docs/index.md", "docs/index-archive.md", "docs/index-canon-spec.md", "docs/index-canon-proposal.md", "docs/index-canon.md", "docs/index-decisions.md",
+           "docs/index-crates.md", "docs/index-roadmap.md", "docs/generated/roadmap.md"]
 index   = true
 roadmap = "docs/generated/roadmap.md"
 gate    = "cargo run -q -p specengine-cli -- check"
-# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md "Generated".
+# Live shards hold Tier 2 canon (cited by path, found by scope; the `spec-*` command canons and the `proposal-*` queue canons first, the first matching claim wins), decisions (read by id), crate READMEs (by path) and plan items: docs/README.md "Generated".
 shards  = [{ path = "docs/index-archive.md", tier3 = true },
            { path = "docs/index-canon-spec.md", claims = ["docs/canon/spec-*.md"] },
+           { path = "docs/index-canon-proposal.md", claims = ["docs/canon/proposal-*.md"] },
            { path = "docs/index-canon.md", claims = ["docs/canon/*.md"] },
            { path = "docs/index-decisions.md", claims = ["docs/decisions/*.md"] },
            { path = "docs/index-crates.md", claims = ["crates/*/README.md"] },

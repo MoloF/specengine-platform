@@ -812,20 +812,24 @@ impl SpecEngineServer {
     {
         let globals = self.globals().clone();
         let joined = tokio::task::spawn_blocking(move || {
-            let outcome = Env::from_process().and_then(|env| command(&env, &globals));
-            match outcome {
-                Ok(outcome) => match serde_json::from_str(&render_json(&outcome)) {
-                    Ok(document) => Answer::Rendered {
-                        exit: outcome.exit(),
-                        text: outcome_text(&outcome),
-                        document,
-                    },
-                    Err(error) => Answer::Unparsed(error.to_string()),
-                },
-                Err(error) => Answer::CannotRun(error),
-            }
+            answer_of(Env::from_process().and_then(|env| command(&env, &globals)))
         })
         .await;
         joined.unwrap_or(Answer::Panicked)
+    }
+}
+
+/// A command's outcome rendered as [`SpecEngineServer::call`] renders it.
+pub(crate) fn answer_of(outcome: Result<Outcome, CliError>) -> Answer {
+    match outcome {
+        Ok(outcome) => match serde_json::from_str(&render_json(&outcome)) {
+            Ok(document) => Answer::Rendered {
+                exit: outcome.exit(),
+                text: outcome_text(&outcome),
+                document,
+            },
+            Err(error) => Answer::Unparsed(error.to_string()),
+        },
+        Err(error) => Answer::CannotRun(error),
     }
 }

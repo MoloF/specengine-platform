@@ -2538,9 +2538,10 @@ fn repository_git(args: &[&str]) -> Option<String> {
 }
 
 /// RD-8: the slice adds no dependency. Against `main` (else `HEAD`): every
-/// workspace manifest (the root's and each crate's) keeps its direct
-/// dependency set, no crate is added, and `Cargo.lock` names the same
-/// packages. M: a crate or a dependency added.
+/// workspace manifest (the root's and each crate's) adds no direct
+/// dependency, no crate is added, and `Cargo.lock` names no new package
+/// (a later slice may remove one: docs/features/review-form.md drops the
+/// MCP server's `getrandom`). M: a crate or a dependency added.
 #[test]
 fn no_workspace_dependency_is_added_against_main() {
     let base = ["main", "HEAD"]
@@ -2584,18 +2585,23 @@ fn no_workspace_dependency_is_added_against_main() {
         let now = fs::read_to_string(root.join(&manifest)).expect("the manifest");
         let then = repository_git(&["show", &format!("{base}:{manifest}")])
             .unwrap_or_else(|| panic!("{manifest} at {base}"));
-        assert_eq!(
-            dependencies(&now),
-            dependencies(&then),
-            "{manifest}: its dependencies against {base}"
+        let then = dependencies(&then);
+        let added: Vec<String> = dependencies(&now).difference(&then).cloned().collect();
+        assert!(
+            added.is_empty(),
+            "{manifest}: dependencies added against {base}: {added:?}"
         );
     }
     let lock_now = fs::read_to_string(root.join("Cargo.lock")).expect("Cargo.lock");
     let lock_then = repository_git(&["show", &format!("{base}:Cargo.lock")]).expect("the lock");
-    assert_eq!(
-        locked_packages(&lock_now),
-        locked_packages(&lock_then),
-        "Cargo.lock's packages against {base}"
+    let then = locked_packages(&lock_then);
+    let added: Vec<String> = locked_packages(&lock_now)
+        .difference(&then)
+        .cloned()
+        .collect();
+    assert!(
+        added.is_empty(),
+        "Cargo.lock's packages added against {base}: {added:?}"
     );
 }
 

@@ -26,11 +26,14 @@ pub const INDEX_SHARD: &str = "docs/index-archive.md";
 /// "Generated"): Tier 2 canon (cited by path, found by scope; the `spec-*`
 /// command canons first, since 2026-10-15), what is read by id (decisions)
 /// and by path (crate READMEs), and the plan items (since
-/// docs/features/roadmap-items.md, SW-4). Claims overlap
-/// (`docs/canon/spec-*.md` is within `docs/canon/*.md`): the first matching
-/// claim wins ([`claiming_shard`]).
-pub const INDEX_LIVE_SHARDS: [(&str, &str); 5] = [
+/// docs/features/roadmap-items.md, SW-4); the `proposal-*` queue canons
+/// second, since docs/features/review-form.md (W5, shard
+/// `docs/index-canon-proposal.md`). Claims overlap (`docs/canon/spec-*.md`
+/// and `docs/canon/proposal-*.md` are within `docs/canon/*.md`): the first
+/// matching claim wins ([`claiming_shard`]).
+pub const INDEX_LIVE_SHARDS: [(&str, &str); 6] = [
     ("docs/index-canon-spec.md", "docs/canon/spec-*.md"),
+    ("docs/index-canon-proposal.md", "docs/canon/proposal-*.md"),
     ("docs/index-canon.md", "docs/canon/*.md"),
     ("docs/index-decisions.md", "docs/decisions/*.md"),
     ("docs/index-crates.md", "crates/*/README.md"),
@@ -45,7 +48,7 @@ pub const VIEW: &str = "docs/generated/roadmap.md";
 /// The outputs of the root config's index entry in config order: the root,
 /// then the shards, then the roadmap view. The index entry's `writes`, the
 /// render's outputs and the export's lines, all in this order.
-pub const INDEX_OUTPUTS: [&str; 8] = [
+pub const INDEX_OUTPUTS: [&str; 9] = [
     INDEX,
     INDEX_SHARD,
     INDEX_LIVE_SHARDS[0].0,
@@ -53,6 +56,7 @@ pub const INDEX_OUTPUTS: [&str; 8] = [
     INDEX_LIVE_SHARDS[2].0,
     INDEX_LIVE_SHARDS[3].0,
     INDEX_LIVE_SHARDS[4].0,
+    INDEX_LIVE_SHARDS[5].0,
     VIEW,
 ];
 

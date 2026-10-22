@@ -1,10 +1,15 @@
 //! docs/features/decision-staging.md over MCP, the default build (AC-15,
-//! the tools' half; "Description and interactions" 2: agents read a stage,
-//! no tool writes one):
+//! the tools' half; "Description and interactions" 2: agents read a stage),
+//! as docs/features/review-form.md rewrites it (ADR-0054: only the owner's
+//! form stages; no tool input carries a choice):
 //!
-//! - `tools/list` is the eighteen of `TOOLS`, none of them a stage tool:
-//!   no name, description or input property that stages, approves or
-//!   rejects.
+//! - `tools/list` is the twenty-two of `TOOLS`, none named for a stage,
+//!   an approve, a reject or a decision; no input property of any tool, at
+//!   any depth, is `choice`, `option`, `answer`, `reason`, `note`,
+//!   `editorial`, `canon`, `staged`, `staged_at`, `consent` or `decision`
+//!   (but `propose_change`'s `decision`, an interpretation's accepted
+//!   decision: a string or null, no enum); `review_proposal` takes
+//!   `proposal_id` alone. M2: an `option` argument on `review_proposal`.
 //! - `get_proposal` of an update staged with its span hash, a question
 //!   staged as a reject, a discrepancy staged with an option and a note,
 //!   and an unstaged update: `spec review --brief --json` (content and
@@ -176,6 +181,43 @@ fn discrepancy() -> DiscrepancyInput {
     }
 }
 
+/// The input properties no tool takes (docs/features/review-form.md,
+/// test-engineer): a choice, its flags, a stage, a consent.
+const CHOICE_PROPERTIES: [&str; 11] = [
+    "choice",
+    "option",
+    "answer",
+    "reason",
+    "note",
+    "editorial",
+    "canon",
+    "staged",
+    "staged_at",
+    "consent",
+    "decision",
+];
+
+/// Every property name of `schema` at any depth (`properties`, `items`,
+/// `anyOf`/`oneOf`/`allOf`), with its path.
+fn all_properties(schema: &Value, at: &str, out: &mut Vec<(String, String, Value)>) {
+    if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
+        for (name, property) in properties {
+            out.push((format!("{at}.{name}"), name.clone(), property.clone()));
+            all_properties(property, &format!("{at}.{name}"), out);
+        }
+    }
+    if let Some(items) = schema.get("items") {
+        all_properties(items, &format!("{at}[]"), out);
+    }
+    for key in ["anyOf", "oneOf", "allOf"] {
+        if let Some(options) = schema.get(key).and_then(Value::as_array) {
+            for option in options {
+                all_properties(option, at, out);
+            }
+        }
+    }
+}
+
 /// The names of a schema's properties, in order.
 fn property_names(schema: &Value) -> Vec<String> {
     schema["properties"]
@@ -199,7 +241,7 @@ fn objects_in(schema: &Value, out: &mut Vec<Value>) {
 }
 
 #[test]
-fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
+fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
     let repo = Repo::new("mcp-stage");
     let update = repo.propose_edit("EDGE-SPRINT-EMPTY", "the sprint ends;", "the sprint stops;");
     let unstaged = repo.propose_edit("EDGE-STAM-ZERO", "immediately", "at once");
@@ -312,29 +354,39 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_stages() {
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&repo.linked), Home::At(&repo.home));
         let list = session.tools();
-        assert_eq!(tool_names(&list), TOOLS, "{era:?}: eighteen tools");
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty-two tools");
+        let mut seen = 0;
         for tool in list["tools"].as_array().expect("tools") {
             let name = tool["name"].as_str().unwrap_or_default();
             for word in ["stage", "approve", "reject", "decide"] {
                 assert!(!name.contains(word), "{era:?}: a tool named {name}");
             }
-            let inputs = property_names(&tool["inputSchema"]);
-            for property in ["staged", "staged_at", "decision", "consent"] {
+            let mut inputs = Vec::new();
+            all_properties(&tool["inputSchema"], name, &mut inputs);
+            seen += inputs.len();
+            for (path, property, schema) in &inputs {
+                if !CHOICE_PROPERTIES.contains(&property.as_str()) {
+                    continue;
+                }
                 // docs/features/kind-interpretation.md: `propose_change`'s
                 // `decision` names the accepted decision an interpretation
                 // carries (a string ID or null), never a staged choice.
-                if name == "propose_change" && property == "decision" {
-                    let decision = &tool["inputSchema"]["properties"]["decision"];
-                    assert_eq!(decision["type"], json!(["string", "null"]), "{decision}");
-                    assert!(decision.get("enum").is_none(), "{decision}");
+                if path == "propose_change.decision" {
+                    assert_eq!(schema["type"], json!(["string", "null"]), "{schema}");
+                    assert!(schema.get("enum").is_none(), "{schema}");
                     continue;
                 }
-                assert!(
-                    !inputs.iter().any(|input| input == property),
-                    "{era:?}: {name} takes `{property}`: {inputs:?}"
-                );
+                panic!("{era:?}: {path}: a tool input carries a choice: {schema}");
             }
         }
+        assert!(seen > 60, "{era:?}: the walk reads the schemas: {seen}");
+        let review = &tool(&list, "review_proposal")["inputSchema"];
+        assert_eq!(
+            property_names(review),
+            ["proposal_id"],
+            "{era:?}: the form's tool takes the ID alone: {review}"
+        );
+        assert_eq!(review["additionalProperties"], json!(false), "{era:?}");
         let schemas = output_schemas(&list);
         let schema = &schemas["get_proposal"];
         let names = property_names(schema);

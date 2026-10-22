@@ -25,18 +25,20 @@
 //! `claim_task`, `submit_plan`, `report_run`, `complete_task` (`spec task
 //! show|claim|plan|report|complete`; `docs/canon/task-package.md` "MCP");
 //! resources `spec://<slug>/tree` and `spec://<slug>/node/<id>` over the
-//! same calls.
-//! Behind feature `probes`, the measurement build: the Phase 0 consent demo
-//! `review_proposal` (`_meta["anthropic/requiresUserInteraction"]: true`,
-//! a form through `elicitation/create` or a multi round-trip request) and
-//! `probe_output`, `probe_sleep` for the owner checklist.
+//! same calls; the owner's form `review_proposal` (task spec
+//! `review-form`: `_meta["anthropic/requiresUserInteraction"]: true`, a
+//! form through `elicitation/create` or a multi round-trip request, the
+//! owner's accepted answer staged through the CLI library's `stage`, then
+//! `spec review --brief`).
+//! Behind feature `probes`, the measurement build: `probe_output`,
+//! `probe_sleep` for the owner checklist.
 //!
 //! Reads refresh the project's index in SpecEngine's data directory, as the
-//! CLI's reads do; the queue tools add the queue's rows there; nothing under
-//! the project root is ever written: spec files change only through
-//! `apply_proposal` on an owner action (ADR-0004, ADR-0005), which no tool
-//! here runs. Stdout is the protocol channel: nothing else is ever printed
-//! there.
+//! CLI's reads do; the queue tools add the queue's rows there, and
+//! `review_proposal` the owner's stage; nothing under the project root is
+//! ever written: spec files change only through `apply_proposal` on an
+//! owner action (ADR-0004, ADR-0005), which no tool here runs. Stdout is
+//! the protocol channel: nothing else is ever printed there.
 
 mod code;
 mod intake;
@@ -45,12 +47,9 @@ mod mirror;
 mod probes;
 mod read;
 mod resources;
-#[cfg(feature = "probes")]
 mod review;
 mod server;
 mod tasks;
 
 pub use read::MAX_RESULT_CHARS;
-#[cfg(feature = "probes")]
-pub use review::{Decision, Era, FormAction, ReviewOutcome};
 pub use server::{INSTRUCTIONS, Lifecycle, ServeError, SpecEngineServer, serve_stdio};

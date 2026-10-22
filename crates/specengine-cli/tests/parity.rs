@@ -260,6 +260,8 @@ fn export_index_recreates_this_repository_s_index() {
         "# Documentation index",
         "## Archive \u{2014} Tier 3, by id only",
         "## Canon",
+        // docs/features/review-form.md: the `proposal-*` queue canons.
+        "## Canon",
         "## Canon",
         "## Decisions",
         "## Canon",
