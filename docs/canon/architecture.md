@@ -59,7 +59,7 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `docs/canon/architecture-code.md#health`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `docs/canon/architecture-code.md#health`), what starts and ends a flow (`[flow]`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
 
 Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` keeps its meaning and cycle warning (`docs/canon/flow-links.md`). ADR-0055.
 

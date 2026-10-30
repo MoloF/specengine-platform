@@ -4,6 +4,10 @@
 //! `[paths]` defaults) and spec-b (Russian CLI tooling, `roots`, legacy
 //! Cyrillic aliases). The per-criterion files run both fixtures; this one
 //! adds the scan and one battery across both.
+//!
+//! docs/features/flow-read.md AC-06: `src/flow.rs` is scanned with the rest,
+//! the words of the flow fixtures' schemes join the list, and `spec flow`
+//! joins the battery.
 
 #![cfg(unix)]
 
@@ -18,8 +22,9 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// `cargo xtask`, docs/features/spec-cli-check.md AC-13; pass 2b this
 /// repository's registered command prefix, docs/features/spec-cli-switch.md
 /// AC-15; docs/features/roadmap-items.md this repository's plan prefix and
-/// its shard).
-const FORBIDDEN: [&str; 21] = [
+/// its shard; docs/features/flow-read.md the flow fixtures' prefixes and
+/// kinds).
+const FORBIDDEN: [&str; 29] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -46,6 +51,16 @@ const FORBIDDEN: [&str; 21] = [
     "DOM-",
     "MOD-",
     "CMD-",
+    // docs/features/flow-read.md AC-06: no `spec flow` line by a word of a
+    // project it reads.
+    "LEG-",
+    "KIT-",
+    "JRN-",
+    "WING-",
+    "LND-",
+    "PLT-",
+    "bookplate",
+    "lending",
 ];
 
 fn cli_sources() -> Vec<PathBuf> {
@@ -85,6 +100,7 @@ fn cli_sources_hold_no_project_words() {
     let files = cli_sources();
     assert!(files.len() >= 3, "the CLI sources: {files:?}");
     assert!(files.iter().any(|file| file.ends_with("main.rs")));
+    assert!(files.iter().any(|file| file.ends_with("flow.rs")));
     let mut found = Vec::new();
     for file in &files {
         let text = fs::read_to_string(file).expect("a UTF-8 source");
@@ -224,6 +240,14 @@ fn the_read_loop_answers_alike_on_both_fixtures() {
         spec(&home, &root, &["search", "zz"]).code(2);
         spec(&home, &root, &["search", "zzqqxxwwvv"]).code(0);
         spec(&home, &root, &["search", "sync", "--limit", "0"]).code(2);
+        // docs/features/flow-read.md AC-06: `spec flow` reads either genre
+        // through its own config: a whole read, a fold, the refusals.
+        spec(&home, &root, &["flow"]).code(0);
+        spec(&home, &root, &["flow", "--depth", "0"]).code(0);
+        spec(&home, &root, &["--json", "flow"]).code(0);
+        spec(&home, &root, &["flow", dangling]).code(1);
+        spec(&home, &root, &["flow", lookalike]).code(2);
+        spec(&home, &root, &["flow", &format!("other:{dangling}")]).code(2);
     }
 }
 

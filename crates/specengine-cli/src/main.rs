@@ -34,17 +34,17 @@ use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CheckRequest,
     CheckedTree, CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env,
-    Exit, ExportIndexRequest, ExportStateRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress,
-    GateRequest, GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES,
-    ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity,
-    IntakeSource, InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt,
-    LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest,
-    RefsRequest, RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
-    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
-    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
-    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
-    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest,
-    VerifyTestsRequest, render_json, render_text,
+    Exit, ExportIndexRequest, ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput,
+    GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
+    INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
+    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
+    LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest,
+    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest,
+    RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve,
+    ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
+    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
+    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree,
+    VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -127,6 +127,16 @@ enum Command {
         /// Include Tier 3 (archived) documents.
         #[arg(long)]
         archive: bool,
+    },
+    /// Print what a flow diagram draws: ten gap rows, the documents walked along `follows`, and the typed edges between them; read-only, exit 0 whatever the rows count, 1 when ROOT names nothing, 2 when it cannot run.
+    Flow {
+        // Not named `root`: that argument id is the global --root.
+        /// Any form `show` takes; absent: every document in a flow.
+        #[arg(value_name = "ROOT")]
+        start: Option<String>,
+        /// Levels below the roots at most (0: the roots only); deeper documents show as their ancestor there.
+        #[arg(long, value_name = "N", allow_negative_numbers = true)]
+        depth: Option<i64>,
     },
     /// Walk the typed links from REF: what it depends on, or with --impact what an edit of it reaches.
     Graph {
@@ -862,6 +872,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 archive,
             },
         )?),
+        Command::Flow { start, depth } => Outcome::Flow(Box::new(specengine_cli::flow(
+            env,
+            globals,
+            &FlowRequest { root: start, depth },
+        )?)),
         Command::Graph {
             reference,
             impact,

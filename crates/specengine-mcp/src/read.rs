@@ -4,7 +4,8 @@
 //! `get_impact` (task specs `impact`, `impact-since`: `spec impact REF |
 //! --symbol QPATH | --since REV [--depth N]`, exactly one of `id`, `symbol`
 //! and `since` told at run time before any discovery, as `find_symbols`'
-//! forms), each one call into the CLI library.
+//! forms) and `get_flow` (task spec `flow-read`: `spec flow [ROOT] [--depth
+//! N]`), each one call into the CLI library.
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
@@ -28,15 +29,15 @@ use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use serde_json::Value;
 use specengine_cli::{
-    BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, Globals, ImpactRequest,
-    MIN_TERM_CHARS, OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET, RoadmapRequest,
-    SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES, SearchRequest,
-    ShowRequest, TreeRequest, View, process_git, render_json, render_text,
+    BundleRequest, CliError, DEFAULT_BUNDLE_BUDGET, Env, Exit, FlowRequest, GAP_ITEMS_SHOWN,
+    Globals, ImpactRequest, MIN_TERM_CHARS, OUTPUT_CAP_CHARS, Outcome, PACKAGE_BUDGET,
+    RoadmapRequest, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SHOW_TAIL_NAMES,
+    SearchRequest, ShowRequest, TreeRequest, View, process_git, render_json, render_text,
 };
 
 use crate::mirror::{
-    BundleDocument, ImpactDocument, RoadmapDocument, SearchDocument, ShowDocument, TreeDocument,
-    input_schema, output_schema,
+    BundleDocument, FlowDocument, ImpactDocument, RoadmapDocument, SearchDocument, ShowDocument,
+    TreeDocument, input_schema, output_schema,
 };
 use crate::server::SpecEngineServer;
 
@@ -223,6 +224,34 @@ with an incomplete walk; since outside git): an error result with its one line. 
 as they are now: refreshes SpecEngine's indexes of the spec and the code in its data directory, \
 writes nothing under the project root. Deterministic: one state, one result; no LLM inside.";
 
+const FLOW_DESCRIPTION: &str = concat!(
+    "What a flow diagram draws over the project's spec: ten gap rows, the documents in reading \
+order, and the typed edges between them. The same as `spec flow [ROOT] [--depth N]`: content is \
+the command's output (its note lines first), structuredContent its --json document.
+
+root: read this REF's documents and every document within them by `parent:`; any REF get_node \
+takes, a section landing on its document. Absent: every live document holding or receiving a \
+flow link or selected by a `[flow]` rule, with its parents.
+depth: levels below the roots at most; 0 = the roots only. A deeper document shows as its \
+ancestor there: an edge inside one node joins its `inner`, any other is lifted and merged with a \
+count. Absent: unbounded.
+
+An edge is a link of follows, uses, supplies or depends_on with both ends in scope; `from` and \
+`to` give the reading direction, so a screen picks by `type` what it shows. `distance` counts \
+follows links from the starts, the least of what a node holds, null where none is reached; \
+`group` is the node's parent.
+
+The ten rows come first, in one order, whatever the depth. state: measured, not_configured (the \
+project's `[flow]` has no rule for it, never 0) or cannot (with its cause). A row lists at most \
+50 items, count the whole. A row blocks nothing.
+
+An answer above 40000 characters is cut, every row kept, with a tail saying how to narrow it (it \
+names the command's flags: ROOT is root). A root naming nothing: an error result with the \
+reason, and the document. A call that cannot run (no project, bad argument value): an error \
+result with its one line. ",
+    common_tail!()
+);
+
 /// `get_impact` given not exactly one of `id`, `symbol` and `since`.
 const ONE_INPUT: &str = "spec: get_impact takes exactly one of `id`, `symbol` and `since`\n";
 
@@ -296,22 +325,37 @@ const _: () = assert!(SEARCH_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(BUNDLE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(ROADMAP_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(IMPACT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(FLOW_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(TREE_DESCRIPTION.is_ascii());
 const _: () = assert!(NODE_DESCRIPTION.is_ascii());
 const _: () = assert!(SEARCH_DESCRIPTION.is_ascii());
 const _: () = assert!(BUNDLE_DESCRIPTION.is_ascii());
 const _: () = assert!(ROADMAP_DESCRIPTION.is_ascii());
 const _: () = assert!(IMPACT_DESCRIPTION.is_ascii());
+const _: () = assert!(FLOW_DESCRIPTION.is_ascii());
 const _: () = assert!(holds(TREE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(NODE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(SEARCH_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(BUNDLE_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(ROADMAP_DESCRIPTION, DETERMINISM));
 const _: () = assert!(holds(IMPACT_DESCRIPTION, DETERMINISM));
+const _: () = assert!(holds(FLOW_DESCRIPTION, DETERMINISM));
 // It names its CLI twin and the table `symbol` needs.
 const _: () = assert!(holds(IMPACT_DESCRIPTION, "`spec impact "));
 const _: () = assert!(holds(IMPACT_DESCRIPTION, "`[code]`"));
 // The numbers the descriptions state are the CLI's.
+const _: () = assert!(holds_number(
+    FLOW_DESCRIPTION,
+    "above ",
+    OUTPUT_CAP_CHARS,
+    " characters"
+));
+const _: () = assert!(holds_number(
+    FLOW_DESCRIPTION,
+    "at most ",
+    GAP_ITEMS_SHOWN,
+    " items"
+));
 const _: () = assert!(holds_number(
     TREE_DESCRIPTION,
     "above ",
@@ -553,6 +597,16 @@ pub(crate) struct ImpactArgs {
     pub depth: Option<i64>,
 }
 
+/// `get_flow` arguments.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct FlowArgs {
+    /// Read here: any REF get_node takes. Absent: every document in a flow.
+    pub root: Option<String>,
+    /// Levels below the roots at most; 0 = the roots only. Absent: unbounded.
+    pub depth: Option<i64>,
+}
+
 #[tool_router(router = read_tools, vis = "pub(crate)")]
 impl SpecEngineServer {
     /// `spec tree`.
@@ -689,6 +743,31 @@ impl SpecEngineServer {
             })
             .await
             .into_tool_result("get_roadmap"))
+    }
+
+    /// `spec flow`.
+    #[tool(
+        description = FLOW_DESCRIPTION,
+        input_schema = input_schema::<FlowArgs>(),
+        output_schema = output_schema::<FlowDocument>(),
+        annotations(read_only_hint = true, destructive_hint = false, open_world_hint = false),
+        meta = result_size_meta()
+    )]
+    async fn get_flow(
+        &self,
+        Parameters(args): Parameters<FlowArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        let request = FlowRequest {
+            root: args.root,
+            depth: args.depth,
+        };
+        Ok(self
+            .call(move |env, globals| {
+                specengine_cli::flow(env, globals, &request)
+                    .map(|outcome| Outcome::Flow(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("get_flow"))
     }
 
     /// `spec impact`: exactly one of `id`, `symbol` and `since`, else the

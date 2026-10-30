@@ -37,11 +37,11 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
-    BundleRequest, CheckRequest, GraphRequest, HealthRequest, InboxRequest, LockDiffRequest,
-    Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest,
-    SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest,
-    TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit,
-    utc_now,
+    BundleRequest, CheckRequest, FlowRequest, GraphRequest, HealthRequest, InboxRequest,
+    LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest,
+    RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest,
+    TaskShowRequest, TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags,
+    round_limit, utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -105,6 +105,7 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/nodes/{*ref}", read(nodes))
         .route("/api/projects/{p}/search", read(search))
         .route("/api/projects/{p}/bundle", read(bundle))
+        .route("/api/projects/{p}/flow", read(flow))
         .route("/api/projects/{p}/graph", read(graph))
         .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/health", read(health))
@@ -268,8 +269,9 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
-             nodes/<REF>, search, bundle, graph, check, health, roadmap, lock-diff, inbox, \
-             proposals/<id>, tasks, tasks/<id>, round, events}}; the web UI: / and /assets/<file>",
+             nodes/<REF>, search, bundle, flow, graph, check, health, roadmap, lock-diff, \
+             inbox, proposals/<id>, tasks, tasks/<id>, round, events}}; the web UI: / and \
+             /assets/<file>",
             uri.path()
         ),
     )
@@ -405,6 +407,26 @@ async fn graph(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
     .map_err(Refusal::bad_request)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::graph_with_view(env, globals, &request, View::Browser).map(Outcome::Graph)
+    })
+    .await)
+}
+
+/// `GET …/flow`: `spec flow --json`, the browser view (every node, edge
+/// and gap item, nothing cut); `root` naming nothing: the exit-1 document,
+/// a 404. A gap row changes no status.
+async fn flow(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("flow", &["root", "depth"], &uri)?;
+    let request = (|| {
+        Ok::<_, String>(FlowRequest {
+            root: args.text("root")?,
+            depth: args.integer("depth")?,
+        })
+    })()
+    .map_err(Refusal::bad_request)?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::flow_with_view(env, globals, &request, View::Browser)
+            .map(|outcome| Outcome::Flow(Box::new(outcome)))
     })
     .await)
 }

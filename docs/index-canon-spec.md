@@ -22,6 +22,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-refs.md](canon/spec-cli-refs.md) spec refs output: rows, JSON, exits · crates/specengine-cli · tier 2
+- [docs/canon/spec-flow.md](canon/spec-flow.md) spec flow: the walk, typed edges, lifted edges and gap rows · crates/specengine-model, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
 - [docs/canon/spec-impact.md](canon/spec-impact.md) spec impact: what a change to a node, a code symbol or the code since a revision reaches · crates/specengine-cli, crates/specengine-mcp, crates/specengine-store, crates/specengine-core, plugin · tier 2
 - [docs/canon/spec-lock-accept.md](canon/spec-lock-accept.md) spec lock accept: the owner's lock commit · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-lock-diff.md](canon/spec-lock-diff.md) spec lock diff: what changed since a lock entry · crates/specengine-cli, crates/specengine-http, ui · tier 2

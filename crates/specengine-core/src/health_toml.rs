@@ -39,6 +39,8 @@ const TABLE: &str = "health";
 const HEALTH_KEYS: [&str; 1] = ["bound"];
 /// A rule's keys, in the order a message lists them.
 const RULE_KEYS: [&str; 5] = ["kinds", "classes", "paths", "when", "relations"];
+/// The selector keys, the grammar [`crate::flow_toml`] shares.
+pub(crate) const SELECTOR_KEYS: [&str; 4] = ["kinds", "classes", "paths", "when"];
 /// How a message names a rule.
 const RULE: &str = "`[[health.bound]]`";
 
@@ -83,17 +85,34 @@ impl HealthConfig {
 }
 
 /// The errors found, each at its line; the first by line is reported.
-struct Errors<'t> {
+pub(crate) struct Errors<'t> {
     text: &'t str,
     found: Vec<(usize, String)>,
 }
 
-impl Errors<'_> {
-    fn push(&mut self, span: Range<usize>, message: String) {
+impl<'t> Errors<'t> {
+    pub(crate) fn new(text: &'t str) -> Self {
+        Self {
+            text,
+            found: Vec::new(),
+        }
+    }
+
+    pub(crate) fn push(&mut self, span: Range<usize>, message: String) {
         self.found.push((line_of(self.text, span.start), message));
     }
 
-    fn first(self) -> Option<ProjectError> {
+    /// How many were pushed.
+    pub(crate) fn len(&self) -> usize {
+        self.found.len()
+    }
+
+    /// The 1-based line `span` starts on.
+    pub(crate) fn line(&self, span: Range<usize>) -> usize {
+        line_of(self.text, span.start)
+    }
+
+    pub(crate) fn first(self) -> Option<ProjectError> {
         self.found
             .into_iter()
             .enumerate()
@@ -123,10 +142,7 @@ pub fn health_from_toml(
     else {
         return Ok(HealthConfig::default());
     };
-    let mut errors = Errors {
-        text,
-        found: Vec::new(),
-    };
+    let mut errors = Errors::new(text);
     let mut config = HealthConfig::default();
     let DeValue::Table(entries) = table.get_ref() else {
         errors.push(
@@ -194,7 +210,7 @@ fn bound_rule(
     words: &Words<'_>,
     errors: &mut Errors<'_>,
 ) -> Option<BoundRule> {
-    let before = errors.found.len();
+    let before = errors.len();
     let mut values: [Option<&Spanned<DeValue<'_>>>; 5] = [None; 5];
     for (key, value) in entry.iter() {
         let name = key.get_ref().as_ref();
@@ -204,61 +220,16 @@ fn bound_rule(
         }
     }
     let [kinds, classes, paths, when, relations] = values;
-
+    let written = [kinds, classes, paths, when];
+    let chosen = selectors(RULE, written, words.kinds, errors);
     let mut rule = BoundRule {
-        kinds: Vec::new(),
-        classes: Vec::new(),
-        paths: Vec::new(),
-        when: Vec::new(),
+        kinds: chosen.kinds,
+        classes: chosen.classes,
+        paths: chosen.paths,
+        when: chosen.when,
         relations: Vec::new(),
-        line: line_of(errors.text, span.start),
+        line: errors.line(span.clone()),
     };
-    if let Some(items) = kinds.and_then(|value| strings(RULE_KEYS[0], value, errors)) {
-        for (kind, at) in items {
-            if words.kinds.contains(&kind) {
-                rule.kinds.push(kind.to_owned());
-            } else {
-                errors.push(
-                    at,
-                    format!(
-                        "{RULE} `{}`: `{kind}` is the kind of no `[ids]` prefix",
-                        RULE_KEYS[0]
-                    ),
-                );
-            }
-        }
-    }
-    if let Some(items) = classes.and_then(|value| strings(RULE_KEYS[1], value, errors)) {
-        for (class, at) in items {
-            match DocClass::parse(class) {
-                Some(known) => rule.classes.push(known),
-                None => {
-                    let all: Vec<&str> = DocClass::ALL.iter().map(|class| class.as_str()).collect();
-                    errors.push(
-                        at,
-                        format!(
-                            "{RULE} `{}`: `{class}` is none of {}",
-                            RULE_KEYS[1],
-                            all.join(" | ")
-                        ),
-                    );
-                }
-            }
-        }
-    }
-    if let Some(items) = paths.and_then(|value| strings(RULE_KEYS[2], value, errors)) {
-        for (glob, at) in items {
-            match checked_path(glob, false) {
-                Ok(checked) => rule.paths.push(checked),
-                Err(problem) => {
-                    errors.push(at, format!("{RULE} `{}`: {problem}", RULE_KEYS[2]));
-                }
-            }
-        }
-    }
-    if let Some(value) = when {
-        rule.when = condition(value, errors);
-    }
     match relations {
         None => {
             rule.relations = words
@@ -268,7 +239,7 @@ fn bound_rule(
                 .collect();
         }
         Some(value) => {
-            for (relation, at) in strings(RULE_KEYS[4], value, errors).unwrap_or_default() {
+            for (relation, at) in strings(RULE, RULE_KEYS[4], value, errors).unwrap_or_default() {
                 if words.relations.contains(&relation) {
                     rule.relations.push(relation.to_owned());
                 } else {
@@ -284,21 +255,105 @@ fn bound_rule(
             }
         }
     }
-    if kinds.is_none() && classes.is_none() && paths.is_none() && when.is_none() {
+    no_selector(RULE, span, written, errors);
+    (errors.len() == before).then_some(rule)
+}
+
+/// A rule's selectors, checked; what fails is pushed and left out.
+pub(crate) struct Selectors {
+    pub(crate) kinds: Vec<String>,
+    pub(crate) classes: Vec<DocClass>,
+    pub(crate) paths: Vec<String>,
+    pub(crate) when: Vec<(String, Vec<String>)>,
+}
+
+/// The selectors `written` holds, in [`SELECTOR_KEYS`] order: the grammar
+/// and messages of `[[check.rules]]`, `rule` naming the entry and
+/// `declared` the kinds `[ids]` declares.
+pub(crate) fn selectors(
+    rule: &str,
+    written: [Option<&Spanned<DeValue<'_>>>; 4],
+    declared: &[&str],
+    errors: &mut Errors<'_>,
+) -> Selectors {
+    let [kinds, classes, paths, when] = written;
+    let mut chosen = Selectors {
+        kinds: Vec::new(),
+        classes: Vec::new(),
+        paths: Vec::new(),
+        when: Vec::new(),
+    };
+    if let Some(items) = kinds.and_then(|value| strings(rule, SELECTOR_KEYS[0], value, errors)) {
+        for (kind, at) in items {
+            if declared.contains(&kind) {
+                chosen.kinds.push(kind.to_owned());
+            } else {
+                errors.push(
+                    at,
+                    format!(
+                        "{rule} `{}`: `{kind}` is the kind of no `[ids]` prefix",
+                        SELECTOR_KEYS[0]
+                    ),
+                );
+            }
+        }
+    }
+    if let Some(items) = classes.and_then(|value| strings(rule, SELECTOR_KEYS[1], value, errors)) {
+        for (class, at) in items {
+            match DocClass::parse(class) {
+                Some(known) => chosen.classes.push(known),
+                None => {
+                    let all: Vec<&str> = DocClass::ALL.iter().map(|class| class.as_str()).collect();
+                    errors.push(
+                        at,
+                        format!(
+                            "{rule} `{}`: `{class}` is none of {}",
+                            SELECTOR_KEYS[1],
+                            all.join(" | ")
+                        ),
+                    );
+                }
+            }
+        }
+    }
+    if let Some(items) = paths.and_then(|value| strings(rule, SELECTOR_KEYS[2], value, errors)) {
+        for (glob, at) in items {
+            match checked_path(glob, false) {
+                Ok(checked) => chosen.paths.push(checked),
+                Err(problem) => {
+                    errors.push(at, format!("{rule} `{}`: {problem}", SELECTOR_KEYS[2]));
+                }
+            }
+        }
+    }
+    if let Some(value) = when {
+        chosen.when = condition(rule, value, errors);
+    }
+    chosen
+}
+
+/// A rule with none of the selectors: its error, at the entry.
+pub(crate) fn no_selector(
+    rule: &str,
+    span: Range<usize>,
+    written: [Option<&Spanned<DeValue<'_>>>; 4],
+    errors: &mut Errors<'_>,
+) {
+    if written.iter().all(Option::is_none) {
         errors.push(
             span,
             format!(
-                "{RULE} without a selector: give `{}`, `{}`, `{}` or `{}`",
-                RULE_KEYS[0], RULE_KEYS[1], RULE_KEYS[2], RULE_KEYS[3]
+                "{rule} without a selector: give `{}`, `{}`, `{}` or `{}`",
+                SELECTOR_KEYS[0], SELECTOR_KEYS[1], SELECTOR_KEYS[2], SELECTOR_KEYS[3]
             ),
         );
     }
-    (errors.found.len() == before).then_some(rule)
 }
 
 /// A selector's list: each string with its span; `None` when it is no
 /// non-empty list of strings (the error pushed).
 fn strings<'v>(
+    rule: &str,
     what: &str,
     value: &'v Spanned<DeValue<'_>>,
     errors: &mut Errors<'_>,
@@ -307,14 +362,14 @@ fn strings<'v>(
         errors.push(
             value.span(),
             format!(
-                "{RULE} `{what}`: a list of strings, not {}",
+                "{rule} `{what}`: a list of strings, not {}",
                 type_name(value.get_ref())
             ),
         );
         return None;
     };
     if items.is_empty() {
-        errors.push(value.span(), format!("{RULE} `{what}` is empty"));
+        errors.push(value.span(), format!("{rule} `{what}` is empty"));
         return None;
     }
     let mut out = Vec::with_capacity(items.len());
@@ -325,7 +380,7 @@ fn strings<'v>(
                 errors.push(
                     item.span(),
                     format!(
-                        "{RULE} `{what}`: a list of strings, not one holding {}",
+                        "{rule} `{what}`: a list of strings, not one holding {}",
                         type_name(other)
                     ),
                 );
@@ -337,20 +392,24 @@ fn strings<'v>(
 }
 
 /// `when`: key → its strings, by key; the entries judged in source order.
-fn condition(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Vec<(String, Vec<String>)> {
-    let what = RULE_KEYS[3];
+fn condition(
+    rule: &str,
+    value: &Spanned<DeValue<'_>>,
+    errors: &mut Errors<'_>,
+) -> Vec<(String, Vec<String>)> {
+    let what = SELECTOR_KEYS[3];
     let DeValue::Table(table) = value.get_ref() else {
         errors.push(
             value.span(),
             format!(
-                "{RULE} `{what}`: a table, not {}",
+                "{rule} `{what}`: a table, not {}",
                 type_name(value.get_ref())
             ),
         );
         return Vec::new();
     };
     if table.is_empty() {
-        errors.push(value.span(), format!("{RULE} `{what}` is empty"));
+        errors.push(value.span(), format!("{rule} `{what}` is empty"));
         return Vec::new();
     }
     let mut entries: Vec<_> = table.iter().collect();
@@ -360,13 +419,13 @@ fn condition(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Vec<(Stri
         let name = key.get_ref().as_ref();
         let span = value.span();
         if name.trim().is_empty() {
-            errors.push(span, format!("{RULE} `{what}`: an empty key name"));
+            errors.push(span, format!("{rule} `{what}`: an empty key name"));
             continue;
         }
         let strings = match value.get_ref() {
             DeValue::String(one) => vec![one.to_string()],
             DeValue::Array(list) if list.is_empty() => {
-                errors.push(span, format!("{RULE} `{what}` `{name}`: an empty list"));
+                errors.push(span, format!("{rule} `{what}` `{name}`: an empty list"));
                 continue;
             }
             DeValue::Array(list) => {
@@ -378,7 +437,7 @@ fn condition(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Vec<(Stri
                             errors.push(
                                 span.clone(),
                                 format!(
-                                    "{RULE} `{what}` `{name}`: a list of strings, not one holding {}",
+                                    "{rule} `{what}` `{name}`: a list of strings, not one holding {}",
                                     type_name(other)
                                 ),
                             );
@@ -396,7 +455,7 @@ fn condition(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Vec<(Stri
                 errors.push(
                     span,
                     format!(
-                        "{RULE} `{what}` `{name}`: a string or a list of strings, not {}",
+                        "{rule} `{what}` `{name}`: a string or a list of strings, not {}",
                         type_name(other)
                     ),
                 );
@@ -410,12 +469,12 @@ fn condition(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Vec<(Stri
 }
 
 /// The TOML reader's message for a key a table does not take.
-fn unknown_field(name: &str, expected: &'static [&'static str]) -> String {
+pub(crate) fn unknown_field(name: &str, expected: &'static [&'static str]) -> String {
     serde::de::value::Error::unknown_field(name, expected).to_string()
 }
 
 /// The TOML type of `value` with its article, for messages.
-fn type_name(value: &DeValue<'_>) -> &'static str {
+pub(crate) fn type_name(value: &DeValue<'_>) -> &'static str {
     match value {
         DeValue::String(_) => "a string",
         DeValue::Integer(_) => "an integer",
@@ -435,7 +494,7 @@ fn unreadable() -> ProjectError {
     }
 }
 
-fn line_of(text: &str, offset: usize) -> usize {
+pub(crate) fn line_of(text: &str, offset: usize) -> usize {
     let end = offset.min(text.len());
     text.as_bytes()[..end]
         .iter()

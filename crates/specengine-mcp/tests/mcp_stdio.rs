@@ -11,7 +11,7 @@
 //!
 //! docs/features/review-form.md retires the Phase 0 consent demo of the
 //! same name (its sealed `requestState`, `getrandom`): the measurement
-//! build lists the default build's twenty-two tools and the two probes,
+//! build lists the default build's twenty-three tools and the two probes,
 //! twenty-four; the form's round trips, refusals and cancellation are
 //! `mcp_review_form.rs`' (every build), here only that the probes build
 //! serves the same tool (its `_meta`, its read before any form).
@@ -31,15 +31,16 @@ use serde_json::{Value, json};
 const REVIEW_TOOL_META_KEY: &str = "anthropic/requiresUserInteraction";
 
 /// `tools/list` of the measurement build: the default build's
-/// [`common::read::TOOLS`] (twenty-two since docs/features/review-form.md)
+/// [`common::read::TOOLS`] (twenty-three since docs/features/flow-read.md)
 /// and the two probes, in wire order.
-const PROBES_BUILD_TOOLS: [&str; 24] = [
+const PROBES_BUILD_TOOLS: [&str; 25] = [
     "ask_question",
     "check_binding",
     "claim_task",
     "complete_task",
     "find_symbols",
     "get_context_bundle",
+    "get_flow",
     "get_impact",
     "get_node",
     "get_proposal",

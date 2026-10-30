@@ -383,14 +383,17 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     // 1 902 and 2 040 since docs/features/review-form.md (D6: the
     // `review_proposal` line, 85 bytes; four glosses cut, 68); the values
     // `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1902);
+    // 1 910 and 2 048 since docs/features/flow-read.md (`get_flow`'s 32
+    // bytes on the reads' line, 24 cut from the hints: the limit); the
+    // values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1910);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "f0924769b09ff777ad983063624e1721f26a407d448fe5900b311324786ce1c1"
+        "322b35f2def2e1d308fae9b868ad562a439f5bcde961899aee56903c5b302000"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "47411b2fd929cbb742ee813df864c584f3d39f7294c1c0348f9360ff0d0b05de"
+        "d1ab3e65028e8715bdc1442a84bfc1c56212942becd077c95ec3ed7016c1b0b1"
     );
 }

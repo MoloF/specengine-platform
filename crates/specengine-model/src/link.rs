@@ -31,6 +31,14 @@ pub const LINK_TYPES: [&str; 15] = [
 /// allowed: `depends-cycle` reads `depends_on` alone.
 pub const FOLLOWS: &str = "follows";
 
+/// The link of a node to what it reuses by reference: a member of
+/// [`LINK_TYPES`] (spelled out there, as [`FOLLOWS`]).
+pub const USES: &str = "uses";
+
+/// The link of a producer to what it feeds: a member of [`LINK_TYPES`]
+/// (spelled out there, as [`FOLLOWS`]).
+pub const SUPPLIES: &str = "supplies";
+
 /// The link of a document that amends a live node until it is absorbed
 /// (06 §7; task spec `kind-amendment`): a member of [`LINK_TYPES`], the
 /// one spelling every crate names it by.
@@ -79,6 +87,17 @@ pub const IMPACT_LINK_TYPES: [(&str, Direction); 7] = [
     ("constrains", Direction::Out),
     ("uses", Direction::In),
     ("supplies", Direction::Out),
+];
+
+/// The link types `spec flow` reads, each with the way it runs: `from` and
+/// `to` give the reading direction, so a screen draws an arrow with no
+/// branch on a type. `In` runs target to source: `B follows A` is the link
+/// B -> A, read A then B.
+pub const FLOW_LINK_TYPES: [(&str, Direction); 4] = [
+    (FOLLOWS, Direction::In),
+    (USES, Direction::Out),
+    (SUPPLIES, Direction::Out),
+    ("depends_on", Direction::Out),
 ];
 
 /// `mentions` is the one weak link type; every declared type, an unknown

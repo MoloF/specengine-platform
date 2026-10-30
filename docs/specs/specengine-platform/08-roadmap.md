@@ -76,11 +76,11 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 | 0 | `full-cycle-decisions` | RM-0041 | Owner's round, two ADRs, this plan | ADR-0055 `flow-graph`, ADR-0056 `cards` | 3-5 | - |
 | 1 | `flow-links` | RM-0042 | `follows`, `uses`, `supplies`, labelled edges, impact, bundle | - | 2-4 | 0 |
 | 2 | `flow-read` | RM-0043 | `spec flow`, `get_flow`, lifted edges, gap rows | - | 3-5 | 1 |
-| 3 | `flow-canvas` | RM-0044 | Collapsing groups, stages, gap marks, text twin | - | 4-6 | 2 |
+| 3 | `flow-canvas` | RM-0044 | Collapsing groups, gap marks, text twin | - | 4-6 | 2 |
 | 4 | `card-store` | RM-0045 | Cards, flows, events, CLI and MCP tools | - | 4-6 | 0 |
 | 5 | `board-ui` | RM-0046 | Board, filters, card panel, write routes | - | 4-6 | 4 |
 | 6 | `card-trace` | RM-0047 | Targets, suspect, clearing, re-estimate, corrections, rollup | - | 4-6 | 4 |
-| 7 | `trace-views` | RM-0048 | Flow badges, timeline lanes, a node's cards | - | 3-5 | 3, 5, 6 |
+| 7 | `trace-views` | RM-0048 | Flow badges, `stage:`, timeline lanes, a node's cards | - | 3-5 | 3, 5, 6 |
 | 8 | `hub-identity` | RM-0049 | Public origin, identity header, person in `Author`, `[team]` | `hub-mode`, `hub-identity` | 4-6 | 0 |
 | 9 | `hub-confirm` | RM-0050 | UI confirm by role; `door.rs` rewritten | `hub-confirm` | 3-5 | 8 |
 | 10 | `hub-git` | RM-0051 | Sole writer, merge and push, index in the commit, push status | `apply-outputs` | 4-6 | 8 |

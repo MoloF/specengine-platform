@@ -1,0 +1,25 @@
+# Fixture corpus flow-gaps: a public library's lending, no game word. One
+# flow is whole (WING-LEND), one breaks every gap rule of `spec flow` once
+# (WING-BROKEN), one has no start (WING-HEADLESS); WING-LIBRARY holds all
+# three. Kinds, prefixes and the `[flow]` rules are this project's own
+# (docs/features/flow-read.md "Fixture", ADR-0008, ADR-0055).
+
+[project]
+slug = "flow-gaps"
+
+[ids]
+WING = { kind = "wing",      shape = "name" }
+LND  = { kind = "lending",   shape = "name" }
+PLT  = { kind = "bookplate", shape = "name" }
+
+[[flow.step]]
+kinds = ["lending"]
+
+[[flow.start]]
+paths = ["docs/spec/lnd-ask.md", "docs/spec/lnd-a.md", "docs/spec/lnd-b.md"]
+
+[[flow.end]]
+paths = ["docs/spec/lnd-open.md", "docs/spec/lnd-end.md", "docs/spec/lnd-end-two.md"]
+
+[[flow.definition]]
+kinds = ["bookplate"]

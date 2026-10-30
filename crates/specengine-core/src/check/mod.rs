@@ -94,6 +94,7 @@ pub use config::{
 };
 pub use engine::{PARSER_SEVERITY, add_findings, parser_severity, run};
 pub use generated::{WalkGap, walk_gap};
+pub(crate) use health::documents_selected;
 pub use health::{BoundCandidate, bound_candidates};
 pub use input::{CheckFile, CheckInput, Problem, ProblemKind};
 pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, render_index_set};

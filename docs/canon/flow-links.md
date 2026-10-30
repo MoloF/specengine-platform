@@ -8,7 +8,7 @@ reviewed: 2026-10-31
 
 # Flow links: `follows`, `uses`, `supplies` and labelled edges
 
-Three shared, domain-free link types carry order, reuse and supply, and a `follows` item may carry a label (ADR-0055, `architecture.md#universal`). They are written in front-matter as any `links` item, with no command, tool, route, table or column of their own. `spec check` gives flow no rule, so nothing here blocks work (ADR-0012).
+Three shared, domain-free link types carry order, reuse and supply, and a `follows` item may carry a label (ADR-0055, `architecture.md#universal`). They are written in front-matter as any `links` item, with no command, tool, route, table or column of their own. `spec check` gives flow no rule, so nothing here blocks work (ADR-0012). `spec flow` reads them: `spec-flow.md`.
 
 ## Types
 

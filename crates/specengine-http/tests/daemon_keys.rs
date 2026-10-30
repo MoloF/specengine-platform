@@ -170,6 +170,12 @@
 //! keys present) and the exit-1 document of `?ref=NOPE-1`; each `row` is
 //! one more `DriftRow` instance. M8: `diff` dropped from the fixture's
 //! `LockDiffCodeSide`.
+//!
+//! docs/features/flow-read.md "Files in scope": five sets more, 86 in all,
+//! last, after `LockDiffCodeSide`: `FlowView` (11 keys), `FlowGap` (5),
+//! `FlowNode` (11), `FlowEdge` (8) and `FlowInner` (2), from `GET flow` on a
+//! git copy of `fixtures/flow-gaps`: a whole read, the fold at depth 1 (its
+//! `inner` lists hold entries) and the exit-1 document of `?root=NOPE-1`.
 
 mod common;
 mod task_state;
@@ -435,10 +441,21 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     // measured with every nested object.
     let health_code = health_code_repo(&scratch, &home);
 
+    // flow-read: the planted corpus, served as its own slug.
+    let flow_gaps = scratch.repo("flow-gaps", "flow-gaps", "main");
+
     let server = Server::serve(
         &home,
         &cwd,
-        &[&a, &observed, &cannot, &amended, &code.0, &health_code],
+        &[
+            &a,
+            &observed,
+            &cannot,
+            &amended,
+            &code.0,
+            &health_code,
+            &flow_gaps,
+        ],
     );
     let p = "/api/projects/lantern-keep";
     // decision-staging: each proposal staged, as a same-origin page stages,
@@ -598,6 +615,22 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
                 .to_owned()
         })
         .collect();
+    // flow-read: a whole read, the fold whose `inner` lists hold entries,
+    // and the exit-1 document.
+    let flows: Vec<String> = [
+        ("", 200),
+        ("?root=WING-LIBRARY&depth=1", 200),
+        ("?root=NOPE-1", 404),
+    ]
+    .iter()
+    .map(|(query, status)| {
+        server
+            .get(&format!("/api/projects/flow-gaps/flow{query}"))
+            .status(*status)
+            .text()
+            .to_owned()
+    })
+    .collect();
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -774,6 +807,19 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let tested_rows = [tested_rows, drift_tested, shown_tested].concat();
     // lock-diff: the view's holders, their kept rows, each row's sides;
     // every `row` one more `DriftRow`.
+    let flow_gap_rows = items(&flows, "gaps");
+    let flow_nodes = items(&flows, "nodes");
+    let flow_edges = items(&flows, "edges");
+    let flow_inners = items(&flow_nodes, "inner");
+    assert_eq!(
+        flow_gap_rows.len(),
+        20,
+        "ten rows a read, none on the exit-1 document: {flows:?}"
+    );
+    assert!(
+        !flow_nodes.is_empty() && !flow_edges.is_empty() && !flow_inners.is_empty(),
+        "FlowNode, FlowEdge, FlowInner: the fold lists each: {flows:?}"
+    );
     let lock_diff_nodes = items(&lock_diffs, "nodes");
     let lock_diff_rows = items(&lock_diff_nodes, "rows");
     let lock_diff_specs = objects(&with_object(&lock_diff_rows, "spec"), "spec");
@@ -1172,6 +1218,11 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "LockDiffCodeSide",
             one_key_set("LockDiffCodeSide", &lock_diff_codes, keys_of),
         ),
+        ("FlowView", one_key_set("FlowView", &flows, keys_of)),
+        ("FlowGap", one_key_set("FlowGap", &flow_gap_rows, keys_of)),
+        ("FlowNode", one_key_set("FlowNode", &flow_nodes, keys_of)),
+        ("FlowEdge", one_key_set("FlowEdge", &flow_edges, keys_of)),
+        ("FlowInner", one_key_set("FlowInner", &flow_inners, keys_of)),
     ]
 }
 
@@ -1498,10 +1549,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        81,
+        86,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
-         health-drift: 74; ui-node-bindings: 76; lock-diff: 81)"
+         health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -1913,6 +1964,45 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         assert_eq!(*name, want_name);
         assert_eq!(keys, want_keys, "{name}");
     }
+    // flow-read's five, last: "Output"'s order and keys.
+    let five: Vec<(&str, Vec<String>)> = sets[81..86].to_vec();
+    let want: [(&str, &[&str]); 5] = [
+        (
+            "FlowView",
+            &[
+                "root",
+                "reason",
+                "depth",
+                "notes",
+                "left_out",
+                "truncated",
+                "omitted_nodes",
+                "omitted_edges",
+                "gaps",
+                "nodes",
+                "edges",
+            ],
+        ),
+        ("FlowGap", &["code", "state", "count", "items", "cause"]),
+        (
+            "FlowNode",
+            &[
+                "id", "kind", "title", "path", "line", "distance", "group", "start", "end",
+                "holds", "inner",
+            ],
+        ),
+        (
+            "FlowEdge",
+            &[
+                "from", "to", "type", "kind", "when", "count", "path", "line",
+            ],
+        ),
+        ("FlowInner", &["type", "count"]),
+    ];
+    for ((name, keys), (want_name, want_keys)) in five.iter().zip(want) {
+        assert_eq!(*name, want_name);
+        assert_eq!(keys, want_keys, "{name}");
+    }
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -1933,7 +2023,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 81 sets (41 until
+/// unchanged, no new key): the fixture holds 86 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -1957,13 +2047,13 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        81,
-        "81 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        86,
+        "86 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
-         health-drift's six (TE-5), ui-node-bindings' two (TE-1) and \
-         lock-diff's five (TE-2)"
+         health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
+         lock-diff's five (TE-2) and flow-read's five"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -2077,7 +2167,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 81 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 86 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2105,13 +2195,13 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        81,
-        "81 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        86,
+        "86 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
-         health-drift's six (TE-5), ui-node-bindings' two (TE-1) and \
-         lock-diff's five (TE-2)"
+         health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
+         lock-diff's five (TE-2) and flow-read's five"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

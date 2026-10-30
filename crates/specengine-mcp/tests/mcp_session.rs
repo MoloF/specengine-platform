@@ -89,6 +89,8 @@ fn valid_args(tool: &str) -> Value {
         // docs/features/impact.md: one input, so the call passes the form
         // check and reaches the CLI (no project: its `spec init` line).
         "get_impact" => json!({"id": "MEC-STAMINA"}),
+        // docs/features/flow-read.md: the whole flow.
+        "get_flow" => json!({}),
         // docs/features/review-form.md: the read before any form (no
         // project: its `spec init` line, no form).
         "review_proposal" => json!({"proposal_id": "PR-0001"}),

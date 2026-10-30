@@ -11,7 +11,9 @@
 //! `check_binding`'s: `docs/features/check-binding.md` "Data"), and of
 //! `get_impact` (`spec impact`'s document: `docs/features/impact.md`
 //! "Data", `docs/features/impact-since.md` "Output"; graph's node object,
-//! the read rows' [`BindingRowShape`]).
+//! the read rows' [`BindingRowShape`]), and of `get_flow` (`spec flow`'s
+//! document: `docs/features/flow-read.md` "Output": a gap's `code` and
+//! `state` and an edge's `kind` closed, link types and node kinds free).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -1054,6 +1056,115 @@ pub(crate) struct TaskDocument {
     pub run: Option<u64>,
     /// A refusal's reason last.
     pub notes: Vec<String>,
+}
+
+// -------------------------------------------------------------------- flow
+
+/// `spec flow --json`.
+#[derive(JsonSchema)]
+pub(crate) struct FlowDocument {
+    /// The ROOT as given; `null` without one.
+    pub root: Option<String>,
+    /// Why ROOT names nothing (the result is then an error); `null` otherwise.
+    pub reason: Option<String>,
+    pub depth: Option<usize>,
+    pub notes: Vec<String>,
+    pub left_out: LeftOut,
+    pub truncated: bool,
+    pub omitted_nodes: usize,
+    pub omitted_edges: usize,
+    /// All ten in one order; empty only when ROOT names nothing.
+    pub gaps: Vec<FlowGap>,
+    pub nodes: Vec<FlowNode>,
+    pub edges: Vec<FlowEdge>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct FlowGap {
+    pub code: FlowGapCode,
+    pub state: FlowGapState,
+    /// The items, the whole; `null` unless `measured`.
+    pub count: Option<usize>,
+    /// The printed items, each a list of names.
+    pub items: Vec<Vec<String>>,
+    /// Why it was not counted.
+    pub cause: Option<String>,
+}
+
+/// A gap row's code.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "kebab-case")]
+pub(crate) enum FlowGapCode {
+    NoStart,
+    TwoStarts,
+    Unreachable,
+    NoWayToEnd,
+    TrapCycle,
+    UnjoinedParallel,
+    CycleNoRepeat,
+    DefinitionUnused,
+    DefinitionOnce,
+    SupplyUnfed,
+}
+
+/// How a gap row fared.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "snake_case")]
+pub(crate) enum FlowGapState {
+    Measured,
+    NotConfigured,
+    Cannot,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct FlowNode {
+    pub id: Option<String>,
+    pub kind: Option<String>,
+    pub title: Option<String>,
+    pub path: String,
+    pub line: usize,
+    /// `follows` links from the starts, the least of what it holds; `null`
+    /// where none is reached.
+    pub distance: Option<usize>,
+    /// The shown node holding it.
+    pub group: Option<String>,
+    pub start: bool,
+    pub end: bool,
+    /// The documents folded into it.
+    pub holds: usize,
+    pub inner: Vec<FlowInner>,
+}
+
+/// The edges inside a node, of one type.
+#[derive(JsonSchema)]
+pub(crate) struct FlowInner {
+    #[schemars(rename = "type")]
+    pub link_type: String,
+    pub count: usize,
+}
+
+/// A shown edge, in reading direction.
+#[derive(JsonSchema)]
+pub(crate) struct FlowEdge {
+    pub from: String,
+    pub to: String,
+    #[schemars(rename = "type")]
+    pub link_type: String,
+    pub kind: Option<FlowEdgeKind>,
+    /// Only at a count of 1.
+    pub when: Option<String>,
+    pub count: usize,
+    pub path: String,
+    pub line: usize,
+}
+
+/// A labelled edge's kind.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum FlowEdgeKind {
+    Alternative,
+    Parallel,
+    Repeat,
 }
 
 // ----------------------------------------------------------------- roadmap

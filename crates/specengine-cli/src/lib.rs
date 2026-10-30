@@ -65,9 +65,9 @@
 //! - [`documents`]: the indexed live documents (neither `class: generated`
 //!   nor Tier 3), by path (MCP's `resources/list`; no command prints it);
 //! - [`tree_with_view`], [`show_with_view`], [`search_with_view`],
-//!   [`graph_with_view`], [`roadmap_with_view`]: those reads bounded by a
-//!   [`View`], the daemon's [`View::Browser`] never cut (task specs
-//!   `daemon-read`, `ui-live`, `roadmap-surfaces`);
+//!   [`graph_with_view`], [`roadmap_with_view`], [`flow_with_view`]: those
+//!   reads bounded by a [`View`], the daemon's [`View::Browser`] never cut
+//!   (task specs `daemon-read`, `ui-live`, `roadmap-surfaces`, `flow-read`);
 //!   [`project_entry`], [`events_after`]: a
 //!   served project's entry and the queue's events after a `seq`, which
 //!   only the daemon reads (no command prints them); [`EventsTail`] the
@@ -156,9 +156,12 @@
 //!   note, never an exit); a `--release` naming no release is an outcome
 //!   with its reason, exit 1; [`roadmap_flags`] its usage check, for the
 //!   daemon;
-//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `bundle`,
-//!   `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or refused by the
-//!   proposal or its target (the queue's commands), 2 could not run
+//! - [`flow()`]: `spec flow [ROOT] [--depth N]` (task spec `flow-read`), the
+//!   typed edges, lifted edges and gap rows core's `flow_read` computes,
+//!   `[flow]` read here alone; a gap changes no exit;
+//! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `flow`,
+//!   `bundle`, `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or
+//!   refused by the proposal or its target (the queue's commands), 2 could not run
 //!   (`check`: could not check; `verify`: could not verify).
 //!
 //! One database state gives one stdout, byte for byte: nothing depends on
@@ -175,8 +178,9 @@
 //! accept`, which writes only `spec.lock` and commits it alone, and `spec
 //! lock regen`, which writes only `spec.lock` (canon `spec-lock`,
 //! "Travel and writes"); `index`, `verify`, `refs`, `symbols`, `unmapped`,
-//! `search`, `show`, `tree`, `graph`, `bundle`, `roadmap`, `propose`, `inbox`,
-//! `review`, `reject`, `import-state`, `round new`, `resolve` and `health`
+//! `search`, `show`, `tree`, `graph`, `flow`, `bundle`, `roadmap`, `propose`,
+//! `inbox`, `review`, `reject`, `import-state`, `round new`, `resolve` and
+//! `health`
 //! write only the data directory (`propose question`, `discrepancy` and
 //! `decision` too), `export state` only its dump (never inside the
 //! worktree), `check` and `serve` nothing (the daemon `serve` execs writes
@@ -205,6 +209,7 @@ mod drift;
 mod drift_apply;
 mod events;
 mod export;
+mod flow;
 mod follow_up;
 mod gate;
 mod graph;
@@ -288,6 +293,7 @@ pub use drift::{
 };
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
+pub use flow::{FlowOutcome, FlowRequest, GAP_ITEMS_SHOWN, flow, flow_with_view};
 pub use gate::{
     GATE_DEADLINE, GATE_TASKS_MAX, GateInput, GateOutcome, GateProgress, GateReason, GateRequest,
     GateStage, GateTaskEntry, GateVerdict, HookInput, LINK_HOPS, gate, gate_session,
@@ -571,6 +577,8 @@ pub enum Outcome {
     Health(HealthOutcome),
     /// `roadmap`: the plan of the `[roadmap]` items.
     Roadmap(Box<RoadmapOutcome>),
+    /// `flow`: typed edges, lifted edges and gap rows.
+    Flow(Box<FlowOutcome>),
     /// `impact`: what a change of a node or a code item reaches.
     Impact(Box<ImpactOutcome>),
     /// `refs`: what in the code names a node.
@@ -638,6 +646,7 @@ impl Outcome {
             Self::Refs(refs) if refs.reason.is_some() => Exit::NotFound,
             Self::Symbols(symbols) if symbols.reason.is_some() => Exit::NotFound,
             Self::Roadmap(roadmap) if roadmap.reason.is_some() => Exit::NotFound,
+            Self::Flow(flow) if flow.reason.is_some() => Exit::NotFound,
             Self::Impact(impact) if impact.reason.is_some() => Exit::NotFound,
             Self::Lock(lock) => lock.exit(),
             Self::LockRegen(regen) => regen.exit(),
@@ -676,6 +685,7 @@ impl Outcome {
             Self::Bump(outcome) => (&outcome.messages, None),
             Self::Health(outcome) => (&outcome.messages, None),
             Self::Roadmap(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::Flow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Impact(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Refs(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::Symbols(outcome) => (&outcome.messages, outcome.reason.as_deref()),
@@ -775,6 +785,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Bump(outcome) => bump::render_text(outcome),
         Outcome::Health(outcome) => health::render_text(outcome),
         Outcome::Roadmap(outcome) => roadmap::render_text(outcome),
+        Outcome::Flow(outcome) => flow::render_text(outcome),
         Outcome::Impact(outcome) => impact::render_text(outcome),
         Outcome::Refs(outcome) => refs::render_text(outcome),
         Outcome::Symbols(outcome) => symbols::render_text(outcome),
@@ -819,6 +830,7 @@ impl serde::Serialize for Outcome {
             Self::Bump(outcome) => outcome.serialize(serializer),
             Self::Health(outcome) => outcome.serialize(serializer),
             Self::Roadmap(outcome) => outcome.serialize(serializer),
+            Self::Flow(outcome) => outcome.serialize(serializer),
             Self::Impact(outcome) => outcome.serialize(serializer),
             Self::Refs(outcome) => outcome.serialize(serializer),
             Self::Symbols(outcome) => outcome.serialize(serializer),

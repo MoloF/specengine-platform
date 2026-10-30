@@ -55,6 +55,12 @@
 //! docs/features/impact-since.md TE-5: `get_impact {since: "HEAD"}` over
 //! the same corpus with 3 000 untracked items joins it (the delta cut).
 //!
+//! docs/features/flow-read.md AC-07: `get_flow` over 4 000 short steps (JSON
+//! several times the text, every edge past the cut) and over titles of
+//! control characters: each answer the CLI library's, the text before the
+//! tail within the cut, the sum within `MAX_RESULT_CHARS`; the maximum
+//! printed (`flow_cut_stays_under_the_declared_cap`).
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -187,6 +193,74 @@ fn ac15_trees_and_searches_cut_stay_under_the_declared_cap() {
         ],
     ));
     eprintln!("AC-15 tree/search maximum: {largest}");
+}
+
+/// docs/features/flow-read.md AC-07: the read that lists a node, a line and
+/// an edge per document stays within the cut and the declared cap, with
+/// rows of 50 items printed above them. Parity here compares the library
+/// with itself: CLI `flow_read.rs` is what holds JSON to the printed items.
+#[test]
+fn flow_cut_stays_under_the_declared_cap() {
+    let scratch = Scratch::new("size-flow");
+    let home = scratch.home("h");
+    // Short lines: JSON several times the text; `[flow]` makes every step
+    // an item of two rows, 50 printed.
+    let short = scratch.dir("short");
+    write(
+        &short,
+        "specengine.toml",
+        "[project]\nslug = \"short\"\n\n[ids]\nS = { kind = \"pace\", width = 4 }\n\n\
+         [[flow.step]]\nkinds = [\"pace\"]\n\n[[flow.start]]\npaths = [\"docs/spec/s-none.md\"]\n\n\
+         [[flow.end]]\npaths = [\"docs/spec/s-none.md\"]\n",
+    );
+    for n in 1..=4_000 {
+        let links = if n % 2 == 0 {
+            format!("links:\n  follows: [S-{:04}]\n", n - 1)
+        } else {
+            String::new()
+        };
+        write(
+            &short,
+            &format!("docs/spec/s-{n:04}.md"),
+            format!("---\nid: S-{n:04}\n{links}---\n\n# x\n"),
+        );
+    }
+    let mut largest = measure(
+        "flow-short-lines",
+        &short,
+        &home,
+        &[
+            ("get_flow", json!({})),
+            ("get_flow", json!({"depth": 0})),
+            ("get_flow", json!({"root": "S-0001"})),
+        ],
+    );
+    // Titles of control characters: each escapes to six in JSON.
+    let control = scratch.dir("control");
+    write(
+        &control,
+        "specengine.toml",
+        "[project]\nslug = \"control\"\n\n[ids]\nS = { kind = \"pace\", width = 4 }\n",
+    );
+    let c = controls();
+    for n in 1..=300 {
+        let to = if n == 1 { 300 } else { n - 1 };
+        write(
+            &control,
+            &format!("docs/spec/s-{n:04}.md"),
+            format!(
+                "---\nid: S-{n:04}\nlinks:\n  follows: [S-{to:04}]\n---\n\n# {} zzq\n\nzzq\n",
+                c.repeat(7)
+            ),
+        );
+    }
+    largest = largest.max(measure(
+        "flow-control-titles",
+        &control,
+        &home,
+        &[("get_flow", json!({}))],
+    ));
+    eprintln!("flow-read get_flow maximum: {largest}");
 }
 
 #[test]

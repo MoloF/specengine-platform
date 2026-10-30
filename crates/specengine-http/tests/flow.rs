@@ -1,0 +1,322 @@
+//! docs/features/flow-read.md AC-07, the route: `GET
+//! /api/projects/:p/flow?root=&depth=`.
+//!
+//! Parity: on `fixtures/flow-gaps`, `fixtures/flow-relay` and
+//! `fixtures/spec-c`, no query, `root` and `depth` answer 200, byte-equal to
+//! `spec --root R flow <flags> --json` stdout less its final LF under the
+//! same `HOME`, a gap of any count included; a repeat answers the same
+//! bytes.
+//!
+//! Uncut: a corpus past the CLI's cut: the daemon's `truncated` is false,
+//! its counts the CLI text's header, the CLI's nodes a prefix of the
+//! daemon's, every gap row whole with all its items.
+//!
+//! The query: `root` naming nothing and `root=` empty are a 404 byte-equal
+//! to the CLI's exit-1 document; `root` twice, `depth=x`, a scalar twice,
+//! an unknown parameter, a CLI flag's name are a 400 naming the parameter,
+//! a fresh `HOME` still empty after; `depth=-1`, a look-alike, a `project:`
+//! REF are a 503 whose message is the CLI's line verbatim.
+//!
+//! Key sets are `daemon_keys.rs`; the route's list, `methods.rs` and
+//! `projects.rs`.
+
+mod common;
+
+use std::path::Path;
+
+use common::{
+    Reply, Run, Scratch, Server, beyond_daemon, encode_component, spec, spec_json, write,
+};
+use serde_json::{Value, json};
+
+const P: &str = "/api/projects/flow-gaps";
+
+/// The daemon's `path` against `spec --root root <args> --json` (exit 0 ->
+/// 200, exit 1 -> 404): the same bytes, the JSON headers, the same bytes
+/// again on a second request.
+fn same(server: &Server, home: &Path, cwd: &Path, root: &Path, path: &str, args: &[&str]) -> Reply {
+    let run = spec_json(home, cwd, root, args);
+    let reply = server.get(path);
+    let want = if run.code == 0 { 200 } else { 404 };
+    assert_eq!(
+        reply.status,
+        want,
+        "{path} vs spec {args:?} (exit {}): {}",
+        run.code,
+        reply.text()
+    );
+    assert_eq!(
+        reply.text(),
+        run.document(),
+        "{path} is byte-equal to `spec flow`"
+    );
+    assert_eq!(
+        reply.header("content-type"),
+        Some("application/json; charset=utf-8"),
+        "{path}"
+    );
+    assert_eq!(reply.header("cache-control"), Some("no-store"), "{path}");
+    let again = server.get(path);
+    assert_eq!(
+        (again.status, again.text()),
+        (reply.status, reply.text()),
+        "{path}: a repeat answers the same bytes"
+    );
+    reply
+}
+
+/// `spec --root root flow <args> --json`, which must exit 2; its stderr
+/// less the final LF.
+fn cannot_run(home: &Path, cwd: &Path, root: &Path, args: &[&str]) -> String {
+    let root = root.to_str().expect("UTF-8 root");
+    let mut all = vec!["--root", root, "flow"];
+    all.extend_from_slice(args);
+    all.push("--json");
+    let run: Run = spec(home, cwd, &all);
+    run.code(2);
+    assert_eq!(run.stdout, "", "exit 2 prints no document: {}", run.show());
+    run.stderr.trim_end_matches('\n').to_owned()
+}
+
+/// AC-07: every form is the CLI's document byte for byte, on the planted
+/// corpus: a whole read, a ROOT in each of its forms, each depth. The
+/// planted rows change no status: 200 with every row counted.
+#[test]
+fn every_flow_is_the_clis_document_byte_for_byte() {
+    let scratch = Scratch::new("flow-parity");
+    let root = scratch.repo("flow-gaps", "gaps", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+
+    let forms: [(&str, &[&str]); 9] = [
+        ("", &[]),
+        ("?depth=0", &["--depth", "0"]),
+        ("?depth=1", &["--depth", "1"]),
+        ("?root=WING-BROKEN", &["WING-BROKEN"]),
+        ("?root=WING-LEND", &["WING-LEND"]),
+        ("?root=WING-HEADLESS", &["WING-HEADLESS"]),
+        (
+            "?root=WING-LIBRARY&depth=1",
+            &["WING-LIBRARY", "--depth", "1"],
+        ),
+        (
+            "?depth=2&root=WING-LIBRARY",
+            &["WING-LIBRARY", "--depth", "2"],
+        ),
+        (
+            "?root=docs%2Fspec%2Fwing-lend.md",
+            &["docs/spec/wing-lend.md"],
+        ),
+    ];
+    for (query, flags) in forms {
+        let mut args = vec!["flow"];
+        args.extend_from_slice(flags);
+        same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{P}/flow{query}"),
+            &args,
+        );
+    }
+    let section = encode_component("LND-ASK#LND-ASK-LINE");
+    same(
+        &server,
+        &home,
+        &cwd,
+        &root,
+        &format!("{P}/flow?root={section}"),
+        &["flow", "LND-ASK#LND-ASK-LINE"],
+    );
+
+    let reply = server.get(&format!("{P}/flow?root=WING-BROKEN"));
+    let document: Value = serde_json::from_str(reply.text()).expect("JSON");
+    assert_eq!(document["gaps"].as_array().expect("gaps").len(), 10);
+    assert_eq!(
+        document["gaps"][7],
+        json!({"code": "definition-unused", "state": "measured", "count": 3,
+            "items": [["PLT-FEED-A"], ["PLT-FEED-B"], ["PLT-UNUSED"]], "cause": null}),
+        "{document}"
+    );
+}
+
+/// AC-06: the route answers on a project with no `[flow]` and one with no
+/// flow link: 200 both, `spec-c`'s `nodes` empty.
+#[test]
+fn the_route_answers_on_other_projects() {
+    let scratch = Scratch::new("flow-other");
+    let relay = scratch.repo("flow-relay", "relay", "main");
+    let hire = scratch.repo("spec-c", "hire", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&relay, &hire]);
+    same(
+        &server,
+        &home,
+        &cwd,
+        &relay,
+        "/api/projects/flow-relay/flow",
+        &["flow"],
+    );
+    let reply = same(
+        &server,
+        &home,
+        &cwd,
+        &hire,
+        "/api/projects/dock-hire/flow",
+        &["flow"],
+    );
+    let document: Value = serde_json::from_str(reply.text()).expect("JSON");
+    assert_eq!(document["nodes"], json!([]), "{document}");
+    assert_eq!(document["gaps"].as_array().expect("gaps").len(), 10);
+}
+
+/// AC-07: past the CLI's cut the daemon is uncut: every node, every edge,
+/// every item; the CLI's counts and a prefix of its order.
+#[test]
+fn a_corpus_past_the_cap_comes_whole() {
+    let scratch = Scratch::new("flow-uncut");
+    let root = scratch.repo("flow-gaps", "gaps", "main");
+    write(
+        &root,
+        "specengine.toml",
+        "[project]\nslug = \"flow-gaps\"\n\n[ids]\nPACE = { kind = \"pace\", width = 4 }\n\n\
+         [[flow.step]]\nkinds = [\"pace\"]\n\n[[flow.start]]\n\
+         paths = [\"docs/spec/pace-0001.md\"]\n",
+    );
+    let title = "A long way round the block, and back again along the river";
+    let count = 700;
+    for step in 1..=count {
+        let links = if step % 2 == 0 {
+            format!("links:\n  follows: [PACE-{:04}]\n", step - 1)
+        } else {
+            String::new()
+        };
+        write(
+            &root,
+            &format!("docs/spec/pace-{step:04}.md"),
+            format!(
+                "---\nid: PACE-{step:04}\nclass: canon\ntitle: {title} {step}\nowner: owner\n\
+                 reviewed: 2026-10-01\n{links}---\n\n# {title} {step}\n\nA step.\n"
+            ),
+        );
+    }
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+
+    let run = spec_json(&home, &cwd, &root, &["flow"]);
+    run.code(0);
+    let cli = run.json();
+    assert_eq!(cli["truncated"], json!(true), "the CLI cuts this corpus");
+
+    let reply = server.get(&format!("{P}/flow"));
+    reply.status(200);
+    let served: Value = serde_json::from_str(reply.text()).expect("JSON");
+    assert_eq!(served["truncated"], json!(false));
+    assert_eq!(served["omitted_nodes"], json!(0));
+    assert_eq!(served["omitted_edges"], json!(0));
+    let nodes = served["nodes"].as_array().expect("nodes");
+    let edges = served["edges"].as_array().expect("edges");
+    assert_eq!(nodes.len(), count, "every node");
+    assert_eq!(edges.len(), count / 2, "every edge");
+
+    let cli_nodes = cli["nodes"].as_array().expect("nodes");
+    assert!(cli_nodes.len() < count, "{} nodes", cli_nodes.len());
+    assert_eq!(
+        &nodes[..cli_nodes.len()],
+        cli_nodes.as_slice(),
+        "the CLI's nodes are a prefix"
+    );
+    assert_eq!(
+        served["nodes"].as_array().expect("nodes").len(),
+        cli_nodes.len() + cli["omitted_nodes"].as_u64().expect("a count") as usize,
+        "the CLI's header counts the daemon's nodes"
+    );
+    // The row's `count` is the whole in both; only the items differ. Steps
+    // pair up (1, 2), (3, 4) and on, so the start reaches the first pair alone.
+    let unreachable = |document: &Value| document["gaps"][2].clone();
+    assert_eq!(unreachable(&served)["count"], unreachable(&cli)["count"]);
+    assert_eq!(unreachable(&served)["count"], json!(count - 2));
+    assert_eq!(
+        unreachable(&served)["items"]
+            .as_array()
+            .expect("items")
+            .len(),
+        count - 2,
+        "every item"
+    );
+    assert_eq!(
+        unreachable(&cli)["items"].as_array().expect("items").len(),
+        50,
+        "the CLI's printed items"
+    );
+}
+
+/// The query: a ROOT naming nothing is the CLI's exit-1 document; a bad
+/// query a 400 before anything runs; what the CLI refuses a 503 with its
+/// line.
+#[test]
+fn the_query_of_the_route() {
+    let scratch = Scratch::new("flow-query");
+    let root = scratch.repo("flow-gaps", "gaps", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+
+    for (query, reference) in [("?root=LND-NOPE", "LND-NOPE"), ("?root=", "")] {
+        let reply = same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{P}/flow{query}"),
+            &["flow", reference],
+        );
+        assert_eq!(reply.status, 404, "{query}");
+    }
+
+    for (query, parameter) in [
+        ("?root=WING-LEND&root=WING-BROKEN", "root"),
+        ("?depth=1&depth=2", "depth"),
+        ("?depth=x", "depth"),
+        ("?depth=", "depth"),
+        ("?x=1", "x"),
+        ("?type=follows", "type"),
+        ("?archive=true", "archive"),
+        ("?ref=WING-LEND", "ref"),
+    ] {
+        let path = format!("{P}/flow{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+        assert!(
+            reply.error_message().contains(parameter),
+            "{path}: {}",
+            reply.error_message()
+        );
+    }
+    let bad = server.get(&format!("{P}/flow?root=%ZZ"));
+    assert_eq!(bad.status, 400, "a bad escape: {}", bad.text());
+
+    for (query, flags) in [
+        ("?depth=-1", &["--depth", "-1"][..]),
+        ("?root=LND-%D0%90SK", &["LND-\u{0410}SK"]),
+        ("?root=other:LND-ASK", &["other:LND-ASK"]),
+    ] {
+        let path = format!("{P}/flow{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 503, "{path}: {}", reply.text());
+        let message = cannot_run(&home, &cwd, &root, flags);
+        assert_eq!(reply.error_message(), message, "{path}");
+    }
+
+    // An unknown slug and a refused query reach no project.
+    let fresh = scratch.home("fresh");
+    let server = Server::serve(&fresh, &cwd, &[&root]);
+    let before = beyond_daemon(&fresh);
+    assert_eq!(server.get("/api/projects/nope/flow").status, 404);
+    assert_eq!(server.get(&format!("{P}/flow?depth=x")).status, 400);
+    assert_eq!(beyond_daemon(&fresh), before, "no database opened");
+}

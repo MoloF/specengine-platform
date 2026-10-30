@@ -16,7 +16,8 @@
 //! code-tools RD-1, RD-5, M: a code tool with a writer's hints; a code
 //! tool unnamed in `instructions`.
 //!
-//! docs/features/review-form.md D1, D6, D7: twenty-two tools; the owner's
+//! docs/features/review-form.md D1, D6, D7: twenty-two tools, twenty-three
+//! since docs/features/flow-read.md (`get_flow`, a read); the owner's
 //! form `review_proposal` (`OWNER_TOOLS`) in the default build with the
 //! writers' hints and `_meta` exactly the size cap and
 //! `anthropic/requiresUserInteraction: true` (no other tool asks the

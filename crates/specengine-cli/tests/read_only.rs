@@ -1,7 +1,8 @@
 //! AC-15 of docs/features/spec-cli.md (`docs/canon/architecture.md#apply`,
 //! `#storage`): `index`, `index --full`, `search` and every `show` form
 //! leave the spec-a and spec-b copies byte- and path-identical; new files
-//! appear only in the data directory.
+//! appear only in the data directory. docs/features/flow-read.md AC-07:
+//! `flow`, whole and folded, joins the loop.
 
 #![cfg(unix)]
 
@@ -23,6 +24,12 @@ fn commands(fixture: &str) -> Vec<Vec<&'static str>> {
         vec!["show", "docs/nope.md"],
         vec!["show", "../x.md"],
         vec!["show", "other:R-12"],
+        vec!["flow"],
+        vec!["--json", "flow"],
+        vec!["flow", "--depth", "0"],
+        vec!["--json", "flow", "--depth", "1"],
+        vec!["flow", "NOPE-1"],
+        vec!["flow", "--depth", "-1"],
     ];
     let forms: &[&'static str] = if fixture == "spec-a" {
         &[

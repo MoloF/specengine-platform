@@ -250,8 +250,9 @@ fn ac14_the_task_tools_and_their_schemas() {
     // bindings hint in, the no-project gloss out); 2 017 since
     // docs/features/impact.md (`get_impact` on the reads' line); 2 023
     // since docs/features/impact-since.md (`|since` in its clause); 2 040
-    // since docs/features/review-form.md (the `review_proposal` line).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
+    // since docs/features/review-form.md (the `review_proposal` line);
+    // 2 048 since docs/features/flow-read.md (`get_flow`, the hints folded).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();

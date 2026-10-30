@@ -17,6 +17,7 @@ Use this before you read or change behaviour the spec describes, and whenever yo
    - one node's current text: `get_node` with its `id`; add `with: ["links"]` for its links when you need what it points at and what points at it, `with: ["bindings"]` for the code bound to it and whether that code still matches the spec (each binding's `sync`);
    - a term or a behaviour without a known ID: `search`, then open only the hits you need;
    - the shape of the spec, or where a new piece belongs: `get_tree`, from a `root` and to a `depth` when the whole tree is too large;
+   - the ordered flow, its typed edges and its gap rows, which stop nothing: `get_flow`, from a `root` and to a `depth` when the whole flow is too large;
    - an item at a line or a name, and the spec markers bound to it, before you change code (the project's config needs a `[code]` table): `find_symbols` with exactly one of `at` (a root-relative path, a colon and the line), `query` (a name, the end of a qualified path or a whole one), `node` (an ID: the items bound to it) or `file` (a code file's items);
    - what in the code binds a node: `refs` with its `id`, the markers and the mentions naming it;
    - where code has no spec: `unmapped`, with a `path` (a code root, a directory or a code file), or without one for every root.

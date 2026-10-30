@@ -95,6 +95,8 @@ const NAMES: [(&str, &[&str]); 6] = [
             "find_symbols",
             "refs",
             "unmapped",
+            // docs/features/flow-read.md: the flow, its edges and its rows.
+            "get_flow",
         ],
     ),
     (
@@ -365,7 +367,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's twenty-two tools"
+        "the default build's twenty-three tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1187,8 +1189,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // 0.17.0 since docs/features/tested-evidence.md; 0.18.0 since
     // docs/features/tested-reads.md; 0.19.0 since
     // docs/features/review-form.md; 0.20.0 since
-    // docs/features/layer-c-reads.md.
-    assert_eq!(manifest["version"], "0.20.0");
+    // docs/features/layer-c-reads.md; 0.21.0 since
+    // docs/features/flow-read.md.
+    assert_eq!(manifest["version"], "0.21.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1277,8 +1280,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // 0.17.0 since docs/features/tested-evidence.md; 0.18.0 since
     // docs/features/tested-reads.md; 0.19.0 since
     // docs/features/review-form.md; 0.20.0 since
-    // docs/features/layer-c-reads.md.
-    assert_eq!(manifest["version"], "0.20.0");
+    // docs/features/layer-c-reads.md; 0.21.0 since
+    // docs/features/flow-read.md.
+    assert_eq!(manifest["version"], "0.21.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1381,12 +1385,12 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.20.0",
+        manifest["version"], "0.21.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
          bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0; \
-         tested-reads: 0.18.0; review-form: 0.19.0; layer-c-reads: 0.20.0"
+         tested-reads: 0.18.0; review-form: 0.19.0; layer-c-reads: 0.20.0; flow-read: 0.21.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1514,8 +1518,10 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // since docs/features/impact.md (`get_impact`, named in `implement`:
     // `impact_implement_names_get_impact`); twenty-two since
     // docs/features/review-form.md (`review_proposal`, named in
-    // `ask-owner`: `review_form_ask_owner_names_review_proposal`).
-    assert_eq!(TOOLS.len(), 22);
+    // `ask-owner`: `review_form_ask_owner_names_review_proposal`);
+    // twenty-three since docs/features/flow-read.md (`get_flow`, which no
+    // skill teaches yet).
+    assert_eq!(TOOLS.len(), 23);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
     assert!(
         READ_SPEC_CODE_TOOLS
@@ -2004,8 +2010,9 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        3_720,
-        "SKILL.md's bytes as docs/features/tested-reads.md measures them (3 444 before)"
+        3_874,
+        "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
+         154 more since docs/features/flow-read.md (the `get_flow` line)"
     );
     let reworded = edited(
         &skills,
@@ -2107,7 +2114,7 @@ fn tested_reads_skills_name_tested() {
     };
     assert_eq!(
         (body(read_spec), read_spec.len()),
-        (3_399, 3_720),
+        (3_553, 3_874),
         "read-spec's bytes"
     );
     assert_eq!(

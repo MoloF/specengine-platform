@@ -25,6 +25,10 @@
 //! the tool's form error ([`GET_IMPACT_ONE_FORM`]) answered before it.
 //! docs/features/impact-since.md "MCP, INSTRUCTIONS, plugin 0.16.0" adds
 //! `since` (`ImpactRequest.since`, `--since REV`) to both.
+//!
+//! docs/features/flow-read.md: `get_flow` joins `TOOLS` (twenty-three); its
+//! twin in [`library`] is `spec flow [ROOT] [--depth N]`
+//! (`FlowRequest {root, depth}`).
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -32,7 +36,7 @@ use std::path::Path;
 use serde_json::{Value, json};
 use specengine_cli::{
     BundleRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
-    DriftRequest, Env, Exit, GitEnv, Globals, ImpactRequest, IntakeSeverity, Outcome,
+    DriftRequest, Env, Exit, FlowRequest, GitEnv, Globals, ImpactRequest, IntakeSeverity, Outcome,
     ProposeRequest, ProposedText, QuestionRequest, RefsRequest, ReviewRequest, RoadmapRequest,
     SearchRequest, ShowRequest, SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest,
     TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest,
@@ -91,14 +95,16 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// nineteen since docs/features/roadmap-surfaces.md (`get_roadmap`),
 /// twenty since docs/features/check-binding.md (`check_binding`),
 /// twenty-one since docs/features/impact.md (`get_impact`), twenty-two
-/// since docs/features/review-form.md ([`OWNER_TOOLS`]).
-pub const TOOLS: [&str; 22] = [
+/// since docs/features/review-form.md ([`OWNER_TOOLS`]), twenty-three since
+/// docs/features/flow-read.md (`get_flow`).
+pub const TOOLS: [&str; 23] = [
     "ask_question",
     "check_binding",
     "claim_task",
     "complete_task",
     "find_symbols",
     "get_context_bundle",
+    "get_flow",
     "get_impact",
     "get_node",
     "get_proposal",
@@ -662,7 +668,7 @@ pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> E
 /// CLI's usage error, exit 2); `get_impact` = `spec impact [REF] [--symbol
 /// QPATH] [--since REV] [--depth N]` with the server's git environment,
 /// not exactly one non-null of `id`, `symbol` and `since` the tool's
-/// [`GET_IMPACT_ONE_FORM`].
+/// [`GET_IMPACT_ONE_FORM`]; `get_flow` = `spec flow [ROOT] [--depth N]`.
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     if CODE_TOOLS.contains(&tool) {
         return code_library(tool, args, env, globals);
@@ -791,6 +797,15 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             )
             .map(|outcome| Outcome::Impact(Box::new(outcome)))
         }
+        "get_flow" => specengine_cli::flow(
+            env,
+            globals,
+            &FlowRequest {
+                root: text("root"),
+                depth: number("depth"),
+            },
+        )
+        .map(|outcome| Outcome::Flow(Box::new(outcome))),
         other => panic!("no CLI counterpart for tool {other}"),
     };
     expected(outcome)

@@ -1,0 +1,771 @@
+{
+  "prefixes": [
+    "LND",
+    "PLT",
+    "WING"
+  ],
+  "kinds": [
+    "bookplate",
+    "lending",
+    "wing"
+  ],
+  "files": {
+    "docs/spec/lnd-a.md": {
+      "id": "LND-A",
+      "kind": "lending",
+      "title": "The first closed desk",
+      "links": [
+        "LND-A follows frontmatter LND-OPEN | kind alternative"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-ask.md": {
+      "id": "LND-ASK",
+      "kind": "lending",
+      "title": "Ask at the desk",
+      "sections": [
+        "LND-ASK-LINE"
+      ],
+      "links": [],
+      "parent": "WING-LEND"
+    },
+    "docs/spec/lnd-b.md": {
+      "id": "LND-B",
+      "kind": "lending",
+      "title": "The second closed desk",
+      "links": [
+        "LND-B follows frontmatter LND-OPEN | kind alternative"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-check.md": {
+      "id": "LND-CHECK",
+      "kind": "lending",
+      "title": "Check the card",
+      "links": [
+        "LND-CHECK follows frontmatter LND-ASK",
+        "LND-CHECK follows frontmatter LND-HAND | kind repeat"
+      ],
+      "parent": "WING-LEND"
+    },
+    "docs/spec/lnd-dead.md": {
+      "id": "LND-DEAD",
+      "kind": "lending",
+      "title": "The unanswered letter",
+      "links": [
+        "LND-DEAD follows frontmatter LND-A",
+        "LND-DEAD uses frontmatter PLT-ONCE"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-end.md": {
+      "id": "LND-END",
+      "kind": "lending",
+      "title": "The book comes back",
+      "links": [
+        "LND-END follows frontmatter LND-A",
+        "LND-END follows frontmatter LND-B",
+        "LND-END follows frontmatter LND-FORK-A",
+        "LND-END follows frontmatter LND-SPIN-B"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-end-two.md": {
+      "id": "LND-END-TWO",
+      "kind": "lending",
+      "title": "The book is written off",
+      "links": [
+        "LND-END-TWO follows frontmatter LND-FORK-B"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-fork-a.md": {
+      "id": "LND-FORK-A",
+      "kind": "lending",
+      "title": "Search the shelves",
+      "links": [
+        "LND-FORK-A follows frontmatter LND-B | kind parallel"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-fork-b.md": {
+      "id": "LND-FORK-B",
+      "kind": "lending",
+      "title": "Search the stacks",
+      "links": [
+        "LND-FORK-B follows frontmatter LND-B | kind parallel"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-hand.md": {
+      "id": "LND-HAND",
+      "kind": "lending",
+      "title": "Hand the book over",
+      "links": [
+        "LND-HAND follows frontmatter LND-STAMP",
+        "LND-HAND follows frontmatter LND-NOTE",
+        "LND-HAND depends_on frontmatter PLT-MARK"
+      ],
+      "parent": "WING-LEND"
+    },
+    "docs/spec/lnd-note.md": {
+      "id": "LND-NOTE",
+      "kind": "lending",
+      "title": "Note the loan",
+      "links": [
+        "LND-NOTE follows frontmatter LND-CHECK | kind parallel",
+        "LND-NOTE uses frontmatter PLT-MARK"
+      ],
+      "parent": "WING-LEND"
+    },
+    "docs/spec/lnd-open.md": {
+      "id": "LND-OPEN",
+      "kind": "lending",
+      "title": "The loan stays open",
+      "links": [
+        "LND-OPEN follows frontmatter LND-HAND",
+        "LND-OPEN follows frontmatter LND-OPEN | kind repeat"
+      ],
+      "parent": "WING-LEND"
+    },
+    "docs/spec/lnd-spin-a.md": {
+      "id": "LND-SPIN-A",
+      "kind": "lending",
+      "title": "Renew by post",
+      "links": [
+        "LND-SPIN-A follows frontmatter LND-A",
+        "LND-SPIN-A follows frontmatter LND-SPIN-B"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-spin-b.md": {
+      "id": "LND-SPIN-B",
+      "kind": "lending",
+      "title": "Renew by telephone",
+      "links": [
+        "LND-SPIN-B follows frontmatter LND-SPIN-A"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-stamp.md": {
+      "id": "LND-STAMP",
+      "kind": "lending",
+      "title": "Stamp the slip",
+      "links": [
+        "LND-STAMP follows frontmatter LND-CHECK | kind parallel",
+        "LND-STAMP uses frontmatter PLT-MARK"
+      ],
+      "parent": "WING-LEND"
+    },
+    "docs/spec/lnd-stray.md": {
+      "id": "LND-STRAY",
+      "kind": "lending",
+      "title": "A lost slip",
+      "links": [],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-trap-a.md": {
+      "id": "LND-TRAP-A",
+      "kind": "lending",
+      "title": "Waiting for a stamp",
+      "links": [
+        "LND-TRAP-A follows frontmatter LND-B",
+        "LND-TRAP-A follows frontmatter LND-TRAP-B | kind repeat"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-trap-b.md": {
+      "id": "LND-TRAP-B",
+      "kind": "lending",
+      "title": "Waiting for a signature",
+      "links": [
+        "LND-TRAP-B follows frontmatter LND-TRAP-A"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/lnd-x.md": {
+      "id": "LND-X",
+      "kind": "lending",
+      "title": "A lock with one key",
+      "links": [
+        "LND-X follows frontmatter LND-Y"
+      ],
+      "parent": "WING-HEADLESS"
+    },
+    "docs/spec/lnd-y.md": {
+      "id": "LND-Y",
+      "kind": "lending",
+      "title": "A key with no lock",
+      "links": [],
+      "parent": "WING-HEADLESS"
+    },
+    "docs/spec/plt-feed-a.md": {
+      "id": "PLT-FEED-A",
+      "kind": "bookplate",
+      "title": "The ink plate",
+      "links": [
+        "PLT-FEED-A supplies frontmatter PLT-FEED-B"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/plt-feed-b.md": {
+      "id": "PLT-FEED-B",
+      "kind": "bookplate",
+      "title": "The paper plate",
+      "links": [
+        "PLT-FEED-B supplies frontmatter PLT-FEED-A"
+      ],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/plt-mark.md": {
+      "id": "PLT-MARK",
+      "kind": "bookplate",
+      "title": "The library mark",
+      "links": [],
+      "parent": "WING-LEND"
+    },
+    "docs/spec/plt-once.md": {
+      "id": "PLT-ONCE",
+      "kind": "bookplate",
+      "title": "The donor plate",
+      "links": [],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/plt-unused.md": {
+      "id": "PLT-UNUSED",
+      "kind": "bookplate",
+      "title": "The old plate",
+      "links": [],
+      "parent": "WING-BROKEN"
+    },
+    "docs/spec/wing-broken.md": {
+      "id": "WING-BROKEN",
+      "kind": "wing",
+      "title": "The closed wing",
+      "links": [],
+      "parent": "WING-LIBRARY"
+    },
+    "docs/spec/wing-headless.md": {
+      "id": "WING-HEADLESS",
+      "kind": "wing",
+      "title": "The back room",
+      "links": [],
+      "parent": "WING-LIBRARY"
+    },
+    "docs/spec/wing-lend.md": {
+      "id": "WING-LEND",
+      "kind": "wing",
+      "title": "The lending wing",
+      "links": [],
+      "parent": "WING-LIBRARY"
+    },
+    "docs/spec/wing-library.md": {
+      "id": "WING-LIBRARY",
+      "kind": "wing",
+      "title": "The public library",
+      "links": []
+    }
+  },
+  "gaps": {
+    "all": [
+      {
+        "code": "no-start",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "two-starts",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-A",
+            "LND-ASK",
+            "LND-B"
+          ]
+        ]
+      },
+      {
+        "code": "unreachable",
+        "state": "measured",
+        "count": 3,
+        "items": [
+          [
+            "LND-STRAY"
+          ],
+          [
+            "LND-X"
+          ],
+          [
+            "LND-Y"
+          ]
+        ]
+      },
+      {
+        "code": "no-way-to-end",
+        "state": "measured",
+        "count": 4,
+        "items": [
+          [
+            "LND-DEAD"
+          ],
+          [
+            "LND-STRAY"
+          ],
+          [
+            "LND-X"
+          ],
+          [
+            "LND-Y"
+          ]
+        ]
+      },
+      {
+        "code": "trap-cycle",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-TRAP-A",
+            "LND-TRAP-B"
+          ]
+        ]
+      },
+      {
+        "code": "unjoined-parallel",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-B"
+          ]
+        ]
+      },
+      {
+        "code": "cycle-no-repeat",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-SPIN-A",
+            "LND-SPIN-B"
+          ]
+        ]
+      },
+      {
+        "code": "definition-unused",
+        "state": "measured",
+        "count": 3,
+        "items": [
+          [
+            "PLT-FEED-A"
+          ],
+          [
+            "PLT-FEED-B"
+          ],
+          [
+            "PLT-UNUSED"
+          ]
+        ]
+      },
+      {
+        "code": "definition-once",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "PLT-ONCE"
+          ]
+        ]
+      },
+      {
+        "code": "supply-unfed",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "PLT-FEED-A",
+            "PLT-FEED-B"
+          ]
+        ]
+      }
+    ],
+    "WING-LIBRARY": [
+      {
+        "code": "no-start",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "two-starts",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-A",
+            "LND-ASK",
+            "LND-B"
+          ]
+        ]
+      },
+      {
+        "code": "unreachable",
+        "state": "measured",
+        "count": 3,
+        "items": [
+          [
+            "LND-STRAY"
+          ],
+          [
+            "LND-X"
+          ],
+          [
+            "LND-Y"
+          ]
+        ]
+      },
+      {
+        "code": "no-way-to-end",
+        "state": "measured",
+        "count": 4,
+        "items": [
+          [
+            "LND-DEAD"
+          ],
+          [
+            "LND-STRAY"
+          ],
+          [
+            "LND-X"
+          ],
+          [
+            "LND-Y"
+          ]
+        ]
+      },
+      {
+        "code": "trap-cycle",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-TRAP-A",
+            "LND-TRAP-B"
+          ]
+        ]
+      },
+      {
+        "code": "unjoined-parallel",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-B"
+          ]
+        ]
+      },
+      {
+        "code": "cycle-no-repeat",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-SPIN-A",
+            "LND-SPIN-B"
+          ]
+        ]
+      },
+      {
+        "code": "definition-unused",
+        "state": "measured",
+        "count": 3,
+        "items": [
+          [
+            "PLT-FEED-A"
+          ],
+          [
+            "PLT-FEED-B"
+          ],
+          [
+            "PLT-UNUSED"
+          ]
+        ]
+      },
+      {
+        "code": "definition-once",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "PLT-ONCE"
+          ]
+        ]
+      },
+      {
+        "code": "supply-unfed",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "PLT-FEED-A",
+            "PLT-FEED-B"
+          ]
+        ]
+      }
+    ],
+    "WING-LEND": [
+      {
+        "code": "no-start",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "two-starts",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "unreachable",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "no-way-to-end",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "trap-cycle",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "unjoined-parallel",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "cycle-no-repeat",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "definition-unused",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "definition-once",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "supply-unfed",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      }
+    ],
+    "WING-BROKEN": [
+      {
+        "code": "no-start",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "two-starts",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-A",
+            "LND-B"
+          ]
+        ]
+      },
+      {
+        "code": "unreachable",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-STRAY"
+          ]
+        ]
+      },
+      {
+        "code": "no-way-to-end",
+        "state": "measured",
+        "count": 2,
+        "items": [
+          [
+            "LND-DEAD"
+          ],
+          [
+            "LND-STRAY"
+          ]
+        ]
+      },
+      {
+        "code": "trap-cycle",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-TRAP-A",
+            "LND-TRAP-B"
+          ]
+        ]
+      },
+      {
+        "code": "unjoined-parallel",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-B"
+          ]
+        ]
+      },
+      {
+        "code": "cycle-no-repeat",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "LND-SPIN-A",
+            "LND-SPIN-B"
+          ]
+        ]
+      },
+      {
+        "code": "definition-unused",
+        "state": "measured",
+        "count": 3,
+        "items": [
+          [
+            "PLT-FEED-A"
+          ],
+          [
+            "PLT-FEED-B"
+          ],
+          [
+            "PLT-UNUSED"
+          ]
+        ]
+      },
+      {
+        "code": "definition-once",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "PLT-ONCE"
+          ]
+        ]
+      },
+      {
+        "code": "supply-unfed",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "PLT-FEED-A",
+            "PLT-FEED-B"
+          ]
+        ]
+      }
+    ],
+    "WING-HEADLESS": [
+      {
+        "code": "no-start",
+        "state": "measured",
+        "count": 1,
+        "items": [
+          [
+            "WING-HEADLESS"
+          ]
+        ]
+      },
+      {
+        "code": "two-starts",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "unreachable",
+        "state": "cannot",
+        "count": null,
+        "items": []
+      },
+      {
+        "code": "no-way-to-end",
+        "state": "measured",
+        "count": 2,
+        "items": [
+          [
+            "LND-X"
+          ],
+          [
+            "LND-Y"
+          ]
+        ]
+      },
+      {
+        "code": "trap-cycle",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "unjoined-parallel",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "cycle-no-repeat",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "definition-unused",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "definition-once",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      },
+      {
+        "code": "supply-unfed",
+        "state": "measured",
+        "count": 0,
+        "items": []
+      }
+    ]
+  },
+  "edges": {
+    "follows": 25,
+    "uses": 3,
+    "supplies": 2,
+    "depends_on": 1
+  }
+}

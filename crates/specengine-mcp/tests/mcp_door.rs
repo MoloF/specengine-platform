@@ -517,6 +517,31 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"node": "MEC-STAMINA", "bogus": true}),
             ],
         ),
+        // docs/features/flow-read.md: spec-a holds `depends_on` links, so
+        // `{}` and a ROOT answer, a depth folds them; a REF naming nothing
+        // is exit 1, a look-alike and `depth: -1` exit 2; a wrong type and
+        // an unknown field (`--type` and `--archive` have no field) are bad
+        // arguments.
+        "get_flow" => (
+            vec![
+                json!({}),
+                json!({"root": "DOM-MOVEMENT"}),
+                json!({"root": "DOM-MOVEMENT", "depth": 1}),
+                json!({"root": "MEC-STAMINA#RULE-STAM-REGEN", "depth": 0}),
+                json!({"root": null, "depth": null}),
+                json!({"root": "MEC-NOPE"}),
+                json!({"root": "M\u{0415}C-STAMINA"}),
+                json!({"depth": -1}),
+            ],
+            vec![
+                json!({"root": 7}),
+                json!({"root": ["MEC-STAMINA"]}),
+                json!({"depth": "1"}),
+                json!({"type": "follows"}),
+                json!({"archive": true}),
+                json!({"root": "MEC-STAMINA", "bogus": true}),
+            ],
+        ),
         // docs/features/impact.md TE-6: spec-a has no `[code]`, so a REF
         // answers with no code (exit 0), `depth` too; a REF naming nothing
         // is exit 1, a look-alike and `depth: -1` exit 2, `symbol` the

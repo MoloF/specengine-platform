@@ -44,11 +44,19 @@ use common::read::{ERAS, STACK_WORDS, Session, TOOLS, has_word};
 use common::*;
 use serde_json::json;
 
-/// Every `kind = "…"` of the fixtures' configs: spec-a, spec-b and the
-/// non-Rust spec-c (07 s1.2 P2-5).
+/// Every `kind = "…"` of the fixtures' configs: spec-a, spec-b, the
+/// non-Rust spec-c (07 s1.2 P2-5) and the flow fixtures
+/// (docs/features/flow-read.md AC-06).
 fn fixture_kinds() -> Vec<String> {
     let mut kinds = Vec::new();
-    for name in ["spec-a", "spec-b", "spec-c"] {
+    for name in [
+        "spec-a",
+        "spec-b",
+        "spec-c",
+        "flow-relay",
+        "flow-hire",
+        "flow-gaps",
+    ] {
         let text = read_text(&fixture(name), "specengine.toml");
         for part in text.split("kind").skip(1) {
             let Some(rest) = part.trim_start().strip_prefix('=') else {
@@ -285,6 +293,12 @@ fn ac12_a_non_rust_corpus_gets_no_stack_word() {
         ("get_impact", json!({"id": "CROP-TOMATO", "depth": 1})),
         ("get_impact", json!({"id": "CROP-NOPE"})),
         ("get_impact", json!({"symbol": "tomato"})),
+        // docs/features/flow-read.md: the flow of a corpus of no genre: a
+        // whole read, a ROOT, a fold, a REF naming nothing, a bad depth.
+        ("get_flow", json!({})),
+        ("get_flow", json!({"root": "PLOT-GARDEN", "depth": 1})),
+        ("get_flow", json!({"root": "CROP-NOPE"})),
+        ("get_flow", json!({"depth": -1})),
     ];
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&root), Home::At(&home));

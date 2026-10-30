@@ -29,14 +29,15 @@ use common::{Reply, Scratch, Server, beyond_daemon, request_bytes};
 /// `tasks/:id`: docs/features/ui-live-tasks.md "Rules and edge cases";
 /// `round`: docs/features/ui-round.md "Data"; `roadmap`:
 /// docs/features/roadmap-surfaces.md, its answer on A a 503: no
-/// `[roadmap]`).
-const READS: [&str; 14] = [
+/// `[roadmap]`; `flow`: docs/features/flow-read.md).
+const READS: [&str; 15] = [
     "/api/projects",
     "/api/projects/lantern-keep/tree",
     "/api/projects/lantern-keep/nodes/MEC-STAMINA",
     "/api/projects/lantern-keep/search?query=stamina",
     "/api/projects/lantern-keep/bundle?node_ids=MEC-STAMINA",
     "/api/projects/lantern-keep/graph?ref=MEC-STAMINA",
+    "/api/projects/lantern-keep/flow",
     "/api/projects/lantern-keep/check",
     "/api/projects/lantern-keep/roadmap",
     "/api/projects/lantern-keep/inbox",
@@ -56,7 +57,7 @@ const ROUND_ANSWERS: &str = "/api/projects/lantern-keep/round/answers";
 /// docs/features/ui-live-tasks.md "Rules and edge cases"). `/` is the web
 /// UI's since docs/features/ui-embed.md; no SPA fallback, no `/index.html`
 /// alias, no `/assets` listing (T5).
-const UNKNOWN: [&str; 18] = [
+const UNKNOWN: [&str; 20] = [
     "/index.html",
     "/assets",
     "/api",
@@ -68,6 +69,8 @@ const UNKNOWN: [&str; 18] = [
     "/api/projects/lantern-keep/tree/more",
     "/api/projects/lantern-keep/check/more",
     "/api/projects/lantern-keep/graph/MEC-STAMINA",
+    "/api/projects/lantern-keep/flow/WING-LEND",
+    "/api/projects/lantern-keep/flows",
     "/api/projects/lantern-keep/roadmap/beta",
     "/api/projects/lantern-keep/roadmaps",
     "/api/projects/lantern-keep/tasks/",
@@ -291,6 +294,11 @@ fn an_unknown_path_is_a_404_for_every_method() {
             assert!(
                 message.contains(" health, roadmap, lock-diff, inbox, "),
                 "{context}: the list names roadmap: {message}"
+            );
+            // docs/features/flow-read.md: `flow` beside the reads it sits with.
+            assert!(
+                message.contains(" flow, graph, "),
+                "{context}: the list names flow: {message}"
             );
         }
     }

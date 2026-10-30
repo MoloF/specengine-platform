@@ -1891,7 +1891,10 @@ fn code_mirrors_pin_the_q35_types() {
 /// docs/features/review-form.md ("INSTRUCTIONS" of the developer's text,
 /// D6): [`REVIEW_LINE`] after the drift line (85 bytes), and
 /// [`MARKDOWN_GLOSS`], [`CODE_GLOSS`], [`DRIFT_GLOSS`] and [`TAIL_GLOSS`]
-/// cut (68 bytes); [`as_of_impact_since`] puts them back.
+/// cut (68 bytes); [`as_of_impact_since`] puts them back. 2 048, the limit,
+/// since docs/features/flow-read.md: the reads' line ends with [`FLOW_READ`]
+/// (32 bytes) and [`WITH_HINTS`] folds into [`WITH_ITEMS`] (24 bytes);
+/// [`as_of_review_form`] takes that back.
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec in git. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1900,7 +1903,8 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = ",
     "show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, ",
     "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
-    "pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact.\n",
+    "pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?) = \
+     flow.\n",
     "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; ",
     "unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.\n",
     "Queue (writes only the queue; the owner decides on a terminal):\n",
@@ -1916,8 +1920,8 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "show|claim|plan|report|complete; the three above take task_id.\n",
     "\n",
     "REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: ",
-    "--kind is kinds, ROOT is root, --links is with [\"links\"], --bindings is with ",
-    "[\"bindings\"]. Answers are cut at 40000 characters. A REF ",
+    "--kind is kinds, ROOT is root, --links, --bindings are with items. Answers are cut at ",
+    "40000 characters. A REF ",
     "naming nothing or a call that cannot run is an error result with the reason. ",
     "Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.\n",
     "\n",
@@ -1940,6 +1944,24 @@ const MARKDOWN_GLOSS: &str = " as Markdown";
 const CODE_GLOSS: &str = " beside the code";
 const DRIFT_GLOSS: &str = " for the owner";
 const TAIL_GLOSS: &str = ", with a tail on narrowing";
+
+/// docs/features/flow-read.md: what the reads' line gains before its full
+/// stop (32 bytes).
+const FLOW_READ: &str = "; get_flow(root?, depth?) = flow";
+
+/// docs/features/flow-read.md: the hints as docs/features/show-bindings.md
+/// left them (58 bytes), folded into [`WITH_ITEMS`] (34 bytes) to make room
+/// for [`FLOW_READ`] beside the 8 bytes left.
+const WITH_HINTS: &str = "--links is with [\"links\"], --bindings is with [\"bindings\"]";
+const WITH_ITEMS: &str = "--links, --bindings are with items";
+
+/// review-form's text (2 040 bytes) out of flow-read's (2 048):
+/// [`FLOW_READ`] taken out, [`WITH_HINTS`] put back.
+fn as_of_review_form(instructions: &str) -> String {
+    instructions
+        .replacen(FLOW_READ, "", 1)
+        .replacen(WITH_ITEMS, WITH_HINTS, 1)
+}
 
 /// impact-since's text (2 023 bytes) out of review-form's (2 040):
 /// [`REVIEW_LINE`] taken out, the four glosses put back.
@@ -1977,11 +1999,13 @@ const IMPACT_READ: &str = "; get_impact(id|symbol|since, depth?) = impact";
 const SINCE_INPUT: &str = "|since";
 
 /// docs/features/impact.md "INSTRUCTIONS": the reads' line, its LF
-/// included (312 bytes; 318 since docs/features/impact-since.md).
+/// included (312 bytes; 318 since docs/features/impact-since.md; 350 since
+/// docs/features/flow-read.md).
 const READS_LINE: &str = "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = \
                           show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, \
                           budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, \
-                          pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact.\n";
+                          pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, \
+                          depth?) = flow.\n";
 
 /// docs/features/check-binding.md "INSTRUCTIONS": what the code line gains,
 /// before its full stop (46 bytes).
@@ -2036,11 +2060,17 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// the same value against `INSTRUCTIONS` (re-pinned by
 /// docs/features/roadmap-surfaces.md, docs/features/check-binding.md,
 /// docs/features/show-bindings.md, docs/features/impact.md,
-/// docs/features/impact-since.md and docs/features/review-form.md).
-const PLANNED_BLAKE3: &str = "47411b2fd929cbb742ee813df864c584f3d39f7294c1c0348f9360ff0d0b05de";
+/// docs/features/impact-since.md, docs/features/review-form.md and
+/// docs/features/flow-read.md).
+const PLANNED_BLAKE3: &str = "d1ab3e65028e8715bdc1442a84bfc1c56212942becd077c95ec3ed7016c1b0b1";
+
+/// review-form's text (2 040 bytes), [`as_of_review_form`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/flow-read.md.
+const REVIEW_FORM_BLAKE3: &str = "47411b2fd929cbb742ee813df864c584f3d39f7294c1c0348f9360ff0d0b05de";
 
 /// impact-since's text (2 023 bytes), [`as_of_impact_since`] over
-/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// [`as_of_review_form`]: its `PLANNED_BLAKE3` before
 /// docs/features/review-form.md.
 const IMPACT_SINCE_BLAKE3: &str =
     "9737b6644b04bf18e3c69b14c83d36ef6de5ca01fff650f6c3f9821072e45b1c";
@@ -2071,12 +2101,12 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 /// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 902
-/// bytes since docs/features/review-form.md); impact-since's 1 885 was
-/// `381344b2…`, impact's 1 879 `523f0715…`, show-bindings' 1 839
-/// `54d160f1…`.
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 910
+/// bytes since docs/features/flow-read.md); review-form's 1 902 was
+/// `f0924769…`, impact-since's 1 885 `381344b2…`, impact's 1 879
+/// `523f0715…`, show-bindings' 1 839 `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "f0924769b09ff777ad983063624e1721f26a407d448fe5900b311324786ce1c1";
+    "322b35f2def2e1d308fae9b868ad562a439f5bcde961899aee56903c5b302000";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -2108,10 +2138,15 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// the four glosses cut: 2 040 bytes, 1 902 less the tasks line, 8 left;
 /// the text before it is impact-since's byte for byte. M: the line
 /// elsewhere or unnamed; the text changed, a pin kept.
+/// docs/features/flow-read.md: [`FLOW_READ`] ends the reads' line,
+/// [`WITH_ITEMS`] the hints: 2 048 bytes, 1 910 less the tasks line, none
+/// left; the text before it is review-form's byte for byte.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2040, "review-form's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2048, "flow-read's figure");
+    assert_eq!(FLOW_READ.len(), 32);
+    assert_eq!(WITH_HINTS.len() - WITH_ITEMS.len(), 24);
     assert_eq!(REVIEW_LINE.len(), 85);
     assert_eq!(
         MARKDOWN_GLOSS.len() + CODE_GLOSS.len() + DRIFT_GLOSS.len() + TAIL_GLOSS.len(),
@@ -2120,7 +2155,7 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(ROADMAP_READ.len(), 40);
     assert_eq!(IMPACT_READ.len(), 46);
     assert_eq!(SINCE_INPUT.len(), 6);
-    assert_eq!(READS_LINE.len(), 318, "the spec's reads line");
+    assert_eq!(READS_LINE.len(), 350, "the spec's reads line");
     assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
     assert_eq!(BINDINGS_HINT.len(), 33);
     assert_eq!(NO_PROJECT_GLOSS.len(), 34);
@@ -2128,8 +2163,8 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TASKS_LINE.len(), 138);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 2040);
-    assert_eq!(2048 - instructions.len(), 8, "the room left");
+    assert_eq!(instructions.len(), 2048);
+    assert_eq!(2048 - instructions.len(), 0, "the room left");
     assert!(
         instructions.contains(&format!("never typed.\n{REVIEW_LINE}{TASKS_LINE}")),
         "the form's line between the drift line and the tasks line"
@@ -2146,15 +2181,22 @@ fn rd5_instructions_are_the_planned_text() {
     );
     assert!(
         instructions.contains(
-            "get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact.\n"
+            "get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol|since, depth?) = \
+             impact; get_flow(root?, depth?) = flow.\n"
         ),
-        "the reads' line ends with the impact clause, exactly"
+        "the reads' line ends with the flow clause, exactly"
     );
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
     assert_eq!(instructions.matches(IMPACT_READ).count(), 1);
+    assert_eq!(instructions.matches(FLOW_READ).count(), 1);
     assert_eq!(instructions.matches(CHECK_BINDING_CLAUSE).count(), 1);
-    assert_eq!(instructions.matches(BINDINGS_HINT).count(), 1);
+    assert_eq!(instructions.matches(WITH_ITEMS).count(), 1);
+    assert_eq!(
+        instructions.matches(BINDINGS_HINT).count(),
+        0,
+        "folded into the one hint"
+    );
     assert!(
         !instructions.contains(NO_PROJECT_GLOSS) && !instructions.contains("spec init"),
         "the no-project gloss is cut: its error result names `spec init`"
@@ -2167,17 +2209,15 @@ fn rd5_instructions_are_the_planned_text() {
     );
     assert!(
         instructions.contains(&format!(
-            "review --brief{ROADMAP_READ}{IMPACT_READ}.\n{CODE_LINE}Queue ("
+            "review --brief{ROADMAP_READ}{IMPACT_READ}{FLOW_READ}.\n{CODE_LINE}Queue ("
         )),
-        "the roadmap and impact reads end the reads' line; the code line closes the reads"
+        "the roadmap, impact and flow reads end the reads' line; the code line closes the reads"
     );
     assert!(instructions.contains("Hints use flags: --kind is kinds"));
     assert!(!instructions.contains("CLI flags"));
     assert!(
-        instructions.contains(&format!(
-            "--links is with [\"links\"]{BINDINGS_HINT}. Answers are cut"
-        )),
-        "the bindings hint follows the links hint and ends the hints"
+        instructions.contains(&format!("ROOT is root, {WITH_ITEMS}. Answers are cut")),
+        "the folded hint ends the hints"
     );
     assert!(
         instructions.contains("A REF naming nothing or a call that cannot run is an error result"),
@@ -2190,10 +2230,19 @@ fn rd5_instructions_are_the_planned_text() {
         assert!(instructions.contains(&format!("{name}(")), "{name}(");
     }
     assert!(instructions.contains("get_impact("), "get_impact(");
+    assert!(instructions.contains("get_flow("), "get_flow(");
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1902, "2 040 less 138");
+    assert_eq!(less.len(), 1910, "2 048 less 138");
+    // The text before docs/features/flow-read.md: review-form's 2 040.
+    let review_form = as_of_review_form(instructions);
+    assert_eq!(review_form.len(), 2040);
+    assert_eq!(
+        blake3_hex(review_form.as_bytes()),
+        REVIEW_FORM_BLAKE3,
+        "only `get_flow` was added and the `with` hints folded"
+    );
     // The text before docs/features/review-form.md: impact-since's 2 023.
-    let impact_since = as_of_impact_since(instructions);
+    let impact_since = as_of_impact_since(&review_form);
     assert_eq!(impact_since.len(), 2023);
     assert_eq!(
         blake3_hex(impact_since.as_bytes()),
@@ -2255,7 +2304,9 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
-    let impact_since = as_of_impact_since(PLANNED_INSTRUCTIONS);
+    let review_form = as_of_review_form(PLANNED_INSTRUCTIONS);
+    assert_eq!(blake3_hex(review_form.as_bytes()), REVIEW_FORM_BLAKE3);
+    let impact_since = as_of_impact_since(&review_form);
     assert_eq!(blake3_hex(impact_since.as_bytes()), IMPACT_SINCE_BLAKE3);
     let impact = as_of_impact(&impact_since);
     assert_eq!(blake3_hex(impact.as_bytes()), IMPACT_BLAKE3);

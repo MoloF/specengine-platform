@@ -28,6 +28,12 @@
 //! repository's view (`generated/`, `roadmap.md`) is a project name. M6: a
 //! hard-coded `"docs/generated/roadmap.md"` there turns
 //! `the_check_source_names_no_prefix_path_or_file_of_a_project` red.
+//!
+//! docs/features/flow-read.md AC-06: core `src/flow.rs` and `src/flow_toml.rs`
+//! are scanned with the check sources and the rules sources, and
+//! `the_flow_sources_name_no_kind_or_prefix_of_a_fixture` holds them to every
+//! fixture's scheme, the flow fixtures' included. M6: a literal kind in core
+//! `src/flow.rs` turns it red.
 
 mod common;
 
@@ -289,6 +295,9 @@ fn check_sources() -> Vec<std::path::PathBuf> {
     // docs/features/roadmap-view.md RD-6: the roadmap view's render (the
     // line builders moved from the CLI) is an output of the index entry.
     sources.push(repository_root().join("crates/specengine-core/src/roadmap.rs"));
+    // docs/features/flow-read.md AC-06: the flow read and its config.
+    sources.push(repository_root().join("crates/specengine-core/src/flow.rs"));
+    sources.push(repository_root().join("crates/specengine-core/src/flow_toml.rs"));
     sources.sort();
     sources
 }
@@ -352,6 +361,8 @@ fn the_check_source_names_no_prefix_path_or_file_of_a_project() {
         "graph.rs",
         "resolve.rs",
         "src/roadmap.rs",
+        "src/flow.rs",
+        "src/flow_toml.rs",
     ] {
         assert!(
             sources.iter().any(|path| path.ends_with(new)),
@@ -632,11 +643,84 @@ fn the_link_sources_name_no_project_and_no_default_base() {
 
 /// The rules sources: the module, the `[[check.rules]]` parsing and the
 /// one own-text split the module calls.
-const RULES_SOURCES: [&str; 3] = [
+const RULES_SOURCES: [&str; 5] = [
     "crates/specengine-core/src/check/rules.rs",
     "crates/specengine-core/src/check/rules_toml.rs",
     "crates/specengine-core/src/own_text.rs",
+    "crates/specengine-core/src/flow.rs",
+    "crates/specengine-core/src/flow_toml.rs",
 ];
+
+/// docs/features/flow-read.md AC-06: every fixture's prefixes and kinds, the
+/// flow fixtures' above all (`lending`, `bookplate`, `leg`, `kit`, `journey`,
+/// `tariff`), and this repository's: "The core names no kind or key".
+#[test]
+fn the_flow_sources_name_no_kind_or_prefix_of_a_fixture() {
+    use specengine_core::IdSchemeToml as _;
+
+    let mut kinds: BTreeSet<String> = BTreeSet::new();
+    let mut prefixes: BTreeSet<String> = BTreeSet::new();
+    let mut corpora = vec![repository_root()];
+    for entry in fs::read_dir(repository_root().join("fixtures")).expect("fixtures") {
+        let path = entry.expect("an entry").path();
+        if path.join("specengine.toml").is_file() {
+            corpora.push(path);
+        }
+    }
+    let mut read = 0;
+    for corpus in &corpora {
+        let text = fs::read_to_string(corpus.join("specengine.toml")).expect("a config");
+        let Ok(scheme) = specengine_model::IdScheme::from_toml(&text) else {
+            continue;
+        };
+        read += 1;
+        for spec in scheme.prefixes() {
+            kinds.insert(spec.kind.clone());
+            prefixes.insert(spec.prefix.clone());
+        }
+    }
+    assert!(read >= 10, "{read} schemes read");
+    for class in ["canon", "decision", "spec", "generated"] {
+        kinds.remove(class);
+    }
+    for kind in [
+        "lending",
+        "bookplate",
+        "wing",
+        "leg",
+        "kit",
+        "journey",
+        "tariff",
+    ] {
+        assert!(kinds.contains(kind), "{kind} is a fixture kind: {kinds:?}");
+    }
+    let mut offenders = Vec::new();
+    for source in &RULES_SOURCES[3..] {
+        let path = repository_root().join(source);
+        let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{source}: {e}"));
+        let mut seen = 0;
+        for (number, line) in text.lines().enumerate() {
+            for literal in literals(line) {
+                seen += 1;
+                let names_prefix = prefixes
+                    .iter()
+                    .any(|prefix| literal.contains(&format!("{prefix}-")));
+                if kinds.contains(literal) || names_prefix {
+                    offenders.push(format!("{source}:{}: {literal:?}", number + 1));
+                }
+            }
+        }
+        assert!(seen > 0, "{source}: no literal read");
+    }
+    assert!(
+        offenders.is_empty(),
+        "project vocabulary in the flow sources:\n{}",
+        offenders.join("\n")
+    );
+    // The scan sees one: M6's literal, on a line of its own.
+    assert_eq!(literals("    if kind == \"lending\" {"), ["lending"]);
+    assert_eq!(literals("    // \"lending\""), Vec::<&str>::new());
+}
 
 /// AC-14 (`#universal`, ADR-0031): the rules sources hold no string
 /// literal equal to an `[ids]` kind of spec-a, spec-b or the root config

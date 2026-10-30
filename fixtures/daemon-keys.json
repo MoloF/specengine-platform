@@ -79,5 +79,10 @@
   "LockDiffNode": ["id", "path", "line", "rows"],
   "LockDiffRow": ["row", "spec", "code"],
   "LockDiffSpecSide": ["commit", "path", "diff"],
-  "LockDiffCodeSide": ["blob", "file", "diff"]
+  "LockDiffCodeSide": ["blob", "file", "diff"],
+  "FlowView": ["root", "reason", "depth", "notes", "left_out", "truncated", "omitted_nodes", "omitted_edges", "gaps", "nodes", "edges"],
+  "FlowGap": ["code", "state", "count", "items", "cause"],
+  "FlowNode": ["id", "kind", "title", "path", "line", "distance", "group", "start", "end", "holds", "inner"],
+  "FlowEdge": ["from", "to", "type", "kind", "when", "count", "path", "line"],
+  "FlowInner": ["type", "count"]
 }

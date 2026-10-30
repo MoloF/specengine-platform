@@ -46,7 +46,9 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// task spec `review-form` adds the `review_proposal` line, its twin and
 /// "only when the owner asks" (85 bytes), and drops ` as Markdown`, `
 /// beside the code`, report_drift's ` for the owner` and `, with a tail on
-/// narrowing` (68 bytes): 2 040 bytes, 1 902 without the tasks line.
+/// narrowing` (68 bytes): 2 040 bytes, 1 902 without the tasks line; task
+/// spec `flow-read` adds `get_flow` to the reads (32 bytes) and folds the
+/// two `with` hints into one (24 bytes): 2 048 bytes, the limit.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
@@ -56,7 +58,7 @@ Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
-get_impact(id|symbol|since, depth?) = impact.
+get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?) = flow.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):
@@ -72,7 +74,7 @@ distinct_from names each; work on your working answer.
     "
 
 REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: --kind \
-is kinds, ROOT is root, --links is with [\"links\"], --bindings is with [\"bindings\"]. \
+is kinds, ROOT is root, --links, --bindings are with items. \
 Answers are cut at 40000 characters. A REF naming nothing or a call that cannot run is an \
 error result with the reason. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, \
 percent-encoded>.

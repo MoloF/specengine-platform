@@ -8,8 +8,13 @@
 //! as `[[check.rules]]` reads it (a key written as a string equal to one
 //! of its strings; absent or no string: not selected).
 //!
+//! `[[flow.*]]` rules select through the same judge
+//! ([`documents_selected`]), documents only.
+//!
 //! Pure: it reads the given files and names no kind, class, path or key
 //! of any project. What it selects is no finding.
+
+use std::collections::BTreeSet;
 
 use specengine_model::Node;
 
@@ -17,7 +22,9 @@ use super::config::DocClass;
 use super::engine::written_values;
 use super::input::CheckFile;
 use super::render::is_live;
+use super::spec_graph::SpecGraph;
 use super::text::{FileText, Written, front_matter_failure};
+use crate::flow_toml::FlowRule;
 use crate::glob::Glob;
 use crate::health_toml::BoundRule;
 
@@ -35,9 +42,9 @@ pub struct BoundCandidate {
 /// Every node of `files` some rule of `rules` selects, by file (the order
 /// given), then position.
 pub fn bound_candidates(files: &[&CheckFile], rules: &[BoundRule]) -> Vec<BoundCandidate> {
-    let globs: Vec<Vec<Glob>> = rules
+    let rules: Vec<Selecting<'_>> = rules
         .iter()
-        .map(|rule| rule.paths.iter().map(|glob| Glob::new(glob)).collect())
+        .map(|rule| Selecting::new(&rule.kinds, &rule.classes, &rule.paths, &rule.when))
         .collect();
     let mut out = Vec::new();
     if rules.is_empty() {
@@ -60,9 +67,8 @@ pub fn bound_candidates(files: &[&CheckFile], rules: &[BoundRule]) -> Vec<BoundC
             }
             let selecting: Vec<usize> = rules
                 .iter()
-                .zip(&globs)
                 .enumerate()
-                .filter(|(_, (rule, globs))| judged.selects(node, rule, globs))
+                .filter(|(_, rule)| judged.selects(node, rule))
                 .map(|(at, _)| at)
                 .collect();
             if !selecting.is_empty() {
@@ -75,6 +81,63 @@ pub fn bound_candidates(files: &[&CheckFile], rules: &[BoundRule]) -> Vec<BoundC
         }
     }
     out
+}
+
+/// The files of `graph` (its [`crate::check::NodeAt::file`]s) whose document
+/// some rule of `rules` selects, whatever the file's standing: the caller
+/// keeps those its read admits.
+pub(crate) fn documents_selected(graph: &SpecGraph<'_>, rules: &[FlowRule]) -> BTreeSet<usize> {
+    let rules: Vec<Selecting<'_>> = rules
+        .iter()
+        .map(|rule| Selecting::new(&rule.kinds, &rule.classes, &rule.paths, &rule.when))
+        .collect();
+    let mut out = BTreeSet::new();
+    if rules.is_empty() {
+        return out;
+    }
+    for index in 0..graph.paths().len() {
+        let Some(file) = graph.file(index) else {
+            continue;
+        };
+        let Some(parsed) = &file.parsed else {
+            continue;
+        };
+        if front_matter_failure(parsed).is_some() {
+            continue;
+        }
+        let Some(document) = parsed.document() else {
+            continue;
+        };
+        let mut judged = Judged::new(file, document);
+        if rules.iter().any(|rule| judged.selects(document, rule)) {
+            out.insert(index);
+        }
+    }
+    out
+}
+
+/// One rule's selectors, of either table; its globs built.
+struct Selecting<'r> {
+    kinds: &'r [String],
+    classes: &'r [DocClass],
+    when: &'r [(String, Vec<String>)],
+    globs: Vec<Glob>,
+}
+
+impl<'r> Selecting<'r> {
+    fn new(
+        kinds: &'r [String],
+        classes: &'r [DocClass],
+        paths: &[String],
+        when: &'r [(String, Vec<String>)],
+    ) -> Self {
+        Self {
+            kinds,
+            classes,
+            when,
+            globs: paths.iter().map(|glob| Glob::new(glob)).collect(),
+        }
+    }
 }
 
 /// One file's document as the selectors read it; its front-matter values
@@ -102,7 +165,7 @@ impl<'a> Judged<'a> {
     }
 
     /// `rule` selects `node` of this file.
-    fn selects(&mut self, node: &Node, rule: &BoundRule, globs: &[Glob]) -> bool {
+    fn selects(&mut self, node: &Node, rule: &Selecting<'_>) -> bool {
         if !rule.kinds.is_empty()
             && !node
                 .kind
@@ -118,7 +181,7 @@ impl<'a> Judged<'a> {
         {
             return false;
         }
-        if !globs.is_empty() && !globs.iter().any(|glob| glob.matches(&self.file.path)) {
+        if !rule.globs.is_empty() && !rule.globs.iter().any(|glob| glob.matches(&self.file.path)) {
             return false;
         }
         if rule.when.is_empty() {

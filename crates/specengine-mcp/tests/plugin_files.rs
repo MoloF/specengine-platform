@@ -118,6 +118,11 @@
 //!   today's with `find_symbols`' layer C keys, fourth tier and query doc
 //!   back ([`as_of_0_19_0`]), `get_impact`'s seed tier 0.19.0's word for
 //!   word (R1). M: the version kept; `CodeTier` changed.
+//! - docs/features/flow-read.md "Files in scope": 0.20.0 -> 0.21.0, MINOR:
+//!   a new tool. A `PINS` entry 0.21.0, the tree with the version set back
+//!   and [`READ_SPEC_FLOW_0_21_0`] taken out 0.20.0's; a `SCHEMA_PINS` entry
+//!   0.21.0, 0.20.0's schemas today's without `get_flow`
+//!   ([`as_of_0_20_0`]).
 //!
 //! The repository is only read.
 
@@ -345,7 +350,19 @@ const PINS: &[(&str, &str)] = &[
         "0.20.0",
         "bf7093719f78ab598a3746c22c46d8510cd1b41c4ab580f4ec959c5ad0e672e1",
     ),
+    // docs/features/flow-read.md "Files in scope" (0.20.0 -> 0.21.0, MINOR:
+    // a tool the plugin's server gains, `get_flow`): `read-spec` names it
+    // in one line; the tree with the version set back and
+    // [`READ_SPEC_FLOW_0_21_0`] taken out hashes as 0.20.0's pin.
+    (
+        "0.21.0",
+        "ca8d0720e1120062294e297eac8722623383e91096dcce3aee9d99f0a4889309",
+    ),
 ];
+
+/// docs/features/flow-read.md: `read-spec`'s line of 0.21.0, whole with its
+/// line feed (154 bytes).
+const READ_SPEC_FLOW_0_21_0: &str = "   - the ordered flow, its typed edges and its gap rows, which stop nothing: `get_flow`, from a `root` and to a `depth` when the whole flow is too large;\n";
 
 /// docs/features/review-form.md D7: `ask-owner`'s edits of 0.19.0, each
 /// `(0.19.0's text, 0.18.0's text)`, whole lines with their line feeds.
@@ -501,6 +518,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.20.0",
         "225e45efc54a66456277e7f834323386194234d7ac6a00372edccf6f6df58703",
+    ),
+    // docs/features/flow-read.md "Files in scope": the tool `get_flow`
+    // ([`as_of_0_20_0`] takes it out; no other tool's schema changed).
+    (
+        "0.21.0",
+        "07317578f207ac8247a77f2def8acc9fbe2525d5dce0a3af90abf7e823e9825a",
     ),
 ];
 
@@ -1620,10 +1643,38 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/flow-read.md (0.20.0 -> 0.21.0): plugin.json's version
+    // and `read-spec`'s one line; both set back, the tree is 0.20.0's pinned
+    // content.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.21.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.21.0"),
+        "plugin.json's version"
+    );
+    assert_eq!(READ_SPEC_FLOW_0_21_0.len(), 154);
+    let at_0_20_0 = edited(
+        &edited(
+            &tree,
+            PLUGIN_JSON,
+            "\"version\": \"0.21.0\"",
+            "\"version\": \"0.20.0\"",
+        ),
+        "specengine/skills/read-spec/SKILL.md",
+        READ_SPEC_FLOW_0_21_0,
+        "",
+    );
+    assert_eq!(
+        content_hash(&at_0_20_0),
+        PINS[PINS.len() - 2].1,
+        "0.21.0 changes plugin.json's version and read-spec's one line only"
+    );
+    let tree = at_0_20_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/layer-c-reads.md (0.19.0 -> 0.20.0): plugin.json's
     // version alone; set back, the tree is 0.19.0's pinned content. M: the
     // version kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.20.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.20.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.20.0"),
@@ -1637,11 +1688,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_19_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.20.0 changes plugin.json's version only"
     );
     let tree = at_0_19_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/review-form.md D7: 0.19.0 changes plugin.json's
     // version and `ask-owner` alone (its edits): all set back, the
     // tree is 0.18.0's pinned content. M: the version kept; another file
@@ -2201,6 +2252,13 @@ fn as_of_0_19_0(schemas: &mut Value) {
     });
 }
 
+/// `schemas` as 0.20.0 listed them (docs/features/flow-read.md): no
+/// `get_flow`; no other tool's schema changed.
+fn as_of_0_20_0(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("schemas by tool");
+    assert!(tools.remove("get_flow").is_some(), "get_flow listed");
+}
+
 fn as_of_0_18_0(schemas: &mut Value) {
     let tools = schemas.as_object_mut().expect("schemas by tool");
     assert!(
@@ -2406,7 +2464,25 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[9].0, "0.18.0", "an entry for 0.18.0");
     assert_eq!(SCHEMA_PINS[10].0, "0.19.0", "an entry for 0.19.0");
     assert_eq!(SCHEMA_PINS[11].0, "0.20.0", "an entry for 0.20.0");
-    assert_eq!(SCHEMA_PINS.len(), 12, "0.20.0 the last entry");
+    assert_eq!(SCHEMA_PINS[12].0, "0.21.0", "an entry for 0.21.0");
+    assert_eq!(SCHEMA_PINS.len(), 13, "0.21.0 the last entry");
+    // docs/features/flow-read.md: 0.20.0's schemas are today's without
+    // `get_flow`, a read flat in `root` and `depth`.
+    let flow_input = &schemas["get_flow"]["inputSchema"]["properties"];
+    assert_eq!(
+        flow_input.as_object().map(|keys| keys.len()),
+        Some(2),
+        "root and depth: {flow_input}"
+    );
+    let mut at_0_20_0 = schemas.clone();
+    as_of_0_20_0(&mut at_0_20_0);
+    let at_0_20_0_hash = schema_hash(&at_0_20_0);
+    assert_eq!(
+        at_0_20_0_hash, SCHEMA_PINS[11].1,
+        "0.20.0's schemas are today's without get_flow"
+    );
+    assert_ne!(at_0_20_0_hash, current, "get_flow changed the schemas");
+    let (schemas, current) = (at_0_20_0, at_0_20_0_hash);
     // docs/features/layer-c-reads.md TE-7: 0.19.0's schemas are today's
     // with `find_symbols`' layer C keys, its fourth tier and its query doc
     // taken back; no other tool's schema changed — `get_impact`'s seeds

@@ -9,6 +9,9 @@
 //! `target_ids`, in the CLI and the daemon. M: pretty JSON; `notes`
 //! dropped; the cap kept; `target_ids` only in the daemon (MCP given the
 //! browser view: `specengine-mcp`'s `mcp_read`, `mcp_size`).
+//!
+//! docs/features/flow-read.md AC-07: `flow`, on both A and B: no query, a
+//! depth, a ROOT of each tree. Its own forms are `flow.rs`.
 
 mod common;
 
@@ -219,6 +222,19 @@ fn ac02_every_document_is_the_clis_byte_for_byte() {
             root,
             &format!("{base}/tree?root={}", encode_component(&ids[1])),
             &["tree", &ids[1]],
+        );
+        pair.same(&server, root, &format!("{base}/flow"), &["flow"]);
+        pair.same(
+            &server,
+            root,
+            &format!("{base}/flow?depth=1"),
+            &["flow", "--depth", "1"],
+        );
+        pair.same(
+            &server,
+            root,
+            &format!("{base}/flow?root={}", encode_component(&ids[1])),
+            &["flow", &ids[1]],
         );
         for id in &ids {
             pair.same(

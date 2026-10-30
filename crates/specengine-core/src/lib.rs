@@ -60,6 +60,11 @@
 //! - [`health_toml`] — `HealthConfig::from_toml`: `[health]`'s
 //!   `[[health.bound]]` rules, read by `spec health` alone (task spec
 //!   `health-code`);
+//! - [`flow_toml`] — `FlowConfig::from_toml`: `[flow]`'s rule tables, read
+//!   by `spec flow` alone, a bad one a row's cause (task spec `flow-read`);
+//! - [`flow`] — the pure half of `spec flow`: the scope, the typed edges,
+//!   the walk, the fold of a depth and the ten gap rows (task spec
+//!   `flow-read`);
 //! - [`lock`] — `spec.lock`'s model (`docs/canon/spec-lock.md` "The file",
 //!   "Entry"): the reader, the canonical render, an accept's merge into one
 //!   node's entries, its editorial refresh and a gone node's drop
@@ -98,6 +103,8 @@ pub mod check;
 pub mod code_toml;
 pub mod create;
 pub mod drift;
+pub mod flow;
+pub mod flow_toml;
 mod front_matter;
 pub mod gate;
 mod glob;
@@ -135,6 +142,11 @@ use specengine_model::{
 };
 
 pub use code_toml::{CodeConfig, code_from_toml};
+pub use flow::{
+    FlowAsk, FlowEdge, FlowGap, FlowInner, FlowNeed, FlowNode, FlowRead, GapCause, GapCode,
+    GapState, flow_read,
+};
+pub use flow_toml::{FlowConfig, FlowRule, FlowTable, flow_from_toml};
 pub use front_matter::{KeyType, TYPED_KEYS};
 pub use gate::{GateConfig, GateMode};
 pub use health_toml::{BoundRule, HealthConfig, health_from_toml};

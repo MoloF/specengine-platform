@@ -1184,6 +1184,66 @@ export interface GraphView {
   edges: GraphEdge[];
 }
 
+/** How a gap row fared. Source: `docs/features/flow-read.md` "Output". */
+export type FlowGapState = "measured" | "not_configured" | "cannot" | Unlisted;
+
+/** A gap row: `count` the whole, null unless measured; `items` the printed ones, each a list of names; `cause` why it was not counted. It stops nothing (ADR-0012). Source: `docs/features/flow-read.md` "Output". */
+export interface FlowGap {
+  code: string;
+  state: FlowGapState;
+  count: number | null;
+  items: string[][];
+  cause: string | null;
+}
+
+/** The edges with both ends in one node, of one type; `type` is corpus vocabulary, a plain string (ADR-0031). Source: `docs/features/flow-read.md` "Output". */
+export interface FlowInner {
+  type: string;
+  count: number;
+}
+
+/** A shown document: `distance` the steps from the starts, the least of what it holds, null where none is reached; `group` the shown node holding it; `holds` the documents folded into it. Source: `docs/features/flow-read.md` "Output". */
+export interface FlowNode {
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
+  line: number;
+  distance: number | null;
+  group: string | null;
+  start: boolean;
+  end: boolean;
+  holds: number;
+  inner: FlowInner[];
+}
+
+/** A shown edge in reading direction, so a screen draws an arrow with no branch on a type; `when` only at a count of 1. Source: `docs/features/flow-read.md` "Output". */
+export interface FlowEdge {
+  from: string;
+  to: string;
+  type: string;
+  kind: string | null;
+  when: string | null;
+  count: number;
+  path: string;
+  line: number;
+}
+
+/** `spec flow --json`: all ten gap rows, then the nodes and edges, or why ROOT names nothing (exit 1). Source: `docs/features/flow-read.md` "Output". */
+export interface FlowView {
+  root: string | null;
+  reason: string | null;
+  depth: number | null;
+  notes: string[];
+  left_out: LeftOut;
+  truncated: boolean;
+  omitted_nodes: number;
+  omitted_edges: number;
+  gaps: FlowGap[];
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+}
+
 /** One search hit. Source: `crates/specengine-cli/README.md` "Output and the cap". */
 export interface SearchHit {
   id: string | null;

@@ -868,7 +868,7 @@ fn assert_same(result: &Value, want: &Expected, schema: &Value, context: &str) {
 
 // ------------------------------------------------------------------ D1
 
-/// D1, D6: both eras list the default build's twenty-two tools;
+/// D1, D6: both eras list the default build's twenty-three tools;
 /// `review_proposal` takes exactly the required string `proposal_id`
 /// (closed: no field carries a choice), its `_meta` is the size cap and
 /// `requiresUserInteraction: true`, its four hints `false`, its output
@@ -881,9 +881,9 @@ fn d1_review_proposal_is_listed_with_one_input_the_consent_meta_and_get_proposal
         let mut session = common::read::Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
         if !cfg!(feature = "probes") {
-            assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty-two tools");
+            assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty-three tools");
         }
-        assert_eq!(TOOLS.len(), 22);
+        assert_eq!(TOOLS.len(), 23);
         let review = tool(&list, "review_proposal");
         let input = &review["inputSchema"];
         assert_eq!(input["type"], json!("object"), "{era:?}: {input}");
