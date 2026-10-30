@@ -36,3 +36,25 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
+- [docs/roadmap/RM-0042.md](roadmap/RM-0042.md) flow-links (Phase 7, step 1): follows, uses, supplies and labelled edges · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft
+- [docs/roadmap/RM-0043.md](roadmap/RM-0043.md) flow-read (Phase 7, step 2): spec flow, get_flow, lifted edges and gap rows · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · draft
+- [docs/roadmap/RM-0044.md](roadmap/RM-0044.md) flow-canvas (Phase 7, step 3): collapsing groups, stages and gap marks · ui, crates/specengine-http · draft
+- [docs/roadmap/RM-0045.md](roadmap/RM-0045.md) card-store (Phase 7, step 4): cards, flows per discipline, events, CLI and MCP tools · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
+- [docs/roadmap/RM-0046.md](roadmap/RM-0046.md) board-ui (Phase 7, step 5): the board, filters, the card panel, write routes · ui, crates/specengine-http · draft
+- [docs/roadmap/RM-0047.md](roadmap/RM-0047.md) card-trace (Phase 7, step 6): targets, suspect marks, clearing, re-estimates, rollup · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
+- [docs/roadmap/RM-0048.md](roadmap/RM-0048.md) trace-views (Phase 7, step 7): flow badges, timeline lanes, a node's cards · ui, crates/specengine-http · draft
+- [docs/roadmap/RM-0049.md](roadmap/RM-0049.md) hub-identity (Phase 7, step 8): a public origin, an identity header, a person in Author · crates/specengine-http, crates/specengine-core, crates/specengine-store · draft
+- [docs/roadmap/RM-0050.md](roadmap/RM-0050.md) hub-confirm (Phase 7, step 9): the UI confirms under a named login · crates/specengine-http, crates/specengine-cli, ui · draft
+- [docs/roadmap/RM-0051.md](roadmap/RM-0051.md) hub-git (Phase 7, step 10): sole writer, merge and push, the index in the commit · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
+- [docs/roadmap/RM-0052.md](roadmap/RM-0052.md) board-in-git (Phase 7, step 10b): the board's snapshot on a dedicated branch · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
+- [docs/roadmap/RM-0053.md](roadmap/RM-0053.md) hub-mcp (Phase 7, step 11): /mcp with a session, identity to author, hub tools · crates/specengine-mcp, crates/specengine-http · draft
+- [docs/roadmap/RM-0054.md](roadmap/RM-0054.md) scale-reads (Phase 7, step 12): an edge table, a trusted index, reads at 100 000 nodes · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-eval · draft
+- [docs/roadmap/RM-0055.md](roadmap/RM-0055.md) zone-index (Phase 7, step 13): an index-free zone and status: retired · crates/specengine-core, docs · draft
+- [docs/roadmap/RM-0056.md](roadmap/RM-0056.md) change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0057.md](roadmap/RM-0057.md) draft-overlay (Phase 7, step 15): revisable drafts in reads · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
+- [docs/roadmap/RM-0058.md](roadmap/RM-0058.md) reuse-overrides (Phase 7, step 16): overrides, variants, usage reads · crates/specengine-core, crates/specengine-cli · draft
+- [docs/roadmap/RM-0059.md](roadmap/RM-0059.md) intake-similar (Phase 7, step 17): similar and distinct_from on create · crates/specengine-cli, crates/specengine-mcp, plugin · draft
+- [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill · crates/specengine-core, crates/specengine-cli, plugin · draft
+- [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) pack (Phase 7, step 19): spec init --pack and a config proposal · crates/specengine-cli, crates/specengine-core · draft
+- [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
+- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flake: failing_test_removes_evidence hits its 1 s nested timeout · crates/specengine-cli · draft

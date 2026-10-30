@@ -147,4 +147,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0030.md](roadmap/RM-0030.md) shipped
 - [docs/roadmap/RM-0032.md](roadmap/RM-0032.md) shipped
 - [docs/roadmap/RM-0033.md](roadmap/RM-0033.md) shipped
+- [docs/roadmap/RM-0041.md](roadmap/RM-0041.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

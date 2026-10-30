@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-30
 ---
 
 # spec roadmap: plan items and the computed path
@@ -16,7 +16,7 @@ Plan items are `spec`-class files; the path and the pool are computed per read f
 [roadmap]
 prefix     = "RM"                         # required: an [ids] prefix, shape number, scope project
 dir        = "docs/roadmap"               # required: where items are created; the [paths] path rules
-releases   = ["mvp", "v1", "v2"]          # required: the path's order
+releases   = ["mvp", "v1", "v2", "v3"]    # required: the path's order
 mvp_cut    = "mvp"                        # optional: one of releases
 priorities = ["must", "should", "could"]  # required: highest first
 unit       = "days"                       # optional: printed after every sum, never converted
@@ -24,7 +24,7 @@ unit       = "days"                       # optional: printed after every sum, n
 
 Core `roadmap_toml.rs`: `RoadmapConfig::from_toml(text, &IdScheme) -> Result<Option<_>, ProjectError>`, `None` without the table; the six fields plus `scheme` (the `[ids]` judged against) and `paths` (the text's `[paths]`), so `plan` resolves `depends_on` as `spec check` does. `ProjectConfig` only name-checks `roadmap`: a bad table fails `spec roadmap` alone; with a view ("View"), every command loading the check config. Every value is judged; the first error by line prints `<config>:<line>: <message>`, exit 2: another key (`unknown field`); a required key missing (`` `[roadmap]` has no `dir`: it is required ``, at the header line); a wrong type (`` `roadmap.prefix`: expected a string, found an integer ``); `prefix` not in `[ids]`, an alias, of shape `name` or feature-scoped; `dir` failing `checked_path`; `releases` or `priorities` empty, an entry not a slug (`slug_problem`: `grammar::is_slug`, then at most 64 bytes) or repeated (`` `roadmap.releases`: "v1" is repeated ``); `mvp_cut` not in `releases` (judged once they read); `unit` blank, over 32 bytes or holding a control character.
 
-Here: `RM` (`plan-item`, width 4) in `docs/roadmap/`, shard `docs/index-roadmap.md`, view `docs/generated/roadmap.md`; `mvp` the rest of Phases 0-2, `v1` Phases 3, 4, 6, `v2` Phase 5. Older `spec`, `specengine-mcp`, `specengine-http` refuse `[roadmap]` with an `INDEX_FORMAT` 12 index, an older `spec` the `roadmap` key: install the three from one commit.
+Here: `RM` (`plan-item`, width 4) in `docs/roadmap/`, shard `docs/index-roadmap.md`, view `docs/generated/roadmap.md`; `mvp` the rest of Phases 0-2, `v1` 3, 4, 6, `v2` 5, `v3` 7. Older `spec`, `specengine-mcp`, `specengine-http` refuse `[roadmap]` with an `INDEX_FORMAT` 12 index, an older `spec` the `roadmap` key: install the three from one commit.
 
 ## Items
 

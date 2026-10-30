@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-10-30
 ---
 
 # SpecEngine architecture rules
@@ -49,6 +49,8 @@ A `generated` document is no spec file: only its registered generator writes it 
 
 Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`docs/canon/tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`docs/canon/task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`docs/canon/architecture-code.md#tests`). ADR-0044.
 
+Decided, not built before RM-0045: any trade's work is a card, `C-NNNN`, a queue row beside `T-`, moved from the UI too, never read by the gate; a lead's move to `ready` is its control point, the requesting side accepts it. ADR-0056.
+
 <a id="rules-format"></a>
 ## Rule form
 
@@ -58,6 +60,8 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 ## Universality
 
 The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `docs/canon/architecture-code.md#health`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
+
+Decided, not built before RM-0042 (`docs/features/flow-links.md`): flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` keeps its meaning and cycle warning. ADR-0055.
 
 <a id="ids"></a>
 ## Identifiers

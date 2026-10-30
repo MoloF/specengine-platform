@@ -63,3 +63,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0052](decisions/ADR-0052.md) Plan items are files in git; tasks execute them; position is computed · architecture · accepted
 - [ADR-0053](decisions/ADR-0053.md) Reads show what changed since a lock entry · architecture · accepted
 - [ADR-0054](decisions/ADR-0054.md) The MCP form stages only the owner's answer · architecture, crates/specengine-mcp · accepted
+- [ADR-0055](decisions/ADR-0055.md) Flow is three shared link types; cycles live in follows, never in depends_on · architecture · accepted
+- [ADR-0056](decisions/ADR-0056.md) A card is a separate lighter queue record; T- stays the code-work task · architecture · accepted

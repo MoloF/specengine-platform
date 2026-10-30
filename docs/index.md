@@ -20,6 +20,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
+- [docs/features/flow-links.md](features/flow-links.md) flow-links: follows, uses, supplies and labelled edges (RM-0042) · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress

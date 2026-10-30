@@ -56,12 +56,68 @@ Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell`
 - Full migration of the pilot projects (order: Phase 1). A was migrated 2026-10-07 through a pilot-side wrapper (§3 AC-6); RM-0013 has SpecEngine replay it alone from config, nothing written into the pilot: `import-homes` (shipped 2026-10-22: `[definitions] home`, `[layout] inherit`), `import-lead-ins` (shipped 2026-10-30: wrapped lead-ins, a `not_taken` count, the emitted scheme keeping the before walk); the owner's replay stays open; check parity: RM-0039 (before 2026-12-31), RM-0040. Then B (RM-0014).
 - A `shared` project (common library) linked from several projects.
 - The owner's staging forms over MCP, form mode (ADR-0054): `review_proposal` (`review-form`, RM-0012), then `approve_task` (`task-stage`, RM-0038, its own ADR).
-- Metrics and compaction, notifications, URL-mode elicitation onto UI cards (staging only, ADR-0035).
+- Metrics and compaction, URL-mode elicitation onto UI cards (staging only, ADR-0035); notifications moved to Phase 7 (RM-0017).
 - Optional: queue export to Beads/Task Master, spec digest into `AGENTS.md`/`CLAUDE.md` for external reviewers. No vector search (04 §2.1).
 
 ### Phase 6. Planning: roadmap and pool (moved before the rest of Phase 3 by the owner's decision, 2026-10-20)
 
 Releases, priority, a `depends_on` chain, range estimates, a computed position, the pool; plan items are files in git (ADR-0052). Slices decided 2026-10-20 under the owner's pre-approval, review open, each scoped in its spec. Shipped 2026-10-20 (`docs/canon/spec-roadmap.md`): `roadmap-items` (1a; the open work seeded once as items in `docs/roadmap/`, read by `spec roadmap`), `roadmap-view` (1b; the generated view replacing §2's slice lists, its "~N weeks" and "Total"), `roadmap-position` (2a; this repository's open tasks on `spec roadmap`, read-only) and `roadmap-surfaces` (2b; `spec task show --next` by the plan, the package's `roadmap`, MCP `get_roadmap`, the daemon's uncut route, plugin 0.11.0). Shipped 2026-10-21: `roadmap-screen` (3a; the Roadmap screen, read-only: lanes, the chain canvas; `docs/canon/spec-roadmap-screen.md`), completing Phase 6's roadmap feature; 3b `roadmap-moves` (a move staged from the screen) is parked on N12 (`roadmap-items.md`), no spec file. 6b-2 (RM-0005), split 2026-10-21 into 6b-2a `verify-node` (the CLI) and 6b-2b `check-binding` (MCP, plugin 0.12.0), shipped 2026-10-21. 7a (RM-0006), split 2026-10-21, both shipped 2026-10-21 (`docs/canon/code-reads.md`): 7a-1 `show-bindings` (`spec show --bindings`, `get_node` `with: ["bindings"]`, `delta.tests_reaching`, plugin 0.13.0), 7a-2 `bundle-bindings` (layers 5 and 9, the package's `bindings`, the Bundle tab's rows, plugin 0.14.0); tree counters deferred to RM-0034. 7b (RM-0007), split 2026-10-21, both shipped 2026-10-21 (`docs/canon/spec-impact.md`): 7b-1 `impact` (`spec impact REF | --symbol`, MCP `get_impact`, plugin 0.15.0), 7b-2 `impact-since` (`--since REV`, `verify --changed --json`'s `delta.symbols`, plugin 0.16.0); 8b, split 2026-10-21: 8b-1 `tested-evidence` (RM-0008), shipped 2026-10-21 (`docs/canon/spec-lock-tested.md`: format 3, the run's evidence commit, plain verify's and `check_binding`'s `tested`, plugin 0.17.0) and 8b-2 `tested-reads` (RM-0032), shipped 2026-10-21 (the reads' `tested`, `spec-lock-tested.md` "Reads", plugin 0.18.0). 9b (RM-0009), split 2026-10-21: 9b-1 `health-drift` (`docs/canon/health-drift.md`: `spec health`'s row 6, plain verify's judge in-process over the call's code index; the route, the daemon keys, the UI's types) and 9b-2 `health-drift-ui` (Health draws row 6), both shipped 2026-10-21, closing the 6b-2 to 9b chain; RM-0011, the drift screens, followed (Phase 4), then RM-0033's `lock-diff` and `lock-diff-ui`, both shipped 2026-10-21: RM-0033 done; then RM-0010 `layer-c-reads` (11a-3), shipped 2026-10-22 after the owner's TE-6. The draft `docs/features/roadmap.md` is abandoned as split.
+
+### Phase 7. Full cycle: flow, board, trace, then a hub (planned 2026-10-30)
+
+**Goal.** One tool for the whole development cycle of a game or any project. Writers, with an AI over MCP, build a flow diagram with branches, loops, reuse and collapsible groups. One plain kanban board carries the work of every trade. Cards and brief sections link both ways; accepted cards confirm the brief and fill a timeline; a changed brief marks its cards and records the consequences. Code binding is phase two and stays as it is: markers, `spec.lock`, verify, the gate, terminal approvals, local `T-` tasks and layers A-C.
+
+**First result: steps 0-7, 27-43 pipeline hours, local, no server.** The owner, alone on the local daemon, has his AI write a real flow, sees it collapse, cuts cards and moves them; accepted cards confirm their nodes, a changed node marks its cards, and the timeline fills. Trace (`card-trace`, `trace-views`) belongs to this result. The team result, steps 0-11 with `board-in-git`, is 45-73 hours; everything is 75-123 hours. Hours are pipeline hours at the measured pace (15 items, 33-54 "days", 37 hours), with a 1.25-2x margin for undecided design. Items keep them in their body, never in `estimate:`, whose unit is human-paced days, so the view counts them unestimated.
+
+**This reverses the single-user premise, at step 8.** ADR-0017 ("One user, a local daemon; server and multi-user mode are out of plan") is superseded by a new ADR, `hub-mode`, issued by step 8. Nothing before step 8 depends on that reversal: steps 0-7 run on the local daemon under today's rules, ADR-0017 stands until that ADR is accepted, and the work can stop after step 7 with a whole local tool.
+
+| Step | Slice | Item | Result | ADR issued | Hours | After |
+|---|---|---|---|---|---|---|
+| 0 | `full-cycle-decisions` | RM-0041 | Owner's round, two ADRs, this plan | ADR-0055 `flow-graph`, ADR-0056 `cards` | 3-5 | - |
+| 1 | `flow-links` | RM-0042 | `follows`, `uses`, `supplies`, labelled edges, impact, bundle | - | 2-4 | 0 |
+| 2 | `flow-read` | RM-0043 | `spec flow`, `get_flow`, lifted edges, gap rows | - | 3-5 | 1 |
+| 3 | `flow-canvas` | RM-0044 | Collapsing groups, stages, gap marks, text twin | - | 4-6 | 2 |
+| 4 | `card-store` | RM-0045 | Cards, flows, events, CLI and MCP tools | - | 4-6 | 0 |
+| 5 | `board-ui` | RM-0046 | Board, filters, card panel, write routes | - | 4-6 | 4 |
+| 6 | `card-trace` | RM-0047 | Targets, suspect, clearing, re-estimate, corrections, rollup | - | 4-6 | 4 |
+| 7 | `trace-views` | RM-0048 | Flow badges, timeline lanes, a node's cards | - | 3-5 | 3, 5, 6 |
+| 8 | `hub-identity` | RM-0049 | Public origin, identity header, person in `Author`, `[team]` | `hub-mode`, `hub-identity` | 4-6 | 0 |
+| 9 | `hub-confirm` | RM-0050 | UI confirm by role; `door.rs` rewritten | `hub-confirm` | 3-5 | 8 |
+| 10 | `hub-git` | RM-0051 | Sole writer, merge and push, index in the commit, push status | `apply-outputs` | 4-6 | 8 |
+| 10b | `board-in-git` | RM-0052 | The board's snapshot on a dedicated branch, checked by CI | `board-snapshot` | 2-4 | 10 |
+| 11 | `hub-mcp` | RM-0053 | `/mcp` with a session, identity to author, hub tools | - | 5-9 | 8 |
+| 12 | `scale-reads` | RM-0054 | Edge table, trusted index, bundle counts, synthetic 10k and 100k | - | 6-10 | 2 |
+| 13 | `zone-index` | RM-0055 | Index-free zone, `status: retired` | `zone-index` | 2-3 | 12 |
+| 14 | `change-record` | RM-0056 | `CR-`, baseline tag, RM-0035, RM-0036 | `changeset` | 4-6 | 6, 10 |
+| 15 | `draft-overlay` | RM-0057 | Revisable drafts in reads | - | 3-5 | 11 |
+| 16 | `reuse-overrides` | RM-0058 | Overrides, variants, usage reads | - | 3-5 | 2 |
+| 17 | `intake-similar` | RM-0059 | `similar`, `distinct_from` on create | - | 2-4 | 12 |
+| 18 | `collision-pass` | RM-0060 | Candidates, pair ledger, skill | - | 3-5 | 17 |
+| 19 | `pack` | RM-0061 | `spec init --pack`, config proposal | - | 3-5 | 4 |
+| 20 | `writer-skills` | RM-0062 | Profile plugin or MCP prompts | - | 3-5 | 11 |
+| 21 | `notify` | RM-0017 | Notifications | - | 1-2 | 8 |
+
+**ADRs.** Each is written by the slice that builds it, so the canon never describes unbuilt machinery as true; only `flow-graph` and `cards` are issued, by step 0, shipped 2026-10-30, and their canon lines say "decided, not built". To come: `hub-mode` (supersedes ADR-0017), `hub-identity` (supplements ADR-0034: the daemon trusts one identity header), `hub-confirm` (supersedes ADR-0035's terminal clause in hub mode), `apply-outputs` (`roadmap-items.md`, N12), `board-snapshot` (amends ADR-0003: a snapshot of the board enters git on a dedicated branch), `zone-index` (amends ADR-0030, ADR-0022), `changeset` (amends ADR-0038: one confirm for a baseline). Unchanged: ADR-0012, ADR-0032, ADR-0039, ADR-0052, ADR-0054.
+
+**The owner's decisions, 2026-10-30, pre-approved, review open:**
+
+1. Git is the store, a thin server is the door. Approved text, decisions and change records are files in git; the server pushes a snapshot of the board to a dedicated branch, so history on the main branch stays clean; CI validates each push; the board can be rebuilt from git, losing only the last minutes. The server gives the live board, MCP over the network and login through an external proxy.
+2. The web UI may confirm under a named login, with a step-up at the proxy on confirm routes.
+3. Zone leads confirm brief changes; the owner sets global baselines.
+4. A rejected brief stops nothing (ADR-0012 holds).
+5. The requesting side accepts a result, never the assignee.
+6. The brief lives in the same repository as the game, with a sparse hub clone.
+7. One named person operates the host.
+8. A card (`C-NNNN`) is a separate lighter record; `T-` stays the code-work extension for phase two.
+9. A brief is `canon`; `status: retired` is added.
+10. English chrome, pack vocabulary in the project's language.
+11. The hand-written canvas layout is tried on 200 nodes before any library is asked for.
+12. One confirm for a baseline, with the impact shown.
+13. Steps 0-7 run locally with no server, and trace belongs to the first result.
+
+**Only people can do:** the host, DNS, TLS, proxy, passkeys and backups, about a working day; the by-hand check that a writer's client attaches a remote MCP; judging how the canvas looks; a writers' trial of at least a calendar week. **Risks:** scope (§5 rates creep high, and this reverses a founding rule; the first result tests the idea before any hosting); a hub before `scale-reads` serialises the team behind O(n) reads; a forged identity header on the host passes as anyone, so only the proxy and an agent-free host stand behind it.
+
+**Phase two** keeps the code layer exactly as it is, and the same repository puts brief nodes in every developer's walk. New work: a `card-task-link` and `.ron` binding by data ID (RM-0024); the layer items (RM-0021 to RM-0025) wait for it.
 
 ## 3. Product acceptance criteria
 
