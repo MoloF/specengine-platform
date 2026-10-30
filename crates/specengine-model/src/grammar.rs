@@ -304,6 +304,7 @@ fn match_at(
         form,
         label,
         span: Some(Span::new(base + occurrence.0, base + occurrence.1)),
+        edge: None,
     };
     Some((
         Found {

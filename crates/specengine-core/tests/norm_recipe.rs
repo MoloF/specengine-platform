@@ -20,6 +20,11 @@
 //!   holds `"rev"` alone, by design). M: a `"mechanic"` literal.
 //! - TE-11: performance: 50 000 sections within the store's `own_text`
 //!   bound (2 s, debug, the loop alone). M: a quadratic join.
+//! - docs/features/flow-links.md AC-03, "`norm_hash`": a labelled `follows`
+//!   item renders after its target under the same recipe: the golden inputs
+//!   of `fixtures/flow-relay` and `fixtures/flow-hire`, the renderings the
+//!   spec prints, what moves the input and what does not. M4: `rendered`
+//!   ignoring `edge`; M5: `specengine-norm/v2`.
 //!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
@@ -1589,6 +1594,299 @@ fn te10_the_scan_sees_what_it_must() {
             "'k'",
         ]
     );
+}
+
+// ---------------------------------------------------------------- flow-links
+
+fn relay_doc(id: &str) -> Vec<u8> {
+    fixture_bytes("flow-relay", &format!("docs/spec/{}.md", id.to_lowercase()))
+}
+
+fn hire_doc(id: &str) -> Vec<u8> {
+    fixture_bytes("flow-hire", &format!("docs/spec/{}.md", id.to_lowercase()))
+}
+
+/// The document's input, parsed at `path` of its own corpus.
+fn doc_input(bytes: &[u8], scheme: &IdScheme, id: &str) -> Option<Vec<u8>> {
+    input_at(
+        &format!("docs/spec/{}.md", id.to_lowercase()),
+        bytes,
+        scheme,
+        id,
+    )
+}
+
+/// docs/features/flow-links.md AC-03: the golden input bytes of a labelled
+/// document, built here by hand: LEG-RUN's three rendered links, a `when`
+/// with no kind, a kind with no `when`, four links of the other project.
+/// M4: `rendered` ignoring `edge`. M5: `specengine-norm/v2`.
+#[test]
+fn flow_golden_inputs_of_labelled_documents() {
+    let relay = corpus_scheme(&fixture("flow-relay"));
+    let hire = corpus_scheme(&fixture("flow-hire"));
+    let cases: Vec<(&str, Vec<u8>, &IdScheme, Vec<u8>)> = vec![
+        (
+            "LEG-RUN",
+            relay_doc("LEG-RUN"),
+            &relay,
+            golden(
+                &[
+                    ([0x14, 0, 0, 0], "follows ref:LEG-DRAW"),
+                    (
+                        [0x32, 0, 0, 0],
+                        "follows ref:LEG-FALL | repeat | the torch is relit",
+                    ),
+                    ([0x12, 0, 0, 0], "uses ref:KIT-TORCH"),
+                ],
+                (
+                    [0x42, 0, 0, 0],
+                    "The runner carries the lit torch down the lane to the next beacon.",
+                ),
+            ),
+        ),
+        (
+            // The spec's second rendering, on the fixture's own target.
+            "LEG-SCORE",
+            relay_doc("LEG-SCORE"),
+            &relay,
+            golden(
+                &[(
+                    [0x2c, 0, 0, 0],
+                    "follows ref:LEG-RUN | - | the runner arrives",
+                )],
+                (
+                    [0x41, 0, 0, 0],
+                    "The round goes to the team whose runner reached the beacon first.",
+                ),
+            ),
+        ),
+        (
+            "JRN-METER",
+            hire_doc("JRN-METER"),
+            &hire,
+            golden(
+                &[([0x21, 0, 0, 0], "follows ref:JRN-UNLOCK | parallel")],
+                (
+                    [0x2e, 0, 0, 0],
+                    "The meter runs from the moment the slot opens.",
+                ),
+            ),
+        ),
+        (
+            "JRN-RETURN",
+            hire_doc("JRN-RETURN"),
+            &hire,
+            golden(
+                &[
+                    (
+                        [0x31, 0, 0, 0],
+                        "follows ref:JRN-NEAREST | repeat | a slot is near",
+                    ),
+                    ([0x14, 0, 0, 0], "follows ref:JRN-RIDE"),
+                    ([0x15, 0, 0, 0], "supplies ref:FEE-RIDE"),
+                    ([0x11, 0, 0, 0], "uses ref:JRN-SCAN"),
+                ],
+                (
+                    [0x4e, 0, 0, 0],
+                    "The rider pushes the bicycle into a free slot and the ride ends when it \
+                     locks.",
+                ),
+            ),
+        ),
+    ];
+    for (id, bytes, scheme, want) in cases {
+        let got = doc_input(&bytes, scheme, id).expect("an input");
+        assert_eq!(got, want, "{id}: {} / {}", shown(&Some(got.clone())), {
+            shown(&Some(want.clone()))
+        });
+    }
+}
+
+/// `follows` items of a document in the relay's scheme, its links rendered.
+fn rendered_items(items: &str) -> Vec<String> {
+    let text = format!(
+        "---\nid: LEG-ANY\nclass: canon\nlinks:\n  follows:\n{items}---\n\n# Any\n\nBody.\n"
+    );
+    let scheme = corpus_scheme(&fixture("flow-relay"));
+    let input = input_at("docs/spec/leg-any.md", text.as_bytes(), &scheme, "LEG-ANY")
+        .unwrap_or_else(|| panic!("null input for {items}"));
+    decode(&input).0
+}
+
+/// "`norm_hash`": the three renderings the spec prints, with the target's
+/// section and revision before the label, and fields that cannot be
+/// confused: `when` runs to the frame's end. M: `when` before `kind`; no
+/// `-` for a missing kind.
+#[test]
+fn flow_the_label_renders_after_its_target() {
+    assert_eq!(
+        rendered_items(
+            "    - {to: LEG-FALL, kind: repeat, when: \"the torch is relit\"}\n    \
+             - {to: LEG-SCORE, when: \"the runner arrives\"}\n    \
+             - {to: LEG-DRAW, kind: parallel}\n"
+        ),
+        [
+            "follows ref:LEG-DRAW | parallel",
+            "follows ref:LEG-FALL | repeat | the torch is relit",
+            "follows ref:LEG-SCORE | - | the runner arrives",
+        ]
+    );
+    assert_eq!(
+        rendered_items("    - {to: \"LEG-HOME#LEG-PART@2\", kind: alternative, when: x}\n"),
+        ["follows ref:LEG-HOME#LEG-PART@2 | alternative | x"]
+    );
+    let word_as_kind = rendered_items("    - {to: LEG-FALL, kind: repeat}\n");
+    let word_as_when = rendered_items("    - {to: LEG-FALL, when: repeat}\n");
+    assert_eq!(word_as_kind, ["follows ref:LEG-FALL | repeat"]);
+    assert_eq!(word_as_when, ["follows ref:LEG-FALL | - | repeat"]);
+    assert_eq!(
+        rendered_items("    - {to: LEG-FALL, when: \"repeat | x\"}\n"),
+        ["follows ref:LEG-FALL | - | repeat | x"]
+    );
+    assert_eq!(
+        rendered_items("    - {to: LEG-FALL, kind: repeat, when: \"x\"}\n"),
+        ["follows ref:LEG-FALL | repeat | x"]
+    );
+    // Two items on one target are two renderings, a plain one first.
+    assert_eq!(
+        rendered_items("    - {to: LEG-FALL, kind: repeat}\n    - LEG-FALL\n"),
+        ["follows ref:LEG-FALL", "follows ref:LEG-FALL | repeat"]
+    );
+    // One rendering twice stays one link, as any repeated link does.
+    assert_eq!(
+        rendered_items("    - {to: LEG-FALL, kind: repeat}\n    - {kind: repeat, to: LEG-FALL}\n"),
+        ["follows ref:LEG-FALL | repeat"]
+    );
+}
+
+/// AC-03: a changed `when` or `kind` changes the input. M4: `rendered`
+/// ignoring `edge` turns each row red.
+#[test]
+fn flow_a_changed_label_changes_the_input() {
+    let scheme = corpus_scheme(&fixture("flow-relay"));
+    let base = String::from_utf8(relay_doc("LEG-RUN")).expect("UTF-8");
+    let item = "{to: LEG-FALL, kind: repeat, when: \"the torch is relit\"}";
+    let golden = doc_input(base.as_bytes(), &scheme, "LEG-RUN").expect("an input");
+    let mut seen = vec![golden];
+    for (row, variant) in [
+        (
+            "a rewritten condition",
+            "{to: LEG-FALL, kind: repeat, when: \"the torch is out\"}",
+        ),
+        (
+            "another kind",
+            "{to: LEG-FALL, kind: alternative, when: \"the torch is relit\"}",
+        ),
+        ("no `when`", "{to: LEG-FALL, kind: repeat}"),
+        ("no `kind`", "{to: LEG-FALL, when: \"the torch is relit\"}"),
+        ("no label", "{to: LEG-FALL}"),
+    ] {
+        let text = with(&base, item, variant);
+        let input = doc_input(text.as_bytes(), &scheme, "LEG-RUN").expect("an input");
+        assert!(!seen.contains(&input), "{row} kept the input");
+        seen.push(input);
+    }
+}
+
+/// AC-03: how an item is spelled does not count: reordered keys, block
+/// style, a quoted `to`, a quoted `when` or none, `{to: LEG-DRAW}` for
+/// `LEG-DRAW`, padding on `when`. M: the rendering taken from the source.
+#[test]
+fn flow_the_spelling_of_an_item_does_not_count() {
+    let scheme = corpus_scheme(&fixture("flow-relay"));
+    let base = String::from_utf8(relay_doc("LEG-RUN")).expect("UTF-8");
+    let item = "{to: LEG-FALL, kind: repeat, when: \"the torch is relit\"}";
+    let golden = doc_input(base.as_bytes(), &scheme, "LEG-RUN").expect("an input");
+    for (row, variant) in [
+        (
+            "reordered keys",
+            with(
+                &base,
+                item,
+                "{when: \"the torch is relit\", to: LEG-FALL, kind: repeat}",
+            ),
+        ),
+        (
+            "block style",
+            with(
+                &base,
+                item,
+                "to: LEG-FALL\n      kind: repeat\n      when: \"the torch is relit\"",
+            ),
+        ),
+        (
+            "a quoted `to`",
+            with(
+                &base,
+                item,
+                "{to: \"LEG-FALL\", kind: repeat, when: \"the torch is relit\"}",
+            ),
+        ),
+        (
+            "an unquoted `when`",
+            with(
+                &base,
+                item,
+                "{to: LEG-FALL, kind: repeat, when: the torch is relit}",
+            ),
+        ),
+        (
+            "`when` padded",
+            with(
+                &base,
+                item,
+                "{to: LEG-FALL, kind: repeat, when: \"  the torch is relit  \"}",
+            ),
+        ),
+        (
+            "`{to: LEG-DRAW}` for `LEG-DRAW`",
+            with(&base, "- LEG-DRAW\n", "- {to: LEG-DRAW}\n"),
+        ),
+        (
+            "the items reordered",
+            with(
+                &base,
+                "    - LEG-DRAW\n    - {to: LEG-FALL, kind: repeat, when: \"the torch is relit\"}\n",
+                "    - {to: LEG-FALL, kind: repeat, when: \"the torch is relit\"}\n    - LEG-DRAW\n",
+            ),
+        ),
+    ] {
+        assert_eq!(
+            doc_input(variant.as_bytes(), &scheme, "LEG-RUN").as_ref(),
+            Some(&golden),
+            "{row}"
+        );
+    }
+}
+
+/// "`norm_hash`", "Rules": a malformed item nulls its document's input,
+/// the sections keep theirs (TE-4's rule, for the new message). M:
+/// `frontmatter-type` no longer among the nulling codes.
+#[test]
+fn flow_a_bad_item_nulls_the_document_and_only_it() {
+    let scheme = corpus_scheme(&fixture("flow-relay"));
+    let base = String::from_utf8(relay_doc("LEG-RUN")).expect("UTF-8");
+    let item = "{to: LEG-FALL, kind: repeat, when: \"the torch is relit\"}";
+    for variant in [
+        "{to: LEG-FALL, by: me}",
+        "{kind: repeat}",
+        "{to: LEG-FALL, kind: loop}",
+        "{to: LEG-FALL, when: \"\"}",
+    ] {
+        let text = format!(
+            "{}\n## Part {{#LEG-PART}}\n\nThe part.\n",
+            with(&base, item, variant)
+        );
+        assert_eq!(
+            doc_input(text.as_bytes(), &scheme, "LEG-RUN"),
+            None,
+            "{variant}"
+        );
+        assert!(
+            doc_input(text.as_bytes(), &scheme, "LEG-PART").is_some(),
+            "{variant}: the section keeps its input"
+        );
+    }
 }
 
 // ------------------------------------------------------------------ TE-11

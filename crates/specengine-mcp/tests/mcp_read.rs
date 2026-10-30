@@ -46,7 +46,7 @@ use std::path::{Path, PathBuf};
 use common::blake3::blake3_hex;
 use common::read::{
     CODE_TOOLS, ERAS, READ_TOOLS, Session, assert_bad_arguments, checked_call, cli_env, conforms,
-    content_text, flat_input_problems, output_schemas,
+    content_text, flat_input_problems, library, output_schemas,
 };
 use common::*;
 use serde_json::{Value, json};
@@ -179,6 +179,66 @@ fn links(id: &str, archive: Option<bool>) -> (&'static str, Value) {
 }
 
 // ------------------------------------------------------------------ AC-02
+
+/// docs/canon/flow-links.md "MCP mirror": `get_node` with links carries a
+/// labelled edge's `kind` and `when` and equals the CLI in both eras. The
+/// mirror leaves those two keys undescribed (`require_all` cannot express an
+/// optional key), so they alone stand outside `conforms`' exact keys: the
+/// published schema forbids no extra key, and the document less those two
+/// meets it exactly. A document of plain links meets it whole. M: a third
+/// undescribed key on a link; `additionalProperties` on the schema.
+#[test]
+fn flow_labels_reach_get_node_within_its_schema() {
+    let project = Project::new("flow-relay");
+    let env = project.env();
+    let globals = Globals::default();
+    let args = json!({"id": "LEG-RUN", "with": ["links"]});
+    let want = library("get_node", &args, &env, &globals);
+    let document = want.document.clone().expect("exit 0 has a document");
+    for era in ERAS {
+        let (mut session, schemas) = project.open(era);
+        let reply = session.call("get_node", args.clone());
+        let done = result(&reply);
+        assert_eq!(content_text(done), want.text, "{era:?}");
+        assert_eq!(done["structuredContent"], document, "{era:?}");
+        let shown = &done["structuredContent"]["nodes"][0]["links"];
+        let outgoing = shown["outgoing"].as_array().expect("outgoing");
+        assert_eq!(outgoing.len(), 3, "{shown}");
+        assert!(outgoing[0].get("kind").is_none(), "{shown}");
+        assert_eq!(outgoing[1]["kind"], json!("repeat"), "{shown}");
+        assert_eq!(outgoing[1]["when"], json!("the torch is relit"), "{shown}");
+        assert!(
+            content_text(done).contains("| kind repeat | when the torch is relit"),
+            "{}",
+            content_text(done)
+        );
+
+        let schema = &schemas["get_node"];
+        assert!(
+            !schema.to_string().contains("additionalProperties"),
+            "the published schema forbids no extra key: {schema}"
+        );
+        let mut less_the_two = document.clone();
+        for side in ["outgoing", "incoming"] {
+            let links = less_the_two["nodes"][0]["links"][side]
+                .as_array_mut()
+                .expect("links");
+            for link in links {
+                let link = link.as_object_mut().expect("a link");
+                link.remove("kind");
+                link.remove("when");
+            }
+        }
+        assert_ne!(less_the_two, document, "the two keys were there");
+        conforms(schema, &less_the_two, "$").expect("the rest is exactly the schema's");
+        let refused = conforms(schema, &document, "$").expect_err("the exact rule is live here");
+        assert!(refused.contains("\"kind\""), "{refused}");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+    // Plain links only: the exact rule holds whole.
+    project.parity(&[links("KIT-TORCH", None), node("LEG-RUN")]);
+}
 
 #[test]
 fn ac02_get_node_matches_show_for_every_ref_form() {

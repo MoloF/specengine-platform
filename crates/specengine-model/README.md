@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-model]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-31
 ---
 
 # specengine-model — the corpus model and the reference grammar
@@ -19,7 +19,7 @@ Types and pure functions, `serde` only: no I/O, no parser library, no other Spec
 | `scheme` | `IdScheme::new(vec![PrefixSpec::number(..), PrefixSpec::name(..).with_aliases(..)])`, `Shape`, `IdScope`, `SchemeProblem` / `SchemeError` |
 | `grammar` | `scan` (text), `parse_reference` (one front-matter scalar), `parse_definition` (`id:`, `{#…}`), `parse_canon`, `split_superseded_by`, `is_slug` (the `slug` rule: qualifiers, feature-document stems) |
 | `task` | `TaskStatus` (ten states), `RunOutcome`, `TaskPackage` (27 keys, `TASK_PACKAGE_SCHEMA_VERSION` 1) and its parts, types only: `docs/canon/task-package.md`; `BindingRow` (`BindingAnchor`, `BindingPlace`), a read's code binding: `docs/canon/code-reads.md`; `TestedRow`, a read's and plain verify's `tested` entry: `docs/canon/spec-lock-tested.md` "Reads" |
-| `reference`, `link`, `node`, `value`, `diagnostic`, `parsed` | what a parsed file is made of; `Fields`, the typed keys' values (the plan's `release`, `priority`, `estimate` too: `docs/canon/spec-roadmap.md`); `Anchor`, `AnchorOrigin`, `LINK_TYPES`, `MENTIONS`, `DiagnosticCode::ALL` (13 codes) |
+| `reference`, `link`, `node`, `value`, `diagnostic`, `parsed` | what a parsed file is made of; `Fields`, the typed keys' values (the plan's `release`, `priority`, `estimate` too: `docs/canon/spec-roadmap.md`); `Anchor`, `AnchorOrigin`, `LINK_TYPES`, `MENTIONS`, `DiagnosticCode::ALL` (13 codes); `EdgeKind`, `EdgeLabel`, `Reference.edge`: a labelled `follows` item (`docs/canon/flow-links.md`) |
 
 ## `[ids]` in `specengine.toml`
 
@@ -52,9 +52,9 @@ Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an ali
 
 ## Links
 
-`LINK_TYPES`, closed and shared: `derived_from` (follows from a requirement or decision), `depends_on` (cannot be understood or built without), `constrains` (a rule restricts another), `supersedes` / `revises` (replaces / refines), `amends` (`AMENDS`: an amendment, unapplied while its document is live, `docs/canon/proposal-amendment.md`), `answers` (a decision answers a question), `working_answer` (an assumption stands in for the answer), `uses_term`, `canon` (a decision promoted into canon; must resolve), `verifies` (a criterion or test verifies a node), `adopts` (a shared-library node at a pinned revision, 05 §3.6). Another declared type is kept with `unknown-link-type`. `MENTIONS` (`is_weak_link`) is the weak link of `refs`, `adrs`, every body reference and every local Markdown link; declared links are strong. `Link = {src?, src_span?, type, origin: frontmatter | inline, dst}`, `dst` a reference or a path, unresolved: `PathTarget {path, anchor?, span?}` is a `canon:` value or a Markdown link destination (split and `span`: `docs/canon/spec-check-links.md` "File links"). `parent` is containment, not a link.
+`LINK_TYPES`, closed and shared: `derived_from` (follows from a requirement or decision), `depends_on` (cannot be understood or built without), `constrains` (a rule restricts another), `supersedes` / `revises` (replaces / refines), `amends` (`AMENDS`: an amendment, unapplied while its document is live, `docs/canon/proposal-amendment.md`), `answers` (a decision answers a question), `working_answer` (an assumption stands in for the answer), `uses_term`, `canon` (a decision promoted into canon; must resolve), `verifies` (a criterion or test verifies a node), `adopts` (a shared-library node at a pinned revision, 05 §3.6), `follows` (`FOLLOWS`: comes after the target, cycles allowed), `uses` (reuses the target by reference), `supplies` (produces or feeds the target). Another declared type is kept with `unknown-link-type`. `MENTIONS` (`is_weak_link`) is the weak link of `refs`, `adrs`, every body reference and every local Markdown link; declared links are strong. `Link = {src?, src_span?, type, origin: frontmatter | inline, dst}`, `dst` a reference or a path, unresolved: `PathTarget {path, anchor?, span?}` is a `canon:` value or a Markdown link destination (split and `span`: `docs/canon/spec-check-links.md` "File links"). `parent` is containment, not a link.
 
-Walks (`Direction`; `docs/canon/spec-cli-graph.md`): `graph_direction` follows every strong type out; `IMPACT_LINK_TYPES` (`impact_direction`): `depends_on`, `derived_from`, `verifies`, `uses_term` in, `constrains` out.
+Walks (`Direction`; `docs/canon/spec-cli-graph.md`): `graph_direction` follows every strong type out; `IMPACT_LINK_TYPES` (`impact_direction`): `depends_on`, `derived_from`, `verifies`, `uses_term`, `uses` in, `constrains`, `supplies` out; `follows` is not followed.
 
 ## Anchors
 

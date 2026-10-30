@@ -105,6 +105,9 @@ nodes 6, edges 6
         "working_answer",
         "canon",
         "adopts",
+        "follows",
+        "uses",
+        "supplies",
     ] {
         assert!(
             types.contains(&serde_json::json!({"type": t, "direction": "out"})),
@@ -280,7 +283,8 @@ fn mentions_are_followed_only_when_asked() {
 }
 
 /// AC-13: `--impact` follows `depends_on`, `derived_from`, `verifies`,
-/// `uses_term` incoming and `constrains` outgoing. M: `derived_from`
+/// `uses_term`, `uses` incoming and `constrains`, `supplies` outgoing
+/// (docs/features/flow-links.md: 7 under `--impact`). M: `derived_from`
 /// flipped.
 #[test]
 fn impact_follows_the_impact_table() {
@@ -331,6 +335,8 @@ fn impact_follows_the_impact_table() {
             {"type": "verifies", "direction": "in"},
             {"type": "uses_term", "direction": "in"},
             {"type": "constrains", "direction": "out"},
+            {"type": "uses", "direction": "in"},
+            {"type": "supplies", "direction": "out"},
         ]),
         "{json}"
     );

@@ -23,6 +23,10 @@
 //! naming the parameter, with a fresh `HOME` still empty after; `depth=-1`,
 //! a look-alike ID, a `project:` REF are a 503 whose message is the CLI's
 //! line verbatim. M: `ref` optional.
+//!
+//! docs/features/flow-links.md "Outputs": `kind` and `when` of a labelled
+//! edge reach the daemon's document byte for byte, a plain edge has neither
+//! key. M10 (`kind: null` on every edge) turns `daemon_keys.rs` red.
 
 mod common;
 
@@ -83,6 +87,48 @@ fn cannot_run(home: &Path, cwd: &Path, root: &Path, args: &[&str]) -> String {
     run.code(2);
     assert_eq!(run.stdout, "", "exit 2 prints no document: {}", run.show());
     run.stderr.trim_end_matches('\n').to_owned()
+}
+
+/// docs/features/flow-links.md "Outputs": the daemon carries the label, on
+/// the follows walk of the game fixture and on the default walk.
+#[test]
+fn flow_labels_reach_the_daemon_byte_for_byte() {
+    let scratch = Scratch::new("graph-flow");
+    let root = scratch.repo("flow-relay", "relay", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let reply = same(
+        &server,
+        &home,
+        &cwd,
+        &root,
+        "/api/projects/flow-relay/graph?ref=LEG-RUN&impact=true&types=follows",
+        &["graph", "LEG-RUN", "--impact", "--type", "follows"],
+    );
+    let document: Value = serde_json::from_str(reply.text()).expect("JSON");
+    let edges = document["edges"].as_array().expect("edges");
+    assert_eq!(edges.len(), 6, "{document}");
+    let labelled = edges
+        .iter()
+        .find(|edge| edge["src"] == "LEG-RUN" && edge["dst"] == "LEG-FALL")
+        .expect("the labelled edge");
+    assert_eq!(labelled["kind"], "repeat", "{document}");
+    assert_eq!(labelled["when"], "the torch is relit", "{document}");
+    let plain = edges
+        .iter()
+        .find(|edge| edge["src"] == "LEG-RUN" && edge["dst"] == "LEG-DRAW")
+        .expect("the plain edge");
+    assert!(plain.get("kind").is_none(), "{document}");
+    assert!(plain.get("when").is_none(), "{document}");
+    same(
+        &server,
+        &home,
+        &cwd,
+        &root,
+        "/api/projects/flow-relay/graph?ref=LEG-RUN",
+        &["graph", "LEG-RUN"],
+    );
 }
 
 #[test]

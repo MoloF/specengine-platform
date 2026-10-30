@@ -24,6 +24,44 @@ impl RefForm {
     }
 }
 
+/// How a labelled edge branches from the step it is written on; a closed
+/// set, shared by every project (ADR-0055).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum EdgeKind {
+    Alternative,
+    Parallel,
+    Repeat,
+}
+
+impl EdgeKind {
+    /// Every kind, in spelling order.
+    pub const ALL: [Self; 3] = [Self::Alternative, Self::Parallel, Self::Repeat];
+
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Alternative => "alternative",
+            Self::Parallel => "parallel",
+            Self::Repeat => "repeat",
+        }
+    }
+
+    pub fn parse(text: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|kind| kind.as_str() == text)
+    }
+}
+
+/// What a `{to, kind, when}` item says beside its target. At least one of
+/// the two is set: `{to: X}` alone is the plain `X`, with no label.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct EdgeLabel {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<EdgeKind>,
+    /// Prose, never evaluated; trimmed, not blank, one line.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+}
+
 /// `[project ":"] [scope "/"] id ["#" id] ["@" rev]`, or its wiki form.
 ///
 /// Nothing here is resolved: existence, aliases, `slug/` and `project:` are
@@ -60,6 +98,11 @@ pub struct Reference {
     /// folding, aliases).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
+    /// The label of a `{to, kind, when}` item. It lives here, not on
+    /// [`Link`](crate::link::Link): the spec graph builds its edges from
+    /// `Fields.links`, which holds references.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub edge: Option<EdgeLabel>,
 }
 
 /// The value of `canon:`: a reference, else `path[#anchor]`.

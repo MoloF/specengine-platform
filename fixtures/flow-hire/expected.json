@@ -1,0 +1,60 @@
+{
+  "prefixes": ["FEE", "JRN"],
+  "kinds": ["journey", "tariff"],
+  "files": {
+    "docs/spec/fee-ride.md": {
+      "id": "FEE-RIDE",
+      "kind": "tariff",
+      "title": "Ride fee",
+      "links": []
+    },
+    "docs/spec/jrn-meter.md": {
+      "id": "JRN-METER",
+      "kind": "journey",
+      "title": "Meter",
+      "links": ["JRN-METER follows frontmatter JRN-UNLOCK | kind parallel"]
+    },
+    "docs/spec/jrn-nearest.md": {
+      "id": "JRN-NEAREST",
+      "kind": "journey",
+      "title": "Nearest dock",
+      "links": ["JRN-NEAREST follows frontmatter JRN-RETURN | kind alternative | when dock full"]
+    },
+    "docs/spec/jrn-no-release.md": {
+      "id": "JRN-NO-RELEASE",
+      "kind": "journey",
+      "title": "No release",
+      "links": ["JRN-NO-RELEASE follows frontmatter JRN-UNLOCK | kind alternative | when not released"]
+    },
+    "docs/spec/jrn-return.md": {
+      "id": "JRN-RETURN",
+      "kind": "journey",
+      "title": "Return",
+      "links": [
+        "JRN-RETURN follows frontmatter JRN-RIDE",
+        "JRN-RETURN follows frontmatter JRN-NEAREST | kind repeat | when a slot is near",
+        "JRN-RETURN uses frontmatter JRN-SCAN",
+        "JRN-RETURN supplies frontmatter FEE-RIDE"
+      ]
+    },
+    "docs/spec/jrn-ride.md": {
+      "id": "JRN-RIDE",
+      "kind": "journey",
+      "title": "Ride",
+      "links": ["JRN-RIDE follows frontmatter JRN-UNLOCK | kind alternative | when released"]
+    },
+    "docs/spec/jrn-scan.md": {
+      "id": "JRN-SCAN",
+      "kind": "journey",
+      "title": "Scan",
+      "sections": ["JRN-SCAN-BAD"],
+      "links": []
+    },
+    "docs/spec/jrn-unlock.md": {
+      "id": "JRN-UNLOCK",
+      "kind": "journey",
+      "title": "Unlock",
+      "links": ["JRN-UNLOCK uses frontmatter JRN-SCAN"]
+    }
+  }
+}

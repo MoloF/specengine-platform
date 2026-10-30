@@ -36,7 +36,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0042.md](roadmap/RM-0042.md) flow-links (Phase 7, step 1): follows, uses, supplies and labelled edges · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft
 - [docs/roadmap/RM-0043.md](roadmap/RM-0043.md) flow-read (Phase 7, step 2): spec flow, get_flow, lifted edges and gap rows · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · draft
 - [docs/roadmap/RM-0044.md](roadmap/RM-0044.md) flow-canvas (Phase 7, step 3): collapsing groups, stages and gap marks · ui, crates/specengine-http · draft
 - [docs/roadmap/RM-0045.md](roadmap/RM-0045.md) card-store (Phase 7, step 4): cards, flows per discipline, events, CLI and MCP tools · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
@@ -57,4 +56,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill · crates/specengine-core, crates/specengine-cli, plugin · draft
 - [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) pack (Phase 7, step 19): spec init --pack and a config proposal · crates/specengine-cli, crates/specengine-core · draft
 - [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
-- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flake: failing_test_removes_evidence hits its 1 s nested timeout · crates/specengine-cli · draft
+- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: two CLI tests that fail under full parallel load · crates/specengine-cli · draft

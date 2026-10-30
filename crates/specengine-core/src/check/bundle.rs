@@ -27,7 +27,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use specengine_model::{Direction, IdScope};
+use specengine_model::{Direction, FOLLOWS, IdScope};
 
 use super::spec_graph::{Endpoint, NodeAt, SpecGraph, Standing};
 
@@ -65,14 +65,20 @@ impl BundleLayer {
 
 /// The (layer, link type, direction from the target) rules of layers 4, 6,
 /// 7 and 8; one table for every project. Layer 2 takes any type, layer 4
-/// also the feature-scoped ID sections linked in by any type.
-pub const BUNDLE_LINK_TYPES: [(BundleLayer, &str, Direction); 7] = [
+/// also the feature-scoped ID sections linked in by any type. Incoming
+/// `uses` stays out, as incoming `depends_on` does.
+pub const BUNDLE_LINK_TYPES: [(BundleLayer, &str, Direction); 12] = [
     (BundleLayer::Criteria, VERIFIES, Direction::In),
     (BundleLayer::Decisions, "canon", Direction::In),
     (BundleLayer::Neighbours, "depends_on", Direction::Out),
     (BundleLayer::Neighbours, "constrains", Direction::Out),
     (BundleLayer::Neighbours, "constrains", Direction::In),
     (BundleLayer::Neighbours, "derived_from", Direction::Out),
+    (BundleLayer::Neighbours, FOLLOWS, Direction::Out),
+    (BundleLayer::Neighbours, FOLLOWS, Direction::In),
+    (BundleLayer::Neighbours, "uses", Direction::Out),
+    (BundleLayer::Neighbours, "supplies", Direction::Out),
+    (BundleLayer::Neighbours, "supplies", Direction::In),
     (BundleLayer::Terms, "uses_term", Direction::Out),
 ];
 

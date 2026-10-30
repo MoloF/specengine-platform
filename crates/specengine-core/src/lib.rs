@@ -265,6 +265,7 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
                             form: Default::default(),
                             label: None,
                             span: this.span,
+                            edge: None,
                         }),
                     });
                 }

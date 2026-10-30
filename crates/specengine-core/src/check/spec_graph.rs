@@ -32,8 +32,8 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use specengine_model::{
-    CanonTarget, Direction, IdScheme, LinkOrigin, LinkTarget, MENTIONS, Node, ParsedFile,
-    PathTarget, Reference,
+    CanonTarget, Direction, EdgeLabel, IdScheme, LinkOrigin, LinkTarget, MENTIONS, Node,
+    ParsedFile, PathTarget, Reference,
 };
 
 use super::config::DocClass;
@@ -156,6 +156,8 @@ pub struct Edge {
     /// A remark on a resolved or unchecked link: an anchor naming nothing
     /// (the link lands on the document), a `canon:` without `#anchor`.
     pub note: Option<String>,
+    /// The label a `{to, kind, when}` item gives it.
+    pub edge: Option<EdgeLabel>,
 }
 
 impl Edge {
@@ -735,6 +737,7 @@ impl<'a> SpecGraph<'a> {
                     offset: reference.span.map_or(0, |span| span.start),
                     written,
                     note: None,
+                    edge: reference.edge.clone(),
                 });
             }
             if let Some(CanonTarget::Path(target)) = document
@@ -758,6 +761,7 @@ impl<'a> SpecGraph<'a> {
                     ),
                     offset: target.span.map_or(0, |span| span.start),
                     note,
+                    edge: None,
                 });
             }
         }
@@ -805,6 +809,7 @@ impl<'a> SpecGraph<'a> {
                 line,
                 offset,
                 note,
+                edge: None,
             });
         }
         (Some(parent), edges)

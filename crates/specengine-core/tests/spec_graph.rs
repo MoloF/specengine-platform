@@ -17,7 +17,8 @@ use specengine_core::check::{
     CheckInput, Endpoint, LinkState, NodeAt, Parent, SpecGraph, Standing,
 };
 use specengine_model::{
-    Direction, IMPACT_LINK_TYPES, LINK_TYPES, graph_direction, impact_direction, is_weak_link,
+    Direction, FOLLOWS, IMPACT_LINK_TYPES, LINK_TYPES, graph_direction, impact_direction,
+    is_weak_link,
 };
 
 const TOML: &str = "\
@@ -662,7 +663,10 @@ fn both_fixtures_walk_as_the_spec_says() {
     );
 }
 
-/// The model's one table for every project (Q1, Q2).
+/// The model's one table for every project (Q1, Q2), with the flow types of
+/// docs/features/flow-links.md: `uses` in, `supplies` out, `follows` not
+/// followed by impact. M6: `("follows", Direction::In)` in the table; M7:
+/// `uses` as `Direction::Out`.
 #[test]
 fn the_link_type_tables_are_the_spec_s() {
     assert_eq!(
@@ -673,8 +677,33 @@ fn the_link_type_tables_are_the_spec_s() {
             ("verifies", Direction::In),
             ("uses_term", Direction::In),
             ("constrains", Direction::Out),
+            ("uses", Direction::In),
+            ("supplies", Direction::Out),
         ]
     );
+    // docs/features/flow-links.md: the twelve as they were, the three
+    // flow types appended; `follows` is no impact type.
+    assert_eq!(
+        LINK_TYPES,
+        [
+            "derived_from",
+            "depends_on",
+            "constrains",
+            "supersedes",
+            "revises",
+            "amends",
+            "answers",
+            "working_answer",
+            "uses_term",
+            "canon",
+            "verifies",
+            "adopts",
+            "follows",
+            "uses",
+            "supplies",
+        ]
+    );
+    assert_eq!(FOLLOWS, "follows");
     for link_type in LINK_TYPES {
         assert_eq!(
             graph_direction(link_type),
@@ -683,8 +712,10 @@ fn the_link_type_tables_are_the_spec_s() {
         );
         assert!(!is_weak_link(link_type), "{link_type}");
         let impact = match link_type {
-            "depends_on" | "derived_from" | "verifies" | "uses_term" => Some(Direction::In),
-            "constrains" => Some(Direction::Out),
+            "depends_on" | "derived_from" | "verifies" | "uses_term" | "uses" => {
+                Some(Direction::In)
+            }
+            "constrains" | "supplies" => Some(Direction::Out),
             _ => None,
         };
         assert_eq!(impact_direction(link_type), impact, "{link_type}");

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-10-07
+reviewed: 2026-10-31
 ---
 
 # spec tree, spec graph, show --links
@@ -28,13 +28,13 @@ Live = neither `class: generated` nor Tier 3 (`check::is_tier3_file`). Tree node
 
 ## Link types
 
-One built-in table in `specengine-model`, no `specengine.toml` key:
+One built-in table in `specengine-model`, no `specengine.toml` key (`flow-links.md`):
 
 | Type | `graph` | `--impact` | `--links` |
 |---|---|---|---|
-| `depends_on`, `derived_from`, `verifies`, `uses_term` | out | in | strong |
-| `constrains` | out | out | strong |
-| `supersedes`, `revises`, `amends`, `answers`, `working_answer`, `canon`, `adopts`, an unknown declared type | out | — | strong |
+| `IMPACT_LINK_TYPES`' `In` rows | out | in | strong |
+| its `Out` rows | out | out | strong |
+| every other `LINK_TYPES` entry, an unknown declared type | out | — | strong |
 | `mentions` | — | — | weak |
 
 ## spec tree
@@ -63,22 +63,22 @@ A line's tail: ` | status <s>`, ` | archived`, then ` | parent <written> danglin
 
 ```text
 <distance> <name> | <kind or -> | <title or -> | <path>:<line>[ | archived]
-<src> --<type>--> <dst> | <path>:<line>[ | dangling: <reason> | skipped: another project | unchecked]
+<src> --<type>--> <dst> | <path>:<line>[ | kind <kind>][ | when <when>][ | dangling: <reason> | skipped: another project | unchecked]
 nodes <n>, edges <e>[; left out: …]
 ```
 
-Nodes by (distance, path, ord), then edges by (type, path, line, column) in link direction, `path:line` where written. JSON `{ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges}`; `types` `[{type, direction}]` as followed, in order: the `--type`s given (a repeat once); else `IMPACT_LINK_TYPES`; else the 12 `LINK_TYPES`, then every unknown declared type of the corpus by name; a node `{id, kind, title, path, line, distance, archived}`; an edge `{src, type, dst, written, path, line, state, reason}`.
+Nodes by (distance, path, ord), then edges by (type, path, line, column) in link direction, `path:line` where written. JSON `{ref, reason, impact, types, depth, archive, notes, left_out, truncated, nodes, edges}`; `types` `[{type, direction}]` as followed, in order: the `--type`s given (a repeat once); else `IMPACT_LINK_TYPES`; else `LINK_TYPES`, then every unknown declared type of the corpus by name; a node `{id, kind, title, path, line, distance, archived}`; an edge `{src, type, dst, written, path, line, state, reason}`, + `kind`, `when` when labelled.
 
 ## spec show --links
 
 `spec show REF --links [--archive]`: `show` unchanged, each shown node's links block between its header line and its bytes; `--archive` without `--links` → exit 2, one line. Out: the links written in the node's span (a document: front-matter and every nested section), every state. In: the links resolving to the node or a nested section from admitted files (the shown node's own file always). Strong before `mentions`, then (type, path, line, column).
 
 ```text
-  <out|in> <type> <name, else written> | <path>:<line>[ | at <section>][ | as <written>][ | dangling: <reason> | skipped: another project | unchecked]
+  <out|in> <type> <name, else written> | <path>:<line>[ | at <section>][ | as <written>][ | kind <kind>][ | when <when>][ | dangling: <reason> | skipped: another project | unchecked]
   links <o> out, <i> in[; left out: …]
 ```
 
-`at`: the nested section holding the link or landed on. `as`: the written form when it is not the name of the node it lands on (for `superseded-by`'s out link: the shown node); `[[X]]` prints `as [[X]]`. JSON: a node's `links` (`null` without `--links`) `{outgoing, incoming, left_out, omitted}`; a link `{type, origin, at, name, written, path, line, state, reason}`, `state` `resolved | dangling | skipped | unchecked`.
+`at`: the nested section holding the link or landed on. `as`: the written form when it is not the name of the node it lands on (for `superseded-by`'s out link: the shown node); `[[X]]` prints `as [[X]]`. JSON: a node's `links` (`null` without `--links`) `{outgoing, incoming, left_out, omitted}`; a link `{type, origin, at, name, written, path, line, state, reason}`, + `kind`, `when` when labelled, `state` `resolved | dangling | skipped | unchecked`.
 
 ## Exit, cap, determinism
 
@@ -90,14 +90,14 @@ Determinism: `BTreeMap`s and the orders above, never rowid, insertion or the abs
 
 ## API
 
-- model: `Direction {Out, In}` (`as_str`), `IMPACT_LINK_TYPES: [(&str, Direction); 5]`, `graph_direction`, `impact_direction`, `is_weak_link` (`&str -> …`).
-- core `check`: `SpecGraph::new(&CheckInput, &IdScheme, &Paths)`, reads no file; lookups `paths`, `file_of`, `standing`, `is_tier3`, `nodes`, `node`, `document`, `documents`, `name`, `line`, `locate(&Reference, written) -> Endpoint`; tree `parent -> Option<Parent>`, `listed_under`, `children`, `cycles`, `ancestors` (pass 4), `within`; links `edges`, `links(at, admit) -> NodeLinks`, `walk(starts, follow: Fn(&str) -> Option<Direction>, depth, admit) -> Walk`. Types `NodeAt {file, ord}`, `Standing {Live, Generated, Tier3}`, `Parent {None, Node {node, others}, Dangling {written, reason}, Skipped {written}, Cycle {members}}`, `Endpoint {Nodes, Dangling, Skipped, Unchecked}`, `LinkState` (`as_str`), `Edge` (`state`, `reason`, `written_end`), `NodeLinks`, `Walk`.
+- model: `Direction {Out, In}` (`as_str`), `IMPACT_LINK_TYPES: [(&str, Direction); 7]`, `graph_direction`, `impact_direction`, `is_weak_link` (`&str -> …`).
+- core `check`: `SpecGraph::new(&CheckInput, &IdScheme, &Paths)`, reads no file; lookups `paths`, `file_of`, `standing`, `is_tier3`, `nodes`, `node`, `document`, `documents`, `name`, `line`, `locate(&Reference, written) -> Endpoint`; tree `parent -> Option<Parent>`, `listed_under`, `children`, `cycles`, `ancestors` (pass 4), `within`; links `edges`, `links(at, admit) -> NodeLinks`, `walk(starts, follow: Fn(&str) -> Option<Direction>, depth, admit) -> Walk`. Types `NodeAt {file, ord}`, `Standing {Live, Generated, Tier3}`, `Parent {None, Node {node, others}, Dangling {written, reason}, Skipped {written}, Cycle {members}}`, `Endpoint {Nodes, Dangling, Skipped, Unchecked}`, `LinkState` (`as_str`), `Edge` (`edge`, `state`, `reason`, `written_end`), `NodeLinks`, `Walk`.
 - CLI: `tree(&Env, &Globals, &TreeRequest) -> TreeOutcome` (`TreeNode`, `TreeMark`), `graph(.., &GraphRequest) -> GraphOutcome` (`GraphNode`, `GraphEdge`, `FollowedType`), `reach` (`spec impact`'s too: `spec-impact.md`), `ShowRequest {reference, links, archive}`, `ShownNode.links` (`ShownLinks`, `ShownLink`), `LeftOut`, `Outcome::{Tree, Graph}`; `corpus.rs` the input, live rule and REF location. `petgraph` only in core.
 
-Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `read_only.rs`, `freshness.rs`, `show.rs`, `genre.rs` over scratch copies of `fixtures/spec-a`, `-b` with their own `HOME`; core `spec_graph.rs`; eval `build_graph.rs`.
+Tests: CLI `tree.rs`, `graph.rs`, `links.rs`, `bounds.rs`, `determinism.rs`, `read_only.rs`, `freshness.rs`, `show.rs`, `genre.rs` over scratch copies of `fixtures/spec-a`, `-b`; core `spec_graph.rs`; eval `build_graph.rs`.
 
 ## Open
 
-- Every call re-reads and re-parses every used file; measured through MCP (`docs/canon/mcp-read.md` "Latency"): a lighter resolver input, or the indexed parse when the bytes match, before large pilots.
+- Every call re-reads and re-parses every used file; measured through MCP (`docs/canon/mcp-read.md` "Latency"): a lighter resolver input, or the indexed parse when the bytes match.
 - The same-size edit race (`freshness.rs`) is probabilistic on its red side: no seam between the index update and the re-read.
-- The unreadable and parser-panic fallback (lines 1, `warning:`) is untested (fix: a `&dyn Source`, as `show`'s).
+- The unreadable and parser-panic fallback (lines 1, `warning:`) is untested.

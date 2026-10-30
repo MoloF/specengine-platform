@@ -1,0 +1,11 @@
+# Fixture corpus flow-hire: the journey of a hired bicycle (the project of
+# fixtures/spec-c), with an alternative, a parallel branch and a retry at a
+# full dock, all in `follows` (docs/features/flow-links.md, ADR-0055). The
+# second project of AC-07: the same binary reads it from `[ids]` alone.
+
+[project]
+slug = "flow-hire"
+
+[ids]
+JRN = { kind = "journey", shape = "name" }
+FEE = { kind = "tariff",  shape = "name" }

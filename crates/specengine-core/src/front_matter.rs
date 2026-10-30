@@ -1,20 +1,24 @@
 //! The front-matter block: where it is (BOM, `---` fences, CRLF kept) and
 //! what its typed keys say.
 
+use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::ops::Range;
 
 use specengine_model::grammar::{self, Canon, Found};
 use specengine_model::link::is_link_type;
 use specengine_model::{
-    CanonTarget, Diagnostic, DiagnosticCode, ExtraEntry, Fields, FmValue, IdScheme, IdScript,
-    LinkTarget, OrderedMap, ParentRef, Reference, Span,
+    CanonTarget, Diagnostic, DiagnosticCode, EdgeKind, EdgeLabel, ExtraEntry, FOLLOWS, Fields,
+    FmValue, IdScheme, IdScript, LinkTarget, OrderedMap, ParentRef, Reference, Span,
 };
 
 use crate::yaml::{self, YNode, YValue};
 
 /// The revisions: `rev = digit{1,9}`, not 0 (ADR-0040).
 const REVISIONS: std::ops::RangeInclusive<i64> = 1..=crate::revision::MAX_REVISION as i64;
+
+/// The longest `when` of a labelled item, trimmed.
+const WHEN_MAX_BYTES: usize = 256;
 
 /// The layout of a file: BOM, front-matter block, body.
 pub(crate) struct Layout {
@@ -579,19 +583,29 @@ impl Reader<'_> {
             self.mistyped(name, value, line, "a mapping of link type to references");
             return;
         };
-        let well_typed = entries.iter().all(|(key, list)| {
-            matches!(key.value, YValue::Str(_))
-                && match &list.value {
-                    YValue::Null => true,
-                    YValue::Seq(items) => items
-                        .iter()
-                        .all(|item| matches!(item.value, YValue::Str(_))),
-                    _ => false,
-                }
-        });
-        if !well_typed {
-            self.mistyped(name, value, line, "a mapping of link type to references");
-            return;
+        match links_fault(entries) {
+            Some(LinksFault::Shape) => {
+                self.mistyped(name, value, line, "a mapping of link type to references");
+                return;
+            }
+            Some(LinksFault::Item {
+                link_type,
+                index,
+                item,
+                problem,
+            }) => {
+                let at = self.line_or(item, line);
+                self.out.diagnostics.push(Diagnostic::new(
+                    DiagnosticCode::FrontmatterType,
+                    at,
+                    format!(
+                        "front-matter `{name}`: `{link_type}[{index}]`: {problem}; kept in `extra`"
+                    ),
+                ));
+                self.keep(name.to_owned(), value, line);
+                return;
+            }
+            None => {}
         }
         let mut map = OrderedMap::new();
         for (key, list) in entries {
@@ -618,11 +632,14 @@ impl Reader<'_> {
                     ),
                 );
             }
-            let references = if matches!(list.value, YValue::Null) {
-                Vec::new()
-            } else {
-                self.reference_list(link_type, list, key_line)
-                    .unwrap_or_default()
+            let references = match &list.value {
+                YValue::Null => Vec::new(),
+                YValue::Seq(items) if link_type == FOLLOWS => {
+                    self.labelled_list(link_type, items, key_line)
+                }
+                _ => self
+                    .reference_list(link_type, list, key_line)
+                    .unwrap_or_default(),
             };
             for reference in &references {
                 self.declare(link_type, reference.clone());
@@ -630,6 +647,32 @@ impl Reader<'_> {
             map.push(link_type.clone(), references);
         }
         self.out.fields.links = Some(map);
+    }
+
+    /// The references of items [`links_fault`] let through: a string is one
+    /// reference, a mapping its `to` with its label. A `to` or a string that
+    /// is not exactly one reference is `unparsed-reference` and dropped.
+    fn labelled_list(&mut self, name: &str, items: &[YNode], line: usize) -> Vec<Reference> {
+        let mut references = Vec::with_capacity(items.len());
+        for item in items {
+            let item_line = self.line_or(item, line);
+            let found = match &item.value {
+                YValue::Str(text) => self
+                    .one_reference(name, text, item, item_line)
+                    .map(|found| found.reference),
+                YValue::Map(keys) => edge_item(keys).ok().and_then(|(to, text, edge)| {
+                    let to_line = self.line_or(to, item_line);
+                    let found = self.one_reference(name, text, to, to_line)?;
+                    Some(Reference {
+                        edge,
+                        ..found.reference
+                    })
+                }),
+                _ => None,
+            };
+            references.extend(found);
+        }
+        references
     }
 
     fn declare(&mut self, link_type: &str, dst: Reference) {
@@ -657,6 +700,117 @@ impl Reader<'_> {
             ));
         }
     }
+}
+
+/// Why a `links` map cannot be read and goes to `extra`.
+enum LinksFault<'a> {
+    /// Not a mapping of link type to lists of strings.
+    Shape,
+    /// A mapping item breaking an item rule ([`edge_item`]).
+    Item {
+        link_type: &'a str,
+        index: usize,
+        item: &'a YNode,
+        problem: String,
+    },
+}
+
+/// The first fault of a `links` map in written order, if any. A mapping
+/// item is taken under [`FOLLOWS`] alone; any other item that is no string
+/// is [`LinksFault::Shape`].
+fn links_fault(entries: &[(YNode, YNode)]) -> Option<LinksFault<'_>> {
+    for (key, list) in entries {
+        let YValue::Str(link_type) = &key.value else {
+            return Some(LinksFault::Shape);
+        };
+        let items = match &list.value {
+            YValue::Null => continue,
+            YValue::Seq(items) => items,
+            _ => return Some(LinksFault::Shape),
+        };
+        for (index, item) in items.iter().enumerate() {
+            match &item.value {
+                YValue::Str(_) => {}
+                YValue::Map(keys) if link_type == FOLLOWS => {
+                    if let Err(problem) = edge_item(keys) {
+                        return Some(LinksFault::Item {
+                            link_type,
+                            index,
+                            item,
+                            problem,
+                        });
+                    }
+                }
+                _ => return Some(LinksFault::Shape),
+            }
+        }
+    }
+    None
+}
+
+/// A mapping item by the item rules, the first failing giving its problem:
+/// its `to` node and text, and its label (`None` for `to` alone, so such an
+/// item is the plain reference). The text of `to` is not read here.
+fn edge_item(keys: &[(YNode, YNode)]) -> Result<(&YNode, &str, Option<EdgeLabel>), String> {
+    let (mut to, mut kind, mut when) = (None, None, None);
+    for (key, value) in keys {
+        match key.value.scalar_text().as_deref() {
+            Some("to") => to = Some(value),
+            Some("kind") => kind = Some(value),
+            Some("when") => when = Some(value),
+            _ => {
+                let written = shown(&key.value);
+                return Err(format!(
+                    "unknown key `{written}`: an item takes `to`, `when`, `kind`"
+                ));
+            }
+        }
+    }
+    let to = to.ok_or("no `to`")?;
+    let YValue::Str(text) = &to.value else {
+        return Err("`to` is not a string".to_owned());
+    };
+    let kind = kind.map(edge_kind).transpose()?;
+    let when = when.map(edge_when).transpose()?;
+    let edge = (kind.is_some() || when.is_some()).then_some(EdgeLabel { kind, when });
+    Ok((to, text, edge))
+}
+
+/// `kind`, one of [`EdgeKind::ALL`].
+fn edge_kind(value: &YNode) -> Result<EdgeKind, String> {
+    let written = shown(&value.value);
+    EdgeKind::parse(&written).ok_or_else(|| {
+        let kinds: Vec<String> = EdgeKind::ALL
+            .iter()
+            .map(|kind| format!("`{}`", kind.as_str()))
+            .collect();
+        format!("`kind` `{written}` is none of {}", kinds.join(", "))
+    })
+}
+
+/// `when`, trimmed: the rules read what is stored.
+fn edge_when(value: &YNode) -> Result<String, String> {
+    let YValue::Str(text) = &value.value else {
+        return Err("`when` is not a string".to_owned());
+    };
+    let when = text.trim();
+    if when.is_empty() {
+        return Err("`when` is blank".to_owned());
+    }
+    if when.len() > WHEN_MAX_BYTES {
+        return Err(format!("`when` is over {WHEN_MAX_BYTES} bytes"));
+    }
+    if when.chars().any(char::is_control) {
+        return Err("`when` holds a control character".to_owned());
+    }
+    Ok(when.to_owned())
+}
+
+/// A scalar's text, else the name of a collection's type, for a message.
+fn shown(value: &YValue) -> String {
+    value
+        .scalar_text()
+        .map_or_else(|| value.type_name().to_owned(), Cow::into_owned)
 }
 
 /// The type the reader gives a typed front-matter key's value (its

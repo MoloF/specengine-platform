@@ -16,7 +16,7 @@
 
 use std::borrow::Cow;
 
-use specengine_model::{DiagnosticCode, Link, LinkOrigin, LinkTarget, ParsedFile, Span};
+use specengine_model::{DiagnosticCode, EdgeKind, Link, LinkOrigin, LinkTarget, ParsedFile, Span};
 
 use crate::markdown;
 use crate::own_text::own_spans;
@@ -147,7 +147,10 @@ fn declared_by(link: &Link, id: Option<&str>) -> bool {
 /// `<type> ref:[<project>:][<scope>/]<id>[#<section>][@<rev>]` or
 /// `<type> path:<path>[#<anchor>]`, from the parsed value: the ID Latin (an
 /// alias prefix as written), the revision decimal, a wiki label and form
-/// dropped.
+/// dropped. A labelled edge's reference goes on `[ | <kind, or ->[ |
+/// <when>]]` (ADR-0055): `when` runs to the frame's end, so no two labels
+/// read alike, and such an item nulled its document's hash before, so no
+/// earlier rendering changes and the recipe stays.
 fn rendered(link: &Link) -> String {
     let mut out = String::with_capacity(link.link_type.len() + 32);
     out.push_str(&link.link_type);
@@ -170,6 +173,14 @@ fn rendered(link: &Link) -> String {
             if let Some(rev) = reference.rev {
                 out.push('@');
                 out.push_str(&rev.to_string());
+            }
+            if let Some(edge) = &reference.edge {
+                out.push_str(" | ");
+                out.push_str(edge.kind.map_or("-", EdgeKind::as_str));
+                if let Some(when) = &edge.when {
+                    out.push_str(" | ");
+                    out.push_str(when);
+                }
             }
         }
         LinkTarget::Path(target) => {

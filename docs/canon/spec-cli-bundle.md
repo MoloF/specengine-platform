@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-31
 ---
 
 # spec bundle and bundle_hash
@@ -30,11 +30,11 @@ Core `check::bundle_layers(&SpecGraph, &[NodeAt]) -> BundleLayers`, pure, by lin
 | 4 | `criteria`, Criteria | sources of `verifies` linked in; an ID section whose prefix has `scope = "feature"`, linked in by any type | header, `tested` lines, text |
 | 5 | `bindings`, Bindings | binding rows, not `verifies`, of the targets and nodes within them (`code-reads.md` "The bundle and the package") | a row |
 | 6 | `decisions`, Decisions | `canon` in | header, summary |
-| 7 | `neighbours`, Neighbours | `depends_on` out, `constrains` both ways, `derived_from` out | header, summary |
+| 7 | `neighbours`, Neighbours | the table's neighbour rows (`flow-links.md` "Types") | header, summary |
 | 8 | `terms`, Terms | `uses_term` out | header, summary |
 | 9 | `tests`, Tests | the `verifies` rows of those and of layer 4's candidates | a row |
 
-Rules 4, 6–8: `BUNDLE_LINK_TYPES`. A node is a candidate once, in its first layer (2, 3, 4, 6, 7, 8); within a layer by (path, ord), ancestors target by target. Open means open by links, not by `status:`; an answered question's decision arrives in layer 6 through `canon:`. Incoming `depends_on` is impact (`spec graph --impact`), not context. Keys and headings live in the CLI (`layer_key`, `layer_heading`): core's genre scan bans layer 6's word.
+Rules 4, 6–8: `BUNDLE_LINK_TYPES`. A node is a candidate once, in its first layer (2, 3, 4, 6, 7, 8); within a layer by (path, ord), ancestors target by target. Open means open by links, not by `status:`; an answered question's decision arrives in layer 6 through `canon:`. Incoming `depends_on`, `uses` is impact (`spec graph --impact`), not context. Keys and headings live in the CLI (`layer_key`, `layer_heading`): core's genre scan bans layer 6's word.
 
 Item header `<name> | <kind or -> | <title or -> | <path>:<line>`, + ` | status <s>` verbatim (layer 2), + ` | via <type> <in|out>, …` by type, `in` first (2, 4, 6–8); no token count, so an edit elsewhere in its file leaves it alone. Summary: a document's `summary` as written; a section or a summary-less document prints its header alone (`form: header`). `working answer:` the resolved answer's header, else `<written> | <path>:<line>` plus `--links`'s state suffix.
 
@@ -83,7 +83,7 @@ Determinism: the orders above, never rowid, insertion, time, `HashMap` order or 
 
 ## API
 
-- core `check`: `bundle_layers`; `BundleLayer` (`ALL`, print order); `BUNDLE_LINK_TYPES: [(BundleLayer, &str, Direction); 7]`; `BundleCandidate {node, layer, via, working_answer}` (`via` sorted pairs, `working_answer` the index of its first `working_answer` edge); `BundleLayers {targets, merged: [(inner, outer)], candidates}`; `bundle_node_from_toml(&str) -> Result<Option<BundleNode {tokens: u32, line}>, ConfigError>`; `SpecGraph::file` (a file's bytes and parse), `SpecGraph::scheme`.
+- core `check`: `bundle_layers`; `BundleLayer` (`ALL`, print order); `BUNDLE_LINK_TYPES: [(BundleLayer, &str, Direction); 12]`; `BundleCandidate {node, layer, via, working_answer}` (`via` sorted pairs, `working_answer` the index of its first `working_answer` edge); `BundleLayers {targets, merged: [(inner, outer)], candidates}`; `bundle_node_from_toml(&str) -> Result<Option<BundleNode {tokens: u32, line}>, ConfigError>`; `SpecGraph::file` (a file's bytes and parse), `SpecGraph::scheme`.
 - store: `b3_hash(&[u8]) -> String`.
 - CLI: `bundle`; `BundleRequest {references, budget: Option<i64>, git}`, `BundleOutcome {references, reason, messages, bundle}`, `Bundle {budget, tokens, chars, bytes, bundle_hash, body, layers, bindings, tests, tail, more}` (`not_included`, `placed(layer)`; `layers` no items in 5, 9), `BundleRow {row, tokens_est}`, `BundleItem`, `ItemForm`, `WorkingAnswer`, `TailEntry`; `layer_key`, `layer_heading`, `DEFAULT_BUNDLE_BUDGET`, `BUNDLE_TAIL_LINES`; `Outcome::Bundle`.
 

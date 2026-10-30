@@ -390,7 +390,7 @@ fn sources() -> Vec<(PathBuf, String)> {
 fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
     let links = link_types();
     assert!(
-        links.len() == 12 && links.contains(&"depends_on".to_owned()),
+        links.len() == 15 && links.contains(&"depends_on".to_owned()),
         "{links:?}"
     );
     let states = task_states();

@@ -11,9 +11,11 @@
 //! levels the reader takes a line or a span from are spanned ([`Root`]).
 //! Peak stack of a whole `parse` at the cap of 32 in a debug build: 0.85–
 //! 0.91 MiB for nested sequences and mappings, 1.05 MiB when every level is
-//! a mapping used as a key, so half of a 2 MiB worker stack stays free
-//! whatever the build profile. The depth budget stops deeper input at level
-//! 33, so an over-deep block costs no more stack than one at the cap.
+//! a mapping used as a key, measured with four spanned levels; the fifth,
+//! a `follows` item's keys and values, adds one wrapper at one level, so
+//! half of a 2 MiB worker stack stays free whatever the build profile. The
+//! depth budget stops deeper input at level 33, so an over-deep block costs
+//! no more stack than one at the cap.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -33,12 +35,13 @@ pub const MAX_DEPTH: usize = 32;
 /// Most nodes alias expansion may replay.
 pub const MAX_ALIAS_EXPANSION: usize = 10_000;
 
-/// The tree as deserialized: the four levels the reader takes a line or a
+/// The tree as deserialized: the five levels the reader takes a line or a
 /// span from are [`Located`] — the root (1), its keys and values (2), list
-/// items and `links` entries (3), `links` list items (4), counted as
-/// [`MAX_DEPTH`] counts. Deeper nodes are only kept as values (`extra`,
-/// `raised_by`), so they are [`Plain`].
-type Root = Located<Located<Located<Located<Plain>>>>;
+/// items and `links` entries (3), `links` list items (4), the keys and
+/// values of a `links` item that is a mapping (5, so `to` keeps its line
+/// and span), counted as [`MAX_DEPTH`] counts. Deeper nodes are only kept
+/// as values (`extra`, `raised_by`), so they are [`Plain`].
+type Root = Located<Located<Located<Located<Located<Plain>>>>>;
 
 /// A YAML node with where it was written.
 #[derive(Debug, Clone)]

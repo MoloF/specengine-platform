@@ -13,17 +13,17 @@
 //! line per link, then the count:
 //!
 //! ```text
-//!   <out|in> <type> <name, else written> | <path>:<line>[ | at <section>][ | as <written>][ | dangling: <reason> | skipped: another project | unchecked]
+//!   <out|in> <type> <name, else written> | <path>:<line>[ | at <section>][ | as <written>][ | kind <kind>][ | when <when>][ | dangling: <reason> | skipped: another project | unchecked]
 //!   links <o> out, <i> in[; left out: <g> generated, <t> archived (--archive)]
 //! ```
 //!
 //! `name`: the other end, its ID else its path; `at`: the nested section
 //! that holds the link or that it lands on; `as`: the written form when it
-//! is not the name of the node it names.
+//! is not the name of the node it names; `kind`, `when`: a labelled edge's.
 
 use serde::Serialize;
 use specengine_core::check::{Endpoint, LinkState, NodeAt, SpecGraph};
-use specengine_model::{Direction, LinkOrigin, is_weak_link};
+use specengine_model::{Direction, EdgeLabel, LinkOrigin, is_weak_link};
 
 use crate::corpus::{Admission, LeftOut};
 use crate::one_line;
@@ -72,6 +72,10 @@ pub struct ShownLink {
     /// Why it dangles, or a remark on a resolved link (an anchor naming
     /// nothing).
     pub reason: Option<String>,
+    /// A labelled edge's kind.
+    pub kind: Option<String>,
+    /// A labelled edge's condition.
+    pub when: Option<String>,
     /// The name of the node its written form names, when resolved.
     named: Option<String>,
     /// Its byte offset: orders links on one line.
@@ -114,6 +118,7 @@ pub(crate) fn node_links(
                 (name, named)
             }
         };
+        let (kind, when) = label_strings(edge.edge.as_ref());
         ShownLink {
             direction,
             link_type: edge.link_type.clone(),
@@ -125,6 +130,8 @@ pub(crate) fn node_links(
             line: edge.line,
             state: edge.state(),
             reason: edge.reason().map(str::to_owned),
+            kind,
+            when,
             named,
             offset: edge.offset,
         }
@@ -203,8 +210,31 @@ pub(crate) fn link_line(link: &ShownLink) -> String {
     {
         line.push_str(&format!(" | as {}", one_line(&link.written)));
     }
+    line.push_str(&label_suffix(link.kind.as_deref(), link.when.as_deref()));
     line.push_str(&state_suffix(link.state, link.reason.as_deref()));
     line
+}
+
+/// A label's kind and condition as strings. Also `spec graph`'s.
+pub(crate) fn label_strings(label: Option<&EdgeLabel>) -> (Option<String>, Option<String>) {
+    label.map_or((None, None), |label| {
+        (
+            label.kind.map(|kind| kind.as_str().to_owned()),
+            label.when.clone(),
+        )
+    })
+}
+
+/// ` | kind <kind>`, ` | when <when>`, each when set. Also `spec graph`'s.
+pub(crate) fn label_suffix(kind: Option<&str>, when: Option<&str>) -> String {
+    let mut suffix = String::new();
+    if let Some(kind) = kind {
+        suffix.push_str(&format!(" | kind {}", one_line(kind)));
+    }
+    if let Some(when) = when {
+        suffix.push_str(&format!(" | when {}", one_line(when)));
+    }
+    suffix
 }
 
 /// ` | dangling: <reason>`, ` | skipped: another project`, ` | unchecked`;
@@ -227,7 +257,9 @@ pub(crate) struct LinksJson<'a> {
     omitted: usize,
 }
 
-/// One link as JSON: `spec show --links`'s, and `spec health`'s.
+/// One link as JSON: `spec show --links`'s, and `spec health`'s. `kind` and
+/// `when` are the one exception to "every key present": a plain link has
+/// neither, so the documents of a corpus without labels keep their keys.
 #[derive(Serialize)]
 pub(crate) struct LinkJson<'a> {
     #[serde(rename = "type")]
@@ -240,6 +272,10 @@ pub(crate) struct LinkJson<'a> {
     line: usize,
     state: &'static str,
     reason: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    when: Option<&'a str>,
 }
 
 /// The first `kept` links (outgoing, then incoming) as JSON; `omitted`:
@@ -266,5 +302,7 @@ pub(crate) fn link_json(link: &ShownLink) -> LinkJson<'_> {
         line: link.line,
         state: link.state.as_str(),
         reason: link.reason.as_deref(),
+        kind: link.kind.as_deref(),
+        when: link.when.as_deref(),
     }
 }

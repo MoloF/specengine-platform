@@ -133,7 +133,7 @@ enum Command {
         /// Any form `show` takes.
         #[arg(value_name = "REF")]
         reference: String,
-        /// Follow the impact table: depends_on, derived_from, verifies, uses_term back, constrains forward.
+        /// Follow the impact table: depends_on, derived_from, verifies, uses_term, uses back; constrains, supplies forward.
         #[arg(long)]
         impact: bool,
         /// Follow only this link type (repeatable): outgoing; with --impact in its table direction, else incoming.

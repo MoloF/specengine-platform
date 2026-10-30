@@ -6,16 +6,17 @@
 //! The types followed (one table for every project, `specengine-model`):
 //! by default every strong type outgoing (`mentions` not followed); with
 //! `--impact` what an edit reaches: `depends_on`, `derived_from`,
-//! `verifies`, `uses_term` incoming, `constrains` outgoing. `--type T`
-//! replaces the set: outgoing; with `--impact` in its table direction,
-//! else incoming. `--depth N` stops at distance N; default unbounded.
+//! `verifies`, `uses_term`, `uses` incoming, `constrains`, `supplies`
+//! outgoing. `--type T` replaces the set: outgoing; with `--impact` in its
+//! table direction, else incoming (so `--impact --type follows` walks the
+//! flow forward). `--depth N` stops at distance N; default unbounded.
 //! Edges written in a file the live rule leaves out are not followed,
 //! counted. A dangling, `project:` or unchecked edge of a followed type is
 //! listed, never followed.
 //!
 //! ```text
 //! <distance> <name> | <kind or -> | <title or -> | <path>:<line>[ | archived]
-//! <src> --<type>--> <dst> | <path>:<line>[ | dangling: <reason> | skipped: another project | unchecked]
+//! <src> --<type>--> <dst> | <path>:<line>[ | kind <kind>][ | when <when>][ | dangling: <reason> | skipped: another project | unchecked]
 //! nodes <n>, edges <e>[; left out: <g> generated, <t> archived (--archive)]
 //! [truncated: <k> of <n> nodes and <j> of <m> edges not shown; lower --depth or add --type]
 //! ```
@@ -37,7 +38,7 @@ use specengine_model::{
 
 use crate::cap::{View, lines_within};
 use crate::corpus::{Admission, LeftOut, depth_of, holders_warning, indexed, locate};
-use crate::links::state_suffix;
+use crate::links::{label_strings, label_suffix, state_suffix};
 use crate::project::discover;
 use crate::search::notes;
 use crate::show::classify;
@@ -126,6 +127,10 @@ pub struct GraphEdge {
     pub line: usize,
     pub state: LinkState,
     pub reason: Option<String>,
+    /// A labelled edge's kind.
+    pub kind: Option<String>,
+    /// A labelled edge's condition.
+    pub when: Option<String>,
 }
 
 /// `spec graph`: updates the index, then walks from `REF`.
@@ -375,6 +380,7 @@ fn edge_of(graph: &SpecGraph<'_>, index: usize) -> GraphEdge {
         Endpoint::Nodes(nodes) => nodes.first().map(|&node| graph.name(node)),
         _ => None,
     };
+    let (kind, when) = label_strings(edge.edge.as_ref());
     GraphEdge {
         src: name(&edge.source),
         link_type: edge.link_type.clone(),
@@ -384,6 +390,8 @@ fn edge_of(graph: &SpecGraph<'_>, index: usize) -> GraphEdge {
         line: edge.line,
         state: edge.state(),
         reason: edge.reason().map(str::to_owned),
+        kind,
+        when,
     }
 }
 
@@ -413,12 +421,13 @@ pub(crate) fn node_line(node: &GraphNode) -> String {
 fn edge_line(edge: &GraphEdge) -> String {
     let end = |name: &Option<String>| one_line(name.as_deref().unwrap_or(&edge.written));
     format!(
-        "{} --{}--> {} | {}:{}{}",
+        "{} --{}--> {} | {}:{}{}{}",
         end(&edge.src),
         one_line(&edge.link_type),
         end(&edge.dst),
         one_line(&edge.path),
         edge.line,
+        label_suffix(edge.kind.as_deref(), edge.when.as_deref()),
         state_suffix(edge.state, edge.reason.as_deref())
     )
 }
@@ -512,6 +521,10 @@ struct EdgeJson<'a> {
     line: usize,
     state: &'static str,
     reason: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    kind: Option<&'a str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    when: Option<&'a str>,
 }
 
 fn view(outcome: &GraphOutcome) -> GraphJson<'_> {
@@ -540,13 +553,16 @@ fn view(outcome: &GraphOutcome) -> GraphJson<'_> {
                 line: edge.line,
                 state: edge.state.as_str(),
                 reason: edge.reason.as_deref(),
+                kind: edge.kind.as_deref(),
+                when: edge.when.as_deref(),
             })
             .collect(),
     }
 }
 
 /// The same document as [`crate::render_json`]: every key present, absent =
-/// `null`.
+/// `null`, but an edge's `kind` and `when`, only on a labelled edge, so the
+/// document of a corpus without labels keeps its keys.
 impl Serialize for GraphOutcome {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         view(self).serialize(serializer)

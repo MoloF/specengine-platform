@@ -1,0 +1,65 @@
+{
+  "prefixes": ["KIT", "LEG"],
+  "kinds": ["kit", "leg"],
+  "files": {
+    "docs/spec/kit-oil.md": {
+      "id": "KIT-OIL",
+      "kind": "kit",
+      "title": "The oil",
+      "links": ["KIT-OIL supplies frontmatter KIT-TORCH"]
+    },
+    "docs/spec/kit-torch.md": {
+      "id": "KIT-TORCH",
+      "kind": "kit",
+      "title": "The torch",
+      "links": []
+    },
+    "docs/spec/leg-draw.md": {
+      "id": "LEG-DRAW",
+      "kind": "leg",
+      "title": "The draw",
+      "links": [
+        "LEG-DRAW follows frontmatter LEG-START",
+        "LEG-DRAW follows frontmatter LEG-SCORE | kind repeat | when rounds remain"
+      ]
+    },
+    "docs/spec/leg-end.md": {
+      "id": "LEG-END",
+      "kind": "leg",
+      "title": "The end",
+      "links": ["LEG-END follows frontmatter LEG-SCORE | kind alternative | when no round remains"]
+    },
+    "docs/spec/leg-fall.md": {
+      "id": "LEG-FALL",
+      "kind": "leg",
+      "title": "The fall",
+      "links": [
+        "LEG-FALL follows frontmatter LEG-RUN | kind alternative | when the torch goes out",
+        "LEG-FALL uses frontmatter KIT-TORCH"
+      ]
+    },
+    "docs/spec/leg-run.md": {
+      "id": "LEG-RUN",
+      "kind": "leg",
+      "title": "The run",
+      "links": [
+        "LEG-RUN follows frontmatter LEG-DRAW",
+        "LEG-RUN follows frontmatter LEG-FALL | kind repeat | when the torch is relit",
+        "LEG-RUN uses frontmatter KIT-TORCH"
+      ]
+    },
+    "docs/spec/leg-score.md": {
+      "id": "LEG-SCORE",
+      "kind": "leg",
+      "title": "The score",
+      "links": ["LEG-SCORE follows frontmatter LEG-RUN | when the runner arrives"]
+    },
+    "docs/spec/leg-start.md": {
+      "id": "LEG-START",
+      "kind": "leg",
+      "title": "The start",
+      "sections": ["LEG-START-LINE"],
+      "links": []
+    }
+  }
+}

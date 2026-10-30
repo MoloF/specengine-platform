@@ -16,7 +16,11 @@
 //! three layer C snapshot tables; docs/features/roadmap-items.md (RD-2)
 //! makes it `INDEX_FORMAT` 12 for the typed `release`, `priority` and
 //! `estimate` (`fields`, no longer `extra`), and the dump reads
-//! `fixtures/roadmap-a` beside spec-a and spec-b, the corpus that sets them.
+//! `fixtures/roadmap-a` beside spec-a and spec-b, the corpus that sets them;
+//! docs/features/flow-links.md (AC-08) makes it `INDEX_FORMAT` 13 for a
+//! `follows` that no longer gives `unknown-link-type` and for the label on a
+//! reference (`edge`, `edge.kind`, `edge.when`), and the dump reads
+//! `fixtures/flow-relay`, the corpus that sets them.
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -139,9 +143,10 @@ fn other_worktrees_read_not_indexed_until_they_are_updated() {
     );
 }
 
-/// The corpora of the format dump: spec-a, spec-b and, since
-/// `INDEX_FORMAT` 12, roadmap-a (the typed plan keys).
-const DUMPED: [&str; 3] = ["spec-a", "spec-b", "roadmap-a"];
+/// The corpora of the format dump: spec-a, spec-b, since `INDEX_FORMAT` 12
+/// roadmap-a (the typed plan keys) and since 13 flow-relay (the label of a
+/// `follows` item).
+const DUMPED: [&str; 4] = ["spec-a", "spec-b", "roadmap-a", "flow-relay"];
 
 /// The dump of [`DUMPED`], each in a fresh DB of its own with the stub
 /// analyzer's code rows (`code_stub`), with the scratch root masked: what
@@ -286,6 +291,9 @@ const SERIALISED: &[&str] = &[
     "nodes[].fields.adrs[].id",
     "nodes[].fields.refs[].id",
     "nodes[].fields.links.*[].id",
+    "nodes[].fields.links.*[].edge",
+    "nodes[].fields.links.*[].edge.kind",
+    "nodes[].fields.links.*[].edge.when",
     "nodes[].fields.raised_by.*",
     "nodes[].fields.release",
     "nodes[].fields.priority",
@@ -306,6 +314,9 @@ const SERIALISED: &[&str] = &[
     "links[].dst.span",
     "links[].dst.path",
     "links[].dst.anchor",
+    "links[].dst.edge",
+    "links[].dst.edge.kind",
+    "links[].dst.edge.when",
     "links[].dst (path, frontmatter).path",
     "links[].dst (path, frontmatter).anchor",
     "links[].dst (path, frontmatter).span",
@@ -433,15 +444,15 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/roadmap-items.md RD-2 M2 (`INDEX_FORMAT` kept at 11): the
-/// typed plan keys make `INDEX_FORMAT` 12, and the history is the eleven
-/// earlier lines, verbatim (layer-c-resolve's `11` among them), followed by
-/// exactly one `12 <hash>` line (no earlier `12`). Replaces layer-c's
-/// format-11 pin, whose line stays verbatim. M: `INDEX_FORMAT` kept at 11;
+/// docs/features/flow-links.md AC-08 (`INDEX_FORMAT` kept at 12): a plain
+/// `follows` and the label make `INDEX_FORMAT` 13, and the history is the
+/// twelve earlier lines, verbatim (roadmap-items' `12` among them), followed
+/// by exactly one `13 <hash>` line (no earlier `13`). Replaces roadmap-items'
+/// format-12 pin, whose line stays verbatim. M: `INDEX_FORMAT` kept at 12;
 /// an earlier line edited.
 #[test]
-fn roadmap_items_pin_format_12_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 12);
+fn flow_links_pin_format_13_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 13);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -462,11 +473,12 @@ fn roadmap_items_pin_format_12_with_one_new_history_line() {
         "9 8c4c50d29560a9d26db29690a4d03de1b5a453910d8cb646809c433cf2a331c1",
         "10 59e87cae8512cc3a5391034deb0531b0fa2c4df8c16b095dc3de95a9e4146f4c",
         "11 1faa605a4770475ee82fbf05ba8a01ff12724866e707482d9454e98d6cb6f5c1",
+        "12 e574d6ba1be0cf469ce377f2312a120f53d38e77b1ed5184ba75d5ce0c190834",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "layer-c's history plus exactly one new line:\n{history}"
+        "roadmap-items' history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -475,15 +487,96 @@ fn roadmap_items_pin_format_12_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "12", "the new line is format 12: {last}");
+    assert_eq!(format, "13", "the new line is format 13: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("12 ")).count(),
+        lines.iter().filter(|line| line.starts_with("13 ")).count(),
         1,
-        "no earlier `12` line"
+        "no earlier `13` line"
+    );
+}
+
+/// The stored `diagnostics` rows of a code, through a raw connection.
+fn stored_diagnostics(db: &Path, code: &str) -> i64 {
+    let conn = rusqlite::Connection::open(db).expect("raw connection");
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .expect("busy timeout");
+    conn.query_row(
+        "SELECT count(*) FROM diagnostics WHERE code = ?1",
+        [code],
+        |row| row.get(0),
+    )
+    .expect("count the rows")
+}
+
+/// docs/features/flow-links.md AC-08, "Index": an index of stamp 12 holds
+/// `unknown-link-type` for a plain `follows`, and an unchanged file is
+/// re-parsed only on a new stamp. Such an index, raised here by a raw
+/// connection (the stored row of a real older build, the format it would
+/// have left), reads `NotIndexed`, loses the row on the next update and
+/// ends equal to a fresh index, the file untouched. M13 (stamp 12): the
+/// stamp matches, nothing is re-parsed, and the row stays.
+#[test]
+fn a_stamp_12_index_loses_its_unknown_link_type_row_on_the_next_read() {
+    let scratch = Scratch::new("format-12");
+    let corpus = Corpus::copy_of("flow-relay", &scratch, "wt");
+    let db = scratch.db("index");
+    let mut index = corpus.open(&db);
+    corpus.update(&mut index);
+    let fresh = index.dump().expect("dump");
+    assert_eq!(stored_diagnostics(&db, "unknown-link-type"), 0);
+
+    let path = "docs/spec/leg-start.md";
+    {
+        let conn = rusqlite::Connection::open(&db).expect("raw connection");
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .expect("busy timeout");
+        let row = serde_json::json!({
+            "code": "unknown-link-type",
+            "severity": "warning",
+            "line": 8,
+            "message": "link type `follows` is not one of the shared link types; kept",
+        });
+        let added = conn
+            .execute(
+                "INSERT INTO diagnostics (file_id, ord, code, diagnostic) \
+                 SELECT file_id, 99, 'unknown-link-type', ?1 FROM files WHERE path = ?2",
+                [row.to_string().as_str(), path],
+            )
+            .expect("the row of an older build");
+        assert_eq!(added, 1, "one file");
+    }
+    rewrite_stamp(&db, "12");
+    assert_eq!(stored_diagnostics(&db, "unknown-link-type"), 1);
+
+    let file = corpus.root.join(path);
+    let bytes = std::fs::read(&file).expect("the file");
+    let modified = std::fs::metadata(&file)
+        .and_then(|meta| meta.modified())
+        .expect("mtime");
+
+    assert_not_indexed(index.files(), "files() of stamp 12");
+    let report = corpus.update(&mut index);
+    assert!(report.reparsed_all, "the stamp re-parses all: {report:?}");
+    assert_eq!(report.parsed, report.walked, "{report:?}");
+
+    assert_eq!(
+        stored_diagnostics(&db, "unknown-link-type"),
+        0,
+        "the row is gone"
+    );
+    assert_eq!(index.dump().expect("dump"), fresh, "after the recreation");
+    assert_equals_fresh(&index, &corpus, &scratch, "the stamp 12 index");
+    assert_eq!(std::fs::read(&file).expect("the file"), bytes);
+    assert_eq!(
+        std::fs::metadata(&file)
+            .and_then(|meta| meta.modified())
+            .expect("mtime"),
+        modified,
+        "the file is untouched"
     );
 }
 

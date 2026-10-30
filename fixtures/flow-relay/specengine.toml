@@ -1,0 +1,12 @@
+# Fixture corpus flow-relay: an invented game, a torch relay run in rounds.
+# Its flow is a retry loop (RUN, FALL, RUN) and a round loop (DRAW, RUN,
+# SCORE, DRAW), both in `follows`, so no finding may read them
+# (docs/features/flow-links.md, ADR-0055). No kind here occurs in a literal
+# the word scans read.
+
+[project]
+slug = "flow-relay"
+
+[ids]
+LEG = { kind = "leg", shape = "name" }
+KIT = { kind = "kit", shape = "name" }

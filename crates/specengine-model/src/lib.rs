@@ -29,12 +29,12 @@ pub mod value;
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use grammar::{Canon, Definition, Found, Homoglyph};
 pub use link::{
-    AMENDS, Direction, IMPACT_LINK_TYPES, LINK_TYPES, Link, LinkOrigin, LinkTarget, MENTIONS,
-    graph_direction, impact_direction, is_weak_link,
+    AMENDS, Direction, FOLLOWS, IMPACT_LINK_TYPES, LINK_TYPES, Link, LinkOrigin, LinkTarget,
+    MENTIONS, graph_direction, impact_direction, is_weak_link,
 };
 pub use node::{Anchor, AnchorOrigin, ExtraEntry, Fields, Node, ParentRef};
 pub use parsed::ParsedFile;
-pub use reference::{CanonTarget, PathTarget, RefForm, Reference};
+pub use reference::{CanonTarget, EdgeKind, EdgeLabel, PathTarget, RefForm, Reference};
 pub use scheme::{IdScheme, IdScope, PrefixSpec, SchemeError, SchemeField, SchemeProblem, Shape};
 pub use script::IdScript;
 pub use span::Span;

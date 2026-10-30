@@ -6,7 +6,7 @@ use crate::reference::{PathTarget, Reference};
 use crate::span::Span;
 
 /// The closed, shared set of link types a `links:` map may declare.
-pub const LINK_TYPES: [&str; 12] = [
+pub const LINK_TYPES: [&str; 15] = [
     "derived_from",
     "depends_on",
     "constrains",
@@ -19,7 +19,17 @@ pub const LINK_TYPES: [&str; 12] = [
     "canon",
     "verifies",
     "adopts",
+    "follows",
+    "uses",
+    "supplies",
 ];
+
+/// The link of a later step to the one it comes after: a member of
+/// [`LINK_TYPES`] (spelled out there, as the daemon's domain scan reads
+/// that array's text), and the one type whose item may carry an
+/// [`EdgeLabel`](crate::reference::EdgeLabel) (ADR-0055). Cycles are
+/// allowed: `depends-cycle` reads `depends_on` alone.
+pub const FOLLOWS: &str = "follows";
 
 /// The link of a document that amends a live node until it is absorbed
 /// (06 §7; task spec `kind-amendment`): a member of [`LINK_TYPES`], the
@@ -58,14 +68,17 @@ impl Direction {
 /// The link types `spec graph --impact` follows, and which way: what an
 /// edit of a node reaches. One table for every project; any other type
 /// (`mentions`, `supersedes`, `revises`, `amends`, `answers`,
-/// `working_answer`, `canon`, `adopts`, an unknown declared type) is not
-/// followed.
-pub const IMPACT_LINK_TYPES: [(&str, Direction); 5] = [
+/// `working_answer`, `canon`, `adopts`, `follows`, an unknown declared
+/// type) is not followed: one edit of a step would reach every later step
+/// and, over a loop, the whole loop (ADR-0055).
+pub const IMPACT_LINK_TYPES: [(&str, Direction); 7] = [
     ("depends_on", Direction::In),
     ("derived_from", Direction::In),
     ("verifies", Direction::In),
     ("uses_term", Direction::In),
     ("constrains", Direction::Out),
+    ("uses", Direction::In),
+    ("supplies", Direction::Out),
 ];
 
 /// `mentions` is the one weak link type; every declared type, an unknown

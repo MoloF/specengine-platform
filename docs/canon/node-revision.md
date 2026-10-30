@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-31
 ---
 
 # Node revision and meaning hash
 
-A node's **revision** is what a marker's `@N` (ADR-0018) and a lock entry's `rev` meet; its **meaning hash** `norm_hash` is what `spec.lock`'s `spec_hash` holds (05 §3.5). Both are pure core functions of one parse (`crates/specengine-core/README.md` "API"): no file is written, nothing is blocked (ADR-0012). The rule is ADR-0040 (`docs/canon/architecture.md#layout`). The recipe is frozen as `specengine-norm/v1`: any change to the bytes below is `specengine-norm/v2` and a re-lock; `crates/specengine-core/tests/norm_recipe.rs` pins v1 (golden inputs and hashes).
+A node's **revision** is what a marker's `@N` (ADR-0018) and a lock entry's `rev` meet; its **meaning hash** `norm_hash` is what `spec.lock`'s `spec_hash` holds (05 §3.5). Both are pure core functions of one parse (`crates/specengine-core/README.md` "API"): no file is written, nothing is blocked (ADR-0012). The rule is ADR-0040 (`docs/canon/architecture.md#layout`). The recipe is frozen as `specengine-norm/v1`: any change to the bytes below is `specengine-norm/v2` and a re-lock, but not a rendering for input that was null (`flow-links.md` "Hash"); `crates/specengine-core/tests/norm_recipe.rs` pins v1 (golden inputs and hashes).
 
 ## Revision
 
@@ -27,7 +27,7 @@ A document's revision is its front-matter `rev:`, a section's the `rev=N` attrib
 
 Core `revision(parsed, ord) -> Revision {Written(u32), Unwritten, Unreadable}`, `number()`: `Written(n)` n, `Unwritten` 1, `Unreadable` none. **Unreadable**: no node at `ord`; a section whose heading `attrs` hold `rev` and whose `Node.rev` is none; a document whose front-matter failed (`front_matter_failure`) or whose `extra` holds `rev` (a bad, repeated or mistyped value is kept there); a `Node.rev` outside the range (a parse of another format). The model's `Node.rev` holds only a written, readable revision: `spec show` and `tree` print ` | rev <n>` only then, JSON `rev` is `null` otherwise.
 
-`bad-rev` stays a warning, no new code. The reference grammar is unchanged: `R-1@0` parses and is no finding.
+`bad-rev` stays a warning. The reference grammar is unchanged: `R-1@0` parses and is no finding.
 
 ## Raising
 
@@ -71,6 +71,7 @@ Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (the
 ```
 <type> ref:[<project>:][<scope>/]<id>[#<section>][@<rev>]   the ID Latin (an alias prefix as written), rev decimal,
                                                             a wiki label and form dropped
+<a labelled item's ref form> | <kind or ->[ | <when>]
 <type> path:<path>[#<anchor>]                                a canon: path target
 ```
 
@@ -85,7 +86,7 @@ NORM_RECIPE = "specengine-norm/v1"
 norm_hash   = b3_hash(input) = "b3:" + 64 lowercase hex BLAKE3        # specengine_store::b3_hash
 ```
 
-Core `NORM_RECIPE`, `norm_input(parsed, bytes, ord) -> Option<Vec<u8>>`, `parsed` the parse of `bytes`, `None` null. Pure: no I/O, no hash crate. Linear in the node's own pieces and links: only they are read as UTF-8 (a document also its body, once), never the whole file per node; 50 000 sections of one file in ~0.15 s (debug).
+Core `NORM_RECIPE`, `norm_input(parsed, bytes, ord) -> Option<Vec<u8>>`, `parsed` the parse of `bytes`, `None` null. Pure: no I/O, no hash crate. Linear in the node's own pieces and links: only they are read as UTF-8 (a document also its body, once), never the whole file per node.
 
 Example, `fixtures/spec-a/docs/spec/movement/sprint.md`. RULE-SPRINT-COST (`## Cost {#RULE-SPRINT-COST rev=3}`, its nested `### Empty tank {#EDGE-SPRINT-EMPTY .playtest}` cut), `b3:bb97b1d5…1623ca4d`:
 
@@ -119,7 +120,6 @@ frame("Hold the sprint key to run; each second drains stamina (see\n[[MEC-STAMIN
 
 - Index: `nodes.norm_hash` after `own_text`, NULL when null, from the parse the row stores (`crates/specengine-store/README.md`). No read API yet; `spec lock accept` hashes the node's `HEAD` blob itself (`spec-lock-accept.md`).
 - `spec show`: ` | norm b3:<hex>` right before ` | span`, omitted when null; JSON `norm_hash` between `sections` and `span_hash`, a string or `null` (`spec-cli-read.md`). From a fresh parse of the bytes printed, never the stored column: a document's covers its own text and links, its `span_hash` the whole file printed.
-- `spec bundle`'s headers carry neither norm nor span.
 - The same key in MCP `get_node` (`docs/canon/mcp-read.md`), the daemon's show JSON and the UI's provisional `ShownNode.norm_hash`. A proposal's base stays `span_hash`: a `norm_hash` sent as `base` meets the stale-base refusal naming the current `span_hash` (untested).
 
 Determinism: the same bytes under the same `[ids]` give the same input from any root, cwd or creation order; an `[ids]` kind or width change keeps every input.

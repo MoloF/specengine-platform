@@ -628,6 +628,7 @@ pub(crate) fn parent_reference(
             form: Default::default(),
             label: None,
             span: None,
+            edge: None,
         },
         |found| found.reference,
     );

@@ -230,7 +230,13 @@ pub use worktree::{
 /// 12: the typed front-matter keys `release`, `priority` and `estimate`
 /// (`fields.release`, `fields.priority`, `fields.estimate`), no longer
 /// kept in `extra` (canon `spec-roadmap`, "Items").
-pub const INDEX_FORMAT: u32 = 12;
+///
+/// 13: the shared link types `follows`, `uses`, `supplies` and a
+/// reference's `edge` (`edge.kind`, `edge.when`), in the stored JSON of
+/// `links` and `fields.links`; no column. A stored row holds
+/// `unknown-link-type` for a plain `follows`, and an unchanged file is
+/// re-parsed only on a new stamp (`docs/features/flow-links.md`, "Index").
+pub const INDEX_FORMAT: u32 = 13;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

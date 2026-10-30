@@ -30,6 +30,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/decision-staging.md](canon/decision-staging.md) Decision staging: UI prepares, terminal confirms · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/documentation-system.md](canon/documentation-system.md) Documentation System: Constant Cost at Corpus Growth · docs · tier 2
 - [docs/canon/drift-screens.md](canon/drift-screens.md) Drift screens in the web UI · ui · tier 2
+- [docs/canon/flow-links.md](canon/flow-links.md) Flow links: follows, uses, supplies and labelled edges · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · tier 2
 - [docs/canon/gate.md](canon/gate.md) Task gate: the write hook · crates/specengine-cli, plugin · tier 2
 - [docs/canon/health-code.md](canon/health-code.md) Health's code rows: assumes and unbound · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http · tier 2
 - [docs/canon/health-drift.md](canon/health-drift.md) Health's row 6: drift · crates/specengine-cli, crates/specengine-http, ui · tier 2

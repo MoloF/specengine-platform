@@ -4,14 +4,18 @@
 //! knows, targets merged and de-duplicated, dangling and `project:` links
 //! not followed, cycles, "open" by links (an `answers` on a section within
 //! the question, a Tier 3 `answers`), a dangling working answer — and the
-//! narrow `[budgets] bundle_node` reader.
+//! narrow `[budgets] bundle_node` reader. docs/features/flow-links.md adds
+//! the five flow rows of layer 7 (AC-05, core half).
 
 mod common;
 
-use common::check::Config;
+use common::check::{Config, fixture_input};
+use common::fixture;
 use specengine_core::check::{
-    BundleLayer, BundleLayers, NodeAt, SpecGraph, bundle_layers, bundle_node_from_toml,
+    BUNDLE_LINK_TYPES, BundleLayer, BundleLayers, NodeAt, SpecGraph, bundle_layers,
+    bundle_node_from_toml,
 };
+use specengine_model::Direction;
 
 /// Kinds no fixture and no rule uses; `CHK` is feature-scoped.
 const TOML: &str = "\
@@ -192,6 +196,104 @@ fn the_layers_follow_link_types_directions_and_scopes_only() {
         .unwrap();
     let edge = &graph.edges()[ask2.working_answer.expect("a working answer edge")];
     assert_eq!(edge.written, "GUESS-99");
+}
+
+/// docs/features/flow-links.md: the table is the seven rows it was and the
+/// five flow rows: `follows` both ways, `supplies` both ways, `uses`
+/// outgoing only. M8: no `("follows", In)`; M9: a `("uses", In)` row.
+#[test]
+fn the_table_holds_the_flow_rows() {
+    use BundleLayer::{Criteria, Decisions, Neighbours, Terms};
+    use Direction::{In, Out};
+    let mut got = BUNDLE_LINK_TYPES.to_vec();
+    got.sort();
+    let mut want = vec![
+        (Criteria, "verifies", In),
+        (Decisions, "canon", In),
+        (Neighbours, "depends_on", Out),
+        (Neighbours, "constrains", Out),
+        (Neighbours, "constrains", In),
+        (Neighbours, "derived_from", Out),
+        (Terms, "uses_term", Out),
+        (Neighbours, "follows", Out),
+        (Neighbours, "follows", In),
+        (Neighbours, "uses", Out),
+        (Neighbours, "supplies", Out),
+        (Neighbours, "supplies", In),
+    ];
+    want.sort();
+    assert_eq!(got, want);
+}
+
+/// `(name, via)` of the neighbours of `name` in `corpus`.
+fn neighbours(corpus: &str, name: &str) -> Vec<(String, Vec<String>)> {
+    let (config, input) = fixture_input(&fixture(corpus));
+    let graph = SpecGraph::new(&input, &config.scheme, &config.paths);
+    let layers = bundle_layers(&graph, &[find(&graph, name)]);
+    view(&graph, &layers)
+        .into_iter()
+        .filter(|(layer, _, _)| *layer == BundleLayer::Neighbours)
+        .map(|(_, name, via)| (name, via))
+        .collect()
+}
+
+fn rows(want: &[(&str, &[&str])]) -> Vec<(String, Vec<String>)> {
+    want.iter()
+        .map(|(name, via)| {
+            (
+                (*name).to_owned(),
+                via.iter().map(|pair| (*pair).to_owned()).collect(),
+            )
+        })
+        .collect()
+}
+
+/// docs/features/flow-links.md AC-05, core half, on the real fixture: the
+/// retry loop gives LEG-FALL both ways, the round loop LEG-SCORE incoming;
+/// a walk ends on the loops; incoming `uses` stays out of KIT-TORCH's, as
+/// incoming `depends_on` does; `supplies` reaches both ways. M8, M9.
+#[test]
+fn flow_neighbours_on_the_game_fixture() {
+    assert_eq!(
+        neighbours("flow-relay", "LEG-RUN"),
+        rows(&[
+            ("KIT-TORCH", &["uses out"]),
+            ("LEG-DRAW", &["follows out"]),
+            ("LEG-FALL", &["follows in", "follows out"]),
+            ("LEG-SCORE", &["follows in"]),
+        ])
+    );
+    assert_eq!(
+        neighbours("flow-relay", "KIT-TORCH"),
+        rows(&[("KIT-OIL", &["supplies in"])])
+    );
+    assert_eq!(
+        neighbours("flow-relay", "KIT-OIL"),
+        rows(&[("KIT-TORCH", &["supplies out"])])
+    );
+}
+
+/// The same table on the other project, from `[ids]` alone (ADR-0008).
+#[test]
+fn flow_neighbours_on_the_hire_fixture() {
+    assert_eq!(
+        neighbours("flow-hire", "JRN-RETURN"),
+        rows(&[
+            ("FEE-RIDE", &["supplies out"]),
+            ("JRN-NEAREST", &["follows in", "follows out"]),
+            ("JRN-RIDE", &["follows out"]),
+            ("JRN-SCAN", &["uses out"]),
+        ])
+    );
+    assert_eq!(
+        neighbours("flow-hire", "JRN-SCAN"),
+        Vec::<(String, Vec<String>)>::new(),
+        "incoming `uses` stays out"
+    );
+    assert_eq!(
+        neighbours("flow-hire", "FEE-RIDE"),
+        rows(&[("JRN-RETURN", &["supplies in"])])
+    );
 }
 
 /// A live `answers` onto a section within the question closes it; the
