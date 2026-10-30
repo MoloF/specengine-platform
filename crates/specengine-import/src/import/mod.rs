@@ -28,14 +28,14 @@ pub use code::{Citation, CodeScan};
 pub use header::{KeyEntry, MapOutcome, ValueEntry};
 pub use model::{
     DocumentDetail, Duplicate, Field, Form, HeaderForm, HyphenlessMatch, HyphenlessRole, IdChange,
-    Import, ImportLink, ImportRecord, Legacy, LinkProblem, Role, RowCause, RowWithoutId, Scope,
-    Token, TokenCause, UnclaimedToken,
+    Import, ImportLink, ImportRecord, Legacy, LinkProblem, NotTaken, Role, RowCause, RowWithoutId,
+    Scope, Token, TokenCause, UnclaimedToken,
 };
 
 use header::HeaderKeys;
 pub(crate) use header::field_table_entries;
 use ids::{Resolution, Resolved, Resolver};
-use lead_in::{LeadIn, Split};
+use lead_in::{ListSpan, Split};
 
 /// Runs the import over the corpus at `root`. Fails only when `root` itself
 /// cannot be read; every per-file problem becomes a [`Diagnostic`].
@@ -113,6 +113,9 @@ pub fn run_walked(root: &Path, config: &CensusConfig, walk: Walk) -> Import {
     import
         .records
         .sort_by(|a, b| (&a.path, a.line, a.form).cmp(&(&b.path, b.line, b.form)));
+    import
+        .not_taken
+        .sort_by(|a, b| (&a.path, a.line).cmp(&(&b.path, b.line)));
     settle(&mut import, pending, &config.import);
     import.code = code::scan(
         root,
@@ -538,20 +541,25 @@ impl DocumentRun<'_, '_> {
         }
     }
 
-    /// List items whose strong lead-in holds an ID, optionally followed by a
-    /// separator and a title. The text is taken from the line as written (HTML
-    /// comments kept), from where the span and separator end in the
-    /// comment-free line; the title, outside the text, from the span. No
-    /// item is read on a line opening inside a comment.
+    /// List items whose strong lead-in, read over soft line breaks
+    /// ([`lead_in::list_span`]), holds an ID on the item's line, optionally
+    /// followed by a separator and a title. The text is taken from the
+    /// closing line as written (HTML comments kept), from where the span
+    /// and separator end in the comment-free line; the title, outside the
+    /// text, from the span, each line break one space. No item is read on a
+    /// line opening inside a comment. An item opening a strong span with
+    /// `ids.like` text and yielding no record and no unmapped legacy ID is
+    /// not taken (`docs/features/import-lead-ins.md`).
     fn list_items(&self, scan: &Scan<'_>, table_lines: &HashSet<usize>) -> Vec<ListItem> {
         let resolver = self.resolver;
         let separators = &self.config.import.separators;
-        let nested_record = |visible: &str| {
-            list_lead_in(resolver, separators, visible)
+        let lines = &scan.lines;
+        let nested_record = |index: usize| {
+            list_lead_in(resolver, separators, lines, index, table_lines)
                 .is_some_and(|found| matches!(found.resolution, Resolution::Id(_)))
         };
         let mut items = Vec::new();
-        for (index, line) in scan.lines.iter().enumerate() {
+        for (index, line) in lines.iter().enumerate() {
             if line.opens_in_comment || table_lines.contains(&line.number) {
                 continue;
             }
@@ -559,34 +567,41 @@ impl DocumentRun<'_, '_> {
                 continue;
             };
             let Some(ListLeadIn {
-                lead,
+                span,
                 split,
                 resolution,
-            }) = list_lead_in(resolver, separators, visible)
+            }) = list_lead_in(resolver, separators, lines, index, table_lines)
             else {
+                if let Some((first, lead)) = lead_in::opened_lead(visible)
+                    && resolver.like_at(visible, first)
+                {
+                    items.push(ListItem::NotTaken {
+                        line: line.number,
+                        lead: lead.to_owned(),
+                    });
+                }
                 continue;
             };
             match resolution {
                 Resolution::Id(resolved) => {
                     // The title as written: a comment right after the
                     // separator or before the closing delimiter is kept.
-                    let title = split.title_from.and_then(|from| {
-                        let end = line.raw_offset_past(lead.content.end);
-                        line.raw
-                            .get(line.raw_offset(from)..end)
-                            .map(str::trim)
-                            .filter(|title| !title.is_empty())
-                            .map(str::to_owned)
-                    });
-                    let after =
-                        lead_in::after_span(visible, &lead, separators, split.stripped_inside);
-                    let first = line.raw.get(line.raw_offset(after)..).unwrap_or("");
+                    let title = split.title_from.and_then(|from| span.title(lines, from));
+                    let closing = &lines[span.closing];
+                    let closing_visible = closing.visible.as_deref().unwrap_or("");
+                    let after = lead_in::after_span(
+                        closing_visible,
+                        &span.lead,
+                        separators,
+                        split.stripped_inside,
+                    );
+                    let first = closing.raw.get(closing.raw_offset(after)..).unwrap_or("");
                     let mut text = first.trim_start_matches([' ', '\t']).to_owned();
-                    let mut last = line.number;
+                    let mut last = closing.number;
                     for continued in lead_in::item_continuation(
-                        &scan.lines,
-                        index,
-                        lead.marker_indent,
+                        lines,
+                        span.closing,
+                        span.lead.marker_indent,
                         table_lines,
                         &nested_record,
                     ) {
@@ -600,7 +615,7 @@ impl DocumentRun<'_, '_> {
                         title,
                         text: text.trim_end().to_owned(),
                         last,
-                        task_box: lead.task_box,
+                        task_box: span.lead.task_box,
                     });
                 }
                 Resolution::Unmapped(written) => items.push(ListItem::Unmapped {
@@ -613,7 +628,8 @@ impl DocumentRun<'_, '_> {
         items
     }
 
-    /// The records and unmapped legacy IDs of [`Self::list_items`].
+    /// The records, unmapped legacy IDs and lead-ins not taken of
+    /// [`Self::list_items`].
     fn list_records(
         &mut self,
         items: Vec<ListItem>,
@@ -650,13 +666,19 @@ impl DocumentRun<'_, '_> {
                     record_ids,
                 ),
                 ListItem::Unmapped { line, written } => self.unmapped(line, written),
+                ListItem::NotTaken { line, lead } => self.import.not_taken.push(NotTaken {
+                    path: self.relative.to_owned(),
+                    line,
+                    lead,
+                }),
             }
         }
     }
 
     /// Hyphenless matches and ID-like tokens over the body text the scanner
     /// sees, record IDs excluded. No lead-in or heading is read on a line
-    /// opening inside a comment.
+    /// opening inside a comment; a list item's lead-in is read over soft
+    /// line breaks ([`lead_in::list_span`]).
     fn text_tokens(
         &mut self,
         scan: &Scan<'_>,
@@ -664,7 +686,7 @@ impl DocumentRun<'_, '_> {
         mut record_ids: HashMap<usize, Vec<String>>,
     ) {
         let mut previous_blank = true;
-        for line in &scan.lines {
+        for (index, line) in scan.lines.iter().enumerate() {
             let Some(visible) = &line.visible else {
                 previous_blank = false;
                 continue;
@@ -674,20 +696,24 @@ impl DocumentRun<'_, '_> {
                 continue;
             }
             let heading = !line.opens_in_comment && markdown::heading_level(visible).is_some();
-            let lead = if heading || line.opens_in_comment || table_lines.contains(&line.number) {
-                None
-            } else {
-                lead_in::list_item(visible).or_else(|| {
-                    previous_blank
-                        .then(|| lead_in::paragraph(visible))
-                        .flatten()
-                })
-            };
+            let lead_start =
+                if heading || line.opens_in_comment || table_lines.contains(&line.number) {
+                    None
+                } else {
+                    lead_in::list_span(&scan.lines, index, table_lines)
+                        .map(|span| span.content_start())
+                        .or_else(|| {
+                            previous_blank
+                                .then(|| lead_in::paragraph(visible))
+                                .flatten()
+                                .map(|lead| {
+                                    let content = &visible[lead.content.clone()];
+                                    lead.content.start
+                                        + (content.len() - content.trim_start().len())
+                                })
+                        })
+                };
             previous_blank = heading;
-            let lead_start = lead.as_ref().map(|lead| {
-                let content = &visible[lead.content.clone()];
-                lead.content.start + (content.len() - content.trim_start().len())
-            });
             let excluded = record_ids.remove(&line.number).unwrap_or_default();
             self.tokens(line.number, visible, lead_start, excluded);
         }
@@ -1030,44 +1056,49 @@ enum ListItem {
         resolved: Resolved,
         title: Option<String>,
         text: String,
-        /// The line of the text's last line (the marker's when it has one).
+        /// The line of the text's last line, the line closing the lead-in
+        /// at least.
         last: usize,
         task_box: Option<bool>,
     },
     /// The lead-in holds an unmapped legacy ID.
     Unmapped { line: usize, written: String },
+    /// An ID-led lead-in no record was taken from ([`NotTaken`]).
+    NotTaken { line: usize, lead: String },
 }
 
 /// A list item's strong lead-in read as ID [separator [title]].
 struct ListLeadIn {
-    lead: LeadIn,
+    span: ListSpan,
     split: Split,
     /// An ID or an unmapped legacy prefix, never [`Resolution::None`].
     resolution: Resolution,
 }
 
-/// A list item whose strong lead-in holds a resolving ID candidate: the
+/// The list item at `index` of `lines` whose strong lead-in, read over soft
+/// line breaks, holds a resolving ID candidate on the item's line: the
 /// longest (a hyphenless one is none); `None` for any other line.
 fn list_lead_in(
     resolver: &Resolver<'_>,
     separators: &[String],
-    visible: &str,
+    lines: &[markdown::Line<'_>],
+    index: usize,
+    table_lines: &HashSet<usize>,
 ) -> Option<ListLeadIn> {
-    let lead = lead_in::list_item(visible)?;
-    let (split, resolution) = lead_in::splits(visible, &lead, separators)
-        .into_iter()
-        .find_map(|split| {
-            let candidate = &visible[split.id.clone()];
-            if resolver.is_hyphenless(candidate) {
-                return None;
-            }
-            match resolver.resolve_whole(candidate) {
-                Resolution::None => None,
-                resolution => Some((split, resolution)),
-            }
-        })?;
+    let visible = lines.get(index)?.visible.as_deref()?;
+    let span = lead_in::list_span(lines, index, table_lines)?;
+    let (split, resolution) = span.splits(separators).into_iter().find_map(|split| {
+        let candidate = visible.get(split.id.clone())?;
+        if resolver.is_hyphenless(candidate) {
+            return None;
+        }
+        match resolver.resolve_whole(candidate) {
+            Resolution::None => None,
+            resolution => Some((split, resolution)),
+        }
+    })?;
     Some(ListLeadIn {
-        lead,
+        span,
         split,
         resolution,
     })

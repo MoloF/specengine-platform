@@ -80,7 +80,8 @@ pub struct ImportRecord {
     pub role: Role,
     pub scope: Scope,
     /// A titled list item's title as written in its lead-in span, outside
-    /// `text` and `hash`.
+    /// `text` and `hash`; a span wrapped over lines reads each line break
+    /// with its blanks as one space (`docs/features/import-lead-ins.md`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
     /// Verbatim text: bytes as written, lines joined by LF.
@@ -91,7 +92,8 @@ pub struct ImportRecord {
     pub fields: Vec<Field>,
     /// `[first, last]`, 1-based source lines
     /// (`docs/canon/import.md` "Record model"): a row's line; a list item's
-    /// marker line to its text's last; a section's heading to its last
+    /// marker line to its text's last, the line closing its lead-in at
+    /// least; a section's heading to its last
     /// non-blank line; a document's every line. Detail only: no count reads it.
     pub extent: [usize; 2],
     /// The ID as written (legacy prefix and look-alikes as they stand).
@@ -115,6 +117,19 @@ pub struct Token {
     pub path: String,
     pub line: usize,
     pub token: String,
+}
+
+/// A list item opening, after an optional task box, a strong delimiter
+/// with `ids.like` text at its content's first non-blank character on the
+/// item's line, from which no record (either role) and no unmapped legacy ID
+/// was taken (`docs/features/import-lead-ins.md`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct NotTaken {
+    pub path: String,
+    pub line: usize,
+    /// The item's comment-free line from the opening delimiter through the
+    /// closing one, else to the line end, trailing blanks trimmed.
+    pub lead: String,
 }
 
 /// Why an ID-like token is not claimed.
@@ -277,6 +292,9 @@ pub struct Import {
     /// The other ID-like tokens, `unclaimed` and `feature-outside`.
     pub unclaimed: Vec<UnclaimedToken>,
     pub links: Vec<ImportLink>,
+    /// ID-led list lead-ins no record was taken from, in (path, line)
+    /// order; none with `[lists] lead_in` off.
+    pub not_taken: Vec<NotTaken>,
     pub code: CodeScan,
     pub diagnostics: Vec<Diagnostic>,
 }

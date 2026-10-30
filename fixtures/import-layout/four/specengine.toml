@@ -1,0 +1,15 @@
+# The "before" scheme of the import-layout/four fixture: the kiln log's own
+# `specengine.toml`, read by `specengine-eval layout --scheme`. Its roots
+# name a guide file the census config does not walk; its exclude is the
+# census config's.
+[project]
+name = "kiln"
+slug = "kiln"
+
+[paths]
+roots = ["kiln/log", "kiln/rules", "kiln/GUIDE.md"]
+exclude = ["kiln/log/old/**"]
+
+[ids]
+KF = { kind = "rule",      width = 2 }
+GZ = { kind = "criterion", width = 2, scope = "feature" }

@@ -6,7 +6,8 @@
     "hyphenless": {
       "definitions": 0,
       "mentions": 0
-    }
+    },
+    "not_taken": 0
   },
   "check": {
     "baseline": {

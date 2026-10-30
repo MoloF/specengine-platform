@@ -1,0 +1,116 @@
+{
+  "before": {
+    "definitions": 8,
+    "documents": 3,
+    "duplicates": 0,
+    "hyphenless": {
+      "definitions": 0,
+      "mentions": 0
+    },
+    "not_taken": 4
+  },
+  "check": {
+    "baseline": {
+      "entries": 17,
+      "per_code": {
+        "class-missing": 3,
+        "key-missing": 14
+      }
+    },
+    "emitter_findings": 0,
+    "enforce": "clean",
+    "findings": {
+      "class-missing": {
+        "before": 4,
+        "emitter": 0,
+        "layout": 0,
+        "source": 3
+      },
+      "key-missing": {
+        "before": 0,
+        "emitter": 0,
+        "layout": 0,
+        "source": 14
+      },
+      "mention-dangling": {
+        "before": 11,
+        "emitter": 0,
+        "layout": 0,
+        "source": 2
+      }
+    },
+    "observe": "observed",
+    "stale": 0
+  },
+  "code": {
+    "citations_to_moved": 0,
+    "moved_cited": 0
+  },
+  "dangling": {
+    "links": {
+      "after": 0,
+      "before": 0
+    },
+    "mentions": {
+      "after": 2,
+      "before": 11
+    }
+  },
+  "detail": {
+    "diagnostics": 0
+  },
+  "extents": {
+    "residue": 0,
+    "total": 8
+  },
+  "fields": {
+    "matched": 0,
+    "mismatched": 0
+  },
+  "hashes": {
+    "extra": 0,
+    "matched": 8,
+    "mismatched": 0,
+    "missing": 0
+  },
+  "header": {
+    "conflicts": 0,
+    "documents": 0,
+    "keys_dropped": 0,
+    "last_row_comment": 0,
+    "unparseable": 0
+  },
+  "index": {
+    "files": 10,
+    "links": 3,
+    "nodes": 11
+  },
+  "prose": {
+    "documents": 3,
+    "mismatched": 0
+  },
+  "reasons": {
+    "header_unparseable": 0,
+    "path_taken": 0,
+    "prefix_unknown": 0,
+    "reader_boundary": 0,
+    "section_fields": 0,
+    "slug": 0,
+    "unexplained": 0
+  },
+  "task_box": {
+    "carried": 0,
+    "dropped": 1
+  },
+  "titles": {
+    "matched": 6,
+    "mismatched": 0
+  },
+  "tree": {
+    "documents": 10,
+    "feature_documents": 1,
+    "moved": 0,
+    "record_files": 7,
+    "reshaped": 1
+  }
+}

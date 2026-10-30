@@ -476,8 +476,8 @@ fn ac01_the_longest_resolving_part_is_the_id() {
     }
 }
 
-/// AC-01, `docs/canon/import.md` "Titled lead-ins": the title is the span
-/// content after the ID and its separator as written: inline markup,
+/// AC-01, `docs/canon/import-lead-ins.md` "Titled lead-ins": the title is the
+/// span content after the ID and its separator as written: inline markup,
 /// escapes and a comment inside the span kept; the text is unaffected.
 #[test]
 fn ac01_the_title_keeps_markup_escapes_and_comments() {

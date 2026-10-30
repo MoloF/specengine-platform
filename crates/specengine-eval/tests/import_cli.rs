@@ -8,6 +8,9 @@
 //! root) and `fixtures/import-two`, scratch copies of them, and the AC-05
 //! copy generated at test time (non-Latin text from `\u{...}` escapes,
 //! `docs/canon/architecture.md` "Repository language").
+//! docs/features/import-lead-ins.md adds `records.not_taken`, the stderr
+//! suffix and `not_taken.json` on the kiln-log convention
+//! `fixtures/import-layout/four`: the section of that name below.
 //! The fixtures are only read; every run writes under a scratch `--out`.
 
 mod import_support;
@@ -894,9 +897,10 @@ fn out_inside_the_corpus_is_refused_and_nothing_is_created() {
 /// docs/features/import-records.md AC-09 plus `records.titled`,
 /// `records.per_form.document` and `references.by_document`
 /// (docs/features/import-gaps.md AC-09) and `references.by_home`
-/// (docs/features/import-homes.md "Output"); `*` is a map of anonymous
+/// (docs/features/import-homes.md "Output") and `records.not_taken`
+/// (docs/features/import-lead-ins.md "Data"); `*` is a map of anonymous
 /// labels.
-const WHITELIST: [&str; 51] = [
+const WHITELIST: [&str; 52] = [
     "documents/total",
     "documents/per_class/*",
     "front_matter/yaml",
@@ -913,6 +917,7 @@ const WHITELIST: [&str; 51] = [
     "records/total",
     "records/empty_text",
     "records/titled",
+    "records/not_taken",
     "records/per_form/table_row",
     "records/per_form/headerless_row",
     "records/per_form/list_item",
@@ -1274,7 +1279,11 @@ fn runs_are_deterministic_and_leave_the_fixtures_untouched() {
             "{name}"
         );
         let first_files = snapshot(&first.detail);
-        assert_eq!(first_files.len(), 10, "{name}: the ten detail files");
+        assert_eq!(
+            first_files.len(),
+            11,
+            "{name}: the eleven detail files (not_taken.json, docs/features/import-lead-ins.md)"
+        );
         assert_eq!(
             first_files,
             snapshot(&second.detail),
@@ -1723,6 +1732,113 @@ fn census_output_is_unchanged_by_the_import_keys() {
             "{name}: census detail files"
         );
     }
+}
+
+// ------------------------------------------ docs/features/import-lead-ins.md
+
+/// The kiln-log convention of docs/features/import-lead-ins.md.
+const LEAD_INS: &str = "import-layout/four";
+
+/// AC-02 "Data": the first stderr line ends in the not-taken count, the
+/// rest of the line as before; `four` counts 4, `import-one` and
+/// `import-two` 0.
+#[test]
+fn lead_ins_the_first_stderr_line_ends_in_the_not_taken_count() {
+    let scratch = Scratch::new("lead-ins-stderr");
+    let first_line = |name: &str| {
+        let out = scratch.join(&name.replace('/', "-"));
+        let output = run(&[
+            "import",
+            "--pilot",
+            fixture_dir(name).to_str().unwrap(),
+            "--out",
+            out.to_str().unwrap(),
+        ]);
+        envelope(&output);
+        stderr(&output)
+            .lines()
+            .next()
+            .unwrap_or_default()
+            .to_owned()
+    };
+    assert_eq!(
+        first_line(LEAD_INS),
+        "import [pilot]: 3 documents (0 skipped), 8 records: 0 table rows, 0 headerless rows, \
+         8 list items (6 titled), 0 sections, 0 documents; 4 ID-led lead-ins not taken"
+    );
+    for name in FIXTURES {
+        let line = first_line(name);
+        assert!(
+            line.starts_with("import [pilot]: ")
+                && line.ends_with(" documents; 0 ID-led lead-ins not taken"),
+            "{name}: {line}"
+        );
+    }
+}
+
+/// AC-02 / "Data": `records.not_taken` is a count outside `total` on the
+/// whitelist; stdout names none of the leads, paths or IDs of
+/// `not_taken.json` and `records.json`.
+#[test]
+fn lead_ins_stdout_counts_not_taken_and_names_no_lead() {
+    let scratch = Scratch::new("lead-ins-stdout");
+    let out = scratch.join("four");
+    let output = run(&[
+        "import",
+        "--pilot",
+        fixture_dir(LEAD_INS).to_str().unwrap(),
+        "--out",
+        out.to_str().unwrap(),
+    ]);
+    let envelope = envelope(&output);
+    let result = &envelope["result"];
+    assert_eq!(result["records"]["not_taken"], 4);
+    assert_eq!(result["records"]["total"], 8);
+    let mut keys = BTreeSet::new();
+    let mut labels = Vec::new();
+    leaves(result, "", &mut keys, &mut labels);
+    let whitelist: BTreeSet<String> = WHITELIST.iter().map(|path| (*path).to_owned()).collect();
+    let extra: Vec<&String> = keys.difference(&whitelist).collect();
+    assert!(extra.is_empty(), "not whitelisted: {extra:?}");
+    assert!(keys.contains("records/not_taken"));
+
+    let stdout = String::from_utf8(output.stdout.clone()).unwrap();
+    let detail = out.join("import/pilot");
+    let mut strings = BTreeSet::new();
+    for entry in read_json(&detail.join("not_taken.json"))
+        .as_array()
+        .unwrap()
+    {
+        strings.insert(entry["path"].as_str().unwrap().to_owned());
+        strings.insert(entry["lead"].as_str().unwrap().to_owned());
+    }
+    for record in read_json(&detail.join("records.json")).as_array().unwrap() {
+        strings.insert(record["id"].as_str().unwrap().to_owned());
+    }
+    assert!(strings.len() >= 14, "{strings:?}");
+    let leaked: Vec<&String> = strings
+        .iter()
+        .filter(|text| stdout.contains(text.as_str()))
+        .collect();
+    assert!(leaked.is_empty(), "corpus strings on stdout: {leaked:?}");
+}
+
+/// Determinism on `four`: two imports print the same result and write
+/// byte-identical detail files, `not_taken.json` among them; the fixture
+/// is untouched.
+#[test]
+fn lead_ins_two_imports_of_four_are_identical() {
+    let scratch = Scratch::new("lead-ins-determinism");
+    let fixture = fixture_dir(LEAD_INS);
+    let before = snapshot(&fixture);
+    let first = ImportRun::new(&fixture, &scratch, "four-1", &[]);
+    let second = ImportRun::new(&fixture, &scratch, "four-2", &[]);
+    assert_eq!(without_ms(&first.result), without_ms(&second.result));
+    let files = snapshot(&first.detail);
+    assert!(files.contains_key(Path::new("not_taken.json")));
+    assert_eq!(files.len(), 11, "the eleven detail files");
+    assert_eq!(files, snapshot(&second.detail));
+    assert_eq!(snapshot(&fixture), before, "the fixture is untouched");
 }
 
 // ---------------------------------------------------------------- AC-10

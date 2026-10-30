@@ -2,17 +2,37 @@
 //! (`docs/canon/import-layout.md` "Emitted configs"): the workspace's
 //! `toml` is built without `display`, so the text is written here. Keys are
 //! sorted at every level; root tables become `[sections]`, arrays of tables
-//! `[[sections]]` (also under a section), every other table is inline.
+//! `[[sections]]` (also under a section), every other table is inline;
+//! comment lines may stand right above a key of a root section.
 
 use toml::{Table, Value};
 
+/// A comment line written right above `key` in the root section
+/// `section`, after `# `.
+pub(super) struct Comment<'c> {
+    pub(super) section: &'c str,
+    pub(super) key: &'c str,
+    pub(super) line: String,
+}
+
 /// The TOML text of `table`, keys sorted, final LF.
 pub(super) fn write(table: &Table) -> String {
+    write_commented(table, &[])
+}
+
+/// [`write`] with `comments` above their keys, in their order.
+pub(super) fn write_commented(table: &Table, comments: &[Comment<'_>]) -> String {
     let mut out = String::new();
-    values(&mut out, table, true);
+    values(&mut out, table, true, &[]);
     for (key, value) in sorted(table) {
         match value {
-            Value::Table(inner) => section(&mut out, &[key], inner),
+            Value::Table(inner) => {
+                let above: Vec<&Comment<'_>> = comments
+                    .iter()
+                    .filter(|comment| comment.section == key)
+                    .collect();
+                section(&mut out, &[key], inner, &above);
+            }
             Value::Array(items) if is_table_array(items) => {
                 for item in items {
                     if let Value::Table(inner) = item {
@@ -43,7 +63,8 @@ fn is_table_array(items: &[Value]) -> bool {
 
 /// The `key = value` lines of a table: at the root, tables and arrays of
 /// tables are left to sections; inside a section, arrays of tables only.
-fn values(out: &mut String, table: &Table, root: bool) {
+/// Each comment naming a key written stands right above it.
+fn values(out: &mut String, table: &Table, root: bool, comments: &[&Comment<'_>]) {
     for (key, value) in sorted(table) {
         let sectioned = match value {
             Value::Table(_) => root,
@@ -51,6 +72,9 @@ fn values(out: &mut String, table: &Table, root: bool) {
             _ => false,
         };
         if !sectioned {
+            for comment in comments.iter().filter(|comment| comment.key == key) {
+                out.push_str(&format!("# {}\n", comment.line));
+            }
             out.push_str(&format!("{} = {}\n", bare_or_quoted(key), inline(value)));
         }
     }
@@ -69,17 +93,17 @@ fn separate(out: &mut String) {
     }
 }
 
-fn section(out: &mut String, path: &[&str], table: &Table) {
+fn section(out: &mut String, path: &[&str], table: &Table, comments: &[&Comment<'_>]) {
     separate(out);
     out.push_str(&format!("[{}]\n", header_path(path)));
-    values(out, table, false);
+    values(out, table, false, comments);
     nested_arrays(out, path, table);
 }
 
 fn array_section(out: &mut String, path: &[&str], table: &Table) {
     separate(out);
     out.push_str(&format!("[[{}]]\n", header_path(path)));
-    values(out, table, false);
+    values(out, table, false, &[]);
     nested_arrays(out, path, table);
 }
 
@@ -148,7 +172,7 @@ fn bare_or_quoted(key: &str) -> String {
 }
 
 /// A TOML basic string holding `text` exactly.
-fn basic_string(text: &str) -> String {
+pub(super) fn basic_string(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     out.push('"');
     for c in text.chars() {

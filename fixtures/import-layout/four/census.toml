@@ -1,0 +1,19 @@
+# Import config of the import-layout/four fixture
+# (docs/features/import-lead-ins.md): an invented kiln-log convention. A
+# rule's or a criterion's strong lead-in wraps onto the item's next lines;
+# four ID-led lead-ins yield no record (an unclosed span, a span cut by the
+# next item, a suffixed ID, a part note); the before scheme walks a guide
+# file this config does not. expected.json is the `layout` result without
+# the `*_ms` timings.
+[corpus]
+roots = ["kiln/log", "kiln/rules"]
+exclude = ["kiln/log/old/**"]
+[ids]
+regex = '^(?P<prefix>[A-Z]{2})-[0-9]{2}$'
+feature_prefixes = ["GZ"]
+[lists]
+lead_in = true
+separators = [":"]
+[layout]
+records = "kiln/atoms"
+features = "kiln/rules/glazes"

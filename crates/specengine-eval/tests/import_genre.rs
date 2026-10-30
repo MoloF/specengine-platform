@@ -27,6 +27,13 @@
 //! and `three` shows the home and the inherited values non-zero. The home
 //! step and the inherit writer live in files the walk already reads.
 //!
+//! docs/features/import-lead-ins.md (CR) extends the forbidden set to the
+//! fourth layout convention `fixtures/import-layout/four` (its census
+//! config, the `[paths]` roots and exclude of its before scheme, which the
+//! emitted scheme now keeps, and the prefixes of its run); `four` shows the
+//! lead-ins not taken non-zero. The wrapped-span reader and the scheme
+//! emitter live in files the walk already reads.
+//!
 //! docs/features/pilot-w.md AC-09 extends the scan to the eval `w` module
 //! and the forbidden set to both `fixtures/pilot-w/*` census configs and
 //! tasks configs (their globs, key, paths and `[tier1.paths]` values).
@@ -54,6 +61,9 @@ const LAYOUT_FIXTURES: [&str; 2] = ["import-layout/one", "import-layout/two"];
 
 /// The third layout convention, of docs/features/import-homes.md.
 const HOMES_FIXTURE: &str = "import-layout/three";
+
+/// The fourth layout convention, of docs/features/import-lead-ins.md.
+const LEAD_INS_FIXTURE: &str = "import-layout/four";
 
 /// The two invented conventions of docs/features/pilot-w.md.
 const W_FIXTURES: [&str; 2] = ["pilot-w/one", "pilot-w/two"];
@@ -238,11 +248,15 @@ fn forbidden() -> BTreeSet<String> {
         ));
     }
     strings.extend(convention_strings(&generated_config_text()));
-    for name in LAYOUT_FIXTURES.iter().chain([&HOMES_FIXTURE]) {
+    for name in LAYOUT_FIXTURES
+        .iter()
+        .chain([&HOMES_FIXTURE, &LEAD_INS_FIXTURE])
+    {
         strings.extend(convention_strings(
             &fs::read_to_string(fixture_config(name)).expect("layout fixture config"),
         ));
     }
+    strings.extend(before_walk_strings(LEAD_INS_FIXTURE));
     for name in W_FIXTURES {
         strings.extend(convention_strings(
             &fs::read_to_string(fixture_config(name)).expect("pilot-w fixture config"),
@@ -261,7 +275,7 @@ fn forbidden() -> BTreeSet<String> {
     for name in FIXTURES
         .iter()
         .chain(&CONSTANTS_FIXTURES)
-        .chain([&HOMES_FIXTURE])
+        .chain([&HOMES_FIXTURE, &LEAD_INS_FIXTURE])
     {
         let run = ImportRun::new(&fixture_dir(name), &scratch, name, &[]);
         let labels = run.file("labels.json");
@@ -736,6 +750,103 @@ fn the_homes_fixture_shows_the_home_and_the_inherited_values_non_zero() {
     assert!(
         inherited.iter().all(|value| value["matched"] == true),
         "{inherited:?}"
+    );
+}
+
+// ---------------------------------------- docs/features/import-lead-ins.md
+
+/// The `[paths]` roots and exclude globs of a fixture's before scheme
+/// (`specengine.toml`), which the emitted scheme keeps
+/// (docs/features/import-lead-ins.md "Emitted `[paths]`").
+fn before_walk_strings(name: &str) -> BTreeSet<String> {
+    let text = fs::read_to_string(fixture_dir(name).join("specengine.toml")).expect("scheme");
+    let table: toml::Table = toml::from_str(&text).expect("the scheme is TOML");
+    let paths = table["paths"].as_table().expect("[paths]");
+    ["roots", "exclude"]
+        .iter()
+        .filter_map(|key| paths.get(*key).and_then(toml::Value::as_array))
+        .flatten()
+        .map(|value| value.as_str().expect("a path string").to_owned())
+        .collect()
+}
+
+/// CR: the forbidden set holds the fourth layout convention's census
+/// config strings, its before scheme's roots and exclude (the guide file
+/// only the before walk names among them), and the prefixes of its run.
+#[test]
+fn the_forbidden_set_holds_the_lead_ins_fixture_conventions() {
+    let forbidden = forbidden();
+    for sample in [
+        "kiln/log",                        // corpus root, before root
+        "kiln/rules",                      // corpus root, before root
+        "kiln/log/old/**",                 // corpus exclude, before exclude
+        "kiln/GUIDE.md",                   // before root only
+        "kiln/atoms",                      // layout.records
+        "kiln/rules/glazes",               // layout.features
+        "KF",                              // a run prefix
+        "GZ",                              // feature prefix, a run prefix
+        "^(?P<prefix>[A-Z]{2})-[0-9]{2}$", // ids.regex
+    ] {
+        assert!(
+            forbidden.contains(sample),
+            "{sample:?} is in the forbidden set"
+        );
+    }
+}
+
+/// CR: the wrapped-span reader (`import/lead_in.rs`, `import/mod.rs`), the
+/// not-taken model (`import/model.rs`), the scheme emitter
+/// (`layout/scheme.rs`) and the eval modules passing the before walk are
+/// read by the walk.
+#[test]
+fn the_scan_covers_the_lead_in_reader_and_the_scheme_emitter() {
+    let scanned: Vec<String> = scanned_sources()
+        .iter()
+        .map(|path| relative(path))
+        .collect();
+    for wanted in [
+        "crates/specengine-import/src/import/lead_in.rs",
+        "crates/specengine-import/src/import/mod.rs",
+        "crates/specengine-import/src/import/model.rs",
+        "crates/specengine-import/src/layout/scheme.rs",
+        "crates/specengine-eval/src/import.rs",
+        "crates/specengine-eval/src/layout.rs",
+        "crates/specengine-eval/src/w.rs",
+    ] {
+        assert!(
+            scanned.iter().any(|path| path == wanted),
+            "{wanted} is not scanned: {scanned:?}"
+        );
+    }
+}
+
+/// CR: `four` exercises the new count: `import` and `layout` count
+/// lead-ins not taken (> 0), and at least one record's lead-in wraps
+/// (its extent runs past its line with a title).
+#[test]
+fn the_lead_ins_fixture_shows_not_taken_non_zero() {
+    let scratch = Scratch::new("genre-lead-ins");
+    let fixture = fixture_dir(LEAD_INS_FIXTURE);
+    let import = ImportRun::new(&fixture, &scratch, "import", &[]);
+    assert!(import.count("records/not_taken") > 0, "{}", import.result);
+    assert!(
+        import
+            .records()
+            .iter()
+            .any(|record| record.get("title").is_some()
+                && record["extent"][1].as_u64() > record["line"].as_u64()),
+        "no wrapped record"
+    );
+    let layout = measure(
+        "layout",
+        &fixture,
+        &scratch.join("layout"),
+        &["--today", "2026-10-04"],
+    );
+    assert!(
+        layout["result"]["before"]["not_taken"].as_u64() > Some(0),
+        "{}",
+        layout["result"]
     );
 }
 

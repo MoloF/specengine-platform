@@ -12,6 +12,12 @@
 //! header keys (AC-03; its on-disk tamper is `tamper_tests` in
 //! `src/layout.rs`), and AC-04's regression: the section of that name below.
 //!
+//! docs/features/import-lead-ins.md (slice 2 of RM-0013) on the fourth
+//! invented convention `fixtures/import-layout/four` (a kiln log): wrapped
+//! lead-ins as records (AC-01), the lead-ins not taken (AC-02), the
+//! emitted `[paths]` keeping the before walk (AC-03) and the existing
+//! fixtures' emitted `[paths]` (AC-04): the section of that name below.
+//!
 //! Nothing here names a pilot; every run writes only under a scratch `--out`.
 
 mod import_support;
@@ -1696,12 +1702,13 @@ fn census_and_import_outputs_are_unchanged() {
 /// Whether a stdout key path is in the whitelist of "stdout and detail";
 /// `*` stands for a check code.
 fn whitelisted(path: &str) -> bool {
-    const FIXED: [&str; 51] = [
+    const FIXED: [&str; 52] = [
         "before/documents",
         "before/definitions",
         "before/duplicates",
         "before/hyphenless/definitions",
         "before/hyphenless/mentions",
+        "before/not_taken",
         "tree/documents",
         "tree/record_files",
         "tree/feature_documents",
@@ -6042,6 +6049,630 @@ fn homes_two_runs_on_three_write_identical_bytes() {
     assert!(runs[0].1.len() > 10);
     assert_eq!(runs[0].1, runs[1].1, "the written bytes");
     assert_eq!(snapshot(&fixture_dir(THREE)), corpus_before, "the fixture");
+    assert!(
+        fs::read_dir(&home).unwrap().next().is_none(),
+        "nothing under HOME"
+    );
+}
+
+// ------------------------------------------ docs/features/import-lead-ins.md
+
+/// The fourth layout convention, of docs/features/import-lead-ins.md: a
+/// kiln log with wrapped lead-ins, lead-ins not taken and a before walk
+/// wider and narrower than the census config's.
+const FOUR: &str = "import-layout/four";
+const FOUR_FIRINGS: &str = "kiln/log/firings.md";
+const FOUR_LIMITS: &str = "kiln/rules/limits.md";
+const FOUR_CELADON: &str = "kiln/rules/glazes/celadon.md";
+const FOUR_LEAD_IN_LINE: &str = "lead_in = true\n";
+
+/// The emitted `tree/specengine.toml` `[paths]` of `four`, exactly
+/// (docs/features/import-lead-ins.md
+/// "Fixture `fixtures/import-layout/four`").
+const FOUR_PATHS: &str = "exclude = [\"kiln/log/old/**\"]\n\
+features = \"kiln/rules/glazes\"\n\
+records = \"kiln/atoms\"\n\
+roots = [\"kiln/log\", \"kiln/rules\", \"kiln/atoms\"]\n";
+
+/// The emitted `[paths]` of the existing layout fixtures (AC-04,
+/// docs/features/import-lead-ins.md "Emitted `[paths]`",
+/// "Exclude and index outputs"): `one` and `three` as before, `two` and
+/// `pilot-w/two` the before roots in their written order with the features
+/// directory appended, `pilot-w/one` its before `exclude` less the pattern
+/// matching its index outputs, which a comment names
+/// ([`dropped_comment`]).
+const EXISTING_PATHS: [(&str, &str); 5] = [
+    (
+        ONE,
+        "exclude = []\nfeatures = \"book/flows\"\nrecords = \"book/atoms\"\nroots = [\"book\"]\n",
+    ),
+    (
+        TWO,
+        "exclude = []\nfeatures = \"topics\"\nindex = \"pages/index.md\"\nrecords = \"ledger\"\n\
+         roots = [\"log\", \"pages\", \"ledger\", \"topics\"]\n",
+    ),
+    (
+        THREE,
+        "exclude = []\nfeatures = \"docs/features\"\nrecords = \"bench/units\"\nroots = [\"bench\"]\n",
+    ),
+    (
+        "pilot-w/one",
+        "# exclude dropped: \"book/index*.md\" matches an index output this scheme writes\n\
+         exclude = []\nfeatures = \"book/flows\"\nindex = \"book/index.md\"\n\
+         records = \"book/atoms\"\nroots = [\"book\"]\ntier0 = \"GUIDE.md\"\n",
+    ),
+    (
+        "pilot-w/two",
+        "exclude = []\nfeatures = \"topics\"\nrecords = \"ledger\"\n\
+         roots = [\"log\", \"pages\", \"ledger\", \"topics\"]\n",
+    ),
+];
+
+/// The record files of `four`'s tree with their source line and text
+/// (docs/features/import-lead-ins.md
+/// "Fixture `fixtures/import-layout/four`"); GZ-01 is a section
+/// of celadon's feature document instead.
+const FOUR_RECORD_FILES: [(&str, u64, &str); 7] = [
+    (
+        "kiln/atoms/KF/KF-21.md",
+        3,
+        "The kiln holds cone ten for an hour.\n  The hold is logged.",
+    ),
+    (
+        "kiln/atoms/KF/KF-22.md",
+        6,
+        "The soak ends before the vent opens.",
+    ),
+    ("kiln/atoms/KF/KF-23.md", 9, "The kiln cools slowly."),
+    (
+        "kiln/atoms/KF/KF-24.md",
+        10,
+        "The door stays shut below red heat.",
+    ),
+    ("kiln/atoms/KF/KF-28.md", 12, "A lazy line closes the span."),
+    (
+        "kiln/atoms/KF/KF-27.md",
+        19,
+        "The next item is a record of its own.",
+    ),
+    (
+        "kiln/atoms/KF/KF-12.md",
+        3,
+        "The kiln never exceeds cone eleven.",
+    ),
+];
+
+/// One `records.json` record as the spec's table reads it: (path, line,
+/// ID, title, text, extent).
+type TableRow = (String, u64, String, Option<String>, String, [u64; 2]);
+
+/// `four`'s `records.json` as the spec's table reads it: (path, line, ID,
+/// title, text, extent), in record order.
+fn four_table() -> Vec<TableRow> {
+    let row = |path: &str, line, id: &str, title: Option<&str>, text: &str, extent| {
+        (
+            path.to_owned(),
+            line,
+            id.to_owned(),
+            title.map(str::to_owned),
+            text.to_owned(),
+            extent,
+        )
+    };
+    vec![
+        row(
+            FOUR_FIRINGS,
+            3,
+            "KF-21",
+            Some("Cone ten reached"),
+            "The kiln holds cone ten for an hour.\n  The hold is logged.",
+            [3, 5],
+        ),
+        row(
+            FOUR_FIRINGS,
+            6,
+            "KF-22",
+            Some("A soak that spans three lines"),
+            "The soak ends before the vent opens.",
+            [6, 8],
+        ),
+        row(
+            FOUR_FIRINGS,
+            9,
+            "KF-23",
+            Some("Parent rule"),
+            "The kiln cools slowly.",
+            [9, 9],
+        ),
+        row(
+            FOUR_FIRINGS,
+            10,
+            "KF-24",
+            Some("Nested and wrapped"),
+            "The door stays shut below red heat.",
+            [10, 11],
+        ),
+        row(
+            FOUR_FIRINGS,
+            12,
+            "KF-28",
+            Some("Lazy wrap"),
+            "A lazy line closes the span.",
+            [12, 13],
+        ),
+        row(
+            FOUR_FIRINGS,
+            19,
+            "KF-27",
+            None,
+            "The next item is a record of its own.",
+            [19, 19],
+        ),
+        row(
+            FOUR_CELADON,
+            3,
+            "GZ-01",
+            Some("Even sheen"),
+            "The glaze shows no crawl.",
+            [3, 4],
+        ),
+        row(
+            FOUR_LIMITS,
+            3,
+            "KF-12",
+            None,
+            "The kiln never exceeds cone eleven.",
+            [3, 3],
+        ),
+    ]
+}
+
+/// A `records.json` array read as [`four_table`] rows.
+fn table_of(records: &[Value]) -> Vec<TableRow> {
+    records
+        .iter()
+        .map(|record| {
+            let extent = record["extent"].as_array().expect("extent");
+            (
+                record["path"].as_str().unwrap().to_owned(),
+                record["line"].as_u64().unwrap(),
+                record["id"].as_str().unwrap().to_owned(),
+                record.get("title").map(|title| {
+                    title
+                        .as_str()
+                        .unwrap_or_else(|| panic!("title: {record}"))
+                        .to_owned()
+                }),
+                record["text"].as_str().unwrap().to_owned(),
+                [extent[0].as_u64().unwrap(), extent[1].as_u64().unwrap()],
+            )
+        })
+        .collect()
+}
+
+/// `not_taken.json` of `four`, byte for byte: `[{"path", "line", "lead"}]`
+/// in (path, line) order, as every other detail file is written (pretty,
+/// two-space indent, no final newline).
+const FOUR_NOT_TAKEN_JSON: &str = r#"[
+  {
+    "path": "kiln/log/firings.md",
+    "line": 14,
+    "lead": "**KF-25: Never closed"
+  },
+  {
+    "path": "kiln/log/firings.md",
+    "line": 18,
+    "lead": "**KF-26: Cut by the next item"
+  },
+  {
+    "path": "kiln/rules/limits.md",
+    "line": 4,
+    "lead": "**KF-17a.**"
+  },
+  {
+    "path": "kiln/rules/limits.md",
+    "line": 5,
+    "lead": "**KF-12 (part)**"
+  }
+]"#;
+
+/// The `[paths]` table of a `specengine.toml` as written: its lines up to
+/// the next table header, blank lines dropped, each ending in LF.
+fn paths_block(scheme: &str) -> String {
+    let mut lines = scheme.lines().skip_while(|line| line.trim() != "[paths]");
+    assert_eq!(lines.next(), Some("[paths]"), "no [paths] in:\n{scheme}");
+    lines
+        .take_while(|line| !line.starts_with('['))
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| format!("{line}\n"))
+        .collect()
+}
+
+/// The emitted scheme of a run, through core: `spec check`'s loader and
+/// `ProjectConfig::from_toml`.
+fn emitted_paths(tree: &Path, context: &str) -> specengine_core::Paths {
+    let file = tree.join("specengine.toml");
+    let text = fs::read_to_string(&file).unwrap_or_else(|error| panic!("{context}: {error}"));
+    specengine_store::load_check(
+        &specengine_store::NamedBytes::read("specengine.toml", &file),
+        None,
+    )
+    .unwrap_or_else(|_| panic!("{context}: core loads the emitted scheme:\n{text}"));
+    specengine_core::ProjectConfig::from_toml(&text)
+        .unwrap_or_else(|error| panic!("{context}: {error}\n{text}"))
+        .paths
+}
+
+/// A scratch copy of `four` with `[lists] lead_in = false`.
+fn four_without_lead_ins(scratch: &Scratch, as_name: &str) -> PathBuf {
+    let corpus = copy_of(FOUR, scratch, as_name);
+    edit(
+        &corpus.join("census.toml"),
+        FOUR_LEAD_IN_LINE,
+        "lead_in = false\n",
+    );
+    corpus
+}
+
+/// AC-01..AC-03 base: `layout` on `four` prints its `expected.json`
+/// (timings aside), the round trip is clean, `not_taken.json` sits beside
+/// the seven detail files, and stdout names no ID, path or lead of the
+/// corpus.
+#[test]
+fn lead_ins_layout_on_four_matches_expected_json() {
+    let scratch = Scratch::new("lead-ins-expected");
+    let run = LayoutRun::of(FOUR, &scratch);
+    assert_eq!(
+        without_ms(run.result()),
+        expected(FOUR),
+        "result minus *_ms differs from fixtures/import-layout/four/expected.json"
+    );
+    assert_round_trip_clean(&run);
+    for detail in DETAIL_FILES.iter().chain(&["not_taken.json"]) {
+        assert!(run.detail.join(detail).is_file(), "{detail}");
+    }
+    let stdout = run.stdout();
+    for corpus_string in ["KF-", "GZ-", "kiln", "firings", "limits", "celadon", "**"] {
+        assert!(
+            !stdout.contains(corpus_string),
+            "{corpus_string:?} on stdout"
+        );
+    }
+    let mut found = Vec::new();
+    leaves(run.result(), "", &mut found);
+    for (path, _) in &found {
+        assert!(whitelisted(path), "{path} is not whitelisted");
+    }
+}
+
+/// AC-01 (V1; M1 the span closes on the item's line only, M2 a list-item
+/// line does not end the search, M8 the nested-record test reads one
+/// line): `import` on `four` writes the spec's table to `records.json`,
+/// eight `list-item` records, six titled, none at firings 14 or 18.
+#[test]
+fn lead_ins_ac01_import_records_json_holds_the_table() {
+    let scratch = Scratch::new("lead-ins-ac01-import");
+    let import = ImportRun::new(&fixture_dir(FOUR), &scratch, "import", &[]);
+    let records = import.records();
+    assert_eq!(table_of(&records), four_table());
+    assert!(
+        records
+            .iter()
+            .all(|record| record["form"] == "list-item" && record["role"] == "definition"),
+        "{records:?}"
+    );
+    assert_eq!(import.count("records/total"), 8);
+    assert_eq!(import.count("records/per_form/list_item"), 8);
+    assert_eq!(import.count("records/titled"), 6);
+    assert_eq!(import.count("definitions"), 8);
+    for line in [14, 18] {
+        assert!(
+            !records
+                .iter()
+                .any(|record| record["path"] == FOUR_FIRINGS && record["line"] == line),
+            "no record at firings {line}"
+        );
+    }
+}
+
+/// AC-01: `layout` on `four` matches every definition by hash, the six
+/// titles, the prose and the extents; each record file's body is its
+/// table text; celadon's residue holds GZ-01 as a section.
+#[test]
+fn lead_ins_ac01_layout_matches_every_wrapped_definition() {
+    let scratch = Scratch::new("lead-ins-ac01-layout");
+    let run = LayoutRun::of(FOUR, &scratch);
+    assert_eq!(run.count("before/definitions"), 8);
+    assert_eq!(run.count("hashes/matched"), 8);
+    assert_eq!(run.count("hashes/missing"), 0);
+    assert_eq!(run.count("titles/matched"), 6);
+    assert_eq!(run.count("titles/mismatched"), 0);
+    assert_eq!(run.count("prose/mismatched"), 0);
+    assert_eq!(run.count("extents/residue"), 0);
+    assert_eq!(run.count("reasons/unexplained"), 0);
+    for (file, line, text) in FOUR_RECORD_FILES {
+        let (header, body) = split_front_matter(&run.tree_text(file));
+        let id = file.rsplit('/').next().unwrap().trim_end_matches(".md");
+        assert_eq!(header[0], format!("id: {id}"), "{file}");
+        assert_eq!(body, format!("\n{text}\n"), "{file}");
+        let entry = run.definition(id, line);
+        assert_eq!(entry["after"], file, "{id}");
+        assert_eq!(entry["place"], "file", "{id}");
+    }
+    let celadon = run.tree_text(FOUR_CELADON);
+    assert!(
+        celadon.contains("## Even sheen {#GZ-01}\n"),
+        "celadon's residue:\n{celadon}"
+    );
+    assert!(celadon.contains("The glaze shows no crawl.\n"), "{celadon}");
+    assert!(!celadon.contains("- **GZ-01"), "{celadon}");
+}
+
+/// AC-02 (M3 the count always 0): `import` on `four` counts four lead-ins
+/// not taken on stdout and lists them in `not_taken.json`, byte for byte;
+/// `layout` prints the same count under `before` and writes the same
+/// file; their lines stay in the residues byte for byte.
+#[test]
+fn lead_ins_ac02_not_taken_on_import_and_layout() {
+    let scratch = Scratch::new("lead-ins-ac02");
+    let import = ImportRun::new(&fixture_dir(FOUR), &scratch, "import", &[]);
+    assert_eq!(import.count("records/not_taken"), 4);
+    assert_eq!(import.count("records/total"), 8, "outside records.total");
+    let import_file = fs::read_to_string(import.detail.join("not_taken.json")).unwrap();
+    assert_eq!(import_file, FOUR_NOT_TAKEN_JSON);
+
+    let run = LayoutRun::of(FOUR, &scratch);
+    assert_eq!(run.count("before/not_taken"), 4);
+    assert_eq!(
+        fs::read_to_string(run.detail.join("not_taken.json")).unwrap(),
+        import_file,
+        "layout writes the run's import list"
+    );
+    assert_eq!(
+        run.tree_text(FOUR_FIRINGS),
+        "# Firings\n\n- **KF-25: Never closed\n\nA blank line ends that span.\n\n\
+         - **KF-26: Cut by the next item\n",
+        "firings' residue: the not-taken items and the prose around them"
+    );
+    assert_eq!(
+        run.tree_text(FOUR_LIMITS),
+        "# Limits\n\n- **KF-17a.** A suffixed ID is not taken.\n\
+         - **KF-12 (part)** A part note is not taken.\n",
+        "limits' residue: the not-taken items"
+    );
+}
+
+/// AC-02: a copy of `four` with `lead_in = false` counts 0 on both
+/// subcommands and writes an empty list; `import-one`, `import-two` and
+/// the layout fixtures `one`, `two`, `three` count 0 with an empty list.
+#[test]
+fn lead_ins_ac02_without_lead_in_or_without_such_items_nothing_is_not_taken() {
+    let scratch = Scratch::new("lead-ins-ac02-off");
+    let off = four_without_lead_ins(&scratch, "off");
+    let import = ImportRun::new(&off, &scratch, "import-off", &[]);
+    assert_eq!(import.count("records/not_taken"), 0);
+    assert_eq!(import.file("not_taken.json"), serde_json::json!([]));
+    let run = LayoutRun::new(&off, &scratch, "layout-off", &[]);
+    assert_eq!(run.count("before/not_taken"), 0);
+    assert_eq!(run.file("not_taken.json"), serde_json::json!([]));
+
+    for name in FIXTURES {
+        let import = ImportRun::new(&fixture_dir(name), &scratch, name, &[]);
+        assert_eq!(import.count("records/not_taken"), 0, "{name}");
+        assert_eq!(
+            import.file("not_taken.json"),
+            serde_json::json!([]),
+            "{name}"
+        );
+    }
+    for name in [ONE, TWO, THREE] {
+        let run = LayoutRun::of(name, &scratch);
+        assert_eq!(run.count("before/not_taken"), 0, "{name}");
+        assert_eq!(run.file("not_taken.json"), serde_json::json!([]), "{name}");
+    }
+}
+
+/// AC-03 (B4; M4 roots from first path components, M5 `exclude = []`, M6
+/// records outside the roots not added, M7 a root the tree lacks kept):
+/// the emitted `[paths]` of `four` is the spec's block; core loads it and
+/// its walk is the before walk over the tree: every root it names exists
+/// in the tree, every tree document is walked, the retired log excluded;
+/// the tree checks clean under the baseline, every record file is walked
+/// (`index.files` = `tree.documents` = 10, `hashes.missing` 0).
+#[test]
+fn lead_ins_ac03_the_emitted_scheme_keeps_the_before_walk() {
+    let scratch = Scratch::new("lead-ins-ac03");
+    let run = LayoutRun::of(FOUR, &scratch);
+    let scheme = run.tree_text("specengine.toml");
+    assert_eq!(paths_block(&scheme), FOUR_PATHS, "emitted:\n{scheme}");
+
+    let paths = emitted_paths(&run.tree(), FOUR);
+    assert_eq!(paths.roots, ["kiln/log", "kiln/rules", "kiln/atoms"]);
+    assert_eq!(paths.exclude, ["kiln/log/old/**"]);
+    for root in &paths.roots {
+        assert!(
+            run.tree().join(root).exists(),
+            "the emitted root {root} names nothing in the tree: the tree check stops"
+        );
+    }
+    let documents: Vec<String> = files_under(&run.tree())
+        .into_iter()
+        .filter(|path| path.ends_with(".md"))
+        .collect();
+    assert_eq!(documents.len(), 10, "{documents:?}");
+    for document in &documents {
+        assert!(paths.in_walk_scope(document), "{document} is not walked");
+    }
+    assert!(paths.is_excluded("kiln/log/old/retired.md"));
+    assert!(!paths.in_walk_scope("kiln/GUIDE.md"), "no root names it");
+
+    let observe = run.result()["check"]["observe"].as_str().unwrap();
+    assert!(
+        ["clean", "observed"].contains(&observe),
+        "observe {observe}: {}",
+        run.result()["check"]
+    );
+    assert_eq!(run.result()["check"]["enforce"], "clean");
+    assert_eq!(run.count("check/stale"), 0);
+    assert_eq!(run.count("check/emitter_findings"), 0);
+    assert_eq!(run.count("tree/documents"), 10);
+    assert_eq!(run.count("tree/record_files"), 7);
+    assert_eq!(run.count("index/files"), 10);
+    assert_eq!(run.count("hashes/missing"), 0);
+}
+
+/// AC-04 ("Emitted `[paths]`"): the existing layout fixtures' emitted
+/// `[paths]`, exactly, each loaded by core with every root it names held
+/// by the tree.
+#[test]
+fn lead_ins_ac04_the_emitted_paths_of_the_existing_fixtures() {
+    let scratch = Scratch::new("lead-ins-ac04-paths");
+    for (name, want) in EXISTING_PATHS {
+        let run = LayoutRun::of(name, &scratch);
+        let scheme = run.tree_text("specengine.toml");
+        assert_eq!(paths_block(&scheme), want, "{name}: emitted:\n{scheme}");
+        let paths = emitted_paths(&run.tree(), name);
+        for root in &paths.roots {
+            assert!(run.tree().join(root).exists(), "{name}: {root}");
+        }
+    }
+}
+
+/// The comment the emitted scheme writes directly above `exclude` for each
+/// before pattern it drops (a before `exclude` pattern matching an index
+/// output the emitted scheme writes is dropped, so the tree walks its index
+/// outputs as at HEAD): docs/features/import-lead-ins.md
+/// "Exclude and index outputs".
+fn dropped_comment(pattern: &str) -> String {
+    format!("# exclude dropped: \"{pattern}\" matches an index output this scheme writes\n")
+}
+
+/// AC-05, docs/features/import-lead-ins.md "Exclude and index outputs"
+/// (M9 a pattern matching an index output kept): a before
+/// `exclude` pattern matching an index output the emitted scheme writes
+/// (`[paths] index`, by a glob or by its path; a generator shard) is
+/// dropped and named in a comment directly above `exclude`, in written
+/// order; a pattern matching none is kept, its order kept; core loads the
+/// result and walks the index outputs, the kept pattern still excluding.
+#[test]
+fn lead_ins_an_exclude_matching_an_index_output_is_dropped_with_a_comment() {
+    let scratch = Scratch::new("lead-ins-index-exclude");
+    let two = copy_of(TWO, &scratch, "two");
+    edit(
+        &two.join("specengine.toml"),
+        "index = \"pages/index.md\"\n",
+        "index = \"pages/index.md\"\n\
+         exclude = [\"pages/index*.md\", \"log/drafts/**\", \"pages/index.md\"]\n",
+    );
+    let run = LayoutRun::new(&two, &scratch, "two-out", &[]);
+    let scheme = run.tree_text("specengine.toml");
+    assert_eq!(
+        paths_block(&scheme),
+        format!(
+            "{}{}exclude = [\"log/drafts/**\"]\nfeatures = \"topics\"\n\
+             index = \"pages/index.md\"\nrecords = \"ledger\"\n\
+             roots = [\"log\", \"pages\", \"ledger\", \"topics\"]\n",
+            dropped_comment("pages/index*.md"),
+            dropped_comment("pages/index.md"),
+        ),
+        "two: emitted:\n{scheme}"
+    );
+    let paths = emitted_paths(&run.tree(), "two");
+    assert!(run.tree().join("pages/index.md").is_file());
+    assert!(paths.in_walk_scope("pages/index.md"), "the index is walked");
+    assert!(paths.is_excluded("log/drafts/note.md"), "the kept pattern");
+
+    let one = copy_of("pilot-w/one", &scratch, "w-one");
+    edit(
+        &one.join("specengine.toml"),
+        "exclude = [\"book/index*.md\"]\n",
+        "exclude = [\"book/drafts/**\", \"book/index-b.md\"]\n",
+    );
+    let run = LayoutRun::new(&one, &scratch, "w-one-out", &[]);
+    let scheme = run.tree_text("specengine.toml");
+    assert_eq!(
+        paths_block(&scheme),
+        format!(
+            "{}exclude = [\"book/drafts/**\"]\nfeatures = \"book/flows\"\n\
+             index = \"book/index.md\"\nrecords = \"book/atoms\"\nroots = [\"book\"]\n\
+             tier0 = \"GUIDE.md\"\n",
+            dropped_comment("book/index-b.md"),
+        ),
+        "pilot-w/one copy: a shard's pattern dropped: emitted:\n{scheme}"
+    );
+    let paths = emitted_paths(&run.tree(), "pilot-w/one copy");
+    for output in ["book/index.md", "book/index-a.md", "book/index-b.md"] {
+        assert!(paths.in_walk_scope(output), "{output} is walked");
+    }
+    assert!(paths.is_excluded("book/drafts/note.md"), "the kept pattern");
+
+    // Not vacuous: a before `exclude` matching no index output is kept
+    // without a comment (`four`), and without one no comment is written.
+    let run = LayoutRun::of(FOUR, &scratch);
+    assert!(!run.tree_text("specengine.toml").contains("exclude dropped"));
+    let run = LayoutRun::of(ONE, &scratch);
+    assert!(!run.tree_text("specengine.toml").contains("exclude dropped"));
+}
+
+/// AC-04: the fixtures this slice leaves alone are unchanged in git
+/// (`import-one`, `import-two` and `import-layout/{one,two,three}` gain
+/// only `not_taken`, pinned by their `expected.json` runs).
+#[test]
+fn lead_ins_ac04_pilot_w_and_corpus_mini_are_unchanged() {
+    for path in ["fixtures/pilot-w", "fixtures/corpus-mini"] {
+        assert_eq!(git_status(&repository_root(), path), "", "{path} changed");
+    }
+}
+
+/// "Description and interactions": `layout`'s stderr is unchanged (no
+/// not-taken count), its stdout gains only `before.not_taken`.
+#[test]
+fn lead_ins_layout_stderr_names_no_not_taken_count() {
+    let scratch = Scratch::new("lead-ins-stderr");
+    let run = LayoutRun::of(FOUR, &scratch);
+    let stderr = stderr(&run.output);
+    assert!(!stderr.contains("not taken"), "{stderr}");
+    assert!(
+        stderr.starts_with("layout [pilot]: 8 definitions;"),
+        "{stderr}"
+    );
+}
+
+/// Determinism on `four`: two runs print the same result and write the
+/// same bytes (the index aside; `not_taken.json` included), the fixture is
+/// untouched, nothing lands under `HOME`.
+#[test]
+fn lead_ins_two_runs_on_four_write_identical_bytes() {
+    let scratch = Scratch::new("lead-ins-determinism");
+    let home = scratch.join("home");
+    fs::create_dir_all(&home).unwrap();
+    let corpus_before = snapshot(&fixture_dir(FOUR));
+    let mut runs = Vec::new();
+    for round in ["a", "b"] {
+        let out = scratch.join(&format!("four-{round}"));
+        let output = eval()
+            .env("HOME", &home)
+            .args([
+                "layout",
+                "--pilot",
+                fixture_dir(FOUR).to_str().unwrap(),
+                "--out",
+                out.to_str().unwrap(),
+                "--today",
+                TODAY,
+            ])
+            .output()
+            .expect("runs");
+        let envelope = envelope(&output);
+        let mut bytes = snapshot(&out.join("layout/pilot"));
+        bytes.retain(|path, _| !path.to_string_lossy().starts_with("index.db"));
+        runs.push((without_ms(&envelope["result"]), bytes));
+    }
+    assert_eq!(runs[0].0, runs[1].0, "stdout");
+    assert!(runs[0].1.contains_key(Path::new("not_taken.json")));
+    assert!(runs[0].1.len() > 15, "{:?}", runs[0].1.keys());
+    assert_eq!(runs[0].1, runs[1].1, "the written bytes");
+    assert_eq!(snapshot(&fixture_dir(FOUR)), corpus_before, "the fixture");
     assert!(
         fs::read_dir(&home).unwrap().next().is_none(),
         "nothing under HOME"

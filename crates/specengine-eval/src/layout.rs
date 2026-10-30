@@ -153,7 +153,23 @@ pub fn prepare(
         .map_err(|report| refusal(&report))?;
     let scheme_text = fs::read_to_string(&scheme_path)
         .map_err(|error| format!("{scheme_name}: cannot read the scheme: {error}"))?;
-    let scheme = Scheme::parse(&scheme_text).map_err(|error| format!("{scheme_name}: {error}"))?;
+    // The emitted scheme keeps the before walk as core reads it, but an
+    // exclude glob hiding an index output it writes, matched by core's glob
+    // rule (`docs/features/import-lead-ins.md`).
+    let index_outputs = index_outputs(&before);
+    let hides_index_output = |glob: &str| {
+        let mut one = before.project.paths.clone();
+        one.exclude = vec![glob.to_owned()];
+        let scope = one.walk_scope();
+        index_outputs.iter().any(|output| scope.is_excluded(output))
+    };
+    let scheme = Scheme::parse(
+        &scheme_text,
+        &before.project.paths.roots,
+        &before.project.paths.exclude,
+        hides_index_output,
+    )
+    .map_err(|error| format!("{scheme_name}: {error}"))?;
     let today = match today {
         Some(today) if is_calendar_date(today) => today.to_owned(),
         Some(today) => return Err(format!("--today {today:?} is not a YYYY-MM-DD date")),
@@ -183,7 +199,6 @@ pub fn prepare(
     let emitted = layout::emit(&config, &found, &sources, &scheme);
     let emit_ms = started.elapsed().as_millis();
 
-    let index_outputs = index_outputs(&before);
     if let Some(taken) = index_outputs.iter().find(|output| emitted.holds(output)) {
         let at = match index_line(&scheme_text, &before, taken) {
             Some(line) => format!("{scheme_name}:{line}"),
@@ -304,6 +319,9 @@ pub struct Before {
     pub definitions: usize,
     pub duplicates: usize,
     pub hyphenless: Hyphenless,
+    /// ID-led list lead-ins the run's import took no record from
+    /// (`docs/features/import-lead-ins.md`).
+    pub not_taken: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -754,6 +772,7 @@ fn finish(corpus: &Corpus, setup: Setup, staged: Staged) -> Result<LayoutResult,
     write_json(&out_dir.join("records.json"), &verified.records)?;
     write_json(&out_dir.join("prose.json"), &verified.prose_detail)?;
     write_json(&out_dir.join("extents.json"), &verified.extent_detail)?;
+    write_json(&out_dir.join("not_taken.json"), &setup.import.not_taken)?;
     write_json(
         &out_dir.join("headers.json"),
         &HeadersDetail {
@@ -804,6 +823,7 @@ fn finish(corpus: &Corpus, setup: Setup, staged: Staged) -> Result<LayoutResult,
                 definitions: setup.import.hyphenless(HyphenlessRole::Definition),
                 mentions: setup.import.hyphenless(HyphenlessRole::Mention),
             },
+            not_taken: setup.import.not_taken.len(),
         },
         tree: Tree {
             documents: written,
@@ -3248,7 +3268,9 @@ fn reader_boundary<'p>(
 
 /// An extent moved out, less its text, title, written ID, cells, task box
 /// and the configured separators, when what is left holds a letter or a
-/// digit that is no ordered-list marker.
+/// digit that is no ordered-list marker. A title not found as written is
+/// one wrapped over lines (`docs/features/import-lead-ins.md`): each blank
+/// of it matches a blank run with its line breaks.
 fn extent_residue(
     side: &SourceSide<'_>,
     record: &ImportRecord,
@@ -3270,7 +3292,11 @@ fn extent_residue(
             cut(&mut rest, &record.text);
             cut(&mut rest, &record.written);
             if let Some(title) = &record.title {
-                cut(&mut rest, title);
+                if rest.contains(title.as_str()) {
+                    cut(&mut rest, title);
+                } else {
+                    cut_wrapped(&mut rest, title);
+                }
             }
             if record.task_box.is_some() {
                 for marker in ["[x]", "[X]", "[ ]"] {
@@ -3302,6 +3328,36 @@ fn cut(text: &mut String, piece: &str) {
         && let Some(at) = text.find(piece)
     {
         text.replace_range(at..at + piece.len(), " ");
+    }
+}
+
+/// Replaces the first run of `piece`'s words in `text`, each pair apart by
+/// a blank run (line breaks included), by a blank.
+fn cut_wrapped(text: &mut String, piece: &str) {
+    let mut words = piece.split_whitespace();
+    let Some(first) = words.next() else {
+        return;
+    };
+    let rest: Vec<&str> = words.collect();
+    let mut from = 0;
+    while let Some(found) = text.get(from..).and_then(|tail| tail.find(first)) {
+        let start = from + found;
+        let mut end = start + first.len();
+        let mut matched = true;
+        for word in &rest {
+            let tail = &text[end..];
+            let blanks = tail.len() - tail.trim_start().len();
+            if blanks == 0 || !tail[blanks..].starts_with(word) {
+                matched = false;
+                break;
+            }
+            end += blanks + word.len();
+        }
+        if matched {
+            text.replace_range(start..end, " ");
+            return;
+        }
+        from = start + text[start..].chars().next().map_or(1, char::len_utf8);
     }
 }
 

@@ -85,6 +85,9 @@ pub struct Records {
     pub per_form: PerForm,
     /// `prefix-N` by descending count of the Latin prefix.
     pub per_prefix: BTreeMap<String, usize>,
+    /// ID-led list lead-ins no record was taken from, outside `total`
+    /// (`docs/features/import-lead-ins.md`).
+    pub not_taken: usize,
 }
 
 #[derive(Serialize)]
@@ -232,6 +235,7 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<ImportResult, String
     write_json(&out_dir.join("unclaimed.json"), &found.unclaimed)?;
     write_json(&out_dir.join("broken_links.json"), &found.links)?;
     write_json(&out_dir.join("code_citations.json"), &found.code.citations)?;
+    write_json(&out_dir.join("not_taken.json"), &found.not_taken)?;
     write_json(&out_dir.join("diagnostics.json"), &found.diagnostics)?;
 
     let result = ImportResult {
@@ -268,6 +272,7 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<ImportResult, String
                 document: found.per_form(Form::Document),
             },
             per_prefix,
+            not_taken: found.not_taken.len(),
         },
         definitions: found.role(Role::Definition),
         references: References {
@@ -322,7 +327,7 @@ pub fn run(corpus: &Corpus, config: CensusConfig) -> Result<ImportResult, String
 fn summarize(result: &ImportResult, found: &Import, label: &str, out_dir: &Path) {
     let forms = &result.records.per_form;
     eprintln!(
-        "import [{label}]: {} documents ({} skipped), {} records: {} table rows, {} headerless rows, {} list items ({} titled), {} sections, {} documents",
+        "import [{label}]: {} documents ({} skipped), {} records: {} table rows, {} headerless rows, {} list items ({} titled), {} sections, {} documents; {} ID-led lead-ins not taken",
         result.documents.total,
         result.detail.files_skipped,
         result.records.total,
@@ -331,7 +336,8 @@ fn summarize(result: &ImportResult, found: &Import, label: &str, out_dir: &Path)
         forms.list_item,
         result.records.titled,
         forms.section,
-        forms.document
+        forms.document,
+        result.records.not_taken
     );
     eprintln!(
         "  definitions {}, references {} ({} unresolved, {} demoted by a document, {} by a home), duplicate definitions {}",

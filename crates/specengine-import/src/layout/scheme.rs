@@ -4,7 +4,6 @@
 //! as a generic TOML table: `specengine-core` validated it already, and this
 //! crate does not depend on it.
 
-use std::collections::BTreeSet;
 use std::path::{Component, Path};
 
 use serde::Serialize;
@@ -12,7 +11,8 @@ use toml::{Table, Value};
 
 use crate::config::{CensusConfig, word};
 
-use super::{LayoutDiagnostic, toml_out};
+use super::LayoutDiagnostic;
+use super::toml_out::{self, Comment};
 
 /// A prefix's `scope` in the scheme: the words are serde's, from the
 /// variants (`crate::config::word`).
@@ -32,18 +32,41 @@ enum PrefixKey {
     Scope,
 }
 
-/// The before scheme: the whole `specengine.toml` table.
+/// The before scheme: the whole `specengine.toml` table and its walk as
+/// core reads it.
 #[derive(Debug, Clone)]
 pub struct Scheme {
     table: Table,
+    /// Core's `[paths] roots`: as written, duplicates dropped; unwritten,
+    /// the role defaults.
+    roots: Vec<String>,
+    /// Core's `[paths] exclude`, in order, each with whether it matches an
+    /// index output the emitted scheme writes.
+    exclude: Vec<(String, bool)>,
 }
 
 impl Scheme {
     /// Reads `specengine.toml` text as TOML (its rules are core's; the
-    /// caller loads it through core first).
-    pub fn parse(text: &str) -> Result<Self, String> {
+    /// caller loads it through core first) with the walk core read from it:
+    /// its `roots` and `exclude` (`docs/features/import-lead-ins.md`).
+    /// `hides_index_output` tells, by core's glob rule, whether an exclude
+    /// glob matches an index output the emitted scheme writes (the `[paths]
+    /// index` file or a shard of its `index = true` generator).
+    pub fn parse(
+        text: &str,
+        roots: &[String],
+        exclude: &[String],
+        hides_index_output: impl Fn(&str) -> bool,
+    ) -> Result<Self, String> {
         toml::from_str::<Table>(text)
-            .map(|table| Self { table })
+            .map(|table| Self {
+                table,
+                roots: roots.to_vec(),
+                exclude: exclude
+                    .iter()
+                    .map(|glob| (glob.clone(), hides_index_output(glob)))
+                    .collect(),
+            })
             .map_err(|error| error.message().trim().to_owned())
     }
 
@@ -78,14 +101,21 @@ impl Scheme {
 const IDS: &str = "ids";
 const ALIASES_FROM: &str = "aliases_from";
 const PATHS: &str = "paths";
+const EXCLUDE: &str = "exclude";
 
 /// The after-tree's `specengine.toml`: the before scheme with `[paths]`
-/// `records`, `features` from `[layout]`, `roots` the sorted first
-/// components of `tree` (the after paths), `exclude = []`, `link_base` its
-/// own else `[links] base`; each `[ids.legacy]` key joins its target's
-/// `aliases_from` (a key that is a prefix, another prefix's alias or names
-/// an unconfigured target: a diagnostic, skipped); `scope = "feature"` for
-/// each configured `feature_prefixes` entry. Keys sorted.
+/// `records`, `features` from `[layout]`; `roots` the before roots each
+/// holding a path of `tree` (the after paths: its documents, and the index
+/// outputs when rendered) at or under it, then `records`, then `features`,
+/// each appended when no kept root equals or holds it and a path of `tree`
+/// lies under it; `exclude` the before globs, in order, but each matching
+/// an index output this scheme writes, which a comment line right above
+/// `exclude` names instead (`docs/features/import-lead-ins.md`);
+/// `link_base` its own else `[links]
+/// base`; each `[ids.legacy]` key joins its target's `aliases_from` (a key
+/// that is a prefix, another prefix's alias or names an unconfigured
+/// target: a diagnostic, skipped); `scope = "feature"` for each configured
+/// `feature_prefixes` entry. Keys sorted.
 pub fn emit_scheme<'p>(
     scheme: &Scheme,
     config: &CensusConfig,
@@ -99,12 +129,20 @@ pub fn emit_scheme<'p>(
         Some(Value::Table(paths)) => paths,
         _ => Table::new(),
     };
-    let roots: BTreeSet<String> = tree
-        .into_iter()
-        .filter_map(|path| path.split('/').next())
-        .filter(|first| !first.is_empty())
-        .map(str::to_owned)
+    let tree: Vec<&str> = tree.into_iter().collect();
+    let mut roots: Vec<String> = scheme
+        .roots
+        .iter()
+        .filter(|root| tree.iter().any(|path| at_or_under(path, root)))
+        .cloned()
         .collect();
+    let kept = roots.len();
+    for role in [&layout.records, &layout.features] {
+        let held = roots[..kept].iter().any(|root| at_or_under(role, root));
+        if !held && !roots.contains(role) && tree.iter().any(|path| under(path, role)) {
+            roots.push(role.clone());
+        }
+    }
     paths.insert("records".to_owned(), Value::String(layout.records.clone()));
     paths.insert(
         "features".to_owned(),
@@ -114,7 +152,26 @@ pub fn emit_scheme<'p>(
         "roots".to_owned(),
         Value::Array(roots.into_iter().map(Value::String).collect()),
     );
-    paths.insert("exclude".to_owned(), Value::Array(Vec::new()));
+    let kept_exclude = scheme
+        .exclude
+        .iter()
+        .filter(|(_, hides)| !hides)
+        .map(|(glob, _)| Value::String(glob.clone()))
+        .collect();
+    paths.insert(EXCLUDE.to_owned(), Value::Array(kept_exclude));
+    let comments: Vec<Comment<'_>> = scheme
+        .exclude
+        .iter()
+        .filter(|(_, hides)| *hides)
+        .map(|(glob, _)| Comment {
+            section: PATHS,
+            key: EXCLUDE,
+            line: format!(
+                "exclude dropped: {} matches an index output this scheme writes",
+                toml_out::basic_string(glob)
+            ),
+        })
+        .collect();
     if !paths.contains_key("link_base")
         && let Some(base) = config.import.link_base.as_deref().map(slash_path)
         && !base.is_empty()
@@ -170,7 +227,18 @@ pub fn emit_scheme<'p>(
     if !ids.is_empty() {
         table.insert(IDS.to_owned(), Value::Table(ids));
     }
-    (toml_out::write(&table), diagnostics)
+    (toml_out::write_commented(&table, &comments), diagnostics)
+}
+
+/// `path` is `root` or lies under it.
+fn at_or_under(path: &str, root: &str) -> bool {
+    path == root || under(path, root)
+}
+
+/// `path` lies under the directory `dir`.
+fn under(path: &str, dir: &str) -> bool {
+    path.strip_prefix(dir)
+        .is_some_and(|rest| rest.starts_with('/'))
 }
 
 /// An entry's `aliases_from` strings.

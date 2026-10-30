@@ -36,6 +36,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/health.md](canon/health.md) Health: what is left, measured · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/import-layout-verifier.md](canon/import-layout-verifier.md) Import layout: verifier, attribution, output · crates/specengine-eval · tier 2
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2
+- [docs/canon/import-lead-ins.md](canon/import-lead-ins.md) Import: list lead-ins and the kept walk · crates/specengine-import, crates/specengine-eval · tier 2
 - [docs/canon/import.md](canon/import.md) Import: record model and rules · crates/specengine-import · tier 2
 - [docs/canon/layer-c-protocol.md](canon/layer-c-protocol.md) Layer C protocol v1: the specengine-ra executable · crates/specengine-ra, crates/specengine-code · tier 2
 - [docs/canon/layer-c-reads.md](canon/layer-c-reads.md) Layer C in the reads: spec symbols and find_symbols · crates/specengine-cli, crates/specengine-store, crates/specengine-code, crates/specengine-mcp · tier 2

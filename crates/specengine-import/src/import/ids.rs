@@ -146,6 +146,18 @@ impl<'c> Resolver<'c> {
             .collect()
     }
 
+    /// Whether an `ids.like` match, not empty, starts at offset `at` of
+    /// `text`, unbounded after it (a suffix may follow), emphasis delimiter
+    /// runs read as blanks (`docs/features/import-lead-ins.md`, `not_taken`).
+    pub fn like_at(&self, text: &str, at: usize) -> bool {
+        let text = emphasis_blanks(text);
+        at <= text.len()
+            && self
+                .like
+                .find_at(&text, at)
+                .is_some_and(|found| found.start() == at && !found.is_empty())
+    }
+
     /// Hyphenless matches in `text`, emphasis delimiter runs read as
     /// blanks: (pattern index, range), pattern by pattern in config order; a
     /// range overlapping one an earlier pattern matched is that token again

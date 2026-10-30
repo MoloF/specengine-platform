@@ -53,7 +53,7 @@ Screens and SSE per 07 s3, begun on mocks (ADR-0033, `ui/README.md`): `ui-shell`
 
 ### Phase 5. Maturity
 
-- Full migration of the pilot projects (order: Phase 1). A was migrated 2026-10-07 through a pilot-side wrapper (§3 AC-6); RM-0013 has SpecEngine replay it alone from config, nothing written into the pilot: `import-homes` (shipped 2026-10-22: `[definitions] home`, `[layout] inherit`), then `import-lead-ins`; check parity: RM-0039 (before 2026-12-31), RM-0040. Then B (RM-0014).
+- Full migration of the pilot projects (order: Phase 1). A was migrated 2026-10-07 through a pilot-side wrapper (§3 AC-6); RM-0013 has SpecEngine replay it alone from config, nothing written into the pilot: `import-homes` (shipped 2026-10-22: `[definitions] home`, `[layout] inherit`), `import-lead-ins` (shipped 2026-10-30: wrapped lead-ins, a `not_taken` count, the emitted scheme keeping the before walk); the owner's replay stays open; check parity: RM-0039 (before 2026-12-31), RM-0040. Then B (RM-0014).
 - A `shared` project (common library) linked from several projects.
 - The owner's staging forms over MCP, form mode (ADR-0054): `review_proposal` (`review-form`, RM-0012), then `approve_task` (`task-stage`, RM-0038, its own ADR).
 - Metrics and compaction, notifications, URL-mode elicitation onto UI cards (staging only, ADR-0035).

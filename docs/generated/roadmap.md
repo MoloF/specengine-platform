@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 25 open, 15 done; current mvp; to mvp 2-3 days; total 16-27 days, 1 unestimated
+roadmap: 24 open, 16 done; current mvp; to mvp 2-3 days; total 14-23 days, 1 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -16,16 +16,15 @@ roadmap: 25 open, 15 done; current mvp; to mvp 2-3 days; total 16-27 days, 1 une
 
 ## release v1 | 0 open, 13 done | 0 days
 
-## release v2 | 8 open, 1 done | 14-24 days, 1 unestimated
+## release v2 | 7 open, 2 done | 12-20 days, 1 unestimated
 
-1. [RM-0013](../roadmap/RM-0013.md) | SpecEngine replays pilot A alone | draft | must | 2-4
-2. [RM-0039](../roadmap/RM-0039.md) | check-parity-b3: gap B3 of pilot A, before its id-width debt expires | draft | must | -
-3. [RM-0014](../roadmap/RM-0014.md) | Full migration of pilot B | draft | should | 3-5 | waits on RM-0013
-4. [RM-0015](../roadmap/RM-0015.md) | A shared project linked from several projects | draft | should | 2-4
-5. [RM-0016](../roadmap/RM-0016.md) | Metrics and compaction | draft | should | 2-3
-6. [RM-0038](../roadmap/RM-0038.md) | task-stage: the owner's staging form approve_task | draft | should | 2-3
-7. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | 1-2
-8. [RM-0018](../roadmap/RM-0018.md) | URL-mode elicitation onto UI cards | draft | could | 2-3
+1. [RM-0039](../roadmap/RM-0039.md) | check-parity-b3: gap B3 of pilot A, before its id-width debt expires | draft | must | -
+2. [RM-0014](../roadmap/RM-0014.md) | Full migration of pilot B | draft | should | 3-5
+3. [RM-0015](../roadmap/RM-0015.md) | A shared project linked from several projects | draft | should | 2-4
+4. [RM-0016](../roadmap/RM-0016.md) | Metrics and compaction | draft | should | 2-3
+5. [RM-0038](../roadmap/RM-0038.md) | task-stage: the owner's staging form approve_task | draft | should | 2-3
+6. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | 1-2
+7. [RM-0018](../roadmap/RM-0018.md) | URL-mode elicitation onto UI cards | draft | could | 2-3
 
 ## pool | 16 open, 1 done | 7-12 days, 12 unestimated
 

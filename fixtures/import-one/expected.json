@@ -29,6 +29,7 @@
     "total": 26,
     "empty_text": 0,
     "titled": 6,
+    "not_taken": 0,
     "per_form": {
       "table_row": 10,
       "headerless_row": 2,

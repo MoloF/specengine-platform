@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-import]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-10-30
 ---
 
 # Import: record model and rules
@@ -12,7 +12,7 @@ reviewed: 2026-10-22
 
 ## Record model
 
-`ImportRecord`, in (path, line, form) order: `path`; `line` (of the ID; a document's: its defining key's, 1 from a path); `form` (`table-row` · `headerless-row` · `list-item` · `section` · `document`); `id`; `prefix` (Latin); `aliases` (the written ID, if legacy-mapped); `script` (as written); `role` (`definition` · `reference`); `scope` (`project` · `feature`); `title` (titled list items only, omitted otherwise); `text` (the body as written); `hash` (BLAKE3 hex of `text`, every form); `fields` (table rows: other cells as `{header, value}`, header as written, `col-N` 0-based if absent, empty or repeated); `extent` (`[first, last]`, 1-based source lines: a row's line; an item's marker line to its `text`'s last; a section's heading to its last non-blank line; a document's every line; detail only, no count reads it). In memory only: a field's `column`; `written` (the ID as written); `task_box` (`[ ]` false, `[x]` true; list items); `id_cell` (a row's ID cell as written, under its column header as written, else `col-N`, when a letter or digit is left once the written ID is cut; the layout carries it as a field). A title is never body. From ``- **XQ-12: Short `name`**: body line`` and `notes/XQ-3.md` = `---` / `ident: XQ-3` / `---` / blank / `# Heading` / blank / `Body.` (`id_key = "ident"`):
+`ImportRecord`, in (path, line, form) order: `path`; `line` (of the ID; a document's: its defining key's, 1 from a path); `form` (`table-row` · `headerless-row` · `list-item` · `section` · `document`); `id`; `prefix` (Latin); `aliases` (the written ID, if legacy-mapped); `script` (as written); `role` (`definition` · `reference`); `scope` (`project` · `feature`); `title` (titled list items only, omitted otherwise); `text` (the body as written); `hash` (BLAKE3 hex of `text`, every form); `fields` (table rows: other cells as `{header, value}`, header as written, `col-N` 0-based if absent, empty or repeated); `extent` (`[first, last]`, 1-based source lines: a row's line; an item's marker line to its `text`'s last, a wrapped span's closing line at least; a section's heading to its last non-blank line; a document's every line; detail only, no count reads it). In memory only: a field's `column`; `written` (the ID as written); `task_box` (`[ ]` false, `[x]` true; list items); `id_cell` (a row's ID cell as written, under its column header as written, else `col-N`, when a letter or digit is left once the written ID is cut; the layout carries it as a field). A title is never body. From ``- **XQ-12: Short `name`**: body line`` and `notes/XQ-3.md` = `---` / `ident: XQ-3` / `---` / blank / `# Heading` / blank / `Body.` (`id_key = "ident"`):
 
 ```json
 {"path":"specs/a.md","line":7,"form":"list-item","id":"XQ-12","prefix":"XQ","aliases":[],"script":"latin","role":"definition","scope":"project","title":"Short `name`","text":"body line","hash":"<hex>","fields":[],"extent":[7,7]}
@@ -23,23 +23,14 @@ reviewed: 2026-10-22
 
 - a `{#ID}` heading → `section`;
 - a record-table row (an ID in the ID column, or `id_header` matching; never a field table) → `table-row`; a row of a `headerless` block → `headerless-row`;
-- a list item opening (after `[ ]` / `[x]`) with a strong span `**…**` / `__…__` holding a lead-in ID (`[lists] lead_in`; "Titled lead-ins") → `list-item`;
+- a list item opening (after `[ ]` / `[x]`) with a strong span `**…**` / `__…__`, over soft line breaks too, holding a lead-in ID (`[lists] lead_in`) → `list-item`; spans, titles and text: `docs/canon/import-lead-ins.md` "Wrapped spans", "Titled lead-ins"; one ID-led but taken by no record: its "Not taken";
 - a document naming its own ID (`[documents]`; "Document records") → `document`.
-
-## Titled lead-ins
-
-One `[lists] separators` list splits ID from title and title from text.
-
-- The span's trimmed content reads as ID [separator [title]]: the ID is the longest leading part that resolves, ending right before a listed separator or at the content end, each candidate trimmed; several separators at one position: the longest. Resolving: an ID, or an unmapped legacy prefix (→ `legacy.unmapped`, no record); a hyphenless match does not resolve, the next shorter part is tried. Nothing resolves: no record.
-- A title exists iff the comment-free span holds content after the separator. Its text is the raw line from right after the separator to the closing delimiter, trimmed; inline markup, escapes and comments kept (`**ID. Title.**` → `Title.`). It stays outside `text` and `hash`; ID-like tokens in it count as anywhere; the hyphenless lead-in test is unchanged.
-- A span ending in a separator with no title strips no separator after it; any other span strips one (right after the span, else past blanks).
-- A legacy titled ID → the Latin `id` and an alias; a feature-scoped one → a record.
 
 ## Text and hash
 
 - **Row**: the first non-ID cell whose header matches `text_header`, else `text_column`, trimmed, escapes and a comment opener as written.
 - **Section**: the heading to the next heading of the same or higher level the import scanner reads, trailing whitespace trimmed: the census span unless a heading sits on a line opening inside a comment ("Comments").
-- **List item**: the raw first line after the span and its separator, comments kept; then deeper and lazy lines, until a blank line before a shallower one, an item at the marker's indent or shallower, a nested record item (titled ones included), or a heading. A lazy line continues the paragraph unless it opens a list item, heading, fence, table row, thematic break, HTML block, block quote, or starts `<!--` outside a comment. A fence opened on a deeper line holds code to its closing fence, no lazy line after it. Block syntax is read past the marker's columns (tab: next multiple of four), not the content column. Lines joined by LF (CR before LF dropped), trailing whitespace trimmed.
+- **List item**: `docs/canon/import-lead-ins.md` "List item text".
 - **Document**: the body is everything after a closed YAML block except a field table's lines (header through last row, lines skipped inside it included) and the blank lines (spaces, tabs) right after it; headings before the table are kept, in order. An unclosed YAML block is no header: the body starts at line 1. `text` = `import::document_text(body)` (pub): a leading BOM, a CR before LF and leading lines of only spaces and tabs dropped, trailing `[ \t\r\n]` trimmed (NBSP, U+3000 and other Unicode blanks kept), nothing else normalised, nested records included. The import path skips a leading BOM before header detection, so a heading or row on line 1 is read (the census does not). `import-layout` normalises an emitted file's body with the same function.
 
 ## Document records
@@ -86,7 +77,7 @@ Import mode only (`scan_import`); the census still reads these lines (`crates/sp
 
 - A comment opened in the **last** row of a field table: its continuation line lands in the document body (one opened mid-table stays out). Fix: the scanner records the last consumed line as the table's end.
 - A statement wholly inside the strong span gives empty `text` (`records.empty_text`); such records share BLAKE3(""), so `import-layout` compares their titles.
-- No record: a separator not right after the ID, a strong span wrapped onto the next line, a paragraph lead-in.
+- No record: a separator not right after the ID (counted `not_taken`), a paragraph lead-in. List lead-in limits: `docs/canon/import-lead-ins.md` "Known limits".
 - The code scan is path-only: a relative form resolving from where a generated file lands (`../../index.md`) is not credited; full-path forms still count right after `/`.
 - Document and section text holds nested records: `import-layout` compares such a container cut, before minus the extents of records moved out, after minus the blocks reshaped in (`docs/canon/import-layout-verifier.md` "Verifier"). A loose `id_path` demotes real definitions: watch `by_document`.
 - Open minor: a second key reaching `id_key` (diagnosed) still counts its value's tokens.

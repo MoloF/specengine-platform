@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-10-30
 ---
 
 # Import layout: verifier, attribution, output
@@ -20,9 +20,11 @@ Core parses each tree file under the emitted scheme. The map, then the ID, then 
 - **Task box**: the source state; `dropped` when no `task_box_key` is set or its value does not read back (then also a miss).
 - **Header**: `documents`, residues with core front-matter; `unparseable`, residues and record files whose front-matter fails (their values are not compared); `keys_dropped`, a source key of a parseable header found neither under its tree name nor as written.
 - **Prose**: per document, the residue minus reshaped blocks vs the source body minus moved extents, S applied.
-- **Extent residue**: a letter or digit left once the carried parts are cut. A row by whole cells (split at unescaped `|`; a carried ID cell whole); a field table, one extent at its header line, per row by its carried key and value (an empty-key row, a third cell stay); an item or section by text, written ID, title, box, configured separators; a moved section's heading line by title, written ID, kept attributes; an opening ordered-list marker ignored. `extents.total` counts each field table once.
+- **Extent residue**: a letter or digit left once the carried parts are cut. A row by whole cells (split at unescaped `|`; a carried ID cell whole); a field table, one extent at its header line, per row by its carried key and value (an empty-key row, a third cell stay); an item or section by text, written ID, title, box, configured separators, a title wrapped over lines cut across its breaks (`cut_wrapped`: its words apart by blank runs, line breaks included); a moved section's heading line by title, written ID, kept attributes; an opening ordered-list marker ignored. `extents.total` counts each field table once.
 - **Reasons**, per miss: the emitter's reason, else `header_unparseable` (the record file's or document record's front-matter fails), else `reader_boundary` (scanner and core heading lines differ between the scanner headings around the extent; core's: slug anchors and ID sections of the source), else `unexplained`.
 - **Dangling**: `mentions` = `mention-dangling`; `links` = `link-dangling` + `link-anchor`, the after count plus links core never reports that named a walked document from the source and reach no tree file now (a target outside core's walk, a renamed or moved document; `findings.json` `left_tree`).
+
+From `specengine-import` `layout/`: `source_body(config, text) -> SourceBody {lines, excluded, headings, field_rows, field_table_line}`, the import's reading of a body; `carried_fields`, `field_keys`, `section_heading`, `s_heading`, `emit_scheme`, `toml_text` (the hand-written TOML writer); `typed_keys() -> Vec<(String, CoreType)>`, the copy of core's `TYPED_KEYS` (pinned by an eval test: count, order, variant names), with `core_type`, `parses_as`.
 
 ## Attribution
 
@@ -45,7 +47,7 @@ The baseline takes the source-caused errors; `layout` findings stay errors and b
 
 ## Output
 
-stdout `{measurement, label, versions, wall_ms, result}`, counts only; `result` is exactly: `before{documents, definitions, duplicates, hyphenless{definitions, mentions}}`, `tree{documents, record_files, feature_documents, moved, reshaped}`, `hashes{matched, mismatched, missing, extra}`, `titles`, `fields` (each `{matched, mismatched}`), `task_box{carried, dropped}`, `prose{documents, mismatched}`, `extents{total, residue}`, `header{documents, unparseable, keys_dropped, conflicts, last_row_comment}`, `reasons{prefix_unknown, slug, path_taken, section_fields, header_unparseable, reader_boundary, unexplained}` (all seven always), `check{observe, enforce, stale, emitter_findings, findings{<code>{before, source, layout, emitter}}, baseline{entries, per_code{<code>}}}` (non-zero codes), `dangling{mentions, links}` (each `{before, after}`), `index{files, nodes, links, full_ms}`, `code{moved_cited, citations_to_moved}`, `detail{diagnostics, layout_ms}` (emit + write). Under `<out>/layout/<label>/`: `tree/`, `index.db`, and `emission`, `records`, `prose`, `extents`, `headers` (inherited entries with `record`), `findings` (attributed), `diagnostics` (`.json`).
+stdout `{measurement, label, versions, wall_ms, result}`, counts only; `result` is exactly: `before{documents, definitions, duplicates, hyphenless{definitions, mentions}, not_taken}`, `tree{documents, record_files, feature_documents, moved, reshaped}`, `hashes{matched, mismatched, missing, extra}`, `titles`, `fields` (each `{matched, mismatched}`), `task_box{carried, dropped}`, `prose{documents, mismatched}`, `extents{total, residue}`, `header{documents, unparseable, keys_dropped, conflicts, last_row_comment}`, `reasons{prefix_unknown, slug, path_taken, section_fields, header_unparseable, reader_boundary, unexplained}` (all seven always), `check{observe, enforce, stale, emitter_findings, findings{<code>{before, source, layout, emitter}}, baseline{entries, per_code{<code>}}}` (non-zero codes), `dangling{mentions, links}` (each `{before, after}`), `index{files, nodes, links, full_ms}`, `code{moved_cited, citations_to_moved}`, `detail{diagnostics, layout_ms}` (emit + write). Under `<out>/layout/<label>/`: `tree/`, `index.db`, and `emission`, `records`, `not_taken` (`docs/canon/import-lead-ins.md` "Not taken"), `prose`, `extents`, `headers` (inherited entries with `record`), `findings` (attributed), `diagnostics` (`.json`).
 
 ## Known limits
 

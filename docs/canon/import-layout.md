@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-import, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-10-30
 ---
 
 # Import layout: the emitter and the after-tree
@@ -67,7 +67,7 @@ Keys read by the import's lenient reader:
 
 ## Emitted configs
 
-`specengine.toml` is the before scheme with `[paths]` `records`, `features` from `[layout]`, `roots` the sorted first components of the tree documents and index outputs, `exclude = []`, `link_base` its own, else `[links] base`; `[ids.legacy]` keys join their target's `aliases_from` (a prefix or another's alias: a diagnostic, skipped); `scope = "feature"` per `feature_prefixes`; keys sorted (`layout::toml_text`, hand-written); it loads in core. `.spec-debt.toml` (eval) holds one sorted `[[debt]]` per distinct (code, path, subject) source-caused error, `reason = "import-layout source debt"`, `expires = debt_expires`. Both sit in `tree/`.
+`specengine.toml` is the before scheme with `[paths]` `records`, `features` from `[layout]`; `roots` the before roots core read, each holding a tree document or index output, then `records`, then `features`, each only when outside them and holding one; `exclude` the before globs in written order, less each matching an index output this scheme writes, which a comment right above `exclude` names, in written order, exactly `# exclude dropped: "<pattern>" matches an index output this scheme writes`; `link_base` its own, else `[links] base`; `[ids.legacy]` keys join their target's `aliases_from` (a prefix or another's alias: a diagnostic, skipped); `scope = "feature"` per `feature_prefixes`; keys sorted (`layout::toml_text`, hand-written); it loads in core. `.spec-debt.toml` (eval) holds one sorted `[[debt]]` per distinct (code, path, subject) source-caused error, `reason = "import-layout source debt"`, `expires = debt_expires`. Both sit in `tree/`. The kept walk's rules and limits: `docs/canon/import-lead-ins.md` "Emitted `[paths]`", "Known limits".
 
 ## Known limits
 

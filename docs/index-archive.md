@@ -47,6 +47,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/import-gaps.md](features/import-gaps.md) shipped
 - [docs/features/import-homes.md](features/import-homes.md) shipped
 - [docs/features/import-layout.md](features/import-layout.md) shipped
+- [docs/features/import-lead-ins.md](features/import-lead-ins.md) shipped
 - [docs/features/import-records.md](features/import-records.md) shipped
 - [docs/features/index-compaction.md](features/index-compaction.md) shipped
 - [docs/features/index-shards.md](features/index-shards.md) shipped
@@ -141,6 +142,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0010.md](roadmap/RM-0010.md) shipped
 - [docs/roadmap/RM-0011.md](roadmap/RM-0011.md) shipped
 - [docs/roadmap/RM-0012.md](roadmap/RM-0012.md) shipped
+- [docs/roadmap/RM-0013.md](roadmap/RM-0013.md) shipped
 - [docs/roadmap/RM-0029.md](roadmap/RM-0029.md) shipped
 - [docs/roadmap/RM-0030.md](roadmap/RM-0030.md) shipped
 - [docs/roadmap/RM-0032.md](roadmap/RM-0032.md) shipped
