@@ -1925,7 +1925,7 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
 
 // ----------------------------------------------------------------- AC-R13
 
-/// AC-R13: an applied and an open amendment export `"queue_schema":8`
+/// AC-R13: an applied and an open amendment export `"queue_schema":9`
 /// (format 2, 46 columns a row since drift-queue, `kind` `amendment`); imported into a fresh
 /// data directory and exported again, byte for byte; the open one's ID
 /// still reserved. M: export skipping the kind.
@@ -1965,7 +1965,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]

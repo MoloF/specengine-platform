@@ -1,25 +1,25 @@
-//! The queue's dump, format 2 (canon `tasks`, "Backup"; format 1: canon
-//! `queue-backup`, "Format"): UTF-8 compact JSON, one object per LF-ended
-//! line. The header
-//! `{"format":2,"queue_schema":8,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"events":<e>}`
+//! The queue's dump, format 3 (task spec `card-store`, "Backup"; format 2:
+//! canon `tasks`, "Backup"; format 1: canon `queue-backup`, "Format"): UTF-8
+//! compact JSON, one object per LF-ended line. The header
+//! `{"format":3,"queue_schema":9,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
-//! `runs` row by task and number, every `events` row by `seq`, each
-//! `{"<table>":{…}}` with every column in table order: `TEXT` a string,
-//! `NULL` `null`, `run` and `seq` numbers; JSON columns stay the strings
-//! stored. No export time and no host inside: equal queues give equal
-//! bytes. A format-1 dump (five header keys, queue schema 1, 2 or 3,
+//! `runs` row by task and number, every `cards` row by ID number, every
+//! `events` row by `seq`, each `{"<table>":{…}}` with every column in table
+//! order: `TEXT` a string, `NULL` `null`, `run`, `position` and `seq`
+//! numbers; JSON columns stay the strings stored. No export time and no host
+//! inside: equal queues give equal bytes. Format 3 holds queue schema 9
+//! alone. A format-1 dump (five header keys, queue schema 1, 2 or 3,
 //! `proposals` and `events` rows only) still restores: its rows hold that
 //! schema's 24, 35 or 40 columns, the later ones restored `NULL`; format 2
-//! holds queue schema 4 (41 columns, its stages restored `NULL`), 5 (43, a
+//! (seven header keys, no cards) holds queue schema 4 (41 columns, its stages restored `NULL`), 5 (43, a
 //! proposal's `staged`, `staged_at` with them: canon `decision-staging`,
 //! "Documents"; its `interpretation` restored `NULL`), 6 (44, an
 //! interpretation's `interpretation` with them: task spec
 //! `kind-interpretation`; its open approve stages restored in schema 7's
 //! shape), 7 (44, an approve stage's `editorial`: task spec
-//! `rev-discipline`; its `drift`, `drift_hash` restored `NULL`) or 8 (this
-//! build's 46, a drift item's `drift` and `drift_hash`: task spec
-//! `drift-queue`).
+//! `rev-discipline`; its `drift`, `drift_hash` restored `NULL`) or 8 (46, a
+//! drift item's `drift` and `drift_hash`: task spec `drift-queue`).
 //!
 //! [`render`] writes it; [`parse`] reads a whole file back, refusing its
 //! first defect as `<FILE>:<line>: <defect>` without ever quoting the line's
@@ -30,27 +30,47 @@ use std::fmt;
 use std::io::{self, Write as _};
 
 use serde::de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor};
+use specengine_core::card::card_number;
 use specengine_core::proposal::proposal_number;
 use specengine_core::task::task_number;
 use specengine_store::{
-    EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, RUN_COLUMNS, StoredEvent,
-    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, proposal_columns,
+    CARD_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, RUN_COLUMNS, StoredCard,
+    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
+    proposal_columns,
 };
 
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 2;
+pub const STATE_FORMAT: u64 = 3;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
 
+/// The format of proposals, tasks, runs and events, no cards.
+const NO_CARDS_FORMAT: u64 = 2;
+
 /// The first queue schema with tasks and runs: format 1 holds the schemas
-/// before it, format 2 it and those after (to this build's).
+/// before it, format 2 it and those after, to [`CARDS_SCHEMA`].
 const TASKS_SCHEMA: i64 = 4;
 
+/// The first queue schema with cards: format 3 holds it, to this build's.
+const CARDS_SCHEMA: i64 = 9;
+
 /// The header's keys, in the order written.
-const HEADER_KEYS: [&str; 7] = [
+const HEADER_KEYS: [&str; 8] = [
+    "format",
+    "queue_schema",
+    "project",
+    "proposals",
+    "tasks",
+    "runs",
+    "cards",
+    "events",
+];
+
+/// A format-2 header's keys.
+const HEADER_KEYS_2: [&str; 7] = [
     "format",
     "queue_schema",
     "project",
@@ -62,6 +82,9 @@ const HEADER_KEYS: [&str; 7] = [
 
 /// A format-1 header's keys.
 const HEADER_KEYS_1: [&str; 5] = ["format", "queue_schema", "project", "proposals", "events"];
+
+/// The one `cards` column that is no `TEXT`.
+const POSITION: &str = "position";
 
 /// The dump of `state`, the queue of `slug` (see the module documentation):
 /// every string escaped by `serde_json` straight into the buffer, no text
@@ -76,8 +99,8 @@ pub(crate) fn render(slug: &str, state: &StoredQueue) -> io::Result<Vec<u8>> {
     serde_json::to_writer(&mut out, slug)?;
     writeln!(
         out,
-        ",\"proposals\":{},\"tasks\":{},\"runs\":{},\"events\":{}}}",
-        counts.proposals, counts.tasks, counts.runs, counts.events
+        ",\"proposals\":{},\"tasks\":{},\"runs\":{},\"cards\":{},\"events\":{}}}",
+        counts.proposals, counts.tasks, counts.runs, counts.cards, counts.events
     )?;
     for row in &state.proposals {
         out.extend_from_slice(b"{\"proposals\":{");
@@ -107,6 +130,23 @@ pub(crate) fn render(slug: &str, state: &StoredQueue) -> io::Result<Vec<u8>> {
         for (column, value) in RUN_COLUMNS[2..].iter().zip(rest) {
             out.push(b',');
             push_column(&mut out, column, value.as_deref())?;
+        }
+        out.extend_from_slice(b"}}\n");
+    }
+    for row in &state.cards {
+        out.extend_from_slice(b"{\"cards\":{");
+        let mut texts = row.columns.iter();
+        for (index, column) in CARD_COLUMNS.iter().enumerate() {
+            if index > 0 {
+                out.push(b',');
+            }
+            if *column == POSITION {
+                write!(out, "\"{POSITION}\":")?;
+                serde_json::to_writer(&mut out, &row.position)?;
+            } else {
+                let value = texts.next().and_then(Option::as_deref);
+                push_column(&mut out, column, value)?;
+            }
         }
         out.extend_from_slice(b"}}\n");
     }
@@ -152,6 +192,7 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
     let mut state = StoredQueue::default();
     let mut ids: HashMap<String, usize> = HashMap::new();
     let mut task_ids: HashMap<String, usize> = HashMap::new();
+    let mut card_ids: HashMap<String, usize> = HashMap::new();
     let mut run_keys: HashMap<(String, i64), usize> = HashMap::new();
     let mut run_lines: Vec<usize> = Vec::new();
     let mut seqs: HashMap<i64, usize> = HashMap::new();
@@ -195,6 +236,16 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
                 run_lines.push(number);
                 state.runs.push(*row);
             }
+            Row::Card(row) => {
+                let id = row.id().unwrap_or_default().to_owned();
+                if let Some(first) = card_ids.insert(id, number) {
+                    return Err(at(
+                        number,
+                        &format!("`id` repeats the `cards` row of line {first}"),
+                    ));
+                }
+                state.cards.push(*row);
+            }
             Row::Event(row) => {
                 if let Some(first) = seqs.insert(row.seq, number) {
                     return Err(at(
@@ -223,28 +274,39 @@ pub(crate) fn parse(label: &str, bytes: &[u8], slug: &str) -> Result<StoredQueue
     let counts_differ = found.proposals != header.proposals
         || found.tasks != header.tasks
         || found.runs != header.runs
+        || found.cards != header.cards
         || found.events != header.events;
     if counts_differ {
-        return Err(CliError::cannot(
-            if header.format == PROPOSALS_ONLY_FORMAT {
-                format!(
-                    "{label}: header counts {}, {}; found {}, {}",
-                    header.proposals, header.events, found.proposals, found.events
-                )
-            } else {
-                format!(
-                    "{label}: header counts {}, {}, {}, {}; found {}, {}, {}, {}",
-                    header.proposals,
-                    header.tasks,
-                    header.runs,
-                    header.events,
-                    found.proposals,
-                    found.tasks,
-                    found.runs,
-                    found.events
-                )
-            },
-        ));
+        return Err(CliError::cannot(match header.format {
+            PROPOSALS_ONLY_FORMAT => format!(
+                "{label}: header counts {}, {}; found {}, {}",
+                header.proposals, header.events, found.proposals, found.events
+            ),
+            NO_CARDS_FORMAT => format!(
+                "{label}: header counts {}, {}, {}, {}; found {}, {}, {}, {}",
+                header.proposals,
+                header.tasks,
+                header.runs,
+                header.events,
+                found.proposals,
+                found.tasks,
+                found.runs,
+                found.events
+            ),
+            _ => format!(
+                "{label}: header counts {}, {}, {}, {}, {}; found {}, {}, {}, {}, {}",
+                header.proposals,
+                header.tasks,
+                header.runs,
+                header.cards,
+                header.events,
+                found.proposals,
+                found.tasks,
+                found.runs,
+                found.cards,
+                found.events
+            ),
+        }));
     }
     Ok(state)
 }
@@ -258,6 +320,7 @@ struct Header {
     proposals: u64,
     tasks: u64,
     runs: u64,
+    cards: u64,
     events: u64,
 }
 
@@ -266,6 +329,7 @@ enum Row {
     Proposal(Box<StoredProposal>),
     Task(Box<StoredTask>),
     Run(Box<StoredRun>),
+    Card(Box<StoredCard>),
     Event(StoredEvent),
 }
 
@@ -284,9 +348,9 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 }
 
 /// The header line: `format` first (a newer build's header may differ in
-/// all else), then exactly the format's keys (format 1: five; 2: seven),
-/// `queue_schema` (format 1: 1 to 3; 2: 4 to this build's), `project` the root's
-/// slug, the counts.
+/// all else), then exactly the format's keys (format 1: five; 2: seven; 3:
+/// eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9 to this
+/// build's), `project` the root's slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
         entries
@@ -297,7 +361,7 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     let Some(format) = named("format") else {
         return Err(
             "no header: a dump's first line is `{\"format\":…,\"queue_schema\":…,\"project\":…,\
-             \"proposals\":…,\"tasks\":…,\"runs\":…,\"events\":…}`"
+             \"proposals\":…,\"tasks\":…,\"runs\":…,\"cards\":…,\"events\":…}`"
                 .to_owned(),
         );
     };
@@ -313,13 +377,13 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     if format < PROPOSALS_ONLY_FORMAT {
         return Err(format!(
             "the dump is of format {format}, which this build does not read (it reads formats \
-             {PROPOSALS_ONLY_FORMAT} and {STATE_FORMAT})"
+             {PROPOSALS_ONLY_FORMAT} to {STATE_FORMAT})"
         ));
     }
-    let header_keys: &[&str] = if format == PROPOSALS_ONLY_FORMAT {
-        &HEADER_KEYS_1
-    } else {
-        &HEADER_KEYS
+    let header_keys: &[&str] = match format {
+        PROPOSALS_ONLY_FORMAT => &HEADER_KEYS_1,
+        NO_CARDS_FORMAT => &HEADER_KEYS_2,
+        _ => &HEADER_KEYS,
     };
     let mut keys: Vec<&str> = entries.iter().map(|(name, _)| name.as_str()).collect();
     keys.sort_unstable();
@@ -345,11 +409,12 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
              {QUEUE_SCHEMA_VERSION}): upgrade SpecEngine"
         ));
     }
-    // Format 1 holds the schemas before the tasks, format 2 those since.
-    let held = if format == PROPOSALS_ONLY_FORMAT {
-        1..TASKS_SCHEMA
-    } else {
-        TASKS_SCHEMA..QUEUE_SCHEMA_VERSION + 1
+    // Format 1 holds the schemas before the tasks, format 2 those to the
+    // cards, format 3 the rest.
+    let held = match format {
+        PROPOSALS_ONLY_FORMAT => 1..TASKS_SCHEMA,
+        NO_CARDS_FORMAT => TASKS_SCHEMA..CARDS_SCHEMA,
+        _ => CARDS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
     };
     let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {
@@ -380,6 +445,11 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
     } else {
         (count("tasks")?, count("runs")?)
     };
+    let cards = if format > NO_CARDS_FORMAT {
+        count("cards")?
+    } else {
+        0
+    };
     Ok(Header {
         format,
         project: project.clone(),
@@ -387,19 +457,22 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         proposals: count("proposals")?,
         tasks,
         runs,
+        cards,
         events: count("events")?,
     })
 }
 
-/// A row line: `{"proposals":{…}}`, `{"tasks":{…}}`, `{"runs":{…}}`
-/// (format 2) or `{"events":{…}}`, every column of the table
-/// (`proposals`: of the header's queue schema) once and no other, `TEXT` a
-/// string or `null`, `run` and `seq` integers ≥ 1, an `id` and a run's
-/// `task_id` as the queue writes them, `project` the header's.
+/// A row line: `{"proposals":{…}}`, `{"tasks":{…}}`, `{"runs":{…}}` (from
+/// format 2), `{"cards":{…}}` (format 3) or `{"events":{…}}`, every column of
+/// the table (`proposals`: of the header's queue schema) once and no other,
+/// `TEXT` a string or `null`, `run` and `seq` integers ≥ 1, `position` an
+/// integer or `null`, an `id` and a run's `task_id` as the queue writes them,
+/// `project` the header's.
 fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, String> {
     const SHAPE: &str = "not a row `{\"<table>\":{…}}` of one table";
     let project = header.project.as_str();
     let with_tasks = header.format != PROPOSALS_ONLY_FORMAT;
+    let with_cards = header.format > NO_CARDS_FORMAT;
     if entries.len() != 1 {
         return Err(SHAPE.to_owned());
     }
@@ -408,11 +481,19 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
         "proposals" => header.columns,
         "tasks" if with_tasks => &TASK_COLUMNS,
         "runs" if with_tasks => &RUN_COLUMNS,
+        "cards" if with_cards => &CARD_COLUMNS,
         "events" => &EVENT_COLUMNS,
+        _ if with_cards => {
+            return Err(
+                "a row of an unknown table (a dump holds `proposals`, `tasks`, `runs`, `cards` \
+                 and `events` rows)"
+                    .to_owned(),
+            );
+        }
         _ if with_tasks => {
             return Err(
-                "a row of an unknown table (a dump holds `proposals`, `tasks`, `runs` and \
-                 `events` rows)"
+                "a row of an unknown table (a format-2 dump holds `proposals`, `tasks`, `runs` \
+                 and `events` rows)"
                     .to_owned(),
             );
         }
@@ -497,6 +578,40 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
         }
         return Ok(Row::Run(Box::new(row)));
     }
+    if table == "cards" {
+        let mut columns: [Option<String>; CARD_COLUMNS.len() - 1] = Default::default();
+        let mut position = None;
+        let mut slot = 0;
+        for (column, value) in taken {
+            if column == POSITION {
+                position = match value {
+                    Json::Null => None,
+                    Json::Count(number) => Some(i64::try_from(number).map_err(|_| bad_position())?),
+                    Json::Negative(number) => Some(number),
+                    _ => return Err(bad_position()),
+                };
+                continue;
+            }
+            columns[slot] = text(column, value)?;
+            slot += 1;
+        }
+        let row = StoredCard { position, columns };
+        if !row
+            .id()
+            .and_then(card_number)
+            .is_some_and(|number| number >= 1)
+        {
+            return Err(format!(
+                "`id` is not a card ID as the queue writes it (`C-` and 4 or more digits, \
+                 numbered from 1 to {})",
+                u64::MAX
+            ));
+        }
+        if row.project() != Some(project) {
+            return Err(format!("`project` is not the header's (`{project}`)"));
+        }
+        return Ok(Row::Card(Box::new(row)));
+    }
     if table == "events" {
         let mut taken = taken.into_iter();
         let seq = match taken.next() {
@@ -537,6 +652,11 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
     Ok(Row::Proposal(Box::new(row)))
 }
 
+/// A `position` that is neither `null` nor a 64-bit integer.
+fn bad_position() -> String {
+    "`position` is not an integer or null".to_owned()
+}
+
 /// A `TEXT` column's value: a string or `null`.
 fn text(column: &str, value: Json) -> Result<Option<String>, String> {
     match value {
@@ -552,9 +672,11 @@ enum Json {
     Null,
     /// An integer ≥ 0 that fits 64 bits.
     Count(u64),
+    /// An integer below 0: a corrupt `position`, kept as stored.
+    Negative(i64),
     String(String),
     Object(Vec<(String, Json)>),
-    /// A boolean, a negative or fractional number, an array.
+    /// A boolean, a fractional number, an array.
     Other,
 }
 
@@ -590,7 +712,7 @@ impl<'de> Visitor<'de> for JsonVisitor {
     }
 
     fn visit_i64<E: de::Error>(self, number: i64) -> Result<Json, E> {
-        Ok(u64::try_from(number).map_or(Json::Other, Json::Count))
+        Ok(u64::try_from(number).map_or(Json::Negative(number), Json::Count))
     }
 
     fn visit_f64<E: de::Error>(self, _: f64) -> Result<Json, E> {

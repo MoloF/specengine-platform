@@ -49,7 +49,7 @@ A `generated` document is no spec file: only its registered generator writes it 
 
 Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`docs/canon/tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`docs/canon/task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`docs/canon/architecture-code.md#tests`). ADR-0044.
 
-Decided, not built before RM-0045: any trade's work is a card, `C-NNNN`, a queue row beside `T-`, moved from the UI too, never read by the gate; a lead's move to `ready` is its control point, the requesting side accepts it. ADR-0056.
+Any trade's work is a card, `C-NNNN`, a queue row beside `T-`, never read by the gate (`docs/canon/cards.md`); a lead's move to `ready` is a convention until the hub; the requesting side accepts it. ADR-0056.
 
 <a id="rules-format"></a>
 ## Rule form

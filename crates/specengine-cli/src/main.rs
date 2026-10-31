@@ -6,8 +6,8 @@
 //!
 //! The one check that stays here: `spec approve`, `spec reject`, `spec
 //! import-state`, `spec round answer`, the owner's `spec task
-//! approve|changes|cancel` and `spec verify --tests` run only when stdin is
-//! a terminal (else exit 2, nothing read or logged, `import-state`'s and
+//! approve|changes|cancel`, `spec card accept` and `spec verify --tests` run
+//! only when stdin is a terminal (else exit 2, nothing read or logged, `import-state`'s and
 //! `round answer`'s file not opened, no test run); the
 //! library asks its question through a callback, which prints it on stderr
 //! as `... [y/N] ` and reads one line: only `y` or `yes` consents. The clock
@@ -32,19 +32,21 @@ use clap::builder::PossibleValuesParser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CheckRequest,
-    CheckedTree, CliError, CreateRequest, DecisionRequest, DiscrepancyRequest, DriftRequest, Env,
-    Exit, ExportIndexRequest, ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput,
-    GateProgress, GateRequest, GateStage, Globals, GraphRequest, HealthRequest,
-    INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest, InboxRequest, IndexRequest,
-    InitRequest, IntakeSeverity, IntakeSource, InterpretRequest, LockAcceptRequest,
-    LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome, ProposeRequest,
-    ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest, ReviewRequest,
-    RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal, SearchRequest, Serve,
-    ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest,
-    TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest, TaskPlanRequest,
-    TaskReportRequest, TaskShowRequest, TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree,
-    VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json, render_text,
+    AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CardAcceptRequest,
+    CardAssignRequest, CardCancelRequest, CardEditRequest, CardListRequest, CardMoveRequest,
+    CardNewRequest, CardShowRequest, CheckRequest, CheckedTree, CliError, CreateRequest,
+    DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest,
+    ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
+    GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
+    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
+    InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest,
+    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
+    RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
+    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
+    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
+    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
+    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest,
+    VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -346,6 +348,11 @@ enum Command {
         #[command(subcommand)]
         command: TaskCommand,
     },
+    /// Work on the project's cards, the lighter record of any trade's work: the columns, moves and who makes them are the project's `[card]`; only a person accepts one, on a terminal.
+    Card {
+        #[command(subcommand)]
+        command: CardCommand,
+    },
     /// The task gate: may an agent write FILE? Exit 0 pass, 2 refuse or no verdict; only an in_progress task claimed in the file's worktree, on its branch, opens a controlled path.
     #[command(group(ArgGroup::new("input").required(true).args(["path", "stdin"])))]
     Gate {
@@ -515,6 +522,175 @@ enum TaskCommand {
     Complete {
         #[arg(value_name = "T")]
         id: String,
+    },
+}
+
+#[derive(Subcommand)]
+enum CardCommand {
+    /// Make a card: the first column of the flow listing its discipline, else of the one flow listing none.
+    New {
+        /// The title, at most 256 bytes.
+        #[arg(long, value_name = "T")]
+        title: String,
+        /// The goal, at most 4096 bytes.
+        #[arg(long, value_name = "T")]
+        goal: Option<String>,
+        /// The discipline, a name `[card]` may list.
+        #[arg(long, value_name = "D")]
+        discipline: Option<String>,
+        /// A node it answers, an ID, `slug/ID` or a root-relative `.md` path (repeatable, at most 64); none: a manual card.
+        #[arg(long = "target", value_name = "REF")]
+        targets: Vec<String>,
+        /// A criterion (repeatable, at most 32, each at most 1024 bytes).
+        #[arg(long = "criterion", value_name = "C")]
+        criteria: Vec<String>,
+        /// Who works on it.
+        #[arg(long, value_name = "N")]
+        assignee: Option<String>,
+        /// `N` or `N-M`.
+        #[arg(long, value_name = "E")]
+        estimate: Option<String>,
+        /// A date, YYYY-MM-DD.
+        #[arg(long, value_name = "DATE")]
+        due: Option<String>,
+        /// The card it belongs to.
+        #[arg(long, value_name = "C")]
+        parent: Option<String>,
+        /// The card it corrects, never itself.
+        #[arg(long, value_name = "C")]
+        corrects: Option<String>,
+        /// Who acts, self-declared and recorded; absent: `local`.
+        #[arg(long = "as", value_name = "N")]
+        actor: Option<String>,
+    },
+    /// List the flows, then the cards by flow, column and position; filters are exact and ANDed.
+    List {
+        /// Only this flow.
+        #[arg(long, value_name = "F")]
+        flow: Option<String>,
+        /// Only this column.
+        #[arg(long, value_name = "K")]
+        column: Option<String>,
+        /// Only this discipline.
+        #[arg(long, value_name = "D")]
+        discipline: Option<String>,
+        /// Only this assignee.
+        #[arg(long, value_name = "N")]
+        assignee: Option<String>,
+        /// Only manual cards.
+        #[arg(long = "no-target")]
+        no_target: bool,
+        /// Cancelled cards too, last in their column.
+        #[arg(long = "with-cancelled")]
+        with_cancelled: bool,
+    },
+    /// Print a card as `key: value` lines.
+    Show {
+        #[arg(value_name = "C")]
+        id: String,
+        /// Its last 64 `card.*` events too.
+        #[arg(long)]
+        history: bool,
+    },
+    /// Move a card within its flow: last in the column, or before a card of it; its own column is a reorder.
+    Move {
+        #[arg(value_name = "C")]
+        id: String,
+        /// The column.
+        #[arg(long, value_name = "K")]
+        to: Option<String>,
+        /// The card whose place it takes.
+        #[arg(long, value_name = "C")]
+        before: Option<String>,
+        /// Only if the card still stands at this revision.
+        #[arg(long, value_name = "R")]
+        revision: Option<String>,
+        /// Who acts, compared with the move's `by`; absent: `local`.
+        #[arg(long = "as", value_name = "N")]
+        actor: Option<String>,
+    },
+    /// Edit a card: a value `-` clears, --target and --criterion replace, --evidence appends.
+    Edit {
+        #[arg(value_name = "C")]
+        id: String,
+        /// The title, at most 256 bytes.
+        #[arg(long, value_name = "T")]
+        title: Option<String>,
+        /// The goal, at most 4096 bytes.
+        #[arg(long, value_name = "T")]
+        goal: Option<String>,
+        /// A node it answers (repeatable, at most 64).
+        #[arg(long = "target", value_name = "REF")]
+        targets: Vec<String>,
+        /// A criterion (repeatable, at most 32, each at most 1024 bytes).
+        #[arg(long = "criterion", value_name = "C")]
+        criteria: Vec<String>,
+        /// `N` or `N-M`.
+        #[arg(long, value_name = "E")]
+        estimate: Option<String>,
+        /// A date, YYYY-MM-DD.
+        #[arg(long, value_name = "DATE")]
+        due: Option<String>,
+        /// The card it belongs to.
+        #[arg(long, value_name = "C")]
+        parent: Option<String>,
+        /// The card it corrects, never itself.
+        #[arg(long, value_name = "C")]
+        corrects: Option<String>,
+        /// `url=http…`, `path=<path>@<hex blob>`, `build=…` or `note=…` (repeatable): a reference, nothing is fetched.
+        #[arg(long = "evidence", value_name = "KIND=VALUE")]
+        evidence: Vec<String>,
+        /// Only if the card still stands at this revision.
+        #[arg(long, value_name = "R")]
+        revision: Option<String>,
+        /// Who acts, recorded; absent: `local`.
+        #[arg(long = "as", value_name = "N")]
+        actor: Option<String>,
+    },
+    /// Name a card's assignee or reviewer; a value `-` clears.
+    Assign {
+        #[arg(value_name = "C")]
+        id: String,
+        /// Who works on it.
+        #[arg(long, value_name = "N")]
+        assignee: Option<String>,
+        /// Who accepts it.
+        #[arg(long, value_name = "N")]
+        reviewer: Option<String>,
+        /// Only if the card still stands at this revision.
+        #[arg(long, value_name = "R")]
+        revision: Option<String>,
+        /// Who acts, recorded; absent: `local`.
+        #[arg(long = "as", value_name = "N")]
+        actor: Option<String>,
+    },
+    /// Take a card out of its column for good.
+    Cancel {
+        #[arg(value_name = "C")]
+        id: String,
+        /// Why, at most 4096 bytes.
+        #[arg(long, value_name = "T")]
+        reason: String,
+        /// Only if the card still stands at this revision.
+        #[arg(long, value_name = "R")]
+        revision: Option<String>,
+        /// Who acts, recorded; absent: `local`.
+        #[arg(long = "as", value_name = "N")]
+        actor: Option<String>,
+    },
+    /// Accept a card as its reviewer, on a terminal: a person's act; asks for consent.
+    Accept {
+        #[arg(value_name = "C")]
+        id: String,
+        /// The card's reviewer, never its assignee.
+        #[arg(long = "as", value_name = "N")]
+        actor: String,
+        /// A note on the result, at most 4096 bytes.
+        #[arg(long, value_name = "T")]
+        note: Option<String>,
+        /// Only if the card still stands at this revision.
+        #[arg(long, value_name = "R")]
+        revision: Option<String>,
     },
 }
 
@@ -1533,6 +1709,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             },
         )?)),
         Command::Task { command } => run_task(env, globals, command)?,
+        Command::Card { command } => run_card(env, globals, command)?,
         // Run apart, before the environment is read (`run_gate`).
         Command::Gate { .. } => {
             return Err(CliError::cannot(
@@ -1932,6 +2109,170 @@ fn run_task(env: &Env, globals: &Globals, command: TaskCommand) -> Result<Outcom
     }
 }
 
+/// `spec card …`; `accept` runs only on a terminal.
+fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcome, CliError> {
+    let card = |outcome| Ok(Outcome::Card(Box::new(outcome)));
+    match command {
+        CardCommand::New {
+            title,
+            goal,
+            discipline,
+            targets,
+            criteria,
+            assignee,
+            estimate,
+            due,
+            parent,
+            corrects,
+            actor,
+        } => card(specengine_cli::card_new(
+            env,
+            globals,
+            &CardNewRequest {
+                title,
+                goal,
+                discipline,
+                targets,
+                criteria,
+                assignee,
+                estimate,
+                due,
+                parent,
+                corrects,
+                actor,
+                now: now(),
+            },
+        )?),
+        CardCommand::List {
+            flow,
+            column,
+            discipline,
+            assignee,
+            no_target,
+            with_cancelled,
+        } => Ok(Outcome::CardList(Box::new(specengine_cli::card_list(
+            env,
+            globals,
+            &CardListRequest {
+                flow,
+                column,
+                discipline,
+                assignee,
+                no_target,
+                with_cancelled,
+            },
+        )?))),
+        CardCommand::Show { id, history } => Ok(Outcome::CardShow(Box::new(
+            specengine_cli::card_show(env, globals, &CardShowRequest { id, history })?,
+        ))),
+        CardCommand::Move {
+            id,
+            to,
+            before,
+            revision,
+            actor,
+        } => card(specengine_cli::card_move(
+            env,
+            globals,
+            &CardMoveRequest {
+                id,
+                to,
+                before,
+                revision,
+                actor,
+                now: now(),
+            },
+        )?),
+        CardCommand::Edit {
+            id,
+            title,
+            goal,
+            targets,
+            criteria,
+            estimate,
+            due,
+            parent,
+            corrects,
+            evidence,
+            revision,
+            actor,
+        } => card(specengine_cli::card_edit(
+            env,
+            globals,
+            &CardEditRequest {
+                id,
+                title,
+                goal,
+                targets,
+                criteria,
+                estimate,
+                due,
+                parent,
+                corrects,
+                evidence,
+                revision,
+                actor,
+                now: now(),
+            },
+        )?),
+        CardCommand::Assign {
+            id,
+            assignee,
+            reviewer,
+            revision,
+            actor,
+        } => card(specengine_cli::card_assign(
+            env,
+            globals,
+            &CardAssignRequest {
+                id,
+                assignee,
+                reviewer,
+                revision,
+                actor,
+                now: now(),
+            },
+        )?),
+        CardCommand::Cancel {
+            id,
+            reason,
+            revision,
+            actor,
+        } => card(specengine_cli::card_cancel(
+            env,
+            globals,
+            &CardCancelRequest {
+                id,
+                reason,
+                revision,
+                actor,
+                now: now(),
+            },
+        )?),
+        CardCommand::Accept {
+            id,
+            actor,
+            note,
+            revision,
+        } => {
+            require_terminal("card accept")?;
+            let mut consent = ask;
+            card(specengine_cli::card_accept(
+                env,
+                globals,
+                &CardAcceptRequest {
+                    id,
+                    actor,
+                    note,
+                    revision,
+                    now: now(),
+                },
+                &mut consent,
+            )?)
+        }
+    }
+}
+
 /// An owner's task request.
 fn decision(env: &Env, id: String, note: Option<String>) -> TaskDecisionRequest {
     TaskDecisionRequest {
@@ -1968,8 +2309,8 @@ fn read_stdin(max: usize, what: &str) -> Result<Vec<u8>, CliError> {
 }
 
 /// `spec approve`, `spec reject`, `spec import-state`, `spec round answer`,
-/// the owner's `spec task approve|changes|cancel` and `spec verify --tests`
-/// decide on a terminal only: a stdin that is no terminal (a pipe, an agent's shell) exits 2
+/// the owner's `spec task approve|changes|cancel`, `spec card accept` and
+/// `spec verify --tests` decide on a terminal only: a stdin that is no terminal (a pipe, an agent's shell) exits 2
 /// before anything is read or logged.
 fn require_terminal(command: &str) -> Result<(), CliError> {
     if std::io::stdin().is_terminal() {

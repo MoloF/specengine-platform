@@ -1,8 +1,8 @@
 //! The proposal queue (task spec `proposal-apply`, "Data"): the operational
 //! tables `proposals` and `events` in the project's database, beside the
 //! index. They are made by the queue's own schema steps on `PRAGMA
-//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8; a higher version is
-//! a newer build's: refused),
+//! user_version` (0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9; a higher version
+//! is a newer build's: refused),
 //! in one `Immediate` transaction, and no list of `schema` names them, so an
 //! index rebuild or an `INDEX_FORMAT` change never drops them (the index
 //! leaves `user_version` alone).
@@ -82,9 +82,10 @@
 //! - **Time**: every time stamp is given by the caller (an injected clock),
 //!   `YYYY-MM-DDTHH:MM:SSZ`, stored as given.
 //! - **Backup** (`docs/canon/queue-backup.md` "Store", `queue/state.rs`;
-//!   format 2: `docs/canon/tasks.md` "Backup"): every row of the four
-//!   tables read as stored in one snapshot ([`SqliteQueue::stored_rows`]),
-//!   and inserted as given into an empty queue ([`SqliteQueue::restore`]).
+//!   format 2: `docs/canon/tasks.md` "Backup"; format 3: task spec
+//!   `card-store`, "Backup"): every row of the five tables read as stored
+//!   in one snapshot ([`SqliteQueue::stored_rows`]), and inserted as given
+//!   into an empty queue ([`SqliteQueue::restore`]).
 //! - **Tasks** (`docs/canon/tasks.md` "Store", `queue/tasks.rs`): step 4
 //!   adds `tasks`, `runs` and a proposal's `task_id`; a proposal binds to a
 //!   task at creation ([`ProposalQueue::create_with_task`],
@@ -104,9 +105,13 @@
 //!   a read-only open for one verdict ([`open_for_gate`]), the tasks of a
 //!   repository as the gate reads them ([`GateQueue::tasks`]), and its one
 //!   record, `gate.observed` ([`record_gate_observed`]); no schema step.
+//! - **Cards** (task spec `card-store`, `queue/cards.rs`): step 9 adds
+//!   `cards`, the lighter record of any trade's work; no gate, task,
+//!   proposal or lock read reaches it, nor it them.
 //!
 //! No `rusqlite` type is public (canon `architecture.md#distribution`).
 
+mod cards;
 mod gate;
 mod stage;
 mod state;
@@ -142,11 +147,16 @@ use crate::error::{Db, StoreError};
 use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
+pub use cards::{
+    CardChange, CardEdit, CardList, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED, EVENT_CARD_CANCELLED,
+    EVENT_CARD_CREATED, EVENT_CARD_EDITED, EVENT_CARD_MOVED, NewCard, UnreadableCard,
+};
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
 pub use state::{
-    EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, RUN_COLUMNS, Restore, StoredEvent,
-    StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, proposal_columns,
+    CARD_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, RUN_COLUMNS, Restore, StoredCard,
+    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
+    proposal_columns,
 };
 pub use tasks::{
     EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED, EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED,
@@ -157,7 +167,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 8;
+pub const QUEUE_SCHEMA_VERSION: i64 = 9;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -245,6 +255,19 @@ ALTER TABLE proposals ADD COLUMN interpretation TEXT;
 const STEP_8: &str = "
 ALTER TABLE proposals ADD COLUMN drift TEXT;
 ALTER TABLE proposals ADD COLUMN drift_hash TEXT;
+";
+
+/// Step 8 → 9: the cards (task spec `card-store`, "Store"); `events` and
+/// `proposals` unchanged.
+const STEP_9: &str = "
+CREATE TABLE cards (
+  id TEXT PRIMARY KEY,
+  project TEXT, flow TEXT, col TEXT, position INTEGER,
+  title TEXT, goal TEXT, discipline TEXT, targets TEXT, snapshot TEXT, criteria TEXT,
+  assignee TEXT, reviewer TEXT, estimate TEXT, due TEXT, parent TEXT, corrects TEXT,
+  evidence TEXT, acceptance TEXT, cancellation TEXT,
+  created_by TEXT, created_at TEXT, updated_at TEXT, revision TEXT
+) STRICT;
 ";
 
 /// The record columns, in table order.
@@ -1033,6 +1056,10 @@ pub enum QueueError {
     /// allow it, a lost compare-and-set, a proposal the task does not take.
     /// `reason` is one line; nothing written.
     TaskRefused { id: String, reason: String },
+    /// A card change refused (task spec `card-store`, "Rules and edge
+    /// cases"): no such card, a move outside its flow, a stale revision, a
+    /// closed card. `reason` is one line; nothing written.
+    CardRefused { id: String, reason: String },
 }
 
 impl From<StoreError> for QueueError {
@@ -1074,7 +1101,9 @@ impl fmt::Display for QueueError {
             Self::Reserved { id, by, kind } => {
                 write!(f, "`{id}` is reserved by `{by}`, a live {}", kind.as_str())
             }
-            Self::TaskRefused { reason, .. } => f.write_str(reason),
+            Self::TaskRefused { reason, .. } | Self::CardRefused { reason, .. } => {
+                f.write_str(reason)
+            }
         }
     }
 }
@@ -1414,9 +1443,9 @@ impl SqliteQueue {
 
     /// The canonical dump of the queue's tables, every project's: one line
     /// per row, `<table>\t<JSON array of every column>`, `proposals` by ID
-    /// number, `tasks` by ID number, `runs` by task and number, then
-    /// `events` by `seq` (a table a DB does not hold yet left out). Equal
-    /// dumps: the same queue.
+    /// number, `tasks` by ID number, `runs` by task and number, `cards` by ID
+    /// number, then `events` by `seq` (a table a DB does not hold yet left
+    /// out). Equal dumps: the same queue.
     pub fn dump(&self) -> Result<String, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut out = String::new();
@@ -1424,6 +1453,7 @@ impl SqliteQueue {
             ("proposals", ID_ORDER),
             ("tasks", ID_ORDER),
             ("runs", tasks::RUN_ORDER),
+            ("cards", ID_ORDER),
             ("events", "ORDER BY seq"),
         ] {
             if !schema::has_table(&tx, table)? {
@@ -1979,8 +2009,9 @@ enum Hold<'a> {
 /// stage, 5 → 6 an interpretation's column, 6 → 7 an approve stage's
 /// `editorial` (no column: every open approve stage rewritten with
 /// `"editorial":null`, task spec `rev-discipline`), 7 → 8 a drift item's
-/// two columns (task spec `drift-queue`; 0 → 8 runs all eight; a schema-5
-/// DB opens as 8, every `interpretation`, `drift`, `drift_hash` `NULL`);
+/// two columns (task spec `drift-queue`), 8 → 9 the cards (task spec
+/// `card-store`; 0 → 9 runs all nine; a schema-5 DB opens as 9, every
+/// `interpretation`, `drift`, `drift_hash` `NULL`, no card);
 /// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
@@ -2030,6 +2061,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 7 {
         tx.execute_batch(STEP_8).db()?;
         version = 8;
+    }
+    if version == 8 {
+        tx.execute_batch(STEP_9).db()?;
+        version = 9;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;

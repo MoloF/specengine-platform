@@ -127,6 +127,11 @@
 //!   a key a tool returns, `FlowNode.gaps`. A `PINS` entry 0.22.0, the tree
 //!   with the version set back 0.21.0's; a `SCHEMA_PINS` entry 0.22.0,
 //!   0.21.0's schemas today's without that key ([`as_of_0_21_0`]).
+//! - docs/features/card-store.md "Files in scope": 0.22.0 -> 0.23.0, MINOR:
+//!   five tools. A `PINS` entry 0.23.0, the tree with the version set back
+//!   and [`READ_SPEC_CARDS_0_23_0`] taken out 0.22.0's; a `SCHEMA_PINS` entry
+//!   0.23.0, 0.22.0's schemas today's without the card tools
+//!   ([`as_of_0_22_0`]).
 //!
 //! The repository is only read.
 
@@ -370,7 +375,19 @@ const PINS: &[(&str, &str)] = &[
         "0.22.0",
         "504caec39e593f073696546a85e8d9a41c3a3e82d3499d6d7805e70e31f85488",
     ),
+    // docs/features/card-store.md "Files in scope" (0.22.0 -> 0.23.0, MINOR:
+    // five tools the plugin's server gains): `read-spec` names them in one
+    // bullet; the tree with the version set back and
+    // [`READ_SPEC_CARDS_0_23_0`] taken out hashes as 0.22.0's pin.
+    (
+        "0.23.0",
+        "781155e22aa3b7e0838ed2f2777a8ae48cb7e2177442b128f998efc5cf72ff17",
+    ),
 ];
+
+/// docs/features/card-store.md: `read-spec`'s bullet of 0.23.0, whole with
+/// its line feed (214 bytes).
+const READ_SPEC_CARDS_0_23_0: &str = "- Work of any trade stands on cards, queue rows beside the tasks, not in the spec: `list_cards` and `get_card` read them, `create_card`, `edit_card` and `move_card` file and change one, and no tool accepts a card.\n";
 
 /// docs/features/flow-read.md: `read-spec`'s line of 0.21.0, whole with its
 /// line feed (154 bytes).
@@ -542,6 +559,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.22.0",
         "dbb3e9682d02395f84bd89cd258a2ace52db4ad42b66c473adcf95365a696106",
+    ),
+    // docs/features/card-store.md "MCP": the five card tools
+    // ([`as_of_0_22_0`] takes them out; no other tool's schema changed).
+    (
+        "0.23.0",
+        "04d8443e2ac1fe1ad31e4e2a0d2c2c310704ce8a19011330b514b2907f6d1341",
     ),
 ];
 
@@ -1661,10 +1684,38 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/card-store.md (0.22.0 -> 0.23.0): plugin.json's version
+    // and `read-spec`'s one bullet; both set back, the tree is 0.22.0's
+    // pinned content. M: the version kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.23.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.23.0"),
+        "plugin.json's version"
+    );
+    assert_eq!(READ_SPEC_CARDS_0_23_0.len(), 214);
+    let at_0_22_0 = edited(
+        &edited(
+            &tree,
+            PLUGIN_JSON,
+            "\"version\": \"0.23.0\"",
+            "\"version\": \"0.22.0\"",
+        ),
+        READ_SPEC,
+        READ_SPEC_CARDS_0_23_0,
+        "",
+    );
+    assert_eq!(
+        content_hash(&at_0_22_0),
+        PINS[PINS.len() - 2].1,
+        "0.23.0 changes plugin.json's version and read-spec's one bullet only"
+    );
+    let tree = at_0_22_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/flow-canvas.md (0.21.0 -> 0.22.0): plugin.json's version
     // alone; set back, the tree is 0.21.0's pinned content. M: the version
     // kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.22.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.22.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.22.0"),
@@ -1678,11 +1729,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_21_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.22.0 changes plugin.json's version only"
     );
     let tree = at_0_21_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/flow-read.md (0.20.0 -> 0.21.0): plugin.json's version
     // and `read-spec`'s one line; both set back, the tree is 0.20.0's pinned
     // content.
@@ -2292,6 +2343,15 @@ fn as_of_0_19_0(schemas: &mut Value) {
     });
 }
 
+/// `schemas` as 0.22.0 listed them (docs/features/card-store.md "MCP"): no
+/// card tool; no other tool's schema changed.
+fn as_of_0_22_0(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("schemas by tool");
+    for name in common::read::CARD_TOOLS {
+        assert!(tools.remove(name).is_some(), "{name} listed");
+    }
+}
+
 /// `schemas` as 0.21.0 listed them (docs/features/flow-canvas.md "Data"):
 /// `get_flow`'s node without `gaps`; no other tool's schema changed.
 fn as_of_0_21_0(schemas: &mut Value) {
@@ -2518,7 +2578,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[11].0, "0.20.0", "an entry for 0.20.0");
     assert_eq!(SCHEMA_PINS[12].0, "0.21.0", "an entry for 0.21.0");
     assert_eq!(SCHEMA_PINS[13].0, "0.22.0", "an entry for 0.22.0");
-    assert_eq!(SCHEMA_PINS.len(), 14, "0.22.0 the last entry");
+    assert_eq!(SCHEMA_PINS[14].0, "0.23.0", "an entry for 0.23.0");
+    assert_eq!(SCHEMA_PINS.len(), 15, "0.23.0 the last entry");
+    // docs/features/card-store.md "MCP": 0.22.0's schemas are today's without
+    // the five card tools.
+    let mut at_0_22_0 = schemas.clone();
+    as_of_0_22_0(&mut at_0_22_0);
+    let at_0_22_0_hash = schema_hash(&at_0_22_0);
+    assert_eq!(
+        at_0_22_0_hash, SCHEMA_PINS[13].1,
+        "0.22.0's schemas are today's without the card tools"
+    );
+    assert_ne!(
+        at_0_22_0_hash, current,
+        "the card tools changed the schemas"
+    );
+    let (schemas, current) = (at_0_22_0, at_0_22_0_hash);
     // docs/features/flow-canvas.md "Data": 0.21.0's schemas are today's
     // without `FlowNode.gaps`.
     let mut at_0_21_0 = schemas.clone();

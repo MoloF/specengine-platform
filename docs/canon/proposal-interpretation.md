@@ -86,7 +86,7 @@ Never a refusal (ADR-0012). `spec propose update` (MCP `propose_change` kind `up
 - **Stage** (`decision-staging.md`): an approve with `span_hash`; `option`, `answer`, `canon` a usage refusal (HTTP 400). No new route.
 - **Round**: never on the sheet; counted among open change proposals; its `round answer` line -> ``is a change proposal (interpretation): `spec approve PR` decides it``; `--staged` notes it unasked.
 - **Task-bound**: refreshes its task's snapshot as an update (`tasks.md`); the package lists it in `open_proposals`, no assumption.
-- **Backup** (`queue-backup.md`): format 2, every column.
+- **Backup** (`queue-backup.md`): every column.
 - **MCP** `propose_change` (`agent-intake.md` "Tools"): `decision`, `how`, `why` nullable strings, no enum (the `mcp_stage` guard admits a `decision` input there only); `kind` `interpretation` = `propose_interpretation_brief`; a field missing -> -32602 `<field>: required with kind interpretation`, `base` null -> `base: an interpretation is written against its node's span_hash (get_node); null or absent only with kind create, for a new file`; one given on another kind -> `<field>: only an interpretation takes it`.
 - **Plugin** 0.4.0 (`plugin.md`): `propose-spec-change` "Carrying an accepted decision into a rule"; `spec-author` names the kind.
 

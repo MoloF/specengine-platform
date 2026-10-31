@@ -13,7 +13,10 @@
 //! "Data", `docs/features/impact-since.md` "Output"; graph's node object,
 //! the read rows' [`BindingRowShape`]), and of `get_flow` (`spec flow`'s
 //! document: `docs/features/flow-read.md` "Output": a gap's `code` and
-//! `state` and an edge's `kind` closed, link types and node kinds free).
+//! `state` and an edge's `kind` closed, link types and node kinds free), and
+//! of the card tools (`docs/features/card-store.md` "Documents and events":
+//! flows, columns, disciplines and names free, a history event's `payload`
+//! any object).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -1168,6 +1171,174 @@ pub(crate) enum FlowEdgeKind {
     Alternative,
     Parallel,
     Repeat,
+}
+
+// ------------------------------------------------------------------- cards
+//
+// `spec card --json` (`docs/features/card-store.md` "Documents and events"):
+// every flow, column, discipline and name is the project's own, free.
+
+/// `spec card list --json`.
+#[derive(JsonSchema)]
+pub(crate) struct CardListDocument {
+    /// Every flow of the project, for empty columns.
+    pub flows: Vec<CardFlowShape>,
+    /// The printed rows.
+    pub cards: Vec<CardRowShape>,
+    pub notes: Vec<String>,
+    pub truncated: bool,
+    /// The cards not shown; `null` when none.
+    pub omitted: Option<usize>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct CardFlowShape {
+    pub name: String,
+    pub disciplines: Vec<String>,
+    pub columns: Vec<CardColumnShape>,
+    /// Every move, expanded.
+    pub moves: Vec<CardMoveShape>,
+    pub accept: CardAcceptRule,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct CardColumnShape {
+    pub id: String,
+    pub title: String,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct CardMoveShape {
+    pub from: String,
+    pub to: String,
+    /// Who makes it; empty: anyone.
+    pub by: Vec<String>,
+}
+
+/// The one way to the end of a flow: `spec card accept`.
+#[derive(JsonSchema)]
+pub(crate) struct CardAcceptRule {
+    pub from: String,
+    pub to: String,
+}
+
+/// One card of `spec card list`.
+#[derive(JsonSchema)]
+pub(crate) struct CardRowShape {
+    pub id: String,
+    pub flow: String,
+    pub column: String,
+    /// From 1 in its column; 0 when cancelled.
+    pub position: u64,
+    pub title: String,
+    pub discipline: Option<String>,
+    pub targets: Vec<String>,
+    pub assignee: Option<String>,
+    pub reviewer: Option<String>,
+    pub estimate: Option<String>,
+    pub due: Option<String>,
+    pub parent: Option<String>,
+    pub corrects: Option<String>,
+    pub updated_at: String,
+    /// Decimal text: the `revision` a write compares.
+    pub revision: String,
+    pub accepted: bool,
+    pub cancelled: bool,
+}
+
+/// One move open to a card.
+#[derive(JsonSchema)]
+pub(crate) struct CardAllowedShape {
+    pub to: String,
+    /// Who makes it; empty: anyone.
+    pub by: Vec<String>,
+}
+
+/// `spec card show --json`.
+#[derive(JsonSchema)]
+pub(crate) struct CardShowDocument {
+    pub id: String,
+    pub flow: String,
+    pub column: String,
+    pub position: u64,
+    pub title: String,
+    pub goal: Option<String>,
+    pub discipline: Option<String>,
+    pub targets: Vec<String>,
+    pub snapshot: Option<String>,
+    pub criteria: Vec<String>,
+    pub assignee: Option<String>,
+    pub reviewer: Option<String>,
+    pub estimate: Option<String>,
+    pub due: Option<String>,
+    pub parent: Option<String>,
+    pub corrects: Option<String>,
+    pub evidence: Vec<CardEvidenceShape>,
+    pub acceptance: Option<CardAcceptanceShape>,
+    pub cancellation: Option<CardCancellationShape>,
+    pub created_by: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub revision: String,
+    pub allowed: Vec<CardAllowedShape>,
+    /// Its last `card.*` events, oldest first; `null` without `history`.
+    pub history: Option<Vec<CardEventShape>>,
+    pub notes: Vec<String>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct CardEvidenceShape {
+    pub kind: CardEvidenceKind,
+    pub value: String,
+    pub by: String,
+    pub at: String,
+}
+
+/// What an evidence entry is: a reference, never a binary.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CardEvidenceKind {
+    Url,
+    Path,
+    Build,
+    Note,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct CardAcceptanceShape {
+    pub by: String,
+    pub at: String,
+    pub note: Option<String>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct CardCancellationShape {
+    pub by: String,
+    pub at: String,
+    pub reason: String,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct CardEventShape {
+    pub seq: i64,
+    #[schemars(rename = "type")]
+    pub event_type: String,
+    pub at: String,
+    /// As stored.
+    pub payload: Value,
+}
+
+/// `spec card new|edit|move --json`, a refusal too.
+#[derive(JsonSchema)]
+pub(crate) struct CardWriteDocument {
+    pub id: Option<String>,
+    pub flow: Option<String>,
+    pub column: Option<String>,
+    pub position: Option<u64>,
+    pub revision: Option<String>,
+    pub allowed: Vec<CardAllowedShape>,
+    /// A refusal's reason last.
+    pub notes: Vec<String>,
 }
 
 // ----------------------------------------------------------------- roadmap

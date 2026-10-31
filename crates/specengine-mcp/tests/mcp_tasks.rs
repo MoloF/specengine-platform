@@ -63,7 +63,7 @@ const CLOCK: &str = "2026-10-07T09:00:00Z";
 
 /// The tasks line of `INSTRUCTIONS` ("Description and interactions").
 const TASKS_LINE: &str = "- get_task, claim_task, submit_plan, report_run, complete_task = spec \
-                          task show|claim|plan|report|complete; the three above take task_id.\n";
+                          task show|claim|plan|report|complete.\n";
 
 /// The exactly-one error of `get_task`.
 const EXACTLY_ONE: &str = "spec: get_task takes exactly one of `task_id` and `next: true`\n";
@@ -236,7 +236,8 @@ fn required(tool: &Value) -> Vec<String> {
 /// M: a 160-byte tasks line (the build's own assert).
 #[test]
 fn ac14_the_task_tools_and_their_schemas() {
-    assert_eq!(TASKS_LINE.len(), 138);
+    // 138 until docs/features/card-store.md "MCP" cut its `task_id` clause.
+    assert_eq!(TASKS_LINE.len(), 108);
     assert!(TASKS_LINE.len() < 140);
     assert_eq!(specengine_mcp::INSTRUCTIONS.matches(TASKS_LINE).count(), 1);
     // 1 890 since docs/features/kind-decision.md names `report_decision`;
@@ -251,8 +252,10 @@ fn ac14_the_task_tools_and_their_schemas() {
     // docs/features/impact.md (`get_impact` on the reads' line); 2 023
     // since docs/features/impact-since.md (`|since` in its clause); 2 040
     // since docs/features/review-form.md (the `review_proposal` line);
-    // 2 048 since docs/features/flow-read.md (`get_flow`, the hints folded).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
+    // 2 048 since docs/features/flow-read.md (`get_flow`, the hints folded);
+    // 2 047 since docs/features/card-store.md "MCP" (the cards line in, two
+    // clauses out).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2047);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();
@@ -970,14 +973,21 @@ fn ac09_two_projects_in_one_home_see_only_their_own_tasks() {
 
 // ----------------------------------------------------------------- P2-3
 
-/// The task package's, brief's and task commands' sources (07 s1.2 P2-3).
-const TASK_SOURCES: [&str; 6] = [
+/// The task package's, brief's and task commands' sources (07 s1.2 P2-3),
+/// and the cards' (docs/features/card-store.md AC-10).
+const TASK_SOURCES: [&str; 12] = [
     "crates/specengine-model/src/task.rs",
     "crates/specengine-core/src/task.rs",
     "crates/specengine-store/src/queue/tasks.rs",
     "crates/specengine-cli/src/task.rs",
     "crates/specengine-cli/src/package.rs",
     "crates/specengine-mcp/src/tasks.rs",
+    "crates/specengine-model/src/card.rs",
+    "crates/specengine-core/src/card.rs",
+    "crates/specengine-core/src/card_toml.rs",
+    "crates/specengine-store/src/queue/cards.rs",
+    "crates/specengine-cli/src/card.rs",
+    "crates/specengine-mcp/src/cards.rs",
 ];
 
 /// The task gate's sources (docs/features/plugin-gate.md AC-15).

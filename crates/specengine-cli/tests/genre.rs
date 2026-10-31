@@ -8,6 +8,9 @@
 //! docs/features/flow-read.md AC-06: `src/flow.rs` is scanned with the rest,
 //! the words of the flow fixtures' schemes join the list, and `spec flow`
 //! joins the battery.
+//!
+//! docs/features/card-store.md AC-10: `src/card.rs` is scanned with the rest,
+//! the words of `fixtures/card-press` join the list.
 
 #![cfg(unix)]
 
@@ -23,8 +26,8 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// repository's registered command prefix, docs/features/spec-cli-switch.md
 /// AC-15; docs/features/roadmap-items.md this repository's plan prefix and
 /// its shard; docs/features/flow-read.md the flow fixtures' prefixes and
-/// kinds).
-const FORBIDDEN: [&str; 29] = [
+/// kinds; docs/features/card-store.md the card fixture's).
+const FORBIDDEN: [&str; 33] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -61,6 +64,12 @@ const FORBIDDEN: [&str; 29] = [
     "PLT-",
     "bookplate",
     "lending",
+    // docs/features/card-store.md AC-10: no `spec card` line by a word of a
+    // project it reads.
+    "PRN-",
+    "SHT-",
+    "broadsheet",
+    "print-run",
 ];
 
 fn cli_sources() -> Vec<PathBuf> {
@@ -101,6 +110,7 @@ fn cli_sources_hold_no_project_words() {
     assert!(files.len() >= 3, "the CLI sources: {files:?}");
     assert!(files.iter().any(|file| file.ends_with("main.rs")));
     assert!(files.iter().any(|file| file.ends_with("flow.rs")));
+    assert!(files.iter().any(|file| file.ends_with("card.rs")));
     let mut found = Vec::new();
     for file in &files {
         let text = fs::read_to_string(file).expect("a UTF-8 source");

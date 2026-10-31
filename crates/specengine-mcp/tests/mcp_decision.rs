@@ -338,9 +338,10 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // docs/features/kind-interpretation.md names `interpretation` (+15)
     // and trims a tail (-4); 1 752 since docs/features/kind-decision.md
     // names `report_decision` in the queue's second line (+1).
+    // 108 since docs/features/card-store.md "MCP" (the `task_id` clause cut).
     let tasks_line = "- get_task, claim_task, submit_plan, report_run, complete_task = spec task \
-                      show|claim|plan|report|complete; the three above take task_id.\n";
-    assert_eq!(tasks_line.len(), 138);
+                      show|claim|plan|report|complete.\n";
+    assert_eq!(tasks_line.len(), 108);
     assert_eq!(specengine_mcp::INSTRUCTIONS.matches(tasks_line).count(), 1);
     let before = specengine_mcp::INSTRUCTIONS.replacen(tasks_line, "", 1);
     // 1 747 since docs/features/kind-amendment.md names `amendment` in the
@@ -374,14 +375,17 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 910 and 2 048 since docs/features/flow-read.md (`get_flow`'s 32
     // bytes on the reads' line, 24 cut from the hints: the limit); the
     // values `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1910);
+    // 1 939 and 2 047 since docs/features/card-store.md "MCP" (the cards
+    // line's 112 bytes in, 113 out); the values `mcp_code.rs`' re-pinned
+    // `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1939);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "322b35f2def2e1d308fae9b868ad562a439f5bcde961899aee56903c5b302000"
+        "6e322b8c83a4f63b5dd0eee4abb714b4883ea2789cfccfe4d2910280f8a619cd"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2047);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "d1ab3e65028e8715bdc1442a84bfc1c56212942becd077c95ec3ed7016c1b0b1"
+        "8666a5184cf8ab8a34d782d5e68ef6222c500be5350ca741378c73b7892a80d5"
     );
 }

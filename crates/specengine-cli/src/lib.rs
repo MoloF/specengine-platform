@@ -159,6 +159,10 @@
 //! - [`flow()`]: `spec flow [ROOT] [--depth N]` (task spec `flow-read`), the
 //!   typed edges, lifted edges and gap rows core's `flow_read` computes,
 //!   `[flow]` read here alone; a gap changes no exit;
+//! - [`card_new`], [`card_list`], [`card_show`], [`card_move`], [`card_edit`],
+//!   [`card_assign`], [`card_cancel`], [`card_accept`]: `spec card …` (task
+//!   spec `card-store`), the lighter record of any trade's work, a queue row
+//!   under the project's `[card]`; `[card]` read here alone, no git, no task;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `flow`,
 //!   `bundle`, `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or
 //!   refused by the proposal or its target (the queue's commands), 2 could not run
@@ -197,6 +201,7 @@ mod bindings;
 mod bump;
 mod bundle;
 mod cap;
+mod card;
 mod check;
 mod code_delta;
 mod code_index;
@@ -280,6 +285,12 @@ pub use bundle::{
     DEFAULT_BUNDLE_BUDGET, ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
 };
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
+pub use card::{
+    CardAcceptRequest, CardAction, CardAssignRequest, CardCancelRequest, CardCause,
+    CardEditRequest, CardListOutcome, CardListRequest, CardMoveRequest, CardNewRequest,
+    CardOutcome, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept, card_assign,
+    card_cancel, card_edit, card_list, card_move, card_new, card_show,
+};
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
 pub use corpus::LeftOut;
@@ -368,6 +379,8 @@ pub use show::{
     NestedSection, ShowOutcome, ShowRequest, ShownBindings, ShownNode, show, show_with_view,
 };
 pub use specengine_core::ProjectConfig;
+/// A card's caps (core's).
+pub use specengine_core::card::{EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, HISTORY_MAX};
 /// The intake's input types, enums and caps (core's), for the bridges;
 /// the names of the kinds `propose_change` takes and of a decision, and a
 /// kind's name with its article.
@@ -623,6 +636,12 @@ pub enum Outcome {
     TaskShow(Box<TaskShowOutcome>),
     /// `task list`.
     TaskList(TaskListOutcome),
+    /// `card new|move|edit|assign|cancel|accept`.
+    Card(Box<CardOutcome>),
+    /// `card show`: the card.
+    CardShow(Box<CardShowOutcome>),
+    /// `card list`: the flows and the cards.
+    CardList(Box<CardListOutcome>),
     /// `round new`: the sheet.
     RoundSheet(Box<RoundSheet>),
     /// `round answer`: the answers, staged, and the walk.
@@ -663,6 +682,8 @@ impl Outcome {
             Self::StateImport(import) => import.exit(),
             Self::Task(task) => task.exit(),
             Self::TaskShow(show) => show.exit(),
+            Self::Card(card) => card.exit(),
+            Self::CardShow(show) => show.exit(),
             Self::Round(run) => run.exit(),
             Self::RoundAnswers(answers) => answers.exit(),
             _ => Exit::Answered,
@@ -711,6 +732,9 @@ impl Outcome {
             Self::Task(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::TaskShow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::TaskList(outcome) => (&outcome.messages, None),
+            Self::Card(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::CardShow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
+            Self::CardList(outcome) => (&outcome.messages, None),
             Self::RoundSheet(outcome) => (&outcome.messages, None),
             Self::Round(outcome) => (&outcome.messages, None),
             Self::RoundAnswers(outcome) => (&outcome.messages, None),
@@ -759,6 +783,9 @@ impl Outcome {
                 | Self::Task(_)
                 | Self::TaskShow(_)
                 | Self::TaskList(_)
+                | Self::Card(_)
+                | Self::CardShow(_)
+                | Self::CardList(_)
                 | Self::RoundSheet(_)
                 | Self::Round(_)
                 | Self::RoundAnswers(_)
@@ -808,6 +835,9 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Task(outcome) => task::render_text(outcome),
         Outcome::TaskShow(outcome) => task::render_show_text(outcome),
         Outcome::TaskList(outcome) => task::render_list_text(outcome),
+        Outcome::Card(outcome) => card::render_text(outcome),
+        Outcome::CardShow(outcome) => card::render_show_text(outcome),
+        Outcome::CardList(outcome) => card::render_list_text(outcome),
         Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
         Outcome::Round(outcome) => round::render_text(outcome),
         Outcome::RoundAnswers(outcome) => round::answers_outcome_text(outcome),
@@ -853,6 +883,9 @@ impl serde::Serialize for Outcome {
             Self::Task(outcome) => outcome.serialize(serializer),
             Self::TaskShow(outcome) => outcome.serialize(serializer),
             Self::TaskList(outcome) => outcome.serialize(serializer),
+            Self::Card(outcome) => outcome.serialize(serializer),
+            Self::CardShow(outcome) => outcome.serialize(serializer),
+            Self::CardList(outcome) => outcome.serialize(serializer),
             Self::RoundSheet(outcome) => outcome.serialize(serializer),
             Self::Round(outcome) => outcome.serialize(serializer),
             Self::RoundAnswers(outcome) => outcome.serialize(serializer),

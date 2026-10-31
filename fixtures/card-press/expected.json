@@ -1,0 +1,51 @@
+{
+  "prefixes": [
+    "PRN",
+    "SHT"
+  ],
+  "kinds": [
+    "broadsheet",
+    "print-run"
+  ],
+  "board": "flow copy | draft 0 | edit 0 | proof 0 | filed 0\nflow plates | queued 0 | blocked 0 | checked 0 | struck 0\n",
+  "flows": [
+    {
+      "name": "copy",
+      "disciplines": [
+        "copy"
+      ],
+      "columns": [
+        { "id": "draft", "title": "draft" },
+        { "id": "edit", "title": "edit" },
+        { "id": "proof", "title": "proof" },
+        { "id": "filed", "title": "filed" }
+      ],
+      "moves": [
+        { "from": "draft", "to": "edit", "by": [ "desk" ] },
+        { "from": "edit", "to": "proof", "by": [] }
+      ],
+      "accept": { "from": "proof", "to": "filed" }
+    },
+    {
+      "name": "plates",
+      "disciplines": [
+        "plates"
+      ],
+      "columns": [
+        { "id": "queued", "title": "queued" },
+        { "id": "blocked", "title": "blocked" },
+        { "id": "checked", "title": "checked" },
+        { "id": "struck", "title": "struck" }
+      ],
+      "moves": [
+        { "from": "queued", "to": "blocked", "by": [] },
+        { "from": "queued", "to": "checked", "by": [] },
+        { "from": "blocked", "to": "queued", "by": [] },
+        { "from": "blocked", "to": "checked", "by": [] },
+        { "from": "checked", "to": "queued", "by": [] },
+        { "from": "checked", "to": "blocked", "by": [] }
+      ],
+      "accept": { "from": "checked", "to": "struck" }
+    }
+  ]
+}

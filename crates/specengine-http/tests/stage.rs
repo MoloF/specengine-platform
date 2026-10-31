@@ -1111,21 +1111,21 @@ fn ac02_a_queue_of_a_newer_schema_answers_503_to_post_and_delete() {
         .as_str()
         .unwrap()
         .to_owned();
-    // This build's queue schema is 8 (docs/features/drift-queue.md
-    // "Queue schema 8"): 9 is newer.
-    sqlite3(&db(&s.home), "PRAGMA user_version = 9;");
+    // This build's queue schema is 9 (docs/features/card-store.md "Store"):
+    // 10 is newer.
+    sqlite3(&db(&s.home), "PRAGMA user_version = 10;");
     let reply = server.stage(
         &decision(&s.report),
         &body("\"decision\":\"approve\",\"option\":1", &updated_at),
     );
     assert_eq!(reply.status, 503, "{}", reply.text());
     let message = reply.error_message();
-    assert!(message.contains('9') && message.contains('8'), "{message}");
+    assert!(message.contains("10") && message.contains('9'), "{message}");
     let reply = server.unstage(&decision(&s.report));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(
         sqlite3(&db(&s.home), "PRAGMA user_version;"),
-        "9",
+        "10",
         "left alone"
     );
     assert_eq!(

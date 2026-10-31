@@ -41,10 +41,10 @@ use common::{Scratch, blake3_hex};
 use git::Sandbox;
 use specengine_core::proposal::Author;
 use specengine_store::{
-    EVENT_COLUMNS, GitEnv, GitError, ListedWorktree, NewProposal, PROPOSAL_COLUMNS, Place,
-    ProposalKind, ProposalQueue as _, QueueCounts, QueueError, RUN_COLUMNS, Restore, SqliteQueue,
-    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, WorktreeGit,
-    patch_hash,
+    CARD_COLUMNS, EVENT_COLUMNS, GitEnv, GitError, ListedWorktree, NewProposal, PROPOSAL_COLUMNS,
+    Place, ProposalKind, ProposalQueue as _, QueueCounts, QueueError, RUN_COLUMNS, Restore,
+    SqliteQueue, StoredCard, StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask,
+    TASK_COLUMNS, WorktreeGit, patch_hash,
 };
 
 const T0: &str = "2026-10-05T21:14:03Z";
@@ -203,10 +203,26 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
     for (slot, column) in run.columns.iter_mut().skip(1).zip(&RUN_COLUMNS[2..]) {
         *slot = Some((*column).to_owned());
     }
+    // Queue schema 9 (docs/features/card-store.md "Store"): `cards`, `TEXT`
+    // but `position`, the row's `project` the handle's again.
+    let mut card = StoredCard {
+        position: Some(1),
+        columns: Default::default(),
+    };
+    let text_columns: Vec<&str> = CARD_COLUMNS
+        .iter()
+        .copied()
+        .filter(|column| *column != "position")
+        .collect();
+    for (slot, column) in card.columns.iter_mut().zip(&text_columns) {
+        *slot = Some((*column).to_owned());
+    }
+    card.columns[1] = Some("project".to_owned());
     let state = StoredQueue {
         proposals: vec![proposal],
         tasks: vec![task],
         runs: vec![run],
+        cards: vec![card],
         events: vec![named],
     };
     assert_eq!(queue.restore(&state).expect("restore"), Restore::Restored);
@@ -227,11 +243,18 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
             .iter()
             .map(|column| serde_json::json!(column)),
     );
+    let mut cards: Vec<serde_json::Value> = CARD_COLUMNS
+        .iter()
+        .map(|column| serde_json::json!(column))
+        .collect();
+    cards[1] = serde_json::json!("project");
+    cards[4] = serde_json::json!(1);
     let want = format!(
-        "proposals\t{}\ntasks\t{}\nruns\t{}\nevents\t{}\n",
+        "proposals\t{}\ntasks\t{}\nruns\t{}\ncards\t{}\nevents\t{}\n",
         serde_json::json!(PROPOSAL_COLUMNS.as_slice()),
         serde_json::Value::Array(tasks),
         serde_json::Value::Array(runs),
+        serde_json::Value::Array(cards),
         serde_json::Value::Array(events)
     );
     assert_eq!(queue.dump().expect("dump"), want);
@@ -241,11 +264,14 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
         (
             PROPOSAL_COLUMNS.len(),
             TASK_COLUMNS.len(),
-            RUN_COLUMNS.len()
+            RUN_COLUMNS.len(),
+            CARD_COLUMNS.len()
         ),
-        // 46 since docs/features/drift-queue.md "Queue schema 8".
-        (46, 17, 11)
+        // 46 since docs/features/drift-queue.md "Queue schema 8"; `cards`
+        // since docs/features/card-store.md "Store".
+        (46, 17, 11, 24)
     );
+    assert_eq!(CARD_COLUMNS[4], "position");
     // docs/features/task-package.md iteration 2: the task's compare-and-set
     // key, its last column.
     assert_eq!(TASK_COLUMNS[16], "revision");
@@ -308,6 +334,7 @@ fn open_existing_creates_nothing_and_restore_runs_the_schema_steps() {
             proposals: 1,
             tasks: 0,
             runs: 0,
+            cards: 0,
             events: 1
         }
     );
@@ -324,10 +351,10 @@ fn open_existing_refuses_a_newer_schema() {
     let scratch = Scratch::new("qs-newer");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 8);
-    sqlite3(&db, "PRAGMA user_version = 9");
+    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 9);
+    sqlite3(&db, "PRAGMA user_version = 10");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 9 }) => {}
+        Err(QueueError::SchemaTooNew { found: 10 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }
@@ -379,6 +406,7 @@ fn stored_rows_are_every_projects_rows_raw_in_id_and_seq_order() {
             proposals: 5,
             tasks: 0,
             runs: 0,
+            cards: 0,
             events: 4
         }
     );
@@ -481,6 +509,7 @@ fn restore_is_all_or_nothing_into_an_empty_queue_only() {
             proposals: 1,
             tasks: 0,
             runs: 0,
+            cards: 0,
             events: 1
         })
     );

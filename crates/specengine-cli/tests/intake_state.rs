@@ -249,8 +249,8 @@ fn ac10_every_kind_round_trips_at_schema_4() {
     let rows = lines(&bytes);
     assert_eq!(
         rows[0],
-        "{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":5,\
-         \"tasks\":0,\"runs\":0,\"events\":6}"
+        "{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":5,\
+         \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":6}"
     );
     // 46 since docs/features/drift-queue.md "Queue schema 8".
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
@@ -333,19 +333,19 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     let v3 = export_ok(&pair, &pair.home, &dumps.join("v3.jsonl"));
     let v3_lines = lines(&v3);
     assert!(
-        v3_lines[0].starts_with("{\"format\":2,\"queue_schema\":8,")
-            && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,"),
+        v3_lines[0].starts_with("{\"format\":3,\"queue_schema\":9,")
+            && v3_lines[0].contains(",\"tasks\":0,\"runs\":0,\"cards\":0,"),
         "{}",
         v3_lines[0]
     );
     let mut v1_lines = v3_lines.clone();
     v1_lines[0] = v1_lines[0]
         .replacen(
-            "\"format\":2,\"queue_schema\":8,",
+            "\"format\":3,\"queue_schema\":9,",
             "\"format\":1,\"queue_schema\":1,",
             1,
         )
-        .replacen("\"tasks\":0,\"runs\":0,", "", 1);
+        .replacen("\"tasks\":0,\"runs\":0,\"cards\":0,", "", 1);
     for line in &mut v1_lines[1..3] {
         assert!(line.ends_with(NULL_TAIL), "{line}");
         *line = format!("{}}}}}", &line[..line.len() - NULL_TAIL.len()]);
@@ -360,7 +360,7 @@ fn ac10_a_schema_1_dump_imports_and_re_exports_as_4() {
     assert_eq!((outcome.proposals, outcome.events), (2, 3));
     assert_eq!(dump_of(&fresh), dump_of(&pair.home), "the twenty NULL");
     let again = export_ok(&pair, &fresh, &dumps.join("again.jsonl"));
-    assert_eq!(again, v3, "re-exported as format 2, queue_schema 6");
+    assert_eq!(again, v3, "re-exported as format 3, queue_schema 9");
 
     // A schema-1 row with the later columns; a schema-6 row without them.
     let mut mixed = v1_lines.clone();
@@ -408,7 +408,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     sql(
         &db,
         &format!(
-            "{} DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = 1;",
+            "{} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = 1;",
             drops.join(" ")
         ),
     );
@@ -421,7 +421,7 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
     let exported = export_ok(&pair, &pair.home, &dumps.join("from-v1.jsonl"));
     assert_eq!(
         exported, v3,
-        "a version-1 DB exports as format 2, queue_schema 8"
+        "a version-1 DB exports as format 3, queue_schema 9"
     );
     assert_eq!(
         sql(&db, "PRAGMA user_version;"),
@@ -431,12 +431,12 @@ fn ac10_a_version_1_database_is_stepped_when_opened() {
 
     let inbox = pair.inbox(&pair.main, false).expect("inbox");
     assert_eq!(inbox.proposals.len(), 1, "{inbox:?}");
-    assert_eq!(sql(&db, "PRAGMA user_version;"), "8");
+    assert_eq!(sql(&db, "PRAGMA user_version;"), "9");
     let columns = sql(&db, "SELECT name FROM pragma_table_info('proposals');");
     assert_eq!(
         columns.lines().collect::<Vec<_>>(),
         PROPOSAL_COLUMNS,
-        "steps 2 to 8 append the twenty-two in order"
+        "steps 2 to 8 append the twenty-two in order, step 9 none"
     );
     assert_eq!(
         sql(

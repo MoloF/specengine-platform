@@ -97,6 +97,12 @@ const NAMES: [(&str, &[&str]); 6] = [
             "unmapped",
             // docs/features/flow-read.md: the flow, its edges and its rows.
             "get_flow",
+            // docs/features/card-store.md "MCP": the card tools' one bullet.
+            "list_cards",
+            "get_card",
+            "create_card",
+            "edit_card",
+            "move_card",
         ],
     ),
     (
@@ -367,7 +373,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's twenty-three tools"
+        "the default build's twenty-eight tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1191,8 +1197,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/review-form.md; 0.20.0 since
     // docs/features/layer-c-reads.md; 0.21.0 since
     // docs/features/flow-read.md; 0.22.0 since
-    // docs/features/flow-canvas.md.
-    assert_eq!(manifest["version"], "0.22.0");
+    // docs/features/flow-canvas.md; 0.23.0 since
+    // docs/features/card-store.md.
+    assert_eq!(manifest["version"], "0.23.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1283,8 +1290,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/review-form.md; 0.20.0 since
     // docs/features/layer-c-reads.md; 0.21.0 since
     // docs/features/flow-read.md; 0.22.0 since
-    // docs/features/flow-canvas.md.
-    assert_eq!(manifest["version"], "0.22.0");
+    // docs/features/flow-canvas.md; 0.23.0 since
+    // docs/features/card-store.md.
+    assert_eq!(manifest["version"], "0.23.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1387,13 +1395,13 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.22.0",
+        manifest["version"], "0.23.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
          bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0; \
          tested-reads: 0.18.0; review-form: 0.19.0; layer-c-reads: 0.20.0; flow-read: 0.21.0; \
-         flow-canvas: 0.22.0"
+         flow-canvas: 0.22.0; card-store: 0.23.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1523,8 +1531,9 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // docs/features/review-form.md (`review_proposal`, named in
     // `ask-owner`: `review_form_ask_owner_names_review_proposal`);
     // twenty-three since docs/features/flow-read.md (`get_flow`, which no
-    // skill teaches yet).
-    assert_eq!(TOOLS.len(), 23);
+    // skill teaches yet); twenty-eight since docs/features/card-store.md
+    // (the card tools, one bullet of `read-spec`).
+    assert_eq!(TOOLS.len(), 28);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
     assert!(
         READ_SPEC_CODE_TOOLS
@@ -2013,9 +2022,10 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        3_874,
+        4_088,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
-         154 more since docs/features/flow-read.md (the `get_flow` line)"
+         154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
+         docs/features/card-store.md (the cards bullet)"
     );
     let reworded = edited(
         &skills,
@@ -2117,7 +2127,7 @@ fn tested_reads_skills_name_tested() {
     };
     assert_eq!(
         (body(read_spec), read_spec.len()),
-        (3_553, 3_874),
+        (3_767, 4_088),
         "read-spec's bytes"
     );
     assert_eq!(

@@ -94,6 +94,13 @@ fn valid_args(tool: &str) -> Value {
         // docs/features/review-form.md: the read before any form (no
         // project: its `spec init` line, no form).
         "review_proposal" => json!({"proposal_id": "PR-0001"}),
+        // docs/features/card-store.md: each reaches the CLI (no project: its
+        // `spec init` line, no document).
+        "create_card" => json!({"title": "A card"}),
+        "edit_card" => json!({"card_id": "C-0001", "goal": "G."}),
+        "get_card" => json!({"card_id": "C-0001"}),
+        "list_cards" => json!({}),
+        "move_card" => json!({"card_id": "C-0001", "to": "ready"}),
         other => panic!("no arguments for {other}"),
     }
 }

@@ -11,7 +11,7 @@
 //! - AC-R5 / AC-T5: a schema-5 queue (as decision-staging's build left it)
 //!   is read unstepped at 46 columns, the last three `None`, and opens as 8
 //!   (drift-queue's schema), the column `NULL`, its rows kept; `user_version`
-//!   9 is `SchemaTooNew` for
+//!   10 is `SchemaTooNew` for
 //!   `open` and `open_existing`, left alone. M: step 6 omitted;
 //!   `user_version` left 5.
 //! - AC-R5, corrupt rows: the column on an update, `NULL` on an
@@ -341,9 +341,10 @@ fn ac_r4_controls_are_stored_raw() {
 /// M: step 6 omitted; `user_version` left 5.
 #[test]
 fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
-    // Schema 8, 46 columns since docs/features/drift-queue.md
+    // Schema 9 since docs/features/card-store.md "Store"; 46 columns since
+    // docs/features/drift-queue.md
     // "Queue schema 8": `drift`, `drift_hash` after `interpretation`.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 8);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[43], INTERPRETATION_KIND);
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
@@ -352,7 +353,9 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     // "Review document, stage, queue").
     assert_eq!(proposal_columns(7), Some(&PROPOSAL_COLUMNS[..44]));
     assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(9), None);
+    // `proposals` unchanged at 9 (docs/features/card-store.md "Store").
+    assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(10), None);
 
     let scratch = Scratch::new("qi-t5");
     let db = scratch.db("q");
@@ -364,7 +367,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     let made = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
     assert_eq!(
         sqlite3(
             &db,
@@ -379,7 +382,8 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
         &db,
         "ALTER TABLE proposals DROP COLUMN drift_hash; \
          ALTER TABLE proposals DROP COLUMN drift; \
-         ALTER TABLE proposals DROP COLUMN interpretation; PRAGMA user_version = 5;",
+         ALTER TABLE proposals DROP COLUMN interpretation; DROP TABLE cards; PRAGMA user_version \
+         = 5;",
     );
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
@@ -404,7 +408,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     );
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping 5 -> 8");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "46"
@@ -422,7 +426,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9", "stepped once");
     // An interpretation goes into the stepped queue.
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
     assert_eq!(
@@ -434,22 +438,22 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     );
     drop(queue);
 
-    // Schema 9: refused by an open and a read, left alone.
-    sqlite3(&db, "PRAGMA user_version = 9;");
+    // Schema 10: refused by an open and a read, left alone.
+    sqlite3(&db, "PRAGMA user_version = 10;");
     let rows = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(error @ QueueError::SchemaTooNew { found: 9 }) => {
+            Err(error @ QueueError::SchemaTooNew { found: 10 }) => {
                 let text = error.to_string();
-                assert!(text.contains('9') && text.contains('8'), "{text}");
+                assert!(text.contains("10") && text.contains('9'), "{text}");
             }
-            other => panic!("expected SchemaTooNew 9, got {other:?}"),
+            other => panic!("expected SchemaTooNew 10, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9", "left alone");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "left alone");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), rows);
 }
 

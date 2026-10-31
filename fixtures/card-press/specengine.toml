@@ -1,0 +1,30 @@
+# Fixture corpus card-press: an invented weekly print shop, no game word and
+# no code. Two trades share one board: `copy` walks a text from draft to
+# proof, a move out of `draft` being the desk's, and `plates` has no `moves`
+# at all, so every ordered pair of its open columns stands. Its `blocked`
+# column is a column like any other: nothing in the engine reads the word.
+# Kinds, prefixes, flows and columns are this project's own
+# (docs/features/card-store.md "Data", ADR-0008, ADR-0056).
+
+[project]
+slug = "card-press"
+
+[ids]
+PRN = { kind = "print-run", shape = "name" }
+SHT = { kind = "broadsheet", shape = "name" }
+
+[[card.flow]]
+name = "copy"
+disciplines = ["copy"]
+columns = ["draft", "edit", "proof", "filed"]
+accept = { from = "proof", to = "filed" }
+moves = [
+  { from = "draft", to = "edit", by = ["desk"] },
+  { from = "edit", to = "proof" },
+]
+
+[[card.flow]]
+name = "plates"
+disciplines = ["plates"]
+columns = ["queued", "blocked", "checked", "struck"]
+accept = { from = "checked", to = "struck" }

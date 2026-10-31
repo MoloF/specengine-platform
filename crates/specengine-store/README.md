@@ -22,7 +22,7 @@ No `rusqlite` type in a public signature (`architecture.md#distribution`).
 - `StoreError {DbInsideWorktree, DbDirMissing, NotIndexed, RootMismatch, Busy, Io {path, source}, Sqlite(String)}`; `INDEX_FORMAT = 13`; `SEARCH_LIMIT_{MIN,MAX,DEFAULT}` 1, 200, 20; `MIN_TERM_CHARS = 3`.
 - Code index (`symbol-{index,reads}.md` seams): `CodeAnalyzer`, `{update,clear}_code`, `stored_names`, `code_{refs,symbols,snapshot{,_with_roles,_with_layer_c},roles,selection}`, `{lookup,file}_symbols`, `LookupWithFiles` (`spec-impact.md`); `StoredRole`, `RoleCandidate`, `CodeSnapshot.roles` (`code-roles.md`); `CodeSelection {refs, files}`, `SelectedFile {path, names, holds, symbols}` (`spec-verify-scope.md`); layer C: `replace_layer_c`, `layer_c_{stamp,snapshot}`, `code_tree_rows` (`layer-c{,-reads}.md`).
 - `b3_hash(&[u8]) -> String`, streaming `B3Stream {new, update, finish}`: `b3:` + 64 lowercase hex BLAKE3, the `spec.lock` form: `bundle_hash`, `span_hash`, `patch_hash`, `norm_hash`.
-- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record,decision-staging}.md`, schemas `proposal-queue.md` "Store"; tasks `tasks.md`, the gate `gate.md`): `ProposalQueue`, `SqliteQueue::open(db, project)`, ops named in those canons, `record_verify_tests` (`spec-verify-tests.md`); `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): methods in those canons and `spec-lock.md`, also `{,is_}intent_to_add`, `remove_cached`, `status_all`; `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"; `list_revision` (`impact --since`): `spec-impact.md` "Since"); the file writes, `span_hash`, `same_repository`, `introduced_findings`: those canons.
+- Proposals (`{proposal-*,queue-backup,agent-intake,decision-record,decision-staging}.md`, schemas `proposal-queue.md` "Store"; tasks `tasks.md`, cards `cards.md`, the gate `gate.md`): `ProposalQueue`, `SqliteQueue::open(db, project)`, ops named in those canons, `record_verify_tests` (`spec-verify-tests.md`); `events_after(after, limit) -> EventsAfter {events: [TailEvent], last_seq, full}` (`user_version` checked); `WorktreeGit::new(dir, &GitEnv)` (`git.rs`, the check's): methods in those canons and `spec-lock.md`, also `{,is_}intent_to_add`, `remove_cached`, `status_all`; `spec verify`'s `VerifyGit` (`spec-verify.md` "Base"; `list_revision` (`impact --since`): `spec-impact.md` "Since"); the file writes, `span_hash`, `same_repository`, `introduced_findings`: those canons.
 
 ## Rows
 
@@ -62,7 +62,7 @@ Working answer -> the other's cost.
 ## Open minors
 
 - -> the watcher: `entry_kind` re-reads a directory per component per probe (`is_dir`: twice); `update_paths` silently drops rows under an unreadable directory.
-- Accepted: a pre-existing non-WAL DB with other tables keeps its rollback journal (Phase 2); a broken escalation invariant or JSON encode -> `Sqlite`; races (`read` checks components, then reads; `resolve` names the parent when an entry's type cannot be read).
+- Accepted: a pre-existing non-WAL DB with other tables keeps its rollback journal; a broken escalation invariant or JSON encode -> `Sqlite`; races (`read` checks components, then reads; `resolve` names the parent when an entry's type cannot be read).
 - `GitIndex` holds each blob twice (`read` returns owned bytes); untested: `RootGone` by a spawn race, a file-system boundary.
 
 Tests: `tests/`, each citing its spec.

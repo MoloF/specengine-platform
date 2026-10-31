@@ -1488,8 +1488,8 @@ fn spec_c_a_decision_is_told_by_its_class_not_an_ids_kind() {
 
 // ----------------------------------------------------------------- AC-R13
 
-/// AC-R13: `export state` with an interpretation: header `{"format":2,
-/// "queue_schema":8,…}`, its row's `interpretation` the stored JSON text;
+/// AC-R13: `export state` with an interpretation: header `{"format":3,
+/// "queue_schema":9,…}`, its row's `interpretation` the stored JSON text;
 /// imported into a fresh `HOME`, the export byte-identical, the row read
 /// equal. A schema-5 dump whose row carries `interpretation` is refused
 /// naming its line. M: import refuses schema 5 (`stage_confirm.rs` holds
@@ -1537,7 +1537,7 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]
@@ -1570,7 +1570,13 @@ fn ac_r13_a_backup_with_an_interpretation_round_trips_byte_identical() {
 
     // A schema-5 dump cannot carry the column.
     let mut v5: Vec<String> = lines.iter().map(|line| (*line).to_owned()).collect();
-    v5[0] = v5[0].replacen("\"queue_schema\":8,", "\"queue_schema\":5,", 1);
+    v5[0] = v5[0]
+        .replacen(
+            "\"format\":3,\"queue_schema\":9,",
+            "\"format\":2,\"queue_schema\":5,",
+            1,
+        )
+        .replacen("\"cards\":0,", "", 1);
     let file = dumps.join("v5-with-44.jsonl");
     std::fs::write(&file, format!("{}\n", v5.join("\n"))).unwrap();
     let home = pair.scratch.home("v5");

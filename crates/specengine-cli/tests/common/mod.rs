@@ -455,6 +455,11 @@ pub const FIXTURES: [(&str, &str); 2] = [("spec-a", "lantern-keep"), ("spec-b", 
 /// [`FIXTURES`], whose loops pin spec-a's and spec-b's own findings.
 pub const NON_RUST: (&str, &str) = ("spec-c", "dock-hire");
 
+/// The fixture of docs/features/card-store.md (an invented print shop with
+/// two trades' flows), with its slug: kept out of [`FIXTURES`] too, for the
+/// same reason.
+pub const CARD_PRESS: (&str, &str) = ("card-press", "card-press");
+
 /// A header line of `spec show`: the fields split on ` | `.
 pub fn header_fields(line: &str) -> Vec<&str> {
     line.split(" | ").collect()

@@ -978,22 +978,22 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         text,
         format!(
-            "wrote {}: 2 proposal(s), 5 task(s), 2 run(s), {events} event(s)\n",
+            "wrote {}: 2 proposal(s), 5 task(s), 2 run(s), 0 card(s), {events} event(s)\n",
             file.display()
         )
     );
     assert_eq!(
         document,
         json!({"path": file.display().to_string(), "proposals": 2, "tasks": 5, "runs": 2,
-               "events": events})
+               "cards": 0, "events": events})
     );
     let bytes = std::fs::read(&file).expect("the dump");
     let lines: Vec<&str> = std::str::from_utf8(&bytes).unwrap().lines().collect();
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":2,\
-             \"tasks\":5,\"runs\":2,\"events\":{events}}}"
+            "{{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":2,\
+             \"tasks\":5,\"runs\":2,\"cards\":0,\"events\":{events}}}"
         )
     );
     assert_eq!(lines.len(), 1 + 2 + 5 + 2 + events);
@@ -1032,8 +1032,8 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         questions,
         [format!(
-            "restore 2 proposal(s), 5 task(s), 2 run(s) and {events} event(s) of lantern-keep \
-             from {} into {}? [y/N]",
+            "restore 2 proposal(s), 5 task(s), 2 run(s), 0 card(s) and {events} event(s) of \
+             lantern-keep from {} into {}? [y/N]",
             file.display(),
             db.display()
         )]
@@ -1042,14 +1042,14 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     assert_eq!(
         text,
         format!(
-            "restored 2 proposal(s), 5 task(s), 2 run(s), {events} event(s) into {}\n",
+            "restored 2 proposal(s), 5 task(s), 2 run(s), 0 card(s), {events} event(s) into {}\n",
             db.display()
         )
     );
     assert_eq!(
         document,
         json!({"db": db.display().to_string(), "proposals": 2, "tasks": 5, "runs": 2,
-               "events": events})
+               "cards": 0, "events": events})
     );
     assert_eq!(dump_in(&fresh, "lantern-keep"), before, "dump() equal");
     let again = dumps.join("again.jsonl");
@@ -1064,7 +1064,7 @@ fn ac11_tasks_and_runs_round_trip_through_a_format_2_backup() {
     let message = cannot(&outcome, "occupied");
     assert!(
         message.contains(&format!(
-            "holds 2 proposal(s), 5 task(s), 2 run(s), {events} event(s)"
+            "holds 2 proposal(s), 5 task(s), 2 run(s), 0 card(s), {events} event(s)"
         )),
         "{message}"
     );
@@ -1123,8 +1123,8 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let v4_lines: Vec<String> = v4.lines().map(str::to_owned).collect();
     assert_eq!(
         v4_lines[0],
-        "{\"format\":2,\"queue_schema\":8,\"project\":\"lantern-keep\",\"proposals\":1,\
-         \"tasks\":0,\"runs\":0,\"events\":1}"
+        "{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":1,\
+         \"tasks\":0,\"runs\":0,\"cards\":0,\"events\":1}"
     );
     // Format 1, schema 3: the header's five keys, rows without `task_id`,
     // the stage's two, `interpretation`, `drift` and `drift_hash`.
@@ -1152,16 +1152,24 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     assert_eq!(
         std::fs::read_to_string(&again).unwrap(),
         v4,
-        "re-exported as format 2"
+        "re-exported as format 3"
     );
 
     // Refused headers and rows: line 1 (the header) or 2 (the row).
+    let two = |line: &str| {
+        line.replacen(
+            "\"format\":3,\"queue_schema\":9,",
+            "\"format\":2,\"queue_schema\":8,",
+            1,
+        )
+        .replacen("\"cards\":0,", "", 1)
+    };
     let mut six = v4_lines.clone();
-    six[0] = six[0].replacen("\"runs\":0,", "", 1);
+    six[0] = two(&six[0]).replacen("\"runs\":0,", "", 1);
     let mut schema_3 = v4_lines.clone();
-    schema_3[0] = schema_3[0].replacen("\"queue_schema\":8,", "\"queue_schema\":3,", 1);
+    schema_3[0] = two(&schema_3[0]).replacen("\"queue_schema\":8,", "\"queue_schema\":3,", 1);
     let mut seven = v4_lines.clone();
-    seven[0] = seven[0].replacen("\"format\":2,", "\"format\":1,", 1);
+    seven[0] = two(&seven[0]).replacen("\"format\":2,", "\"format\":1,", 1);
     let mut v3_row_4 = v3_lines.clone();
     v3_row_4[1] = v4_lines[1].clone();
     for (name, lines, line) in [
@@ -1187,7 +1195,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
         "ALTER TABLE proposals DROP COLUMN drift_hash; ALTER TABLE proposals DROP COLUMN drift; \
          ALTER TABLE proposals DROP COLUMN interpretation; ALTER TABLE proposals DROP COLUMN \
          staged_at; ALTER TABLE proposals DROP COLUMN staged; ALTER TABLE proposals DROP COLUMN \
-         task_id; DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = 3;",
+         task_id; DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = 3;",
     );
     let from_3 = dumps.join("from-3.jsonl");
     export(&pair, &pair.home, &from_3);
@@ -1222,7 +1230,7 @@ fn ac11_older_formats_restore_and_bad_headers_are_refused() {
     let (outcome, questions) = import(&other, &held, &current);
     let message = cannot(&outcome, "only a task");
     assert!(
-        message.contains("holds 0 proposal(s), 1 task(s), 0 run(s), 0 event(s)"),
+        message.contains("holds 0 proposal(s), 1 task(s), 0 run(s), 0 card(s), 0 event(s)"),
         "{message}"
     );
     assert!(questions.is_empty());

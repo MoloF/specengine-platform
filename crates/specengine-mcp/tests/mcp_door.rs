@@ -72,6 +72,14 @@
 //! the note); its door over `fixtures/code-a` with its lock, rows judged:
 //! `mcp_code.rs` `te2_code_tools_write_nothing_under_the_root`.
 //!
+//! AC-01 of docs/features/card-store.md: the five card tools join the door
+//! with valid and invalid calls (spec-a has no `[card]`: the default flow),
+//! and `ac01_seven_writes_on_one_card_write_nothing_under_the_project_root`
+//! runs seven writes on one `fixtures/card-press` card, the tools' three and
+//! the terminal's: `git status --porcelain --ignored` empty, the tree
+//! byte-identical, `HEAD` unchanged, seven `card.*` events. M: a card move
+//! writing a file; the tools without calls here.
+//!
 //! Compiles to nothing with `--features probes` (the AC names the default
 //! build; the measurement build lists the demo and probe tools).
 
@@ -92,7 +100,9 @@ use common::read::{ERAS, Era, Session, TOOLS, assert_bad_arguments, content_text
 use common::*;
 use serde_json::{Value, json};
 use specengine_cli::{
-    Env, Exit, GitEnv, Globals, TaskDecisionRequest, TaskNewRequest, task_approve, task_new,
+    CardAcceptRequest, CardAssignRequest, CardMoveRequest, Env, Exit, GitEnv, Globals,
+    TaskDecisionRequest, TaskNewRequest, card_accept, card_assign, card_move, task_approve,
+    task_new,
 };
 
 /// `git args` in `dir`: a cleared environment, no global or system config,
@@ -542,6 +552,99 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"root": "MEC-STAMINA", "bogus": true}),
             ],
         ),
+        // docs/features/card-store.md AC-01: spec-a has no `[card]`, so the
+        // default flow answers; `create_card` runs first (tools by name), so
+        // `C-0001` stands for the rest; a refusal is an error result, a wrong
+        // type, `as` and an unknown field are bad arguments.
+        "create_card" => (
+            vec![
+                json!({"title": "A manual card"}),
+                json!({"title": "A targeted card", "goal": "G.", "discipline": "design",
+                    "target": ["MEC-STAMINA"], "criterion": ["Holds."], "assignee": "ana",
+                    "estimate": "2-3", "due": "2026-11-05", "parent": "C-0001"}),
+                json!({"title": "Bad", "estimate": "3d"}),
+                json!({"title": "Bad", "target": ["MEC-NOPE"]}),
+                json!({"title": "Bad", "parent": "C-0999"}),
+                json!({"title": "Bad", "corrects": "\u{0421}-0001"}),
+            ],
+            vec![
+                json!({}),
+                json!({"title": 7}),
+                json!({"title": "T", "as": "ana"}),
+                json!({"title": "T", "target": "MEC-STAMINA"}),
+                json!({"title": "T", "bogus": true}),
+            ],
+        ),
+        "edit_card" => (
+            vec![
+                json!({"card_id": "C-0001", "goal": "G."}),
+                json!({"card_id": "C-0001", "evidence": ["note=Seen."]}),
+                json!({"card_id": "C-0001", "goal": "-"}),
+                json!({"card_id": "C-0001"}),
+                json!({"card_id": "C-0001", "evidence": ["file=x"]}),
+                json!({"card_id": "C-0999", "goal": "G."}),
+                json!({"card_id": "C-0001", "goal": "G.", "revision": "1"}),
+            ],
+            vec![
+                json!({}),
+                json!({"goal": "G."}),
+                json!({"card_id": 7}),
+                json!({"card_id": "C-0001", "as": "ana"}),
+                json!({"card_id": "C-0001", "evidence": "note=x"}),
+                json!({"card_id": "C-0001", "discipline": "x"}),
+                json!({"card_id": "C-0001", "assignee": "ana"}),
+            ],
+        ),
+        "get_card" => (
+            vec![
+                json!({"card_id": "C-0001"}),
+                json!({"card_id": "C-0001", "history": true}),
+                json!({"card_id": "C-0999"}),
+                json!({"card_id": "\u{0421}-0001"}),
+                json!({"card_id": ""}),
+            ],
+            vec![
+                json!({}),
+                json!({"card_id": 1}),
+                json!({"card_id": "C-0001", "history": "yes"}),
+                json!({"card_id": "C-0001", "bogus": true}),
+            ],
+        ),
+        "list_cards" => (
+            vec![
+                json!({}),
+                json!({"flow": "plain", "column": "backlog"}),
+                json!({"discipline": "design", "assignee": "ana"}),
+                json!({"no_target": true, "with_cancelled": true}),
+                json!({"flow": "nope"}),
+                json!({"flow": null, "no_target": null}),
+            ],
+            vec![
+                json!({"flow": 7}),
+                json!({"no_target": "yes"}),
+                json!({"as": "ana"}),
+                json!({"bogus": true}),
+            ],
+        ),
+        "move_card" => (
+            vec![
+                json!({"card_id": "C-0001", "to": "ready"}),
+                json!({"card_id": "C-0001", "to": "review"}),
+                // `accept.to`: no tool reaches it.
+                json!({"card_id": "C-0001", "to": "done"}),
+                json!({"card_id": "C-0001"}),
+                json!({"card_id": "C-0002", "to": "review", "before": "C-0001"}),
+                json!({"card_id": "C-0999", "to": "ready"}),
+                json!({"card_id": "C-0001", "to": "ready", "revision": "1"}),
+            ],
+            vec![
+                json!({}),
+                json!({"to": "ready"}),
+                json!({"card_id": 7}),
+                json!({"card_id": "C-0001", "as": "desk"}),
+                json!({"card_id": "C-0001", "reviewer": "ben"}),
+            ],
+        ),
         // docs/features/impact.md TE-6: spec-a has no `[code]`, so a REF
         // answers with no code (exit 0), `depth` too; a REF naming nothing
         // is exit 1, a look-alike and `depth: -1` exit 2, `symbol` the
@@ -816,6 +919,166 @@ fn ac08_reads_write_nothing_under_the_project_root() {
             .any(|path| path.ends_with("specengine/lantern-keep.db")),
         "the index lives under HOME: {new_paths:?}"
     );
+}
+
+/// AC-01 of docs/features/card-store.md: seven writes on one
+/// `fixtures/card-press` card, each in order: `create_card`, `edit_card`,
+/// the owner's `assign`, the desk's `move` (a move `by = ["desk"]` refuses a
+/// tool, and the refusal writes nothing), `move_card` to `proof`, `edit_card`
+/// with evidence, the reviewer's `accept`. After them the tree is
+/// byte-identical (`.git` too: no commit, no ref, `HEAD` as it was), `git
+/// status --porcelain --ignored` empty, and `get_card`'s history holds
+/// exactly the seven, one a change. M: a card move writing a file under the
+/// root; a move committing.
+#[test]
+fn ac01_seven_writes_on_one_card_write_nothing_under_the_project_root() {
+    const CLOCK: &str = "2026-10-30T09:00:00Z";
+    let scratch = Scratch::new("door-card");
+    let home = scratch.home("h");
+    let git_home = scratch.home("git");
+    let root = scratch.copy("card-press", "repo");
+    git(
+        &root,
+        &git_home,
+        &["init", "-q", "--template=", "-b", "main"],
+    );
+    for (key, value) in scratch_git::QUIET {
+        git(&root, &git_home, &["config", "--local", key, value]);
+    }
+    git(&root, &git_home, &["add", "-A"]);
+    git(&root, &git_home, &["commit", "-q", "-m", "card-press"]);
+    let status = |root: &Path| {
+        git(
+            root,
+            &git_home,
+            &["--no-optional-locks", "status", "--porcelain", "--ignored"],
+        )
+    };
+    assert_eq!(status(&root), "", "committed clean");
+    let head = git(&root, &git_home, &["rev-parse", "HEAD"]);
+    let tree_before = snapshot(&root);
+    let env = Env {
+        cwd: root.clone(),
+        home: Some(home.clone().into_os_string()),
+        xdg_data_home: None,
+    };
+    let globals = Globals::default();
+    let mut session = Session::open(Era::Stateless, &[], Some(&root), Home::At(&home));
+    let mut steps: Vec<(&str, String)> = Vec::new();
+    let mut after = |session: &mut Session, kind: &str, moved: Option<&str>| {
+        steps.push((
+            match kind {
+                "card.created" => "card.created",
+                "card.edited" => "card.edited",
+                "card.assigned" => "card.assigned",
+                "card.moved" => "card.moved",
+                "card.accepted" => "card.accepted",
+                other => panic!("no event {other}"),
+            },
+            moved.unwrap_or_default().to_owned(),
+        ));
+        assert_eq!(status(&root), "", "{kind}: git status");
+        assert!(snapshot(&root) == tree_before, "{kind}: the tree changed");
+        let reply = session.call("get_card", json!({"card_id": "C-0001", "history": true}));
+        let history = result(&reply)["structuredContent"]["history"]
+            .as_array()
+            .expect("the history")
+            .clone();
+        assert_eq!(
+            history.len(),
+            steps.len(),
+            "one event a change: {history:?}"
+        );
+        for (event, (kind, moved)) in history.iter().zip(&steps) {
+            assert_eq!(event["type"], json!(kind), "{history:?}");
+            if !moved.is_empty() {
+                assert_eq!(event["payload"]["to"], json!(moved), "{history:?}");
+            }
+        }
+    };
+
+    let created = session.call(
+        "create_card",
+        json!({"title": "Lead story", "discipline": "copy", "target": ["SHT-FRONT"]}),
+    );
+    assert_eq!(result(&created)["structuredContent"]["id"], json!("C-0001"));
+    after(&mut session, "card.created", None);
+    let edited = session.call(
+        "edit_card",
+        json!({"card_id": "C-0001", "goal": "Ten inches."}),
+    );
+    assert_eq!(result(&edited)["isError"], json!(false), "{edited}");
+    after(&mut session, "card.edited", None);
+    let assigned = card_assign(
+        &env,
+        &globals,
+        &CardAssignRequest {
+            id: "C-0001".to_owned(),
+            assignee: Some("ana".to_owned()),
+            reviewer: Some("ben".to_owned()),
+            actor: Some("desk".to_owned()),
+            now: CLOCK.to_owned(),
+            ..CardAssignRequest::default()
+        },
+    )
+    .expect("card assign");
+    assert_eq!(assigned.exit(), Exit::Answered, "{assigned:?}");
+    after(&mut session, "card.assigned", None);
+    // The desk's move refuses a tool, which writes nothing.
+    let refused = session.call("move_card", json!({"card_id": "C-0001", "to": "edit"}));
+    assert_eq!(result(&refused)["isError"], json!(true), "{refused}");
+    assert!(
+        content_text(result(&refused)).contains("`desk`"),
+        "{refused}"
+    );
+    let moved = card_move(
+        &env,
+        &globals,
+        &CardMoveRequest {
+            id: "C-0001".to_owned(),
+            to: Some("edit".to_owned()),
+            actor: Some("desk".to_owned()),
+            now: CLOCK.to_owned(),
+            ..CardMoveRequest::default()
+        },
+    )
+    .expect("card move");
+    assert_eq!(moved.exit(), Exit::Answered, "{moved:?}");
+    after(&mut session, "card.moved", Some("edit"));
+    let moved = session.call("move_card", json!({"card_id": "C-0001", "to": "proof"}));
+    assert_eq!(result(&moved)["isError"], json!(false), "{moved}");
+    after(&mut session, "card.moved", Some("proof"));
+    let evidence = session.call(
+        "edit_card",
+        json!({"card_id": "C-0001", "evidence": ["url=https://press.example.invalid/1"]}),
+    );
+    assert_eq!(result(&evidence)["isError"], json!(false), "{evidence}");
+    after(&mut session, "card.edited", None);
+    let mut yes = |_: &str| true;
+    let accepted = card_accept(
+        &env,
+        &globals,
+        &CardAcceptRequest {
+            id: "C-0001".to_owned(),
+            actor: "ben".to_owned(),
+            now: CLOCK.to_owned(),
+            ..CardAcceptRequest::default()
+        },
+        &mut yes,
+    )
+    .expect("card accept");
+    assert_eq!(accepted.exit(), Exit::Answered, "{accepted:?}");
+    after(&mut session, "card.accepted", Some("filed"));
+    drop(session.finish());
+
+    assert_eq!(status(&root), "", "git status after the session");
+    assert_eq!(git(&root, &git_home, &["rev-parse", "HEAD"]), head, "HEAD");
+    assert_eq!(
+        git(&root, &git_home, &["rev-list", "--all", "--count"]).trim(),
+        "1",
+        "no commit"
+    );
+    assert!(snapshot(&root) == tree_before, "the repository changed");
 }
 
 /// One `tools/call` of `name` in `era` on `server` (stateless: `_meta`

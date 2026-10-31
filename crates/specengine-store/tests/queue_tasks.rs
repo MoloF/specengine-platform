@@ -215,12 +215,12 @@ fn task_events(queue: &SqliteQueue) -> Vec<(String, serde_json::Value)> {
 /// column moved or retyped.
 #[test]
 fn schema_4_makes_the_tasks_and_runs_tables() {
-    // Schema 8 since docs/features/drift-queue.md "Queue schema 8".
-    assert_eq!(QUEUE_SCHEMA_VERSION, 8);
+    // Schema 9 since docs/features/card-store.md "Store".
+    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
     let scratch = Scratch::new("qt-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
     let info = |table: &str| {
         sqlite3(
             &db,
@@ -309,7 +309,8 @@ fn schema_1_to_3_databases_step_to_4() {
         sqlite3(
             &db,
             &format!(
-                "{} DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = {version};",
+                "{} DROP TABLE cards; DROP TABLE tasks; DROP TABLE runs; PRAGMA user_version = \
+                 {version};",
                 drops.join(" ")
             ),
         );
@@ -318,7 +319,7 @@ fn schema_1_to_3_databases_step_to_4() {
             kept.to_string()
         );
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9", "from {version}");
         assert_eq!(
             sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
             "46"
@@ -333,7 +334,7 @@ fn schema_1_to_3_databases_step_to_4() {
         assert_eq!(task.id, "T-0001", "from {version}");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "8");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
     }
 }
 
@@ -914,6 +915,7 @@ fn a_task_alone_makes_the_queue_occupied() {
             proposals: 0,
             tasks: 1,
             runs: 1,
+            cards: 0,
             events: 0
         }
     );
@@ -926,6 +928,7 @@ fn a_task_alone_makes_the_queue_occupied() {
             proposals: 0,
             tasks: 1,
             runs: 1,
+            cards: 0,
             events: 0
         })
     );

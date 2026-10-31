@@ -1505,11 +1505,11 @@ fn raise_exits_2_change_nothing() {
     repo.git(&["checkout", "-q", "main"]);
 
     // A queue of a newer schema.
-    sql(&repo, SLUG, "PRAGMA user_version = 9;");
+    sql(&repo, SLUG, "PRAGMA user_version = 10;");
     let message = raise(&repo, &[]).cannot("a newer queue");
-    assert!(message.contains('9') && message.contains('8'), "{message}");
-    assert_eq!(sql(&repo, SLUG, "PRAGMA user_version;"), "9", "left alone");
-    sql(&repo, SLUG, "PRAGMA user_version = 8;");
+    assert!(message.contains("10") && message.contains('9'), "{message}");
+    assert_eq!(sql(&repo, SLUG, "PRAGMA user_version;"), "10", "left alone");
+    sql(&repo, SLUG, "PRAGMA user_version = 9;");
     assert_unchanged(&repo, &before, "a newer queue");
 
     // An unborn HEAD; a root outside git.

@@ -29,18 +29,24 @@
 //! docs/features/flow-read.md: `get_flow` joins `TOOLS` (twenty-three); its
 //! twin in [`library`] is `spec flow [ROOT] [--depth N]`
 //! (`FlowRequest {root, depth}`).
+//!
+//! docs/features/card-store.md: the five card tools join `TOOLS`
+//! (twenty-eight) as [`CARD_TOOLS`], their twins in [`card_library`], a
+//! write acting as `TOOL_ACTOR`.
 
 use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde_json::{Value, json};
 use specengine_cli::{
-    BundleRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
-    DriftRequest, Env, Exit, FlowRequest, GitEnv, Globals, ImpactRequest, IntakeSeverity, Outcome,
-    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, ReviewRequest, RoadmapRequest,
-    SearchRequest, ShowRequest, SymbolsForm, SymbolsRequest, TaskClaimRequest, TaskCompleteRequest,
-    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TreeRequest, UnmappedRequest,
-    VerifiedTree, VerifyRequest, render_json, render_text,
+    BundleRequest, CardEditRequest, CardListRequest, CardMoveRequest, CardNewRequest,
+    CardShowRequest, CliError, DecisionInput, DecisionRequest, DiscrepancyInput,
+    DiscrepancyRequest, DriftRequest, Env, Exit, FlowRequest, GitEnv, Globals, ImpactRequest,
+    IntakeSeverity, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
+    ReviewRequest, RoadmapRequest, SearchRequest, ShowRequest, SymbolsForm, SymbolsRequest,
+    TOOL_ACTOR, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest, TaskReportRequest,
+    TaskShowRequest, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest, render_json,
+    render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -96,13 +102,17 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// twenty since docs/features/check-binding.md (`check_binding`),
 /// twenty-one since docs/features/impact.md (`get_impact`), twenty-two
 /// since docs/features/review-form.md ([`OWNER_TOOLS`]), twenty-three since
-/// docs/features/flow-read.md (`get_flow`).
-pub const TOOLS: [&str; 23] = [
+/// docs/features/flow-read.md (`get_flow`), twenty-eight since
+/// docs/features/card-store.md ([`CARD_TOOLS`]).
+pub const TOOLS: [&str; 28] = [
     "ask_question",
     "check_binding",
     "claim_task",
     "complete_task",
+    "create_card",
+    "edit_card",
     "find_symbols",
+    "get_card",
     "get_context_bundle",
     "get_flow",
     "get_impact",
@@ -111,6 +121,8 @@ pub const TOOLS: [&str; 23] = [
     "get_roadmap",
     "get_task",
     "get_tree",
+    "list_cards",
+    "move_card",
     "propose_change",
     "refs",
     "report_decision",
@@ -121,6 +133,16 @@ pub const TOOLS: [&str; 23] = [
     "search",
     "submit_plan",
     "unmapped",
+];
+
+/// The card tools of docs/features/card-store.md "MCP": two reads, three
+/// writes annotated as `claim_task`. No tool assigns, cancels or accepts.
+pub const CARD_TOOLS: [&str; 5] = [
+    "create_card",
+    "edit_card",
+    "get_card",
+    "list_cards",
+    "move_card",
 ];
 
 /// The owner's tools of docs/features/review-form.md (07 §1.2 `owner`
@@ -576,6 +598,113 @@ pub fn task_library(
     expected(outcome.map(|outcome| Outcome::Task(Box::new(outcome))))
 }
 
+/// The card tools' twins (docs/features/card-store.md "MCP"): `list_cards`
+/// = `spec card list`, `get_card` = `spec card show`, `create_card` = `spec
+/// card new`, `edit_card` = `spec card edit`, `move_card` = `spec card
+/// move`, the flags in snake case, `C` as `card_id`, a write acting as
+/// `agent` at `now`. No such card is an error result with no
+/// `structuredContent`, as `get_task`.
+pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now: &str) -> Expected {
+    let text = |key: &str| args[key].as_str().map(str::to_owned);
+    let id = text("card_id").unwrap_or_default();
+    let actor = Some(TOOL_ACTOR.to_owned());
+    let outcome = match tool {
+        "list_cards" => {
+            return expected(
+                specengine_cli::card_list(
+                    env,
+                    globals,
+                    &CardListRequest {
+                        flow: text("flow"),
+                        column: text("column"),
+                        discipline: text("discipline"),
+                        assignee: text("assignee"),
+                        no_target: args["no_target"] == json!(true),
+                        with_cancelled: args["with_cancelled"] == json!(true),
+                    },
+                )
+                .map(|outcome| Outcome::CardList(Box::new(outcome))),
+            );
+        }
+        "get_card" => {
+            let mut want = expected(
+                specengine_cli::card_show(
+                    env,
+                    globals,
+                    &CardShowRequest {
+                        id,
+                        history: args["history"] == json!(true),
+                    },
+                )
+                .map(|outcome| Outcome::CardShow(Box::new(outcome))),
+            );
+            if want.is_error {
+                want.document = None;
+            }
+            return want;
+        }
+        "create_card" => specengine_cli::card_new(
+            env,
+            globals,
+            &CardNewRequest {
+                title: text("title").unwrap_or_default(),
+                goal: text("goal"),
+                discipline: text("discipline"),
+                targets: strings(&args["target"]),
+                criteria: strings(&args["criterion"]),
+                assignee: text("assignee"),
+                estimate: text("estimate"),
+                due: text("due"),
+                parent: text("parent"),
+                corrects: text("corrects"),
+                actor,
+                now: now.to_owned(),
+            },
+        ),
+        "edit_card" => specengine_cli::card_edit(
+            env,
+            globals,
+            &CardEditRequest {
+                id,
+                title: text("title"),
+                goal: text("goal"),
+                targets: strings(&args["target"]),
+                criteria: strings(&args["criterion"]),
+                estimate: text("estimate"),
+                due: text("due"),
+                parent: text("parent"),
+                corrects: text("corrects"),
+                evidence: strings(&args["evidence"]),
+                revision: text("revision"),
+                actor,
+                now: now.to_owned(),
+            },
+        ),
+        "move_card" => specengine_cli::card_move(
+            env,
+            globals,
+            &CardMoveRequest {
+                id,
+                to: text("to"),
+                before: text("before"),
+                revision: text("revision"),
+                actor,
+                now: now.to_owned(),
+            },
+        ),
+        other => panic!("no card twin for tool {other}"),
+    };
+    let mut want = expected(outcome.map(|outcome| Outcome::Card(Box::new(outcome))));
+    if want
+        .document
+        .as_ref()
+        .is_some_and(|document| document.get("reason").is_some())
+    {
+        want.document = None;
+    }
+    want
+}
+
 /// The code tools' twins (docs/canon/mcp-code.md "Tools", Forms, Results):
 /// `find_symbols` = `spec symbols` with
 /// exactly one form, `query` one positional, `at` passed raw (MCP never
@@ -692,6 +821,9 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             &specengine_cli::utc_now(),
             &server_git(env),
         );
+    }
+    if CARD_TOOLS.contains(&tool) {
+        return card_library(tool, args, env, globals, &specengine_cli::utc_now());
     }
     if OWNER_TOOLS.contains(&tool) {
         // docs/features/review-form.md: the read before any form,

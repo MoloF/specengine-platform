@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow` (`spec-flow.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. `spec mcp`, the daemon relay, is Phase 2. Launcher: `fixtures/mcp/mcp.json` (`probes` build, a scratch `HOME`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow` (`spec-flow.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. Launcher: `fixtures/mcp/mcp.json` (`probes` build, a scratch `HOME`).
 
 ## Tools
 
@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue with `review_proposal`, the tasks, REF, the cut, the resources and the rules (`server.rs`), 2 048 B in every build, 1 910 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): 0 B left. Each description <= 2 048 (`get_node` 1 670, `get_context_bundle` 1 433), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue with `review_proposal`, the tasks, the cards, REF, the cut, the resources and the rules (`server.rs`), 2 047 B in every build, 1 939 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): 1 B left. Each description <= 2 048 (`get_node` 1 670, `get_context_bundle` 1 433), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
@@ -69,12 +69,12 @@ AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Rec
 
 ## Tests
 
-`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default`, `mcp_read`, `mcp_flow`, `mcp_resources`, `mcp_session`, `mcp_door` (the single door), `mcp_intake`, `mcp_review_form`, `mcp_stage` (`review-form.md`), `mcp_tasks`, `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
+`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default`, `mcp_read`, `mcp_flow`, `mcp_resources`, `mcp_session`, `mcp_door` (the single door), `mcp_intake`, `mcp_review_form`, `mcp_stage` (`review-form.md`), `mcp_tasks`, `mcp_cards`, `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
 
 ## Open
 
 - AC-16's "not verified" items (Owner's check); 500 000 stays the working answer (A12).
 - Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` -> `null`), untriggered so far, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
 - `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a CLI/core fix.
-- A panic in the async wrapper, outside `spawn_blocking`, gets no response (low).
+- A panic in the async wrapper, outside `spawn_blocking`, gets no response.
 - The Size residue. `resources/list` over a busy, corrupt or read-only database is untested.

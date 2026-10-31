@@ -10,7 +10,7 @@ adrs: [ADR-0056]
 
 ## Why
 
-The owner wants an ordinary kanban with statuses, transitions, deadlines and assignees, starting empty and filling from the brief or by hand, every card linking to its source. `card-store.md` holds the record. This slice draws it and gives the daemon its first writes beyond staging, for cards alone (ADR-0056), so one person runs the whole cycle on one screen. Confirming a brief change stays on a terminal (ADR-0035).
+The owner wants an ordinary kanban with statuses, transitions, deadlines and assignees, starting empty and filling from the brief or by hand, every card linking to its source. `docs/canon/cards.md` holds the record. This slice draws it and gives the daemon its first writes beyond staging, for cards alone (ADR-0056), so one person runs the whole cycle on one screen.
 
 ## Description and interactions
 
@@ -27,7 +27,7 @@ A new section `board`, third in the nav: `#/<p>/board[/<C>]`, the ID selecting a
 
 Each card has a Move button opening `MoveMenu`: its column's `moves[]` in served order, each `by` as "needs <names>", then Up, Down (`before`), and Accept when the column is `accept.from`. A choice posts `moveCard` with the row's `revision`. The UI looks moves up and never judges them; the board redraws from the answer, nothing optimistic.
 
-**Drag** is an extra on native HTML5 events, no new dependency (the allowlist stays 17): a drop posts the same `moveCard`, between two cards with `before`.
+**Drag** is an extra on native HTML5 events, no new dependency: a drop posts the same `moveCard`, between two cards with `before`.
 
 **Keyboard.** One tab stop, roving: Up, Down in a column; Left, Right across; Home, End. Enter opens the panel; `m` opens `MoveMenu`, Up, Down, Enter, Esc inside; `n` New card; Esc closes, focus back on the card; `?` lists them. Focus follows a moved card; a polite live region says `C-0001 moved to Ready`.
 
@@ -64,7 +64,7 @@ Loading: a skeleton. Failed: `ErrorPanel` verbatim, Retry; a bad `[card]` is tha
 
 - **New:** `ui/src/board/{BoardView,BoardColumn,BoardCard,MoveMenu,CardPanel,CardDialogs}.tsx`, `{acting,due,labels,filter}.ts`, `BoardView.test.tsx`, `{acting,due,filter}.test.ts`; `ui/src/mocks/cards.ts`, `board.smoke.test.tsx`; http `tests/cards.rs`.
 - **UI**, in `ui/src/`: `api/{provisional,types,client,http,queries}.ts`, `http.test.ts`, `daemonKeys.test.ts`, `queries.test.tsx`, `live.test.tsx`; `mocks/MockClient.ts`; `app/{sections,routes}.ts`, `routes.test.ts`, `App.test.tsx`, `Shell.tsx`, `shortcuts.tsx`; `tree/NodePane.tsx`; `ui/Icon.tsx`; `styles/app.css`; `policy.test.ts`.
-- **Rust:** http `src/app.rs`, `src/answer.rs`; CLI `src/card.rs`, `src/lib.rs`.
+- **Rust:** http `src/app.rs`, `src/answer.rs`; CLI `src/card.rs`, `src/lib.rs`. Left by `card-store`: `card_list` needs a `View`, `CardCause` a `Usage`; "nothing asked" is a `CliError`, so `CardOutcome::exit` needs a route for `Usage` that stays exit 2 on the CLI.
 - **Tests:** http `door.rs`, `fence.rs`, `methods.rs`, `query.rs`, `parity.rs`, `daemon_keys.rs`; `fixtures/daemon-keys.json`.
 - **Unchanged:** `crates/specengine-mcp`, `queue/gate.rs`, `ui/package.json`.
 - **Canon at shipping:** new `board-ui.md`; `architecture.md#ui`, `serve.md#trust` (any local process can also move, cancel and accept a card), `ui/README.md`, the http README; an ADR for the page's accept and clear, written then, owner pre-approved, review open: ADR-0056 names moves alone. It states that a departing page accept (RM-0047) creates one proposal through the daemon, which is why `card_writes_touch_only_the_queue` admits it.
@@ -117,7 +117,7 @@ getCard(project, id, signal?): Promise<Card | CardNotFound>;
 createCard(project, body): Promise<CardWrite>;  // moveCard, editCard, assignCard, cancelCard, acceptCard (project, id, body)
 ```
 
-`CardRow`, `Card` copy `card-store.md` "Documents and events". `fixtures/daemon-keys.json` gains `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, pinned by `daemon_keys.rs`, `daemonKeys.test.ts`. `QUEUE_EVENT_TYPES` gains the six `card.*`: 22.
+`CardRow`, `Card` copy `cards.md` "Documents and events". `fixtures/daemon-keys.json` gains `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, pinned by `daemon_keys.rs`, `daemonKeys.test.ts`. `QUEUE_EVENT_TYPES` gains the six `card.*`: 22.
 
 ## Rules and edge cases
 

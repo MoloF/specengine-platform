@@ -2,7 +2,9 @@
 //! `#storage`): `index`, `index --full`, `search` and every `show` form
 //! leave the spec-a and spec-b copies byte- and path-identical; new files
 //! appear only in the data directory. docs/features/flow-read.md AC-07:
-//! `flow`, whole and folded, joins the loop.
+//! `flow`, whole and folded, joins the loop. docs/features/card-store.md
+//! AC-01: the card reads join it, a board with no card and a card that is
+//! none: no read of a card writes under a root.
 
 #![cfg(unix)]
 
@@ -30,6 +32,19 @@ fn commands(fixture: &str) -> Vec<Vec<&'static str>> {
         vec!["--json", "flow", "--depth", "1"],
         vec!["flow", "NOPE-1"],
         vec!["flow", "--depth", "-1"],
+        vec!["card", "list"],
+        vec!["--json", "card", "list"],
+        vec![
+            "card",
+            "list",
+            "--flow",
+            "plain",
+            "--no-target",
+            "--with-cancelled",
+        ],
+        vec!["card", "show", "C-0099"],
+        vec!["--json", "card", "show", "C-0099", "--history"],
+        vec!["card", "show", "\u{0421}-0001"],
     ];
     let forms: &[&'static str] = if fixture == "spec-a" {
         &[

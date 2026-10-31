@@ -22,7 +22,16 @@ use crate::resources;
 macro_rules! tasks_line {
     () => {
         "- get_task, claim_task, submit_plan, report_run, complete_task = spec task \
-show|claim|plan|report|complete; the three above take task_id."
+show|claim|plan|report|complete."
+    };
+}
+
+/// The `instructions` line of the card tools (task spec `card-store`,
+/// "MCP").
+macro_rules! cards_line {
+    () => {
+        "- list_cards, get_card, create_card, edit_card, move_card = spec card \
+list|show|new|edit|move; no tool accepts."
     };
 }
 
@@ -48,7 +57,10 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// beside the code`, report_drift's ` for the owner` and `, with a tail on
 /// narrowing` (68 bytes): 2 040 bytes, 1 902 without the tasks line; task
 /// spec `flow-read` adds `get_flow` to the reads (32 bytes) and folds the
-/// two `with` hints into one (24 bytes): 2 048 bytes, the limit.
+/// two `with` hints into one (24 bytes): 2 048 bytes, the limit; task spec
+/// `card-store` adds the cards line (112 bytes) and drops the sentence on
+/// error results and the tasks line's `; the three above take task_id` (113
+/// bytes): 2 047 bytes.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
@@ -72,11 +84,13 @@ distinct_from names each; work on your working answer.
 ",
     tasks_line!(),
     "
+",
+    cards_line!(),
+    "
 
 REF: an ID, alias, slug/ID, ID#SECTION or root-relative .md path. Hints use flags: --kind \
 is kinds, ROOT is root, --links, --bindings are with items. \
-Answers are cut at 40000 characters. A REF naming nothing or a call that cannot run is an \
-error result with the reason. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, \
+Answers are cut at 40000 characters. Resources: spec://<slug>/tree, spec://<slug>/node/<REF, \
 percent-encoded>.
 
 Rules:
@@ -97,6 +111,7 @@ const _: () = assert!(INSTRUCTIONS.len() <= TEXT_LIMIT);
 // line alone.
 const _: () = assert!(tasks_line!().len() < TASKS_LINE_LIMIT);
 const _: () = assert!(holds(INSTRUCTIONS, tasks_line!()));
+const _: () = assert!(holds(INSTRUCTIONS, cards_line!()));
 // The owner's form is named with its twin, and when it may be called
 // (canon `review-form`, "Tool").
 const _: () = assert!(holds(
@@ -158,7 +173,8 @@ impl SpecEngineServer {
             + Self::code_tools()
             + Self::intake_tools()
             + Self::review_tools()
-            + Self::task_tools();
+            + Self::task_tools()
+            + Self::card_tools();
         #[cfg(feature = "probes")]
         let tool_router = tool_router + Self::probe_tools();
         Self {

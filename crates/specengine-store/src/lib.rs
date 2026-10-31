@@ -148,20 +148,23 @@ pub use layer_c::{
     LayerCSnapshot, LayerCStamp,
 };
 pub use queue::{
-    APPLY_VERIFY_STEP, ApplyFailure, Choice, Decision, DecisionRecord, DriftItem, DriftResult,
-    EVENT_APPLIED, EVENT_APPLY_FAILED, EVENT_APPROVED, EVENT_COLUMNS, EVENT_CREATED,
+    APPLY_VERIFY_STEP, ApplyFailure, CARD_COLUMNS, CardChange, CardEdit, CardList, Choice,
+    Decision, DecisionRecord, DriftItem, DriftResult, EVENT_APPLIED, EVENT_APPLY_FAILED,
+    EVENT_APPROVED, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED, EVENT_CARD_CANCELLED,
+    EVENT_CARD_CREATED, EVENT_CARD_EDITED, EVENT_CARD_MOVED, EVENT_COLUMNS, EVENT_CREATED,
     EVENT_GATE_OBSERVED, EVENT_REJECTED, EVENT_STAGED, EVENT_TASK_APPROVED, EVENT_TASK_CANCELLED,
     EVENT_TASK_CHANGES_REQUESTED, EVENT_TASK_CLAIMED, EVENT_TASK_COMPLETED, EVENT_TASK_CREATED,
     EVENT_TASK_PLANNED, EVENT_TASK_REFRESHED, EVENT_TASK_RUN_REPORTED, EVENT_UNSTAGED, Event,
     EventsAfter, GateObserved, GateQueue, Intake, IntakeResult, Interpretation, KindFamily,
-    NewDrift, NewIntake, NewProposal, NewTask, PROPOSAL_COLUMNS, Place, Proposal, ProposalFilter,
-    ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
+    NewCard, NewDrift, NewIntake, NewProposal, NewTask, PROPOSAL_COLUMNS, Place, Proposal,
+    ProposalFilter, ProposalFinding, ProposalKind, ProposalList, ProposalQueue, ProposalStatus,
     QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, QueueMatch, RUN_COLUMNS, RecordApproval,
     RecordSeries, RefreshEntry, Reservation, Restore, Run, Seen, SnapshotEntry, SqliteQueue, Stage,
-    StagedChoice, StoredEvent, StoredNote, StoredProposal, StoredQueue, StoredRun, StoredTask,
-    TASK_COLUMNS, TailEvent, Task, TaskChange, TaskList, TaskRefresh, TaskSeen, TaskSnapshot,
-    UnreadableRow, UnreadableTask, binding_problem, claimed_elsewhere, open_for_gate, patch_hash,
-    proposal_columns, record_gate_observed, task_event,
+    StagedChoice, StoredCard, StoredEvent, StoredNote, StoredProposal, StoredQueue, StoredRun,
+    StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange, TaskList, TaskRefresh, TaskSeen,
+    TaskSnapshot, UnreadableCard, UnreadableRow, UnreadableTask, binding_problem,
+    claimed_elsewhere, open_for_gate, patch_hash, proposal_columns, record_gate_observed,
+    task_event,
 };
 pub use roles::{RoleCandidate, StoredRole};
 pub use source::{GitIndex, Listing, Source, WorkingTree};

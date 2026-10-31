@@ -1,6 +1,7 @@
 //! The queue as stored, for its backup and restore
-//! (`docs/canon/queue-backup.md` "Store"; `docs/canon/tasks.md` "Backup"):
-//! every row of `proposals`, `tasks`, `runs` and `events`, every project's,
+//! (`docs/canon/queue-backup.md` "Store"; `docs/canon/tasks.md` "Backup";
+//! task spec `card-store`, "Backup"):
+//! every row of `proposals`, `tasks`, `runs`, `cards` and `events`, every project's,
 //! read raw in one snapshot and never decoded (a row `get` refuses is kept
 //! as it is, never skipped as `list_readable` skips it), and inserted as
 //! given into an empty queue in one `Immediate` transaction that logs no
@@ -16,7 +17,7 @@ use rusqlite::{Connection, OpenFlags, Row, Transaction, TransactionBehavior};
 use specengine_core::intake::{DRIFT_KIND, INTERPRETATION_KIND};
 
 use super::{
-    ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, corrupt, migrate, stage, tasks,
+    ID_ORDER, QUEUE_SCHEMA_VERSION, QueueError, SqliteQueue, cards, corrupt, migrate, stage, tasks,
     user_version,
 };
 
@@ -86,6 +87,9 @@ pub const PROPOSAL_COLUMNS: [&str; 46] = [
 /// The first queue schema with `tasks` and `runs` (step 3 → 4).
 const TASKS_SCHEMA: i64 = 4;
 
+/// The first queue schema with `cards` (step 8 → 9).
+const CARDS_SCHEMA: i64 = 9;
+
 /// The columns of queue schema 1's `proposals`: the first of
 /// [`PROPOSAL_COLUMNS`].
 const SCHEMA_1_COLUMNS: usize = 24;
@@ -111,7 +115,7 @@ const SCHEMA_5_COLUMNS: usize = 43;
 const SCHEMA_6_COLUMNS: usize = 44;
 
 /// The `proposals` columns of queue schema `schema`, in table order: 1, 2,
-/// 3, 4, 5, 6, 7 and 8 (this build's) are known, a dump of any restores;
+/// 3, 4, 5, 6, 7, 8 and 9 (this build's) are known, a dump of any restores;
 /// `None` for any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
@@ -166,6 +170,36 @@ pub const RUN_COLUMNS: [&str; 11] = [
     "outcome",
     "summary",
     "changed_files",
+];
+
+/// Every column of `cards`, in table order (task spec `card-store`,
+/// "Store"): `position` `INTEGER`, the rest `TEXT` (`col` the documents' key
+/// `column`, `revision` a decimal counter from 1).
+pub const CARD_COLUMNS: [&str; 24] = [
+    "id",
+    "project",
+    "flow",
+    "col",
+    "position",
+    "title",
+    "goal",
+    "discipline",
+    "targets",
+    "snapshot",
+    "criteria",
+    "assignee",
+    "reviewer",
+    "estimate",
+    "due",
+    "parent",
+    "corrects",
+    "evidence",
+    "acceptance",
+    "cancellation",
+    "created_by",
+    "created_at",
+    "updated_at",
+    "revision",
 ];
 
 /// Every column of `events`, in table order: `seq` (`INTEGER`), then the
@@ -240,14 +274,35 @@ impl StoredRun {
     }
 }
 
+/// A `cards` row as stored, never decoded: `position` (`NULL` kept), and
+/// the `TEXT` columns around it in [`CARD_COLUMNS`] order, `TEXT` or `NULL`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredCard {
+    pub position: Option<i64>,
+    pub columns: [Option<String>; CARD_COLUMNS.len() - 1],
+}
+
+impl StoredCard {
+    /// The stored `id`.
+    pub fn id(&self) -> Option<&str> {
+        self.columns[0].as_deref()
+    }
+
+    /// The stored `project`.
+    pub fn project(&self) -> Option<&str> {
+        self.columns[1].as_deref()
+    }
+}
+
 /// The queue tables as stored. Read ([`SqliteQueue::stored_rows`]):
-/// `proposals` and `tasks` by ID number, `runs` by task and number,
+/// `proposals`, `tasks` and `cards` by ID number, `runs` by task and number,
 /// `events` by `seq`; given to [`SqliteQueue::restore`]: in any order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StoredQueue {
     pub proposals: Vec<StoredProposal>,
     pub tasks: Vec<StoredTask>,
     pub runs: Vec<StoredRun>,
+    pub cards: Vec<StoredCard>,
     pub events: Vec<StoredEvent>,
 }
 
@@ -258,6 +313,7 @@ impl StoredQueue {
             proposals: self.proposals.len() as u64,
             tasks: self.tasks.len() as u64,
             runs: self.runs.len() as u64,
+            cards: self.cards.len() as u64,
             events: self.events.len() as u64,
         }
     }
@@ -269,13 +325,19 @@ pub struct QueueCounts {
     pub proposals: u64,
     pub tasks: u64,
     pub runs: u64,
+    pub cards: u64,
     pub events: u64,
 }
 
 impl QueueCounts {
-    /// No table holds a row (a task alone makes the queue occupied).
+    /// No table holds a row (a task or a card alone makes the queue
+    /// occupied).
     pub fn is_empty(&self) -> bool {
-        self.proposals == 0 && self.tasks == 0 && self.runs == 0 && self.events == 0
+        self.proposals == 0
+            && self.tasks == 0
+            && self.runs == 0
+            && self.cards == 0
+            && self.events == 0
     }
 }
 
@@ -329,12 +391,12 @@ impl SqliteQueue {
     }
 
     /// Every row of the queue tables, every project's, as stored, in one
-    /// read transaction: `proposals` and `tasks` by ID number, `runs` by
-    /// task and number, `events` by `seq`. A `TEXT` column that holds no
-    /// UTF-8 text fails, naming row and column. A DB still at queue schema
-    /// 1, 2, 3, 4, 5, 6 or 7 (no step runs here) reads its 24, 35, 40, 41,
-    /// 43 or 44 proposal columns, the later ones `None`, and its tasks and
-    /// runs from schema 4 on (none before).
+    /// read transaction: `proposals`, `tasks` and `cards` by ID number,
+    /// `runs` by task and number, `events` by `seq`. A `TEXT` column that
+    /// holds no UTF-8 text fails, naming row and column. A DB still at queue
+    /// schema 1, 2, 3, 4, 5, 6 or 7 (no step runs here) reads its 24, 35, 40,
+    /// 41, 43 or 44 proposal columns, the later ones `None`, its tasks and
+    /// runs from schema 4 on (none before), and its cards from schema 9 on.
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();
@@ -391,6 +453,20 @@ impl SqliteQueue {
                 drop(rows);
                 drop(statement);
             }
+            if version >= CARDS_SCHEMA {
+                let mut statement = tx
+                    .prepare(&format!(
+                        "SELECT {} FROM main.cards {ID_ORDER}",
+                        CARD_COLUMNS.join(", ")
+                    ))
+                    .db()?;
+                let mut rows = statement.query([]).db()?;
+                while let Some(row) = rows.next().db()? {
+                    state.cards.push(stored_card(row)?);
+                }
+                drop(rows);
+                drop(statement);
+            }
             let mut statement = tx
                 .prepare(&format!(
                     "SELECT {} FROM main.events ORDER BY seq",
@@ -406,7 +482,7 @@ impl SqliteQueue {
         Ok(state)
     }
 
-    /// The row counts of both tables, every project's, in one snapshot.
+    /// The row counts of every table, every project's, in one snapshot.
     pub fn counts(&self) -> Result<QueueCounts, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let counts = counts_in(&tx)?;
@@ -453,6 +529,16 @@ impl SqliteQueue {
                 "run {} of {}: no task of the project `{project}` holds it",
                 row.run,
                 row.task_id().unwrap_or("NULL")
+            )));
+        }
+        if let Some(row) = state
+            .cards
+            .iter()
+            .find(|row| row.project() != Some(project.as_str()))
+        {
+            return Err(QueueError::Invalid(format!(
+                "card {}: not a row of the project `{project}`",
+                row.id().unwrap_or("NULL")
             )));
         }
         if let Some(row) = state
@@ -517,6 +603,28 @@ impl SqliteQueue {
                 values.extend(rest.iter().map(text_value));
                 insert.execute(rusqlite::params_from_iter(values)).db()?;
             }
+            let placeholders: Vec<String> = (1..=CARD_COLUMNS.len())
+                .map(|number| format!("?{number}"))
+                .collect();
+            let mut insert = tx
+                .prepare(&format!(
+                    "INSERT INTO main.cards ({}) VALUES ({})",
+                    CARD_COLUMNS.join(", "),
+                    placeholders.join(", ")
+                ))
+                .db()?;
+            for row in &state.cards {
+                let mut values: Vec<rusqlite::types::Value> =
+                    row.columns.iter().map(text_value).collect();
+                values.insert(
+                    cards::POSITION_COLUMN,
+                    row.position.map_or(
+                        rusqlite::types::Value::Null,
+                        rusqlite::types::Value::Integer,
+                    ),
+                );
+                insert.execute(rusqlite::params_from_iter(values)).db()?;
+            }
             let mut insert = tx
                 .prepare(&format!(
                     "INSERT INTO main.events ({}) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -563,6 +671,7 @@ fn counts_in(conn: &Connection) -> Result<QueueCounts, QueueError> {
         proposals: count("proposals")?,
         tasks: count("tasks")?,
         runs: count("runs")?,
+        cards: count("cards")?,
         events: count("events")?,
     })
 }
@@ -623,6 +732,37 @@ fn stored_run(row: &Row<'_>) -> Result<StoredRun, QueueError> {
     Ok(StoredRun { run, columns })
 }
 
+/// A `cards` row as stored: `position` an integer or `NULL`, the rest as
+/// [`stored_proposal`].
+fn stored_card(row: &Row<'_>) -> Result<StoredCard, QueueError> {
+    let name = match row.get_ref(0).db()? {
+        ValueRef::Text(bytes) => String::from_utf8_lossy(bytes).into_owned(),
+        _ => "NULL".to_owned(),
+    };
+    let position = match row.get_ref(cards::POSITION_COLUMN).db()? {
+        ValueRef::Integer(position) => Some(position),
+        ValueRef::Null => None,
+        _ => {
+            return Err(QueueError::Store(StoreError::Sqlite(format!(
+                "card {name}: the stored `position` is not an integer"
+            ))));
+        }
+    };
+    let mut columns: [Option<String>; CARD_COLUMNS.len() - 1] = Default::default();
+    let texts = CARD_COLUMNS
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| *index != cards::POSITION_COLUMN);
+    for (slot, (index, column)) in columns.iter_mut().zip(texts) {
+        *slot = stored_text(row, index)?.map_err(|why| {
+            QueueError::Store(StoreError::Sqlite(format!(
+                "card {name}: the stored `{column}` cannot be read: {why}"
+            )))
+        })?;
+    }
+    Ok(StoredCard { position, columns })
+}
+
 /// A `proposals` row as stored, its first `width` columns read (the rest
 /// `None`); a value that is no UTF-8 text fails, naming the row (its `id`,
 /// as far as it reads) and the column.
@@ -654,7 +794,7 @@ fn stored_event(row: &Row<'_>) -> Result<StoredEvent, QueueError> {
 
 /// A `TEXT` column's value: `Ok(Err(why))` when it is no UTF-8 text (a
 /// `STRICT` table holds none, but a file written elsewhere may).
-fn stored_text(
+pub(super) fn stored_text(
     row: &Row<'_>,
     index: usize,
 ) -> Result<Result<Option<String>, &'static str>, QueueError> {

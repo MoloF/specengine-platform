@@ -46,6 +46,7 @@ use crate::corpus::indexed;
 use crate::package::{
     NodeNow, Roots, assemble, node_now, plan_task, reading_plan, render_brief, staleness,
 };
+use crate::project::ProjectRoot;
 use crate::proposals::{QueueContext, checked_now, escaped_error, open_context, queue_cannot};
 use crate::propose::{ProposedText, is_path_target, read_text, resolved_node};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
@@ -443,8 +444,8 @@ fn store_refusal(
 
 /// The nodes `written` names over `input`, canonical, each once (as the
 /// intake's `node_ids`): `Ok(Err)` the refusal naming `field[i]`.
-fn resolved_list(
-    context: &QueueContext,
+pub(crate) fn resolved_list(
+    project: &ProjectRoot,
     input: &specengine_core::check::CheckInput,
     written: &[String],
     field: &str,
@@ -452,12 +453,11 @@ fn resolved_list(
     let mut ids: Vec<String> = Vec::with_capacity(written.len());
     for (index, reference) in written.iter().enumerate() {
         let at = format!("{field}[{index}]");
-        let (id, _) = match resolved_node(&context.project, input, reference)
-            .map_err(|error| prefixed(error, &at))?
-        {
-            Ok(found) => found,
-            Err(reason) => return Ok(Err(format!("{at}: {reason}"))),
-        };
+        let (id, _) =
+            match resolved_node(project, input, reference).map_err(|error| prefixed(error, &at))? {
+                Ok(found) => found,
+                Err(reason) => return Ok(Err(format!("{at}: {reason}"))),
+            };
         if let Some(first) = ids.iter().position(|known| *known == id) {
             return Ok(Err(format!(
                 "{at}: `{}` names `{id}`, as {field}[{first}] does: name each node once",
@@ -532,7 +532,7 @@ fn run_new(
     }
     let mut messages = Vec::new();
     let input = indexed(env, &context.project, &mut messages, false)?;
-    let targets = match resolved_list(&context, &input, &request.nodes, "nodes")? {
+    let targets = match resolved_list(&context.project, &input, &request.nodes, "nodes")? {
         Ok(targets) => targets,
         Err(reason) => return refuse(reason, messages),
     };
@@ -1082,7 +1082,12 @@ fn run_plan(
         )));
     }
     let criteria = kept;
-    let affected = match resolved_list(&context, &input, &request.affected, "affected_nodes")? {
+    let affected = match resolved_list(
+        &context.project,
+        &input,
+        &request.affected,
+        "affected_nodes",
+    )? {
         Ok(affected) => affected,
         Err(reason) => return refuse(&reason, messages),
     };

@@ -21,6 +21,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/bevy-roles-reads.md](features/bevy-roles-reads.md) shipped
 - [docs/features/bevy-roles.md](features/bevy-roles.md) shipped
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) shipped
+- [docs/features/card-store.md](features/card-store.md) shipped
 - [docs/features/check-binding.md](features/check-binding.md) shipped
 - [docs/features/citation-sweep.md](features/citation-sweep.md) shipped
 - [docs/features/code-refs.md](features/code-refs.md) shipped
@@ -154,4 +155,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0042.md](roadmap/RM-0042.md) shipped
 - [docs/roadmap/RM-0043.md](roadmap/RM-0043.md) shipped
 - [docs/roadmap/RM-0044.md](roadmap/RM-0044.md) shipped
+- [docs/roadmap/RM-0045.md](roadmap/RM-0045.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

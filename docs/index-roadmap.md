@@ -36,7 +36,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0045.md](roadmap/RM-0045.md) card-store (Phase 7, step 4): cards, flows per discipline, events, CLI and MCP tools · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
 - [docs/roadmap/RM-0046.md](roadmap/RM-0046.md) board-ui (Phase 7, step 5): the board, filters, the card panel, write routes · ui, crates/specengine-http · draft
 - [docs/roadmap/RM-0047.md](roadmap/RM-0047.md) card-trace (Phase 7, step 6): targets, suspect marks, clearing, re-estimates, rollup · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0048.md](roadmap/RM-0048.md) trace-views (Phase 7, step 7): flow badges, stage:, timeline lanes, a node's cards · ui, crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-import, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · draft
@@ -54,4 +53,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill · crates/specengine-core, crates/specengine-cli, plugin · draft
 - [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) pack (Phase 7, step 19): spec init --pack and a config proposal · crates/specengine-cli, crates/specengine-core · draft
 - [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
-- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: three CLI tests that fail under full parallel load · crates/specengine-cli · draft
+- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store · draft

@@ -99,6 +99,8 @@
 //! The corpus model and the reference grammar live in `specengine-model`.
 
 pub mod anchor;
+pub mod card;
+pub mod card_toml;
 pub mod check;
 pub mod code_toml;
 pub mod create;
@@ -141,6 +143,9 @@ use specengine_model::{
     LinkTarget, Node, ParentRef, ParsedFile, PathTarget, Reference, Span,
 };
 
+pub use card_toml::{
+    CardAccept, CardColumn, CardConfig, CardFlow, CardMove, PLAIN_FLOW, card_from_toml,
+};
 pub use code_toml::{CodeConfig, code_from_toml};
 pub use flow::{
     FlowAsk, FlowEdge, FlowGap, FlowInner, FlowNeed, FlowNode, FlowRead, GapCause, GapCode,

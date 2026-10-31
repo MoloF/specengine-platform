@@ -12,8 +12,10 @@
 //! - [`grammar`] — the one reference grammar and its lexer, shared by text,
 //!   front-matter and `{#ID}` definitions;
 //! - [`reference`], [`link`], [`node`], [`value`], [`diagnostic`],
-//!   [`parsed`] — what a parsed file is made of.
+//!   [`parsed`] — what a parsed file is made of;
+//! - [`task`], [`card`] — the queue's two records of work.
 
+pub mod card;
 pub mod diagnostic;
 pub mod grammar;
 pub mod link;
@@ -26,6 +28,7 @@ pub mod span;
 pub mod task;
 pub mod value;
 
+pub use card::{Card, CardAcceptance, CardCancellation, CardEvidence, EvidenceKind};
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use grammar::{Canon, Definition, Found, Homoglyph};
 pub use link::{

@@ -31,8 +31,8 @@ use specengine_core::ProjectConfig;
 /// (core `record`, CLI `decide`), of docs/features/proposal-kinds.md
 /// (core and CLI `create`) and of docs/features/task-package.md
 /// (docs/canon/task-package.md "Genre": model, core and store tasks, CLI `task` and `package`, the MCP
-/// task tools).
-const NEW_SOURCES: [&str; 21] = [
+/// task tools) and of docs/features/card-store.md (their cards).
+const NEW_SOURCES: [&str; 27] = [
     "crates/specengine-core/src/patch.rs",
     "crates/specengine-core/src/proposal.rs",
     "crates/specengine-core/src/record.rs",
@@ -54,6 +54,12 @@ const NEW_SOURCES: [&str; 21] = [
     "crates/specengine-cli/src/task.rs",
     "crates/specengine-cli/src/package.rs",
     "crates/specengine-mcp/src/tasks.rs",
+    "crates/specengine-model/src/card.rs",
+    "crates/specengine-core/src/card.rs",
+    "crates/specengine-core/src/card_toml.rs",
+    "crates/specengine-store/src/queue/cards.rs",
+    "crates/specengine-cli/src/card.rs",
+    "crates/specengine-mcp/src/cards.rs",
 ];
 
 /// docs/features/proposal-kinds.md's new sources (AC-11).
@@ -470,6 +476,13 @@ fn task_package_the_task_sources_name_no_prefix_kind_or_directory() {
         "crates/specengine-cli/src/task.rs",
         "crates/specengine-cli/src/package.rs",
         "crates/specengine-mcp/src/tasks.rs",
+        // docs/features/card-store.md AC-10.
+        "crates/specengine-model/src/card.rs",
+        "crates/specengine-core/src/card.rs",
+        "crates/specengine-core/src/card_toml.rs",
+        "crates/specengine-store/src/queue/cards.rs",
+        "crates/specengine-cli/src/card.rs",
+        "crates/specengine-mcp/src/cards.rs",
     ];
     let mut found = Vec::new();
     for source in sources {

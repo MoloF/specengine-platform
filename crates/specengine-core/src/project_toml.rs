@@ -20,16 +20,17 @@
 //!   a discrepancy needs it.
 //! - Top-level keys: `project`, `paths`, `ids`, `decision_records`, then
 //!   `budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code`,
-//!   `verify`, `health`, `roadmap`, `flow`, which are only name-checked here
+//!   `verify`, `health`, `roadmap`, `flow`, `card`, which are only
+//!   name-checked here
 //!   (their readers are the check's, [`crate::gate`]'s for `zones` and
 //!   `gate`, [`crate::code_toml`]'s and [`crate::verify`]'s, read only where
 //!   code is read, [`crate::health_toml`]'s and [`crate::roadmap_toml`]'s,
 //!   read only by `spec health` and `spec roadmap`, the latter also by the
 //!   check tables when the index entry registers a `roadmap` view,
-//!   [`crate::flow_toml`]'s, read only by `spec flow`): a bad `[gate]`,
-//!   `[verify]`, `[roadmap]` or `[flow]` fails no read; any other key is an
-//!   error at its line, so a `[path]` typo cannot silently fall back to the
-//!   default walk.
+//!   [`crate::flow_toml`]'s, read only by `spec flow`, [`crate::card_toml`]'s,
+//!   read only by `spec card`): a bad `[gate]`, `[verify]`, `[roadmap]`,
+//!   `[flow]` or `[card]` fails no read; any other key is an error at its
+//!   line, so a `[path]` typo cannot silently fall back to the default walk.
 //!
 //! Every error is `file:line: message` through [`ProjectError::at`].
 
@@ -311,6 +312,8 @@ struct RawFile {
     roadmap: Option<IgnoredAny>,
     #[serde(default)]
     flow: Option<IgnoredAny>,
+    #[serde(default)]
+    card: Option<IgnoredAny>,
 }
 
 /// `[project]`; any other key is an error.

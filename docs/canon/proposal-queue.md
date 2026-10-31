@@ -41,7 +41,7 @@ JSON of propose, review, approve, reject: the **review document** (MCP `get_prop
 
 ## States and events
 
-`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `gate.observed`, `verify.tests` (`spec-verify-tests.md`); `specengine-http` streams it.
+`open -> approved -> applied`, `open -> rejected`; also `approved -> rejected` (no commit of it in history), `approved -> open` (a refusal reopening the run's own hold), `open -> applied` (a completion). `approved` only inside an apply or after its crash. Each change: one `Immediate` transaction with its event, `seq` rising, payload JSON with `id`: `proposal.created`, `.approved`, `.applied` (`commit`; a decision's `record` on both), `.rejected` (`reason`; `task` with a follow-up), `.apply_failed` (`step`, `reason`; one per attempt refused at steps 2-10), `.staged`, `.unstaged`. Closed, with `task.*` (`tasks.md`), `card.*` (`cards.md`), `gate.observed`, `verify.tests` (`spec-verify-tests.md`); `specengine-http` streams it.
 
 ## Store
 
@@ -56,7 +56,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON `{type: human|agent, role, model, run}`; `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 8; higher -> exit 2, nothing changed; a migrated queue refuses older builds, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 46). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 9; higher -> exit 2, nothing changed; a migrated queue refuses older builds, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 46). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -68,6 +68,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 6 | `interpretation` | 44 | `proposal-interpretation.md` "Row and review" |
 | 7 | no column: open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
 | 8 | `drift`, `drift_hash` | 46 | `proposal-drift-item.md` "The item" |
+| 9 | `cards` | 46 | `cards.md` "Store" |
 
 - **Connection**: the index's PRAGMAs but `synchronous=FULL`; until the daemon is the sole writer, CLI, MCP and `specengine-http` (stages) write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).

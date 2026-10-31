@@ -4,7 +4,7 @@
 //! The dump's format: [`crate::state_file`].
 //!
 //! - **Export** reads every row of the queue's tables (proposals, tasks,
-//!   runs, events) as stored, every repository
+//!   runs, cards, events) as stored, every repository
 //!   of the root's slug, in one read transaction (never `list_readable`: an
 //!   unreadable row goes into the dump as it is); a row of another project
 //!   is exit 2 naming it. No consent, no index refresh. The destination,
@@ -23,8 +23,8 @@
 //! - **Import**, in order, nothing written before step 5: (1) `main`
 //!   refuses a stdin that is no terminal before the file is opened; (2)
 //!   the whole file, a regular one (else exit 2 unread), is read and
-//!   checked; (3) every table must be empty (any project's rows; a task
-//!   alone makes it occupied); (4) one
+//!   checked; (3) every table must be empty (any project's rows; a task or
+//!   a card alone makes it occupied); (4) one
 //!   `[y/N]` question; (5) one `Immediate`
 //!   transaction re-checks (3) and inserts every row as given, logging no
 //!   event of its own. Nothing else is touched: no worktree, no git, no
@@ -76,6 +76,7 @@ pub struct ExportStateOutcome {
     pub proposals: u64,
     pub tasks: u64,
     pub runs: u64,
+    pub cards: u64,
     pub events: u64,
     pub messages: Vec<Message>,
 }
@@ -96,6 +97,7 @@ pub struct ImportStateOutcome {
     pub proposals: u64,
     pub tasks: u64,
     pub runs: u64,
+    pub cards: u64,
     pub events: u64,
     /// Why nothing was restored (exit 1): the answer was not `y`.
     pub refusal: Option<String>,
@@ -190,6 +192,7 @@ fn run_export(
         proposals: counts.proposals,
         tasks: counts.tasks,
         runs: counts.runs,
+        cards: counts.cards,
         events: counts.events,
         messages,
     })
@@ -361,6 +364,20 @@ fn foreign_row(state: &StoredQueue, slug: &str, db: &Path) -> Result<(), CliErro
                         row.run,
                         row.task_id().unwrap_or("NULL"),
                         db.display()
+                    )
+                })
+        })
+        .or_else(|| {
+            state
+                .cards
+                .iter()
+                .find(|row| row.project() != Some(slug))
+                .map(|row| {
+                    format!(
+                        "card `{}` in {} is {}",
+                        row.id().unwrap_or("NULL"),
+                        db.display(),
+                        shown(row.project())
                     )
                 })
         })
@@ -560,11 +577,12 @@ fn run_import(
     }
     // Step 4: the owner's answer.
     let question = format!(
-        "restore {} proposal(s), {} task(s), {} run(s) and {} event(s) of {slug} from {label} \
-         into {}? [y/N]",
+        "restore {} proposal(s), {} task(s), {} run(s), {} card(s) and {} event(s) of {slug} from \
+         {label} into {}? [y/N]",
         counts.proposals,
         counts.tasks,
         counts.runs,
+        counts.cards,
         counts.events,
         db.display()
     );
@@ -574,6 +592,7 @@ fn run_import(
             proposals: 0,
             tasks: 0,
             runs: 0,
+            cards: 0,
             events: 0,
             refusal: Some("not restored: the answer was not `y`; nothing changed".to_owned()),
             messages: Vec::new(),
@@ -588,6 +607,7 @@ fn run_import(
             proposals: counts.proposals,
             tasks: counts.tasks,
             runs: counts.runs,
+            cards: counts.cards,
             events: counts.events,
             refusal: None,
             messages: Vec::new(),
@@ -622,30 +642,37 @@ fn read_regular(path: &Path, label: &str) -> Result<Vec<u8>, CliError> {
 /// Exit 2: the queue holds rows (any project's).
 fn occupied(slug: &str, db: &Path, held: QueueCounts) -> CliError {
     CliError::spec(format!(
-        "the queue of `{slug}` in {db} holds {} proposal(s), {} task(s), {} run(s), {} event(s): \
-         import-state restores only into an empty queue (a fresh data directory, or {db} moved \
-         aside); nothing changed",
+        "the queue of `{slug}` in {db} holds {} proposal(s), {} task(s), {} run(s), {} card(s), {} \
+         event(s): import-state restores only into an empty queue (a fresh data directory, or {db} \
+         moved aside); nothing changed",
         held.proposals,
         held.tasks,
         held.runs,
+        held.cards,
         held.events,
         db = db.display()
     ))
 }
 
-/// `wrote <path>: <p> proposal(s), <t> task(s), <r> run(s), <e> event(s)`.
+/// `wrote <path>: <p> proposal(s), <t> task(s), <r> run(s), <c> card(s), <e>
+/// event(s)`.
 pub(crate) fn render_export_text(outcome: &ExportStateOutcome) -> String {
     escape_controls(&format!(
         "{}\n",
         one_line(&format!(
-            "wrote {}: {} proposal(s), {} task(s), {} run(s), {} event(s)",
-            outcome.path, outcome.proposals, outcome.tasks, outcome.runs, outcome.events
+            "wrote {}: {} proposal(s), {} task(s), {} run(s), {} card(s), {} event(s)",
+            outcome.path,
+            outcome.proposals,
+            outcome.tasks,
+            outcome.runs,
+            outcome.cards,
+            outcome.events
         ))
     ))
 }
 
-/// `restored <p> proposal(s), <t> task(s), <r> run(s), <e> event(s) into
-/// <db>`; nothing when declined.
+/// `restored <p> proposal(s), <t> task(s), <r> run(s), <c> card(s), <e>
+/// event(s) into <db>`; nothing when declined.
 pub(crate) fn render_import_text(outcome: &ImportStateOutcome) -> String {
     if outcome.refusal.is_some() {
         return String::new();
@@ -653,8 +680,13 @@ pub(crate) fn render_import_text(outcome: &ImportStateOutcome) -> String {
     escape_controls(&format!(
         "{}\n",
         one_line(&format!(
-            "restored {} proposal(s), {} task(s), {} run(s), {} event(s) into {}",
-            outcome.proposals, outcome.tasks, outcome.runs, outcome.events, outcome.db
+            "restored {} proposal(s), {} task(s), {} run(s), {} card(s), {} event(s) into {}",
+            outcome.proposals,
+            outcome.tasks,
+            outcome.runs,
+            outcome.cards,
+            outcome.events,
+            outcome.db
         ))
     ))
 }
@@ -665,10 +697,11 @@ struct ExportJson<'a> {
     proposals: u64,
     tasks: u64,
     runs: u64,
+    cards: u64,
     events: u64,
 }
 
-/// `{path, proposals, tasks, runs, events}`.
+/// `{path, proposals, tasks, runs, cards, events}`.
 impl Serialize for ExportStateOutcome {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         ExportJson {
@@ -676,6 +709,7 @@ impl Serialize for ExportStateOutcome {
             proposals: self.proposals,
             tasks: self.tasks,
             runs: self.runs,
+            cards: self.cards,
             events: self.events,
         }
         .serialize(serializer)
@@ -688,11 +722,12 @@ struct ImportJson<'a> {
     proposals: u64,
     tasks: u64,
     runs: u64,
+    cards: u64,
     events: u64,
 }
 
-/// `{db, proposals, tasks, runs, events}`: the rows restored (all 0 when
-/// declined).
+/// `{db, proposals, tasks, runs, cards, events}`: the rows restored (all 0
+/// when declined).
 impl Serialize for ImportStateOutcome {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         ImportJson {
@@ -700,6 +735,7 @@ impl Serialize for ImportStateOutcome {
             proposals: self.proposals,
             tasks: self.tasks,
             runs: self.runs,
+            cards: self.cards,
             events: self.events,
         }
         .serialize(serializer)

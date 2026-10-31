@@ -50,7 +50,7 @@ The store's `accept_departing` runs `create_intake`'s body inside the accept's t
 
 **The dedup never refuses a departure**, nothing being blocked by a discrepancy (ADR-0012). Hits are found under the write lock as ever; the accept names them itself in the item's `distinct_from`, the first 64 (`DISTINCT_MAX`), and lists them all in its notes. The person is never asked to type one, and the exit stays 0.
 
-**Git.** The item binds a place as `propose update` step 5, so `--departs` reads git, reads only: the one exception to `card-store.md`'s "no git" (exit 2 outside a worktree, nothing changed). A card path without `--departs` reads none.
+**Git.** The item binds a place as `propose update` step 5, so `--departs` reads git, reads only: the one exception to `cards.md`'s "no git" (exit 2 outside a worktree, nothing changed). A card path without `--departs` reads none.
 
 The page's dialog gains the choice and these keys. `card_accept` makes the item, so `propose*` stays forbidden in `crates/specengine-http/src`; `card_writes_touch_only_the_queue` admits that one proposal, and the page's accept ADR says why.
 
@@ -100,9 +100,9 @@ Consequences: `cards` in `spec impact --json`, `spec trace --json`. Events carry
 ## Data
 
 ```json
-{"snapshot": [{"id": "PAGE-COVER", "rev": 2, "norm_hash": "b3:…", "also": []}],
+{"snapshot": [{"id": "SHT-FRONT", "rev": 2, "norm_hash": "b3:…", "also": []}],
  "acceptance": {"by": "desk", "at": "…", "note": null, "verdict": "departs",
-  "departs": ["PAGE-COVER"], "discrepancy": "PR-0007"}}
+  "departs": ["SHT-FRONT"], "discrepancy": "PR-0007"}}
 ```
 
 No schema step: `snapshot`, `acceptance` hold JSON already; a step-4 row without `verdict` reads `briefed`. `also` keeps the last 16.
@@ -111,7 +111,7 @@ Events: `card.accepted` gains `verdict`, `discrepancy`; `card.cleared {id, outco
 
 `spec trace --json`, `{ref, reason, notes, counts, nodes, truncated, omitted}`: a node `{id, title, path, rollup, counts, cards: [{id, flow, column, title, mark, on, discrepancy, correction}], uses: [{id, rollup, cards}]}`. `counts` `{no_card, in_work, suspect, departed, confirmed}` over the node and what it holds by `parent:`.
 
-`fixtures/card-press` gains a brief: `ISSUE-SPRING` over `PAGE-COVER`, `PAGE-BACK` (`uses` `STYLE-MASTHEAD`) and an accepted decision linked to `PAGE-COVER`.
+`fixtures/card-press`' five documents under `PRN-WEEKLY` are the brief; it gains a `uses` from `SHT-BACK` to `SHT-FRONT-HEAD` and an accepted decision linked to `SHT-FRONT`.
 
 ## Rules and edge cases
 
@@ -123,12 +123,12 @@ Events: `card.accepted` gains `verdict`, `discrepancy`; `card.cleared {id, outco
 
 - [ ] AC-01 — On `fixtures/card-press`, approving a meaning change makes a card suspect; whitespace does not; a clear with a reason removes it, the next meaning change restores it. M: comparing `span_hash` turns the whitespace case red.
 - [ ] AC-02 — `spec approve --editorial`: not suspect, one `card.refreshed`, also from a worktree without the commit. A hand edit: suspect. M: the apply refreshing nothing.
-- [ ] AC-03 — `PAGE-COVER` is `confirmed` only with a card, all accepted or cancelled, one accepted, none suspect or departed; all cancelled reads `no card`; the file and `git status` stay as they were. M: confirming with no card.
+- [ ] AC-03 — `SHT-FRONT` is `confirmed` only with a card, all accepted or cancelled, one accepted, none suspect or departed; all cancelled reads `no card`; the file and `git status` stay as they were. M: confirming with no card.
 - [ ] AC-04 — `--departs`: one `open` discrepancy, the card accepted, the node `departed`; `spec reject` of it gives `confirmed`. A failure injected after the insert leaves neither. M: the insert in its own transaction.
 - [ ] AC-05 — The linked decision is a hit: the departing accept exits 0 with no flag, the item's `distinct_from` names it, a note lists it. M: the dedup's refusal kept.
 - [ ] AC-06 — Needs correction: the original stays accepted, the node `in work`; the correction accepted gives `confirmed`; cancelled, `suspect`. M: re-freezing at the clear.
-- [ ] AC-07 — `clear --group ISSUE-SPRING`: one event per card, no card outside it. M: a bulk clear ignoring `parent:`.
-- [ ] AC-08 — `STYLE-MASTHEAD` changes: its card suspect, `PAGE-BACK`'s not, listed under `uses`. M: marking through `uses`.
+- [ ] AC-07 — `clear --group PRN-WEEKLY`: one event per card, no card outside it. M: a bulk clear ignoring `parent:`.
+- [ ] AC-08 — `SHT-FRONT-HEAD` changes: its card suspect, `SHT-BACK`'s not, listed under `uses`. M: marking through `uses`.
 - [ ] AC-09 — `spec trace`, `get_trace`, `GET trace` agree, exit 0 on suspect and departed rows; `spec check`, `spec gate` unchanged; `spec impact` lists the cards; a re-estimate without a reason exits 1. Piped `clear` exits 2; `--briefed` runs at a root with no `.git`.
 - [ ] AC-10 — From a same-origin page a clear of each outcome and a group clear finish, the typed name in the event; no `Sec-Fetch-Site`: 403; `tools/list` holds no clear.
 
@@ -138,7 +138,7 @@ Events: `card.accepted` gains `verdict`, `discrepancy`; `card.cleared {id, outco
 
 ## Files in scope
 
-- **New:** core `src/trace.rs`; CLI `src/trace.rs`, `tests/card_trace.rs`; store `tests/queue_trace.rs`; MCP `tests/mcp_trace.rs`; http `tests/trace.rs`; the fixture's brief.
+- **New:** core `src/trace.rs`; CLI `src/trace.rs`, `tests/card_trace.rs`; store `tests/queue_trace.rs`; MCP `tests/mcp_trace.rs`; http `tests/trace.rs`; the fixture's `uses` and decision.
 - **Changed:** core `card.rs`, `lib.rs`; store `queue.rs`, `queue/cards.rs`, `read.rs`, `lib.rs`; CLI `card.rs`, `intake.rs`, `impact.rs`, `apply.rs`, `revisions.rs`, `main.rs`, `lib.rs`; MCP `read.rs`, `cards.rs`, `mirror.rs`, `server.rs`; http `app.rs`; `plugin.json`, next MINOR; UI `src/board/{CardPanel,CardDialogs}.tsx`, `labels.ts`, `api/{provisional,client,http,queries}.ts`, `http.test.ts`.
 - **Pins:** `INSTRUCTIONS`, `TOOLS` 29, `SCHEMA_PINS`, `door.rs`, `fence.rs`, `methods.rs`, `daemon-keys.json`, `mcp_door.rs`, genre scans.
 - **Canon at shipping:** new `card-trace.md`; `cards.md`, `spec-impact.md`, `node-revision.md`, `proposal-revisions.md`, `mcp-read.md`, the http README.
