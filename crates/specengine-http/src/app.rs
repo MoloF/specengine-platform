@@ -858,7 +858,11 @@ async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
     let id = percent_decode(raw).map_err(Refusal::bad_request)?;
     args("cards/:id", &[], &uri)?;
     Ok(run(project, move |env, globals| {
-        let request = CardShowRequest { id, history: true };
+        let request = CardShowRequest {
+            id,
+            history: true,
+            marks: false,
+        };
         specengine_cli::card_show(env, globals, &request)
             .map(|outcome| Outcome::CardShow(Box::new(outcome)))
     })

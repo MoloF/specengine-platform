@@ -197,6 +197,10 @@
 //! with `uses`, the exit-1 document, a group's refused clear;
 //! `CardAcceptance` grows to 6.
 //!
+//! docs/features/trace-truth.md "Data": `Card` grows to 30 (`mark`, `on`,
+//! `discrepancy`, `correction` after `targets`), `CardFrozen` to 5
+//! (`within_hash` after `norm_hash`).
+//!
 //! docs/features/trace-views.md "Routes and types": one set more, 106 in all,
 //! last, after `CardClearGroupWrite`: `TraceStage` (3 keys), from `GET trace`
 //! on `fixtures/trace-almanac`, whole, `summary=true` and `stage=-`, so a lane
@@ -2345,6 +2349,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "goal",
                 "discipline",
                 "targets",
+                "mark",
+                "on",
+                "discrepancy",
+                "correction",
                 "snapshot",
                 "criteria",
                 "assignee",
@@ -2425,7 +2433,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             ],
         ),
         ("TraceUse", &["id", "rollup", "cards"]),
-        ("CardFrozen", &["id", "rev", "norm_hash", "also"]),
+        (
+            "CardFrozen",
+            &["id", "rev", "norm_hash", "within_hash", "also"],
+        ),
         ("CardClearGroupWrite", &["group", "cleared", "notes"]),
     ];
     for ((name, keys), (want_name, want_keys)) in seven.iter().zip(want) {

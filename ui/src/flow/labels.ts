@@ -184,6 +184,11 @@ export function gapMark(node: FlowNode, drawnOpen: boolean, named: ReadonlySet<s
   return namesIt || node.gaps > 0 ? ROW_NAMES_IT : null;
 }
 
+/** Every served row measured at 0: the rows have nothing to say. */
+export function allClear(gaps: readonly FlowGap[]): boolean {
+  return gaps.length > 0 && gaps.every((gap) => gap.state === "measured" && gap.count === 0);
+}
+
 /** `<n> rows need [flow] rules in specengine.toml`; null when none does. */
 export function needsRulesLine(gaps: readonly FlowGap[]): string | null {
   const rows = gaps.filter(needsRule).length;

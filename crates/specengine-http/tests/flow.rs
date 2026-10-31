@@ -182,7 +182,7 @@ fn trace_views_the_flag_is_the_clis_document_byte_for_byte() {
     assert_eq!(part["rollup"], "no card", "{part}");
     assert_eq!(
         part["counts"],
-        json!({"no_card": 1, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1}),
+        json!({"no_card": 0, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1}),
         "the daemon counts what it holds: {part}"
     );
 

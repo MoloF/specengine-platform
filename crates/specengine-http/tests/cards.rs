@@ -1363,6 +1363,57 @@ fn trace_views_an_index_that_cannot_be_read_is_a_503() {
     );
 }
 
+/// docs/features/trace-truth.md AC-01 and AC-08, the board and the panel: text
+/// appended under a section marks the document's card on `GET cards?marks=true`
+/// (`suspect SHT-FRONT`); `GET cards/:id` holds the four keys `null`, plain
+/// `spec card show`'s bytes, a read of no index: the panel keeps its marks from
+/// the list; `spec card show --marks` equals the row. M: keys not joined in
+/// `run_show`.
+#[test]
+fn trace_truth_the_board_marks_and_the_panel_holds_null() {
+    let press = Press::new("cards-truth");
+    let id = press.done(
+        "cards",
+        &json!({"title": "Lead story", "discipline": "copy", "target": ["SHT-FRONT"]}),
+    )["id"]
+        .as_str()
+        .expect("an ID")
+        .to_owned();
+    replace(
+        &press.root,
+        "docs/spec/sht-front.md",
+        "The masthead stays the same from week to week.\n",
+        "The masthead stays the same from week to week.\nThe date changes.\n",
+    );
+
+    let list = press.get("cards?marks=true").status(200).json();
+    let row = &list["cards"][0];
+    assert_eq!(row["mark"], "suspect", "{row}");
+    assert_eq!(row["on"], "SHT-FRONT", "{row}");
+
+    let panel = press.show(&id);
+    for key in ["mark", "on", "discrepancy", "correction"] {
+        assert!(panel.get(key).is_some(), "{key}: {panel}");
+        assert_eq!(panel[key], Value::Null, "{key}: {panel}");
+    }
+    assert!(panel["snapshot"][0]["within_hash"].is_string(), "{panel}");
+    // The panel's route asks `--history` too.
+    let run = press.cli(&["card", "show", &id, "--history"]);
+    run.code(0);
+    assert_eq!(
+        press.get(&format!("cards/{id}")).status(200).text(),
+        run.document(),
+        "plain `show`'s bytes"
+    );
+
+    let marked = press.cli(&["card", "show", &id, "--marks"]);
+    marked.code(0);
+    let marked = marked.json();
+    for key in ["mark", "on", "discrepancy", "correction"] {
+        assert_eq!(marked[key], row[key], "{key}: {marked}");
+    }
+}
+
 /// "States": a bad `[card]` is that 503 on every card route, the CLI's
 /// `<config>:<line>:` line, and fails no other read (docs/canon/cards.md
 /// "Config"). The config is read again per call: no restart.

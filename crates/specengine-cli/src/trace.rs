@@ -28,6 +28,11 @@
 //! under a `[flow]` that does not read. Lanes by (`distance`, unreached
 //! last, stage), the steps with no stage last.
 //!
+//! A node holding a live document, with no card of its own, is the sum of
+//! its parts and counted nowhere, not in a row's counts, the header or a
+//! lane; its row still says `no card`
+//! (task spec `trace-truth`, "Description and interactions").
+//!
 //! The cut, at [`crate::OUTPUT_CAP_CHARS`]: nodes whole, the first that does
 //! not fit and every later one left out; a first node over the cap alone
 //! shows its row and the card and `uses` lines that fit, so an answer is never
@@ -60,6 +65,7 @@ use crate::corpus::{Admission, holders_warning, indexed_in, locate};
 use crate::location::{db_path, open_index};
 use crate::project::{ProjectRoot, discover_with_text};
 use crate::proposals::{queue_below_schema, queue_cannot};
+use crate::revisions::within_hash;
 use crate::search::notes;
 use crate::show::classify;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, store_error};
@@ -284,6 +290,13 @@ fn existing_queue(db: &Path, slug: &str) -> Result<QueueRead, QueueError> {
 /// What `card`, not cancelled, adds to the facts its marks are read against:
 /// the correction it is, its settled discrepancy.
 pub(crate) fn facts_of(queue: &SqliteQueue, card: &Card, read: &mut QueueRead) {
+    correction_of(card, read);
+    settled_of(queue, card, read);
+}
+
+/// `card`, not cancelled, into [`QueueRead::corrections`] when it is a live
+/// correction; the first by number holds the mark.
+pub(crate) fn correction_of(card: &Card, read: &mut QueueRead) {
     if card.acceptance.is_none()
         && let Some(original) = &card.corrects
     {
@@ -291,12 +304,11 @@ pub(crate) fn facts_of(queue: &SqliteQueue, card: &Card, read: &mut QueueRead) {
             .entry(original.clone())
             .or_insert_with(|| card.id.clone());
     }
-    settled_of(queue, card, read);
 }
 
 /// `card`'s discrepancy into [`QueueRead::settled`] when it is `applied` or
 /// `rejected`; one that does not read stays unsettled, with a note.
-fn settled_of(queue: &SqliteQueue, card: &Card, read: &mut QueueRead) {
+pub(crate) fn settled_of(queue: &SqliteQueue, card: &Card, read: &mut QueueRead) {
     let Some(acceptance) = &card.acceptance else {
         return;
     };
@@ -356,8 +368,9 @@ pub(crate) fn target_places<'t>(
     places
 }
 
-/// What each target with a node reads now, its first node's revision and
-/// stored `norm_hash`: a target with none is absent.
+/// What each target with a node reads now, its first node's revision, stored
+/// `norm_hash` and `within_hash`, the one place a [`TargetNow`] is made: a
+/// target with none is absent.
 pub(crate) fn target_norms(
     graph: &SpecGraph<'_>,
     stored: &[NodeNorm],
@@ -373,11 +386,18 @@ pub(crate) fn target_norms(
             let at = nodes.first()?;
             let path = graph.paths()[at.file];
             let parsed = graph.file(at.file)?.parsed.as_ref()?;
+            let norm_of = |ord: usize| hashes.get(&(path, ord)).copied().flatten().cloned();
+            let members = graph
+                .within(*at)
+                .into_iter()
+                .map(|node| (graph.name(node), norm_of(node.ord)))
+                .collect();
             Some((
                 target.clone(),
                 TargetNow {
                     rev: revision(parsed, at.ord).number(),
-                    norm_hash: hashes.get(&(path, at.ord)).copied().flatten().cloned(),
+                    norm_hash: norm_of(at.ord),
+                    within_hash: within_hash(members),
                 },
             ))
         })
@@ -434,6 +454,23 @@ pub(crate) fn held_documents(graph: &SpecGraph<'_>, at: NodeAt) -> Vec<NodeAt> {
     }
     found.sort_unstable();
     found
+}
+
+/// Whether `at` holds a live document by `parent:`, through sections or not:
+/// [`held_documents`]' walk, stopped at the first, so the whole read stays
+/// light. A document whose children are sections alone holds nothing.
+fn holds_document(graph: &SpecGraph<'_>, at: NodeAt) -> bool {
+    let mut stack = vec![at];
+    while let Some(node) = stack.pop() {
+        for &child in graph.children(node) {
+            if child.ord != 0 {
+                stack.push(child);
+            } else if graph.standing(child.file) == Standing::Live {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 /// The nodes of a corpus each card holds, per read.
@@ -531,13 +568,24 @@ impl<'a> Reading<'a> {
             .collect()
     }
 
+    /// Whether `at`, standing in `state`, stands in a count: a node holding
+    /// a live document, with no card of its own, is its parts' sum.
+    fn counted(&self, at: NodeAt, state: Rollup) -> bool {
+        state != Rollup::NoCard || !holds_document(self.graph, at)
+    }
+
     /// The counts over `at`, standing in `state`, and the documents it
     /// holds by `parent:`.
     fn counts(&self, at: NodeAt, state: Rollup) -> RollupCounts {
         let mut counts = RollupCounts::default();
-        counts.add(state);
+        if self.counted(at, state) {
+            counts.add(state);
+        }
         for document in held_documents(self.graph, at) {
-            counts.add(self.state(document).0);
+            let state = self.state(document).0;
+            if self.counted(document, state) {
+                counts.add(state);
+            }
         }
         counts
     }
@@ -647,13 +695,16 @@ pub fn trace_with_view(
     // `uses` are built only for a row kept.
     for &at in &scope {
         let (state, marked) = reading.state(at);
-        outcome.counts.add(state);
+        let counted = reading.counted(at, state).then_some(state);
+        if let Some(state) = counted {
+            outcome.counts.add(state);
+        }
         cards.extend(marked.iter().map(|(card, _)| card.id.clone()));
         let stage = stage_of(&graph, at.file);
         let in_lane = stage.is_some() || walk.steps.contains(&at.file);
         if in_lane {
             let distance = walk.distance.get(&at.file).copied();
-            add_to_lane(&mut lanes, stage, distance, state);
+            add_to_lane(&mut lanes, stage, distance, counted);
         }
         if request.keeps(stage, in_lane) {
             outcome.nodes.push(reading.row(at, &walk, (state, marked)));
@@ -702,19 +753,23 @@ fn walk_of(
     walk
 }
 
-/// A node standing in `state` into the lane of its stage.
+/// A node into the lane of its stage, standing in `state` when it is counted:
+/// a holder stands in its lane and adds to no count, so a lane's counts can
+/// differ from its rows.
 fn add_to_lane<'s>(
     lanes: &mut BTreeMap<Option<&'s str>, TraceStage>,
     stage: Option<&'s str>,
     distance: Option<usize>,
-    state: Rollup,
+    state: Option<Rollup>,
 ) {
     let lane = lanes.entry(stage).or_insert_with(|| TraceStage {
         stage: stage.map(str::to_owned),
         distance: None,
         counts: RollupCounts::default(),
     });
-    lane.counts.add(state);
+    if let Some(state) = state {
+        lane.counts.add(state);
+    }
     lane.distance = match (lane.distance, distance) {
         (Some(lane), Some(node)) => Some(lane.min(node)),
         (lane, node) => lane.or(node),

@@ -103,8 +103,15 @@ pub struct CardFrozen {
     /// The target as `targets` holds it.
     pub id: String,
     pub rev: Option<u32>,
+    /// The target's own text and links.
     pub norm_hash: Option<String>,
-    /// Hashes vouched for since (an editorial apply's), the last 16.
+    /// The target and the ID sections nested in it, the hash a mark compares;
+    /// `None` when none could be frozen, and on an entry stored before there
+    /// was one, whose `norm_hash` stands in.
+    #[serde(default)]
+    pub within_hash: Option<String>,
+    /// Hashes vouched for since (an editorial apply's), of the kind this
+    /// entry compares, the last 16.
     #[serde(default)]
     pub also: Vec<String>,
 }

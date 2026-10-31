@@ -10,6 +10,11 @@
 //! - AC-10: `tools/list` holds no clear; the sources hold no way to one.
 //! - "Re-estimating": `edit_card` gains `reason?`, acting as `agent`.
 //!
+//! - docs/features/trace-truth.md AC-01, AC-08: a nested edit reads `suspect`
+//!   on `list_cards` and `get_trace`; `get_card` is `spec card show --marks`,
+//!   its row's four keys, `within_hash`, no new argument, an index error an
+//!   error result.
+//!
 //! The door (`mcp_door.rs`), the genre scan (`mcp_genre.rs`) and the
 //! `INSTRUCTIONS` pins hold the rest.
 
@@ -270,7 +275,7 @@ fn ac09_get_trace_equals_the_cli_within_its_schema() {
     let text = content_text(whole);
     assert!(
         text.starts_with(
-            "trace PRN-WEEKLY | nodes 5, cards 3 | no card 2, in work 0, suspect 1, departed 1, \
+            "trace PRN-WEEKLY | nodes 5, cards 3 | no card 1, in work 0, suspect 1, departed 1, \
              confirmed 1\n"
         ),
         "{text}"
@@ -285,7 +290,7 @@ fn ac09_get_trace_equals_the_cli_within_its_schema() {
     );
     assert_eq!(
         whole["structuredContent"]["counts"],
-        json!({"no_card": 2, "in_work": 0, "suspect": 1, "departed": 1, "confirmed": 1})
+        json!({"no_card": 1, "in_work": 0, "suspect": 1, "departed": 1, "confirmed": 1})
     );
 }
 
@@ -346,6 +351,189 @@ fn trace_views_list_cards_marks_equal_the_trace() {
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }
     assert_eq!(repo.git_side(), git, "a read touches no file");
+}
+
+/// docs/features/trace-truth.md AC-01, the tool: text appended under
+/// `STEP-SET-PROOF`, the card on `STEP-SET` accepted: `list_cards {marks: true}`
+/// and `get_trace` read `suspect STEP-SET`, within the schemas, the bytes the
+/// CLI's. M: `within_hash` over the target alone.
+#[test]
+fn trace_truth_a_nested_edit_marks_on_the_tools() {
+    let repo = Repo::of("mcp-truth-nested", "trace-almanac");
+    let (env, globals) = (repo.env(), Globals::default());
+    let made = card_new(
+        &env,
+        &globals,
+        &CardNewRequest {
+            title: "Pages set".to_owned(),
+            discipline: Some("editing".to_owned()),
+            targets: vec!["STEP-SET".to_owned()],
+            now: CLOCK.to_owned(),
+            ..CardNewRequest::default()
+        },
+    )
+    .expect("a card");
+    let id = made.card.expect("a card").id;
+    card_assign(
+        &env,
+        &globals,
+        &CardAssignRequest {
+            id: id.clone(),
+            reviewer: Some("ben".to_owned()),
+            now: CLOCK.to_owned(),
+            ..CardAssignRequest::default()
+        },
+    )
+    .expect("assigned");
+    card_move(
+        &env,
+        &globals,
+        &CardMoveRequest {
+            id: id.clone(),
+            to: Some("review".to_owned()),
+            actor: Some("ana".to_owned()),
+            now: CLOCK.to_owned(),
+            ..CardMoveRequest::default()
+        },
+    )
+    .expect("moved");
+    repo.accept(
+        &id,
+        CardAcceptRequest {
+            briefed: true,
+            ..CardAcceptRequest::default()
+        },
+    );
+    repo.hand_edit(
+        "docs/spec/step-set.md",
+        "before any copy is pulled.\n",
+        "before any copy is pulled.\nA second proof goes to the printer.\n",
+    );
+
+    let mut session = repo.session(ERAS[0]);
+    let schemas = output_schemas(&session.tools());
+    let mut call = |tool: &str, args: Value| {
+        let result = checked_call(&mut session, &schemas, tool, args, &env, &globals);
+        assert_eq!(result["isError"], json!(false), "{tool}: {result}");
+        result["structuredContent"].clone()
+    };
+    let rows = call("list_cards", json!({"marks": true}));
+    let row = &rows["cards"][0];
+    assert_eq!(row["mark"], "suspect", "{row}");
+    assert_eq!(row["on"], "STEP-SET", "{row}");
+    let trace = call("get_trace", json!({"ref": "STEP-SET"}));
+    let node = &trace["nodes"][0];
+    assert_eq!(node["rollup"], "suspect", "{trace}");
+    assert_eq!(node["cards"][0]["mark"], "suspect", "{trace}");
+    assert_eq!(node["cards"][0]["on"], "STEP-SET", "{trace}");
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+}
+
+/// docs/features/trace-truth.md AC-08, the tool: `get_card` always asks the
+/// mark, so each card equals its `list_cards {marks: true}` row on the four
+/// keys, a suspect, a departed and an accepted one, in both eras, the bytes of
+/// `spec card show --marks` within the strict walker's schema, `within_hash` in
+/// its snapshot; it takes no new argument. Nothing is written. M: keys not
+/// joined in `run_show`.
+#[test]
+fn trace_truth_get_card_equals_its_list_row() {
+    let repo = marked("mcp-truth-get-card");
+    let git = repo.git_side();
+    let env = repo.env();
+    let globals = Globals::default();
+    for era in ERAS {
+        let mut session = repo.session(era);
+        let schemas = output_schemas(&session.tools());
+        let mut call = |tool: &str, args: Value| {
+            let result = checked_call(&mut session, &schemas, tool, args, &env, &globals);
+            assert_eq!(result["isError"], json!(false), "{tool}: {result}");
+            result["structuredContent"].clone()
+        };
+        let list = call("list_cards", json!({"marks": true}));
+        let rows = list["cards"].as_array().expect("cards");
+        assert_eq!(rows.len(), 3, "{list}");
+        let mut words = Vec::new();
+        for row in rows {
+            let id = row["id"].as_str().expect("an ID");
+            let card = call("get_card", json!({"card_id": id}));
+            for key in ["mark", "on", "discrepancy", "correction"] {
+                assert_eq!(card[key], row[key], "{id}: {key}: {card}");
+            }
+            assert!(
+                card["snapshot"][0]["within_hash"].is_string(),
+                "{id}: {card}"
+            );
+            words.push(row["mark"].as_str().expect("a mark").to_owned());
+        }
+        assert_eq!(words, ["accepted", "suspect", "departed"], "{list}");
+        let reply = session.call("get_card", json!({"card_id": "C-0001", "marks": true}));
+        assert_bad_arguments(&reply, "", "get_card takes no `marks`");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+    assert_eq!(repo.git_side(), git, "a read touches no file");
+}
+
+/// docs/features/trace-truth.md "Data": a card frozen on a broken document
+/// holds a null `within_hash`, and a cancelled card null marks: both within
+/// the schema. D8: `get_card` over an index that cannot be read is an error
+/// result, never a clean card.
+#[test]
+fn trace_truth_get_card_nulls_and_a_broken_index() {
+    let repo = Repo::new("mcp-truth-nulls");
+    let (env, globals) = (repo.env(), Globals::default());
+    repo.hand_edit(
+        "docs/spec/sht-front.md",
+        "reviewed: 2026-10-01\n",
+        "reviewed: 2026-10-01\nlinks: 7\n",
+    );
+    let cancelled = repo.in_proof("Pulled", &["SHT-BACK"]);
+    card_cancel(
+        &env,
+        &globals,
+        &CardCancelRequest {
+            id: cancelled.clone(),
+            reason: "Pulled.".to_owned(),
+            now: CLOCK.to_owned(),
+            ..CardCancelRequest::default()
+        },
+    )
+    .expect("cancelled");
+    let broken = repo.in_proof("Lead story", &["SHT-FRONT"]);
+
+    let mut session = repo.session(ERAS[0]);
+    let schemas = output_schemas(&session.tools());
+    let mut call = |tool: &str, args: Value| {
+        let result = checked_call(&mut session, &schemas, tool, args, &env, &globals);
+        assert_eq!(result["isError"], json!(false), "{tool}: {result}");
+        result["structuredContent"].clone()
+    };
+    let card = call("get_card", json!({"card_id": broken}));
+    assert_eq!(card["snapshot"][0]["within_hash"], Value::Null, "{card}");
+    assert_eq!(card["mark"], "open", "{card}");
+    let card = call("get_card", json!({"card_id": cancelled}));
+    for key in ["mark", "on", "discrepancy", "correction"] {
+        assert_eq!(card[key], Value::Null, "{key}: {card}");
+    }
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+
+    let mut session = repo.session(ERAS[0]);
+    let database = data_dir(&repo.home).join("card-press.db");
+    let renamed = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(database)
+        .arg("ALTER TABLE files RENAME TO files_gone;")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(renamed.status.success(), "{renamed:?}");
+    let reply = session.call("get_card", json!({"card_id": broken}));
+    let result = &reply["result"];
+    assert_eq!(result["isError"], json!(true), "no clean card: {reply}");
+    assert!(result.get("structuredContent").is_none(), "{reply}");
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
 }
 
 /// The IDs of a document's nodes, in order.
@@ -474,7 +662,7 @@ fn no_queue_reads_no_card_within_the_schema() {
     let results = parity(&repo, &[json!({}), json!({"ref": "PRN-WEEKLY"})]);
     assert_eq!(
         results[0]["structuredContent"]["counts"],
-        json!({"no_card": 6, "in_work": 0, "suspect": 0, "departed": 0, "confirmed": 0})
+        json!({"no_card": 5, "in_work": 0, "suspect": 0, "departed": 0, "confirmed": 0})
     );
 
     let repo = marked("mcp-trace-schema");

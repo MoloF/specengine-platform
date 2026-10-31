@@ -441,6 +441,7 @@ describe("source policy", () => {
       // AC-07 of flow-canvas: a link type, a gap state or an edge's kind branched on outside labels.ts.
       'const walked = edge.type === "follows";',
       'gaps.filter((gap) => gap.state === "measured")',
+      'const clear = top.gaps.every((gap) => gap.state === "measured" && gap.count === 0);',
       'const dotted = edge.kind === "repeat";',
       "const dash = DASHES.get(edge.type);",
       // UI-7 of lock-diff-ui: a kept row's state branched on in the panel.

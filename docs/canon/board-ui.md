@@ -64,7 +64,7 @@ Section `board`, third of nine: `#/<p>/board[/<C>]`, the ID selecting a card and
 
 ### Moving
 
-`moveCard` has three doors: `MoveMenu`, listing its column's `moves[]` with each `by` as "needs <names>"; Up and Down, by `before`; native drag, no new dependency. A closed card has no Move. Accept shows only in `accept.from`.
+`moveCard` has three doors: `MoveMenu`, listing its column's `moves[]` with each `by` as "needs <names>"; Up and Down, by `before`; native drag, no new dependency. A closed card has no Move. Accept shows only in `accept.from`. Side by side, columns stand over the free height (`min-height: 60vh`), so a drop anywhere in one lands, below every card last; a narrow screen stacks them with none.
 
 ### Writes
 

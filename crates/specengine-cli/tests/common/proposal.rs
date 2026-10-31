@@ -191,6 +191,34 @@ impl Pair {
         (node.span_hash, node.text)
     }
 
+    /// docs/features/trace-truth.md "Recipe": the `within_hash` of the target
+    /// whose `within` is `members`, worked out from `spec show`'s `norm_hash`
+    /// of each in the main worktree. One member: its hash, the same string.
+    pub fn within(&self, members: &[&str]) -> String {
+        let mut pairs: Vec<(String, String)> = members
+            .iter()
+            .map(|member| {
+                let hash = self.node(&self.main, member).norm_hash;
+                (
+                    (*member).to_owned(),
+                    hash.unwrap_or_else(|| panic!("{member} has a hash")),
+                )
+            })
+            .collect();
+        if let [(_, only)] = pairs.as_slice() {
+            return only.clone();
+        }
+        pairs.sort();
+        let mut input = Vec::new();
+        for (name, hash) in &pairs {
+            input.extend_from_slice(name.as_bytes());
+            input.push(0);
+            input.extend_from_slice(hash.as_bytes());
+            input.push(b'\n');
+        }
+        specengine_store::b3_hash(&input)
+    }
+
     pub fn propose_with(
         &self,
         cwd: &Path,

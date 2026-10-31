@@ -33,14 +33,22 @@
 //!   ([`restore`]), and checked at step 10 ([`lock_in_commit`]).
 //! - **Completion** ([`raised_span`]): the text step 5 gives on a commit's
 //!   parent, raised as an apply would raise it.
+//! - **Cards** ([`Revisions::card_refresh`]): under `--editorial`, each
+//!   node's `norm_hash` change and each node's `within_hash` change, so a
+//!   section's wording vouches for the document and sections around it,
+//!   whose own hash did not move (task spec `trace-truth`, "Data"). A
+//!   `within_hash` pair goes only over the same members ([`within_pair`]). A
+//!   completion ([`named_refresh`]) vouches for what its trailers name alone
+//!   (task spec `trace-truth` D5).
 //! - **Review** ([`rows`]): the document's `revisions`.
 
+use std::collections::BTreeSet;
 use std::fs;
 use std::io;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 
-use specengine_core::check::CheckConfig;
+use specengine_core::check::{CheckConfig, nodes_within};
 use specengine_core::lock::{
     LOCK_FILE, Lock, LockFormat, REBASE_STEP, parse_lock, refresh_editorial, render_lock, vouches,
 };
@@ -50,14 +58,16 @@ use specengine_core::proposal::{
     editorial_revision,
 };
 use specengine_core::raise::{
-    RaiseRefusal, RevisionRow, closed_against_rev, meaning_changes, raised, revision_change,
-    write_revisions,
+    RaiseRefusal, RevisionRow, closed_against_rev, meaning_changes, paired, raised,
+    revision_change, write_revisions,
 };
+use specengine_core::trace::{HashKind, WithinInput, within_input};
 use specengine_core::{NORM_RECIPE, norm_input};
 use specengine_model::{IdScheme, Node, ParsedFile};
 use specengine_store::{CardRefresh, WorktreeGit, b3_hash, replace_file};
 
 use crate::lock::build_recipes;
+use crate::package::position;
 use crate::preflight::StepFailure;
 use crate::project::CONFIG_FILE;
 use crate::{Message, one_line, pathspec_word};
@@ -69,6 +79,126 @@ const LOCK_CHANGED: &str = "spec.lock changed while being applied; nothing writt
 /// `None` when null.
 pub(crate) fn norm_hash(parsed: &ParsedFile, bytes: &[u8], ord: usize) -> Option<String> {
     norm_input(parsed, bytes, ord).map(|input| b3_hash(&input))
+}
+
+/// A node's `within_hash` from its members' (name, `norm_hash`) pairs: core's
+/// input, hashed here as `norm_input`'s is; `None` when null.
+pub(crate) fn within_hash(members: Vec<(String, Option<String>)>) -> Option<String> {
+    match within_input(members)? {
+        WithinInput::Alone(hash) => Some(hash),
+        WithinInput::Pairs(input) => Some(b3_hash(&input)),
+    }
+}
+
+/// One parse with each node's `norm_hash`: what a node's `within_hash` is
+/// read from, by the members and names a read of the index takes, core's
+/// [`nodes_within`], the ID else the path.
+struct Hashed<'a> {
+    path: &'a str,
+    parsed: &'a ParsedFile,
+    norms: Vec<Option<String>>,
+}
+
+impl<'a> Hashed<'a> {
+    /// `parsed`, the parse of `bytes`, at `path`.
+    fn new(path: &'a str, parsed: &'a ParsedFile, bytes: &[u8]) -> Self {
+        let norms = (0..parsed.nodes.len())
+            .map(|ord| norm_hash(parsed, bytes, ord))
+            .collect();
+        Self {
+            path,
+            parsed,
+            norms,
+        }
+    }
+
+    /// Node `ord`'s members but those `left_out`, as (name, `norm_hash`),
+    /// sorted, so two parses compare whatever a section's place in its file.
+    fn pairs(&self, ord: usize, left_out: &BTreeSet<usize>) -> Vec<(String, Option<String>)> {
+        let nodes = &self.parsed.nodes;
+        let mut pairs: Vec<(String, Option<String>)> = nodes_within(nodes, ord)
+            .into_iter()
+            .filter(|member| !left_out.contains(member))
+            .map(|member| {
+                let name = nodes[member].id.as_deref().unwrap_or(self.path);
+                (name.to_owned(), self.norms[member].clone())
+            })
+            .collect();
+        pairs.sort_unstable();
+        pairs
+    }
+
+    /// Node `ord`'s `within_hash`.
+    fn within(&self, ord: usize) -> Option<String> {
+        within_hash(self.pairs(ord, &BTreeSet::new()))
+    }
+}
+
+/// The `within_hash` a node moved from and to, node `at_old` of `old` and
+/// `at_new` of `new`; `None` when it did not move, either reads null, or
+/// their sorted member names differ: a section that came or went is new
+/// meaning for a card that has not read it, so no editorial vouches for it.
+fn within_pair(
+    old: &Hashed<'_>,
+    at_old: usize,
+    new: &Hashed<'_>,
+    at_new: usize,
+) -> Option<(String, String)> {
+    let names = |hashed: &Hashed<'_>, at: usize| -> Vec<String> {
+        let pairs = hashed.pairs(at, &BTreeSet::new());
+        pairs.into_iter().map(|(name, _)| name).collect()
+    };
+    if names(old, at_old) != names(new, at_new) {
+        return None;
+    }
+    let (from, to) = (old.within(at_old)?, new.within(at_new)?);
+    (from != to).then_some((from, to))
+}
+
+/// What a commit's `(editorial)` trailers vouch for on the cards, over one
+/// file at the commit's first parent (`before`) and at it (`after`), each a
+/// parse and its bytes at `path`. Per node `named` in both: its own `norm_hash`
+/// pair, and its `within_hash` pair ([`within_pair`]) only when, every named
+/// node taken out, the members left read the same (name, `norm_hash`) pairs in
+/// both: a trailer names one node, so a section it does not name that moved
+/// keeps the mark, and a holder no trailer names has no pair at all (task
+/// spec `trace-truth` D5): a false mark, never a false clean.
+pub(crate) fn named_refresh(
+    path: &str,
+    named: &[String],
+    before: (&ParsedFile, &[u8]),
+    after: (&ParsedFile, &[u8]),
+) -> Vec<CardRefresh> {
+    let old = Hashed::new(path, before.0, before.1);
+    let new = Hashed::new(path, after.0, after.1);
+    let places: Vec<(&String, usize, usize)> = named
+        .iter()
+        .filter_map(|node| Some((node, position(before.0, node)?, position(after.0, node)?)))
+        .collect();
+    let named_old: BTreeSet<usize> = places.iter().map(|place| place.1).collect();
+    let named_new: BTreeSet<usize> = places.iter().map(|place| place.2).collect();
+    let mut refresh = Vec::new();
+    for &(node, at_old, at_new) in &places {
+        if let (Some(from), Some(to)) = (&old.norms[at_old], &new.norms[at_new]) {
+            refresh.push(CardRefresh {
+                node: node.clone(),
+                kind: HashKind::Own,
+                old: from.clone(),
+                new: to.clone(),
+            });
+        }
+        if old.pairs(at_old, &named_old) == new.pairs(at_new, &named_new)
+            && let Some((from, to)) = within_pair(&old, at_old, &new, at_new)
+        {
+            refresh.push(CardRefresh {
+                node: node.clone(),
+                kind: HashKind::Within,
+                old: from,
+                new: to,
+            });
+        }
+    }
+    refresh
 }
 
 /// Creation's check 3 and apply's step 6 (task spec `rev-discipline` Q7):
@@ -165,6 +295,9 @@ pub(crate) struct Revisions {
     pub editorial: bool,
     /// The nodes whose meaning changes, in file order.
     pub nodes: Vec<NodeRevision>,
+    /// Under `--editorial`, each node with an ID in both parses, over the
+    /// same members, whose `within_hash` moved; none for a meaning approve.
+    pub within_moved: Vec<CardRefresh>,
     /// Under `--editorial` with entries to refresh.
     pub lock: Option<LockWrite>,
     /// Step 5's text with every node's raise written: what a meaning
@@ -233,8 +366,8 @@ impl Revisions {
     }
 
     /// What an editorial apply vouches for on the cards: each node's old
-    /// and new `norm_hash`; none for a meaning approve, whose raise rightly
-    /// marks them.
+    /// and new `norm_hash`, then its `within_hash` ([`Self::within_moved`]);
+    /// none for a meaning approve, whose raise rightly marks them.
     pub(crate) fn card_refresh(&self) -> Vec<CardRefresh> {
         if !self.editorial {
             return Vec::new();
@@ -245,10 +378,12 @@ impl Revisions {
                 let (old, new) = node.refreshable()?;
                 Some(CardRefresh {
                     node: node.id.clone(),
+                    kind: HashKind::Own,
                     old: old.to_owned(),
                     new: new.to_owned(),
                 })
             })
+            .chain(self.within_moved.iter().cloned())
             .collect()
     }
 
@@ -398,6 +533,28 @@ pub(crate) struct Step6<'a> {
     pub lock: Option<LockRead>,
 }
 
+/// What `--editorial` vouches for besides each changed node's own hash: every
+/// node with an ID in both parses whose `within_hash` moved over the same
+/// members ([`within_pair`]), a document around a changed section among them,
+/// and a node with no sections, whose pair is its own hash's, by its canonical
+/// ID. A null hash on either side has nothing to vouch for.
+fn within_moved(given: &Step6<'_>) -> Vec<CardRefresh> {
+    let old = Hashed::new(given.path, given.before_parsed, given.before);
+    let new = Hashed::new(given.path, given.after_parsed, given.after);
+    paired(given.before_parsed, given.after_parsed)
+        .into_iter()
+        .filter_map(|pair| {
+            let (from, to) = within_pair(&old, pair.before, &new, pair.after)?;
+            Some(CardRefresh {
+                node: (given.name)(&pair.id),
+                kind: HashKind::Within,
+                old: from,
+                new: to,
+            })
+        })
+        .collect()
+}
+
 /// Step 6's revisions, every node judged in one pass: per node whose
 /// meaning changes, a meaning approve's raise or why it is refused (none
 /// under `--editorial`), and the bytes it writes when nothing is refused
@@ -486,6 +643,11 @@ pub(crate) fn step_6(given: Step6<'_>) -> Result<Revisions, StepFailure> {
     };
     Ok(Revisions {
         editorial: given.editorial,
+        within_moved: if given.editorial {
+            within_moved(&given)
+        } else {
+            Vec::new()
+        },
         nodes,
         lock,
         raised: raised_bytes.filter(|_| !refused),

@@ -17,7 +17,7 @@ spec card new --title T [--goal T] [--discipline D] [--target REF]... [--criteri
   [--assignee N] [--estimate E] [--due DATE] [--parent C] [--corrects C] [--as N]
 spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--no-target]
   [--with-cancelled] [--marks]
-spec card show C [--history]
+spec card show C [--history] [--marks]
 spec card move C [--to K] [--before C] [--revision R] [--as N]
 spec card edit C [new's flags but --discipline, --assignee] [--evidence KIND=VALUE]...
   [--reason T] [--revision R]
@@ -102,7 +102,7 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 
 ## Documents and events
 
-`show`, `get_card`, every key present, absent `null`: `{id, flow, column, position, title, goal, discipline, targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes}`.
+`show`, `get_card`, every key present, absent `null`; `mark` to `correction` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes}`.
 
 - `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card, or one whose flow is gone: empty. `accept` is never in it: the board finds it through `accept.from`.
 - `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`; a payload that does not parse is passed over.
@@ -127,7 +127,3 @@ Each exit 1, nothing changed; core's, pure, asked twice.
 - **Dropped from config**: a column no longer listed is served last in its flow with a note, `allowed` the flow's first column, anyone's. A flow no longer listed: a note, `allowed` empty, `edit` and `assign` still work.
 
 No lock or task is read, and a proposal only for a departure's state, so a rejected brief stops no card (ADR-0012).
-
-## Known limits
-
-`next_card_id` and `card_history` read with `row.get`: bad bytes in a card ID or `events.payload` exit 2.

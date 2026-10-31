@@ -19,10 +19,10 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import type { BoxCommand, Centring } from "./FlowCanvas";
 import { FlowDetails } from "./FlowDetails";
-import { FlowGaps, recallGapsHidden, rememberGapsHidden } from "./FlowGaps";
+import { FlowGaps, GapsClear, recallGapsHidden, rememberGapsHidden } from "./FlowGaps";
 import { FlowLegend } from "./FlowLegend";
 import { FlowList } from "./FlowList";
-import { namedByRows, notDrawnLine, readCount, STATES_HIDDEN_WORDS, typesOf } from "./labels";
+import { allClear, namedByRows, notDrawnLine, readCount, STATES_HIDDEN_WORDS, typesOf } from "./labels";
 import { boxId, isGroup, layoutFlow, readsOf, type FlowBox, type FlowInput } from "./layout";
 import { TimelineView } from "./TimelineView";
 import { ALL_STAGES, stageInForce, stageOptions, withoutStates, type StageOption } from "./timeline";
@@ -278,6 +278,8 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   const focusBox = useRef<(id: string) => void>(() => undefined);
   /** A box's name whose panel takes focus once it shows. */
   const headingFor = useRef<string | null>(null);
+  /** The last commit drew the gap rows' button, and the rows unless hidden. */
+  const rowsBefore = useRef(false);
 
   const topRead = useFlow(project);
   const failure = useRetainedFailure(topRead.error, topRead.isFetching);
@@ -300,6 +302,8 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   // A read that failed again keeps its picture, and says no state it can no longer vouch for.
   const answers = useMemo(() => new Map(groups.flatMap((group) => (group.data === undefined ? [] : [[group.name, group.error === null ? group.data : withoutStates(group.data)] as const]))), [groups]);
   const topFailed = topRead.error !== null;
+  /** Top's rows have nothing to say; never on a failed read, or with no tools to hold the line. */
+  const clear = top !== undefined && top.nodes.length > 0 && !topFailed && allClear(top.gaps);
   const input = useMemo<FlowInput | null>(() => (top === undefined ? null : { top: topFailed ? withoutStates(top) : top, groups: answers, open: opened }), [top, topFailed, answers, opened]);
   const reads = useMemo(() => (input === null ? [] : readsOf(input)), [input]);
   const notes = useMemo(() => [...new Set(reads.flatMap((read) => read.view.notes))], [reads]);
@@ -398,6 +402,14 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
       headingFor.current = null;
       detailsHeading.current?.focus();
     }
+  });
+
+  // A read turning clean takes the rows and their button: focus on one goes to the results, never the body.
+  useEffect(() => {
+    if (clear && rowsBefore.current && focusIsLost()) {
+      results.current?.focus({ preventScroll: true });
+    }
+    rowsBefore.current = top !== undefined && !clear;
   });
 
   // Each group's opening is said once, when its read lands.
@@ -554,7 +566,7 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
     body = <ErrorPanel title="The flow could not be read" message={top.reason} retrying={topRead.isFetching} attempt={topRead.dataUpdatedAt} onRetry={retryTop} />;
   } else {
     const empty = top.nodes.length === 0;
-    const gapsShown = empty || !gapsHidden;
+    const gapsShown = !clear && (empty || !gapsHidden);
     const stage = ["flow-stage", !gapsShown && "no-gaps", !gapsShown && selected === undefined && "no-side"].filter(Boolean).join(" ");
     body = (
       <div className={stage}>
@@ -668,18 +680,22 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
                   ]}
                 />
                 {tab !== "timeline" && <StageFilter value={stageShown} options={stageOptions(stages)} onChange={setChosenStage} />}
-                <button
-                  type="button"
-                  className="button button-quiet"
-                  aria-expanded={!gapsHidden}
-                  onClick={() => {
-                    rememberGapsHidden(!gapsHidden);
-                    setGapsHidden(!gapsHidden);
-                  }}
-                >
-                  <Icon name="flowGap" />
-                  <span>{gapsHidden ? "Show gaps" : "Hide gaps"}</span>
-                </button>
+                {clear ? (
+                  <GapsClear />
+                ) : (
+                  <button
+                    type="button"
+                    className="button button-quiet"
+                    aria-expanded={!gapsHidden}
+                    onClick={() => {
+                      rememberGapsHidden(!gapsHidden);
+                      setGapsHidden(!gapsHidden);
+                    }}
+                  >
+                    <Icon name="flowGap" />
+                    <span>{gapsHidden ? "Show gaps" : "Hide gaps"}</span>
+                  </button>
+                )}
               </div>
               <TabPanel base={tabsBase} id="canvas" selected={tab === "canvas"}>
                 {tab === "canvas" && layout !== null && (

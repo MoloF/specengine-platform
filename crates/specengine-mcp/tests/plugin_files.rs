@@ -142,6 +142,11 @@
 //!   `PINS` entry 0.25.0, the tree with the version set back 0.24.0's; a
 //!   `SCHEMA_PINS` entry 0.25.0, 0.24.0's schemas today's without those
 //!   ([`as_of_0_24_0`]).
+//! - docs/features/trace-truth.md "Data": 0.25.0 -> 0.26.0, MINOR: a key a
+//!   tool returns: `get_card`'s `mark`, `on`, `discrepancy`, `correction`, its
+//!   snapshot's `within_hash`. A `PINS` entry 0.26.0, the tree with the version
+//!   set back 0.25.0's; a `SCHEMA_PINS` entry 0.26.0, 0.25.0's schemas today's
+//!   without those and their two reworded lines ([`as_of_0_25_0`]).
 //!
 //! The repository is only read.
 
@@ -410,6 +415,13 @@ const PINS: &[(&str, &str)] = &[
         "0.25.0",
         "0397c13046845603136d5024872f374a99a97994339887f4c187f97a973a7612",
     ),
+    // docs/features/trace-truth.md "Data" (0.25.0 -> 0.26.0, MINOR: a key a
+    // tool returns): plugin.json's version alone; the tree with the version
+    // set back hashes as 0.25.0's pin.
+    (
+        "0.26.0",
+        "95f8b3944124facf67d5071acdfe9e74187c719c51f712e82c87c74b9ce979c0",
+    ),
 ];
 
 /// docs/features/card-trace.md: `read-spec`'s line of 0.24.0, whole with its
@@ -611,6 +623,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.25.0",
         "85db59cb24c4e39c208fd00de6fcdc398eb01f082999a7281ff93a030f2112d8",
+    ),
+    // docs/features/trace-truth.md "Data": `get_card`'s four keys and its
+    // snapshot's `within_hash` ([`as_of_0_25_0`] takes them out; no other
+    // tool's schema changed but two reworded lines).
+    (
+        "0.26.0",
+        "dc5dbd0a9085c70d2a6b99025cbe2b7c931a369461c6ee4c5918375ac24b923a",
     ),
 ];
 
@@ -1730,10 +1749,32 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/trace-truth.md (0.25.0 -> 0.26.0): plugin.json's version
+    // alone; set back, the tree is 0.25.0's pinned content. M: the version
+    // kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.26.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.26.0"),
+        "plugin.json's version"
+    );
+    let at_0_25_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.26.0\"",
+        "\"version\": \"0.25.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_25_0),
+        PINS[PINS.len() - 2].1,
+        "0.26.0 changes plugin.json's version only"
+    );
+    let tree = at_0_25_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/trace-views.md (0.24.0 -> 0.25.0): plugin.json's version
     // alone; set back, the tree is 0.24.0's pinned content. M: the version
     // kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.25.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.25.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.25.0"),
@@ -1747,11 +1788,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_24_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.25.0 changes plugin.json's version only"
     );
     let tree = at_0_24_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/card-trace.md (0.23.0 -> 0.24.0): plugin.json's version
     // and `read-spec`'s one line; both set back, the tree is 0.23.0's pinned
     // content. M: the version kept; another file changed.
@@ -2450,6 +2491,57 @@ fn without_key(object: &mut Value, key: &str) {
     }
 }
 
+/// Every `description` equal to `new` under `schema` set to `old`: how many.
+fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
+    match schema {
+        Value::Object(object) => {
+            let mut changed = 0;
+            for (key, value) in object.iter_mut() {
+                if key == "description" && value == new {
+                    *value = json!(old);
+                    changed += 1;
+                } else {
+                    changed += reworded(value, new, old);
+                }
+            }
+            changed
+        }
+        Value::Array(items) => items.iter_mut().map(|item| reworded(item, new, old)).sum(),
+        _ => 0,
+    }
+}
+
+/// docs/features/trace-truth.md "Data": `schemas` as 0.25.0 listed them:
+/// `get_card` without `mark`, `on`, `discrepancy`, `correction`, its snapshot's
+/// entry without `within_hash` and its `also` and `TraceCounts` in their old
+/// words. No other tool's schema changed.
+fn as_of_0_25_0(schemas: &mut Value) {
+    let card = &mut schemas["get_card"]["outputSchema"];
+    for key in ["mark", "on", "discrepancy", "correction"] {
+        without_key(card, key);
+    }
+    let entry = &mut card["properties"]["snapshot"]["items"];
+    without_key(entry, "within_hash");
+    assert_eq!(
+        reworded(
+            card,
+            "Hashes an editorial apply vouched for since, of the kind this entry\ncompares.",
+            "Hashes an editorial apply vouched for since.",
+        ),
+        1,
+        "`also`'s line"
+    );
+    assert!(
+        reworded(
+            schemas,
+            "How many nodes stand in each state; a node holding live documents, with\nno card \
+             of its own, stands in none.",
+            "How many nodes stand in each state.",
+        ) > 0,
+        "`TraceCounts`' line"
+    );
+}
+
 /// docs/features/trace-views.md "Routes and types": `schemas` as 0.24.0 listed
 /// them: `get_flow` without `trace`, its node without `stage`, `rollup` and
 /// `counts`, its `start` and `end` undescribed; `list_cards` without `marks`,
@@ -2740,7 +2832,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[14].0, "0.23.0", "an entry for 0.23.0");
     assert_eq!(SCHEMA_PINS[15].0, "0.24.0", "an entry for 0.24.0");
     assert_eq!(SCHEMA_PINS[16].0, "0.25.0", "an entry for 0.25.0");
-    assert_eq!(SCHEMA_PINS.len(), 17, "0.25.0 the last entry");
+    assert_eq!(SCHEMA_PINS[17].0, "0.26.0", "an entry for 0.26.0");
+    assert_eq!(SCHEMA_PINS.len(), 18, "0.26.0 the last entry");
+    // docs/features/trace-truth.md "Data": 0.25.0's schemas are today's without
+    // the keys `get_card` gains and the two lines reworded.
+    let mut at_0_25_0 = schemas.clone();
+    as_of_0_25_0(&mut at_0_25_0);
+    let at_0_25_0_hash = schema_hash(&at_0_25_0);
+    assert_eq!(
+        at_0_25_0_hash, SCHEMA_PINS[16].1,
+        "0.25.0's schemas are today's without trace-truth's"
+    );
+    assert_ne!(at_0_25_0_hash, current, "trace-truth changed the schemas");
+    let (schemas, current) = (at_0_25_0, at_0_25_0_hash);
     // docs/features/trace-views.md "Routes and types": 0.24.0's schemas are
     // today's without `trace`, `marks`, `stage`, `summary`, the lanes and the
     // keys they add.

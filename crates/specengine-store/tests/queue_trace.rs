@@ -15,6 +15,8 @@
 //! - `applied_vouching`: `also` of every entry holding the old hash, one
 //!   `card.refreshed` each, the last 16, a corrupt row left alone.
 //! - `list_existing_cards`, `node_norms`: reads, no schema step, no table.
+//! - docs/features/trace-truth.md "Editorial refresh": one event per (card,
+//!   node), `revision` once, `also` the kind the entry compares.
 
 #![cfg(unix)]
 
@@ -30,7 +32,7 @@ use serde_json::{Value, json};
 use specengine_core::card_toml::{CardConfig, CardFlow};
 use specengine_core::intake::{Evidence, GapType, IntakeOption, IntakeSeverity};
 use specengine_core::proposal::Author;
-use specengine_core::trace::{ALSO_MAX, TargetNorms, TargetNow};
+use specengine_core::trace::{ALSO_MAX, HashKind, TargetNorms, TargetNow};
 use specengine_model::{CardFrozen, CardVerdict};
 use specengine_store::{
     CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, CardRefresh,
@@ -85,6 +87,7 @@ fn norms(targets: &[&str], rev: u32, hash: &str) -> TargetNorms {
                 TargetNow {
                     rev: Some(rev),
                     norm_hash: Some(hash.to_owned()),
+                    within_hash: Some(hash.to_owned()),
                 },
             )
         })
@@ -99,6 +102,7 @@ fn frozen(targets: &[&str], hash: &str) -> Vec<CardFrozen> {
             id: (*target).to_owned(),
             rev: Some(1),
             norm_hash: Some(hash.to_owned()),
+            within_hash: Some(hash.to_owned()),
             also: Vec::new(),
         })
         .collect()
@@ -862,6 +866,7 @@ fn an_accept_freezes_only_what_has_a_hash() {
         TargetNow {
             rev: Some(2),
             norm_hash: None,
+            within_hash: None,
         },
     );
     accepted(&mut queue, &id, &now);
@@ -919,6 +924,120 @@ fn a_correction_refreezes_only_what_it_read() {
 }
 
 // ------------------------------------------------------------ the refresh
+
+/// docs/features/trace-truth.md AC-05, "Editorial refresh": a document whose
+/// own hash and `within_hash` both moved sends a pair of each kind: an entry
+/// holding a `within_hash` takes the within pair and logs one `card.refreshed`,
+/// `revision` one more; a legacy entry, which holds no `within_hash`, takes the
+/// own pair the same way.
+#[test]
+fn two_changes_of_one_node_log_one_event() {
+    let scratch = Scratch::new("qt-two-changes");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let config = press();
+    let flow = copy(&config);
+    let entry = |within: Option<&str>| CardFrozen {
+        id: INNER.to_owned(),
+        rev: Some(1),
+        norm_hash: Some(OLD.to_owned()),
+        within_hash: within.map(str::to_owned),
+        also: Vec::new(),
+    };
+    let current = queue
+        .create_card_frozen(
+            &new_card(flow, "Current", &[INNER], None),
+            &[entry(Some("b3:within-old"))],
+            T0,
+        )
+        .expect("a card");
+    let legacy = queue
+        .create_card_frozen(
+            &new_card(flow, "Legacy", &[INNER], None),
+            &[entry(None)],
+            T0,
+        )
+        .expect("a card");
+    let id = update(&mut queue, INNER, "new");
+    let refresh = [
+        CardRefresh {
+            node: INNER.to_owned(),
+            kind: HashKind::Own,
+            old: OLD.to_owned(),
+            new: NEW.to_owned(),
+        },
+        CardRefresh {
+            node: INNER.to_owned(),
+            kind: HashKind::Within,
+            old: "b3:within-old".to_owned(),
+            new: "b3:within-new".to_owned(),
+        },
+    ];
+    let commit = "c".repeat(40);
+    queue
+        .applied_vouching(&id, &commit, Some(&owner()), None, &refresh, T1)
+        .expect("recorded");
+    assert_eq!(
+        payloads(&queue, "card.refreshed"),
+        [
+            json!({"id": current.id, "node": INNER, "proposal": id}),
+            json!({"id": legacy.id, "node": INNER, "proposal": id}),
+        ]
+    );
+    let card = queue.get_card(&current.id).expect("read").expect("a card");
+    assert_eq!(card.revision, current.revision + 1, "once per card");
+    let snapshot = card.snapshot.expect("a snapshot");
+    assert_eq!(snapshot[0].also, ["b3:within-new"], "the kind it compares");
+    assert_eq!(snapshot[0].within_hash.as_deref(), Some("b3:within-old"));
+    let card = queue.get_card(&legacy.id).expect("read").expect("a card");
+    let snapshot = card.snapshot.expect("a snapshot");
+    assert_eq!(snapshot[0].also, [NEW], "own hashes on a legacy entry");
+    assert_eq!(snapshot[0].within_hash, None);
+}
+
+/// "one `card.refreshed` per (card, node)", held where two changes of a node
+/// both join one entry's `also`: an entry takes one kind, and a pass sends one
+/// pair of it per holder of the ID, so a duplicated `{#ID}` does it through a
+/// real pass (the CLI's `ac05_a_duplicated_id_logs_one_event`), and so does a
+/// refresh chained as here, the second change's old hash the first's new one.
+/// M: `nodes` not deduplicated.
+#[test]
+fn a_chain_of_changes_of_one_node_logs_one_event() {
+    let scratch = Scratch::new("qt-chain");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let card = make(&mut queue, "Chained", &[INNER]);
+    let before = queue.get_card(&card).expect("read").expect("a card");
+    let id = update(&mut queue, INNER, "new");
+    let refresh = [
+        CardRefresh {
+            node: INNER.to_owned(),
+            kind: HashKind::Within,
+            old: OLD.to_owned(),
+            new: NEW.to_owned(),
+        },
+        CardRefresh {
+            node: INNER.to_owned(),
+            kind: HashKind::Within,
+            old: NEW.to_owned(),
+            new: "b3:newer".to_owned(),
+        },
+    ];
+    let commit = "c".repeat(40);
+    queue
+        .applied_vouching(&id, &commit, Some(&owner()), None, &refresh, T1)
+        .expect("recorded");
+    assert_eq!(
+        payloads(&queue, "card.refreshed"),
+        [json!({"id": card, "node": INNER, "proposal": id})]
+    );
+    let after = queue.get_card(&card).expect("read").expect("a card");
+    assert_eq!(after.revision, before.revision + 1);
+    assert_eq!(
+        after.snapshot.expect("a snapshot")[0].also,
+        [NEW, "b3:newer"]
+    );
+}
 
 /// A decision `applied_vouching` records an `open` update under.
 fn owner() -> Decision {
@@ -1006,6 +1125,7 @@ fn applied_vouching_adds_to_also() {
     let id = update(&mut queue, INNER, "new");
     let refresh = [CardRefresh {
         node: INNER.to_owned(),
+        kind: HashKind::Within,
         old: OLD.to_owned(),
         new: NEW.to_owned(),
     }];
@@ -1082,6 +1202,7 @@ fn also_keeps_the_last_sixteen() {
                 None,
                 &[CardRefresh {
                     node: INNER.to_owned(),
+                    kind: HashKind::Within,
                     old: last.clone(),
                     new: new.clone(),
                 }],

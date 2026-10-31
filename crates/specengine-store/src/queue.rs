@@ -1860,10 +1860,11 @@ impl SqliteQueue {
     /// `card-trace`, "Snapshot and suspect"): [`ProposalQueue::applied`]
     /// (`decision` `None`) or [`ProposalQueue::applied_with`], `task` as
     /// [`Self::applied_refreshing`] takes it, and each editorial change of
-    /// `cards` joining the `also` of every card entry holding its old hash,
-    /// one `card.refreshed` each. A card that does not read is left alone:
-    /// recording the commit never fails for a card's sake. The stored
-    /// proposal, the task's nodes refreshed, the cards changed.
+    /// `cards` joining the `also` of every card entry holding its old hash of
+    /// that kind, one `card.refreshed` per (card, node), a node repeated in
+    /// `cards` logging one. A card that does not read is left alone: recording
+    /// the commit never fails for a card's sake. The stored proposal, the
+    /// task's nodes refreshed, the cards changed.
     pub fn applied_vouching(
         &mut self,
         id: &str,

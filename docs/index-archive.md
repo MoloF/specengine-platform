@@ -94,6 +94,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/roadmap-view.md](features/roadmap-view.md) shipped
 - [docs/features/roadmap.md](features/roadmap.md) abandoned
 - [docs/features/round.md](features/round.md) shipped
+- [docs/features/screen-fit.md](features/screen-fit.md) shipped
 - [docs/features/show-bindings.md](features/show-bindings.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
 - [docs/features/spec-check-links.md](features/spec-check-links.md) shipped
@@ -120,6 +121,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/tested-evidence.md](features/tested-evidence.md) shipped
 - [docs/features/tested-reads.md](features/tested-reads.md) shipped
 - [docs/features/token-calibration.md](features/token-calibration.md) shipped
+- [docs/features/trace-truth.md](features/trace-truth.md) shipped
 - [docs/features/trace-views.md](features/trace-views.md) shipped
 - [docs/features/ui-drift-evidence.md](features/ui-drift-evidence.md) shipped
 - [docs/features/ui-embed.md](features/ui-embed.md) shipped
@@ -162,4 +164,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0046.md](roadmap/RM-0046.md) shipped
 - [docs/roadmap/RM-0047.md](roadmap/RM-0047.md) shipped
 - [docs/roadmap/RM-0048.md](roadmap/RM-0048.md) shipped
+- [docs/roadmap/RM-0066.md](roadmap/RM-0066.md) shipped
+- [docs/roadmap/RM-0069.md](roadmap/RM-0069.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

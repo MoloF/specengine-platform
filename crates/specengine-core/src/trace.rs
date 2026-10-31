@@ -4,11 +4,14 @@
 //! nothing is read or written here, and nothing computed here is stored. A
 //! mark and a rollup hold for one read of one root.
 //!
-//! - **Suspect**: a direct target whose `norm_hash` now is neither its
-//!   entry's nor in its `also`, or which no longer resolves. A `null` hash on
-//!   either side cannot be compared: not suspect, and [`mark_notes`] says so;
-//!   so does a card with no snapshot. Whitespace leaves `norm_hash` equal, so
-//!   it marks nothing.
+//! - **Suspect**: a direct target whose `within_hash` now is neither its
+//!   entry's nor in its `also`, or which no longer resolves; an entry stored
+//!   with no `within_hash` compares `norm_hash`, and [`mark_notes`] says what
+//!   it cannot see (task spec `trace-truth`, "Rules and edge cases"). A
+//!   `null` hash on either side cannot be compared: not suspect, and
+//!   [`mark_notes`] says so; so does a card with no snapshot. Whitespace
+//!   leaves both hashes equal, so it marks nothing. A mark stops at the file:
+//!   nothing here reads `parent:`, `uses` or a sibling section.
 //! - **Marks**, first match: departed (its discrepancy not settled), then
 //!   suspect, which a live correction holds as correcting, then accepted or
 //!   open.
@@ -41,16 +44,63 @@ pub struct TargetNow {
     pub rev: Option<u32>,
     /// `None`: null, the node has no hash to compare.
     pub norm_hash: Option<String>,
+    /// The node and the ID sections nested in it, per read and never stored;
+    /// `None` when any of them reads null.
+    pub within_hash: Option<String>,
 }
 
 /// Each direct target that resolves, as the reading root's index has it.
 pub type TargetNorms = BTreeMap<String, TargetNow>;
+
+/// Which of a node's two hashes an editorial change moved. On a node with no
+/// sections they are one string, and it sends both.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum HashKind {
+    /// `norm_hash`, for an entry holding no `within_hash`.
+    Own,
+    /// `within_hash`, for an entry holding one.
+    Within,
+}
+
+/// What a node's `within_hash` is taken from. Core holds no hash function, so
+/// the caller hashes [`Self::Pairs`], as it does `norm_input`'s bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WithinInput {
+    /// One member: `within_hash` is its `norm_hash`, the same string.
+    Alone(String),
+    /// Two or more: `<name>\0<norm_hash>\n` per member, by name.
+    Pairs(Vec<u8>),
+}
+
+/// The input of a node's `within_hash` from its members' (name, `norm_hash`)
+/// pairs: the node and the ID sections nested in it, `name` the node's ID,
+/// else its file's path. `None` when any hash is null, or there is no member.
+/// Sorted by name, then hash for a repeated ID, so a section moved in its
+/// file is no change and a new section is one.
+pub fn within_input(mut members: Vec<(String, Option<String>)>) -> Option<WithinInput> {
+    if let [(_, hash)] = members.as_mut_slice() {
+        return hash.take().map(WithinInput::Alone);
+    }
+    if members.is_empty() {
+        return None;
+    }
+    members.sort_unstable();
+    let mut input = Vec::new();
+    for (name, hash) in &members {
+        input.extend_from_slice(name.as_bytes());
+        input.push(0);
+        input.extend_from_slice(hash.as_ref()?.as_bytes());
+        input.push(b'\n');
+    }
+    Some(WithinInput::Pairs(input))
+}
 
 fn entry_of(id: &str, now: Option<&TargetNow>) -> CardFrozen {
     CardFrozen {
         id: id.to_owned(),
         rev: now.and_then(|now| now.rev),
         norm_hash: now.and_then(|now| now.norm_hash.clone()),
+        within_hash: now.and_then(|now| now.within_hash.clone()),
         also: Vec::new(),
     }
 }
@@ -94,16 +144,19 @@ pub fn retargeted(
 }
 
 /// An accept's snapshot: every target with a hash now frozen anew. One that
-/// no longer resolves, or reads null (a front-matter broken at this moment),
-/// has nothing to freeze, so its entry stays: the card stays comparable, and
-/// suspect on a gone target for a person to clear with a reason.
+/// no longer resolves, or reads null where its entry compares (a front-matter
+/// broken at this moment), has nothing to freeze, so its entry stays: the
+/// card stays comparable, and suspect on a gone target for a person to clear
+/// with a reason.
 pub fn refrozen(card: &Card, norms: &TargetNorms) -> Vec<CardFrozen> {
     card.targets
         .iter()
         .map(|target| {
             let now = norms.get(target);
             match entry(card, target) {
-                Some(kept) if now.is_none_or(|now| now.norm_hash.is_none()) => kept.clone(),
+                Some(kept) if now.is_none_or(|now| compared_now(kept, now).is_none()) => {
+                    kept.clone()
+                }
                 _ => entry_of(target, now),
             }
         })
@@ -117,16 +170,29 @@ fn entry<'c>(card: &'c Card, target: &str) -> Option<&'c CardFrozen> {
         .find(|entry| entry.id == target)
 }
 
+/// The hash an entry is compared by: its `within_hash`, else, on an entry
+/// holding none, its `norm_hash`.
+fn compared(frozen: &CardFrozen) -> Option<&String> {
+    frozen.within_hash.as_ref().or(frozen.norm_hash.as_ref())
+}
+
+/// The hash of `now` that [`compared`] of `frozen` meets, the same kind.
+fn compared_now<'n>(frozen: &CardFrozen, now: &'n TargetNow) -> Option<&'n String> {
+    if frozen.within_hash.is_some() {
+        now.within_hash.as_ref()
+    } else {
+        now.norm_hash.as_ref()
+    }
+}
+
 fn is_suspect(frozen: &CardFrozen, now: Option<&TargetNow>) -> bool {
-    let Some(hash) = &frozen.norm_hash else {
+    let Some(hash) = compared(frozen) else {
         return false;
     };
     let Some(now) = now else {
         return true;
     };
-    now.norm_hash
-        .as_ref()
-        .is_some_and(|new| new != hash && !frozen.also.contains(new))
+    compared_now(frozen, now).is_some_and(|new| new != hash && !frozen.also.contains(new))
 }
 
 /// The direct targets `card` is suspect on, in `targets` order.
@@ -142,7 +208,9 @@ pub fn suspect_on<'c>(card: &'c Card, norms: &TargetNorms) -> Vec<&'c str> {
 
 /// One target a clear moved: `card.cleared`'s `nodes`. `rev` the one it
 /// reads now (the last it read, when it is gone), so a `Revision:` trailer
-/// joins it to a commit.
+/// joins it to a commit: the target's own, so the join of a change in a
+/// section walks `within`. `from` and `to` what each entry is compared by,
+/// so they differ even when the target's own hash held.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct ClearedNode {
     pub id: String,
@@ -178,8 +246,8 @@ pub fn cleared(
             moved.push(ClearedNode {
                 id: frozen.id.clone(),
                 rev: again.rev,
-                from: frozen.norm_hash.clone(),
-                to: again.norm_hash.clone(),
+                from: compared(frozen).cloned(),
+                to: compared(&again).cloned(),
             });
             again
         })
@@ -187,12 +255,20 @@ pub fn cleared(
     (snapshot, moved)
 }
 
-/// An editorial apply changed a node from `old` to `new`: `new` joins the
-/// `also` of an entry holding `old`, the last [`ALSO_MAX`] kept; `false`
-/// when the entry holds no `old`, or already holds `new`.
-pub fn vouched(entry: &mut CardFrozen, old: &str, new: &str) -> bool {
+/// An editorial apply changed a node's hash of `kind` from `old` to `new`:
+/// `new` joins the `also` of an entry holding `old`, the last [`ALSO_MAX`]
+/// kept; `false` when the entry holds no `old`, already holds `new`, or
+/// compares the other kind. An entry takes a within pair only if it holds a
+/// `within_hash` and an own pair only if it holds none, judged by that key and
+/// never by comparing strings, so its `also` keeps the kind it compares alone
+/// and no own hash can read clean once a target's sections are gone.
+pub fn vouched(entry: &mut CardFrozen, kind: HashKind, old: &str, new: &str) -> bool {
+    if (kind == HashKind::Within) != entry.within_hash.is_some() {
+        return false;
+    }
     let holds = |entry: &CardFrozen, hash: &str| {
-        entry.norm_hash.as_deref() == Some(hash) || entry.also.iter().any(|also| also == hash)
+        compared(entry).is_some_and(|held| held == hash)
+            || entry.also.iter().any(|also| also == hash)
     };
     if !holds(entry, old) || holds(entry, new) {
         return false;
@@ -414,12 +490,20 @@ pub fn mark_notes(card: &Card, norms: &TargetNorms) -> Vec<String> {
                     Some(format!("{id}: `{target}` no longer resolves"))
                 }
                 (Some(frozen), now)
-                    if frozen.norm_hash.is_none()
-                        || now.is_none_or(|now| now.norm_hash.is_none()) =>
+                    if compared(frozen).is_none()
+                        || now.is_none_or(|now| compared_now(frozen, now).is_none()) =>
                 {
                     Some(format!(
                         "{id}: `{target}` has a null hash: it cannot be compared, so it reads \
                          not suspect"
+                    ))
+                }
+                (Some(frozen), Some(now))
+                    if frozen.within_hash.is_none() && now.within_hash != now.norm_hash =>
+                {
+                    Some(format!(
+                        "{id}: {target} froze its own text alone: a change in its sections marks \
+                         nothing until an accept or a clear"
                     ))
                 }
                 _ => None,

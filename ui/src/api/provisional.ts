@@ -1797,11 +1797,12 @@ export interface CardAcceptance {
   discrepancy: string | null;
 }
 
-/** One direct target as a card last saw it; a mark against it is computed per read. Source: `docs/features/card-trace.md` "Data". */
+/** One direct target as a card last saw it; a mark against it is computed per read. `within_hash`, over the target and the ID sections nested in it, is what a mark compares: null when none could be frozen, and on an entry stored before there was one, whose `norm_hash` stands in. Source: `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data". */
 export interface CardFrozen {
   id: string;
   rev: number | null;
   norm_hash: string | null;
+  within_hash: string | null;
   also: string[];
 }
 
@@ -1820,7 +1821,7 @@ export interface CardEvent {
   payload: unknown;
 }
 
-/** `spec card show C --history --json`: every key present, absent `null`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data". */
+/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data". */
 export interface Card {
   id: string;
   flow: string;
@@ -1830,6 +1831,10 @@ export interface Card {
   goal: string | null;
   discipline: string | null;
   targets: string[];
+  mark: string | null;
+  on: string | null;
+  discrepancy: string | null;
+  correction: string | null;
   snapshot: CardFrozen[] | null;
   criteria: string[];
   assignee: string | null;
@@ -1989,7 +1994,7 @@ export interface TraceUse {
   cards: number;
 }
 
-/** One lane of `spec trace`: `stage` null for the documents with none; `distance` the least of its steps'; `counts` over its steps. Source: `docs/features/trace-views.md` "Routes and types". */
+/** One lane of `spec trace`: `stage` null for the documents with none; `distance` the least of its steps'; `counts` over its steps, a node holding live documents with no card of its own standing in the lane and adding nothing, so a lane of those alone stays at zero. Source: `docs/features/trace-views.md` "Routes and types", `docs/features/trace-truth.md` "Description and interactions". */
 export interface TraceStage {
   stage: string | null;
   distance: number | null;

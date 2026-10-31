@@ -288,6 +288,11 @@ fn norm(pair: &Pair, id: &str) -> String {
     pair.node(&pair.main, id).norm_hash.expect("a norm hash")
 }
 
+/// `SHT-FRONT`'s `within_hash` now: it holds one section.
+fn front_within(pair: &Pair) -> String {
+    pair.within(&[FRONT, HEAD])
+}
+
 /// `spec --json trace [reference]`, exit 0: the document.
 fn trace(pair: &Pair, reference: Option<&str>) -> Value {
     trace_in(pair, &pair.main, reference)
@@ -439,10 +444,12 @@ fn ac01_new_and_edit_target_freeze_each_direct_target() {
         assert_eq!(entry["also"], json!([]), "{card}");
         assert_eq!(
             entry.as_object().expect("an entry").len(),
-            4,
-            "id, rev, norm_hash, also: {entry}"
+            5,
+            "id, rev, norm_hash, within_hash, also: {entry}"
         );
     }
+    assert_eq!(frozen[0]["within_hash"], front_within(&pair), "{card}");
+    assert_eq!(frozen[1]["within_hash"], norm(&pair, BACK), "{card}");
 
     ok(&pair, &["card", "edit", &id, "--target", HEAD]);
     let card = show(&pair, &id);
@@ -518,6 +525,7 @@ fn ac01_a_meaning_change_marks_whitespace_does_not_a_clear_removes_it() {
     // Whitespace: `norm_hash` equal, `span_hash` not, so the case would turn
     // red on the other hash.
     let frozen = norm(&pair, FRONT);
+    let held = front_within(&pair);
     let span = pair.span(&pair.main, FRONT).0;
     approved(&pair, FRONT, WHITESPACE);
     assert_eq!(norm(&pair, FRONT), frozen, "the fixture's premise");
@@ -571,7 +579,7 @@ fn ac01_a_meaning_change_marks_whitespace_does_not_a_clear_removes_it() {
         [json!({
             "id": id,
             "outcome": "no_effect",
-            "nodes": [{"id": FRONT, "rev": 2, "from": frozen, "to": changed}],
+            "nodes": [{"id": FRONT, "rev": 2, "from": held, "to": front_within(&pair)}],
             "correction": null,
             "reason": "Only the weather.",
             "as": "ben",
@@ -841,6 +849,7 @@ fn ac02_an_editorial_approve_refreshes_each_card_holding_the_old_hash() {
     let before = norm(&pair, FRONT);
     let proposal = editorial(&pair, FRONT, MEANING);
     let after = norm(&pair, FRONT);
+    let vouched = front_within(&pair);
     assert_ne!(before, after, "the fixture's premise: the text changed");
     assert_eq!(pair.node(&pair.main, FRONT).rev, None, "no raise");
     assert!(
@@ -861,7 +870,11 @@ fn ac02_an_editorial_approve_refreshes_each_card_holding_the_old_hash() {
         let entry = &card["snapshot"][0];
         assert_eq!(entry["id"], FRONT, "{card}");
         assert_eq!(entry["norm_hash"], before, "`also`, not a replace: {card}");
-        assert_eq!(entry["also"], json!([after]), "{card}");
+        assert_eq!(
+            entry["also"],
+            json!([vouched]),
+            "the kind it compares: {card}"
+        );
     }
     assert_eq!(
         show(&pair, &other)["snapshot"][0]["also"],
@@ -878,10 +891,10 @@ fn ac02_an_editorial_approve_refreshes_each_card_holding_the_old_hash() {
 
     // A second editorial approve: `also` grows, oldest first.
     editorial(&pair, FRONT, MEANING_AGAIN);
-    let latest = norm(&pair, FRONT);
+    let latest = front_within(&pair);
     assert_eq!(
         show(&pair, &first)["snapshot"][0]["also"],
-        json!([after, latest])
+        json!([vouched, latest])
     );
     assert_eq!(rollup(&pair, FRONT), "in work");
     assert_eq!(
@@ -924,7 +937,7 @@ fn ac02_an_editorial_apply_refreshes_each_changed_node() {
     );
     let card = show(&pair, &id);
     assert_eq!(card["snapshot"][0]["norm_hash"], front);
-    assert_eq!(card["snapshot"][0]["also"], json!([norm(&pair, FRONT)]));
+    assert_eq!(card["snapshot"][0]["also"], json!([front_within(&pair)]));
     assert_eq!(card["snapshot"][1]["norm_hash"], head);
     assert_eq!(card["snapshot"][1]["also"], json!([norm(&pair, HEAD)]));
     assert_eq!(rollup(&pair, FRONT), "in work");
@@ -1007,7 +1020,7 @@ fn ac02_a_completion_refreshes_as_the_apply_did() {
     let raw = raw.trim_end_matches('\n');
     let proposal = editorial(&pair, FRONT, MEANING);
     let commit = pair.rev(&pair.main, "HEAD");
-    let after = norm(&pair, FRONT);
+    let vouched = front_within(&pair);
     assert_eq!(events_of(&pair, "card.refreshed").len(), 1);
 
     pair.sql(&format!(
@@ -1024,7 +1037,7 @@ fn ac02_a_completion_refreshes_as_the_apply_did() {
     );
     assert_eq!(
         show(&pair, &id)["snapshot"][0]["also"],
-        json!([after]),
+        json!([vouched]),
         "the completion's refresh"
     );
     assert_eq!(rollup(&pair, FRONT), "in work");
@@ -1588,9 +1601,9 @@ fn ac06_a_correction_holds_the_mark() {
     let pair = Pair::new("ct-ac06", PRESS);
     let id = accepted(&pair, "Lead story", &[FRONT]);
     let frozen = show(&pair, &id);
-    let old = norm(&pair, FRONT);
+    let old = front_within(&pair);
     approved(&pair, FRONT, MEANING);
-    let new = norm(&pair, FRONT);
+    let new = front_within(&pair);
     let git = git_side(&pair);
     let done = clear(
         &pair,
@@ -2117,7 +2130,7 @@ fn ac09_trace_exits_0_and_check_and_gate_stay() {
     let lead = make(&pair, "Lead story", &[FRONT]);
     pair.sql(&format!(
         "UPDATE cards SET snapshot = replace(snapshot, '{}', 'b3:{}') WHERE id = '{lead}';",
-        norm(&pair, FRONT),
+        front_within(&pair),
         "0".repeat(64)
     ));
     assert_eq!(rollup(&pair, FRONT), "suspect");
@@ -2463,7 +2476,7 @@ fn the_rows_of_a_tree() {
     assert_eq!(
         done.stdout,
         format!(
-            "trace {WEEKLY} | nodes 5, cards 3 | no card 2, in work 1, suspect 1, departed 0, \
+            "trace {WEEKLY} | nodes 5, cards 3 | no card 1, in work 1, suspect 1, departed 0, \
              confirmed 1\n\
              no card | {PLATES} | The plate room | docs/spec/prn-plates.md | cards 0\n\
              no card | {WEEKLY} | The weekly run | docs/spec/prn-weekly.md | cards 0\n\
@@ -2488,7 +2501,7 @@ fn the_rows_of_a_tree() {
     assert_eq!(document["truncated"], false);
     assert_eq!(
         document["counts"],
-        json!({"no_card": 2, "in_work": 1, "suspect": 1, "departed": 0, "confirmed": 1})
+        json!({"no_card": 1, "in_work": 1, "suspect": 1, "departed": 0, "confirmed": 1})
     );
     assert_eq!(node_ids(&document), [PLATES, WEEKLY, BACK, FRONT, INNER]);
     let Ordered::Array(nodes) = ordered.get("nodes") else {
@@ -2516,8 +2529,8 @@ fn the_rows_of_a_tree() {
     assert_eq!(top["rollup"], "no card");
     assert_eq!(
         top["counts"],
-        json!({"no_card": 2, "in_work": 1, "suspect": 1, "departed": 0, "confirmed": 1}),
-        "over the node and what it holds by `parent:`"
+        json!({"no_card": 1, "in_work": 1, "suspect": 1, "departed": 0, "confirmed": 1}),
+        "over what it holds by `parent:`, the holder with no card counted nowhere"
     );
     assert_eq!(
         node_of(&document, FRONT)["counts"],
@@ -2543,7 +2556,7 @@ fn the_scope_of_a_read() {
     );
     assert!(
         run(&pair, &["trace"]).stdout.starts_with(
-            "trace all | nodes 6, cards 0 | no card 6, in work 0, suspect 0, \
+            "trace all | nodes 6, cards 0 | no card 5, in work 0, suspect 0, \
                          departed 0, confirmed 0\n"
         ),
         "the header"
@@ -2603,7 +2616,7 @@ fn no_queue_reads_no_card_and_makes_none() {
     let shown = trace(&pair, None);
     assert_eq!(
         shown["counts"],
-        json!({"no_card": 6, "in_work": 0, "suspect": 0, "departed": 0, "confirmed": 0})
+        json!({"no_card": 5, "in_work": 0, "suspect": 0, "departed": 0, "confirmed": 0})
     );
     assert_eq!(
         pair.sql("SELECT name FROM sqlite_master WHERE name IN ('cards', 'proposals', 'tasks');"),
@@ -2671,6 +2684,7 @@ fn rows_written_before_this_slice_and_corrupt_ones() {
 fn a_target_that_no_longer_resolves_is_suspect() {
     let pair = Pair::new("ct-gone", PRESS);
     let id = make(&pair, "The fold", &[FOLD, INNER]);
+    let inner_before = pair.within(&[INNER, FOLD]);
     let text = read_text(&pair.main, INNER_MD);
     write(
         &pair.main,
@@ -2685,10 +2699,11 @@ fn a_target_that_no_longer_resolves_is_suspect() {
     let note = format!("{id}: `{FOLD}` no longer resolves");
     assert!(shown["notes"].to_string().contains(&note), "{shown}");
     let node = node_of(&shown, INNER);
+    let card = card_of(node, &id);
     assert_eq!(
-        card_of(node, &id)["mark"],
-        "open",
-        "the node's own target is clean: {node}"
+        (&card["mark"], &card["on"]),
+        (&json!("suspect"), &json!(INNER)),
+        "docs/features/trace-truth.md: the pairs of the node around it changed: {node}"
     );
 
     let old = show(&pair, &id)["snapshot"][0]["norm_hash"].clone();
@@ -2696,7 +2711,10 @@ fn a_target_that_no_longer_resolves_is_suspect() {
     let event = events_of(&pair, "card.cleared").pop().expect("the event");
     assert_eq!(
         event["nodes"],
-        json!([{"id": FOLD, "rev": 1, "from": old, "to": null}]),
+        json!([
+            {"id": FOLD, "rev": 1, "from": old, "to": null},
+            {"id": INNER, "rev": 1, "from": inner_before, "to": norm(&pair, INNER)},
+        ]),
         "{event}"
     );
     let card = show(&pair, &id);
@@ -2985,20 +3003,20 @@ fn the_backup_keeps_what_a_trace_reads() {
 #[test]
 fn also_keeps_the_last_sixteen() {
     let pair = Pair::new("ct-also", PRESS);
-    let id = make(&pair, "Lead story", &[FRONT]);
+    let id = make(&pair, "Notices", &[BACK]);
     let mut hashes = Vec::new();
-    let mut last = "the lead story".to_owned();
+    let mut last = "the tide table".to_owned();
     for number in 0..17 {
-        let next = format!("the lead story {number}");
-        editorial(&pair, FRONT, (&last, &next));
-        hashes.push(norm(&pair, FRONT));
+        let next = format!("the tide table {number}");
+        editorial(&pair, BACK, (&last, &next));
+        hashes.push(norm(&pair, BACK));
         last = next;
     }
     assert_eq!(
         show(&pair, &id)["snapshot"][0]["also"],
         json!(hashes[1..].to_vec())
     );
-    assert_eq!(rollup(&pair, FRONT), "in work");
+    assert_eq!(rollup(&pair, BACK), "in work");
 }
 
 /// "Determinism": a repeat of every read gives the same bytes, and a read
@@ -3029,6 +3047,11 @@ fn a_repeat_gives_the_same_bytes() {
 /// `count` cards of 250-byte titles on `target`, frozen as it reads now.
 fn many_cards(pair: &Pair, target: &str, count: usize) {
     let hash = norm(pair, target);
+    let within = match target {
+        FRONT => front_within(pair),
+        INNER => pair.within(&[INNER, FOLD]),
+        _ => hash.clone(),
+    };
     let mut queue = pair.queue();
     for _ in 0..count {
         queue
@@ -3052,6 +3075,7 @@ fn many_cards(pair: &Pair, target: &str, count: usize) {
                     id: target.to_owned(),
                     rev: Some(1),
                     norm_hash: Some(hash.clone()),
+                    within_hash: Some(within.clone()),
                     also: Vec::new(),
                 }],
                 "2026-10-30T09:00:00Z",
@@ -3078,7 +3102,7 @@ fn a_long_trace_is_cut_with_a_tail() {
     assert_eq!(tail, "[truncated: 2 of 6 nodes not shown; give a REF]");
     assert!(
         done.stdout
-            .starts_with("trace all | nodes 6, cards 200 | no card 5, in work 1, suspect 0,"),
+            .starts_with("trace all | nodes 6, cards 200 | no card 4, in work 1, suspect 0,"),
         "the header counts whole: {}",
         &done.stdout[..80]
     );
@@ -3093,7 +3117,7 @@ fn a_long_trace_is_cut_with_a_tail() {
     );
     assert_eq!(
         document["counts"],
-        json!({"no_card": 5, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 0})
+        json!({"no_card": 4, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 0})
     );
 }
 

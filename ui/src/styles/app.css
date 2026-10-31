@@ -4576,6 +4576,16 @@ mark {
   min-width: 0;
 }
 
+/* Stands where the gaps button does, and as tall, so the tools do not jump when a row turns up. */
+.flow-gaps-clear {
+  align-items: center;
+  min-height: max(var(--target-min), 2.25rem);
+}
+
+.flow-gaps-clear .icon {
+  color: var(--flow-gap-none);
+}
+
 .flow-failed {
   display: flex;
   flex-wrap: wrap;
@@ -5318,13 +5328,16 @@ mark {
   grid-auto-flow: column;
   grid-auto-columns: minmax(14rem, 1fr);
   gap: var(--space-3);
-  align-items: start;
+  align-items: stretch;
+  min-height: 60vh;
   overflow-x: auto;
   padding-bottom: var(--space-2);
 }
 
+/* Starts its rows at the top: else they share the column's stretch, and the title grows. */
 .board-column {
   display: grid;
+  align-content: start;
   gap: var(--space-2);
   min-width: 0;
   padding: var(--space-2);
@@ -5661,6 +5674,7 @@ mark {
   .board-columns {
     grid-auto-flow: row;
     grid-auto-columns: auto;
+    min-height: 0;
     overflow-x: visible;
   }
 }

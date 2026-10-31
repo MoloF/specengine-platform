@@ -105,6 +105,7 @@ pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
 pub use resolve::{Resolution, Resolver, canonical_id, feature_scoped};
 pub use spec_graph::{
     CANON_LINK, Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
+    nodes_within,
 };
 /// A file's bytes for a reference's written form (`crate::roadmap`'s
 /// `depends_on`, resolved as the check resolves it).

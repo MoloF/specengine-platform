@@ -219,6 +219,27 @@ pub struct Walk {
     pub left_out: Vec<usize>,
 }
 
+/// The position `at` of one parse's `nodes` and those of the ID sections
+/// nested in it, by position; none for no such node. A graph's
+/// [`SpecGraph::within`] and an apply, which has two parses and no graph,
+/// take the same members.
+pub fn nodes_within(nodes: &[Node], at: usize) -> Vec<usize> {
+    let Some(node) = nodes.get(at) else {
+        return Vec::new();
+    };
+    let mut within = vec![at];
+    for (ord, other) in nodes.iter().enumerate().skip(at + 1) {
+        // Sections come in source order: none after this one's end.
+        if at != 0 && other.span.start >= node.span.end {
+            break;
+        }
+        if at == 0 || node.span.contains(other.span) {
+            within.push(ord);
+        }
+    }
+    within
+}
+
 /// The containment tree and the resolved links of one corpus.
 pub struct SpecGraph<'a> {
     resolver: Resolver<'a>,
@@ -442,23 +463,13 @@ impl<'a> SpecGraph<'a> {
         chain
     }
 
-    /// The node and the ID sections nested in it, by position.
+    /// The node and the ID sections nested in it, by position
+    /// ([`nodes_within`]).
     pub fn within(&self, at: NodeAt) -> Vec<NodeAt> {
-        let nodes = self.nodes(at.file);
-        let Some(node) = nodes.get(at.ord) else {
-            return Vec::new();
-        };
-        let mut within = vec![at];
-        for (ord, other) in nodes.iter().enumerate().skip(at.ord + 1) {
-            // Sections come in source order: none after this one's end.
-            if at.ord != 0 && other.span.start >= node.span.end {
-                break;
-            }
-            if at.ord == 0 || node.span.contains(other.span) {
-                within.push(NodeAt { file: at.file, ord });
-            }
-        }
-        within
+        nodes_within(self.nodes(at.file), at.ord)
+            .into_iter()
+            .map(|ord| NodeAt { file: at.file, ord })
+            .collect()
     }
 
     /// Every link of the corpus, in (path, written order).

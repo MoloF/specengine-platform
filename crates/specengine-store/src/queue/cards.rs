@@ -20,9 +20,9 @@
 //! - **Columns**: `targets`, `criteria` JSON string lists, `evidence`
 //!   `[{kind, value, by, at}]`, `acceptance` `{by, at, note, verdict, departs,
 //!   discrepancy}` (a row without `verdict` reads `briefed`), `cancellation`
-//!   `{by, at, reason}`, `snapshot` `[{id, rev, norm_hash, also}]` or `NULL`,
-//!   its entries `targets`' then any dropped target's. A value that does not
-//!   decode is a corrupt row, named ([`UnreadableCard`]).
+//!   `{by, at, reason}`, `snapshot` `[{id, rev, norm_hash, within_hash,
+//!   also}]` or `NULL`, its entries `targets`' then any dropped target's. A
+//!   value that does not decode is a corrupt row, named ([`UnreadableCard`]).
 //! - **Trace** (task spec `card-trace`): a suspect mark and a rollup are
 //!   computed per read by core's `trace` and never stored; what is stored is
 //!   the snapshot they are computed from. An accept and a clear take the
@@ -45,8 +45,8 @@ use specengine_core::card::{
 use specengine_core::card_toml::CardFlow;
 use specengine_core::intake::{DISTINCT_MAX, distinct_entry_fits};
 use specengine_core::trace::{
-    ClearedNode, TargetNorms, clear_refusal, cleared, clearer_problem, correction_refusal, freeze,
-    refrozen, retargeted, suspect_on, vouched,
+    ClearedNode, HashKind, TargetNorms, clear_refusal, cleared, clearer_problem,
+    correction_refusal, freeze, refrozen, retargeted, suspect_on, vouched,
 };
 use specengine_model::{
     Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, CardVerdict, EvidenceKind,
@@ -240,11 +240,12 @@ pub struct CardCleared {
     pub correction: Option<Card>,
 }
 
-/// An editorial apply changed `node` from `old` to `new`: a reader that has
-/// either text stays clean.
+/// An editorial apply changed the hash of `kind` of `node` from `old` to
+/// `new`: a reader that has either text stays clean.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardRefresh {
     pub node: String,
+    pub kind: HashKind,
     pub old: String,
     pub new: String,
 }
@@ -930,10 +931,11 @@ fn insert_card(
 }
 
 /// The transaction recording an editorial apply `proposal`: each change of
-/// `refresh` joins the `also` of every entry holding its old hash, across
-/// the project's cards not cancelled, one `card.refreshed` each, `revision` one more on a
-/// card it changes. A row that does not decode is left alone: recording a
-/// commit never fails for a card's sake. The cards changed, by number.
+/// `refresh` joins the `also` of every entry holding its old hash of that
+/// kind, across the project's cards not cancelled, one `card.refreshed` per
+/// (card, node), a node repeated in `refresh` logging one, `revision` one more
+/// on a card it changes. A row that does not decode is left alone: recording
+/// a commit never fails for a card's sake. The cards changed, by number.
 pub(super) fn refresh_snapshots(
     tx: &Transaction<'_>,
     project: &str,
@@ -964,7 +966,9 @@ pub(super) fn refresh_snapshots(
         let mut nodes = Vec::new();
         for change in refresh {
             for entry in snapshot.iter_mut().filter(|entry| entry.id == change.node) {
-                if vouched(entry, &change.old, &change.new) {
+                if vouched(entry, change.kind, &change.old, &change.new)
+                    && !nodes.contains(&change.node.as_str())
+                {
                     nodes.push(change.node.as_str());
                 }
             }

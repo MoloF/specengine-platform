@@ -746,6 +746,10 @@ const KEYS = {
     goal: true,
     discipline: true,
     targets: true,
+    mark: true,
+    on: true,
+    discrepancy: true,
+    correction: true,
     snapshot: true,
     criteria: true,
     assignee: true,
@@ -779,7 +783,7 @@ const KEYS = {
   TraceUse: { id: true, rollup: true, cards: true } satisfies Record<keyof TraceUse, true>,
   // docs/features/trace-views.md "Routes and types": one lane.
   TraceStage: { stage: true, distance: true, counts: true } satisfies Record<keyof TraceStage, true>,
-  CardFrozen: { id: true, rev: true, norm_hash: true, also: true } satisfies Record<keyof CardFrozen, true>,
+  CardFrozen: { id: true, rev: true, norm_hash: true, within_hash: true, also: true } satisfies Record<keyof CardFrozen, true>,
   CardClearGroupWrite: { group: true, cleared: true, notes: true } satisfies Record<keyof CardClearGroupWrite, true>,
 };
 
@@ -890,7 +894,7 @@ const CITED: Record<Named, string> = {
   CardColumn: "id, title",
   CardMove: "from, to, by",
   CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
-  Card: "id, flow, column, position, title, goal, discipline, targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
+  Card: "id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
   CardEvidence: "kind, value, by, at",
   CardAcceptance: "by, at, note, verdict, departs, discrepancy",
   CardCancellation: "by, at, reason",
@@ -903,7 +907,7 @@ const CITED: Record<Named, string> = {
   TraceCard: "id, flow, column, title, mark, on, discrepancy, correction",
   TraceUse: "id, rollup, cards",
   TraceStage: "stage, distance, counts",
-  CardFrozen: "id, rev, norm_hash, also",
+  CardFrozen: "id, rev, norm_hash, within_hash, also",
   CardClearGroupWrite: "group, cleared, notes",
 };
 
@@ -1631,21 +1635,21 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.TraceNode?.slice(2, 5)).toEqual(["path", "stage", "distance"]);
   });
 
-  it("names card-trace's seven after CardNotFound, before TraceStage: 8, 5, 9, 8, 3, 4, 3 keys in the types' order, the hundred-and-fifth CardClearGroupWrite (docs/features/card-trace.md \"Data\")", () => {
+  it("names card-trace's seven after CardNotFound, before TraceStage: 8, 5, 9, 8, 3, 5, 3 keys in the types' order, the hundred-and-fifth CardClearGroupWrite (docs/features/card-trace.md \"Data\")", () => {
     expect(Object.keys(sets).slice(BEFORE_CARD_TRACE.length, BEFORE_TRACE_VIEWS.length)).toEqual([...CARD_TRACE]);
     expect(Object.keys(sets).indexOf("TraceDocument")).toBe(98);
     expect(Object.keys(sets).at(BEFORE_TRACE_VIEWS.length - 1)).toBe("CardClearGroupWrite");
     expect(CARD_TRACE.map((name) => sets[name])).toEqual(CARD_TRACE.map((name) => served(name)));
-    expect(CARD_TRACE.map((name) => sets[name]?.length)).toEqual([8, 5, 9, 8, 3, 4, 3]);
+    expect(CARD_TRACE.map((name) => sets[name]?.length)).toEqual([8, 5, 9, 8, 3, 5, 3]);
     expect(CARD_TRACE.map((name) => declaredKeys(name))).toEqual(CARD_TRACE.map((name) => served(name)));
   });
 
-  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 5, 2, 3, 21, 26, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\")", () => {
+  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 5, 2, 3, 21, 30, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\")", () => {
     expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length, BEFORE_CARD_TRACE.length)).toEqual([...BOARD_UI]);
     expect(Object.keys(sets).indexOf("CardList")).toBe(86);
     expect(Object.keys(sets).at(BEFORE_CARD_TRACE.length - 1)).toBe("CardNotFound");
     expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 21, 26, 4, 6, 3, 4, 7, 2]);
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 21, 30, 4, 6, 3, 4, 7, 2]);
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
 

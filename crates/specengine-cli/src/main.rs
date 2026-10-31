@@ -610,6 +610,9 @@ enum CardCommand {
         /// Its last 64 `card.*` events too.
         #[arg(long)]
         history: bool,
+        /// Its mark over its targets too.
+        #[arg(long)]
+        marks: bool,
     },
     /// Move a card within its flow: last in the column, or before a card of it; its own column is a reorder.
     Move {
@@ -2260,8 +2263,8 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 marks,
             },
         )?))),
-        CardCommand::Show { id, history } => Ok(Outcome::CardShow(Box::new(
-            specengine_cli::card_show(env, globals, &CardShowRequest { id, history })?,
+        CardCommand::Show { id, history, marks } => Ok(Outcome::CardShow(Box::new(
+            specengine_cli::card_show(env, globals, &CardShowRequest { id, history, marks })?,
         ))),
         CardCommand::Move {
             id,

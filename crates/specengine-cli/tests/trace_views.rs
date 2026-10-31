@@ -24,9 +24,13 @@
 //!   target included.
 //! - The owner's readings of the lanes, settled after the spec: a lane holds
 //!   the nodes carrying its stage, the last lane and `--stage -` the flow steps
-//!   with none, so a group with no stage stands in no lane, `stages` can be
-//!   `[]` and the lanes can sum to less than the header; a queue this build
-//!   cannot read gives `rollup` and `counts` `null` with a note.
+//!   with none, so a group with no stage stands in no lane and `stages` can be
+//!   `[]`; a queue this build cannot read gives `rollup` and `counts` `null`
+//!   with a note.
+//! - docs/features/trace-truth.md AC-07 moves the counts these pin: a holder
+//!   with no card of its own is counted nowhere, its row word still `no card`,
+//!   so the almanac's lanes now sum to the header and a holder standing in a
+//!   lane leaves its count below its rows.
 //! - "Rules and edge cases": no read changes a status, an exit or a file; a
 //!   queue of another schema; a bad `[flow]`; a control character in a stage.
 //!
@@ -463,7 +467,7 @@ fn the_almanac_reads_as_expected() {
 
     let trace = copy.json(&["trace"]);
     assert_eq!(trace["stages"], expected["stages"], "{trace}");
-    assert_eq!(trace["counts"], counts(8, 0, 0, 0, 0), "{trace}");
+    assert_eq!(trace["counts"], counts(5, 0, 0, 0, 0), "{trace}");
     let (prefixes, kinds) = (expected["prefixes"].clone(), expected["kinds"].clone());
     assert_eq!(prefixes, json!(["BOOK", "PART", "STEP"]));
     assert_eq!(kinds, json!(["committee", "errand", "yearbook"]));
@@ -989,19 +993,19 @@ fn ac03_the_flag_gives_each_node_spec_traces_values() {
     assert_eq!(node_of(&flow, SET)["rollup"], "in work");
     assert_eq!(node_of(&flow, BIND)["rollup"], "no card");
 
-    // A group's own row has no card; its `counts` hold what it holds, itself
-    // included, so folding moves nothing. PART-GATHER: itself, CALL, SET.
-    // PART-PRINT: itself, SORT, READ, BIND. The book: itself and those.
+    // A group's own row has no card, so it counts nowhere; its `counts` hold
+    // what it holds, so folding moves nothing and the book is its parts' sum.
+    // PART-GATHER: CALL, SET. PART-PRINT: SORT, READ, BIND. The book: those.
     let unfolded = doc(&pair, &["flow", BOOK, "--trace"]);
     let parts = doc(&pair, &["flow", BOOK, "--depth", "1", "--trace"]);
     let book = doc(&pair, &["flow", BOOK, "--depth", "0", "--trace"]);
     assert_eq!(node_of(&parts, GATHER)["rollup"], "no card", "{parts}");
-    assert_eq!(node_of(&parts, GATHER)["counts"], counts(1, 1, 1, 0, 0));
-    assert_eq!(node_of(&parts, PRINT)["counts"], counts(2, 0, 0, 1, 1));
-    assert_eq!(node_of(&book, BOOK)["counts"], counts(4, 1, 1, 1, 1));
-    assert_eq!(node_of(&unfolded, GATHER)["counts"], counts(1, 1, 1, 0, 0));
-    assert_eq!(node_of(&unfolded, PRINT)["counts"], counts(2, 0, 0, 1, 1));
-    assert_eq!(node_of(&unfolded, BOOK)["counts"], counts(4, 1, 1, 1, 1));
+    assert_eq!(node_of(&parts, GATHER)["counts"], counts(0, 1, 1, 0, 0));
+    assert_eq!(node_of(&parts, PRINT)["counts"], counts(1, 0, 0, 1, 1));
+    assert_eq!(node_of(&book, BOOK)["counts"], counts(1, 1, 1, 1, 1));
+    assert_eq!(node_of(&unfolded, GATHER)["counts"], counts(0, 1, 1, 0, 0));
+    assert_eq!(node_of(&unfolded, PRINT)["counts"], counts(1, 0, 0, 1, 1));
+    assert_eq!(node_of(&unfolded, BOOK)["counts"], counts(1, 1, 1, 1, 1));
 }
 
 /// AC-03: the text of `--trace`: ` | rollup <state>` on every node line and
@@ -1257,16 +1261,16 @@ fn ac06_a_step_with_no_card_keeps_its_place_and_the_lane_fills() {
 
 // ------------------------------------------------------------------- AC-07
 
-/// AC-07: `spec trace` whole, hand-worked: the header over every document, the
-/// lanes by least `distance`, the `null` lane last though it stands before
-/// `print` in the walk, a `no card` step counted and the book and its parts in
-/// no lane, the rows by path.
+/// AC-07: `spec trace` whole, hand-worked: the header over every document but
+/// the holders with no card (trace-truth AC-07), the lanes by least `distance`,
+/// the `null` lane last though it stands before `print` in the walk, a `no card`
+/// step counted and the book and its parts in no lane, the rows by path.
 #[test]
 fn ac07_the_stage_lines_follow_the_summary_line() {
     let copy = Copy::new("tv-ac07-lines", ALMANAC);
     assert_eq!(
         copy.ok(&["trace"]),
-        "trace all | nodes 8, cards 0 | no card 8, in work 0, suspect 0, departed 0, confirmed 0\n\
+        "trace all | nodes 8, cards 0 | no card 5, in work 0, suspect 0, departed 0, confirmed 0\n\
          stage gather | distance 0 | no card 2, in work 0, suspect 0, departed 0, confirmed 0\n\
          stage print | distance 3 | no card 2, in work 0, suspect 0, departed 0, confirmed 0\n\
          stage - | distance 2 | no card 1, in work 0, suspect 0, departed 0, confirmed 0\n\
@@ -1414,9 +1418,9 @@ fn ac07_lanes_sort_by_their_least_step() {
 }
 
 /// AC-07: a card and a mark count where their step stands: `stage` and
-/// `counts` of each lane over the cycle, hand-worked. The lanes sum to less
-/// than the summary line by what stands in none: the book and two parts,
-/// three `no card`.
+/// `counts` of each lane over the cycle, hand-worked. The lanes now sum to the
+/// summary line (trace-truth AC-07): what stands in none, the book and two
+/// parts, has no card and is counted nowhere.
 #[test]
 fn ac07_a_lane_counts_its_nodes_rollups() {
     let pair = Pair::new("tv-ac07-counts", ALMANAC);
@@ -1431,21 +1435,15 @@ fn ac07_a_lane_counts_its_nodes_rollups() {
         ]),
         "{trace}"
     );
-    assert_eq!(trace["counts"], counts(4, 1, 1, 1, 1), "{trace}");
-    for (key, outside) in [
-        ("no_card", 3),
-        ("in_work", 0),
-        ("suspect", 0),
-        ("departed", 0),
-        ("confirmed", 0),
-    ] {
+    assert_eq!(trace["counts"], counts(1, 1, 1, 1, 1), "{trace}");
+    for key in COUNT_KEYS {
         let sum: u64 = trace["stages"]
             .as_array()
             .expect("stages")
             .iter()
             .map(|row| row["counts"][key].as_u64().expect("a count"))
             .sum();
-        assert_eq!(json!(sum + outside), trace["counts"][key], "{key}: {trace}");
+        assert_eq!(json!(sum), trace["counts"][key], "{key}: {trace}");
     }
 }
 
@@ -1484,8 +1482,9 @@ fn ac07_a_group_stands_in_a_lane_only_by_its_own_stage() {
     );
     assert_eq!(
         trace["counts"],
-        counts(6, 4, 0, 0, 0),
-        "ten rows: PART-PRINT, READ and their sections in work, the rest no card: {trace}"
+        counts(4, 4, 0, 0, 0),
+        "ten rows: PART-PRINT, a holder with a card, READ and their sections in work; BIND, \
+         CALL, SET, SORT no card; the book and PART-GATHER counted nowhere: {trace}"
     );
 
     let copy = Copy::new("tv-ac07-group-stage", ALMANAC);
@@ -1499,7 +1498,8 @@ fn ac07_a_group_stands_in_a_lane_only_by_its_own_stage() {
     assert_eq!(ids(&staged), [GATHER, CALL, SORT], "{staged}");
     assert_eq!(
         lane(&staged, Some("gather"))["counts"],
-        counts(3, 0, 0, 0, 0)
+        counts(2, 0, 0, 0, 0),
+        "a holder stands in the lane and counts nowhere (trace-truth): {staged}"
     );
     assert_eq!(
         lane(&staged, Some("gather"))["distance"],
@@ -1511,7 +1511,7 @@ fn ac07_a_group_stands_in_a_lane_only_by_its_own_stage() {
     ruled.configure("\n[[flow.step]]\nkinds = [\"committee\"]\n");
     let none = ruled.json(&["trace", "--stage", "-"]);
     assert_eq!(ids(&none), [GATHER, PRINT, READ], "{none}");
-    assert_eq!(lane(&none, None)["counts"], counts(3, 0, 0, 0, 0), "{none}");
+    assert_eq!(lane(&none, None)["counts"], counts(1, 0, 0, 0, 0), "{none}");
     assert_eq!(lane(&none, None)["distance"], json!(2), "{none}");
 }
 
@@ -1584,8 +1584,8 @@ fn ac07_the_cut_leaves_the_lanes_whole() {
     assert_eq!(whole["omitted"], json!(1_408 - shown));
     assert_eq!(
         whole["counts"],
-        counts(1_408, 0, 0, 0, 0),
-        "the header whole"
+        counts(1_405, 0, 0, 0, 0),
+        "the header whole, the book and its parts counted nowhere"
     );
 
     let text = copy.ok(&["trace"]);

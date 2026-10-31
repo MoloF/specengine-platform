@@ -129,7 +129,7 @@ use crate::proposals::{
 };
 use crate::review::stale_note;
 use crate::revisions::{
-    apply_trailers, editorial_nodes, lock_in_commit, lock_unchanged, norm_hash, restore,
+    apply_trailers, editorial_nodes, lock_in_commit, lock_unchanged, named_refresh, restore,
     restored_clause,
 };
 use crate::stage::{self, Staging};
@@ -1391,10 +1391,11 @@ fn completion_refresh(
 }
 
 /// What a completion vouches for on the cards: each node `commit`'s
-/// `Revision: <ID> <rev> (editorial)` trailers name, its `norm_hash` at the
-/// commit's first parent and at the commit, read where its history is
-/// ([`history`]), parsed under the recorded root's scheme. Empty when any of
-/// it cannot be read: a mark stays, which a person can clear.
+/// `Revision: <ID> <rev> (editorial)` trailers name, its hashes at the
+/// commit's first parent and at the commit ([`named_refresh`]), read where
+/// its history is ([`history`]), parsed under the recorded root's scheme.
+/// Empty when any of it cannot be read: a mark stays, which a person can
+/// clear.
 fn completion_cards(
     git_env: &GitEnv,
     context: &QueueContext,
@@ -1429,16 +1430,12 @@ fn completion_cards(
             .ok()
         };
         let (parsed_before, parsed_after) = (parse(&before)?, parse(&after)?);
-        Some(
-            nodes
-                .into_iter()
-                .filter_map(|node| {
-                    let old = norm_hash(&parsed_before, &before, position(&parsed_before, &node)?)?;
-                    let new = norm_hash(&parsed_after, &after, position(&parsed_after, &node)?)?;
-                    Some(CardRefresh { node, old, new })
-                })
-                .collect(),
-        )
+        Some(named_refresh(
+            proposal.target_path.as_str(),
+            &nodes,
+            (&parsed_before, &before),
+            (&parsed_after, &after),
+        ))
     };
     read().unwrap_or_default()
 }

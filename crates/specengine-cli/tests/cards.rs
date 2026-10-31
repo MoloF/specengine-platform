@@ -79,8 +79,9 @@ const WRITE_KEYS: [&str; 7] = [
 ];
 
 /// `show`'s document: the columns in order, less `project`, `col` as
-/// `column`, then `allowed`, `history`, `notes`.
-const SHOW_KEYS: [&str; 26] = [
+/// `column`, `--marks`' four keys after `targets`, then `allowed`, `history`,
+/// `notes`.
+const SHOW_KEYS: [&str; 30] = [
     "id",
     "flow",
     "column",
@@ -89,6 +90,10 @@ const SHOW_KEYS: [&str; 26] = [
     "goal",
     "discipline",
     "targets",
+    "mark",
+    "on",
+    "discrepancy",
+    "correction",
     "snapshot",
     "criteria",
     "assignee",

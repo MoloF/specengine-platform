@@ -214,7 +214,7 @@ fn trace_views_get_flow_takes_trace() {
     );
 
     let folded = &results[5]["structuredContent"];
-    let gather = json!({"no_card": 1, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1});
+    let gather = json!({"no_card": 0, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1});
     assert_eq!(node_of(flat, "PART-GATHER")["counts"], gather, "{flat}");
     assert_eq!(node_of(folded, "PART-GATHER")["counts"], gather, "{folded}");
     assert_eq!(node_of(folded, "PART-GATHER")["start"], json!(true));
@@ -222,7 +222,7 @@ fn trace_views_get_flow_takes_trace() {
     let book = &results[6]["structuredContent"];
     assert_eq!(
         node_of(book, "BOOK-ALMANAC")["counts"],
-        json!({"no_card": 6, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1}),
+        json!({"no_card": 3, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1}),
         "{book}"
     );
 }

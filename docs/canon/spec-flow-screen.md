@@ -40,7 +40,7 @@ The flow drawn, lifting nothing (ADR-0033, ADR-0055), its boxes against their ca
 
 ## Gap rows
 
-A list beside the canvas, outside the tabs: Top's ten rows as served, unknown states last; a group read's rows are not shown.
+A list beside the canvas, outside the tabs: Top's ten rows as served, unknown states last; a group read's rows are not shown. All rows None on a fresh read: one line in the tools, no list, no side column.
 
 - **A row:** code raw, its meaning, a state in words: `None` at 0, `<n> found`; `Not configured` or `Cannot measure` with `cause` verbatim and no number, the latter in the `cannot-verify` colour and icon; another state a neutral badge.
 - **Items:** eight, then "Show all <n>", members joined ` + `; each a button, but `no-start`'s scope, text.
@@ -48,7 +48,7 @@ A list beside the canvas, outside the tabs: Top's ten rows as served, unknown st
 - **Activating one** routes to the item's first member, marks all, centres the first; focus stays. In the List it scrolls to the row.
 - **A seek** runs once per route change or gap item, first member only. A name no read holds takes `getTree`, and closed boxes on its `parent` chain open top down. A refused box is skipped; a chain with a failed group read keeps its seek for Retry; a chain run out ends it with a note; the owner's close ends it.
 - **Marks.** A drawn box a row names shows "Gap"; a closed group its served `gaps`, `<g> with gaps`, by its own read's rows, so a nested group goes by its sub-flow's. An open group says only what names it.
-- **Hide gaps**, or Show gaps, collapses the side column, `aria-expanded` following; `localStorage` key `specengine.flow.gaps-hidden`, per viewer, for every project, `on` when hidden, removed when shown. Refused storage keeps the choice for the view alone. A selected box brings the side column back for its panel; an empty flow always shows rows.
+- **Hide gaps**, or Show gaps, collapses the side column, `aria-expanded` following; `localStorage` key `specengine.flow.gaps-hidden`, per viewer, for every project, `on` when hidden, removed when shown. Refused storage keeps the choice for the view alone. A selected box brings the side column back for its panel; an empty flow always shows rows. The line stands in this button's place; focus lost with it goes to the results.
 
 ## Panel
 
@@ -102,7 +102,6 @@ A select beside the tabs, hidden on the Timeline, its options the served lanes':
 - **Decision 11, the owner's call.** The 200-box trial with random wiring passes (median 1.9 ms, no overlap) with 1,920 forward crossings, "a hairball by eye". The look at the cap, `?scenario=large`, is the owner's to judge. A layout library would need the owner's allowlist.
 - No round trip against a real daemon in a browser yet.
 - **320 px** is unproven by a test: it needs a browser. A headless look saw `scrollWidth` 320.
-- **The build warns** that the main chunk is 527.99 kB, over Vite's 500 kB.
 - Exit steps carry no mark: core `Steps.leaving` is not served.
 - Only an item's first member is sought; the others are marked if drawn.
 - A crossing edge's child is named in the panel's links, not on the canvas.

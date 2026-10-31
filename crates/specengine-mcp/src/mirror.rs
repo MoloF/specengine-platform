@@ -1085,7 +1085,8 @@ pub(crate) struct TraceDocument {
     pub omitted: Option<usize>,
 }
 
-/// How many nodes stand in each state.
+/// How many nodes stand in each state; a node holding live documents, with
+/// no card of its own, stands in none.
 #[derive(JsonSchema)]
 pub(crate) struct TraceCounts {
     pub no_card: usize,
@@ -1387,6 +1388,12 @@ pub(crate) struct CardShowDocument {
     pub goal: Option<String>,
     pub discipline: Option<String>,
     pub targets: Vec<String>,
+    /// Its mark over all its targets; `null` on a cancelled card.
+    pub mark: Option<TraceMark>,
+    /// The target a suspect, correcting or departed mark is on.
+    pub on: Option<String>,
+    pub discrepancy: Option<String>,
+    pub correction: Option<String>,
     /// Each direct target as frozen, then any target since dropped, inert;
     /// `null` on a card that never froze one.
     pub snapshot: Option<Vec<CardFrozenShape>>,
@@ -1416,7 +1423,10 @@ pub(crate) struct CardFrozenShape {
     pub id: String,
     pub rev: Option<u32>,
     pub norm_hash: Option<String>,
-    /// Hashes an editorial apply vouched for since.
+    /// The target and the ID sections nested in it, the hash a mark compares.
+    pub within_hash: Option<String>,
+    /// Hashes an editorial apply vouched for since, of the kind this entry
+    /// compares.
     pub also: Vec<String>,
 }
 

@@ -10,7 +10,7 @@ ref: RM-0048; Phase 7 step 7 (08 s2)
 
 ## Why
 
-This closes the first result: the owner, alone on the local daemon, sees a whole cycle. The diagram shows what is confirmed, the timeline how far each stage has come, and a node its cards, all read from `card-trace.md`'s rollup. The UI joins nothing and computes no rollup.
+This was the last of steps 0-7 of the first result, which closes at the gate, step 7e (08 s2 Phase 7): the owner, alone on the local daemon, sees a whole cycle. The diagram shows what is confirmed, the timeline how far each stage has come, and a node its cards, all read from `card-trace.md`'s rollup. The UI joins nothing and computes no rollup.
 
 ## Summary
 

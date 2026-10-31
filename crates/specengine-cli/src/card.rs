@@ -5,7 +5,8 @@
 //! reads a column's name.
 //!
 //! - `new --title T …` → `created C-0001: plain/backlog`; `list` → a line per
-//!   flow, then per card; `show C [--history]` → `key: value` lines.
+//!   flow, then per card; `show C [--history] [--marks]` → `key: value`
+//!   lines.
 //! - `move C [--to K] [--before C]`, `edit C …`, `assign C …`, `cancel C
 //!   --reason T` → `<verb> C-0001: <flow>/<column>`; JSON `{id, flow, column,
 //!   position, revision, allowed, notes}`, a refusal too; no such card `{id,
@@ -42,6 +43,7 @@
 //! written under the root: the queue is in the data directory.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::slice;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -80,7 +82,8 @@ use crate::search::notes;
 use crate::show::classify;
 use crate::task::resolved_list;
 use crate::trace::{
-    QueueRead, facts_of, fresh_norms, held_documents, norms_read, target_norms, target_places,
+    QueueRead, correction_of, facts_of, fresh_norms, held_documents, norms_read, settled_of,
+    target_norms, target_places,
 };
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, process_git};
 
@@ -127,12 +130,14 @@ pub struct CardListRequest {
     pub marks: bool,
 }
 
-/// `spec card show C [--history]`.
+/// `spec card show C [--history] [--marks]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CardShowRequest {
     pub id: String,
     /// The card's last `card.*` events.
     pub history: bool,
+    /// `--marks`: its mark over all its targets, as its `list --marks` row.
+    pub marks: bool,
 }
 
 /// `spec card move C [--to K] [--before C]`.
@@ -864,6 +869,9 @@ pub struct CardShowOutcome {
     pub allowed: Vec<AllowedMove>,
     /// `--history`'s events, oldest first; `null` without it.
     pub history: Option<Vec<Event>>,
+    /// `--marks`' mark; `None` without it and on a cancelled card, which a
+    /// read ignores.
+    pub mark: Option<CardMark>,
     pub notes: Vec<String>,
     /// The card asked for, when there is none.
     pub id: Option<String>,
@@ -892,7 +900,9 @@ struct EventJson<'a> {
     payload: &'a serde_json::Value,
 }
 
-/// The columns in order, less `project`, then `allowed`, `history`, `notes`.
+/// The columns in order, less `project`, the four keys of `--marks` right
+/// after `targets`, so no cut of a long card's text reaches them, then
+/// `allowed`, `history`, `notes`.
 #[derive(Serialize)]
 struct CardJson<'a> {
     id: &'a str,
@@ -903,6 +913,10 @@ struct CardJson<'a> {
     goal: Option<&'a str>,
     discipline: Option<&'a str>,
     targets: &'a [String],
+    mark: Option<&'static str>,
+    on: Option<&'a str>,
+    discrepancy: Option<&'a str>,
+    correction: Option<&'a str>,
     snapshot: Option<&'a [CardFrozen]>,
     criteria: &'a [String],
     assignee: Option<&'a str>,
@@ -932,6 +946,7 @@ impl Serialize for CardShowOutcome {
             }
             .serialize(serializer);
         };
+        let mark = self.mark.as_ref();
         CardJson {
             id: &card.id,
             flow: &card.flow,
@@ -941,6 +956,10 @@ impl Serialize for CardShowOutcome {
             goal: card.goal.as_deref(),
             discipline: card.discipline.as_deref(),
             targets: &card.targets,
+            mark: mark.map(CardMark::word),
+            on: mark.and_then(CardMark::on),
+            discrepancy: mark.and_then(CardMark::discrepancy),
+            correction: mark.and_then(CardMark::correction),
             snapshot: card.snapshot.as_deref(),
             criteria: &card.criteria,
             assignee: card.assignee.as_deref(),
@@ -1440,7 +1459,7 @@ fn resolved_targets(
 
 // -------------------------------------------------------------- reads
 
-/// `spec card show C [--history]`.
+/// `spec card show C [--history] [--marks]`.
 pub fn card_show(
     env: &Env,
     globals: &Globals,
@@ -1458,6 +1477,7 @@ fn run_show(
         card: None,
         allowed: Vec::new(),
         history: None,
+        mark: None,
         notes: Vec::new(),
         id,
         reason: Some(reason),
@@ -1481,19 +1501,63 @@ fn run_show(
     } else {
         None
     };
-    let notes: Vec<String> = stranded(&context.config, &card)
+    let mut notes: Vec<String> = stranded(&context.config, &card)
         .map(|why| format!("{}: {why}", card.id))
         .into_iter()
         .collect();
+    let mut messages = Vec::new();
+    let mark = if request.marks {
+        show_mark(env, &context, &card, &mut notes, &mut messages)?
+    } else {
+        None
+    };
+    messages.extend(notes.iter().cloned().map(Message::Note));
     Ok(CardShowOutcome {
         allowed: allowed_moves(context.config.flow(&card.flow), &card),
         card: Some(Box::new(card)),
         history,
-        messages: notes.iter().cloned().map(Message::Note).collect(),
+        mark,
+        messages,
         notes,
         id: None,
         reason: None,
     })
+}
+
+/// `--marks`: `card`'s mark as its `list --marks` row reads it, over every
+/// card's live correction and its own discrepancy, so the notes are its own.
+/// A cancelled card has none; an index that cannot be read is the read's
+/// error ([`list_marks`]), never a clean card.
+fn show_mark(
+    env: &Env,
+    context: &CardContext,
+    card: &Card,
+    notes: &mut Vec<String>,
+    messages: &mut Vec<Message>,
+) -> Result<Option<CardMark>, CliError> {
+    if card.cancellation.is_some() {
+        return Ok(None);
+    }
+    let listed = context.queue.list_cards().map_err(queue_cannot)?;
+    notes.extend(
+        listed
+            .unreadable
+            .iter()
+            .map(|row| one_line(&format!("{row}; not read"))),
+    );
+    let mut facts = QueueRead::default();
+    for other in listed
+        .cards
+        .iter()
+        .filter(|other| other.cancellation.is_none())
+    {
+        correction_of(other, &mut facts);
+    }
+    settled_of(&context.queue, card, &mut facts);
+    notes.append(&mut facts.notes);
+    let (mut marks, unread) = list_marks(env, context, slice::from_ref(card), &facts, messages)?;
+    notes.extend(unread);
+    Ok(marks.remove(&card.id))
 }
 
 /// Why `[card]` no longer places `card`: its flow or its column is gone.
@@ -2813,6 +2877,17 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
         "targets",
         card.targets.iter().map(|text| one_line(text)).collect(),
     );
+    let mark = outcome.mark.as_ref();
+    let held = |text: Option<&str>| text.map_or(ABSENT.to_owned(), one_line);
+    lines.extend([
+        format!("mark: {}", mark.map_or(ABSENT, CardMark::word)),
+        format!("on: {}", held(mark.and_then(CardMark::on))),
+        format!(
+            "discrepancy: {}",
+            held(mark.and_then(CardMark::discrepancy))
+        ),
+        format!("correction: {}", held(mark.and_then(CardMark::correction))),
+    ]);
     list(
         &mut lines,
         "snapshot",

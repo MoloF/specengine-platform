@@ -96,6 +96,20 @@ function GapRow({ gap, unread, marked, onActivate }: { gap: FlowGap; unread: boo
 }
 
 /**
+ * Every row of a fresh read says None: this line stands in the tools, in place of the rows and their
+ * button (docs/features/screen-fit.md). A failed read never shows it: a None from the last read is
+ * no None now.
+ */
+export function GapsClear() {
+  return (
+    <p className="note flow-gaps-clear" role="status">
+      <Icon name="checkClean" />
+      <span>No gaps: every row reads None</span>
+    </p>
+  );
+}
+
+/**
  * The gap rows beside the canvas, outside its tabs (docs/features/flow-canvas.md "Gap rows"): the
  * top read's ten as served, unknown states last. A row changes no status or control (ADR-0012): it
  * says what was found, and each name takes you to it. `unread`: the top read's last fetch failed, so

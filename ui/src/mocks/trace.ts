@@ -8,7 +8,9 @@ import type { MockFlow } from "./flow";
 // `spec trace` over the mock (docs/canon/spec-trace.md "The read", docs/features/trace-views.md
 // "Data"): each read joins cards and spec, as the CLI does, and the mock is the one place that may.
 // The scope, a node's state, its counts over what it holds, the lanes by stage; `spec flow --trace`
-// joins them after the flow's read. Nothing here is stored.
+// joins them after the flow's read. Nothing here is stored. A node holding live documents, with no
+// card of its own, is its parts' sum: it says `no card` and is counted nowhere, not in a row's counts,
+// the header or a lane, where it still stands (docs/features/trace-truth.md, `Reading::counted`).
 
 /** harbor-sim's `stage:` keys: project vocabulary nothing resolves, cutting across its groups, as no `parent:` can; most documents have none, MEC-NIGHT-PASSAGE among the steps. */
 export const HARBOR_STAGES: ReadonlyMap<string, string> = new Map([
@@ -125,6 +127,13 @@ export function traceOf(board: MockBoard, options: TraceOptions, world: TraceWor
   const cardsOf = (place: Place): StoredCard[] => standing.filter((card) => card.targets.some((target) => place.within.includes(target)));
   const marksOf = (place: Place): TraceCard[] => cardsOf(place).map((card) => markOver(board, card, card.targets.filter((target) => place.within.includes(target)), world.settled));
   const stateOf = (place: Place): keyof TraceCounts => rollupOf(marksOf(place));
+  const parents = new Set(places.flatMap(({ parent }) => parent ?? []));
+  /** Whether a read counts `place`, standing in `state`: not when it holds a document and has no card. A document whose children are sections alone holds nothing. */
+  const isCounted = (place: Place, state: keyof TraceCounts): boolean => state !== "no_card" || !place.within.some((name) => parents.has(name));
+  const withPlace = (sum: TraceCounts, place: Place): TraceCounts => {
+    const state = stateOf(place);
+    return isCounted(place, state) ? counted(sum, state) : sum;
+  };
   const targeted = new Set(standing.flatMap((card) => card.targets));
   const listed = root === undefined ? places.filter((place) => place.document || targeted.has(place.name)) : heldBy(root, places);
   listed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.line - b.line));
@@ -135,6 +144,7 @@ export function traceOf(board: MockBoard, options: TraceOptions, world: TraceWor
       return user === undefined ? [] : [{ id: user.name, rollup: WORDS[stateOf(user)], cards: cardsOf(user).length }];
     });
 
+  /** Each row a count takes, and its state: a holder with no card has none. */
   const states = new Map<TraceNode, keyof TraceCounts>();
   // A lane holds steps and documents with a `stage:`: a document that is neither stands in none.
   const laned = new Set<TraceNode>();
@@ -148,11 +158,13 @@ export function traceOf(board: MockBoard, options: TraceOptions, world: TraceWor
       stage: place.stage,
       distance: place.distance,
       rollup: WORDS[state],
-      counts: held.reduce<TraceCounts>((sum, one) => counted(sum, stateOf(one)), NO_COUNTS),
+      counts: held.reduce(withPlace, NO_COUNTS),
       cards: marksOf(place),
       uses: usesOf(place),
     };
-    states.set(row, state);
+    if (isCounted(place, state)) {
+      states.set(row, state);
+    }
     if (place.step || place.stage !== null) {
       laned.add(row);
     }

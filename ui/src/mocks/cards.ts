@@ -26,14 +26,15 @@ import type { Scenario } from "./scenario";
 // daemon's rules in its words, so the Board's refusals can be seen without one. harbor-sim prints an
 // almanac, two trades on two flows, the plates' `blocked` a column like any other; ledger-api keeps
 // the default flow, and one card a column left behind. Marks are joined per read as the daemon's
-// (`docs/features/card-trace.md`): a node's `norm_hash` now against a card's frozen entry. In
-// harbor-sim DOM-BERTHS and MEC-MOORING changed after their cards read them, so C-0002 (open) and
+// (`docs/features/card-trace.md`): a node's hash now against a card's frozen entry. The boards hold
+// no section text, so each target is one member of its `within`, and `within_hash` is its `norm_hash`,
+// the same string (`docs/features/trace-truth.md` "Data"). In harbor-sim DOM-BERTHS and MEC-MOORING changed after their cards read them, so C-0002 (open) and
 // C-0005 (accepted) are suspect; C-0010 was accepted as departing, PR-0041 its open discrepancy;
 // C-0008 stands on MEC-OLD-SLIPWAY, a target gone, which no node of a trace read holds; C-0011 and
 // C-0012 are accepted and stand, so the Flow has something confirmed.
 
 /** A stored card: the document less what a read adds. */
-export type StoredCard = Omit<Card, "allowed" | "history" | "notes">;
+export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "allowed" | "history" | "notes">;
 
 interface MockEvent extends CardEvent {
   id: string;
@@ -128,9 +129,19 @@ function hashNow(board: MockBoard, id: string): string {
   return board.changed.get(id) ?? hashOf(id);
 }
 
+/** An entry frozen at `hash`: one member, so both hashes are the same string. */
+function frozenAt(id: string, hash: string | null): CardFrozen {
+  return { id, rev: 1, norm_hash: hash, within_hash: hash, also: [] };
+}
+
 /** A frozen entry as a card reads the node now; a gone target has no hash to read. */
 function frozenNow(board: MockBoard, id: string): CardFrozen {
-  return { id, rev: 1, norm_hash: board.gone.has(id) ? null : hashNow(board, id), also: [] };
+  return frozenAt(id, board.gone.has(id) ? null : hashNow(board, id));
+}
+
+/** The hash an entry is compared by: its `within_hash`, else, on an entry holding none, its `norm_hash`. */
+function compared({ within_hash, norm_hash }: CardFrozen): string | null {
+  return within_hash ?? norm_hash;
 }
 
 /** A calendar day `days` from `at`, as `--due` writes one. */
@@ -411,7 +422,7 @@ export function mockBoard(slug: string, scenario: Scenario, at: number): MockBoa
   }
   const cards = [...(harbor ? harborCards(at) : ledgerCards(at)), ...(harbor && scenario === "large" ? largeColumn(at) : [])].map((card) => ({
     ...card,
-    snapshot: card.targets.map((id) => ({ id, rev: 1, norm_hash: hashOf(id), also: [] })),
+    snapshot: card.targets.map((id) => frozenAt(id, hashOf(id))),
   }));
   const events = cards.map((card, index): MockEvent => ({
     id: card.id,
@@ -493,14 +504,14 @@ export function cardListOf(board: MockBoard, options: CardsOptions, settled: Set
   return { flows: structuredClone(board.flows), cards: rows, notes, truncated: false, omitted: null };
 }
 
-/** `spec card show C --history --json`, uncut; an unknown C its exit-1 document. */
+/** `spec card show C --history --json`, uncut, as `GET cards/:id` serves it: no `--marks`, so its four keys null; an unknown C its exit-1 document. */
 export function cardShowOf(board: MockBoard, id: string): Card | CardNotFound {
   const card = board.cards.find((candidate) => candidate.id === id);
   if (card === undefined) {
     return { id, reason: `no card ${id}` };
   }
   const history = board.events.filter((event) => event.id === id).map(({ seq, type, at, payload }) => ({ seq, type, at, payload }));
-  return structuredClone({ ...card, allowed: allowedOf(board, card), history, notes: [] });
+  return structuredClone({ ...card, mark: null, on: null, discrepancy: null, correction: null, allowed: allowedOf(board, card), history, notes: [] });
 }
 
 /** What cannot stand in a person's name: a control character, a line or paragraph separator, a bidirectional mark. */
@@ -819,11 +830,11 @@ export function acceptCardIn(board: MockBoard, id: string, body: CardAcceptBody,
 function suspectOn(board: MockBoard, card: StoredCard): string[] {
   return card.targets.filter((target) => {
     const frozen = card.snapshot?.find((entry) => entry.id === target);
-    if (frozen === undefined || frozen.norm_hash === null) {
+    if (frozen === undefined || compared(frozen) === null) {
       return false;
     }
     const now = hashNow(board, target);
-    return board.gone.has(target) || (now !== frozen.norm_hash && !frozen.also.includes(now));
+    return board.gone.has(target) || (now !== compared(frozen) && !frozen.also.includes(now));
   });
 }
 
@@ -843,7 +854,7 @@ function clearProblem(as: string, reason: string): string | null {
 /** Each suspect entry frozen again, and the entries as moved, `card.cleared`'s `nodes`. */
 function cleared(board: MockBoard, card: StoredCard) {
   const suspect = suspectOn(board, card);
-  const nodes = (card.snapshot ?? []).filter((entry) => suspect.includes(entry.id)).map((entry) => ({ id: entry.id, rev: 1, from: entry.norm_hash, to: frozenNow(board, entry.id).norm_hash }));
+  const nodes = (card.snapshot ?? []).filter((entry) => suspect.includes(entry.id)).map((entry) => ({ id: entry.id, rev: 1, from: compared(entry), to: compared(frozenNow(board, entry.id)) }));
   card.snapshot = (card.snapshot ?? []).map((entry) => (suspect.includes(entry.id) ? frozenNow(board, entry.id) : entry));
   return nodes;
 }

@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import { ApiProvider } from "../api/provider";
-import type { FlowEdge, FlowNode, FlowView as FlowAnswer, QueueEvent, TraceCounts, TraceNode, TraceStage } from "../api/types";
+import type { FlowEdge, FlowGap, FlowNode, FlowView as FlowAnswer, QueueEvent, TraceCounts, TraceNode, TraceStage } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { aFlowEdge, aFlowGap, aFlowNode, aFlowView, aTrace, aTraceCard, aTraceNode, tenGapRows, aTreeNode, aTreeView } from "../test/builders";
 import { aGroupRead, aLine, flowClient, TYPE_A, TYPE_B } from "../test/flowStub";
@@ -304,7 +304,8 @@ describe("gap rows (AC-08)", () => {
 
   it("shows no group read's rows", async () => {
     const group = aGroupRead("G", aLine(["X"]), [], { gaps: tenGapRows([aFlowGap("unreachable", [["X"], ["OTHER"]])]) });
-    renderApp(flowClient(aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 })], []), { G: group }), "#/alpha/flow");
+    const reads = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 })], [], { gaps: tenGapRows([aFlowGap("trap-cycle", [["G"]])]) });
+    renderApp(flowClient(reads, { G: group }), "#/alpha/flow");
     await drawn("X");
     expect(within(gapRow("unreachable")).getByText("None")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "OTHER" })).toBeNull();
@@ -966,8 +967,10 @@ describe("the canvas's width changing", () => {
 });
 
 describe("the side column", () => {
+  const found = aFlowView(aLine(["A", "B"]), [aFlowEdge({ from: "A", to: "B" })], { gaps: tenGapRows([aFlowGap("unreachable", [["B"]])]) });
+
   it("hides the gaps and shows them again; the choice is the viewer's, kept across a reload", async () => {
-    const client = flowClient(steps);
+    const client = flowClient(found);
     const first = renderApp(client, "#/alpha/flow");
     await drawn("A");
     const hide = screen.getByRole("button", { name: "Hide gaps" });
@@ -979,7 +982,7 @@ describe("the side column", () => {
     expect(document.activeElement).toBe(hide);
     expect(hide.textContent).toBe("Show gaps");
     first.unmount();
-    renderApp(flowClient(steps), "#/beta/flow");
+    renderApp(flowClient(found), "#/beta/flow");
     await drawn("A");
     expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show gaps" }));
@@ -989,7 +992,7 @@ describe("the side column", () => {
 
   it("keeps the panel's column while a box is selected", async () => {
     window.localStorage.setItem("specengine.flow.gaps-hidden", "on");
-    renderApp(flowClient(steps), "#/alpha/flow/B");
+    renderApp(flowClient(found), "#/alpha/flow/B");
     await screen.findByRole("heading", { level: 2, name: "B" });
     const stage = document.querySelector(".flow-stage");
     expect([stage?.classList.contains("no-gaps"), stage?.classList.contains("no-side")]).toEqual([true, false]);
@@ -1008,10 +1011,174 @@ describe("the side column", () => {
     vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("denied");
     });
-    renderApp(flowClient(steps), "#/alpha/flow");
+    renderApp(flowClient(found), "#/alpha/flow");
     await drawn("A");
     fireEvent.click(screen.getByRole("button", { name: "Hide gaps" }));
     expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
+  });
+});
+
+describe("a clean flow (docs/features/screen-fit.md)", () => {
+  const CLEAR_LINE = "No gaps: every row reads None";
+  const clean = aFlowView(aLine(["A", "B"]), []);
+  const withRows = (rows: FlowGap[]) => aFlowView(aLine(["A", "B"]), [], { gaps: tenGapRows(rows) });
+  const oneFound = withRows([aFlowGap("unreachable", [["B"]])]);
+  const results = () => document.querySelector<HTMLElement>(".flow-results");
+
+  /** Whether the flow's stage holds `no-gaps` and `no-side`. */
+  function sideClasses(): [boolean | undefined, boolean | undefined] {
+    const stage = document.querySelector(".flow-stage");
+    return [stage?.classList.contains("no-gaps"), stage?.classList.contains("no-side")];
+  }
+
+  function emitApplied(tail: ReturnType<typeof tailOf>) {
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+  }
+
+  it("says one line in the tools, after the stage filter, in place of the rows and their button; the side column goes (AC-03)", async () => {
+    renderApp(flowClient(clean), "#/alpha/flow");
+    await drawn("A");
+    const tools = document.querySelector<HTMLElement>(".flow-tools");
+    expect(tools).not.toBeNull();
+    const line = within(tools ?? document.body).getByRole("status");
+    expect(line.textContent).toBe(CLEAR_LINE);
+    expect(line.querySelector("svg")).not.toBeNull();
+    expect(line.previousElementSibling?.classList.contains("flow-stage-filter")).toBe(true);
+    expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
+    expect(sideClasses()).toEqual([true, true]);
+    expect(screen.queryByRole("button", { name: "Hide gaps" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Show gaps" })).toBeNull();
+  });
+
+  it("keeps the line on every tab: the rows stood outside them", async () => {
+    renderApp(stagedClient(clean, [aStage("print", { no_card: 1 })]), "#/alpha/flow");
+    await drawn("A");
+    for (const tab of ["List", "Timeline"]) {
+      fireEvent.click(screen.getByRole("tab", { name: tab }));
+      expect(screen.getByText(CLEAR_LINE)).toBeTruthy();
+    }
+  });
+
+  it("one row found: all ten as today, no line, the button back, the column kept (AC-04)", async () => {
+    renderApp(flowClient(oneFound), "#/alpha/flow");
+    await drawn("A");
+    expect(gapsRegion().querySelectorAll(".flow-gap")).toHaveLength(10);
+    expect(screen.queryByText(CLEAR_LINE)).toBeNull();
+    expect(screen.getByRole("button", { name: "Hide gaps" })).toBeTruthy();
+    expect(sideClasses()).toEqual([false, false]);
+  });
+
+  it.each([
+    ["Not configured", aFlowGap("no-start", [], { state: "not_configured", count: null, cause: "no [[flow.start]] rule" })],
+    ["Cannot measure", aFlowGap("supply-unfed", [], { state: "cannot", count: null, cause: "a cause" })],
+    ["an unknown state", aFlowGap("trap-cycle", [], { state: "weighed", count: 0 })],
+    ["a measured row with no count", aFlowGap("trap-cycle", [], { count: null })],
+  ])("draws the rows beside %s: a row that says no None is something to say", async (_name, row) => {
+    renderApp(flowClient(withRows([row])), "#/alpha/flow");
+    await drawn("A");
+    expect(gapsRegion().querySelectorAll(".flow-gap")).toHaveLength(10);
+    expect(screen.queryByText(CLEAR_LINE)).toBeNull();
+  });
+
+  it("keeps the panel's column for a selected box: no-gaps alone (AC-04)", async () => {
+    renderApp(flowClient(clean), "#/alpha/flow/B");
+    await screen.findByRole("heading", { level: 2, name: "B" });
+    expect(sideClasses()).toEqual([true, false]);
+    expect(screen.getByText(CLEAR_LINE)).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
+  });
+
+  it("a failed re-read of a clean flow: every row Not read, never the line; a read that lands brings the line back (AC-05)", async () => {
+    const client = flowClient(clean);
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await screen.findByText(CLEAR_LINE);
+    client.getFlow.mockRejectedValue(new ClientError({ status: 503, message: "spec: index locked" }));
+    emitApplied(tail);
+    await screen.findByText(/The flow could not be read again/);
+    expect(screen.queryByText(CLEAR_LINE)).toBeNull();
+    const states = Array.from(gapsRegion().querySelectorAll(".flow-gap .badge"), (badge) => badge.textContent);
+    expect(states).toEqual(Array.from({ length: 10 }, () => "State: Not read"));
+    expect(sideClasses()).toEqual([false, false]);
+    client.getFlow.mockImplementation(() => Promise.resolve(clean));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText(CLEAR_LINE)).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
+  });
+
+  it("brings the rows back through the same read when a row turns up, with no reload", async () => {
+    let shown = clean;
+    const client = flowClient(clean);
+    client.getFlow.mockImplementation(() => Promise.resolve(shown));
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await screen.findByText(CLEAR_LINE);
+    shown = oneFound;
+    emitApplied(tail);
+    expect(await screen.findByRole("region", { name: "Gaps" })).toBeTruthy();
+    expect(screen.queryByText(CLEAR_LINE)).toBeNull();
+    expect(screen.getByRole("button", { name: "Hide gaps" })).toBeTruthy();
+    expect(sideClasses()).toEqual([false, false]);
+  });
+
+  it("leaves a stored Hide gaps as it is; it holds again when a row is found", async () => {
+    window.localStorage.setItem("specengine.flow.gaps-hidden", "on");
+    let shown = clean;
+    const client = flowClient(clean);
+    client.getFlow.mockImplementation(() => Promise.resolve(shown));
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await screen.findByText(CLEAR_LINE);
+    expect(window.localStorage.getItem("specengine.flow.gaps-hidden")).toBe("on");
+    shown = oneFound;
+    emitApplied(tail);
+    expect(await screen.findByRole("button", { name: "Show gaps" })).toBeTruthy();
+    expect(screen.queryByText(CLEAR_LINE)).toBeNull();
+    expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
+    expect(window.localStorage.getItem("specengine.flow.gaps-hidden")).toBe("on");
+  });
+
+  it("an empty flow keeps its rows, whatever was chosen: no tools to hold the line", async () => {
+    window.localStorage.setItem("specengine.flow.gaps-hidden", "on");
+    renderApp(flowClient(aFlowView([], [])), "#/alpha/flow");
+    expect(await screen.findByRole("region", { name: "Gaps" })).toBeTruthy();
+    expect(screen.queryByText(CLEAR_LINE)).toBeNull();
+    expect(sideClasses()).toEqual([false, false]);
+  });
+
+  it("reads Top's rows alone: a group's found row draws no rows and leaves the line", async () => {
+    const group = aGroupRead("G", aLine(["X"]), [], { gaps: tenGapRows([aFlowGap("unreachable", [["X"]])]) });
+    renderApp(flowClient(aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 })], []), { G: group }), "#/alpha/flow");
+    await drawn("X");
+    expect(screen.getByText(CLEAR_LINE)).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
+  });
+
+  it("hands focus to the results when a clean read takes the button that had it, never to the body", async () => {
+    let shown = oneFound;
+    const client = flowClient(oneFound);
+    client.getFlow.mockImplementation(() => Promise.resolve(shown));
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    screen.getByRole("button", { name: "Hide gaps" }).focus();
+    shown = clean;
+    emitApplied(tail);
+    await screen.findByText(CLEAR_LINE);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(results());
+    });
+  });
+
+  it("takes no focus on a clean first read", async () => {
+    renderApp(flowClient(clean), "#/alpha/flow");
+    await screen.findByText(CLEAR_LINE);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(document.activeElement).not.toBe(results());
   });
 });
 
@@ -1531,7 +1698,7 @@ describe("the Timeline (trace-views)", () => {
   });
 
   it("keeps the gap rows beside it", async () => {
-    renderApp(stagedClient(flow, [aStage("print", { no_card: 1 })]), "#/alpha/flow");
+    renderApp(stagedClient({ ...flow, gaps: tenGapRows([aFlowGap("unreachable", [["C"]])]) }, [aStage("print", { no_card: 1 })]), "#/alpha/flow");
     await drawn("C");
     openTimeline();
     await screen.findByRole("button", { name: /^print/ });
@@ -1871,7 +2038,7 @@ describe("a read that failed again (trace-views)", () => {
   }
 
   it("takes a None row's state away: never the clean word or icon beside a read that failed, and a read brings it back", async () => {
-    const reads = aFlowView(aLine(["A"]), []);
+    const reads = aFlowView(aLine(["A"]), [], { gaps: tenGapRows([aFlowGap("unreachable", [["A"]])]) });
     const client = flowClient(reads);
     const tail = tailOf(client);
     renderApp(client, "#/alpha/flow");

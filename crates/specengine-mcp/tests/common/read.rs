@@ -640,6 +640,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                     &CardShowRequest {
                         id,
                         history: args["history"] == json!(true),
+                        marks: true,
                     },
                 )
                 .map(|outcome| Outcome::CardShow(Box::new(outcome))),
