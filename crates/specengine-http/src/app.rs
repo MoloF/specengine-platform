@@ -7,7 +7,9 @@
 //! round's answers; `HEAD` is no read here), `Cache-Control: no-store` on
 //! every response and no `Access-Control-*` header on any. The web UI's two
 //! read routes, `/` and `/assets/<file>`, are fenced like the API's
-//! (docs/features/ui-embed.md, [`crate::ui`]).
+//! (docs/features/ui-embed.md, [`crate::ui`]). A card's routes
+//! (docs/features/board-ui.md "Data"): `…/cards` a read and a write, its 405
+//! `Allow: GET, POST`; `…/cards/<id>` a read; its five writes `Allow: POST`.
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data" and
@@ -16,14 +18,17 @@
 //! run (the working tree on disk:
 //! no git mode, no client's file); a task is only listed or shown, never
 //! moved (docs/features/ui-live-tasks.md "Description and interactions").
-//! The one queue write is a proposal's staged choice, through the CLI
-//! library's `stage` and `unstage` (POST and DELETE on the stage route,
-//! past the fence only from a same-origin page: `Sec-Fetch-Site:
-//! same-origin`, which is not authentication, ADR-0034), and through its
-//! `round_stage_answers` (POST on the round's answers, the same door:
-//! docs/features/ui-round.md "Data"), confirmed only on a terminal
-//! (ADR-0035, ADR-0038): no handler here walks a round or decides an item;
-//! the other writes are the reads' own, in the data directory.
+//! A proposal's queue write is a staged choice, through the CLI library's
+//! `stage` and `unstage` (POST and DELETE on the stage route, past the
+//! fence only from a same-origin page: `Sec-Fetch-Site: same-origin`, which
+//! is not authentication, ADR-0034), and through its `round_stage_answers`
+//! (POST on the round's answers, the same door: docs/features/ui-round.md
+//! "Data"), confirmed only on a terminal (ADR-0035, ADR-0038): no handler
+//! here walks a round or decides an item. A card's writes are the library's
+//! `card_new`, `card_move`, `card_edit`, `card_assign`, `card_cancel` and
+//! `card_accept`, through the same door (docs/features/board-ui.md "Data");
+//! they touch the queue alone, and no agent tool reaches them. The other
+//! writes are the reads' own, in the data directory.
 
 use std::sync::Arc;
 
@@ -37,11 +42,12 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
-    BundleRequest, CheckRequest, FlowRequest, GraphRequest, HealthRequest, InboxRequest,
-    LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody, RoundAnswersRequest,
-    RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest, TaskListRequest,
-    TaskShowRequest, TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags,
-    round_limit, utc_now,
+    BundleRequest, CardAcceptBody, CardAssignBody, CardCancelBody, CardEditBody, CardListRequest,
+    CardMoveBody, CardNewBody, CardOutcome, CardShowRequest, CheckRequest, CliError, FlowRequest,
+    GraphRequest, HealthRequest, InboxRequest, LockDiffRequest, Outcome, ReviewRequest,
+    RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
+    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TreeRequest,
+    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -115,6 +121,34 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/proposals/{id}", read(proposal))
         .route("/api/projects/{p}/tasks", read(tasks))
         .route("/api/projects/{p}/tasks/{id}", read(task))
+        .route(
+            "/api/projects/{p}/cards",
+            get(cards)
+                .post(new_card)
+                .head(only_cards)
+                .fallback(only_cards),
+        )
+        .route("/api/projects/{p}/cards/{id}", read(card))
+        .route(
+            "/api/projects/{p}/cards/{id}/move",
+            post(move_card).fallback(only_post),
+        )
+        .route(
+            "/api/projects/{p}/cards/{id}/edit",
+            post(edit_card).fallback(only_post),
+        )
+        .route(
+            "/api/projects/{p}/cards/{id}/assign",
+            post(assign_card).fallback(only_post),
+        )
+        .route(
+            "/api/projects/{p}/cards/{id}/cancel",
+            post(cancel_card).fallback(only_post),
+        )
+        .route(
+            "/api/projects/{p}/cards/{id}/accept",
+            post(accept_card).fallback(only_post),
+        )
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
             post(stage).delete(unstage).fallback(only_stage),
@@ -253,6 +287,21 @@ async fn only_round_answers(method: Method, uri: Uri) -> Response {
     )
 }
 
+/// 405 on the board's route, `HEAD` included.
+async fn only_cards(method: Method, uri: Uri) -> Response {
+    method_refused(
+        &method,
+        &uri,
+        "this path takes only GET (the board) and POST (a new card)",
+        Some("GET, POST"),
+    )
+}
+
+/// 405 on a card's write.
+async fn only_post(method: Method, uri: Uri) -> Response {
+    method_refused(&method, &uri, "only POST is served here", Some("POST"))
+}
+
 /// 405 on a route without its own.
 async fn method_not_allowed(method: Method, uri: Uri) -> Response {
     method_refused(&method, &uri, "another method is served here", None)
@@ -270,8 +319,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, flow, graph, check, health, roadmap, lock-diff, \
-             inbox, proposals/<id>, tasks, tasks/<id>, round, events}}; the web UI: / and \
-             /assets/<file>",
+             inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events}}; the \
+             web UI: / and /assets/<file>",
             uri.path()
         ),
     )
@@ -618,7 +667,11 @@ const STAGE_BODY_MAX: usize = 16_384;
 /// "Data", W-6: 200 answers at their caps, escaped, fit).
 const ROUND_BODY_MAX: usize = 4_194_304;
 
-/// Only a same-origin page stages (`Sec-Fetch-Site: same-origin`; absent or
+/// The most bytes of a card write's body
+/// (docs/features/board-ui.md "Data").
+const CARD_BODY_MAX: usize = 1_048_576;
+
+/// Only a same-origin page writes (`Sec-Fetch-Site: same-origin`; absent or
 /// `none`, which the fence lets a read through, is refused: 403). This is
 /// no authentication (ADR-0034): any local process can send the header.
 fn same_origin(headers: &HeaderMap) -> Result<(), Refusal> {
@@ -626,7 +679,7 @@ fn same_origin(headers: &HeaderMap) -> Result<(), Refusal> {
     if site.is_none_or(|site| site.as_bytes() != b"same-origin") {
         return Err(Refusal::new(
             StatusCode::FORBIDDEN,
-            "staging needs a same-origin page (not authentication: ADR-0034)",
+            "a write needs a same-origin page (not authentication: ADR-0034)",
         ));
     }
     Ok(())
@@ -717,6 +770,166 @@ async fn round_answers(State(app): State<Shared>, request: Request) -> Result<Re
         };
         specengine_cli::round_stage_answers(env, globals, &request)
             .map(|outcome| Outcome::RoundAnswers(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// `GET …/cards`: `spec card list --json`, the browser view (every row, in
+/// the flows' order, nothing cut). Filters ANDed, exact; `with_cancelled`
+/// is the flag `--with-cancelled`, nothing here reading a card's state.
+async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args(
+        "cards",
+        &[
+            "flow",
+            "column",
+            "discipline",
+            "assignee",
+            "no_target",
+            "with_cancelled",
+        ],
+        &uri,
+    )?;
+    let request = (|| {
+        Ok::<_, String>(CardListRequest {
+            flow: args.text("flow")?,
+            column: args.text("column")?,
+            discipline: args.text("discipline")?,
+            assignee: args.text("assignee")?,
+            no_target: args.boolean("no_target")?.unwrap_or(false),
+            with_cancelled: args.boolean("with_cancelled")?.unwrap_or(false),
+        })
+    })()
+    .map_err(Refusal::bad_request)?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_list(env, globals, &request)
+            .map(|outcome| Outcome::CardList(Box::new(outcome.in_view(View::Browser))))
+    })
+    .await)
+}
+
+/// `GET …/cards/<id>`: `spec card show C --history --json`, uncut (no query
+/// name); no such card: the CLI's exit-1 document, a 404.
+async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, rest) = app.project_of(&uri)?;
+    let raw = rest
+        .strip_prefix("cards/")
+        .ok_or_else(|| unknown_route_of(&uri))?;
+    let id = percent_decode(raw).map_err(Refusal::bad_request)?;
+    args("cards/:id", &[], &uri)?;
+    Ok(run(project, move |env, globals| {
+        let request = CardShowRequest { id, history: true };
+        specengine_cli::card_show(env, globals, &request)
+            .map(|outcome| Outcome::CardShow(Box::new(outcome)))
+    })
+    .await)
+}
+
+/// The project and the card ID (percent-decoded once, judged by the CLI) of
+/// the card write `verb` at `uri`, from a same-origin page only
+/// ([`same_origin`]), as [`stage_target`].
+fn written_target(
+    app: &App,
+    uri: &Uri,
+    headers: &HeaderMap,
+    verb: &str,
+) -> Result<(Arc<Project>, String), Refusal> {
+    let (project, rest) = app.project_of(uri)?;
+    same_origin(headers)?;
+    let raw = rest
+        .strip_prefix("cards/")
+        .and_then(|rest| rest.strip_suffix(verb))
+        .ok_or_else(|| unknown_route_of(uri))?;
+    let id = percent_decode(raw).map_err(Refusal::bad_request)?;
+    Ok((project, id))
+}
+
+/// A card write's body past the door's last three steps, in order: JSON
+/// (415), at most [`CARD_BODY_MAX`] bytes (413), what `decode`, the CLI's
+/// `Card*Body`, takes (400 with its line: a shape, or a person off the
+/// card's grammar, which is someone's typing and no failure to run).
+async fn written_body<T>(
+    request: Request,
+    decode: impl FnOnce(&[u8]) -> Result<T, CliError>,
+) -> Result<T, Refusal> {
+    json_typed(request.headers())?;
+    let bytes = body(request, CARD_BODY_MAX).await?;
+    decode(&bytes).map_err(|error| Refusal::bad_request(error.message))
+}
+
+/// What a card write answers.
+fn written(outcome: CardOutcome) -> Outcome {
+    Outcome::Card(Box::new(outcome))
+}
+
+/// `POST …/cards`: `card_new`, past `round_answers`' door in order, nothing
+/// read on a refusal: the served slug (404), a same-origin page (403),
+/// [`written_body`]. Then one call in the project's turn, one clock
+/// reading: 200 the write document, 400 usage, 404 `{id, reason}`, 409
+/// refused (the write document), 503 cannot run (`answer.rs`).
+async fn new_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(request.uri())?;
+    same_origin(request.headers())?;
+    let body = written_body(request, CardNewBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_new(env, globals, &body.request(utc_now())).map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/<id>/move`: `card_move`, past [`new_card`]'s door; a
+/// lost compare-and-set, a move outside the flow, an `as` outside `by`: 409.
+async fn move_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = written_target(&app, request.uri(), request.headers(), "/move")?;
+    let body = written_body(request, CardMoveBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_move(env, globals, &body.request(id, utc_now())).map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/<id>/edit`: `card_edit`, past [`new_card`]'s door.
+async fn edit_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = written_target(&app, request.uri(), request.headers(), "/edit")?;
+    let body = written_body(request, CardEditBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_edit(env, globals, &body.request(id, utc_now())).map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/<id>/assign`: `card_assign`, past [`new_card`]'s door.
+async fn assign_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = written_target(&app, request.uri(), request.headers(), "/assign")?;
+    let body = written_body(request, CardAssignBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_assign(env, globals, &body.request(id, utc_now())).map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/<id>/cancel`: `card_cancel`, past [`new_card`]'s door.
+async fn cancel_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = written_target(&app, request.uri(), request.headers(), "/cancel")?;
+    let body = written_body(request, CardCancelBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_cancel(env, globals, &body.request(id, utc_now())).map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/<id>/accept`: `card_accept`, past [`new_card`]'s door. Its
+/// consent is the page's dialog, so the handler answers yes; the rules are
+/// the CLI's (`accept.from`, the card's reviewer, never its assignee). The
+/// name is self-declared, and no terminal asks here: a convention until
+/// the hub's named login (ADR-0034).
+async fn accept_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = written_target(&app, request.uri(), request.headers(), "/accept")?;
+    let body = written_body(request, CardAcceptBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_accept(env, globals, &body.request(id, utc_now()), &mut |_| true)
+            .map(written)
     })
     .await)
 }

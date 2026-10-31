@@ -12,6 +12,8 @@ describe("hash routes", () => {
     ["#/alpha/tree/R-12", { type: "section", project: "alpha", section: "tree", id: "R-12" }],
     ["#/alpha/roadmap", { type: "section", project: "alpha", section: "roadmap", id: null }],
     ["#/alpha/roadmap/RM-0004", { type: "section", project: "alpha", section: "roadmap", id: "RM-0004" }],
+    ["#/alpha/board", { type: "section", project: "alpha", section: "board", id: null }],
+    ["#/alpha/board/C-0001", { type: "section", project: "alpha", section: "board", id: "C-0001" }],
     ["#/alpha/flow", { type: "section", project: "alpha", section: "flow", id: null }],
     ["#/a/flow/MEC-TIDES", { type: "section", project: "a", section: "flow", id: "MEC-TIDES" }],
     ["#/alpha", { type: "project", project: "alpha" }],
@@ -28,11 +30,12 @@ describe("hash routes", () => {
     expect(parseHash(hash)).toEqual(route);
   });
 
-  it("lists the nav: Overview to the home, then the eight sections, Roadmap third, Flow fourth", () => {
+  it("lists the nav: Overview to the home, then the nine sections, Board third, Roadmap fourth, Flow fifth", () => {
     expect(navOf("a b").map(({ label, hash }) => [label, hash])).toEqual([
       ["Overview", "#/a%20b"],
       ["Inbox", "#/a%20b/inbox"],
       ["Tasks", "#/a%20b/tasks"],
+      ["Board", "#/a%20b/board"],
       ["Roadmap", "#/a%20b/roadmap"],
       ["Flow", "#/a%20b/flow"],
       ["Spec tree", "#/a%20b/tree"],

@@ -348,7 +348,7 @@ enum Command {
         #[command(subcommand)]
         command: TaskCommand,
     },
-    /// Work on the project's cards, the lighter record of any trade's work: the columns, moves and who makes them are the project's `[card]`; only a person accepts one, on a terminal.
+    /// Work on the project's cards, the lighter record of any trade's work: the columns, moves and who makes them are the project's `[card]`; a person accepts one, on a terminal or the local page, and no agent tool does.
     Card {
         #[command(subcommand)]
         command: CardCommand,
@@ -2111,7 +2111,11 @@ fn run_task(env: &Env, globals: &Globals, command: TaskCommand) -> Result<Outcom
 
 /// `spec card …`; `accept` runs only on a terminal.
 fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcome, CliError> {
-    let card = |outcome| Ok(Outcome::Card(Box::new(outcome)));
+    let card = |outcome: specengine_cli::CardOutcome| {
+        outcome
+            .or_usage_error()
+            .map(|outcome| Outcome::Card(Box::new(outcome)))
+    };
     match command {
         CardCommand::New {
             title,

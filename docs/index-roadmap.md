@@ -36,7 +36,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0046.md](roadmap/RM-0046.md) board-ui (Phase 7, step 5): the board, filters, the card panel, write routes · ui, crates/specengine-http · draft
 - [docs/roadmap/RM-0047.md](roadmap/RM-0047.md) card-trace (Phase 7, step 6): targets, suspect marks, clearing, re-estimates, rollup · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0048.md](roadmap/RM-0048.md) trace-views (Phase 7, step 7): flow badges, stage:, timeline lanes, a node's cards · ui, crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-import, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · draft
 - [docs/roadmap/RM-0049.md](roadmap/RM-0049.md) hub-identity (Phase 7, step 8): a public origin, an identity header, a person in Author · crates/specengine-http, crates/specengine-core, crates/specengine-store · draft

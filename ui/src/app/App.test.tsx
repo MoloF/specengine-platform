@@ -30,13 +30,14 @@ function navLink(name: string): HTMLElement {
 }
 
 describe("the shell (AC-11)", () => {
-  it("lists the home and the eight sections in order and marks the current one", async () => {
+  it("lists the home and the nine sections in order and marks the current one", async () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
     expect(navLinks().map((link) => link.textContent)).toEqual([
       "Overview",
       "Inbox",
       "Tasks",
+      "Board",
       "Roadmap",
       "Flow",
       "Spec tree",
@@ -44,7 +45,7 @@ describe("the shell (AC-11)", () => {
       "Health",
       "Questions",
     ]);
-    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null, null]);
+    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null, null, null]);
     expect(navLinks()[0]?.getAttribute("href")).toBe("#/alpha");
     expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/tasks");
   });

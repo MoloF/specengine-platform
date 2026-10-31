@@ -187,6 +187,14 @@
   --flow-frame-surface-nested: var(--surface-canvas);
   --flow-repeat-width: 2.25;
 
+  /* The Board (docs/features/board-ui.md): a closed card's two marks and a late one's, each a label
+     and an icon, none of them a hold on work; where a drag would land. A column is project
+     vocabulary and has no colour. */
+  --card-accepted: var(--task-accepted);
+  --card-cancelled: var(--task-cancelled);
+  --card-overdue: var(--attention);
+  --card-drop: var(--accent);
+
   /* Section diffs. */
   --diff-added-surface: #123628;
   --diff-removed-surface: #3d1c25;

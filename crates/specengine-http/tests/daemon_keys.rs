@@ -176,6 +176,18 @@
 //! `FlowNode` (12), `FlowEdge` (8) and `FlowInner` (2), from `GET flow` on a
 //! git copy of `fixtures/flow-gaps`: a whole read, the fold at depth 1 (its
 //! `inner` lists hold entries) and the exit-1 document of `?root=NOPE-1`.
+//!
+//! AC-09 of docs/features/board-ui.md, its Rust half ("Types"): twelve sets
+//! more, 98 in all, last, after `FlowInner`: `CardList` (5 keys), `CardFlow`
+//! (5), `CardColumn` (2), `CardMove` (3), `CardRow` (17), `Card` (26),
+//! `CardEvidence` (4), `CardAcceptance` (3), `CardCancellation` (3),
+//! `CardEvent` (4), `CardWrite` (7) and `CardNotFound` (2), the keys of
+//! docs/canon/cards.md "Documents and events", from a git copy of
+//! `fixtures/card-press` through the routes: an accepted card with evidence
+//! and a cancelled one, the writes and a refusal (`CardWrite`, a 200 and a
+//! 409 alike), the exit-1 documents. A flow's `accept` and a move's `allowed`
+//! entry have no set of their own: their keys are pinned where they are read.
+//! M: a `Card` key dropped from the fixture.
 
 mod common;
 mod task_state;
@@ -444,6 +456,9 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     // flow-read: the planted corpus, served as its own slug.
     let flow_gaps = scratch.repo("flow-gaps", "flow-gaps", "main");
 
+    // board-ui: the print shop, served as its own slug.
+    let press = scratch.repo("card-press", "card-press", "main");
+
     let server = Server::serve(
         &home,
         &cwd,
@@ -455,6 +470,7 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             &code.0,
             &health_code,
             &flow_gaps,
+            &press,
         ],
     );
     let p = "/api/projects/lantern-keep";
@@ -631,6 +647,84 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .to_owned()
     })
     .collect();
+    // board-ui: an accepted card with evidence and a cancelled one, through
+    // the routes, each write's answer kept, then a refusal's.
+    let cards = "/api/projects/card-press/cards";
+    let mut card_writes: Vec<String> = [
+        (
+            "",
+            serde_json::json!({"title": "Lead story", "discipline": "copy", "assignee": "ana"}),
+        ),
+        (
+            "/C-0001/edit",
+            serde_json::json!({"evidence": ["note=first pass"]}),
+        ),
+        ("/C-0001/assign", serde_json::json!({"reviewer": "ben"})),
+        (
+            "/C-0001/move",
+            serde_json::json!({"to": "edit", "as": "desk"}),
+        ),
+        ("/C-0001/move", serde_json::json!({"to": "proof"})),
+        (
+            "/C-0001/accept",
+            serde_json::json!({"as": "ben", "note": "Read twice."}),
+        ),
+        (
+            "",
+            serde_json::json!({"title": "Back page", "discipline": "plates"}),
+        ),
+        ("/C-0002/cancel", serde_json::json!({"reason": "Pulled."})),
+    ]
+    .iter()
+    .map(|(path, body)| {
+        server
+            .stage(&format!("{cards}{path}"), &body.to_string())
+            .status(200)
+            .text()
+            .to_owned()
+    })
+    .collect();
+    card_writes.push(
+        server
+            .stage(&format!("{cards}/C-0002/move"), "{\"to\":\"checked\"}")
+            .status(409)
+            .text()
+            .to_owned(),
+    );
+    let card_lists = vec![
+        server
+            .get(&format!("{cards}?with_cancelled=true"))
+            .status(200)
+            .text()
+            .to_owned(),
+    ];
+    let card_shows: Vec<String> = ["C-0001", "C-0002"]
+        .iter()
+        .map(|id| {
+            server
+                .get(&format!("{cards}/{id}"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .collect();
+    let mut card_missing: Vec<String> = ["C-0099", "foo"]
+        .iter()
+        .map(|id| {
+            server
+                .get(&format!("{cards}/{id}"))
+                .status(404)
+                .text()
+                .to_owned()
+        })
+        .collect();
+    card_missing.push(
+        server
+            .stage(&format!("{cards}/C-0099/accept"), "{\"as\":\"ben\"}")
+            .status(404)
+            .text()
+            .to_owned(),
+    );
     // ui-round: A's sheet, then its answers (after every other read of A).
     let round_a = server
         .get(&format!("{p}/round"))
@@ -819,6 +913,27 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     assert!(
         !flow_nodes.is_empty() && !flow_edges.is_empty() && !flow_inners.is_empty(),
         "FlowNode, FlowEdge, FlowInner: the fold lists each: {flows:?}"
+    );
+    let card_flows = items(&card_lists, "flows");
+    let card_columns = items(&card_flows, "columns");
+    let card_moves = items(&card_flows, "moves");
+    let card_rows = items(&card_lists, "cards");
+    let card_evidence = items(&card_shows, "evidence");
+    let card_acceptances = objects(&card_shows[..1], "acceptance");
+    let card_cancellations = objects(&card_shows[1..], "cancellation");
+    let card_events = items(&card_shows, "history");
+    assert_eq!(card_flows.len(), 2, "copy, plates: {card_lists:?}");
+    assert_eq!(card_rows.len(), 2, "both endings: {card_lists:?}");
+    assert_eq!(card_evidence.len(), 1, "{card_shows:?}");
+    assert!(card_events.len() >= 7, "every write: {card_shows:?}");
+    // No set of their own ("Types"): a flow's `accept`, an `allowed` entry.
+    assert_eq!(
+        one_key_set("accept", &objects(&card_flows, "accept"), keys_of),
+        ["from", "to"]
+    );
+    assert_eq!(
+        one_key_set("allowed", &items(&card_writes, "allowed"), keys_of),
+        ["to", "by"]
     );
     let lock_diff_nodes = items(&lock_diffs, "nodes");
     let lock_diff_rows = items(&lock_diff_nodes, "rows");
@@ -1223,6 +1338,33 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         ("FlowNode", one_key_set("FlowNode", &flow_nodes, keys_of)),
         ("FlowEdge", one_key_set("FlowEdge", &flow_edges, keys_of)),
         ("FlowInner", one_key_set("FlowInner", &flow_inners, keys_of)),
+        ("CardList", one_key_set("CardList", &card_lists, keys_of)),
+        ("CardFlow", one_key_set("CardFlow", &card_flows, keys_of)),
+        (
+            "CardColumn",
+            one_key_set("CardColumn", &card_columns, keys_of),
+        ),
+        ("CardMove", one_key_set("CardMove", &card_moves, keys_of)),
+        ("CardRow", one_key_set("CardRow", &card_rows, keys_of)),
+        ("Card", one_key_set("Card", &card_shows, keys_of)),
+        (
+            "CardEvidence",
+            one_key_set("CardEvidence", &card_evidence, keys_of),
+        ),
+        (
+            "CardAcceptance",
+            one_key_set("CardAcceptance", &card_acceptances, keys_of),
+        ),
+        (
+            "CardCancellation",
+            one_key_set("CardCancellation", &card_cancellations, keys_of),
+        ),
+        ("CardEvent", one_key_set("CardEvent", &card_events, keys_of)),
+        ("CardWrite", one_key_set("CardWrite", &card_writes, keys_of)),
+        (
+            "CardNotFound",
+            one_key_set("CardNotFound", &card_missing, keys_of),
+        ),
     ]
 }
 
@@ -1549,10 +1691,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        86,
+        98,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
-         health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86)"
+         health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
+         board-ui: 98)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2003,6 +2146,89 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         assert_eq!(*name, want_name);
         assert_eq!(keys, want_keys, "{name}");
     }
+    // board-ui's twelve, last: docs/features/board-ui.md "Types" gives their
+    // order, docs/canon/cards.md "Documents and events" their keys.
+    let twelve: Vec<(&str, Vec<String>)> = sets[86..98].to_vec();
+    let want: [(&str, &[&str]); 12] = [
+        (
+            "CardList",
+            &["flows", "cards", "notes", "truncated", "omitted"],
+        ),
+        (
+            "CardFlow",
+            &["name", "disciplines", "columns", "moves", "accept"],
+        ),
+        ("CardColumn", &["id", "title"]),
+        ("CardMove", &["from", "to", "by"]),
+        (
+            "CardRow",
+            &[
+                "id",
+                "flow",
+                "column",
+                "position",
+                "title",
+                "discipline",
+                "targets",
+                "assignee",
+                "reviewer",
+                "estimate",
+                "due",
+                "parent",
+                "corrects",
+                "updated_at",
+                "revision",
+                "accepted",
+                "cancelled",
+            ],
+        ),
+        (
+            "Card",
+            &[
+                "id",
+                "flow",
+                "column",
+                "position",
+                "title",
+                "goal",
+                "discipline",
+                "targets",
+                "snapshot",
+                "criteria",
+                "assignee",
+                "reviewer",
+                "estimate",
+                "due",
+                "parent",
+                "corrects",
+                "evidence",
+                "acceptance",
+                "cancellation",
+                "created_by",
+                "created_at",
+                "updated_at",
+                "revision",
+                "allowed",
+                "history",
+                "notes",
+            ],
+        ),
+        ("CardEvidence", &["kind", "value", "by", "at"]),
+        ("CardAcceptance", &["by", "at", "note"]),
+        ("CardCancellation", &["by", "at", "reason"]),
+        ("CardEvent", &["seq", "type", "at", "payload"]),
+        (
+            "CardWrite",
+            &[
+                "id", "flow", "column", "position", "revision", "allowed", "notes",
+            ],
+        ),
+        ("CardNotFound", &["id", "reason"]),
+    ];
+    for ((name, keys), (want_name, want_keys)) in twelve.iter().zip(want) {
+        assert_eq!(*name, want_name);
+        assert_eq!(keys, want_keys, "{name}");
+    }
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -2023,7 +2249,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 86 sets (41 until
+/// unchanged, no new key): the fixture holds 98 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2033,7 +2259,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/tested-reads.md its `TestedRow`, TE-5,
 /// docs/features/health-drift.md its six, TE-5,
 /// docs/features/ui-node-bindings.md its two, TE-1, and
-/// docs/features/lock-diff.md its five, TE-2); a decision
+/// docs/features/lock-diff.md its five, TE-2, and
+/// docs/features/flow-read.md its five, and
+/// docs/features/board-ui.md its twelve, AC-09); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -2047,13 +2275,13 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        86,
-        "86 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        98,
+        "98 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
-         lock-diff's five (TE-2) and flow-read's five"
+         lock-diff's five (TE-2), flow-read's five and board-ui's twelve (AC-09)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -2167,7 +2395,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 86 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 98 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2195,13 +2423,13 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        86,
-        "86 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        98,
+        "98 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
-         lock-diff's five (TE-2) and flow-read's five"
+         lock-diff's five (TE-2), flow-read's five and board-ui's twelve (AC-09)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

@@ -26,9 +26,9 @@ spec card cancel C --reason T [--revision R] [--as N]
 spec card accept C --as N [--note T] [--revision R]
 ```
 
-Globals as the queue's. In `edit`, `assign` a value `-` clears (`CLEAR`), and on `new` it is no assignee; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused, which is how "each once" has always been enforced. A manual card has no targets. `move`, `edit`, `assign` with nothing asked: exit 2, a `CliError`. Library `card_{new,list,show,move,edit,assign,cancel,accept}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, `card_accept` a `Consent`).
+Globals as the queue's. In `edit`, `assign` a value `-` clears, and on `new` it is no assignee; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, `card_accept` a `Consent`); the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
-`open_cards`, never `open_context`: no git runs, so any root works; `[card]` is read here alone.
+`open_cards`, never `open_context`: no git runs, so any root works.
 
 - **Lines** `created|moved|edited|cancelled|accepted C-0001: plain/backlog`, `assigned C-0001: <assignee or ->, reviewer <reviewer or ->`. JSON of a write or a refusal `{id, flow, column, position, revision, allowed, notes}`; no such card, exit 1, `{id, reason}`, `no card C-0099`.
 - **`list`**, by flow, column (config order), position; a column `[card]` no longer places last in its flow, such a flow last of all, cancelled cards last in their column:
@@ -39,16 +39,16 @@ flow <name> | <column> <n> | ...
 [truncated: <k> of <n> cards not shown]
 ```
 
-  `-` for none. A flow line per flow, empty columns too; `<n>` counts the listed cards, so a filter moves it, and a cancelled card has left its column. The board starts empty: flow lines only, exit 0, nothing seeded, no `T-`. Filters AND, exact. Each stranded (flow, column) is one note, `<n> card(s) in <flow>/<column>, from <first ID>: ...`. Cut at `OUTPUT_CAP_CHARS`, JSON the printed rows.
+  `-` for none. A flow line per flow, empty columns too; `<n>` counts the listed cards, so a filter moves it, and a cancelled card has left its column. The board starts empty: flow lines only, exit 0, nothing seeded, no `T-`. Filters AND, exact, untrimmed. Each stranded (flow, column) is one note, `<n> card(s) in <flow>/<column>, from <first ID>: ...`. Cut at `OUTPUT_CAP_CHARS`, JSON the printed rows.
 - **`show`**: a `key: value` line per document key but `notes`, `-` for null, cut at the same cap, tail `[truncated: <k> of <n> lines not shown]`.
 - **`cancel`** takes the card out of its column (`position` 0, the column closes up), `reason` required. Only `--with-cancelled` lists it.
-- **`accept`**, a person's act on a terminal, as `task approve`: a stdin that is no terminal exits 2 before anything is read, no `--yes`. Prompt `accept C-0001 (<title>) as <N>? [y/N]`; not `y`: exit 1, no event. `card_accept` asks through its `Consent`, then compares `revision`.
+- **`accept`**, a person's act, on a terminal as `task approve`, or on the page by `POST .../accept` (ADR-0057): a stdin that is no terminal exits 2 before anything is read, no `--yes`. Prompt `accept C-0001 (<title>) as <N>? [y/N]`; not `y`: exit 1, no event. `card_accept` asks through its `Consent`, then compares `revision`.
 
 **Exits** as the queue's. 1 refused: no such card, a move outside its flow, a closed card, a cap, a declined prompt, a stale `--revision`. 2 cannot run: `C` in `[ids]`, a look-alike ID (its Latin form named), a bad `[card]`, `--as` or `--revision` off their grammar, no terminal, a corrupt row, a newer schema, nothing asked.
 
 ## Who acts
 
-`--as N` is self-declared, recorded in the event and compared with a move's `by`, never verified: until the hub, `by` stops a slip, not a person. Absent: `local`. N: `author_field_problem`'s grammar. A tool acts as `agent`, so `by = ["lead"]` holds against tools, and a flow admits them by listing `agent`. `agent` and `local` are no one's name, so both are refused as a reviewer, at `assign` and at `accept`.
+`--as N` is self-declared, recorded in the event and compared with a move's `by`, never verified: until the hub, `by` stops a slip, not a person. Absent: `local`. A person (`card_person_problem`, no ID: ADR-0057): trimmed, one line, at most 128 bytes, no control character, U+2028, U+2029 or bidi mark, any script and inner spaces, compared exactly. Off it, `--as` exits 2 and `--assignee`, `--reviewer` exit 1; each a 400 at the daemon. A tool acts as `agent`, so `by = ["lead"]` holds against tools, and a flow admits them by listing `agent`. `agent` and `local` are no one's name, so both are refused as a reviewer, at `assign` and at `accept`.
 
 A lead's move to `ready` is a convention until the hub: a control point exists only where a flow writes `by`, and the default writes none.
 
@@ -73,7 +73,7 @@ moves = [
 ```
 
 - `[card]` holds `flow` alone, at most 32. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
-- `accept` required, two columns; `to` is reached only by `spec card accept`, so it may not be the first column, and a move at it, either end, is a config error.
+- `accept` required, two columns; `to` is reached only by an accept, `spec card accept` or `POST .../accept`, so it may not be the first column, and a move at it, either end, is a config error.
 - `moves` `{from, to, by?}` of two columns, each pair once. No `by`, or `by: []` as served: anyone. No `moves`: every ordered pair of the other columns, expanded by the reader, so a reader looks moves up and never judges them.
 - **A new card** takes the first column of the first flow in the file listing its discipline, else of the one flow listing none, else exit 1 naming why. A discipline two flows list goes to the first.
 - **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so a project pasting it changes nothing: `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled Backlog, Ready, In progress, Review, Done, `accept` `review` to `done`, no `moves`, `--discipline` free.
@@ -94,7 +94,7 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 
 - **Fields.** Caps as tasks'; title required, a control character in it stored, printed escaped; `estimate` `parse_estimate`'s, no unit, no sum; `due` `is_calendar_date`; `parent`, `corrects` existing cards, no `parent` cycle, a card never correcting itself.
 - **Evidence.** `--evidence KIND=VALUE`: `url` (`http://`, `https://`), `path` (`<clean relative path>@<blob>`, the blob lower-case hex of any length, the code's rule), `build`, `note`; one line, at most 1024 bytes, 32 entries. Nothing is fetched or read: a reference, never a binary.
-- **Order.** `position` dense from 1 per (flow, `col`). A move leaves its column at `position` 0, closes it up, then opens the target or goes last. `new` goes last; `--before C`, another card of that column, takes its place. Neighbours take `position` alone, no `revision`, `updated_at` or event, so a card passed by loses no compare-and-set. `--to` its own column is a reorder: no flow rule, no `by`. Ties by ID; no clock orders anything.
+- **Order.** `position` dense from 1 per (flow, `col`). A move leaves its column at `position` 0, closes it up, then opens the target or goes last. `new` goes last; `--before C`, another card of that column, takes its place. Neighbours take `position` alone, no `revision`, `updated_at` or event, so a card passed by loses no compare-and-set. `--to` its own column is a reorder: no flow rule, no `by`. Ties by ID.
 - **IDs.** `C-` and 4 or more digits, highest + 1 in the transaction, never deleted or reused. `card_prefix_clash` as `task_prefix_clash`, for `spec card` alone. Unique per `<slug>.db`: a hub must be the one minter, filled by `spec import-state`, never merged.
 - **`revision`** is decimal text from `1`, raised by every change of the row.
 - **Corrupt** (bad JSON, a bad ID, a non-decimal `revision`, a bad `position`, a column that does not read): `show` exit 2 naming the column, `list` a note, the row unreadable, never a failed list. Card reads alone name it: the gate reads `tasks` alone, so a corrupt card row closes no gate.
@@ -112,7 +112,7 @@ Events, the `as` the acting name: `card.created {id, flow, column, position, ass
 
 ## Backup
 
-`STATE_FORMAT` 3, eight header keys at schema 9; formats 1 and 2 still restore. `StoredCard` keeps `position` raw. A card alone occupies a queue. `queue-backup.md`, `tasks.md` "Backup".
+Format 3: `queue-backup.md`, `tasks.md` "Backup".
 
 ## Rules
 
@@ -130,7 +130,3 @@ No proposal, lock or task is read, so a rejected brief stops no card (ADR-0012).
 ## Known limits
 
 `next_card_id` reads `id` with `row.get`, so a card ID with bad bytes makes `spec card new` exit 2; `card_history` likewise on `events.payload`.
-
-## Tests
-
-`fixtures/card-press`, an invented print shop. CLI `tests/cards.rs`, store `tests/queue_cards.rs`, MCP `tests/mcp_cards.rs`, `mcp_door.rs`.

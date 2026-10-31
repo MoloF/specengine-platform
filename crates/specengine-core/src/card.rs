@@ -12,6 +12,7 @@ use specengine_model::{Card, EvidenceKind, IdScheme};
 
 use crate::card_toml::CardFlow;
 use crate::check::is_calendar_date;
+use crate::record::is_escaped;
 use crate::roadmap::parse_estimate;
 use crate::walk_scope::is_clean_relative;
 
@@ -38,6 +39,9 @@ pub const EVIDENCE_VALUE_MAX: usize = 1024;
 
 /// The most `card.*` events `--history` gives, the last ones.
 pub const HISTORY_MAX: usize = 64;
+
+/// The most bytes of a card person's name, trimmed.
+pub const CARD_PERSON_MAX: usize = 128;
 
 /// The card ID of `number`: `C-` and the number, zero-padded to
 /// [`CARD_DIGITS`].
@@ -292,6 +296,37 @@ pub fn accept_refusal(card: &Card, flow: Option<&CardFlow>, actor: &str) -> Opti
 pub fn reviewer_problem(name: &str) -> Option<String> {
     (name == LOCAL_ACTOR || name == AGENT_ACTOR)
         .then(|| format!("`{name}` can be no reviewer: a person accepts a result"))
+}
+
+/// A card's person as stored and compared: `written`, trimmed. Every name
+/// passes here (`--as`, `assignee`, `reviewer`, a move's `by`), so `by` and
+/// the reviewer compare exact on the same text.
+pub fn card_person(written: &str) -> &str {
+    written.trim()
+}
+
+/// Why `written` can be no card's person, trimmed: empty, over
+/// [`CARD_PERSON_MAX`] bytes, or holding a control character, U+2028, U+2029
+/// or a bidirectional mark. Any script and inner spaces stand: a person's
+/// name is typed as it is spoken and is no ID, so the Latin-only rule of IDs
+/// does not reach it. [`LOCAL_ACTOR`] and [`AGENT_ACTOR`] pass here; only
+/// [`reviewer_problem`] refuses them.
+pub fn card_person_problem(written: &str) -> Option<String> {
+    let name = card_person(written);
+    if name.is_empty() {
+        return Some("empty; give a value or leave the option out".to_owned());
+    }
+    if name.len() > CARD_PERSON_MAX {
+        return Some(format!("{} bytes; at most {CARD_PERSON_MAX}", name.len()));
+    }
+    name.chars()
+        .find(|&c| c.is_control() || is_escaped(c) || matches!(c, '\u{2028}' | '\u{2029}'))
+        .map(|c| {
+            format!(
+                "U+{:04X} in a name: one line, no control character or bidirectional mark",
+                u32::from(c)
+            )
+        })
 }
 
 /// Why `written` is no estimate: [`parse_estimate`]'s, no unit.

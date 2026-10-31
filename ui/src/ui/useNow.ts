@@ -34,3 +34,11 @@ function snapshot(): number {
 export function useNow(): number {
   return useSyncExternalStore(subscribe, snapshot);
 }
+
+/**
+ * What `select` makes of the clock: a tick that leaves it equal re-renders nothing. A primitive,
+ * since the store compares snapshots by identity and a fresh object would never settle.
+ */
+export function useNowOf<Value extends string | number | boolean | null>(select: (now: number) => Value): Value {
+  return useSyncExternalStore(subscribe, () => select(snapshot()));
+}

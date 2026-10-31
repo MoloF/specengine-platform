@@ -1,6 +1,7 @@
 import {
   ClientError,
   type BundleOptions,
+  type CardsOptions,
   type FlowOptions,
   type GraphOptions,
   type NodeOptions,
@@ -13,6 +14,16 @@ import {
 import type {
   ApiError,
   BundleView,
+  Card,
+  CardAcceptBody,
+  CardAssignBody,
+  CardCancelBody,
+  CardCreateBody,
+  CardEditBody,
+  CardList,
+  CardMoveBody,
+  CardNotFound,
+  CardWrite,
   CheckReport,
   FlowView,
   GraphView,
@@ -42,7 +53,7 @@ import type {
 // the question round `docs/features/ui-round.md` "Data", the unapplied amendments
 // `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
 // the lock diff `docs/features/lock-diff.md` "Route", the flow `docs/features/flow-canvas.md`
-// "Data"): `fetch` and `EventSource`, no package.
+// "Data", the cards `docs/features/board-ui.md` "Routes"): `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -54,8 +65,8 @@ const API = "/api";
 /**
  * The queue's event types: the proposals' seven
  * (`docs/canon/proposal-queue.md` "States and events"; the stage's two after `apply_failed`:
- * `docs/canon/decision-staging.md` "Queue"), then the tasks' nine (`docs/canon/tasks.md` "Store").
- * An EventSource hands a named event only to a listener of that name: a type missing here is
+ * `docs/canon/decision-staging.md` "Queue"), the tasks' nine (`docs/canon/tasks.md` "Store"), then
+ * the cards' six (`docs/canon/cards.md` "Documents and events"). An EventSource hands a named event only to a listener of that name: a type missing here is
  * never seen.
  */
 export const QUEUE_EVENT_TYPES = [
@@ -75,6 +86,12 @@ export const QUEUE_EVENT_TYPES = [
   "task.completed",
   "task.cancelled",
   "task.refreshed",
+  "card.created",
+  "card.moved",
+  "card.accepted",
+  "card.edited",
+  "card.assigned",
+  "card.cancelled",
 ] as const;
 
 /** The first wait before a stream the browser gave up on is opened again; doubled per failure. */
@@ -123,6 +140,16 @@ function roundPath(project: string): string {
   return `${projectPath(project)}/round`;
 }
 
+/** The project's cards; a card's five writes are under `cardPath`. */
+function cardsPath(project: string): string {
+  return `${projectPath(project)}/cards`;
+}
+
+/** One card's path. */
+function cardPath(project: string, id: string): string {
+  return `${cardsPath(project)}/${segment(id)}`;
+}
+
 const NOT_JSON = Symbol("not JSON");
 
 function parsed(text: string): unknown {
@@ -147,15 +174,19 @@ export function errorBodyOf(value: unknown): ApiError | null {
 }
 
 /**
- * The reason a refused write's review document gives: the last of its `notes` (the 409 of a stage
- * on a proposal not open or changed since read, `docs/canon/decision-staging.md` "Daemon"); null
- * for any other body.
+ * The reason a refused write's document gives: the last of its `notes` (the 409 of a stage on a
+ * proposal not open or changed since read, `docs/canon/decision-staging.md` "Daemon"; a card's write
+ * document, `docs/features/board-ui.md` "Routes"), else its `reason` (no such card's `{id, reason}`);
+ * null for any other body.
  */
 export function refusedReasonOf(value: unknown): string | null {
-  if (typeof value !== "object" || value === null || Array.isArray(value) || !("notes" in value)) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
     return null;
   }
-  const notes: unknown = value.notes;
+  if ("reason" in value && !("notes" in value)) {
+    return typeof value.reason === "string" && value.reason !== "" ? value.reason : null;
+  }
+  const notes: unknown = "notes" in value ? value.notes : null;
   if (!Array.isArray(notes)) {
     return null;
   }
@@ -426,6 +457,52 @@ export class HttpClient implements SpecEngineClient {
   async stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome> {
     const sent: RoundAnswersBody = { project, answers };
     return (await request("POST", `${roundPath(project)}/answers`, { body: JSON.stringify(sent) })) as RoundAnswersOutcome;
+  }
+
+  /**
+   * `spec card list [--with-cancelled] --json` as the browser view (`docs/features/board-ui.md`
+   * "Routes"): `with_cancelled` the one query, sent only as true; the screen filters the answer. A
+   * 503 (a bad `[card]`) rejects in the daemon's words. Takes its query's AbortSignal.
+   */
+  async getCards(project: string, options: CardsOptions = {}, signal?: AbortSignal): Promise<CardList> {
+    const query = queryOf([["with_cancelled", options.with_cancelled === true ? true : undefined]]);
+    return (await request("GET", `${cardsPath(project)}${query}`, { signal })) as CardList;
+  }
+
+  /**
+   * `spec card show C --history --json`, uncut, no query; the ID a path segment encoded once. A 404
+   * is the exit-1 document `{id, reason}`, resolved as data.
+   */
+  async getCard(project: string, id: string, signal?: AbortSignal): Promise<Card | CardNotFound> {
+    return (await request("GET", cardPath(project, id), { signal })) as Card | CardNotFound;
+  }
+
+  // The card writes (`docs/features/board-ui.md` "Routes"), each a JSON body and no AbortSignal: a
+  // write's answer is always taken. 200 the write document. A refusal (409) rejects with its last
+  // note, no such card (404) with its `reason`, an error body with its message.
+
+  async createCard(project: string, body: CardCreateBody): Promise<CardWrite> {
+    return (await request("POST", cardsPath(project), { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  async moveCard(project: string, id: string, body: CardMoveBody): Promise<CardWrite> {
+    return (await request("POST", `${cardPath(project, id)}/move`, { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  async editCard(project: string, id: string, body: CardEditBody): Promise<CardWrite> {
+    return (await request("POST", `${cardPath(project, id)}/edit`, { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  async assignCard(project: string, id: string, body: CardAssignBody): Promise<CardWrite> {
+    return (await request("POST", `${cardPath(project, id)}/assign`, { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  async cancelCard(project: string, id: string, body: CardCancelBody): Promise<CardWrite> {
+    return (await request("POST", `${cardPath(project, id)}/cancel`, { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  async acceptCard(project: string, id: string, body: CardAcceptBody): Promise<CardWrite> {
+    return (await request("POST", `${cardPath(project, id)}/accept`, { body: JSON.stringify(body) })) as CardWrite;
   }
 
   /**

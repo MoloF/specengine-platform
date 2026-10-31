@@ -7,6 +7,11 @@ import type {
   BundleItem,
   BundleLayers,
   BundleView,
+  Card,
+  CardFlow,
+  CardList,
+  CardRow,
+  CardWrite,
   CheckCounts,
   CheckFinding,
   CheckReport,
@@ -793,4 +798,93 @@ export function aRoadmap(groups: RoadmapGroup[], fields: Partial<RoadmapDocument
     omitted: 0,
     ...fields,
   };
+}
+
+/** A flow for the Board's tests: invented columns, every ordered pair of the open ones a move, as a reader expands them. */
+export function aCardFlow(fields: Partial<CardFlow> & { name?: string } = {}): CardFlow {
+  return {
+    name: "work",
+    disciplines: [],
+    columns: [
+      { id: "todo", title: "To do" },
+      { id: "doing", title: "Doing" },
+      { id: "check", title: "Check" },
+      { id: "closed", title: "Closed" },
+    ],
+    moves: [
+      { from: "todo", to: "doing", by: [] },
+      { from: "todo", to: "check", by: [] },
+      { from: "doing", to: "todo", by: [] },
+      { from: "doing", to: "check", by: [] },
+      { from: "check", to: "todo", by: [] },
+      { from: "check", to: "doing", by: [] },
+    ],
+    accept: { from: "check", to: "closed" },
+    ...fields,
+  };
+}
+
+/** A row as `spec card list --json` gives it; omitted keys null or empty. */
+export function aCardRow(fields: Partial<CardRow> & { id: string }): CardRow {
+  return {
+    flow: "work",
+    column: "todo",
+    position: 1,
+    title: `Card ${fields.id}`,
+    discipline: null,
+    targets: [],
+    assignee: null,
+    reviewer: null,
+    estimate: null,
+    due: null,
+    parent: null,
+    corrects: null,
+    updated_at: "2026-10-30T09:00:00Z",
+    revision: "1",
+    accepted: false,
+    cancelled: false,
+    ...fields,
+  };
+}
+
+/** `spec card list --json` over rows; the flow is one by default. */
+export function aCardList(cards: CardRow[], fields: Partial<CardList> = {}): CardList {
+  return { flows: [aCardFlow()], cards, notes: [], truncated: false, omitted: null, ...fields };
+}
+
+/** `spec card show C --history --json`; omitted keys null or empty. */
+export function aCard(fields: Partial<Card> & { id: string }): Card {
+  return {
+    flow: "work",
+    column: "todo",
+    position: 1,
+    title: `Card ${fields.id}`,
+    goal: null,
+    discipline: null,
+    targets: [],
+    snapshot: null,
+    criteria: [],
+    assignee: null,
+    reviewer: null,
+    estimate: null,
+    due: null,
+    parent: null,
+    corrects: null,
+    evidence: [],
+    acceptance: null,
+    cancellation: null,
+    created_by: "local",
+    created_at: "2026-10-29T09:00:00Z",
+    updated_at: "2026-10-30T09:00:00Z",
+    revision: "1",
+    allowed: [],
+    history: [],
+    notes: [],
+    ...fields,
+  };
+}
+
+/** A write's document for a card. */
+export function aCardWrite(id: string, fields: Partial<CardWrite> = {}): CardWrite {
+  return { id, flow: "work", column: "todo", position: 1, revision: "2", allowed: [], notes: [], ...fields };
 }

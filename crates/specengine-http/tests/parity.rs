@@ -12,6 +12,15 @@
 //!
 //! docs/features/flow-read.md AC-07: `flow`, on both A and B: no query, a
 //! depth, a ROOT of each tree. Its own forms are `flow.rs`.
+//!
+//! AC-01 of docs/features/board-ui.md: over `fixtures/card-press` `GET cards`
+//! with every filter is `spec card list --json`, `GET cards/C` is `spec card
+//! show C --history --json`, byte for byte (exit 1 a 404); past the cap the
+//! list is the browser view ("Routes"): the CLI's rows byte for byte, then
+//! the rest, `truncated` false, `omitted` null, where `spec card list` cuts;
+//! a show past the cap is still the CLI's document. A, B and the press share
+//! one `HOME`, one daemon and a board each (ADR-0008). M: `card_list`
+//! called with the capped view.
 
 mod common;
 
@@ -915,4 +924,365 @@ fn rd7_lock_diff_is_the_clis_document_byte_for_byte() {
             "{path}: the CLI's line verbatim"
         );
     }
+}
+
+// ---------------------------------------------------------------- cards
+
+/// The press's routes.
+const PRESS: &str = "/api/projects/card-press";
+
+/// A card through `spec card new` under the pair's `HOME`; its ID.
+fn new_card(pair: &Pair, root: &Path, flags: &[&str]) -> String {
+    let mut args = vec!["card", "new"];
+    args.extend_from_slice(flags);
+    let run = pair.cli(root, &args);
+    run.code(0);
+    run.json()["id"].as_str().expect("an ID").to_owned()
+}
+
+/// A same-origin page's POST, the answer a 200.
+fn page_post(server: &Server, path: &str, body: &Value) {
+    let reply = server.stage(path, &body.to_string());
+    assert_eq!(reply.status, 200, "{path} {body}: {}", reply.text());
+}
+
+#[test]
+fn board_ac01_the_board_and_a_card_are_the_clis_byte_for_byte() {
+    let pair = Pair::new("parity-cards");
+    let (a, b) = (&pair.a, &pair.b);
+    let press = pair.scratch.repo("card-press", "press", "main");
+    let server = Server::serve(&pair.home, &pair.cwd, &[a, b, &press]);
+
+    // The empty board: its flows, nothing seeded; a project with no `[card]`
+    // the default flow; the same bytes on all three.
+    let cards = format!("{PRESS}/cards");
+    let empty = pair.same(&server, &press, &cards, &["card", "list"]);
+    let expected: Value = serde_json::from_str(&common::read_text(
+        &common::fixture("card-press"),
+        "expected.json",
+    ))
+    .expect("expected.json");
+    assert_eq!(empty.json()["flows"], expected["flows"], "the fixture's");
+    assert_eq!(empty.json()["cards"], json!([]));
+    assert_eq!(empty.json()["truncated"], json!(false));
+    assert_eq!(empty.json()["omitted"], Value::Null);
+    for (root, slug) in [(a, "lantern-keep"), (b, "zerkalo")] {
+        let path = format!("/api/projects/{slug}/cards");
+        let reply = pair.same(&server, root, &path, &["card", "list"]);
+        assert_eq!(reply.json()["flows"][0]["name"], json!("plain"), "{slug}");
+    }
+
+    // One card of each ending, written by the CLI and by the page.
+    let lead = new_card(
+        &pair,
+        &press,
+        &[
+            "--title",
+            "Lead story",
+            "--discipline",
+            "copy",
+            "--target",
+            "SHT-FRONT",
+            "--assignee",
+            "ana",
+            "--estimate",
+            "2-3",
+            "--due",
+            "2026-03-01",
+            "--criterion",
+            "Fits the page.",
+            "--as",
+            "desk",
+        ],
+    );
+    let plain = new_card(
+        &pair,
+        &press,
+        &["--title", "Back page", "--discipline", "copy"],
+    );
+    let plate = new_card(
+        &pair,
+        &press,
+        &["--title", "Front plate", "--discipline", "plates"],
+    );
+    let gone = new_card(
+        &pair,
+        &press,
+        &["--title", "Spare plate", "--discipline", "plates"],
+    );
+    let done = new_card(
+        &pair,
+        &press,
+        &[
+            "--title",
+            "Weather box",
+            "--discipline",
+            "copy",
+            "--assignee",
+            "ana",
+        ],
+    );
+    pair.cli(&press, &["card", "move", &plate, "--to", "blocked"])
+        .code(0);
+    pair.cli(&press, &["card", "cancel", &gone, "--reason", "Pulled."])
+        .code(0);
+    pair.cli(
+        &press,
+        &["card", "edit", &lead, "--evidence", "note=first pass"],
+    )
+    .code(0);
+    pair.cli(&press, &["card", "assign", &done, "--reviewer", "ben"])
+        .code(0);
+    pair.cli(
+        &press,
+        &["card", "move", &done, "--to", "edit", "--as", "desk"],
+    )
+    .code(0);
+    pair.cli(&press, &["card", "move", &done, "--to", "proof"])
+        .code(0);
+    page_post(
+        &server,
+        &format!("{cards}/{done}/accept"),
+        &json!({"as": "ben", "note": "Read twice."}),
+    );
+    new_card(&pair, a, &["--title", "Refill the oil"]);
+    new_card(&pair, b, &["--title", "Mend the net"]);
+
+    for (query, flags) in [
+        ("", &[][..]),
+        ("?with_cancelled=true", &["--with-cancelled"][..]),
+        ("?with_cancelled=false", &[][..]),
+        ("?no_target=false", &[][..]),
+        ("?flow=copy", &["--flow", "copy"][..]),
+        ("?flow=nope", &["--flow", "nope"][..]),
+        ("?column=draft", &["--column", "draft"][..]),
+        ("?column=blocked", &["--column", "blocked"][..]),
+        ("?discipline=plates", &["--discipline", "plates"][..]),
+        ("?assignee=ana", &["--assignee", "ana"][..]),
+        ("?no_target=true", &["--no-target"][..]),
+        (
+            "?no_target=true&with_cancelled=true",
+            &["--no-target", "--with-cancelled"][..],
+        ),
+        (
+            "?flow=copy&assignee=ana&column=filed",
+            &["--flow", "copy", "--assignee", "ana", "--column", "filed"][..],
+        ),
+    ] {
+        let mut args = vec!["card", "list"];
+        args.extend_from_slice(flags);
+        let path = format!("{cards}{query}");
+        let first = pair.same(&server, &press, &path, &args);
+        assert_eq!(first.text(), server.get(&path).text(), "{path}: one state");
+    }
+    let whole = pair.same(
+        &server,
+        &press,
+        &format!("{cards}?with_cancelled=true"),
+        &["card", "list", "--with-cancelled"],
+    );
+    // By flow, column in config order, a cancelled card last in its column.
+    let ids: Vec<String> = whole.json()["cards"]
+        .as_array()
+        .expect("cards")
+        .iter()
+        .map(|row| row["id"].as_str().expect("an ID").to_owned())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            lead.as_str(),
+            plain.as_str(),
+            done.as_str(),
+            gone.as_str(),
+            plate.as_str()
+        ],
+        "{}",
+        whole.text()
+    );
+    assert_eq!(whole.json()["cards"][2]["accepted"], json!(true));
+    assert_eq!(whole.json()["cards"][3]["cancelled"], json!(true));
+    for id in [&lead, &plain, &plate, &gone, &done] {
+        let path = format!("{cards}/{id}");
+        pair.same(&server, &press, &path, &["card", "show", id, "--history"]);
+    }
+    let shown = server.get(&format!("{cards}/{done}")).status(200).json();
+    assert_eq!(shown["acceptance"]["by"], json!("ben"), "{shown}");
+    assert!(shown["history"].is_array(), "uncut, `--history`: {shown}");
+    for id in ["C-0099", "foo"] {
+        pair.same(
+            &server,
+            &press,
+            &format!("{cards}/{id}"),
+            &["card", "show", id, "--history"],
+        );
+    }
+    pair.same(
+        &server,
+        a,
+        "/api/projects/lantern-keep/cards",
+        &["card", "list"],
+    );
+    pair.same(
+        &server,
+        b,
+        "/api/projects/zerkalo/cards/C-0001",
+        &["card", "show", "C-0001", "--history"],
+    );
+    // A look-alike is the CLI's exit 2: a 503, its line.
+    let look_alike = "\u{0421}-0001";
+    pair.cannot(
+        &server,
+        &press,
+        &format!("{cards}/{}", encode_component(look_alike)),
+        &["card", "show", look_alike, "--history"],
+    );
+}
+
+/// "Rules and edge cases": a card whose column `[card]` no longer lists: the
+/// daemon's list and show stay the CLI's, the note in `notes`, its row
+/// where a page draws the last lane. The config is read per call.
+#[test]
+fn board_a_card_outside_its_flow_is_served_as_the_cli_serves_it() {
+    let pair = Pair::new("parity-cards-stranded");
+    let press = pair.scratch.repo("card-press", "press", "main");
+    let server = Server::serve(&pair.home, &pair.cwd, &[&press]);
+    let cards = format!("{PRESS}/cards");
+    let stuck = new_card(
+        &pair,
+        &press,
+        &["--title", "Stuck", "--discipline", "plates"],
+    );
+    new_card(
+        &pair,
+        &press,
+        &["--title", "Fine", "--discipline", "plates"],
+    );
+    pair.cli(&press, &["card", "move", &stuck, "--to", "blocked"])
+        .code(0);
+    common::replace(
+        &press,
+        "specengine.toml",
+        "columns = [\"queued\", \"blocked\", \"checked\", \"struck\"]",
+        "columns = [\"queued\", \"checked\", \"struck\"]",
+    );
+    let reply = pair.same(&server, &press, &cards, &["card", "list"]);
+    let board = reply.json();
+    assert_eq!(board["cards"][1]["id"], json!(stuck), "last: {board}");
+    assert_eq!(board["cards"][1]["column"], json!("blocked"), "{board}");
+    assert!(
+        board["notes"].to_string().contains(&stuck),
+        "the daemon's note: {board}"
+    );
+    let path = format!("{cards}/{stuck}");
+    pair.same(
+        &server,
+        &press,
+        &path,
+        &["card", "show", &stuck, "--history"],
+    );
+}
+
+/// AC-01 and "Routes": past `OUTPUT_CAP_CHARS`. The CLI cuts `list`; the
+/// daemon's browser view does not, and holds the CLI's bytes up to the cut;
+/// each half of the board, under the cap, is the CLI's byte for byte, so
+/// every row past the cut has an oracle too. A show past the cap is the
+/// CLI's document: only its text is cut. M: the capped view.
+#[test]
+fn board_ac01_past_the_cap_the_board_comes_whole_and_a_card_stays_the_clis() {
+    let pair = Pair::new("parity-cards-cap");
+    let press = pair.scratch.repo("card-press", "press", "main");
+    let server = Server::serve(&pair.home, &pair.cwd, &[&press]);
+    let cards = format!("{PRESS}/cards");
+    let title = "t".repeat(240);
+    for card in 0..200 {
+        let assignee = if card % 2 == 0 { "ana" } else { "ben" };
+        page_post(
+            &server,
+            &cards,
+            &json!({"title": title, "discipline": "copy", "assignee": assignee}),
+        );
+    }
+
+    let cut = pair.cli(&press, &["card", "list", "--with-cancelled"]);
+    cut.code(0);
+    let capped = cut.json();
+    assert_eq!(capped["truncated"], json!(true), "the CLI cuts");
+    let omitted = capped["omitted"].as_u64().expect("the CLI's count");
+    let shown = capped["cards"].as_array().expect("cards").len();
+    assert_eq!(shown as u64 + omitted, 200);
+    assert!(omitted > 0 && shown > 0, "{shown} + {omitted}");
+
+    let reply = server.get(&format!("{cards}?with_cancelled=true"));
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    assert!(reply.text().chars().count() > 40_000, "past the cap");
+    let whole = reply.json();
+    assert_eq!(
+        whole["truncated"],
+        json!(false),
+        "the browser view is whole"
+    );
+    assert_eq!(whole["omitted"], Value::Null, "nothing omitted");
+    assert_eq!(whole["cards"].as_array().map(Vec::len), Some(200));
+    assert_eq!(whole["flows"], capped["flows"]);
+    assert_eq!(whole["notes"], capped["notes"]);
+    let keys =
+        |value: &Value| -> Vec<String> { value.as_object().unwrap().keys().cloned().collect() };
+    assert_eq!(keys(&whole), keys(&capped), "the same keys");
+    let rows = cut
+        .document()
+        .split_once("],\"notes\":")
+        .expect("the document's rows")
+        .0;
+    assert!(
+        reply.text().starts_with(rows),
+        "the CLI's bytes, then the rest"
+    );
+    assert!(
+        reply
+            .text()
+            .ends_with("],\"notes\":[],\"truncated\":false,\"omitted\":null}"),
+        "{}",
+        &reply.text()[reply.text().len() - 80..]
+    );
+
+    // A filter brings each half under the cap: the CLI's bytes, and with
+    // them every row of the whole board.
+    let mut halves: Vec<Value> = Vec::new();
+    for assignee in ["ana", "ben"] {
+        let half = pair.same(
+            &server,
+            &press,
+            &format!("{cards}?assignee={assignee}"),
+            &["card", "list", "--assignee", assignee],
+        );
+        let half = half.json();
+        assert_eq!(
+            half["truncated"],
+            json!(false),
+            "{assignee} is under the cap"
+        );
+        halves.extend(half["cards"].as_array().expect("cards").iter().cloned());
+    }
+    let mut rows: Vec<Value> = whole["cards"].as_array().expect("cards").clone();
+    let id = |row: &Value| row["id"].as_str().expect("an ID").to_owned();
+    rows.sort_by_key(id);
+    halves.sort_by_key(id);
+    assert_eq!(rows, halves, "every row is a row of the CLI's");
+
+    // A card past the cap: goal, 32 criteria and 32 evidence entries of 1 KB.
+    let criteria = vec!["c".repeat(1024); 32];
+    let evidence = vec![format!("note={}", "n".repeat(1024)); 32];
+    page_post(
+        &server,
+        &format!("{cards}/C-0002/edit"),
+        &json!({"goal": "g".repeat(4096), "criterion": criteria, "evidence": evidence}),
+    );
+    let reply = pair.same(
+        &server,
+        &press,
+        &format!("{cards}/C-0002"),
+        &["card", "show", "C-0002", "--history"],
+    );
+    assert!(reply.text().chars().count() > 40_000, "past the cap");
 }

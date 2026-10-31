@@ -475,6 +475,9 @@ textarea.field {
 .tone-unbound-homoglyph { --badge-color: var(--unbound-homoglyph); }
 .tone-unbound-unanchored { --badge-color: var(--unbound-unanchored); }
 .tone-unbound-cannot-verify { --badge-color: var(--unbound-cannot-verify); }
+.tone-card-accepted { --badge-color: var(--card-accepted); }
+.tone-card-cancelled { --badge-color: var(--card-cancelled); }
+.tone-card-overdue { --badge-color: var(--card-overdue); }
 .tone-roadmap-current { --badge-color: var(--roadmap-current); }
 .tone-roadmap-cut { --badge-color: var(--roadmap-cut); }
 .tone-roadmap-cycle { --badge-color: var(--roadmap-cycle); }
@@ -1852,6 +1855,9 @@ mark {
 
 /* Tree node pane: the way to the graph. */
 .node-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
   font-size: var(--font-size-s);
 }
 
@@ -4958,5 +4964,388 @@ mark {
 @media (max-width: 48rem) {
   .flow-canvas .react-flow__minimap {
     display: none;
+  }
+}
+
+/* The Board (docs/features/board-ui.md): tools over the columns, the panel beside them from 64rem,
+   the columns scrolling sideways, one under the other on a phone. Long words of any script wrap. */
+.board-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-2) var(--space-3);
+}
+
+.board-tool {
+  display: grid;
+  gap: var(--space-1);
+  flex: 0 1 11rem;
+  min-width: 8rem;
+}
+
+.board-tool-check {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+  min-width: 0;
+  min-height: max(var(--target-min), 2.25rem);
+}
+
+.board-acting {
+  margin-left: auto;
+}
+
+.board-results,
+.board-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.board-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 64rem) {
+  .board-stage-panel {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
+  }
+}
+
+/* Relative, so the visually hidden labels of columns scrolled off stay inside the scroller. */
+.board-columns {
+  position: relative;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(14rem, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+}
+
+.board-column {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.board-column-outside {
+  border-style: dashed;
+  border-color: var(--border-control);
+}
+
+.board-column-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-m);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.board-column-count {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: 500;
+}
+
+.board-list {
+  display: grid;
+  gap: var(--space-2);
+  min-height: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-slot {
+  min-width: 0;
+}
+
+.board-slot-drop {
+  padding-top: var(--space-1);
+  border-top: 2px solid var(--card-drop);
+}
+
+.board-drop-end {
+  border-top: 2px solid var(--card-drop);
+}
+
+.board-card {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.board-card:hover {
+  border-color: var(--border-control);
+}
+
+.board-card-selected,
+.board-card-selected:hover {
+  border-color: var(--accent);
+}
+
+.board-card-closed {
+  background: var(--surface-panel);
+}
+
+.board-card-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.board-card-id {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.board-card-title {
+  font-size: var(--font-size-m);
+  font-weight: 600;
+  line-height: var(--line-height-tight);
+}
+
+.board-card-title a {
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.board-card-title a:hover {
+  text-decoration: underline;
+}
+
+.board-card-who,
+.board-card-when {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-3);
+  font-size: var(--font-size-s);
+}
+
+.board-card-when {
+  color: var(--text-secondary);
+}
+
+.board-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.board-card-source {
+  min-width: 0;
+  font-size: var(--font-size-s);
+}
+
+.board-move {
+  flex: none;
+  min-height: var(--target-min);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-s);
+}
+
+.board-hint {
+  font-size: var(--font-size-s);
+}
+
+.move-menu-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-dialog);
+}
+
+.move-menu {
+  position: fixed;
+  z-index: var(--z-dialog);
+  display: grid;
+  width: max-content;
+  min-width: 13rem;
+  max-width: calc(100vw - var(--space-4));
+  padding: var(--space-1);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-overlay);
+}
+
+.move-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: max(var(--target-min), 2.25rem);
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.move-menu-item:hover {
+  background: var(--surface-raised);
+}
+
+.move-menu-detail {
+  margin-inline-start: auto;
+  padding-inline-start: var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.move-menu-empty {
+  padding: var(--space-2);
+  color: var(--text-secondary);
+}
+
+.board-panel {
+  display: grid;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+  overflow-wrap: anywhere;
+}
+
+.board-panel-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.board-panel-title {
+  grid-column: 1 / -1;
+  font-size: var(--font-size-l);
+  line-height: var(--line-height-tight);
+}
+
+.board-panel-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.board-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.board-panel-part {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.board-panel-list {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.board-evidence {
+  display: grid;
+  justify-items: start;
+  gap: 0;
+  font-size: var(--font-size-s);
+}
+
+.board-history-line {
+  display: grid;
+  font-size: var(--font-size-s);
+}
+
+.board-history-line time {
+  color: var(--text-secondary);
+}
+
+.card-dialog {
+  width: min(40rem, 100%);
+}
+
+.card-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.card-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+
+.card-field {
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.card-field-hint {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.card-evidence-field {
+  min-width: 0;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+}
+
+.card-evidence-field legend {
+  padding: 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: 500;
+}
+
+@media (max-width: 36rem) {
+  .board-acting {
+    margin-left: 0;
+  }
+
+  .board-tool:not(.board-tool-check) {
+    flex: 1 1 8rem;
+  }
+
+  .board-columns {
+    grid-auto-flow: row;
+    grid-auto-columns: auto;
+    overflow-x: visible;
   }
 }

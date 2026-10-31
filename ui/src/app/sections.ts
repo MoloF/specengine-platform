@@ -1,10 +1,15 @@
-/** The eight sections of the nav, in order (07 §3 "Web UI — screens"), each with what it shows. */
+/** The nine sections of the nav, in order (07 §3 "Web UI — screens"), each with what it shows. */
 export const SECTIONS = [
   { id: "inbox", label: "Inbox", about: "Proposals waiting for your decision." },
   {
     id: "tasks",
     label: "Tasks",
     about: "Tasks from draft to done: what waits for you, each task's plan, spec changes and runs.",
+  },
+  {
+    id: "board",
+    label: "Board",
+    about: "The work as cards: what stands where, who has it, when it is due and where it came from.",
   },
   {
     id: "roadmap",
@@ -31,6 +36,11 @@ export const SECTIONS = [
 ] as const;
 
 export type SectionId = (typeof SECTIONS)[number]["id"];
+
+/** What a section shows, as the nav's table words it. */
+export function aboutOf(id: SectionId): string {
+  return SECTIONS.find((section) => section.id === id)?.about ?? "";
+}
 
 export function isSectionId(value: string): value is SectionId {
   return SECTIONS.some((section) => section.id === value);

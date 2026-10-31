@@ -10,7 +10,9 @@
 //! - A tool acts as `agent` (AC-03): `by = ["desk"]` refuses it naming `desk`,
 //!   a flow listing `agent` admits it, the event records it.
 //! - `move_card` never reaches `accept.to` (AC-04's M).
-//! - A refusal keeps its document, no such card and an exit 2 have none.
+//! - A refusal keeps its document, no such card and an exit 2 have none;
+//!   nothing asked is an exit 2 (docs/features/board-ui.md: its `{id, reason}`
+//!   is the daemon's alone).
 //! - `copy`, `plates` and the default flow of three projects run one tool
 //!   code (AC-10); no reply names a stack word.
 //! - The MCP sources hold no `card_accept`, `card_assign`, `card_cancel`.
@@ -492,6 +494,54 @@ fn refusals_read_as_the_clis() {
     assert_eq!(alike["isError"], json!(true));
     assert!(alike.get("structuredContent").is_none(), "{alike}");
     assert!(content_text(alike).contains("`C-0001`"), "{alike}");
+    drop(session.finish());
+}
+
+/// docs/features/board-ui.md "Files in scope": nothing asked of `move_card`
+/// or `edit_card` is an error result with the CLI's one line and no
+/// `structuredContent`: no tool's output schema holds `{id, reason}`.
+#[test]
+fn nothing_asked_has_no_document() {
+    let repo = Repo::new("mc-nothing", "card-press");
+    let mut session = repo.session(Era::Legacy);
+    session.call(
+        "create_card",
+        json!({"title": "Lead", "discipline": "copy"}),
+    );
+    for (tool, args, line) in [
+        (
+            "move_card",
+            json!({"card_id": "C-0001"}),
+            "spec: `spec card move` asks nothing: give --to K, --before C or both\n",
+        ),
+        (
+            "move_card",
+            json!({"card_id": "C-0001", "revision": "1"}),
+            "spec: `spec card move` asks nothing: give --to K, --before C or both\n",
+        ),
+        (
+            "edit_card",
+            json!({"card_id": "C-0001"}),
+            "spec: `spec card edit` asks nothing: give a field to change or --evidence\n",
+        ),
+        (
+            "edit_card",
+            json!({"card_id": "C-0001", "revision": "1"}),
+            "spec: `spec card edit` asks nothing: give a field to change or --evidence\n",
+        ),
+    ] {
+        let reply = session.call(tool, args);
+        let reply = result(&reply);
+        assert_eq!(reply["isError"], json!(true), "{tool}: {reply}");
+        assert!(reply.get("structuredContent").is_none(), "{tool}: {reply}");
+        assert_eq!(content_text(reply), line, "{tool}");
+    }
+    let shown = session.call("get_card", json!({"card_id": "C-0001"}));
+    assert_eq!(
+        result(&shown)["structuredContent"]["revision"],
+        json!("1"),
+        "nothing changed"
+    );
     drop(session.finish());
 }
 

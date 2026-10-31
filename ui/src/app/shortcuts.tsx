@@ -84,6 +84,19 @@ const TASKS_KEYS: readonly Shortcut[] = [
   [["?"], "Show this list"],
 ];
 
+/** The Board's keys (docs/features/board-ui.md "Moving"): the cards, one tab stop; the Move menu. */
+const BOARD_KEYS: readonly Shortcut[] = [
+  [["Down arrow", "Up arrow"], "Cards: the next or previous card in the column; Move menu: the next or previous line"],
+  [["Left arrow", "Right arrow"], "Cards: the nearest card of the column beside"],
+  [["Home", "End"], "Cards: first or last card of the column; Move menu: its first or last line"],
+  [["Enter"], "Cards: open the card's panel; Move menu: take the line"],
+  [["m"], "Cards: open the Move menu"],
+  [["n"], "New card"],
+  [["Esc"], "Close the Move menu or the panel, focus back on the card; a dialog: close it"],
+  JUMP,
+  [["?"], "Show this list"],
+];
+
 /** Health's keys (docs/features/ui-health.md, keys as Tasks): the findings, one Tab stop; no key changes anything. */
 const HEALTH_KEYS: readonly Shortcut[] = [
   [["j", "Down arrow"], "Findings: next finding"],
@@ -108,6 +121,7 @@ const INTRO: Partial<Record<SectionId, string>> = {
   flow: `Keys act on the canvas's focused box, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One box holds the tab stop; arrows only move it. The List view holds every box and edge as text. Nothing here writes: changes go through your AI, as proposals.`,
   tasks: `Keys act where focus is (the task list, the tabs), outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} Arrows only move; Enter and clicks open, one history entry each. No key changes a task: owner actions are commands you copy to a terminal.`,
   health: `Keys act on the findings' focused row, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One row holds the Tab stop; arrows only move it. Health is read only: nothing here fixes a finding.`,
+  board: `Keys act on the focused card, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One card holds the Tab stop; arrows only move it. A move goes to the daemon, which says whether it stands.`,
   roadmap: `No key moves an item: the Roadmap is read only, and an item moves when its file's release, priority or depends_on changes. Keys act outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED}`,
   questions: `No key answers or stages here: pick each answer with its controls (arrows move within an item's choices), then Stage. Keys act outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED}`,
 };
@@ -131,6 +145,9 @@ function keysOf(section: SectionId | null): readonly Shortcut[] {
   }
   if (section === "health") {
     return HEALTH_KEYS;
+  }
+  if (section === "board") {
+    return BOARD_KEYS;
   }
   return GENERAL_KEYS;
 }

@@ -204,7 +204,7 @@ describe("source policy", () => {
   });
 
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/"];
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
@@ -238,14 +238,14 @@ describe("source policy", () => {
 
   it("reads no clock in the home or the palette: times are shown as stored (AC-07 of ui-home)", () => {
     const outside = (path: string) => !(path.startsWith("/src/overview/") || path.startsWith("/src/palette/")) || /\.test\.tsx?$/.test(path);
-    const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "performance\\.now\\(", "useNow\\b", "formatAge\\b"].join("|"));
+    const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "performance\\.now\\(", "useNow", "formatAge\\b"].join("|"));
     expect(offending(clock, outside)).toEqual([]);
   });
 
   it("reads no clock in Health: the report carries no time, dates are shown as stored (AC-05 of ui-health)", () => {
     const outside = (path: string) => !path.startsWith("/src/health/") || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => !outside(path)).length).toBeGreaterThan(3);
-    const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "Date\\.parse\\(", "performance\\.now\\(", "useNow\\b", "formatAge\\b"].join("|"));
+    const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "Date\\.parse\\(", "performance\\.now\\(", "useNow", "formatAge\\b"].join("|"));
     expect(offending(clock, outside)).toEqual([]);
   });
 
@@ -532,6 +532,50 @@ describe("source policy", () => {
     for (const line of ["<Badge look={itemStatusLook(item.status)} />", "return release === null ? a : b;", "if (isRelease(group) && group.name !== null) {"]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
     }
+  });
+
+  it("compares no column, flow, discipline or event word in the Board, labels.ts the one map; reads no clock but in due.ts, never a UTC date there (AC-06, AC-08 of board-ui)", () => {
+    const boardSources = (path: string) => path.startsWith("/src/board/") && !/\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter(boardSources)).toEqual(
+      expect.arrayContaining(["/src/board/BoardView.tsx", "/src/board/BoardColumn.tsx", "/src/board/BoardCard.tsx", "/src/board/MoveMenu.tsx", "/src/board/CardPanel.tsx", "/src/board/CardDialogs.tsx", "/src/board/filter.ts", "/src/board/due.ts", "/src/board/labels.ts"]),
+    );
+    const field = "\\.(column|flow|discipline|type|from|to|name|id|title|key)\\b";
+    const quote = "[\"'`]";
+    const compared = new RegExp(
+      [
+        // A field against a spelled word; a field against another field of the read passes.
+        `${field}\\s*[!=]==?\\s*${quote}`,
+        `${quote}\\s*[!=]==?\\s*[\\w.?]*${field}`,
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `\\[[^\\]]*${field}\\s*\\]`,
+        `\\.(startsWith|endsWith)\\(${quote}`,
+        // A spelled word; a template of the read's own values, `${row.flow}/${row.column}`, passes.
+        `\\.(includes|has|get|indexOf)\\(${quote}(?!\\$\\{)`,
+      ].join("|"),
+    );
+    const scanned = (path: string) => !boardSources(path) || path === "/src/board/labels.ts";
+    // A keyboard event's key is the keyboard's, no project's word; a lane's key holds its flow and column.
+    const withoutEventKey = (_path: string, line: string) => line.replace(/\bevent\.key\b/g, "event");
+    expect(offending(compared, scanned, withoutEventKey)).toEqual([]);
+    expect(compared.test(withoutEventKey("", 'if (event.key === "Escape") {'))).toBe(false);
+    expect(compared.test(withoutEventKey("", "switch (event.key) {"))).toBe(false);
+    // An event's type is spelled in labels.ts alone.
+    expect(offending(/["'\`]card\.[a-z]+["'\`]/, scanned)).toEqual([]);
+    // The detector itself: a branch on a project's word is caught, the look-ups the Board makes are not.
+    for (const line of ['if (row.column === "done") {', 'const late = "review" === card.column;', "switch (row.column) {", "const tone = TONES[row.column];", 'flow.name === "copy" && <p />', 'if (event.type === "card.moved") {', 'const hold = row.flow.includes("x");'.replace("row.flow.includes", "names.includes"), 'lane.title.startsWith("Done")', 'if (lane.column.id !== "review") {', 'if (lane.column.title !== "Done") {', 'const late = row.id === "C-0001";', 'const done = "Done" === column.title;', 'if (lane.key === "copy/column:done") {', 'const look = LOOKS[lane.key];']) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["if (row.column === flow?.accept.from) {", "{card.column === flow?.accept.from && <button />}", 'const moves = flow.moves.filter((move) => move.from === column);', "<span>{columnTitle(flow, row.column)}</span>", "notes.filter((note) => note.includes(`${row.flow}/${row.column}`))"]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+    // No clock but due.ts; there the local date, never a UTC one.
+    const clock = new RegExp(["Date\\.now\\(", "new Date\\(", "Date\\.parse\\(", "performance\\.now\\(", "useNow", "formatAge\\b"].join("|"));
+    expect(offending(clock, (path) => !boardSources(path) || path === "/src/board/due.ts")).toEqual([]);
+    expect(sources["/src/board/due.ts"]).toMatch(/useNow/);
+    expect(sources["/src/board/due.ts"]).not.toMatch(/toISOString|getUTC/);
+    // A second table of words: a typed record of labels or a Map literal lives in labels.ts alone.
+    expect(offending(/\bnew Map\(\[/, scanned)).toEqual([]);
   });
 
   it("holds no raw Cyrillic letter: non-Latin test text is escaped (ADR-0024)", () => {

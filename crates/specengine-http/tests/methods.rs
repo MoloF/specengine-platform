@@ -19,6 +19,13 @@
 //! method but POST, GET, HEAD, PUT and DELETE among them, with a 405 whose
 //! `Allow` is `POST` and whose message ends `confirmed on a terminal`; its
 //! POST without `Sec-Fetch-Site: same-origin` is the stage route's 403.
+//!
+//! docs/features/board-ui.md "Data" ("Answers", "Methods"): `.../cards`
+//! serves GET and POST (any other method, HEAD included: 405 `Allow: GET,
+//! POST`); `.../cards/:id` is a read (POST among the others: 405 `Allow:
+//! GET`); `.../cards/:id/{move,edit,assign,cancel,accept}` take POST alone
+//! (GET among the others: 405 `Allow: POST`); their POST from no page is the
+//! 403 of `same_origin()`, no `Allow`. None runs a call.
 
 mod common;
 
@@ -29,8 +36,10 @@ use common::{Reply, Scratch, Server, beyond_daemon, request_bytes};
 /// `tasks/:id`: docs/features/ui-live-tasks.md "Rules and edge cases";
 /// `round`: docs/features/ui-round.md "Data"; `roadmap`:
 /// docs/features/roadmap-surfaces.md, its answer on A a 503: no
-/// `[roadmap]`; `flow`: docs/features/flow-read.md).
-const READS: [&str; 15] = [
+/// `[roadmap]`; `flow`: docs/features/flow-read.md; `cards/:id`:
+/// docs/features/board-ui.md "Data"; `cards` itself takes a POST too:
+/// [`CARDS`]).
+const READS: [&str; 16] = [
     "/api/projects",
     "/api/projects/lantern-keep/tree",
     "/api/projects/lantern-keep/nodes/MEC-STAMINA",
@@ -45,6 +54,7 @@ const READS: [&str; 15] = [
     "/api/projects/lantern-keep/tasks",
     "/api/projects/lantern-keep/tasks/T-0001",
     "/api/projects/lantern-keep/round",
+    "/api/projects/lantern-keep/cards/C-0001",
     "/api/projects/lantern-keep/events",
 ];
 
@@ -53,11 +63,24 @@ const DECISION: &str = "/api/projects/lantern-keep/proposals/PR-0001/decision";
 /// The round's answers (docs/features/ui-round.md "Data").
 const ROUND_ANSWERS: &str = "/api/projects/lantern-keep/round/answers";
 
+/// The board's route: the list, and a new card (docs/features/board-ui.md
+/// "Data").
+const CARDS: &str = "/api/projects/lantern-keep/cards";
+
+/// The five writes on one card.
+const CARD_WRITES: [&str; 5] = [
+    "/api/projects/lantern-keep/cards/C-0001/move",
+    "/api/projects/lantern-keep/cards/C-0001/edit",
+    "/api/projects/lantern-keep/cards/C-0001/assign",
+    "/api/projects/lantern-keep/cards/C-0001/cancel",
+    "/api/projects/lantern-keep/cards/C-0001/accept",
+];
+
 /// Paths no route serves (`tasks/:id/transition`, 07 s3, stays one:
 /// docs/features/ui-live-tasks.md "Rules and edge cases"). `/` is the web
 /// UI's since docs/features/ui-embed.md; no SPA fallback, no `/index.html`
 /// alias, no `/assets` listing (T5).
-const UNKNOWN: [&str; 20] = [
+const UNKNOWN: [&str; 25] = [
     "/index.html",
     "/assets",
     "/api",
@@ -78,6 +101,11 @@ const UNKNOWN: [&str; 20] = [
     "/api/projects/lantern-keep/round/",
     "/api/projects/lantern-keep/round/answers/more",
     "/api/projects/lantern-keep/round/answers/PR-0001",
+    "/api/projects/lantern-keep/card",
+    "/api/projects/lantern-keep/cards/",
+    "/api/projects/lantern-keep/cards/C-0001/",
+    "/api/projects/lantern-keep/cards/C-0001/reject",
+    "/api/projects/lantern-keep/cards/C-0001/move/more",
 ];
 
 /// Every method but GET and POST.
@@ -173,7 +201,7 @@ fn the_decision_route_answers_every_other_method_405_allow_post() {
             assert!(reply.cors_headers().is_empty(), "{reply:?}");
             assert_eq!(
                 reply.error_message(),
-                "staging needs a same-origin page (not authentication: ADR-0034)",
+                "a write needs a same-origin page (not authentication: ADR-0034)",
                 "{method} {headers:?}"
             );
         }
@@ -251,7 +279,7 @@ fn the_round_routes_answer_another_method_405_allow_get_on_the_sheet_post_on_the
         assert_eq!(reply.header("allow"), None, "{reply:?}");
         assert_eq!(
             reply.error_message(),
-            "staging needs a same-origin page (not authentication: ADR-0034)"
+            "a write needs a same-origin page (not authentication: ADR-0034)"
         );
     }
     assert!(
@@ -259,6 +287,94 @@ fn the_round_routes_answer_another_method_405_allow_get_on_the_sheet_post_on_the
         "a 405 or a refused POST runs no call: {:?}",
         beyond_daemon(&home)
     );
+}
+
+/// One `Allow`, `no-store`, no `Access-Control-*`; but for HEAD the error
+/// body, naming the method and the path.
+fn assert_card_405(reply: &Reply, method: &str, path: &str, allow: &str, context: &str) {
+    assert_eq!(reply.status, 405, "{context}: {reply:?}");
+    let allows: Vec<&str> = reply
+        .headers
+        .iter()
+        .filter(|(name, _)| name == "allow")
+        .map(|(_, value)| value.as_str())
+        .collect();
+    assert_eq!(allows, [allow], "{context}: the one `Allow`");
+    assert_eq!(reply.header("cache-control"), Some("no-store"), "{context}");
+    assert!(reply.cors_headers().is_empty(), "{context}: {reply:?}");
+    if method == "HEAD" {
+        assert!(reply.body.is_empty(), "{context}");
+    } else {
+        let message = reply.error_message();
+        assert!(
+            message.starts_with(&format!("method {method} is not served on {path}: ")),
+            "{context}: {message}"
+        );
+    }
+}
+
+#[test]
+fn the_card_routes_answer_another_method_405_and_their_allow() {
+    let scratch = Scratch::new("methods-cards");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    let page = [
+        ("Sec-Fetch-Site", "same-origin"),
+        ("Content-Type", "application/json"),
+    ];
+    let card = "/api/projects/lantern-keep/cards/C-0001";
+    // A same-origin page's header too: the method decides, not the page.
+    for headers in [&[][..], &page[..]] {
+        for method in OTHERS {
+            let context = format!("{method} {CARDS} {headers:?}");
+            let reply = server.request(method, CARDS, headers);
+            assert_card_405(&reply, method, CARDS, "GET, POST", &context);
+        }
+        for method in ["HEAD", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "TRACE"] {
+            let context = format!("{method} {card} {headers:?}");
+            let body: &[u8] = if method == "HEAD" { b"" } else { b"{}" };
+            let reply = server.send(method, card, headers, body);
+            let message =
+                format!("method {method} is not served on {card}: only GET is served here");
+            assert_405(&reply, method, "GET", &message, &context);
+        }
+        for path in CARD_WRITES {
+            for method in ["GET", "HEAD", "PUT", "DELETE", "PATCH", "OPTIONS", "TRACE"] {
+                let context = format!("{method} {path} {headers:?}");
+                let reply = server.request(method, path, headers);
+                assert_card_405(&reply, method, path, "POST", &context);
+            }
+        }
+    }
+    // POST from no page (or the address bar's `none`): 403, no `Allow`.
+    let mut writes = CARD_WRITES.to_vec();
+    writes.push(CARDS);
+    for path in writes {
+        for headers in [&[][..], &[("Sec-Fetch-Site", "none")][..]] {
+            let reply = server.request("POST", path, headers);
+            assert_eq!(reply.status, 403, "{path} {headers:?}: {}", reply.text());
+            assert_eq!(reply.header("allow"), None, "{path}: {reply:?}");
+            assert!(reply.cors_headers().is_empty(), "{path}: {reply:?}");
+            assert_eq!(
+                reply.error_message(),
+                "a write needs a same-origin page (not authentication: ADR-0034)",
+                "{path} {headers:?}"
+            );
+        }
+    }
+    assert!(
+        beyond_daemon(&home).is_empty(),
+        "a 405 or a refused POST runs no call: {:?}",
+        beyond_daemon(&home)
+    );
+    // GET still answers (the control): the routes are served.
+    let reply = server.get(CARDS);
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    assert_eq!(reply.header("allow"), None, "a 200 carries no `Allow`");
+    let reply = server.get(card);
+    assert_eq!(reply.status, 404, "{}", reply.text());
+    assert_eq!(reply.header("allow"), None, "a 404 carries no `Allow`");
 }
 
 #[test]
@@ -300,6 +416,12 @@ fn an_unknown_path_is_a_404_for_every_method() {
                 message.contains(" flow, graph, "),
                 "{context}: the list names flow: {message}"
             );
+            // docs/features/board-ui.md: the board's two reads beside the
+            // tasks'.
+            assert!(
+                message.contains(" tasks/<id>, cards, cards/<id>, round, "),
+                "{context}: the list names cards: {message}"
+            );
         }
     }
     // `/assets/` (an empty `<file>`): no route, on GET (docs/features/ui-embed.md T5).
@@ -339,6 +461,8 @@ fn the_fences_403_carries_no_allow_whatever_the_method() {
     let mut targets: Vec<&str> = READS.to_vec();
     targets.push(DECISION);
     targets.push(ROUND_ANSWERS);
+    targets.push(CARDS);
+    targets.extend_from_slice(&CARD_WRITES);
     targets.push("/no/such/route");
     for headers in &foreign {
         for target in &targets {

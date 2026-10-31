@@ -1,6 +1,16 @@
 import type {
   ApiError,
   BundleView,
+  Card,
+  CardAcceptBody,
+  CardAssignBody,
+  CardCancelBody,
+  CardCreateBody,
+  CardEditBody,
+  CardList,
+  CardMoveBody,
+  CardNotFound,
+  CardWrite,
   CheckReport,
   FlowView,
   GraphView,
@@ -90,11 +100,20 @@ export interface RoundOptions {
 export type RoadmapOptions = { release: string; pool?: never } | { pool: true; release?: never };
 
 /**
+ * `spec card list`: `--with-cancelled`, sent only as true. The Board reads every card of the project
+ * once and filters that answer, so no other flag is sent (`docs/features/board-ui.md` "Board").
+ */
+export interface CardsOptions {
+  with_cancelled?: boolean;
+}
+
+/**
  * The one seam between the UI and SpecEngine (ADR-0033): methods named after the daemon's
  * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data",
  * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data", the plan's
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
- * "Route", the flow's `docs/features/flow-canvas.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * "Route", the flow's `docs/features/flow-canvas.md` "Data", the cards' `docs/features/board-ui.md`
+ * "Routes"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
  * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
@@ -107,7 +126,9 @@ export type RoadmapOptions = { release: string; pool?: never } | { pool: true; r
  * POST, answered 200 whatever each answer became; `spec round answer --staged` confirms them on a
  * terminal. Tasks are read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
  * The plan is read only too: an item moves when its file's front-matter is edited
- * (`docs/canon/spec-roadmap.md` "Items").
+ * (`docs/canon/spec-roadmap.md` "Items"). Cards are the daemon's only writes beyond staging
+ * (ADR-0056): a queue row, never a spec file; 200 the write document, a refusal (409) its last note,
+ * no such card (404) its `reason`, an error body (400, 403, 413, 415, 503) its message.
  *
  * `signal`: the query's AbortSignal. A read superseded before it answered (a burst of live events
  * reading the same task again) is aborted, so the daemon, which drops a request whose client left,
@@ -163,6 +184,23 @@ export interface SpecEngineClient {
    * whatever each answer became, a refused one in the daemon's words; no AbortSignal.
    */
   stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome>;
+  /** GET /api/projects/:p/cards (docs/features/board-ui.md "Routes"; = spec card list [--with-cancelled] --json, the browser view) */
+  getCards(project: string, options?: CardsOptions, signal?: AbortSignal): Promise<CardList>;
+  /** GET /api/projects/:p/cards/:id (docs/features/board-ui.md "Routes"; = spec card show C --history --json, uncut; 404 the exit-1 document) */
+  getCard(project: string, id: string, signal?: AbortSignal): Promise<Card | CardNotFound>;
+  // The card writes (docs/features/board-ui.md "Routes"): no AbortSignal, a write's answer is always taken.
+  /** POST /api/projects/:p/cards */
+  createCard(project: string, body: CardCreateBody): Promise<CardWrite>;
+  /** POST /api/projects/:p/cards/:id/move */
+  moveCard(project: string, id: string, body: CardMoveBody): Promise<CardWrite>;
+  /** POST /api/projects/:p/cards/:id/edit */
+  editCard(project: string, id: string, body: CardEditBody): Promise<CardWrite>;
+  /** POST /api/projects/:p/cards/:id/assign */
+  assignCard(project: string, id: string, body: CardAssignBody): Promise<CardWrite>;
+  /** POST /api/projects/:p/cards/:id/cancel */
+  cancelCard(project: string, id: string, body: CardCancelBody): Promise<CardWrite>;
+  /** POST /api/projects/:p/cards/:id/accept */
+  acceptCard(project: string, id: string, body: CardAcceptBody): Promise<CardWrite>;
   /**
    * GET /api/projects/:p/events (SSE): `onEvent` per queue event of the project until the returned
    * function is called. `onGap` when the client opens the stream again after the browser gave up on
@@ -180,6 +218,15 @@ export const STAGE_REFUSED = 409;
 
 /** HTTP 404: no such proposal for a stage or an unstage. */
 export const NO_SUCH_PROPOSAL = 404;
+
+/** HTTP 409: the daemon refused a card write, a lost compare-and-set too (`docs/features/board-ui.md` "Routes"). */
+export const CARD_REFUSED = 409;
+
+/** HTTP 404: no such card for a card write. */
+export const NO_SUCH_CARD = 404;
+
+/** HTTP 400: a card write the daemon cannot take as asked: nothing asked, a person's name off its grammar (`docs/features/board-ui.md` "Routes"). */
+export const CARD_USAGE = 400;
 
 /**
  * HTTP 501 Not Implemented: the status of a read the daemon does not serve yet, refused by the

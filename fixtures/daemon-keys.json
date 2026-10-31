@@ -84,5 +84,17 @@
   "FlowGap": ["code", "state", "count", "items", "cause"],
   "FlowNode": ["id", "kind", "title", "path", "line", "distance", "group", "start", "end", "holds", "inner", "gaps"],
   "FlowEdge": ["from", "to", "type", "kind", "when", "count", "path", "line"],
-  "FlowInner": ["type", "count"]
+  "FlowInner": ["type", "count"],
+  "CardList": ["flows", "cards", "notes", "truncated", "omitted"],
+  "CardFlow": ["name", "disciplines", "columns", "moves", "accept"],
+  "CardColumn": ["id", "title"],
+  "CardMove": ["from", "to", "by"],
+  "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled"],
+  "Card": ["id", "flow", "column", "position", "title", "goal", "discipline", "targets", "snapshot", "criteria", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "evidence", "acceptance", "cancellation", "created_by", "created_at", "updated_at", "revision", "allowed", "history", "notes"],
+  "CardEvidence": ["kind", "value", "by", "at"],
+  "CardAcceptance": ["by", "at", "note"],
+  "CardCancellation": ["by", "at", "reason"],
+  "CardEvent": ["seq", "type", "at", "payload"],
+  "CardWrite": ["id", "flow", "column", "position", "revision", "allowed", "notes"],
+  "CardNotFound": ["id", "reason"]
 }

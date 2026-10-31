@@ -8,7 +8,9 @@
  * "UI"; src/mocks/editorial.ts). `code-cannot`: every read as `normal` but Health's rows 4-6, which
  * could not be measured, row 6 for both projects; `not-configured`: as `normal` but Health's row 5,
  * which has no rule, and ledger-api's row 6, measured with zero rows (`docs/features/health-code-ui.md`
- * "Data"; `docs/features/health-drift-ui.md` "Data"; src/mocks/health.ts).
+ * "Data"; `docs/features/health-drift-ui.md` "Data"; src/mocks/health.ts). The Board
+ * (`docs/features/board-ui.md`; src/mocks/cards.ts): `empty` keeps the columns and no card, `conflict`
+ * refuses a project's first card write as changed meanwhile, `large` puts 231 cards in one column.
  */
 export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured"] as const;
 

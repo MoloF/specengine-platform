@@ -10,11 +10,16 @@
 //!   --reason T` → `<verb> C-0001: <flow>/<column>`; JSON `{id, flow, column,
 //!   position, revision, allowed, notes}`, a refusal too; no such card `{id,
 //!   reason}`. In `edit`, `assign` a value `-` clears.
-//! - `accept C --as N`, a person's act on a terminal (`main` refuses a stdin
-//!   that is no terminal before anything is read), with a `Consent`.
+//! - `accept C --as N`, with a `Consent`: a person accepts, on a terminal
+//!   (`main` refuses a stdin that is no terminal before anything is read) or
+//!   the local page, and no agent tool does.
 //!
 //! `--as N` is self-declared, recorded and compared with a move's `by`, never
-//! verified; absent: `local`. A tool acts as `agent`.
+//! verified; absent: `local`. A tool acts as `agent`. The daemon's page (task
+//! spec `board-ui`) writes through these same calls: each `Card*Body` is a
+//! route's JSON, decoded here, its `as` as self-declared as the flag. A
+//! person is core's `card_person_problem`: any script, inner spaces, trimmed
+//! wherever it is stored or compared; no grammar of a task or a proposal.
 //!
 //! Exits as the queue's: 0 done; 1 refused (no such card, a move outside its
 //! flow, a closed card, a cap, a declined prompt, a stale `--revision`); 2
@@ -23,15 +28,15 @@
 //! nothing reads a proposal, a lock or a task, and nothing is written under
 //! the root: the queue is in the data directory.
 
-use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use specengine_core::card::{
     AGENT_ACTOR, AllowedMove, CLEAR, CardIdError, EVIDENCE_ENTRIES_MAX, HISTORY_MAX, LOCAL_ACTOR,
     accept_refusal, allowed_moves, card_look_alike_message, card_move as decide_move, card_number,
-    card_prefix_clash, closed_refusal, due_problem, estimate_problem, parse_card_id,
-    parse_evidence, reviewer_problem, stale_refusal,
+    card_person, card_person_problem, card_prefix_clash, closed_refusal, due_problem,
+    estimate_problem, parse_card_id, parse_evidence, reviewer_problem, stale_refusal,
 };
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
-use specengine_core::proposal::author_field_problem;
 use specengine_core::task::{
     CRITERIA_MAX, CRITERION_MAX, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX, over_bytes, over_items,
 };
@@ -39,7 +44,7 @@ use specengine_model::{Card, CardAcceptance, CardCancellation, CardEvidence};
 use specengine_store::{CardChange, CardEdit, Event, NewCard, QueueError, SqliteQueue};
 
 use crate::apply::Consent;
-use crate::cap::lines_within;
+use crate::cap::{View, lines_within};
 use crate::corpus::indexed;
 use crate::location::prepared_data_dir;
 use crate::project::{ProjectRoot, config_error, discover_with_text};
@@ -161,6 +166,282 @@ pub struct CardAcceptRequest {
     pub now: String,
 }
 
+/// `bytes` as the JSON of one route's body, `shape` its keys; else exit 2
+/// naming the defect, nothing read or changed.
+fn decoded<T: DeserializeOwned>(bytes: &[u8], shape: &str) -> Result<T, CliError> {
+    serde_json::from_slice(bytes).map_err(|error| {
+        escaped_error(CliError::spec(format!(
+            "the card's body is not `{{{shape}}}` as JSON: {error}; nothing changed"
+        )))
+    })
+}
+
+/// The persons a body names, judged as the flags judge them: a person's
+/// typing is the daemon's 400 with the CLI's line, read before any call,
+/// whether the flag's exit is 2 (`as`) or 1 (each of `named`, a key and its
+/// name).
+fn persons_named(actor: Option<&str>, named: &[(&str, Option<&str>)]) -> Result<(), CliError> {
+    actor_of(actor)
+        .and_then(|_| {
+            named
+                .iter()
+                .find_map(|(key, name)| name.and_then(|name| person_problem(key, name)))
+                .map_or(Ok(()), |problem| Err(CliError::spec(problem)))
+        })
+        .map_err(escaped_error)
+}
+
+/// The body of `POST …/cards`: `create_card`'s keys and `as`. Any other key,
+/// or no `title`, is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardNewBody {
+    pub title: String,
+    pub goal: Option<String>,
+    pub discipline: Option<String>,
+    /// Nodes it answers; none: a manual card.
+    pub target: Option<Vec<String>>,
+    pub criterion: Option<Vec<String>>,
+    pub assignee: Option<String>,
+    pub estimate: Option<String>,
+    pub due: Option<String>,
+    pub parent: Option<String>,
+    pub corrects: Option<String>,
+    /// The acting name; `null`: `local`.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardNewBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(
+            bytes,
+            "\"title\",\"goal\",\"discipline\",\"target\",\"criterion\",\"assignee\",\
+             \"estimate\",\"due\",\"parent\",\"corrects\",\"as\"",
+        )?;
+        persons_named(
+            body.actor.as_deref(),
+            &[("assignee", body.assignee.as_deref())],
+        )?;
+        Ok(body)
+    }
+
+    /// The request at `now`.
+    pub fn request(self, now: String) -> CardNewRequest {
+        CardNewRequest {
+            title: self.title,
+            goal: self.goal,
+            discipline: self.discipline,
+            targets: self.target.unwrap_or_default(),
+            criteria: self.criterion.unwrap_or_default(),
+            assignee: self.assignee,
+            estimate: self.estimate,
+            due: self.due,
+            parent: self.parent,
+            corrects: self.corrects,
+            actor: self.actor,
+            now,
+        }
+    }
+}
+
+/// The body of `POST …/cards/<id>/move`: `move_card`'s keys but the path's
+/// `card_id`, and `as`. Any other key is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardMoveBody {
+    pub to: Option<String>,
+    pub before: Option<String>,
+    pub revision: Option<String>,
+    /// The acting name; `null`: `local`.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardMoveBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(bytes, "\"to\",\"before\",\"revision\",\"as\"")?;
+        persons_named(body.actor.as_deref(), &[])?;
+        Ok(body)
+    }
+
+    /// The request for `id` at `now`.
+    pub fn request(self, id: String, now: String) -> CardMoveRequest {
+        CardMoveRequest {
+            id,
+            to: self.to,
+            before: self.before,
+            revision: self.revision,
+            actor: self.actor,
+            now,
+        }
+    }
+}
+
+/// The body of `POST …/cards/<id>/edit`: `edit_card`'s keys but the path's
+/// `card_id`, and `as`; `-` clears, as the flags. Any other key is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardEditBody {
+    pub title: Option<String>,
+    pub goal: Option<String>,
+    pub target: Option<Vec<String>>,
+    pub criterion: Option<Vec<String>>,
+    pub estimate: Option<String>,
+    pub due: Option<String>,
+    pub parent: Option<String>,
+    pub corrects: Option<String>,
+    /// Each `KIND=VALUE`; appended.
+    pub evidence: Option<Vec<String>>,
+    pub revision: Option<String>,
+    /// The acting name; `null`: `local`.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardEditBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(
+            bytes,
+            "\"title\",\"goal\",\"target\",\"criterion\",\"estimate\",\"due\",\"parent\",\
+             \"corrects\",\"evidence\",\"revision\",\"as\"",
+        )?;
+        persons_named(body.actor.as_deref(), &[])?;
+        Ok(body)
+    }
+
+    /// The request for `id` at `now`.
+    pub fn request(self, id: String, now: String) -> CardEditRequest {
+        CardEditRequest {
+            id,
+            title: self.title,
+            goal: self.goal,
+            targets: self.target.unwrap_or_default(),
+            criteria: self.criterion.unwrap_or_default(),
+            estimate: self.estimate,
+            due: self.due,
+            parent: self.parent,
+            corrects: self.corrects,
+            evidence: self.evidence.unwrap_or_default(),
+            revision: self.revision,
+            actor: self.actor,
+            now,
+        }
+    }
+}
+
+/// The body of `POST …/cards/<id>/assign`; `-` clears, as the flags. Any
+/// other key is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardAssignBody {
+    pub assignee: Option<String>,
+    pub reviewer: Option<String>,
+    pub revision: Option<String>,
+    /// The acting name; `null`: `local`.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardAssignBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(bytes, "\"assignee\",\"reviewer\",\"revision\",\"as\"")?;
+        persons_named(
+            body.actor.as_deref(),
+            &[
+                ("assignee", body.assignee.as_deref()),
+                ("reviewer", body.reviewer.as_deref()),
+            ],
+        )?;
+        Ok(body)
+    }
+
+    /// The request for `id` at `now`.
+    pub fn request(self, id: String, now: String) -> CardAssignRequest {
+        CardAssignRequest {
+            id,
+            assignee: self.assignee,
+            reviewer: self.reviewer,
+            revision: self.revision,
+            actor: self.actor,
+            now,
+        }
+    }
+}
+
+/// The body of `POST …/cards/<id>/cancel`. Any other key, or no `reason`, is
+/// refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardCancelBody {
+    pub reason: String,
+    pub revision: Option<String>,
+    /// The acting name; `null`: `local`.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardCancelBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(bytes, "\"reason\",\"revision\",\"as\"")?;
+        persons_named(body.actor.as_deref(), &[])?;
+        Ok(body)
+    }
+
+    /// The request for `id` at `now`.
+    pub fn request(self, id: String, now: String) -> CardCancelRequest {
+        CardCancelRequest {
+            id,
+            reason: self.reason,
+            revision: self.revision,
+            actor: self.actor,
+            now,
+        }
+    }
+}
+
+/// The body of `POST …/cards/<id>/accept`. Any other key is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardAcceptBody {
+    /// The acting name; `null`: `local`, who can accept nothing.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+    pub note: Option<String>,
+    pub revision: Option<String>,
+}
+
+impl CardAcceptBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(bytes, "\"as\",\"note\",\"revision\"")?;
+        persons_named(body.actor.as_deref(), &[])?;
+        Ok(body)
+    }
+
+    /// The request for `id` at `now`.
+    pub fn request(self, id: String, now: String) -> CardAcceptRequest {
+        CardAcceptRequest {
+            id,
+            actor: self.actor.unwrap_or_else(|| LOCAL_ACTOR.to_owned()),
+            note: self.note,
+            revision: self.revision,
+            now,
+        }
+    }
+}
+
 /// What a card-changing command did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CardAction {
@@ -187,8 +468,12 @@ impl CardAction {
 }
 
 /// Why a command was refused.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CardCause {
+    /// The request asks nothing: exit 2, no card read. The document is `{id,
+    /// reason}`; the daemon answers a 400 with the line, and the terminal
+    /// prints the line alone ([`CardOutcome::or_usage_error`]).
+    Usage,
     /// There is no such card: the document is `{id, reason}`.
     Unknown,
     /// A rule, a cap, a stale revision, a declined prompt.
@@ -214,12 +499,21 @@ pub struct CardOutcome {
 }
 
 impl CardOutcome {
-    /// Exit 0, or 1 when refused.
+    /// 0 done; 2 a usage defect; 1 unknown or refused.
     pub fn exit(&self) -> Exit {
-        if self.refusal.is_some() {
-            Exit::NotFound
-        } else {
-            Exit::Answered
+        match self.cause {
+            None => Exit::Answered,
+            Some(CardCause::Usage) => Exit::CannotRun,
+            Some(CardCause::Unknown | CardCause::Refused) => Exit::NotFound,
+        }
+    }
+
+    /// A usage defect as the terminal gives it, a [`CliError`]: its one line
+    /// on stderr, stdout empty, `--json` too. Any other outcome as it is.
+    pub fn or_usage_error(self) -> Result<Self, CliError> {
+        match (self.cause, &self.refusal) {
+            (Some(CardCause::Usage), Some(reason)) => Err(CliError::spec(reason)),
+            _ => Ok(self),
         }
     }
 
@@ -267,6 +561,15 @@ impl CardOutcome {
             ..Self::refused(action, id, None, &reason, Vec::new())
         }
     }
+
+    /// `line`, without the `spec: ` of the stderr line: what the request
+    /// did wrong.
+    fn usage(action: CardAction, line: &str) -> Self {
+        Self {
+            cause: Some(CardCause::Usage),
+            ..Self::refused(action, None, None, line, Vec::new())
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -287,10 +590,10 @@ struct NoCardJson<'a> {
 }
 
 /// `{id, flow, column, position, revision, allowed, notes}`, else exactly
-/// `{id, reason}`.
+/// `{id, reason}`: no such card, or a usage defect.
 impl Serialize for CardOutcome {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        if self.cause == Some(CardCause::Unknown) {
+        if matches!(self.cause, Some(CardCause::Unknown | CardCause::Usage)) {
             return NoCardJson {
                 id: self.id.as_deref(),
                 reason: self.refusal.as_deref(),
@@ -444,6 +747,17 @@ pub struct CardListOutcome {
 }
 
 impl CardListOutcome {
+    /// The list as `view` bounds it: [`View::Browser`] prints every card
+    /// (`truncated` false, `omitted` null, the same keys); else as
+    /// [`card_list`] read it.
+    #[must_use]
+    pub fn in_view(mut self, view: View) -> Self {
+        if view == View::Browser {
+            self.shown = self.cards.len();
+        }
+        self
+    }
+
     fn omitted(&self) -> usize {
         self.cards.len().saturating_sub(self.shown)
     }
@@ -577,13 +891,13 @@ fn not_a_card(written: &str) -> String {
     )
 }
 
-/// `--as N`: `local` when absent; off `author_field_problem`'s grammar exit
-/// 2, as `--author-role`.
+/// `--as N`, trimmed: `local` when absent; off a card person's grammar exit
+/// 2.
 fn actor_of(written: Option<&str>) -> Result<String, CliError> {
     let actor = written.unwrap_or(LOCAL_ACTOR);
-    match author_field_problem(actor) {
+    match card_person_problem(actor) {
         Some(problem) => Err(CliError::spec(format!("--as: {problem}"))),
-        None => Ok(actor.to_owned()),
+        None => Ok(card_person(actor).to_owned()),
     }
 }
 
@@ -618,6 +932,11 @@ fn field(written: Option<&str>) -> Option<Option<String>> {
     written.map(|value| (value != CLEAR).then(|| value.to_owned()))
 }
 
+/// A person as `assign` takes one: [`field`]'s, trimmed.
+fn person_field(written: Option<&str>) -> Option<Option<String>> {
+    field(written.map(card_person))
+}
+
 /// The first problem of the fields `new` and `edit` share.
 fn field_problem(
     title: Option<&str>,
@@ -646,7 +965,7 @@ fn field_problem(
 
 /// Why `name` cannot be a person a card names.
 fn person_problem(key: &str, name: &str) -> Option<String> {
-    author_field_problem(name).map(|problem| format!("{key}: {problem}"))
+    card_person_problem(name).map(|problem| format!("{key}: {problem}"))
 }
 
 /// The card a command names: `Ok(Err)` the refused outcome (exit 1).
@@ -762,6 +1081,7 @@ fn run_new(
         (Ok(parent), Ok(corrects)) => (parent, corrects),
         (Err(reason), _) | (_, Err(reason)) => return refuse(reason, Vec::new()),
     };
+    let assignee = request.assignee.as_deref().map(card_person);
     let problem = field_problem(
         Some(&request.title),
         request.goal.as_deref(),
@@ -778,7 +1098,7 @@ fn run_new(
             .map(|problem| format!("discipline: {problem}"))
     })
     .or_else(|| {
-        request.assignee.as_deref().and_then(|name| {
+        assignee.and_then(|name| {
             (name == CLEAR)
                 .then(|| format!("assignee: `{CLEAR}` clears a name: a new card has none"))
                 .or_else(|| person_problem("assignee", name))
@@ -806,7 +1126,7 @@ fn run_new(
             discipline: request.discipline.clone(),
             targets,
             criteria: request.criteria.clone(),
-            assignee: request.assignee.clone(),
+            assignee: assignee.map(str::to_owned),
             estimate: request.estimate.clone(),
             due: request.due.clone(),
             parent,
@@ -1097,7 +1417,8 @@ fn run_move(
     const ACTION: CardAction = CardAction::Move;
     let now = checked_now(&request.now)?;
     if request.to.is_none() && request.before.is_none() {
-        return Err(CliError::spec(
+        return Ok(CardOutcome::usage(
+            ACTION,
             "`spec card move` asks nothing: give --to K, --before C or both",
         ));
     }
@@ -1192,7 +1513,8 @@ fn run_edit(
         || request.corrects.is_some()
         || !request.evidence.is_empty();
     if !asked {
-        return Err(CliError::spec(
+        return Ok(CardOutcome::usage(
+            ACTION,
             "`spec card edit` asks nothing: give a field to change or --evidence",
         ));
     }
@@ -1313,7 +1635,8 @@ fn run_assign(
     const ACTION: CardAction = CardAction::Assign;
     let now = checked_now(&request.now)?;
     if request.assignee.is_none() && request.reviewer.is_none() {
-        return Err(CliError::spec(
+        return Ok(CardOutcome::usage(
+            ACTION,
             "`spec card assign` asks nothing: give --assignee N, --reviewer N or both",
         ));
     }
@@ -1325,8 +1648,8 @@ fn run_assign(
         Ok(card) => card,
         Err(refused) => return Ok(*refused),
     };
-    let assignee = field(request.assignee.as_deref());
-    let reviewer = field(request.reviewer.as_deref());
+    let assignee = person_field(request.assignee.as_deref());
+    let reviewer = person_field(request.reviewer.as_deref());
     let problem = closed_refusal(&card)
         .or_else(|| {
             assignee

@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { aBundle, aCheckReport, aGraphView, aHealthReport, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
+import { aBundle, aCard, aCardList, aCardRow, aCheckReport, aGraphView, aHealthReport, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, NO_SUCH_PROPOSAL, STAGE_REFUSED } from "./client";
 import { ApiProvider, createQueryClient } from "./provider";
@@ -10,6 +10,9 @@ import {
   useBundle,
   useCachedInbox,
   useCachedTasks,
+  useCard,
+  useCards,
+  useCardWrite,
   useCheck,
   useFlow,
   useFlowGroups,
@@ -392,5 +395,122 @@ describe("a task's read (AC-11 of ui-tasks)", () => {
     });
     expect(seen.length).toBeGreaterThan(0);
     expect(seen.every((data) => data === undefined)).toBe(true);
+  });
+});
+
+describe("the cards (docs/features/board-ui.md \"Board\", \"Moving\")", () => {
+  type Write = ReturnType<typeof useCardWrite>;
+
+  function Board({ withCancelled = false, onWrite }: { withCancelled?: boolean; onWrite?: (write: Write) => void }) {
+    useCards("alpha", withCancelled ? { with_cancelled: true } : {});
+    useCard("alpha", "C-0001");
+    useCard("alpha", "C-0002");
+    const write = useCardWrite("alpha");
+    onWrite?.(write);
+    return null;
+  }
+
+  async function mounted(client: StubClient, onWrite?: (write: Write) => void) {
+    const queryClient = createQueryClient();
+    render(
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Board onWrite={onWrite} />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    return queryClient;
+  }
+
+  function cardsClient() {
+    const client = stubClient();
+    client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-0001" })]));
+    client.getCard.mockImplementation((_project, id) => Promise.resolve(aCard({ id })));
+    return client;
+  }
+
+  it("keys the list by project and Show cancelled, a card by its ID", () => {
+    expect(queryKeys.cards("alpha")).toEqual(["cards", "alpha", { with_cancelled: false }]);
+    expect(queryKeys.cards("alpha", { with_cancelled: true })).toEqual(["cards", "alpha", { with_cancelled: true }]);
+    expect(queryKeys.card("alpha", "C-0001")).toEqual(["card", "alpha", "C-0001"]);
+  });
+
+  it("reads the list with no option unless cancelled cards are asked", async () => {
+    const client = cardsClient();
+    const queryClient = await mounted(client);
+    expect(argsOf(client.getCards)).toEqual([["alpha"]]);
+    render(
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Board withCancelled />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(argsOf(client.getCards)).toEqual([["alpha"], ["alpha", { with_cancelled: true }]]);
+    });
+  });
+
+  it("after a write reads every list and that card again, and settles only then: the board is the daemon's", async () => {
+    const client = cardsClient();
+    let write: Write | undefined;
+    await mounted(client, (latest) => {
+      write = latest;
+    });
+    client.getCards.mockClear();
+    client.getCard.mockClear();
+    let settledAfter = -1;
+    await act(async () => {
+      await write?.mutateAsync({ write: "move", id: "C-0001", body: { to: "doing", revision: "1", as: null } });
+      settledAfter = client.getCards.mock.calls.length;
+    });
+    expect(settledAfter).toBe(1);
+    expect(argsOf(client.getCard)).toEqual([["alpha", "C-0001"]]);
+    expect(client.moveCard.mock.calls).toEqual([["alpha", "C-0001", { to: "doing", revision: "1", as: null }]]);
+  });
+
+  it.each([
+    [409, "`C-0001` changed since this run read it"],
+    [404, "no card C-0001"],
+    [0, "no response from the daemon"],
+  ])("after a %i reads them again too: the answer rejects as it came", async (status, message) => {
+    const client = cardsClient();
+    client.moveCard.mockRejectedValue(new ClientError({ status, message }));
+    let write: Write | undefined;
+    await mounted(client, (latest) => {
+      write = latest;
+    });
+    client.getCards.mockClear();
+    await act(async () => {
+      await expect(write?.mutateAsync({ write: "move", id: "C-0001", body: { to: "doing", revision: "1", as: null } })).rejects.toThrow(message);
+    });
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+  });
+
+  it("after a refusal that stored nothing (400, 503) reads nothing", async () => {
+    const client = cardsClient();
+    client.moveCard.mockRejectedValue(new ClientError({ status: 400, message: "spec: --as: too long" }));
+    let write: Write | undefined;
+    await mounted(client, (latest) => {
+      write = latest;
+    });
+    client.getCards.mockClear();
+    await act(async () => {
+      await expect(write?.mutateAsync({ write: "move", id: "C-0001", body: { to: "doing", revision: "1", as: "x" } })).rejects.toThrow("too long");
+    });
+    expect(client.getCards).not.toHaveBeenCalled();
+  });
+
+  it("creates through the list's path and reads no card it does not know", async () => {
+    const client = cardsClient();
+    client.createCard.mockRejectedValue(new ClientError({ status: 409, message: "no flow takes a card without a discipline" }));
+    let write: Write | undefined;
+    await mounted(client, (latest) => {
+      write = latest;
+    });
+    client.getCard.mockClear();
+    await act(async () => {
+      await expect(write?.mutateAsync({ write: "create", body: { title: "T", as: null } })).rejects.toThrow("no flow takes");
+    });
+    expect(client.getCard).not.toHaveBeenCalled();
   });
 });

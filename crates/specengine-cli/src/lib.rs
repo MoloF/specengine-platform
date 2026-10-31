@@ -163,6 +163,9 @@
 //!   [`card_assign`], [`card_cancel`], [`card_accept`]: `spec card …` (task
 //!   spec `card-store`), the lighter record of any trade's work, a queue row
 //!   under the project's `[card]`; `[card]` read here alone, no git, no task;
+//!   the daemon decodes its routes' bodies as [`CardNewBody`] and its kin,
+//!   and reads the list uncut by [`CardListOutcome::in_view`] (task spec
+//!   `board-ui`);
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `flow`,
 //!   `bundle`, `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or
 //!   refused by the proposal or its target (the queue's commands), 2 could not run
@@ -286,10 +289,11 @@ pub use bundle::{
 };
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use card::{
-    CardAcceptRequest, CardAction, CardAssignRequest, CardCancelRequest, CardCause,
-    CardEditRequest, CardListOutcome, CardListRequest, CardMoveRequest, CardNewRequest,
-    CardOutcome, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept, card_assign,
-    card_cancel, card_edit, card_list, card_move, card_new, card_show,
+    CardAcceptBody, CardAcceptRequest, CardAction, CardAssignBody, CardAssignRequest,
+    CardCancelBody, CardCancelRequest, CardCause, CardEditBody, CardEditRequest, CardListOutcome,
+    CardListRequest, CardMoveBody, CardMoveRequest, CardNewBody, CardNewRequest, CardOutcome,
+    CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept, card_assign, card_cancel, card_edit,
+    card_list, card_move, card_new, card_show,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};

@@ -85,15 +85,15 @@ describe("the tasks' reads (AC-01 of ui-tasks)", () => {
     return [...block.matchAll(/^\s+(?:readonly\s+)?(\w+)\??[(:]/gm)].map((match) => match[1] ?? "");
   }
 
-  it("are two reads and no write: no member transitions, approves, cancels or claims a task", () => {
+  it("are two reads and no write: no member transitions, approves, cancels or claims a task; a card's cancel is the card's (ADR-0056)", () => {
     const names = members();
     expect(names).toContain("getTasks");
     expect(names).toContain("getTask");
     expect(names).toContain("stageDecision");
-    expect(names.filter((name) => /transition|approve|cancel|claim/i.test(name))).toEqual([]);
+    expect(names.filter((name) => /transition|approve|cancel|claim/i.test(name))).toEqual(["cancelCard"]);
   });
 
-  it("write only stages: stageDecision, unstageDecision and the round's stageRoundAnswers, no decide, apply or reject member, none taking an AbortSignal (AC-14 of decision-staging, ui-round)", () => {
+  it("writes no decision: only stageDecision, unstageDecision and the round's stageRoundAnswers touch a proposal, no decide, apply or reject member, none taking an AbortSignal; the other writes are the cards' (AC-14 of decision-staging, ui-round, ADR-0056)", () => {
     const names = members();
     expect(names.filter((name) => /stage|decide|decision|apply|reject/i.test(name))).toEqual(["stageDecision", "unstageDecision", "stageRoundAnswers"]);
     expect(source).toContain("stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal>;");
@@ -137,10 +137,10 @@ describe("the health read (AC-U1 of health-left)", () => {
 });
 
 describe("the lock diff's read (UI-2 of lock-diff)", () => {
-  it("is one read typed as the lock diff document, taking the REF and its query's AbortSignal; no member writes the lock or accepts a binding", () => {
+  it("is one read typed as the lock diff document, taking the REF and its query's AbortSignal; no member writes the lock or accepts a binding, a card's accept being the card's (ADR-0056)", () => {
     expect(source).toContain("getLockDiff(project: string, ref: string, signal?: AbortSignal): Promise<LockDiffView>;");
     const block = /export interface SpecEngineClient \{([\s\S]*?)\n\}/.exec(source)?.[1] ?? "";
     const names = [...block.matchAll(/^\s+(?:readonly\s+)?(\w+)\??[(:]/gm)].map((match) => match[1] ?? "");
-    expect(names.filter((name) => /lock|accept|drift/i.test(name))).toEqual(["getLockDiff"]);
+    expect(names.filter((name) => /lock|accept|drift/i.test(name))).toEqual(["getLockDiff", "acceptCard"]);
   });
 });

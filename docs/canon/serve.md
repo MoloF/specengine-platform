@@ -81,7 +81,7 @@ Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first:
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distribution`). The daemon's `127.0.0.1` bind, its Host, Origin and Sec-Fetch-Site fence (`crates/specengine-http/README.md`) and absent CORS stop other sites' pages; they identify no one. Threat model: any local process of any account can read everything served and stage a decision (loopback is not per-user); none confirms one from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve` today. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy in front), never in-app.
+No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distribution`). The daemon's `127.0.0.1` bind, its Host, Origin and Sec-Fetch-Site fence (`crates/specengine-http/README.md`) and absent CORS stop other sites' pages; they identify no one. Threat model: any local process of any account can read everything served, stage a decision, and move, cancel or accept a card under any name (loopback is not per-user; ADR-0057, `board-ui.md`); none confirms a decision from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve` today. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy in front), never in-app.
 
 ## Concurrency
 

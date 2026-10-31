@@ -53,7 +53,7 @@ Events `proposal.staged` `{"id":"PR-0004","staged":{...},"staged_at":"..."}`, `p
 
 A second POST replaces the stage, one event. Bodies: 404, 409 the review document (exit 1's); 400, 403, 405, 413, 415, 503 the error body `{status, message}`.
 
-Past the fence (`crates/specengine-http/README.md` "Fence"), in order, nothing read or stored on a refusal: the slug (unknown: 404); `Sec-Fetch-Site: same-origin`, else 403 ``staging needs a same-origin page (not authentication: ADR-0034)``; the path's ID decoded (400); for POST, one `Content-Type` of media type `application/json` (any case, any parameter), else 415 ``the body is JSON: send it with Content-Type: application/json``; a body over 16 384 bytes (a declared `Content-Length` over it: unread) -> 413 ``the body is over 16384 bytes``. DELETE reads no body. Any other method: 405 `Allow: POST, DELETE`, ``this path takes only POST (stage a choice) and DELETE (unstage it); a staged choice is confirmed on a terminal``. No `Access-Control-*`.
+Past the fence (`crates/specengine-http/README.md` "Fence"), in order, nothing read or stored on a refusal: the slug (unknown: 404); `Sec-Fetch-Site: same-origin`, else 403 ``a write needs a same-origin page (not authentication: ADR-0034)``; the path's ID decoded (400); for POST, one `Content-Type` of media type `application/json` (any case, any parameter), else 415 ``the body is JSON: send it with Content-Type: application/json``; a body over 16 384 bytes (a declared `Content-Length` over it: unread) -> 413 ``the body is over 16384 bytes``. DELETE reads no body. Any other method: 405 `Allow: POST, DELETE`, ``this path takes only POST (stage a choice) and DELETE (unstage it); a staged choice is confirmed on a terminal``. No `Access-Control-*`.
 
 ## Terminal
 

@@ -49,6 +49,17 @@
 //! AC-R6 and AC-R7 of docs/features/health-left.md, the door's half: `GET
 //! health` joins the endpoints that change nothing (no event, no index,
 //! no file).
+//!
+//! AC-02 of docs/features/board-ui.md ("The fence stays"): the door changes
+//! for cards alone. `CARD_CALLS`, beside `TASK_READS`, lists the eight
+//! `card_` calls and any other `card_` name is forbidden, each caught in a
+//! probe by path and bare; `approve`, `reject`, every `propose*`,
+//! `round_answer`, `import_state`, `export_*`, `init`, `index` and every
+//! `task_` writer stay forbidden. The two card GETs join the endpoints that
+//! change nothing. `card_writes_touch_only_the_queue`: each POST leaves
+//! `git status`, `HEAD`, the refs, the files and the proposals alone and
+//! adds one `card.*` event; a refused one adds none. M: a handler calling
+//! `task_claim` or an unlisted `card_` name.
 
 mod common;
 
@@ -212,6 +223,9 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         format!("{p}/tasks"),
         format!("{p}/tasks?status=draft&status=ready"),
         format!("{p}/tasks/T-0001"),
+        format!("{p}/cards"),
+        format!("{p}/cards?with_cancelled=true&flow=plain&no_target=true"),
+        format!("{p}/cards/C-0001"),
     ] {
         let reply = server.get(&path);
         assert!(
@@ -259,7 +273,7 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         assert_eq!(reply.status, 403, "{}", reply.text());
         assert_eq!(
             reply.error_message(),
-            "staging needs a same-origin page (not authentication: ADR-0034)"
+            "a write needs a same-origin page (not authentication: ADR-0034)"
         );
         let reply = post(&decision, Some("same-origin"), body);
         assert_eq!(reply.status, 400, "{body:?}: {}", reply.text());
@@ -307,6 +321,11 @@ fn ac03_no_endpoint_changes_the_repository_or_the_queue() {
         ("POST", format!("{p}/tasks")),
         ("POST", format!("{p}/tasks/T-0001")),
         ("PUT", format!("{p}/tasks/T-0001")),
+        ("POST", format!("{p}/cards/C-0001")),
+        ("PUT", format!("{p}/cards/C-0001")),
+        ("PUT", format!("{p}/cards")),
+        ("DELETE", format!("{p}/cards")),
+        ("GET", format!("{p}/cards/C-0001/accept")),
     ] {
         let reply = server.request(method, &path, &[]);
         assert_eq!(reply.status, 405, "{method} {path}: {}", reply.text());
@@ -459,22 +478,36 @@ fn sources() -> Vec<(PathBuf, String)> {
 /// (docs/features/ui-live-tasks.md "Description and interactions").
 const TASK_READS: [&str; 2] = ["task_list", "task_show"];
 
+/// The CLI library's card calls a handler may make, reads and writes: a
+/// card is the one record the daemon writes beyond a stage (ADR-0056,
+/// docs/features/board-ui.md "The fence stays").
+const CARD_CALLS: [&str; 8] = [
+    "card_list",
+    "card_show",
+    "card_new",
+    "card_move",
+    "card_edit",
+    "card_assign",
+    "card_cancel",
+    "card_accept",
+];
+
 /// The names no handler may call: the CLI's deciding, storing, exporting,
 /// importing, creating and indexing calls (`check` left the list with
-/// docs/features/ui-live.md: the plain run is a read), and every `task_`
-/// call but the two reads (docs/features/ui-live-tasks.md AC-05).
+/// docs/features/ui-live.md: the plain run is a read), every `task_` call
+/// but the two reads (docs/features/ui-live-tasks.md AC-05) and every
+/// `card_` name but [`CARD_CALLS`] (docs/features/board-ui.md AC-02).
 fn forbidden(name: &str) -> bool {
     if name.starts_with("task_") {
         return !TASK_READS.contains(&name);
+    }
+    if name.starts_with("card_") {
+        return !CARD_CALLS.contains(&name);
     }
     [
         "approve",
         "approve_with",
         "reject",
-        "propose",
-        "propose_brief",
-        "propose_question",
-        "propose_discrepancy",
         "import_state",
         "init",
         "index",
@@ -482,6 +515,7 @@ fn forbidden(name: &str) -> bool {
     ]
     .contains(&name)
         || name.starts_with("export_")
+        || name.starts_with("propose")
 }
 
 /// The names `src` may not hold at all, a field access included: a check's
@@ -958,5 +992,244 @@ fn ui_round_t02_the_scan_catches_a_round_walk_and_its_terminal_but_not_the_stagi
         "fn f() { let s = \"round_answer RoundTerminal\"; } // round_answer(x), RoundTerminal",
     ] {
         assert_eq!(caught(probe), Vec::<String>::new(), "{probe}");
+    }
+}
+
+// ------------------------------------------------------- board-ui, AC-02
+
+#[test]
+fn board_ui_ac02_the_scan_admits_the_eight_card_calls_and_no_other_card_name() {
+    // Positive controls: a `card_` name outside the list, by path and bare;
+    // a name the library may add later too.
+    for name in [
+        "card_delete",
+        "card_import",
+        "card_restore",
+        "card_approve",
+        "card_history",
+        "card_write",
+    ] {
+        let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
+        assert_eq!(caught(&by_path), [name], "{by_path}");
+        let bare = format!("fn f() {{ {name}(&env, &globals, &r)?; }}");
+        assert_eq!(caught(&bare), [name], "{bare}");
+    }
+    // What stays forbidden, by path and bare: a card POST answering with an
+    // always-yes `Consent` could otherwise decide, stage a proposal or walk
+    // a round; every `propose*`, the ones named nowhere yet too.
+    for name in [
+        "approve",
+        "approve_with",
+        "reject",
+        "propose",
+        "propose_brief",
+        "propose_update",
+        "propose_question",
+        "propose_question_with_task",
+        "propose_discrepancy",
+        "propose_decision",
+        "propose_interpretation",
+        "propose_amendment",
+        "propose_drift",
+        "round_answer",
+        "import_state",
+        "export_state",
+        "export_index",
+        "init",
+        "index",
+        "task_claim",
+        "task_approve",
+        "task_new",
+        "task_cancel",
+    ] {
+        let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
+        assert_eq!(caught(&by_path), [name], "{by_path}");
+        let bare = format!("fn f() {{ {name}(&env, &globals, &r)?; }}");
+        assert_eq!(caught(&bare), [name], "{bare}");
+    }
+    // M: the accept handler claiming a task, then calling an unlisted name.
+    let handler = "async fn accept(State(app): State<Shared>, request: Request) {\n\
+                   run(project, move |env, globals| {\n\
+                   specengine_cli::task_claim(env, globals, &claim, &mut |_| true)?;\n\
+                   specengine_cli::card_reopen(env, globals, &reopen)\n\
+                   }).await }";
+    assert_eq!(caught(handler), ["task_claim", "card_reopen"], "{handler}");
+    // Negative controls: the eight, by path and bare; the handler of the
+    // slice with its yes; the types, the outcome's variant, the body's cap;
+    // a method of something else; a name in a string or a comment.
+    for name in CARD_CALLS {
+        let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
+        assert_eq!(caught(&by_path), Vec::<String>::new(), "{by_path}");
+        let bare = format!("fn f() {{ {name}(&env, &globals, &r)?; }}");
+        assert_eq!(caught(&bare), Vec::<String>::new(), "{bare}");
+    }
+    for probe in [
+        "async fn cards_accept(State(app): State<Shared>, request: Request) {\n\
+         run(project, move |env, globals| {\n\
+         specengine_cli::card_accept(env, globals, &CardAcceptRequest { id, actor, note, \
+         revision, now: utc_now() }, &mut |_| true).map(|o| Outcome::Card(Box::new(o)))\n\
+         }).await }",
+        "fn f() { let b: CardNewBody = todo!(); let r: CardMoveRequest = todo!(); }",
+        "const CARD_BODY_MAX: usize = 1_048_576;",
+        "fn f() { board.card_delete(); }",
+        "fn f() { let s = \"card_delete approve propose_update\"; } // card_delete(x), approve(y)",
+    ] {
+        assert_eq!(caught(probe), Vec::<String>::new(), "{probe}");
+    }
+}
+
+/// docs/features/board-ui.md "The fence stays", 3: a card's write is a row
+/// and an event in the queue, nothing else. An open question stands for the
+/// proposals, an identity makes a commit possible, and the whole repository
+/// is compared byte for byte after every POST: each of the seven writes
+/// adds exactly its one `card.*` event; each refused one, past the door or
+/// at it, adds none. `spec task list` answers as it did: a card is no task.
+#[test]
+fn card_writes_touch_only_the_queue() {
+    let scratch = Scratch::new("door-cards");
+    let a = scratch.repo("card-press", "press", "main");
+    let git = scratch.git();
+    git.run(&a, &["config", "user.name", "Owner"]);
+    git.run(&a, &["config", "user.email", "owner@example.invalid"]);
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let q = ask(
+        &home,
+        &a,
+        &["SHT-FRONT"],
+        "Does the masthead keep its rule?",
+    );
+    let ids = [q.as_str()];
+    let before = round_state(&scratch, &home, &cwd, &a, &ids);
+    assert_eq!(before.0[0], "", "the copy is committed");
+    let tasks = spec_json(&home, &cwd, &a, &["task", "list"])
+        .document()
+        .to_owned();
+
+    let server = Server::serve(&home, &cwd, &[&a]);
+    let p = "/api/projects/card-press";
+    let post = |path: &str, body: &serde_json::Value| {
+        server.stage(&format!("{p}/{path}"), &body.to_string())
+    };
+    let mut stored = before.2.clone();
+    for (path, body, kind) in [
+        (
+            "cards",
+            json!({"title": "Lead story", "discipline": "copy", "target": ["SHT-FRONT"],
+                "assignee": "ana", "as": "desk"}),
+            "card.created",
+        ),
+        (
+            "cards/C-0001/assign",
+            json!({"reviewer": "ben", "as": "desk"}),
+            "card.assigned",
+        ),
+        (
+            "cards/C-0001/edit",
+            json!({"goal": "Fill the front.", "evidence": ["note=first pass"], "as": "ana"}),
+            "card.edited",
+        ),
+        (
+            "cards/C-0001/move",
+            json!({"to": "edit", "as": "desk"}),
+            "card.moved",
+        ),
+        (
+            "cards/C-0001/move",
+            json!({"to": "proof", "as": "ana"}),
+            "card.moved",
+        ),
+        (
+            "cards/C-0001/accept",
+            json!({"as": "ben", "note": "Read twice."}),
+            "card.accepted",
+        ),
+        (
+            "cards",
+            json!({"title": "Back page", "discipline": "plates"}),
+            "card.created",
+        ),
+        (
+            "cards/C-0002/cancel",
+            json!({"reason": "Pulled for space."}),
+            "card.cancelled",
+        ),
+    ] {
+        let reply = post(path, &body);
+        assert_eq!(reply.status, 200, "{path} {body}: {}", reply.text());
+        let after = round_state(&scratch, &home, &cwd, &a, &ids);
+        assert_eq!(after.0, before.0, "{path}: git, the refs, every file");
+        assert_eq!(after.1, before.1, "{path}: the proposal as it was");
+        assert_eq!(
+            after.2[..stored.len()],
+            stored[..],
+            "{path}: the earlier events kept"
+        );
+        let added: Vec<&str> = after.2[stored.len()..]
+            .iter()
+            .map(|(_, kind, _)| kind.as_str())
+            .collect();
+        assert_eq!(added, [kind], "{path}: one event");
+        stored = after.2;
+    }
+    assert_eq!(
+        spec_json(&home, &cwd, &a, &["task", "list"]).document(),
+        tasks,
+        "no task made or moved"
+    );
+
+    // Refused past the door: an open card to refuse on.
+    let reply = post(
+        "cards",
+        &json!({"title": "Inner page", "discipline": "copy", "assignee": "ana"}),
+    );
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let stored = round_state(&scratch, &home, &cwd, &a, &ids);
+    assert_eq!(stored.0, before.0, "git and the files as they were");
+    for (status, path, body) in [
+        (
+            409,
+            "cards/C-0003/move",
+            json!({"to": "edit", "revision": "9", "as": "desk"}),
+        ),
+        (409, "cards/C-0003/move", json!({"to": "filed"})),
+        (409, "cards/C-0003/move", json!({"to": "edit", "as": "ana"})),
+        (409, "cards/C-0003/accept", json!({"as": "ana"})),
+        (409, "cards/C-0001/edit", json!({"goal": "Again."})),
+        (404, "cards/C-0099/cancel", json!({"reason": "Late."})),
+        (400, "cards/C-0003/move", json!({})),
+        (400, "cards/C-0003/edit", json!({"owner": "ana"})),
+        (400, "cards", json!({"goal": "No title."})),
+    ] {
+        let reply = post(path, &body);
+        assert_eq!(reply.status, status, "{path} {body}: {}", reply.text());
+        assert_eq!(
+            round_state(&scratch, &home, &cwd, &a, &ids),
+            stored,
+            "{path} {body}: nothing changed"
+        );
+    }
+    // Refused at the door.
+    let path = format!("{p}/cards/C-0003/edit");
+    let body = b"{\"goal\":\"Again.\"}";
+    let same = ("Sec-Fetch-Site", "same-origin");
+    let json_type = ("Content-Type", "application/json");
+    for (status, headers) in [
+        (403, &[json_type][..]),
+        (403, &[json_type, ("Sec-Fetch-Site", "none")][..]),
+        (403, &[json_type, ("Sec-Fetch-Site", "cross-site")][..]),
+        (
+            403,
+            &[same, json_type, ("Origin", "http://evil.example")][..],
+        ),
+        (415, &[same, ("Content-Type", "text/plain")][..]),
+    ] {
+        let reply = server.send("POST", &path, headers, body);
+        assert_eq!(reply.status, status, "{headers:?}: {}", reply.text());
+        assert_eq!(
+            round_state(&scratch, &home, &cwd, &a, &ids),
+            stored,
+            "{headers:?}: nothing changed"
+        );
     }
 }

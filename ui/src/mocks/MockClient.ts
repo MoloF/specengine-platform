@@ -3,6 +3,7 @@ import {
   NO_SUCH_PROPOSAL,
   STAGE_REFUSED,
   type BundleOptions,
+  type CardsOptions,
   type FlowOptions,
   type GraphOptions,
   type NodeOptions,
@@ -14,6 +15,16 @@ import {
 } from "../api/client";
 import type {
   BundleView,
+  Card,
+  CardAcceptBody,
+  CardAssignBody,
+  CardCancelBody,
+  CardCreateBody,
+  CardEditBody,
+  CardList,
+  CardMoveBody,
+  CardNotFound,
+  CardWrite,
   CheckReport,
   FlowView,
   GraphView,
@@ -38,6 +49,19 @@ import type {
 import { mockCode } from "./bindings";
 import { inboxEntryOf, noReview, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { checkReportOf } from "./check";
+import {
+  acceptCardIn,
+  assignCardIn,
+  cancelCardIn,
+  cardListOf,
+  cardShowOf,
+  changeElsewhere,
+  createCardIn,
+  editCardIn,
+  mockBoard,
+  moveCardIn,
+  type MockBoard,
+} from "./cards";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { editorialScenario } from "./editorial";
 import { flowOf } from "./flow";
@@ -91,6 +115,10 @@ export class MockClient implements SpecEngineClient {
   private readonly tasks = new Map<string, MockTasks>();
   private readonly delayMs: number;
   private readonly now: () => number;
+  /** Each project's cards by slug (src/mocks/cards.ts): the daemon's writes on them, until a reload. */
+  private readonly boards = new Map<string, MockBoard>();
+  /** `conflict`: the projects whose first card write has met a change made elsewhere. */
+  private readonly cardConflicted = new Set<string>();
   /** `conflict`: the proposals another page has staged on already, once each. */
   private readonly stagedElsewhere = new Set<string>();
   /** `conflict`: the projects whose first round POST has met a stage made elsewhere. */
@@ -104,6 +132,7 @@ export class MockClient implements SpecEngineClient {
     this.projects = [harborSim(at), ledgerApi(at)];
     for (const project of this.projects) {
       this.tasks.set(project.project.slug, mockTasks(project.project.slug));
+      this.boards.set(project.project.slug, mockBoard(project.project.slug, scenario, at));
     }
     if (scenario === "empty") {
       for (const project of this.projects) {
@@ -406,6 +435,69 @@ export class MockClient implements SpecEngineClient {
   /** Now, as the queue stores a time (1 s resolution). */
   private stamp(): string {
     return stamp(this.now(), 0);
+  }
+
+  /** The project's cards (src/mocks/cards.ts); the daemon serves its own (`docs/features/board-ui.md` "Routes"). */
+  async getCards(project: string, options: CardsOptions = {}): Promise<CardList> {
+    await this.read();
+    return structuredClone(cardListOf(this.board(project), options));
+  }
+
+  /** One card with its history; an unknown C answers the exit-1 document, as data. */
+  async getCard(project: string, id: string): Promise<Card | CardNotFound> {
+    await this.read();
+    return cardShowOf(this.board(project), id);
+  }
+
+  async createCard(project: string, body: CardCreateBody): Promise<CardWrite> {
+    await this.wait();
+    return createCardIn(this.board(project), body, this.stamp());
+  }
+
+  async moveCard(project: string, id: string, body: CardMoveBody): Promise<CardWrite> {
+    await this.wait();
+    this.meetConflict(project, id);
+    return moveCardIn(this.board(project), id, body, this.stamp());
+  }
+
+  async editCard(project: string, id: string, body: CardEditBody): Promise<CardWrite> {
+    await this.wait();
+    this.meetConflict(project, id);
+    return editCardIn(this.board(project), id, body, this.stamp());
+  }
+
+  async assignCard(project: string, id: string, body: CardAssignBody): Promise<CardWrite> {
+    await this.wait();
+    this.meetConflict(project, id);
+    return assignCardIn(this.board(project), id, body, this.stamp());
+  }
+
+  async cancelCard(project: string, id: string, body: CardCancelBody): Promise<CardWrite> {
+    await this.wait();
+    this.meetConflict(project, id);
+    return cancelCardIn(this.board(project), id, body, this.stamp());
+  }
+
+  async acceptCard(project: string, id: string, body: CardAcceptBody): Promise<CardWrite> {
+    await this.wait();
+    this.meetConflict(project, id);
+    return acceptCardIn(this.board(project), id, body, this.stamp());
+  }
+
+  /** The `conflict` scenario: a project's first card write finds its card changed meanwhile, a lost compare-and-set; the next one, on the new read, is taken. */
+  private meetConflict(project: string, id: string): void {
+    if (this.scenario === "conflict" && !this.cardConflicted.has(project)) {
+      this.cardConflicted.add(project);
+      changeElsewhere(this.board(project), id, this.stamp());
+    }
+  }
+
+  private board(project: string): MockBoard {
+    const board = this.boards.get(project);
+    if (board === undefined) {
+      throw new ClientError({ status: 404, message: `no project ${project}` });
+    }
+    return board;
   }
 
   /** No live tail: the mock's queue changes only by this page's stages, which read again themselves. */

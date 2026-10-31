@@ -9,6 +9,13 @@
 //! `GET /assets/x.js` stand behind the same fence (403 for a foreign
 //! `Host`, `Origin` or `Sec-Fetch-Site`; `no-store`, no CORS header). M: the
 //! UI routes outside the fence's layer.
+//!
+//! docs/features/board-ui.md "The fence stays": `fence()` does not change;
+//! it runs before routing, so the two card reads and the six writes are
+//! fenced like every route: a foreign `Host`, `Origin` or `Sec-Fetch-Site`
+//! is a 403 before anything is read, no response carries an
+//! `Access-Control-*` header (a `same-origin` claim beside a foreign
+//! `Origin` or `Host` included: `cards.rs`, AC-03).
 
 mod common;
 
@@ -99,6 +106,29 @@ fn endpoints(port: u16) -> Vec<(&'static str, String)> {
         (
             "POST",
             "/api/projects/lantern-keep/proposals/PR-0001/decision".to_owned(),
+        ),
+        ("GET", "/api/projects/lantern-keep/cards".to_owned()),
+        ("GET", "/api/projects/lantern-keep/cards/C-0001".to_owned()),
+        ("POST", "/api/projects/lantern-keep/cards".to_owned()),
+        (
+            "POST",
+            "/api/projects/lantern-keep/cards/C-0001/move".to_owned(),
+        ),
+        (
+            "POST",
+            "/api/projects/lantern-keep/cards/C-0001/edit".to_owned(),
+        ),
+        (
+            "POST",
+            "/api/projects/lantern-keep/cards/C-0001/assign".to_owned(),
+        ),
+        (
+            "POST",
+            "/api/projects/lantern-keep/cards/C-0001/cancel".to_owned(),
+        ),
+        (
+            "POST",
+            "/api/projects/lantern-keep/cards/C-0001/accept".to_owned(),
         ),
         ("GET", "/no/such/route".to_owned()),
         ("OPTIONS", "/api/projects".to_owned()),
@@ -247,6 +277,7 @@ fn ac01_no_response_carries_an_access_control_header() {
             ("POST", _) => 403,
             (_, "/no/such/route")
             | (_, "/api/projects/lantern-keep/proposals/PR-0001")
+            | (_, "/api/projects/lantern-keep/cards/C-0001")
             | (_, "/assets/x.js") => 404,
             (_, "/") => page_status(),
             _ => 200,

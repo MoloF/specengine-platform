@@ -651,7 +651,7 @@ describe("answers (AC-09)", () => {
 
   it.each([
     [400, "spec: `PR-0004` is a question: --option is for a discrepancy (exit 2)"],
-    [403, "staging needs a same-origin page (not authentication: ADR-0034)"],
+    [403, "a write needs a same-origin page (not authentication: ADR-0034)"],
     [413, "the body is over 16384 bytes"],
     [415, "the body must be application/json"],
     [503, "spec: the queue cannot be read: database is locked\nsecond line, verbatim"],
@@ -669,6 +669,14 @@ describe("answers (AC-09)", () => {
     expect(refusedReasonOf({ status: 409, message: "x" })).toBeNull();
     expect(refusedReasonOf(["the reason"])).toBeNull();
     expect(refusedReasonOf(null)).toBeNull();
+  });
+
+  it("takes a card's refusals: a write document's last note, a refused POST cards whose keys are null, no such card's reason (docs/features/board-ui.md \"Routes\")", () => {
+    expect(refusedReasonOf({ id: "C-0001", flow: "plain", column: "ready", position: 1, revision: "2", allowed: [], notes: ["first", "`C-0001` changed since this run read it"] })).toBe("`C-0001` changed since this run read it");
+    expect(refusedReasonOf({ id: null, flow: null, column: null, position: null, revision: null, allowed: [], notes: ["no flow takes the discipline `x`"] })).toBe("no flow takes the discipline `x`");
+    expect(refusedReasonOf({ id: "C-0099", reason: "no card C-0099" })).toBe("no card C-0099");
+    expect(refusedReasonOf({ id: "C-0099", reason: "" })).toBeNull();
+    expect(refusedReasonOf({ id: "C-0099", reason: 7 })).toBeNull();
   });
 
   it("never takes a GET's error answer for a refused write: a read's 409 with notes is its text", async () => {
@@ -756,9 +764,15 @@ describe("the live tail (AC-09)", () => {
       "task.completed",
       "task.cancelled",
       "task.refreshed",
+      "card.created",
+      "card.moved",
+      "card.accepted",
+      "card.edited",
+      "card.assigned",
+      "card.cancelled",
     ]);
     expect([...QUEUE_EVENT_TYPES]).toEqual(source.types());
-    expect(QUEUE_EVENT_TYPES).toHaveLength(16);
+    expect(QUEUE_EVENT_TYPES).toHaveLength(22);
     source.open();
     source.emit("proposal.created", '{"id":"PR-0005"}', "12");
     source.emit("proposal.rejected", '{"id":"PR-0002","reason":"no"}', "13");
@@ -874,5 +888,77 @@ describe("the live tail (AC-09)", () => {
     stop();
     vi.advanceTimersByTime(REOPEN_MAX_MS);
     expect(FakeEventSource.instances).toHaveLength(waits + 2);
+  });
+});
+
+describe("the cards (docs/features/board-ui.md \"Routes\")", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const list = { flows: [], cards: [], notes: [], truncated: false, omitted: null };
+  const written = { id: "C-0001", flow: "plain", column: "ready", position: 1, revision: "2", allowed: [], notes: [] };
+
+  it("reads the list with no query, `with_cancelled` sent only as true, the read's signal taken", async () => {
+    const stub = stubFetch(() => jsonAnswer(200, list));
+    const signal = new AbortController().signal;
+    await new HttpClient().getCards("a b", {}, signal);
+    await new HttpClient().getCards("alpha", { with_cancelled: false });
+    await new HttpClient().getCards("alpha", { with_cancelled: true });
+    expect(urlsOf(stub)).toEqual(["/api/projects/a%20b/cards", "/api/projects/alpha/cards", "/api/projects/alpha/cards?with_cancelled=true"]);
+    expect(stub.mock.calls[0]?.[1]?.signal).toBe(signal);
+  });
+
+  it("reads one card, the ID a segment encoded once, a 404's {id, reason} as data", async () => {
+    const stub = stubFetch(() => jsonAnswer(404, { id: "C/1", reason: "no card C/1" }));
+    expect(await new HttpClient().getCard("alpha", "C/1")).toEqual({ id: "C/1", reason: "no card C/1" });
+    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/cards/C%2F1"]);
+  });
+
+  it("rejects a bad [card] as the daemon words it", async () => {
+    stubFetch(() => errorAnswer(503, "specengine.toml:3: card: a flow needs two columns"));
+    const error = await rejection(new HttpClient().getCards("alpha"));
+    expect([error.status, error.message]).toEqual([503, "specengine.toml:3: card: a flow needs two columns"]);
+  });
+
+  it("posts each write as JSON to its path, the body exactly as given, no signal", async () => {
+    const stub = stubFetch(() => jsonAnswer(200, written));
+    const client = new HttpClient();
+    await client.createCard("alpha", { title: "T", target: ["R-1"], criterion: ["c"], as: null });
+    await client.moveCard("alpha", "C-0001", { to: "ready", revision: "1", as: "Mira Holt" });
+    await client.editCard("alpha", "C-0001", { goal: "-", evidence: ["note=x"], revision: "1", as: null });
+    await client.assignCard("alpha", "C-0001", { reviewer: "Ivo Brandt", revision: "1", as: null });
+    await client.cancelCard("alpha", "C-0001", { reason: "why", revision: "1", as: null });
+    await client.acceptCard("alpha", "C-0001", { as: "Ivo Brandt", note: null, revision: "1" });
+    expect(urlsOf(stub)).toEqual([
+      "/api/projects/alpha/cards",
+      "/api/projects/alpha/cards/C-0001/move",
+      "/api/projects/alpha/cards/C-0001/edit",
+      "/api/projects/alpha/cards/C-0001/assign",
+      "/api/projects/alpha/cards/C-0001/cancel",
+      "/api/projects/alpha/cards/C-0001/accept",
+    ]);
+    expect(stub.mock.calls.map((call) => [call[1]?.method, "signal" in (call[1] ?? {})])).toEqual(Array.from({ length: 6 }, () => ["POST", false]));
+    expect(stub.mock.calls.map((call) => JSON.parse(call[1]?.body as string) as unknown)).toEqual([
+      { title: "T", target: ["R-1"], criterion: ["c"], as: null },
+      { to: "ready", revision: "1", as: "Mira Holt" },
+      { goal: "-", evidence: ["note=x"], revision: "1", as: null },
+      { reviewer: "Ivo Brandt", revision: "1", as: null },
+      { reason: "why", revision: "1", as: null },
+      { as: "Ivo Brandt", note: null, revision: "1" },
+    ]);
+  });
+
+  it.each([
+    [409, { ...written, notes: ["C-0001 is in ready: no move to `done`; nothing changed"] }, "C-0001 is in ready: no move to `done`; nothing changed"],
+    [409, { id: null, flow: null, column: null, position: null, revision: null, allowed: [], notes: ["no flow takes a card without a discipline"] }, "no flow takes a card without a discipline"],
+    [404, { id: "C-0099", reason: "no card C-0099" }, "no card C-0099"],
+    [400, { status: 400, message: "spec: --as: 129 bytes; at most 128" }, "spec: --as: 129 bytes; at most 128"],
+    [403, { status: 403, message: "a write needs a same-origin page (not authentication: ADR-0034)" }, "a write needs a same-origin page (not authentication: ADR-0034)"],
+    [503, { status: 503, message: "a look-alike ID" }, "a look-alike ID"],
+  ])("rejects a write's %i in the daemon's words", async (status, body, message) => {
+    stubFetch(() => jsonAnswer(status, body));
+    const error = await rejection(new HttpClient().moveCard("alpha", "C-0001", { to: "done", revision: "1", as: null }));
+    expect([error.status, error.message]).toEqual([status, message]);
   });
 });

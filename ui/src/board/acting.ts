@@ -1,0 +1,75 @@
+import { useCallback, useSyncExternalStore } from "react";
+import { CARD_USAGE } from "../api/client";
+import type { ApiError } from "../api/types";
+import { ACTING_FLAG } from "./labels";
+
+// The acting name (`docs/features/board-ui.md` "The acting name, and acceptance"): a field in the
+// Board's header, kept per viewer, sent as `as` on every write. A convention until the hub's named
+// login: the name is typed and nothing verifies it (ADR-0034).
+
+/** Where the viewer's name is kept: per viewer, for every project. */
+export const ACTING_KEY = "specengine.board.as";
+
+const listeners = new Set<() => void>();
+
+/** The name typed while the browser refuses to store it: it overrides the storage for this page. */
+let unstored: string | null = null;
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/** The name as typed: empty when none is kept, and when the browser refuses its storage. */
+export function recallActing(): string {
+  if (unstored !== null) {
+    return unstored;
+  }
+  try {
+    return window.localStorage.getItem(ACTING_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/** Keeps the name as typed, an empty one removing the key; a refused write keeps it for this page. */
+export function rememberActing(name: string): void {
+  try {
+    if (name === "") {
+      window.localStorage.removeItem(ACTING_KEY);
+    } else {
+      window.localStorage.setItem(ACTING_KEY, name);
+    }
+    unstored = null;
+  } catch {
+    unstored = name;
+  }
+  for (const listener of listeners) {
+    listener();
+  }
+}
+
+/** What a write sends as `as`: the name trimmed; none is null, which the daemon records `local`. */
+export function actingName(typed: string): string | null {
+  const name = typed.trim();
+  return name === "" ? null : name;
+}
+
+/**
+ * Whether a refused write's line is about the acting name, so it belongs next to its field: a 400
+ * naming the flag. Any other 400 (a bad assignee, say) stays where the write was made.
+ */
+export function isActingLine({ status, message }: ApiError): boolean {
+  return status === CARD_USAGE && message.includes(ACTING_FLAG);
+}
+
+/** The acting name as typed and its setter: every field showing it stays the same. */
+export function useActing(): readonly [string, (name: string) => void] {
+  const typed = useSyncExternalStore(subscribe, recallActing);
+  const set = useCallback((name: string) => {
+    rememberActing(name);
+  }, []);
+  return [typed, set];
+}

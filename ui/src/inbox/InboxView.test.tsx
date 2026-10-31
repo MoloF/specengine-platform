@@ -353,7 +353,7 @@ describe("the card reads the review document (daemon-read \"Data\")", () => {
 
   it("keeps the daemon's 403 in the dialog, in its own words (the fence: not authentication)", async () => {
     const { client } = await openInbox(QUEUE, "#/alpha/inbox/PR-2");
-    const message = "staging needs a same-origin page (not authentication: ADR-0034)";
+    const message = "a write needs a same-origin page (not authentication: ADR-0034)";
     client.stageDecision.mockRejectedValueOnce(new ClientError({ status: 403, message }));
     const card = await screen.findByRole("article");
     await within(card).findByRole("heading", { level: 3, name: "Provenance" });

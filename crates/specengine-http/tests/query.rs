@@ -11,6 +11,12 @@
 //! docs/features/show-bindings.md RD-7 "HTTP":
 //! `nodes_with_bindings_equals_show_bindings` (`with=bindings`, with
 //! `with=links` in either order, and the 400 of any other value).
+//!
+//! docs/features/board-ui.md "Data": `cards` takes `flow`, `column`,
+//! `discipline`, `assignee`, `no_target`, `with_cancelled`, decoded as every
+//! query (a bad `%`, bytes that are not UTF-8: a 400 naming the parameter; a
+//! `+` a space, a `%2B` a plus), a scalar once, a boolean `true` or `false`;
+//! `cards/:id` takes no query name. Each refusal runs no call.
 
 mod common;
 
@@ -95,6 +101,29 @@ fn a_bad_escape_or_non_utf8_in_a_query_value_or_name_is_a_400_naming_it() {
             "%C0%AF",
             utf8,
         ),
+        (format!("{P}/cards?flow=%FF"), "flow", "%FF", utf8),
+        (format!("{P}/cards?column=%E2%82"), "column", "%E2%82", utf8),
+        (
+            format!("{P}/cards?discipline=co%zzpy"),
+            "discipline",
+            "co%zzpy",
+            hex,
+        ),
+        (format!("{P}/cards?assignee=ana%"), "assignee", "ana%", hex),
+        (
+            format!("{P}/cards?with_cancelled=%C3%28"),
+            "with_cancelled",
+            "%C3%28",
+            utf8,
+        ),
+        (format!("{P}/cards?no_target=%4"), "no_target", "%4", hex),
+        (
+            format!("{P}/cards?%FFflow=copy"),
+            "%FFflow",
+            "%FFflow",
+            utf8,
+        ),
+        (format!("{P}/cards/C-0001?%FF=1"), "%FF", "%FF", utf8),
     ];
     for (target, name, raw, why) in &cases {
         let reply = server.get(target);
@@ -187,6 +216,125 @@ fn a_plus_is_a_space_and_an_encoded_plus_a_plus() {
     let (_, plus) = searched(&server, &format!("{P}/search?query=stamina%2Bregen"));
     assert!(!spaced.is_empty(), "`stamina regen` has hits in A");
     assert_ne!(spaced, plus, "a space and a plus search differently in A");
+}
+
+/// docs/features/board-ui.md "Data": the board's filters as the shared
+/// `Args` read them, each refusal a 400 before any call (a fresh `HOME`
+/// stays empty).
+#[test]
+fn a_card_query_outside_its_names_or_values_is_a_400_before_any_call() {
+    let scratch = Scratch::new("query-cards-refused");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    let names = "flow, column, discipline, assignee, no_target, with_cancelled";
+    let cases: Vec<(String, String)> = vec![
+        (
+            format!("{P}/cards?limit=1"),
+            format!("`limit` is no query name of cards: it takes {names}"),
+        ),
+        (
+            format!("{P}/cards?status=draft"),
+            format!("`status` is no query name of cards: it takes {names}"),
+        ),
+        (
+            format!("{P}/cards?flow=copy&flow=plates"),
+            "`flow` is given 2 times: it takes one value".to_owned(),
+        ),
+        (
+            format!("{P}/cards?assignee=ana&assignee=ben"),
+            "`assignee` is given 2 times: it takes one value".to_owned(),
+        ),
+        (
+            format!("{P}/cards?with_cancelled=1"),
+            "`with_cancelled=1`: not `true` or `false`".to_owned(),
+        ),
+        (
+            format!("{P}/cards?with_cancelled"),
+            "`with_cancelled=`: not `true` or `false`".to_owned(),
+        ),
+        (
+            format!("{P}/cards?no_target=yes"),
+            "`no_target=yes`: not `true` or `false`".to_owned(),
+        ),
+        (
+            format!("{P}/cards/C-0001?history=true"),
+            "`history` is no query name of cards/:id: it takes no query name".to_owned(),
+        ),
+    ];
+    for (target, message) in &cases {
+        let reply = server.get(target);
+        assert_eq!(reply.status, 400, "{target}: {}", reply.text());
+        assert_eq!(&reply.error_message(), message, "{target}");
+    }
+    assert!(
+        beyond_daemon(&home).is_empty(),
+        "a refused query ran no call: the fresh HOME holds {:?}",
+        beyond_daemon(&home)
+    );
+}
+
+/// docs/features/board-ui.md "Data": a filter is the CLI's flag, decoded as a
+/// form: `+` a space, `%2B` a plus, so `ana%2Bben` finds the name written
+/// with a plus and `ana+ben` finds nobody; filters AND; `false` is the
+/// flag left out.
+#[test]
+fn the_card_filters_decode_as_a_form_and_are_the_clis_flags() {
+    let scratch = Scratch::new("query-cards");
+    let root = scratch.repo("card-press", "press", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let base = "/api/projects/card-press";
+    for (title, discipline, assignee) in [
+        ("Lead story", "copy", "ana+ben"),
+        ("Back page", "copy", "cid"),
+        ("Front plate", "plates", "cid"),
+    ] {
+        let run = spec_json(
+            &home,
+            &cwd,
+            &root,
+            &[
+                "card",
+                "new",
+                "--title",
+                title,
+                "--discipline",
+                discipline,
+                "--assignee",
+                assignee,
+            ],
+        );
+        run.code(0);
+    }
+    let ids = |target: &str| -> Vec<String> {
+        let reply = server.get(&format!("{base}/{target}"));
+        assert_eq!(reply.status, 200, "{target}: {}", reply.text());
+        reply.json()["cards"]
+            .as_array()
+            .expect("cards")
+            .iter()
+            .map(|row| row["id"].as_str().expect("an ID").to_owned())
+            .collect()
+    };
+    assert_eq!(ids("cards?assignee=ana%2Bben"), ["C-0001"]);
+    assert_eq!(ids("cards?assignee=ana+ben"), Vec::<String>::new());
+    assert_eq!(ids("cards?assignee=cid"), ["C-0002", "C-0003"]);
+    assert_eq!(ids("cards?assignee=cid&discipline=copy"), ["C-0002"]);
+    assert_eq!(ids("cards?assignee=cid&flow=plates"), ["C-0003"]);
+    assert_eq!(
+        ids("cards?flow=copy&discipline=plates"),
+        Vec::<String>::new()
+    );
+    assert_eq!(ids("cards?column=draft"), ["C-0001", "C-0002"]);
+    assert_eq!(ids("cards?no_target=true"), ["C-0001", "C-0002", "C-0003"]);
+    assert_eq!(
+        ids("cards?no_target=false&with_cancelled=false"),
+        ["C-0001", "C-0002", "C-0003"]
+    );
+    // Exact, never a part of the word.
+    assert_eq!(ids("cards?assignee=ci"), Vec::<String>::new());
 }
 
 /// A git repository of `fixtures/code-a` with the golden lock committed

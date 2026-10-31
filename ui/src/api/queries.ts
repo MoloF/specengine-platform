@@ -2,9 +2,12 @@ import { keepPreviousData, useIsMutating, useMutation, useQueries, useQuery, use
 import { useCallback, useEffect, useState } from "react";
 import {
   apiErrorOf,
+  CARD_REFUSED,
+  NO_SUCH_CARD,
   NO_SUCH_PROPOSAL,
   STAGE_REFUSED,
   type BundleOptions,
+  type CardsOptions,
   type FlowOptions,
   type GraphOptions,
   type NodeOptions,
@@ -13,7 +16,22 @@ import {
 } from "./client";
 import { endOwnWrite, isOwnStageEvent, outsideSince, startOwnWrite, type OwnWrite } from "./ownStages";
 import { useClient } from "./provider";
-import type { FlowView, Inbox, Proposal, RoundAnswerBody, RoundAnswersOutcome, StageChoice, TreeView } from "./types";
+import type {
+  CardAcceptBody,
+  CardAssignBody,
+  CardCancelBody,
+  CardCreateBody,
+  CardEditBody,
+  CardMoveBody,
+  CardWrite,
+  FlowView,
+  Inbox,
+  Proposal,
+  RoundAnswerBody,
+  RoundAnswersOutcome,
+  StageChoice,
+  TreeView,
+} from "./types";
 
 /**
  * Query keys: every argument present, an absent one as `null`, `[]` or `false`, so two reads that
@@ -74,6 +92,10 @@ export const queryKeys = {
   roadmap: (project: string) => ["roadmap", project] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
+  /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does. */
+  cards: (project: string, options: CardsOptions = {}) => ["cards", project, { with_cancelled: options.with_cancelled ?? false }] as const,
+  /** One card, its history with it. */
+  card: (project: string, id: string) => ["card", project, id] as const,
 };
 
 /** Every round sheet of a project, whatever its limit. */
@@ -84,6 +106,16 @@ function roundsOf(project: string) {
 /** A project's round POSTs in the mutation cache: one key, whatever screen sent them. */
 function roundAnswersKey(project: string) {
   return ["round-answers", project] as const;
+}
+
+/** Every read of a project's card list, whatever its options. */
+function cardListsOf(project: string) {
+  return ["cards", project] as const;
+}
+
+/** Every card read of a project. */
+function cardsOf(project: string) {
+  return ["card", project] as const;
 }
 
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
@@ -257,6 +289,9 @@ export interface OutsideStage {
 /** A task's queue events (`docs/canon/tasks.md` "Store"). */
 const TASK_EVENT = "task.";
 
+/** A card's queue events (`docs/canon/cards.md` "Documents and events"). */
+const CARD_EVENT = "card.";
+
 /**
  * The project's live tail while `project` is set (`docs/features/daemon-read.md` "Data"): a
  * `proposal.*` event reads that project's inbox and that proposal again, and its task list and
@@ -275,10 +310,13 @@ const TASK_EVENT = "task.";
  * project's round sheets again, a read in flight aborted
  * (`docs/features/ui-round.md` "Description and interactions"). The plan is read again on a
  * `task.*` event, `proposal.applied` and a gap, a read in flight aborted, never on a stage,
- * `.created`, `.approved`, `.rejected` or `.apply_failed` (`docs/features/roadmap-screen.md`). No
+ * `.created`, `.approved`, `.rejected` or `.apply_failed` (`docs/features/roadmap-screen.md`). A
+ * `card.*` event reads that project's card lists and that card again (no string `id`: every card of
+ * it), never anything else and with no outside-change alert: a card is no decision
+ * (`docs/features/board-ui.md` "Rules and edge cases"). No
  * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
- * reads and the round sheets of the project again. Only the reads on screen are fetched, once each
+ * reads, the round sheets and the cards of the project again. Only the reads on screen are fetched, once each
  * but the health read's one more after a walk (the check and the health read only while Health
  * shows them: `docs/features/health-left.md` "Description and interactions"; the health read also
  * while the Spec tree shows its drift: `docs/features/ui-tree-drift.md`); the rest are marked
@@ -350,10 +388,24 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     const readRoundAgain = () => {
       void queryClient.invalidateQueries({ queryKey: roundsOf(project) });
     };
+    /** The Board's lists and every card read of the project. */
+    const readCardsAgain = () => {
+      void queryClient.invalidateQueries({ queryKey: cardListsOf(project) });
+      void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+    };
     const unsubscribe = client.subscribe(
       project,
       (event) => {
         const id = eventId(event.payload);
+        if (event.type.startsWith(CARD_EVENT)) {
+          if (id === null) {
+            readCardsAgain();
+          } else {
+            void queryClient.invalidateQueries({ queryKey: cardListsOf(project) });
+            void queryClient.invalidateQueries({ queryKey: queryKeys.card(project, id), exact: true });
+          }
+          return;
+        }
         if (event.type.startsWith(TASK_EVENT) || event.type.startsWith(PROPOSAL_EVENT)) {
           readRoundAgain();
         }
@@ -395,6 +447,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         readSpecAgain();
         readTasksAgain();
         readRoundAgain();
+        readCardsAgain();
       },
     );
     return () => {
@@ -756,6 +809,87 @@ export function useRoadmap(project: string) {
 
 /** The plan's read as the Roadmap shares it among its parts. */
 export type RoadmapQuery = ReturnType<typeof useRoadmap>;
+
+/**
+ * The Board's one read (`docs/features/board-ui.md` "Board"): the filters work on its answer, and
+ * Show cancelled is another entry, the last board staying up while it is read. Read on entering the
+ * Board, after a write of this page and, while it shows, after a `card.*` event or a gap.
+ */
+export function useCards(project: string, options: CardsOptions = {}) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.cards(project, options),
+    queryFn: ({ signal }) => client.getCards(project, options.with_cancelled === true ? options : undefined, signal),
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The card list's read as the Board shares it. */
+export type CardsQuery = ReturnType<typeof useCards>;
+
+/** One card with its history (`id` null: nothing read); a new ID never shows the last one's card. */
+export function useCard(project: string, id: string | null) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.card(project, id ?? ""),
+    queryFn: ({ signal }) => client.getCard(project, id ?? "", signal),
+    enabled: id !== null,
+  });
+}
+
+/** One card's read as the panel shares it. */
+export type CardQuery = ReturnType<typeof useCard>;
+
+/** One of the card writes, as `useCardWrite` sends it (`docs/features/board-ui.md` "Routes"). */
+export type CardWriteRequest =
+  | { write: "create"; body: CardCreateBody }
+  | { write: "move"; id: string; body: CardMoveBody }
+  | { write: "edit"; id: string; body: CardEditBody }
+  | { write: "assign"; id: string; body: CardAssignBody }
+  | { write: "cancel"; id: string; body: CardCancelBody }
+  | { write: "accept"; id: string; body: CardAcceptBody };
+
+/**
+ * One card write per call; nothing is optimistic. After an answer, a refusal (409, a lost
+ * compare-and-set too) or no such card (404), the project's card lists and that card are read again,
+ * and the call settles once they have: the board on screen is the daemon's. Any other failure stored
+ * nothing, and no answer at all (status 0) may have stored it: read again too.
+ */
+export function useCardWrite(project: string) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  async function readAgain(id: string | null) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: cardListsOf(project) }),
+      id === null ? Promise.resolve() : queryClient.invalidateQueries({ queryKey: queryKeys.card(project, id), exact: true }),
+    ]);
+  }
+  return useMutation({
+    mutationFn: (request: CardWriteRequest): Promise<CardWrite> => {
+      switch (request.write) {
+        case "create":
+          return client.createCard(project, request.body);
+        case "move":
+          return client.moveCard(project, request.id, request.body);
+        case "edit":
+          return client.editCard(project, request.id, request.body);
+        case "assign":
+          return client.assignCard(project, request.id, request.body);
+        case "cancel":
+          return client.cancelCard(project, request.id, request.body);
+        case "accept":
+          return client.acceptCard(project, request.id, request.body);
+      }
+    },
+    onSuccess: (answer) => readAgain(answer.id),
+    onError: async (error, request) => {
+      const { status } = apiErrorOf(error);
+      if (status === CARD_REFUSED || status === NO_SUCH_CARD || status === 0) {
+        await readAgain(request.write === "create" ? null : request.id);
+      }
+    },
+  });
+}
 
 /** The round sheet at `limit` (null: the daemon's default); while another limit is read, the last sheet stays up. */
 export function useRound(project: string, limit: number | null) {

@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
 import { useLiveQueue, useProjects } from "../api/queries";
 import type { Project } from "../api/types";
+import { BoardView, type BoardMemory, type BoardState } from "../board/BoardView";
 import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
 import { GraphView } from "../graph/GraphView";
 import { HealthView } from "../health/HealthView";
@@ -140,7 +141,7 @@ function ProjectSwitcher({
   );
 }
 
-/** Header, the home and the eight sections, the current view inside its own error boundary, the jump palette. */
+/** Header, the home and the nine sections, the current view inside its own error boundary, the jump palette. */
 export function Shell({ scenario }: { scenario: string | null }) {
   const hash = useHash();
   const route = parseHash(hash);
@@ -190,6 +191,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
       recall: (project) => flowStates.current.get(project),
       remember: (project, state) => {
         flowStates.current.set(project, state);
+      },
+    }),
+    [],
+  );
+  /** The Board's tab, filters and Show cancelled per project for this page's life; never in the hash (docs/features/board-ui.md "Board"). */
+  const boardStates = useRef(new Map<string, BoardState>());
+  const boardMemory = useMemo<BoardMemory>(
+    () => ({
+      recall: (project) => boardStates.current.get(project),
+      remember: (project, state) => {
+        boardStates.current.set(project, state);
       },
     }),
     [],
@@ -367,6 +379,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {
     view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
+  } else if (route.section === "board") {
+    view = <BoardView key={route.project} project={route.project} cardId={route.id} memory={boardMemory} />;
   } else if (route.section === "roadmap") {
     view = <RoadmapView key={route.project} project={route.project} itemId={route.id} memory={roadmapMemory} />;
   } else if (route.section === "flow") {

@@ -71,6 +71,12 @@ const PATHS = {
   flowGap: "M2.5 5V2.5H5 M11 2.5h2.5V5 M13.5 11v2.5H11 M5 13.5H2.5V11 M8 5.2v3.4 M8 10.8v.2",
   flowMarked: "M8 2.5 9.7 6l3.8.5-2.8 2.6.7 3.8L8 11.1l-3.4 1.8.7-3.8L2.5 6.5 6.3 6 8 2.5Z",
   flowLoop: "M12.5 8a4.5 4.5 0 1 1-1.4-3.3 M12.8 2.6v2.6h-2.6",
+  // The Board (docs/features/board-ui.md): a late card, moving one, a new one, and Up and Down.
+  cardOverdue: "M7 2.6a5.2 5.2 0 1 0 5.4 5.4 M7 5v3l2 1.2 M13 2.5v3 M13 7.6v.2",
+  cardMove: "M2.5 8h11 M5 5.5 2.5 8 5 10.5 M11 5.5 13.5 8 11 10.5",
+  cardNew: "M8 3v10 M3 8h10",
+  cardUp: "M8 13V3 M4.5 6.5 8 3l3.5 3.5",
+  cardDown: "M8 3v10 M4.5 9.5 8 13l3.5-3.5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

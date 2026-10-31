@@ -23,6 +23,11 @@
 //! - AC-10: one code for five projects' flows, no fixture word in the card
 //!   sources (the tool half: `mcp_cards.rs`).
 //! - AC-11: `cancel`.
+//! - docs/features/board-ui.md: a usage defect stays exit 2's one line under
+//!   `--json`, stdout empty (`or_usage_error`); a card's persons take a wider
+//!   grammar: any script and inner spaces, one line after trimming, at most
+//!   128 bytes, no control character, U+2028, U+2029 or bidi mark, compared
+//!   exactly after trimming; `agent` and `local` stay no reviewers.
 //!
 //! The oracle of "nothing changed" is `SELECT * FROM cards` and
 //! `SqliteQueue::dump()`, both raw. Every expected value below is worked
@@ -544,6 +549,50 @@ fn nothing_asked_exits_2() {
     assert_eq!(events(&pair).len(), 1);
 }
 
+/// docs/features/board-ui.md "Files in scope": nothing asked is a `CliError`
+/// on the terminal, `--json` too: exit 2, its one line on stderr, stdout
+/// empty, no `{id, reason}` document, which only the daemon's route reads.
+/// M: `or_usage_error` dropped from `main.rs`.
+#[test]
+fn nothing_asked_under_json_is_the_line_alone() {
+    let pair = Pair::new("cd-nothing-json", PRESS);
+    make(&pair, "One", &["--discipline", "plates"]);
+    let before = state(&pair);
+    for (args, line) in [
+        (
+            vec!["card", "move", "C-0001"],
+            "spec: `spec card move` asks nothing: give --to K, --before C or both\n",
+        ),
+        (
+            vec!["card", "move", "C-0001", "--as", "desk"],
+            "spec: `spec card move` asks nothing: give --to K, --before C or both\n",
+        ),
+        (
+            vec!["card", "edit", "C-0001"],
+            "spec: `spec card edit` asks nothing: give a field to change or --evidence\n",
+        ),
+        (
+            vec!["card", "edit", "C-0001", "--revision", "1"],
+            "spec: `spec card edit` asks nothing: give a field to change or --evidence\n",
+        ),
+        (
+            vec!["card", "assign", "C-0001"],
+            "spec: `spec card assign` asks nothing: give --assignee N, --reviewer N or both\n",
+        ),
+    ] {
+        let done = json_run(&pair, &args);
+        done.code(2);
+        assert_eq!(done.stdout, "", "{args:?}: no document: {}", done.show());
+        assert_eq!(done.stderr, line, "{args:?}");
+        // The text mode says the same.
+        let text = run(&pair, &args);
+        text.code(2);
+        assert_eq!(text.stdout, "", "{args:?}: {}", text.show());
+        assert_eq!(text.stderr, line, "{args:?}");
+    }
+    assert_eq!(state(&pair), before, "nothing changed");
+}
+
 // --------------------------------------------------------------- AC-02
 
 /// AC-02: `draft` to `proof` is no move of `copy`: exit 1 with the spec's
@@ -756,15 +805,40 @@ fn ac03_a_by_list_stops_a_slip_and_records_who_moved() {
     assert_eq!(events(&pair)[2].1["as"], "local");
 }
 
-/// "Who acts": `--as` takes `author_field_problem`'s grammar, and a value
-/// outside it stores nothing.
+/// "Who acts": `--as` takes a person's grammar (one line after trimming, at
+/// most 128 bytes, no control character, U+2028, U+2029 or bidi mark), and a
+/// value outside it stores nothing: exit 2 for `--as`, exit 1 for
+/// `--assignee` and `--reviewer`.
 #[test]
-fn as_takes_the_author_grammar() {
+fn as_takes_the_person_grammar() {
     let pair = Pair::new("cd-as", PRESS);
     make(&pair, "One", &["--discipline", "plates"]);
     let before = state(&pair);
-    let long = "n".repeat(300);
-    for name in ["two words", "", "caf\u{00e9}", long.as_str()] {
+    let long = "n".repeat(129);
+    let wide = "\u{0430}".repeat(65);
+    // 128 characters, 129 bytes: the limit counts bytes.
+    let mixed = format!("{}\u{0430}", "n".repeat(127));
+    let off = [
+        "",
+        "   ",
+        "two\nlines",
+        "tab\tinside",
+        "bell\u{7}",
+        "a\u{85}b",
+        "a\u{61c}b",
+        "a\u{2028}b",
+        "a\u{2029}b",
+        "a\u{200e}b",
+        "a\u{200f}b",
+        "a\u{202a}b",
+        "a\u{202e}b",
+        "a\u{2066}b",
+        "a\u{2069}b",
+        long.as_str(),
+        wide.as_str(),
+        mixed.as_str(),
+    ];
+    for name in off {
         let done = run(
             &pair,
             &["card", "move", "C-0001", "--to", "blocked", "--as", name],
@@ -773,8 +847,20 @@ fn as_takes_the_author_grammar() {
         assert!(done.stderr.contains("--as"), "{name:?}: {}", done.show());
         assert_eq!(state(&pair), before, "{name:?}");
     }
+    // The limit's own words, in bytes, the trimmed name's.
+    assert_eq!(
+        cannot(
+            &pair,
+            &["card", "move", "C-0001", "--to", "blocked", "--as", &mixed]
+        ),
+        "spec: --as: 129 bytes; at most 128\n"
+    );
+    assert_eq!(
+        refused(&pair, &["card", "assign", "C-0001", "--reviewer", &long]),
+        "spec: reviewer: 129 bytes; at most 128\n"
+    );
     // `--assignee` and `--reviewer` are refused by the same grammar, exit 1.
-    for name in ["two words", "caf\u{00e9}", long.as_str()] {
+    for name in off {
         for (args, field) in [
             (
                 vec!["card", "assign", "C-0001", "--assignee", name],
@@ -802,6 +888,220 @@ fn as_takes_the_author_grammar() {
             assert!(reason.contains(field), "{name:?}: {reason}");
             assert_eq!(state(&pair), before, "{name:?}");
         }
+    }
+}
+
+/// A full name in another script.
+const FULL_NAME: &str =
+    "\u{0410}\u{043d}\u{043d}\u{0430} \u{041f}\u{0435}\u{0442}\u{0440}\u{043e}\u{0432}\u{0430}";
+
+/// Another person's, who reviews.
+const OTHER_NAME: &str =
+    "\u{0411}\u{043e}\u{0440}\u{0438}\u{0441} \u{0418}\u{0432}\u{0430}\u{043d}\u{043e}\u{0432}";
+
+/// "Who acts": a full name in any script as `--as`, `--assignee`,
+/// `--reviewer` and in a move's `by`, compared exactly after trimming; on a
+/// terminal the assignee is still refused and the reviewer accepts. `agent`
+/// and `local` stay no reviewers, trimmed or not. At 128 bytes, in any
+/// script, a name passes.
+#[test]
+fn a_full_name_in_any_script_is_a_person_compared_exactly_after_trimming() {
+    let pair = Pair::new("cd-names", PRESS);
+    let config = read_text(&pair.main, "specengine.toml");
+    write(
+        &pair.main,
+        "specengine.toml",
+        config.replace(
+            "by = [\"desk\"]",
+            &format!("by = [\"desk\", \"{FULL_NAME}\"]"),
+        ),
+    );
+    let id = make(
+        &pair,
+        "Lead story",
+        &[
+            "--discipline",
+            "copy",
+            "--assignee",
+            FULL_NAME,
+            "--as",
+            FULL_NAME,
+        ],
+    );
+    let spaced_other = format!("  {OTHER_NAME} ");
+    ok(&pair, &["card", "assign", &id, "--reviewer", &spaced_other]);
+    let card = show(&pair, &id);
+    assert_eq!(card["created_by"], FULL_NAME, "{card}");
+    assert_eq!(card["assignee"], FULL_NAME, "{card}");
+    assert_eq!(card["reviewer"], OTHER_NAME, "trimmed: {card}");
+    assert_eq!(
+        card["allowed"],
+        json!([{"to": "edit", "by": ["desk", FULL_NAME]}]),
+        "{card}"
+    );
+
+    // Exactly: the first name alone, another case: not `by`'s.
+    let first = "\u{0410}\u{043d}\u{043d}\u{0430}";
+    let lower =
+        "\u{0430}\u{043d}\u{043d}\u{0430} \u{043f}\u{0435}\u{0442}\u{0440}\u{043e}\u{0432}\u{0430}";
+    let before = state(&pair);
+    for near in [first, lower] {
+        assert_eq!(
+            refused(&pair, &["card", "move", &id, "--to", "edit", "--as", near]),
+            format!(
+                "spec: {id} is in draft: the move to `edit` is `desk` or `{FULL_NAME}`'s, not \
+                 `{near}`'s; nothing changed\n"
+            )
+        );
+        assert_eq!(state(&pair), before, "{near}");
+    }
+    // After trimming, the same name, recorded trimmed.
+    let spaced = format!("  {FULL_NAME}  ");
+    ok(
+        &pair,
+        &["card", "move", &id, "--to", "edit", "--as", &spaced],
+    );
+    let moved = events(&pair).pop().expect("the move");
+    assert_eq!(moved.1["as"], FULL_NAME, "{moved:?}");
+    ok(&pair, &["card", "move", &id, "--to", "proof"]);
+    assert_eq!(
+        listed(&pair, &["--assignee", FULL_NAME]),
+        [id.as_str()],
+        "an exact filter"
+    );
+
+    // On a terminal: `accept`'s rules, then the reviewer's yes.
+    let before = state(&pair);
+    for name in [FULL_NAME, first, "agent", "local", " agent "] {
+        let tried = pair.spec_pty(
+            &pair.main,
+            &["card", "accept", &id, "--as", name],
+            Some("y"),
+        );
+        assert_eq!(tried.code, 1, "{name}: {}", tried.output);
+        assert_eq!(state(&pair), before, "{name}");
+    }
+    for name in ["agent", "local", " local "] {
+        let reason = refused(&pair, &["card", "assign", &id, "--reviewer", name]);
+        assert!(reason.contains("no reviewer"), "{name:?}: {reason}");
+        assert_eq!(state(&pair), before, "{name:?}");
+    }
+    let accepted = pair.spec_pty(
+        &pair.main,
+        &["card", "accept", &id, "--as", OTHER_NAME],
+        Some("y"),
+    );
+    assert_eq!(accepted.code, 0, "{}", accepted.output);
+    assert_eq!(show(&pair, &id)["acceptance"]["by"], OTHER_NAME);
+
+    // At the limit, in bytes: one, two and three bytes a letter.
+    let ascii = "n".repeat(128);
+    let wide = "\u{0430}".repeat(64);
+    let wider = format!("{}nn", "\u{4e2d}".repeat(42));
+    for name in [ascii.as_str(), wide.as_str(), wider.as_str()] {
+        assert_eq!(name.len(), 128, "{name}");
+        let card = make(
+            &pair,
+            "At the limit",
+            &["--discipline", "plates", "--as", name, "--assignee", name],
+        );
+        let shown = show(&pair, &card);
+        assert_eq!(shown["created_by"], name);
+        assert_eq!(shown["assignee"], name);
+        ok(&pair, &["card", "assign", &card, "--reviewer", name]);
+        assert_eq!(show(&pair, &card)["reviewer"], name);
+    }
+    // The limit is the trimmed name's: spaces around it cost nothing.
+    let spaced = format!("  {ascii}  ");
+    let card = make(
+        &pair,
+        "Spaced",
+        &["--discipline", "plates", "--as", &spaced],
+    );
+    assert_eq!(show(&pair, &card)["created_by"], ascii.as_str());
+}
+
+/// "Config": `by` is read as a person is written: trimmed, so a config's
+/// stray spaces change no comparison and no document, and the longest name
+/// a person may have fits there too.
+#[test]
+fn a_by_is_trimmed_from_the_config_and_holds_the_longest_name() {
+    let pair = Pair::new("cd-by-trimmed", PRESS);
+    let config = read_text(&pair.main, "specengine.toml");
+    write(
+        &pair.main,
+        "specengine.toml",
+        config.replace(
+            "by = [\"desk\"]",
+            &format!("by = [\"  desk \", \" {FULL_NAME}  \"]"),
+        ),
+    );
+    let id = make(&pair, "Lead story", &["--discipline", "copy"]);
+    let by = json!(["desk", FULL_NAME]);
+    assert_eq!(
+        show(&pair, &id)["allowed"],
+        json!([{"to": "edit", "by": by}])
+    );
+    assert_eq!(
+        doc(&pair, &["card", "list"])["flows"][0]["moves"][0]["by"],
+        by,
+        "the board's flows, trimmed"
+    );
+    let before = state(&pair);
+    assert_eq!(
+        refused(&pair, &["card", "move", &id, "--to", "edit", "--as", "ana"]),
+        format!(
+            "spec: {id} is in draft: the move to `edit` is `desk` or `{FULL_NAME}`'s, not \
+             `ana`'s; nothing changed\n"
+        )
+    );
+    assert_eq!(state(&pair), before);
+    ok(
+        &pair,
+        &["card", "move", &id, "--to", "edit", "--as", "desk"],
+    );
+
+    // The longest name, in either script, a move's `by` takes it.
+    let ascii = "n".repeat(128);
+    let wide = "\u{0430}".repeat(64);
+    for name in [ascii.as_str(), wide.as_str()] {
+        write(
+            &pair.main,
+            "specengine.toml",
+            config.replace("by = [\"desk\"]", &format!("by = [\"{name}\"]")),
+        );
+        let card = make(&pair, "Longest", &["--discipline", "copy"]);
+        ok(
+            &pair,
+            &["card", "move", &card, "--to", "edit", "--as", name],
+        );
+    }
+}
+
+/// "Config": `by` holds persons: a name off the grammar is a bad `[card]`,
+/// exit 2 at its line; `spec card` alone.
+#[test]
+fn a_by_off_the_person_grammar_is_a_bad_card_table() {
+    let pair = Pair::new("cd-by-grammar", PRESS);
+    let config = read_text(&pair.main, "specengine.toml");
+    let long = "n".repeat(129);
+    let wide = "\u{0430}".repeat(65);
+    for name in [
+        "a\u{2028}b",
+        "a\u{202e}b",
+        "   ",
+        long.as_str(),
+        wide.as_str(),
+    ] {
+        write(
+            &pair.main,
+            "specengine.toml",
+            config.replace("by = [\"desk\"]", &format!("by = [\"{name}\"]")),
+        );
+        let line = cannot(&pair, &["card", "list"]);
+        assert!(line.contains("specengine.toml:"), "{name:?}: {line}");
+        assert!(line.contains("`by`"), "{name:?}: {line}");
+        ok(&pair, &["tree"]);
     }
 }
 

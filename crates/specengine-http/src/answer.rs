@@ -20,7 +20,8 @@
 //! the outcome's type (docs/features/ui-round.md "Data"). A stage's
 //! answer (`docs/canon/decision-staging.md` "Daemon") is keyed on its
 //! cause: none 200, a usage defect 400, unknown 404, refused 409 (a
-//! `CliError` is still a 503). A body is
+//! `CliError` is still a 503); a card write's alike
+//! (docs/features/board-ui.md "Data"). A body is
 //! `application/json; charset=utf-8`, compact: the CLI's bytes without the
 //! final line end. The error body is `{"status":<code>,"message":"…"}`,
 //! exactly two keys. The store and `rusqlite` are never touched here.
@@ -32,7 +33,8 @@ use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use specengine_cli::{
-    CliError, Env, Exit, Globals, Outcome, ProjectRoot, StageCause, discover, render_json,
+    CardCause, CliError, Env, Exit, Globals, Outcome, ProjectRoot, StageCause, discover,
+    render_json,
 };
 
 use crate::start::Project;
@@ -127,24 +129,34 @@ enum Answered {
 /// the outcome's type, never on an answer's), and a stage's answer is keyed on
 /// its cause (`docs/canon/decision-staging.md` "Daemon"): none 200, a
 /// usage defect 400 (the error body, the CLI's line), unknown 404, refused
-/// 409 (the refused review document).
+/// 409 (the refused review document); a card write's alike
+/// (docs/features/board-ui.md "Data"): 404 `{id, reason}`, 409 the write
+/// document, a lost compare-and-set too.
 fn answered(outcome: &Outcome) -> Answered {
-    if let Outcome::Stage(stage) = outcome {
-        let status = match stage.cause {
-            None => StatusCode::OK,
-            Some(StageCause::Usage) => {
-                return Answered::Refused {
-                    status: StatusCode::BAD_REQUEST,
-                    message: outcome.stderr_lines().join("\n"),
-                };
-            }
-            Some(StageCause::Unknown) => StatusCode::NOT_FOUND,
-            Some(StageCause::Refused) => StatusCode::CONFLICT,
-        };
-        return Answered::Document {
-            status,
-            body: document(outcome),
-        };
+    match outcome {
+        Outcome::Stage(stage) => {
+            return caused(
+                outcome,
+                match stage.cause {
+                    None => Some(StatusCode::OK),
+                    Some(StageCause::Usage) => None,
+                    Some(StageCause::Unknown) => Some(StatusCode::NOT_FOUND),
+                    Some(StageCause::Refused) => Some(StatusCode::CONFLICT),
+                },
+            );
+        }
+        Outcome::Card(card) => {
+            return caused(
+                outcome,
+                match card.cause {
+                    None => Some(StatusCode::OK),
+                    Some(CardCause::Usage) => None,
+                    Some(CardCause::Unknown) => Some(StatusCode::NOT_FOUND),
+                    Some(CardCause::Refused) => Some(StatusCode::CONFLICT),
+                },
+            );
+        }
+        _ => {}
     }
     let status = match (outcome, outcome.exit()) {
         (Outcome::Check(_) | Outcome::RoundAnswers(_), _) | (_, Exit::Answered) => StatusCode::OK,
@@ -154,6 +166,21 @@ fn answered(outcome: &Outcome) -> Answered {
     Answered::Document {
         status,
         body: document(outcome),
+    }
+}
+
+/// The answer of a write keyed on its cause: `status` with the document,
+/// `None` a usage defect, a 400 with the CLI's line.
+fn caused(outcome: &Outcome, status: Option<StatusCode>) -> Answered {
+    match status {
+        Some(status) => Answered::Document {
+            status,
+            body: document(outcome),
+        },
+        None => Answered::Refused {
+            status: StatusCode::BAD_REQUEST,
+            message: outcome.stderr_lines().join("\n"),
+        },
     }
 }
 

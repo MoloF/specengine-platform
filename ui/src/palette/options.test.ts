@@ -41,7 +41,7 @@ describe("the palette's groups", () => {
     const expected = [
       [
         "Sections",
-        ["section:overview", "section:inbox", "section:tasks", "section:roadmap", "section:flow", "section:tree", "section:graph", "section:health", "section:questions"],
+        ["section:overview", "section:inbox", "section:tasks", "section:board", "section:roadmap", "section:flow", "section:tree", "section:graph", "section:health", "section:questions"],
       ],
       ["Projects", ["project:alpha", "project:beta"]],
     ];
@@ -52,6 +52,7 @@ describe("the palette's groups", () => {
       "#/alpha",
       "#/alpha/inbox",
       "#/alpha/tasks",
+      "#/alpha/board",
       "#/alpha/roadmap",
       "#/alpha/flow",
       "#/alpha/tree",

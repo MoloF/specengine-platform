@@ -4,13 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { BindingsPanel } from "../tree/BindingsPanel";
 import { LockDiffPanel } from "../tree/LockDiffPanel";
-import { aCheckFinding, aCheckReport, aFlowView, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage, entryOf } from "../test/builders";
+import { aCard, aCardList, aCardRow, aCheckFinding, aCheckReport, aFlowView, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage, entryOf } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, openStreams, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
+import { stubClient } from "../test/stubClient";
 import { HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS } from "./http";
 import { ApiProvider, createQueryClient } from "./provider";
 import {
   queryKeys,
   useBundle,
+  useCard,
+  useCards,
   useCheck,
   useGraph,
   useInbox,
@@ -1084,5 +1087,90 @@ describe("the lock diff on the live tail (UI-4 of lock-diff-ui)", () => {
       await screen.findByRole("button", { name: "Read again" });
     }
     expect(methodsOf(fetchStub)).toEqual(["GET", "GET", "GET"]);
+  });
+});
+
+describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge cases\")", () => {
+  type Tail = Parameters<StubCards["subscribe"]>;
+  type StubCards = ReturnType<typeof stubClient>;
+
+  function CardsOnScreen() {
+    const { outside } = useLiveQueue("alpha");
+    useCards("alpha");
+    useCard("alpha", "C-0001");
+    useCard("alpha", "C-0002");
+    useInbox("alpha");
+    useTasks("alpha");
+    return outside === null ? null : <p>changed outside</p>;
+  }
+
+  /** Waits until nothing is read any more; this screen shows no line to wait on. */
+  async function quiet(queryClient: QueryClient) {
+    await waitFor(() => {
+      expect(queryClient.isFetching()).toBe(0);
+    });
+  }
+
+  async function onScreen() {
+    const client = stubClient();
+    client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-0001" })]));
+    client.getCard.mockImplementation((_project, id) => Promise.resolve(aCard({ id })));
+    let tail: Tail[1] = () => undefined;
+    let gap: Tail[2];
+    const subscribe: StubCards["subscribe"] = (_project, onEvent, onGap) => {
+      tail = onEvent;
+      gap = onGap;
+      return () => undefined;
+    };
+    const queryClient = createQueryClient();
+    render(
+      <ApiProvider client={{ ...client, subscribe }} queryClient={queryClient}>
+        <CardsOnScreen />
+      </ApiProvider>,
+    );
+    await quiet(queryClient);
+    for (const method of [client.getCards, client.getCard, client.getInbox, client.getTasks]) {
+      method.mockClear();
+    }
+    return { client, queryClient, tail, gap: () => gap?.() };
+  }
+
+  it.each(QUEUE_EVENT_TYPES.filter((type) => type.startsWith("card.")))("%s reads the list and that card, no other card, no inbox, no task, no alert", async (type) => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 90, type, payload: { id: "C-0001", as: "agent" } });
+    });
+    await quiet(queryClient);
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+    expect(client.getCard.mock.calls.map((call) => call[1])).toEqual(["C-0001"]);
+    expect(client.getInbox).not.toHaveBeenCalled();
+    expect(client.getTasks).not.toHaveBeenCalled();
+    expect(screen.queryByText("changed outside")).toBeNull();
+  });
+
+  it("a card event naming no ID reads every card of the project", async () => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 91, type: "card.moved", payload: "not JSON" });
+    });
+    await quiet(queryClient);
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+    expect(client.getCard.mock.calls.map((call) => call[1]).sort()).toEqual(["C-0001", "C-0002"]);
+  });
+
+  it("a gap reads the cards again; a proposal or a task event does not", async () => {
+    const { client, queryClient, tail, gap } = await onScreen();
+    act(() => {
+      tail({ seq: 92, type: "proposal.created", payload: { id: "PR-1" } });
+      tail({ seq: 93, type: "task.claimed", payload: { id: "T-1" } });
+    });
+    await quiet(queryClient);
+    expect(client.getCards).not.toHaveBeenCalled();
+    act(() => {
+      gap();
+    });
+    await quiet(queryClient);
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+    expect(client.getCard).toHaveBeenCalledTimes(2);
   });
 });

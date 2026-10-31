@@ -1,9 +1,10 @@
 ---
 class: spec
-status: draft
-scope: [ui, crates/specengine-http, crates/specengine-cli]
+status: shipped
+shipped: 2026-10-31
+scope: [ui, crates/specengine-http, crates/specengine-cli, crates/specengine-core]
 ref: RM-0046; Phase 7 step 5 (08 s2)
-adrs: [ADR-0056]
+adrs: [ADR-0056, ADR-0057]
 ---
 
 # board-ui: the Board section and the daemon's card routes (RM-0046)
@@ -12,134 +13,93 @@ adrs: [ADR-0056]
 
 The owner wants an ordinary kanban with statuses, transitions, deadlines and assignees, starting empty and filling from the brief or by hand, every card linking to its source. `docs/canon/cards.md` holds the record. This slice draws it and gives the daemon its first writes beyond staging, for cards alone (ADR-0056), so one person runs the whole cycle on one screen.
 
-## Description and interactions
+## Summary
+
+What is true now is `docs/canon/board-ui.md`; these headings stay because code cites them.
 
 ### Board
 
-A new section `board`, third in the nav: `#/<p>/board[/<C>]`, the ID selecting a card and opening its flow. `getCards` once, `getCard` for the panel; `card.*` events read them again.
-
-- **One board per flow.** A tab per `flows[]` in served order; one flow, no tabs. Columns are `columns[]`, with `title` and a count.
-- **Filters**, per-project screen state: Discipline, Assignee (with "Unassigned"), ANDed, compared as `ui/README.md` "Text"; a Show cancelled toggle (`with_cancelled=true`). Past 200 cards a column ends "Show all <n>".
-- **A card** shows title, assignee or "Unassigned", due, estimate and its source: the first target, a `routes.ts` link to the Spec tree, `+<n>` for the rest; no target: "By hand". Accepted and cancelled say so, with an icon.
-- **Overdue.** Reads carry no clock, so `src/board/due.ts` alone holds one: `localToday` from `useNow`, by `getFullYear`, `getMonth`, `getDate`, never `toISOString`. Overdue is `due < today` as strings, unless accepted or cancelled: the label "Overdue" and an icon.
+Section `board`, third of nine; a tab per flow; Discipline and Assignee filters; overdue by the viewer's local date. Canon "Screen".
 
 ### Moving
 
-Each card has a Move button opening `MoveMenu`: its column's `moves[]` in served order, each `by` as "needs <names>", then Up, Down (`before`), and Accept when the column is `accept.from`. A choice posts `moveCard` with the row's `revision`. The UI looks moves up and never judges them; the board redraws from the answer, nothing optimistic.
-
-**Drag** is an extra on native HTML5 events, no new dependency: a drop posts the same `moveCard`, between two cards with `before`.
-
-**Keyboard.** One tab stop, roving: Up, Down in a column; Left, Right across; Home, End. Enter opens the panel; `m` opens `MoveMenu`, Up, Down, Enter, Esc inside; `n` New card; Esc closes, focus back on the card; `?` lists them. Focus follows a moved card; a polite live region says `C-0001 moved to Ready`.
+`MoveMenu`, native drag, Up and Down via `before`. Accept shows only in `accept.from`; a closed card has no Move. A card moved past the cap reveals its column once.
 
 ### Panel
 
-Beside the board, routed by ID, text as stored:
-
-- Goal, criteria, discipline, estimate, due, assignee, reviewer, created by and at; targets link to the tree, `parent` and `corrects` to their cards.
-- **Evidence**: kind, value, by, at. A `url` is text, never an `href`.
-- **History**: `history` by `seq`: time, the event's words from `labels.ts`, `as`, from and to; an unknown type raw.
-- **Actions**: Edit, Assign, Cancel card, Accept. An accepted or cancelled card has none and shows `acceptance` or `cancellation`.
+Fields, evidence, history; a `url` is no `href`. After Accept from the panel focus goes to the heading; from the Move menu it follows the card.
 
 ### Creating and editing
 
-In-app dialogs (`ui/README.md` "Dialogs").
-
-- **New card**: title, goal, discipline, targets and criteria one per line, assignee, estimate, due (`type="date"`), parent, corrects. A New card button on the tree's `NodePane` opens it with that node as target: how a board fills from the brief.
-- **Edit**: the same less discipline and assignee, changed fields only, `-` for a cleared one; Add evidence, a kind and a value.
-- **Assign**: assignee, reviewer. **Cancel card**: a required reason.
+In-app dialogs; New card on the tree's `NodePane` presets the node as target. Edit and Assign send only what differs from the form as opened, on the revision read now; fields left alone keep another writer's value.
 
 ### The acting name, and acceptance
 
-"Acting as", a field in the board's header, kept per viewer in `localStorage` `specengine.board.as` (`src/board/acting.ts`), sent as `as` on every write; empty sends `null`, recorded `local`.
+"Acting as", `localStorage` `specengine.board.as`; the accept dialog is the consent. A convention until the hub's named login (ADR-0057).
 
-**Accept** opens a dialog with that name and a note, disabled while the name is empty. The rules are the CLI's: in `accept.from`, the name its `reviewer`, never its `assignee`.
+### Data
 
-This is a convention until the hub's named login. The name is typed and nothing verifies it (ADR-0034). No MCP tool reaches the route, `specengine-mcp` holds no HTTP client, and there is no credential to hand an agent; but any local process can send these headers, so an agent with a shell can post here. Only `spec card accept` asks on a terminal.
+#### Routes
 
-### States
+Two GETs and six POSTs behind one door. Canon "Routes", "The door".
 
-Loading: a skeleton. Failed: `ErrorPanel` verbatim, Retry; a bad `[card]` is that 503. Empty: the columns, and "No cards yet. Next: press New card, press New card on a node in the Spec tree, or have your AI call create_card."
+#### The fence stays
 
-### Files in scope
+`fence()` is unchanged; `same_origin()` guards every POST. `door.rs` gains `CARD_CALLS` and `card_writes_touch_only_the_queue`. Canon "Fence and trust".
 
-- **New:** `ui/src/board/{BoardView,BoardColumn,BoardCard,MoveMenu,CardPanel,CardDialogs}.tsx`, `{acting,due,labels,filter}.ts`, `BoardView.test.tsx`, `{acting,due,filter}.test.ts`; `ui/src/mocks/cards.ts`, `board.smoke.test.tsx`; http `tests/cards.rs`.
-- **UI**, in `ui/src/`: `api/{provisional,types,client,http,queries}.ts`, `http.test.ts`, `daemonKeys.test.ts`, `queries.test.tsx`, `live.test.tsx`; `mocks/MockClient.ts`; `app/{sections,routes}.ts`, `routes.test.ts`, `App.test.tsx`, `Shell.tsx`, `shortcuts.tsx`; `tree/NodePane.tsx`; `ui/Icon.tsx`; `styles/app.css`; `policy.test.ts`.
-- **Rust:** http `src/app.rs`, `src/answer.rs`; CLI `src/card.rs`, `src/lib.rs`. Left by `card-store`: `card_list` needs a `View`, `CardCause` a `Usage`; "nothing asked" is a `CliError`, so `CardOutcome::exit` needs a route for `Usage` that stays exit 2 on the CLI.
-- **Tests:** http `door.rs`, `fence.rs`, `methods.rs`, `query.rs`, `parity.rs`, `daemon_keys.rs`; `fixtures/daemon-keys.json`.
-- **Unchanged:** `crates/specengine-mcp`, `queue/gate.rs`, `ui/package.json`.
-- **Canon at shipping:** new `board-ui.md`; `architecture.md#ui`, `serve.md#trust` (any local process can also move, cancel and accept a card), `ui/README.md`, the http README; an ADR for the page's accept and clear, written then, owner pre-approved, review open: ADR-0056 names moves alone. It states that a departing page accept (RM-0047) creates one proposal through the daemon, which is why `card_writes_touch_only_the_queue` admits it.
+#### Types
 
-## Data
+`getCards(project, options?, signal?)`; `CardWrite` nullable; `daemon-keys.json` 98 sets. Canon "Types".
 
-### Routes
+### Rules and edge cases
 
-`...` is `/api/projects/:p`; a null `as` records `local`, as the CLI's absent flag.
-
-| Method, path | Query or body | Answer |
-|---|---|---|
-| GET `.../cards` | `flow`, `column`, `discipline`, `assignee`, `no_target`, `with_cancelled` | `spec card list --json`, browser view |
-| GET `.../cards/:id` | -- | `spec card show C --history --json`, uncut |
-| POST `.../cards` | `create_card`'s keys, `as` | `card_new` |
-| POST `.../cards/:id/move` | `move_card`'s, `as` | `card_move` |
-| POST `.../cards/:id/edit` | `edit_card`'s, `as` | `card_edit` |
-| POST `.../cards/:id/assign` | `assignee`, `reviewer`, `revision`, `as` | `card_assign` |
-| POST `.../cards/:id/cancel` | `reason`, `revision`, `as` | `card_cancel` |
-| POST `.../cards/:id/accept` | `as`, `note`, `revision` | `card_accept` |
-
-**The door**, as `round_answers`, in order, nothing read on a refusal: the served slug (404), a same-origin page (403), JSON (415), `CARD_BODY_MAX` 1 MiB (413), a body the CLI decodes (`Card*Body`, `deny_unknown_fields`: 400). Then one library call in the project's turn. `card_accept`'s `Consent` is the page's dialog: the handler answers yes.
-
-**Answers**: 200 the write document; 400 usage; 404 `{id, reason}`; 409 refused, a lost compare-and-set too, the write document, its reason the last of `notes`; 503 cannot run. `Outcome::Card` carries `CardCause` (`Usage`, `Unknown`, `Refused`), mapped as `Outcome::Stage`. **Methods**: `.../cards` `Allow: GET, POST`; `.../cards/:id` a read; the five `Allow: POST`.
-
-### The fence stays
-
-`fence()` does not change: the `127.0.0.1` bind, `Host` and `Origin` naming the bound port, `Sec-Fetch-Site`, no `Access-Control-*`. It runs before routing, so new routes are fenced. `same_origin()` guards every POST; its line becomes `a write needs a same-origin page (not authentication: ADR-0034)`.
-
-`tests/door.rs` changes for cards alone:
-
-1. `CARD_CALLS`, beside `TASK_READS`, lists `card_{list,show,new,move,edit,assign,cancel,accept}`: any other `card_` name is forbidden. `approve`, `reject`, `propose*`, `round_answer`, `import_state`, `export_*`, `init`, `index`, every `task_` writer stay forbidden.
-2. The two GETs join the endpoints that change nothing.
-3. New `card_writes_touch_only_the_queue`: a POST leaves `git status`, `HEAD`, refs, files and proposals alone and adds one `card.*` event; a refused one adds none.
-
-`fence.rs` adds the routes. `no_domain.rs` stays: `with_cancelled` is one word, `accept`, `cancel` no task state.
-
-### Types
-
-In `provisional.ts`, citing `docs/canon/cards.md`.
-
-```ts
-interface CardFlow { name: string; disciplines: string[]; columns: { id: string; title: string }[];
-  moves: { from: string; to: string; by: string[] }[]; accept: { from: string; to: string } }
-interface CardList { flows: CardFlow[]; cards: CardRow[]; notes: string[]; truncated: boolean; omitted: number | null }
-interface CardWrite { id: string; flow: string; column: string; position: number; revision: string;
-  allowed: { to: string; by: string[] }[]; notes: string[] }
-getCards(project, signal?): Promise<CardList>;
-getCard(project, id, signal?): Promise<Card | CardNotFound>;
-createCard(project, body): Promise<CardWrite>;  // moveCard, editCard, assignCard, cancelCard, acceptCard (project, id, body)
-```
-
-`CardRow`, `Card` copy `cards.md` "Documents and events". `fixtures/daemon-keys.json` gains `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, pinned by `daemon_keys.rs`, `daemonKeys.test.ts`. `QUEUE_EVENT_TYPES` gains the six `card.*`: 22.
-
-## Rules and edge cases
-
-- WHEN a `card.*` event arrives THEN list and card are read again; no outside-change alert, a card being no decision.
-- WHEN a write answers 409 THEN an alert shows the daemon's reason, a dialog keeps its text, the board reads again.
-- WHEN a row's column is outside `columns[]` THEN it stands in a last "Not in the flow" lane, with the daemon's note.
-- `src/board/` branches on no column, flow, discipline or event word, `labels.ts` the one map, and reads no clock but in `due.ts`. A column named `blocked` is data, shown raw (ADR-0012).
+Nothing optimistic; a 409 shows the daemon's reason; no branch on a column word. Canon "Screen".
 
 ## Acceptance criteria
 
-- [ ] AC-01 — Over `fixtures/card-press`, `GET cards?with_cancelled=true`, `cards/C-0001` equal `spec card list --with-cancelled --json`, `show --history --json`, byte for byte, past the cap.
-- [ ] AC-02 — Each POST from a same-origin page: 200, one `card.*`, `git status`, `HEAD`, files unchanged. M: a handler calling `task_claim` or an unlisted `card_` name turns `door.rs` red.
-- [ ] AC-03 — Each POST with no `Sec-Fetch-Site`, `cross-site`, a foreign `Origin` or `Host`: 403, no event. M: a POST without `same_origin`.
-- [ ] AC-04 — A stale `revision`, a move outside `moves`, an `as` outside `by`, accept by the assignee: 409 with the document. M: `Outcome::Card` falling to exit 1's 404.
-- [ ] AC-05 — On one screen new, assign, move, accept end accepted, `acceptance.by` the typed name, which survives a reload; `specengine-mcp` names no `/api/`. M: the name dropped from the body.
-- [ ] AC-06 — At `2026-03-01T23:30-08:00`, `due` `2026-03-01` is not overdue, `2026-02-28` is; accepted and cancelled never. M: `toISOString` in `due.ts`.
-- [ ] AC-07 — Keys alone: `m`, Down, Enter move a card, focus on it, the live region speaks. M: a menu reachable by pointer alone.
-- [ ] AC-08 — `copy`, `plates` give two tabs; filters AND; `blocked` looks as any column; `policy.test.ts` scans `src/board/`. M: a branch on a column word.
-- [ ] AC-09 — Empty: columns and the line naming how to add a card. The panel lists fields, evidence, history; New card from a node links back to it. M: a `Card` key dropped from `daemon-keys.json`.
+- [x] AC-01 — Over `fixtures/card-press`, `GET cards?with_cancelled=true` equals `spec card list --with-cancelled --json` byte for byte below the cap, and past it the daemon serves every row; `cards/C-0001` equals `show --history --json`, past the cap too.
+- [x] AC-02 — Each POST from a same-origin page: 200, one `card.*`, `git status`, `HEAD`, files unchanged. M: a handler calling `task_claim` or an unlisted `card_` name turns `door.rs` red.
+- [x] AC-03 — Each POST with no `Sec-Fetch-Site`, `cross-site`, a foreign `Origin` or `Host`: 403, no event. M: a POST without `same_origin`.
+- [x] AC-04 — A stale `revision`, a move outside `moves`, an `as` outside `by`, accept by the assignee: 409 with the document. M: `Outcome::Card` falling to exit 1's 404.
+- [x] AC-05 — On one screen new, assign, move, accept end accepted, `acceptance.by` the typed name, which survives a reload; `specengine-mcp` names no `/api/`. M: the name dropped from the body.
+- [x] AC-06 — At `2026-03-01T23:30-08:00`, `due` `2026-03-01` is not overdue, `2026-02-28` is; accepted and cancelled never. M: `toISOString` in `due.ts`.
+- [x] AC-07 — Keys alone: `m`, Down, Enter move a card, focus on it, the live region speaks. M: a menu reachable by pointer alone.
+- [x] AC-08 — `copy`, `plates` give two tabs; filters AND; `blocked` looks as any column; `policy.test.ts` scans `src/board/`. M: a branch on a column word.
+- [x] AC-09 — Empty: columns and the line naming how to add a card. The panel lists fields, evidence, history; New card from a node links back to it. M: a `Card` key dropped from `daemon-keys.json`.
+
+## Verification
+
+Delta review: ACCEPT. Gates: fmt, clippy, probes 0; `cargo nextest run --workspace` 4238 run, 4238 passed, 71 skipped; UI lint 0, vitest 2960 passed (a last wording edit follows), build 0; parity 3 of 3; 86 of 86 doc tests.
+
+Mutations, first round, 7 of 8 killed: AC-02 (`door.rs`), AC-03 (`same_origin`), AC-04, AC-05's Rust half, `in_view` dropped, `or_usage_error` dropped, AC-07. AC-08's survivor, `lane.column.id !== "review"`, closed by adding `id`, `title`, `key` to the scan of `policy.test.ts`. AC-06 shown by the developer; AC-09 skipped. The developer's own 13 mutations of iteration 2 killed.
 
 ## Out of scope
 
 Confirming a brief change on the page. A node's cards, rollup: RM-0047, RM-0048. Named login: RM-0049. Cards in the palette. An MCP tool for accept.
 
 ## Implementation
+
+| Module | What it does |
+|---|---|
+| CLI `card.rs` | `CardCause::Usage`, and `exit()` keys on the cause (usage 2, unknown and refused 1). `move`, `edit`, `assign` asking nothing return that outcome, document `{id, reason}`, so MCP's `without_no_card` drops it and the tool result is unchanged; `or_usage_error` turns it back into a `CliError` in `main.rs` `run_card`, so the terminal prints one line and no stdout, `--json` too |
+| CLI `card.rs`, lists | `CardListOutcome::in_view(View)` shows every row: `card_list` keeps its signature, so MCP is untouched and the handler calls a listed name |
+| CLI `card.rs`, bodies | `Card{New,Move,Edit,Assign,Cancel,Accept}Body`: `from_json` (`deny_unknown_fields`, the key `as`, `card_id` left to the path) and `request`. A null `as` on accept is `local`, refused by the reviewer rule. Each `from_json` judges its persons (`persons_named`) with the flags' lines: a 400 before any call |
+| http `app.rs` | `.../cards` GET and POST (`Allow: GET, POST`, HEAD a 405), `.../cards/{id}` a read, five POSTs (`Allow: POST`); `CARD_BODY_MAX` 1 MiB; `written_target`, `written_body` hold the door in order; accept's consent answers yes. `same_origin`'s line is `a write needs a same-origin page (not authentication: ADR-0034)`; `fence()` is unchanged. Handler names avoid the `card_` prefix `door.rs` reserves |
+| http `answer.rs` | `caused` maps `Outcome::Stage` and `Outcome::Card` alike: 200, 400 the CLI's line, 404, 409. A `revision` off its grammar and a look-alike ID stay `CliError`: 503 |
+| Core `card.rs`, `card_toml.rs` | Persons: `card_person_problem`, `card_person`, `CARD_PERSON_MAX` 128, beside `reviewer_problem`. `actor_of`, the CLI's `person_problem` and `card_toml.rs` `read_by` take it instead of `author_field_problem`, which keeps its callers unchanged. Every name is stored and compared trimmed. `CardCause::Usage` stays nothing asked |
+| UI `src/board/` | One read of `getCards` (`with_cancelled` on Show cancelled), `getCard` for the routed panel; `card.*` events and gaps read both again. Columns, moves and accept come from the read: the UI looks them up and never judges, and `labels.ts` is the one word map |
+| UI writes | Each goes through `useCardWrite`, which settles after the re-read, so nothing is optimistic; a 409 shows the daemon's reason, a dialog keeps its text and takes the new revision. `moveCard` has three doors: `MoveMenu`, native drag, Up and Down via `before`. Focus follows a written card once its re-read settles, revealing a capped column or letting go. Edit and Assign send only what differs from the form as opened, on the revision read now. Cards are memoised; the clock redraws only when the day turns |
+| UI keys, clock, name | One tab stop over the cards; `m`, `n`, Enter, Esc, `?`. `due.ts` alone holds a clock: `localToday` by local date, overdue as `due < today`, never on a closed card. The acting name lives in `localStorage` `specengine.board.as`, sent trimmed as `as`, empty as `null`; a 400 naming `--as` shows under its field. The accept dialog is the consent; nothing verifies the name (ADR-0034). New card on `NodePane` presets the node as target |
+| Keys | `fixtures/daemon-keys.json`: 98 sets |
+
+### Files in scope
+
+- **New:** `ui/src/board/{BoardView,BoardColumn,BoardCard,MoveMenu,CardPanel,CardDialogs}.tsx`, `{acting,due,labels,filter}.ts`, `BoardView.test.tsx`, `redraw.test.tsx`, `{acting,due,filter}.test.ts`; `ui/src/mocks/cards.ts`, `board.smoke.test.tsx`; http `tests/cards.rs`.
+- **UI**, in `ui/src/`: `api/{provisional,types,client,http,queries}.ts`, `http.test.ts`, `daemonKeys.test.ts`, `queries.test.tsx`, `live.test.tsx`; `mocks/MockClient.ts`; `app/{sections,routes}.ts`, `routes.test.ts`, `App.test.tsx`, `Shell.tsx`, `shortcuts.tsx`; `tree/NodePane.tsx`; `ui/Icon.tsx`, `ui/useNow.ts`; `styles/app.css`; `policy.test.ts`.
+- **Rust:** http `src/app.rs`, `src/answer.rs`; CLI `src/card.rs`, `src/lib.rs`, `src/main.rs`; core `src/card.rs`, `src/card_toml.rs`.
+- **Tests:** http `door.rs`, `fence.rs`, `methods.rs`, `query.rs`, `parity.rs`, `round.rs`, `stage.rs`, `daemon_keys.rs`; `fixtures/daemon-keys.json`.
+- **Unchanged:** `crates/specengine-mcp`, `queue/gate.rs`, `ui/package.json`.
+
+**Divergences from the draft.** A column past 200 ends "Show all <n>", as drafted, and the Board filters on the client: `with_cancelled` is the one query it sends. AC-01 as drafted held only below the cap: the daemon serves every row past it. `CardWrite` is nullable, a refused `POST cards` having made no card. A person is `card_person_problem`'s, any script, not `author_field_problem`'s (ADR-0057).
+
+**Known limits.** Drag is tested in jsdom only. No round trip against the real daemon in a browser yet. Not tested through the daemon: a corrupt card row, a chunked body over 1 MiB, `C` in `[ids]`.

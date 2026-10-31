@@ -78,7 +78,7 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 | 2 | `flow-read` | RM-0043 | `spec flow`, `get_flow`, lifted edges, gap rows | - | 3-5 | 1 |
 | 3 | `flow-canvas` | RM-0044 | Collapsing groups, gap marks, text twin | - | 4-6 | 2 |
 | 4 | `card-store` | RM-0045 | Cards, flows, events, CLI and MCP tools | - | 4-6 | 0 |
-| 5 | `board-ui` | RM-0046 | Board, filters, card panel, write routes | - | 4-6 | 4 |
+| 5 | `board-ui` | RM-0046 | Board, filters, card panel, write routes | ADR-0057 `card-accept-page` | 4-6 | 4 |
 | 6 | `card-trace` | RM-0047 | Targets, suspect, clearing, re-estimate, corrections, rollup | - | 4-6 | 4 |
 | 7 | `trace-views` | RM-0048 | Flow badges, `stage:`, timeline lanes, a node's cards | - | 3-5 | 3, 5, 6 |
 | 8 | `hub-identity` | RM-0049 | Public origin, identity header, person in `Author`, `[team]` | `hub-mode`, `hub-identity` | 4-6 | 0 |
@@ -97,7 +97,7 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 | 20 | `writer-skills` | RM-0062 | Profile plugin or MCP prompts | - | 3-5 | 11 |
 | 21 | `notify` | RM-0017 | Notifications | - | 1-2 | 8 |
 
-**ADRs.** Each is written by the slice that builds it, so the canon never describes unbuilt machinery as true; only `flow-graph` and `cards` are issued, by step 0, shipped 2026-10-30. `flow-graph` is built by step 1, `flow-links`, shipped 2026-10-31 (`docs/canon/flow-links.md`); `cards` by step 4, `card-store`, shipped 2026-10-31 (`docs/canon/cards.md`). To come: `hub-mode` (supersedes ADR-0017), `hub-identity` (supplements ADR-0034: the daemon trusts one identity header), `hub-confirm` (supersedes ADR-0035's terminal clause in hub mode), `apply-outputs` (`roadmap-items.md`, N12), `board-snapshot` (amends ADR-0003: a snapshot of the board enters git on a dedicated branch), `zone-index` (amends ADR-0030, ADR-0022), `changeset` (amends ADR-0038: one confirm for a baseline). Unchanged: ADR-0012, ADR-0032, ADR-0039, ADR-0052, ADR-0054.
+**ADRs.** Each is written by the slice that builds it, so the canon never describes unbuilt machinery as true; only `flow-graph` and `cards` are issued, by step 0, shipped 2026-10-30. `flow-graph` is built by step 1, `flow-links`, shipped 2026-10-31 (`docs/canon/flow-links.md`); `cards` by step 4, `card-store`, shipped 2026-10-31 (`docs/canon/cards.md`); ADR-0057 `card-accept-page` by step 5. To come: `hub-mode` (supersedes ADR-0017), `hub-identity` (supplements ADR-0034: the daemon trusts one identity header), `hub-confirm` (supersedes ADR-0035's terminal clause in hub mode), `apply-outputs` (`roadmap-items.md`, N12), `board-snapshot` (amends ADR-0003: a snapshot of the board enters git on a dedicated branch), `zone-index` (amends ADR-0030, ADR-0022), `changeset` (amends ADR-0038: one confirm for a baseline). Unchanged: ADR-0012, ADR-0032, ADR-0039, ADR-0052, ADR-0054.
 
 **The owner's decisions, 2026-10-30, pre-approved, review open:**
 

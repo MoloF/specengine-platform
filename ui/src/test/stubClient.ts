@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import {
   ClientError,
   type BundleOptions,
+  type CardsOptions,
   type FlowOptions,
   type GraphOptions,
   type NodeOptions,
@@ -13,6 +14,16 @@ import {
 } from "../api/client";
 import type {
   BundleView,
+  Card,
+  CardAcceptBody,
+  CardAssignBody,
+  CardCancelBody,
+  CardCreateBody,
+  CardEditBody,
+  CardList,
+  CardMoveBody,
+  CardNotFound,
+  CardWrite,
   CheckReport,
   FlowView,
   GraphView,
@@ -36,7 +47,9 @@ import type {
 } from "../api/types";
 import {
   aBundle,
+  aCardList,
   aCheckReport,
+  aCardWrite,
   aFlowView,
   aGraphNode,
   aGraphView,
@@ -180,6 +193,17 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       });
       return Promise.resolve({ project, answers: outcomes, notes: [] });
     }),
+    // The cards (docs/features/board-ui.md "Routes"): none; each write answers its card's document, a test overriding what it stores.
+    getCards: vi.fn<(project: string, options?: CardsOptions, signal?: AbortSignal) => Promise<CardList>>(() => Promise.resolve(aCardList([]))),
+    getCard: vi.fn<(project: string, id: string, signal?: AbortSignal) => Promise<Card | CardNotFound>>((_project, id) =>
+      Promise.resolve({ id, reason: `no card ${id}` }),
+    ),
+    createCard: vi.fn<(project: string, body: CardCreateBody) => Promise<CardWrite>>(() => Promise.resolve(aCardWrite("C-0001"))),
+    moveCard: vi.fn<(project: string, id: string, body: CardMoveBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
+    editCard: vi.fn<(project: string, id: string, body: CardEditBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
+    assignCard: vi.fn<(project: string, id: string, body: CardAssignBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
+    cancelCard: vi.fn<(project: string, id: string, body: CardCancelBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
+    acceptCard: vi.fn<(project: string, id: string, body: CardAcceptBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
     /** No live tail; a plain function (`callsOf` never counts it) a test may replace to emit events. */
     subscribe: noLiveTail,
   } satisfies SpecEngineClient & { state: unknown };

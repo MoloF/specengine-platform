@@ -8,6 +8,18 @@ import type {
   Author,
   BindingRow,
   BundleView,
+  Card,
+  CardAcceptance,
+  CardCancellation,
+  CardColumn,
+  CardEvent,
+  CardEvidence,
+  CardFlow,
+  CardList,
+  CardMove,
+  CardNotFound,
+  CardRow,
+  CardWrite,
   CheckCause,
   CheckCounts,
   CheckFinding,
@@ -126,10 +138,12 @@ import type {
 // (UI-1, TE-2 of docs/features/lock-diff.md: the lock diff document, a holder, a kept row, the
 // spec side and the code side, the eighty-first `LockDiffCodeSide`); and flow-read's five
 // (docs/features/flow-read.md "Output": the flow document, a gap row, a node, an edge and a node's
-// `inner` entry, the eighty-sixth and last `FlowInner`). A key the types carry ahead of the file is
-// listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that
-// file is absent the comparison is skipped, saying so; once it exists it names all eighty-six, in
-// the slices' order.
+// `inner` entry, the eighty-sixth `FlowInner`); and board-ui's twelve (docs/features/board-ui.md
+// "Types": the list, a flow, a column, a move, a row, a card, an evidence entry, an acceptance, a
+// cancellation, an event, the write document, no such card, the ninety-eighth and last
+// `CardNotFound`). A key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty
+// today; a listed key the file already names fails. While that file is absent the comparison is
+// skipped, saying so; once it exists it names all ninety-eight, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -679,6 +693,64 @@ const KEYS = {
     line: true,
   } satisfies Record<keyof FlowEdge, true>,
   FlowInner: { type: true, count: true } satisfies Record<keyof FlowInner, true>,
+  // docs/canon/cards.md "Documents and events", "Commands" (the write document, no such card), "Store" (an evidence entry, the two closures).
+  CardList: { flows: true, cards: true, notes: true, truncated: true, omitted: true } satisfies Record<keyof CardList, true>,
+  CardFlow: { name: true, disciplines: true, columns: true, moves: true, accept: true } satisfies Record<keyof CardFlow, true>,
+  CardColumn: { id: true, title: true } satisfies Record<keyof CardColumn, true>,
+  CardMove: { from: true, to: true, by: true } satisfies Record<keyof CardMove, true>,
+  CardRow: {
+    id: true,
+    flow: true,
+    column: true,
+    position: true,
+    title: true,
+    discipline: true,
+    targets: true,
+    assignee: true,
+    reviewer: true,
+    estimate: true,
+    due: true,
+    parent: true,
+    corrects: true,
+    updated_at: true,
+    revision: true,
+    accepted: true,
+    cancelled: true,
+  } satisfies Record<keyof CardRow, true>,
+  Card: {
+    id: true,
+    flow: true,
+    column: true,
+    position: true,
+    title: true,
+    goal: true,
+    discipline: true,
+    targets: true,
+    snapshot: true,
+    criteria: true,
+    assignee: true,
+    reviewer: true,
+    estimate: true,
+    due: true,
+    parent: true,
+    corrects: true,
+    evidence: true,
+    acceptance: true,
+    cancellation: true,
+    created_by: true,
+    created_at: true,
+    updated_at: true,
+    revision: true,
+    allowed: true,
+    history: true,
+    notes: true,
+  } satisfies Record<keyof Card, true>,
+  CardEvidence: { kind: true, value: true, by: true, at: true } satisfies Record<keyof CardEvidence, true>,
+  CardAcceptance: { by: true, at: true, note: true } satisfies Record<keyof CardAcceptance, true>,
+  CardCancellation: { by: true, at: true, reason: true } satisfies Record<keyof CardCancellation, true>,
+  CardEvent: { seq: true, type: true, at: true, payload: true } satisfies Record<keyof CardEvent, true>,
+  CardWrite: { id: true, flow: true, column: true, position: true, revision: true, allowed: true, notes: true } satisfies Record<keyof CardWrite, true>,
+  CardNotFound: { id: true, reason: true } satisfies Record<keyof CardNotFound, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -783,6 +855,18 @@ const CITED: Record<Named, string> = {
   FlowNode: "id, kind, title, path, line, distance, group, start, end, holds, inner, gaps",
   FlowEdge: "from, to, type, kind, when, count, path, line",
   FlowInner: "type, count",
+  CardList: "flows, cards, notes, truncated, omitted",
+  CardFlow: "name, disciplines, columns, moves, accept",
+  CardColumn: "id, title",
+  CardMove: "from, to, by",
+  CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled",
+  Card: "id, flow, column, position, title, goal, discipline, targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
+  CardEvidence: "kind, value, by, at",
+  CardAcceptance: "by, at, note",
+  CardCancellation: "by, at, reason",
+  CardEvent: "seq, type, at, payload",
+  CardWrite: "id, flow, column, position, revision, allowed, notes",
+  CardNotFound: "id, reason",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -927,8 +1011,14 @@ const BEFORE_FLOW_READ: readonly Named[] = [...BEFORE_LOCK_DIFF, ...LOCK_DIFF];
 /** flow-read's five: the document, a gap row, a node, an edge, a node's `inner` entry (docs/features/flow-read.md "Output"). */
 const FLOW_READ: readonly Named[] = ["FlowView", "FlowGap", "FlowNode", "FlowEdge", "FlowInner"];
 
+/** The eighty-six types the fixture named before board-ui. */
+const BEFORE_BOARD_UI: readonly Named[] = [...BEFORE_FLOW_READ, ...FLOW_READ];
+
+/** board-ui's twelve, in the list's order, then the card's, the write document, no such card (docs/features/board-ui.md "Types"). */
+const BOARD_UI: readonly Named[] = ["CardList", "CardFlow", "CardColumn", "CardMove", "CardRow", "Card", "CardEvidence", "CardAcceptance", "CardCancellation", "CardEvent", "CardWrite", "CardNotFound"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_FLOW_READ, ...FLOW_READ];
+const ALL: readonly Named[] = [...BEFORE_BOARD_UI, ...BOARD_UI];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -952,8 +1042,8 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * flow-read wrote its five sets, the eighty-second to eighty-sixth and last
- * (docs/features/flow-read.md "Output").
+ * board-ui wrote its twelve sets, the eighty-seventh to ninety-eighth and last
+ * (docs/features/board-ui.md "Types").
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -994,7 +1084,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_UI_NODE_BINDINGS.at(-1)).toBe("DriftLevels");
     expect(BEFORE_LOCK_DIFF.at(-1)).toBe("ShownBindings");
     expect(BEFORE_FLOW_READ.at(-1)).toBe("LockDiffCodeSide");
-    expect(ALL.at(-1)).toBe("FlowInner");
+    expect(BEFORE_BOARD_UI.at(-1)).toBe("FlowInner");
+    expect(ALL.at(-1)).toBe("CardNotFound");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1023,7 +1114,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(86);
+    expect(ALL).toHaveLength(98);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1129,8 +1220,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_UI_NODE_BINDINGS).toHaveLength(74);
     expect(BEFORE_LOCK_DIFF).toHaveLength(76);
     expect(BEFORE_FLOW_READ).toHaveLength(81);
-    expect(ALL).toHaveLength(86);
-    expect(new Set(ALL).size).toBe(86);
+    expect(BEFORE_BOARD_UI).toHaveLength(86);
+    expect(ALL).toHaveLength(98);
+    expect(new Set(ALL).size).toBe(98);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1371,12 +1463,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the eighty-six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five", () => {
+  it("names exactly the ninety-eight types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all eighty-six, in the slices' order.
+    // None is ahead of the file today: it names all ninety-eight, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(86);
+    expect(Object.keys(sets)).toHaveLength(98);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1476,11 +1568,19 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
-  it("names flow-read's five after LockDiffCodeSide, last: 11, 5, 12, 8, 2 keys in the types' order, the eighty-sixth and last FlowInner (docs/features/flow-read.md, flow-canvas.md)", () => {
-    expect(Object.keys(sets).slice(BEFORE_FLOW_READ.length)).toEqual([...FLOW_READ]);
+  it("names board-ui's twelve after FlowInner, last: 5, 5, 2, 3, 17, 26, 4, 3, 3, 4, 7, 2 keys in the types' order, the ninety-eighth and last CardNotFound (AC-09 of docs/features/board-ui.md)", () => {
+    expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length)).toEqual([...BOARD_UI]);
+    expect(Object.keys(sets).indexOf("CardList")).toBe(86);
+    expect(Object.keys(sets).at(-1)).toBe("CardNotFound");
+    expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 17, 26, 4, 3, 3, 4, 7, 2]);
+    expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
+  });
+
+  it("names flow-read's five after LockDiffCodeSide, before board-ui's twelve: 11, 5, 12, 8, 2 keys in the types' order, the eighty-sixth FlowInner (docs/features/flow-read.md, flow-canvas.md)", () => {
+    expect(Object.keys(sets).slice(BEFORE_FLOW_READ.length, BEFORE_BOARD_UI.length)).toEqual([...FLOW_READ]);
     expect(Object.keys(sets).indexOf("FlowView")).toBe(81);
-    expect(Object.keys(sets)).toHaveLength(86);
-    expect(Object.keys(sets).at(-1)).toBe("FlowInner");
+    expect(Object.keys(sets).at(BEFORE_BOARD_UI.length - 1)).toBe("FlowInner");
     expect(FLOW_READ.map((name) => sets[name])).toEqual(FLOW_READ.map((name) => served(name)));
     expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([11, 5, 12, 8, 2]);
     expect(FLOW_READ.map((name) => declaredKeys(name))).toEqual(FLOW_READ.map((name) => served(name)));

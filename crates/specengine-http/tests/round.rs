@@ -612,7 +612,7 @@ fn r04_the_transport_refuses_before_anything_is_read_or_stored() {
     assert_eq!(reply.status, 403, "{}", reply.text());
     assert_eq!(
         reply.error_message(),
-        "staging needs a same-origin page (not authentication: ADR-0034)"
+        "a write needs a same-origin page (not authentication: ADR-0034)"
     );
     // The same from a same-origin page: 413, unread (the 4 MiB never sent).
     let mut bytes = request_bytes(
@@ -681,7 +681,7 @@ fn r04_the_transport_refuses_before_anything_is_read_or_stored() {
             vec![("Origin", own.as_str()), json_type],
             good_body.clone(),
             403,
-            "staging needs a same-origin page (not authentication: ADR-0034)".to_owned(),
+            "a write needs a same-origin page (not authentication: ADR-0034)".to_owned(),
             true,
         ),
         (
@@ -689,7 +689,7 @@ fn r04_the_transport_refuses_before_anything_is_read_or_stored() {
             vec![("Sec-Fetch-Site", "none"), json_type],
             good_body.clone(),
             403,
-            "staging needs a same-origin page (not authentication: ADR-0034)".to_owned(),
+            "a write needs a same-origin page (not authentication: ADR-0034)".to_owned(),
             true,
         ),
         (

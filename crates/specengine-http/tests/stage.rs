@@ -981,14 +981,14 @@ fn ac15_the_transport_refuses_a_foreign_page_another_type_an_oversize_or_bad_bod
             vec![("Origin", own.as_str()), json_type],
             &good,
             403,
-            Some("staging needs a same-origin page (not authentication: ADR-0034)"),
+            Some("a write needs a same-origin page (not authentication: ADR-0034)"),
         ),
         (
             "Sec-Fetch-Site: none",
             vec![("Sec-Fetch-Site", "none"), json_type],
             &good,
             403,
-            Some("staging needs a same-origin page (not authentication: ADR-0034)"),
+            Some("a write needs a same-origin page (not authentication: ADR-0034)"),
         ),
         (
             "Sec-Fetch-Site: cross-site",
@@ -1157,7 +1157,7 @@ fn the_page_is_judged_before_the_path_is_decoded() {
         assert_eq!(reply.status, 403, "{method} without: {}", reply.text());
         assert_eq!(
             reply.error_message(),
-            "staging needs a same-origin page (not authentication: ADR-0034)",
+            "a write needs a same-origin page (not authentication: ADR-0034)",
             "{method}"
         );
         let reply = server.send(

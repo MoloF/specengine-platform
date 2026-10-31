@@ -1704,3 +1704,207 @@ export interface RoadmapPoolTask {
   title: string | null;
   targets: string[];
 }
+
+/** A column of a flow: `id` its name, `title` any script, default the ID. Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardColumn {
+  id: string;
+  title: string;
+}
+
+/** A move a flow lists, expanded by the reader; `by` empty: anyone. Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardMove {
+  from: string;
+  to: string;
+  by: string[];
+}
+
+/** A flow's accept: `from` the column a card is accepted in, `to` the one only an accept reaches. Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardAcceptRule {
+  from: string;
+  to: string;
+}
+
+/** One board: a project's flow, every word of it project vocabulary (ADR-0056). Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardFlow {
+  name: string;
+  disciplines: string[];
+  columns: CardColumn[];
+  moves: CardMove[];
+  accept: CardAcceptRule;
+}
+
+/** A row of `spec card list --json`, by flow, column, position; `revision` decimal text. Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardRow {
+  id: string;
+  flow: string;
+  column: string;
+  position: number;
+  title: string;
+  discipline: string | null;
+  targets: string[];
+  assignee: string | null;
+  reviewer: string | null;
+  estimate: string | null;
+  due: string | null;
+  parent: string | null;
+  corrects: string | null;
+  updated_at: string;
+  revision: string;
+  accepted: boolean;
+  cancelled: boolean;
+}
+
+/** `spec card list --json`: `flows` for the empty columns too; `omitted` null when nothing is cut. Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardList {
+  flows: CardFlow[];
+  cards: CardRow[];
+  notes: string[];
+  truncated: boolean;
+  omitted: number | null;
+}
+
+/** One entry of `allowed`, per read: moves only, `by` empty: anyone. Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardAllowed {
+  to: string;
+  by: string[];
+}
+
+/** An evidence entry, oldest first: a reference, never fetched; `kind` as stored. Source: `docs/canon/cards.md` "Store". */
+export interface CardEvidence {
+  kind: string;
+  value: string;
+  by: string;
+  at: string;
+}
+
+/** The reviewer's act. Source: `docs/canon/cards.md` "Store". */
+export interface CardAcceptance {
+  by: string;
+  at: string;
+  note: string | null;
+}
+
+/** Who took the card out of its column, and why. Source: `docs/canon/cards.md` "Store". */
+export interface CardCancellation {
+  by: string;
+  at: string;
+  reason: string;
+}
+
+/** One of a card's last `card.*` events, oldest first; `payload` as stored. Source: `docs/canon/cards.md` "Documents and events". */
+export interface CardEvent {
+  seq: number;
+  type: string;
+  at: string;
+  payload: unknown;
+}
+
+/** `spec card show C --history --json`: every key present, absent `null`; `snapshot` held for a later slice. Source: `docs/canon/cards.md` "Documents and events". */
+export interface Card {
+  id: string;
+  flow: string;
+  column: string;
+  position: number;
+  title: string;
+  goal: string | null;
+  discipline: string | null;
+  targets: string[];
+  snapshot: string | null;
+  criteria: string[];
+  assignee: string | null;
+  reviewer: string | null;
+  estimate: string | null;
+  due: string | null;
+  parent: string | null;
+  corrects: string | null;
+  evidence: CardEvidence[];
+  acceptance: CardAcceptance | null;
+  cancellation: CardCancellation | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  revision: string;
+  allowed: CardAllowed[];
+  history: CardEvent[] | null;
+  notes: string[];
+}
+
+/** No such card (exit 1, the daemon's 404): `no card C-0099`; `id` null for no card ID. Source: `docs/canon/cards.md` "Commands". */
+export interface CardNotFound {
+  id: string | null;
+  reason: string;
+}
+
+/**
+ * The document of a write and of a refused one (409, the reason the last of `notes`); a refused
+ * `POST cards` made no card, so all five are null. Source: `docs/canon/cards.md` "Commands".
+ */
+export interface CardWrite {
+  id: string | null;
+  flow: string | null;
+  column: string | null;
+  position: number | null;
+  revision: string | null;
+  allowed: CardAllowed[];
+  notes: string[];
+}
+
+/** POST `.../cards`: `create_card`'s keys and the acting name; a key left out asks nothing. Source: `docs/features/board-ui.md` "Routes". */
+export interface CardCreateBody {
+  title: string;
+  goal?: string;
+  discipline?: string;
+  target?: string[];
+  criterion?: string[];
+  assignee?: string;
+  estimate?: string;
+  due?: string;
+  parent?: string;
+  corrects?: string;
+  as: string | null;
+}
+
+/** POST `.../cards/:id/move`: `move_card`'s keys and the acting name; `to` left out: its own column, with `before`. Source: `docs/features/board-ui.md` "Routes". */
+export interface CardMoveBody {
+  to?: string;
+  before?: string;
+  revision: string;
+  as: string | null;
+}
+
+/** POST `.../cards/:id/edit`: `edit_card`'s keys and the acting name; `-` clears a field, `["-"]` a list. Source: `docs/features/board-ui.md` "Routes". */
+export interface CardEditBody {
+  title?: string;
+  goal?: string;
+  target?: string[];
+  criterion?: string[];
+  estimate?: string;
+  due?: string;
+  parent?: string;
+  corrects?: string;
+  evidence?: string[];
+  revision: string;
+  as: string | null;
+}
+
+/** POST `.../cards/:id/assign`; `-` clears a name. Source: `docs/features/board-ui.md` "Routes". */
+export interface CardAssignBody {
+  assignee?: string;
+  reviewer?: string;
+  revision: string;
+  as: string | null;
+}
+
+/** POST `.../cards/:id/cancel`. Source: `docs/features/board-ui.md` "Routes". */
+export interface CardCancelBody {
+  reason: string;
+  revision: string;
+  as: string | null;
+}
+
+/** POST `.../cards/:id/accept`: the name is required, the page's dialog is the consent. Source: `docs/features/board-ui.md` "Routes". */
+export interface CardAcceptBody {
+  as: string;
+  note: string | null;
+  revision: string;
+}

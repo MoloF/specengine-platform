@@ -333,12 +333,13 @@ describe("nav, switcher and keys (AC-08)", () => {
     return within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link");
   }
 
-  it("lists nine entries, Overview first to the home, current only there", async () => {
+  it("lists ten entries, Overview first to the home, current only there", async () => {
     await openHome();
     expect(navLinks().map((link) => [link.textContent, link.getAttribute("href"), link.getAttribute("aria-current")])).toEqual([
       ["Overview", "#/alpha", "page"],
       ["Inbox", "#/alpha/inbox", null],
       ["Tasks", "#/alpha/tasks", null],
+      ["Board", "#/alpha/board", null],
       ["Roadmap", "#/alpha/roadmap", null],
       ["Flow", "#/alpha/flow", null],
       ["Spec tree", "#/alpha/tree", null],

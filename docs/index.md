@@ -20,7 +20,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/board-ui.md](features/board-ui.md) board-ui: the Board section and the daemon's card routes (RM-0046) · ui, crates/specengine-http, crates/specengine-cli · draft
 - [docs/features/card-trace.md](features/card-trace.md) card-trace: suspect marks, clearing, verdicts, rollup (RM-0047) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin · draft
 - [docs/features/trace-views.md](features/trace-views.md) trace-views: flow badges, stage:, the timeline, a node's cards (RM-0048) · ui, crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-import, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, plugin · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress

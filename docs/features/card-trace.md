@@ -52,7 +52,7 @@ The store's `accept_departing` runs `create_intake`'s body inside the accept's t
 
 **Git.** The item binds a place as `propose update` step 5, so `--departs` reads git, reads only: the one exception to `cards.md`'s "no git" (exit 2 outside a worktree, nothing changed). A card path without `--departs` reads none.
 
-The page's dialog gains the choice and these keys. `card_accept` makes the item, so `propose*` stays forbidden in `crates/specengine-http/src`; `card_writes_touch_only_the_queue` admits that one proposal, and the page's accept ADR says why.
+The page's dialog gains the choice and these keys. `card_accept` makes the item, so `propose*` stays forbidden in `crates/specengine-http/src`; this slice widens `card_writes_touch_only_the_queue` to admit that one proposal (ADR-0057).
 
 ### Clearing
 

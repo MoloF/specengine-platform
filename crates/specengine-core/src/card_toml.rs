@@ -10,9 +10,9 @@
 //!   [`MAX_NAME_BYTES`] bytes; each once in its list. [`MIN_COLUMNS`] to
 //!   [`MAX_COLUMNS`] columns. `titles = { id = "text" }`, any script, at most
 //!   [`MAX_TITLE_BYTES`] bytes, default the ID.
-//! - **`accept`** required, `{from, to}`, two columns: `to` is reached only
-//!   by `spec card accept`, so a move ending there, or a new card starting
-//!   there, is an error.
+//! - **`accept`** required, `{from, to}`, two columns: a person reaches `to`
+//!   by accepting, on a terminal or the local page, and no agent tool does,
+//!   so a move ending there, or a new card starting there, is an error.
 //! - **`moves`**: `{from, to, by?}` of two columns, each pair once. No `by`:
 //!   anyone; `by` names as `--as` writes them. No `moves`: every ordered pair
 //!   of the columns but `accept.to`, expanded here, so a reader looks moves
@@ -31,9 +31,9 @@ use serde::Serialize;
 use toml::Spanned;
 use toml::de::{DeTable, DeValue};
 
+use crate::card::{card_person, card_person_problem};
 use crate::health_toml::{Errors, line_of, type_name, unknown_field};
 use crate::project_toml::ProjectError;
-use crate::proposal::author_field_problem;
 
 /// The table's name.
 const TABLE: &str = "card";
@@ -491,8 +491,8 @@ fn read_accept(
         errors.push(
             at,
             format!(
-                "`accept.to`: `{to}` is the first column, where a new card starts: `to` is \
-                 reached only by `spec card accept`"
+                "`accept.to`: `{to}` is the first column, where a new card starts: accept alone \
+                 reaches `to`"
             ),
         );
         return None;
@@ -624,8 +624,8 @@ fn read_move(
         errors.push(
             at,
             format!(
-                "`moves`: `{}` is `accept.to`, reached only by `spec card accept`: no move \
-                 starts or ends there",
+                "`moves`: `{}` is `accept.to`, which accept alone reaches: no move starts or \
+                 ends there",
                 accept.to
             ),
         );
@@ -649,9 +649,9 @@ fn read_by(value: &Spanned<DeValue<'_>>, errors: &mut Errors<'_>) -> Vec<String>
     }
     let mut by = Vec::with_capacity(listed.len());
     for (name, span) in listed {
-        match author_field_problem(&name) {
+        match card_person_problem(&name) {
             Some(problem) => errors.push(span, format!("`by`: {problem}")),
-            None => by.push(name),
+            None => by.push(card_person(&name).to_owned()),
         }
     }
     by

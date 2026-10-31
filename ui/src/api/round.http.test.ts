@@ -103,7 +103,7 @@ describe("the round's answers", () => {
 
   it("rejects the fence's, the type's, the size's and a body's refusal with the daemon's message verbatim; no answer is status 0", async () => {
     for (const [status, message] of [
-      [403, "staging needs a same-origin page (not authentication: ADR-0034)"],
+      [403, "a write needs a same-origin page (not authentication: ADR-0034)"],
       [413, "the body is over 4194304 bytes"],
       [415, "the body is JSON: send it with Content-Type: application/json"],
       [400, "the answers are for `beta`, this is `alpha`; nothing changed"],
