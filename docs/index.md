@@ -20,6 +20,8 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
+- [docs/features/hub-confirm.md](features/hub-confirm.md) hub-confirm: one click confirms one staged choice, a commit in the hub's checkout, nothing pushed (RM-0050) · crates/specengine-core, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp, ui · draft
+- [docs/features/hub-team.md](features/hub-team.md) hub-team: a [team] login accepts, clears and stages on a hub, and no spec file changes (RM-0071) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
 - [docs/specs/specengine-platform/06-workflows.md](specs/specengine-platform/06-workflows.md) 06. Workflows · specengine · in-progress
