@@ -361,14 +361,16 @@ export class HttpClient implements SpecEngineClient {
   }
 
   /**
-   * `spec flow [ROOT] [--depth N] --json` as the browser view, uncut (`docs/canon/spec-flow.md`
-   * "The read"): `root` a query value, encoded once, an absent option left out. A 404 is the exit-1
-   * document (a ROOT naming nothing, `reason` set), resolved as data. Takes its query's AbortSignal.
+   * `spec flow [ROOT] [--depth N] [--trace] --json` as the browser view, uncut
+   * (`docs/canon/spec-flow.md` "The read"): `root` a query value, encoded once, an absent option left
+   * out, `trace` sent only as true. A 404 is the exit-1 document (a ROOT naming nothing, `reason`
+   * set), resolved as data. Takes its query's AbortSignal.
    */
   async getFlow(project: string, options: FlowOptions, signal?: AbortSignal): Promise<FlowView> {
     const query = queryOf([
       ["root", options.root],
       ["depth", options.depth],
+      ["trace", options.trace === true ? true : undefined],
     ]);
     return (await request("GET", `${projectPath(project)}/flow${query}`, { signal })) as FlowView;
   }
@@ -474,12 +476,16 @@ export class HttpClient implements SpecEngineClient {
   }
 
   /**
-   * `spec card list [--with-cancelled] --json` as the browser view (`docs/features/board-ui.md`
-   * "Routes"): `with_cancelled` the one query, sent only as true; the screen filters the answer. A
-   * 503 (a bad `[card]`) rejects in the daemon's words. Takes its query's AbortSignal.
+   * `spec card list [--with-cancelled] [--marks] --json` as the browser view
+   * (`docs/features/board-ui.md` "Routes"): `with_cancelled` and `marks` the two queries, each sent
+   * only as true; the screen filters the answer. A 503 (a bad `[card]`, an index that cannot be read
+   * for the marks) rejects in the daemon's words. Takes its query's AbortSignal.
    */
   async getCards(project: string, options: CardsOptions = {}, signal?: AbortSignal): Promise<CardList> {
-    const query = queryOf([["with_cancelled", options.with_cancelled === true ? true : undefined]]);
+    const query = queryOf([
+      ["with_cancelled", options.with_cancelled === true ? true : undefined],
+      ["marks", options.marks === true ? true : undefined],
+    ]);
     return (await request("GET", `${cardsPath(project)}${query}`, { signal })) as CardList;
   }
 
@@ -529,12 +535,18 @@ export class HttpClient implements SpecEngineClient {
   }
 
   /**
-   * `spec trace [REF] --json` as the browser view (`docs/features/card-trace.md`):
-   * `ref` the one query. A 404 is the exit-1 document (a REF naming nothing, `reason` set), resolved as
-   * data; a 503 rejects in the daemon's words. Takes its query's AbortSignal.
+   * `spec trace [REF] [--stage S] [--summary] --json` as the browser view
+   * (`docs/features/card-trace.md`, `docs/features/trace-views.md` "Routes and types"): `ref` and
+   * `stage` query values, `summary` sent only as true. A 404 is the exit-1 document (a REF naming
+   * nothing, `reason` set), resolved as data; a 503 rejects in the daemon's words. Takes its query's
+   * AbortSignal.
    */
   async getTrace(project: string, options: TraceOptions = {}, signal?: AbortSignal): Promise<TraceDocument> {
-    const query = queryOf([["ref", options.ref]]);
+    const query = queryOf([
+      ["ref", options.ref],
+      ["stage", options.stage],
+      ["summary", options.summary === true ? true : undefined],
+    ]);
     return (await request("GET", `${tracePath(project)}${query}`, { signal })) as TraceDocument;
   }
 

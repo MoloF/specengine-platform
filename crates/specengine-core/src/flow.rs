@@ -23,9 +23,11 @@
 //!   to itself stays an edge while the document is shown. A shown node's
 //!   `distance` is the least of what it holds, itself included, so a screen
 //!   orders the top level without reading the whole flow; `start` and `end`
-//!   stay its own. Its `gaps` counts the documents this read's rows name
-//!   among what it holds, itself included, each once: rows before any fold
-//!   or cap, so a depth never moves the sum over a read's nodes.
+//!   are true when it or anything it holds is one, so the overview marks
+//!   where a flow begins and ends. Its `stage` stays its own. Its `gaps`
+//!   counts the documents this read's rows name among what it holds, itself
+//!   included, each once: rows before any fold or cap, so a depth never
+//!   moves the sum over a read's nodes.
 //! - **Gaps.** All ten, always in [`GapCode::ALL`]'s order, computed before
 //!   any fold, so a depth never changes one. A `follows` edge crossing the
 //!   scope is an entry or a way out, so a sub-flow is not called broken;
@@ -147,6 +149,8 @@ pub struct FlowGap {
 /// A shown node.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FlowNode {
+    /// The file it stands for, an index into the graph's paths.
+    pub file: usize,
     pub id: Option<String>,
     pub kind: Option<String>,
     pub title: Option<String>,
@@ -157,7 +161,11 @@ pub struct FlowNode {
     pub distance: Option<usize>,
     /// The name of the shown node holding it.
     pub group: Option<String>,
+    /// Its own `stage:`, as written; a fold keeps what it holds out of it.
+    pub stage: Option<String>,
+    /// It or something it holds is a source of the walk.
     pub start: bool,
+    /// It or something it holds is an end.
     pub end: bool,
     /// The documents folded into it.
     pub holds: usize,
@@ -214,6 +222,15 @@ pub struct FlowRead {
     pub nodes: Vec<FlowNode>,
     /// By (`from`, `to`, type, kind).
     pub edges: Vec<FlowEdge>,
+}
+
+/// What a walk found, by file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FlowWalk {
+    /// The steps of the scope.
+    pub steps: BTreeSet<usize>,
+    /// Each step reached and its links of `follows` from the starts.
+    pub distance: BTreeMap<usize, usize>,
 }
 
 /// Successors, or predecessors, of a file.
@@ -322,6 +339,27 @@ pub fn flow_read(graph: &SpecGraph<'_>, ask: &FlowAsk<'_>) -> FlowRead {
         nodes,
         edges,
     }
+}
+
+/// The walk of the read over `roots` (`None`: every flow document), before
+/// any fold, with none of [`flow_read`]'s rows computed.
+pub fn flow_walk(graph: &SpecGraph<'_>, roots: Option<&[NodeAt]>, config: &FlowConfig) -> FlowWalk {
+    let asked: BTreeSet<usize> = roots.into_iter().flatten().map(|at| at.file).collect();
+    let admitted = |file: usize| graph.standing(file) == Standing::Live || asked.contains(&file);
+    let (links, strays) = read_links(graph, &admitted);
+    let selected = Selected::of(graph, config);
+    let scope = scope_of(graph, roots, &links, &strays, &selected, &admitted);
+    let steps = steps_of(&scope.members, &links, &strays, &selected);
+    FlowWalk {
+        steps: steps.steps,
+        distance: steps.distance,
+    }
+}
+
+/// The `stage:` of `file`'s document, a section's too, as written.
+pub fn stage_of<'g>(graph: &SpecGraph<'g>, file: usize) -> Option<&'g str> {
+    let fields = graph.node(document(file))?.fields.as_ref()?;
+    fields.stage.as_deref()
 }
 
 /// The document of `file`.
@@ -994,6 +1032,8 @@ fn shown(
     let mut holds: BTreeMap<usize, usize> = BTreeMap::new();
     let mut least: BTreeMap<usize, usize> = BTreeMap::new();
     let mut gaps: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut starting = BTreeSet::new();
+    let mut ending = BTreeSet::new();
     for &member in &scope.members {
         let shown = shown_as(member);
         if shown != member {
@@ -1007,6 +1047,12 @@ fn shown(
                 .entry(shown)
                 .and_modify(|lowest| *lowest = distance.min(*lowest))
                 .or_insert(distance);
+        }
+        if steps.starts.contains(&member) {
+            starting.insert(shown);
+        }
+        if steps.ends.contains(&member) {
+            ending.insert(shown);
         }
     }
     let mut inner: BTreeMap<usize, BTreeMap<&'static str, usize>> = BTreeMap::new();
@@ -1053,6 +1099,7 @@ fn shown(
             let at = document(file);
             let node = graph.node(at);
             FlowNode {
+                file,
                 id: node.and_then(|node| node.id.clone()),
                 kind: node.and_then(|node| node.kind.clone()),
                 title: node.and_then(|node| node.title.clone()),
@@ -1060,8 +1107,9 @@ fn shown(
                 line: graph.line(at),
                 distance: least.get(&file).copied(),
                 group: tree.parent.get(&file).map(|&parent| name(parent)),
-                start: steps.starts.contains(&file),
-                end: steps.ends.contains(&file),
+                stage: stage_of(graph, file).map(str::to_owned),
+                start: starting.contains(&file),
+                end: ending.contains(&file),
                 holds: holds.get(&file).copied().unwrap_or(0),
                 inner: inner
                     .get(&file)

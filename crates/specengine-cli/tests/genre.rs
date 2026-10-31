@@ -14,6 +14,10 @@
 //!
 //! docs/features/card-trace.md: `src/trace.rs` is scanned with the rest, the
 //! ruling of that fixture joins the list, and `spec trace` joins the battery.
+//!
+//! docs/features/trace-views.md: `--stage`, `--trace` and `--marks` are read
+//! here, the words of `fixtures/trace-almanac` join the list. `PART-` stays
+//! out: `src/show.rs` tests a made-up scheme of its own under that prefix.
 
 #![cfg(unix)]
 
@@ -30,8 +34,9 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// AC-15; docs/features/roadmap-items.md this repository's plan prefix and
 /// its shard; docs/features/flow-read.md the flow fixtures' prefixes and
 /// kinds; docs/features/card-store.md the card fixture's;
-/// docs/features/card-trace.md that fixture's ruling).
-const FORBIDDEN: [&str; 35] = [
+/// docs/features/card-trace.md that fixture's ruling;
+/// docs/features/trace-views.md the almanac's).
+const FORBIDDEN: [&str; 40] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -78,6 +83,13 @@ const FORBIDDEN: [&str; 35] = [
     // project it reads.
     "STY-",
     "style-ruling",
+    // docs/features/trace-views.md: no `spec flow --trace`, `spec trace` or
+    // `spec card list --marks` line by a word of a project it reads.
+    "BOOK-",
+    "STEP-",
+    "yearbook",
+    "committee",
+    "errand",
 ];
 
 fn cli_sources() -> Vec<PathBuf> {

@@ -1,12 +1,13 @@
-import type { FlowEdge, FlowGap, FlowNode, FlowView } from "../api/types";
+import type { FlowEdge, FlowGap, FlowNode, FlowView, TraceCounts } from "../api/types";
 import { compareText, nodeName } from "../graph/layout";
 import type { Look } from "../ui/Badge";
 
-// The Flow's closed tables and words (docs/features/flow-canvas.md "Data", "Gap rows"). The one
-// place under src/flow/ that tells a gap state, a gap code or an edge's `kind` apart: an edge's
-// `kind` is the closed `FlowEdgeKind` of the daemon's schema, no project vocabulary, and a repeat is
-// always dotted. A link `type` is never spelled: its colour and plain dash go by its place in the
-// sorted types of the top read, which hold every edge, so folding moves no dash.
+// The Flow's closed tables and words (docs/features/flow-canvas.md "Data", "Gap rows";
+// docs/features/trace-views.md). The one place under src/flow/ and src/trace/ that tells a gap state,
+// a gap code, an edge's `kind` or a rollup apart: an edge's `kind` is the closed `FlowEdgeKind` of the
+// daemon's schema, no project vocabulary, and a repeat is always dotted. A link `type` is never
+// spelled: its colour and plain dash go by its place in the sorted types of the top read, which hold
+// every edge, so folding moves no dash. A stage is project vocabulary, shown as served.
 
 /** The seven stroke patterns: four by a type's place, then the three kinds; `repeat` alone is dotted. */
 export const FLOW_DASHES = ["none", "14 6", "24 5 6 5", "6 5 6 14", "9 5", "18 4 3 4", "1 7"] as const;
@@ -223,3 +224,97 @@ export function readCount(view: Pick<FlowView, "nodes" | "edges">): string {
 export function boxWords(node: FlowNode): string {
   return node.title ?? nodeName(node);
 }
+
+/** The word of a node with no card: a gap in the plan, drawn hollow wherever a step stands. */
+const NO_CARD = "no card";
+
+const ROLLUPS: ReadonlyMap<string, Look> = new Map<string, Look>([
+  ["confirmed", { label: "Confirmed", tone: "trace-confirmed", icon: "taskAccepted" }],
+  ["in work", { label: "In work", tone: "trace-in-work", icon: "taskInProgress" }],
+  ["suspect", { label: "Suspect", tone: "trace-suspect", icon: "specChanged" }],
+  ["departed", { label: "Departed", tone: "trace-departed", icon: "cardDeparted" }],
+  [NO_CARD, { label: "No card", tone: "trace-no-card", icon: "open" }],
+]);
+
+/** How a rollup looks; one this build does not know raw and neutral (`docs/features/trace-views.md` "Flow badges"). */
+export function rollupLook(rollup: string): Look {
+  return ROLLUPS.get(rollup) ?? { label: rollup, tone: "trace-unknown", icon: "unknown" };
+}
+
+/** Whether a rollup is a step with no card: it stays in its place, hollow. */
+export function isNoCard(rollup: string): boolean {
+  return rollup === NO_CARD;
+}
+
+/** What each rollup says, for the legend: done, in work, in question, missing. */
+export const ROLLUP_MEANINGS: readonly { look: Look; meaning: string }[] = [
+  { look: rollupLook("confirmed"), meaning: "its work is accepted and stands against the brief" },
+  { look: rollupLook("in work"), meaning: "a card is open on it" },
+  { look: rollupLook("suspect"), meaning: "the brief changed after a card read it" },
+  { look: rollupLook("departed"), meaning: "accepted as departing from the brief, not settled yet" },
+  { look: rollupLook(NO_CARD), meaning: "no card holds it: the gap stays visible" },
+];
+
+/** The parts of `counts`, in the words of each state, from what is done to what is missing. */
+const COUNT_ORDER: readonly (readonly [keyof TraceCounts, string])[] = [
+  ["confirmed", "confirmed"],
+  ["in_work", "in work"],
+  ["suspect", "suspect"],
+  ["departed", "departed"],
+  ["no_card", NO_CARD],
+];
+
+/** One state of `counts` with something in it. */
+export interface CountPart {
+  key: keyof TraceCounts;
+  count: number;
+  /** As a line says it: `3 confirmed`. */
+  words: string;
+  look: Look;
+  hollow: boolean;
+}
+
+/** The served counts, zero parts left out: nothing here adds them up. */
+export function countParts(counts: TraceCounts): CountPart[] {
+  return COUNT_ORDER.flatMap(([key, word]) => {
+    const count = counts[key];
+    return count > 0 ? [{ key, count, words: `${String(count)} ${word}`, look: rollupLook(word), hollow: isNoCard(word) }] : [];
+  });
+}
+
+/** `3 confirmed, 1 suspect, 2 no card`, as a closed group says it. */
+export function countsText(counts: TraceCounts): string {
+  return countParts(counts)
+    .map((part) => part.words)
+    .join(", ");
+}
+
+/** A lane's stage as a person reads it; none: the lane for what has no `stage:`. */
+export function stageWords(stage: string | null): string {
+  return stage ?? "No stage";
+}
+
+/** Where a step stands on the walk, counted from one; a distance the read did not give is not known, never a place. */
+export function stepWords(distance: number | null): string {
+  return distance === null ? "Step unknown" : `Step ${String(distance + 1)}`;
+}
+
+/** The lane's score: `<c> of <n> confirmed`. */
+export function confirmedLine(confirmed: number, total: number): string {
+  return `${String(confirmed)} of ${String(total)} confirmed`;
+}
+
+/** No step has a card: a card may still stand elsewhere, on a target gone, and a note then says so. */
+export const NO_CARDS_YET = "No step has a card yet. Next: open a step and press New card.";
+
+/** Beside a re-read that failed: what stands under it is the last read's, not the state now. */
+export const LAST_READ_WORDS = "What stands below is from the last read.";
+
+/** Beside the top read's failed re-read, on a tab drawing boxes: of those, only the top level's are that read's. */
+export const STATES_HIDDEN_WORDS = "Top-level boxes show no state until it reads.";
+
+/** A gap row whose read failed: it says nothing, least of all None. */
+export const GAP_NOT_READ: Look = { label: "Not read", tone: "flow-gap-unknown", icon: "unknown" };
+
+/** No document has a stage: one lane, and what would give it others. */
+export const NO_STAGES_YET = "Next: give documents a `stage:` key";

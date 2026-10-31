@@ -448,7 +448,8 @@ pub use task::{
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
 pub use trace::{
-    TraceCard, TraceNode, TraceOutcome, TraceRequest, TraceUse, trace, trace_with_view,
+    TraceBadge, TraceCard, TraceNode, TraceOutcome, TraceRequest, TraceStage, TraceUse, trace,
+    trace_with_view,
 };
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};

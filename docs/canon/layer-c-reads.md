@@ -74,5 +74,5 @@ CLI `tests/layer_c_reads.rs` (the six-file tally, absent bytes against `fixtures
 ## Known limits
 
 - Every read with a snapshot builds the whole project's run and current BLAKE3 maps and `TargetCrates` (review 1: later).
-- `INSTRUCTIONS` names no moniker (2 040 of 2 048 B).
+- `INSTRUCTIONS` names no moniker (2 048 of 2 048 B).
 - One pilot's 17 disagrees are not attributed (TE-6, `layer-c-resolve.md`).

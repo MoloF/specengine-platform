@@ -286,6 +286,7 @@ impl Reader<'_> {
             "release" => self.out.fields.release = self.string(&name, &value, line),
             "priority" => self.out.fields.priority = self.string(&name, &value, line),
             "estimate" => self.out.fields.estimate = self.text_or_integer(&name, &value, line),
+            "stage" => self.out.fields.stage = self.string(&name, &value, line),
             _ => {
                 self.out.diagnostics.push(Diagnostic::new(
                     DiagnosticCode::UnknownKey,
@@ -838,7 +839,7 @@ pub enum KeyType {
 
 /// Every typed front-matter key and its [`KeyType`]; any other key is
 /// untyped (`unknown-key`, kept in `extra`).
-pub const TYPED_KEYS: [(&str, KeyType); 30] = [
+pub const TYPED_KEYS: [(&str, KeyType); 31] = [
     ("id", KeyType::Text),
     ("kind", KeyType::Text),
     ("class", KeyType::Text),
@@ -869,6 +870,7 @@ pub const TYPED_KEYS: [(&str, KeyType); 30] = [
     ("release", KeyType::Text),
     ("priority", KeyType::Text),
     ("estimate", KeyType::TextOrInteger),
+    ("stage", KeyType::Text),
 ];
 
 /// Keys with a type: a null value leaves them absent.

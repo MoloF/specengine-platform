@@ -1,11 +1,13 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import type { FlowEdge, FlowNode, FlowView, QueueEvent } from "../api/types";
+import { ApiProvider } from "../api/provider";
+import type { FlowEdge, FlowNode, FlowView as FlowAnswer, QueueEvent, TraceCounts, TraceNode, TraceStage } from "../api/types";
 import { sectionHash } from "../app/routes";
-import { aFlowEdge, aFlowGap, aFlowNode, aFlowView, tenGapRows, aTreeNode, aTreeView } from "../test/builders";
+import { aFlowEdge, aFlowGap, aFlowNode, aFlowView, aTrace, aTraceCard, aTraceNode, tenGapRows, aTreeNode, aTreeView } from "../test/builders";
 import { aGroupRead, aLine, flowClient, TYPE_A, TYPE_B } from "../test/flowStub";
 import { renderApp } from "../test/render";
+import { FlowView, type FlowState } from "./FlowView";
 import { FLOW_DASHES, dashOf, edgeLine, edgeWords, shortWhen, typeColour, typesOf, WHEN_SHOWN } from "./labels";
 import { BOX_WIDTH, COLUMN_GAP, LANE_PAD } from "./layout";
 
@@ -107,7 +109,7 @@ describe("nothing lifted (AC-03)", () => {
     const client = flowClient(aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 })], []), { G: aGroupRead("G", aLine(["X"])) });
     renderApp(client, "#/alpha/flow");
     await drawn("X");
-    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0 }, { root: "G", depth: 1 }]);
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0, trace: true }, { root: "G", depth: 1, trace: true }]);
   });
 });
 
@@ -350,7 +352,7 @@ describe("gap selection (AC-09)", () => {
     fireEvent.click(member);
     await drawn("DEEP");
     expect(client.getTree).toHaveBeenCalledTimes(1);
-    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0 }, { root: "G", depth: 1 }, { root: "H", depth: 1 }]);
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0, trace: true }, { root: "G", depth: 1, trace: true }, { root: "H", depth: 1, trace: true }]);
     await waitFor(() => {
       expect(window.location.hash).toBe("#/alpha/flow/DEEP");
     });
@@ -442,7 +444,7 @@ describe("the panel (AC-10)", () => {
     expect(screen.getByText("4 documents, 2 with gaps")).toBeTruthy();
     fireEvent.click(open);
     await waitFor(() => {
-      expect(stub.getFlow).toHaveBeenCalledWith("alpha", { root: "G", depth: 1 }, expect.any(AbortSignal));
+      expect(stub.getFlow).toHaveBeenCalledWith("alpha", { root: "G", depth: 1, trace: true }, expect.any(AbortSignal));
     });
     expect(await screen.findByRole("button", { name: "Close the group" })).toBeTruthy();
   });
@@ -467,7 +469,7 @@ describe("the panel (AC-10)", () => {
 describe("states (AC-11)", () => {
   it("loading: a skeleton, aria-busy, until the top lands", async () => {
     const client = flowClient(steps);
-    const held = deferred<FlowView>();
+    const held = deferred<FlowAnswer>();
     client.getFlow.mockImplementation(() => held.promise);
     renderApp(client, "#/alpha/flow");
     expect(await screen.findByRole("status", { name: "Reading the flow of alpha" })).toBeTruthy();
@@ -481,7 +483,7 @@ describe("states (AC-11)", () => {
 
   it("a group opening stays closed, says Opening, then opens; focus stays", async () => {
     const client = flowClient(steps);
-    const held = deferred<FlowView>();
+    const held = deferred<FlowAnswer>();
     client.getFlow.mockImplementation((_project, options) =>
       options.root === undefined ? Promise.resolve(aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 }), aFlowNode({ id: "H", distance: 1, holds: 1 })], [])) : held.promise,
     );
@@ -653,7 +655,7 @@ describe("a seek", () => {
   });
 
   it("ends at the owner's close: a read landing after it opens nothing more", async () => {
-    const heldH = deferred<FlowView>();
+    const heldH = deferred<FlowAnswer>();
     const client = flowClient(flow());
     client.getFlow.mockImplementation((_project, options) => {
       if (options.root === undefined) {
@@ -732,7 +734,7 @@ describe("focus after a Retry", () => {
   });
 
   it("goes to the group's head after its Retry worked, the line and the button kept up while it runs", async () => {
-    const second = deferred<FlowView>();
+    const second = deferred<FlowAnswer>();
     const client = flowClient(twoGroups());
     client.getFlow.mockImplementation((_project, options) => (options.root === undefined ? Promise.resolve(twoGroups()) : Promise.reject(new ClientError({ status: 503, message: "spec: group read failed" }))));
     renderApp(client, "#/alpha/flow");
@@ -1020,7 +1022,7 @@ describe("a group asked open and not drawn open", () => {
   );
 
   it("reads as closed while its read is on its way: aria-expanded and the words say so, a press adds nothing", async () => {
-    const held = deferred<FlowView>();
+    const held = deferred<FlowAnswer>();
     const flow = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 }), aFlowNode({ id: "K", distance: 1, holds: 1 })], []);
     const client = flowClient(flow);
     client.getFlow.mockImplementation((_project, options) => (options.root === undefined ? Promise.resolve(flow) : held.promise));
@@ -1065,14 +1067,14 @@ describe("the sole top group", () => {
     renderApp(client, "#/alpha/flow");
     await drawn("X");
     expect(box("G").getAttribute("aria-label")).toContain("open group");
-    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0 }, { root: "G", depth: 1 }]);
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0, trace: true }, { root: "G", depth: 1, trace: true }]);
   });
 
   it("leaves two top groups closed: no group read on load", async () => {
     const client = flowClient(aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 }), aFlowNode({ id: "H", distance: 1, holds: 1 })], []));
     renderApp(client, "#/alpha/flow");
     await drawn("H");
-    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0 }]);
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0, trace: true }]);
   });
 
   it("stays closed once closed, for the page's life", async () => {
@@ -1302,5 +1304,850 @@ describe("width and memory (AC-13)", () => {
     await drawn("A");
     window.location.hash = "#/beta/flow";
     expect(await screen.findByRole("tabpanel", { name: "List" })).toBeTruthy();
+  });
+});
+
+const COUNTS = { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 };
+
+function aStage(stage: string | null, counts: Partial<TraceCounts> = {}, distance: number | null = 0): TraceStage {
+  return { stage, distance, counts: { ...COUNTS, ...counts } };
+}
+
+/** A flow whose lanes the summary read serves, and a read per lane. */
+function stagedClient(top: FlowAnswer, stages: TraceStage[], lanes: Record<string, TraceNode[]> = {}, groups: Record<string, FlowAnswer> = {}) {
+  const client = flowClient(top, groups);
+  client.getTrace.mockImplementation((_project, options) => {
+    const counts = stages.reduce((sum, lane) => ({ no_card: sum.no_card + lane.counts.no_card, in_work: sum.in_work + lane.counts.in_work, suspect: sum.suspect + lane.counts.suspect, departed: sum.departed + lane.counts.departed, confirmed: sum.confirmed + lane.counts.confirmed }), COUNTS);
+    return Promise.resolve(aTrace(options?.stage === undefined ? [] : (lanes[options.stage] ?? []), { stages, counts }));
+  });
+  return client;
+}
+
+function openTimeline() {
+  fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+}
+
+function laneOf(stage: string): HTMLElement {
+  const found = screen.getByRole("button", { name: new RegExp(`^${stage}\\b`) }).closest("li");
+  if (found === null) {
+    throw new Error(`no lane ${stage}`);
+  }
+  return found;
+}
+
+/** The live tail's `emit`, the client answering through it. */
+function tailOf(client: ReturnType<typeof flowClient>) {
+  const tail: { emit: (event: QueueEvent) => void } = { emit: () => undefined };
+  client.subscribe = vi.fn((_project: string, onEvent: (event: QueueEvent) => void) => {
+    tail.emit = onEvent;
+    return () => undefined;
+  });
+  return tail;
+}
+
+describe("flow badges (trace-views)", () => {
+  it("always sends trace, and says a box's rollup in a label and an icon; its accessible name says it too", async () => {
+    const reads = aFlowView([aFlowNode({ id: "A", distance: 0, rollup: "confirmed", counts: { ...COUNTS, confirmed: 1 } }), aFlowNode({ id: "B", distance: 1, rollup: "in work" })], []);
+    const client = flowClient(reads);
+    renderApp(client, "#/alpha/flow");
+    await drawn("B");
+    const badge = box("A").querySelector(".flow-box-state .badge");
+    expect([badge?.textContent, badge?.getAttribute("data-tone"), badge?.querySelector("svg") !== null]).toEqual(["Confirmed", "trace-confirmed", true]);
+    expect(box("A").getAttribute("aria-label")).toContain("Confirmed");
+    expect(box("B").querySelector(".badge")?.textContent).toBe("In work");
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0, trace: true }]);
+  });
+
+  it("an unknown rollup is a neutral badge, raw; no rollup read, no badge at all", async () => {
+    renderApp(flowClient(aFlowView([aFlowNode({ id: "A", distance: 0, rollup: "pondering" }), aFlowNode({ id: "B", distance: 1 })], [])), "#/alpha/flow");
+    await drawn("B");
+    const badge = box("A").querySelector(".badge");
+    expect([badge?.textContent, badge?.getAttribute("data-tone")]).toEqual(["pondering", "trace-unknown"]);
+    expect(box("B").querySelector(".badge")).toBeNull();
+    expect(box("B").getAttribute("aria-label")).toBe("B, Title of B, widget");
+  });
+
+  it("draws a step with no card hollow, and a step with one not", async () => {
+    renderApp(flowClient(aFlowView([aFlowNode({ id: "A", distance: 0, rollup: "no card" }), aFlowNode({ id: "B", distance: 1, rollup: "in work" })], [])), "#/alpha/flow");
+    await drawn("B");
+    expect(box("A").querySelector(".flow-box")?.classList.contains("is-hollow")).toBe(true);
+    expect(box("B").querySelector(".flow-box")?.classList.contains("is-hollow")).toBe(false);
+  });
+
+  it("draws a closed group's served counts, zero parts left out; a stub of 7 draws 7 whatever its read holds (AC-04)", async () => {
+    const reads = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 2, rollup: "no card", counts: { ...COUNTS, confirmed: 7 } }), aFlowNode({ id: "H", distance: 1, holds: 1, counts: { ...COUNTS, confirmed: 3, suspect: 1, no_card: 2 } })], []);
+    const client = flowClient(reads, { G: aGroupRead("G", aLine(["X", "Y"])) });
+    renderApp(client, "#/alpha/flow");
+    await drawn("G");
+    expect(box("G").querySelector(".flow-box-state")?.textContent).toBe("7 confirmed");
+    expect(box("H").querySelector(".flow-box-state")?.textContent).toBe("3 confirmed, 1 suspect, 2 no card");
+    expect(box("G").getAttribute("aria-label")).toContain("7 confirmed");
+    expect(box("G").querySelector(".badge")).toBeNull();
+    expect(client.getFlow.mock.calls.filter((call) => call[1].root !== undefined)).toEqual([]);
+  });
+
+  it("gives an open group no state of its own: what it holds shows on its boxes", async () => {
+    const reads = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1, rollup: "no card", counts: { ...COUNTS, confirmed: 1 } })], []);
+    renderApp(flowClient(reads, { G: aGroupRead("G", [aFlowNode({ id: "X", distance: 0, rollup: "confirmed" })]) }), "#/alpha/flow");
+    await drawn("X");
+    expect(box("G").querySelector(".flow-box-state, .badge")).toBeNull();
+    expect(box("X").querySelector(".badge")?.textContent).toBe("Confirmed");
+  });
+
+  it("says a closed group's Start and End as served, Entry in a group's lane", async () => {
+    const reads = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 2, start: true }), aFlowNode({ id: "H", distance: 1, holds: 2, end: true })], []);
+    renderApp(flowClient(reads), "#/alpha/flow");
+    await drawn("H");
+    expect(box("G").querySelector(".flow-mark-start")?.textContent).toBe("Start");
+    expect(box("H").querySelector(".flow-mark-end")?.textContent).toBe("End");
+  });
+
+  it("the List says the same, a group's counts, a step's rollup, its stage, in words", async () => {
+    const reads = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1, counts: { ...COUNTS, confirmed: 2 } }), aFlowNode({ id: "A", distance: 1, rollup: "suspect", stage: "\u043f\u0435\u0447\u0430\u0442\u044c" })], []);
+    renderApp(flowClient(reads), "#/alpha/flow");
+    await drawn("A");
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    const row = (name: string) => document.querySelector(`[data-flow-row="${name}"]`);
+    expect(row("G")?.querySelector(".flow-list-counts")?.textContent).toBe("2 confirmed");
+    expect(row("A")?.querySelector(".badge")?.textContent).toBe("Suspect");
+    expect(row("A")?.textContent).toContain("\u043f\u0435\u0447\u0430\u0442\u044c");
+  });
+
+  it("a card event reads the boxes again, with no reload (a rollup moves with its card)", async () => {
+    let rollup = "in work";
+    const client = flowClient(aFlowView([], []));
+    client.getFlow.mockImplementation(() => Promise.resolve(aFlowView([aFlowNode({ id: "A", distance: 0, rollup })], [])));
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    rollup = "confirmed";
+    act(() => {
+      tail.emit({ seq: 9, type: "card.accepted", payload: { id: "C-0001" } });
+    });
+    await waitFor(() => {
+      expect(box("A").querySelector(".badge")?.textContent).toBe("Confirmed");
+    });
+  });
+
+  it("changes no control: a state is what a read says, and nothing is held for it (ADR-0012)", async () => {
+    const plain = aFlowView(aLine(["A", "B"]), []);
+    const marked = aFlowView([aFlowNode({ id: "A", distance: 0, rollup: "departed" }), aFlowNode({ id: "B", distance: 1, rollup: "suspect" })], []);
+    const controls = () => Array.from(document.querySelectorAll("button, a, select"), (element) => element.textContent);
+    const first = renderApp(flowClient(plain), "#/alpha/flow");
+    await drawn("B");
+    const before = controls();
+    first.unmount();
+    renderApp(flowClient(marked), "#/alpha/flow");
+    await drawn("B");
+    expect(controls()).toEqual(before);
+  });
+
+  it("the panel says the box's stage and holds its cards", async () => {
+    const client = flowClient(aFlowView([aFlowNode({ id: "A", distance: 0, stage: "print" })], []));
+    client.getTrace.mockResolvedValue(aTrace([aTraceNode("A", [aTraceCard({ id: "C-0001", title: "Its card" })], { rollup: "in work" })]));
+    renderApp(client, "#/alpha/flow/A");
+    const panel = await screen.findByRole("complementary", { name: "A" });
+    expect(within(panel).getByText("Stage").closest("div")?.textContent).toBe("Stageprint");
+    expect((await within(panel).findByRole("link", { name: /C-0001/ })).getAttribute("href")).toBe("#/alpha/board/C-0001");
+  });
+});
+
+describe("the Timeline (trace-views)", () => {
+  const flow = aFlowView(aLine(["A", "B", "C"]), []);
+
+  it("on load reads the summary, opening a lane its stage; never a whole read (AC-05)", async () => {
+    const stages = [aStage("gather", { confirmed: 1, no_card: 1 }), aStage(null, { no_card: 1 }, null)];
+    const client = stagedClient(flow, stages, { gather: [aTraceNode("A", [], { distance: 0, rollup: "confirmed" })], "-": [aTraceNode("C", [], { rollup: "no card" })] });
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    await waitFor(() => {
+      expect(client.getTrace).toHaveBeenCalled();
+    });
+    expect(client.getTrace.mock.calls.map((call) => call[1])).toEqual([{ summary: true }]);
+    openTimeline();
+    fireEvent.click(await screen.findByRole("button", { name: /^gather/ }));
+    await within(laneOf("gather")).findByRole("link", { name: "A" });
+    fireEvent.click(screen.getByRole("button", { name: /^No stage/ }));
+    await within(laneOf("No stage")).findByRole("link", { name: "C" });
+    // The summary once more as the tab mounts, so the score goes with the steps; never a whole read.
+    expect(client.getTrace.mock.calls.map((call) => call[1])).toEqual([{ summary: true }, { summary: true }, { stage: "gather" }, { stage: "-" }]);
+  });
+
+  it("draws lanes in the served order, each with its stage, its score and each part in words", async () => {
+    renderApp(stagedClient(flow, [aStage("print", { confirmed: 2, in_work: 1, suspect: 1, no_card: 2 }), aStage("\u043f\u0435\u0447\u0430\u0442\u044c", { confirmed: 1 }), aStage(null, { no_card: 3 }, null)]), "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    const heads = await screen.findAllByRole("button", { expanded: false, name: /confirmed$/ });
+    expect(heads.map((head) => head.textContent)).toEqual(["print: 2 of 6 confirmed", "\u043f\u0435\u0447\u0430\u0442\u044c: 1 of 1 confirmed", "No stage: 0 of 3 confirmed"]);
+    const lane = laneOf("print");
+    expect(Array.from(lane.querySelectorAll(".timeline-parts .badge"), (badge) => badge.textContent)).toEqual(["2 confirmed", "1 in work", "1 suspect", "2 no card"]);
+    expect(lane.querySelectorAll(".trace-bar-part")).toHaveLength(4);
+    expect(lane.querySelectorAll(".trace-bar-part.is-hollow")).toHaveLength(1);
+  });
+
+  it("lists a lane's steps by distance, a step with no card in its place, hollow, \"No card\": the gaps stay visible (AC-06)", async () => {
+    const steps = [aTraceNode("LAST", [], { distance: 3, rollup: "confirmed" }), aTraceNode("OFF", [], { distance: null, rollup: "no card" }), aTraceNode("GAP", [], { distance: 2, rollup: "no card" }), aTraceNode("FIRST", [], { distance: 1, rollup: "in work" })];
+    renderApp(stagedClient(flow, [aStage("print", { in_work: 1, confirmed: 1, no_card: 2 })], { print: steps }), "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    fireEvent.click(await screen.findByRole("button", { name: /^print/ }));
+    const list = await screen.findByRole("list", { name: "Steps of print" });
+    const rows = Array.from(list.querySelectorAll("li"));
+    expect(rows.map((row) => row.querySelector("a")?.textContent)).toEqual(["FIRST", "GAP", "LAST", "OFF"]);
+    expect(rows[1]?.className).toContain("is-hollow");
+    expect(rows[1]?.textContent).toContain("No card");
+    expect(rows[0]?.className).not.toContain("is-hollow");
+    expect(rows.map((row) => row.querySelector(".timeline-step-place")?.textContent)).toEqual(["Step 2", "Step 3", "Step 4", "Step unknown"]);
+    expect(list.textContent).not.toContain("Distance");
+    expect(rows[1]?.querySelector("a")?.getAttribute("href")).toBe("#/alpha/flow/GAP");
+  });
+
+  it("fills as cards are accepted: a card.accepted event reads the lanes and what is open, to <n> of <n>, no reload (AC-06)", async () => {
+    let done = false;
+    const client = flowClient(flow);
+    client.getTrace.mockImplementation((_project, options) => {
+      const counts = done ? { ...COUNTS, confirmed: 2 } : { ...COUNTS, confirmed: 1, no_card: 1 };
+      const rows = [aTraceNode("A", [], { distance: 0, rollup: "confirmed" }), aTraceNode("B", [], { distance: 1, rollup: done ? "confirmed" : "no card" })];
+      return Promise.resolve(aTrace(options?.stage === undefined ? [] : rows, { stages: [{ stage: "print", distance: 0, counts }], counts }));
+    });
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    expect((await screen.findByRole("button", { name: /^print/ })).textContent).toContain("1 of 2 confirmed");
+    fireEvent.click(screen.getByRole("button", { name: /^print/ }));
+    const list = await screen.findByRole("list", { name: "Steps of print" });
+    expect(list.querySelectorAll(".is-hollow")).toHaveLength(1);
+    done = true;
+    act(() => {
+      tail.emit({ seq: 9, type: "card.accepted", payload: { id: "C-0001", verdict: "briefed" } });
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^print/ }).textContent).toContain("2 of 2 confirmed");
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("list", { name: "Steps of print" }).querySelectorAll(".is-hollow")).toHaveLength(0);
+    });
+  });
+
+  it("keeps the gap rows beside it", async () => {
+    renderApp(stagedClient(flow, [aStage("print", { no_card: 1 })]), "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    await screen.findByRole("button", { name: /^print/ });
+    expect(gapsRegion()).toBeTruthy();
+  });
+
+  it("no card anywhere: lanes at 0 of <n>, and the next step", async () => {
+    renderApp(stagedClient(flow, [aStage("print", { no_card: 2 })]), "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    expect(await screen.findByText("No step has a card yet. Next: open a step and press New card.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^print/ }).textContent).toContain("0 of 2 confirmed");
+  });
+
+  it("no `stage:` anywhere: one lane, and what would make others; a filter of All and No stage", async () => {
+    renderApp(stagedClient(flow, [aStage(null, { no_card: 3 }, null)]), "#/alpha/flow");
+    await drawn("C");
+    await waitFor(() => {
+      expect(within(screen.getByLabelText("Stage")).getAllByRole("option").map((option) => option.textContent)).toEqual(["All stages", "No stage"]);
+    });
+    openTimeline();
+    expect(await screen.findByText("Next: give documents a `stage:` key")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^No stage/ })).toBeTruthy();
+  });
+
+  it("no lane at all says the same next step, and offers no empty list", async () => {
+    renderApp(stagedClient(flow, []), "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    expect(await screen.findByText("Next: give documents a `stage:` key")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /confirmed$/ })).toBeNull();
+  });
+
+  it("hides the Stage select on the Timeline: lanes are the stages there; the other tabs keep it", async () => {
+    renderApp(stagedClient(flow, [aStage("print", { no_card: 1 })]), "#/alpha/flow");
+    await drawn("C");
+    expect(screen.getByLabelText("Stage")).toBeTruthy();
+    openTimeline();
+    expect(screen.queryByLabelText("Stage")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    expect(screen.getByLabelText("Stage")).toBeTruthy();
+  });
+
+  it("reads the summary again each time it mounts, so the score goes with the open lanes' steps", async () => {
+    let done = false;
+    const client = flowClient(flow);
+    client.getTrace.mockImplementation((_project, options) => {
+      const counts = done ? { ...COUNTS, confirmed: 1 } : { ...COUNTS, no_card: 1 };
+      return Promise.resolve(aTrace(options?.stage === undefined ? [] : [aTraceNode("A", [], { distance: 0, rollup: done ? "confirmed" : "no card" })], { stages: [{ stage: "print", distance: 0, counts }], counts }));
+    });
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    fireEvent.click(await screen.findByRole("button", { name: /^print/ }));
+    await screen.findByRole("list", { name: "Steps of print" });
+    fireEvent.click(screen.getByRole("tab", { name: "Canvas" }));
+    done = true;
+    openTimeline();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: /^print/ }).textContent).toContain("1 of 1 confirmed");
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("list", { name: "Steps of print" }).textContent).toContain("Confirmed");
+    });
+  });
+
+  it("closing a panel opened from a step returns focus to that step's link", async () => {
+    renderApp(stagedClient(flow, [aStage("print", { no_card: 1 })], { print: [aTraceNode("A", [], { distance: 0, rollup: "no card" })] }), "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    fireEvent.click(await screen.findByRole("button", { name: /^print/ }));
+    const link = await within(await screen.findByRole("list", { name: "Steps of print" })).findByRole("link", { name: "A" });
+    window.location.hash = "#/alpha/flow/A";
+    const panel = await screen.findByRole("complementary", { name: "A" });
+    fireEvent.click(within(panel).getByRole("button", { name: /^Close/ }));
+    await waitFor(() => {
+      expect(document.activeElement).toBe(link);
+    });
+  });
+
+  it("a failed re-read of the lanes says the score is the last read's, beside the daemon's words, and of a lane's steps too", async () => {
+    const client = stagedClient(flow, [aStage("print", { confirmed: 1 })], { print: [aTraceNode("A", [], { distance: 0, rollup: "confirmed" })] });
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    fireEvent.click(await screen.findByRole("button", { name: /^print/ }));
+    await screen.findByRole("list", { name: "Steps of print" });
+    client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the queue is locked" }));
+    act(() => {
+      tail.emit({ seq: 9, type: "card.moved", payload: { id: "C-0001" } });
+    });
+    const panel = await screen.findByRole("tabpanel", { name: "Timeline" });
+    await waitFor(() => {
+      expect(within(panel).getAllByText(/could not be read again: the queue is locked/)).toHaveLength(2);
+    });
+    for (const line of within(panel).getAllByText(/could not be read again: the queue is locked/)) {
+      expect(line.textContent).toContain("What stands below is from the last read.");
+    }
+  });
+
+  it("says a note once: one the flow's reads show already does not stand again over the lanes", async () => {
+    const note = "C-0009: `GONE` no longer resolves";
+    const client = stagedClient(aFlowView(aLine(["A"]), [], { notes: [note] }), [aStage("print", { no_card: 1 })]);
+    const lanes = client.getTrace.getMockImplementation();
+    client.getTrace.mockImplementation(async (project, options, signal) => ({ ...(await (lanes as NonNullable<typeof lanes>)(project, options, signal)), notes: [note, "only the stages say this"] }));
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    openTimeline();
+    expect(await screen.findByText("only the stages say this")).toBeTruthy();
+    expect(screen.getAllByText(note)).toHaveLength(1);
+  });
+
+  it("a bad [flow]: lanes by name, no distance, the daemon's note", async () => {
+    const note = "specengine.toml:9: [flow]: `start` names no field";
+    const client = stagedClient(flow, [aStage("alpha", { no_card: 1 }, null), aStage("beta", { no_card: 1 }, null)], { alpha: [aTraceNode("A", [], { rollup: "no card" })] });
+    const lanes = client.getTrace.getMockImplementation();
+    client.getTrace.mockImplementation(async (project, options, signal) => ({ ...(await (lanes as NonNullable<typeof lanes>)(project, options, signal)), notes: [note] }));
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    expect(await screen.findByText(note)).toBeTruthy();
+    expect(screen.getAllByRole("button", { name: /confirmed$/ }).map((head) => head.textContent)).toEqual(["alpha: 0 of 1 confirmed", "beta: 0 of 1 confirmed"]);
+    fireEvent.click(screen.getByRole("button", { name: /^alpha/ }));
+    expect((await screen.findByRole("list", { name: "Steps of alpha" })).textContent).toContain("Step unknown");
+  });
+
+  it("loading: a skeleton, aria-busy, until the lanes land", async () => {
+    const held = deferred<ReturnType<typeof aTrace>>();
+    const client = flowClient(flow);
+    client.getTrace.mockImplementationOnce(() => held.promise);
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    expect(document.querySelector('[aria-busy="true"] .skeleton')).not.toBeNull();
+    act(() => {
+      held.resolve(aTrace([], { stages: [aStage("print", { no_card: 1 })] }));
+    });
+    expect(await screen.findByRole("button", { name: /^print/ })).toBeTruthy();
+    expect(document.querySelector('[role="tabpanel"] .skeleton')).toBeNull();
+  });
+
+  it("a failed summary: the Timeline says so in the daemon's words, and Retry reads it", async () => {
+    const client = flowClient(flow);
+    client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the queue is locked" }));
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    const panel = await screen.findByRole("tabpanel", { name: "Timeline" });
+    expect((await within(panel).findByRole("alert")).textContent).toContain("the queue is locked");
+    client.getTrace.mockResolvedValue(aTrace([], { stages: [aStage("print", { no_card: 1 })] }));
+    const retry = within(panel).getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    expect(await within(panel).findByRole("button", { name: /^print/ })).toBeTruthy();
+    // Retry went with the failure: focus lands on the lanes, never the body.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(panel.querySelector(".timeline-lanes"));
+    });
+  });
+
+  it("a failed re-read of the lanes: its Retry hands focus to the lanes", async () => {
+    const client = stagedClient(flow, [aStage("print", { confirmed: 1 })]);
+    const lanes = client.getTrace.getMockImplementation();
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    const panel = await screen.findByRole("tabpanel", { name: "Timeline" });
+    await within(panel).findByRole("button", { name: /^print/ });
+    client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the queue is locked" }));
+    act(() => {
+      tail.emit({ seq: 9, type: "card.moved", payload: { id: "C-0001" } });
+    });
+    await within(panel).findByRole("alert");
+    client.getTrace.mockImplementation(lanes as NonNullable<typeof lanes>);
+    const retry = within(panel).getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(panel.querySelector(".timeline-lanes"));
+    });
+  });
+
+  it("a failed lane: its Retry hands focus to the lanes", async () => {
+    const client = stagedClient(flow, [aStage("print", { no_card: 1 })], { print: [aTraceNode("A", [], { rollup: "no card" })] });
+    const lanes = client.getTrace.getMockImplementation();
+    client.getTrace.mockImplementation((project, options, signal) => (options?.stage === "print" ? Promise.reject(new ClientError({ status: 503, message: "the index is locked" })) : (lanes as NonNullable<typeof lanes>)(project, options, signal)));
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    fireEvent.click(await screen.findByRole("button", { name: /^print/ }));
+    await within(laneOf("print")).findByRole("alert");
+    client.getTrace.mockImplementation(lanes as NonNullable<typeof lanes>);
+    const retry = within(laneOf("print")).getByRole("button", { name: "Retry" });
+    retry.focus();
+    fireEvent.click(retry);
+    await screen.findByRole("list", { name: "Steps of print" });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.querySelector(".timeline-lanes"));
+    });
+  });
+
+  it("a failed lane read: a line in the daemon's words and Retry, the other lanes standing", async () => {
+    const client = stagedClient(flow, [aStage("print", { no_card: 1 }), aStage("bind", { no_card: 1 })], { print: [aTraceNode("A", [], { rollup: "no card" })] });
+    const lanes = client.getTrace.getMockImplementation();
+    let fail = true;
+    client.getTrace.mockImplementation((project, options, signal) => (fail && options?.stage === "print" ? Promise.reject(new ClientError({ status: 503, message: "the index is locked" })) : (lanes as NonNullable<typeof lanes>)(project, options, signal)));
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    fireEvent.click(await screen.findByRole("button", { name: /^print/ }));
+    expect((await within(laneOf("print")).findByRole("alert")).textContent).toContain("the index is locked");
+    expect(screen.getByRole("button", { name: /^bind/ })).toBeTruthy();
+    fail = false;
+    fireEvent.click(within(laneOf("print")).getByRole("button", { name: "Retry" }));
+    expect(await screen.findByRole("list", { name: "Steps of print" })).toBeTruthy();
+  });
+
+  it("closing a lane and opening it again reads nothing unless an event marked it", async () => {
+    const client = stagedClient(flow, [aStage("print", { no_card: 1 })], { print: [aTraceNode("A", [], { rollup: "no card" })] });
+    renderApp(client, "#/alpha/flow");
+    await drawn("C");
+    openTimeline();
+    const head = await screen.findByRole("button", { name: /^print/ });
+    fireEvent.click(head);
+    await screen.findByRole("list", { name: "Steps of print" });
+    fireEvent.click(head);
+    expect(screen.queryByRole("list", { name: "Steps of print" })).toBeNull();
+    fireEvent.click(head);
+    await screen.findByRole("list", { name: "Steps of print" });
+    expect(client.getTrace.mock.calls.filter((call) => call[1]?.stage === "print")).toHaveLength(1);
+  });
+});
+
+describe("when the rollup read fails (trace-views)", () => {
+  it("draws the canvas, boxes without badges, a line with the daemon's words", async () => {
+    const client = flowClient(aFlowView(aLine(["A", "B"]), []));
+    client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the queue is of a newer schema" }));
+    renderApp(client, "#/alpha/flow");
+    await drawn("B");
+    expect((await screen.findByRole("alert")).textContent).toContain("the queue is of a newer schema");
+    expect(box("B").querySelector(".badge")).toBeNull();
+    expect(hasBox("A")).toBe(true);
+    client.getTrace.mockResolvedValue(aTrace([], { stages: [aStage("print")] }));
+    const retry = screen.getByRole("button", { name: /^Retry/ });
+    retry.focus();
+    fireEvent.click(retry);
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
+    // Retry went with the line: focus lands on the results, never the body.
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.querySelector(".flow-results"));
+    });
+  });
+
+  it("a newer queue serves no state and a note: the note shows, every box bare, and nothing anywhere says No card", async () => {
+    const note = "rollups not shown: the queue is of a newer schema";
+    const reads = aFlowView([aFlowNode({ id: "A", distance: 0 }), aFlowNode({ id: "G", distance: 1, holds: 2 })], [], { notes: [note] });
+    expect([reads.nodes[0]?.rollup, reads.nodes[0]?.counts]).toEqual([null, null]);
+    renderApp(flowClient(reads), "#/alpha/flow");
+    await drawn("G");
+    expect(screen.getByText(note)).toBeTruthy();
+    expect(document.querySelector(".flow-box-state, .flow-box-bar, .is-hollow")).toBeNull();
+    expect(screen.queryByText("No card")).toBeNull();
+    expect(box("A").getAttribute("aria-label")).not.toContain("No card");
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    expect(document.querySelector("[data-flow-row] .badge, .flow-list-counts")).toBeNull();
+    expect(screen.queryByText("No card")).toBeNull();
+  });
+
+  it("names each state in the legend once a read served one", async () => {
+    renderApp(flowClient(aFlowView([aFlowNode({ id: "A", distance: 0, rollup: "in work" })], [])), "#/alpha/flow");
+    await drawn("A");
+    const legend = screen.getByRole("region", { name: "Legend" });
+    expect(Array.from(legend.querySelectorAll(".badge"), (badge) => badge.textContent)).toEqual(["Confirmed", "In work", "Suspect", "Departed", "No card"]);
+  });
+});
+
+describe("a read that failed again (trace-views)", () => {
+  const COUNTED = { ...COUNTS, confirmed: 2 };
+
+  it("takes the top's badges and counts away, says why beside the daemon's words, and a Retry brings them back", async () => {
+    const reads = aFlowView([aFlowNode({ id: "A", distance: 0, rollup: "confirmed" }), aFlowNode({ id: "G", distance: 1, holds: 2, counts: COUNTED })], []);
+    const client = flowClient(reads);
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("G");
+    expect(box("A").querySelector(".badge")?.textContent).toBe("Confirmed");
+    client.getFlow.mockRejectedValue(new ClientError({ status: 503, message: "spec: index locked" }));
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    const line = await screen.findByText(/The flow could not be read again: spec: index locked/);
+    expect(line.textContent).toContain("Top-level boxes show no state until it reads.");
+    expect(box("A").querySelector(".badge")).toBeNull();
+    expect(box("G").querySelector(".flow-box-state, .flow-box-bar")).toBeNull();
+    expect(box("A").getAttribute("aria-label")).not.toContain("Confirmed");
+    client.getFlow.mockImplementation(() => Promise.resolve(reads));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(box("A").querySelector(".badge")?.textContent).toBe("Confirmed");
+    });
+  });
+
+  it("takes an open group's boxes' badges away, the top's staying", async () => {
+    const top = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 }), aFlowNode({ id: "A", distance: 1, rollup: "in work" })], []);
+    const group = aGroupRead("G", [aFlowNode({ id: "X", distance: 0, rollup: "confirmed" })]);
+    const client = flowClient(top, { G: group });
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("X");
+    expect(box("X").querySelector(".badge")?.textContent).toBe("Confirmed");
+    client.getFlow.mockImplementation((_project, options) => (options.root === undefined ? Promise.resolve(top) : Promise.reject(new ClientError({ status: 503, message: "spec: index locked" }))));
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    await waitFor(() => {
+      expect(box("X").querySelector(".badge")).toBeNull();
+    });
+    expect(box("A").querySelector(".badge")?.textContent).toBe("In work");
+  });
+
+  /** A flow of one step, read once, then its re-read failed; the client to answer again. */
+  async function failedAfterRead(reads: FlowAnswer) {
+    const client = flowClient(reads);
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    client.getFlow.mockRejectedValue(new ClientError({ status: 503, message: "spec: index locked" }));
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    await screen.findByText(/The flow could not be read again/);
+    return client;
+  }
+
+  it("takes a None row's state away: never the clean word or icon beside a read that failed, and a read brings it back", async () => {
+    const reads = aFlowView(aLine(["A"]), []);
+    const client = flowClient(reads);
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    const badge = () => gapRow("no-start").querySelector(".badge");
+    expect([badge()?.textContent, badge()?.getAttribute("data-tone")]).toEqual(["State: None", "flow-gap-none"]);
+    client.getFlow.mockRejectedValue(new ClientError({ status: 503, message: "spec: index locked" }));
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    await screen.findByText(/The flow could not be read again/);
+    expect([badge()?.textContent, badge()?.getAttribute("data-tone")]).toEqual(["State: Not read", "flow-gap-unknown"]);
+    expect(within(gapsRegion()).queryByText("None")).toBeNull();
+    client.getFlow.mockImplementation(() => Promise.resolve(reads));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(badge()?.getAttribute("data-tone")).toBe("flow-gap-none");
+    });
+  });
+
+  it("takes a found row's count, items and cause away with it, and the rules line", async () => {
+    const reads = aFlowView(aLine(["A"]), [], { gaps: tenGapRows([aFlowGap("unreachable", [["A"]]), { code: "no-start", state: "not_configured", count: null, items: [], cause: "no [[flow.start]] rule" }]) });
+    await failedAfterRead(reads);
+    expect(gapRow("unreachable").querySelector(".badge")?.textContent).toBe("State: Not read");
+    expect(within(gapRow("unreachable")).queryByRole("button", { name: "A" })).toBeNull();
+    expect(screen.queryByText("no [[flow.start]] rule")).toBeNull();
+    expect(screen.queryByText(/rules in specengine.toml/)).toBeNull();
+  });
+
+  it("takes the gap marks off the top's boxes too: a mark from the last read is no mark now", async () => {
+    await failedAfterRead(aFlowView(aLine(["A"]), [], { gaps: tenGapRows([aFlowGap("unreachable", [["A"]])]) }));
+    expect(box("A").querySelector(".flow-mark-gap")).toBeNull();
+    expect(box("A").getAttribute("aria-label")).not.toContain("gap");
+  });
+
+  it("says nothing of boxes on the Timeline, where none stands; the failure line and the unread rows stay", async () => {
+    const reads = aFlowView(aLine(["A"]), []);
+    const client = stagedClient(reads, [aStage("print", { confirmed: 1 })]);
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    openTimeline();
+    await screen.findByRole("button", { name: /^print/ });
+    client.getFlow.mockRejectedValue(new ClientError({ status: 503, message: "spec: index locked" }));
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    const line = await screen.findByText(/The flow could not be read again/);
+    expect(line.textContent).not.toContain("boxes");
+    expect(gapRow("no-start").querySelector(".badge")?.textContent).toBe("State: Not read");
+  });
+
+  it("scopes its sentence to the top level: an open group whose read landed keeps its badges beside it", async () => {
+    const top = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 }), aFlowNode({ id: "A", distance: 1, rollup: "in work" })], []);
+    const group = aGroupRead("G", [aFlowNode({ id: "X", distance: 0, rollup: "confirmed" })]);
+    const client = flowClient(top, { G: group });
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("X");
+    client.getFlow.mockImplementation((_project, options) => (options.root === undefined ? Promise.reject(new ClientError({ status: 503, message: "spec: index locked" })) : Promise.resolve(group)));
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    const line = await screen.findByText(/The flow could not be read again/);
+    expect(line.textContent).toContain("Top-level boxes");
+    expect(box("A").querySelector(".badge")).toBeNull();
+    expect(box("X").querySelector(".badge")?.textContent).toBe("Confirmed");
+  });
+
+  it("the List says no state either, and the legend names none", async () => {
+    const reads = aFlowView([aFlowNode({ id: "A", distance: 0, rollup: "confirmed" })], []);
+    const client = flowClient(reads);
+    const tail = tailOf(client);
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    client.getFlow.mockRejectedValue(new ClientError({ status: 503, message: "spec: index locked" }));
+    act(() => {
+      tail.emit({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    await screen.findByText(/could not be read again/);
+    expect(screen.queryByText("Confirmed")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    expect(document.querySelector('[data-flow-row="A"] .badge')).toBeNull();
+  });
+});
+
+describe("a group read's notes (trace-views)", () => {
+  it("stand with the top's, each once, while its read is shown", async () => {
+    const shared = "rollups not shown: the queue is of a newer schema";
+    const top = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 }), aFlowNode({ id: "K", distance: 1, holds: 1 })], [], { notes: [shared] });
+    const group = aGroupRead("G", aLine(["X"]), [], { notes: [shared, "only the group says this"] });
+    renderApp(flowClient(top, { G: group }), "#/alpha/flow");
+    await drawn("K");
+    expect(screen.queryByText("only the group says this")).toBeNull();
+    fireEvent.click(caret("G"));
+    await drawn("X");
+    expect(screen.getByText("only the group says this")).toBeTruthy();
+    expect(screen.getAllByText(shared)).toHaveLength(1);
+  });
+});
+
+describe("a stage filter over groups, a book of parts (trace-views)", () => {
+  // A nested read: BOOK folds two parts, neither with a stage of its own; `print` cuts across them.
+  const top = aFlowView([aFlowNode({ id: "BOOK", distance: 0, holds: 6 })], []);
+  const book = aGroupRead("BOOK", [aFlowNode({ id: "PART-ONE", distance: 0, holds: 2 }), aFlowNode({ id: "PART-TWO", distance: 1, holds: 2 })]);
+  const partOne = aGroupRead("PART-ONE", [aFlowNode({ id: "STEP-SET", distance: 0, stage: "print" }), aFlowNode({ id: "STEP-CALL", distance: 1, stage: "gather" })]);
+  const lanes = [aStage("gather", { no_card: 1 }), aStage("print", { no_card: 1 }, 1), aStage(null, { no_card: 1 }, 2)];
+
+  async function bookOpen(value: string) {
+    renderApp(stagedClient(top, lanes, {}, { BOOK: book, "PART-ONE": partOne }), "#/alpha/flow");
+    await drawn("PART-TWO");
+    await waitFor(() => {
+      expect(within(screen.getByLabelText("Stage")).getAllByRole("option")).toHaveLength(4);
+    });
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value } });
+  }
+
+  const rows = () => Array.from(document.querySelectorAll<HTMLElement>("[data-flow-row]"), (row) => row.dataset.flowRow);
+
+  it("keeps the parts and their Open in the List, and opening one shows only its steps of the stage", async () => {
+    await bookOpen("stage:print");
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    expect(rows()).toEqual(["BOOK", "PART-ONE", "PART-TWO"]);
+    expect(screen.getByRole("button", { name: "Open PART-ONE" })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 2, name: "BOOK (2 boxes, 0 edges)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open PART-ONE" }));
+    await waitFor(() => {
+      expect(rows()).toContain("STEP-SET");
+    });
+    expect(rows()).not.toContain("STEP-CALL");
+  });
+
+  it("dims neither part on the Canvas, and no name says it is outside: what it holds is not known here", async () => {
+    await bookOpen("stage:print");
+    await waitFor(() => {
+      expect(box("PART-ONE").getAttribute("aria-label")).not.toContain("outside");
+    });
+    expect(box("PART-TWO").getAttribute("aria-label")).not.toContain("outside");
+    expect(document.querySelector(".is-dimmed")).toBeNull();
+    fireEvent.click(caret("PART-ONE"));
+    await drawn("STEP-CALL");
+    expect(box("STEP-CALL").querySelector(".flow-box")?.classList.contains("is-dimmed")).toBe(true);
+    expect(box("STEP-CALL").getAttribute("aria-label")).toContain("outside the stage shown");
+    expect(box("STEP-SET").querySelector(".flow-box")?.classList.contains("is-dimmed")).toBe(false);
+  });
+
+  it("No stage singles out no group: the parts look as under any other stage", async () => {
+    await bookOpen("none");
+    await waitFor(() => {
+      expect(screen.getByLabelText<HTMLSelectElement>("Stage").value).toBe("none");
+    });
+    expect(document.querySelector(".is-dimmed")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    expect(rows()).toEqual(["BOOK", "PART-ONE", "PART-TWO"]);
+  });
+
+  it("a group with a stage of its own other than the one shown dims, and says so; its row and Open stay", async () => {
+    const staged = aGroupRead("BOOK", [aFlowNode({ id: "PART-ONE", distance: 0, holds: 2, stage: "gather" }), aFlowNode({ id: "PART-TWO", distance: 1, holds: 2 })]);
+    renderApp(stagedClient(top, lanes, {}, { BOOK: staged }), "#/alpha/flow");
+    await drawn("PART-TWO");
+    await waitFor(() => {
+      expect(within(screen.getByLabelText("Stage")).getAllByRole("option")).toHaveLength(4);
+    });
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "stage:print" } });
+    await waitFor(() => {
+      expect(box("PART-ONE").getAttribute("aria-label")).toContain("outside the stage shown");
+    });
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    expect(rows()).toContain("PART-ONE");
+  });
+
+  it("keeps an edge between two kept groups, and a group's own edge to a child, in the List", async () => {
+    const wired = aGroupRead("BOOK", [aFlowNode({ id: "PART-ONE", distance: 0, holds: 2 }), aFlowNode({ id: "PART-TWO", distance: 1, holds: 2 }), aFlowNode({ id: "LOOSE", distance: 2, stage: "gather" })], [aFlowEdge({ from: "PART-ONE", to: "PART-TWO" }), aFlowEdge({ from: "BOOK", to: "PART-ONE" }), aFlowEdge({ from: "PART-TWO", to: "LOOSE" })]);
+    renderApp(stagedClient(top, lanes, {}, { BOOK: wired }), "#/alpha/flow");
+    await drawn("LOOSE");
+    await waitFor(() => {
+      expect(within(screen.getByLabelText("Stage")).getAllByRole("option")).toHaveLength(4);
+    });
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "stage:print" } });
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    const lines = Array.from(document.querySelectorAll(".graph-edge-lines li"), (line) => line.textContent);
+    expect(lines.filter((line) => line.startsWith("PART-ONE -> PART-TWO"))).toHaveLength(1);
+    expect(lines.filter((line) => line.startsWith("BOOK -> PART-ONE"))).toHaveLength(1);
+    expect(lines.filter((line) => line.includes("LOOSE"))).toHaveLength(0);
+  });
+});
+
+describe("the stage filter (trace-views)", () => {
+  const reads = aFlowView([aFlowNode({ id: "A", distance: 0, stage: "gather" }), aFlowNode({ id: "B", distance: 1, stage: "print" }), aFlowNode({ id: "C", distance: 2 })], [aFlowEdge({ from: "A", to: "B" }), aFlowEdge({ from: "B", to: "C" })]);
+  const stages = [aStage("gather", { no_card: 1 }), aStage("print", { no_card: 1 }, 1), aStage(null, { no_card: 1 }, null)];
+
+  async function filtered(value: string) {
+    renderApp(stagedClient(reads, stages), "#/alpha/flow");
+    await drawn("C");
+    await waitFor(() => {
+      expect(within(screen.getByLabelText("Stage")).getAllByRole("option")).toHaveLength(4);
+    });
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value } });
+  }
+
+  it("offers All, each stage, No stage, from the served lanes", async () => {
+    await filtered("all");
+    expect(within(screen.getByLabelText("Stage")).getAllByRole("option").map((option) => option.textContent)).toEqual(["All stages", "gather", "print", "No stage"]);
+  });
+
+  it("dims the other boxes on the Canvas, keeping the layout; every box keeps its place and its name says why (AC-08)", async () => {
+    await filtered("all");
+    const place = () => boxes().map((element) => element.style.transform);
+    const before = place();
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "stage:print" } });
+    await waitFor(() => {
+      expect(box("A").querySelector(".flow-box")?.classList.contains("is-dimmed")).toBe(true);
+    });
+    expect(box("B").querySelector(".flow-box")?.classList.contains("is-dimmed")).toBe(false);
+    expect(box("C").querySelector(".flow-box")?.classList.contains("is-dimmed")).toBe(true);
+    expect(box("A").getAttribute("aria-label")).toContain("outside the stage shown");
+    expect(place()).toEqual(before);
+  });
+
+  it("No stage picks what has none; All takes the dimming off", async () => {
+    await filtered("none");
+    await waitFor(() => {
+      expect(box("C").querySelector(".flow-box")?.classList.contains("is-dimmed")).toBe(false);
+    });
+    expect(box("A").querySelector(".flow-box")?.classList.contains("is-dimmed")).toBe(true);
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "all" } });
+    await waitFor(() => {
+      expect(document.querySelector(".is-dimmed")).toBeNull();
+    });
+  });
+
+  it("hides the others in the List, and the edges they end (AC-08)", async () => {
+    await filtered("stage:print");
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    const rows = () => Array.from(document.querySelectorAll<HTMLElement>("[data-flow-row]"), (row) => row.dataset.flowRow);
+    expect(rows()).toEqual(["B"]);
+    expect(document.querySelectorAll(".graph-edge-lines li")).toHaveLength(0);
+    expect(screen.getByRole("heading", { level: 2, name: "Top (1 box, 0 edges)" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "all" } });
+    expect(rows()).toEqual(["A", "B", "C"]);
+    expect(document.querySelectorAll(".graph-edge-lines li")).toHaveLength(2);
+  });
+
+  it("is remembered per project with the tab and the open lanes, and a stage no lane serves now shows all", async () => {
+    const remembered = new Map<string, FlowState>();
+    const memory = { recall: (project: string) => remembered.get(project), remember: (project: string, state: FlowState) => remembered.set(project, state) };
+    const client = stagedClient(reads, stages);
+    const view = render(
+      <ApiProvider client={client}>
+        <FlowView project="alpha" nodeRef={null} memory={memory} />
+      </ApiProvider>,
+    );
+    await drawn("C");
+    await waitFor(() => {
+      expect(within(screen.getByLabelText("Stage")).getAllByRole("option")).toHaveLength(4);
+    });
+    fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "stage:print" } });
+    expect(remembered.get("alpha")?.stage).toBe("stage:print");
+    view.unmount();
+    render(
+      <ApiProvider client={client}>
+        <FlowView project="alpha" nodeRef={null} memory={memory} />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(screen.getByLabelText<HTMLSelectElement>("Stage").value).toBe("stage:print");
+    });
+  });
+
+  it("an edge between a group and its child stays undrawn, and in the List (AC-08)", async () => {
+    const top = aFlowView([aFlowNode({ id: "G", distance: 0, holds: 1 })], []);
+    const group = aGroupRead("G", aLine(["X"]), [aFlowEdge({ from: "G", to: "X" })]);
+    renderApp(flowClient(top, { G: group }), "#/alpha/flow");
+    await drawn("X");
+    expect(document.querySelector(".react-flow__edge")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "List" }));
+    expect(document.querySelector(".graph-edge-lines")?.textContent).toContain("G -> X");
   });
 });

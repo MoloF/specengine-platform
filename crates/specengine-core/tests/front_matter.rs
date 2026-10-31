@@ -716,6 +716,96 @@ fn mistyped_roadmap_keys_are_frontmatter_type_in_extra() {
     }
 }
 
+/// docs/features/trace-views.md "The key `stage:`": typed `Text`, in any
+/// script, kept as written: no `unknown-key`, nothing in `extra`; an ID is
+/// one value a project may write, and nothing reads it as one; a null leaves
+/// the key absent, as every typed key.
+#[test]
+fn a_stage_is_typed_text_in_any_script() {
+    for (yaml, text) in [
+        ("stage: gather", "gather"),
+        ("stage: \"two words\"", "two words"),
+        ("stage: R-12", "R-12"),
+        ("stage: NOT-A-PREFIX-77", "NOT-A-PREFIX-77"),
+        (
+            "stage: \u{0441}\u{0431}\u{043e}\u{0440}",
+            "\u{0441}\u{0431}\u{043e}\u{0440}",
+        ),
+        ("stage: \u{0421}TEP-BIND", "\u{0421}TEP-BIND"),
+        ("stage: \u{53ce}\u{96c6}", "\u{53ce}\u{96c6}"),
+        ("stage: '3'", "3"),
+    ] {
+        let parsed = roadmap_keys(&format!("{yaml}\n"));
+        assert_eq!(codes(&parsed), [], "{yaml}: {:?}", parsed.diagnostics);
+        let document = parsed.document().unwrap();
+        let fields = document.fields.as_ref().expect("fields");
+        assert_eq!(fields.stage.as_deref(), Some(text), "{yaml}");
+        assert_eq!(document.extra.as_deref(), Some(&[][..]), "{yaml}: extra");
+        assert!(fields.links.is_none(), "{yaml}: no link read out of it");
+    }
+    let parsed = roadmap_keys("stage:\n");
+    assert_eq!(codes(&parsed), []);
+    let fields = parsed.document().unwrap().fields.clone().expect("fields");
+    assert_eq!(fields.stage, None);
+    let parsed = roadmap_keys("");
+    let fields = parsed.document().unwrap().fields.clone().expect("fields");
+    assert_eq!(fields.stage, None, "absent stays absent");
+}
+
+/// docs/features/trace-views.md "The key `stage:`": a mistyped value is
+/// `frontmatter-type` at its line, the key absent from `fields` and kept raw
+/// in `extra`, as any typed key.
+#[test]
+fn a_mistyped_stage_is_frontmatter_type_in_extra() {
+    for yaml in [
+        "stage: [gather]",
+        "stage: {name: gather}",
+        "stage: 3",
+        "stage: true",
+    ] {
+        let parsed = roadmap_keys(&format!("{yaml}\n"));
+        assert_eq!(
+            codes(&parsed),
+            [("frontmatter-type".to_owned(), 5)],
+            "{yaml}: {:?}",
+            parsed.diagnostics
+        );
+        let document = parsed.document().unwrap();
+        let fields = document.fields.as_ref().expect("fields");
+        assert_eq!(fields.stage, None, "{yaml}");
+        let extra: Vec<&str> = document
+            .extra
+            .as_ref()
+            .expect("extra")
+            .iter()
+            .map(|entry| entry.key.as_str())
+            .collect();
+        assert_eq!(extra, ["stage"], "{yaml}");
+    }
+}
+
+/// docs/features/trace-views.md "The key `stage:`": a section has none: its
+/// `fields` belong to the document, and a key-shaped line of its body is its
+/// text.
+#[test]
+fn a_section_has_no_stage() {
+    let text = "---\nclass: spec\nid: R-12\nstage: gather\n---\n\n# Item\n\n\
+                ## Cut {#R-13}\n\nstage: print\n";
+    let parsed = parse_str(text, &spec_a());
+    assert_eq!(codes(&parsed), [], "{:?}", parsed.diagnostics);
+    assert_eq!(parsed.nodes.len(), 2, "{:?}", parsed.nodes);
+    let fields = parsed.document().unwrap().fields.as_ref().expect("fields");
+    assert_eq!(fields.stage.as_deref(), Some("gather"));
+    assert!(
+        parsed.nodes[1]
+            .fields
+            .as_ref()
+            .is_none_or(|fields| fields.stage.is_none()),
+        "{:?}",
+        parsed.nodes[1]
+    );
+}
+
 /// RD-2 / TE-2: `fixtures/spec-a`'s `priority: high` is typed now: its
 /// `unknown-key` is gone, `playtest`'s stays.
 #[test]

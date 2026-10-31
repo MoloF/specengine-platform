@@ -5,8 +5,8 @@
 //! --symbol QPATH | --since REV [--depth N]`, exactly one of `id`, `symbol`
 //! and `since` told at run time before any discovery, as `find_symbols`'
 //! forms), `get_trace` (task spec `card-trace`: `spec trace [REF]`) and
-//! `get_flow` (task spec `flow-read`: `spec flow [ROOT] [--depth
-//! N]`), each one call into the CLI library.
+//! `get_flow` (task specs `flow-read`, `trace-views`: `spec flow [ROOT]
+//! [--depth N] [--trace]`), each one call into the CLI library.
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
@@ -228,8 +228,8 @@ writes nothing under the project root. Deterministic: one state, one result; no 
 
 const FLOW_DESCRIPTION: &str = concat!(
     "What a flow diagram draws over the project's spec: ten gap rows, the documents in reading \
-order, and the typed edges between them. The same as `spec flow [ROOT] [--depth N]`: content is \
-the command's output (its note lines first), structuredContent its --json document.
+order, and the typed edges between them. The same as `spec flow [ROOT] [--depth N] [--trace]`: \
+content is the command's output (its note lines first), structuredContent its --json document.
 
 root: read this REF's documents and every document within them by `parent:`; any REF get_node \
 takes, a section landing on its document. Absent: every live document holding or receiving a \
@@ -237,11 +237,14 @@ flow link or selected by a `[flow]` rule, with its parents.
 depth: levels below the roots at most; 0 = the roots only. A deeper document shows as its \
 ancestor there: an edge inside one node joins its `inner`, any other is lifted and merged with a \
 count. Absent: unbounded.
+trace: true: each node's `rollup` and `counts`, get_trace's; `null` without it. A queue that \
+cannot be read leaves them `null` with a note, never an error.
 
 An edge is a link of follows, uses, supplies or depends_on with both ends in scope; `from` and \
 `to` give the reading direction, so a screen picks by `type` what it shows. `distance` counts \
 follows links from the starts, the least of what a node holds, null where none is reached; \
-`group` is the node's parent.
+`group` is the node's parent, `stage` its own `stage:` key; `start` and `end` are true when it or \
+anything it holds is one.
 
 The ten rows come first, in one order, whatever the depth. state: measured, not_configured (the \
 project's `[flow]` has no rule for it, never 0) or cannot (with its cause). A row lists at most \
@@ -256,11 +259,13 @@ result with its one line. ",
 
 const TRACE_DESCRIPTION: &str = concat!(
     "Each node's state against the cards that answer it, and what a change of it marks. The same \
-as `spec trace [REF]`: content is the command's output (its note lines first), structuredContent \
-its --json document {ref, reason, notes, counts, nodes, truncated, omitted}.
+as `spec trace [REF] [--stage S] [--summary]`: content is the command's output (its note lines \
+first), structuredContent its --json document {ref, reason, notes, counts, stages, nodes, \
+truncated, omitted}.
 
 ref: read this REF and the documents it holds by `parent:`; any REF get_node takes. Absent: every \
 live document and every section a card targets.
+stage: only this stage's rows; `-`: the flow steps with none. summary: true: no rows.
 
 A node's cards have a target in it or a section nested in it; cancelled ones are ignored. Its \
 rollup, first match: no card; departed (a card departs from it, its discrepancy not applied or \
@@ -269,6 +274,9 @@ not accepted, or a correction lives); confirmed. A card's mark: open, accepted, 
 or correcting, with on, discrepancy and correction naming what it stands on. A marked card moves \
 and is accepted as any other. uses lists the nodes with a uses link to this one, one level: \
 consequences, never marks.
+
+stages, always whole: a lane per `stage:`, {stage, distance, counts}, by least distance, \
+unreached last; then null, the flow steps with none.
 
 Every state is computed by this read, of this root, and stored nowhere; nothing here changes a \
 status, a finding, a claim or a gate, and whatever is listed is no error. A person clears a mark \
@@ -643,6 +651,8 @@ pub(crate) struct FlowArgs {
     pub root: Option<String>,
     /// Levels below the roots at most; 0 = the roots only. Absent: unbounded.
     pub depth: Option<i64>,
+    /// Each node's `rollup` and `counts`, as `get_trace` reads them.
+    pub trace: Option<bool>,
 }
 
 /// `get_trace` arguments.
@@ -653,6 +663,10 @@ pub(crate) struct TraceArgs {
     /// every section a card targets.
     #[serde(rename = "ref")]
     pub reference: Option<String>,
+    /// Keep the node rows of this stage; `-`: the flow steps with none.
+    pub stage: Option<String>,
+    /// No node rows: the counts and the lanes alone.
+    pub summary: Option<bool>,
 }
 
 #[tool_router(router = read_tools, vis = "pub(crate)")]
@@ -808,6 +822,7 @@ impl SpecEngineServer {
         let request = FlowRequest {
             root: args.root,
             depth: args.depth,
+            trace: args.trace.unwrap_or(false),
         };
         Ok(self
             .call(move |env, globals| {
@@ -832,6 +847,8 @@ impl SpecEngineServer {
     ) -> Result<CallToolResult, ErrorData> {
         let request = TraceRequest {
             reference: args.reference,
+            stage: args.stage,
+            summary: args.summary.unwrap_or(false),
         };
         Ok(self
             .call(move |env, globals| {

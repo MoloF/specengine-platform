@@ -1,0 +1,345 @@
+import { useRef, useState, type ReactNode } from "react";
+import { apiErrorOf } from "../api/client";
+import { useCard, useTrace } from "../api/queries";
+import type { CardWrite, TraceCard, TraceDocument, TraceNode, TraceUse } from "../api/types";
+import { sectionHash } from "../app/routes";
+import { ClearCardDialog, ClearGroupDialog, NewCardDialog } from "../board/CardDialogs";
+import { isCard } from "../board/CardPanel";
+import { canClear, cardStateLook, isMarked } from "../board/labels";
+import { countsText, LAST_READ_WORDS, rollupLook } from "../flow/labels";
+import { useAnnounce } from "../ui/announcer";
+import { Badge } from "../ui/Badge";
+import { Icon } from "../ui/Icon";
+import { ErrorPanel, Skeleton } from "../ui/states";
+import { shownSlot } from "../ui/text";
+import { useFocusLater } from "../ui/useFocusLater";
+import { useRetainedFailure } from "../ui/useRetainedFailure";
+import { useRetryFocus } from "../ui/useRetryFocus";
+
+/** A Clear asked for: the card, the button to go back to; `asked` counts the presses, so a read that failed is read again. */
+interface Clearing {
+  card: TraceCard;
+  trigger: HTMLElement;
+  asked: number;
+}
+
+/** The row of the node asked, never another's: a read of a group holds what it holds besides, by (path, position). */
+function rowOf(trace: TraceDocument, nodeRef: string): TraceNode | undefined {
+  return trace.nodes.find((node) => node.id === nodeRef);
+}
+
+/** Each card of a read once: a card on two rows keeps the mark that says something, one a person can clear before any. */
+function cardsOf(trace: TraceDocument): TraceCard[] {
+  const held = new Map<string, TraceCard>();
+  for (const card of trace.nodes.flatMap((node) => node.cards)) {
+    const seen = held.get(card.id);
+    if (seen === undefined || (isMarked(card) && !isMarked(seen)) || (canClear(card) && !canClear(seen))) {
+      held.set(card.id, card);
+    }
+  }
+  return [...held.values()];
+}
+
+/** Each node using this one once, what it holds using it included. */
+function usesOf(trace: TraceDocument): TraceUse[] {
+  return [...new Map(trace.nodes.flatMap((node) => node.uses).map((use) => [use.id, use])).values()];
+}
+
+/** A dialog's keys stay in the dialog: the view around the block has Esc and `?` of its own. */
+function OwnKeys({ children }: { children: ReactNode }) {
+  return (
+    <div
+      onKeyDown={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** One card: its title, a link to the Board, the word for where it stands, where it is, Clear on a suspect one. */
+function CardLine({ project, card, onClear }: { project: string; card: TraceCard; onClear: (card: TraceCard, trigger: HTMLElement) => void }) {
+  return (
+    <li className="cards-line">
+      <a className="cards-line-title" href={sectionHash(project, "board", card.id)}>
+        <span className="mono cards-line-id">{card.id}</span> <bdi>{shownSlot(card.title)}</bdi>
+      </a>
+      <Badge look={cardStateLook(card)} />
+      <span className="muted cards-line-place">
+        <bdi>{shownSlot(`${card.flow}/${card.column}`)}</bdi>
+      </span>
+      {canClear(card) && (
+        <button
+          type="button"
+          className="button"
+          onClick={(event) => {
+            onClear(card, event.currentTarget);
+          }}
+        >
+          Clear <span className="sr-only">{card.id}</span>
+        </button>
+      )}
+    </li>
+  );
+}
+
+/** A Clear reads its card first: the dialog goes on the revision read now. A card that cannot be read says so, in the daemon's words. */
+function ClearCard({ project, clearing, onClose, onDone }: { project: string; clearing: Clearing; onClose: () => void; onDone: (answer: CardWrite) => void }) {
+  const read = useCard(project, clearing.card.id);
+  const answer = read.data;
+  if (answer === undefined || !isCard(answer)) {
+    const reason = read.error === null ? answer?.reason : apiErrorOf(read.error).message;
+    return reason === undefined ? (
+      <Skeleton label={`Reading ${clearing.card.id}`} lines={1} />
+    ) : (
+      <p className="note" role="alert">
+        <Icon name="alert" />
+        <span>
+          {clearing.card.id} could not be read: {reason}
+        </span>
+      </p>
+    );
+  }
+  return (
+    <OwnKeys>
+      <ClearCardDialog project={project} card={answer} on={clearing.card.on} onClose={onClose} onDone={onDone} />
+    </OwnKeys>
+  );
+}
+
+/**
+ * A node's cards (docs/features/trace-views.md "A node's cards"), beside it in the Flow's panel and the
+ * Spec tree: `getTrace(ref)`'s rollup, each card with its mark, linked to the Board, the nodes using
+ * it, New card. A suspect card takes its Clear here, the dialog of the Board; a group's block adds
+ * Clear all, no effect only. Nothing here is counted: a group says the counts served for it.
+ */
+export function CardsBlock({ project, nodeRef, section, heading: Heading }: { project: string; nodeRef: string; section: "flow" | "tree"; heading: "h2" | "h3" }) {
+  const read = useTrace(project, { ref: nodeRef });
+  const failure = useRetainedFailure(read.error, read.isFetching);
+  const announce = useAnnounce();
+  const focusLater = useFocusLater();
+  const [creating, setCreating] = useState(false);
+  const [clearing, setClearing] = useState<Clearing | null>(null);
+  const [clearingAll, setClearingAll] = useState(false);
+  const [made, setMade] = useState<string | null>(null);
+  const [notes, setNotes] = useState<readonly string[]>([]);
+  const presses = useRef(0);
+  const title = useRef<HTMLHeadingElement>(null);
+  const newButton = useRef<HTMLButtonElement>(null);
+  const allButton = useRef<HTMLButtonElement>(null);
+  const retried = useRetryFocus(read.dataUpdatedAt === 0 ? undefined : read.dataUpdatedAt, () => title.current);
+
+  function retry() {
+    retried();
+    void read.refetch({ cancelRefetch: false });
+  }
+
+  function backTo(target: HTMLElement | null) {
+    focusLater(() => (target?.isConnected === true ? target : title.current));
+  }
+
+  function afterClear(answer: CardWrite, trigger: HTMLElement) {
+    setClearing(null);
+    setNotes(answer.notes);
+    backTo(trigger);
+    announce(`${answer.id ?? "The card"} is cleared`);
+  }
+
+  let body: ReactNode;
+  const trace = read.data;
+  if (trace === undefined) {
+    body =
+      failure === null ? (
+        <Skeleton label={`Reading the cards of ${nodeRef}`} lines={2} />
+      ) : (
+        <ErrorPanel
+          title={`The cards of ${nodeRef} could not be read`}
+          message={apiErrorOf(failure).message}
+          retrying={read.isFetching}
+          attempt={read.errorUpdateCount}
+          onRetry={retry}
+        />
+      );
+  } else if (trace.reason !== null) {
+    body = <p className="verbatim">{trace.reason}</p>;
+  } else {
+    const row = rowOf(trace, nodeRef);
+    const cards = cardsOf(trace);
+    const uses = usesOf(trace);
+    const group = trace.nodes.length > 1;
+    const clearable = cards.filter(canClear).length;
+    body = (
+      <>
+        {/* A state read before a failure is no state now: the failure line below speaks for what stands under it. */}
+        {read.error === null &&
+          (row === undefined ? (
+            <p className="cards-state muted">This read holds no row for {nodeRef}: its state is not known.</p>
+          ) : (
+            <p className="cards-state">{group ? countsText(row.counts) : <Badge look={rollupLook(row.rollup)} />}</p>
+          ))}
+        {trace.notes.length > 0 && (
+          <ul className="note-list" aria-label={`Notes from the daemon on the cards of ${nodeRef}`}>
+            {trace.notes.map((note, index) => (
+              <li key={`${String(index)}-${note}`}>{note}</li>
+            ))}
+          </ul>
+        )}
+        {read.error !== null && (
+          <div className="flow-failed">
+            <p className="note" role="alert">
+              <Icon name="alert" />
+              <span>
+                The cards of {nodeRef} could not be read again: {apiErrorOf(read.error).message}
+                <br />
+                {LAST_READ_WORDS}
+              </span>
+            </p>
+            <button type="button" className="button" aria-disabled={read.isFetching} onClick={read.isFetching ? undefined : retry}>
+              <Icon name="retry" />
+              <span>{read.isFetching ? "Retrying" : "Retry"}</span>
+            </button>
+          </div>
+        )}
+        {cards.length === 0 && row !== undefined && <p className="muted">No card holds this yet. Next: press New card.</p>}
+        {cards.length > 0 && (
+          <ul className="cards-lines" aria-label={`Cards of ${nodeRef}`}>
+            {cards.map((shown) => (
+              <CardLine
+                key={shown.id}
+                project={project}
+                card={shown}
+                onClear={(card, trigger) => {
+                  presses.current += 1;
+                  setClearing({ card, trigger, asked: presses.current });
+                }}
+              />
+            ))}
+          </ul>
+        )}
+        {uses.length > 0 && (
+          <>
+            <p className="field-label">Used by</p>
+            <ul className="cards-lines" aria-label={`Nodes using ${nodeRef}`}>
+              {uses.map((use) => (
+                <li key={use.id} className="cards-line">
+                  <a className="mono cards-line-title" href={sectionHash(project, section, use.id)}>
+                    <bdi>{shownSlot(use.id)}</bdi>
+                  </a>
+                  <Badge look={rollupLook(use.rollup)} />
+                  <span className="muted cards-line-place">{use.cards === 1 ? "1 card" : `${String(use.cards)} cards`}</span>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+        {group && clearable > 0 && (
+          <p className="cards-actions">
+            <button
+              ref={allButton}
+              type="button"
+              className="button"
+              aria-haspopup="dialog"
+              onClick={() => {
+                setClearingAll(true);
+              }}
+            >
+              Clear all
+            </button>
+          </p>
+        )}
+        {clearingAll && (
+          <OwnKeys>
+            <ClearGroupDialog
+              project={project}
+              group={nodeRef}
+              cards={clearable}
+              onClose={() => {
+                setClearingAll(false);
+                backTo(allButton.current);
+              }}
+              onDone={(answer) => {
+                setClearingAll(false);
+                setNotes(answer.notes);
+                backTo(allButton.current);
+                announce(`${String(answer.cleared.length)} cleared under ${answer.group}`);
+              }}
+            />
+          </OwnKeys>
+        )}
+      </>
+    );
+  }
+
+  return (
+    <section className="cards-block" aria-label="Cards">
+      <div className="cards-head">
+        <Heading ref={title} tabIndex={-1} className="card-section-title">
+          Cards
+        </Heading>
+        <button
+          ref={newButton}
+          type="button"
+          className="button button-quiet"
+          aria-haspopup="dialog"
+          onClick={() => {
+            setCreating(true);
+          }}
+        >
+          <Icon name="cardNew" />
+          <span>New card</span>
+        </button>
+      </div>
+      {body}
+      {made !== null && (
+        <p className="note">
+          <Icon name="info" />
+          <span>
+            <span className="mono">{made}</span> created. <a href={sectionHash(project, "board", made)}>Open it on the Board</a>
+          </span>
+        </p>
+      )}
+      {notes.length > 0 && (
+        <ul className="note-list" aria-label="Notes from the daemon on the last write">
+          {notes.map((note, index) => (
+            <li key={`${String(index)}-${note}`}>{note}</li>
+          ))}
+        </ul>
+      )}
+      {clearing !== null && (
+        <ClearCard
+          key={clearing.asked}
+          project={project}
+          clearing={clearing}
+          onClose={() => {
+            setClearing(null);
+            backTo(clearing.trigger);
+          }}
+          onDone={(answer) => {
+            afterClear(answer, clearing.trigger);
+          }}
+        />
+      )}
+      {creating && (
+        <OwnKeys>
+          <NewCardDialog
+            project={project}
+            target={nodeRef}
+            onClose={() => {
+              setCreating(false);
+              backTo(newButton.current);
+            }}
+            onDone={({ id }) => {
+              setCreating(false);
+              backTo(newButton.current);
+              if (id !== null) {
+                setMade(id);
+                announce(`${id} created`);
+              }
+            }}
+          />
+        </OwnKeys>
+      )}
+    </section>
+  );
+}

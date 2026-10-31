@@ -283,7 +283,7 @@ fn te1_golden_inputs_of_spec_a_and_spec_b() {
 // ------------------------------------------------------------------ the base
 
 /// A document carrying every typed front-matter key (the six counted ones
-/// and the 21 never counted), an untyped key, a non-ID subheading, two ID
+/// and the 25 never counted), an untyped key, a non-ID subheading, two ID
 /// sections and a nested one: the base of TE-2 and TE-3.
 const BASE: &str = "\
 ---
@@ -312,6 +312,7 @@ difficulty: hard
 release: v1
 priority: should
 estimate: 2-4
+stage: gather
 links:
   derived_from: [R-12, A-101]
   depends_on: [MEC-SPRINT]
@@ -656,6 +657,9 @@ fn never_counted_changes() -> Vec<(&'static str, &'static str, &'static str)> {
         ("release", "release: v1\n", "release: v2\n"),
         ("priority", "priority: should\n", "priority: must\n"),
         ("estimate", "estimate: 2-4\n", "estimate: 3\n"),
+        // docs/features/trace-views.md AC-01: re-cutting stages raises no
+        // revision and marks no card.
+        ("stage", "stage: gather\n", "stage: print\n"),
     ]
 }
 
@@ -705,6 +709,7 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
         "release",
         "priority",
         "estimate",
+        "stage",
     ]
     .into_iter()
     .collect();
@@ -714,6 +719,43 @@ fn te2_the_never_counted_keys_are_the_typed_keys_minus_the_counted_six() {
         typed.difference(&counted).copied().collect::<BTreeSet<_>>(),
         never
     );
+}
+
+/// docs/features/trace-views.md "The key `stage:`": a stage is project
+/// vocabulary: written, changed or taken away, in any script, an ID or a
+/// value naming nothing, no node's input moves, on the sections neither. M:
+/// counting the key in `norm_input`.
+#[test]
+fn a_stage_is_never_counted_whatever_it_says() {
+    const WRITTEN: &str = "stage: gather\n";
+    let scheme = spec_a();
+    let base = inputs(BASE.as_bytes(), &scheme);
+    assert_eq!(base.len(), 4, "the document and three sections");
+    assert!(base.iter().all(Option::is_some), "the base is hashed");
+    let parsed = parse("docs/spec/lantern.md", BASE.as_bytes(), &scheme);
+    let stage = parsed.document().and_then(|node| node.fields.as_ref());
+    assert_eq!(
+        stage.and_then(|fields| fields.stage.as_deref()),
+        Some("gather"),
+        "the base carries the key this test turns"
+    );
+    for value in [
+        "stage: print\n",
+        "stage: MEC-SPRINT\n",
+        "stage: RM-0048\n",
+        "stage: \u{0441}\u{0431}\u{043e}\u{0440}\n",
+        "stage: \"two words\"\n",
+        "stage:\n",
+        "",
+    ] {
+        let variant = BASE.replacen(WRITTEN, value, 1);
+        assert_ne!(variant, BASE, "the base holds the line");
+        assert_eq!(
+            inputs(variant.as_bytes(), &scheme),
+            base,
+            "{value:?} (M: counting the key in `norm_input`)"
+        );
+    }
 }
 
 /// TE-2: every row gives the base's inputs (all nodes, or the named ones).

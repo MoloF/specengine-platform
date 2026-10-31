@@ -24,7 +24,8 @@ use std::fs;
 use std::path::PathBuf;
 
 use common::read::{
-    ERAS, Era, Session, TOOLS, checked_call, cli_env, conforms, content_text, output_schemas,
+    ERAS, Era, Session, TOOLS, assert_bad_arguments, checked_call, cli_env, conforms, content_text,
+    output_schemas,
 };
 use common::*;
 use git::Sandbox;
@@ -50,9 +51,14 @@ struct Repo {
 
 impl Repo {
     fn new(label: &str) -> Self {
+        Self::of(label, "card-press")
+    }
+
+    /// A scratch git repository of `fixtures/<fixture>`, committed.
+    fn of(label: &str, fixture: &str) -> Self {
         let scratch = Scratch::new(label);
         let git = Sandbox::new(scratch.path());
-        let root = scratch.copy("card-press", "repo");
+        let root = scratch.copy(fixture, "repo");
         git.init(&root);
         git.add_all(&root);
         git.commit(&root, "the fixture");
@@ -283,6 +289,162 @@ fn ac09_get_trace_equals_the_cli_within_its_schema() {
     );
 }
 
+/// docs/features/trace-views.md AC-09, the tool: `list_cards {marks: true}` is
+/// `spec card list --marks`' bytes within the schema, each row's mark what
+/// `get_trace` reads; no `marks`, every mark `null`; this project has no step
+/// and no stage, so `get_trace` holds no lane; git as it was: a read.
+/// M: a tile drawn without its mark.
+#[test]
+fn trace_views_list_cards_marks_equal_the_trace() {
+    let repo = marked("mcp-trace-marks");
+    let git = repo.git_side();
+    let env = repo.env();
+    let globals = Globals::default();
+    for era in ERAS {
+        let mut session = repo.session(era);
+        let schemas = output_schemas(&session.tools());
+        let mut call = |tool: &str, args: Value| {
+            let result = checked_call(&mut session, &schemas, tool, args, &env, &globals);
+            assert_eq!(result["isError"], json!(false), "{tool}: {result}");
+            result["structuredContent"].clone()
+        };
+        let marked = call("list_cards", json!({"marks": true}));
+        let plain = call("list_cards", json!({}));
+        assert_eq!(
+            plain,
+            call("list_cards", json!({"marks": false})),
+            "{era:?}"
+        );
+        let trace = call("get_trace", json!({}));
+        let rows = marked["cards"].as_array().expect("cards");
+        assert_eq!(rows.len(), 3, "{marked}");
+        for (row, node, word) in [
+            (&rows[0], "SHT-FRONT", "accepted"),
+            (&rows[1], "SHT-BACK", "suspect"),
+            (&rows[2], "SHT-INNER", "departed"),
+        ] {
+            assert_eq!(row["mark"], word, "{row}");
+            let shown = trace["nodes"]
+                .as_array()
+                .expect("nodes")
+                .iter()
+                .find(|shown| shown["id"] == node)
+                .expect("the node");
+            let card = &shown["cards"][0];
+            assert_eq!(card["id"], row["id"], "{shown}");
+            for key in ["mark", "on", "discrepancy", "correction"] {
+                assert_eq!(row[key], card[key], "{key}: {row}");
+            }
+        }
+        for row in plain["cards"].as_array().expect("cards") {
+            for key in ["mark", "on", "discrepancy", "correction"] {
+                assert_eq!(row[key], Value::Null, "{key}: {row}");
+            }
+        }
+        assert_eq!(trace["stages"], json!([]), "no step, no stage: {trace}");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+    assert_eq!(repo.git_side(), git, "a read touches no file");
+}
+
+/// The IDs of a document's nodes, in order.
+fn node_ids(document: &Value) -> Vec<&str> {
+    document["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .map(|node| node["id"].as_str().expect("an ID"))
+        .collect()
+}
+
+/// docs/features/trace-views.md "`spec trace`, extended", the tool: `stage` and
+/// `summary` are `spec trace`'s flags: each call the CLI's bytes within the
+/// schema, in both eras, the rows of one stage across both parts, `-` the step
+/// with none, `summary` no row; the lanes whole every time, the book and its
+/// parts in none. A wrong type is a bad argument; git as it was: a read.
+#[test]
+fn trace_views_get_trace_takes_stage_and_summary() {
+    let repo = Repo::of("mcp-trace-lanes", "trace-almanac");
+    let (env, globals) = (repo.env(), Globals::default());
+    card_new(
+        &env,
+        &globals,
+        &CardNewRequest {
+            title: "Notice posted".to_owned(),
+            discipline: Some("editing".to_owned()),
+            targets: vec!["STEP-CALL".to_owned()],
+            now: CLOCK.to_owned(),
+            ..CardNewRequest::default()
+        },
+    )
+    .expect("a card");
+    let git = repo.git_side();
+    let results = parity(
+        &repo,
+        &[
+            json!({}),
+            json!({"stage": "print"}),
+            json!({"stage": "-"}),
+            json!({"stage": "nowhere"}),
+            json!({"summary": true}),
+            json!({"summary": false}),
+            json!({"stage": null, "summary": null}),
+            json!({"stage": "print", "summary": true}),
+            json!({"ref": "PART-GATHER", "stage": "print"}),
+            json!({"ref": "STEP-NOWHERE", "stage": "print"}),
+        ],
+    );
+    assert_eq!(repo.git_side(), git, "a read touches no file");
+    let whole = &results[0]["structuredContent"];
+    let in_work = json!({"no_card": 1, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 0});
+    let empty = json!({"no_card": 2, "in_work": 0, "suspect": 0, "departed": 0, "confirmed": 0});
+    let one = json!({"no_card": 1, "in_work": 0, "suspect": 0, "departed": 0, "confirmed": 0});
+    assert_eq!(
+        whole["stages"],
+        json!([
+            {"stage": "gather", "distance": 0, "counts": in_work},
+            {"stage": "print", "distance": 3, "counts": empty},
+            {"stage": null, "distance": 2, "counts": one},
+        ]),
+        "{whole}"
+    );
+    for (result, rows) in [
+        (&results[1], vec!["STEP-BIND", "STEP-SET"]),
+        (&results[2], vec!["STEP-READ"]),
+        (&results[3], vec![]),
+        (&results[4], vec![]),
+        (&results[7], vec![]),
+        (&results[8], vec!["STEP-SET"]),
+    ] {
+        assert_eq!(result["isError"], json!(false), "{result}");
+        let document = &result["structuredContent"];
+        assert_eq!(node_ids(document), rows, "{document}");
+    }
+    for at in [1, 2, 3, 4, 7] {
+        let document = &results[at]["structuredContent"];
+        assert_eq!(document["stages"], whole["stages"], "always whole");
+        assert_eq!(document["counts"], whole["counts"], "the header whole");
+    }
+    assert_eq!(
+        content_text(&results[4]).lines().count(),
+        4,
+        "the summary line and three lanes: {}",
+        content_text(&results[4])
+    );
+    assert_eq!(results[5], results[0], "`false` is the plain read");
+    assert_eq!(results[6], results[0], "`null` is the plain read");
+    assert_eq!(results[9]["isError"], json!(true), "{}", results[9]);
+
+    let mut session = repo.session(ERAS[0]);
+    for args in [json!({"stage": 3}), json!({"summary": "yes"})] {
+        let reply = session.call("get_trace", args.clone());
+        assert_bad_arguments(&reply, "", &format!("get_trace {args}"));
+    }
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+}
+
 /// "Exit 1 only a REF naming nothing, 2 as `spec flow`": a REF naming nothing
 /// is an error result with the document, what cannot run has none; a wrong
 /// type or an unknown field is a bad argument.
@@ -352,13 +514,14 @@ fn no_queue_reads_no_card_within_the_schema() {
 
 /// AC-10: `tools/list` holds no clear, in both eras, by name or description,
 /// and `get_trace` is a read: `readOnlyHint`, one optional input, `ref`.
-/// `INSTRUCTIONS` holds its clause on the reads' line, 2 040 bytes.
+/// `INSTRUCTIONS` holds its clause on the reads' line, 2 048 bytes since
+/// docs/features/trace-views.md (`get_flow`'s `, trace?`).
 #[test]
 fn ac10_no_tool_clears_and_get_trace_is_a_read() {
     assert_eq!(TOOLS.len(), 29);
     assert!(TOOLS.contains(&"get_trace"));
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(instructions.len(), 2040);
+    assert_eq!(instructions.len(), 2048);
     assert_eq!(
         instructions.matches(TRACE_READ).count(),
         1,
@@ -389,7 +552,7 @@ fn ac10_no_tool_clears_and_get_trace_is_a_read() {
                 .expect("properties")
                 .keys()
                 .collect::<Vec<_>>(),
-            ["ref"],
+            ["ref", "stage", "summary"],
             "{trace}"
         );
         assert_eq!(trace["inputSchema"].get("required"), None, "{trace}");

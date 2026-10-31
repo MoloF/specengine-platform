@@ -29,7 +29,6 @@ import {
   disciplineChoices,
   dropMove,
   lanesOf,
-  marksOf,
   matchesFilters,
   NO_FILTERS,
   openRows,
@@ -39,7 +38,7 @@ import {
   type BoardFilters,
   type BoardLane,
 } from "./filter";
-import { columnTitle, movesFrom, needsLine, NO_CARDS, noteNames } from "./labels";
+import { columnTitle, movesFrom, needsLine, NO_CARDS, noteNames, rowMark } from "./labels";
 import { MoveMenu, type MoveChoice } from "./MoveMenu";
 
 const ABOUT = aboutOf("board");
@@ -189,10 +188,12 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   const moving = useRef(false);
   const menuWasOpen = useRef(false);
   const refusals = useRef(0);
+  const failedBefore = useRef(false);
 
   const cards = useCards(project, withCancelled ? { with_cancelled: true } : {});
   const panel = useCard(project, cardId);
-  const trace = useTrace(project);
+  // The tiles' marks are the list's; only an open panel asks what its targets read, as the list on focus.
+  const trace = useTrace(project, {}, cardId !== null, true);
   const write = useCardWrite(project);
   const today = useToday();
   const failure = useRetainedFailure(cards.error, cards.isFetching);
@@ -203,7 +204,10 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   }, [memory, project, chosenFlow, filters, withCancelled]);
 
   const list = cards.data;
-  const marks = useMemo(() => marksOf(trace.data), [trace.data]);
+  // A read that failed again says no target's state: what it last said may no longer hold.
+  const rollups = useMemo(() => new Map(trace.error === null ? (trace.data?.nodes.map((node) => [node.id, node.rollup]) ?? []) : []), [trace.data, trace.error]);
+  /** The list could not be read: no tile, no mark, whatever the last read said. */
+  const boardFailed = cards.error !== null;
   const all = useMemo(() => list?.cards ?? [], [list]);
   const tabs = useMemo(() => (list === undefined ? [] : tabsOf(list)), [list]);
   const visible = useMemo(() => all.filter((row) => matchesFilters(row, filters)), [all, filters]);
@@ -217,6 +221,8 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
     }
   }
 
+  const panelRow = all.find((row) => row.id === cardId);
+  const shownMark = panelRow === undefined ? null : rowMark(panelRow);
   const tab = tabs.find((candidate) => candidate.name === chosenFlow) ?? tabs[0];
   const flow = tab?.flow;
   const lanes = useMemo(() => (tab === undefined ? [] : lanesOf(tab, visible)), [tab, visible]);
@@ -234,9 +240,13 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   // A card a column of the flow no longer holds: the flow lists no move from there, its read does.
   const menuOutside = menuRow !== undefined && !(flow?.columns.some((column) => column.id === menuRow.column) ?? false);
   const outsideRead = useCard(project, menuOutside ? menuRow.id : null);
-  // A card read away while its menu is open takes the menu with it.
-  if (menu !== null && menuRow === undefined) {
+  // A card read away while its menu is open takes the menu with it; a board that failed takes the menu and a drag.
+  if (menu !== null && (menuRow === undefined || boardFailed)) {
     setMenu(null);
+  }
+  if (dragged !== null && boardFailed) {
+    setDragged(null);
+    setDropAt(null);
   }
 
   function cardElement(id: string): HTMLElement | undefined {
@@ -294,6 +304,11 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
       (cardElement(rovingId ?? "") ?? results.current)?.focus();
     }
     menuWasOpen.current = menu !== null;
+    // The tile that had focus went with the board.
+    if (boardFailed && !failedBefore.current && focusIsLost()) {
+      results.current?.focus();
+    }
+    failedBefore.current = boardFailed;
   });
 
   function openPanel(id: string) {
@@ -643,7 +658,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
         <ClearCardDialog
           project={project}
           card={currentCard(dialog.card)}
-          on={marks.get(dialog.card.id)?.on ?? null}
+          on={shownMark?.on ?? null}
           onClose={closeDialog}
           onActingLine={setActingLine}
           onDone={(answer) => {
@@ -728,7 +743,6 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
                   key={row.id}
                   project={project}
                   row={row}
-                  mark={marks.get(row.id)}
                   today={today}
                   tabbable={row.id === rovingId}
                   selected={row.id === cardId}
@@ -745,18 +759,12 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
     body = (
       <div className={cardId === null ? "board-stage" : "board-stage board-stage-panel"}>
         <div className="board-main">
-          <Notes notes={list.notes.filter((note) => !placedNotes.has(note))} label="Notes from the daemon" />
+          {!boardFailed && <Notes notes={list.notes.filter((note) => !placedNotes.has(note))} label="Notes from the daemon" />}
           <Notes notes={writeNotes} label="Notes from the daemon on the last write" />
-          {list.truncated && (
+          {!boardFailed && list.truncated && (
             <p className="note">
               <Icon name="info" />
               <span>{list.omitted ?? 0} cards not shown.</span>
-            </p>
-          )}
-          {cards.error !== null && (
-            <p className="note" role="alert">
-              <Icon name="alert" />
-              <span>The board could not be read again: {apiErrorOf(cards.error).message}</span>
             </p>
           )}
           {refusal !== null && (
@@ -768,40 +776,47 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
               <p className="verbatim">{refusal.message}</p>
             </div>
           )}
-          {list.cards.length === 0 && (
-            <div className="empty-state">
-              <p>{NO_CARDS}</p>
-            </div>
-          )}
-          {all.length > 0 && visible.length === 0 && (
-            <div className="empty-filter">
-              <p>No card matches the filters.</p>
-              {filtered && (
-                <button type="button" className="button" onClick={clearFilters}>
-                  Clear filters
-                </button>
-              )}
-            </div>
-          )}
-          {tabs.length > 1 ? (
-            <>
-              <Tabs
-                label="Boards"
-                base={tabsBase}
-                selected={tab.name}
-                onSelect={setChosenFlow}
-                tabs={tabs.map((candidate) => ({ id: candidate.name, label: <bdi>{candidate.name}</bdi> }))}
-              />
-              {tabs.map((candidate) => (
-                <TabPanel key={candidate.name} base={tabsBase} id={candidate.name} selected={candidate.name === tab.name}>
-                  {candidate.name === tab.name && boardBody}
-                </TabPanel>
-              ))}
-            </>
+          {cards.error !== null ? (
+            // No tile drawn on the last read: a card may be suspect now, and a clean tile would say it is not.
+            <ErrorPanel title="The board could not be read" message={apiErrorOf(cards.error).message} retrying={cards.isFetching} attempt={cards.errorUpdateCount} onRetry={retry} />
           ) : (
-            boardBody
+            <>
+              {list.cards.length === 0 && (
+                <div className="empty-state">
+                  <p>{NO_CARDS}</p>
+                </div>
+              )}
+              {all.length > 0 && visible.length === 0 && (
+                <div className="empty-filter">
+                  <p>No card matches the filters.</p>
+                  {filtered && (
+                    <button type="button" className="button" onClick={clearFilters}>
+                      Clear filters
+                    </button>
+                  )}
+                </div>
+              )}
+              {tabs.length > 1 ? (
+                <>
+                  <Tabs
+                    label="Boards"
+                    base={tabsBase}
+                    selected={tab.name}
+                    onSelect={setChosenFlow}
+                    tabs={tabs.map((candidate) => ({ id: candidate.name, label: <bdi>{candidate.name}</bdi> }))}
+                  />
+                  {tabs.map((candidate) => (
+                    <TabPanel key={candidate.name} base={tabsBase} id={candidate.name} selected={candidate.name === tab.name}>
+                      {candidate.name === tab.name && boardBody}
+                    </TabPanel>
+                  ))}
+                </>
+              ) : (
+                boardBody
+              )}
+              <p className="muted board-hint">Arrow keys move between cards. Enter opens one, m moves it, n adds a card, ? lists every key.</p>
+            </>
           )}
-          <p className="muted board-hint">Arrow keys move between cards. Enter opens one, m moves it, n adds a card, ? lists every key.</p>
         </div>
         {cardId !== null && (
           <RegionBoundary key={cardId} name="card" heading={cardId}>
@@ -811,8 +826,10 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
               query={panel}
               flowOf={flowOf}
               today={today}
-              mark={marks.get(cardId)}
-              markFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
+              mark={boardFailed ? null : shownMark}
+              rollups={rollups}
+              markFailure={cards.error === null ? null : apiErrorOf(cards.error).message}
+              stateFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
               headingRef={panelHeading}
               onAct={onAct}
               onClose={closePanel}

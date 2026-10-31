@@ -3,6 +3,7 @@ import type { FlowEdge, FlowGap, FlowInner, FlowNode, FlowView } from "../api/ty
 import type { MockCorpus } from "./build";
 import { nameOf, resolveRef } from "./corpus";
 import type { Scenario } from "./scenario";
+import { HARBOR_STAGES } from "./trace";
 
 // The flows of the mock projects (docs/features/flow-canvas.md "Data", Mock): `spec flow --json` as
 // the daemon's browser view sends it (`docs/canon/spec-flow.md` "The read"), uncut. The scope, the
@@ -17,9 +18,10 @@ import type { Scenario } from "./scenario";
 // read holds it.
 // ledger-api: no `[flow]`, so its rows are `not_configured`. `empty`: no flow, the rows stay.
 // `large`: 500 documents in 25 groups, generated, past the canvas's cap once a few open.
+// `spec flow --trace` is joined after this read, in src/mocks/trace.ts, as the CLI joins it.
 
-/** A live document as a read sees it. */
-interface FlowDocument {
+/** A live document as a read sees it; `stage` its front-matter's, project vocabulary. */
+export interface FlowDocument {
   name: string;
   id: string | null;
   kind: string | null;
@@ -27,6 +29,7 @@ interface FlowDocument {
   path: string;
   line: number;
   parent: string | null;
+  stage: string | null;
 }
 
 /** A flow link: `from` and `to` in reading direction, as a read serves it. */
@@ -39,7 +42,7 @@ interface FlowLink {
 }
 
 /** What a project's flow holds besides its documents. */
-interface MockFlow {
+export interface MockFlow {
   documents: FlowDocument[];
   links: FlowLink[];
   /** Marked starts and ends (a `[flow]` table's picks). */
@@ -127,8 +130,8 @@ const LEDGER_LINKS: FlowLink[] = [
   { from: "EP-REFUNDS", to: "POL-WRITES", type: "depends_on" },
 ];
 
-/** The live documents of a corpus: tier 3 and generated stay out, counted. */
-function documentsOf(corpus: MockCorpus): { documents: FlowDocument[]; leftOut: { generated: number; tier3: number } } {
+/** The live documents of a corpus: tier 3 and generated stay out, counted; `stages` the project's `stage:` keys. */
+function documentsOf(corpus: MockCorpus, stages: ReadonlyMap<string, string>): { documents: FlowDocument[]; leftOut: { generated: number; tier3: number } } {
   const leftOut = { generated: 0, tier3: 0 };
   const documents: FlowDocument[] = [];
   for (const { node } of corpus.documents) {
@@ -137,7 +140,7 @@ function documentsOf(corpus: MockCorpus): { documents: FlowDocument[]; leftOut: 
     } else if (node.archived) {
       leftOut.tier3 += 1;
     } else {
-      documents.push({ name: nameOf(node), id: node.id, kind: node.kind, title: node.title, path: node.path, line: node.line, parent: node.parent });
+      documents.push({ name: nameOf(node), id: node.id, kind: node.kind, title: node.title, path: node.path, line: node.line, parent: node.parent, stage: stages.get(nameOf(node)) ?? null });
     }
   }
   return { documents, leftOut };
@@ -155,10 +158,10 @@ function largeFlow(): MockFlow {
   for (let group = 1; group <= 25; group += 1) {
     const name = `ZONE-GEN-${pad(group)}`;
     const word = STAGE_WORDS[group % STAGE_WORDS.length] ?? "Stage";
-    documents.push({ name, id: name, kind: "domain", title: `${word} zone ${String(group)}`, path: `docs/spec/zones/z${pad(group)}/README.md`, line: 1, parent: null });
+    documents.push({ name, id: name, kind: "domain", title: `${word} zone ${String(group)}`, path: `docs/spec/zones/z${pad(group)}/README.md`, line: 1, parent: null, stage: null });
     for (let step = 1; step <= 19; step += 1) {
       const id = `${name}-${pad(step)}`;
-      documents.push({ name: id, id, kind: "mechanic", title: `${word} step ${String(step)}`, path: `docs/spec/zones/z${pad(group)}/s${pad(step)}.md`, line: 1, parent: name });
+      documents.push({ name: id, id, kind: "mechanic", title: `${word} step ${String(step)}`, path: `docs/spec/zones/z${pad(group)}/s${pad(step)}.md`, line: 1, parent: name, stage: word.toLowerCase() });
       if (step > 1 && step !== 7 && step !== 8 && step !== 9 && step !== 15) {
         links.push(follows(`${name}-${pad(step - 1)}`, id));
       }
@@ -181,12 +184,12 @@ function harborFlow(corpus: MockCorpus, scenario: Scenario): MockFlow {
   if (scenario === "large") {
     return largeFlow();
   }
-  const { documents, leftOut } = documentsOf(corpus);
+  const { documents, leftOut } = documentsOf(corpus, HARBOR_STAGES);
   return { documents, links: HARBOR_LINKS, starts: ["RULE-HIGH-WATER"], ends: ["MEC-MOORING"], steps: [], rows: documents.length === 0 ? NO_STEP : HARBOR_ROWS, leftOut };
 }
 
 function ledgerFlow(corpus: MockCorpus, scenario: Scenario): MockFlow {
-  const { documents, leftOut } = documentsOf(corpus);
+  const { documents, leftOut } = documentsOf(corpus, new Map());
   return { documents, links: scenario === "empty" ? [] : LEDGER_LINKS, starts: [], ends: [], steps: [], rows: NO_RULES, leftOut };
 }
 
@@ -285,6 +288,9 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
   const holds = new Map<string, number>();
   const least = new Map<string, number>();
   const gaps = new Map<string, number>();
+  // A shown node is a start or an end when it or anything it holds is one (`docs/features/trace-views.md` "Folded start and end").
+  const startsShown = new Set<string>();
+  const endsShown = new Set<string>();
   for (const name of scope) {
     if (!inScope(name)) {
       continue;
@@ -292,6 +298,12 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
     const shown = shownAs(name);
     if (shown !== name) {
       holds.set(shown, (holds.get(shown) ?? 0) + 1);
+    }
+    if (starts.includes(name)) {
+      startsShown.add(shown);
+    }
+    if (flow.ends.includes(name)) {
+      endsShown.add(shown);
     }
     if (named.has(name)) {
       gaps.set(shown, (gaps.get(shown) ?? 0) + 1);
@@ -353,11 +365,14 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
           line: document.line,
           distance: least.get(name) ?? null,
           group: parent !== null && inScope(parent) ? parent : null,
-          start: starts.includes(name),
-          end: flow.ends.includes(name),
+          stage: document.stage,
+          start: startsShown.has(name),
+          end: endsShown.has(name),
           holds: holds.get(name) ?? 0,
           inner: types,
           gaps: gaps.get(name) ?? 0,
+          rollup: null,
+          counts: null,
         },
       ];
     })
@@ -377,12 +392,17 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
   };
 }
 
+/** A project's flow for a scenario, its documents and links as written. */
+export function mockFlowOf(slug: string, corpus: MockCorpus, scenario: Scenario): MockFlow {
+  return slug === "harbor-sim" ? harborFlow(corpus, scenario) : ledgerFlow(corpus, scenario);
+}
+
 /** The mock's flow read; a ROOT naming nothing answers the exit-1 document, as data; a bad depth is refused 503. */
 export function flowOf(slug: string, corpus: MockCorpus, scenario: Scenario, options: FlowOptions): FlowView {
   if (options.depth !== undefined && (!Number.isInteger(options.depth) || options.depth < 0)) {
     throw new ClientError({ status: 503, message: `spec: --depth ${String(options.depth)}: the depth is an integer of 0 or more` });
   }
-  const flow = slug === "harbor-sim" ? harborFlow(corpus, scenario) : ledgerFlow(corpus, scenario);
+  const flow = mockFlowOf(slug, corpus, scenario);
   if (options.root !== undefined && !flow.documents.some((document) => document.name === options.root)) {
     const resolved = resolveRef(corpus, options.root);
     const reason = "reason" in resolved ? resolved.reason : `${options.root} is no document of this flow`;

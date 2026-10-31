@@ -62,7 +62,9 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// error results and the tasks line's `; the three above take task_id` (113
 /// bytes): 2 047 bytes; task spec `card-trace` adds `get_trace` to the reads
 /// (25 bytes) and cuts report_drift's `; evidence computed, never typed` (32
-/// bytes): 2 040 bytes.
+/// bytes): 2 040 bytes; task spec `trace-views` adds `trace?` to `get_flow`
+/// (8 bytes): 2 048 bytes, the limit, so `get_trace`'s `stage?, summary?` (18
+/// bytes) stay in its schema alone.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
@@ -72,8 +74,8 @@ Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
-get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?) = flow; get_trace(ref?) = \
-trace.
+get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?, trace?) = flow; \
+get_trace(ref?) = trace.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):

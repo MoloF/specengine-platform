@@ -242,7 +242,11 @@ pub use worktree::{
 /// `links` and `fields.links`; no column. A stored row holds
 /// `unknown-link-type` for a plain `follows`, and an unchanged file is
 /// re-parsed only on a new stamp (`docs/features/flow-links.md`, "Index").
-pub const INDEX_FORMAT: u32 = 13;
+///
+/// 14: the typed front-matter key `stage` (`fields.stage`), no longer kept
+/// in `extra`; no column
+/// (`docs/features/trace-views.md`, "The key `stage:`").
+pub const INDEX_FORMAT: u32 = 14;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.

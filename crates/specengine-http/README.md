@@ -34,7 +34,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
 | GET `.../bundle` | `node_ids`, `budget` | `spec bundle --json` |
 | GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json`, browser view |
-| GET `.../flow` | `root`, `depth` | `spec flow --json`, browser view |
+| GET `.../flow` | `root`, `depth`, `trace` | `spec flow --json`, browser view |
 | GET `.../check` | -- | `spec check --json`, the plain run |
 | GET `.../health` | -- | `spec health --json` (`health*.md`) |
 | GET `.../roadmap` | `release`, `pool` | `spec roadmap --json`, browser view |
@@ -75,7 +75,7 @@ One request per project at a time, projects in parallel, beside the CLI's and MC
 
 - Repositories of one slug share `<slug>.db` and its events: a tail carries every one's (the UI refetches).
 - U+0002 to U+0004 in the corpus can fake a snippet's hit or cut, capped too.
-- One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's per-host connections.
+- One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's host connections.
 - A database replaced under a live stream: its events up to the stream's cursor are never sent.
 - In the project's turn, other reads wait: `check`, `health` walk the tree; a package read runs `git diff --no-index` per changed node.
 

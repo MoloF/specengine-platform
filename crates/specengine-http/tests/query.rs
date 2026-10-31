@@ -227,7 +227,7 @@ fn a_card_query_outside_its_names_or_values_is_a_400_before_any_call() {
     let a = scratch.repo("spec-a", "a", "main");
     let home = scratch.home("fresh");
     let server = Server::serve(&home, scratch.path(), &[&a]);
-    let names = "flow, column, discipline, assignee, no_target, with_cancelled";
+    let names = "flow, column, discipline, assignee, no_target, with_cancelled, marks";
     let cases: Vec<(String, String)> = vec![
         (
             format!("{P}/cards?limit=1"),

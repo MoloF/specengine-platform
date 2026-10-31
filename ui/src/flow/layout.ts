@@ -1,6 +1,6 @@
 import type { FlowEdge, FlowNode, FlowView } from "../api/types";
-import { BOX_HEIGHT, BOX_WIDTH, CANVAS_LIMIT, compareText, nodeName } from "../graph/layout";
-import { curveMiddle, curvePath, curvePoints, loopPath, LOOP_DEPTH, roundedPath, type Point, type Rect, type Run } from "./geometry";
+import { BOX_WIDTH, CANVAS_LIMIT, compareText, nodeName } from "../graph/layout";
+import { BOX_HEIGHT, curveMiddle, curvePath, curvePoints, loopPath, LOOP_DEPTH, roundedPath, type Point, type Rect, type Run } from "./geometry";
 import { edgeWords } from "./labels";
 
 // The Flow's layout (docs/features/flow-canvas.md "Layout"), hand-written and pure: the reads in

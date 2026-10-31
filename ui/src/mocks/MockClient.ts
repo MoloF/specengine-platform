@@ -60,7 +60,6 @@ import {
   cancelCardIn,
   cardListOf,
   cardShowOf,
-  cardTraceOf,
   changeElsewhere,
   clearCardGroupIn,
   clearCardIn,
@@ -69,12 +68,12 @@ import {
   mockBoard,
   moveCardIn,
   type MockBoard,
+  type Settled,
   type StoredCard,
-  type TraceFacts,
 } from "./cards";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { editorialScenario } from "./editorial";
-import { flowOf } from "./flow";
+import { flowOf, mockFlowOf } from "./flow";
 import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
@@ -83,6 +82,7 @@ import { lockDiffOf } from "./lockDiff";
 import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
+import { traceOf, withTrace } from "./trace";
 
 export interface MockOptions {
   /** The clock; fixture times are relative to it at construction. */
@@ -217,10 +217,11 @@ export class MockClient implements SpecEngineClient {
     return graphOf(this.project(project).corpus, options);
   }
 
-  /** The project's flow for the scenario (src/mocks/flow.ts); the daemon serves its own (`docs/canon/spec-flow.md` "The read"). */
+  /** The project's flow for the scenario (src/mocks/flow.ts), each box's rollup joined with `trace`; the daemon serves its own (`docs/canon/spec-flow.md` "The read"). */
   async getFlow(project: string, options: FlowOptions): Promise<FlowView> {
     await this.read();
-    return structuredClone(flowOf(project, this.project(project).corpus, this.scenario, options));
+    const view = flowOf(project, this.project(project).corpus, this.scenario, options);
+    return structuredClone(options.trace === true ? withTrace(view, this.traced(project, {})) : view);
   }
 
   /** The mock's task list; the daemon serves its own (`docs/features/ui-live-tasks.md` "Data"). */
@@ -450,7 +451,7 @@ export class MockClient implements SpecEngineClient {
   /** The project's cards (src/mocks/cards.ts); the daemon serves its own (`docs/features/board-ui.md` "Routes"). */
   async getCards(project: string, options: CardsOptions = {}): Promise<CardList> {
     await this.read();
-    return structuredClone(cardListOf(this.board(project), options));
+    return structuredClone(cardListOf(this.board(project), options, this.settled(project)));
   }
 
   /** One card with its history; an unknown C answers the exit-1 document, as data. */
@@ -533,25 +534,30 @@ export class MockClient implements SpecEngineClient {
     return clearCardGroupIn(this.board(project), body, this.stamp(), this.heldBy(project, body.group));
   }
 
-  /** Marks and rollups joined per read (src/mocks/cards.ts); the daemon serves its own (`docs/features/card-trace.md`). */
+  /** Marks and rollups joined per read (src/mocks/trace.ts); the daemon serves its own (`docs/features/card-trace.md`). */
   async getTrace(project: string, options: TraceOptions = {}): Promise<TraceDocument> {
     await this.read();
-    return structuredClone(cardTraceOf(this.board(project), options, this.traceFacts(project)));
+    return structuredClone(this.traced(project, options));
   }
 
-  /** What a trace read takes from the project's corpus and queue. */
-  private traceFacts(project: string): TraceFacts {
+  /** `spec trace` over the project's corpus, flow and queue. */
+  private traced(project: string, options: TraceOptions): TraceDocument {
+    const { corpus } = this.project(project);
+    const walked = flowOf(project, corpus, this.scenario, {}).nodes;
+    return traceOf(this.board(project), options, {
+      flow: mockFlowOf(project, corpus, this.scenario),
+      corpus,
+      distance: new Map(walked.map((node) => [node.id ?? node.path, node.distance])),
+      settled: this.settled(project),
+    });
+  }
+
+  /** Whether a discrepancy of the project's queue is settled. */
+  private settled(project: string): Settled {
     const entry = this.project(project);
-    const rows = treeOf(entry.corpus).nodes;
-    return {
-      place: (id) => {
-        const row = rows.find((candidate) => candidate.id === id);
-        return row === undefined ? null : { title: row.title, path: row.path };
-      },
-      settled: (discrepancy) => {
-        const status = entry.proposals.find(({ review }) => review.id === discrepancy)?.review.status;
-        return status === "applied" || status === "rejected";
-      },
+    return (discrepancy) => {
+      const status = entry.proposals.find(({ review }) => review.id === discrepancy)?.review.status;
+      return status === "applied" || status === "rejected";
     };
   }
 

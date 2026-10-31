@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { ACTING_KEY } from "../board/acting";
 import { MockClient } from "./MockClient";
@@ -183,10 +183,10 @@ describe("the Board over the mock", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
     await closed();
     const link = await screen.findByRole("link", { name: "Open it on the Board" });
-    expect(link.getAttribute("href")).toBe("#/harbor-sim/board/C-0011");
+    expect(link.getAttribute("href")).toBe("#/harbor-sim/board/C-0013");
     fireEvent.click(link);
-    window.location.hash = "#/harbor-sim/board/C-0011";
-    const source = await shows("C-0011");
+    window.location.hash = "#/harbor-sim/board/C-0013";
+    const source = await shows("C-0013");
     expect(within(source).getByRole("link", { name: "MEC-TIDES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDES");
   });
 
@@ -283,14 +283,14 @@ describe("the card against its brief, over the mock", () => {
     type(dialog, "Estimate", "2");
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
     await closed();
-    const made = await shows("C-0011");
+    const made = await shows("C-0013");
     expect(made.textContent).toContain("Correct Mooring fees table");
-    expect(columnOf("C-0011")).toBe("draft");
+    expect(columnOf("C-0013")).toBe("draft");
     await waitFor(() => {
       expect(within(card("C-0005")).getByText("Correcting")).toBeTruthy();
     });
-    expect(within(card("C-0005")).getByText("Accepted")).toBeTruthy();
-    expect(await screen.findByText("C-0011 corrects C-0005: copy/draft")).toBeTruthy();
+    expect(within(card("C-0005")).queryByText("Accepted")).toBeNull();
+    expect(await screen.findByText("C-0013 corrects C-0005: copy/draft")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
   });
 
@@ -333,8 +333,36 @@ describe("the card against its brief, over the mock", () => {
     await expect(client.clearCardGroup("harbor-sim", { group: "MEC-TIDES", reason: "x", as: "Ivo Brandt" })).rejects.toThrow("no suspect card under `MEC-TIDES`");
     expect((await client.clearCardGroup("harbor-sim", { group: "DOM-BERTHS", reason: "Numbering only.", as: "Ivo Brandt" })).cleared).toEqual(expect.arrayContaining(["C-0002", "C-0005"]));
     const { nodes } = await client.getTrace("harbor-sim");
-    expect(nodes.flatMap((node) => node.cards).filter((row) => row.on !== null).map((row) => row.id)).toEqual(["C-0010"]);
+    expect([...new Set(nodes.flatMap((node) => node.cards).filter((row) => row.on !== null).map((row) => row.id))]).toEqual(["C-0010"]);
     expect((await client.getTrace("harbor-sim", { ref: "NOPE" })).reason).toBe("no node `NOPE`");
+  });
+
+  it("a card on a target gone shows its mark and takes its Clear on the page; cleared, a note stays and the mark goes (RM-0048)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    renderMock("normal", "#/harbor-sim/board/C-0008");
+    const panel = await screen.findByRole("complementary", { name: "Crane reach diagram" });
+    const tile = await shows("C-0008");
+    expect(tile.querySelector(".board-card-mark")?.textContent).toBe("SuspectMEC-OLD-SLIPWAY");
+    fireEvent.click(await within(panel).findByRole("button", { name: "Clear" }));
+    const dialog = await clearDialog();
+    type(dialog, "Reason", "The slipway is out of the book.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    await closed();
+    await waitFor(() => {
+      expect(card("C-0008").querySelector(".board-card-mark")).toBeNull();
+    });
+  });
+
+  it("marks every tile from the list: a whole trace is read only for a panel, so a board of tiles needs none", async () => {
+    const { client } = renderMock("normal", "#/harbor-sim/board");
+    const getTrace = vi.spyOn(client, "getTrace");
+    await shows("C-0002");
+    expect(card("C-0002").querySelector(".board-card-mark")?.textContent).toBe("SuspectDOM-BERTHS");
+    expect(card("C-0005").querySelector(".board-card-mark")?.textContent).toBe("SuspectMEC-MOORING");
+    expect(card("C-0010").querySelector(".board-card-mark")?.textContent).toBe("DepartedPR-0041");
+    expect(within(card("C-0005")).queryByText("Accepted")).toBeNull();
+    expect(within(card("C-0011")).getByText("Accepted")).toBeTruthy();
+    expect(getTrace).not.toHaveBeenCalled();
   });
 
   it("a re-estimate of a card holding one says why, and stands alone", async () => {

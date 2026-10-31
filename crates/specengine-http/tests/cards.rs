@@ -1247,6 +1247,122 @@ fn what_cannot_run_is_a_503_with_the_clis_line() {
     assert_eq!(press.state(), before, "nothing stored");
 }
 
+/// docs/features/trace-views.md AC-09, the route: `marks=true` is `spec card
+/// list --marks --json`'s bytes: a clean card open, a suspect one on an
+/// uncommitted edit named by its target, a card on a section taken out suspect
+/// too, where `GET trace` has no node to stand it on. With no flag the
+/// keys are `null`. `marks=x` is a 400 naming it. M: a tile drawn without its
+/// mark.
+#[test]
+fn trace_views_marks_are_the_clis_document() {
+    let press = Press::new("cards-marks");
+    for (title, target) in [
+        ("Notices", "SHT-INNER"),
+        ("Lead story", "SHT-FRONT"),
+        ("Masthead", "SHT-FRONT-HEAD"),
+    ] {
+        press.done(
+            "cards",
+            &json!({"title": title, "discipline": "copy", "target": [target]}),
+        );
+    }
+    replace(
+        &press.root,
+        "docs/spec/sht-front.md",
+        "## The masthead {#SHT-FRONT-HEAD}\n\nThe masthead stays the same from week to week.\n",
+        "",
+    );
+    replace(
+        &press.root,
+        "docs/spec/sht-front.md",
+        "the masthead and the lead story",
+        "the masthead, the lead story and the weather",
+    );
+    let run = press.cli(&["card", "list", "--marks"]);
+    run.code(0);
+    let reply = press.get("cards?marks=true");
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    assert_eq!(reply.text(), run.document(), "the CLI's bytes");
+    let rows = reply.json()["cards"].clone();
+    let marks: Vec<(Value, Value, Value)> = rows
+        .as_array()
+        .expect("cards")
+        .iter()
+        .map(|row| (row["title"].clone(), row["mark"].clone(), row["on"].clone()))
+        .collect();
+    assert_eq!(
+        marks,
+        [
+            (json!("Notices"), json!("open"), Value::Null),
+            (json!("Lead story"), json!("suspect"), json!("SHT-FRONT")),
+            (json!("Masthead"), json!("suspect"), json!("SHT-FRONT-HEAD")),
+        ],
+        "{}",
+        reply.text()
+    );
+    for row in press.get("cards").status(200).json()["cards"]
+        .as_array()
+        .expect("cards")
+    {
+        for key in ["mark", "on", "discrepancy", "correction"] {
+            assert_eq!(row[key], Value::Null, "{key}: {row}");
+        }
+    }
+    assert_eq!(
+        press.get("cards?marks=false").status(200).text(),
+        press.get("cards").status(200).text(),
+        "`false` is the plain list"
+    );
+    for query in [
+        "cards?marks=yes",
+        "cards?marks=",
+        "cards?marks=true&marks=true",
+    ] {
+        let reply = press.get(query);
+        assert_eq!(reply.status, 400, "{query}: {}", reply.text());
+        assert!(
+            reply.error_message().contains("marks"),
+            "{query}: {}",
+            reply.error_message()
+        );
+    }
+}
+
+/// docs/features/trace-views.md "The board tile": no marks, no tiles: an index
+/// that cannot be read is `GET cards?marks=true`'s 503, the CLI's line, so
+/// `ErrorPanel` stands where a clean board would; the plain list, which reads
+/// no index, stands. M: a tile drawn without its mark.
+#[test]
+fn trace_views_an_index_that_cannot_be_read_is_a_503() {
+    let press = Press::new("cards-marks-503");
+    press.done(
+        "cards",
+        &json!({"title": "Lead story", "discipline": "copy", "target": ["SHT-FRONT"]}),
+    );
+    let reply = press.get("cards?marks=true");
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    assert_eq!(reply.json()["cards"][0]["mark"], "open");
+    let done = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(common::data_dir(&press.home).join("card-press.db"))
+        .arg("ALTER TABLE files RENAME TO files_gone;")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(done.status.success(), "{done:?}");
+    let reply = press.get("cards?marks=true");
+    assert_eq!(reply.status, 503, "{}", reply.text());
+    assert_eq!(
+        reply.error_message(),
+        press.cannot(&["card", "list", "--marks"])
+    );
+    assert_eq!(
+        press.get("cards").status(200).json()["cards"]
+            .as_array()
+            .map(Vec::len),
+        Some(1)
+    );
+}
+
 /// "States": a bad `[card]` is that 503 on every card route, the CLI's
 /// `<config>:<line>:` line, and fails no other read (docs/canon/cards.md
 /// "Config"). The config is read again per call: no restart.

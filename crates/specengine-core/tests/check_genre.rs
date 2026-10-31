@@ -702,6 +702,9 @@ fn the_flow_sources_name_no_kind_or_prefix_of_a_fixture() {
         "kit",
         "journey",
         "tariff",
+        "yearbook",
+        "committee",
+        "errand",
     ] {
         assert!(kinds.contains(kind), "{kind} is a fixture kind: {kinds:?}");
     }

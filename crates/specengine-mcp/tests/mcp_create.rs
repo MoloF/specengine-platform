@@ -405,10 +405,11 @@ fn ac17_the_instructions_name_create_within_their_budget() {
     // 2 047 since docs/features/card-store.md (the cards line in, two
     // clauses out; the change line untouched); 2 040 since
     // docs/features/card-trace.md (`get_trace` in, the evidence clause out;
-    // the change line untouched).
+    // the change line untouched); 2 048 since docs/features/trace-views.md
+    // (`get_flow`'s `, trace?`; the change line untouched).
     assert_eq!(CHANGE_LINE.len(), 171);
     assert!(specengine_mcp::INSTRUCTIONS.contains(CHANGE_LINE));
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let discover = result(&session.request("server/discover", json!({}))).clone();
     assert_eq!(
@@ -458,7 +459,7 @@ fn ac17_the_probes_build_sends_instructions_alone() {
     // docs/features/review-form.md; 2 048 since docs/features/flow-read.md;
     // 2 047 since docs/features/card-store.md; 2 040 since
     // docs/features/card-trace.md.
-    assert_eq!(sent.len(), 2040);
+    assert_eq!(sent.len(), 2048);
     assert_eq!(2048 - sent.len(), 8, "the room left");
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());

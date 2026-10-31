@@ -14,6 +14,10 @@
 //! - "Clearing", the refusals: a card not suspect, a stale revision, a body
 //!   the CLI cannot decode.
 //!
+//! - docs/features/trace-views.md "Routes and types": `stage`, `summary`, each
+//!   form `spec trace --json`'s bytes on `fixtures/trace-almanac`, the lanes
+//!   always whole, a read never whole on load.
+//!
 //! The door's scan and the whole-state compare are `door.rs`; methods, fence,
 //! keys their own files. Every expected value below is worked out from the
 //! spec, never read back from a run.
@@ -379,6 +383,85 @@ fn the_query_of_the_route() {
     let reply = press.get(&format!("trace?ref={}", encode_component(look_alike)));
     assert_eq!(reply.status, 503, "{}", reply.text());
     assert_eq!(reply.error_message(), line);
+}
+
+/// "Routes and types", the route's `stage` and `summary`: each form is the
+/// CLI's document byte for byte; `summary=true` serves the lanes and no node,
+/// a stage two rows across both parts; a bad query is a 400 naming it. AC-05's
+/// daemon half: what the page reads on load is the one that holds no node.
+#[test]
+fn trace_views_stage_and_summary_are_the_clis_document() {
+    const ALMANAC: &str = "/api/projects/trace-almanac";
+    let other_script = "\u{043f}\u{0435}\u{0447}\u{0430}\u{0442}\u{044c}";
+    let scratch = Scratch::new("trace-lanes");
+    let root = scratch.repo("trace-almanac", "almanac", "main");
+    replace(
+        &root,
+        "docs/spec/step-sort.md",
+        "stage: gather\n",
+        &format!("stage: {other_script}\n"),
+    );
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let encoded = encode_component(other_script);
+    let forms: Vec<(String, Vec<&str>)> = vec![
+        (String::new(), vec![]),
+        ("?stage=print".to_owned(), vec!["--stage", "print"]),
+        ("?stage=-".to_owned(), vec!["--stage", "-"]),
+        ("?stage=nowhere".to_owned(), vec!["--stage", "nowhere"]),
+        (format!("?stage={encoded}"), vec!["--stage", other_script]),
+        ("?summary=true".to_owned(), vec!["--summary"]),
+        ("?summary=false".to_owned(), vec![]),
+        (
+            "?stage=print&summary=true".to_owned(),
+            vec!["--stage", "print", "--summary"],
+        ),
+        (
+            "?ref=PART-GATHER&stage=print".to_owned(),
+            vec!["PART-GATHER", "--stage", "print"],
+        ),
+    ];
+    for (query, flags) in &forms {
+        let mut args = vec!["trace"];
+        args.extend_from_slice(flags);
+        let run = spec_json(&home, &cwd, &root, &args);
+        let reply = server.get(&format!("{ALMANAC}/trace{query}"));
+        assert_eq!(reply.status, 200, "{query}: {}", reply.text());
+        assert_eq!(reply.text(), run.document(), "{query}: the CLI's bytes");
+    }
+    let summary = server.get(&format!("{ALMANAC}/trace?summary=true")).json();
+    assert_eq!(summary["nodes"], json!([]), "{summary}");
+    assert_eq!(
+        summary["stages"].as_array().map(Vec::len),
+        Some(4),
+        "{summary}"
+    );
+    let print = server.get(&format!("{ALMANAC}/trace?stage=print")).json();
+    let names: Vec<&str> = print["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .map(|node| node["id"].as_str().expect("an ID"))
+        .collect();
+    assert_eq!(names, ["STEP-BIND", "STEP-SET"], "{print}");
+    assert_eq!(print["stages"], summary["stages"], "always whole");
+
+    for (query, parameter) in [
+        ("?stage=print&stage=gather", "stage"),
+        ("?summary=yes", "summary"),
+        ("?summary=", "summary"),
+        ("?summary=true&summary=true", "summary"),
+    ] {
+        let path = format!("{ALMANAC}/trace{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+        assert!(
+            reply.error_message().contains(parameter),
+            "{path}: {}",
+            reply.error_message()
+        );
+    }
 }
 
 /// "browser view": past the CLI's cut the daemon serves every node's every

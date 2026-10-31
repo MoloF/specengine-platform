@@ -17,6 +17,12 @@
 //! a fresh `HOME` still empty after; `depth=-1`, a look-alike, a `project:`
 //! REF are a 503 whose message is the CLI's line verbatim.
 //!
+//! docs/features/trace-views.md AC-03, the route: `trace=true` is `spec flow
+//! --trace --json`'s bytes on `fixtures/trace-almanac` with cards made through
+//! the routes, `rollup` and `counts` `null` with no flag or `trace=false`, and
+//! `null` with a note on a newer queue, a 200. M: `rollup` filled without the
+//! flag.
+//!
 //! Key sets are `daemon_keys.rs`; the route's list, `methods.rs` and
 //! `projects.rs`.
 
@@ -25,11 +31,14 @@ mod common;
 use std::path::Path;
 
 use common::{
-    Reply, Run, Scratch, Server, beyond_daemon, encode_component, spec, spec_json, write,
+    Reply, Run, Scratch, Server, beyond_daemon, data_dir, encode_component, spec, spec_json, write,
 };
 use serde_json::{Value, json};
 
 const P: &str = "/api/projects/flow-gaps";
+
+/// The almanac's project.
+const ALMANAC: &str = "/api/projects/trace-almanac";
 
 /// The daemon's `path` against `spec --root root <args> --json` (exit 0 ->
 /// 200, exit 1 -> 404): the same bytes, the JSON headers, the same bytes
@@ -76,6 +85,154 @@ fn cannot_run(home: &Path, cwd: &Path, root: &Path, args: &[&str]) -> String {
     run.code(2);
     assert_eq!(run.stdout, "", "exit 2 prints no document: {}", run.show());
     run.stderr.trim_end_matches('\n').to_owned()
+}
+
+/// A daemon over a repository of `fixtures/trace-almanac` holding an accepted
+/// card on `STEP-CALL` and an open one on `STEP-SET`, each made by a route.
+fn almanac(
+    scratch: &Scratch,
+) -> (
+    Server,
+    std::path::PathBuf,
+    std::path::PathBuf,
+    std::path::PathBuf,
+) {
+    let root = scratch.repo("trace-almanac", "almanac", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let cards = format!("{ALMANAC}/cards");
+    for (path, body) in [
+        (
+            "",
+            json!({"title": "Notice posted", "discipline": "editing",
+                "target": ["STEP-CALL"]}),
+        ),
+        (
+            "/C-0001/assign",
+            json!({"assignee": "ana", "reviewer": "ben"}),
+        ),
+        ("/C-0001/move", json!({"to": "review"})),
+        ("/C-0001/accept", json!({"as": "ben", "briefed": true})),
+        (
+            "",
+            json!({"title": "Pages set", "discipline": "editing", "target": ["STEP-SET"]}),
+        ),
+    ] {
+        server
+            .stage(&format!("{cards}{path}"), &body.to_string())
+            .status(200);
+    }
+    (server, root, home, cwd)
+}
+
+/// AC-03, the route: every form of `trace` is the CLI's document byte for
+/// byte, at every depth, and a read with no flag holds no `rollup`.
+/// M: `rollup` filled without the flag.
+#[test]
+fn trace_views_the_flag_is_the_clis_document_byte_for_byte() {
+    let scratch = Scratch::new("flow-trace");
+    let (server, root, home, cwd) = almanac(&scratch);
+    let forms: [(&str, &[&str]); 7] = [
+        ("", &[]),
+        ("?trace=false", &[]),
+        ("?trace=true", &["--trace"]),
+        (
+            "?root=BOOK-ALMANAC&trace=true",
+            &["BOOK-ALMANAC", "--trace"],
+        ),
+        (
+            "?root=BOOK-ALMANAC&depth=1&trace=true",
+            &["BOOK-ALMANAC", "--depth", "1", "--trace"],
+        ),
+        (
+            "?trace=true&depth=0&root=BOOK-ALMANAC",
+            &["BOOK-ALMANAC", "--depth", "0", "--trace"],
+        ),
+        (
+            "?root=BOOK-ALMANAC&depth=1",
+            &["BOOK-ALMANAC", "--depth", "1"],
+        ),
+    ];
+    for (query, flags) in forms {
+        let mut args = vec!["flow"];
+        args.extend_from_slice(flags);
+        same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{ALMANAC}/flow{query}"),
+            &args,
+        );
+    }
+    let document: Value = server.get(&format!("{ALMANAC}/flow")).json();
+    for node in document["nodes"].as_array().expect("nodes") {
+        assert_eq!(node["rollup"], Value::Null, "{node}");
+        assert_eq!(node["counts"], Value::Null, "{node}");
+    }
+    let folded: Value = server
+        .get(&format!(
+            "{ALMANAC}/flow?root=BOOK-ALMANAC&depth=1&trace=true"
+        ))
+        .json();
+    let part = folded["nodes"][0].clone();
+    assert_eq!(part["id"], "PART-GATHER", "{folded}");
+    assert_eq!(part["start"], json!(true), "{part}");
+    assert_eq!(part["rollup"], "no card", "{part}");
+    assert_eq!(
+        part["counts"],
+        json!({"no_card": 1, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1}),
+        "the daemon counts what it holds: {part}"
+    );
+
+    for (query, parameter) in [
+        ("?trace=yes", "trace"),
+        ("?trace=", "trace"),
+        ("?trace=true&trace=false", "trace"),
+    ] {
+        let path = format!("{ALMANAC}/flow{query}");
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+        assert!(
+            reply.error_message().contains(parameter),
+            "{path}: {}",
+            reply.error_message()
+        );
+    }
+}
+
+/// "Rules and edge cases": `trace=true` with a newer queue is a 200, `rollup`
+/// and `counts` `null` with a note, the CLI's bytes, never a failed flow.
+#[test]
+fn trace_views_a_newer_queue_is_a_note() {
+    let scratch = Scratch::new("flow-trace-schema");
+    let (server, root, home, cwd) = almanac(&scratch);
+    let done = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(data_dir(&home).join("trace-almanac.db"))
+        .arg("PRAGMA user_version = 9999;")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(done.status.success(), "{done:?}");
+    let reply = same(
+        &server,
+        &home,
+        &cwd,
+        &root,
+        &format!("{ALMANAC}/flow?trace=true"),
+        &["flow", "--trace"],
+    );
+    let document: Value = reply.json();
+    assert_eq!(
+        document["notes"].as_array().map(Vec::len),
+        Some(1),
+        "{document}"
+    );
+    for node in document["nodes"].as_array().expect("nodes") {
+        assert_eq!(node["rollup"], Value::Null, "{node}");
+        assert_eq!(node["counts"], Value::Null, "{node}");
+    }
 }
 
 /// AC-07: every form is the CLI's document byte for byte, on the planted

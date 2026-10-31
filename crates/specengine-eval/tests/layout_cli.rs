@@ -2899,8 +2899,13 @@ fn import_s_typed_key_table_is_core_s_and_core_reads_by_it() {
         .map(|(key, kind)| (key, format!("{kind:?}")))
         .collect();
     assert_eq!(import, core, "import's typed keys vs core's, in order");
-    // docs/features/roadmap-items.md RD-2: `release`, `priority`, `estimate`.
-    assert_eq!(core.len(), 30);
+    // docs/features/roadmap-items.md RD-2: `release`, `priority`, `estimate`;
+    // docs/features/trace-views.md "The key `stage:`": `stage`, typed `Text`.
+    assert_eq!(core.len(), 31);
+    assert!(
+        core.contains(&("stage".to_owned(), "Text".to_owned())),
+        "{core:?}"
+    );
 
     let scheme = IdScheme::new(vec![PrefixSpec::number("X", "x", 1)]).unwrap();
     let codes = |key: &str, value: &str| -> Vec<DiagnosticCode> {

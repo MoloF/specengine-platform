@@ -69,10 +69,11 @@ enum TypedKey {
     Release,
     Priority,
     Estimate,
+    Stage,
 }
 
 /// Every [`TypedKey`], in core's table order.
-const TYPED: [TypedKey; 30] = [
+const TYPED: [TypedKey; 31] = [
     TypedKey::Id,
     TypedKey::Kind,
     TypedKey::Class,
@@ -103,6 +104,7 @@ const TYPED: [TypedKey; 30] = [
     TypedKey::Release,
     TypedKey::Priority,
     TypedKey::Estimate,
+    TypedKey::Stage,
 ];
 
 impl TypedKey {
@@ -124,7 +126,8 @@ impl TypedKey {
             | Self::Source
             | Self::Acceptance
             | Self::Release
-            | Self::Priority => CoreType::Text,
+            | Self::Priority
+            | Self::Stage => CoreType::Text,
             Self::Tier | Self::Rev => CoreType::Integer,
             Self::Scope | Self::Aliases => CoreType::List,
             Self::Parent | Self::WorkingAnswer | Self::Canon => CoreType::Reference,

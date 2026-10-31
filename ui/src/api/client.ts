@@ -82,13 +82,15 @@ export interface GraphOptions {
 }
 
 /**
- * `spec flow`: ROOT, `--depth N`. The screen always sends a `depth`: the top is `depth=0`, a group
- * `root=G&depth=1`; a whole-flow read, which fails at volume, is never made
- * (`docs/features/flow-canvas.md` "Reads").
+ * `spec flow`: ROOT, `--depth N`, `--trace`. The screen always sends a `depth`: the top is `depth=0`,
+ * a group `root=G&depth=1`; a whole-flow read, which fails at volume, is never made
+ * (`docs/features/flow-canvas.md` "Reads"). `trace` is sent only as true, and the Flow always sends
+ * it (`docs/features/trace-views.md` "Flow badges").
  */
 export interface FlowOptions {
   root?: string;
   depth?: number;
+  trace?: boolean;
 }
 
 /** `spec round new`: `--limit N`, 1 to 200 (absent: the daemon's default, 20). */
@@ -104,16 +106,25 @@ export interface RoundOptions {
 export type RoadmapOptions = { release: string; pool?: never } | { pool: true; release?: never };
 
 /**
- * `spec card list`: `--with-cancelled`, sent only as true. The Board reads every card of the project
- * once and filters that answer, so no other flag is sent (`docs/features/board-ui.md` "Board").
+ * `spec card list`: `--with-cancelled`, `--marks`, each sent only as true. The Board reads every card
+ * of the project once and filters that answer, so no other flag is sent
+ * (`docs/features/board-ui.md` "Board"), and always asks the marks, so a tile is never drawn without
+ * one (`docs/features/trace-views.md` "The board tile").
  */
 export interface CardsOptions {
   with_cancelled?: boolean;
+  marks?: boolean;
 }
 
-/** `spec trace [REF]`: the node and what it holds; absent, every live document and every section a card targets. */
+/**
+ * `spec trace [REF] [--stage S] [--summary]`: the node and what it holds; absent, every live document
+ * and every section a card targets. `stage` keeps one lane's rows, `-` those with none; `summary`, sent
+ * only as true, no row at all (`docs/features/trace-views.md` "Data").
+ */
 export interface TraceOptions {
   ref?: string;
+  stage?: string;
+  summary?: boolean;
 }
 
 /**
@@ -165,7 +176,7 @@ export interface SpecEngineClient {
   getBundle(project: string, options: BundleOptions, signal?: AbortSignal): Promise<BundleView>;
   /** GET /api/projects/:p/graph (crates/specengine-http/README.md "Endpoints"; the browser view, uncut) */
   getGraph(project: string, options: GraphOptions, signal?: AbortSignal): Promise<GraphView>;
-  /** GET /api/projects/:p/flow (docs/canon/spec-flow.md "The read"; = spec flow --json, the browser view, uncut; 404 the exit-1 document) */
+  /** GET /api/projects/:p/flow (docs/canon/spec-flow.md "The read"; = spec flow [--trace] --json, the browser view, uncut; 404 the exit-1 document) */
   getFlow(project: string, options: FlowOptions, signal?: AbortSignal): Promise<FlowView>;
   /** GET /api/projects/:p/tasks (crates/specengine-http/README.md "Endpoints"; = spec task list --json) */
   getTasks(project: string, signal?: AbortSignal): Promise<TaskList>;
@@ -193,7 +204,7 @@ export interface SpecEngineClient {
    * whatever each answer became, a refused one in the daemon's words; no AbortSignal.
    */
   stageRoundAnswers(project: string, answers: RoundAnswerBody[]): Promise<RoundAnswersOutcome>;
-  /** GET /api/projects/:p/cards (docs/features/board-ui.md "Routes"; = spec card list [--with-cancelled] --json, the browser view) */
+  /** GET /api/projects/:p/cards (docs/features/board-ui.md "Routes"; = spec card list [--with-cancelled] [--marks] --json, the browser view) */
   getCards(project: string, options?: CardsOptions, signal?: AbortSignal): Promise<CardList>;
   /** GET /api/projects/:p/cards/:id (docs/features/board-ui.md "Routes"; = spec card show C --history --json, uncut; 404 the exit-1 document) */
   getCard(project: string, id: string, signal?: AbortSignal): Promise<Card | CardNotFound>;
@@ -214,7 +225,7 @@ export interface SpecEngineClient {
   clearCard(project: string, id: string, body: CardClearBody): Promise<CardWrite>;
   /** POST /api/projects/:p/trace/clear (docs/features/card-trace.md "Clearing"; no effect only, one event per card) */
   clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite>;
-  /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] --json, the browser view; 404 the exit-1 document) */
+  /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] [--stage S] [--summary] --json, the browser view; 404 the exit-1 document) */
   getTrace(project: string, options?: TraceOptions, signal?: AbortSignal): Promise<TraceDocument>;
   /**
    * GET /api/projects/:p/events (SSE): `onEvent` per queue event of the project until the returned

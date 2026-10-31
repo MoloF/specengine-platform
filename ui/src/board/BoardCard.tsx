@@ -1,12 +1,12 @@
 import { memo, type DragEvent, type MouseEvent } from "react";
-import type { CardRow, TraceCard } from "../api/types";
+import type { CardRow } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier } from "../ui/keys";
 import { shownSlot } from "../ui/text";
 import { isOverdue } from "./due";
-import { ACCEPTED, BY_HAND, CANCELLED, markLook, OVERDUE, UNASSIGNED } from "./labels";
+import { ACCEPTED, BY_HAND, CANCELLED, markLook, markNames, OVERDUE, rowMark, UNASSIGNED } from "./labels";
 
 /** What a card asks of its board. */
 export interface CardActions {
@@ -39,8 +39,10 @@ function Source({ project, targets }: { project: string; targets: readonly strin
 }
 
 /**
- * One card (docs/features/board-ui.md "Board"): title, assignee, due, estimate, its source. The
- * board holds one tab stop: every card but the roving one, and the controls inside each, are out of
+ * One card (docs/features/board-ui.md "Board"): title, assignee, due, estimate, its source. A mark
+ * stands first and names what it is on, the list's own, so a card on a gone target has it too; an
+ * accepted card's word yields to it (docs/features/trace-views.md "The board tile"). The board holds
+ * one tab stop: every card but the roving one, and the controls inside each, are out of
  * the Tab order, and keys or a click reach them; `m` is the Move button, Enter the title's link, the
  * panel the source. A click anywhere on it but a control opens the panel. A closed card neither
  * moves nor drags: accepted and cancelled take no write, and say so. Memoised: an arrow key or a drag
@@ -49,7 +51,6 @@ function Source({ project, targets }: { project: string; targets: readonly strin
 export const BoardCard = memo(function BoardCard({
   project,
   row,
-  mark,
   today,
   tabbable,
   selected,
@@ -59,8 +60,6 @@ export const BoardCard = memo(function BoardCard({
 }: {
   project: string;
   row: CardRow;
-  /** What the last trace read says of it, when it says anything. */
-  mark: TraceCard | undefined;
   today: string;
   tabbable: boolean;
   selected: boolean;
@@ -70,7 +69,9 @@ export const BoardCard = memo(function BoardCard({
   actions: CardActions;
 }) {
   const closed = row.accepted || row.cancelled;
-  const markShown = mark === undefined ? null : markLook(mark);
+  const mark = rowMark(row);
+  const markShown = mark === null ? null : markLook(mark);
+  const named = mark === null ? null : markNames(mark);
 
   function onClick(event: MouseEvent<HTMLElement>) {
     if (!(event.target instanceof Element) || event.target.closest("a, button") === null) {
@@ -105,7 +106,7 @@ export const BoardCard = memo(function BoardCard({
         data-column={row.column}
         tabIndex={tabbable ? 0 : -1}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${row.id}: ${shownSlot(row.title)}`}
+        aria-label={`${row.id}: ${shownSlot(row.title)}${markShown === null ? "" : `, ${markShown.label}`}`}
         draggable={!closed}
         onClick={onClick}
         onFocus={() => {
@@ -114,12 +115,17 @@ export const BoardCard = memo(function BoardCard({
         onDragStart={onDragStart}
         onDragEnd={actions.onDragEnd}
       >
+        {markShown !== null && (
+          <p className="board-card-mark">
+            <Badge look={markShown} />
+            {named !== null && <bdi className="mono board-card-marked">{shownSlot(named)}</bdi>}
+          </p>
+        )}
         <div className="board-card-top">
           <span className="mono board-card-id">{row.id}</span>
-          {row.accepted && <Badge look={ACCEPTED} />}
+          {row.accepted && markShown === null && <Badge look={ACCEPTED} />}
           {row.cancelled && <Badge look={CANCELLED} />}
           {isOverdue(row, today) && <Badge look={OVERDUE} />}
-          {markShown !== null && <Badge look={markShown} />}
         </div>
         <h3 className="board-card-title">
           <a href={sectionHash(project, "board", row.id)} tabIndex={-1} draggable={false} onClick={onTitleClick}>

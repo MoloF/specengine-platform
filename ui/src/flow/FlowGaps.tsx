@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { FlowGap } from "../api/types";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { gapLook, gapMeaning, gapsInOrder, namesDocuments, needsRulesLine } from "./labels";
+import { GAP_NOT_READ, gapLook, gapMeaning, gapsInOrder, namesDocuments, needsRulesLine } from "./labels";
 
 /** Items a row shows before "Show all". */
 export const GAP_ITEMS_SHOWN = 8;
@@ -61,18 +61,18 @@ function GapItem({ item, buttons, marked, onActivate }: { item: readonly string[
   );
 }
 
-function GapRow({ gap, marked, onActivate }: { gap: FlowGap; marked: ReadonlySet<string>; onActivate: (item: readonly string[]) => void }) {
+function GapRow({ gap, unread, marked, onActivate }: { gap: FlowGap; unread: boolean; marked: ReadonlySet<string>; onActivate: (item: readonly string[]) => void }) {
   const [all, setAll] = useState(false);
   const meaning = gapMeaning(gap.code);
-  const items = all ? gap.items : gap.items.slice(0, GAP_ITEMS_SHOWN);
+  const items = unread ? [] : all ? gap.items : gap.items.slice(0, GAP_ITEMS_SHOWN);
   return (
     <li className="flow-gap">
       <p className="flow-gap-head">
         <span className="mono flow-gap-code">{gap.code}</span>
-        <Badge name="State" look={gapLook(gap)} />
+        <Badge name="State" look={unread ? GAP_NOT_READ : gapLook(gap)} />
       </p>
       {meaning !== null && <p className="flow-gap-meaning">{meaning}</p>}
-      {gap.cause !== null && <p className="verbatim flow-gap-cause">{gap.cause}</p>}
+      {!unread && gap.cause !== null && <p className="verbatim flow-gap-cause">{gap.cause}</p>}
       {items.length > 0 && (
         <ul className="flow-gap-items">
           {items.map((item) => (
@@ -80,7 +80,7 @@ function GapRow({ gap, marked, onActivate }: { gap: FlowGap; marked: ReadonlySet
           ))}
         </ul>
       )}
-      {!all && gap.items.length > GAP_ITEMS_SHOWN && (
+      {!unread && !all && gap.items.length > GAP_ITEMS_SHOWN && (
         <button
           type="button"
           className="link-button"
@@ -98,10 +98,11 @@ function GapRow({ gap, marked, onActivate }: { gap: FlowGap; marked: ReadonlySet
 /**
  * The gap rows beside the canvas, outside its tabs (docs/features/flow-canvas.md "Gap rows"): the
  * top read's ten as served, unknown states last. A row changes no status or control (ADR-0012): it
- * says what was found, and each name takes you to it.
+ * says what was found, and each name takes you to it. `unread`: the top read's last fetch failed, so
+ * no row says a state, an item or a cause: a None from the last read is no None now.
  */
-export function FlowGaps({ gaps, marked, onActivate }: { gaps: readonly FlowGap[]; marked: ReadonlySet<string>; onActivate: (item: readonly string[]) => void }) {
-  const rules = needsRulesLine(gaps);
+export function FlowGaps({ gaps, unread, marked, onActivate }: { gaps: readonly FlowGap[]; unread: boolean; marked: ReadonlySet<string>; onActivate: (item: readonly string[]) => void }) {
+  const rules = unread ? null : needsRulesLine(gaps);
   return (
     <section className="flow-gaps" aria-label="Gaps">
       <h2 className="card-section-title">Gaps</h2>
@@ -113,7 +114,7 @@ export function FlowGaps({ gaps, marked, onActivate }: { gaps: readonly FlowGap[
       )}
       <ul className="flow-gap-list">
         {gapsInOrder(gaps).map((gap) => (
-          <GapRow key={gap.code} gap={gap} marked={marked} onActivate={onActivate} />
+          <GapRow key={gap.code} gap={gap} unread={unread} marked={marked} onActivate={onActivate} />
         ))}
       </ul>
     </section>

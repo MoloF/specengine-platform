@@ -1076,6 +1076,8 @@ pub(crate) struct TraceDocument {
     pub notes: Vec<String>,
     /// Over the listed nodes.
     pub counts: TraceCounts,
+    /// A lane per stage, always whole, the flow steps with none last.
+    pub stages: Vec<TraceStage>,
     pub nodes: Vec<TraceNode>,
     pub truncated: bool,
     /// The rows the cut left out: nodes, and the cards and `uses` of a
@@ -1091,6 +1093,16 @@ pub(crate) struct TraceCounts {
     pub suspect: usize,
     pub departed: usize,
     pub confirmed: usize,
+}
+
+/// One lane: the listed nodes of a stage.
+#[derive(JsonSchema)]
+pub(crate) struct TraceStage {
+    /// `null`: the flow steps with no stage.
+    pub stage: Option<String>,
+    /// The least of its nodes'; `null` where none is reached.
+    pub distance: Option<usize>,
+    pub counts: TraceCounts,
 }
 
 /// A node's computed state.
@@ -1125,6 +1137,10 @@ pub(crate) struct TraceNode {
     pub id: String,
     pub title: Option<String>,
     pub path: String,
+    /// Its document's `stage:`.
+    pub stage: Option<String>,
+    /// Its document's `follows` links from the starts; `null` when unreached.
+    pub distance: Option<usize>,
     pub rollup: TraceRollup,
     /// Over the node and the documents it holds by `parent:`.
     pub counts: TraceCounts,
@@ -1223,7 +1239,11 @@ pub(crate) struct FlowNode {
     pub distance: Option<usize>,
     /// The shown node holding it.
     pub group: Option<String>,
+    /// Its own `stage:`.
+    pub stage: Option<String>,
+    /// It or something it holds is a source of the walk.
     pub start: bool,
+    /// It or something it holds is an end.
     pub end: bool,
     /// The documents folded into it.
     pub holds: usize,
@@ -1231,6 +1251,10 @@ pub(crate) struct FlowNode {
     /// The documents this read's gap rows name among what it holds, itself
     /// included, each once.
     pub gaps: usize,
+    /// `get_trace`'s state of it; `null` without `trace`, or no state read.
+    pub rollup: Option<TraceRollup>,
+    /// `get_trace`'s counts of it and what it holds; `null` as `rollup`.
+    pub counts: Option<TraceCounts>,
 }
 
 /// The edges inside a node, of one type.
@@ -1336,6 +1360,12 @@ pub(crate) struct CardRowShape {
     pub revision: String,
     pub accepted: bool,
     pub cancelled: bool,
+    /// Its mark over all its targets; `null` without `marks`, or cancelled.
+    pub mark: Option<TraceMark>,
+    /// The target a suspect, correcting or departed mark is on.
+    pub on: Option<String>,
+    pub discrepancy: Option<String>,
+    pub correction: Option<String>,
 }
 
 /// One move open to a card.

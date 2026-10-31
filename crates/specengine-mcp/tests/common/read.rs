@@ -626,6 +626,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                         assignee: text("assignee"),
                         no_target: args["no_target"] == json!(true),
                         with_cancelled: args["with_cancelled"] == json!(true),
+                        marks: args["marks"] == json!(true),
                     },
                 )
                 .map(|outcome| Outcome::CardList(Box::new(outcome))),
@@ -942,6 +943,7 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             &FlowRequest {
                 root: text("root"),
                 depth: number("depth"),
+                trace: args["trace"] == json!(true),
             },
         )
         .map(|outcome| Outcome::Flow(Box::new(outcome))),
@@ -950,6 +952,8 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             globals,
             &TraceRequest {
                 reference: text("ref"),
+                stage: text("stage"),
+                summary: args["summary"] == json!(true),
             },
         )
         .map(|outcome| Outcome::Trace(Box::new(outcome))),

@@ -100,7 +100,9 @@ const ROADMAP = ["current", "cut", "cycle", "waits", "unestimated", "status", "b
 // docs/features/flow-canvas.md: an edge's colour by its type's place, the gap rows' states, the walk's marks.
 const FLOW_EDGE = ["0", "1", "2", "3"];
 const FLOW_GAP = ["none", "found", "not-configured", "unknown"];
-const CARD = ["accepted", "cancelled", "overdue", "drop", "suspect", "departed", "correcting", "mark-unknown"];
+const CARD = ["accepted", "cancelled", "overdue", "drop", "suspect", "departed", "correcting", "mark-unknown", "open"];
+// docs/features/trace-views.md: a node's states against its cards.
+const TRACE = ["confirmed", "in-work", "suspect", "departed", "no-card", "unknown"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
   ...LINK.map((value) => `--link-${value}`),
@@ -119,6 +121,7 @@ const STATUS = [
   ...FLOW_EDGE.map((value) => `--flow-edge-${value}`),
   ...FLOW_GAP.map((value) => `--flow-gap-${value}`),
   ...CARD.map((value) => `--card-${value}`),
+  ...TRACE.map((value) => `--trace-${value}`),
   "--flow-start",
   "--flow-end",
   "--flow-marked",
@@ -247,6 +250,45 @@ describe("tokens.css (AC-09)", () => {
     }
     const states = ["--sync-ok", "--sync-conflict", "--sync-cannot-verify", "--attention"].map((name) => resolve(name).toLowerCase());
     expect(colours.filter((colour) => states.includes(colour))).toEqual([]);
+  });
+
+  it("gives each state of a node its own colour, at least 3:1 on the Flow's and the panels' surfaces, none a sync colour of a check that passed or cannot verify (trace-views)", () => {
+    const states = TRACE.filter((state) => state !== "unknown").map((state) => resolve(`--trace-${state}`).toLowerCase());
+    expect(new Set(states).size).toBe(states.length);
+    expect(states).not.toContain(resolve("--sync-ok").toLowerCase());
+    expect(states).not.toContain(resolve("--sync-cannot-verify").toLowerCase());
+    for (const state of TRACE) {
+      for (const surface of [...SURFACES, "--flow-box-surface", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
+        expect([state, surface, contrast(`--trace-${state}`, surface) >= 3]).toEqual([state, surface, true]);
+      }
+    }
+  });
+
+  it("gives a tone class to every state of a node, an unknown word dashed (trace-views)", () => {
+    for (const state of TRACE) {
+      expect(appCss).toContain(`.tone-trace-${state} { --badge-color: var(--trace-${state}); }`);
+    }
+    expect(/\.tone-trace-unknown,[^{]*\{\s*border-style: dashed;/.test(appCss)).toBe(true);
+  });
+
+  it("keeps a box outside the stage filter readable: secondary text, dimmed with its box, stays at 4.5:1 on all it can sit on (trace-views)", () => {
+    const opacity = Number(tokens.get("--flow-dimmed"));
+    expect(opacity).toBeGreaterThan(0.6);
+    const blended = (over: string, under: string) => {
+      const channels = (hex: string) => [1, 3, 5].map((at) => parseInt(resolve(hex).slice(at, at + 2), 16));
+      const [top, base] = [channels(over), channels(under)];
+      const mixed = top.map((value, index) => Math.round(value * opacity + (base[index] ?? 0) * (1 - opacity)));
+      return `#${mixed.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+    };
+    for (const under of ["--surface-canvas", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
+      for (const box of ["--flow-box-surface", "--surface-canvas"]) {
+        tokens.set("--test-dimmed-text", blended("--text-secondary", under));
+        tokens.set("--test-dimmed-surface", blended(box, under));
+        expect([under, box, contrast("--test-dimmed-text", "--test-dimmed-surface") >= 4.5]).toEqual([under, box, true]);
+        tokens.delete("--test-dimmed-text");
+        tokens.delete("--test-dimmed-surface");
+      }
+    }
   });
 
   it("keeps a gap row that cannot be measured off None's colour, and None's off cannot-verify's (AC-08 of flow-canvas)", () => {

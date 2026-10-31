@@ -1,4 +1,4 @@
-import type { CardAllowed, CardFlow, CardMove, TraceCard } from "../api/types";
+import type { CardAllowed, CardFlow, CardMove, CardRow, TraceCard } from "../api/types";
 import type { Look } from "../ui/Badge";
 
 // The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"): columns, flows
@@ -7,6 +7,7 @@ import type { Look } from "../ui/Badge";
 export const ACCEPTED: Look = { label: "Accepted", tone: "card-accepted", icon: "taskAccepted" };
 export const CANCELLED: Look = { label: "Cancelled", tone: "card-cancelled", icon: "taskCancelled" };
 export const OVERDUE: Look = { label: "Overdue", tone: "card-overdue", icon: "cardOverdue" };
+export const OPEN: Look = { label: "Open", tone: "card-open", icon: "open" };
 
 export const UNASSIGNED = "Unassigned";
 export const BY_HAND = "By hand";
@@ -39,52 +40,77 @@ export function eventWords(type: string): string {
   return EVENT_WORDS.get(type) ?? type;
 }
 
-/** How each mark that says something looks, and its sentence (`docs/features/card-trace.md` "Rollup"). */
-const MARKS: ReadonlyMap<string, { look: Look; line: (mark: TraceCard) => string }> = new Map([
+/** A mark as a read tells it, `spec trace`'s row and the card list's alike. */
+export type CardMark = Pick<TraceCard, "mark" | "on" | "discrepancy" | "correction">;
+
+/** Each mark that says something: how it looks, its sentence, and which of its keys a tile names (`docs/features/card-trace.md` "Rollup"). */
+const MARKS: ReadonlyMap<string, { look: Look; line: (mark: CardMark) => string; names: "on" | "discrepancy" | "correction" }> = new Map([
   [
     "suspect",
     {
       look: { label: "Suspect", tone: "card-suspect", icon: "specChanged" },
-      line: ({ on }: TraceCard) => `The brief changed at ${on ?? ""} after this card last read it.`,
+      line: ({ on }: CardMark) => (on === null ? "The brief changed after this card last read it." : `The brief changed at ${on} after this card last read it.`),
+      names: "on",
     },
   ],
   [
     "departed",
     {
       look: { label: "Departed", tone: "card-departed", icon: "cardDeparted" },
-      line: ({ on, discrepancy }: TraceCard) => `Accepted as departing from ${on ?? ""}; ${discrepancy ?? "its discrepancy"} is not settled yet.`,
+      line: ({ on, discrepancy }: CardMark) => `Accepted as departing from ${on ?? "its brief"}; ${discrepancy ?? "its discrepancy"} is not settled yet.`,
+      names: "discrepancy",
     },
   ],
   [
     "correcting",
     {
       look: { label: "Correcting", tone: "card-correcting", icon: "taskDraft" },
-      line: ({ on, correction }: TraceCard) => `The brief changed at ${on ?? ""}; ${correction ?? "a correction"} is putting it right.`,
+      line: ({ on, correction }: CardMark) => `The brief changed${on === null ? "" : ` at ${on}`}; ${correction ?? "a correction"} is putting it right.`,
+      names: "correction",
     },
   ],
-] satisfies [string, { look: Look; line: (mark: TraceCard) => string }][]);
+] satisfies [string, { look: Look; line: (mark: CardMark) => string; names: "on" | "discrepancy" | "correction" }][]);
 
-/** Whether a mark says anything: a mark on no target is a plain state, and shows nothing. */
-export function isMarked({ on }: TraceCard): boolean {
-  return on !== null;
+/** The two marks that are plain states, by their word. */
+const PLAIN_MARKS: ReadonlyMap<string, Look> = new Map(Object.entries({ open: OPEN, accepted: ACCEPTED }));
+
+/** Whether a mark says anything against the brief: all but the two plain states, a word this build does not know among them. */
+export function isMarked({ mark }: Pick<TraceCard, "mark">): boolean {
+  return !PLAIN_MARKS.has(mark);
 }
 
 /** How a mark looks; one this build does not know raw and neutral; null for one that says nothing. */
-export function markLook(card: TraceCard): Look | null {
+export function markLook(card: CardMark): Look | null {
   if (!isMarked(card)) {
     return null;
   }
   return MARKS.get(card.mark)?.look ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" };
 }
 
-/** A mark in a sentence; one this build does not know, its target. */
-export function markLine(card: TraceCard): string {
-  return MARKS.get(card.mark)?.line(card) ?? card.on ?? "";
+/** A card's word in a node's block: its mark, or the plain state its word names. */
+export function cardStateLook(card: CardMark): Look {
+  return markLook(card) ?? PLAIN_MARKS.get(card.mark) ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" };
+}
+
+/** A mark in a sentence; one this build does not know, its target, else its word. */
+export function markLine(card: CardMark): string {
+  return MARKS.get(card.mark)?.line(card) ?? card.on ?? card.mark;
+}
+
+/** What a tile names beside the mark: the target, the discrepancy or the correction; one this build does not know, its target. */
+export function markNames(card: CardMark): string | null {
+  const key = MARKS.get(card.mark)?.names ?? "on";
+  return card[key];
 }
 
 /** Whether a person can answer the mark: only a suspect one clears, a correcting one is held. */
-export function canClear({ mark }: TraceCard): boolean {
+export function canClear({ mark }: Pick<TraceCard, "mark">): boolean {
   return mark === "suspect";
+}
+
+/** A list row's mark, the list's own, so a gone target cannot hide it; null for a read with no marks and for a plain state: a word this build does not know is a mark, never a clean tile. */
+export function rowMark({ mark, on, discrepancy, correction }: Pick<CardRow, "mark" | "on" | "discrepancy" | "correction">): CardMark | null {
+  return mark === null || !isMarked({ mark }) ? null : { mark, on, discrepancy, correction };
 }
 
 /** The gaps a departing accept can name; the first is the daemon's default. */

@@ -1,12 +1,14 @@
-//! `spec flow [ROOT] [--depth N]` (task spec `flow-read`): what a flow
-//! diagram draws, over the index-fed spec graph and `[flow]`, read here
-//! alone. Core's [`flow_read`] finds the scope, the typed edges, the walk
-//! and the ten gap rows; this file resolves `ROOT`, bounds and prints.
+//! `spec flow [ROOT] [--depth N] [--trace]` (task specs `flow-read`,
+//! `trace-views`): what a flow diagram draws, over the index-fed spec graph
+//! and `[flow]`, read here alone. Core's [`flow_read`] finds the scope, the
+//! typed edges, the walk and the ten gap rows; this file resolves `ROOT`,
+//! bounds and prints. `--trace` joins `spec trace`'s `rollup` and `counts`
+//! to each shown node here: core's read stays pure and reads no queue.
 //!
 //! ```text
 //! flow <ROOT or all> | nodes <n>, edges <e>, depth <N or ->[; left out: …]
 //! gap <code> | <state> | <count>[ | <item>, …][ | <cause>]
-//! <distance or -> <name> | <kind or -> | <title or -> | <path>:<line>[ | start][ | end][ | group <name>][ | holds <h>, inner <i>][ | gaps <g>]
+//! <distance or -> <name> | <kind or -> | <title or -> | <path>:<line>[ | start][ | end][ | group <name>][ | stage <s>][ | holds <h>, inner <i>][ | gaps <g>][ | rollup <state>]
 //! <from> -> <to> | <type> | x<count>[ | kind <kind>][ | when <when>] | <path>:<line>
 //! [truncated: <k> of <n> nodes and <j> of <m> edges not shown; give a ROOT or lower --depth]
 //! ```
@@ -21,19 +23,24 @@
 //! Exit 0 answered, zero nodes and any gap included; 1 a `ROOT` naming
 //! nothing; 2 usage, a bad `--depth`, a look-alike ID, a config error
 //! outside `[flow]`, no `HOME`, a store error. A bad `[flow]` table is a
-//! row's cause, never an exit.
+//! row's cause, never an exit; a queue `--trace` cannot read, a note.
+
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 use specengine_core::check::{NodeAt, SpecGraph};
+use specengine_core::trace::{Rollup, RollupCounts};
 use specengine_core::{
     FlowAsk, FlowConfig, FlowEdge, FlowGap, FlowNeed, FlowNode, GapCause, flow_read,
 };
 
 use crate::cap::{View, lines_within};
-use crate::corpus::{LeftOut, depth_of, holders_warning, indexed, locate};
+use crate::corpus::{LeftOut, depth_of, holders_warning, indexed_in, locate};
+use crate::location::open_index;
 use crate::project::discover_with_text;
 use crate::search::notes;
 use crate::show::classify;
+use crate::trace::{TraceBadge, flow_badges};
 use crate::{CliError, Env, Globals, Message, one_line};
 
 /// The most items a gap row prints, and its JSON lists, when capped.
@@ -49,6 +56,8 @@ pub struct FlowRequest {
     pub root: Option<String>,
     /// `--depth N`; `None`: unbounded.
     pub depth: Option<i64>,
+    /// `--trace`: each shown node's `rollup` and `counts`.
+    pub trace: bool,
 }
 
 /// What `spec flow` read, or why `ROOT` names nothing (exit 1).
@@ -66,6 +75,8 @@ pub struct FlowOutcome {
     pub nodes: Vec<FlowNode>,
     /// By (`from`, `to`, type, kind).
     pub edges: Vec<FlowEdge>,
+    /// `--trace`: by a node's `file`; none joined, empty.
+    pub badges: BTreeMap<usize, TraceBadge>,
     /// How many of `nodes`, then of `edges`, are printed (text and JSON
     /// alike).
     pub shown_nodes: usize,
@@ -115,6 +126,7 @@ pub fn flow_with_view(
         gaps: Vec::new(),
         nodes: Vec::new(),
         edges: Vec::new(),
+        badges: BTreeMap::new(),
         shown_nodes: 0,
         shown_edges: 0,
         gap_items: match view {
@@ -137,7 +149,8 @@ pub fn flow_with_view(
         }
     };
 
-    let input = indexed(env, &project, &mut messages, true)?;
+    let mut open = open_index(env, &project)?;
+    let input = indexed_in(&mut open.index, &project, &mut messages, true)?;
     let graph = SpecGraph::new(&input, scheme, &project.config.paths);
     let roots: Option<Vec<NodeAt>> = match target {
         Some((target, written)) => match locate(&graph, &target, written)? {
@@ -162,6 +175,18 @@ pub fn flow_with_view(
     );
     for file in read.left_out {
         outcome.left_out.add(graph.standing(file));
+    }
+    if request.trace {
+        let files: Vec<usize> = read.nodes.iter().map(|node| node.file).collect();
+        outcome.badges = flow_badges(
+            env,
+            &open.slug,
+            &open.index,
+            &graph,
+            &files,
+            roots.is_none(),
+            &mut messages,
+        );
     }
     outcome.gaps = read.gaps;
     outcome.nodes = read.nodes;
@@ -189,10 +214,12 @@ fn capped(outcome: &FlowOutcome) -> (usize, usize) {
         used += gap_line(gap, outcome.gap_items).chars().count() + 1;
     }
     let (shown_nodes, used) = lines_within(
-        outcome
-            .nodes
-            .iter()
-            .map(|node| node_line(node).chars().count() + 1),
+        outcome.nodes.iter().map(|node| {
+            node_line(node, outcome.badges.get(&node.file))
+                .chars()
+                .count()
+                + 1
+        }),
         used,
         false,
     );
@@ -295,7 +322,7 @@ fn gap_line(gap: &FlowGap, limit: Option<usize>) -> String {
 }
 
 /// The node's line, no line end.
-fn node_line(node: &FlowNode) -> String {
+fn node_line(node: &FlowNode, badge: Option<&TraceBadge>) -> String {
     let name = node.id.as_deref().unwrap_or(&node.path);
     let mut line = format!(
         "{} {} | {} | {} | {}:{}",
@@ -320,12 +347,18 @@ fn node_line(node: &FlowNode) -> String {
     if let Some(group) = &node.group {
         line.push_str(&format!(" | group {}", one_line(group)));
     }
+    if let Some(stage) = &node.stage {
+        line.push_str(&format!(" | stage {}", one_line(stage)));
+    }
     let inner: usize = node.inner.iter().map(|inner| inner.count).sum();
     if node.holds > 0 || inner > 0 {
         line.push_str(&format!(" | holds {}, inner {inner}", node.holds));
     }
     if node.gaps > 0 {
         line.push_str(&format!(" | gaps {}", node.gaps));
+    }
+    if let Some(badge) = badge {
+        line.push_str(&format!(" | rollup {}", badge.rollup.as_str()));
     }
     line
 }
@@ -360,7 +393,7 @@ pub(crate) fn render_text(outcome: &FlowOutcome) -> String {
         out.push('\n');
     }
     for node in &outcome.nodes[..outcome.shown_nodes.min(outcome.nodes.len())] {
-        out.push_str(&node_line(node));
+        out.push_str(&node_line(node, outcome.badges.get(&node.file)));
         out.push('\n');
     }
     for edge in &outcome.edges[..outcome.shown_edges.min(outcome.edges.len())] {
@@ -412,11 +445,14 @@ struct NodeJson<'a> {
     line: usize,
     distance: Option<usize>,
     group: Option<&'a str>,
+    stage: Option<&'a str>,
     start: bool,
     end: bool,
     holds: usize,
     inner: Vec<InnerJson>,
     gaps: usize,
+    rollup: Option<Rollup>,
+    counts: Option<RollupCounts>,
 }
 
 #[derive(Serialize)]
@@ -450,7 +486,7 @@ fn gap_json(gap: &FlowGap, limit: Option<usize>) -> GapJson<'_> {
     }
 }
 
-fn node_json(node: &FlowNode) -> NodeJson<'_> {
+fn node_json<'a>(node: &'a FlowNode, badge: Option<&TraceBadge>) -> NodeJson<'a> {
     NodeJson {
         id: node.id.as_deref(),
         kind: node.kind.as_deref(),
@@ -459,6 +495,7 @@ fn node_json(node: &FlowNode) -> NodeJson<'_> {
         line: node.line,
         distance: node.distance,
         group: node.group.as_deref(),
+        stage: node.stage.as_deref(),
         start: node.start,
         end: node.end,
         holds: node.holds,
@@ -471,6 +508,8 @@ fn node_json(node: &FlowNode) -> NodeJson<'_> {
             })
             .collect(),
         gaps: node.gaps,
+        rollup: badge.map(|badge| badge.rollup),
+        counts: badge.map(|badge| badge.counts),
     }
 }
 
@@ -504,7 +543,7 @@ fn view(outcome: &FlowOutcome) -> FlowJson<'_> {
             .collect(),
         nodes: outcome.nodes[..outcome.shown_nodes.min(outcome.nodes.len())]
             .iter()
-            .map(node_json)
+            .map(|node| node_json(node, outcome.badges.get(&node.file)))
             .collect(),
         edges: outcome.edges[..outcome.shown_edges.min(outcome.edges.len())]
             .iter()

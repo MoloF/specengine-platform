@@ -1900,6 +1900,8 @@ fn code_mirrors_pin_the_q35_types() {
 /// [`as_of_flow_read`] takes that back. 2 040 since
 /// docs/features/card-trace.md: [`TRACE_READ`] ends the reads' line (25
 /// bytes), [`EVIDENCE_CLAUSE`] cut (32 bytes); [`as_of_card_store`] takes that
+/// back. 2 048, the limit again, since docs/features/trace-views.md:
+/// `get_flow` gains [`TRACE_INPUT`] (8 bytes); [`as_of_card_trace`] takes that
 /// back.
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec in git. Each tool is a ",
@@ -1909,8 +1911,8 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = ",
     "show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, ",
     "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
-    "pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?) = \
-     flow; get_trace(ref?) = trace.\n",
+    "pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?, \
+     trace?) = flow; get_trace(ref?) = trace.\n",
     "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; ",
     "unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.\n",
     "Queue (writes only the queue; the owner decides on a terminal):\n",
@@ -1957,6 +1959,16 @@ const TRACE_READ: &str = "; get_trace(ref?) = trace";
 /// docs/features/card-trace.md: what makes room for [`TRACE_READ`] beside the
 /// 1 byte left (32 bytes).
 const EVIDENCE_CLAUSE: &str = "; evidence computed, never typed";
+
+/// docs/features/trace-views.md: what `get_flow`'s clause gains after `depth?`
+/// (8 bytes); `get_trace`'s `stage?` and `summary?` stay in its schema alone.
+const TRACE_INPUT: &str = ", trace?";
+
+/// card-trace's text (2 040 bytes) out of trace-views' (2 048): [`TRACE_INPUT`]
+/// taken out.
+fn as_of_card_trace(instructions: &str) -> String {
+    instructions.replacen(TRACE_INPUT, "", 1)
+}
 
 /// card-store's text (2 047 bytes) out of card-trace's (2 040): [`TRACE_READ`]
 /// taken out, [`EVIDENCE_CLAUSE`] put back.
@@ -2052,12 +2064,13 @@ const SINCE_INPUT: &str = "|since";
 
 /// docs/features/impact.md "INSTRUCTIONS": the reads' line, its LF
 /// included (312 bytes; 318 since docs/features/impact-since.md; 350 since
-/// docs/features/flow-read.md; 375 since docs/features/card-trace.md).
+/// docs/features/flow-read.md; 375 since docs/features/card-trace.md; 383 since
+/// docs/features/trace-views.md).
 const READS_LINE: &str = "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = \
                           show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, \
                           budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, \
                           pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, \
-                          depth?) = flow; get_trace(ref?) = trace.\n";
+                          depth?, trace?) = flow; get_trace(ref?) = trace.\n";
 
 /// docs/features/check-binding.md "INSTRUCTIONS": what the code line gains,
 /// before its full stop (46 bytes).
@@ -2114,9 +2127,14 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// docs/features/roadmap-surfaces.md, docs/features/check-binding.md,
 /// docs/features/show-bindings.md, docs/features/impact.md,
 /// docs/features/impact-since.md, docs/features/review-form.md,
-/// docs/features/flow-read.md, docs/features/card-store.md and
-/// docs/features/card-trace.md).
-const PLANNED_BLAKE3: &str = "2f8e3e48411f0e6193c5c2ca7c28b892a578052994933250e93c38135c60bfce";
+/// docs/features/flow-read.md, docs/features/card-store.md,
+/// docs/features/card-trace.md and docs/features/trace-views.md).
+const PLANNED_BLAKE3: &str = "bfaa9e7888de1025f06d68969a727d585b889547254d747427b6c567aefa6bb4";
+
+/// card-trace's text (2 040 bytes), [`as_of_card_trace`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/trace-views.md.
+const CARD_TRACE_BLAKE3: &str = "2f8e3e48411f0e6193c5c2ca7c28b892a578052994933250e93c38135c60bfce";
 
 /// card-store's text (2 047 bytes), [`as_of_card_store`] over
 /// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
@@ -2165,14 +2183,15 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 /// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 932
-/// bytes since docs/features/card-trace.md); card-store's 1 939 was
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 940
+/// bytes since docs/features/trace-views.md); card-trace's 1 932 was
+/// `576f7ffe…`, card-store's 1 939
 /// `6e322b8c…`, flow-read's 1 910 `322b35f2…`, review-form's 1 902
 /// `f0924769…`, impact-since's 1 885
 /// `381344b2…`, impact's 1 879 `523f0715…`, show-bindings' 1 839
 /// `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "576f7ffed0cb1e5f22942a9d935836c4a07b798fc1cb29d89dd0db38b6eef861";
+    "3dce41d92a1ddf690092d4d41553ae9fcad38d0e5e003e86bee12fb8e9a1197f";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -2213,10 +2232,14 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// docs/features/card-trace.md: [`TRACE_READ`] ends the reads' line,
 /// [`EVIDENCE_CLAUSE`] cut: 2 040 bytes, 1 932 less the tasks line, 8 left;
 /// the text before it is card-store's byte for byte.
+/// docs/features/trace-views.md: [`TRACE_INPUT`] in `get_flow`'s clause: 2 048
+/// bytes, 1 940 less the tasks line, none left; the text before it is
+/// card-trace's byte for byte.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2040, "card-trace's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2048, "trace-views' figure");
+    assert_eq!(TRACE_INPUT.len(), 8);
     assert_eq!(TRACE_READ.len(), 25);
     assert_eq!(EVIDENCE_CLAUSE.len(), 32);
     assert_eq!(CARDS_LINE.len(), 112);
@@ -2231,7 +2254,7 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(ROADMAP_READ.len(), 40);
     assert_eq!(IMPACT_READ.len(), 46);
     assert_eq!(SINCE_INPUT.len(), 6);
-    assert_eq!(READS_LINE.len(), 375, "the spec's reads line");
+    assert_eq!(READS_LINE.len(), 383, "the spec's reads line");
     assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
     assert_eq!(BINDINGS_HINT.len(), 33);
     assert_eq!(NO_PROJECT_GLOSS.len(), 34);
@@ -2239,8 +2262,8 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TASKS_LINE.len(), 108);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 2040);
-    assert_eq!(2048 - instructions.len(), 8, "the room left");
+    assert_eq!(instructions.len(), 2048);
+    assert_eq!(2048 - instructions.len(), 0, "the room left");
     assert!(
         instructions.contains(&format!(
             "lock drift.\n{REVIEW_LINE}{TASKS_LINE}{CARDS_LINE}\n"
@@ -2260,14 +2283,15 @@ fn rd5_instructions_are_the_planned_text() {
     assert!(
         instructions.contains(
             "get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol|since, depth?) = \
-             impact; get_flow(root?, depth?) = flow; get_trace(ref?) = trace.\n"
+             impact; get_flow(root?, depth?, trace?) = flow; get_trace(ref?) = trace.\n"
         ),
         "the reads' line ends with the trace clause, exactly"
     );
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
     assert_eq!(instructions.matches(IMPACT_READ).count(), 1);
-    assert_eq!(instructions.matches(FLOW_READ).count(), 1);
+    let card_trace = as_of_card_trace(instructions);
+    assert_eq!(card_trace.matches(FLOW_READ).count(), 1);
     assert_eq!(instructions.matches(CHECK_BINDING_CLAUSE).count(), 1);
     assert_eq!(instructions.matches(WITH_ITEMS).count(), 1);
     assert_eq!(
@@ -2286,7 +2310,7 @@ fn rd5_instructions_are_the_planned_text() {
         "check_binding ends the code line"
     );
     assert!(
-        instructions.contains(&format!(
+        card_trace.contains(&format!(
             "review --brief{ROADMAP_READ}{IMPACT_READ}{FLOW_READ}{TRACE_READ}.\n{CODE_LINE}Queue ("
         )),
         "the roadmap, impact, flow and trace reads end the reads' line; the code line closes \
@@ -2320,9 +2344,16 @@ fn rd5_instructions_are_the_planned_text() {
     assert!(instructions.contains("get_flow("), "get_flow(");
     assert!(instructions.contains("get_trace("), "get_trace(");
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1932, "2 040 less 108");
+    assert_eq!(less.len(), 1940, "2 048 less 108");
+    // The text before docs/features/trace-views.md: card-trace's 2 040.
+    assert_eq!(card_trace.len(), 2040);
+    assert_eq!(
+        blake3_hex(card_trace.as_bytes()),
+        CARD_TRACE_BLAKE3,
+        "only `, trace?` was added"
+    );
     // The text before docs/features/card-trace.md: card-store's 2 047.
-    let card_store = as_of_card_store(instructions);
+    let card_store = as_of_card_store(&card_trace);
     assert_eq!(card_store.len(), 2047);
     assert_eq!(
         blake3_hex(card_store.as_bytes()),
@@ -2408,7 +2439,9 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
-    let card_store = as_of_card_store(PLANNED_INSTRUCTIONS);
+    let card_trace = as_of_card_trace(PLANNED_INSTRUCTIONS);
+    assert_eq!(blake3_hex(card_trace.as_bytes()), CARD_TRACE_BLAKE3);
+    let card_store = as_of_card_store(&card_trace);
     assert_eq!(blake3_hex(card_store.as_bytes()), CARD_STORE_BLAKE3);
     let flow_read = as_of_flow_read(&card_store);
     assert_eq!(blake3_hex(flow_read.as_bytes()), FLOW_READ_BLAKE3);

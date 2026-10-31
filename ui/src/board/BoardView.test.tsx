@@ -1,7 +1,7 @@
 import { act, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import type { Card, CardList } from "../api/types";
+import type { Card, CardList, CardRow, QueueEvent } from "../api/types";
 import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aTrace, aTraceCard, aTraceNode } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
@@ -176,7 +176,7 @@ describe("the board", () => {
     await waitFor(() => {
       expect(shown()).toEqual(["C-0001", "C-0002"]);
     });
-    expect(client.getCards.mock.calls.at(-1)?.[1]).toEqual({ with_cancelled: true });
+    expect(client.getCards.mock.calls.at(-1)?.[1]).toEqual({ with_cancelled: true, marks: true });
     expect(within(card("C-0002")).getByText("Cancelled")).toBeTruthy();
     expect(within(card("C-0002")).queryByRole("button", { hidden: true })).toBeNull();
     expect(card("C-0002").draggable).toBe(false);
@@ -1038,7 +1038,7 @@ describe("a drop with Show cancelled on", () => {
     });
     fireEvent.click(screen.getByLabelText("Show cancelled"));
     await waitFor(() => {
-      expect(client.getCards.mock.calls.at(-1)?.[1]).toEqual({ with_cancelled: true });
+      expect(client.getCards.mock.calls.at(-1)?.[1]).toEqual({ with_cancelled: true, marks: true });
     });
     vi.spyOn(card("C-0003"), "getBoundingClientRect").mockReturnValue({ top: 200, height: 40 } as DOMRect);
     return client;
@@ -1287,27 +1287,271 @@ describe("the small edges", () => {
 describe("the card against its brief", () => {
   const SUSPECT = aCard({ id: "C-0001", title: "The card", targets: ["R-1"], revision: "4" });
 
-  function suspectClient(document: Card = SUSPECT) {
-    const client = boardClient(aCardList([aCardRow({ id: "C-0001", title: "The card", column: document.column, revision: "4" })]), { "C-0001": document });
-    client.getTrace.mockResolvedValue(aTrace([aTraceNode("R-1", [aTraceCard({ id: "C-0001", mark: "suspect", on: "R-1" })])]));
+  function suspectRow(fields: Partial<CardRow> = {}): CardRow {
+    return aCardRow({ id: "C-0001", title: "The card", column: "todo", revision: "4", mark: "suspect", on: "R-1", ...fields });
+  }
+
+  function suspectClient(document: Card = SUSPECT, row: Partial<CardRow> = {}) {
+    const client = boardClient(aCardList([suspectRow({ column: document.column, ...row })]), { "C-0001": document });
+    client.getTrace.mockResolvedValue(aTrace([aTraceNode("R-1", [aTraceCard({ id: "C-0001", mark: "suspect", on: "R-1" })], { rollup: "suspect" })]));
     return client;
   }
 
-  it("a mark nobody can act on shows no Clear; a read that failed is said, and never reads as clean", async () => {
+  it("the mark is the list's: a failed trace read leaves it and its Clear, and says what it could not read", async () => {
     const client = suspectClient();
     client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the index is locked" }));
     await open(client, "#/alpha/board/C-0001");
     const panel = await screen.findByRole("complementary", { name: "The card" });
-    expect((await within(panel).findByText(/could not be read: the index is locked/)).textContent).toContain("Whether the brief changed");
+    expect((await within(panel).findByText(/could not be read: the index is locked/)).textContent).toContain("The state of this card's targets");
+    expect(within(panel).getByRole("button", { name: "Clear" })).toBeTruthy();
+    expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
+  });
+
+  it("a good read, then a failed one: no tile stands on the last read, the daemon's words stand where the columns stood, Retry brings them back (AC-09)", async () => {
+    const client = suspectClient(SUSPECT, { mark: "open", on: null });
+    let tail: (event: QueueEvent) => void = () => undefined;
+    renderApp(
+      {
+        ...client,
+        subscribe: (_project, onEvent) => {
+          tail = onEvent;
+          return () => undefined;
+        },
+      },
+      "#/alpha/board",
+    );
+    const tile = await waitFor(() => card("C-0001"));
+    tile.focus();
+    client.getCards.mockRejectedValue(new ClientError({ status: 503, message: "the index could not be read for the marks" }));
+    act(() => {
+      tail({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("The board could not be read");
+    expect(alert.textContent).toContain("the index could not be read for the marks");
+    expect(document.querySelector("[data-card]")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Board" })).toBeNull();
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.querySelector(".board-results"));
+    });
+    client.getCards.mockImplementation(() => Promise.resolve(aCardList([suspectRow()])));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => {
+      expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("a failed re-read takes the panel's mark and its Clear too, and says why: a mark that may be stale is never shown", async () => {
+    const client = suspectClient();
+    let tail: (event: QueueEvent) => void = () => undefined;
+    renderApp(
+      {
+        ...client,
+        subscribe: (_project, onEvent) => {
+          tail = onEvent;
+          return () => undefined;
+        },
+      },
+      "#/alpha/board/C-0001",
+    );
+    const panel = await screen.findByRole("complementary", { name: "The card" });
+    await within(panel).findByRole("button", { name: "Clear" });
+    client.getCards.mockRejectedValue(new ClientError({ status: 503, message: "the queue is locked" }));
+    act(() => {
+      tail({ seq: 9, type: "card.moved", payload: { id: "C-0002" } });
+    });
+    expect((await within(panel).findByText(/could not be read: the queue is locked/)).textContent).toContain("Whether the brief changed");
     expect(within(panel).queryByRole("button", { name: "Clear" })).toBeNull();
-    expect(within(card("C-0001")).queryByText("Suspect")).toBeNull();
+    expect(within(panel).queryByRole("region", { name: "Against the brief" })).toBeNull();
+  });
+
+  it("a failed re-read takes the Move menu", async () => {
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001" })]));
+    let tail: (event: QueueEvent) => void = () => undefined;
+    renderApp(
+      {
+        ...client,
+        subscribe: (_project, onEvent) => {
+          tail = onEvent;
+          return () => undefined;
+        },
+      },
+      "#/alpha/board",
+    );
+    await openMenuOf("C-0001");
+    client.getCards.mockRejectedValue(new ClientError({ status: 503, message: "the queue is locked" }));
+    act(() => {
+      tail({ seq: 9, type: "card.moved", payload: { id: "C-0002" } });
+    });
+    await screen.findByRole("alert");
+    expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("a failed re-read ends a drag under way: its tile went, and a drop on the board that comes back posts nothing", async () => {
+    const rows = [aCardRow({ id: "C-0001" }), aCardRow({ id: "C-0002", position: 2 })];
+    const client = boardClient(aCardList(rows));
+    let tail: (event: QueueEvent) => void = () => undefined;
+    renderApp(
+      {
+        ...client,
+        subscribe: (_project, onEvent) => {
+          tail = onEvent;
+          return () => undefined;
+        },
+      },
+      "#/alpha/board",
+    );
+    fireEvent.dragStart(await waitFor(() => card("C-0002")));
+    dragAt("dragOver", column("To do"), 0);
+    expect(document.querySelector(".board-slot-drop, .board-drop-end")).not.toBeNull();
+    client.getCards.mockRejectedValue(new ClientError({ status: 503, message: "the queue is locked" }));
+    act(() => {
+      tail({ seq: 9, type: "card.moved", payload: { id: "C-0003" } });
+    });
+    await screen.findByRole("alert");
+    client.getCards.mockImplementation(() => Promise.resolve(aCardList(rows)));
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => card("C-0001"));
+    expect(document.querySelector(".board-slot-drop, .board-drop-end")).toBeNull();
+    dragAt("dragOver", column("To do"), 0);
+    expect(document.querySelector(".board-slot-drop, .board-drop-end")).toBeNull();
+    dragAt("drop", column("To do"), 0);
+    expect(client.moveCard).not.toHaveBeenCalled();
+  });
+
+  it("a word this build does not know, on no target, is the neutral badge on the tile and in the panel, never a clean tile", async () => {
+    const client = suspectClient(SUSPECT, { mark: "pondering", on: null });
+    await open(client, "#/alpha/board/C-0001");
+    const panel = await screen.findByRole("complementary", { name: "The card" });
+    const tile = await waitFor(() => card("C-0001"));
+    expect(within(tile).getByText("pondering").closest(".badge")?.getAttribute("data-tone")).toBe("card-mark-unknown");
+    expect(tile.getAttribute("aria-label")).toContain("pondering");
+    expect(within(panel).getByRole("region", { name: "Against the brief" }).textContent).toContain("pondering");
+    expect(within(panel).queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("window focus reads an open panel's trace again, for a hand edit, with the list", async () => {
+    const client = suspectClient();
+    await open(client, "#/alpha/board/C-0001");
+    const source = await screen.findByRole("region", { name: "Source" });
+    await waitFor(() => {
+      expect(within(source).getByRole("link", { name: "R-1" }).closest("li")?.textContent).toContain("Suspect");
+    });
+    client.getTrace.mockResolvedValue(aTrace([aTraceNode("R-1", [], { rollup: "confirmed" })]));
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => {
+      expect(within(source).getByRole("link", { name: "R-1" }).closest("li")?.textContent).toContain("Confirmed");
+    });
+  });
+
+  it("a trace re-read that failed takes each target's word away: the panel says none it cannot vouch for", async () => {
+    const client = suspectClient();
+    await open(client, "#/alpha/board/C-0001");
+    const source = await screen.findByRole("region", { name: "Source" });
+    await waitFor(() => {
+      expect(within(source).getByRole("link", { name: "R-1" }).closest("li")?.textContent).toContain("Suspect");
+    });
+    client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the index is locked" }));
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await waitFor(() => {
+      expect(within(source).getByRole("link", { name: "R-1" }).closest("li")?.querySelector(".badge")).toBeNull();
+    });
+  });
+
+  it("reads the whole trace only for an open panel: a tile needs none (trace-views)", async () => {
+    const client = suspectClient();
+    await open(client);
+    await screen.findByText("The card");
+    expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
+    expect(client.getTrace).not.toHaveBeenCalled();
+  });
+
+  it("gives each target on the panel its rollup word; a target the read does not hold has none", async () => {
+    const document = aCard({ ...SUSPECT, targets: ["R-1", "GONE"] });
+    await open(suspectClient(document), "#/alpha/board/C-0001");
+    const source = await screen.findByRole("region", { name: "Source" });
+    await waitFor(() => {
+      expect(within(source).getByRole("link", { name: "R-1" }).closest("li")?.textContent).toContain("Suspect");
+    });
+    expect(within(source).getByRole("link", { name: "GONE" }).closest("li")?.querySelector(".badge")).toBeNull();
+  });
+
+  it("a card on a gone target: no node of the trace holds it, and the tile, the panel and Clear still stand (AC-09)", async () => {
+    const client = suspectClient(aCard({ ...SUSPECT, targets: ["GONE"] }), { on: "GONE" });
+    client.getTrace.mockResolvedValue(aTrace([], { notes: ["C-0001: `GONE` no longer resolves"] }));
+    await open(client, "#/alpha/board/C-0001");
+    const panel = await screen.findByRole("complementary", { name: "The card" });
+    await screen.findAllByText("The card");
+    const tile = await waitFor(() => card("C-0001"));
+    expect(within(tile).getByText("Suspect").closest(".badge")?.getAttribute("data-tone")).toBe("card-suspect");
+    expect(within(tile).getByText("GONE")).toBeTruthy();
+    expect(within(panel).getByRole("region", { name: "Against the brief" }).textContent).toContain("The brief changed at GONE");
+    fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
+    expect(await screen.findByRole("dialog", { name: "Clear C-0001" })).toBeTruthy();
+  });
+
+  it.each([
+    ["suspect", "Suspect", "card-suspect", { on: "R-1" }, "R-1"],
+    ["departed", "Departed", "card-departed", { on: "R-1", discrepancy: "PR-7" }, "PR-7"],
+    ["correcting", "Correcting", "card-correcting", { on: "R-1", correction: "C-0009" }, "C-0009"],
+  ])("%s stands first on the tile, named, with its icon, and an accepted card's word yields to it (AC-09)", async (mark, word, tone, keys, named) => {
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001", accepted: true, mark, ...keys })]));
+    await open(client);
+    const tile = await waitFor(() => card("C-0001"));
+    const badge = within(tile).getByText(word).closest(".badge");
+    expect([badge?.getAttribute("data-tone"), badge?.querySelector("svg") !== null]).toEqual([tone, true]);
+    expect(tile.firstElementChild?.textContent).toBe(`${word}${named}`);
+    expect(within(tile).queryByText("Accepted")).toBeNull();
+  });
+
+  it("an accepted card with nothing against it says so; a plain row says nothing", async () => {
+    await open(boardClient(aCardList([aCardRow({ id: "C-0001", accepted: true, mark: "accepted" }), aCardRow({ id: "C-0002", position: 2 })])));
+    expect(within(await waitFor(() => card("C-0001"))).getByText("Accepted")).toBeTruthy();
+    expect(card("C-0002").querySelector(".board-card-mark")).toBeNull();
+  });
+
+  it("a mark moved by a live event shows on the tile with no reload (AC-09)", async () => {
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001", targets: ["R-1"] })]));
+    let tail: (event: QueueEvent) => void = () => undefined;
+    renderApp(
+      {
+        ...client,
+        subscribe: (_project, onEvent) => {
+          tail = onEvent;
+          return () => undefined;
+        },
+      },
+      "#/alpha/board",
+    );
+    await screen.findByText("Card C-0001");
+    expect(card("C-0001").querySelector(".board-card-mark")).toBeNull();
+    client.getCards.mockImplementation(() => Promise.resolve(aCardList([aCardRow({ id: "C-0001", targets: ["R-1"], mark: "suspect", on: "R-1" })])));
+    act(() => {
+      tail({ seq: 9, type: "proposal.applied", payload: { id: "PR-1" } });
+    });
+    await waitFor(() => {
+      expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
+    });
+  });
+
+  it("a failed mark read draws no tile: the daemon's words stand where a clean board would (AC-09)", async () => {
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001" })]));
+    client.getCards.mockRejectedValue(new ClientError({ status: 503, message: "the index could not be read for the marks" }));
+    renderApp(client, "#/alpha/board");
+    expect((await screen.findByRole("alert")).textContent).toContain("the index could not be read for the marks");
+    expect(document.querySelector("[data-card]")).toBeNull();
   });
 
   it("Clear sends the outcome, the reason, the revision and the typed name; focus lands on the panel's heading", async () => {
     window.localStorage.setItem(ACTING_KEY, "\u0410\u043d\u043d\u0430 \u041f\u0435\u0442\u0440\u043e\u0432\u0430");
     const client = suspectClient();
     client.clearCard.mockImplementation((_project, id) => {
-      client.getTrace.mockResolvedValue(aTrace([]));
+      client.getCards.mockImplementation(() => Promise.resolve(aCardList([suspectRow({ mark: "open", on: null })])));
       return Promise.resolve(aCardWrite(id));
     });
     await open(client, "#/alpha/board/C-0001");
@@ -1365,8 +1609,7 @@ describe("the card against its brief", () => {
   });
 
   it("a mark this build does not know: raw, neutral, no Clear", async () => {
-    const client = suspectClient();
-    client.getTrace.mockResolvedValue(aTrace([aTraceNode("R-1", [aTraceCard({ id: "C-0001", mark: "pondering", on: "R-1" })])]));
+    const client = suspectClient(SUSPECT, { mark: "pondering" });
     await open(client, "#/alpha/board/C-0001");
     const panel = await screen.findByRole("complementary", { name: "The card" });
     await waitFor(() => {

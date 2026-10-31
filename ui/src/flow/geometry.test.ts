@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { curveMiddle, curvePath, curvePoints, durationOf, fitOf, inView, loopPath, LOOP_DEPTH, pointInside, roundedPath, stretchCrosses } from "./geometry";
+import { curveMiddle, curvePath, curvePoints, durationOf, fitOf, fittedCanvasHeight, inView, loopPath, LOOP_DEPTH, pointInside, roundedPath, stretchCrosses } from "./geometry";
 
 // The Flow's drawing geometry (docs/features/flow-canvas.md "Layout"): pure numbers.
 
@@ -102,6 +102,31 @@ describe("the view", () => {
 
   it("gives no fit on a canvas with no size", () => {
     expect(fitOf({ width: 800, height: 400 }, 0, 0)).toBeNull();
+  });
+
+  it("lets the width decide: a flow fills it whatever the canvas's height, and a tall one starts at its top, readable", () => {
+    const wide = fitOf({ width: 1000, height: 300 }, 832, 800);
+    expect(wide?.zoom).toBe(0.768);
+    expect(wide?.x).toBe(32);
+    expect(fitOf({ width: 1000, height: 300 }, 832, 300)?.zoom).toBe(0.768);
+    const tall = fitOf({ width: 800, height: 3000 }, 1000, 500);
+    expect(tall?.zoom).toBe(1);
+    expect([tall?.x, tall?.y]).toEqual([100, 32]);
+  });
+
+  it("gives a short flow a short canvas: the fitted picture, its margins and the controls under it", () => {
+    expect(fittedCanvasHeight({ width: 1000, height: 300 }, 832)).toBe(Math.ceil(300 * 0.768 + 64 + 44));
+    expect(fittedCanvasHeight({ width: 400, height: 92 }, 832)).toBe(92 + 64 + 44);
+    expect(fittedCanvasHeight({ width: 5000, height: 300 }, 832)).toBe(180 + 64 + 44);
+    expect(fittedCanvasHeight({ width: 1000, height: 300 }, 0)).toBeNull();
+  });
+
+  it("holds the height it gives: the picture fits and stays clear of the controls", () => {
+    const picture = { width: 1000, height: 300 };
+    const height = fittedCanvasHeight(picture, 832) ?? 0;
+    const fit = fitOf(picture, 832, height);
+    expect(fit?.y).toBeGreaterThanOrEqual(32);
+    expect(height - (fit?.y ?? 0) - picture.height * (fit?.zoom ?? 0)).toBeGreaterThanOrEqual(44);
   });
 
   it("tells a box in view from one past its edge, at the zoom", () => {

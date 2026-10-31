@@ -90,19 +90,23 @@ const INNER_MEANING: (&str, &str) = ("carries the long reads", "carries the shor
 const CHECK_FROM: &str = "first regeneration tick 1.5 s later";
 const CHECK_TO: &str = "first regeneration tick 2 s later";
 
-/// `spec trace --json`'s document, in order.
-const TRACE_KEYS: [&str; 7] = [
+/// `spec trace --json`'s document, in order; `stages` since
+/// docs/features/trace-views.md.
+const TRACE_KEYS: [&str; 8] = [
     "ref",
     "reason",
     "notes",
     "counts",
+    "stages",
     "nodes",
     "truncated",
     "omitted",
 ];
 
-/// A node of it.
-const NODE_KEYS: [&str; 7] = ["id", "title", "path", "rollup", "counts", "cards", "uses"];
+/// A node of it; `stage` and `distance` since docs/features/trace-views.md.
+const NODE_KEYS: [&str; 9] = [
+    "id", "title", "path", "stage", "distance", "rollup", "counts", "cards", "uses",
+];
 
 /// A card of a node.
 const CARD_KEYS: [&str; 8] = [

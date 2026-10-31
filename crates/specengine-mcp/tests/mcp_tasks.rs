@@ -255,8 +255,9 @@ fn ac14_the_task_tools_and_their_schemas() {
     // 2 048 since docs/features/flow-read.md (`get_flow`, the hints folded);
     // 2 047 since docs/features/card-store.md "MCP" (the cards line in, two
     // clauses out); 2 040 since docs/features/card-trace.md (`get_trace` in,
-    // the evidence clause out).
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
+    // the evidence clause out); 2 048 since docs/features/trace-views.md
+    // (`get_flow`'s `, trace?`).
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
     for era in ERAS {
         let mut session = Session::open(era, &[], None, Home::Fresh);
         let list = session.tools();

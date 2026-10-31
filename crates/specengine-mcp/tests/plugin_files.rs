@@ -137,6 +137,11 @@
 //!   A `PINS` entry 0.24.0, the tree with the version set back and
 //!   [`READ_SPEC_TRACE_0_24_0`] taken out 0.23.0's; a `SCHEMA_PINS` entry
 //!   0.24.0, 0.23.0's schemas today's without those ([`as_of_0_23_0`]).
+//! - docs/features/trace-views.md "Files in scope": 0.24.0 -> 0.25.0, MINOR:
+//!   `get_flow`'s `trace`, `list_cards`' `marks`, four documents' keys. A
+//!   `PINS` entry 0.25.0, the tree with the version set back 0.24.0's; a
+//!   `SCHEMA_PINS` entry 0.25.0, 0.24.0's schemas today's without those
+//!   ([`as_of_0_24_0`]).
 //!
 //! The repository is only read.
 
@@ -397,6 +402,14 @@ const PINS: &[(&str, &str)] = &[
         "0.24.0",
         "69654a9e08fe93a6b1bd2638a1063c447207969401d6513557ee97c209d89b00",
     ),
+    // docs/features/trace-views.md "Files in scope" (0.24.0 -> 0.25.0, MINOR:
+    // an argument on each of two tools and the keys they and `get_trace`
+    // return): plugin.json's version alone; the tree with the version set
+    // back hashes as 0.24.0's pin.
+    (
+        "0.25.0",
+        "0397c13046845603136d5024872f374a99a97994339887f4c187f97a973a7612",
+    ),
 ];
 
 /// docs/features/card-trace.md: `read-spec`'s line of 0.24.0, whole with its
@@ -590,6 +603,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.24.0",
         "4c331c198de8850438d38139e434f27e2de42648c75a938ac049f54c945966ca",
+    ),
+    // docs/features/trace-views.md "Routes and types": `get_flow`'s `trace`
+    // and node keys, `list_cards`' `marks` and row keys, `get_trace`'s `stage`,
+    // `summary`, `stages` and node keys ([`as_of_0_24_0`] takes them out; no
+    // other tool's schema changed).
+    (
+        "0.25.0",
+        "85db59cb24c4e39c208fd00de6fcdc398eb01f082999a7281ff93a030f2112d8",
     ),
 ];
 
@@ -1709,10 +1730,32 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/trace-views.md (0.24.0 -> 0.25.0): plugin.json's version
+    // alone; set back, the tree is 0.24.0's pinned content. M: the version
+    // kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.25.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.25.0"),
+        "plugin.json's version"
+    );
+    let at_0_24_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.25.0\"",
+        "\"version\": \"0.24.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_24_0),
+        PINS[PINS.len() - 2].1,
+        "0.25.0 changes plugin.json's version only"
+    );
+    let tree = at_0_24_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/card-trace.md (0.23.0 -> 0.24.0): plugin.json's version
     // and `read-spec`'s one line; both set back, the tree is 0.23.0's pinned
     // content. M: the version kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.24.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.24.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.24.0"),
@@ -1732,11 +1775,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_23_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.24.0 changes plugin.json's version and read-spec's one line only"
     );
     let tree = at_0_23_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/card-store.md (0.22.0 -> 0.23.0): plugin.json's version
     // and `read-spec`'s one bullet; both set back, the tree is 0.22.0's
     // pinned content. M: the version kept; another file changed.
@@ -2402,8 +2445,40 @@ fn without_key(object: &mut Value, key: &str) {
         .as_object_mut()
         .expect("an object schema");
     assert!(properties.remove(key).is_some(), "{key} listed");
-    if let Some(required) = object["required"].as_array_mut() {
+    if let Some(required) = object.get_mut("required").and_then(Value::as_array_mut) {
         required.retain(|name| name != key);
+    }
+}
+
+/// docs/features/trace-views.md "Routes and types": `schemas` as 0.24.0 listed
+/// them: `get_flow` without `trace`, its node without `stage`, `rollup` and
+/// `counts`, its `start` and `end` undescribed; `list_cards` without `marks`,
+/// its row without `mark`, `on`, `discrepancy`, `correction`; `get_trace`
+/// without `stage` and `summary`, its document without `stages`, its node
+/// without `stage` and `distance`. No other tool's schema changed.
+fn as_of_0_24_0(schemas: &mut Value) {
+    without_key(&mut schemas["get_flow"]["inputSchema"], "trace");
+    let node = &mut schemas["get_flow"]["outputSchema"]["properties"]["nodes"]["items"];
+    for key in ["stage", "rollup", "counts"] {
+        without_key(node, key);
+    }
+    for key in ["start", "end"] {
+        let property = node["properties"][key].as_object_mut().expect(key);
+        assert!(property.remove("description").is_some(), "{key} described");
+    }
+    without_key(&mut schemas["list_cards"]["inputSchema"], "marks");
+    let row = &mut schemas["list_cards"]["outputSchema"]["properties"]["cards"]["items"];
+    for key in ["mark", "on", "discrepancy", "correction"] {
+        without_key(row, key);
+    }
+    for key in ["stage", "summary"] {
+        without_key(&mut schemas["get_trace"]["inputSchema"], key);
+    }
+    let trace = &mut schemas["get_trace"]["outputSchema"];
+    without_key(trace, "stages");
+    let node = &mut trace["properties"]["nodes"]["items"];
+    for key in ["stage", "distance"] {
+        without_key(node, key);
     }
 }
 
@@ -2664,7 +2739,20 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[13].0, "0.22.0", "an entry for 0.22.0");
     assert_eq!(SCHEMA_PINS[14].0, "0.23.0", "an entry for 0.23.0");
     assert_eq!(SCHEMA_PINS[15].0, "0.24.0", "an entry for 0.24.0");
-    assert_eq!(SCHEMA_PINS.len(), 16, "0.24.0 the last entry");
+    assert_eq!(SCHEMA_PINS[16].0, "0.25.0", "an entry for 0.25.0");
+    assert_eq!(SCHEMA_PINS.len(), 17, "0.25.0 the last entry");
+    // docs/features/trace-views.md "Routes and types": 0.24.0's schemas are
+    // today's without `trace`, `marks`, `stage`, `summary`, the lanes and the
+    // keys they add.
+    let mut at_0_24_0 = schemas.clone();
+    as_of_0_24_0(&mut at_0_24_0);
+    let at_0_24_0_hash = schema_hash(&at_0_24_0);
+    assert_eq!(
+        at_0_24_0_hash, SCHEMA_PINS[15].1,
+        "0.24.0's schemas are today's without trace-views'"
+    );
+    assert_ne!(at_0_24_0_hash, current, "trace-views changed the schemas");
+    let (schemas, current) = (at_0_24_0, at_0_24_0_hash);
     // docs/features/card-trace.md "Data": 0.23.0's schemas are today's
     // without `get_trace`, `reason`, the snapshot's and acceptance's shapes
     // and the impact's cards.

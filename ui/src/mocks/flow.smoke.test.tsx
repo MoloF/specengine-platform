@@ -47,13 +47,39 @@ function options(getFlow: ReturnType<typeof renderMock>["getFlow"]) {
 }
 
 describe("the Flow over the mock", () => {
+  it("harbor-sim: badges, counts, and a Start on what folds a start; the Timeline's lanes, a lane's steps by distance, the hollow step in its place (trace-views)", async () => {
+    window.history.replaceState(null, "", "/?scenario=normal#/harbor-sim/flow");
+    const client = new MockClient("normal", { delayMs: 0 });
+    const getTrace = vi.spyOn(client, "getTrace");
+    render(<App client={client} scenario={null} />);
+    await drawn("DOM-BERTHS");
+    expect(box("MEC-PILOTAGE").querySelector(".badge")?.textContent).toBe("No card");
+    expect(box("DOM-WATER").querySelector(".flow-box-state")?.textContent).toBe("2 confirmed, 2 in work, 1 departed");
+    expect(box("DOM-WATER").querySelector(".flow-mark-start")?.textContent).toBe("Entry");
+    expect(box("DOM-BERTHS").querySelector(".flow-mark-end")?.textContent).toBe("End");
+    fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^landfall/ }));
+    const steps = await screen.findByRole("list", { name: "Steps of landfall" });
+    expect(Array.from(steps.querySelectorAll("li"), (row) => row.querySelector("a")?.textContent)).toEqual(["RULE-HIGH-WATER", "RULE-SPRING-WINDOW", "MEC-PILOTAGE"]);
+    expect(steps.querySelector(".is-hollow")?.textContent).toContain("No card");
+    expect(getTrace.mock.calls.map((call) => call[1])).toEqual([{ summary: true }, { summary: true }, { stage: "landfall" }]);
+  });
+
+  it("ledger-api: no `stage:` anywhere, one lane and the next step", async () => {
+    renderMock("normal", "#/ledger-api/flow");
+    await screen.findByRole("tab", { name: "Timeline" });
+    fireEvent.click(screen.getByRole("tab", { name: "Timeline" }));
+    expect(await screen.findByText("Next: give documents a `stage:` key")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^No stage/ })).toBeTruthy();
+  });
+
   it("harbor-sim: reads the top and the sole group, never the whole flow; opening adds a read, closing and reopening none (AC-02)", async () => {
     const { getFlow } = renderMock("normal", "#/harbor-sim/flow");
     await drawn("DOM-BERTHS");
-    expect(options(getFlow)).toEqual([{ depth: 0 }, { root: "DOM-HARBOR", depth: 1 }]);
+    expect(options(getFlow)).toEqual([{ depth: 0, trace: true }, { root: "DOM-HARBOR", depth: 1, trace: true }]);
     fireEvent.click(caret("DOM-BERTHS"));
     await drawn("MEC-MOORING");
-    expect(options(getFlow)).toEqual([{ depth: 0 }, { root: "DOM-HARBOR", depth: 1 }, { root: "DOM-BERTHS", depth: 1 }]);
+    expect(options(getFlow)).toEqual([{ depth: 0, trace: true }, { root: "DOM-HARBOR", depth: 1, trace: true }, { root: "DOM-BERTHS", depth: 1, trace: true }]);
     fireEvent.click(caret("DOM-BERTHS"));
     await waitFor(() => {
       expect(boxes().some((element) => element.dataset.id === "n:MEC-MOORING")).toBe(false);
@@ -85,7 +111,7 @@ describe("the Flow over the mock", () => {
     fireEvent.click(member);
     await drawn("MEC-TIDE-TABLES");
     expect(getTree).toHaveBeenCalledTimes(1);
-    expect(options(getFlow)).toEqual([{ depth: 0 }, { root: "DOM-HARBOR", depth: 1 }, { root: "DOM-WATER", depth: 1 }, { root: "MEC-TIDES", depth: 1 }]);
+    expect(options(getFlow)).toEqual([{ depth: 0, trace: true }, { root: "DOM-HARBOR", depth: 1, trace: true }, { root: "DOM-WATER", depth: 1, trace: true }, { root: "MEC-TIDES", depth: 1, trace: true }]);
     await waitFor(() => {
       expect(window.location.hash).toBe("#/harbor-sim/flow/MEC-TIDE-TABLES");
     });

@@ -9,7 +9,10 @@
 //! - AC-05: a depth changes no row;
 //! - a seeded brute-force reading of the graph rows, whole and under a ROOT,
 //!   from the spec's definitions alone: transitive closures, no Tarjan;
-//! - the walks are no recursion: a ring and a `parent:` chain of thousands.
+//! - the walks are no recursion: a ring and a `parent:` chain of thousands;
+//! - docs/features/trace-views.md "Folded start and end": at every depth a
+//!   shown node's `start` and `end` over what it holds, its `stage` its own,
+//!   read from the unfolded read alone.
 //!
 //! The reads, exits and surfaces are CLI `tests/flow_read.rs`, MCP
 //! `tests/mcp_flow.rs` and http `tests/flow.rs`.
@@ -26,13 +29,14 @@ use common::{corpus_scheme, fixture, render_diagnostics, render_link, walked_md_
 use serde_json::Value;
 use specengine_core::check::{CheckInput, NodeAt, SpecGraph};
 use specengine_core::{
-    FlowAsk, FlowConfig, FlowRead, FlowTable, GapCode, GapState, ProjectConfig, flow_read,
+    FlowAsk, FlowConfig, FlowNode, FlowRead, FlowTable, GapCode, GapState, ProjectConfig, flow_read,
 };
 use specengine_model::{Direction, FLOW_LINK_TYPES, FOLLOWS, IdScheme, LINK_TYPES};
 
 const GAPS: &str = "flow-gaps";
 const RELAY: &str = "flow-relay";
 const HIRE: &str = "flow-hire";
+const ALMANAC: &str = "trace-almanac";
 
 /// How a test names the config in a cause.
 const LABEL: &str = "the-config.toml";
@@ -129,6 +133,92 @@ fn shape(read: &FlowRead) -> (Vec<String>, Vec<String>) {
 
 fn table(text: &str, scheme: &IdScheme) -> FlowConfig {
     FlowConfig::from_toml(text, scheme)
+}
+
+// ------------------------------------------------- "Folded start and end"
+
+/// A shown node's name, as `group` names it.
+fn name_of(node: &FlowNode) -> &str {
+    node.id.as_deref().unwrap_or(&node.path)
+}
+
+/// docs/features/trace-views.md "Folded start and end", brute force: the
+/// unfolded read gives each document its marks, its stage and its place in the
+/// tree; at every depth a shown node's `start` and `end` are true exactly when
+/// it or a document folded into it carries one, and its `stage` is its own.
+/// Gap rows are no business of a fold. M: `steps.starts.contains(&file)` kept
+/// in `shown`.
+#[test]
+fn a_fold_marks_a_start_and_an_end_by_what_it_holds() {
+    for (corpus, root) in [
+        (GAPS, Some("WING-LIBRARY")),
+        (GAPS, Some("WING-BROKEN")),
+        (GAPS, None),
+        (RELAY, None),
+        (HIRE, None),
+        (ALMANAC, None),
+        (ALMANAC, Some("BOOK-ALMANAC")),
+        (ALMANAC, Some("PART-PRINT")),
+    ] {
+        let whole = read(corpus, root, None);
+        let above: BTreeMap<&str, &str> = whole
+            .nodes
+            .iter()
+            .filter_map(|node| Some((name_of(node), node.group.as_deref()?)))
+            .collect();
+        let level = |name: &str| {
+            let (mut at, mut levels) = (name, 0);
+            while let Some(parent) = above.get(at) {
+                at = parent;
+                levels += 1;
+            }
+            levels
+        };
+        let shown_as = |name: &'_ str, depth: usize| -> String {
+            let mut at = name.to_owned();
+            while level(&at) > depth {
+                at = above[at.as_str()].to_owned();
+            }
+            at
+        };
+        let deepest = whole
+            .nodes
+            .iter()
+            .map(|node| level(name_of(node)))
+            .max()
+            .unwrap_or(0);
+        for depth in 0..=deepest + 1 {
+            let context = format!("{corpus} {root:?} at depth {depth}");
+            let folded = read(corpus, root, Some(depth));
+            assert_eq!(rows(&folded), rows(&whole), "{context}");
+            let mut seen = 0;
+            for node in &folded.nodes {
+                let held: Vec<&FlowNode> = whole
+                    .nodes
+                    .iter()
+                    .filter(|document| shown_as(name_of(document), depth) == name_of(node))
+                    .collect();
+                assert!(!held.is_empty(), "{context}: {node:?}");
+                seen += held.len();
+                assert_eq!(
+                    node.start,
+                    held.iter().any(|document| document.start),
+                    "{context}: {node:?}"
+                );
+                assert_eq!(
+                    node.end,
+                    held.iter().any(|document| document.end),
+                    "{context}: {node:?}"
+                );
+                let own = held
+                    .iter()
+                    .find(|document| name_of(document) == name_of(node))
+                    .expect("a shown node holds itself");
+                assert_eq!(node.stage, own.stage, "{context}: {node:?}");
+            }
+            assert_eq!(seen, whole.nodes.len(), "{context}: nothing lost");
+        }
+    }
 }
 
 // ------------------------------------------------------------------- "Data"

@@ -1,5 +1,6 @@
+import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { FLOW_KINDS, dashOf, typeColour, typeDash } from "./labels";
+import { FLOW_KINDS, ROLLUP_MEANINGS, dashOf, typeColour, typeDash } from "./labels";
 
 /** A stroke as the canvas draws it. */
 function Sample({ dash, colour }: { dash: string; colour: string }) {
@@ -15,9 +16,10 @@ const kindDashOf = (kind: string) => dashOf({ from: "", to: "", type: "", kind, 
 
 /**
  * The canvas's legend (docs/features/flow-canvas.md "Data"): each type and kind with its sample, in
- * the daemon's words; what an arc means; the marks; the drawing library's credit.
+ * the daemon's words; what an arc means; the marks; what each state of a box's work says, when a read
+ * served any, so a flow drawn bare names no state; the drawing library's credit.
  */
-export function FlowLegend({ types }: { types: readonly string[] }) {
+export function FlowLegend({ types, states }: { types: readonly string[]; states: boolean }) {
   return (
     <section className="graph-legend flow-legend" aria-label="Legend">
       <h2 className="card-section-title">Legend</h2>
@@ -72,6 +74,20 @@ export function FlowLegend({ types }: { types: readonly string[] }) {
           <span>click the arrow, or press Space, to open or close it</span>
         </li>
       </ul>
+      {states && (
+        <ul className="graph-legend-list">
+          {ROLLUP_MEANINGS.map(({ look, meaning }) => (
+            <li key={look.label} className="graph-legend-item">
+              <Badge look={look} />
+              <span>{meaning}</span>
+            </li>
+          ))}
+          <li className="graph-legend-item">
+            <span className="flow-mark">3 confirmed, 1 suspect</span>
+            <span>a closed group counts what it holds</span>
+          </li>
+        </ul>
+      )}
       <p className="graph-legend-credit">Drawn with React Flow (MIT)</p>
     </section>
   );

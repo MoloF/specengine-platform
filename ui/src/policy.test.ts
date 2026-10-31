@@ -204,7 +204,7 @@ describe("source policy", () => {
   });
 
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/"];
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
@@ -364,7 +364,7 @@ describe("source policy", () => {
   });
 
   it("compares no kind, class, status, state, sync, link type, reason, ID state, binding, relation or category in Health, the Bindings tab, the drift card, the tree's badges, the lock diff or the Flow but in the label maps: rows 3 to 6, binding rows, stored drift rows and gap rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui, UI-7 of ui-node-bindings, UI-6 of ui-drift-evidence, UI-6 of ui-tree-drift, UI-7 of lock-diff-ui and AC-07 of flow-canvas)", () => {
-    const flowSource = (path: string) => path.startsWith("/src/flow/") && path !== "/src/flow/labels.ts";
+    const flowSource = (path: string) => (path.startsWith("/src/flow/") || path.startsWith("/src/trace/")) && path !== "/src/flow/labels.ts";
     const outside = (path: string) => !(path.startsWith("/src/health/") || ROW_SOURCES.includes(path) || flowSource(path)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
       expect.arrayContaining([
@@ -382,6 +382,7 @@ describe("source policy", () => {
         "/src/flow/FlowView.tsx",
         "/src/flow/FlowCanvas.tsx",
         "/src/flow/FlowGaps.tsx",
+        "/src/trace/CardsBlock.tsx",
       ]),
     );
     expect(Object.keys(sources).filter((path) => !outside(path))).not.toContain("/src/flow/labels.ts");
@@ -576,6 +577,52 @@ describe("source policy", () => {
     expect(sources["/src/board/due.ts"]).not.toMatch(/toISOString|getUTC/);
     // A second table of words: a typed record of labels or a Map literal lives in labels.ts alone.
     expect(offending(/\bnew Map\(\[/, scanned)).toEqual([]);
+  });
+
+  it("branches on no rollup, stage or mark word in the Flow, the node's cards or the Board but in their labels.ts (AC-08 of trace-views)", () => {
+    const labels = ["/src/flow/labels.ts", "/src/board/labels.ts"];
+    const scoped = (path: string) => (path.startsWith("/src/flow/") || path.startsWith("/src/trace/") || path.startsWith("/src/board/")) && !/\.test\.tsx?$/.test(path);
+    expect(Object.keys(sources).filter(scoped)).toEqual(expect.arrayContaining(["/src/trace/CardsBlock.tsx", "/src/trace/TraceBar.tsx", "/src/flow/TimelineView.tsx", "/src/flow/timeline.ts", "/src/board/BoardCard.tsx", ...labels]));
+    const outside = (path: string) => !scoped(path) || labels.includes(path);
+    const field = "\\.(rollup|stage|mark)\\b";
+    // The same two words destructured or passed in: `rollup === "x"` is the same branch as `node.rollup === "x"`.
+    const bare = "(?<![\\w.])(rollup|mark)\\b";
+    // A bare `stage` is the filter's prop and a lane's key, passed about freely: it is caught against a spelled word alone.
+    const spelled = "(?<![\\w.])(rollup|mark|stage)\\b";
+    const quote = "[\"'`]";
+    const compared = new RegExp(
+      [
+        `${field}\\s*[!=]==?\\s*${quote}`,
+        `${quote}\\s*[!=]==?\\s*[\\w.?]*${field}`,
+        `switch\\s*\\([^)]*${field}`,
+        `${field}\\s*\\?\\s*[^?.:\\s]`,
+        `\\w\\[[^\\]]*${field}\\s*\\]`,
+        `${field}\\.(includes|startsWith|endsWith)\\(`,
+        `${spelled}\\s*[!=]==?\\s*${quote}`,
+        `${quote}\\s*[!=]==?\\s*${spelled}`,
+        `switch\\s*\\(\\s*${bare}`,
+        `${bare}\\s*\\?\\s*[^?.:\\s]`,
+        `\\w\\[\\s*${bare}\\s*\\]`,
+      ].join("|"),
+    );
+    expect(offending(compared, outside)).toEqual([]);
+    // No state's word is spelled there at all: not as a value, not in a table of its own. A box's
+    // form is the layout's own closed word: its `"open"` says nothing of a mark.
+    const withoutBoxForm = (_path: string, line: string) => line.replace(/\bform\b.*?["']open["']/g, "").replace(/\bBoxForm\b.*$/, "");
+    const word = new RegExp(`${quote}(no card|in work|confirmed|suspect|departed|correcting|open|accepted)${quote}`);
+    expect(offending(word, outside, withoutBoxForm)).toEqual([]);
+    expect(word.test('const plain = "accepted";')).toBe(true);
+    expect(word.test('const plain = word === "open";')).toBe(true);
+    expect(word.test(withoutBoxForm("", 'if (box.form === "open") {'))).toBe(false);
+    expect(word.test(withoutBoxForm("", 'export type BoxForm = "step" | "closed" | "open";'))).toBe(false);
+    expect(word.test(withoutBoxForm("", 'form: cell.inner !== null ? "open" : "step",'))).toBe(false);
+    // The detector itself: a branch on a word is caught, the lookups these screens make are not.
+    for (const line of ['if (node.rollup === "confirmed") {', 'const late = "no card" !== step.rollup;', "switch (card.mark) {", "const tone = TONES[node.rollup];", 'const hollow = node.rollup === "no card";', 'lane.stage === "print" && <p />', 'const print = node.stage.startsWith("pr");', "const look = node.rollup ? a : b;", 'if (rollup === "confirmed") {', 'const plain = mark === "open";', '"accepted" !== mark && <p />', "switch (mark) {", "const look = rollup ? a : b;", "const tone = TONES[mark];", 'const print = stage === "print";', '"print" !== stage && <p />']) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["<Badge look={rollupLook(node.rollup)} />", "{node.stage !== null && <span>{node.stage}</span>}", "!inStage(box.node.stage, stage)", "const hollow = !closed && node.rollup !== null && isNoCard(node.rollup);", "stageKey(lane.stage)", "new Map(nodes.map((node) => [node.id, node.rollup]))", "const shown = mark === null ? null : markLook(mark);", "return rollup === undefined ? null : <Badge look={rollupLook(rollup)} />;", "function TargetState({ rollup }: { rollup: string | undefined }) {", "const word = rollup ?? fallback;", "mark?: string;", "return stage === null ? NO_STAGE : `stage:${stage}`;", "!inStage(node.stage, stage)"]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
   });
 
   it("holds no raw Cyrillic letter: non-Latin test text is escaped (ADR-0024)", () => {

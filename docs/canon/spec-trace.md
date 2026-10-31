@@ -8,27 +8,7 @@ reviewed: 2026-10-31
 
 # spec trace: suspect marks, clearing, verdicts, rollup
 
-ADR-0056, ADR-0057, built by `card-trace` (RM-0047): a changed brief reaches the work done against it and accepted work confirms the brief, with nothing written into the file and nothing stopped (ADR-0012): a suspect card moves and is accepted as any other, an open discrepancy holds no card. Marks and rollups are computed per read over the reading root's index and never stored, so a branch editing a target marks its cards there alone. The record: `cards.md`; the page: `board-ui.md`. Code: core `trace.rs`, pure; store `queue/cards.rs`, `read.rs`; CLI `trace.rs`, `card.rs`.
-
-## Snapshot
-
-`snapshot` holds `CardFrozen {id, rev, norm_hash, also}`: `targets`' entries in order, then any dropped target's. `NULL` on a manual card and on one made before this slice. `also` keeps the last 16 hashes vouched for (`ALSO_MAX`). No schema step: the columns hold JSON already.
-
-```json
-{"snapshot": [{"id": "SHT-FRONT", "rev": 2, "norm_hash": "b3:...", "also": []}],
- "acceptance": {"by": "desk", "at": "...", "note": null, "verdict": "departs",
-  "departs": ["SHT-FRONT"], "discrepancy": "PR-0007"}}
-```
-
-| When | Core | The entries |
-|---|---|---|
-| `new`, a correction | `freeze` | each target as it reads now |
-| `edit --target` | `retargeted` | a kept target keeps its entry, a new one is frozen, a dropped one stays after `targets` |
-| an accept | `refrozen` | `targets`' alone, frozen anew; one gone or reading null keeps its entry |
-| a clear | `cleared` | each suspect entry in reach frozen again |
-| an editorial apply | `vouched` | the new hash joins `also` |
-
-**Dropped entries** are inert to marks (`suspect_on` walks `targets`), so neither `edit_card` nor two edits can remove a mark, and a target that returns finds its old hash. A card with all its targets dropped keeps its snapshot. An editorial apply still vouches for them, logging `card.refreshed` and raising `revision`, rightly: a returning target must not mark falsely. An accept writes `targets`' entries alone, and nothing returns after it: a closed card takes no edit.
+ADR-0056, ADR-0057, built by `card-trace` (RM-0047), read by `trace-views` (RM-0048): a changed brief reaches the work done against it and accepted work confirms the brief, with nothing written into the file and nothing stopped (ADR-0012): a suspect card moves and is accepted as any other, an open discrepancy holds no card. Marks and rollups are computed per read over the reading root's index and never stored, so a branch editing a target marks its cards there alone. The record: `cards.md`; the page: `board-ui.md`; what a card records (snapshot, re-estimating, events): `spec-trace-record.md`. Code: core `trace.rs`, pure; store `queue/cards.rs`, `read.rs`; CLI `trace.rs`, `card.rs`.
 
 ## Suspect
 
@@ -94,16 +74,13 @@ A person's act, on a terminal as `accept` (prompt `clear C-0001 (<title>) as <N>
 
 `card.cleared` names (node, `rev`), which `Revision:` trailers join to a commit; under needs correction `nodes` are the entries the correction answers, not yet moved.
 
-## Re-estimating
-
-`edit --estimate E --reason T` on a card holding an estimate, `-` for `E` too: `--reason` required (exit 1), no other field beside it (exit 2), `card.reestimated`, `new` null on a clear, so the record keeps `old`. `--reason` beside a first estimate exits 2: that stays `card.edited`. `edit_card` takes `reason?`.
-
 ## The read
 
-`spec trace [REF]`, MCP `get_trace {ref?}` (a read), daemon `GET .../trace?ref=` (browser view):
+`spec trace [REF] [--stage S] [--summary]`, MCP `get_trace {ref?, stage?, summary?}` (a read), daemon `GET .../trace?ref=&stage=&summary=` (browser view):
 
 ```text
 trace <REF or all> | nodes <n>, cards <c> | no card <a>, in work <b>, suspect <s>, departed <d>, confirmed <f>
+stage <name or -> | distance <d or -> | no card <a>, in work <b>, suspect <s>, departed <d>, confirmed <f>
 <state> | <name> | <title> | <path> | cards <c>
   card <id> | <flow>/<column> | <mark> | <title>
   uses <name> | <state> | cards <c>
@@ -112,23 +89,28 @@ trace <REF or all> | nodes <n>, cards <c> | no card <a>, in work <b>, suspect <s
 
 Scope: REF's holders and what they hold by `parent:`; no REF: every live document and every section a card targets, by (path, position). Exit 0 whatever is listed, 1 only a REF naming nothing, 2 as `spec flow`. It changes no status, finding, claim or gate. The queue is read as `spec roadmap` reads it (`open_existing`, no schema step); no queue: `no card`. A corrupt card row: skipped, a note.
 
-**Cut** at `OUTPUT_CAP_CHARS`: nodes whole; a first node over the cap alone shows its row and the card and `uses` lines that fit, so an answer is never empty. Header and row counts stay whole; JSON holds the printed rows.
+**Lanes.** A lane holds the listed nodes carrying a `stage:`, a section reading its document's; the last lane, and `--stage -`, the flow steps with none. So a group with no stage of its own stands in no lane, `stages` can be `[]`, and the lanes can sum to less than the header. A lane's `distance` is the least of its nodes', from core's walk of the read (`flow_walk`); lanes by (`distance`, unreached last, stage), the `null` stage last. A `[flow]` table with an error clears distances: lanes by name, a note `no distance read: <config>:<line>: <message>`.
 
-`{ref, reason, notes, counts, nodes, truncated, omitted}`; a node `{id, title, path, rollup, counts, cards: [{id, flow, column, title, mark, on, discrepancy, correction}], uses: [{id, rollup, cards}]}`. `rollup` is the state as printed, `no card`, `in work` included; `counts` `{no_card, in_work, suspect, departed, confirmed}`, a node's over it and what it holds by `parent:`. `mark` the word alone. `omitted` counts the rows cut, a mixed count: nodes + cards + `uses`; `null` when uncut.
+**`--stage S`** keeps one lane's rows, `-` the steps with none; **`--summary`** keeps none. The header and the stage lines stay the whole read's under both; a row's counts and `uses` are built only for a row kept, so a summary stays light.
+
+**Cut** at `OUTPUT_CAP_CHARS`: nodes whole; a first node over the cap alone shows its row and the card and `uses` lines that fit, so an answer is never empty. Header, stage lines and row counts stay whole; JSON holds the printed rows.
+
+`{ref, reason, notes, counts, stages, nodes, truncated, omitted}`; a lane `{stage, distance, counts}`, `stage` `null` for the steps with none; a node `{id, title, path, stage, distance, rollup, counts, cards: [{id, flow, column, title, mark, on, discrepancy, correction}], uses: [{id, rollup, cards}]}`. `rollup` is the state as printed, `no card`, `in work` included; `counts` `{no_card, in_work, suspect, departed, confirmed}`, a node's over it and what it holds by `parent:`, while `rollup` covers its own cards only, so a group's screen shows `counts`. `stage`, `distance`: its document's. `mark` the word alone. `omitted` counts the rows cut, a mixed count: nodes + cards + `uses`; `null` when uncut.
+
+**`spec card list --marks`** adds each row's mark over all its targets, core's `card_mark`, with `on`, `discrepancy`, `correction`. A gone target stands on no node, so `spec trace` says it in a note alone and a node's row reads clean; the list shows the mark, and the page takes it from there, Clear included. A cancelled card has none. An index that cannot be read is the read's error: exit 2, the daemon's 503, never a clean row.
+
+**`spec flow --trace`** joins each shown node's `rollup` and `counts` (`spec-flow.md` "The read"). It never fails a flow: a queue that cannot be read, a newer one included, leaves `rollup` and `counts` null with a note, never `no card`; one below this build's is named.
 
 **`spec impact`** adds the cards not cancelled with a direct target in the reached set: `spec-impact.md`. Its mark is over all a card's targets, unlike a node's row here.
-
-## Events
-
-`card.accepted` gains `verdict`, `discrepancy`. `card.cleared {id, outcome, nodes: [{id, rev, from, to}], correction, reason, as}`, `outcome` `no_effect`, `needs_correction`, `corrected`; `card.reestimated {id, old, new, reason, as}`; `card.refreshed {id, node, proposal}`. For `CR-` (RM-0056): consequences from `spec impact --json`, `spec trace --json`; the estimate delta from `card.reestimated` plus each correction's `estimate`.
 
 ## Known limits
 
 - `raise.rs` `meaning_changes` pairs nodes with an ID only, so a card on an id-less document by path gets no `card.refreshed` on `--editorial` and reads suspect: marking falsely, never fresh.
 - An accepted card with no snapshot or a null hash rolls up `confirmed`; only a note differs.
 - Dropped entries have no cap, bounded only by the distinct nodes a card ever targeted: a cap would reopen the hole a dropped entry closes.
-- A gone target stands on no node, so `spec trace` says it in a note alone, and a node's row reads clean. On the page, where no trace note shows, such a card has no mark and no Clear; `spec card clear` reaches it; RM-0048 shows it.
+- Stage lines are never cut, as `spec flow`'s gap rows: a project with more stages than the cap holds passes `OUTPUT_CAP_CHARS`.
+- A literal `stage: "-"` cannot be reached by `--stage`, where `-` asks the steps with none; its line reads as theirs, and JSON tells them apart.
 
 ## Tests
 
-CLI `card_trace.rs`, `cards.rs`; store `queue_trace.rs`; MCP `mcp_trace.rs`, `mcp_impact.rs`; http `trace.rs`, `door.rs`, `daemon_keys.rs`; UI `src/board/*.test.*`, `api/http.test.ts`; fixture `card-press`: five documents under `PRN-WEEKLY`, a `uses` from `SHT-BACK` to `SHT-FRONT-HEAD`, an accepted decision linked to `SHT-FRONT`.
+CLI `card_trace.rs`, `trace_views.rs`, `cards.rs`; store `queue_trace.rs`; MCP `mcp_trace.rs`, `mcp_impact.rs`; http `trace.rs`, `door.rs`, `daemon_keys.rs`; UI `src/board/*.test.*`, `api/http.test.ts`; fixture `card-press`: five documents under `PRN-WEEKLY`, a `uses` from `SHT-BACK` to `SHT-FRONT-HEAD`, an accepted decision linked to `SHT-FRONT`; fixture `trace-almanac`: stages cutting across two parts, one step with none.

@@ -8,7 +8,7 @@ reviewed: 2026-10-31
 
 # Cards: commands, flows, store
 
-ADR-0056, built by `card-store`: a card is the lighter record of any trade's work, a queue row beside tasks, never a file or a commit. `T-` stays the code-work task; `spec task approve` takes no `C-`. The project's `[card]` gives each discipline its columns, moves and who makes them; no code reads a column's name. Marks, clearing, verdicts: `spec-trace.md`. Code: model `card.rs`; core `card.rs`, `card_toml.rs`; store `queue/cards.rs`; CLI `card.rs`; MCP `cards.rs`.
+ADR-0056, built by `card-store`: a card is the lighter record of any trade's work, a queue row, never a file or a commit. `T-` stays the code-work task; `spec task approve` takes no `C-`. The project's `[card]` gives each discipline its columns, moves and who makes them; no code reads a column's name. Marks, clearing, verdicts: `spec-trace.md`. Code: model `card.rs`; core `card.rs`, `card_toml.rs`; store `queue/cards.rs`; CLI `card.rs`; MCP `cards.rs`.
 
 ## Commands
 
@@ -16,7 +16,7 @@ ADR-0056, built by `card-store`: a card is the lighter record of any trade's wor
 spec card new --title T [--goal T] [--discipline D] [--target REF]... [--criterion C]...
   [--assignee N] [--estimate E] [--due DATE] [--parent C] [--corrects C] [--as N]
 spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--no-target]
-  [--with-cancelled]
+  [--with-cancelled] [--marks]
 spec card show C [--history]
 spec card move C [--to K] [--before C] [--revision R] [--as N]
 spec card edit C [new's flags but --discipline, --assignee] [--evidence KIND=VALUE]...
@@ -29,18 +29,18 @@ spec card clear (C | --group REF) ... --reason T --as N
 
 Globals as the queue's. In `edit`, `assign` a value `-` clears, and on `new` it is no assignee; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`); the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
-`open_cards`, never `open_context`: no git runs, so any root works; `accept --departs` alone reads git, reads only.
+`open_cards`, never `open_context`: no git runs, so any root works; `accept --departs` alone reads git.
 
 - **Lines** `created|moved|edited|cancelled|accepted|cleared C-0001: plain/backlog`, `assigned C-0001: <assignee or ->, reviewer <reviewer or ->`. JSON of a write or a refusal `{id, flow, column, position, revision, allowed, notes}`; no such card, exit 1, `{id, reason}`, `no card C-0099`.
 - **`list`**, by flow, column (config order), position; a column `[card]` no longer places last in its flow, such a flow last of all, cancelled cards last in their column:
 
 ```text
 flow <name> | <column> <n> | ...
-<id> | <flow>/<column> | <position> | <title> | <discipline> | <assignee> | <due> | <targets>[ | cancelled]
+<id> | <flow>/<column> | <position> | <title> | <discipline> | <assignee> | <due> | <targets>[ | cancelled][ | mark <mark>]
 [truncated: <k> of <n> cards not shown]
 ```
 
-  `-` for none. A flow line per flow, empty columns too; `<n>` counts the listed cards, so a filter moves it, and a cancelled card has left its column. An empty board: flow lines only, exit 0. Filters AND, exact, untrimmed. Each stranded (flow, column) is one note, `<n> card(s) in <flow>/<column>, from <first ID>: ...`. Cut at `OUTPUT_CAP_CHARS`, JSON the printed rows.
+  `-` for none. A line per flow, empty columns too; `<n>` counts the listed cards: a filter moves it, a cancelled card has left its column. No card: flow lines only, exit 0. Filters AND, exact, untrimmed. Each stranded (flow, column) is one note, `<n> card(s) in <flow>/<column>, from <first ID>: ...`. Cut at `OUTPUT_CAP_CHARS`, JSON the printed rows.
 - **`show`**: a `key: value` line per document key but `notes`, `-` for null, cut at the same cap, tail `[truncated: <k> of <n> lines not shown]`.
 - **`cancel`** takes the card out of its column (`position` 0, the column closes up), `reason` required. Only `--with-cancelled` lists it.
 - **`accept`**, **`clear`**, a person's acts (ADR-0057): `spec-trace.md`.
@@ -49,7 +49,7 @@ flow <name> | <column> <n> | ...
 
 ## Who acts
 
-`--as N` is self-declared, recorded in the event and compared with a move's `by`, never verified: until the hub, `by` stops a slip, not a person. Absent: `local`. A person (`card_person_problem`, no ID: ADR-0057): trimmed, one line, at most 128 bytes, no control character, U+2028, U+2029 or bidi mark, any script and inner spaces, compared exactly. Off it, `--as` exits 2 and `--assignee`, `--reviewer` exit 1; each a 400 at the daemon. A tool acts as `agent`, so `by = ["lead"]` holds against tools, and a flow admits them by listing `agent`. `agent` and `local` are no one's name, so both are refused as a reviewer, at `assign` and at `accept`, and as a clearer (`clearer_problem`).
+`--as N` is self-declared, recorded and compared with a move's `by`, never verified: until the hub, `by` stops a slip, not a person. Absent: `local`. A person (`card_person_problem`, no ID: ADR-0057): trimmed, one line, at most 128 bytes, no control character, U+2028, U+2029 or bidi mark, any script and inner spaces, compared exactly. Off it, `--as` exits 2 and `--assignee`, `--reviewer` exit 1; each a 400 at the daemon. A tool acts as `agent`, so `by = ["lead"]` holds against tools, and a flow admits them by listing `agent`. `agent` and `local` are no one's name, so both are refused as a reviewer, at `assign` and at `accept`, and as a clearer (`clearer_problem`).
 
 A control point exists only where a flow writes `by`; the default writes none.
 
@@ -76,7 +76,7 @@ moves = [
 - `[card]` holds `flow` alone, at most 32. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
 - `accept` required, two columns; `to` is reached only by an accept, `spec card accept` or `POST .../accept`, so it may not be the first column, and a move at it, either end, is a config error.
 - `moves` `{from, to, by?}` of two columns, each pair once. No `by`, or `by: []` as served: anyone. No `moves`: every ordered pair of the other columns, expanded by the reader, so a reader looks moves up and never judges them.
-- **A new card** takes the first column of the first flow in the file listing its discipline, else of the one flow listing none, else exit 1 naming why.
+- **A new card** takes the first column of the first flow listing its discipline, else of the one flow listing none, else exit 1 naming why.
 - **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so a project pasting it changes nothing: `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, `--discipline` free.
 
 ## Store
@@ -89,16 +89,16 @@ cards(id PRIMARY KEY, project, flow, col, position INTEGER, title, goal, discipl
   acceptance, cancellation, created_by, created_at, updated_at, revision)
 ```
 
-`CARD_COLUMNS` 24, pinned to `PRAGMA table_info`; `col` is the key `column`, an SQL word. JSON columns: `targets`, `criteria` string lists; `evidence` `[{kind, value, by, at}]`; `acceptance` `{by, at, note, verdict, departs, discrepancy}`, no `verdict` reading `briefed`; `cancellation` `{by, at, reason}`, `reason` <= `NOTE_MAX`; `snapshot` an array of `CardFrozen` (`spec-trace.md`), or `NULL`. A card holds no path or common dir: every repository of the slug sees one board.
+`CARD_COLUMNS` 24, pinned to `PRAGMA table_info`; `col` is the key `column`, an SQL word. JSON columns: `targets`, `criteria` string lists; `evidence` `[{kind, value, by, at}]`; `acceptance` `{by, at, note, verdict, departs, discrepancy}`, no `verdict` reading `briefed`; `cancellation` `{by, at, reason}`, `reason` <= `NOTE_MAX`; `snapshot` an array of `CardFrozen` (`spec-trace-record.md`), or `NULL`. A card holds no path: every repository of the slug sees one board.
 
-API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), `card_history`, `change_card(id, seen, change, actor, now)`, `accept_card`, `list_existing_cards`, each write one `Immediate` transaction with one event; refusals `QueueError::CardRefused`.
+API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), `card_history`, `change_card(id, seen, change, actor, now)`, `accept_card`, `list_existing_cards`, each write one `Immediate` transaction, one event; refusals `QueueError::CardRefused`.
 
-- **Fields.** Caps as tasks'; title required, a control character in it stored, printed escaped; `estimate` `parse_estimate`'s, no unit, no sum; `due` `is_calendar_date`; `parent`, `corrects` existing cards, no `parent` cycle, a card never correcting itself.
-- **Evidence.** `--evidence KIND=VALUE`: `url` (`http://`, `https://`), `path` (`<clean relative path>@<blob>`, lower-case hex of any length), `build`, `note`; one line, at most 1024 bytes, 32 entries. Nothing is fetched or read: a reference, never a binary.
+- **Fields.** Caps as tasks'; title required, a control character stored, printed escaped; `estimate` `parse_estimate`'s, no unit, no sum; `due` `is_calendar_date`; `parent`, `corrects` existing cards, no `parent` cycle, a card never correcting itself.
+- **Evidence.** `--evidence KIND=VALUE`: `url` (`http://`, `https://`), `path` (`<clean relative path>@<blob>`, lower-case hex of any length), `build`, `note`; one line, at most 1024 bytes, 32 entries. Nothing is fetched: a reference, never a binary.
 - **Order.** `position` dense from 1 per (flow, `col`). A move leaves its column at `position` 0, closes it up, then opens the target or goes last. `new` goes last; `--before C`, another card of that column, takes its place. Neighbours take `position` alone, no `revision`, `updated_at` or event, so a card passed by loses no compare-and-set. `--to` its own column is a reorder: no flow rule, no `by`. Ties by ID.
 - **IDs.** `C-` and 4 or more digits, highest + 1 in the transaction, never deleted or reused. `card_prefix_clash` as `task_prefix_clash`, for `spec card` alone. Unique per `<slug>.db`: a hub must be the one minter, filled by `spec import-state`, never merged.
-- **`revision`** is decimal text from `1`, raised by every change of the row.
-- **Corrupt** (bad JSON, a bad ID, a non-decimal `revision`, a bad `position`, a column that does not read): `show` exit 2 naming the column, `list` a note, the row unreadable, never a failed list. Card reads alone name it: the gate reads `tasks` alone, so a corrupt card row closes no gate.
+- **`revision`**: decimal text from `1`, raised by every change.
+- **Corrupt** (bad JSON, a bad ID, a non-decimal `revision`, a bad `position`, a column that does not read): `show` exit 2 naming the column, `list` a note, the row unreadable, never a failed list. The gate reads `tasks` alone, so a corrupt card row closes no gate.
 
 ## Documents and events
 
@@ -107,9 +107,9 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 - `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card, or one whose flow is gone: empty. `accept` is never in it: the board finds it through `accept.from`.
 - `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`; a payload that does not parse is passed over.
 
-`list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` when nothing is cut. `flows` `[{name, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}}]`, `moves` expanded, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled}`.
+`list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` when nothing is cut. `flows` `[{name, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}}]`, `moves` expanded, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction}`, 21 keys; the last four `--marks`' (`spec-trace.md` "The read"), else `null`.
 
-Events, the `as` the acting name: `card.created {id, flow, column, position, assignee, as}`; `card.moved {id, from, to, position, as}`, a reorder `from` = `to`; `card.accepted` the same and `verdict`, `discrepancy`; `card.edited {id, fields, as}`, the changed keys; `card.assigned {id, assignee, reviewer, as}`; `card.cancelled {id, column, as}`; `card.cleared`, `card.reestimated`, `card.refreshed`: `spec-trace.md` "Events".
+Events, the `as` the acting name: `card.created {id, flow, column, position, assignee, as}`; `card.moved {id, from, to, position, as}`, a reorder `from` = `to`; `card.accepted` the same and `verdict`, `discrepancy`; `card.edited {id, fields, as}`, the changed keys; `card.assigned {id, assignee, reviewer, as}`; `card.cancelled {id, column, as}`; `card.cleared`, `card.reestimated`, `card.refreshed`: `spec-trace-record.md` "Events".
 
 ## Backup
 

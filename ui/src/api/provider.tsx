@@ -1,11 +1,29 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { focusManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createContext, use, useState, type ReactNode } from "react";
 import type { SpecEngineClient } from "./client";
 
 const ClientContext = createContext<SpecEngineClient | null>(null);
 
-/** A query cache with the slice's defaults: no retry, no refetch on focus. */
+/**
+ * Focus as a person meets it: query-core listens to `visibilitychange` alone, which a browser beside
+ * an editor never raises, so a hand edit and a click back on the page would read nothing. The
+ * window's `focus` is that click. A read still asks for it, by `refetchOnWindowFocus`.
+ */
+function listenForFocus(onFocus: () => void): () => void {
+  const listener = () => {
+    onFocus();
+  };
+  window.addEventListener("visibilitychange", listener);
+  window.addEventListener("focus", listener);
+  return () => {
+    window.removeEventListener("visibilitychange", listener);
+    window.removeEventListener("focus", listener);
+  };
+}
+
+/** A query cache with the slice's defaults: no retry, no refetch on focus but where a read asks it. */
 export function createQueryClient(): QueryClient {
+  focusManager.setEventListener(listenForFocus);
   return new QueryClient({
     defaultOptions: {
       queries: { retry: 0, refetchOnWindowFocus: false },

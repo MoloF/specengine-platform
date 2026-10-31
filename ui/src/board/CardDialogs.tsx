@@ -1,7 +1,7 @@
 import { createContext, use, useEffect, useId, useMemo, useRef, useState, type ReactNode, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useCards, useCardWrite, type CardWriteRequest } from "../api/queries";
-import type { Card, CardAcceptBody, CardClearBody, CardCreateBody, CardEditBody, CardRow, CardVerdict, CardWrite } from "../api/types";
+import { useCardClearGroup, useCards, useCardWrite, type CardWriteRequest } from "../api/queries";
+import type { Card, CardAcceptBody, CardClearBody, CardClearGroupWrite, CardCreateBody, CardEditBody, CardRow, CardVerdict, CardWrite } from "../api/types";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -835,6 +835,49 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
           <p className="dialog-text dialog-effect">This opens a new card. This one stays accepted, and its mark stands until the new card is accepted.</p>
         </>
       )}
+      <TextField label="Clearing as" value={acting} onChange={setActing} required autoFocus={name === null} hint="Your name: a person answers a mark." />
+    </WriteDialog>
+  );
+}
+
+/**
+ * Clear all (docs/features/trace-views.md "A node's cards"): every suspect card of a group, no effect
+ * only, one POST, the dialog the consent. A refusal keeps it open, in the daemon's words.
+ */
+export function ClearGroupDialog({ project, group, cards, onClose, onDone }: { project: string; group: string; cards: number; onClose: () => void; onDone: (answer: CardClearGroupWrite) => void }) {
+  const clear = useCardClearGroup(project);
+  const [acting, setActing] = useActing();
+  const [reason, setReason] = useState("");
+  const [checked, setChecked] = useState(false);
+  const name = actingName(acting);
+
+  async function send(as: string): Promise<string | null> {
+    try {
+      onDone(await clear.mutateAsync({ group, reason: reason.trim(), as }));
+      return null;
+    } catch (error) {
+      return apiErrorOf(error).message;
+    }
+  }
+
+  return (
+    <WriteDialog
+      title={`Clear all under ${group}`}
+      action="Clear all"
+      sending="Clearing"
+      canSubmit={name !== null}
+      onClose={onClose}
+      check={() => {
+        setChecked(true);
+        return reason.trim() === "" ? "Say why the marks clear." : null;
+      }}
+      onSubmit={() => (name === null ? Promise.resolve("A name is needed.") : send(name))}
+    >
+      <p className="dialog-text">
+        {cards === 1 ? "1 suspect card" : `${String(cards)} suspect cards`} of <bdi className="mono">{shownSlot(group)}</bdi> and what it holds clear as no effect. A card a correction holds is passed over.
+      </p>
+      <p className="dialog-text dialog-effect">{NAME_IS_TYPED}</p>
+      <TextArea label="Reason" value={reason} onChange={setReason} required autoFocus={name !== null} invalid={checked && reason.trim() === ""} />
       <TextField label="Clearing as" value={acting} onChange={setActing} required autoFocus={name === null} hint="Your name: a person answers a mark." />
     </WriteDialog>
   );

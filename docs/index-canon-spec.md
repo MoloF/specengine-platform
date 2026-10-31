@@ -22,6 +22,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-cli-graph.md](canon/spec-cli-graph.md) spec tree, spec graph, show --links · crates/specengine-cli, crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-refs.md](canon/spec-cli-refs.md) spec refs output: rows, JSON, exits · crates/specengine-cli · tier 2
+- [docs/canon/spec-flow-layout.md](canon/spec-flow-layout.md) The Flow screen: layout and forms · ui · tier 2
 - [docs/canon/spec-flow-screen.md](canon/spec-flow-screen.md) The Flow screen · ui · tier 2
 - [docs/canon/spec-flow.md](canon/spec-flow.md) spec flow: the walk, typed edges, lifted edges and gap rows · crates/specengine-model, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
 - [docs/canon/spec-impact.md](canon/spec-impact.md) spec impact: what a change to a node, a code symbol or the code since a revision reaches · crates/specengine-cli, crates/specengine-mcp, crates/specengine-store, crates/specengine-core, plugin · tier 2
@@ -32,6 +33,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-lock.md](canon/spec-lock.md) spec.lock: the file, its entries, spec lock regen · crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-roadmap-screen.md](canon/spec-roadmap-screen.md) The Roadmap screen · ui · tier 2
 - [docs/canon/spec-roadmap.md](canon/spec-roadmap.md) spec roadmap: plan items and the computed path · crates/specengine-core, crates/specengine-cli · tier 2
+- [docs/canon/spec-trace-record.md](canon/spec-trace-record.md) spec trace: what a card records · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli · tier 2
 - [docs/canon/spec-trace.md](canon/spec-trace.md) spec trace: suspect marks, clearing, verdicts, rollup · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
 - [docs/canon/spec-verify-anchors.md](canon/spec-verify-anchors.md) spec verify's anchors: a renamed or moved binding followed · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-verify-output.md](canon/spec-verify-output.md) spec verify's output: rows, hints, summary, JSON · crates/specengine-cli · tier 2

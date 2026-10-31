@@ -14,6 +14,11 @@
 //! both the text and the document, and the schema requires it. The count
 //! itself is `specengine-cli`'s `flow_read.rs`.
 //!
+//! docs/features/trace-views.md AC-03: `get_flow`'s `trace`, over a scratch
+//! copy of `fixtures/trace-almanac` with cards cut through the library: the
+//! CLI's bytes within the schema either way, `null` with no flag, a node's
+//! values `get_trace`'s, folded or not; a queue of another schema a note.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -26,7 +31,10 @@ use common::read::{
 };
 use common::*;
 use serde_json::{Value, json};
-use specengine_cli::Globals;
+use specengine_cli::{
+    CardAcceptRequest, CardAssignRequest, CardMoveRequest, CardNewRequest, Globals, card_accept,
+    card_assign, card_move, card_new,
+};
 
 /// A scratch copy of a fixture with its own `HOME`.
 struct Project {
@@ -78,6 +86,186 @@ fn parity(project: &Project, calls: &[Value]) -> Vec<Value> {
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }
     first
+}
+
+/// Fixed clock of the cards below.
+const CLOCK: &str = "2026-10-30T09:00:00Z";
+
+/// A card of the almanac's one flow on `target`, its ID.
+fn cut(project: &Project, title: &str, target: &str) -> String {
+    let made = card_new(
+        &cli_env(&project.root, Some(&project.home)),
+        &Globals::default(),
+        &CardNewRequest {
+            title: title.to_owned(),
+            discipline: Some("editing".to_owned()),
+            targets: vec![target.to_owned()],
+            now: CLOCK.to_owned(),
+            ..CardNewRequest::default()
+        },
+    )
+    .expect("a card");
+    made.card.expect("a card").id
+}
+
+/// `id` taken to `review` and accepted `--briefed` by `ben`.
+fn accepted(project: &Project, id: &str) {
+    let (env, globals) = (
+        cli_env(&project.root, Some(&project.home)),
+        Globals::default(),
+    );
+    card_assign(
+        &env,
+        &globals,
+        &CardAssignRequest {
+            id: id.to_owned(),
+            assignee: Some("ana".to_owned()),
+            reviewer: Some("ben".to_owned()),
+            now: CLOCK.to_owned(),
+            ..CardAssignRequest::default()
+        },
+    )
+    .expect("assigned");
+    card_move(
+        &env,
+        &globals,
+        &CardMoveRequest {
+            id: id.to_owned(),
+            to: Some("review".to_owned()),
+            now: CLOCK.to_owned(),
+            ..CardMoveRequest::default()
+        },
+    )
+    .expect("moved");
+    let outcome = card_accept(
+        &env,
+        &globals,
+        &CardAcceptRequest {
+            id: id.to_owned(),
+            actor: "ben".to_owned(),
+            briefed: true,
+            now: CLOCK.to_owned(),
+            ..CardAcceptRequest::default()
+        },
+        &mut |_| true,
+    )
+    .expect("the accept");
+    assert_eq!(outcome.refusal, None, "{outcome:?}");
+}
+
+/// The node `id` of a document.
+fn node_of<'a>(document: &'a Value, id: &str) -> &'a Value {
+    document["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .find(|node| node["id"] == id)
+        .unwrap_or_else(|| panic!("no node {id}: {document}"))
+}
+
+/// AC-03, the tool: `trace` absent, `false` or `null` is the plain read, each
+/// node's `rollup` and `counts` `null`, its `stage` its own; `true` gives
+/// `get_trace`'s values at every depth, and folding moves no count. Each call
+/// the CLI's bytes within the schema, in both eras. M: `rollup` filled without
+/// the flag.
+#[test]
+fn trace_views_get_flow_takes_trace() {
+    let project = Project::new("trace-almanac");
+    let call = cut(&project, "Notice posted", "STEP-CALL");
+    accepted(&project, &call);
+    cut(&project, "Pages set", "STEP-SET");
+    let results = parity(
+        &project,
+        &[
+            json!({}),
+            json!({"trace": false}),
+            json!({"trace": null}),
+            json!({"root": "BOOK-ALMANAC", "depth": 1}),
+            json!({"trace": true}),
+            json!({"root": "BOOK-ALMANAC", "depth": 1, "trace": true}),
+            json!({"root": "BOOK-ALMANAC", "depth": 0, "trace": true}),
+        ],
+    );
+    for result in &results[..4] {
+        assert_eq!(result["isError"], json!(false), "{result}");
+        let document = &result["structuredContent"];
+        for node in document["nodes"].as_array().expect("nodes") {
+            assert_eq!(node["rollup"], Value::Null, "{node}");
+            assert_eq!(node["counts"], Value::Null, "{node}");
+        }
+        assert!(!content_text(result).contains(" | rollup "), "{result}");
+    }
+    assert_eq!(
+        results[0]["structuredContent"], results[1]["structuredContent"],
+        "`false` is the plain read"
+    );
+    let plain = &results[0]["structuredContent"];
+    assert_eq!(node_of(plain, "STEP-CALL")["stage"], "gather", "{plain}");
+    assert_eq!(node_of(plain, "STEP-READ")["stage"], Value::Null, "{plain}");
+
+    let flat = &results[4]["structuredContent"];
+    assert_eq!(node_of(flat, "STEP-CALL")["rollup"], "confirmed", "{flat}");
+    assert_eq!(node_of(flat, "STEP-SET")["rollup"], "in work", "{flat}");
+    assert_eq!(node_of(flat, "STEP-BIND")["rollup"], "no card", "{flat}");
+    assert!(
+        content_text(&results[4]).contains(" | rollup confirmed\n"),
+        "{}",
+        content_text(&results[4])
+    );
+
+    let folded = &results[5]["structuredContent"];
+    let gather = json!({"no_card": 1, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1});
+    assert_eq!(node_of(flat, "PART-GATHER")["counts"], gather, "{flat}");
+    assert_eq!(node_of(folded, "PART-GATHER")["counts"], gather, "{folded}");
+    assert_eq!(node_of(folded, "PART-GATHER")["start"], json!(true));
+    assert_eq!(node_of(folded, "PART-PRINT")["end"], json!(true));
+    let book = &results[6]["structuredContent"];
+    assert_eq!(
+        node_of(book, "BOOK-ALMANAC")["counts"],
+        json!({"no_card": 6, "in_work": 1, "suspect": 0, "departed": 0, "confirmed": 1}),
+        "{book}"
+    );
+}
+
+/// "Rules and edge cases": `trace` with a newer queue is a note, `rollup` and
+/// `counts` `null`, within the schema and never an error result; a wrong type
+/// is a bad argument.
+#[test]
+fn trace_views_a_newer_queue_is_a_note() {
+    let project = Project::new("trace-almanac");
+    cut(&project, "Notice posted", "STEP-CALL");
+    let db = data_dir(&project.home).join("trace-almanac.db");
+    let done = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(&db)
+        .arg("PRAGMA user_version = 9999;")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(done.status.success(), "{done:?}");
+    let mut session = project.session(ERAS[0]);
+    let schemas = output_schemas(&session.tools());
+    let env = cli_env(&project.root, Some(&project.home));
+    let result = checked_call(
+        &mut session,
+        &schemas,
+        "get_flow",
+        json!({"trace": true}),
+        &env,
+        &Globals::default(),
+    );
+    assert_eq!(result["isError"], json!(false), "{result}");
+    let document = &result["structuredContent"];
+    assert_eq!(node_of(document, "STEP-CALL")["rollup"], Value::Null);
+    assert_eq!(node_of(document, "STEP-CALL")["counts"], Value::Null);
+    assert_eq!(
+        document["notes"].as_array().map(Vec::len),
+        Some(1),
+        "{document}"
+    );
+    let reply = session.call("get_flow", json!({"trace": "yes"}));
+    assert_bad_arguments(&reply, "", "get_flow trace yes");
+    let finished = session.finish();
+    assert!(finished.status.success(), "{}", finished.stderr);
 }
 
 /// AC-07: the planted corpus: a whole read, a ROOT, a fold, each form of
@@ -291,7 +479,7 @@ fn the_tool_is_a_flat_read_that_writes_nothing() {
             .keys()
             .collect();
         names.sort();
-        assert_eq!(names, ["depth", "root"], "{era:?}: {input}");
+        assert_eq!(names, ["depth", "root", "trace"], "{era:?}: {input}");
         assert_eq!(
             input
                 .get("required")
@@ -339,7 +527,7 @@ fn the_tool_is_a_flat_read_that_writes_nothing() {
 fn the_instructions_name_get_flow_within_their_limit() {
     let instructions = specengine_mcp::INSTRUCTIONS;
     assert!(
-        instructions.contains("get_flow(root?, depth?) = flow"),
+        instructions.contains("get_flow(root?, depth?, trace?) = flow"),
         "{instructions}"
     );
     assert!(instructions.len() <= 2048, "{}", instructions.len());

@@ -481,6 +481,13 @@ textarea.field {
 .tone-card-suspect { --badge-color: var(--card-suspect); }
 .tone-card-departed { --badge-color: var(--card-departed); }
 .tone-card-correcting { --badge-color: var(--card-correcting); }
+.tone-card-open { --badge-color: var(--card-open); }
+.tone-trace-confirmed { --badge-color: var(--trace-confirmed); }
+.tone-trace-in-work { --badge-color: var(--trace-in-work); }
+.tone-trace-suspect { --badge-color: var(--trace-suspect); }
+.tone-trace-departed { --badge-color: var(--trace-departed); }
+.tone-trace-no-card { --badge-color: var(--trace-no-card); }
+.tone-trace-unknown { --badge-color: var(--trace-unknown); }
 .tone-card-mark-unknown { --badge-color: var(--card-mark-unknown); }
 .tone-roadmap-current { --badge-color: var(--roadmap-current); }
 .tone-roadmap-cut { --badge-color: var(--roadmap-cut); }
@@ -508,6 +515,7 @@ textarea.field {
 .tone-sync-unknown { --badge-color: var(--sync-unknown); }
 
 .tone-card-mark-unknown,
+.tone-trace-unknown,
 .tone-severity-unknown,
 .tone-proposal-unknown,
 .tone-link-unknown,
@@ -4562,6 +4570,12 @@ mark {
   flex: 1 1 auto;
 }
 
+.flow-stage-filter {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .flow-failed {
   display: flex;
   flex-wrap: wrap;
@@ -4653,8 +4667,24 @@ mark {
   font-weight: 650;
 }
 
+/* As high as the fitted picture wants, never past the Graph's measure: a short flow takes a short canvas. */
 .flow-canvas {
-  height: clamp(24rem, 72vh, 52rem);
+  height: min(var(--flow-canvas-fitted, 100vh), clamp(24rem, 72vh, 52rem));
+  min-height: 12rem;
+}
+
+/* A row under the picture: over no box. */
+.flow-canvas .react-flow__controls-button {
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 0;
+}
+
+.flow-canvas .react-flow__controls-button:last-child {
+  border-right: 0;
+}
+
+.flow-canvas .react-flow__minimap {
+  margin: var(--space-1) var(--space-2);
 }
 
 /* Labels over every lane; the edges' stacking is the layout's. */
@@ -4804,6 +4834,43 @@ mark {
   gap: var(--space-2);
   color: var(--text-secondary);
   font-size: 0.75rem;
+}
+
+/* The box's work: a step's rollup, a closed group's counts and their bar along its foot. */
+.flow-box p.flow-box-state {
+  display: block;
+  color: var(--text-primary);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+}
+
+.flow-box .badge {
+  padding: 0 var(--space-1);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.flow-box-bar.trace-bar {
+  position: absolute;
+  right: var(--space-4);
+  bottom: 5px;
+  left: var(--space-4);
+  height: 3px;
+}
+
+/* A step with no card: nothing fills it, so the gap shows at a glance. */
+.flow-box.is-hollow {
+  border-style: dashed;
+  background: var(--surface-canvas);
+}
+
+/* Outside the stage filter: its place kept, its words still readable on a zoomed-in box. */
+.flow-box.is-dimmed,
+.flow-frame.is-dimmed .flow-head {
+  opacity: var(--flow-dimmed);
 }
 
 .flow-mark {
@@ -4961,6 +5028,227 @@ mark {
   border-color: var(--accent);
 }
 
+.flow-list-counts {
+  color: var(--text-primary);
+  font-size: var(--font-size-s);
+  font-weight: 600;
+}
+
+/* A bar drawn from served counts: its words always stand beside it; each part keeps a width to be seen at. */
+.trace-bar {
+  display: flex;
+  gap: 2px;
+  height: 10px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 2px;
+}
+
+.trace-bar-part {
+  flex-basis: 4px;
+  min-width: 4px;
+  background: var(--badge-color);
+}
+
+.trace-bar-part.is-hollow {
+  border: 1px dashed var(--badge-color);
+  background: transparent;
+}
+
+/* The Timeline (docs/features/trace-views.md): a lane per stage, its bar, its steps when open. */
+.timeline {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.timeline-lanes,
+.timeline-parts,
+.timeline-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-lanes {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.timeline-lane {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.timeline-lane-title {
+  margin: 0;
+  font-size: var(--font-size-m);
+}
+
+.timeline-lane-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: var(--target-min);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.timeline-stage {
+  min-width: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.timeline-score {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-parts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+}
+
+.timeline-steps {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.timeline-step {
+  display: grid;
+  grid-template-columns: minmax(0, 13rem) minmax(0, 1fr) 7.5rem 6.75rem;
+  align-items: center;
+  justify-items: start;
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+}
+
+/* A step with no card keeps its place in the walk, and nothing fills it. */
+.timeline-step.is-hollow {
+  border: 1px dashed var(--border-control);
+  background: transparent;
+}
+
+.timeline-step[aria-current="true"] {
+  border-color: var(--accent);
+}
+
+@media (max-width: 48rem) {
+  .timeline-step {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+}
+
+/* Each in its column, a step with no title too. */
+.timeline-step-name {
+  grid-column: 1;
+}
+
+.timeline-step-title {
+  grid-column: 2;
+}
+
+.timeline-step .timeline-step-place {
+  grid-column: 3;
+  justify-self: end;
+  font-size: var(--font-size-s);
+}
+
+.timeline-step .badge {
+  grid-column: 4;
+  justify-self: end;
+}
+
+@media (max-width: 48rem) {
+  .timeline-step > *,
+  .timeline-step .timeline-step-place,
+  .timeline-step .badge {
+    grid-column: auto;
+  }
+}
+
+/* A node's cards (docs/features/trace-views.md "A node's cards"): the Flow's panel and the tree's pane. */
+.cards-block {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.node-pane > .cards-block {
+  padding-block: var(--space-2);
+}
+
+.cards-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.cards-state {
+  color: var(--text-primary);
+  font-size: var(--font-size-s);
+  font-weight: 600;
+}
+
+.cards-lines {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cards-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-1) 0;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-wrap: anywhere;
+}
+
+.cards-line:last-child {
+  border-bottom: 0;
+}
+
+.cards-line-title {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.cards-line-id {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.cards-line-place {
+  font-size: var(--font-size-s);
+}
+
+.cards-actions {
+  margin: 0;
+}
+
 .flow-details-text {
   min-width: 0;
   overflow-wrap: anywhere;
@@ -5113,6 +5401,21 @@ mark {
   background: var(--surface-panel);
 }
 
+/* A mark stands first on the tile, naming what it is on. */
+.board-card-mark {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  margin: 0;
+}
+
+.board-card-marked {
+  min-width: 0;
+  font-size: var(--font-size-s);
+  overflow-wrap: anywhere;
+}
+
 .board-card-top {
   display: flex;
   flex-wrap: wrap;
@@ -5224,6 +5527,13 @@ mark {
 .move-menu-empty {
   padding: var(--space-2);
   color: var(--text-secondary);
+}
+
+.board-panel-target {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
 }
 
 .board-panel {

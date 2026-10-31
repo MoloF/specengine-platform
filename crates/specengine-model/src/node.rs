@@ -148,6 +148,10 @@ pub struct Fields {
     /// decimal text; never counted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub estimate: Option<String>,
+    /// A document's stage in a flow, as written, in any script: project
+    /// vocabulary nothing resolves or branches on; never counted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
 }
 
 /// A place a `path#name` link can land on: a heading's GitHub slug, a

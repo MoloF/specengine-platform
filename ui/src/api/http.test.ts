@@ -158,6 +158,8 @@ describe("each method hits its URL (AC-09)", () => {
     // UI-6 of docs/features/roadmap-screen.md: the three queries; the screen sends the first.
     ["getFlow: the top, depth 0 sent", (client) => client.getFlow("harbor-sim", { depth: 0 }), "/api/projects/harbor-sim/flow?depth=0"],
     ["getFlow: a group, root then depth", (client) => client.getFlow("alpha", { root: "DOM-HARBOR", depth: 1 }), "/api/projects/alpha/flow?root=DOM-HARBOR&depth=1"],
+    ["getFlow: `trace` last, sent as true", (client) => client.getFlow("alpha", { root: "DOM-HARBOR", depth: 1, trace: true }), "/api/projects/alpha/flow?root=DOM-HARBOR&depth=1&trace=true"],
+    ["getFlow: `trace` false is left out", (client) => client.getFlow("alpha", { depth: 0, trace: false }), "/api/projects/alpha/flow?depth=0"],
     ["getFlow: a path ROOT's `/` as %2F, non-Latin text as UTF-8", (client) => client.getFlow("a b", { root: `docs/${String.fromCodePoint(0x417)}.md`, depth: 1 }), "/api/projects/a%20b/flow?root=docs%2F%D0%97.md&depth=1"],
     ["getRoadmap: no query, the whole plan", (client) => client.getRoadmap("harbor-sim"), "/api/projects/harbor-sim/roadmap"],
     [
@@ -902,13 +904,15 @@ describe("the cards (docs/features/board-ui.md \"Routes\")", () => {
   const list = { flows: [], cards: [], notes: [], truncated: false, omitted: null };
   const written = { id: "C-0001", flow: "plain", column: "ready", position: 1, revision: "2", allowed: [], notes: [] };
 
-  it("reads the list with no query, `with_cancelled` sent only as true, the read's signal taken", async () => {
+  it("reads the list with no query, `with_cancelled` and `marks` sent only as true, the read's signal taken", async () => {
     const stub = stubFetch(() => jsonAnswer(200, list));
     const signal = new AbortController().signal;
     await new HttpClient().getCards("a b", {}, signal);
-    await new HttpClient().getCards("alpha", { with_cancelled: false });
+    await new HttpClient().getCards("alpha", { with_cancelled: false, marks: false });
     await new HttpClient().getCards("alpha", { with_cancelled: true });
-    expect(urlsOf(stub)).toEqual(["/api/projects/a%20b/cards", "/api/projects/alpha/cards", "/api/projects/alpha/cards?with_cancelled=true"]);
+    await new HttpClient().getCards("alpha", { marks: true });
+    await new HttpClient().getCards("alpha", { with_cancelled: true, marks: true });
+    expect(urlsOf(stub)).toEqual(["/api/projects/a%20b/cards", "/api/projects/alpha/cards", "/api/projects/alpha/cards?with_cancelled=true", "/api/projects/alpha/cards?marks=true", "/api/projects/alpha/cards?with_cancelled=true&marks=true"]);
     expect(stub.mock.calls[0]?.[1]?.signal).toBe(signal);
   });
 
@@ -942,8 +946,17 @@ describe("the cards (docs/features/board-ui.md \"Routes\")", () => {
     expect([error.status, error.message]).toEqual([409, "no suspect card under `PRN-WEEKLY`: there is no mark to clear; nothing changed"]);
   });
 
+  it("reads the trace by `ref`, `stage` or `summary`, each encoded once, `summary` sent only as true (docs/features/trace-views.md)", async () => {
+    const stub = stubFetch(() => jsonAnswer(200, {}));
+    await new HttpClient().getTrace("alpha", { summary: true });
+    await new HttpClient().getTrace("alpha", { summary: false });
+    await new HttpClient().getTrace("alpha", { stage: `a b ${String.fromCodePoint(0x417)}` });
+    await new HttpClient().getTrace("alpha", { stage: "-" });
+    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/trace?summary=true", "/api/projects/alpha/trace", "/api/projects/alpha/trace?stage=a%20b%20%D0%97", "/api/projects/alpha/trace?stage=-"]);
+  });
+
   it("reads the trace, `ref` the one query encoded once, a 404's document as data, the read's signal taken (docs/features/card-trace.md)", async () => {
-    const document = { ref: "A#B", reason: "no node", notes: [], counts: { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 }, nodes: [], truncated: false, omitted: null };
+    const document = { ref: "A#B", reason: "no node", notes: [], counts: { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 }, stages: [], nodes: [], truncated: false, omitted: null };
     const stub = stubFetch((url) => jsonAnswer(url.includes("ref=") ? 404 : 200, document));
     const signal = new AbortController().signal;
     await new HttpClient().getTrace("alpha", {}, signal);

@@ -393,14 +393,17 @@ fn ac09_the_writers_name_the_path_form_and_instructions_stay() {
     // 1 932 and 2 040 since docs/features/card-trace.md (`get_trace`'s 25
     // bytes on the reads' line, the evidence clause's 32 out); the values
     // `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1932);
+    // 1 940 and 2 048 since docs/features/trace-views.md (`get_flow`'s
+    // `, trace?`, 8 bytes: the limit); the values `mcp_code.rs`' re-pinned
+    // `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1940);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "576f7ffed0cb1e5f22942a9d935836c4a07b798fc1cb29d89dd0db38b6eef861"
+        "3dce41d92a1ddf690092d4d41553ae9fcad38d0e5e003e86bee12fb8e9a1197f"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "2f8e3e48411f0e6193c5c2ca7c28b892a578052994933250e93c38135c60bfce"
+        "bfaa9e7888de1025f06d68969a727d585b889547254d747427b6c567aefa6bb4"
     );
 }

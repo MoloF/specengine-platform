@@ -140,12 +140,21 @@ enum Command {
         /// Levels below the roots at most (0: the roots only); deeper documents show as their ancestor there.
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         depth: Option<i64>,
+        /// Each shown node's state and counts from `spec trace` too.
+        #[arg(long)]
+        trace: bool,
     },
-    /// Print each node's state against the cards that answer it: no card, departed, suspect, in work or confirmed; read-only and computed per read, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run.
+    /// Print each node's state against the cards that answer it: no card, departed, suspect, in work or confirmed, then a line per stage; read-only and computed per read, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run.
     Trace {
         /// Any form `show` takes; absent: every live document and every section a card targets.
         #[arg(value_name = "REF")]
         reference: Option<String>,
+        /// Keep the node rows of this stage, `-` the flow steps with none; the stage lines stay whole.
+        #[arg(long, value_name = "S")]
+        stage: Option<String>,
+        /// Print no node rows.
+        #[arg(long)]
+        summary: bool,
     },
     /// Walk the typed links from REF: what it depends on, or with --impact what an edit of it reaches.
     Graph {
@@ -590,6 +599,9 @@ enum CardCommand {
         /// Cancelled cards too, last in their column.
         #[arg(long = "with-cancelled")]
         with_cancelled: bool,
+        /// Each card's mark over its targets too.
+        #[arg(long)]
+        marks: bool,
     },
     /// Print a card as `key: value` lines.
     Show {
@@ -1107,15 +1119,31 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 archive,
             },
         )?),
-        Command::Trace { reference } => Outcome::Trace(Box::new(specengine_cli::trace(
+        Command::Trace {
+            reference,
+            stage,
+            summary,
+        } => Outcome::Trace(Box::new(specengine_cli::trace(
             env,
             globals,
-            &TraceRequest { reference },
+            &TraceRequest {
+                reference,
+                stage,
+                summary,
+            },
         )?)),
-        Command::Flow { start, depth } => Outcome::Flow(Box::new(specengine_cli::flow(
+        Command::Flow {
+            start,
+            depth,
+            trace,
+        } => Outcome::Flow(Box::new(specengine_cli::flow(
             env,
             globals,
-            &FlowRequest { root: start, depth },
+            &FlowRequest {
+                root: start,
+                depth,
+                trace,
+            },
         )?)),
         Command::Graph {
             reference,
@@ -2218,6 +2246,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             assignee,
             no_target,
             with_cancelled,
+            marks,
         } => Ok(Outcome::CardList(Box::new(specengine_cli::card_list(
             env,
             globals,
@@ -2228,6 +2257,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 assignee,
                 no_target,
                 with_cancelled,
+                marks,
             },
         )?))),
         CardCommand::Show { id, history } => Ok(Outcome::CardShow(Box::new(

@@ -1202,7 +1202,7 @@ export interface FlowInner {
   count: number;
 }
 
-/** A shown document: `distance` the steps from the starts, the least of what it holds, null where none is reached; `group` the shown node holding it; `holds` the documents folded into it; `gaps` the documents this read's gap rows name among what it holds, each once. Source: `docs/features/flow-read.md` "Output", `docs/features/flow-canvas.md` "Data". */
+/** A shown document: `distance` the steps from the starts, the least of what it holds, null where none is reached; `group` the shown node holding it; `stage` its own, project vocabulary; `start` and `end` true when it or anything it holds is one; `holds` the documents folded into it; `gaps` the documents this read's gap rows name among what it holds, each once; `rollup` and `counts` `spec trace`'s, null without `--trace`. Source: `docs/features/flow-read.md` "Output", `docs/features/flow-canvas.md` "Data", `docs/features/trace-views.md` "Routes and types". */
 export interface FlowNode {
   id: string | null;
   kind: string | null;
@@ -1211,11 +1211,14 @@ export interface FlowNode {
   line: number;
   distance: number | null;
   group: string | null;
+  stage: string | null;
   start: boolean;
   end: boolean;
   holds: number;
   inner: FlowInner[];
   gaps: number;
+  rollup: string | null;
+  counts: TraceCounts | null;
 }
 
 /** A shown edge in reading direction, so a screen draws an arrow with no branch on a type; `when` only at a count of 1. Source: `docs/features/flow-read.md` "Output". */
@@ -1733,7 +1736,7 @@ export interface CardFlow {
   accept: CardAcceptRule;
 }
 
-/** A row of `spec card list --json`, by flow, column, position; `revision` decimal text. Source: `docs/canon/cards.md` "Documents and events". */
+/** A row of `spec card list --json`, by flow, column, position; `revision` decimal text; `mark` core's over all its targets, told apart in `src/board/labels.ts` alone, with what it names: null without `--marks`, and on a cancelled card. Source: `docs/canon/cards.md` "Documents and events", `docs/features/trace-views.md` "The board tile". */
 export interface CardRow {
   id: string;
   flow: string;
@@ -1752,6 +1755,10 @@ export interface CardRow {
   revision: string;
   accepted: boolean;
   cancelled: boolean;
+  mark: string | null;
+  on: string | null;
+  discrepancy: string | null;
+  correction: string | null;
 }
 
 /** `spec card list --json`: `flows` for the empty columns too; `omitted` null when nothing is cut. Source: `docs/canon/cards.md` "Documents and events". */
@@ -1954,9 +1961,6 @@ export interface CardClearGroupWrite {
   notes: string[];
 }
 
-/** A node's computed state, per read, never stored. Source: `docs/features/card-trace.md` "Rollup". */
-export type TraceRollup = "no card" | "departed" | "suspect" | "in work" | "confirmed";
-
 /** How many nodes stand in each state. Source: `docs/features/card-trace.md` "Data". */
 export interface TraceCounts {
   no_card: number;
@@ -1978,30 +1982,40 @@ export interface TraceCard {
   correction: string | null;
 }
 
-/** A node using another one, a consequence and never a mark. Source: `docs/features/card-trace.md` "Data". */
+/** A node using another one, a consequence and never a mark; `rollup` a word of the daemon's, told apart in `src/flow/labels.ts` alone. Source: `docs/features/card-trace.md` "Data". */
 export interface TraceUse {
   id: string;
-  rollup: TraceRollup;
+  rollup: string;
   cards: number;
 }
 
-/** One node of `spec trace`. Source: `docs/features/card-trace.md` "Data". */
+/** One lane of `spec trace`: `stage` null for the documents with none; `distance` the least of its steps'; `counts` over its steps. Source: `docs/features/trace-views.md` "Routes and types". */
+export interface TraceStage {
+  stage: string | null;
+  distance: number | null;
+  counts: TraceCounts;
+}
+
+/** One node of `spec trace`; `rollup` a word of the daemon's, told apart in `src/flow/labels.ts` alone; a section's `stage` its document's. Source: `docs/features/card-trace.md` "Data", `docs/features/trace-views.md` "Routes and types". */
 export interface TraceNode {
   id: string;
   title: string | null;
   path: string;
-  rollup: TraceRollup;
+  stage: string | null;
+  distance: number | null;
+  rollup: string;
   counts: TraceCounts;
   cards: TraceCard[];
   uses: TraceUse[];
 }
 
-/** `spec trace [REF] --json`. Source: `docs/features/card-trace.md` "Data". */
+/** `spec trace [REF] --json`; `stages` always whole, `nodes` empty under `--summary`. Source: `docs/features/card-trace.md` "Data", `docs/features/trace-views.md` "Routes and types". */
 export interface TraceDocument {
   ref: string | null;
   reason: string | null;
   notes: string[];
   counts: TraceCounts;
+  stages: TraceStage[];
   nodes: TraceNode[];
   truncated: boolean;
   omitted: number | null;

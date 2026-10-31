@@ -20,7 +20,10 @@
 //! docs/features/flow-links.md (AC-08) makes it `INDEX_FORMAT` 13 for a
 //! `follows` that no longer gives `unknown-link-type` and for the label on a
 //! reference (`edge`, `edge.kind`, `edge.when`), and the dump reads
-//! `fixtures/flow-relay`, the corpus that sets them.
+//! `fixtures/flow-relay`, the corpus that sets them;
+//! docs/features/trace-views.md ("The key `stage:`") makes it `INDEX_FORMAT`
+//! 14 for the typed `stage` (`fields`, no longer `extra`), and the dump reads
+//! `fixtures/trace-almanac`, the corpus that sets it.
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -144,9 +147,15 @@ fn other_worktrees_read_not_indexed_until_they_are_updated() {
 }
 
 /// The corpora of the format dump: spec-a, spec-b, since `INDEX_FORMAT` 12
-/// roadmap-a (the typed plan keys) and since 13 flow-relay (the label of a
-/// `follows` item).
-const DUMPED: [&str; 4] = ["spec-a", "spec-b", "roadmap-a", "flow-relay"];
+/// roadmap-a (the typed plan keys), since 13 flow-relay (the label of a
+/// `follows` item) and since 14 trace-almanac (`stage`).
+const DUMPED: [&str; 5] = [
+    "spec-a",
+    "spec-b",
+    "roadmap-a",
+    "flow-relay",
+    "trace-almanac",
+];
 
 /// The dump of [`DUMPED`], each in a fresh DB of its own with the stub
 /// analyzer's code rows (`code_stub`), with the scratch root masked: what
@@ -298,6 +307,7 @@ const SERIALISED: &[&str] = &[
     "nodes[].fields.release",
     "nodes[].fields.priority",
     "nodes[].fields.estimate",
+    "nodes[].fields.stage",
     "links[].src",
     "links[].src_span",
     "links[].type",
@@ -444,15 +454,14 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/flow-links.md AC-08 (`INDEX_FORMAT` kept at 12): a plain
-/// `follows` and the label make `INDEX_FORMAT` 13, and the history is the
-/// twelve earlier lines, verbatim (roadmap-items' `12` among them), followed
-/// by exactly one `13 <hash>` line (no earlier `13`). Replaces roadmap-items'
-/// format-12 pin, whose line stays verbatim. M: `INDEX_FORMAT` kept at 12;
-/// an earlier line edited.
+/// docs/features/trace-views.md "The key `stage:`": the typed `stage` makes
+/// `INDEX_FORMAT` 14, and the history is the thirteen earlier lines, verbatim
+/// (flow-links' `13` among them), followed by exactly one `14 <hash>` line (no
+/// earlier `14`). Replaces flow-links' format-13 pin, whose line stays
+/// verbatim. M: `INDEX_FORMAT` kept at 13; an earlier line edited.
 #[test]
-fn flow_links_pin_format_13_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 13);
+fn trace_views_pin_format_14_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 14);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -474,11 +483,12 @@ fn flow_links_pin_format_13_with_one_new_history_line() {
         "10 59e87cae8512cc3a5391034deb0531b0fa2c4df8c16b095dc3de95a9e4146f4c",
         "11 1faa605a4770475ee82fbf05ba8a01ff12724866e707482d9454e98d6cb6f5c1",
         "12 e574d6ba1be0cf469ce377f2312a120f53d38e77b1ed5184ba75d5ce0c190834",
+        "13 852a6f00f30fc19cd73f5bb63e34b332ea5959e53e66e2b04bc6bd230a5ea28b",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "roadmap-items' history plus exactly one new line:\n{history}"
+        "flow-links' history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -487,15 +497,15 @@ fn flow_links_pin_format_13_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "13", "the new line is format 13: {last}");
+    assert_eq!(format, "14", "the new line is format 14: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("13 ")).count(),
+        lines.iter().filter(|line| line.starts_with("14 ")).count(),
         1,
-        "no earlier `13` line"
+        "no earlier `14` line"
     );
 }
 

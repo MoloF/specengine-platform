@@ -387,11 +387,14 @@ export function aFlowNode(fields: Partial<FlowNode> & Pick<FlowNode, "id" | "dis
     path: `docs/spec/${(fields.id ?? "node").toLowerCase()}.md`,
     line: 1,
     group: null,
+    stage: null,
     start: false,
     end: false,
     holds: 0,
     inner: [],
     gaps: 0,
+    rollup: null,
+    counts: null,
     ...fields,
   };
 }
@@ -846,6 +849,10 @@ export function aCardRow(fields: Partial<CardRow> & { id: string }): CardRow {
     revision: "1",
     accepted: false,
     cancelled: false,
+    mark: "open",
+    on: null,
+    discrepancy: null,
+    correction: null,
     ...fields,
   };
 }
@@ -899,10 +906,10 @@ export function aTraceCard(fields: Partial<TraceCard> & { id: string }): TraceCa
 
 /** One node of `spec trace --json`. */
 export function aTraceNode(id: string, cards: TraceCard[], fields: Partial<TraceNode> = {}): TraceNode {
-  return { id, title: null, path: `docs/spec/${id}.md`, rollup: "in work", counts: { no_card: 0, in_work: 1, suspect: 0, departed: 0, confirmed: 0 }, cards, uses: [], ...fields };
+  return { id, title: null, path: `docs/spec/${id}.md`, stage: null, distance: null, rollup: "in work", counts: { no_card: 0, in_work: 1, suspect: 0, departed: 0, confirmed: 0 }, cards, uses: [], ...fields };
 }
 
 /** `spec trace --json` over nodes. */
 export function aTrace(nodes: TraceNode[], fields: Partial<TraceDocument> = {}): TraceDocument {
-  return { ref: null, reason: null, notes: [], counts: { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 }, nodes, truncated: false, omitted: null, ...fields };
+  return { ref: null, reason: null, notes: [], counts: { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 }, stages: [], nodes, truncated: false, omitted: null, ...fields };
 }

@@ -46,8 +46,9 @@ use serde_json::json;
 
 /// Every `kind = "…"` of the fixtures' configs: spec-a, spec-b, the
 /// non-Rust spec-c (07 s1.2 P2-5), the flow fixtures
-/// (docs/features/flow-read.md AC-06) and the print shop
-/// (docs/features/card-trace.md).
+/// (docs/features/flow-read.md AC-06), the print shop
+/// (docs/features/card-trace.md) and the almanac
+/// (docs/features/trace-views.md).
 fn fixture_kinds() -> Vec<String> {
     let mut kinds = Vec::new();
     for name in [
@@ -58,6 +59,7 @@ fn fixture_kinds() -> Vec<String> {
         "flow-hire",
         "flow-gaps",
         "card-press",
+        "trace-almanac",
     ] {
         let text = read_text(&fixture(name), "specengine.toml");
         for part in text.split("kind").skip(1) {

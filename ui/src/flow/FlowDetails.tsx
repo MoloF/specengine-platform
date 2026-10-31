@@ -6,18 +6,20 @@ import { sectionHash } from "../app/routes";
 import { nodeName } from "../graph/layout";
 import { Prose } from "../markdown/Prose";
 import { splitFrontMatter } from "../markdown/source";
+import { CardsBlock } from "../trace/CardsBlock";
 import { LinksPanel } from "../tree/LinksPanel";
 import type { LineTarget } from "../tree/TextView";
 import { Icon } from "../ui/Icon";
 import { hasModifier } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
-import { boxWords, holdsText, startWord, withGapsText } from "./labels";
+import { boxWords, holdsText, stageWords, startWord, withGapsText } from "./labels";
 import { isGroup } from "./layout";
 
 /**
  * The panel beside the canvas (docs/features/flow-canvas.md "Panel"): a box's words, its place on
- * the walk, a group's edges within and Open or Close, its text and links. Nothing writes here; Esc
- * closes it and puts focus back on the box.
+ * the walk, a group's edges within and Open or Close, its cards
+ * (docs/features/trace-views.md "A node's cards"), its text and links. The spec changes through the
+ * AI alone; a card is written, a queue row. Esc closes it and puts focus back on the box.
  */
 export function FlowDetails({
   project,
@@ -77,6 +79,10 @@ export function FlowDetails({
           <dt>Distance</dt>
           <dd>{node.distance ?? "Not on the walk"}</dd>
         </div>
+        <div className="fact">
+          <dt>Stage</dt>
+          <dd>{stageWords(node.stage)}</dd>
+        </div>
         <div className="fact fact-wide">
           <dt>Where</dt>
           <dd className="mono">
@@ -132,6 +138,7 @@ export function FlowDetails({
           </p>
         </section>
       )}
+      <CardsBlock project={project} nodeRef={name} section="flow" heading="h3" />
       {read.data === undefined && read.error === null && <Skeleton label={`Reading ${name}`} lines={3} />}
       {read.error !== null && (
         <ErrorPanel

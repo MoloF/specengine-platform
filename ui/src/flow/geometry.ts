@@ -1,5 +1,4 @@
-import { BOX_HEIGHT, BOX_WIDTH } from "../graph/layout";
-import { readableViewport, type FitViewport } from "../graph/geometry";
+import { FIT_MARGIN, FIT_MAX_ZOOM, FIT_MIN_ZOOM, type FitViewport } from "../graph/geometry";
 
 // The Flow's drawing geometry (docs/features/flow-canvas.md "Layout"): pure numbers, no drawing
 // library. A forward edge is horizontal runs joined by S-curves in the gaps between columns; an arc
@@ -22,6 +21,9 @@ export interface Run {
   to: number;
   y: number;
 }
+
+/** A box of the flow: the Graph's box and a line more, its state under its marks (docs/features/trace-views.md "Flow badges"). */
+export const BOX_HEIGHT = 92;
 
 /** How a corner of an arc rounds; a short stretch rounds less. */
 export const ARC_RADIUS = 8;
@@ -140,17 +142,31 @@ export function inView(box: Rect, view: { x: number; y: number; zoom: number; wi
   return left >= 0 && top >= 0 && left + box.width * view.zoom <= view.width && top + box.height * view.zoom <= view.height;
 }
 
+/** Free under a fitted picture: the canvas's controls stand there, over no box. */
+const CONTROLS_ROOM = 44;
+
+/** The fit's zoom: the flow fills the width, no larger than 100 %, no smaller than readable. Height has no say: the canvas follows the picture. */
+function fitZoom(pictureWidth: number, width: number): number {
+  return Math.max(FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, (width - 2 * FIT_MARGIN) / pictureWidth));
+}
+
 /**
- * The fit: the whole picture when its text stays readable, else its start at the top left, at the
- * smallest readable zoom. The Graph's rule, given the picture's two corners. Null on a canvas with
- * no size yet.
+ * The fit: the picture at the zoom the width gives, centred along each side it fits; along one it
+ * overflows, its start at the margin, top left. A tall picture stays readable and is panned, never
+ * shrunk to the canvas's height. Null on a canvas with no size yet.
  */
 export function fitOf(picture: { width: number; height: number }, width: number, height: number): FitViewport | null {
-  const corners = [
-    { x: 0, y: 0 },
-    { x: picture.width - BOX_WIDTH, y: picture.height - BOX_HEIGHT },
-  ];
-  return readableViewport(corners, { x: 0, y: 0 }, width, height);
+  if (width <= 2 * FIT_MARGIN || height <= 2 * FIT_MARGIN) {
+    return null;
+  }
+  const zoom = fitZoom(picture.width, width);
+  const along = (size: number, span: number) => (span * zoom <= size - 2 * FIT_MARGIN ? (size - span * zoom) / 2 : FIT_MARGIN);
+  return { x: along(width, picture.width), y: along(height, picture.height), zoom };
+}
+
+/** The height that holds a fitted picture whole, its margins and the controls under it: a short flow takes a short canvas. Null with no width yet. */
+export function fittedCanvasHeight(picture: { width: number; height: number }, width: number): number | null {
+  return width <= 0 ? null : Math.ceil(picture.height * fitZoom(picture.width, width) + 2 * FIT_MARGIN + CONTROLS_ROOM);
 }
 
 /** A duration token in milliseconds: 0 under reduced motion, or where no style sheet applies. */

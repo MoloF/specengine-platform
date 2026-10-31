@@ -1,10 +1,12 @@
-import { memo, useEffect, useId, useRef } from "react";
+import { memo, useEffect, useId, useMemo, useRef } from "react";
 import type { FlowNode } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { nodeName } from "../graph/layout";
+import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { edgeLine, gapMark, holdsText, readCount, startWord } from "./labels";
+import { countsText, edgeLine, gapMark, holdsText, readCount, rollupLook, startWord } from "./labels";
 import { isGroup, type DrawnRead } from "./layout";
+import { keptInList } from "./timeline";
 
 function BoxRow({
   project,
@@ -28,6 +30,7 @@ function BoxRow({
 }) {
   const name = nodeName(node);
   const gap = gapMark(node, open, named);
+  const group = isGroup(node);
   return (
     <li className="graph-list-node flow-list-box" data-flow-row={name} aria-current={selected ? "true" : undefined}>
       <p className="graph-list-node-head">
@@ -39,11 +42,19 @@ function BoxRow({
           {node.kind ?? "-"}
         </span>
         {node.title !== null && <span>{node.title}</span>}
+        {!group && node.rollup !== null && <Badge look={rollupLook(node.rollup)} />}
       </p>
+      {group && node.counts !== null && <p className="flow-list-counts">{countsText(node.counts)}</p>}
       <p className="graph-list-node-meta">
         <span className="mono">
           {node.path}:{node.line}
         </span>
+        {node.stage !== null && (
+          <span className="plain-tag">
+            <span className="sr-only">Stage: </span>
+            <bdi>{node.stage}</bdi>
+          </span>
+        )}
         <span>{node.distance === null ? "Not on the walk" : `Distance ${String(node.distance)}`}</span>
         {node.start && (
           <span className="flow-mark flow-mark-start">
@@ -57,7 +68,7 @@ function BoxRow({
             End
           </span>
         )}
-        {isGroup(node) && <span>{holdsText(node.holds)}</span>}
+        {group && <span>{holdsText(node.holds)}</span>}
         {gap !== null && (
           <span className="flow-mark flow-mark-gap">
             <Icon name="flowGap" />
@@ -76,7 +87,7 @@ function BoxRow({
             Selected
           </span>
         )}
-        {isGroup(node) && (
+        {group && (
           <button
             type="button"
             className="link-button"
@@ -100,6 +111,7 @@ function ReadSection({
   named,
   selected,
   marked,
+  stage,
   onToggle,
 }: {
   project: string;
@@ -108,16 +120,23 @@ function ReadSection({
   named: ReadonlySet<string>;
   selected: string | null;
   marked: ReadonlySet<string>;
+  /** The stage filter's value: other steps are hidden, and the edges they end; a group stays, with its Open. */
+  stage: string;
   onToggle: (name: string) => void;
 }) {
   const headingId = useId();
+  const boxes = useMemo(() => read.boxes.filter((node) => keptInList(node, stage)), [read.boxes, stage]);
+  const edges = useMemo(() => {
+    const hidden = new Set(read.view.nodes.filter((node) => nodeName(node) !== read.group && !keptInList(node, stage)).map(nodeName));
+    return read.view.edges.filter((edge) => !hidden.has(edge.from) && !hidden.has(edge.to));
+  }, [read.view, read.group, stage]);
   return (
     <section className="graph-list-group" aria-labelledby={headingId}>
       <h2 id={headingId} className="graph-list-heading">
-        {read.group === null ? "Top" : read.group} ({readCount({ nodes: read.boxes, edges: read.view.edges })})
+        {read.group === null ? "Top" : read.group} ({readCount({ nodes: boxes, edges })})
       </h2>
       <ul className="graph-list-nodes">
-        {read.boxes.map((node) => (
+        {boxes.map((node) => (
           <BoxRow
             key={`${node.path}:${String(node.line)}`}
             project={project}
@@ -131,9 +150,9 @@ function ReadSection({
           />
         ))}
       </ul>
-      {read.view.edges.length > 0 && (
+      {edges.length > 0 && (
         <ul className="graph-edge-lines">
-          {read.view.edges.map((edge) => (
+          {edges.map((edge) => (
             <li key={edgeLine(edge)} className="verbatim">
               {edgeLine(edge)}
             </li>
@@ -156,6 +175,7 @@ export const FlowList = memo(function FlowList({
   named,
   selected,
   marked,
+  stage,
   scrollTo,
   onToggle,
 }: {
@@ -167,6 +187,8 @@ export const FlowList = memo(function FlowList({
   named: ReadonlySet<string>;
   selected: string | null;
   marked: ReadonlySet<string>;
+  /** The stage filter's value. */
+  stage: string;
   /** A name to scroll to; a new object each time. */
   scrollTo: { name: string } | null;
   onToggle: (name: string) => void;
@@ -186,7 +208,7 @@ export const FlowList = memo(function FlowList({
   return (
     <div ref={list} className="graph-list flow-list">
       {reads.map((read) => (
-        <ReadSection key={read.group ?? ""} project={project} read={read} open={open} named={named} selected={selected} marked={marked} onToggle={onToggle} />
+        <ReadSection key={read.group ?? ""} project={project} read={read} open={open} named={named} selected={selected} marked={marked} stage={stage} onToggle={onToggle} />
       ))}
     </div>
   );

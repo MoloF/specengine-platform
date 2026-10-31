@@ -28,6 +28,8 @@ import {
   useTask,
   useTasks,
   useTrace,
+  useTraceLanes,
+  useTraceSummary,
   useTree,
 } from "./queries";
 
@@ -154,9 +156,9 @@ describe("the flow's reads (flow-canvas)", () => {
     return null;
   }
 
-  it("keys a read by [flow, project, root, depth], root null at the top", () => {
-    expect(queryKeys.flow("alpha", { depth: 0 })).toEqual(["flow", "alpha", null, 0]);
-    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1 })).toEqual(["flow", "alpha", "G-1", 1]);
+  it("keys a read by [flow, project, root, depth, trace], root null at the top", () => {
+    expect(queryKeys.flow("alpha", { depth: 0 })).toEqual(["flow", "alpha", null, 0, false]);
+    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1, trace: true })).toEqual(["flow", "alpha", "G-1", 1, true]);
   });
 
   it("always carries a depth: the top at 0, each group's root at 1, never a whole-flow read (AC-02)", async () => {
@@ -169,7 +171,7 @@ describe("the flow's reads (flow-canvas)", () => {
     await waitFor(() => {
       expect(client.getFlow).toHaveBeenCalledTimes(3);
     });
-    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0 }, { root: "G-1", depth: 1 }, { root: "G-2", depth: 1 }]);
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0, trace: true }, { root: "G-1", depth: 1, trace: true }, { root: "G-2", depth: 1, trace: true }]);
   });
 
   it("reads a group only while it is open; closing and reopening reads nothing", async () => {
@@ -188,14 +190,14 @@ describe("the flow's reads (flow-canvas)", () => {
     await waitFor(() => {
       expect(client.getFlow).toHaveBeenCalledTimes(1);
     });
-    expect(client.getFlow.mock.calls[0]?.[1]).toEqual({ root: "G-1", depth: 1 });
+    expect(client.getFlow.mock.calls[0]?.[1]).toEqual({ root: "G-1", depth: 1, trace: true });
     rerender(mounted(new Set()));
     rerender(mounted(new Set(["G-1"])));
     rerender(mounted(new Set(["G-1", "G-2"])));
     await waitFor(() => {
       expect(client.getFlow).toHaveBeenCalledTimes(2);
     });
-    expect(client.getFlow.mock.calls[1]?.[1]).toEqual({ root: "G-2", depth: 1 });
+    expect(client.getFlow.mock.calls[1]?.[1]).toEqual({ root: "G-2", depth: 1, trace: true });
   });
 });
 
@@ -438,17 +440,17 @@ describe("the cards (docs/features/board-ui.md \"Board\", \"Moving\")", () => {
     expect(queryKeys.card("alpha", "C-0001")).toEqual(["card", "alpha", "C-0001"]);
   });
 
-  it("reads the list with no option unless cancelled cards are asked", async () => {
+  it("always asks the marks, so no tile is drawn without one, and no other option unless cancelled cards are asked (AC-09 of trace-views)", async () => {
     const client = cardsClient();
     const queryClient = await mounted(client);
-    expect(argsOf(client.getCards)).toEqual([["alpha"]]);
+    expect(argsOf(client.getCards)).toEqual([["alpha", { marks: true }]]);
     render(
       <ApiProvider client={client} queryClient={queryClient}>
         <Board withCancelled />
       </ApiProvider>,
     );
     await waitFor(() => {
-      expect(argsOf(client.getCards)).toEqual([["alpha"], ["alpha", { with_cancelled: true }]]);
+      expect(argsOf(client.getCards)).toEqual([["alpha", { marks: true }], ["alpha", { with_cancelled: true, marks: true }]]);
     });
   });
 
@@ -518,13 +520,18 @@ describe("the cards (docs/features/board-ui.md \"Board\", \"Moving\")", () => {
 });
 
 describe("the trace and the clears (docs/features/card-trace.md)", () => {
-  it("keys a trace by project and REF, null the whole project; no option goes out unasked", async () => {
-    expect(queryKeys.trace("alpha")).toEqual(["trace", "alpha", null]);
-    expect(queryKeys.trace("alpha", { ref: "R-1" })).toEqual(["trace", "alpha", "R-1"]);
+  it("keys a trace by project, REF, stage and summary, null the whole project; no option goes out unasked", async () => {
+    expect(queryKeys.trace("alpha")).toEqual(["trace", "alpha", null, null, false]);
+    expect(queryKeys.trace("alpha", { ref: "R-1" })).toEqual(["trace", "alpha", "R-1", null, false]);
+    expect(queryKeys.trace("alpha", { stage: "print" })).toEqual(["trace", "alpha", null, "print", false]);
+    expect(queryKeys.trace("alpha", { summary: true })).toEqual(["trace", "alpha", null, null, true]);
     const client = stubClient();
     function Reads() {
       useTrace("alpha");
       useTrace("alpha", { ref: "R-1" });
+      useTrace("alpha", { stage: "print" });
+      useTraceSummary("alpha");
+      useTrace("alpha", { summary: false, stage: "held" }, false);
       return null;
     }
     render(
@@ -533,8 +540,34 @@ describe("the trace and the clears (docs/features/card-trace.md)", () => {
       </ApiProvider>,
     );
     await waitFor(() => {
-      expect(argsOf(client.getTrace)).toEqual([["alpha"], ["alpha", { ref: "R-1" }]]);
+      expect(argsOf(client.getTrace)).toEqual([["alpha"], ["alpha", { ref: "R-1" }], ["alpha", { stage: "print" }], ["alpha", { summary: true }]]);
     });
+  });
+
+  it("reads a lane only while it is open, by its stage; closing and reopening reads nothing", async () => {
+    const client = stubClient();
+    function Lanes({ open }: { open: ReadonlySet<string> }) {
+      useTraceLanes("alpha", ["gather", "-"], open);
+      return null;
+    }
+    const queryClient = createQueryClient();
+    const mounted = (open: ReadonlySet<string>) => (
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Lanes open={open} />
+      </ApiProvider>
+    );
+    const { rerender } = render(mounted(new Set()));
+    expect(client.getTrace).not.toHaveBeenCalled();
+    rerender(mounted(new Set(["gather"])));
+    await waitFor(() => {
+      expect(client.getTrace).toHaveBeenCalledTimes(1);
+    });
+    rerender(mounted(new Set()));
+    rerender(mounted(new Set(["gather", "-"])));
+    await waitFor(() => {
+      expect(client.getTrace).toHaveBeenCalledTimes(2);
+    });
+    expect(argsOf(client.getTrace)).toEqual([["alpha", { stage: "gather" }], ["alpha", { stage: "-" }]]);
   });
 
   it("a clear goes out as a write, and the list, the card and the trace are read before it settles", async () => {

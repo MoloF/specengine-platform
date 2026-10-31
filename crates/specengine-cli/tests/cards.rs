@@ -113,7 +113,7 @@ const SHOW_KEYS: [&str; 26] = [
 const LIST_KEYS: [&str; 5] = ["flows", "cards", "notes", "truncated", "omitted"];
 
 /// A row of `list`'s document.
-const ROW_KEYS: [&str; 17] = [
+const ROW_KEYS: [&str; 21] = [
     "id",
     "flow",
     "column",
@@ -131,6 +131,11 @@ const ROW_KEYS: [&str; 17] = [
     "revision",
     "accepted",
     "cancelled",
+    // docs/features/trace-views.md "The board tile": `null` without `--marks`.
+    "mark",
+    "on",
+    "discrepancy",
+    "correction",
 ];
 
 // ------------------------------------------------------------- helpers

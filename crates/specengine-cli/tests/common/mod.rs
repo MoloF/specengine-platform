@@ -460,6 +460,11 @@ pub const NON_RUST: (&str, &str) = ("spec-c", "dock-hire");
 /// same reason.
 pub const CARD_PRESS: (&str, &str) = ("card-press", "card-press");
 
+/// The fixture of docs/features/trace-views.md (a village almanac whose stages
+/// cut across its committees), with its slug: kept out of [`FIXTURES`] too,
+/// for the same reason.
+pub const TRACE_ALMANAC: (&str, &str) = ("trace-almanac", "trace-almanac");
+
 /// A header line of `spec show`: the fields split on ` | `.
 pub fn header_fields(line: &str) -> Vec<&str> {
     line.split(" | ").collect()

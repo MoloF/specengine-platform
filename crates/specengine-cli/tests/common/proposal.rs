@@ -128,7 +128,7 @@ impl Pair {
         let home = scratch.home("h");
         let slug = super::FIXTURES
             .iter()
-            .chain([&super::NON_RUST, &super::CARD_PRESS])
+            .chain([&super::NON_RUST, &super::CARD_PRESS, &super::TRACE_ALMANAC])
             .find(|(name, _)| *name == fixture)
             .map_or_else(
                 || panic!("no slug for {fixture}"),

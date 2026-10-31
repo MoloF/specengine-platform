@@ -294,18 +294,19 @@ fn ac15_bundle_writes_only_the_data_directory_and_reads_fresh_files() {
     );
 }
 
-/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 13, the stamp
+/// AC-16: the bundle adds no index format: `INDEX_FORMAT` is 14, the stamp
 /// of the code index (docs/features/symbol-index.md "Tables", TE-3), of its
 /// role table (`docs/canon/code-roles.md` "Table"; bevy-roles S5), of the
 /// layer C snapshot (docs/features/layer-c-resolve.md "Tables", R7), of the
-/// typed plan keys (docs/features/roadmap-items.md RD-2) and of the flow
-/// links (docs/features/flow-links.md AC-08), and the store's format history
-/// is its thirteen lines: roadmap-items' twelve, verbatim, and one
-/// `13 <hash>`. M: the dump changed, the stamp kept (the store's `format.rs`
+/// typed plan keys (docs/features/roadmap-items.md RD-2), of the flow links
+/// (docs/features/flow-links.md AC-08) and of `stage`
+/// (docs/features/trace-views.md "The key `stage:`"), and the store's format
+/// history is its fourteen lines: flow-links' thirteen, verbatim, and one
+/// `14 <hash>`. M: the dump changed, the stamp kept (the store's `format.rs`
 /// turns red on the dump; this pins the stamp and the file).
 #[test]
-fn ac16_index_format_is_thirteen() {
-    assert_eq!(specengine_store::INDEX_FORMAT, 13);
+fn ac16_index_format_is_fourteen() {
+    assert_eq!(specengine_store::INDEX_FORMAT, 14);
     let history = read_text(
         &repository_root(),
         "crates/specengine-store/tests/format_history.txt",
@@ -323,20 +324,21 @@ fn ac16_index_format_is_thirteen() {
 10 59e87cae8512cc3a5391034deb0531b0fa2c4df8c16b095dc3de95a9e4146f4c
 11 1faa605a4770475ee82fbf05ba8a01ff12724866e707482d9454e98d6cb6f5c1
 12 e574d6ba1be0cf469ce377f2312a120f53d38e77b1ed5184ba75d5ce0c190834
+13 852a6f00f30fc19cd73f5bb63e34b332ea5959e53e66e2b04bc6bd230a5ea28b
 ";
-    let thirteenth = history
+    let fourteenth = history
         .strip_prefix(earlier)
-        .unwrap_or_else(|| panic!("the twelve earlier lines stay verbatim:\n{history}"));
-    let (format, hash) = thirteenth
+        .unwrap_or_else(|| panic!("the thirteen earlier lines stay verbatim:\n{history}"));
+    let (format, hash) = fourteenth
         .strip_suffix('\n')
         .and_then(|line| line.split_once(' '))
-        .unwrap_or_else(|| panic!("one more line, `13 <hash>`:\n{history}"));
-    assert_eq!(format, "13", "{history}");
+        .unwrap_or_else(|| panic!("one more line, `14 <hash>`:\n{history}"));
+    assert_eq!(format, "14", "{history}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
-        "a BLAKE3 hex: {thirteenth:?}"
+        "a BLAKE3 hex: {fourteenth:?}"
     );
-    assert_eq!(history.lines().count(), 13, "thirteen lines:\n{history}");
+    assert_eq!(history.lines().count(), 14, "fourteen lines:\n{history}");
 }
 
 /// A garden-planning corpus: no programming stack, its own prefixes and

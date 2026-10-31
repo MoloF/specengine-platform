@@ -26,6 +26,9 @@
 //! - docs/features/flow-canvas.md AC-14, `FlowNode.gaps`: the distinct
 //!   documents the rows name among what a node holds, on the same corpora.
 //!   Its M8 (counting per row) turns `ac14_` red.
+//! - docs/features/trace-views.md AC-02 reverses `start` and `end` staying a
+//!   folded node's own: the two pins here flipped, the rest of the fold is
+//!   `trace_views.rs`.
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
@@ -687,8 +690,8 @@ fn every_key_is_present() {
             assert_eq!(
                 keys(node),
                 BTreeSet::from([
-                    "id", "kind", "title", "path", "line", "distance", "group", "start", "end",
-                    "holds", "inner", "gaps",
+                    "id", "kind", "title", "path", "line", "distance", "group", "stage", "start",
+                    "end", "holds", "inner", "gaps", "rollup", "counts",
                 ]),
                 "{node}"
             );
@@ -2281,12 +2284,10 @@ fn a_folded_node_takes_the_least_distance_it_holds() {
     let document = flow.json(&gaps, &["WING-LEND", "--depth", "0"]);
     let lend = node(&document, "WING-LEND");
     assert_eq!(lend["distance"], json!(0), "it holds LND-ASK at 0: {lend}");
-    assert_eq!(
-        lend["start"],
-        json!(false),
-        "LND-ASK's, not its own: {lend}"
-    );
-    assert_eq!(lend["end"], json!(false), "LND-OPEN's, not its own: {lend}");
+    // docs/features/trace-views.md "Folded start and end" reverses this
+    // slice's rule: both now fold beside `distance`.
+    assert_eq!(lend["start"], json!(true), "it holds LND-ASK: {lend}");
+    assert_eq!(lend["end"], json!(true), "it holds LND-OPEN: {lend}");
 
     let document = flow.json(&gaps, &["WING-LIBRARY", "--depth", "1"]);
     assert_eq!(
@@ -2782,10 +2783,10 @@ fn ac14_a_text_line_ends_gaps_above_zero() {
     assert_eq!(
         node_lines(&run.stdout),
         [
-            "0 WING-BROKEN | wing | The closed wing | docs/spec/wing-broken.md:1 | group \
-             WING-LIBRARY | holds 16, inner 17 | gaps 12",
-            "0 WING-LEND | wing | The lending wing | docs/spec/wing-lend.md:1 | group \
-             WING-LIBRARY | holds 7, inner 11 | gaps 1",
+            "0 WING-BROKEN | wing | The closed wing | docs/spec/wing-broken.md:1 | start | end \
+             | group WING-LIBRARY | holds 16, inner 17 | gaps 12",
+            "0 WING-LEND | wing | The lending wing | docs/spec/wing-lend.md:1 | start | end \
+             | group WING-LIBRARY | holds 7, inner 11 | gaps 1",
             "- WING-HEADLESS | wing | The back room | docs/spec/wing-headless.md:1 | group \
              WING-LIBRARY | holds 2, inner 1 | gaps 2",
             "- WING-LIBRARY | wing | The public library | docs/spec/wing-library.md:1",

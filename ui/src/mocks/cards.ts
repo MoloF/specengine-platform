@@ -1,4 +1,4 @@
-import { ClientError, CARD_REFUSED, CARD_USAGE, NO_SUCH_CARD, type CardsOptions, type TraceOptions } from "../api/client";
+import { ClientError, CARD_REFUSED, CARD_USAGE, NO_SUCH_CARD, type CardsOptions } from "../api/client";
 import type {
   Card,
   CardAcceptBody,
@@ -18,10 +18,6 @@ import type {
   CardRow,
   CardWrite,
   TraceCard,
-  TraceCounts,
-  TraceDocument,
-  TraceNode,
-  TraceRollup,
 } from "../api/types";
 import { stamp } from "./build";
 import type { Scenario } from "./scenario";
@@ -32,7 +28,9 @@ import type { Scenario } from "./scenario";
 // the default flow, and one card a column left behind. Marks are joined per read as the daemon's
 // (`docs/features/card-trace.md`): a node's `norm_hash` now against a card's frozen entry. In
 // harbor-sim DOM-BERTHS and MEC-MOORING changed after their cards read them, so C-0002 (open) and
-// C-0005 (accepted) are suspect; C-0010 was accepted as departing, PR-0041 its open discrepancy.
+// C-0005 (accepted) are suspect; C-0010 was accepted as departing, PR-0041 its open discrepancy;
+// C-0008 stands on MEC-OLD-SLIPWAY, a target gone, which no node of a trace read holds; C-0011 and
+// C-0012 are accepted and stand, so the Flow has something confirmed.
 
 /** A stored card: the document less what a read adds. */
 export type StoredCard = Omit<Card, "allowed" | "history" | "notes">;
@@ -49,13 +47,12 @@ export interface MockBoard {
   seq: number;
   /** The nodes whose meaning changed: each one's `norm_hash` now; any other reads as first frozen. */
   changed: Map<string, string>;
+  /** The targets that no longer resolve. */
+  gone: ReadonlySet<string>;
 }
 
-/** What a trace read takes from the project: a node's place, and whether a discrepancy is settled. */
-export interface TraceFacts {
-  place: (id: string) => { title: string | null; path: string } | null;
-  settled: (discrepancy: string) => boolean;
-}
+/** Whether a discrepancy is `applied` or `rejected`. */
+export type Settled = (discrepancy: string) => boolean;
 
 const MINUTE_DAY = 24 * 60;
 
@@ -70,6 +67,9 @@ const CLEAR = "-";
 
 /** At most this many bytes in a person's name, `CARD_PERSON_MAX`. */
 const NAME_MAX_BYTES = 128;
+
+/** harbor-sim's target gone: its document was deleted by hand. */
+const GONE_TARGET = "MEC-OLD-SLIPWAY";
 
 /** The `conflict` scenario's other hand. */
 const ELSEWHERE = "Dana Reyes";
@@ -128,9 +128,9 @@ function hashNow(board: MockBoard, id: string): string {
   return board.changed.get(id) ?? hashOf(id);
 }
 
-/** A frozen entry as a card reads the node now. */
+/** A frozen entry as a card reads the node now; a gone target has no hash to read. */
 function frozenNow(board: MockBoard, id: string): CardFrozen {
-  return { id, rev: 1, norm_hash: hashNow(board, id), also: [] };
+  return { id, rev: 1, norm_hash: board.gone.has(id) ? null : hashNow(board, id), also: [] };
 }
 
 /** A calendar day `days` from `at`, as `--due` writes one. */
@@ -285,7 +285,7 @@ function harborCards(at: number): StoredCard[] {
       title: "Crane reach diagram",
       goal: "Waiting on the survey's new numbers; the plate is set otherwise.",
       discipline: "plates",
-      targets: ["MEC-CARGO-CRANES"],
+      targets: ["MEC-CARGO-CRANES", GONE_TARGET],
       assignee: "Noor Ainsley",
       estimate: "2",
     }),
@@ -302,6 +302,34 @@ function harborCards(at: number): StoredCard[] {
       estimate: "3",
       due: dayFrom(at, 2),
       evidence: [{ kind: "build", value: "plate-run-41", by: "Lena Fisk", at: stamp(at, 8 * 60) }],
+    }),
+    aCard(at, {
+      id: "C-0011",
+      flow: "copy",
+      column: "filed",
+      position: 3,
+      title: "High water note",
+      discipline: "copy",
+      targets: ["RULE-HIGH-WATER"],
+      assignee: "Tomas Oakes",
+      reviewer: "Mira Holt",
+      estimate: "1",
+      acceptance: { by: "Mira Holt", at: stamp(at, 5 * MINUTE_DAY), note: null, verdict: "briefed", departs: [], discrepancy: null },
+      revision: "5",
+    }),
+    aCard(at, {
+      id: "C-0012",
+      flow: "copy",
+      column: "filed",
+      position: 4,
+      title: "Spring window table",
+      discipline: "copy",
+      targets: ["RULE-SPRING-WINDOW"],
+      assignee: "Mira Holt",
+      reviewer: "Ivo Brandt",
+      estimate: "2",
+      acceptance: { by: "Ivo Brandt", at: stamp(at, 2 * MINUTE_DAY), note: null, verdict: "briefed", departs: [], discrepancy: null },
+      revision: "5",
     }),
   ];
 }
@@ -377,7 +405,7 @@ function largeColumn(at: number): StoredCard[] {
 export function mockBoard(slug: string, scenario: Scenario, at: number): MockBoard {
   const harbor = slug === "harbor-sim";
   const flows = structuredClone(harbor ? [COPY, PLATES] : [PLAIN]);
-  const board = (cards: StoredCard[], events: MockEvent[], changed: Map<string, string>): MockBoard => ({ flows, cards, events, seq: events.length, changed });
+  const board = (cards: StoredCard[], events: MockEvent[], changed: Map<string, string>): MockBoard => ({ flows, cards, events, seq: events.length, changed, gone: new Set(harbor ? [GONE_TARGET] : []) });
   if (scenario === "empty") {
     return board([], [], new Map());
   }
@@ -420,7 +448,16 @@ function allowedOf(board: MockBoard, card: StoredCard) {
 }
 
 function rowOf({ id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, acceptance, cancellation }: StoredCard): CardRow {
-  return { id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted: acceptance !== null, cancelled: cancellation !== null };
+  return { id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted: acceptance !== null, cancelled: cancellation !== null, mark: null, on: null, discrepancy: null, correction: null };
+}
+
+/** A row with its mark over all its targets; a cancelled card, which a read ignores, has none. */
+function markedRow(board: MockBoard, card: StoredCard, settled: Settled): CardRow {
+  if (card.cancellation !== null) {
+    return rowOf(card);
+  }
+  const { mark, on, discrepancy, correction } = markOver(board, card, card.targets, settled);
+  return { ...rowOf(card), mark, on, discrepancy, correction };
 }
 
 /** A card's place in the list: flow, column by config, cancelled last, position. */
@@ -440,8 +477,8 @@ function byPlace(board: MockBoard) {
   };
 }
 
-/** `spec card list --json`, the browser view. */
-export function cardListOf(board: MockBoard, options: CardsOptions = {}): CardList {
+/** `spec card list [--marks] --json`, the browser view. */
+export function cardListOf(board: MockBoard, options: CardsOptions, settled: Settled): CardList {
   const listed = board.cards.filter((card) => options.with_cancelled === true || card.cancellation === null).sort(byPlace(board));
   const stranded = new Map<string, StoredCard[]>();
   for (const card of listed) {
@@ -452,7 +489,8 @@ export function cardListOf(board: MockBoard, options: CardsOptions = {}): CardLi
     }
   }
   const notes = Array.from(stranded, ([key, group]) => `${String(group.length)} card(s) in ${key}, from ${group[0]?.id ?? ""}: the column \`${group[0]?.column ?? ""}\` is no longer in the flow \`${group[0]?.flow ?? ""}\`: served last`);
-  return { flows: structuredClone(board.flows), cards: listed.map(rowOf), notes, truncated: false, omitted: null };
+  const rows = listed.map((card) => (options.marks === true ? markedRow(board, card, settled) : rowOf(card)));
+  return { flows: structuredClone(board.flows), cards: rows, notes, truncated: false, omitted: null };
 }
 
 /** `spec card show C --history --json`, uncut; an unknown C its exit-1 document. */
@@ -777,7 +815,7 @@ export function acceptCardIn(board: MockBoard, id: string, body: CardAcceptBody,
   return made === null ? answer : { ...answer, notes: [`${id} departs: its discrepancy is ${made}`] };
 }
 
-/** The direct targets `card` is suspect on: its frozen hash, or an `also`, is not what the node reads now. */
+/** The direct targets `card` is suspect on: its frozen hash, or an `also`, is not what the node reads now, or the node is gone. */
 function suspectOn(board: MockBoard, card: StoredCard): string[] {
   return card.targets.filter((target) => {
     const frozen = card.snapshot?.find((entry) => entry.id === target);
@@ -785,7 +823,7 @@ function suspectOn(board: MockBoard, card: StoredCard): string[] {
       return false;
     }
     const now = hashNow(board, target);
-    return now !== frozen.norm_hash && !frozen.also.includes(now);
+    return board.gone.has(target) || (now !== frozen.norm_hash && !frozen.also.includes(now));
   });
 }
 
@@ -805,7 +843,7 @@ function clearProblem(as: string, reason: string): string | null {
 /** Each suspect entry frozen again, and the entries as moved, `card.cleared`'s `nodes`. */
 function cleared(board: MockBoard, card: StoredCard) {
   const suspect = suspectOn(board, card);
-  const nodes = (card.snapshot ?? []).filter((entry) => suspect.includes(entry.id)).map((entry) => ({ id: entry.id, rev: 1, from: entry.norm_hash, to: hashNow(board, entry.id) }));
+  const nodes = (card.snapshot ?? []).filter((entry) => suspect.includes(entry.id)).map((entry) => ({ id: entry.id, rev: 1, from: entry.norm_hash, to: frozenNow(board, entry.id).norm_hash }));
   card.snapshot = (card.snapshot ?? []).map((entry) => (suspect.includes(entry.id) ? frozenNow(board, entry.id) : entry));
   return nodes;
 }
@@ -883,67 +921,26 @@ export function clearCardGroupIn(board: MockBoard, body: CardClearGroupBody, at:
   return { group: body.group, cleared: cards.map((card) => card.id), notes: [] };
 }
 
-/** A card's mark over one node, first match: departed, suspect (correcting while a correction lives), accepted, open. */
-function markOf(board: MockBoard, card: StoredCard, node: string, facts: TraceFacts): TraceCard {
+/** A card's mark over the targets `on`, first match: departed, suspect (correcting while a correction lives), accepted, open. */
+export function markOver(board: MockBoard, card: StoredCard, on: readonly string[], settled: Settled): TraceCard {
   const { id, flow, column, title } = card;
   const row = { id, flow, column, title, on: null, discrepancy: null, correction: null };
   const { acceptance } = card;
-  if (acceptance !== null && acceptance.departs.includes(node) && (acceptance.discrepancy === null || !facts.settled(acceptance.discrepancy))) {
-    return { ...row, mark: "departed", on: node, discrepancy: acceptance.discrepancy };
+  const departed = acceptance?.departs.find((target) => on.includes(target));
+  if (acceptance !== null && departed !== undefined && (acceptance.discrepancy === null || !settled(acceptance.discrepancy))) {
+    return { ...row, mark: "departed", on: departed, discrepancy: acceptance.discrepancy };
   }
-  if (suspectOn(board, card).includes(node)) {
+  const suspect = suspectOn(board, card).find((target) => on.includes(target));
+  if (suspect !== undefined) {
     const correction = liveCorrection(board, id);
-    return correction === null ? { ...row, mark: "suspect", on: node } : { ...row, mark: "correcting", on: node, correction };
+    return correction === null ? { ...row, mark: "suspect", on: suspect } : { ...row, mark: "correcting", on: suspect, correction };
   }
   return { ...row, mark: acceptance === null ? "open" : "accepted" };
 }
 
-/** A node's state from its cards' marks, first match. */
-function rollupOf(marks: readonly TraceCard[]): TraceRollup {
-  if (marks.length === 0) {
-    return "no card";
-  }
-  if (marks.some(({ mark }) => mark === "departed")) {
-    return "departed";
-  }
-  if (marks.some(({ mark }) => mark === "suspect")) {
-    return "suspect";
-  }
-  return marks.some(({ mark }) => mark === "open" || mark === "correcting") ? "in work" : "confirmed";
-}
-
-const NO_COUNTS: TraceCounts = { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 };
-
-/** One state counted. */
-function countOf(rollup: TraceRollup): TraceCounts {
-  const key = ({ "no card": "no_card", departed: "departed", suspect: "suspect", "in work": "in_work", confirmed: "confirmed" } as const)[rollup];
-  return { ...NO_COUNTS, [key]: 1 };
-}
-
-/** `spec trace [REF] --json`: every node a card targets, or REF alone, marks joined per read; a REF naming nothing, its exit-1 document. */
-export function cardTraceOf(board: MockBoard, options: TraceOptions, facts: TraceFacts): TraceDocument {
-  const standingCards = board.cards.filter((card) => card.cancellation === null);
-  const ids = options.ref === undefined ? [...new Set(standingCards.flatMap((card) => card.targets))] : [options.ref];
-  if (options.ref !== undefined && facts.place(options.ref) === null) {
-    return { ref: options.ref, reason: `no node \`${options.ref}\``, notes: [], counts: NO_COUNTS, nodes: [], truncated: false, omitted: null };
-  }
-  const nodes = ids.map((id): TraceNode => {
-    const cards = standingCards.filter((card) => card.targets.includes(id)).map((card) => markOf(board, card, id, facts));
-    const rollup = rollupOf(cards);
-    const place = facts.place(id);
-    return { id, title: place?.title ?? null, path: place?.path ?? "", rollup, counts: countOf(rollup), cards, uses: [] };
-  });
-  const counts = nodes.reduce<TraceCounts>(
-    (sum, node) => ({
-      no_card: sum.no_card + node.counts.no_card,
-      in_work: sum.in_work + node.counts.in_work,
-      suspect: sum.suspect + node.counts.suspect,
-      departed: sum.departed + node.counts.departed,
-      confirmed: sum.confirmed + node.counts.confirmed,
-    }),
-    NO_COUNTS,
-  );
-  return { ref: options.ref ?? null, reason: null, notes: [], counts, nodes, truncated: false, omitted: null };
+/** The targets gone a card is suspect on, as a read's note says them. */
+export function goneUnder(board: MockBoard, card: StoredCard): string[] {
+  return suspectOn(board, card).filter((target) => board.gone.has(target));
 }
 
 /** The `conflict` scenario: someone else got there first, once. */

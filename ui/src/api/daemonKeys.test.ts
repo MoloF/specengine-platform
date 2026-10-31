@@ -102,6 +102,7 @@ import type {
   TraceCounts,
   TraceDocument,
   TraceNode,
+  TraceStage,
   TraceUse,
   UnappliedAmendment,
   UnboundCounts,
@@ -149,11 +150,13 @@ import type {
 // "Types": the list, a flow, a column, a move, a row, a card, an evidence entry, an acceptance, a
 // cancellation, an event, the write document, no such card, the ninety-eighth `CardNotFound`); and
 // card-trace's seven (docs/features/card-trace.md "Data": the trace document, its counts, a node, a
-// card with its mark, a use, a frozen entry, the group clear's answer, the hundred-and-fifth and last
-// `CardClearGroupWrite`), with an acceptance's `verdict`, `departs`, `discrepancy`. A key the types
+// card with its mark, a use, a frozen entry, the group clear's answer, the hundred-and-fifth
+// `CardClearGroupWrite`), with an acceptance's `verdict`, `departs`, `discrepancy`; and trace-views'
+// one (docs/features/trace-views.md "Routes and types": a lane, the hundred-and-sixth and last
+// `TraceStage`), with `FlowNode` at 15 keys, `CardRow` at 21, `TraceDocument` at 8, `TraceNode` at 9. A key the types
 // carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already
 // names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all one hundred and five, in the slices' order.
+// names all one hundred and six, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -686,11 +689,14 @@ const KEYS = {
     line: true,
     distance: true,
     group: true,
+    stage: true,
     start: true,
     end: true,
     holds: true,
     inner: true,
     gaps: true,
+    rollup: true,
+    counts: true,
   } satisfies Record<keyof FlowNode, true>,
   FlowEdge: {
     from: true,
@@ -726,6 +732,10 @@ const KEYS = {
     revision: true,
     accepted: true,
     cancelled: true,
+    mark: true,
+    on: true,
+    discrepancy: true,
+    correction: true,
   } satisfies Record<keyof CardRow, true>,
   Card: {
     id: true,
@@ -762,11 +772,13 @@ const KEYS = {
   CardWrite: { id: true, flow: true, column: true, position: true, revision: true, allowed: true, notes: true } satisfies Record<keyof CardWrite, true>,
   CardNotFound: { id: true, reason: true } satisfies Record<keyof CardNotFound, true>,
   // docs/features/card-trace.md "Data".
-  TraceDocument: { ref: true, reason: true, notes: true, counts: true, nodes: true, truncated: true, omitted: true } satisfies Record<keyof TraceDocument, true>,
+  TraceDocument: { ref: true, reason: true, notes: true, counts: true, stages: true, nodes: true, truncated: true, omitted: true } satisfies Record<keyof TraceDocument, true>,
   TraceCounts: { no_card: true, in_work: true, suspect: true, departed: true, confirmed: true } satisfies Record<keyof TraceCounts, true>,
-  TraceNode: { id: true, title: true, path: true, rollup: true, counts: true, cards: true, uses: true } satisfies Record<keyof TraceNode, true>,
+  TraceNode: { id: true, title: true, path: true, stage: true, distance: true, rollup: true, counts: true, cards: true, uses: true } satisfies Record<keyof TraceNode, true>,
   TraceCard: { id: true, flow: true, column: true, title: true, mark: true, on: true, discrepancy: true, correction: true } satisfies Record<keyof TraceCard, true>,
   TraceUse: { id: true, rollup: true, cards: true } satisfies Record<keyof TraceUse, true>,
+  // docs/features/trace-views.md "Routes and types": one lane.
+  TraceStage: { stage: true, distance: true, counts: true } satisfies Record<keyof TraceStage, true>,
   CardFrozen: { id: true, rev: true, norm_hash: true, also: true } satisfies Record<keyof CardFrozen, true>,
   CardClearGroupWrite: { group: true, cleared: true, notes: true } satisfies Record<keyof CardClearGroupWrite, true>,
 };
@@ -870,14 +882,14 @@ const CITED: Record<Named, string> = {
   LockDiffCodeSide: "blob, file, diff",
   FlowView: "root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, gaps, nodes, edges",
   FlowGap: "code, state, count, items, cause",
-  FlowNode: "id, kind, title, path, line, distance, group, start, end, holds, inner, gaps",
+  FlowNode: "id, kind, title, path, line, distance, group, stage, start, end, holds, inner, gaps, rollup, counts",
   FlowEdge: "from, to, type, kind, when, count, path, line",
   FlowInner: "type, count",
   CardList: "flows, cards, notes, truncated, omitted",
   CardFlow: "name, disciplines, columns, moves, accept",
   CardColumn: "id, title",
   CardMove: "from, to, by",
-  CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled",
+  CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
   Card: "id, flow, column, position, title, goal, discipline, targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
   CardEvidence: "kind, value, by, at",
   CardAcceptance: "by, at, note, verdict, departs, discrepancy",
@@ -885,11 +897,12 @@ const CITED: Record<Named, string> = {
   CardEvent: "seq, type, at, payload",
   CardWrite: "id, flow, column, position, revision, allowed, notes",
   CardNotFound: "id, reason",
-  TraceDocument: "ref, reason, notes, counts, nodes, truncated, omitted",
+  TraceDocument: "ref, reason, notes, counts, stages, nodes, truncated, omitted",
   TraceCounts: "no_card, in_work, suspect, departed, confirmed",
-  TraceNode: "id, title, path, rollup, counts, cards, uses",
+  TraceNode: "id, title, path, stage, distance, rollup, counts, cards, uses",
   TraceCard: "id, flow, column, title, mark, on, discrepancy, correction",
   TraceUse: "id, rollup, cards",
+  TraceStage: "stage, distance, counts",
   CardFrozen: "id, rev, norm_hash, also",
   CardClearGroupWrite: "group, cleared, notes",
 };
@@ -1048,8 +1061,14 @@ const BEFORE_CARD_TRACE: readonly Named[] = [...BEFORE_BOARD_UI, ...BOARD_UI];
 /** card-trace's seven, in the file's order (docs/features/card-trace.md "Data"). */
 const CARD_TRACE: readonly Named[] = ["TraceDocument", "TraceCounts", "TraceNode", "TraceCard", "TraceUse", "CardFrozen", "CardClearGroupWrite"];
 
+/** The hundred and five types the fixture named before trace-views. */
+const BEFORE_TRACE_VIEWS: readonly Named[] = [...BEFORE_CARD_TRACE, ...CARD_TRACE];
+
+/** trace-views' one: a lane of `spec trace` (docs/features/trace-views.md "Routes and types"). */
+const TRACE_VIEWS: readonly Named[] = ["TraceStage"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_CARD_TRACE, ...CARD_TRACE];
+const ALL: readonly Named[] = [...BEFORE_TRACE_VIEWS, ...TRACE_VIEWS];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1117,7 +1136,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_FLOW_READ.at(-1)).toBe("LockDiffCodeSide");
     expect(BEFORE_BOARD_UI.at(-1)).toBe("FlowInner");
     expect(BEFORE_CARD_TRACE.at(-1)).toBe("CardNotFound");
-    expect(ALL.at(-1)).toBe("CardClearGroupWrite");
+    expect(BEFORE_TRACE_VIEWS.at(-1)).toBe("CardClearGroupWrite");
+    expect(ALL.at(-1)).toBe("TraceStage");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1146,7 +1166,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(105);
+    expect(ALL).toHaveLength(106);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1254,8 +1274,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_FLOW_READ).toHaveLength(81);
     expect(BEFORE_BOARD_UI).toHaveLength(86);
     expect(BEFORE_CARD_TRACE).toHaveLength(98);
-    expect(ALL).toHaveLength(105);
-    expect(new Set(ALL).size).toBe(105);
+    expect(BEFORE_TRACE_VIEWS).toHaveLength(105);
+    expect(ALL).toHaveLength(106);
+    expect(new Set(ALL).size).toBe(106);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1496,12 +1517,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and five types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven", () => {
+  it("names exactly the one hundred and six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and five, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and six, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(105);
+    expect(Object.keys(sets)).toHaveLength(106);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1601,30 +1622,39 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
-  it("names card-trace's seven after CardNotFound, last: 7, 5, 7, 8, 3, 4, 3 keys in the types' order, the hundred-and-fifth and last CardClearGroupWrite (docs/features/card-trace.md \"Data\")", () => {
-    expect(Object.keys(sets).slice(BEFORE_CARD_TRACE.length)).toEqual([...CARD_TRACE]);
+  it("names trace-views' TraceStage last: a lane's three keys, the hundred-and-sixth; a document's stages after counts, a node's stage and distance after path (docs/features/trace-views.md \"Routes and types\")", () => {
+    expect(Object.keys(sets).slice(BEFORE_TRACE_VIEWS.length)).toEqual([...TRACE_VIEWS]);
+    expect(Object.keys(sets).at(-1)).toBe("TraceStage");
+    expect(sets.TraceStage).toEqual(["stage", "distance", "counts"]);
+    expect(declaredKeys("TraceStage")).toEqual(["stage", "distance", "counts"]);
+    expect(sets.TraceDocument?.slice(3, 5)).toEqual(["counts", "stages"]);
+    expect(sets.TraceNode?.slice(2, 5)).toEqual(["path", "stage", "distance"]);
+  });
+
+  it("names card-trace's seven after CardNotFound, before TraceStage: 8, 5, 9, 8, 3, 4, 3 keys in the types' order, the hundred-and-fifth CardClearGroupWrite (docs/features/card-trace.md \"Data\")", () => {
+    expect(Object.keys(sets).slice(BEFORE_CARD_TRACE.length, BEFORE_TRACE_VIEWS.length)).toEqual([...CARD_TRACE]);
     expect(Object.keys(sets).indexOf("TraceDocument")).toBe(98);
-    expect(Object.keys(sets).at(-1)).toBe("CardClearGroupWrite");
+    expect(Object.keys(sets).at(BEFORE_TRACE_VIEWS.length - 1)).toBe("CardClearGroupWrite");
     expect(CARD_TRACE.map((name) => sets[name])).toEqual(CARD_TRACE.map((name) => served(name)));
-    expect(CARD_TRACE.map((name) => sets[name]?.length)).toEqual([7, 5, 7, 8, 3, 4, 3]);
+    expect(CARD_TRACE.map((name) => sets[name]?.length)).toEqual([8, 5, 9, 8, 3, 4, 3]);
     expect(CARD_TRACE.map((name) => declaredKeys(name))).toEqual(CARD_TRACE.map((name) => served(name)));
   });
 
-  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 5, 2, 3, 17, 26, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\")", () => {
+  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 5, 2, 3, 21, 26, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\")", () => {
     expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length, BEFORE_CARD_TRACE.length)).toEqual([...BOARD_UI]);
     expect(Object.keys(sets).indexOf("CardList")).toBe(86);
     expect(Object.keys(sets).at(BEFORE_CARD_TRACE.length - 1)).toBe("CardNotFound");
     expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 17, 26, 4, 6, 3, 4, 7, 2]);
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 21, 26, 4, 6, 3, 4, 7, 2]);
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
 
-  it("names flow-read's five after LockDiffCodeSide, before board-ui's twelve: 11, 5, 12, 8, 2 keys in the types' order, the eighty-sixth FlowInner (docs/features/flow-read.md, flow-canvas.md)", () => {
+  it("names flow-read's five after LockDiffCodeSide, before board-ui's twelve: 11, 5, 15, 8, 2 keys in the types' order, the eighty-sixth FlowInner (docs/features/flow-read.md, flow-canvas.md)", () => {
     expect(Object.keys(sets).slice(BEFORE_FLOW_READ.length, BEFORE_BOARD_UI.length)).toEqual([...FLOW_READ]);
     expect(Object.keys(sets).indexOf("FlowView")).toBe(81);
     expect(Object.keys(sets).at(BEFORE_BOARD_UI.length - 1)).toBe("FlowInner");
     expect(FLOW_READ.map((name) => sets[name])).toEqual(FLOW_READ.map((name) => served(name)));
-    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([11, 5, 12, 8, 2]);
+    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([11, 5, 15, 8, 2]);
     expect(FLOW_READ.map((name) => declaredKeys(name))).toEqual(FLOW_READ.map((name) => served(name)));
   });
 

@@ -1,0 +1,28 @@
+# Fixture corpus trace-almanac: a village's yearly almanac, no game word and
+# no code. Two committees make the book, and the stages cut across them: each
+# committee does some of the gathering and some of the printing, so no
+# `parent:` could say what `stage:` says. One step carries no stage. `[flow]`
+# marks where the book begins and ends, and one trade works every card. Kinds,
+# prefixes, stages, flows and columns are this project's own
+# (docs/features/trace-views.md "Fixture", ADR-0008). Tests cut the cards; the
+# fixture holds none.
+
+[project]
+slug = "trace-almanac"
+
+[ids]
+BOOK = { kind = "yearbook",  shape = "name" }
+PART = { kind = "committee", shape = "name" }
+STEP = { kind = "errand",    shape = "name" }
+
+[[flow.start]]
+paths = ["docs/spec/step-call.md"]
+
+[[flow.end]]
+paths = ["docs/spec/step-bind.md"]
+
+[[card.flow]]
+name = "almanac"
+disciplines = ["editing"]
+columns = ["todo", "doing", "review", "done"]
+accept = { from = "review", to = "done" }

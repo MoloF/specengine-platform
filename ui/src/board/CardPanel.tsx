@@ -1,8 +1,9 @@
 import { useId, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref } from "react";
 import { apiErrorOf } from "../api/client";
 import type { CardQuery } from "../api/queries";
-import type { Card, CardEvent, CardFlow, CardNotFound, TraceCard } from "../api/types";
+import type { Card, CardEvent, CardFlow, CardNotFound } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { rollupLook } from "../flow/labels";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier } from "../ui/keys";
@@ -11,7 +12,7 @@ import { shownSlot, shownText } from "../ui/text";
 import { formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { isOverdue } from "./due";
-import { ACCEPTED, BY_HAND, canClear, CANCELLED, columnTitle, eventWords, markLine, markLook, OVERDUE, UNASSIGNED } from "./labels";
+import { ACCEPTED, BY_HAND, canClear, CANCELLED, columnTitle, eventWords, markLine, markLook, OVERDUE, UNASSIGNED, type CardMark } from "./labels";
 
 /** The panel's five writes, each a dialog. */
 export type CardAction = "edit" | "assign" | "cancel" | "accept" | "clear";
@@ -146,7 +147,7 @@ function Closure({ card }: { card: Card }) {
 }
 
 /** What a read says of the card against its brief, closed or not: a suspect card's Clear stands here, an accepted card's too. */
-function BriefMark({ card, mark, onAct }: { card: Card; mark: TraceCard; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+function BriefMark({ card, mark, onAct }: { card: Card; mark: CardMark; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
   const look = markLook(mark);
   if (look === null) {
     return null;
@@ -174,6 +175,11 @@ function BriefMark({ card, mark, onAct }: { card: Card; mark: TraceCard; onAct: 
       )}
     </Part>
   );
+}
+
+/** A target's word, when the trace read holds it; a target gone has none. */
+function TargetState({ rollup }: { rollup: string | undefined }) {
+  return rollup === undefined ? null : <Badge look={rollupLook(rollup)} />;
 }
 
 function Actions({ card, flow, onAct }: { card: Card; flow: CardFlow | undefined; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
@@ -208,15 +214,19 @@ function Details({
   flow,
   today,
   mark,
+  rollups,
   markFailure,
+  stateFailure,
   onAct,
 }: {
   project: string;
   card: Card;
   flow: CardFlow | undefined;
   today: string;
-  mark: TraceCard | undefined;
+  mark: CardMark | null;
+  rollups: ReadonlyMap<string, string>;
   markFailure: string | null;
+  stateFailure: string | null;
   onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
 }) {
   const accepted = card.acceptance !== null;
@@ -239,12 +249,18 @@ function Details({
           ))}
         </ul>
       )}
-      {mark !== undefined && <BriefMark card={card} mark={mark} onAct={onAct} />}
+      {mark !== null && <BriefMark card={card} mark={mark} onAct={onAct} />}
       {markFailure !== null && (
         // Not known, never read as clean: no mark is shown for a read that failed.
         <p className="note">
           <Icon name="alert" />
           <span>Whether the brief changed under this card could not be read: {markFailure}</span>
+        </p>
+      )}
+      {stateFailure !== null && (
+        <p className="note">
+          <Icon name="alert" />
+          <span>The state of this card's targets could not be read: {stateFailure}</span>
         </p>
       )}
       {accepted || cancelled ? <Closure card={card} /> : <Actions card={card} flow={flow} onAct={onAct} />}
@@ -270,10 +286,11 @@ function Details({
         ) : (
           <ul className="board-panel-list">
             {card.targets.map((target) => (
-              <li key={target}>
+              <li key={target} className="board-panel-target">
                 <a href={sectionHash(project, "tree", target)}>
                   <bdi className="mono">{shownSlot(target)}</bdi>
                 </a>
+                <TargetState rollup={rollups.get(target)} />
               </li>
             ))}
           </ul>
@@ -353,7 +370,9 @@ export function CardPanel({
   flowOf,
   today,
   mark,
+  rollups,
   markFailure,
+  stateFailure,
   headingRef,
   onAct,
   onClose,
@@ -363,9 +382,13 @@ export function CardPanel({
   query: CardQuery;
   flowOf: (name: string) => CardFlow | undefined;
   today: string;
-  mark: TraceCard | undefined;
-  /** Why the trace could not be read. */
+  mark: CardMark | null;
+  /** Each target's rollup, as the trace read has it. */
+  rollups: ReadonlyMap<string, string>;
+  /** Why the list, which says the mark, could not be read: no mark is shown. */
   markFailure: string | null;
+  /** Why the trace, which says the targets' states, could not be read. */
+  stateFailure: string | null;
   headingRef: Ref<HTMLHeadingElement>;
   onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
   onClose: () => void;
@@ -411,7 +434,7 @@ export function CardPanel({
       </div>
     );
   } else {
-    body = <Details project={project} card={card} flow={flowOf(card.flow)} today={today} mark={mark} markFailure={markFailure} onAct={onAct} />;
+    body = <Details project={project} card={card} flow={flowOf(card.flow)} today={today} mark={mark} rollups={rollups} markFailure={markFailure} stateFailure={stateFailure} onAct={onAct} />;
   }
 
   return (

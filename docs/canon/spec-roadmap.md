@@ -40,7 +40,7 @@ links:
   depends_on: [RM-0004]   # optional: the chain
 ```
 
-Typed (core `TYPED_KEYS` 30, model `Fields`, import's copy: `import-layout.md` "YAML"): `release`, `priority` `Text`; `estimate` `TextOrInteger`, a YAML integer kept as its decimal text (`3` -> `"3"`). Never counted (`node-revision.md` "Never counted"): a value of the key's type leaves `NORM_RECIPE`, every `norm_hash` and revision as they are. A wrongly typed one (a list, a mapping; a number or boolean under `release`, `priority`; a float or boolean under `estimate`) is `frontmatter-type`, kept in `extra`, its document's `norm_hash` null (`node-revision.md` "Null").
+Typed (core `TYPED_KEYS` 31, model `Fields`, import's copy: `import-layout.md` "YAML"): `release`, `priority` `Text`; `estimate` `TextOrInteger`, a YAML integer kept as its decimal text (`3` -> `"3"`). Never counted (`node-revision.md` "Never counted"): a value of the key's type leaves `NORM_RECIPE`, every `norm_hash` and revision as they are. A wrongly typed one (a list, a mapping; a number or boolean under `release`, `priority`; a float or boolean under `estimate`) is `frontmatter-type`, kept in `extra`, its document's `norm_hash` null (`node-revision.md` "Null").
 
 No check rule of its own: `depends-cycle`, `ref-dangling`, `frontmatter-type`, `status-invalid`, `id-width`, `id-taken` cover items. Other reads see a node of its `[ids]` kind; a Tier 3 item only with `--archive`.
 

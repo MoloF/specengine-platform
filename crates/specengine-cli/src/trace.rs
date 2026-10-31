@@ -1,10 +1,11 @@
-//! `spec trace [REF]` (task spec `card-trace`): each node's computed state
-//! against the cards that answer it, and what a change of it marks. Core's
-//! `trace` judges; this file reads the root's index and the queue, resolves
-//! `REF`, bounds and prints.
+//! `spec trace [REF] [--stage S] [--summary]` (task specs `card-trace`,
+//! `trace-views`): each node's computed state against the cards that answer
+//! it, and what a change of it marks. Core's `trace` judges; this file reads
+//! the root's index and the queue, resolves `REF`, bounds and prints.
 //!
 //! ```text
 //! trace <REF or all> | nodes <n>, cards <c> | no card <a>, in work <b>, suspect <s>, departed <d>, confirmed <f>
+//! stage <name or -> | distance <d or -> | no card <a>, in work <b>, suspect <s>, departed <d>, confirmed <f>
 //! <state> | <name> | <title> | <path> | cards <c>
 //!   card <id> | <flow>/<column> | <mark> | <title>
 //!   uses <name> | <state> | cards <c>
@@ -18,11 +19,20 @@
 //! target in `SpecGraph::within(node)`, cancelled ones never read. `uses` is
 //! one level of incoming links, a consequence and never a mark.
 //!
+//! The summary line and the stage lines are the whole read's, whatever
+//! `--stage` keeps of its node rows and `--summary`, which keeps none. A
+//! lane holds the listed nodes of a stage, a section standing in its
+//! document's; the last lane, and `--stage -`, the listed flow steps with
+//! none, so a group with no stage of its own stands in no lane. A lane's
+//! `distance` is the least of its nodes' from core's walk of the read, none
+//! under a `[flow]` that does not read. Lanes by (`distance`, unreached
+//! last, stage), the steps with no stage last.
+//!
 //! The cut, at [`crate::OUTPUT_CAP_CHARS`]: nodes whole, the first that does
 //! not fit and every later one left out; a first node over the cap alone
 //! shows its row and the card and `uses` lines that fit, so an answer is never
 //! empty. The tail counts what is cut, JSON holds the printed rows, `omitted`
-//! counts them, and the header's and a row's counts stay whole.
+//! counts them, and the header's, a lane's and a row's counts stay whole.
 //!
 //! Exit 0 whatever is listed; 1 only a `REF` naming nothing; 2 as `spec
 //! flow`. The queue is read as `spec roadmap` reads it, no schema step; no
@@ -30,22 +40,26 @@
 //! unreadable discrepancy reads unsettled with a note.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use serde::Serialize;
 use specengine_core::check::{Endpoint, NodeAt, SpecGraph, Standing};
-use specengine_core::revision;
 use specengine_core::trace::{
     CardMark, MarkFacts, Rollup, RollupCounts, TargetNorms, TargetNow, card_mark, mark_notes,
     rollup,
 };
+use specengine_core::{FlowConfig, FlowWalk, flow_walk, revision, stage_of};
 use specengine_model::{Card, CardVerdict, USES};
-use specengine_store::{NodeNorm, ProposalQueue as _, ProposalStatus, SqliteIndex, SqliteQueue};
+use specengine_store::{
+    NodeNorm, ProposalQueue as _, ProposalStatus, QUEUE_SCHEMA_VERSION, QueueError, SqliteIndex,
+    SqliteQueue,
+};
 
 use crate::cap::{View, lines_within};
 use crate::corpus::{Admission, holders_warning, indexed_in, locate};
 use crate::location::{db_path, open_index};
-use crate::project::{ProjectRoot, discover};
-use crate::proposals::queue_cannot;
+use crate::project::{ProjectRoot, discover_with_text};
+use crate::proposals::{queue_below_schema, queue_cannot};
 use crate::search::notes;
 use crate::show::classify;
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, store_error};
@@ -59,11 +73,30 @@ const ALL: &str = "all";
 /// What a tail may take beside the name of the node it cuts.
 const TAIL_ROOM: usize = 160;
 
+/// How a line and `--stage` name the steps with no stage.
+const NO_STAGE: &str = "-";
+
 /// `spec trace` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TraceRequest {
     /// `REF` as given; `None`: every live document.
     pub reference: Option<String>,
+    /// `--stage S`: keep the node rows of this stage, `-` the steps with none.
+    pub stage: Option<String>,
+    /// `--summary`: no node rows.
+    pub summary: bool,
+}
+
+impl TraceRequest {
+    /// Whether a row of `stage`, in a lane or not, is kept.
+    fn keeps(&self, stage: Option<&str>, in_lane: bool) -> bool {
+        !self.summary
+            && match self.stage.as_deref() {
+                None => true,
+                Some(NO_STAGE) => stage.is_none() && in_lane,
+                asked => asked == stage,
+            }
+    }
 }
 
 /// One card of a node.
@@ -91,11 +124,34 @@ pub struct TraceNode {
     pub id: String,
     pub title: Option<String>,
     pub path: String,
+    /// Its document's `stage:`, as written.
+    pub stage: Option<String>,
+    /// Its document's links of `follows` from the starts, core's walk of the
+    /// read; `None`: unreached.
+    pub distance: Option<usize>,
     pub rollup: Rollup,
     /// Over the node and the documents it holds by `parent:`.
     pub counts: RollupCounts,
     pub cards: Vec<TraceCard>,
     pub uses: Vec<TraceUse>,
+}
+
+/// One lane: the listed nodes of a stage.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct TraceStage {
+    /// `None`: the flow steps with no stage.
+    pub stage: Option<String>,
+    /// The least of its nodes'; `None`: none is reached.
+    pub distance: Option<usize>,
+    pub counts: RollupCounts,
+}
+
+/// A node's state and what it and what it holds count, for a read joining
+/// them (`spec flow --trace`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TraceBadge {
+    pub rollup: Rollup,
+    pub counts: RollupCounts,
 }
 
 /// How much of a first node over the cap prints.
@@ -112,11 +168,15 @@ pub struct TraceOutcome {
     pub reference: Option<String>,
     pub reason: Option<String>,
     pub messages: Vec<Message>,
+    /// The nodes listed, whatever `--stage` and `--summary` keep.
+    pub listed: usize,
     /// Over the listed nodes.
     pub counts: RollupCounts,
     /// The cards the listed nodes hold, each once.
     pub cards: usize,
-    /// By (path, position).
+    /// Over the listed nodes carrying a stage and the listed flow steps.
+    pub stages: Vec<TraceStage>,
+    /// The rows kept, by (path, position).
     pub nodes: Vec<TraceNode>,
     /// How many of `nodes` are printed (text and JSON alike).
     pub shown: usize,
@@ -184,18 +244,27 @@ pub(crate) struct QueueRead {
     /// Each card a live correction corrects, and the first such correction.
     pub corrections: BTreeMap<String, String>,
     pub notes: Vec<String>,
+    /// The schema it stands at; 0: no queue step has run.
+    schema: i64,
 }
 
 /// The queue as `spec roadmap` reads it, no schema step; no queue: empty.
-/// A failure is the caller's: `spec trace` exits, `spec impact` notes it.
+/// A failure is the caller's: `spec trace` exits, `spec impact` notes it,
+/// `spec flow --trace` too ([`flow_queue`]).
 pub(crate) fn queue_read(env: &Env, slug: &str) -> Result<QueueRead, CliError> {
-    let db = db_path(env, slug)?;
-    let queue = SqliteQueue::open_existing(&db, slug).map_err(queue_cannot)?;
-    let Some(queue) = queue else {
+    existing_queue(&db_path(env, slug)?, slug).map_err(queue_cannot)
+}
+
+/// [`queue_read`] of the database `db`.
+fn existing_queue(db: &Path, slug: &str) -> Result<QueueRead, QueueError> {
+    let Some(queue) = SqliteQueue::open_existing(db, slug)? else {
         return Ok(QueueRead::default());
     };
-    let listed = queue.list_existing_cards().map_err(queue_cannot)?;
-    let mut read = QueueRead::default();
+    let listed = queue.list_existing_cards()?;
+    let mut read = QueueRead {
+        schema: queue.schema_version()?,
+        ..QueueRead::default()
+    };
     read.notes.extend(
         listed
             .unreadable
@@ -206,17 +275,23 @@ pub(crate) fn queue_read(env: &Env, slug: &str) -> Result<QueueRead, CliError> {
         if card.cancellation.is_some() {
             continue;
         }
-        if card.acceptance.is_none()
-            && let Some(original) = &card.corrects
-        {
-            read.corrections
-                .entry(original.clone())
-                .or_insert_with(|| card.id.clone());
-        }
-        settled_of(&queue, &card, &mut read);
+        facts_of(&queue, &card, &mut read);
         read.cards.push(card);
     }
     Ok(read)
+}
+
+/// What `card`, not cancelled, adds to the facts its marks are read against:
+/// the correction it is, its settled discrepancy.
+pub(crate) fn facts_of(queue: &SqliteQueue, card: &Card, read: &mut QueueRead) {
+    if card.acceptance.is_none()
+        && let Some(original) = &card.corrects
+    {
+        read.corrections
+            .entry(original.clone())
+            .or_insert_with(|| card.id.clone());
+    }
+    settled_of(queue, card, read);
 }
 
 /// `card`'s discrepancy into [`QueueRead::settled`] when it is `applied` or
@@ -370,7 +445,34 @@ struct Reading<'a> {
     held: BTreeMap<NodeAt, Vec<(usize, &'a String)>>,
 }
 
-impl Reading<'_> {
+impl<'a> Reading<'a> {
+    /// `read`'s cards over `graph`, `places` their targets' nodes.
+    fn new(
+        graph: &'a SpecGraph<'a>,
+        read: &'a QueueRead,
+        norms: &'a TargetNorms,
+        places: &BTreeMap<String, Vec<NodeAt>>,
+    ) -> Self {
+        let mut held: BTreeMap<NodeAt, Vec<(usize, &String)>> = BTreeMap::new();
+        for (index, card) in read.cards.iter().enumerate() {
+            for target in &card.targets {
+                for &at in places.get(target).into_iter().flatten() {
+                    held.entry(at).or_default().push((index, target));
+                }
+            }
+        }
+        Self {
+            graph,
+            cards: &read.cards,
+            facts: MarkFacts {
+                norms,
+                settled: &read.settled,
+                corrections: &read.corrections,
+            },
+            held,
+        }
+    }
+
     /// The cards with a target in `within(at)`, by number, each with those
     /// targets.
     fn cards_of(&self, at: NodeAt) -> BTreeMap<usize, Vec<String>> {
@@ -429,20 +531,33 @@ impl Reading<'_> {
             .collect()
     }
 
-    fn row(&self, at: NodeAt) -> TraceNode {
-        let graph = self.graph;
-        let (state, marked) = self.state(at);
+    /// The counts over `at`, standing in `state`, and the documents it
+    /// holds by `parent:`.
+    fn counts(&self, at: NodeAt, state: Rollup) -> RollupCounts {
         let mut counts = RollupCounts::default();
         counts.add(state);
-        for document in held_documents(graph, at) {
+        for document in held_documents(self.graph, at) {
             counts.add(self.state(document).0);
         }
+        counts
+    }
+
+    /// `at`'s full row, from what [`Self::state`] read of it.
+    fn row(
+        &self,
+        at: NodeAt,
+        walk: &FlowWalk,
+        (state, marked): (Rollup, Vec<(&Card, CardMark)>),
+    ) -> TraceNode {
+        let graph = self.graph;
         TraceNode {
             id: graph.name(at),
             title: graph.node(at).and_then(|node| node.title.clone()),
             path: graph.paths()[at.file].to_owned(),
+            stage: stage_of(graph, at.file).map(str::to_owned),
+            distance: walk.distance.get(&at.file).copied(),
             rollup: state,
-            counts,
+            counts: self.counts(at, state),
             cards: marked
                 .into_iter()
                 .map(|(card, mark)| TraceCard {
@@ -475,7 +590,7 @@ pub fn trace_with_view(
     request: &TraceRequest,
     view: View,
 ) -> Result<TraceOutcome, CliError> {
-    let project = discover(env, globals)?;
+    let (project, text) = discover_with_text(env, globals)?;
     let slug = project.slug()?.to_owned();
     let scheme = &project.config.scheme;
     let mut messages = Vec::new();
@@ -483,8 +598,10 @@ pub fn trace_with_view(
         reference: request.reference.clone(),
         reason: None,
         messages: Vec::new(),
+        listed: 0,
         counts: RollupCounts::default(),
         cards: 0,
+        stages: Vec::new(),
         nodes: Vec::new(),
         shown: 0,
         partial: None,
@@ -514,33 +631,37 @@ pub fn trace_with_view(
     let places = target_places(&graph, read.cards.iter().flat_map(|card| &card.targets));
     let norms = target_norms(&graph, &stored, &places);
     messages.extend(read.notes.iter().cloned().map(Message::Note));
-    let mut held: BTreeMap<NodeAt, Vec<(usize, &String)>> = BTreeMap::new();
-    for (index, card) in read.cards.iter().enumerate() {
-        for target in &card.targets {
-            for &at in places.get(target).into_iter().flatten() {
-                held.entry(at).or_default().push((index, target));
-            }
-        }
-    }
-    let reading = Reading {
-        graph: &graph,
-        cards: &read.cards,
-        facts: MarkFacts {
-            norms: &norms,
-            settled: &read.settled,
-            corrections: &read.corrections,
-        },
-        held,
-    };
+    let reading = Reading::new(&graph, &read, &norms, &places);
+    let config = FlowConfig::from_toml(&text, scheme);
+    let walk = walk_of(
+        &graph,
+        roots.as_deref(),
+        &config,
+        &project.config_label,
+        &mut messages,
+    );
     let scope = listed(&reading, roots.as_deref());
     let mut cards = BTreeSet::new();
+    let mut lanes = BTreeMap::new();
+    // The whole read needs each node's state alone: a row's counts and
+    // `uses` are built only for a row kept.
     for &at in &scope {
-        let row = reading.row(at);
-        outcome.counts.add(row.rollup);
-        cards.extend(row.cards.iter().map(|card| card.id.clone()));
-        outcome.nodes.push(row);
+        let (state, marked) = reading.state(at);
+        outcome.counts.add(state);
+        cards.extend(marked.iter().map(|(card, _)| card.id.clone()));
+        let stage = stage_of(&graph, at.file);
+        let in_lane = stage.is_some() || walk.steps.contains(&at.file);
+        if in_lane {
+            let distance = walk.distance.get(&at.file).copied();
+            add_to_lane(&mut lanes, stage, distance, state);
+        }
+        if request.keeps(stage, in_lane) {
+            outcome.nodes.push(reading.row(at, &walk, (state, marked)));
+        }
     }
+    outcome.listed = scope.len();
     outcome.cards = cards.len();
+    outcome.stages = ordered_lanes(lanes);
     // A target gone stands on no node: with no `REF`, every card speaks.
     for card in &read.cards {
         if roots.is_none() || cards.contains(&card.id) {
@@ -555,6 +676,153 @@ pub fn trace_with_view(
     Ok(outcome)
 }
 
+/// Core's walk of the read; a `[flow]` that does not read gives no distance,
+/// its errors notes, so lanes stand by name.
+fn walk_of(
+    graph: &SpecGraph<'_>,
+    roots: Option<&[NodeAt]>,
+    config: &FlowConfig,
+    label: &str,
+    messages: &mut Vec<Message>,
+) -> FlowWalk {
+    let errors: BTreeSet<String> = [&config.step, &config.start, &config.end, &config.definition]
+        .into_iter()
+        .filter_map(|table| table.error.as_ref())
+        .map(|error| error.at(label))
+        .collect();
+    let mut walk = flow_walk(graph, roots, config);
+    if !errors.is_empty() {
+        walk.distance.clear();
+    }
+    messages.extend(
+        errors
+            .into_iter()
+            .map(|error| Message::Note(one_line(&format!("no distance read: {error}")))),
+    );
+    walk
+}
+
+/// A node standing in `state` into the lane of its stage.
+fn add_to_lane<'s>(
+    lanes: &mut BTreeMap<Option<&'s str>, TraceStage>,
+    stage: Option<&'s str>,
+    distance: Option<usize>,
+    state: Rollup,
+) {
+    let lane = lanes.entry(stage).or_insert_with(|| TraceStage {
+        stage: stage.map(str::to_owned),
+        distance: None,
+        counts: RollupCounts::default(),
+    });
+    lane.counts.add(state);
+    lane.distance = match (lane.distance, distance) {
+        (Some(lane), Some(node)) => Some(lane.min(node)),
+        (lane, node) => lane.or(node),
+    };
+}
+
+/// A lane's place: (`distance`, unreached last, stage), no stage last.
+fn lane_key(lane: &TraceStage) -> (bool, bool, Option<usize>, Option<&str>) {
+    (
+        lane.stage.is_none(),
+        lane.distance.is_none(),
+        lane.distance,
+        lane.stage.as_deref(),
+    )
+}
+
+/// The lanes in the order of [`lane_key`].
+fn ordered_lanes(lanes: BTreeMap<Option<&str>, TraceStage>) -> Vec<TraceStage> {
+    let mut stages: Vec<TraceStage> = lanes.into_values().collect();
+    stages.sort_by(|a, b| lane_key(a).cmp(&lane_key(b)));
+    stages
+}
+
+/// The queue for `spec flow --trace`, never a failed flow: a queue below this
+/// build's holds no card and is named; one that cannot be read, a newer
+/// build's included, gives no state to join (`None`) with a note, so a screen
+/// draws its boxes bare: what a read cannot verify is never `no card`.
+fn flow_queue(env: &Env, slug: &str, messages: &mut Vec<Message>) -> Option<QueueRead> {
+    let db = match db_path(env, slug) {
+        Ok(db) => db,
+        Err(error) => {
+            messages.push(rollups_unread(&error.message));
+            return None;
+        }
+    };
+    match existing_queue(&db, slug) {
+        Ok(read) => {
+            if (1..QUEUE_SCHEMA_VERSION).contains(&read.schema) {
+                messages.push(Message::Note(queue_below_schema(read.schema)));
+            }
+            Some(read)
+        }
+        Err(error) => {
+            messages.push(rollups_unread(&error.to_string()));
+            None
+        }
+    }
+}
+
+/// The note of a flow read with no state to join.
+fn rollups_unread(why: &str) -> Message {
+    Message::Note(one_line(&format!("rollups not shown: {why}")))
+}
+
+/// `spec flow --trace`: `spec trace`'s state and counts of each document of
+/// `files`, by file, over a handle refreshed for `graph`'s corpus. A failure
+/// is a note and no entry. `every_card`: a read with no `ROOT`, every card
+/// speaks, as `spec trace`'s; else the cards of what `files` hold.
+pub(crate) fn flow_badges(
+    env: &Env,
+    slug: &str,
+    index: &SqliteIndex,
+    graph: &SpecGraph<'_>,
+    files: &[usize],
+    every_card: bool,
+    messages: &mut Vec<Message>,
+) -> BTreeMap<usize, TraceBadge> {
+    let Some(read) = flow_queue(env, slug, messages) else {
+        return BTreeMap::new();
+    };
+    let stored = match index.node_norms() {
+        Ok(stored) => stored,
+        Err(error) => {
+            messages.push(rollups_unread(&error.to_string()));
+            return BTreeMap::new();
+        }
+    };
+    let places = target_places(graph, read.cards.iter().flat_map(|card| &card.targets));
+    let norms = target_norms(graph, &stored, &places);
+    messages.extend(read.notes.iter().cloned().map(Message::Note));
+    let reading = Reading::new(graph, &read, &norms, &places);
+    let mut badges = BTreeMap::new();
+    let mut held_cards = BTreeSet::new();
+    for &file in files {
+        let at = NodeAt { file, ord: 0 };
+        let (state, _) = reading.state(at);
+        let counts = reading.counts(at, state);
+        badges.insert(
+            file,
+            TraceBadge {
+                rollup: state,
+                counts,
+            },
+        );
+        if !every_card {
+            for node in std::iter::once(at).chain(held_documents(graph, at)) {
+                held_cards.extend(reading.cards_of(node).into_keys());
+            }
+        }
+    }
+    for (index, card) in read.cards.iter().enumerate() {
+        if every_card || held_cards.contains(&index) {
+            messages.extend(mark_notes(card, &norms).into_iter().map(Message::Note));
+        }
+    }
+    badges
+}
+
 /// The characters of `lines`, a line end each.
 fn cost(lines: &[String]) -> usize {
     lines.iter().map(|line| line.chars().count() + 1).sum()
@@ -564,7 +832,13 @@ fn cost(lines: &[String]) -> usize {
 /// part: its row, then its card and `uses` lines while they fit beside the
 /// tail, so the answer is never empty.
 fn capped(outcome: &TraceOutcome) -> (usize, Option<Partial>) {
-    let used = header(outcome).chars().count() + 1;
+    let used = header(outcome).chars().count()
+        + 1
+        + outcome
+            .stages
+            .iter()
+            .map(|lane| stage_line(lane).chars().count() + 1)
+            .sum::<usize>();
     let whole = |node: &TraceNode| Partial {
         cards: node.cards.len(),
         uses: node.uses.len(),
@@ -637,19 +911,33 @@ fn not_found(mut outcome: TraceOutcome, reason: &str, messages: Vec<Message>) ->
 fn header(outcome: &TraceOutcome) -> String {
     let counts = outcome.counts;
     format!(
-        "trace {} | nodes {}, cards {} | no card {}, in work {}, suspect {}, departed {}, \
-         confirmed {}",
+        "trace {} | nodes {}, cards {} | {}",
         outcome
             .reference
             .as_deref()
             .map_or_else(|| ALL.to_owned(), one_line),
-        outcome.nodes.len(),
+        outcome.listed,
         outcome.cards,
-        counts.no_card,
-        counts.in_work,
-        counts.suspect,
-        counts.departed,
-        counts.confirmed
+        counts_text(counts)
+    )
+}
+
+/// `no card <a>, in work <b>, suspect <s>, departed <d>, confirmed <f>`.
+fn counts_text(counts: RollupCounts) -> String {
+    format!(
+        "no card {}, in work {}, suspect {}, departed {}, confirmed {}",
+        counts.no_card, counts.in_work, counts.suspect, counts.departed, counts.confirmed
+    )
+}
+
+/// A lane's line.
+fn stage_line(lane: &TraceStage) -> String {
+    format!(
+        "stage {} | distance {} | {}",
+        lane.stage.as_deref().map_or(NO_STAGE.to_owned(), one_line),
+        lane.distance
+            .map_or_else(|| NO_STAGE.to_owned(), |distance| distance.to_string()),
+        counts_text(lane.counts)
     )
 }
 
@@ -692,6 +980,10 @@ pub(crate) fn render_text(outcome: &TraceOutcome) -> String {
     }
     let mut out = header(outcome);
     out.push('\n');
+    for lane in &outcome.stages {
+        out.push_str(&stage_line(lane));
+        out.push('\n');
+    }
     for (at, node) in outcome.shown_nodes().iter().enumerate() {
         for line in node_lines(node, outcome.shown_rows(node, at)) {
             out.push_str(&line);
@@ -740,6 +1032,7 @@ struct TraceJson<'a> {
     reason: Option<&'a str>,
     notes: Vec<String>,
     counts: RollupCounts,
+    stages: &'a [TraceStage],
     nodes: Vec<NodeJson<'a>>,
     truncated: bool,
     omitted: Option<usize>,
@@ -750,6 +1043,8 @@ struct NodeJson<'a> {
     id: &'a str,
     title: Option<&'a str>,
     path: &'a str,
+    stage: Option<&'a str>,
+    distance: Option<usize>,
     rollup: Rollup,
     counts: RollupCounts,
     cards: Vec<CardMarkJson<'a>>,
@@ -807,6 +1102,7 @@ impl Serialize for TraceOutcome {
             reason: self.reason.as_deref(),
             notes: notes(&self.messages),
             counts: self.counts,
+            stages: &self.stages,
             nodes: self
                 .shown_nodes()
                 .iter()
@@ -816,6 +1112,8 @@ impl Serialize for TraceOutcome {
                     id: &node.id,
                     title: node.title.as_deref(),
                     path: &node.path,
+                    stage: node.stage.as_deref(),
+                    distance: node.distance,
                     rollup: node.rollup,
                     counts: node.counts,
                     cards: node

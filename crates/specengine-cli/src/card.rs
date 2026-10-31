@@ -41,7 +41,7 @@
 //! worktree. Nothing else reads a proposal, a lock or a task, and nothing is
 //! written under the root: the queue is in the data directory.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -59,8 +59,8 @@ use specengine_core::task::{
     CRITERIA_MAX, CRITERION_MAX, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX, over_bytes, over_items,
 };
 use specengine_core::trace::{
-    Departure, TargetNorms, clear_refusal, clearer_problem, correction_refusal, correction_title,
-    departure_input, freeze, suspect_on,
+    CardMark, Departure, MarkFacts, TargetNorms, card_mark, clear_refusal, clearer_problem,
+    correction_refusal, correction_title, departure_input, freeze, mark_notes, suspect_on,
 };
 use specengine_model::{Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen};
 use specengine_store::{
@@ -79,7 +79,9 @@ use crate::propose::resolved_node;
 use crate::search::notes;
 use crate::show::classify;
 use crate::task::resolved_list;
-use crate::trace::{fresh_norms, held_documents, norms_read, target_norms, target_places};
+use crate::trace::{
+    QueueRead, facts_of, fresh_norms, held_documents, norms_read, target_norms, target_places,
+};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, process_git};
 
 /// How a line prints an absent field.
@@ -121,6 +123,8 @@ pub struct CardListRequest {
     pub no_target: bool,
     /// `--with-cancelled`: cancelled cards too, last in their column.
     pub with_cancelled: bool,
+    /// `--marks`: each card's mark over all its targets.
+    pub marks: bool,
 }
 
 /// `spec card show C [--history]`.
@@ -979,6 +983,8 @@ pub struct CardListOutcome {
     pub flow_lines: Vec<String>,
     /// Every card listed, in list order.
     pub cards: Vec<Card>,
+    /// `--marks`: by card ID; a cancelled card, which a read ignores, none.
+    pub marks: BTreeMap<String, CardMark>,
     /// How many of `cards` are printed (text and JSON alike).
     pub shown: usize,
     pub notes: Vec<String>,
@@ -1026,6 +1032,10 @@ struct CardRowJson<'a> {
     revision: String,
     accepted: bool,
     cancelled: bool,
+    mark: Option<&'static str>,
+    on: Option<&'a str>,
+    discrepancy: Option<&'a str>,
+    correction: Option<&'a str>,
 }
 
 #[derive(Serialize)]
@@ -1046,24 +1056,31 @@ impl Serialize for CardListOutcome {
             cards: self
                 .shown_cards()
                 .iter()
-                .map(|card| CardRowJson {
-                    id: &card.id,
-                    flow: &card.flow,
-                    column: &card.column,
-                    position: card.position,
-                    title: &card.title,
-                    discipline: card.discipline.as_deref(),
-                    targets: &card.targets,
-                    assignee: card.assignee.as_deref(),
-                    reviewer: card.reviewer.as_deref(),
-                    estimate: card.estimate.as_deref(),
-                    due: card.due.as_deref(),
-                    parent: card.parent.as_deref(),
-                    corrects: card.corrects.as_deref(),
-                    updated_at: &card.updated_at,
-                    revision: card.revision.to_string(),
-                    accepted: card.acceptance.is_some(),
-                    cancelled: card.cancellation.is_some(),
+                .map(|card| {
+                    let mark = self.marks.get(&card.id);
+                    CardRowJson {
+                        id: &card.id,
+                        flow: &card.flow,
+                        column: &card.column,
+                        position: card.position,
+                        title: &card.title,
+                        discipline: card.discipline.as_deref(),
+                        targets: &card.targets,
+                        assignee: card.assignee.as_deref(),
+                        reviewer: card.reviewer.as_deref(),
+                        estimate: card.estimate.as_deref(),
+                        due: card.due.as_deref(),
+                        parent: card.parent.as_deref(),
+                        corrects: card.corrects.as_deref(),
+                        updated_at: &card.updated_at,
+                        revision: card.revision.to_string(),
+                        accepted: card.acceptance.is_some(),
+                        cancelled: card.cancellation.is_some(),
+                        mark: mark.map(CardMark::word),
+                        on: mark.and_then(CardMark::on),
+                        discrepancy: mark.and_then(CardMark::discrepancy),
+                        correction: mark.and_then(CardMark::correction),
+                    }
                 })
                 .collect(),
             notes: &self.notes,
@@ -1537,6 +1554,17 @@ fn run_list(
         .iter()
         .map(|row| one_line(&format!("{row}; not listed")))
         .collect();
+    // Over every card: a filter must not hide a live correction.
+    let mut facts = QueueRead::default();
+    if request.marks {
+        for card in listed
+            .cards
+            .iter()
+            .filter(|card| card.cancellation.is_none())
+        {
+            facts_of(&context.queue, card, &mut facts);
+        }
+    }
     let exact = |asked: &Option<String>, value: Option<&str>| {
         asked.as_deref().is_none_or(|asked| Some(asked) == value)
     };
@@ -1555,6 +1583,15 @@ fn run_list(
     let config = &context.config;
     cards.sort_by_cached_key(|card| list_key(config, card));
     notes.extend(stranded_notes(config, &cards));
+    let mut messages = Vec::new();
+    let marks = if request.marks {
+        notes.append(&mut facts.notes);
+        let (marks, unread) = list_marks(env, &context, &cards, &facts, &mut messages)?;
+        notes.extend(unread);
+        marks
+    } else {
+        BTreeMap::new()
+    };
     let flow_lines: Vec<String> = config
         .flows
         .iter()
@@ -1565,18 +1602,48 @@ fn run_list(
         .map(|line| line.chars().count() + 1)
         .sum::<usize>();
     let (shown, _) = lines_within(
-        cards.iter().map(|card| card_line(card).chars().count() + 1),
+        cards
+            .iter()
+            .map(|card| card_line(card, marks.get(&card.id)).chars().count() + 1),
         used,
         false,
     );
+    messages.extend(notes.iter().cloned().map(Message::Note));
     Ok(CardListOutcome {
         flows: config.flows.clone(),
         flow_lines,
         cards,
+        marks,
         shown,
-        messages: notes.iter().cloned().map(Message::Note).collect(),
+        messages,
         notes,
     })
+}
+
+/// `--marks`: each listed card's mark over all its targets, core's, and what
+/// a read cannot compare of it. A cancelled card, which every read ignores,
+/// has none. No index to read the targets: the read's error, so a board
+/// never draws a clean tile it could not vouch for.
+fn list_marks(
+    env: &Env,
+    context: &CardContext,
+    cards: &[Card],
+    facts: &QueueRead,
+    messages: &mut Vec<Message>,
+) -> Result<(BTreeMap<String, CardMark>, Vec<String>), CliError> {
+    let live = || cards.iter().filter(|card| card.cancellation.is_none());
+    let targets: BTreeSet<&String> = live().flat_map(|card| &card.targets).collect();
+    let norms = fresh_norms(env, &context.project, &targets, messages)?;
+    let facts = MarkFacts {
+        norms: &norms,
+        settled: &facts.settled,
+        corrections: &facts.corrections,
+    };
+    let marks = live()
+        .map(|card| (card.id.clone(), card_mark(card, &card.targets, &facts)))
+        .collect();
+    let notes = live().flat_map(|card| mark_notes(card, &norms)).collect();
+    Ok((marks, notes))
 }
 
 /// Where a name stands in `names`: its place, or past them all by name.
@@ -1631,8 +1698,8 @@ fn flow_line(flow: &CardFlow, cards: &[Card]) -> String {
 }
 
 /// `<id> | <flow>/<column> | <position> | <title> | <discipline> | <assignee>
-/// | <due> | <targets>[ | cancelled]`, no line end.
-fn card_line(card: &Card) -> String {
+/// | <due> | <targets>[ | cancelled][ | mark <mark>]`, no line end.
+fn card_line(card: &Card, mark: Option<&CardMark>) -> String {
     let optional = |value: &Option<String>| value.as_deref().map_or(ABSENT.to_owned(), one_line);
     let targets = if card.targets.is_empty() {
         ABSENT.to_owned()
@@ -1652,6 +1719,9 @@ fn card_line(card: &Card) -> String {
     );
     if card.cancellation.is_some() {
         line.push_str(" | cancelled");
+    }
+    if let Some(mark) = mark {
+        line.push_str(&format!(" | mark {}", one_line(&mark.text())));
     }
     line
 }
@@ -2854,7 +2924,7 @@ pub(crate) fn render_list_text(outcome: &CardListOutcome) -> String {
         out.push('\n');
     }
     for card in outcome.shown_cards() {
-        out.push_str(&card_line(card));
+        out.push_str(&card_line(card, outcome.marks.get(&card.id)));
         out.push('\n');
     }
     let omitted = outcome.omitted();

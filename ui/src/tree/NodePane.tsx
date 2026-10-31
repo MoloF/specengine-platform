@@ -4,14 +4,12 @@ import { useNode, type InboxQuery } from "../api/queries";
 import type { ShownNode } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
-import { NewCardDialog } from "../board/CardDialogs";
-import { useAnnounce } from "../ui/announcer";
+import { CardsBlock } from "../trace/CardsBlock";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import type { TextMode } from "../markdown/TextMode";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
-import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { BindingsPanel } from "./BindingsPanel";
@@ -103,68 +101,9 @@ export function NoNodePane() {
   );
 }
 
-/** A card made from a node: which node, and the ID the daemon gave it. */
-interface MadeCard {
-  nodeRef: string;
-  id: string;
-}
-
-/**
- * New card on a node (docs/features/board-ui.md "Creating and editing"): the dialog opens with the
- * node as its target, how a board fills from the brief. Its own keys stay in the dialog, not the tree's.
- */
-function NewCardAction({ project, nodeRef, onMade }: { project: string; nodeRef: string; onMade: (made: MadeCard) => void }) {
-  const [open, setOpen] = useState(false);
-  const button = useRef<HTMLButtonElement>(null);
-  const focusLater = useFocusLater();
-  const announce = useAnnounce();
-
-  function close() {
-    setOpen(false);
-    focusLater(() => button.current);
-  }
-
-  return (
-    <>
-      <button
-        ref={button}
-        type="button"
-        className="link-button node-action"
-        aria-haspopup="dialog"
-        onClick={() => {
-          setOpen(true);
-        }}
-      >
-        <Icon name="cardNew" />
-        New card
-      </button>
-      {open && (
-        <div
-          onKeyDown={(event) => {
-            event.stopPropagation();
-          }}
-        >
-          <NewCardDialog
-            project={project}
-            target={nodeRef}
-            onClose={close}
-            onDone={({ id }) => {
-              close();
-              if (id !== null) {
-                onMade({ nodeRef, id });
-                announce(`${id} created`);
-              }
-            }}
-          />
-        </div>
-      )}
-    </>
-  );
-}
-
 /**
  * One node by REF: its heading (the REF when several holders answer it, each holder then under
- * its own h2), the header facts, the daemon's notes and five tabs. The Text tab shows at once,
+ * its own h2), the header facts, the daemon's notes, its cards and five tabs. The Text tab shows at once,
  * rendered or as its source; the node's links read starts beside it (the rendered text's anchors,
  * the Links tab), the text never waiting for it. The Bindings and Bundle tabs each read on first
  * open (docs/features/ui-node-bindings.md); Proposals reads the Inbox's query.
@@ -205,7 +144,6 @@ export function NodePane({
   const [tab, setTab] = useState<TabId>("text");
   const [opened, setOpened] = useState<ReadonlySet<TabId>>(() => new Set<TabId>(["text"]));
   const [target, setTarget] = useState<TextTarget | null>(null);
-  const [made, setMade] = useState<MadeCard | null>(null);
 
   // A followed link lands on this heading; so does Back or Forward when focus went with the old node.
   useEffect(() => {
@@ -367,16 +305,7 @@ export function NodePane({
               <Icon name="graph" />
               Show in graph
             </a>
-            <NewCardAction project={project} nodeRef={nodeRef} onMade={setMade} />
           </div>
-        )}
-        {made !== null && made.nodeRef === nodeRef && (
-          <p className="note">
-            <Icon name="info" />
-            <span>
-              <span className="mono">{made.id}</span> created. <a href={sectionHash(project, "board", made.id)}>Open it on the Board</a>
-            </span>
-          </p>
         )}
         {single !== undefined && <Facts holder={single} />}
         {holders.length > 1 && (
@@ -410,6 +339,11 @@ export function NodePane({
           </p>
         )}
       </header>
+      {holders.length > 0 && (
+        <RegionBoundary name="cards">
+          <CardsBlock key={nodeRef} project={project} nodeRef={nodeRef} section="tree" heading="h2" />
+        </RegionBoundary>
+      )}
       {body}
       {data !== undefined && holders.length > 0 && (
         <p className="node-foot muted">

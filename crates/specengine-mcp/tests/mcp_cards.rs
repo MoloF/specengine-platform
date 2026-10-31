@@ -5,7 +5,7 @@
 //!
 //! - The tools: both reads read-only, the three writes annotated as
 //!   `claim_task`; the twin's flags in snake case, `C` as `card_id`, no `as`;
-//!   no tool assigns, cancels or accepts (AC-04); `INSTRUCTIONS` 2 040 bytes
+//!   no tool assigns, cancels or accepts (AC-04); `INSTRUCTIONS` 2 048 bytes
 //!   with the cards line.
 //! - A tool acts as `agent` (AC-03): `by = ["desk"]` refuses it naming `desk`,
 //!   a flow listing `agent` admits it, the event records it.
@@ -173,7 +173,7 @@ fn required(list: &Value, name: &str) -> Vec<String> {
 /// "MCP": five tools, the twin's flags in snake case, `card_id`, no `as`, no
 /// tool for `assign`, `cancel`, `accept`; reads read-only, writes annotated
 /// as `claim_task`; the write document's seven keys, `get_card`'s and
-/// `list_cards`'; `INSTRUCTIONS` 2 040 bytes holding the cards line once and
+/// `list_cards`'; `INSTRUCTIONS` 2 048 bytes holding the cards line once and
 /// naming every tool. M: a tool taking `as`; a sixth tool.
 #[test]
 fn ac10_the_card_tools_and_their_schemas() {
@@ -183,7 +183,7 @@ fn ac10_the_card_tools_and_their_schemas() {
     }
     assert_eq!(CARDS_LINE.len(), 112);
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(instructions.len(), 2040);
+    assert_eq!(instructions.len(), 2048);
     assert_eq!(instructions.matches(CARDS_LINE).count(), 1);
     assert!(
         instructions.contains(&format!(
@@ -210,6 +210,7 @@ fn ac10_the_card_tools_and_their_schemas() {
                     "column",
                     "discipline",
                     "flow",
+                    "marks",
                     "no_target",
                     "with_cancelled",
                 ],

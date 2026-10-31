@@ -475,14 +475,16 @@ async fn graph(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 
 /// `GET …/flow`: `spec flow --json`, the browser view (every node, edge
 /// and gap item, nothing cut); `root` naming nothing: the exit-1 document,
-/// a 404. A gap row changes no status.
+/// a 404. A gap row changes no status. `trace=true` is `--trace`: a queue
+/// that cannot be read is a note, never a failed flow.
 async fn flow(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
-    let args = args("flow", &["root", "depth"], &uri)?;
+    let args = args("flow", &["root", "depth", "trace"], &uri)?;
     let request = (|| {
         Ok::<_, String>(FlowRequest {
             root: args.text("root")?,
             depth: args.integer("depth")?,
+            trace: args.boolean("trace")?.unwrap_or(false),
         })
     })()
     .map_err(Refusal::bad_request)?;
@@ -787,14 +789,20 @@ async fn round_answers(State(app): State<Shared>, request: Request) -> Result<Re
     .await)
 }
 
-/// `GET …/trace?ref=`: `spec trace [REF] --json`, the browser view (every
-/// node, `truncated` false). A read; it changes nothing but the index.
+/// `GET …/trace?ref=&stage=&summary=`: `spec trace [REF] [--stage S]
+/// [--summary] --json`, the browser view (every node kept, `truncated`
+/// false). A read; it changes nothing but the index.
 async fn trace(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
-    let args = args("trace", &["ref"], &uri)?;
-    let request = TraceRequest {
-        reference: args.text("ref").map_err(Refusal::bad_request)?,
-    };
+    let args = args("trace", &["ref", "stage", "summary"], &uri)?;
+    let request = (|| {
+        Ok::<_, String>(TraceRequest {
+            reference: args.text("ref")?,
+            stage: args.text("stage")?,
+            summary: args.boolean("summary")?.unwrap_or(false),
+        })
+    })()
+    .map_err(Refusal::bad_request)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::trace_with_view(env, globals, &request, View::Browser)
             .map(|outcome| Outcome::Trace(Box::new(outcome)))
@@ -804,7 +812,8 @@ async fn trace(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 
 /// `GET …/cards`: `spec card list --json`, the browser view (every row, in
 /// the flows' order, nothing cut). Filters ANDed, exact; `with_cancelled`
-/// is the flag `--with-cancelled`, nothing here reading a card's state.
+/// is the flag `--with-cancelled`, `marks` `--marks`, nothing here reading a
+/// card's state. No index to read marks from: a 503, never a clean row.
 async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     let args = args(
@@ -816,6 +825,7 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
             "assignee",
             "no_target",
             "with_cancelled",
+            "marks",
         ],
         &uri,
     )?;
@@ -827,6 +837,7 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
             assignee: args.text("assignee")?,
             no_target: args.boolean("no_target")?.unwrap_or(false),
             with_cancelled: args.boolean("with_cancelled")?.unwrap_or(false),
+            marks: args.boolean("marks")?.unwrap_or(false),
         })
     })()
     .map_err(Refusal::bad_request)?;

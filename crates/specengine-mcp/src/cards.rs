@@ -40,15 +40,16 @@ Deterministic: one state, one result; no LLM inside."
 const LIST_DESCRIPTION: &str = concat!(
     "The project's cards, the lighter record of any trade's work beside the tasks: the same as \
 `spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--no-target] \
-[--with-cancelled]`. content is a line per flow with its columns' counts, then a line per card by \
+[--with-cancelled] [--marks]`. content is a line per flow with its columns' counts, then a line per card by \
 flow, column and position, cut at 40000 characters with a tail; structuredContent the --json \
 document {flows, cards, notes, truncated, omitted}: each flow's columns, expanded moves and \
 accept, each card's row.
 
 flow, column, discipline, assignee: exact filters, ANDed. no_target: true: only manual cards. \
-with_cancelled: true: cancelled cards too, last in their column. A card a project's [card] no \
-longer places comes last with a note; a corrupt row is a note. due is raw: nothing here knows \
-today.
+with_cancelled: true: cancelled cards too, last in their column. marks: true: each row's mark \
+over all its targets, a target gone included, with on, discrepancy and correction; null without \
+it and on a cancelled card; a mark changes nothing. A card a project's [card] no longer places \
+comes last with a note; a corrupt row is a note. due is raw: nothing here knows today.
 
 Reads only: no state changes, nothing under the project root is written. ",
     "Deterministic: one state, one result; no LLM inside."
@@ -201,6 +202,8 @@ pub(crate) struct ListCardsArgs {
     pub no_target: Option<bool>,
     /// Cancelled cards too.
     pub with_cancelled: Option<bool>,
+    /// Each card's mark over all its targets.
+    pub marks: Option<bool>,
 }
 
 /// `get_card` arguments.
@@ -294,6 +297,7 @@ impl SpecEngineServer {
             assignee: args.assignee,
             no_target: args.no_target.unwrap_or(false),
             with_cancelled: args.with_cancelled.unwrap_or(false),
+            marks: args.marks.unwrap_or(false),
         };
         Ok(self
             .call(move |env, globals| {

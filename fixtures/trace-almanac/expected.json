@@ -1,0 +1,256 @@
+{
+  "prefixes": [
+    "BOOK",
+    "PART",
+    "STEP"
+  ],
+  "kinds": [
+    "committee",
+    "errand",
+    "yearbook"
+  ],
+  "files": {
+    "docs/spec/book-almanac.md": {
+      "id": "BOOK-ALMANAC",
+      "kind": "yearbook",
+      "title": "The village almanac",
+      "parent": null,
+      "stage": null,
+      "distance": null,
+      "start": false,
+      "end": false
+    },
+    "docs/spec/part-gather.md": {
+      "id": "PART-GATHER",
+      "kind": "committee",
+      "title": "The gathering committee",
+      "parent": "BOOK-ALMANAC",
+      "stage": null,
+      "distance": null,
+      "start": false,
+      "end": false
+    },
+    "docs/spec/part-print.md": {
+      "id": "PART-PRINT",
+      "kind": "committee",
+      "title": "The printing committee",
+      "parent": "BOOK-ALMANAC",
+      "stage": null,
+      "distance": null,
+      "start": false,
+      "end": false
+    },
+    "docs/spec/step-call.md": {
+      "id": "STEP-CALL",
+      "kind": "errand",
+      "title": "Call for entries",
+      "parent": "PART-GATHER",
+      "stage": "gather",
+      "distance": 0,
+      "start": true,
+      "end": false
+    },
+    "docs/spec/step-sort.md": {
+      "id": "STEP-SORT",
+      "kind": "errand",
+      "title": "Sort the entries",
+      "parent": "PART-PRINT",
+      "stage": "gather",
+      "distance": 1,
+      "start": false,
+      "end": false
+    },
+    "docs/spec/step-read.md": {
+      "id": "STEP-READ",
+      "kind": "errand",
+      "title": "Read the entries aloud",
+      "parent": "PART-PRINT",
+      "stage": null,
+      "distance": 2,
+      "start": false,
+      "end": false
+    },
+    "docs/spec/step-set.md": {
+      "id": "STEP-SET",
+      "kind": "errand",
+      "title": "Set the pages",
+      "parent": "PART-GATHER",
+      "stage": "print",
+      "distance": 3,
+      "start": false,
+      "end": false,
+      "sections": [
+        "STEP-SET-PROOF"
+      ]
+    },
+    "docs/spec/step-bind.md": {
+      "id": "STEP-BIND",
+      "kind": "errand",
+      "title": "Bind the copies",
+      "parent": "PART-PRINT",
+      "stage": "print",
+      "distance": 4,
+      "start": false,
+      "end": true
+    }
+  },
+  "walk": [
+    "STEP-CALL",
+    "STEP-SORT",
+    "STEP-READ",
+    "STEP-SET",
+    "STEP-BIND",
+    "BOOK-ALMANAC",
+    "PART-GATHER",
+    "PART-PRINT"
+  ],
+  "stages": [
+    {
+      "stage": "gather",
+      "distance": 0,
+      "counts": {
+        "no_card": 2,
+        "in_work": 0,
+        "suspect": 0,
+        "departed": 0,
+        "confirmed": 0
+      }
+    },
+    {
+      "stage": "print",
+      "distance": 3,
+      "counts": {
+        "no_card": 2,
+        "in_work": 0,
+        "suspect": 0,
+        "departed": 0,
+        "confirmed": 0
+      }
+    },
+    {
+      "stage": null,
+      "distance": 2,
+      "counts": {
+        "no_card": 1,
+        "in_work": 0,
+        "suspect": 0,
+        "departed": 0,
+        "confirmed": 0
+      }
+    }
+  ],
+  "gaps": [
+    {
+      "code": "no-start",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    },
+    {
+      "code": "two-starts",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    },
+    {
+      "code": "unreachable",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    },
+    {
+      "code": "no-way-to-end",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    },
+    {
+      "code": "trap-cycle",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    },
+    {
+      "code": "unjoined-parallel",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    },
+    {
+      "code": "cycle-no-repeat",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    },
+    {
+      "code": "definition-unused",
+      "state": "not_configured",
+      "count": null,
+      "items": [],
+      "cause": "no [[flow.definition]] rule: what is a definition is the project's to declare"
+    },
+    {
+      "code": "definition-once",
+      "state": "not_configured",
+      "count": null,
+      "items": [],
+      "cause": "no [[flow.definition]] rule: what is a definition is the project's to declare"
+    },
+    {
+      "code": "supply-unfed",
+      "state": "measured",
+      "count": 0,
+      "items": [],
+      "cause": null
+    }
+  ],
+  "edges": [
+    {
+      "from": "STEP-CALL",
+      "to": "STEP-SORT",
+      "type": "follows",
+      "kind": null,
+      "when": null,
+      "count": 1,
+      "path": "docs/spec/step-sort.md",
+      "line": 10
+    },
+    {
+      "from": "STEP-READ",
+      "to": "STEP-SET",
+      "type": "follows",
+      "kind": null,
+      "when": null,
+      "count": 1,
+      "path": "docs/spec/step-set.md",
+      "line": 10
+    },
+    {
+      "from": "STEP-SET",
+      "to": "STEP-BIND",
+      "type": "follows",
+      "kind": null,
+      "when": null,
+      "count": 1,
+      "path": "docs/spec/step-bind.md",
+      "line": 10
+    },
+    {
+      "from": "STEP-SORT",
+      "to": "STEP-READ",
+      "type": "follows",
+      "kind": null,
+      "when": null,
+      "count": 1,
+      "path": "docs/spec/step-read.md",
+      "line": 9
+    }
+  ]
+}

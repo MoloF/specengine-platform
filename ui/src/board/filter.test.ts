@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { aCardFlow, aCardList, aCardRow, aTrace, aTraceCard, aTraceNode } from "../test/builders";
-import { assigneeChoices, disciplineChoices, dropMove, lanesOf, marksOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf } from "./filter";
+import { aCardFlow, aCardList, aCardRow } from "../test/builders";
+import { assigneeChoices, disciplineChoices, dropMove, lanesOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf } from "./filter";
+import { canClear, markLine, markLook, markNames, rowMark } from "./labels";
 
 // The Board's arrangement of one answer (docs/features/board-ui.md "Board", "Rules and edge cases").
 
@@ -41,15 +42,37 @@ describe("the filters", () => {
   });
 });
 
-describe("the marks of one trace read", () => {
-  it("keeps a mark that says something; a plain state says nothing; a clearable mark goes before any other", () => {
-    const departed = aTraceCard({ id: "C-1", mark: "departed", on: "A", discrepancy: "PR-1" });
-    const suspect = aTraceCard({ id: "C-1", mark: "suspect", on: "B" });
-    const plain = aTraceCard({ id: "C-2" });
-    const marks = marksOf(aTrace([aTraceNode("A", [departed, plain]), aTraceNode("B", [suspect])]));
-    expect([...marks.keys()]).toEqual(["C-1"]);
-    expect(marks.get("C-1")).toBe(suspect);
-    expect(marksOf(undefined).size).toBe(0);
+describe("a row's mark", () => {
+  const plain = { mark: "open", on: null, discrepancy: null, correction: null };
+
+  it("says what a row says: a plain state and a read with no marks say nothing against the brief", () => {
+    expect(rowMark(plain)).toBeNull();
+    expect(rowMark({ ...plain, mark: "accepted" })).toBeNull();
+    expect(rowMark({ ...plain, mark: null })).toBeNull();
+  });
+
+  it("names the target, the discrepancy or the correction, each mark its own", () => {
+    const suspect = rowMark({ ...plain, mark: "suspect", on: "R-1" });
+    const departed = rowMark({ ...plain, mark: "departed", on: "R-1", discrepancy: "PR-1" });
+    const correcting = rowMark({ ...plain, mark: "correcting", on: "R-1", correction: "C-2" });
+    expect([suspect, departed, correcting].map((mark) => (mark === null ? null : markNames(mark)))).toEqual(["R-1", "PR-1", "C-2"]);
+    expect([suspect, departed, correcting].map((mark) => mark !== null && canClear(mark))).toEqual([true, false, false]);
+  });
+
+  it("says each mark in a whole sentence, a gone target by its name as any other", () => {
+    expect(markLine({ ...plain, mark: "suspect", on: "R-1" })).toBe("The brief changed at R-1 after this card last read it.");
+    expect(markLine({ ...plain, mark: "departed", on: "R-1", discrepancy: "PR-1" })).toBe("Accepted as departing from R-1; PR-1 is not settled yet.");
+    expect(markLine({ ...plain, mark: "correcting", on: "R-1", correction: "C-2" })).toBe("The brief changed at R-1; C-2 is putting it right.");
+  });
+
+  it("shows a word this build does not know raw and neutral, never as nothing", () => {
+    const mark = rowMark({ ...plain, mark: "pondering", on: "R-1" });
+    expect(mark === null ? null : [markLook(mark)?.label, markLook(mark)?.tone, markNames(mark)]).toEqual(["pondering", "card-mark-unknown", "R-1"]);
+  });
+
+  it("shows it so on no target too: a word it cannot place is no plain state, and no tile reads clean for it", () => {
+    const mark = rowMark({ ...plain, mark: "pondering" });
+    expect(mark === null ? null : [markLook(mark)?.label, markLook(mark)?.tone, markLine(mark)]).toEqual(["pondering", "card-mark-unknown", "pondering"]);
   });
 });
 

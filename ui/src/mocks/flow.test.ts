@@ -15,6 +15,35 @@ const names = (view: FlowView) => view.nodes.map((node) => node.id ?? node.path)
 const line = (edge: FlowEdge) => `${edge.from} -> ${edge.to} | ${edge.type}${edge.kind === null ? "" : ` | ${edge.kind}`} | x${String(edge.count)}`;
 
 describe("harbor-sim's flow", () => {
+  it("folds start and end into what shows them, at every depth, Top and a group's read alike, and moves no gap row (AC-02 of trace-views)", async () => {
+    const top = await read({ depth: 0 });
+    expect([top.nodes[0]?.start, top.nodes[0]?.end]).toEqual([true, true]);
+    const group = await read({ root: "DOM-HARBOR", depth: 1 });
+    const at = (name: string) => group.nodes.find((node) => node.id === name);
+    expect([at("DOM-WATER")?.start, at("DOM-WATER")?.end]).toEqual([true, false]);
+    expect([at("DOM-BERTHS")?.start, at("DOM-BERTHS")?.end]).toEqual([false, true]);
+    expect([at("MEC-PILOTAGE")?.start, at("MEC-PILOTAGE")?.end]).toEqual([false, false]);
+    expect(top.gaps).toEqual((await read({})).gaps);
+  });
+
+  it("serves a node's own stage, and no rollup or counts without `trace` (AC-03 of trace-views)", async () => {
+    const plain = await read({ root: "DOM-HARBOR", depth: 1 });
+    const at = plain.nodes.find((node) => node.id === "MEC-PILOTAGE");
+    expect([at?.stage, at?.rollup, at?.counts]).toEqual(["landfall", null, null]);
+    expect(plain.nodes.find((node) => node.id === "DOM-WATER")?.stage).toBeNull();
+  });
+
+  it("joins each box's rollup and counts with `trace`, each as the trace read says it (AC-03 of trace-views)", async () => {
+    const client = new MockClient("normal", { delayMs: 0 });
+    const view = await client.getFlow("harbor-sim", { root: "DOM-HARBOR", depth: 1, trace: true });
+    const rows = (await client.getTrace("harbor-sim")).nodes;
+    for (const node of view.nodes) {
+      const row = rows.find((candidate) => candidate.id === node.id);
+      expect([node.id, node.rollup, node.counts]).toEqual([node.id, row?.rollup, row?.counts]);
+    }
+    expect(view.nodes.find((node) => node.id === "DOM-WATER")?.counts?.confirmed).toBe(2);
+  });
+
   it("answers depth 0 with one top group: every document it holds folded, no edge left over", async () => {
     const top = await read({ depth: 0 });
     expect(Object.keys(top)).toEqual(["reason", "root", "depth", "notes", "left_out", "truncated", "omitted_nodes", "omitted_edges", "gaps", "nodes", "edges"]);

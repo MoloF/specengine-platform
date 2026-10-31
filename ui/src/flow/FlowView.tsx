@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useFlow, useFlowGroups, useTreeOnDemand } from "../api/queries";
+import { useFlow, useFlowGroups, useTraceSummary, useTreeOnDemand } from "../api/queries";
 import type { FlowNode, FlowView as FlowAnswer, TreeNode } from "../api/types";
 import { pushHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
@@ -22,20 +22,26 @@ import { FlowDetails } from "./FlowDetails";
 import { FlowGaps, recallGapsHidden, rememberGapsHidden } from "./FlowGaps";
 import { FlowLegend } from "./FlowLegend";
 import { FlowList } from "./FlowList";
-import { namedByRows, notDrawnLine, readCount, typesOf } from "./labels";
+import { namedByRows, notDrawnLine, readCount, STATES_HIDDEN_WORDS, typesOf } from "./labels";
 import { boxId, isGroup, layoutFlow, readsOf, type FlowBox, type FlowInput } from "./layout";
+import { TimelineView } from "./TimelineView";
+import { ALL_STAGES, stageInForce, stageOptions, withoutStates, type StageOption } from "./timeline";
 
 /** The canvas and its drawing library load with the first answer drawn, not with the app. */
 const FlowCanvas = lazy(() => import("./FlowCanvas").then((module) => ({ default: module.FlowCanvas })));
 
 const ABOUT = SECTIONS.find((section) => section.id === "flow")?.about ?? "";
 
-export type FlowTab = "canvas" | "list";
+export type FlowTab = "canvas" | "list" | "timeline";
 
 /** What the Shell keeps per project for this page's life; null: nothing chosen yet. */
 export interface FlowState {
   tab: FlowTab | null;
   open: readonly string[] | null;
+  /** The stage filter's value (src/flow/timeline.ts). */
+  stage: string;
+  /** The Timeline's open lanes, by `stageKey`. */
+  lanes: readonly string[];
 }
 
 export interface FlowMemory {
@@ -122,14 +128,40 @@ function panelBox(name: string | null, nodes: ReadonlyMap<string, ShownBox>, ans
   return undefined;
 }
 
-/** What a read says besides its boxes: the daemon's notes, what was left out. */
-function TopNotes({ top }: { top: FlowAnswer }) {
+/** The select over the section: its options are the served lanes', and it compares nothing else. */
+function StageFilter({ value, options, onChange }: { value: string; options: readonly StageOption[]; onChange: (value: string) => void }) {
+  const id = useId();
+  return (
+    <div className="flow-stage-filter">
+      <label className="field-label" htmlFor={id}>
+        Stage
+      </label>
+      <select
+        id={id}
+        className="field"
+        value={value}
+        onChange={(event) => {
+          onChange(event.target.value);
+        }}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+/** What the reads say besides their boxes: the daemon's notes, each once, what was left out. */
+function TopNotes({ top, notes }: { top: FlowAnswer; notes: readonly string[] }) {
   const leftOut = leftOutText(top.left_out);
   return (
     <>
-      {top.notes.length > 0 && (
+      {notes.length > 0 && (
         <ul className="note-list" aria-label="Notes from the daemon">
-          {top.notes.map((note, index) => (
+          {notes.map((note, index) => (
             <li key={`${String(index)}-${note}`}>{note}</li>
           ))}
         </ul>
@@ -211,8 +243,11 @@ function GroupFailure({
 /**
  * The Flow (`#/<project>/flow[/<name>]`, docs/features/flow-canvas.md): the daemon's flow as a
  * diagram running forward, groups folding into one box. Every read carries a depth: Top at 0, a
- * group `root=G&depth=1`, so a whole-flow read is never made and the UI lifts nothing. The name in
- * the route only selects. Read only: changes go through the AI, as proposals.
+ * group `root=G&depth=1`, so a whole-flow read is never made and the UI lifts nothing. Each box
+ * carries its served rollup, a closed group its counts, and a third tab reads the stages
+ * (docs/features/trace-views.md): nothing here counts a card. The name in the route only selects.
+ * The spec is read only here, its changes going through the AI as proposals; a card is written from
+ * the panel, a queue row.
  */
 export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { project: string; nodeRef: string | null; memory?: FlowMemory }) {
   const openShortcuts = useOpenShortcuts();
@@ -223,6 +258,8 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   const [narrow] = useState(isNarrow);
   const [chosenTab, setChosenTab] = useState<FlowTab | null>(remembered?.tab ?? null);
   const [chosenOpen, setChosenOpen] = useState<readonly string[] | null>(remembered?.open ?? null);
+  const [chosenStage, setChosenStage] = useState(remembered?.stage ?? ALL_STAGES);
+  const [openLanes, setOpenLanes] = useState<readonly string[]>(remembered?.lanes ?? []);
   /** Groups closed since they were read: their reads stay, so reopening reads nothing. */
   const [closed, setClosed] = useState<readonly string[]>([]);
   const [roving, setRoving] = useState<string | null>(null);
@@ -247,6 +284,8 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   // Keyed on the read settling, not on its data: an equal answer keeps its object (structural sharing).
   const retried = useRetryFocus(topRead.dataUpdatedAt === 0 ? undefined : topRead.dataUpdatedAt, () => results.current);
   const readTree = useTreeOnDemand(project);
+  const summary = useTraceSummary(project);
+  const retriedStages = useRetryFocus(summary.dataUpdatedAt === 0 ? undefined : summary.dataUpdatedAt, () => results.current);
   const top = topRead.data;
   const tab = chosenTab ?? (narrow ? "list" : "canvas");
   const open = useMemo(() => chosenOpen ?? soleGroupOf(top), [chosenOpen, top]);
@@ -255,16 +294,21 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   const groups = useFlowGroups(project, asked, opened);
 
   useEffect(() => {
-    memory.remember(project, { tab: chosenTab, open: chosenOpen });
-  }, [memory, project, chosenTab, chosenOpen]);
+    memory.remember(project, { tab: chosenTab, open: chosenOpen, stage: chosenStage, lanes: openLanes });
+  }, [memory, project, chosenTab, chosenOpen, chosenStage, openLanes]);
 
-  const answers = useMemo(() => new Map(groups.flatMap((group) => (group.data === undefined ? [] : [[group.name, group.data] as const]))), [groups]);
-  const input = useMemo<FlowInput | null>(() => (top === undefined ? null : { top, groups: answers, open: opened }), [top, answers, opened]);
+  // A read that failed again keeps its picture, and says no state it can no longer vouch for.
+  const answers = useMemo(() => new Map(groups.flatMap((group) => (group.data === undefined ? [] : [[group.name, group.error === null ? group.data : withoutStates(group.data)] as const]))), [groups]);
+  const topFailed = topRead.error !== null;
+  const input = useMemo<FlowInput | null>(() => (top === undefined ? null : { top: topFailed ? withoutStates(top) : top, groups: answers, open: opened }), [top, topFailed, answers, opened]);
   const reads = useMemo(() => (input === null ? [] : readsOf(input)), [input]);
+  const notes = useMemo(() => [...new Set(reads.flatMap((read) => read.view.notes))], [reads]);
   const layout = useMemo(() => (input === null ? null : layoutFlow(input)), [input]);
   const types = useMemo(() => (top === undefined ? [] : typesOf(top)), [top]);
-  const named = useMemo(() => namedByRows(top?.gaps ?? []), [top]);
+  const named = useMemo(() => namedByRows(topFailed ? [] : (top?.gaps ?? [])), [top, topFailed]);
   const marked = useMemo(() => new Set(nodeRef !== null && marks.includes(nodeRef) ? marks : []), [marks, nodeRef]);
+  const stages = useMemo(() => summary.data?.stages ?? [], [summary.data]);
+  const stageShown = stageInForce(chosenStage, stages);
   const opening = useMemo(() => new Set(groups.filter((group) => group.data === undefined && group.error === null && opened.has(group.name)).map((group) => group.name)), [groups, opened]);
   const refused = useMemo(() => groups.filter((group) => group.data !== undefined && group.data.reason !== null), [groups]);
 
@@ -477,6 +521,10 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
     focusBox.current = focus;
   }, []);
 
+  function toggleLane(key: string) {
+    setOpenLanes((lanes) => (lanes.includes(key) ? lanes.filter((lane) => lane !== key) : [...lanes, key]));
+  }
+
   function onViewKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.defaultPrevented || hasModifier(event) || isTextField(event.target)) {
       return;
@@ -510,14 +558,22 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
     const stage = ["flow-stage", !gapsShown && "no-gaps", !gapsShown && selected === undefined && "no-side"].filter(Boolean).join(" ");
     body = (
       <div className={stage}>
-        {gapsShown && <FlowGaps gaps={top.gaps} marked={marked} onActivate={activate} />}
+        {gapsShown && <FlowGaps gaps={top.gaps} unread={topFailed} marked={marked} onActivate={activate} />}
         <div className="flow-main">
-          <TopNotes top={top} />
+          <TopNotes top={top} notes={notes} />
           {topRead.error !== null && (
             <div className="flow-failed">
               <p className="note" role="alert">
                 <Icon name="alert" />
-                <span>The flow could not be read again: {apiErrorOf(topRead.error).message}</span>
+                <span>
+                  The flow could not be read again: {apiErrorOf(topRead.error).message}
+                  {tab !== "timeline" && (
+                    <>
+                      <br />
+                      {STATES_HIDDEN_WORDS}
+                    </>
+                  )}
+                </span>
               </p>
               <button type="button" className="button" aria-disabled={topRead.isFetching} onClick={topRead.isFetching ? undefined : retryTop}>
                 <Icon name="retry" />
@@ -540,6 +596,32 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
                 onSettled={afterGroupRetry}
               />
             ))}
+          {summary.error !== null && tab !== "timeline" && (
+            <div className="flow-failed">
+              <p className="note" role="alert">
+                <Icon name="alert" />
+                <span>The stages could not be read: {apiErrorOf(summary.error).message}</span>
+              </p>
+              <button
+                type="button"
+                className="button"
+                aria-disabled={summary.isFetching}
+                onClick={
+                  summary.isFetching
+                    ? undefined
+                    : () => {
+                        retriedStages();
+                        void summary.refetch({ cancelRefetch: false });
+                      }
+                }
+              >
+                <Icon name="retry" />
+                <span>
+                  {summary.isFetching ? "Retrying" : "Retry"} <span className="sr-only">reading the stages</span>
+                </span>
+              </button>
+            </div>
+          )}
           {refused
             .filter((group) => nodes.has(group.name))
             .map((group) => (
@@ -582,8 +664,10 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
                   tabs={[
                     { id: "canvas", label: "Canvas" },
                     { id: "list", label: "List" },
+                    { id: "timeline", label: "Timeline" },
                   ]}
                 />
+                {tab !== "timeline" && <StageFilter value={stageShown} options={stageOptions(stages)} onChange={setChosenStage} />}
                 <button
                   type="button"
                   className="button button-quiet"
@@ -618,6 +702,7 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
                           marked={marked}
                           opening={opening}
                           named={named}
+                          stage={stageShown}
                           centring={centring}
                           onRove={setRoving}
                           onCommand={onCommand}
@@ -625,14 +710,21 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
                         />
                       </Suspense>
                     </RegionBoundary>
-                    <FlowLegend types={types} />
+                    <FlowLegend types={types} states={reads.some((read) => read.boxes.some((node) => node.rollup !== null))} />
                   </div>
                 )}
               </TabPanel>
               <TabPanel base={tabsBase} id="list" selected={tab === "list"}>
                 {tab === "list" && (
                   <RegionBoundary name="list">
-                    <FlowList project={project} reads={reads} open={drawnOpen} named={named} selected={nodeRef} marked={marked} scrollTo={centring} onToggle={toggle} />
+                    <FlowList project={project} reads={reads} open={drawnOpen} named={named} selected={nodeRef} marked={marked} stage={stageShown} scrollTo={centring} onToggle={toggle} />
+                  </RegionBoundary>
+                )}
+              </TabPanel>
+              <TabPanel base={tabsBase} id="timeline" selected={tab === "timeline"}>
+                {tab === "timeline" && (
+                  <RegionBoundary name="timeline">
+                    <TimelineView project={project} read={summary} openLanes={openLanes} selected={nodeRef} noted={notes} onToggle={toggleLane} />
                   </RegionBoundary>
                 )}
               </TabPanel>
@@ -662,7 +754,7 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
         <h1 id={titleId} tabIndex={-1}>
           Flow
         </h1>
-        <p className="view-about">{ABOUT} Read only.</p>
+        <p className="view-about">{ABOUT} The spec is read only here.</p>
       </header>
       <div ref={results} tabIndex={-1} className="flow-results" aria-busy={topRead.isFetching || opening.size > 0}>
         <RegionBoundary name="flow">{body}</RegionBoundary>

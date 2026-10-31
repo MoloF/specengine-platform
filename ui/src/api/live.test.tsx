@@ -968,7 +968,7 @@ describe("the Bindings tab on the live tail (UI-6 of ui-node-bindings)", () => {
 });
 
 describe("the flow on the live tail (flow-canvas)", () => {
-  const FLOW_READS = ["/api/projects/alpha/flow?depth=0", "/api/projects/alpha/flow?root=G-1&depth=1"];
+  const FLOW_READS = ["/api/projects/alpha/flow?depth=0&trace=true", "/api/projects/alpha/flow?root=G-1&depth=1&trace=true"];
 
   function FlowReads() {
     useLiveQueue("alpha");
@@ -1101,6 +1101,7 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     useCard("alpha", "C-0001");
     useCard("alpha", "C-0002");
     useTrace("alpha");
+    useFlow("alpha");
     useInbox("alpha");
     useTasks("alpha");
     return outside === null ? null : <p>changed outside</p>;
@@ -1131,7 +1132,7 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
       </ApiProvider>,
     );
     await quiet(queryClient);
-    for (const method of [client.getCards, client.getCard, client.getTrace, client.getInbox, client.getTasks]) {
+    for (const method of [client.getCards, client.getCard, client.getTrace, client.getFlow, client.getInbox, client.getTasks]) {
       method.mockClear();
     }
     return { client, queryClient, tail, gap: () => gap?.() };
@@ -1161,14 +1162,43 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     expect(client.getCard.mock.calls.map((call) => call[1]).sort()).toEqual(["C-0001", "C-0002"]);
   });
 
-  it.each(["proposal.rejected", "proposal.applied"])("%s reads the trace: it settles a departure or moves a mark", async (type) => {
+  it.each(["proposal.rejected", "proposal.applied"])("%s reads the trace and the list: it settles a departure or moves a mark, and a tile shows it with no reload", async (type) => {
     const { client, queryClient, tail } = await onScreen();
     act(() => {
       tail({ seq: 94, type, payload: { id: "PR-1" } });
     });
     await quiet(queryClient);
     expect(client.getTrace).toHaveBeenCalledTimes(1);
-    expect(client.getCards).not.toHaveBeenCalled();
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+  });
+
+  it("a real window focus reads the list again, for a hand edit in an editor beside the browser, which raises no event and no visibilitychange", async () => {
+    const { client, queryClient } = await onScreen();
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await quiet(queryClient);
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+    expect(client.getTrace).not.toHaveBeenCalled();
+  });
+
+  it("a page coming back into view reads the list too, once, whichever of the two events said so", async () => {
+    const { client, queryClient } = await onScreen();
+    act(() => {
+      window.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(new Event("focus"));
+    });
+    await quiet(queryClient);
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+  });
+
+  it("a card event reads the flows on screen too: their boxes carry the rollups (trace-views)", async () => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 95, type: "card.accepted", payload: { id: "C-0001" } });
+    });
+    await quiet(queryClient);
+    expect(client.getFlow).toHaveBeenCalledTimes(1);
   });
 
   it("a gap reads the cards again; a proposal or a task event does not", async () => {

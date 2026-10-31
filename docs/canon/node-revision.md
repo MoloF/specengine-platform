@@ -27,7 +27,7 @@ A document's revision is its front-matter `rev:`, a section's the `rev=N` attrib
 
 Core `revision(parsed, ord) -> Revision {Written(u32), Unwritten, Unreadable}`, `number()`: `Written(n)` n, `Unwritten` 1, `Unreadable` none. **Unreadable**: no node at `ord`; a section whose heading `attrs` hold `rev` and whose `Node.rev` is none; a document whose front-matter failed (`front_matter_failure`) or whose `extra` holds `rev` (a bad, repeated or mistyped value is kept there); a `Node.rev` outside the range (a parse of another format). The model's `Node.rev` holds only a written, readable revision: `spec show` and `tree` print ` | rev <n>` only then, JSON `rev` is `null` otherwise.
 
-`bad-rev` stays a warning. The reference grammar is unchanged: `R-1@0` parses and is no finding.
+`bad-rev` stays a warning. The reference grammar holds: `R-1@0` parses and is no finding.
 
 ## Raising
 
@@ -53,7 +53,7 @@ required | R-12 | docs/spec/combat.md:14 | rev 3 -> 4 | 2 lock entries | ## Cost
 
 ## The recipe
 
-It sees spans and links only: no key, kind or prefix literal (a source scan in the tests).
+It sees spans and links only: no key, kind or prefix literal (a source scan in tests).
 
 **Text** (`own_spans`, as the store's `own_text`). A section: its body (the line after its heading to its end) minus nested ID sections; never its heading line(s). A document (ord 0): the file's body minus its ID sections, minus its first H1, from the start of the H1's first line through the line ending of its last, when that H1 is no ID section. The H1 is found by re-reading the body with the parser's reader and options (`markdown::first_h1`), never through slug anchors (a punctuation-only H1 has none). The cut leaves the text before and after it as two pieces. A document's hash never covers its ID sections; each has its own.
 
@@ -75,7 +75,7 @@ Kept: indentation, tabs, inner spaces, Markdown, HTML comments, code blocks (the
 <type> path:<path>[#<anchor>]                                a canon: path target
 ```
 
-**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`) or untyped (`extra`); a heading line; a revision.
+**Never counted**: every other key, typed (`id`, `kind`, `parent`, `title`, `status`, `tier`, `owner`, `reviewed`, `rev`, `class`, `scope`, `date`, `shipped`, `ref`, `to`, `severity`, `generator`, `source`, `acceptance`, `aliases`, `raised_by`, `release`, `priority`, `estimate`, `stage`) or untyped (`extra`); a heading line; a revision.
 
 **Bytes**, framed as `specengine-hash/v2` (`crates/specengine-code/README.md` "Hash recipe"):
 

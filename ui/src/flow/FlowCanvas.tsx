@@ -18,14 +18,17 @@ import {
   type Node,
   type NodeProps,
 } from "@xyflow/react";
-import { memo, useCallback, useEffect, useId, useMemo, useRef, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, type CSSProperties, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { HANDLE_SIZE } from "../graph/layout";
+import { TraceBar } from "../trace/TraceBar";
+import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { focusIsLost } from "../ui/focus";
 import { hasModifier, isTextField } from "../ui/keys";
-import { durationOf, fitOf, inView, type Rect } from "./geometry";
-import { boxWords, dashOf, edgeName, edgeWords, gapMark, holdsText, isRepeat, startWord, typeColour, type GapMark } from "./labels";
+import { durationOf, fitOf, fittedCanvasHeight, inView, type Rect } from "./geometry";
+import { boxWords, countsText, dashOf, edgeName, edgeWords, gapMark, holdsText, isNoCard, isRepeat, rollupLook, startWord, typeColour, type GapMark } from "./labels";
 import { boxAfterKey, enclosingHead, HEAD_HEIGHT, LANE_PAD, type FlowBox, type FlowLane, type FlowLayout, type LaidEdge } from "./layout";
+import { outsideStage } from "./timeline";
 
 // The Flow's canvas (ui/README.md "Screen rules", Canvas; docs/features/flow-canvas.md): React Flow
 // draws the layout's boxes, frames and edges where the layout put them; nothing drags, connects,
@@ -54,6 +57,8 @@ type BoxMarks = {
   marked: boolean;
   opening: boolean;
   gap: GapMark | null;
+  /** Outside the stage filter by its own stage: it keeps its place, dimmed. */
+  dimmed: boolean;
 };
 
 type BoxData = { box: FlowBox } & BoxMarks;
@@ -139,19 +144,51 @@ function boxClasses(base: string, box: FlowBox, data: BoxMarks): string {
     data.selected && "is-selected",
     data.marked && "is-marked",
     data.gap !== null && "has-gap",
+    data.dimmed && "is-dimmed",
     box.group !== null && "in-lane",
   ]
     .filter(Boolean)
     .join(" ");
 }
 
-/** A step or a closed group: its words, name, kind, and what marks it. */
+/**
+ * What the read says of a box's work: a step its rollup, a closed group its served counts and the bar
+ * they make. No read of them, no line: a box never shows a state nobody served.
+ */
+function WorkState({ box }: { box: FlowBox }) {
+  const { node } = box;
+  if (box.form === "closed") {
+    if (node.counts === null) {
+      return null;
+    }
+    const words = countsText(node.counts);
+    return (
+      <>
+        <p className="flow-box-state" title={words}>
+          {words}
+        </p>
+        <TraceBar counts={node.counts} className="flow-box-bar" />
+      </>
+    );
+  }
+  return (
+    node.rollup !== null && (
+      <p className="flow-box-state">
+        <Badge look={rollupLook(node.rollup)} />
+      </p>
+    )
+  );
+}
+
+/** A step or a closed group: its words, name, kind, what marks it, then its work. A step with no card is hollow. */
 function StepBox({ data }: { data: BoxData }) {
   const { box } = data;
   const { node } = box;
   const closed = box.form === "closed";
+  const marked = closed || data.gap !== null || node.start || node.end;
+  const hollow = !closed && node.rollup !== null && isNoCard(node.rollup);
   return (
-    <div className={`${boxClasses("flow-box", box, data)}${closed ? " is-group" : ""}`} aria-hidden="true">
+    <div className={`${boxClasses("flow-box", box, data)}${closed ? " is-group" : ""}${hollow ? " is-hollow" : ""}`} aria-hidden="true">
       <Handles />
       <StateTabs data={data} />
       <p className="flow-box-words">
@@ -162,16 +199,19 @@ function StepBox({ data }: { data: BoxData }) {
         <span className="mono flow-box-id">{box.name}</span>
         {node.kind !== null && <span className="mono flow-box-kind">{node.kind}</span>}
       </p>
-      <p className="flow-box-marks">
-        {data.gap !== null && (
-          <span className="flow-mark flow-mark-gap">
-            <Icon name="flowGap" />
-            {data.gap.shown}
-          </span>
-        )}
-        <WalkMarks box={box} />
-        {closed && <span className="flow-mark">{holdsText(node.holds)}</span>}
-      </p>
+      {marked && (
+        <p className="flow-box-marks">
+          {data.gap !== null && (
+            <span className="flow-mark flow-mark-gap">
+              <Icon name="flowGap" />
+              {data.gap.shown}
+            </span>
+          )}
+          <WalkMarks box={box} />
+          {closed && <span className="flow-mark">{holdsText(node.holds)}</span>}
+        </p>
+      )}
+      <WorkState box={box} />
     </div>
   );
 }
@@ -267,9 +307,17 @@ export function boxName(box: FlowBox, marks: BoxMarks): string {
     parts.push(`open group, ${holdsText(node.holds)}`);
   } else if (box.form === "closed") {
     parts.push(`closed group, ${holdsText(node.holds)}`);
+    if (node.counts !== null) {
+      parts.push(countsText(node.counts));
+    }
+  } else if (node.rollup !== null) {
+    parts.push(rollupLook(node.rollup).label);
   }
   if (marks.gap !== null) {
     parts.push(marks.gap.said);
+  }
+  if (marks.dimmed) {
+    parts.push("outside the stage shown");
   }
   if (marks.opening) {
     parts.push("opening");
@@ -350,6 +398,9 @@ function edgeOf(laid: LaidEdge, types: readonly string[], emphasis: boolean): Li
   };
 }
 
+/** A strip in the row under the picture, beside the controls, so it covers no box of a short canvas. */
+const MINIMAP_SIZE = { width: 160, height: 48 };
+
 /** The canvas's commands for a box, decided by the view: a click selects, Enter also moves focus to the panel. */
 export type BoxCommand = "select" | "details" | "toggle" | "tree" | "close";
 
@@ -372,6 +423,8 @@ export interface FlowCanvasProps {
   opening: ReadonlySet<string>;
   /** The names a gap row of the top read names. */
   named: ReadonlySet<string>;
+  /** The stage filter's value: boxes outside it dim, the layout stays. */
+  stage: string;
   centring: Centring | null;
   onRove: (id: string) => void;
   onCommand: (box: FlowBox, command: BoxCommand) => void;
@@ -399,7 +452,7 @@ function useReadableFit(layout: FlowLayout): () => boolean {
 }
 
 /**
- * Fits the view while the owner has not moved it, the canvas's width changing too. After that a
+ * Fits the view while the owner has not moved it, the canvas's size changing too. After that a
  * layout never moves the view on its own but to keep the box in hand where it was on the screen:
  * opening a group pushes its neighbours aside, not the group away.
  */
@@ -410,10 +463,12 @@ function KeepInView({ layout, fit, held, touched }: { layout: FlowLayout; fit: (
   const { setViewport } = useReactFlow();
   const fitted = useRef<FlowLayout | null>(null);
   const fittedWidth = useRef(width);
+  const fittedHeight = useRef(height);
   useEffect(() => {
     const before = fitted.current;
-    const resized = fittedWidth.current !== width;
+    const resized = fittedWidth.current !== width || fittedHeight.current !== height;
     fittedWidth.current = width;
+    fittedHeight.current = height;
     if ((before === layout && !resized) || width <= 0 || height <= 0) {
       return;
     }
@@ -437,7 +492,7 @@ function KeepInView({ layout, fit, held, touched }: { layout: FlowLayout; fit: (
   return null;
 }
 
-function Canvas({ layout, types, rovingId, selected, marked, opening, named, centring, onRove, onCommand, focusRef }: FlowCanvasProps) {
+function Canvas({ layout, types, rovingId, selected, marked, opening, named, stage, centring, onRove, onCommand, focusRef }: FlowCanvasProps) {
   const wrapper = useRef<HTMLDivElement>(null);
   const store = useStoreApi();
   const { setCenter } = useReactFlow();
@@ -459,13 +514,14 @@ function Canvas({ layout, types, rovingId, selected, marked, opening, named, cen
           marked: marked.has(box.name),
           opening: opening.has(box.name),
           gap: gapMark(box.node, box.form === "open", named),
+          dimmed: outsideStage(box.node, stage),
         },
         box.id === rovingId,
       ),
     );
     const bands = layout.lanes.flatMap((lane) => (lane.bandY === null ? [] : [bandNode(lane, lane.bandY)]));
     return [...boxes, ...bands];
-  }, [layout, selected, marked, opening, named, rovingId]);
+  }, [layout, selected, marked, opening, named, stage, rovingId]);
   const edges = useMemo(
     () => layout.edges.map((laid) => edgeOf(laid, types, selectedId !== null && (laid.source === selectedId || laid.target === selectedId))),
     [layout, types, selectedId],
@@ -517,6 +573,12 @@ function Canvas({ layout, types, rovingId, selected, marked, opening, named, cen
   // The canvas's width changed, a panel opening beside it: what was centred on the old width is
   // looked at again, against the view it will have.
   const canvasWidth = useStore((state) => state.width);
+  const canvasHeight = fittedCanvasHeight(layout, canvasWidth);
+  // The minimap only covers a picture already whole in view.
+  const pictureWhole = useStore((state) => {
+    const [x, y, zoom] = state.transform;
+    return inView({ x: 0, y: 0, width: layout.width, height: layout.height }, { x, y, zoom, width: state.width, height: state.height });
+  });
   const lookedAt = useRef(canvasWidth);
   useEffect(() => {
     if (lookedAt.current === canvasWidth) {
@@ -624,7 +686,14 @@ function Canvas({ layout, types, rovingId, selected, marked, opening, named, cen
   }
 
   return (
-    <div ref={wrapper} className="graph-canvas flow-canvas" onKeyDown={onKeyDown} onFocus={onFocus} onBlur={onBlur}>
+    <div
+      ref={wrapper}
+      className="graph-canvas flow-canvas"
+      style={canvasHeight === null ? undefined : ({ "--flow-canvas-fitted": `${String(canvasHeight)}px` } as CSSProperties)}
+      onKeyDown={onKeyDown}
+      onFocus={onFocus}
+      onBlur={onBlur}
+    >
       <p id={hintId} className="sr-only">
         The List view holds every box and edge as text.
       </p>
@@ -666,7 +735,7 @@ function Canvas({ layout, types, rovingId, selected, marked, opening, named, cen
           onNodeClick(event, node.id);
         }}
       >
-        <Controls showInteractive={false} showFitView={false}>
+        <Controls orientation="horizontal" showInteractive={false} showFitView={false}>
           <ControlButton
             className="react-flow__controls-fitview"
             title={FLOW_ARIA_LABELS["controls.fitView.ariaLabel"]}
@@ -678,7 +747,7 @@ function Canvas({ layout, types, rovingId, selected, marked, opening, named, cen
             <Icon name="fit" />
           </ControlButton>
         </Controls>
-        <MiniMap pannable={false} zoomable={false} nodeClassName={(node) => node.className ?? ""} />
+        {!pictureWhole && <MiniMap style={MINIMAP_SIZE} pannable={false} zoomable={false} nodeClassName={(node) => node.className ?? ""} />}
         <KeepInView layout={layout} fit={fit} held={rovingId} touched={touched} />
       </ReactFlow>
     </div>
