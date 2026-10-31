@@ -388,7 +388,7 @@ fn round_key(proposal: &Proposal, waiting: usize) -> OrderKey {
 }
 
 /// `ids`, at most [`IDS_NAMED_MAX`], the rest counted.
-fn named(ids: &[String]) -> String {
+pub(crate) fn named(ids: &[String]) -> String {
     let mut text = ids
         .iter()
         .take(IDS_NAMED_MAX)
@@ -639,10 +639,12 @@ pub(crate) fn sheet_text(sheet: &RoundSheet) -> String {
     out
 }
 
-/// The owner's terminal during `spec round answer` (`main`: stdout, and a
-/// `[y/N]` prompt on stderr read from the terminal).
+/// The owner's terminal during `spec round answer` and `spec approve
+/// --open` (`main`: stdout, and a `[y/N]` prompt on stderr read from the
+/// terminal).
 pub trait RoundTerminal {
-    /// The report, once, before the first question (text: stdout).
+    /// The report, once, before the first question; `spec approve
+    /// --open`: each item's own output as it ends (text: stdout).
     fn report(&mut self, text: &str);
     /// One item's question: `Some(true)` only for `y` or `yes`; `None` at
     /// the end of input.

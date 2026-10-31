@@ -8,7 +8,7 @@ reviewed: 2026-10-31
 
 # Proposal apply: consent and steps
 
-`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; completion, reject: `proposal-completion.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`; a `drift` item `spec.lock` alone, by its node's lock accept: `proposal-drift.md` "Approve") and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
+`spec approve` is the one write door into spec files (ADR-0004, ADR-0005), bound to where the proposal was raised (ADR-0032, `architecture.md#apply`). Commands, states, store ops, escaping, git safety: `proposal-queue.md`; completion, reject: `proposal-completion.md`; revisions, `--editorial`: `proposal-revisions.md`. An apply writes the target file (or a new file: a record, `decision-record.md`; a create's, an amendment's, `proposal-create-apply.md`; `--editorial` also `spec.lock`; a `drift` item `spec.lock` alone, by its node's lock accept: `proposal-drift.md` "Approve") and one commit in the recorded worktree, the queue and the data directory; nothing else. Code: CLI `apply.rs` (approve, `--open`, reject, steps 7-10, completion), `preflight.rs` (steps 2-6, the trailer lookup); store `WorktreeGit` (`merge_file`, `commit_only{,_paths}`, git reads), `replace_file`, `update_file`.
 
 ## Consent
 
@@ -19,6 +19,16 @@ reviewed: 2026-10-31
 - `reject [approved ]PR-0001 (<target_id> in <path> on <branch> in <worktree>)? [y/N]`.
 
 A lookup git could not make is printed above the question (`note: cannot tell whether …`) and in the outcome's notes. A pseudo-terminal passes (ADR-0034). A stage it confirms is printed above, the question marked `staged` (`decision-staging.md` "Terminal").
+
+**`spec approve --open`** (`approve_open`; the same terminal check first; beside a `PR`, `--note`, `--option`, `--answer`, `--canon` or `--editorial`: a usage error, exit 2) walks this repository's `open` rows of applying kinds (`family()` `Applies`), listed once at its start, by ID number, on one clock reading. Each runs the ordinary `spec approve PR`: its own question, `[y/N]`, commit and `Proposal:`; an approve staged shows its stage. One key per item: no consent over a set (ADR-0038), no `--yes`. An `approved` row is not walked (`spec approve PR` completes it); an item needing a flag takes its own `spec approve`.
+
+- **Declined or refused** (a stale base, a dirty place, a conflict): printed, in `left`; the walk moves on.
+- **Its place fails** (step 2: another branch, a detached `HEAD`, an operation in progress, the worktree gone; `own_place_failure`): `` `PR` left open: <reason> ``, in `left`; the walk moves on.
+- **A reject staged**, read at the item's turn because the daemon can stage while the walk waits: never asked, no event, no row change, in `left`: `` `PR` has a reject staged at <at>: spec reject PR confirms it; spec approve PR overrides it ``.
+- **Anything else that stops an approve from running** (a missing identity, an unreadable queue, store or project): the walk stops, exit 2, each earlier commit standing: `` <error>; the open walk stopped at `PR`, <n> applied before it, each commit stands: <IDs> `` (`nothing applied before it`).
+- **End of input** ends it: `end of input: <n> proposal(s) not answered: <IDs>`, `left` also holding items never asked.
+
+Text: each item's own output in turn, then `open walk: <a> applied, <k> left open`, then `note:` lines. JSON: one document at the end, `{applied, left, notes}`. Exit 0 when no walked item stays open, else 1; no proposal: `open walk: 0 applied, 0 left open`. A kind that decides and a drift item are noted, not walked, in `spec round new`'s words: `` <n> open deciding item(s) not walked: <IDs>; spec round new lists them ``, `` <n> open drift item(s) not walked: <IDs>; spec review <ID>, then spec approve or spec reject ``; the inbox's notes on rows left out follow.
 
 ## Apply steps
 
@@ -58,3 +68,5 @@ None blocks; completion's and reject's: `proposal-completion.md` "Known limits";
 
 - Racing terminals meet git's `index.lock` (reported); hooks or signing needing stdin fail (bytes restored); revisions: `proposal-revisions.md`.
 - A path target follows no rename (step 3 refuses; no re-targeting).
+- `--open`'s order puts a holder before its dependant only without a decline: declining A and pressing `y` on B applies B with a dangling reference. `spec check` reports it, a project's commit hook may refuse it, and the review showed no note: the held note is not stored (`proposal-kinds.md` "Known limits").
+- Plain `spec approve PR` on a row with a reject staged is unchanged: it prints `note: the choice staged <at> is not used: the typed flags decide`, and `y` applies. The note never says it was a reject; left out of `proposal-rehearsal`.

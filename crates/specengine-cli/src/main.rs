@@ -32,22 +32,22 @@ use clap::builder::PossibleValuesParser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
-    AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CardAcceptRequest,
-    CardAssignRequest, CardCancelRequest, CardClearGroupRequest, CardClearOutcome,
-    CardClearRequest, CardEditRequest, CardListRequest, CardMoveRequest, CardNewRequest,
-    CardShowRequest, CheckRequest, CheckedTree, CliError, CreateRequest, DecisionRequest,
-    DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest, ExportStateRequest,
-    FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
-    GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest,
-    InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
-    LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome,
-    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest,
-    ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
-    SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES,
-    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
-    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest,
-    UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json,
-    render_text,
+    AmendmentRequest, ApproveFlags, ApproveOpenRequest, ApproveRequest, BumpRequest, BundleRequest,
+    CardAcceptRequest, CardAssignRequest, CardCancelRequest, CardClearGroupRequest,
+    CardClearOutcome, CardClearRequest, CardEditRequest, CardListRequest, CardMoveRequest,
+    CardNewRequest, CardShowRequest, CheckRequest, CheckedTree, CliError, CreateRequest,
+    DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest,
+    ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
+    GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
+    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
+    InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest,
+    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
+    RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
+    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
+    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
+    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
+    TaskStatus, TraceRequest, TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat,
+    VerifyRequest, VerifyTestsRequest, render_json, render_text,
 };
 use specengine_store::GitEnv;
 
@@ -314,8 +314,8 @@ enum Command {
     },
     /// Apply an open proposal in its worktree as one commit (a question, a discrepancy or a decision: write its decision record, from the project's [decision_records] template, as one new file and one commit), or complete an open or approved one whose own commit is already on its branch, with no new commit; asks for consent on the terminal (completing an approved one does not ask). Without flags, an approve staged from the UI is shown and confirmed with its flags.
     Approve {
-        #[arg(value_name = "PR")]
-        id: String,
+        #[arg(value_name = "PR", required_unless_present = "open")]
+        id: Option<String>,
         /// A note kept with the decision (and in a decision record's `note` slot), at most 4096 bytes.
         #[arg(long, value_name = "T")]
         note: Option<String>,
@@ -331,6 +331,9 @@ enum Command {
         /// An editorial change (wording, no meaning): keep every revision the change would raise, and set the new spec hash on the spec.lock entries that vouched for the old text, in the same commit; a drift item: its node's `spec lock accept --editorial`.
         #[arg(long)]
         editorial: bool,
+        /// Walk this repository's open proposals of applying kinds, oldest first: each its own question and `[y/N]`, its own commit; a decline leaves it open and the walk moves on. An item needing a flag takes its own `spec approve`.
+        #[arg(long, conflicts_with_all = ["id", "note", "option", "answer", "canon", "editorial"])]
+        open: bool,
     },
     /// Reject an open or approved proposal, never one whose `Proposal:` commit is on its branch (a drift item: one completing it); asks for consent on the terminal.
     Reject {
@@ -796,6 +799,9 @@ enum Propose {
         /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
         #[arg(long)]
         brief: bool,
+        /// Run every step of the real call, every refusal and finding, and store nothing: no proposal, no ID held; the answer has no ID.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
         /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
         #[arg(long, value_name = "T")]
         task: Option<String>,
@@ -826,6 +832,9 @@ enum Propose {
         /// Answer with the brief review: no texts or diff, at most 20 introduced findings, the text cut at 40000 characters.
         #[arg(long)]
         brief: bool,
+        /// Run every step of the real call, every refusal and finding, and store nothing: no proposal, no ID held; the answer has no ID.
+        #[arg(long = "dry-run")]
+        dry_run: bool,
         /// The task this is raised for (`T-0001`): one of this repository, not done or cancelled.
         #[arg(long, value_name = "T")]
         task: Option<String>,
@@ -1367,6 +1376,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_model,
                     run,
                     brief,
+                    dry_run,
                     task,
                 },
         } => {
@@ -1387,10 +1397,15 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 git: process_git(env),
             };
             let task = task.as_deref();
-            Outcome::Proposal(Box::new(if brief {
-                specengine_cli::propose_brief_with_task(env, globals, &request, task)?
-            } else {
-                specengine_cli::propose_with_task(env, globals, &request, task)?
+            Outcome::Proposal(Box::new(match (dry_run, brief) {
+                (true, true) => {
+                    specengine_cli::propose_dry_run_brief(env, globals, &request, task)?
+                }
+                (true, false) => specengine_cli::propose_dry_run(env, globals, &request, task)?,
+                (false, true) => {
+                    specengine_cli::propose_brief_with_task(env, globals, &request, task)?
+                }
+                (false, false) => specengine_cli::propose_with_task(env, globals, &request, task)?,
             }))
         }
         Command::Propose {
@@ -1404,6 +1419,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_model,
                     run,
                     brief,
+                    dry_run,
                     task,
                 },
         } => {
@@ -1424,10 +1440,19 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 git: process_git(env),
             };
             let task = task.as_deref();
-            Outcome::Proposal(Box::new(if brief {
-                specengine_cli::propose_create_brief_with_task(env, globals, &request, task)?
-            } else {
-                specengine_cli::propose_create_with_task(env, globals, &request, task)?
+            Outcome::Proposal(Box::new(match (dry_run, brief) {
+                (true, true) => {
+                    specengine_cli::propose_create_dry_run_brief(env, globals, &request, task)?
+                }
+                (true, false) => {
+                    specengine_cli::propose_create_dry_run(env, globals, &request, task)?
+                }
+                (false, true) => {
+                    specengine_cli::propose_create_brief_with_task(env, globals, &request, task)?
+                }
+                (false, false) => {
+                    specengine_cli::propose_create_with_task(env, globals, &request, task)?
+                }
             }))
         }
         Command::Propose {
@@ -1649,8 +1674,21 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             answer,
             canon,
             editorial,
+            open,
         } => {
             require_terminal("approve")?;
+            if open {
+                let mut terminal = Console { json };
+                return Ok(Outcome::OpenWalk(specengine_cli::approve_open(
+                    env,
+                    globals,
+                    &ApproveOpenRequest {
+                        now: now(),
+                        git: process_git(env),
+                    },
+                    &mut terminal,
+                )?));
+            }
             let mut consent = ask;
             let approve = if editorial {
                 specengine_cli::approve_editorial
@@ -1661,7 +1699,8 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 env,
                 globals,
                 &ApproveRequest {
-                    id,
+                    // Clap requires it without `--open`.
+                    id: id.unwrap_or_default(),
                     note,
                     now: now(),
                     git: process_git(env),
@@ -2511,11 +2550,12 @@ fn show_and_ask(prompt: &LockPrompt<'_>, json: bool) -> bool {
     ask(prompt.question)
 }
 
-/// `spec round answer`'s terminal: the report on stdout before the first
-/// question (text only; `--json` prints one document after the walk),
-/// each question on stderr with one answer line read from the terminal
-/// (only `y` or `yes` consents; the end of input ends the walk), the
-/// walk's lines on stderr.
+/// `spec round answer`'s and `spec approve --open`'s terminal: the report
+/// on stdout before the first question, each item's own output as it ends
+/// (text only; `--json` prints one document after the walk), each question
+/// on stderr with one answer line read from the terminal (only `y` or
+/// `yes` consents; the end of input ends the walk), the walk's lines on
+/// stderr.
 struct Console {
     json: bool,
 }

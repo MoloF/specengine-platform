@@ -63,6 +63,7 @@ use specengine_store::{
 
 use crate::cap::SHOW_TAIL_NAMES;
 use crate::corpus::{Admission, indexed};
+use crate::create::unheld_findings;
 use crate::proposals::{
     checked_now, escaped_error, finding_line, more_findings_note, open_context, queue_cannot,
 };
@@ -645,6 +646,7 @@ fn run_intake(
     // 4. The proposed patch: one of the targets, then `propose update`
     // steps 1–4.
     let mut checked = None;
+    let mut held = Vec::new();
     if let Some(patch) = item.patch {
         const FIELD: &str = "proposed_patch";
         let target = match resolved_node(&context.project, &input, &patch.target)
@@ -691,7 +693,15 @@ fn run_intake(
         )
         .map_err(|error| prefixed(error, FIELD))?
         {
-            Ok(update) => checked = Some(update),
+            Ok(mut update) => {
+                // Told below, only once the update is stored.
+                let mut deferred = Vec::new();
+                let (diagnostics, notes) =
+                    unheld_findings(&context, update.diagnostics, &mut deferred)?;
+                update.diagnostics = diagnostics;
+                held = notes;
+                checked = Some(update);
+            }
             Err(reason) => {
                 return Ok(IntakeOutcome::refused(
                     &format!("{FIELD}: {reason}"),
@@ -767,13 +777,19 @@ fn run_intake(
         }
         Err(error) => return Err(queue_cannot(error)),
     };
-    Ok(answer(
+    let mut outcome = answer(
         corpus_hits,
         corpus_related,
         result,
         item.patch.is_some(),
         messages,
-    ))
+    );
+    if outcome.document.created {
+        let told = held.iter().cloned().map(Message::Note);
+        outcome.messages.extend(told);
+        outcome.document.notes.extend(held);
+    }
+    Ok(outcome)
 }
 
 /// The intake document of what step 7 did.

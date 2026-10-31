@@ -45,7 +45,7 @@ use specengine_store::{
 use crate::corpus::indexed;
 use crate::create::{
     Corpus, NewIds, canonical_in, checked_file, file_target, parsed_text, reserved_refusal,
-    validated,
+    unheld_findings, validated,
 };
 use crate::intake::prefixed;
 use crate::preflight::StepFailure;
@@ -234,6 +234,7 @@ fn run_amend(
         checked.patched.clone(),
         &mut messages,
     );
+    let (diagnostics, held) = unheld_findings(&context, diagnostics, &mut messages)?;
 
     // 7. `--task`.
     let task = match task {
@@ -273,7 +274,8 @@ fn run_amend(
         }
         Err(error) => return Err(queue_cannot(error)),
     };
-    let document = previewed(env, &request.git, &context, &created, &mut messages);
+    let mut document = previewed(env, &request.git, &context, &created, &mut messages);
+    document.notes.extend(held);
     Ok(ProposalOutcome::done(
         QueueCommand::Propose,
         document,

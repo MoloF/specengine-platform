@@ -27,7 +27,7 @@ use specengine_store::{
     same_repository,
 };
 
-use crate::proposals::{escaped_error, open_context, queue_cannot, repository_gone};
+use crate::proposals::{QueueContext, escaped_error, open_context, queue_cannot, repository_gone};
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line};
 
 /// The most characters of the rationale's first line `inbox` shows.
@@ -121,6 +121,24 @@ fn run_inbox(
     } else {
         vec![ProposalStatus::Open, ProposalStatus::Approved]
     };
+    let (ours, notes) = repository_proposals(&context, statuses)?;
+    let proposals = ours.iter().map(entry).collect();
+    let messages = notes.iter().cloned().map(Message::Note).collect();
+    Ok(InboxOutcome {
+        proposals,
+        notes,
+        messages,
+    })
+}
+
+/// The current repository's proposals of `statuses` (none given: every
+/// state), by ID number, and the notes on what is left out: a row that does
+/// not decode, another repository's, a gone repository's (`spec inbox`,
+/// `spec approve --open`).
+pub(crate) fn repository_proposals(
+    context: &QueueContext,
+    statuses: Vec<ProposalStatus>,
+) -> Result<(Vec<Proposal>, Vec<String>), CliError> {
     let listed = context
         .queue
         .list_readable(&ProposalFilter {
@@ -132,7 +150,6 @@ fn run_inbox(
         .proposals
         .into_iter()
         .partition(|proposal| same_repository(&proposal.place.git_common_dir, &context.common_dir));
-    let proposals = ours.iter().map(entry).collect();
     let mut notes: Vec<String> = listed
         .unreadable
         .iter()
@@ -164,12 +181,7 @@ fn run_inbox(
             gone.len()
         ));
     }
-    let messages = notes.iter().cloned().map(Message::Note).collect();
-    Ok(InboxOutcome {
-        proposals,
-        notes,
-        messages,
-    })
+    Ok((ours, notes))
 }
 
 /// One proposal's line.

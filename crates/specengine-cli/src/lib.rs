@@ -86,7 +86,10 @@
 //!   request carries the caller's git environment ([`process_git`]) and,
 //!   where the queue records a time, the clock's `now` ([`utc_now`]);
 //!   [`propose_brief`], [`propose_create_brief`], [`review_brief`]: their
-//!   brief answers;
+//!   brief answers; [`propose_dry_run`], [`propose_create_dry_run`]: every
+//!   step of the real call, nothing stored; [`approve_open`] the
+//!   repository's open proposals of applying kinds, one [`approve`] each
+//!   (task spec `proposal-rehearsal`);
 //! - [`stage`], [`unstage`]: the owner's choice staged on an `open`
 //!   proposal, or cleared (canon `decision-staging`; no command: the
 //!   daemon's decision route calls them), confirmed only by `approve` or
@@ -284,8 +287,8 @@ use std::path::PathBuf;
 
 pub use amend::{AmendmentRequest, propose_amendment, propose_amendment_brief};
 pub use apply::{
-    ApproveFlags, ApproveRequest, Consent, RejectRequest, approve, approve_editorial, approve_with,
-    reject, reject_follow_up,
+    ApproveFlags, ApproveOpenRequest, ApproveRequest, Consent, OpenWalk, RejectRequest, approve,
+    approve_editorial, approve_open, approve_with, reject, reject_follow_up,
 };
 pub use bump::{BumpOutcome, BumpRequest, bump};
 pub use bundle::{
@@ -307,7 +310,7 @@ pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_c
 pub use corpus::LeftOut;
 pub use create::{
     CreateRequest, propose_create, propose_create_brief, propose_create_brief_with_task,
-    propose_create_with_task,
+    propose_create_dry_run, propose_create_dry_run_brief, propose_create_with_task,
 };
 pub use documents::{DocumentEntry, documents};
 pub use drift::{
@@ -365,7 +368,7 @@ pub use project::{
 pub use proposals::{Preview, ProposalDocument, ProposalDrift, ProposalOutcome, QueueCommand};
 pub use propose::{
     ProposeRequest, ProposedText, TEXT_MAX_BYTES, propose, propose_brief, propose_brief_with_task,
-    propose_with_task,
+    propose_dry_run, propose_dry_run_brief, propose_with_task,
 };
 pub use refresh::{IndexOutcome, IndexRequest, index};
 pub use refs::{
@@ -661,6 +664,8 @@ pub enum Outcome {
     CardShow(Box<CardShowOutcome>),
     /// `card list`: the flows and the cards.
     CardList(Box<CardListOutcome>),
+    /// `approve --open`: what the walk applied and left.
+    OpenWalk(OpenWalk),
     /// `round new`: the sheet.
     RoundSheet(Box<RoundSheet>),
     /// `round answer`: the answers, staged, and the walk.
@@ -695,6 +700,7 @@ impl Outcome {
             Self::Check(check) => check.exit(),
             Self::Bump(bump) => bump.exit(),
             Self::Proposal(proposal) => proposal.exit(),
+            Self::OpenWalk(walk) => walk.exit(),
             Self::Intake(intake) => intake.exit(),
             Self::Drift(drift) => drift.exit(),
             Self::Stage(stage) => stage.exit(),
@@ -741,6 +747,8 @@ impl Outcome {
             Self::VerifyTests(outcome) => (&outcome.messages, None),
             Self::Export(outcome) => (&outcome.messages, None),
             Self::Proposal(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            // Each item told its own lines; the walk's notes close its text.
+            Self::OpenWalk(_) => return Vec::new(),
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Drift(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Stage(outcome) => (
@@ -851,6 +859,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::VerifyTests(outcome) => verify_tests::render_text(outcome),
         Outcome::Export(outcome) => export::render_text(outcome),
         Outcome::Proposal(outcome) => proposals::render_text(outcome),
+        Outcome::OpenWalk(walk) => apply::open_walk_text(walk),
         Outcome::Intake(outcome) => intake::render_text(outcome),
         Outcome::Drift(outcome) => drift::render_text(outcome),
         Outcome::Stage(outcome) => proposals::render_text(&outcome.proposal),
@@ -901,6 +910,7 @@ impl serde::Serialize for Outcome {
             Self::VerifyTests(outcome) => outcome.serialize(serializer),
             Self::Export(outcome) => outcome.serialize(serializer),
             Self::Proposal(outcome) => outcome.serialize(serializer),
+            Self::OpenWalk(walk) => walk.serialize(serializer),
             Self::Intake(outcome) => outcome.serialize(serializer),
             Self::Drift(outcome) => outcome.serialize(serializer),
             Self::Stage(outcome) => outcome.serialize(serializer),

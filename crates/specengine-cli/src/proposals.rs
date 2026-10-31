@@ -40,6 +40,10 @@
 //! - **Brief** (`--brief`, MCP `get_proposal`, `propose_change`): the texts
 //!   (`record_text` too), `diff` and `conflict` dropped, at most [`SHOW_TAIL_NAMES`] findings
 //!   (the rest counted in a note), the text cut at [`OUTPUT_CAP_CHARS`].
+//! - **Dry run** ([`rehearsed`]; task spec `proposal-rehearsal`): the real
+//!   call's document of what it would store, `id` and `status` `null`,
+//!   [`DRY_RUN_NOTE`] the first note; what only a stored row or its
+//!   worktree preview fills `null`. The text's first line is the note.
 //!
 //! - **Terminal**: the text output and stderr of the queue's commands
 //!   carry agent-written text (rationale, texts, paths): every C0 and C1
@@ -60,8 +64,8 @@ use specengine_core::proposal::{
 };
 use specengine_core::raise::RevisionRow;
 use specengine_store::{
-    Choice, GitEnv, KindFamily, Proposal, ProposalFinding, ProposalQueue as _, QueueError,
-    SqliteQueue, Stage, WorktreeGit, same_repository,
+    Choice, GitEnv, KindFamily, NewProposal, Proposal, ProposalFinding, ProposalQueue as _,
+    ProposalStatus, QueueError, SqliteQueue, Stage, WorktreeGit, same_repository,
 };
 
 use crate::cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES};
@@ -70,6 +74,13 @@ use crate::project::{CONFIG_FILE, ProjectRoot, discover};
 use crate::revisions::rows_text as revisions_text;
 use crate::verify::{FindingLine, keyed_binding};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
+
+/// A dry run's first note and its text's first line.
+pub(crate) const DRY_RUN_NOTE: &str = "dry run: nothing stored";
+
+/// Where a brief dry run's reader finds the rest: no row to review, so the
+/// command's whole answer.
+const DRY_RUN_TAIL: &str = "spec propose's dry run without --brief lists them";
 
 /// Which command answered with a review document.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -360,7 +371,10 @@ pub(crate) fn briefed(mut outcome: ProposalOutcome) -> ProposalOutcome {
     {
         omitted = findings.len() - SHOW_TAIL_NAMES;
         findings.truncate(SHOW_TAIL_NAMES);
-        let note = more_findings_note(omitted, document.id.as_deref().unwrap_or("PR"));
+        let note = match document.id.as_deref() {
+            Some(id) => more_findings_note(omitted, id),
+            None => format!("{omitted} more introduced finding(s): {DRY_RUN_TAIL}"),
+        };
         let at = document.notes.len() - usize::from(outcome.refusal.is_some());
         document.notes.insert(at, note.clone());
         outcome.messages.push(Message::Note(note));
@@ -372,6 +386,57 @@ pub(crate) fn briefed(mut outcome: ProposalOutcome) -> ProposalOutcome {
 /// The note on the introduced findings a brief answer leaves out.
 pub(crate) fn more_findings_note(omitted: usize, id: &str) -> String {
     format!("{omitted} more introduced finding(s): spec review {id}")
+}
+
+/// A dry run's answer (task spec `proposal-rehearsal`): the document of the
+/// row `new` would be, no ID and no state, its `notes` opening with
+/// [`DRY_RUN_NOTE`]. `base_commit`, `preview`, `revisions` and the times are
+/// `null`: only a stored row or its worktree preview fills them. Nothing
+/// is written but git's scratch files for the diff.
+pub(crate) fn rehearsed(
+    context: &QueueContext,
+    git_env: &GitEnv,
+    new: &NewProposal,
+    task: Option<&str>,
+) -> ProposalDocument {
+    let proposal = Proposal {
+        id: String::new(),
+        project: context.slug.clone(),
+        kind: new.kind,
+        status: ProposalStatus::Open,
+        target_id: new.target_id.clone(),
+        target_path: new.target_path.clone(),
+        place: new.place.clone(),
+        base_hash: new.base_hash.clone().unwrap_or_default(),
+        base_text: new.base_text.clone().unwrap_or_default(),
+        new_text: new.new_text.clone(),
+        patch_hash: new.patch_hash.clone(),
+        rationale: new.rationale.clone(),
+        author: new.author.clone(),
+        diagnostics: new.diagnostics.clone(),
+        decided_by: None,
+        decided_at: None,
+        decision_note: None,
+        applied_commit: None,
+        created_at: String::new(),
+        updated_at: String::new(),
+        intake: None,
+        linked: None,
+        record: None,
+        new_ids: new.new_ids.clone(),
+        task_id: task.map(str::to_owned),
+        staged: None,
+        interpretation: None,
+        drift: None,
+    };
+    let mut document = with_diff(&proposal, git_env, &context.data_dir);
+    document.id = None;
+    document.status = None;
+    document.base_commit = None;
+    document.created_at = None;
+    document.updated_at = None;
+    document.notes.insert(0, DRY_RUN_NOTE.to_owned());
+    document
 }
 
 impl Serialize for ProposalOutcome {
@@ -656,16 +721,18 @@ pub(crate) fn finding_line(finding: &ProposalFinding) -> String {
 /// answer cut at [`OUTPUT_CAP_CHARS`] ([`cut_brief`]).
 pub(crate) fn render_text(outcome: &ProposalOutcome) -> String {
     let text = escape_controls(&raw_text(outcome));
-    match outcome.brief {
-        Some(_) => cut_brief(text, outcome.document.id.as_deref().unwrap_or("PR")),
-        None => text,
+    match (outcome.brief, outcome.document.id.as_deref()) {
+        (Some(_), Some(id)) => cut_brief(text, &format!("spec review {id}")),
+        // Only a dry run answers a text with no ID.
+        (Some(_), None) => cut_brief(text, DRY_RUN_TAIL),
+        (None, _) => text,
     }
 }
 
 /// A brief text over [`OUTPUT_CAP_CHARS`] characters: the lines that fit
 /// (a first line longer than the cap cut at it), then `[truncated: <k> of
-/// <n> lines not shown: spec review PR]`.
-pub(crate) fn cut_brief(text: String, id: &str) -> String {
+/// <n> lines not shown: <rest>]`, `rest` where the whole is read.
+pub(crate) fn cut_brief(text: String, rest: &str) -> String {
     if text.chars().count() <= OUTPUT_CAP_CHARS {
         return text;
     }
@@ -688,7 +755,7 @@ pub(crate) fn cut_brief(text: String, id: &str) -> String {
         shown += 1;
     }
     kept.push_str(&format!(
-        "[truncated: {} of {total} lines not shown: spec review {id}]\n",
+        "[truncated: {} of {total} lines not shown: {rest}]\n",
         total - shown
     ));
     kept
@@ -712,7 +779,9 @@ fn raw_text(outcome: &ProposalOutcome) -> String {
         QueueCommand::Propose => {
             let findings = document.diagnostics.as_deref().unwrap_or_default();
             let introduced = findings.len() + outcome.brief.unwrap_or(0);
-            out.push_str(&format!("{id}\nintroduced: {introduced}\n"));
+            // A dry run stored no row: its line says so.
+            let head = document.id.as_deref().unwrap_or(DRY_RUN_NOTE);
+            out.push_str(&format!("{head}\nintroduced: {introduced}\n"));
             for finding in findings {
                 out.push_str(&finding_line(finding));
                 out.push('\n');

@@ -29,7 +29,12 @@
 //!   the same scope). The queue's insert checks the live creates again
 //!   under its write lock ([`QueueError::Reserved`]).
 //! - What `spec check` judges is a finding, stored, never a refusal:
-//!   nothing is blocked by a discrepancy.
+//!   nothing is blocked by a discrepancy. A `ref-dangling` on an ID a live
+//!   create or amendment holds is left out, a note naming the holder
+//!   ([`unheld_findings`]; task spec `proposal-rehearsal`).
+//! - **Dry run** (`--dry-run`, [`propose_create_dry_run`]): every step
+//!   above, every refusal and finding, nothing stored and no ID held; the
+//!   answer is [`crate::proposals::rehearsed`].
 //!
 //! **Apply of a new file** ([`approve_file`]; a create's, an amendment's,
 //! which also checks the nodes it amends again at step 4, its text's own
@@ -68,7 +73,7 @@ use specengine_core::proposal::{
 };
 use specengine_core::record::{record_form, record_id, record_number};
 use specengine_core::{Paths, is_clean_relative, is_under};
-use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape};
+use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape, grammar};
 use specengine_store::{
     CreateFileError, Decision, GitEnv, IndexWriter as _, KindFamily, NamedBytes, NewProposal,
     Proposal, ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation,
@@ -90,7 +95,7 @@ use crate::preflight::{
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{
     Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, briefed, checked_now,
-    escaped_error, open_context, queue_cannot, queue_refusal, top_of, with_diff,
+    escaped_error, open_context, queue_cannot, queue_refusal, rehearsed, top_of, with_diff,
 };
 use crate::propose::{
     CheckedUpdate, ProposedText, SectionsFound, SpanRule, checked_span, exists_refusal,
@@ -107,6 +112,9 @@ use crate::{
 
 /// What a create refuses as its writer.
 const CREATE: &str = "a create";
+
+/// The check's code for a reference that resolves to nothing.
+const REF_DANGLING: &str = "ref-dangling";
 
 /// `spec propose create` options.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -158,7 +166,7 @@ pub fn propose_create_with_task(
     request: &CreateRequest,
     task: Option<&str>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_create(env, globals, request, task).map_err(escaped_error)
+    run_create(env, globals, request, task, false).map_err(escaped_error)
 }
 
 /// [`propose_create_brief`] with `--task T`.
@@ -169,6 +177,30 @@ pub fn propose_create_brief_with_task(
     task: Option<&str>,
 ) -> Result<ProposalOutcome, CliError> {
     propose_create_with_task(env, globals, request, task).map(briefed)
+}
+
+/// `spec propose create --dry-run [--task T]`: every step of
+/// [`propose_create_with_task`], nothing stored and no ID held; the answer
+/// is the real call's document with no ID and no state
+/// ([`crate::proposals::rehearsed`]).
+pub fn propose_create_dry_run(
+    env: &Env,
+    globals: &Globals,
+    request: &CreateRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    run_create(env, globals, request, task, true).map_err(escaped_error)
+}
+
+/// [`propose_create_dry_run`], its answer brief (MCP `propose_change` of
+/// kind `create` with `dry_run`).
+pub fn propose_create_dry_run_brief(
+    env: &Env,
+    globals: &Globals,
+    request: &CreateRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    propose_create_dry_run(env, globals, request, task).map(briefed)
 }
 
 /// What steps 2–3 make of a target and a text.
@@ -195,6 +227,7 @@ fn run_create(
     globals: &Globals,
     request: &CreateRequest,
     task: Option<&str>,
+    dry_run: bool,
 ) -> Result<ProposalOutcome, CliError> {
     let now = checked_now(&request.now)?;
     if let Some(problem) = author_problem(AuthorInput {
@@ -315,6 +348,7 @@ fn run_create(
         checked.patched.clone(),
         &mut messages,
     );
+    let (diagnostics, held) = unheld_findings(&context, diagnostics, &mut messages)?;
 
     // 7. Stored, bound to the place found first; a live create taking an ID
     // meanwhile is step 4's refusal.
@@ -353,6 +387,15 @@ fn run_create(
             }
         }
     };
+    if dry_run {
+        let mut document = rehearsed(&context, &request.git, &new, task.as_deref());
+        document.notes.extend(held);
+        return Ok(ProposalOutcome::done(
+            QueueCommand::Propose,
+            document,
+            messages,
+        ));
+    }
     let created = match context.queue.create_with_task(&new, task.as_deref(), now) {
         Ok(created) => created,
         Err(QueueError::TaskRefused { reason, .. }) => {
@@ -364,7 +407,8 @@ fn run_create(
         }
         Err(error) => return Err(queue_cannot(error)),
     };
-    let document = previewed(env, &request.git, &context, &created, &mut messages);
+    let mut document = previewed(env, &request.git, &context, &created, &mut messages);
+    document.notes.extend(held);
     Ok(ProposalOutcome::done(
         QueueCommand::Propose,
         document,
@@ -653,6 +697,84 @@ pub(crate) fn validated(
             Vec::new()
         }
     }
+}
+
+/// `findings` without the `ref-dangling` on an ID a live create or
+/// amendment holds (task spec `proposal-rehearsal`): findings never
+/// refused, so this changes what is read, not what passes. A reference to
+/// nothing keeps its finding. Beside what stays, one note per holder, also
+/// among `messages`; the queue is read only when there is one to judge.
+pub(crate) fn unheld_findings(
+    context: &QueueContext,
+    findings: Vec<ProposalFinding>,
+    messages: &mut Vec<Message>,
+) -> Result<(Vec<ProposalFinding>, Vec<String>), CliError> {
+    if !findings.iter().any(|finding| finding.code == REF_DANGLING) {
+        return Ok((findings, Vec::new()));
+    }
+    let reserved = context.queue.reserved().map_err(queue_cannot)?;
+    let scheme = &context.project.config.scheme;
+    let features = &context.project.config.paths.features;
+    let mut kept = Vec::with_capacity(findings.len());
+    // Each holder, as first met, with the other IDs it holds here.
+    let mut holders: Vec<(&Reservation, Vec<&str>)> = Vec::new();
+    for finding in findings {
+        let held = (finding.code == REF_DANGLING)
+            .then(|| {
+                let slug = feature_stem(features, &finding.path);
+                let id = reservation_id(&finding.subject, slug, scheme);
+                reserved.iter().find(|held| held.id == id)
+            })
+            .flatten();
+        let Some(held) = held else {
+            kept.push(finding);
+            continue;
+        };
+        match holders.iter_mut().find(|(first, _)| first.by == held.by) {
+            Some((first, more)) => {
+                if first.id != held.id && !more.contains(&held.id.as_str()) {
+                    more.push(&held.id);
+                }
+            }
+            None => holders.push((held, Vec::new())),
+        }
+    }
+    let notes: Vec<String> = holders
+        .iter()
+        .map(|(held, more)| held_note(held, more))
+        .collect();
+    messages.extend(notes.iter().cloned().map(Message::Note));
+    Ok((kept, notes))
+}
+
+/// A reference as written, in a file whose feature slug is `slug`, in the
+/// form a [`Reservation`] names an ID: section and revision cut, an alias
+/// prefix replaced, `slug/ID` for a feature-scoped one. What the grammar
+/// does not read stays as written, cut at its `#`.
+fn reservation_id(subject: &str, slug: Option<&str>, scheme: &IdScheme) -> String {
+    let Some(found) = grammar::parse_reference(subject, 0, scheme) else {
+        return subject.split('#').next().unwrap_or(subject).to_owned();
+    };
+    let reference = found.reference;
+    let id = match (&reference.alias_of, reference.id.split_once('-')) {
+        (Some(prefix), Some((_, number))) => format!("{prefix}-{number}"),
+        _ => reference.id.clone(),
+    };
+    match reference.scope {
+        Some(scope) => format!("{scope}/{id}"),
+        None => canonical_in(scheme, slug, &id),
+    }
+}
+
+/// `` `<id>` is reserved by `PR-…` (<status>), a live create: no
+/// ref-dangling stored ``, the holder's other IDs after `; also`.
+fn held_note(held: &Reservation, more: &[&str]) -> String {
+    let mut note = format!("{}: no {REF_DANGLING} stored", reserved_by(held));
+    if !more.is_empty() {
+        let also: Vec<String> = more.iter().map(|id| format!("`{id}`")).collect();
+        note.push_str(&format!("; also {}", also.join(", ")));
+    }
+    note
 }
 
 /// `id` (a Latin ID) in its canonical form for a file whose feature slug is

@@ -506,6 +506,8 @@ pub(crate) struct ChangeArgs {
     pub run: Option<String>,
     /// The task it is raised for (`T-` and 4 or more digits).
     pub task_id: Option<String>,
+    /// true: every refusal and the diagnostics of the real call, nothing stored; update and create only.
+    pub dry_run: Option<bool>,
 }
 
 /// `ask_question` arguments.
@@ -666,7 +668,22 @@ impl SpecEngineServer {
             author_model,
             run,
             task_id,
+            dry_run,
         } = args;
+        // A dry run rehearses an update or a create alone (a form error,
+        // naming the field).
+        let dry_run = dry_run.unwrap_or(false);
+        if dry_run && matches!(kind, ChangeKind::Interpretation | ChangeKind::Amendment) {
+            return Err(ErrorData::invalid_params(
+                format!(
+                    "dry_run: only {} or {} takes it, not {}",
+                    with_article(UPDATE_KIND),
+                    with_article(CREATE_KIND),
+                    with_article(kind.as_str())
+                ),
+                None,
+            ));
+        }
         // An update or an interpretation is written against its span:
         // `base` is required, as `spec propose update --base` is; an
         // amendment is a new file: none, as `spec propose amendment` takes
@@ -759,10 +776,8 @@ impl SpecEngineServer {
                         },
                         task,
                     ),
-                    (ChangeKind::Update, Some(base)) => specengine_cli::propose_brief_with_task(
-                        env,
-                        globals,
-                        &ProposeRequest {
+                    (ChangeKind::Update, Some(base)) => {
+                        let request = ProposeRequest {
                             target,
                             base,
                             text,
@@ -772,13 +787,15 @@ impl SpecEngineServer {
                             run,
                             now,
                             git,
-                        },
-                        task,
-                    ),
-                    (_, base) => specengine_cli::propose_create_brief_with_task(
-                        env,
-                        globals,
-                        &CreateRequest {
+                        };
+                        if dry_run {
+                            specengine_cli::propose_dry_run_brief(env, globals, &request, task)
+                        } else {
+                            specengine_cli::propose_brief_with_task(env, globals, &request, task)
+                        }
+                    }
+                    (_, base) => {
+                        let request = CreateRequest {
                             target,
                             base,
                             text,
@@ -788,9 +805,17 @@ impl SpecEngineServer {
                             run,
                             now,
                             git,
-                        },
-                        task,
-                    ),
+                        };
+                        if dry_run {
+                            specengine_cli::propose_create_dry_run_brief(
+                                env, globals, &request, task,
+                            )
+                        } else {
+                            specengine_cli::propose_create_brief_with_task(
+                                env, globals, &request, task,
+                            )
+                        }
+                    }
                 };
                 outcome.map(|outcome| Outcome::Proposal(Box::new(outcome)))
             })

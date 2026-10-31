@@ -99,10 +99,26 @@
 //! record, a history git cannot read refuses nothing (a note, before the
 //! prompt too). `decided_by` the current repository's committer unless it
 //! holds a record issued at an earlier step 7 (then as an update's).
+//!
+//! `spec approve --open` ([`approve_open`]; task spec `proposal-rehearsal`):
+//! `main` has refused a stdin that is no terminal before this runs. The
+//! repository's `open` rows of applying kinds, listed once, by ID number,
+//! each through the ordinary [`approve`]: its own question, its own commit.
+//! A decline or a refusal leaves it open and the walk moves on; so does a
+//! failure of that one proposal's place (apply step 2: another branch, a
+//! detached `HEAD`, an operation in progress, its worktree gone), named in
+//! a note, the row as it was. A row with a reject staged is never asked: a
+//! reflex `y` would apply what the owner chose to refuse, so it is named in
+//! a note and left (`spec approve PR`, typed, overrides it as before); an
+//! approve staged shows its stage. Any other approve that cannot run stops
+//! the walk, each earlier commit standing; the end of input leaves the
+//! rest. A kind that decides and a drift item are never asked, each named
+//! in a note. No `--yes`: one key per item.
 
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
+use serde::Serialize;
 use specengine_core::lock::LOCK_FILE;
 use specengine_core::proposal::{
     Author, CommitFacts, EDITORIAL, Interprets, PROPOSAL_TRAILER, commit_message_raising,
@@ -112,15 +128,16 @@ use specengine_model::IdScheme;
 use specengine_store::{
     ApplyFailure, CardRefresh, Decision, GitEnv, IndexWriter as _, KindFamily, NewTask, Proposal,
     ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _,
-    TaskRefresh, WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
+    Stage, TaskRefresh, WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
 };
 
+use crate::inbox::repository_proposals;
 use crate::location::open_index;
 use crate::package::position;
 use crate::preflight::{
     History, LookupError, Missing, Prepared, StepFailure, StepRead, TrailerCommit, completes_when,
-    completing, history, place_unchanged, prepare_spanned, recorded_project, recorded_root,
-    trailer_lookup, trailer_lookup_here,
+    completing, history, place_step, place_unchanged, prepare_spanned, recorded_project,
+    recorded_root, trailer_lookup, trailer_lookup_here,
 };
 use crate::proposals::{
     Find, Preview, ProposalDocument, ProposalOutcome, QueueCommand, QueueContext, checked_now,
@@ -132,8 +149,12 @@ use crate::revisions::{
     apply_trailers, editorial_nodes, lock_in_commit, lock_unchanged, named_refresh, restore,
     restored_clause,
 };
+use crate::round::{RoundTerminal, named};
 use crate::stage::{self, Staging};
-use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, pathspec_word};
+use crate::{
+    CliError, Env, Exit, Globals, Message, Outcome, escape_controls, one_line, pathspec_word,
+    render_text,
+};
 use crate::{create, decide, drift_apply, follow_up};
 
 /// `spec approve` options.
@@ -168,6 +189,40 @@ impl ApproveFlags {
     /// Any flag given.
     pub fn any(&self) -> bool {
         self.option.is_some() || self.answer.is_some() || self.canon.is_some()
+    }
+}
+
+/// `spec approve --open` options.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ApproveOpenRequest {
+    /// The injected clock, one reading for the whole walk:
+    /// `YYYY-MM-DDTHH:MM:SSZ`.
+    pub now: String,
+    /// The caller's environment; git runs without its local `GIT_*`
+    /// variables.
+    pub git: GitEnv,
+}
+
+/// What `spec approve --open` did: `{applied, left, notes}`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct OpenWalk {
+    /// Applied by this walk, in its order.
+    pub applied: Vec<String>,
+    /// Declined, refused, stopped by its own place, holding a reject
+    /// staged or never asked, in the walk's order.
+    pub left: Vec<String>,
+    /// What the walk did not take; closing `note:` lines in the text.
+    pub notes: Vec<String>,
+}
+
+impl OpenWalk {
+    /// 0 when nothing it walked stays open; else 1.
+    pub fn exit(&self) -> Exit {
+        if self.left.is_empty() {
+            Exit::Answered
+        } else {
+            Exit::NotFound
+        }
     }
 }
 
@@ -210,6 +265,193 @@ pub fn approve_with(
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     run_approve(env, globals, request, flags, false, consent).map_err(escaped_error)
+}
+
+/// `spec approve --open` (see the module documentation): `main` has
+/// checked that stdin is a terminal. Each item's question goes through
+/// `terminal`, its own output through `report` (stdout) and `tell`
+/// (stderr). Exit 2 ([`CliError`]) for what keeps the walk from starting,
+/// or an item's approve that cannot run for anything but that item's own
+/// place, which stops it there.
+pub fn approve_open(
+    env: &Env,
+    globals: &Globals,
+    request: &ApproveOpenRequest,
+    terminal: &mut dyn RoundTerminal,
+) -> Result<OpenWalk, CliError> {
+    run_open(env, globals, request, terminal).map_err(escaped_error)
+}
+
+fn run_open(
+    env: &Env,
+    globals: &Globals,
+    request: &ApproveOpenRequest,
+    terminal: &mut dyn RoundTerminal,
+) -> Result<OpenWalk, CliError> {
+    let now = checked_now(&request.now)?;
+    // Listed once, at the start: a row raised during the walk waits for
+    // the next one. Each approve opens the queue for itself.
+    let context = open_context(env, globals, &request.git)?;
+    let (proposals, listing_notes) = repository_proposals(&context, vec![ProposalStatus::Open])?;
+    let (mut applying, mut deciding, mut drifts) = (Vec::new(), Vec::new(), Vec::new());
+    for proposal in proposals {
+        match proposal.kind.family() {
+            KindFamily::Applies => applying.push(proposal),
+            KindFamily::Decides => deciding.push(proposal.id),
+            KindFamily::Locks => drifts.push(proposal.id),
+        }
+    }
+    let mut walk = OpenWalk::default();
+    if !deciding.is_empty() {
+        walk.notes.push(format!(
+            "{} open deciding item(s) not walked: {}; spec round new lists them",
+            deciding.len(),
+            named(&deciding)
+        ));
+    }
+    if !drifts.is_empty() {
+        walk.notes.push(format!(
+            "{} open drift item(s) not walked: {}; spec review <ID>, then spec approve or spec \
+             reject",
+            drifts.len(),
+            named(&drifts)
+        ));
+    }
+    walk.notes.extend(listing_notes);
+    let mut unasked = Vec::new();
+    for proposal in applying {
+        let id = proposal.id.clone();
+        if !unasked.is_empty() {
+            unasked.push(id);
+            continue;
+        }
+        // Read at its turn: a stage comes from the daemon at any moment,
+        // the listing's copy may be old.
+        let row = context
+            .queue
+            .get(&id)
+            .map_err(|error| walk_stopped(queue_cannot(error), &id, &walk.applied))?;
+        if let Some(note) = row.as_ref().and_then(reject_staged) {
+            terminal.tell(&Message::Note(note.clone()).line());
+            walk.notes.push(note);
+            walk.left.push(id);
+            continue;
+        }
+        let mut ended = false;
+        let answered = {
+            let mut consent = |question: &str| -> bool {
+                let answer = terminal.ask(question);
+                ended = answer.is_none();
+                answer.unwrap_or(false)
+            };
+            approve(
+                env,
+                globals,
+                &ApproveRequest {
+                    id: id.clone(),
+                    note: None,
+                    now: now.to_owned(),
+                    git: request.git.clone(),
+                },
+                &mut consent,
+            )
+        };
+        let outcome = match answered {
+            Ok(outcome) => outcome,
+            Err(error) => {
+                let Some(reason) = own_place_failure(&request.git, &proposal, &error) else {
+                    return Err(walk_stopped(error, &id, &walk.applied));
+                };
+                terminal.tell(&error.message);
+                walk.notes.push(format!("`{id}` left open: {reason}"));
+                walk.left.push(id);
+                continue;
+            }
+        };
+        let applied = outcome.refusal.is_none();
+        let printed = Outcome::Proposal(Box::new(outcome));
+        for line in printed.stderr_lines() {
+            terminal.tell(&line);
+        }
+        terminal.report(&render_text(&printed));
+        if applied {
+            walk.applied.push(id);
+        } else if ended {
+            // Asked and unanswered: the rest cannot be asked either.
+            unasked.push(id);
+        } else {
+            walk.left.push(id);
+        }
+    }
+    if !unasked.is_empty() {
+        walk.notes.push(format!(
+            "end of input: {} proposal(s) not answered: {}",
+            unasked.len(),
+            named(&unasked)
+        ));
+        walk.left.append(&mut unasked);
+    }
+    Ok(walk)
+}
+
+/// `proposal`'s note when a reject is staged on it: a walk of one key per
+/// item never asks it, since `y` would override the owner's refusal.
+fn reject_staged(proposal: &Proposal) -> Option<String> {
+    let staged = proposal.staged.as_ref()?;
+    let id = &proposal.id;
+    matches!(staged.stage, Stage::Reject { .. }).then(|| {
+        format!(
+            "`{id}` has a reject staged at {}: spec reject {id} confirms it; spec approve {id} \
+             overrides it",
+            staged.at
+        )
+    })
+}
+
+/// Why `error`, an approve of `proposal` that could not run, belongs to
+/// that proposal's own place: apply step 2 fails for it now, and `error` is
+/// that failure. `None`: it belongs to the queue, the store, the project or
+/// the identity, which no next item escapes.
+fn own_place_failure(git_env: &GitEnv, proposal: &Proposal, error: &CliError) -> Option<String> {
+    let reason = place_step(git_env, proposal).err()?.reason;
+    error
+        .message
+        .contains(&escape_controls(&reason))
+        .then_some(reason)
+}
+
+/// An approve that cannot run for anything but its item's own place stops
+/// the walk: its error, with what stands.
+fn walk_stopped(error: CliError, id: &str, applied: &[String]) -> CliError {
+    let before = if applied.is_empty() {
+        "nothing applied before it".to_owned()
+    } else {
+        format!(
+            "{} applied before it, each commit stands: {}",
+            applied.len(),
+            named(applied)
+        )
+    };
+    CliError {
+        exit: error.exit,
+        message: format!(
+            "{}; the open walk stopped at `{id}`, {before}",
+            error.message
+        ),
+    }
+}
+
+/// `open walk: <a> applied, <k> left open`, then the notes.
+pub(crate) fn open_walk_text(walk: &OpenWalk) -> String {
+    let mut out = format!(
+        "open walk: {} applied, {} left open\n",
+        walk.applied.len(),
+        walk.left.len()
+    );
+    for note in &walk.notes {
+        out.push_str(&format!("note: {}\n", one_line(note)));
+    }
+    escape_controls(&out)
 }
 
 /// `spec approve PR --editorial [--note T]` (task spec `rev-discipline`):

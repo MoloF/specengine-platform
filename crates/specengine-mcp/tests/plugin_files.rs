@@ -147,6 +147,10 @@
 //!   snapshot's `within_hash`. A `PINS` entry 0.26.0, the tree with the version
 //!   set back 0.25.0's; a `SCHEMA_PINS` entry 0.26.0, 0.25.0's schemas today's
 //!   without those and their two reworded lines ([`as_of_0_25_0`]).
+//! - docs/features/proposal-rehearsal.md "Schema": 0.26.0 -> 0.27.0, MINOR: a
+//!   key a tool takes: `propose_change`'s `dry_run`. A `PINS` entry 0.27.0,
+//!   the tree with the version set back 0.26.0's; a `SCHEMA_PINS` entry
+//!   0.27.0, 0.26.0's schemas today's without it ([`as_of_0_26_0`]).
 //!
 //! The repository is only read.
 
@@ -422,6 +426,13 @@ const PINS: &[(&str, &str)] = &[
         "0.26.0",
         "95f8b3944124facf67d5071acdfe9e74187c719c51f712e82c87c74b9ce979c0",
     ),
+    // docs/features/proposal-rehearsal.md "Schema" (0.26.0 -> 0.27.0, MINOR: a
+    // key a tool takes): plugin.json's version alone; the tree with the
+    // version set back hashes as 0.26.0's pin.
+    (
+        "0.27.0",
+        "c5853d73bc55ba2b418d9469c4e542749eeb776611c279d46234c73bd6996ea4",
+    ),
 ];
 
 /// docs/features/card-trace.md: `read-spec`'s line of 0.24.0, whole with its
@@ -630,6 +641,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.26.0",
         "dc5dbd0a9085c70d2a6b99025cbe2b7c931a369461c6ee4c5918375ac24b923a",
+    ),
+    // docs/features/proposal-rehearsal.md "Schema": `propose_change`'s
+    // `dry_run` ([`as_of_0_26_0`] takes it out; no other tool changed).
+    (
+        "0.27.0",
+        "96c272b247b6608019603677b1e411944be0637fb0c05be3e44fd4d16e0b531c",
     ),
 ];
 
@@ -1749,10 +1766,32 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/proposal-rehearsal.md (0.26.0 -> 0.27.0): plugin.json's
+    // version alone; set back, the tree is 0.26.0's pinned content. M: the
+    // version kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.27.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.27.0"),
+        "plugin.json's version"
+    );
+    let at_0_26_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.27.0\"",
+        "\"version\": \"0.26.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_26_0),
+        PINS[PINS.len() - 2].1,
+        "0.27.0 changes plugin.json's version only"
+    );
+    let tree = at_0_26_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/trace-truth.md (0.25.0 -> 0.26.0): plugin.json's version
     // alone; set back, the tree is 0.25.0's pinned content. M: the version
     // kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.26.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.26.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.26.0"),
@@ -1766,11 +1805,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_25_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.26.0 changes plugin.json's version only"
     );
     let tree = at_0_25_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/trace-views.md (0.24.0 -> 0.25.0): plugin.json's version
     // alone; set back, the tree is 0.24.0's pinned content. M: the version
     // kept; another file changed.
@@ -2511,6 +2550,12 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// docs/features/proposal-rehearsal.md "Schema": `schemas` as 0.26.0 listed
+/// them: `propose_change` without `dry_run`. No other tool's schema changed.
+fn as_of_0_26_0(schemas: &mut Value) {
+    without_key(&mut schemas["propose_change"]["inputSchema"], "dry_run");
+}
+
 /// docs/features/trace-truth.md "Data": `schemas` as 0.25.0 listed them:
 /// `get_card` without `mark`, `on`, `discrepancy`, `correction`, its snapshot's
 /// entry without `within_hash` and its `also` and `TraceCounts` in their old
@@ -2833,7 +2878,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[15].0, "0.24.0", "an entry for 0.24.0");
     assert_eq!(SCHEMA_PINS[16].0, "0.25.0", "an entry for 0.25.0");
     assert_eq!(SCHEMA_PINS[17].0, "0.26.0", "an entry for 0.26.0");
-    assert_eq!(SCHEMA_PINS.len(), 18, "0.26.0 the last entry");
+    assert_eq!(SCHEMA_PINS[18].0, "0.27.0", "an entry for 0.27.0");
+    assert_eq!(SCHEMA_PINS.len(), 19, "0.27.0 the last entry");
+    // docs/features/proposal-rehearsal.md "Schema": 0.26.0's schemas are
+    // today's without `propose_change`'s `dry_run`.
+    let mut at_0_26_0 = schemas.clone();
+    as_of_0_26_0(&mut at_0_26_0);
+    let at_0_26_0_hash = schema_hash(&at_0_26_0);
+    assert_eq!(
+        at_0_26_0_hash, SCHEMA_PINS[17].1,
+        "0.26.0's schemas are today's without proposal-rehearsal's"
+    );
+    assert_ne!(
+        at_0_26_0_hash, current,
+        "proposal-rehearsal changed the schemas"
+    );
+    let (schemas, current) = (at_0_26_0, at_0_26_0_hash);
     // docs/features/trace-truth.md "Data": 0.25.0's schemas are today's without
     // the keys `get_card` gains and the two lines reworded.
     let mut at_0_25_0 = schemas.clone();

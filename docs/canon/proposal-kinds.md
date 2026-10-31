@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-10-31
 ---
 
 # Proposal kinds: create
@@ -12,7 +12,7 @@ Phase 2 slice 6 (2026-10-07): a node comes into existence through the queue. Kin
 
 ## Forms
 
-`spec propose create TARGET [--base HASH] --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID] [--brief]`: caps, outputs (`PR-0001`, `introduced: <n>`), `--brief`, JSON as `propose update`'s (`proposal-review.md`).
+`spec propose create TARGET [--base HASH] --text-file F|- --rationale T [--author-role R] [--author-model M] [--run ID] [--brief] [--dry-run]`: caps, outputs (`PR-0001`, `introduced: <n>`), `--brief`, JSON as `propose update`'s (`proposal-review.md`).
 
 - **File form**: `TARGET` a `.md` path no indexed file has, no `--base`; the text is the whole file, byte for byte; the commit `A <path>`.
 - **Section form**: `TARGET` resolving as an update's (Creation 1, its refusals), `--base` its span hash (Creation 2); the text is the span with new `{#ID}` sections below the target's level; the commit `M <path>`.
@@ -32,8 +32,10 @@ In order; the first refusal answers, exit 1 unless named; nothing stored or rese
    - twice -> `` `X` is defined twice in the text (lines a and b) ``;
    - taken: defined or aliased in the recorded root's index, refreshed now -> `` `X` is defined in `<path>` (`id: Y` | no `id:`) `` (`is an alias in`); else held by a live create or amendment -> `` `X` is reserved by `PR-0001` (open), a live create `` (the holder's kind); a number shape adds ``; the next free is `Z` ``.
    An `immutable_text` prefix may be created in a new file; its sections are no section-form target (Creation 1).
-5. **Validation**: Creation 4 with the file added (or swapped) against `HEAD`; introduced findings stored: `ref-dangling`, `file-name`, `id-scope`, `id-width`, `id-not-in-scheme` never refuse (ADR-0012).
+5. **Validation**: Creation 4 with the file added (or swapped) against `HEAD`; introduced findings stored: `ref-dangling`, `file-name`, `id-scope`, `id-width`, `id-not-in-scheme` never refuse (ADR-0012). **A held ID** (CLI `create.rs` `unheld_findings`, five callers: `create`, `update`, `interpretation`, `amendment`, the intake's linked update): a `ref-dangling`, `parent:` or `links`, on an ID `reserved()` lists is not stored. Its `subject` is read through `parse_reference` in the citing file's scope (section and revision cut, an alias prefix replaced, `slug/ID`); a cut at `#` is only the fallback. One note per holder: `` `A` is reserved by `PR-0002` (open), a live create: no ref-dangling stored `` (`a live amendment`), its other IDs after `` ; also `B`, `C` ``; `notes` holds it only when the row is `created` or rehearsed. A reference to nothing keeps its finding.
 6. **Insert** ("Reservation").
+
+**Dry run** (`--dry-run`, `update` and `create` only; `propose_dry_run`, `propose_create_dry_run`, `proposals.rs` `rehearsed`): the real call's every step, refusal and finding, stopping before the insert: no row, no event, no ID held, so the same real call then stores, and of two agents rehearsing one ID the second real call is refused as ever. `--task` is checked once the place is bound. A refusal exits 1 with the real reason; else exit 0, findings or none. The answer is the real document: `kind`, `target_id`, `target_path`, `diagnostics` as stored; `id`, `status`, `base_commit`, `preview`, `revisions`, `created_at`, `updated_at` `null`; `notes` opening `dry run: nothing stored`, also the text's first line. `--brief` past 20 findings: the tail `spec propose's dry run without --brief lists them`. Other kinds have no flag: clap, exit 2.
 
 ## Reservation
 
@@ -57,7 +59,7 @@ Store: `ProposalKind::Create` (`family()` `Applies`, `adds_nodes()` true, `amend
 
 ## MCP and plugin
 
-`propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?}`: `kind` required, enum `["update", "create", "interpretation", "amendment"]` from core `*_KIND` (`ChangeKind`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> -32602 `base: ...`. `INSTRUCTIONS`: `mcp-read.md` "Texts".
+`propose_change {kind, target, base?, text, rationale, author_role, author_model?, run?, dry_run?}`: `kind` required, enum `["update", "create", "interpretation", "amendment"]` from core `*_KIND` (`ChangeKind`); `base` nullable, not required; `create` = `spec propose create TARGET [--base B] --text-file - --rationale R A --brief` (`propose_create_brief`); an `update` with `base` `null` or absent -> -32602 `base: ...`. `dry_run` = `--dry-run` (`propose_dry_run_brief`, `propose_create_dry_run_brief`; schema text `true: every refusal and the diagnostics of the real call, nothing stored; update and create only.`; the output schema unchanged, `id` and `status` nullable); `true` with `interpretation` or `amendment` -> -32602 `dry_run: only an update or a create takes it, not an amendment`, nothing stored. `INSTRUCTIONS`: `mcp-read.md` "Texts".
 
 Plugin (since 0.1.4), `propose-spec-change` "A new section or file": `kind: "create"`; a new file with `base: null`, its ID in `id:`; ID sections against the `span_hash`; the agent names each new ID. Taken by the spec or another's proposal: resend with the named next free ID. **Held by the agent's own earlier proposal** (a corrected create): never the next free ID, which would add the node twice; name that proposal, ask the owner to reject it, resend once `get_proposal` shows it rejected. Removing an ID section stays a question for the owner.
 
@@ -72,3 +74,5 @@ Accepted at shipping (2026-10-07); none blocks.
 - An ID created outside the queue on another branch: `id-taken` at merge. A stale open create holds its IDs until rejected; a wrong guess costs one refused call.
 - Apply's limits: `proposal-create-apply.md`.
 - A generated directory or index outside the walk gets the walk's wording, not its own (exit 1 either way).
+- A holder on another branch or clone also filters the finding (`proposal-rehearsal` D10): nothing is refused, and `spec check` still reports the reference.
+- The held note is not stored, so `spec review` shows none: declining A and pressing `y` on B applies B with a dangling reference, no note in sight (`proposal-apply.md` "Known limits").

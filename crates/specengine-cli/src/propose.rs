@@ -19,7 +19,9 @@
 //!    ordered (ID, heading level) list, the target spanning exactly it, and
 //!    changes the file (else "no change");
 //! 4. validation: the findings the edit introduces in the project's check
-//!    are stored with it, never refusing;
+//!    are stored with it, never refusing, but a `ref-dangling` on an ID a
+//!    live create or amendment holds, left out with a note naming the
+//!    holder ([`crate::create::unheld_findings`]);
 //! 5. binding: the canonical worktree top, the root in it, the common dir,
 //!    the branch and `HEAD` (a root in no worktree, a detached or unborn
 //!    `HEAD` exit 2).
@@ -32,6 +34,11 @@
 //! refused. `--task T` binds it to a task of this
 //! repository (canon `tasks`, "Task-bound proposals"): checked once the
 //! place is bound, and again inside the inserting transaction (exit 1).
+//!
+//! `--dry-run` ([`propose_dry_run`]; task spec `proposal-rehearsal`) runs
+//! every step, every refusal and finding, and stops before storing: no row,
+//! no event, no ID held; the answer is the real call's document with no ID
+//! and no state ([`crate::proposals::rehearsed`]).
 
 use std::fs;
 use std::io::Read as _;
@@ -56,12 +63,12 @@ use specengine_store::{
 };
 
 use crate::corpus::indexed;
-use crate::create::canonical_in;
+use crate::create::{canonical_in, unheld_findings};
 use crate::interpret::canon_note;
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{
     ProposalDocument, ProposalOutcome, QueueCommand, briefed, checked_now, escaped_error,
-    open_context, queue_cannot,
+    open_context, queue_cannot, rehearsed,
 };
 use crate::review::previewed;
 use crate::revisions::revision_refusal;
@@ -132,7 +139,7 @@ pub fn propose_with_task(
     request: &ProposeRequest,
     task: Option<&str>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_propose(env, globals, request, task).map_err(escaped_error)
+    run_propose(env, globals, request, task, false).map_err(escaped_error)
 }
 
 /// [`propose_brief`] with `--task T`.
@@ -145,11 +152,35 @@ pub fn propose_brief_with_task(
     propose_with_task(env, globals, request, task).map(briefed)
 }
 
+/// `spec propose update --dry-run [--task T]`: every step of
+/// [`propose_with_task`], nothing stored; the answer is the real call's
+/// document with no ID and no state ([`crate::proposals::rehearsed`]).
+pub fn propose_dry_run(
+    env: &Env,
+    globals: &Globals,
+    request: &ProposeRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    run_propose(env, globals, request, task, true).map_err(escaped_error)
+}
+
+/// [`propose_dry_run`], its answer brief (MCP `propose_change` with
+/// `dry_run`).
+pub fn propose_dry_run_brief(
+    env: &Env,
+    globals: &Globals,
+    request: &ProposeRequest,
+    task: Option<&str>,
+) -> Result<ProposalOutcome, CliError> {
+    propose_dry_run(env, globals, request, task).map(briefed)
+}
+
 fn run_propose(
     env: &Env,
     globals: &Globals,
     request: &ProposeRequest,
     task: Option<&str>,
+    dry_run: bool,
 ) -> Result<ProposalOutcome, CliError> {
     let now = checked_now(&request.now)?;
     // An author field outside its grammar exits 2, named as the intake
@@ -206,7 +237,7 @@ fn run_propose(
         Err(reason) => return refuse(reason, messages),
     };
     let input = indexed(env, &context.project, &mut messages, false)?;
-    let checked = match checked_update(
+    let mut checked = match checked_update(
         &context.project,
         &input,
         written,
@@ -221,27 +252,26 @@ fn run_propose(
     };
 
     // 5. Stored, bound to the place found first (and to its task, checked
-    // again under the write lock).
-    let created = match context.queue.create_with_task(
-        &checked.new_proposal(place, &request.rationale, author),
-        task.as_deref(),
-        now,
-    ) {
-        Ok(created) => created,
-        Err(QueueError::TaskRefused { reason, .. }) => {
-            return refuse(format!("--task: {reason}"), messages);
-        }
-        Err(error) => return Err(queue_cannot(error)),
+    // again under the write lock); a dry run stops here.
+    let (diagnostics, held) = unheld_findings(&context, checked.diagnostics, &mut messages)?;
+    checked.diagnostics = diagnostics;
+    let new = checked.new_proposal(place, &request.rationale, author);
+    let mut document = if dry_run {
+        rehearsed(&context, &request.git, &new, task.as_deref())
+    } else {
+        let created = match context.queue.create_with_task(&new, task.as_deref(), now) {
+            Ok(created) => created,
+            Err(QueueError::TaskRefused { reason, .. }) => {
+                return refuse(format!("--task: {reason}"), messages);
+            }
+            Err(error) => return Err(queue_cannot(error)),
+        };
+        previewed(env, &request.git, &context, &created, &mut messages)
     };
-    let mut document = previewed(env, &request.git, &context, &created, &mut messages);
+    document.notes.extend(held);
     // An update in an accepted decision's `canon:` section: a note, never
     // a refusal (task spec `kind-interpretation`, W7).
-    if let Some(note) = canon_note(
-        &context.project,
-        &input,
-        &created.target_id,
-        &created.target_path,
-    ) {
+    if let Some(note) = canon_note(&context.project, &input, &new.target_id, &new.target_path) {
         messages.push(Message::Note(note.clone()));
         document.notes.push(note);
     }

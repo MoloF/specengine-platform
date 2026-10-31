@@ -43,6 +43,7 @@ use specengine_store::{
 };
 
 use crate::corpus::indexed;
+use crate::create::unheld_findings;
 use crate::intake::{accepted_decision, prefixed};
 use crate::preflight::{recorded_project, recorded_root};
 use crate::project::ProjectRoot;
@@ -186,7 +187,7 @@ fn run_interpret(
     };
 
     // Creation 2–4.
-    let checked = match checked_located(
+    let mut checked = match checked_located(
         &context.project,
         target,
         &request.base,
@@ -208,6 +209,8 @@ fn run_interpret(
         },
         None => None,
     };
+    let (diagnostics, held) = unheld_findings(&context, checked.diagnostics, &mut messages)?;
+    checked.diagnostics = diagnostics;
     let mut new = checked.new_proposal(place, &request.rationale, author);
     new.kind = ProposalKind::Interpretation;
     new.interpretation = Some(Interpretation {
@@ -222,7 +225,8 @@ fn run_interpret(
         }
         Err(error) => return Err(queue_cannot(error)),
     };
-    let document = previewed(env, &request.git, &context, &created, &mut messages);
+    let mut document = previewed(env, &request.git, &context, &created, &mut messages);
+    document.notes.extend(held);
     Ok(ProposalOutcome::done(
         QueueCommand::Propose,
         document,

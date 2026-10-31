@@ -16,7 +16,7 @@ Default build, each one CLI library call with a twin, answering as `mcp-read.md`
 
 | Tool | = `spec` | Answer |
 |---|---|---|
-| `propose_change {kind, target, base?, text, rationale, decision?, how?, why?, A}` | `propose update\|create\|interpretation\|amendment TARGET [--base B] --text-file - --rationale R A --brief` | brief review |
+| `propose_change {kind, target, base?, text, rationale, decision?, how?, why?, dry_run?, A}` | `propose update\|create\|interpretation\|amendment TARGET [--base B] --text-file - --rationale R A --brief [--dry-run]` (`proposal-kinds.md` "Propose": update, create) | brief review |
 | `ask_question {node_ids, text, working_answer, price_of_other, severity?, distinct_from?, A}` | `propose question ID… --text T --working-answer W --price-of-other P [--severity S] [--distinct-from X]… A` | intake |
 | `report_discrepancy {node_ids, summary, gap_type, severity, evidence: [{file, qpath?, lines?, observed, documented}], options: [{label, effect, price}], recommendation, working_answer?, proposed_patch?: {target, base, text, rationale}, distinct_from?, A}` | `propose discrepancy --input F\|- A` (F: the arguments but `A`'s as JSON, UTF-8, <= 8 MiB `INTAKE_INPUT_MAX_BYTES`) | intake |
 | `report_decision {node_ids, text, working_answer, price_of_other, severity?, proposed_patch?, distinct_from?, A}` | `propose decision --input F\|- A` (F as above) | intake |

@@ -81,6 +81,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/pointer-sweep.md](features/pointer-sweep.md) shipped
 - [docs/features/proposal-apply.md](features/proposal-apply.md) shipped
 - [docs/features/proposal-kinds.md](features/proposal-kinds.md) shipped
+- [docs/features/proposal-rehearsal.md](features/proposal-rehearsal.md) shipped
 - [docs/features/queue-export.md](features/queue-export.md) shipped
 - [docs/features/queue-path-targets.md](features/queue-path-targets.md) shipped
 - [docs/features/ref-superseded-records.md](features/ref-superseded-records.md) shipped
@@ -165,5 +166,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0047.md](roadmap/RM-0047.md) shipped
 - [docs/roadmap/RM-0048.md](roadmap/RM-0048.md) shipped
 - [docs/roadmap/RM-0066.md](roadmap/RM-0066.md) shipped
+- [docs/roadmap/RM-0067.md](roadmap/RM-0067.md) shipped
 - [docs/roadmap/RM-0069.md](roadmap/RM-0069.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped
