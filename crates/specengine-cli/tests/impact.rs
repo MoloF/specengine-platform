@@ -86,7 +86,7 @@ const CROSSING_LOOK_ALIKE: &str = "R\u{41E}UTE-CROSSING";
 /// The top-level keys of the JSON document, in order (A5: `since`,
 /// `revision` and `delta` present, null): docs/features/impact.md "JSON";
 /// `tested` after `nodes` since docs/features/tested-reads.md "Per read".
-const TOP_KEYS: [&str; 15] = [
+const TOP_KEYS: [&str; 16] = [
     "input",
     "reason",
     "revision",
@@ -99,6 +99,7 @@ const TOP_KEYS: [&str; 15] = [
     "symbols",
     "tests",
     "tasks",
+    "cards",
     "notes",
     "truncated",
     "code",

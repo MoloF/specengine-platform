@@ -16,7 +16,9 @@
 //! `state` and an edge's `kind` closed, link types and node kinds free), and
 //! of the card tools (`docs/features/card-store.md` "Documents and events":
 //! flows, columns, disciplines and names free, a history event's `payload`
-//! any object).
+//! any object), and of `get_trace` (`spec trace`'s document:
+//! `docs/features/card-trace.md` "Data": a state and a mark closed, IDs, names
+//! and titles free).
 //!
 //! Input schemas come from the argument types; output schemas from mirror
 //! types of the CLI's `--json` documents (CLI README; the canons
@@ -1061,6 +1063,96 @@ pub(crate) struct TaskDocument {
     pub notes: Vec<String>,
 }
 
+// ------------------------------------------------------------------- trace
+
+/// `spec trace --json`.
+#[derive(JsonSchema)]
+pub(crate) struct TraceDocument {
+    /// The REF as given; `null` without one.
+    #[schemars(rename = "ref")]
+    pub reference: Option<String>,
+    /// Why REF names nothing (the result is then an error); `null` otherwise.
+    pub reason: Option<String>,
+    pub notes: Vec<String>,
+    /// Over the listed nodes.
+    pub counts: TraceCounts,
+    pub nodes: Vec<TraceNode>,
+    pub truncated: bool,
+    /// The rows the cut left out: nodes, and the cards and `uses` of a
+    /// node over the cap alone, shown in part; `null` when uncut.
+    pub omitted: Option<usize>,
+}
+
+/// How many nodes stand in each state.
+#[derive(JsonSchema)]
+pub(crate) struct TraceCounts {
+    pub no_card: usize,
+    pub in_work: usize,
+    pub suspect: usize,
+    pub departed: usize,
+    pub confirmed: usize,
+}
+
+/// A node's computed state.
+#[derive(JsonSchema)]
+pub(crate) enum TraceRollup {
+    #[schemars(rename = "no card")]
+    NoCard,
+    #[schemars(rename = "departed")]
+    Departed,
+    #[schemars(rename = "suspect")]
+    Suspect,
+    #[schemars(rename = "in work")]
+    InWork,
+    #[schemars(rename = "confirmed")]
+    Confirmed,
+}
+
+/// What a read says of a card.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum TraceMark {
+    Open,
+    Accepted,
+    Suspect,
+    Departed,
+    Correcting,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct TraceNode {
+    /// Its ID, else its path.
+    pub id: String,
+    pub title: Option<String>,
+    pub path: String,
+    pub rollup: TraceRollup,
+    /// Over the node and the documents it holds by `parent:`.
+    pub counts: TraceCounts,
+    pub cards: Vec<TraceCard>,
+    /// The nodes with a `uses` link to it, one level: consequences, no mark.
+    pub uses: Vec<TraceUse>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct TraceCard {
+    pub id: String,
+    pub flow: String,
+    pub column: String,
+    pub title: String,
+    pub mark: TraceMark,
+    /// The target a suspect, correcting or departed mark is on.
+    pub on: Option<String>,
+    pub discrepancy: Option<String>,
+    pub correction: Option<String>,
+}
+
+#[derive(JsonSchema)]
+pub(crate) struct TraceUse {
+    pub id: String,
+    pub rollup: TraceRollup,
+    pub cards: usize,
+}
+
 // -------------------------------------------------------------------- flow
 
 /// `spec flow --json`.
@@ -1265,7 +1357,9 @@ pub(crate) struct CardShowDocument {
     pub goal: Option<String>,
     pub discipline: Option<String>,
     pub targets: Vec<String>,
-    pub snapshot: Option<String>,
+    /// Each direct target as frozen, then any target since dropped, inert;
+    /// `null` on a card that never froze one.
+    pub snapshot: Option<Vec<CardFrozenShape>>,
     pub criteria: Vec<String>,
     pub assignee: Option<String>,
     pub reviewer: Option<String>,
@@ -1284,6 +1378,16 @@ pub(crate) struct CardShowDocument {
     /// Its last `card.*` events, oldest first; `null` without `history`.
     pub history: Option<Vec<CardEventShape>>,
     pub notes: Vec<String>,
+}
+
+/// One direct target as a card last saw it.
+#[derive(JsonSchema)]
+pub(crate) struct CardFrozenShape {
+    pub id: String,
+    pub rev: Option<u32>,
+    pub norm_hash: Option<String>,
+    /// Hashes an editorial apply vouched for since.
+    pub also: Vec<String>,
 }
 
 #[derive(JsonSchema)]
@@ -1309,6 +1413,19 @@ pub(crate) struct CardAcceptanceShape {
     pub by: String,
     pub at: String,
     pub note: Option<String>,
+    pub verdict: CardVerdictShape,
+    /// The direct targets a departing accept names.
+    pub departs: Vec<String>,
+    /// The discrepancy a departing accept made.
+    pub discrepancy: Option<String>,
+}
+
+/// What an accept says of the result against its brief.
+#[derive(JsonSchema)]
+#[schemars(rename_all = "lowercase")]
+pub(crate) enum CardVerdictShape {
+    Briefed,
+    Departs,
 }
 
 #[derive(JsonSchema)]
@@ -1518,6 +1635,9 @@ pub(crate) struct ImpactDocument {
     /// The printed open tasks of this repository naming a reached node, by
     /// number.
     pub tasks: Vec<ImpactTask>,
+    /// The printed cards not cancelled with a target in the reached nodes
+    /// or the sections within them, by number.
+    pub cards: Vec<ImpactCard>,
     pub notes: Vec<String>,
     /// The items of each list the cut left out; `null` when uncut.
     pub truncated: Option<ImpactTruncated>,
@@ -1601,6 +1721,22 @@ pub(crate) struct ImpactTask {
     pub nodes: Vec<String>,
 }
 
+/// A card with a target in the reached set.
+#[derive(JsonSchema)]
+pub(crate) struct ImpactCard {
+    pub id: String,
+    pub flow: String,
+    pub column: String,
+    pub title: String,
+    pub mark: TraceMark,
+    /// The target a suspect, correcting or departed mark is on.
+    pub on: Option<String>,
+    pub discrepancy: Option<String>,
+    pub correction: Option<String>,
+    /// The reached nodes it names (ID, else path), in radius order.
+    pub nodes: Vec<String>,
+}
+
 /// What the cut left out of each list; `null` for a `null` list.
 #[derive(JsonSchema)]
 pub(crate) struct ImpactTruncated {
@@ -1609,6 +1745,7 @@ pub(crate) struct ImpactTruncated {
     pub symbols: Option<usize>,
     pub tests: Option<usize>,
     pub tasks: usize,
+    pub cards: usize,
     pub seeds: Option<usize>,
     pub delta: Option<usize>,
 }

@@ -70,7 +70,7 @@ const SINCE_TAIL: &str = " not shown; lower --depth N or name a later --since RE
 
 /// The top-level keys of the document (docs/canon/spec-impact.md "Output";
 /// `tested` after `nodes` since docs/features/tested-reads.md "Per read").
-const TOP_KEYS: [&str; 15] = [
+const TOP_KEYS: [&str; 16] = [
     "input",
     "reason",
     "revision",
@@ -83,6 +83,7 @@ const TOP_KEYS: [&str; 15] = [
     "symbols",
     "tests",
     "tasks",
+    "cards",
     "notes",
     "truncated",
     "code",

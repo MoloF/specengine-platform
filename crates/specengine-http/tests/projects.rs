@@ -286,6 +286,9 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
         ("GET", "/api/projects/nope/bundle?node_ids=MEC-STAMINA"),
         ("GET", "/api/projects/nope/graph?ref=MEC-STAMINA"),
         ("GET", "/api/projects/nope/flow"),
+        ("GET", "/api/projects/nope/trace"),
+        ("POST", "/api/projects/nope/trace/clear"),
+        ("POST", "/api/projects/nope/cards/C-0001/clear"),
         ("GET", "/api/projects/nope/check"),
         ("GET", "/api/projects/nope/inbox"),
         ("GET", "/api/projects/nope/proposals/PR-0001"),
@@ -327,6 +330,7 @@ fn ac06_an_unknown_slug_is_a_404_error_body_listing_the_served() {
         let message = reply.error_message();
         for route in [
             "flow",
+            "trace",
             "graph",
             "check",
             "proposals/<id>",

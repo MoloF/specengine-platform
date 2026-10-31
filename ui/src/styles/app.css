@@ -478,6 +478,10 @@ textarea.field {
 .tone-card-accepted { --badge-color: var(--card-accepted); }
 .tone-card-cancelled { --badge-color: var(--card-cancelled); }
 .tone-card-overdue { --badge-color: var(--card-overdue); }
+.tone-card-suspect { --badge-color: var(--card-suspect); }
+.tone-card-departed { --badge-color: var(--card-departed); }
+.tone-card-correcting { --badge-color: var(--card-correcting); }
+.tone-card-mark-unknown { --badge-color: var(--card-mark-unknown); }
 .tone-roadmap-current { --badge-color: var(--roadmap-current); }
 .tone-roadmap-cut { --badge-color: var(--roadmap-cut); }
 .tone-roadmap-cycle { --badge-color: var(--roadmap-cycle); }
@@ -503,6 +507,7 @@ textarea.field {
 .tone-sync-not-judged { --badge-color: var(--sync-not-judged); }
 .tone-sync-unknown { --badge-color: var(--sync-unknown); }
 
+.tone-card-mark-unknown,
 .tone-severity-unknown,
 .tone-proposal-unknown,
 .tone-link-unknown,

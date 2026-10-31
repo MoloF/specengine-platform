@@ -112,7 +112,7 @@ const SINCE_TAIL: &str = " not shown; lower --depth N or name a later --since RE
 
 /// The document's keys (docs/features/impact.md "JSON"; `tested` after
 /// `nodes` since docs/features/tested-reads.md "Per read").
-const TOP_KEYS: [&str; 15] = [
+const TOP_KEYS: [&str; 16] = [
     "input",
     "reason",
     "revision",
@@ -125,6 +125,7 @@ const TOP_KEYS: [&str; 15] = [
     "symbols",
     "tests",
     "tasks",
+    "cards",
     "notes",
     "truncated",
     "code",
@@ -1304,8 +1305,28 @@ fn get_impact_mirror_is_impact_json() {
     assert_eq!(
         keys_at(schema_at(&schema, "truncated")),
         set(&[
-            "nodes", "tested", "symbols", "tests", "tasks", "seeds", "delta"
+            "nodes", "tested", "symbols", "tests", "tasks", "cards", "seeds", "delta"
         ])
+    );
+    // docs/features/card-trace.md: a card's row, `truncated.cards` a count.
+    assert_eq!(
+        keys_at(schema_at(&schema, "cards[]")),
+        set(&[
+            "id",
+            "flow",
+            "column",
+            "title",
+            "mark",
+            "on",
+            "discrepancy",
+            "correction",
+            "nodes"
+        ])
+    );
+    assert_eq!(
+        types_of(schema_at(&schema, "truncated.cards")),
+        set(&["integer"]),
+        "truncated.cards: a count"
     );
     // docs/features/tested-reads.md "MCP": `tested` a list of 8b-1's
     // entries or null, `truncated.tested` a count or null.
@@ -1753,7 +1774,7 @@ fn get_impact_refuses_an_option_like_since_before_git() {
 /// document KILN-FIRING and the criterion `glaze-check/GLZ-01` answers
 /// what `spec impact` answers through the library, both eras, each
 /// document walked against the `outputSchema` (a key the mirror lacks is
-/// refused): `tested` the 9th of 15 keys, its entries `verified` with the
+/// refused): `tested` the 9th of 16 keys, its entries `verified` with the
 /// seven keys, by node bytes, the reached nodes' and those within them;
 /// the content a `tested | verified | <node>` line per entry, after the
 /// `node` lines and before any `symbol` line; uncut.
@@ -1786,7 +1807,7 @@ fn get_impact_carries_tested() {
                 .keys()
                 .map(String::as_str)
                 .collect();
-            assert_eq!(keys.len(), 15, "{}: 15 keys", call.label);
+            assert_eq!(keys.len(), 16, "{}: 16 keys", call.label);
             let tested = document["tested"].as_array().expect("tested, a list");
             assert!(!tested.is_empty(), "{}: the evidence reached", call.label);
             let nodes: Vec<&str> = tested

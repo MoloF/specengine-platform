@@ -2,7 +2,7 @@ import { act, createEvent, fireEvent, screen, waitFor, within } from "@testing-l
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { Card, CardList } from "../api/types";
-import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite } from "../test/builders";
+import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aTrace, aTraceCard, aTraceNode } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
 import { ACTING_KEY } from "./acting";
@@ -655,7 +655,7 @@ describe("the panel", () => {
   });
 
   it("an accepted card has no actions and shows who accepted it", async () => {
-    const panel = within(await panelOf({ ...FULL, column: "closed", acceptance: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: "Good." } }));
+    const panel = within(await panelOf({ ...FULL, column: "closed", acceptance: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: "Good.", verdict: "briefed", departs: [], discrepancy: null } }));
     expect(panel.queryByRole("group", { name: "Actions" })).toBeNull();
     const part = panel.getByRole("region", { name: "Acceptance" });
     expect(part.textContent).toContain("Ivo Brandt");
@@ -856,7 +856,7 @@ describe("the dialogs", () => {
     await waitFor(() => {
       expect(client.acceptCard).toHaveBeenCalledTimes(1);
     });
-    expect(client.acceptCard.mock.calls[0]).toEqual(["alpha", "C-0001", { as: "Ivo Brandt", note: "Good.", revision: "4" }]);
+    expect(client.acceptCard.mock.calls[0]).toEqual(["alpha", "C-0001", { as: "Ivo Brandt", note: "Good.", revision: "4", briefed: true }]);
     expect(window.localStorage.getItem(ACTING_KEY)).toBe(" Ivo Brandt ");
     await waitFor(() => {
       expect(spoken()).toBe("C-0001 is accepted");
@@ -888,7 +888,7 @@ describe("the dialogs", () => {
     await waitFor(() => {
       expect(client.acceptCard).toHaveBeenCalledTimes(2);
     });
-    expect(client.acceptCard.mock.calls[1]?.[2]).toEqual({ as: "Ivo Brandt", note: "Good.", revision: "5" });
+    expect(client.acceptCard.mock.calls[1]?.[2]).toEqual({ as: "Ivo Brandt", note: "Good.", revision: "5", briefed: true });
   });
 
   it("a name off its grammar in a dialog: the line there and under the Acting as field", async () => {
@@ -1190,7 +1190,7 @@ describe("focus after a write", () => {
     const first = aCard({ id: "C-0001", title: "The card", column: "check", reviewer: "Ivo Brandt", revision: "4" });
     const client = boardClient(aCardList([aCardRow({ id: "C-0001", column: "check", reviewer: "Ivo Brandt", revision: "4" })]), { "C-0001": first });
     client.acceptCard.mockImplementation((_project, id) => {
-      client.getCard.mockImplementation(() => Promise.resolve({ ...first, column: "closed", acceptance: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: null } }));
+      client.getCard.mockImplementation(() => Promise.resolve({ ...first, column: "closed", acceptance: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: null, verdict: "briefed", departs: [], discrepancy: null } }));
       return Promise.resolve(aCardWrite(id, { column: "closed" }));
     });
     await open(client, "#/alpha/board/C-0001");
@@ -1281,5 +1281,153 @@ describe("the small edges", () => {
       expect(shown()[0]).toBe("C-2000");
     });
     expect(shown()).toHaveLength(COLUMN_SHOWN);
+  });
+});
+
+describe("the card against its brief", () => {
+  const SUSPECT = aCard({ id: "C-0001", title: "The card", targets: ["R-1"], revision: "4" });
+
+  function suspectClient(document: Card = SUSPECT) {
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001", title: "The card", column: document.column, revision: "4" })]), { "C-0001": document });
+    client.getTrace.mockResolvedValue(aTrace([aTraceNode("R-1", [aTraceCard({ id: "C-0001", mark: "suspect", on: "R-1" })])]));
+    return client;
+  }
+
+  it("a mark nobody can act on shows no Clear; a read that failed is said, and never reads as clean", async () => {
+    const client = suspectClient();
+    client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the index is locked" }));
+    await open(client, "#/alpha/board/C-0001");
+    const panel = await screen.findByRole("complementary", { name: "The card" });
+    expect((await within(panel).findByText(/could not be read: the index is locked/)).textContent).toContain("Whether the brief changed");
+    expect(within(panel).queryByRole("button", { name: "Clear" })).toBeNull();
+    expect(within(card("C-0001")).queryByText("Suspect")).toBeNull();
+  });
+
+  it("Clear sends the outcome, the reason, the revision and the typed name; focus lands on the panel's heading", async () => {
+    window.localStorage.setItem(ACTING_KEY, "\u0410\u043d\u043d\u0430 \u041f\u0435\u0442\u0440\u043e\u0432\u0430");
+    const client = suspectClient();
+    client.clearCard.mockImplementation((_project, id) => {
+      client.getTrace.mockResolvedValue(aTrace([]));
+      return Promise.resolve(aCardWrite(id));
+    });
+    await open(client, "#/alpha/board/C-0001");
+    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
+    const dialog = await screen.findByRole("dialog", { name: "Clear C-0001" });
+    typeIn(dialog, "Reason", " Wording only ");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    await waitFor(() => {
+      expect(client.clearCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.clearCard.mock.calls[0]).toEqual(["alpha", "C-0001", { outcome: "no_effect", reason: "Wording only", revision: "4", as: "\u0410\u043d\u043d\u0430 \u041f\u0435\u0442\u0440\u043e\u0432\u0430" }]);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "The card" }));
+    });
+    expect(spoken()).toBe("C-0001 is cleared");
+  });
+
+  it("Clear is disabled while the name is empty", async () => {
+    await open(suspectClient(), "#/alpha/board/C-0001");
+    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
+    const dialog = await screen.findByRole("dialog");
+    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Clear card" });
+    expect(submit.disabled).toBe(true);
+    typeIn(dialog, "Clearing as", "Ivo Brandt");
+    expect(submit.disabled).toBe(false);
+  });
+
+  it("Needs correction on an accepted card sends the estimate, a title only when typed, and shows on an accepted card too", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    const client = suspectClient({ ...SUSPECT, column: "closed", acceptance: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: null, verdict: "briefed", departs: [], discrepancy: null } });
+    await open(client, "#/alpha/board/C-0001");
+    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Needs correction" }));
+    typeIn(dialog, "Reason", "The rates moved.");
+    typeIn(dialog, "Estimate", "2");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    await waitFor(() => {
+      expect(client.clearCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.clearCard.mock.calls[0]?.[2]).toEqual({ outcome: "needs_correction", reason: "The rates moved.", estimate: "2", revision: "4", as: "Ivo Brandt" });
+  });
+
+  it("a refused clear keeps the dialog and the text, the daemon's words in an alert", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    const client = suspectClient();
+    client.clearCard.mockRejectedValueOnce(new ClientError({ status: 409, message: "C-0001 is not suspect: there is no mark to clear; nothing changed" }));
+    await open(client, "#/alpha/board/C-0001");
+    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
+    const dialog = await screen.findByRole("dialog");
+    typeIn(dialog, "Reason", "Kept");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toContain("C-0001 is not suspect");
+    expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Reason").value).toBe("Kept");
+  });
+
+  it("a mark this build does not know: raw, neutral, no Clear", async () => {
+    const client = suspectClient();
+    client.getTrace.mockResolvedValue(aTrace([aTraceNode("R-1", [aTraceCard({ id: "C-0001", mark: "pondering", on: "R-1" })])]));
+    await open(client, "#/alpha/board/C-0001");
+    const panel = await screen.findByRole("complementary", { name: "The card" });
+    await waitFor(() => {
+      expect(within(card("C-0001")).getByText("pondering").closest(".badge")?.getAttribute("data-tone")).toBe("card-mark-unknown");
+    });
+    expect(within(panel).queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("Accept as departing sends the targets and the three texts, no `briefed`; a card by hand has none to depart from", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001", column: "check", targets: ["R-1", "R-2"], revision: "4" }), aCardRow({ id: "C-0002", column: "check" })]));
+    await open(client);
+    fireEvent.click(within(await openMenuOf("C-0001")).getByRole("menuitem", { name: "Accept" }));
+    const dialog = await screen.findByRole("dialog", { name: "Accept C-0001" });
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Departs from it" }));
+    const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Accept card" });
+    expect(submit.disabled).toBe(true);
+    typeIn(dialog, "Departs from", "R-2");
+    typeIn(dialog, "Summary", "S");
+    typeIn(dialog, "What the result does", "O");
+    typeIn(dialog, "What the brief says", "D");
+    fireEvent.click(submit);
+    await waitFor(() => {
+      expect(client.acceptCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.acceptCard.mock.calls[0]?.[2]).toEqual({ as: "Ivo Brandt", note: null, revision: "4", departs: ["R-2"], summary: "S", observed: "O", documented: "D", gap_type: "contradicts" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    fireEvent.click(within(await openMenuOf("C-0002")).getByRole("menuitem", { name: "Accept" }));
+    const manual = await screen.findByRole("dialog", { name: "Accept C-0002" });
+    expect(within(manual).getByRole<HTMLInputElement>("radio", { name: "Departs from it" }).disabled).toBe(true);
+  });
+
+  it("a new estimate on a card holding one asks why and sends the reason; a first estimate does not", async () => {
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001", revision: "4" })]), { "C-0001": aCard({ id: "C-0001", estimate: "3", revision: "4" }) });
+    await open(client, "#/alpha/board/C-0001");
+    fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByLabelText("Why the estimate changes")).toBeNull();
+    typeIn(dialog, "Estimate", "5");
+    typeIn(dialog, "Why the estimate changes", "The survey grew.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => {
+      expect(client.editCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.editCard.mock.calls[0]?.[2]).toEqual({ estimate: "5", reason: "The survey grew.", revision: "4", as: null });
+  });
+
+  it("history words the three new events, a clear's outcome among its details", async () => {
+    const document_ = aCard({
+      id: "C-0001",
+      title: "The card",
+      history: [
+        { seq: 1, type: "card.cleared", at: "2026-10-30T09:00:00Z", payload: { id: "C-0001", outcome: "no_effect", as: "Ivo Brandt" } },
+        { seq: 2, type: "card.reestimated", at: "2026-10-30T09:10:00Z", payload: { id: "C-0001", as: "Ivo Brandt" } },
+        { seq: 3, type: "card.refreshed", at: "2026-10-30T09:20:00Z", payload: { id: "C-0001" } },
+      ],
+    });
+    await open(boardClient(aCardList([aCardRow({ id: "C-0001" })]), { "C-0001": document_ }), "#/alpha/board/C-0001");
+    const panel = await screen.findByRole("complementary", { name: "The card" });
+    expect(within(within(panel).getByRole("region", { name: "History" })).getAllByRole("listitem").map((line) => line.querySelector("strong")?.textContent)).toEqual(["Cleared", "Re-estimated", "Refreshed"]);
   });
 });

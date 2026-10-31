@@ -794,9 +794,10 @@ pub fn entries_by_node(run: &Verify) -> std::collections::BTreeMap<String, Value
 /// `json` (one compact document of a read) without the `tested` keys
 /// docs/features/tested-reads.md adds: each `,"tested":[]` and
 /// `,"tested":null`, exactly `count` of them: what a build before 8b-2
-/// printed for an evidence-free read.
+/// printed for an evidence-free read. `spec impact`'s empty `cards`
+/// (docs/features/card-trace.md) goes with them: the record is older.
 pub fn without_read_tested(json: &str, count: usize) -> String {
-    let mut out = json.to_owned();
+    let mut out = json.replace(",\"cards\":[]", "");
     let mut found = 0;
     for key in [",\"tested\":[]", ",\"tested\":null"] {
         found += out.matches(key).count();

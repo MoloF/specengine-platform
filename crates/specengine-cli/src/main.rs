@@ -33,20 +33,21 @@ use clap::error::{ContextKind, ContextValue, ErrorKind};
 use clap::{ArgGroup, ColorChoice, CommandFactory as _, Parser, Subcommand};
 use specengine_cli::{
     AmendmentRequest, ApproveFlags, ApproveRequest, BumpRequest, BundleRequest, CardAcceptRequest,
-    CardAssignRequest, CardCancelRequest, CardEditRequest, CardListRequest, CardMoveRequest,
-    CardNewRequest, CardShowRequest, CheckRequest, CheckedTree, CliError, CreateRequest,
-    DecisionRequest, DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest,
-    ExportStateRequest, FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest,
-    GateStage, Globals, GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest,
-    ImportStateRequest, InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource,
-    InterpretRequest, LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest,
-    LockRegenRequest, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
-    RejectRequest, ResolveRequest, ReviewRequest, RoadmapRequest, RoundAnswerRequest,
-    RoundNewRequest, RoundTerminal, SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm,
-    SymbolsRequest, TEXT_MAX_BYTES, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest,
-    TaskListRequest, TaskNewRequest, TaskPlanRequest, TaskReportRequest, TaskShowRequest,
-    TaskStatus, TreeRequest, UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest,
-    VerifyTestsRequest, render_json, render_text,
+    CardAssignRequest, CardCancelRequest, CardClearGroupRequest, CardClearOutcome,
+    CardClearRequest, CardEditRequest, CardListRequest, CardMoveRequest, CardNewRequest,
+    CardShowRequest, CheckRequest, CheckedTree, CliError, CreateRequest, DecisionRequest,
+    DiscrepancyRequest, DriftRequest, Env, Exit, ExportIndexRequest, ExportStateRequest,
+    FlowRequest, FollowUp, GATE_DEADLINE, GateInput, GateProgress, GateRequest, GateStage, Globals,
+    GraphRequest, HealthRequest, INTAKE_INPUT_MAX_BYTES, ImpactRequest, ImportStateRequest,
+    InboxRequest, IndexRequest, InitRequest, IntakeSeverity, IntakeSource, InterpretRequest,
+    LockAcceptRequest, LockDiffRequest, LockPrompt, LockRebaseRequest, LockRegenRequest, Outcome,
+    ProposeRequest, ProposedText, QuestionRequest, RefsRequest, RejectRequest, ResolveRequest,
+    ReviewRequest, RoadmapRequest, RoundAnswerRequest, RoundNewRequest, RoundTerminal,
+    SearchRequest, Serve, ServeRequest, ShowRequest, SymbolsForm, SymbolsRequest, TEXT_MAX_BYTES,
+    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListRequest, TaskNewRequest,
+    TaskPlanRequest, TaskReportRequest, TaskShowRequest, TaskStatus, TraceRequest, TreeRequest,
+    UnmappedRequest, VerifiedTree, VerifyFormat, VerifyRequest, VerifyTestsRequest, render_json,
+    render_text,
 };
 use specengine_store::GitEnv;
 
@@ -139,6 +140,12 @@ enum Command {
         /// Levels below the roots at most (0: the roots only); deeper documents show as their ancestor there.
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         depth: Option<i64>,
+    },
+    /// Print each node's state against the cards that answer it: no card, departed, suspect, in work or confirmed; read-only and computed per read, exit 0 whatever is listed, 1 when REF names nothing, 2 when it cannot run.
+    Trace {
+        /// Any form `show` takes; absent: every live document and every section a card targets.
+        #[arg(value_name = "REF")]
+        reference: Option<String>,
     },
     /// Walk the typed links from REF: what it depends on, or with --impact what an edit of it reaches.
     Graph {
@@ -640,6 +647,9 @@ enum CardCommand {
         /// `url=http…`, `path=<path>@<hex blob>`, `build=…` or `note=…` (repeatable): a reference, nothing is fetched.
         #[arg(long = "evidence", value_name = "KIND=VALUE")]
         evidence: Vec<String>,
+        /// Why an estimate the card holds changes, at most 4096 bytes; required then, and no other field beside it.
+        #[arg(long, value_name = "T")]
+        reason: Option<String>,
         /// Only if the card still stands at this revision.
         #[arg(long, value_name = "R")]
         revision: Option<String>,
@@ -678,16 +688,65 @@ enum CardCommand {
         #[arg(long = "as", value_name = "N")]
         actor: Option<String>,
     },
-    /// Accept a card as its reviewer, on a terminal: a person's act; asks for consent.
+    /// Accept a card as its reviewer, on a terminal: a person's act; asks for consent. Say --briefed, or --departs and how: that raises a discrepancy, and nothing about it stops the accept.
     Accept {
         #[arg(value_name = "C")]
         id: String,
         /// The card's reviewer, never its assignee.
         #[arg(long = "as", value_name = "N")]
         actor: String,
+        /// The result is what the brief asked.
+        #[arg(long)]
+        briefed: bool,
+        /// A direct target the result departs from (1-16); reads git to bind the discrepancy.
+        #[arg(long, value_name = "REF", num_args = 1..)]
+        departs: Vec<String>,
+        /// The discrepancy's summary, at most 1024 bytes.
+        #[arg(long, value_name = "T")]
+        summary: Option<String>,
+        /// What the result does, at most 1024 bytes.
+        #[arg(long, value_name = "T")]
+        observed: Option<String>,
+        /// What the brief says, at most 1024 bytes.
+        #[arg(long, value_name = "T")]
+        documented: Option<String>,
+        /// `missing`, `partial`, `contradicts` or `unrequested`; absent: `contradicts`.
+        #[arg(long = "gap-type", value_name = "G")]
+        gap_type: Option<String>,
         /// A note on the result, at most 4096 bytes.
         #[arg(long, value_name = "T")]
         note: Option<String>,
+        /// Only if the card still stands at this revision.
+        #[arg(long, value_name = "R")]
+        revision: Option<String>,
+    },
+    /// Clear a suspect mark, on a terminal: a person's act with a recorded reason; asks for consent. No effect freezes it again; a needed correction makes a new card.
+    #[command(group(ArgGroup::new("what").required(true).args(["id", "group"])))]
+    #[command(group(ArgGroup::new("clearing").required(true).args(["no_effect", "needs_correction"])))]
+    Clear {
+        #[arg(value_name = "C")]
+        id: Option<String>,
+        /// Every suspect card with a target in REF or a document under it by `parent:`, no effect only.
+        #[arg(long, value_name = "REF", conflicts_with_all = ["needs_correction", "revision"])]
+        group: Option<String>,
+        /// The change does not touch the work.
+        #[arg(long = "no-effect")]
+        no_effect: bool,
+        /// The accepted work needs a correction card.
+        #[arg(long = "needs-correction", requires = "estimate")]
+        needs_correction: bool,
+        /// Why, at most 4096 bytes.
+        #[arg(long, value_name = "T")]
+        reason: String,
+        /// The correction's estimate, `N` or `N-M`.
+        #[arg(long, value_name = "E", requires = "needs_correction")]
+        estimate: Option<String>,
+        /// The correction's title; absent: `Correct <title>`.
+        #[arg(long, value_name = "T", requires = "needs_correction")]
+        title: Option<String>,
+        /// Who clears: a person's name, recorded.
+        #[arg(long = "as", value_name = "N")]
+        actor: String,
         /// Only if the card still stands at this revision.
         #[arg(long, value_name = "R")]
         revision: Option<String>,
@@ -1048,6 +1107,11 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 archive,
             },
         )?),
+        Command::Trace { reference } => Outcome::Trace(Box::new(specengine_cli::trace(
+            env,
+            globals,
+            &TraceRequest { reference },
+        )?)),
         Command::Flow { start, depth } => Outcome::Flow(Box::new(specengine_cli::flow(
             env,
             globals,
@@ -2198,6 +2262,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             parent,
             corrects,
             evidence,
+            reason,
             revision,
             actor,
         } => card(specengine_cli::card_edit(
@@ -2214,6 +2279,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 parent,
                 corrects,
                 evidence,
+                reason,
                 revision,
                 actor,
                 now: now(),
@@ -2256,6 +2322,12 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
         CardCommand::Accept {
             id,
             actor,
+            briefed,
+            departs,
+            summary,
+            observed,
+            documented,
+            gap_type,
             note,
             revision,
         } => {
@@ -2269,6 +2341,60 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                     actor,
                     note,
                     revision,
+                    now: now(),
+                    briefed,
+                    departs,
+                    summary,
+                    observed,
+                    documented,
+                    gap_type,
+                },
+                &mut consent,
+            )?)
+        }
+        CardCommand::Clear {
+            id,
+            group,
+            no_effect: _,
+            needs_correction,
+            reason,
+            estimate,
+            title,
+            actor,
+            revision,
+        } => {
+            require_terminal("card clear")?;
+            let mut consent = ask;
+            if let Some(group) = group {
+                return Ok(Outcome::CardGroup(Box::new(
+                    specengine_cli::card_clear_group(
+                        env,
+                        globals,
+                        &CardClearGroupRequest {
+                            group,
+                            reason,
+                            actor: Some(actor),
+                            now: now(),
+                        },
+                        &mut consent,
+                    )?,
+                )));
+            }
+            card(specengine_cli::card_clear(
+                env,
+                globals,
+                &CardClearRequest {
+                    id: id.unwrap_or_default(),
+                    outcome: if needs_correction {
+                        CardClearOutcome::NeedsCorrection
+                    } else {
+                        CardClearOutcome::NoEffect
+                    },
+                    reason,
+                    estimate,
+                    title,
+                    revision,
+                    actor: Some(actor),
                     now: now(),
                 },
                 &mut consent,

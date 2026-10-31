@@ -11,6 +11,7 @@ import {
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
+  type TraceOptions,
   type TreeOptions,
 } from "../api/client";
 import type {
@@ -19,6 +20,9 @@ import type {
   CardAcceptBody,
   CardAssignBody,
   CardCancelBody,
+  CardClearBody,
+  CardClearGroupBody,
+  CardClearGroupWrite,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -44,10 +48,11 @@ import type {
   TaskList,
   TaskNotFound,
   TaskPackage,
+  TraceDocument,
   TreeView,
 } from "../api/types";
 import { mockCode } from "./bindings";
-import { inboxEntryOf, noReview, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
+import { inboxEntryOf, noReview, proposal, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
 import { checkReportOf } from "./check";
 import {
   acceptCardIn,
@@ -55,12 +60,17 @@ import {
   cancelCardIn,
   cardListOf,
   cardShowOf,
+  cardTraceOf,
   changeElsewhere,
+  clearCardGroupIn,
+  clearCardIn,
   createCardIn,
   editCardIn,
   mockBoard,
   moveCardIn,
   type MockBoard,
+  type StoredCard,
+  type TraceFacts,
 } from "./cards";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { editorialScenario } from "./editorial";
@@ -481,7 +491,80 @@ export class MockClient implements SpecEngineClient {
   async acceptCard(project: string, id: string, body: CardAcceptBody): Promise<CardWrite> {
     await this.wait();
     this.meetConflict(project, id);
-    return acceptCardIn(this.board(project), id, body, this.stamp());
+    return acceptCardIn(this.board(project), id, body, this.stamp(), (card) => this.departure(project, card, body));
+  }
+
+  /** The discrepancy a departing accept makes, in the queue as `accept_departing` puts it (`docs/features/card-trace.md` "Accepting"); its ID. */
+  private departure(project: string, card: StoredCard, body: CardAcceptBody): string {
+    const entry = this.project(project);
+    const highest = entry.proposals.reduce((most, { review }) => Math.max(most, Number(review.id.slice(3))), 0);
+    const id = `PR-${String(highest + 1).padStart(4, "0")}`;
+    const nodes = body.departs ?? [];
+    entry.proposals.push(
+      proposal({
+        id,
+        project,
+        kind: "discrepancy",
+        created_at: this.stamp(),
+        target_id: nodes[0] ?? null,
+        target_ids: nodes,
+        severity: "normal",
+        gap_type: body.gap_type ?? "contradicts",
+        summary: body.summary ?? null,
+        evidence: [{ file: card.id, qpath: null, lines: null, observed: body.observed ?? "", documented: body.documented ?? "" }],
+        options: [
+          { label: "Change the brief", effect: "The brief takes what the result does.", price: "not priced at acceptance" },
+          { label: "Rework the result", effect: "A new card brings the result back to the brief.", price: "not priced at acceptance" },
+        ],
+        recommendation: 0,
+      }),
+    );
+    return id;
+  }
+
+  async clearCard(project: string, id: string, body: CardClearBody): Promise<CardWrite> {
+    await this.wait();
+    this.meetConflict(project, id);
+    return clearCardIn(this.board(project), id, body, this.stamp());
+  }
+
+  async clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite> {
+    await this.wait();
+    return clearCardGroupIn(this.board(project), body, this.stamp(), this.heldBy(project, body.group));
+  }
+
+  /** Marks and rollups joined per read (src/mocks/cards.ts); the daemon serves its own (`docs/features/card-trace.md`). */
+  async getTrace(project: string, options: TraceOptions = {}): Promise<TraceDocument> {
+    await this.read();
+    return structuredClone(cardTraceOf(this.board(project), options, this.traceFacts(project)));
+  }
+
+  /** What a trace read takes from the project's corpus and queue. */
+  private traceFacts(project: string): TraceFacts {
+    const entry = this.project(project);
+    const rows = treeOf(entry.corpus).nodes;
+    return {
+      place: (id) => {
+        const row = rows.find((candidate) => candidate.id === id);
+        return row === undefined ? null : { title: row.title, path: row.path };
+      },
+      settled: (discrepancy) => {
+        const status = entry.proposals.find(({ review }) => review.id === discrepancy)?.review.status;
+        return status === "applied" || status === "rejected";
+      },
+    };
+  }
+
+  /** REF and what it holds by `parent:`, as a group clear reads it. */
+  private heldBy(project: string, ref: string): ReadonlySet<string> {
+    const rows = treeOf(this.project(project).corpus).nodes;
+    const held = new Set([ref]);
+    for (const row of rows) {
+      if (row.id !== null && row.parent !== null && held.has(row.parent)) {
+        held.add(row.id);
+      }
+    }
+    return held;
   }
 
   /** The `conflict` scenario: a project's first card write finds its card changed meanwhile, a lost compare-and-set; the next one, on the new read, is taken. */

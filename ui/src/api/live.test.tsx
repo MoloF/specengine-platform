@@ -26,6 +26,7 @@ import {
   useStageDecision,
   useTask,
   useTasks,
+  useTrace,
   useTree,
 } from "./queries";
 import type { Proposal, TaskListEntry } from "./types";
@@ -1099,6 +1100,7 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     useCards("alpha");
     useCard("alpha", "C-0001");
     useCard("alpha", "C-0002");
+    useTrace("alpha");
     useInbox("alpha");
     useTasks("alpha");
     return outside === null ? null : <p>changed outside</p>;
@@ -1129,7 +1131,7 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
       </ApiProvider>,
     );
     await quiet(queryClient);
-    for (const method of [client.getCards, client.getCard, client.getInbox, client.getTasks]) {
+    for (const method of [client.getCards, client.getCard, client.getTrace, client.getInbox, client.getTasks]) {
       method.mockClear();
     }
     return { client, queryClient, tail, gap: () => gap?.() };
@@ -1142,6 +1144,7 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     });
     await quiet(queryClient);
     expect(client.getCards).toHaveBeenCalledTimes(1);
+    expect(client.getTrace).toHaveBeenCalledTimes(1);
     expect(client.getCard.mock.calls.map((call) => call[1])).toEqual(["C-0001"]);
     expect(client.getInbox).not.toHaveBeenCalled();
     expect(client.getTasks).not.toHaveBeenCalled();
@@ -1156,6 +1159,16 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     await quiet(queryClient);
     expect(client.getCards).toHaveBeenCalledTimes(1);
     expect(client.getCard.mock.calls.map((call) => call[1]).sort()).toEqual(["C-0001", "C-0002"]);
+  });
+
+  it.each(["proposal.rejected", "proposal.applied"])("%s reads the trace: it settles a departure or moves a mark", async (type) => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 94, type, payload: { id: "PR-1" } });
+    });
+    await quiet(queryClient);
+    expect(client.getTrace).toHaveBeenCalledTimes(1);
+    expect(client.getCards).not.toHaveBeenCalled();
   });
 
   it("a gap reads the cards again; a proposal or a task event does not", async () => {

@@ -5,6 +5,8 @@ title: The back sheet
 parent: PRN-WEEKLY
 owner: owner
 reviewed: 2026-10-01
+links:
+  uses: [SHT-FRONT-HEAD]
 ---
 
 # The back sheet

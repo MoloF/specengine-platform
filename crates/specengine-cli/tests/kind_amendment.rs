@@ -1840,12 +1840,12 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        98,
+        105,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
          tested-reads' `TestedRow`, health-drift's six, ui-node-bindings' two, \
-         lock-diff's five, flow-read's five and board-ui's twelve"
+         lock-diff's five, flow-read's five, board-ui's twelve and card-trace's seven"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").

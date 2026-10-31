@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-mcp, crates/specengine-store, crates/specengine-core, plugin]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-31
 ---
 
 # spec impact: what a change to a node, a code symbol or the code since a revision reaches
 
-Before a change or hand-in: the nodes the impact walk reaches, the code bound to them with each binding's `sync`, the tests to run, this repository's open tasks to warn. Nothing it shows changes an exit, a status, a claim or a verdict (ADR-0046, `architecture-code.md#sync-in-reads`). Built: 7b-1 `docs/features/impact.md`, 7b-2 `docs/features/impact-since.md`.
+Before a change or hand-in: the nodes the impact walk reaches, the code bound to them with each binding's `sync`, the tests to run, this repository's open tasks to warn, the cards answering them. Nothing it shows changes an exit, a status, a claim or a verdict (ADR-0046, `architecture-code.md#sync-in-reads`).
 
 ## Command
 
@@ -40,6 +40,7 @@ One record builder (`code_delta`) and comparer (core `symbol_delta::compare`, pu
 - **Rows**: with `[code]`, one `set_bindings` over the keys of every reached node and every node within it (`SpecGraph::within`), each row once: `tests` the `verifies` rows, `symbols` the rest, verify's order, `BindingRow`s (`code-reads.md` "The binding row"). Without `[code]` (`CodeConfig::from_toml` `Ok(None)`): `symbols`, `tests`, `code` `null`, the code index untouched, no note.
 - **`code`**: `SetBindings.code`, the judge's walk counts (`spec refs`' `{files, rs, ron, skipped}`), `null` without `[code]` or under causes (1), (3), (8); then the lookup's or disk walk's. Exit 1: `null`.
 - **Tasks**: `roadmap::open_tasks(env, project, slug, git, GitPlace::Unnamed) -> OpenTasks {here, others, notes}`, open by core `PlanTask::is_open`, the queue read as `spec roadmap` reads it (`open_existing`, no schema step). A task of `here` is listed when `node_set::named_set(targets ∪ affected_nodes)`, each resolved now with the sections it holds, meets R: the reached nodes and every node within each. Its `nodes`: the reached N, in `nodes`' order, whose {N} ∪ within(N) meets that set; tasks by number. `others` meeting R: one note, `others_note(k, slug, "spec impact")`. No repository, queue or task: `[]`, no note.
+- **Cards** (`spec-trace.md`): those not cancelled with a direct target in R, by number; the mark over all their targets; `nodes` the reached N named. Unread: one note, as tasks', `cards not shown: ... (spec trace names the cause)`.
 
 ## Notes
 
@@ -48,8 +49,6 @@ stderr and JSON `notes`, in order: the md refresh's; the holders warning (`--sym
 - the data directory or the queue unreadable: `tasks not shown: the queue cannot be read (spec roadmap names the cause)`;
 - git failing in the root: `tasks not shown: git in the project root failed (spec roadmap names the cause)`;
 - an `[ids]` prefix taking `PR` or `T`: `tasks not shown: <config>: <clash>`; a row not decoded: `<row>; not shown`; ``<k> task(s) of another repository of the project `<slug>` not shown: `spec impact` shows the current repository's``.
-
-`spec roadmap` (`GitPlace::Root`) keeps its texts (`spec-roadmap.md` "Notes").
 
 ## Output
 
@@ -63,6 +62,7 @@ symbol <row line>
   sig <signature>
 test <row line>
 task <id> | <status> | <title or -> | <names>
+card <id> | <flow>/<column> | <mark> | <title> | <names>
 seed <qpath> | <item_kind> | <path>:<start>-<end>
 <changed|added|removed> | <file>:<line> | <symbol> <item_kind>
 [truncated: <parts> not shown; lower --depth N or narrow the REF or --symbol]
@@ -70,11 +70,11 @@ seed <qpath> | <item_kind> | <path>:<start>-<end>
 
 A header under `--symbol` or `--since` only (`<7 hex>` `revision`'s first seven, never git's abbreviation; totals before the cut); the summary's totals, the code part when `code` is set, zero `left out` parts omitted; rows `cap.rs` `row_line`, then `row_lines`' `sig`, `moved from`, `candidate` lines; a task's names ID, else path; delta lines last, `changed`, `added`, `removed`, each in the comparer's order. `--since`'s tail ends `lower --depth N or name a later --since REV`.
 
-JSON, every key present, absent `null`: `{input {ref, symbol, since}, reason, revision, depth, seeds {nodes, symbols}, delta, left_out {generated, tier3}, nodes, tested, symbols, tests, tasks, notes, truncated, code}`; `tested`: `spec-lock-tested.md` "Reads". `input` as given; `revision` `--since`'s OID. `seeds.nodes` the printed distance-0 names; `seeds.symbols` the printed matches `{qpath, item_kind, path, start_line, end_line, tier}`, `null` for REF and `--since`. `delta` under `--since`: `{added, removed, changed: [{file, symbol, item_kind, line}], renamed: null}`, the printed items (`symbol` the qpath, a RON file's path; `line` a removed one's old). A node graph's object; `tasks` `{id, status, title, nodes}`. `truncated`: `null` uncut, else `{nodes, tested, symbols, tests, tasks, seeds, delta}` not shown (0 for a list not cut, `null` for a `null` list). Exit 1: `input`, `depth`, `reason`, `notes` set, `left_out` zeros, `nodes`, `tasks`, `seeds.nodes` `[]`, `seeds.symbols` `[]` under `--symbol`, the rest `null`.
+JSON, every key present, absent `null`: `{input {ref, symbol, since}, reason, revision, depth, seeds {nodes, symbols}, delta, left_out {generated, tier3}, nodes, tested, symbols, tests, tasks, cards, notes, truncated, code}`; `tested`: `spec-lock-tested.md` "Reads". `input` as given; `revision` `--since`'s OID. `seeds.nodes` the printed distance-0 names; `seeds.symbols` the printed matches `{qpath, item_kind, path, start_line, end_line, tier}`, `null` for REF and `--since`. `delta` under `--since`: `{added, removed, changed: [{file, symbol, item_kind, line}], renamed: null}`, the printed items (`symbol` the qpath, a RON file's path; `line` a removed one's old). A node graph's object; `tasks` `{id, status, title, nodes}`; `cards` `spec trace`'s card and `nodes`. `truncated`: `null` uncut, else `{nodes, tested, symbols, tests, tasks, cards, seeds, delta}` not shown (0 for a list not cut, `null` for a `null` list). Exit 1: `input`, `depth`, `reason`, `notes` set, `left_out` zeros, `nodes`, `tasks`, `cards`, `seeds.nodes` `[]`, `seeds.symbols` `[]` under `--symbol`, the rest `null`.
 
 ## Cut
 
-`OUTPUT_CAP_CHARS` 40 000: the header and summary always print; then nodes, tested lines, symbol rows (each with its lines), tasks, seed matches, delta items, each whole, while the text stays within the cap (`lines_within`, the first item whole); the first item that does not fit and all later ones are cut. The tail's parts `<n> nodes`, `<e> tested`, `<s> symbols`, `<t> tests`, `<k> tasks`, `<m> seed matches`, `<d> delta items`, zero parts omitted. The JSON holds exactly the printed items.
+`OUTPUT_CAP_CHARS` 40 000: the header and summary always print; then nodes, tested lines, symbol rows (each with its lines), tasks, cards, seed matches, delta items, each whole, while the text stays within the cap (`lines_within`, the first item whole); the first item that does not fit and all later ones are cut. The tail's parts `<n> nodes`, `<e> tested`, `<s> symbols`, `<t> tests`, `<k> tasks`, `<c> cards`, `<m> seed matches`, `<d> delta items`, zero parts omitted. The JSON holds exactly the printed items.
 
 ## Exits and degrade
 
@@ -84,15 +84,14 @@ Text and JSON byte-identical across roots, clones, cwd, creation order and CRLF 
 
 ## MCP get_impact
 
-`{id?, symbol?, since?, depth?}` (`ImpactArgs`, unknown fields refused), each nullable; no root `oneOf`. Not exactly one non-null of `id`, `symbol`, `since`, before discovery: an error result ``spec: get_impact takes exactly one of `id`, `symbol` and `since` `` + LF, no `structuredContent`. Then one `call`: content the output, `structuredContent` the document; read annotations. `IMPACT_DESCRIPTION` 2 043 B, ASCII, its figures asserted. Mirror `ImpactDocument` (`Impact{Input,Seeds,SeedSymbol,Node,Task,Truncated,Delta,DeltaItem}`, `BindingRowShape`, `CodeCount`): a key the JSON may set `null` nullable, `delta.renamed` `AlwaysNull`. `INSTRUCTIONS`' reads line ends `get_impact(id|symbol|since, depth?) = impact.` (`mcp-read.md` "Tools"). Plugin: `plugin.md` "Skills".
+`{id?, symbol?, since?, depth?}` (`ImpactArgs`, unknown fields refused), each nullable; no root `oneOf`. Not exactly one non-null of `id`, `symbol`, `since`, before discovery: an error result ``spec: get_impact takes exactly one of `id`, `symbol` and `since` `` + LF, no `structuredContent`. Then one `call`: content the output, `structuredContent` the document; read annotations. `IMPACT_DESCRIPTION` 2 043 B, ASCII, its figures asserted. Mirror `ImpactDocument` (`Impact{Input,Seeds,SeedSymbol,Node,Task,Card,Truncated,Delta,DeltaItem}`, `BindingRowShape`, `CodeCount`): a key the JSON may set `null` nullable, `delta.renamed` `AlwaysNull`. `INSTRUCTIONS`' reads line names it (`mcp-read.md` "Tools").
 
 ## Tests
 
-CLI `impact.rs` (`fixtures/impact/`), `impact_since.rs`, `verify_delta.rs` (scripted histories), `impact_{cost,pilot}.rs` (`#[ignore]`); core `symbol_delta.rs`. MCP `mcp_impact.rs`, `mcp_door`, `mcp_size`, `mcp_genre`, `plugin_{skills,files}`.
+CLI `impact.rs` (`fixtures/impact/`), `impact_since.rs`, `verify_delta.rs`, `impact_{cost,pilot}.rs` (`#[ignore]`); core `symbol_delta.rs`. MCP `mcp_impact.rs`, `mcp_door`, `mcp_size`, `mcp_genre`, `plugin_{skills,files}`.
 
 ## Known limits
 
 - `LookupWithFiles` reads each best-tier hit's file whole.
-- The REF form costs about 3x `show --bindings` (771 against 259 ms, `code-a`): it judges it all.
-- `--symbol` refreshes code twice (lookup, `set_bindings`); a name tier can match many items. `--since` reads every REV code blob, binds REV's tree, parses each compared Rust file twice per side (bind, `item_levels`), then `set_bindings` refreshes. The cut bounds the answer, not the work.
+- `--symbol` refreshes code twice (lookup, `set_bindings`); a name tier can match many items. `--since` reads every REV code blob, parses each compared Rust file twice per side, then refreshes. The cut bounds the answer, not the work.
 - A nested repository or submodule under a code root reads as `added` on every run; `renamed` is not filled (RM-0031).

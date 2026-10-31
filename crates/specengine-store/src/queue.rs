@@ -148,8 +148,10 @@ use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
 pub use cards::{
-    CardChange, CardEdit, CardList, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED, EVENT_CARD_CANCELLED,
-    EVENT_CARD_CREATED, EVENT_CARD_EDITED, EVENT_CARD_MOVED, NewCard, UnreadableCard,
+    CardAccept, CardAccepted, CardChange, CardClear, CardCleared, CardClearing, CardDeparture,
+    CardEdit, CardList, CardRefresh, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
+    EVENT_CARD_CANCELLED, EVENT_CARD_CLEARED, EVENT_CARD_CREATED, EVENT_CARD_EDITED,
+    EVENT_CARD_MOVED, EVENT_CARD_REESTIMATED, EVENT_CARD_REFRESHED, NewCard, UnreadableCard,
 };
 pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, record_gate_observed};
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
@@ -1753,16 +1755,18 @@ impl SqliteQueue {
 
     /// [`ProposalQueue::applied`] (`decision` `None`: from `approved` only)
     /// and [`ProposalQueue::applied_with`] (also from `open`, deciding), as
-    /// [`Self::applied_refreshing`] when `refresh` is given: the stored
-    /// proposal and the snapshot nodes refreshed.
+    /// [`Self::applied_refreshing`] when `refresh` is given, as
+    /// [`Self::applied_vouching`] when `cards` is: the stored proposal, the
+    /// snapshot nodes refreshed and the cards an editorial apply vouched for.
     fn applied_if(
         &mut self,
         id: &str,
         commit: &str,
         decision: Option<&Decision>,
         refresh: Option<&TaskRefresh>,
+        cards: &[CardRefresh],
         now: &str,
-    ) -> Result<(Proposal, Vec<String>), QueueError> {
+    ) -> Result<(Proposal, Vec<String>, Vec<String>), QueueError> {
         check_time(now)?;
         let project = self.project.clone();
         let tx = self.write()?;
@@ -1824,9 +1828,10 @@ impl SqliteQueue {
             }
             _ => Vec::new(),
         };
+        let vouched = cards::refresh_snapshots(&tx, &project, id, cards, now)?;
         let stored = existing(&tx, &project, id)?;
         tx.commit().db()?;
-        Ok((stored, refreshed))
+        Ok((stored, refreshed, vouched))
     }
 
     /// A task-bound `update` or section-form `create` applied in its task's
@@ -1847,7 +1852,28 @@ impl SqliteQueue {
         refresh: &TaskRefresh,
         now: &str,
     ) -> Result<(Proposal, Vec<String>), QueueError> {
-        self.applied_if(id, commit, decision, Some(refresh), now)
+        self.applied_if(id, commit, decision, Some(refresh), &[], now)
+            .map(|(applied, refreshed, _)| (applied, refreshed))
+    }
+
+    /// The transaction recording an applied proposal (task spec
+    /// `card-trace`, "Snapshot and suspect"): [`ProposalQueue::applied`]
+    /// (`decision` `None`) or [`ProposalQueue::applied_with`], `task` as
+    /// [`Self::applied_refreshing`] takes it, and each editorial change of
+    /// `cards` joining the `also` of every card entry holding its old hash,
+    /// one `card.refreshed` each. A card that does not read is left alone:
+    /// recording the commit never fails for a card's sake. The stored
+    /// proposal, the task's nodes refreshed, the cards changed.
+    pub fn applied_vouching(
+        &mut self,
+        id: &str,
+        commit: &str,
+        decision: Option<&Decision>,
+        task: Option<&TaskRefresh>,
+        cards: &[CardRefresh],
+        now: &str,
+    ) -> Result<(Proposal, Vec<String>, Vec<String>), QueueError> {
+        self.applied_if(id, commit, decision, task, cards, now)
     }
 
     /// [`ProposalQueue::approve_record_from`].
@@ -3893,8 +3919,8 @@ impl ProposalQueue for SqliteQueue {
     }
 
     fn applied(&mut self, id: &str, commit: &str, now: &str) -> Result<Proposal, QueueError> {
-        self.applied_if(id, commit, None, None, now)
-            .map(|(applied, _)| applied)
+        self.applied_if(id, commit, None, None, &[], now)
+            .map(|(applied, _, _)| applied)
     }
 
     fn applied_with(
@@ -3904,8 +3930,8 @@ impl ProposalQueue for SqliteQueue {
         decision: &Decision,
         now: &str,
     ) -> Result<Proposal, QueueError> {
-        self.applied_if(id, commit, Some(decision), None, now)
-            .map(|(applied, _)| applied)
+        self.applied_if(id, commit, Some(decision), None, &[], now)
+            .map(|(applied, _, _)| applied)
     }
 
     fn reopen(

@@ -13,8 +13,10 @@ import type {
   CardCancellation,
   CardColumn,
   CardEvent,
+  CardClearGroupWrite,
   CardEvidence,
   CardFlow,
+  CardFrozen,
   CardList,
   CardMove,
   CardNotFound,
@@ -96,6 +98,11 @@ import type {
   TaskRun,
   TaskTarget,
   TestedRow,
+  TraceCard,
+  TraceCounts,
+  TraceDocument,
+  TraceNode,
+  TraceUse,
   UnappliedAmendment,
   UnboundCounts,
   UnboundMarker,
@@ -140,10 +147,13 @@ import type {
 // (docs/features/flow-read.md "Output": the flow document, a gap row, a node, an edge and a node's
 // `inner` entry, the eighty-sixth `FlowInner`); and board-ui's twelve (docs/features/board-ui.md
 // "Types": the list, a flow, a column, a move, a row, a card, an evidence entry, an acceptance, a
-// cancellation, an event, the write document, no such card, the ninety-eighth and last
-// `CardNotFound`). A key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty
-// today; a listed key the file already names fails. While that file is absent the comparison is
-// skipped, saying so; once it exists it names all ninety-eight, in the slices' order.
+// cancellation, an event, the write document, no such card, the ninety-eighth `CardNotFound`); and
+// card-trace's seven (docs/features/card-trace.md "Data": the trace document, its counts, a node, a
+// card with its mark, a use, a frozen entry, the group clear's answer, the hundred-and-fifth and last
+// `CardClearGroupWrite`), with an acceptance's `verdict`, `departs`, `discrepancy`. A key the types
+// carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already
+// names fails. While that file is absent the comparison is skipped, saying so; once it exists it
+// names all one hundred and five, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -746,11 +756,19 @@ const KEYS = {
     notes: true,
   } satisfies Record<keyof Card, true>,
   CardEvidence: { kind: true, value: true, by: true, at: true } satisfies Record<keyof CardEvidence, true>,
-  CardAcceptance: { by: true, at: true, note: true } satisfies Record<keyof CardAcceptance, true>,
+  CardAcceptance: { by: true, at: true, note: true, verdict: true, departs: true, discrepancy: true } satisfies Record<keyof CardAcceptance, true>,
   CardCancellation: { by: true, at: true, reason: true } satisfies Record<keyof CardCancellation, true>,
   CardEvent: { seq: true, type: true, at: true, payload: true } satisfies Record<keyof CardEvent, true>,
   CardWrite: { id: true, flow: true, column: true, position: true, revision: true, allowed: true, notes: true } satisfies Record<keyof CardWrite, true>,
   CardNotFound: { id: true, reason: true } satisfies Record<keyof CardNotFound, true>,
+  // docs/features/card-trace.md "Data".
+  TraceDocument: { ref: true, reason: true, notes: true, counts: true, nodes: true, truncated: true, omitted: true } satisfies Record<keyof TraceDocument, true>,
+  TraceCounts: { no_card: true, in_work: true, suspect: true, departed: true, confirmed: true } satisfies Record<keyof TraceCounts, true>,
+  TraceNode: { id: true, title: true, path: true, rollup: true, counts: true, cards: true, uses: true } satisfies Record<keyof TraceNode, true>,
+  TraceCard: { id: true, flow: true, column: true, title: true, mark: true, on: true, discrepancy: true, correction: true } satisfies Record<keyof TraceCard, true>,
+  TraceUse: { id: true, rollup: true, cards: true } satisfies Record<keyof TraceUse, true>,
+  CardFrozen: { id: true, rev: true, norm_hash: true, also: true } satisfies Record<keyof CardFrozen, true>,
+  CardClearGroupWrite: { group: true, cleared: true, notes: true } satisfies Record<keyof CardClearGroupWrite, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -862,11 +880,18 @@ const CITED: Record<Named, string> = {
   CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled",
   Card: "id, flow, column, position, title, goal, discipline, targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes",
   CardEvidence: "kind, value, by, at",
-  CardAcceptance: "by, at, note",
+  CardAcceptance: "by, at, note, verdict, departs, discrepancy",
   CardCancellation: "by, at, reason",
   CardEvent: "seq, type, at, payload",
   CardWrite: "id, flow, column, position, revision, allowed, notes",
   CardNotFound: "id, reason",
+  TraceDocument: "ref, reason, notes, counts, nodes, truncated, omitted",
+  TraceCounts: "no_card, in_work, suspect, departed, confirmed",
+  TraceNode: "id, title, path, rollup, counts, cards, uses",
+  TraceCard: "id, flow, column, title, mark, on, discrepancy, correction",
+  TraceUse: "id, rollup, cards",
+  CardFrozen: "id, rev, norm_hash, also",
+  CardClearGroupWrite: "group, cleared, notes",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1017,8 +1042,14 @@ const BEFORE_BOARD_UI: readonly Named[] = [...BEFORE_FLOW_READ, ...FLOW_READ];
 /** board-ui's twelve, in the list's order, then the card's, the write document, no such card (docs/features/board-ui.md "Types"). */
 const BOARD_UI: readonly Named[] = ["CardList", "CardFlow", "CardColumn", "CardMove", "CardRow", "Card", "CardEvidence", "CardAcceptance", "CardCancellation", "CardEvent", "CardWrite", "CardNotFound"];
 
+/** The ninety-eight types the fixture named before card-trace. */
+const BEFORE_CARD_TRACE: readonly Named[] = [...BEFORE_BOARD_UI, ...BOARD_UI];
+
+/** card-trace's seven, in the file's order (docs/features/card-trace.md "Data"). */
+const CARD_TRACE: readonly Named[] = ["TraceDocument", "TraceCounts", "TraceNode", "TraceCard", "TraceUse", "CardFrozen", "CardClearGroupWrite"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_BOARD_UI, ...BOARD_UI];
+const ALL: readonly Named[] = [...BEFORE_CARD_TRACE, ...CARD_TRACE];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1042,8 +1073,8 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * board-ui wrote its twelve sets, the eighty-seventh to ninety-eighth and last
- * (docs/features/board-ui.md "Types").
+ * card-trace wrote its seven sets, the ninety-ninth to hundred-and-fifth and last
+ * (docs/features/card-trace.md "Data").
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1085,7 +1116,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_LOCK_DIFF.at(-1)).toBe("ShownBindings");
     expect(BEFORE_FLOW_READ.at(-1)).toBe("LockDiffCodeSide");
     expect(BEFORE_BOARD_UI.at(-1)).toBe("FlowInner");
-    expect(ALL.at(-1)).toBe("CardNotFound");
+    expect(BEFORE_CARD_TRACE.at(-1)).toBe("CardNotFound");
+    expect(ALL.at(-1)).toBe("CardClearGroupWrite");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1114,7 +1146,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(98);
+    expect(ALL).toHaveLength(105);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1221,8 +1253,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_LOCK_DIFF).toHaveLength(76);
     expect(BEFORE_FLOW_READ).toHaveLength(81);
     expect(BEFORE_BOARD_UI).toHaveLength(86);
-    expect(ALL).toHaveLength(98);
-    expect(new Set(ALL).size).toBe(98);
+    expect(BEFORE_CARD_TRACE).toHaveLength(98);
+    expect(ALL).toHaveLength(105);
+    expect(new Set(ALL).size).toBe(105);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1463,12 +1496,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the ninety-eight types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve", () => {
+  it("names exactly the one hundred and five types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all ninety-eight, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and five, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(98);
+    expect(Object.keys(sets)).toHaveLength(105);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1568,12 +1601,21 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
-  it("names board-ui's twelve after FlowInner, last: 5, 5, 2, 3, 17, 26, 4, 3, 3, 4, 7, 2 keys in the types' order, the ninety-eighth and last CardNotFound (AC-09 of docs/features/board-ui.md)", () => {
-    expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length)).toEqual([...BOARD_UI]);
+  it("names card-trace's seven after CardNotFound, last: 7, 5, 7, 8, 3, 4, 3 keys in the types' order, the hundred-and-fifth and last CardClearGroupWrite (docs/features/card-trace.md \"Data\")", () => {
+    expect(Object.keys(sets).slice(BEFORE_CARD_TRACE.length)).toEqual([...CARD_TRACE]);
+    expect(Object.keys(sets).indexOf("TraceDocument")).toBe(98);
+    expect(Object.keys(sets).at(-1)).toBe("CardClearGroupWrite");
+    expect(CARD_TRACE.map((name) => sets[name])).toEqual(CARD_TRACE.map((name) => served(name)));
+    expect(CARD_TRACE.map((name) => sets[name]?.length)).toEqual([7, 5, 7, 8, 3, 4, 3]);
+    expect(CARD_TRACE.map((name) => declaredKeys(name))).toEqual(CARD_TRACE.map((name) => served(name)));
+  });
+
+  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 5, 2, 3, 17, 26, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\")", () => {
+    expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length, BEFORE_CARD_TRACE.length)).toEqual([...BOARD_UI]);
     expect(Object.keys(sets).indexOf("CardList")).toBe(86);
-    expect(Object.keys(sets).at(-1)).toBe("CardNotFound");
+    expect(Object.keys(sets).at(BEFORE_CARD_TRACE.length - 1)).toBe("CardNotFound");
     expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 17, 26, 4, 3, 3, 4, 7, 2]);
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 17, 26, 4, 6, 3, 4, 7, 2]);
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
 

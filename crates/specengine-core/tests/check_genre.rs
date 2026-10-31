@@ -34,6 +34,8 @@
 //! `the_flow_sources_name_no_kind_or_prefix_of_a_fixture` holds them to every
 //! fixture's scheme, the flow fixtures' included. M6: a literal kind in core
 //! `src/flow.rs` turns it red.
+//!
+//! docs/features/card-trace.md: core `src/trace.rs` is scanned with them.
 
 mod common;
 
@@ -298,6 +300,8 @@ fn check_sources() -> Vec<std::path::PathBuf> {
     // docs/features/flow-read.md AC-06: the flow read and its config.
     sources.push(repository_root().join("crates/specengine-core/src/flow.rs"));
     sources.push(repository_root().join("crates/specengine-core/src/flow_toml.rs"));
+    // docs/features/card-trace.md: a mark and a rollup.
+    sources.push(repository_root().join("crates/specengine-core/src/trace.rs"));
     sources.sort();
     sources
 }
@@ -363,6 +367,7 @@ fn the_check_source_names_no_prefix_path_or_file_of_a_project() {
         "src/roadmap.rs",
         "src/flow.rs",
         "src/flow_toml.rs",
+        "src/trace.rs",
     ] {
         assert!(
             sources.iter().any(|path| path.ends_with(new)),
@@ -651,6 +656,12 @@ const RULES_SOURCES: [&str; 5] = [
     "crates/specengine-core/src/flow_toml.rs",
 ];
 
+/// docs/features/card-trace.md: a mark and a rollup, held to the fixtures'
+/// schemes as the flow sources are. It stays out of [`RULES_SOURCES`]: the
+/// words `open` and `accepted` are this source's own closed marks, no status
+/// of a project.
+const TRACE_SOURCE: &str = "crates/specengine-core/src/trace.rs";
+
 /// docs/features/flow-read.md AC-06: every fixture's prefixes and kinds, the
 /// flow fixtures' above all (`lending`, `bookplate`, `leg`, `kit`, `journey`,
 /// `tariff`), and this repository's: "The core names no kind or key".
@@ -695,7 +706,7 @@ fn the_flow_sources_name_no_kind_or_prefix_of_a_fixture() {
         assert!(kinds.contains(kind), "{kind} is a fixture kind: {kinds:?}");
     }
     let mut offenders = Vec::new();
-    for source in &RULES_SOURCES[3..] {
+    for source in RULES_SOURCES[3..].iter().chain([&TRACE_SOURCE]) {
         let path = repository_root().join(source);
         let text = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{source}: {e}"));
         let mut seen = 0;

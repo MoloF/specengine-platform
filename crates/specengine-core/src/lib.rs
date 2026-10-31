@@ -94,7 +94,10 @@
 //!   `next`'s order by the plan (`roadmap-surfaces`);
 //! - [`symbol_delta`] — the code items added, removed and changed between
 //!   two sides, over records the caller made (task spec `impact-since`):
-//!   `spec impact --since` and `spec verify --changed`'s `delta.symbols`.
+//!   `spec impact --since` and `spec verify --changed`'s `delta.symbols`;
+//! - [`trace`] — a card against its brief (task spec `card-trace`): the
+//!   frozen snapshot, `card_mark`, `rollup`, pure, computed per read and
+//!   never stored.
 //!
 //! The corpus model and the reference grammar live in `specengine-model`.
 
@@ -131,6 +134,7 @@ pub mod scheme_toml;
 pub mod symbol_delta;
 pub mod task;
 pub mod tokens;
+pub mod trace;
 pub mod verify;
 pub mod walk_scope;
 mod yaml;

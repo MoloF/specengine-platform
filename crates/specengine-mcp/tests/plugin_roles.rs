@@ -1374,10 +1374,10 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // 0.13.0; bundle-bindings: 0.14.0; impact: 0.15.0; impact-since:
     // 0.16.0; tested-evidence: 0.17.0; tested-reads: 0.18.0; review-form:
     // 0.19.0; layer-c-reads: 0.20.0; flow-read: 0.21.0; flow-canvas: 0.22.0;
-    // card-store: 0.23.0.
-    if plugin["version"] != "0.23.0" {
+    // card-store: 0.23.0; card-trace: 0.24.0.
+    if plugin["version"] != "0.24.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.23.0",
+            "plugin.json: version {}, not 0.24.0",
             plugin["version"]
         ));
     }
@@ -1447,9 +1447,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.23.0\"", "\"0.22.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.23.0");
-    assert_names(&r2_problems(&older, &market), "not 0.23.0", "0.22.0");
+    let older = plugin.replacen("\"0.24.0\"", "\"0.23.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.24.0");
+    assert_names(&r2_problems(&older, &market), "not 0.24.0", "0.23.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

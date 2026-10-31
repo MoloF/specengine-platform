@@ -770,9 +770,12 @@ describe("the live tail (AC-09)", () => {
       "card.edited",
       "card.assigned",
       "card.cancelled",
+      "card.cleared",
+      "card.reestimated",
+      "card.refreshed",
     ]);
     expect([...QUEUE_EVENT_TYPES]).toEqual(source.types());
-    expect(QUEUE_EVENT_TYPES).toHaveLength(22);
+    expect(QUEUE_EVENT_TYPES).toHaveLength(25);
     source.open();
     source.emit("proposal.created", '{"id":"PR-0005"}', "12");
     source.emit("proposal.rejected", '{"id":"PR-0002","reason":"no"}', "13");
@@ -919,6 +922,34 @@ describe("the cards (docs/features/board-ui.md \"Routes\")", () => {
     stubFetch(() => errorAnswer(503, "specengine.toml:3: card: a flow needs two columns"));
     const error = await rejection(new HttpClient().getCards("alpha"));
     expect([error.status, error.message]).toEqual([503, "specengine.toml:3: card: a flow needs two columns"]);
+  });
+
+  it("posts a clear and a group clear as JSON, no signal; a refused group's reason the last of its notes (docs/features/card-trace.md \"Clearing\")", async () => {
+    const stub = stubFetch((url) => jsonAnswer(200, url.endsWith("/trace/clear") ? { group: "PRN-WEEKLY", cleared: ["C-0001"], notes: [] } : written));
+    const client = new HttpClient();
+    await client.clearCard("alpha", "C-0001", { outcome: "no_effect", reason: "Wording only", revision: "3", as: "Mira Holt" });
+    await client.clearCard("alpha", "C-0002", { outcome: "needs_correction", reason: "The rate moved", estimate: "2", title: "Fix it", revision: "4", as: "Mira Holt" });
+    expect(await client.clearCardGroup("alpha", { group: "PRN-WEEKLY", reason: "No meaning changed", as: "Mira Holt" })).toEqual({ group: "PRN-WEEKLY", cleared: ["C-0001"], notes: [] });
+    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/cards/C-0001/clear", "/api/projects/alpha/cards/C-0002/clear", "/api/projects/alpha/trace/clear"]);
+    expect(stub.mock.calls.map((call) => [call[1]?.method, "signal" in (call[1] ?? {})])).toEqual(Array.from({ length: 3 }, () => ["POST", false]));
+    expect(stub.mock.calls.map((call) => JSON.parse(call[1]?.body as string) as unknown)).toEqual([
+      { outcome: "no_effect", reason: "Wording only", revision: "3", as: "Mira Holt" },
+      { outcome: "needs_correction", reason: "The rate moved", estimate: "2", title: "Fix it", revision: "4", as: "Mira Holt" },
+      { group: "PRN-WEEKLY", reason: "No meaning changed", as: "Mira Holt" },
+    ]);
+    stubFetch(() => jsonAnswer(409, { group: "PRN-WEEKLY", cleared: [], notes: ["no suspect card under `PRN-WEEKLY`: there is no mark to clear; nothing changed"] }));
+    const error = await rejection(client.clearCardGroup("alpha", { group: "PRN-WEEKLY", reason: "x", as: "Mira Holt" }));
+    expect([error.status, error.message]).toEqual([409, "no suspect card under `PRN-WEEKLY`: there is no mark to clear; nothing changed"]);
+  });
+
+  it("reads the trace, `ref` the one query encoded once, a 404's document as data, the read's signal taken (docs/features/card-trace.md)", async () => {
+    const document = { ref: "A#B", reason: "no node", notes: [], counts: { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 }, nodes: [], truncated: false, omitted: null };
+    const stub = stubFetch((url) => jsonAnswer(url.includes("ref=") ? 404 : 200, document));
+    const signal = new AbortController().signal;
+    await new HttpClient().getTrace("alpha", {}, signal);
+    expect((await new HttpClient().getTrace("alpha", { ref: "A#B" })).reason).toBe("no node");
+    expect(urlsOf(stub)).toEqual(["/api/projects/alpha/trace", "/api/projects/alpha/trace?ref=A%23B"]);
+    expect(stub.mock.calls[0]?.[1]?.signal).toBe(signal);
   });
 
   it("posts each write as JSON to its path, the body exactly as given, no signal", async () => {

@@ -3,9 +3,10 @@
 //! queue as `claim_task` does, each one call into the CLI library with a
 //! `spec card` twin, answering what the CLI answers (`read.rs`'s mapping). A
 //! tool acts as `agent`, so a flow's `by` holds against tools until it lists
-//! that name. `assign`, `cancel` and `accept` have no tool: a person accepts
-//! a card, on a terminal (ADR-0056). They write only the queue in
-//! SpecEngine's data directory: nothing under the project root, and no git.
+//! that name. `assign`, `cancel`, `accept` and `clear` have no tool: a person
+//! accepts a card and answers its mark, on a terminal or the local page
+//! (ADR-0056). They write only the queue in SpecEngine's data directory:
+//! nothing under the project root, and no git.
 
 use rmcp::handler::server::wrapper::Parameters;
 use rmcp::model::CallToolResult;
@@ -85,11 +86,12 @@ existing cards. ",
 const EDIT_DESCRIPTION: &str = concat!(
     "Changes a card's fields: the same as `spec card edit C [--title T] [--goal T] [--target \
 REF]... [--criterion C]... [--estimate E] [--due DATE] [--parent C] [--corrects C] [--evidence \
-KIND=VALUE]... [--revision R]`. content is the command's line, structuredContent its --json \
-document {id, flow, column, position, revision, allowed, notes}.
+KIND=VALUE]... [--reason T] [--revision R]`. content is the command's line, structuredContent its \
+--json document {id, flow, column, position, revision, allowed, notes}.
 
 card_id: the card. The fields as create_card takes them; a value - clears one, title excepted. \
-target and criterion replace the list. evidence appends, at most 32 on a card: url=http..., \
+target and criterion replace the list. estimate on a card holding one: reason says why, required, \
+and no other field beside it. evidence appends, at most 32 on a card: url=http..., \
 path=<path>@<hex blob>, build=... or note=..., one line, at most 1024 bytes: a reference, never a \
 binary, and nothing is fetched. revision: only if the card still stands at it, the revision a read \
 gave. ",
@@ -243,6 +245,8 @@ pub(crate) struct EditCardArgs {
     pub corrects: Option<String>,
     /// Each `KIND=VALUE`; appended.
     pub evidence: Option<Vec<String>>,
+    /// Why an estimate the card holds changes.
+    pub reason: Option<String>,
     pub revision: Option<String>,
 }
 
@@ -396,6 +400,7 @@ impl SpecEngineServer {
                     parent: args.parent,
                     corrects: args.corrects,
                     evidence: args.evidence.unwrap_or_default(),
+                    reason: args.reason,
                     revision: args.revision,
                     actor: Some(TOOL_ACTOR.to_owned()),
                     now: utc_now(),

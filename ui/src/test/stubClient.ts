@@ -10,6 +10,7 @@ import {
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
+  type TraceOptions,
   type TreeOptions,
 } from "../api/client";
 import type {
@@ -18,6 +19,9 @@ import type {
   CardAcceptBody,
   CardAssignBody,
   CardCancelBody,
+  CardClearBody,
+  CardClearGroupBody,
+  CardClearGroupWrite,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -43,6 +47,7 @@ import type {
   TaskList,
   TaskNotFound,
   TaskPackage,
+  TraceDocument,
   TreeView,
 } from "../api/types";
 import {
@@ -60,6 +65,7 @@ import {
   aRoadmapItem,
   aRoundSheet,
   aSearchResults,
+  aTrace,
   aTreeNode,
   aTreeView,
   entryOf,
@@ -204,6 +210,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     assignCard: vi.fn<(project: string, id: string, body: CardAssignBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
     cancelCard: vi.fn<(project: string, id: string, body: CardCancelBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
     acceptCard: vi.fn<(project: string, id: string, body: CardAcceptBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
+    clearCard: vi.fn<(project: string, id: string, body: CardClearBody) => Promise<CardWrite>>((_project, id) => Promise.resolve(aCardWrite(id))),
+    clearCardGroup: vi.fn<(project: string, body: CardClearGroupBody) => Promise<CardClearGroupWrite>>((_project, body) => Promise.resolve({ group: body.group, cleared: [], notes: [] })),
+    // Marks and rollups (docs/features/card-trace.md): none.
+    getTrace: vi.fn<(project: string, options?: TraceOptions, signal?: AbortSignal) => Promise<TraceDocument>>(() => Promise.resolve(aTrace([]))),
     /** No live tail; a plain function (`callsOf` never counts it) a test may replace to emit events. */
     subscribe: noLiveTail,
   } satisfies SpecEngineClient & { state: unknown };

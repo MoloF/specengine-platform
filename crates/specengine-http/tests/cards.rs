@@ -277,7 +277,7 @@ fn posts(base: &str, id: &str) -> Vec<(String, Value)> {
         ),
         (
             format!("{base}/cards/{id}/accept"),
-            json!({"as": "ben", "note": "Fine."}),
+            json!({"briefed": true, "as": "ben", "note": "Fine."}),
         ),
     ]
 }
@@ -347,10 +347,11 @@ fn ac02_each_post_is_a_200_its_document_and_one_event() {
         ),
         (
             "cards/C-0001/accept",
-            json!({"as": "ben", "note": "Read twice.", "revision": "5"}),
+            json!({"briefed": true, "as": "ben", "note": "Read twice.", "revision": "5"}),
             write("C-0001", "copy", "filed", 1, 6, none),
             "card.accepted",
-            json!({"id": "C-0001", "from": "proof", "to": "filed", "position": 1, "as": "ben"}),
+            json!({"id": "C-0001", "from": "proof", "to": "filed", "position": 1, "as": "ben",
+                "verdict": "briefed", "discrepancy": null}),
         ),
         (
             "cards",
@@ -468,11 +469,23 @@ fn every_key_of_a_body_reaches_the_card() {
     let edited = press.done(
         "cards/C-0003/edit",
         &json!({"title": "Lead", "goal": "-", "target": ["SHT-INNER"], "criterion": ["One."],
-            "estimate": "5", "due": "2026-03-02", "parent": "-", "corrects": "-",
+            "due": "2026-03-02", "parent": "-", "corrects": "-",
             "evidence": ["note=first pass", "url=https://example.invalid/proof"],
             "revision": "1", "as": "ana"}),
     );
     assert_eq!(edited["revision"], json!("2"), "{edited}");
+    // docs/features/card-trace.md "Re-estimating": beside another field, on a
+    // card holding an estimate, a 400; with its reason, alone, a 200.
+    let reply = press.post(
+        "cards/C-0003/edit",
+        &json!({"estimate": "5", "goal": "Again.", "as": "ana"}),
+    );
+    assert_eq!(reply.status, 400, "{}", reply.text());
+    let edited = press.done(
+        "cards/C-0003/edit",
+        &json!({"estimate": "5", "reason": "It grew.", "revision": "2", "as": "ana"}),
+    );
+    assert_eq!(edited["revision"], json!("3"), "{edited}");
     let card = press.show("C-0003");
     for (key, want) in [
         ("title", json!("Lead")),
@@ -876,29 +889,29 @@ fn ac04_accept_keeps_the_clis_rules_and_a_closed_card_refuses_every_write() {
     for (path, body, reason) in [
         (
             accept,
-            json!({"as": "ana"}),
+            json!({"briefed": true, "as": "ana"}),
             "C-0001: `ana` is its assignee, who never accepts a result; nothing changed".to_owned(),
         ),
         (
             accept,
-            json!({"as": "cid", "note": "Looks fine."}),
+            json!({"briefed": true, "as": "cid", "note": "Looks fine."}),
             "C-0001: its reviewer is `ben`, and `--as` says `cid`; nothing changed".to_owned(),
         ),
         (
             accept,
-            json!({"as": null}),
+            json!({"briefed": true, "as": null}),
             "C-0001: `local` can be no reviewer: a person accepts a result; nothing changed"
                 .to_owned(),
         ),
         (
             accept,
-            json!({"as": "agent"}),
+            json!({"briefed": true, "as": "agent"}),
             "C-0001: `agent` can be no reviewer: a person accepts a result; nothing changed"
                 .to_owned(),
         ),
         (
             accept,
-            json!({"as": "ben", "revision": "1"}),
+            json!({"briefed": true, "as": "ben", "revision": "1"}),
             format!(
                 "`C-0001` changed since this run read it: it is in proof since {at}; nothing \
                  changed"
@@ -906,12 +919,12 @@ fn ac04_accept_keeps_the_clis_rules_and_a_closed_card_refuses_every_write() {
         ),
         (
             "cards/C-0002/accept",
-            json!({"as": "ben"}),
+            json!({"briefed": true, "as": "ben"}),
             "C-0002 is in draft: `accept` needs proof; nothing changed".to_owned(),
         ),
         (
             "cards/C-0003/accept",
-            json!({"as": "ben"}),
+            json!({"briefed": true, "as": "ben"}),
             "C-0003 has no reviewer: `spec card assign C-0003 --reviewer N` names one; nothing \
              changed"
                 .to_owned(),
@@ -921,13 +934,19 @@ fn ac04_accept_keeps_the_clis_rules_and_a_closed_card_refuses_every_write() {
     }
     // A note over its cap, well under the door's.
     let before = press.state();
-    let reply = press.post(accept, &json!({"as": "ben", "note": "n".repeat(70_000)}));
+    let reply = press.post(
+        accept,
+        &json!({"briefed": true, "as": "ben", "note": "n".repeat(70_000)}),
+    );
     assert_eq!(reply.status, 409, "{}", reply.text());
     assert_eq!(press.state(), before, "nothing changed");
 
     // The reviewer's yes; then the closed card refuses all five, and a
     // cancelled one alike.
-    let accepted = press.done(accept, &json!({"as": "ben", "note": "Read twice."}));
+    let accepted = press.done(
+        accept,
+        &json!({"briefed": true, "as": "ben", "note": "Read twice."}),
+    );
     assert_eq!(accepted["column"], json!("filed"), "{accepted}");
     let line = closed("C-0001", "accepted");
     for (path, body, args) in [
@@ -951,7 +970,7 @@ fn ac04_accept_keeps_the_clis_rules_and_a_closed_card_refuses_every_write() {
             json!({"reason": "Late."}),
             vec!["card", "cancel", "C-0001", "--reason", "Late."],
         ),
-        (accept, json!({"as": "ben"}), Vec::new()),
+        (accept, json!({"briefed": true, "as": "ben"}), Vec::new()),
     ] {
         press.refused(path, &body, &args, &line);
     }
@@ -964,7 +983,7 @@ fn ac04_accept_keeps_the_clis_rules_and_a_closed_card_refuses_every_write() {
     );
     press.refused(
         "cards/C-0002/accept",
-        &json!({"as": "ben"}),
+        &json!({"briefed": true, "as": "ben"}),
         &[],
         &closed("C-0002", "cancelled"),
     );
@@ -1048,12 +1067,18 @@ fn a_card_that_is_not_there_is_a_404_with_id_and_reason() {
             run.code(1);
             assert_eq!(reply.text(), run.document(), "{path}/{verb}");
         }
-        let reply = press.post(&format!("{path}/accept"), &json!({"as": "ben"}));
+        let reply = press.post(
+            &format!("{path}/accept"),
+            &json!({"briefed": true, "as": "ben"}),
+        );
         assert_eq!(reply.status, 404, "{path}/accept: {}", reply.text());
     }
     assert_eq!(
         press
-            .post("cards/C-0099/accept", &json!({"as": "ben"}))
+            .post(
+                "cards/C-0099/accept",
+                &json!({"briefed": true, "as": "ben"})
+            )
             .text(),
         "{\"id\":\"C-0099\",\"reason\":\"no card C-0099\"}",
         "exactly `{{id, reason}}`"
@@ -1550,7 +1575,7 @@ fn ac05_a_full_cycle_ends_accepted_and_leaves_git_alone() {
     let seen = press.events().len();
     let reply = press.post(
         &format!("cards/{id}/accept"),
-        &json!({"note": "No name.", "revision": revision}),
+        &json!({"briefed": true, "note": "No name.", "revision": revision}),
     );
     assert!(
         reply.status == 400 || reply.status == 409,
@@ -1561,7 +1586,7 @@ fn ac05_a_full_cycle_ends_accepted_and_leaves_git_alone() {
     assert_eq!(press.show(&id)["acceptance"], json!(null));
     let accepted = step(
         "accept",
-        json!({"as": "ben", "note": "Read twice."}),
+        json!({"briefed": true, "as": "ben", "note": "Read twice."}),
         &mut revision,
     );
     assert_eq!(accepted["column"], json!("filed"), "{accepted}");
@@ -1747,7 +1772,7 @@ fn the_routes_walk_another_projects_flow_and_a_blocked_column_is_data() {
     );
     post("cards/C-0001/move", json!({"to": "review"}));
     post("cards/C-0001/assign", json!({"reviewer": "ben"}));
-    let accepted = post("cards/C-0001/accept", json!({"as": "ben"}));
+    let accepted = post("cards/C-0001/accept", json!({"briefed": true, "as": "ben"}));
     assert_eq!(accepted.json()["column"], json!("done"));
     assert_eq!(
         keep.scratch
@@ -1770,7 +1795,10 @@ fn the_routes_walk_another_projects_flow_and_a_blocked_column_is_data() {
     );
     press.done("cards/C-0001/assign", &json!({"reviewer": "ben"}));
     press.done("cards/C-0001/move", &json!({"to": "checked"}));
-    let accepted = press.done("cards/C-0001/accept", &json!({"as": "ben"}));
+    let accepted = press.done(
+        "cards/C-0001/accept",
+        &json!({"briefed": true, "as": "ben"}),
+    );
     assert_eq!(accepted["column"], json!("struck"), "{accepted}");
 }
 
@@ -1797,7 +1825,7 @@ fn the_routes_run_on_a_root_that_is_no_repository() {
     post("cards/C-0001/assign", json!({"reviewer": "ben"}));
     post("cards/C-0001/move", json!({"to": "edit", "as": "desk"}));
     post("cards/C-0001/move", json!({"to": "proof"}));
-    let accepted = post("cards/C-0001/accept", json!({"as": "ben"}));
+    let accepted = post("cards/C-0001/accept", json!({"briefed": true, "as": "ben"}));
     assert_eq!(accepted["column"], json!("filed"), "{accepted}");
     assert_eq!(common::snapshot(&root), files, "nothing under the root");
 }
@@ -1919,7 +1947,7 @@ fn a_full_name_in_any_script_acts_and_is_compared_exactly_after_trimming() {
     let accept = "cards/C-0001/accept";
     press.refused(
         accept,
-        &json!({"as": format!(" {FULL_NAME} ")}),
+        &json!({"briefed": true, "as": format!(" {FULL_NAME} ")}),
         &[],
         &format!(
             "C-0001: `{FULL_NAME}` is its assignee, who never accepts a result; nothing changed"
@@ -1927,7 +1955,7 @@ fn a_full_name_in_any_script_acts_and_is_compared_exactly_after_trimming() {
     );
     press.refused(
         accept,
-        &json!({"as": first}),
+        &json!({"briefed": true, "as": first}),
         &[],
         &format!(
             "C-0001: its reviewer is `{OTHER_NAME}`, and `--as` says `{first}`; nothing changed"
@@ -1942,7 +1970,7 @@ fn a_full_name_in_any_script_acts_and_is_compared_exactly_after_trimming() {
     ] {
         press.refused(
             accept,
-            &json!({"as": written}),
+            &json!({"briefed": true, "as": written}),
             &[],
             &format!(
                 "C-0001: `{name}` can be no reviewer: a person accepts a result; nothing changed"
@@ -1955,7 +1983,7 @@ fn a_full_name_in_any_script_acts_and_is_compared_exactly_after_trimming() {
     }
     let accepted = press.done(
         accept,
-        &json!({"as": format!(" {OTHER_NAME} "), "note": "Read twice."}),
+        &json!({"briefed": true, "as": format!(" {OTHER_NAME} "), "note": "Read twice."}),
     );
     assert_eq!(accepted["column"], json!("filed"), "{accepted}");
     let card = press.show("C-0001");

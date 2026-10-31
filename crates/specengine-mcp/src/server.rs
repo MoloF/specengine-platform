@@ -60,7 +60,9 @@ const TASKS_LINE_LIMIT: usize = 140;
 /// two `with` hints into one (24 bytes): 2 048 bytes, the limit; task spec
 /// `card-store` adds the cards line (112 bytes) and drops the sentence on
 /// error results and the tasks line's `; the three above take task_id` (113
-/// bytes): 2 047 bytes.
+/// bytes): 2 047 bytes; task spec `card-trace` adds `get_trace` to the reads
+/// (25 bytes) and cuts report_drift's `; evidence computed, never typed` (32
+/// bytes): 2 040 bytes.
 pub const INSTRUCTIONS: &str = concat!(
     "\
 SpecEngine keeps a project's spec in git. Each tool is a spec command: content its `2>&1` \
@@ -70,7 +72,8 @@ Reads:
 - get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = show; \
 search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, budget?) = \
 bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, pool?) = roadmap; \
-get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?) = flow.
+get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?) = flow; get_trace(ref?) = \
+trace.
 - Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; unmapped(path?) \
 = unmapped; check_binding(node, symbol?) = verify --node.
 Queue (writes only the queue; the owner decides on a terminal):
@@ -79,7 +82,7 @@ against its span_hash; create: new ID sections in it, or a new file (base null).
 - ask_question, report_discrepancy, report_decision = spec propose \
 question|discrepancy|decision: hits are what is decided or asked; stored only if \
 distinct_from names each; work on your working answer.
-- report_drift = spec propose drift: queues HEAD's lock drift; evidence computed, never typed.
+- report_drift = spec propose drift: queues HEAD's lock drift.
 - review_proposal = review --brief after the owner's form; only when the owner asks.
 ",
     tasks_line!(),

@@ -10,9 +10,20 @@
 //!   --reason T` → `<verb> C-0001: <flow>/<column>`; JSON `{id, flow, column,
 //!   position, revision, allowed, notes}`, a refusal too; no such card `{id,
 //!   reason}`. In `edit`, `assign` a value `-` clears.
-//! - `accept C --as N`, with a `Consent`: a person accepts, on a terminal
-//!   (`main` refuses a stdin that is no terminal before anything is read) or
-//!   the local page, and no agent tool does.
+//! - `accept C --as N (--briefed | --departs REF... --summary T --observed T
+//!   --documented T [--gap-type G])`, with a `Consent`: a person accepts, on
+//!   a terminal (`main` refuses a stdin that is no terminal before anything
+//!   is read) or the local page, and no agent tool does. Either verdict
+//!   freezes the snapshot again, a correction's also that of the card it
+//!   corrects. `--departs` makes the discrepancy in the accept's transaction,
+//!   its hits named by the accept itself, so the dedup never refuses one.
+//! - `clear C --no-effect|--needs-correction --reason T --as N` and `clear
+//!   --group REF --no-effect --reason T --as N`, with a `Consent`: a person
+//!   answers a suspect mark, and no agent tool does. A mark is computed per
+//!   read (core's `trace`); only what it is computed from is written.
+//! - `edit --estimate E --reason T` on a card holding an estimate, `-` for
+//!   `E` too: `card.reestimated`, `new` null when cleared, no other field
+//!   beside it, so the record keeps `old`.
 //!
 //! `--as N` is self-declared, recorded and compared with a move's `by`, never
 //! verified; absent: `local`. A tool acts as `agent`. The daemon's page (task
@@ -24,9 +35,13 @@
 //! Exits as the queue's: 0 done; 1 refused (no such card, a move outside its
 //! flow, a closed card, a cap, a declined prompt, a stale `--revision`); 2
 //! cannot run (`C` in `[ids]`, a look-alike ID, a bad `[card]`, no terminal,
-//! a corrupt row, nothing asked). Nothing here opens git, so any root works;
-//! nothing reads a proposal, a lock or a task, and nothing is written under
-//! the root: the queue is in the data directory.
+//! a corrupt row, nothing asked). Nothing here opens git, so any root works,
+//! but for `--departs`, which binds its discrepancy to a place as `propose
+//! update` does and reads git to do it: reads only, exit 2 outside a
+//! worktree. Nothing else reads a proposal, a lock or a task, and nothing is
+//! written under the root: the queue is in the data directory.
+
+use std::collections::BTreeSet;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
@@ -37,24 +52,41 @@ use specengine_core::card::{
     estimate_problem, parse_card_id, parse_evidence, reviewer_problem, stale_refusal,
 };
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
+use specengine_core::check::SpecGraph;
+use specengine_core::intake::{AuthorInput, GapType, discrepancy_problem};
+use specengine_core::proposal::{Author, prefix_clash};
 use specengine_core::task::{
     CRITERIA_MAX, CRITERION_MAX, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX, over_bytes, over_items,
 };
-use specengine_model::{Card, CardAcceptance, CardCancellation, CardEvidence};
-use specengine_store::{CardChange, CardEdit, Event, NewCard, QueueError, SqliteQueue};
+use specengine_core::trace::{
+    Departure, TargetNorms, clear_refusal, clearer_problem, correction_refusal, correction_title,
+    departure_input, freeze, suspect_on,
+};
+use specengine_model::{Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen};
+use specengine_store::{
+    CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, Event, IntakeResult,
+    NewCard, NewIntake, Place, QueueError, SqliteQueue, WorktreeGit,
+};
 
 use crate::apply::Consent;
 use crate::cap::{View, lines_within};
-use crate::corpus::indexed;
-use crate::location::prepared_data_dir;
+use crate::corpus::{indexed_in, locate};
+use crate::intake::{IntakeTarget, departing_hits, departure_intake, prefixed};
+use crate::location::{open_index, prepared_data_dir};
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::proposals::{checked_now, escaped_error, queue_cannot, require_root_config};
+use crate::propose::resolved_node;
 use crate::search::notes;
+use crate::show::classify;
 use crate::task::resolved_list;
-use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
+use crate::trace::{fresh_norms, held_documents, norms_read, target_norms, target_places};
+use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, process_git};
 
 /// How a line prints an absent field.
 const ABSENT: &str = "-";
+
+/// Why a group's `@rev` is ignored.
+const GROUP_REV_IGNORED: &str = "`spec card clear --group` reads the current files";
 
 /// Who a tool acts as (MCP's card tools).
 pub const TOOL_ACTOR: &str = AGENT_ACTOR;
@@ -129,6 +161,8 @@ pub struct CardEditRequest {
     pub corrects: Option<String>,
     /// Each `KIND=VALUE`.
     pub evidence: Vec<String>,
+    /// `--reason T`: why an estimate the card holds changes.
+    pub reason: Option<String>,
     pub revision: Option<String>,
     pub actor: Option<String>,
     pub now: String,
@@ -155,7 +189,8 @@ pub struct CardCancelRequest {
     pub now: String,
 }
 
-/// `spec card accept C --as N [--note T]`.
+/// `spec card accept C --as N (--briefed | --departs REF... --summary T
+/// --observed T --documented T [--gap-type G]) [--note T]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CardAcceptRequest {
     pub id: String,
@@ -163,6 +198,54 @@ pub struct CardAcceptRequest {
     pub actor: String,
     pub note: Option<String>,
     pub revision: Option<String>,
+    pub now: String,
+    /// `--briefed`: the result is what the brief asked.
+    pub briefed: bool,
+    /// `--departs REF...`: direct targets the result departs from.
+    pub departs: Vec<String>,
+    pub summary: Option<String>,
+    pub observed: Option<String>,
+    pub documented: Option<String>,
+    /// `--gap-type G`; `None`: `contradicts`.
+    pub gap_type: Option<String>,
+}
+
+/// What a clear says of a mark.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CardClearOutcome {
+    /// The change does not touch the work.
+    #[default]
+    NoEffect,
+    /// The accepted work needs a correction card.
+    NeedsCorrection,
+}
+
+/// `spec card clear C (--no-effect | --needs-correction --estimate E [--title
+/// T]) --reason T --as N`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardClearRequest {
+    pub id: String,
+    pub outcome: CardClearOutcome,
+    pub reason: String,
+    /// The correction's estimate.
+    pub estimate: Option<String>,
+    /// The correction's title; `None`: `Correct <title>`.
+    pub title: Option<String>,
+    pub revision: Option<String>,
+    /// `--as N`, required: a person, never `local` or `agent`.
+    pub actor: Option<String>,
+    pub now: String,
+}
+
+/// `spec card clear --group REF --no-effect --reason T --as N`.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CardClearGroupRequest {
+    /// `REF` as given.
+    pub group: String,
+    pub reason: String,
+    /// `--as N`, required: a person, never `local` or `agent`.
+    pub actor: Option<String>,
     pub now: String,
 }
 
@@ -297,6 +380,8 @@ pub struct CardEditBody {
     pub corrects: Option<String>,
     /// Each `KIND=VALUE`; appended.
     pub evidence: Option<Vec<String>>,
+    /// Why an estimate the card holds changes.
+    pub reason: Option<String>,
     pub revision: Option<String>,
     /// The acting name; `null`: `local`.
     #[serde(rename = "as")]
@@ -310,7 +395,7 @@ impl CardEditBody {
         let body: Self = decoded(
             bytes,
             "\"title\",\"goal\",\"target\",\"criterion\",\"estimate\",\"due\",\"parent\",\
-             \"corrects\",\"evidence\",\"revision\",\"as\"",
+             \"corrects\",\"evidence\",\"reason\",\"revision\",\"as\"",
         )?;
         persons_named(body.actor.as_deref(), &[])?;
         Ok(body)
@@ -329,6 +414,7 @@ impl CardEditBody {
             parent: self.parent,
             corrects: self.corrects,
             evidence: self.evidence.unwrap_or_default(),
+            reason: self.reason,
             revision: self.revision,
             actor: self.actor,
             now,
@@ -419,13 +505,25 @@ pub struct CardAcceptBody {
     pub actor: Option<String>,
     pub note: Option<String>,
     pub revision: Option<String>,
+    /// As briefed; else `departs` and its three texts.
+    pub briefed: Option<bool>,
+    /// The direct targets the result departs from.
+    pub departs: Option<Vec<String>>,
+    pub summary: Option<String>,
+    pub observed: Option<String>,
+    pub documented: Option<String>,
+    pub gap_type: Option<String>,
 }
 
 impl CardAcceptBody {
     /// `bytes` decoded; else exit 2 naming the defect, nothing read or
     /// changed.
     pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
-        let body: Self = decoded(bytes, "\"as\",\"note\",\"revision\"")?;
+        let body: Self = decoded(
+            bytes,
+            "\"as\",\"note\",\"revision\",\"briefed\",\"departs\",\"summary\",\"observed\",\
+             \"documented\",\"gap_type\"",
+        )?;
         persons_named(body.actor.as_deref(), &[])?;
         Ok(body)
     }
@@ -437,6 +535,86 @@ impl CardAcceptBody {
             actor: self.actor.unwrap_or_else(|| LOCAL_ACTOR.to_owned()),
             note: self.note,
             revision: self.revision,
+            now,
+            briefed: self.briefed.unwrap_or(false),
+            departs: self.departs.unwrap_or_default(),
+            summary: self.summary,
+            observed: self.observed,
+            documented: self.documented,
+            gap_type: self.gap_type,
+        }
+    }
+}
+
+/// The body of `POST …/cards/<id>/clear`. Any other key, or no `outcome` or
+/// `reason`, is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardClearBody {
+    pub outcome: CardClearOutcome,
+    pub reason: String,
+    pub estimate: Option<String>,
+    pub title: Option<String>,
+    pub revision: Option<String>,
+    /// The acting name; `null`: `local`, who can clear nothing.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardClearBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(
+            bytes,
+            "\"outcome\",\"reason\",\"estimate\",\"title\",\"revision\",\"as\"",
+        )?;
+        persons_named(body.actor.as_deref(), &[])?;
+        Ok(body)
+    }
+
+    /// The request for `id` at `now`.
+    pub fn request(self, id: String, now: String) -> CardClearRequest {
+        CardClearRequest {
+            id,
+            outcome: self.outcome,
+            reason: self.reason,
+            estimate: self.estimate,
+            title: self.title,
+            revision: self.revision,
+            actor: self.actor,
+            now,
+        }
+    }
+}
+
+/// The body of `POST …/trace/clear`. Any other key, or no `group` or
+/// `reason`, is refused.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardClearGroupBody {
+    pub group: String,
+    pub reason: String,
+    /// The acting name; `null`: `local`, who can clear nothing.
+    #[serde(rename = "as")]
+    pub actor: Option<String>,
+}
+
+impl CardClearGroupBody {
+    /// `bytes` decoded; else exit 2 naming the defect, nothing read or
+    /// changed.
+    pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
+        let body: Self = decoded(bytes, "\"group\",\"reason\",\"as\"")?;
+        persons_named(body.actor.as_deref(), &[])?;
+        Ok(body)
+    }
+
+    /// The request at `now`.
+    pub fn request(self, now: String) -> CardClearGroupRequest {
+        CardClearGroupRequest {
+            group: self.group,
+            reason: self.reason,
+            actor: self.actor,
             now,
         }
     }
@@ -451,6 +629,7 @@ pub enum CardAction {
     Assign,
     Cancel,
     Accept,
+    Clear,
 }
 
 impl CardAction {
@@ -463,6 +642,7 @@ impl CardAction {
             Self::Assign => "assigned",
             Self::Cancel => "cancelled",
             Self::Accept => "accepted",
+            Self::Clear => "cleared",
         }
     }
 }
@@ -614,6 +794,65 @@ impl Serialize for CardOutcome {
     }
 }
 
+/// What `spec card clear --group` answered.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CardGroupOutcome {
+    /// `REF` as given.
+    pub group: String,
+    /// The cards cleared, by number.
+    pub cards: Vec<Card>,
+    /// What a reader should know; a refusal's reason last.
+    pub notes: Vec<String>,
+    /// Why the command was refused (exit 1).
+    pub refusal: Option<String>,
+    pub cause: Option<CardCause>,
+    pub messages: Vec<Message>,
+}
+
+impl CardGroupOutcome {
+    /// 0 done; 1 unknown or refused.
+    pub fn exit(&self) -> Exit {
+        match self.cause {
+            None => Exit::Answered,
+            Some(CardCause::Usage) => Exit::CannotRun,
+            Some(CardCause::Unknown | CardCause::Refused) => Exit::NotFound,
+        }
+    }
+
+    fn refused(group: &str, cause: CardCause, reason: &str, messages: Vec<Message>) -> Self {
+        let reason = one_line(reason);
+        let mut listed = notes(&messages);
+        listed.push(reason.clone());
+        Self {
+            group: group.to_owned(),
+            cards: Vec::new(),
+            notes: listed,
+            refusal: Some(reason),
+            cause: Some(cause),
+            messages,
+        }
+    }
+}
+
+#[derive(Serialize)]
+struct CardGroupJson<'a> {
+    group: &'a str,
+    cleared: Vec<&'a str>,
+    notes: &'a [String],
+}
+
+/// `{group, cleared, notes}`, a refusal's reason the last of `notes`.
+impl Serialize for CardGroupOutcome {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        CardGroupJson {
+            group: &self.group,
+            cleared: self.cards.iter().map(|card| card.id.as_str()).collect(),
+            notes: &self.notes,
+        }
+        .serialize(serializer)
+    }
+}
+
 /// What `spec card show` answered: the card, or why there is none.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CardShowOutcome {
@@ -660,7 +899,7 @@ struct CardJson<'a> {
     goal: Option<&'a str>,
     discipline: Option<&'a str>,
     targets: &'a [String],
-    snapshot: Option<&'a str>,
+    snapshot: Option<&'a [CardFrozen]>,
     criteria: &'a [String],
     assignee: Option<&'a str>,
     reviewer: Option<&'a str>,
@@ -963,6 +1202,15 @@ fn field_problem(
         .or_else(|| due.and_then(due_problem))
 }
 
+/// Why `reason` is no reason a card records: blank, or over its cap.
+fn reason_problem(reason: &str, why: &str) -> Option<String> {
+    reason
+        .trim()
+        .is_empty()
+        .then(|| format!("reason: blank; say {why}"))
+        .or_else(|| over_bytes("reason", reason, NOTE_MAX))
+}
+
 /// Why `name` cannot be a person a card names.
 fn person_problem(key: &str, name: &str) -> Option<String> {
     card_person_problem(name).map(|problem| format!("{key}: {problem}"))
@@ -1113,28 +1361,31 @@ fn run_new(
     };
     let (flow, column) = (flow.name.clone(), flow.first_column().to_owned());
     let mut messages = Vec::new();
-    let targets = match resolved_targets(env, &context, &request.targets, &mut messages)? {
-        Ok(targets) => targets,
+    let (targets, norms) = match resolved_targets(env, &context, &request.targets, &mut messages)? {
+        Ok(resolved) => resolved,
         Err(reason) => return refuse(reason, messages),
     };
-    let made = context.queue.create_card(
-        &NewCard {
-            flow,
-            column,
-            title: request.title.clone(),
-            goal: request.goal.clone(),
-            discipline: request.discipline.clone(),
-            targets,
-            criteria: request.criteria.clone(),
-            assignee: assignee.map(str::to_owned),
-            estimate: request.estimate.clone(),
-            due: request.due.clone(),
-            parent,
-            corrects,
-            by: actor,
-        },
-        now,
-    );
+    let snapshot = freeze(&targets, &norms);
+    let new_card = NewCard {
+        flow,
+        column,
+        title: request.title.clone(),
+        goal: request.goal.clone(),
+        discipline: request.discipline.clone(),
+        targets,
+        criteria: request.criteria.clone(),
+        assignee: assignee.map(str::to_owned),
+        estimate: request.estimate.clone(),
+        due: request.due.clone(),
+        parent,
+        corrects,
+        by: actor,
+    };
+    let made = if new_card.targets.is_empty() {
+        context.queue.create_card(&new_card, now)
+    } else {
+        context.queue.create_card_frozen(&new_card, &snapshot, now)
+    };
     match made {
         Ok(card) => Ok(CardOutcome::done(
             CardAction::New,
@@ -1147,19 +1398,27 @@ fn run_new(
     }
 }
 
-/// The nodes `--target` names, canonical, each once; a manual card reads no
-/// index.
+/// The nodes `--target` names, canonical, each once, and what they read now;
+/// a manual card reads no index.
 fn resolved_targets(
     env: &Env,
     context: &CardContext,
     written: &[String],
     messages: &mut Vec<Message>,
-) -> Result<Result<Vec<String>, String>, CliError> {
+) -> Result<Result<(Vec<String>, TargetNorms), String>, CliError> {
     if written.is_empty() {
-        return Ok(Ok(Vec::new()));
+        return Ok(Ok((Vec::new(), TargetNorms::new())));
     }
-    let input = indexed(env, &context.project, messages, false)?;
-    resolved_list(&context.project, &input, written, "target")
+    let project = &context.project;
+    let mut open = open_index(env, project)?;
+    let input = indexed_in(&mut open.index, project, messages, false)?;
+    let targets = match resolved_list(project, &input, written, "target")? {
+        Ok(targets) => targets,
+        Err(reason) => return Ok(Err(reason)),
+    };
+    let graph = SpecGraph::new(&input, &project.config.scheme, &project.config.paths);
+    let norms = norms_read(&open.index, &graph, &targets)?;
+    Ok(Ok((targets, norms)))
 }
 
 // -------------------------------------------------------------- reads
@@ -1512,6 +1771,14 @@ fn run_edit(
         || request.parent.is_some()
         || request.corrects.is_some()
         || !request.evidence.is_empty();
+    let beside_estimate = request.title.is_some()
+        || request.goal.is_some()
+        || !request.targets.is_empty()
+        || !request.criteria.is_empty()
+        || request.due.is_some()
+        || request.parent.is_some()
+        || request.corrects.is_some()
+        || !request.evidence.is_empty();
     if !asked {
         return Ok(CardOutcome::usage(
             ACTION,
@@ -1540,6 +1807,37 @@ fn run_edit(
     };
     if let Some(reason) = closed_refusal(&card) {
         return refuse(&reason, &context, messages);
+    }
+    // A change of an estimate the card holds, a clear too, stands alone and
+    // says why.
+    let reestimate = request.estimate.is_some() && card.estimate.is_some();
+    if reestimate && beside_estimate {
+        return Ok(CardOutcome::usage(
+            ACTION,
+            &format!(
+                "`spec card edit`: {} holds an estimate: --estimate takes --reason and no other \
+                 field",
+                card.id
+            ),
+        ));
+    }
+    if !reestimate && request.reason.is_some() {
+        return Ok(CardOutcome::usage(
+            ACTION,
+            "`spec card edit`: --reason goes with --estimate on a card holding an estimate",
+        ));
+    }
+    if reestimate {
+        let problem = match &request.reason {
+            Some(reason) => reason_problem(reason, "why the estimate changes"),
+            None => Some(format!(
+                "{} holds an estimate: --reason says why it changes; nothing changed",
+                card.id
+            )),
+        };
+        if let Some(problem) = problem {
+            return refuse(&problem, &context, messages);
+        }
     }
     let (parent, corrects) = match (parent.transpose(), corrects.transpose()) {
         (Ok(parent), Ok(corrects)) => (parent, corrects),
@@ -1577,13 +1875,13 @@ fn run_edit(
             Err(reason) => return refuse(&reason, &context, messages),
         }
     }
-    let targets = if clears(&request.targets) {
-        Some(Vec::new())
+    let (targets, norms) = if clears(&request.targets) {
+        (Some(Vec::new()), Some(TargetNorms::new()))
     } else if request.targets.is_empty() {
-        None
+        (None, None)
     } else {
         match resolved_targets(env, &context, &request.targets, &mut messages)? {
-            Ok(targets) => Some(targets),
+            Ok((targets, norms)) => (Some(targets), Some(norms)),
             Err(reason) => return refuse(&reason, &context, messages),
         }
     };
@@ -1597,8 +1895,10 @@ fn run_edit(
         parent,
         corrects,
         evidence,
+        reason: request.reason.clone(),
+        norms,
     };
-    let change = CardChange::Edit(edit);
+    let change = CardChange::Edit(Box::new(edit));
     let mut answer = changed(&mut context, ACTION, &card, seen, &change, &actor, now)?;
     answer.notes.splice(0..0, notes(&messages));
     answer.messages.splice(0..0, messages);
@@ -1727,9 +2027,11 @@ fn run_cancel(
     changed(&mut context, ACTION, &card, seen, &change, &actor, now)
 }
 
-/// `spec card accept C --as N`: the card in `accept.from`, `N` its reviewer
-/// and not its assignee, after the person's consent; to `accept.to`, which
-/// nothing else reaches.
+/// `spec card accept C --as N` with its verdict: the card in `accept.from`,
+/// `N` its reviewer and not its assignee, after the person's consent; to
+/// `accept.to`, which nothing else reaches. Its snapshot is frozen anew, a
+/// correction's accept also that of the card it corrects; `--departs` makes
+/// the discrepancy in the same transaction, refused by no hit.
 pub fn card_accept(
     env: &Env,
     globals: &Globals,
@@ -1737,6 +2039,137 @@ pub fn card_accept(
     consent: Consent<'_>,
 ) -> Result<CardOutcome, CliError> {
     run_accept(env, globals, request, consent).map_err(escaped_error)
+}
+
+/// The verdict as asked: one of the two, a departure with its three texts
+/// and nothing of one beside `--briefed`; else the usage line.
+fn verdict_usage(request: &CardAcceptRequest) -> Option<&'static str> {
+    let departing = !request.departs.is_empty();
+    let texts = [&request.summary, &request.observed, &request.documented];
+    let any_text = texts.iter().any(|text| text.is_some()) || request.gap_type.is_some();
+    if request.briefed && (departing || any_text) {
+        return Some("`spec card accept`: --briefed takes no --departs, nor its texts");
+    }
+    if !request.briefed && !departing {
+        return Some("`spec card accept` asks one of --briefed and --departs REF...");
+    }
+    (departing && !texts.iter().all(|text| text.is_some()))
+        .then_some("`spec card accept`: --departs takes --summary, --observed and --documented")
+}
+
+/// `--gap-type G`, off its four words a usage line.
+fn gap_type_of(request: &CardAcceptRequest) -> Result<Option<GapType>, String> {
+    let Some(written) = request.gap_type.as_deref() else {
+        return Ok(None);
+    };
+    GapType::parse(written).map(Some).ok_or_else(|| {
+        let words: Vec<&str> = GapType::ALL.iter().map(|gap| gap.as_str()).collect();
+        format!("--gap-type: `{written}` is none of {}", words.join(", "))
+    })
+}
+
+/// Where a departure is raised and what it reads of the root: the item as
+/// the queue stores it, its corpus hits named as `distinct_from` takes them,
+/// and what the card's targets read now. `Err` the refusal (exit 1); git is
+/// read here alone, reads only, exit 2 outside a worktree.
+struct Departing {
+    intake: NewIntake,
+    corpus_hits: Vec<String>,
+    departs: Vec<String>,
+    norms: TargetNorms,
+    messages: Vec<Message>,
+}
+
+fn departing(
+    env: &Env,
+    context: &CardContext,
+    card: &Card,
+    request: &CardAcceptRequest,
+    gap_type: Option<GapType>,
+    targets: &BTreeSet<&String>,
+) -> Result<Result<Departing, (String, Vec<Message>)>, CliError> {
+    let project = &context.project;
+    let mut messages = Vec::new();
+    let text = |value: &Option<String>| value.clone().unwrap_or_default();
+    let (summary, observed, documented) = (
+        text(&request.summary),
+        text(&request.observed),
+        text(&request.documented),
+    );
+    let input = departure_input(&Departure {
+        card: &card.id,
+        node_ids: &request.departs,
+        summary: &summary,
+        observed: &observed,
+        documented: &documented,
+        gap_type,
+    });
+    let author = Author::human();
+    let anonymous = AuthorInput {
+        role: None,
+        model: None,
+        run: None,
+    };
+    if let Some(problem) = discrepancy_problem(&input, anonymous) {
+        return Ok(Err((problem.to_string(), messages)));
+    }
+    let place = departure_place(env, project)?;
+    let mut open = open_index(env, project)?;
+    let read = indexed_in(&mut open.index, project, &mut messages, false)?;
+    let mut nodes: Vec<IntakeTarget> = Vec::with_capacity(input.node_ids.len());
+    for (index, written) in input.node_ids.iter().enumerate() {
+        let field = format!("departs[{index}]");
+        let (id, path) = match resolved_node(project, &read, written)
+            .map_err(|error| prefixed(error, &field))?
+        {
+            Ok(found) => found,
+            Err(reason) => return Ok(Err((format!("{field}: {reason}"), messages))),
+        };
+        if !card.targets.contains(&id) {
+            return Ok(Err((
+                format!(
+                    "{field}: `{id}` is no direct target of {}; nothing changed",
+                    card.id
+                ),
+                messages,
+            )));
+        }
+        if nodes.iter().any(|node| node.id == id) {
+            return Ok(Err((
+                format!("{field}: `{id}` is named twice; name each node once"),
+                messages,
+            )));
+        }
+        nodes.push(IntakeTarget { id, path });
+    }
+    let graph = SpecGraph::new(&read, &project.config.scheme, &project.config.paths);
+    let corpus_hits = departing_hits(&graph, &nodes);
+    let norms = norms_read(&open.index, &graph, targets.iter().copied())?;
+    let departs: Vec<String> = nodes.iter().map(|node| node.id.clone()).collect();
+    let intake = departure_intake(&input, &nodes, place, author);
+    Ok(Ok(Departing {
+        intake,
+        corpus_hits,
+        departs,
+        norms,
+        messages,
+    }))
+}
+
+/// The place a departure binds, `propose update`'s step 5: `[ids]` taking
+/// `PR`, no worktree, a detached or unborn `HEAD` exit 2. Git is only read.
+fn departure_place(env: &Env, project: &ProjectRoot) -> Result<Place, CliError> {
+    if let Some(clash) = prefix_clash(&project.config.scheme) {
+        return Err(CliError::spec(format!("{}: {clash}", project.config_label)));
+    }
+    let git = WorktreeGit::new(&project.root, &process_git(env))
+        .map_err(|error| CliError::spec(format!("cannot run git: {error}")))?;
+    git.place(&project.root).map_err(|error| {
+        CliError::spec(format!(
+            "the project root {} cannot be bound to a discrepancy: {error}; nothing changed",
+            project.root.display()
+        ))
+    })
 }
 
 fn run_accept(
@@ -1747,6 +2180,13 @@ fn run_accept(
 ) -> Result<CardOutcome, CliError> {
     const ACTION: CardAction = CardAction::Accept;
     let now = checked_now(&request.now)?;
+    if let Some(line) = verdict_usage(request) {
+        return Ok(CardOutcome::usage(ACTION, line));
+    }
+    let gap_type = match gap_type_of(request) {
+        Ok(gap_type) => gap_type,
+        Err(line) => return Ok(CardOutcome::usage(ACTION, &line)),
+    };
     let actor = actor_of(Some(&request.actor))?;
     let seen = revision_of(request.revision.as_deref())?;
     let id = written_card(&request.id)?;
@@ -1755,13 +2195,13 @@ fn run_accept(
         Ok(card) => card,
         Err(refused) => return Ok(*refused),
     };
-    let refuse = |reason: &str, context: &CardContext| {
+    let refuse = |reason: &str, context: &CardContext, messages: Vec<Message>| {
         Ok(CardOutcome::refused(
             ACTION,
             Some(&card.id),
             Some((&card, &context.config)),
             reason,
-            Vec::new(),
+            messages,
         ))
     };
     let config = context.config.clone();
@@ -1778,8 +2218,35 @@ fn run_accept(
                 .and_then(|note| over_bytes("note", note, NOTE_MAX))
         });
     if let Some(problem) = problem {
-        return refuse(&problem, &context);
+        return refuse(&problem, &context, Vec::new());
     }
+    // The card it corrects is frozen again too, so its targets are read.
+    let original = card
+        .corrects
+        .as_deref()
+        .map(|original| context.queue.get_card(original))
+        .transpose()
+        .ok()
+        .flatten()
+        .flatten();
+    let targets: BTreeSet<&String> = card
+        .targets
+        .iter()
+        .chain(original.iter().flat_map(|original| &original.targets))
+        .collect();
+    let mut messages = Vec::new();
+    let departure = if request.departs.is_empty() {
+        None
+    } else {
+        match departing(env, &context, &card, request, gap_type, &targets)? {
+            Ok(departure) => Some(departure),
+            Err((reason, messages)) => return refuse(&reason, &context, messages),
+        }
+    };
+    let norms = match &departure {
+        Some(departure) => departure.norms.clone(),
+        None => fresh_norms(env, &context.project, &targets, &mut messages)?,
+    };
     let question = format!("accept {} ({}) as {actor}? [y/N]", card.id, card.title);
     if !consent(&escape_controls(&one_line(&question))) {
         return refuse(
@@ -1788,21 +2255,409 @@ fn run_accept(
                 card.id
             ),
             &context,
+            messages,
         );
     }
-    let change = CardChange::Accept {
+    let accept = CardAccept {
         flow,
-        note: request.note.clone(),
+        note: request.note.as_deref(),
+        norms: &norms,
     };
-    changed(
-        &mut context,
+    let seen = Some(card.revision);
+    let accepted = match &departure {
+        None => context
+            .queue
+            .accept_card(&card.id, seen, &accept, &actor, now),
+        Some(departure) => context.queue.accept_departing(
+            &card.id,
+            seen,
+            &accept,
+            &CardDeparture {
+                intake: &departure.intake,
+                corpus_hits: &departure.corpus_hits,
+                departs: &departure.departs,
+            },
+            &actor,
+            now,
+        ),
+    };
+    let accepted = match accepted {
+        Ok(accepted) => accepted,
+        Err(error) => return store_refusal(error, ACTION, &card, &context),
+    };
+    if let Some(departure) = &departure {
+        messages.extend(departure.messages.iter().cloned());
+        messages.extend(departed_notes(
+            &accepted.card.id,
+            accepted.intake.as_ref(),
+            &departure.corpus_hits,
+        ));
+    }
+    if let Some(original) = &accepted.corrected {
+        messages.push(Message::Note(format!(
+            "{original}: frozen again by its correction {}",
+            accepted.card.id
+        )));
+    }
+    Ok(CardOutcome::done(
         ACTION,
-        &card,
-        Some(card.revision),
-        &change,
-        &actor,
-        now,
-    )
+        accepted.card,
+        &context.config,
+        messages,
+    ))
+}
+
+/// What a departure says after its commit: the discrepancy, then every hit
+/// the item names itself, none hidden, whatever `distinct_from` could hold.
+fn departed_notes(
+    card: &str,
+    result: Option<&IntakeResult>,
+    corpus_hits: &[String],
+) -> Vec<Message> {
+    let Some(result) = result else {
+        return Vec::new();
+    };
+    let made = result.created.as_ref().map_or("-", |item| item.id.as_str());
+    let mut lines = vec![format!("{card} departs: its discrepancy is {made}")];
+    let hits: Vec<&str> = corpus_hits
+        .iter()
+        .map(String::as_str)
+        .chain(result.hits.iter().map(|hit| hit.id.as_str()))
+        .collect();
+    if !hits.is_empty() {
+        lines.push(one_line(&format!(
+            "{made} is distinct from {} hit(s), named by this accept: {}",
+            hits.len(),
+            hits.join(", ")
+        )));
+    }
+    lines.into_iter().map(Message::Note).collect()
+}
+
+/// Why `actor` cannot clear with `reason`: a person's act, under a name and
+/// for a reason.
+fn clear_problem(actor: &str, reason: &str) -> Option<String> {
+    reason_problem(reason, "why the mark clears")
+        .or_else(|| clearer_problem(actor).map(|problem| format!("--as: {problem}")))
+}
+
+/// `spec card clear C`: a person answers a suspect card, after their consent:
+/// no effect freezes each suspect entry again, a needed correction makes a
+/// new card and leaves the original's row. Exit 1 on a card not suspect.
+pub fn card_clear(
+    env: &Env,
+    globals: &Globals,
+    request: &CardClearRequest,
+    consent: Consent<'_>,
+) -> Result<CardOutcome, CliError> {
+    run_clear(env, globals, request, consent).map_err(escaped_error)
+}
+
+fn clear_usage(request: &CardClearRequest) -> Option<&'static str> {
+    match request.outcome {
+        CardClearOutcome::NeedsCorrection if request.estimate.is_none() => {
+            Some("`spec card clear`: --needs-correction takes --estimate E")
+        }
+        CardClearOutcome::NoEffect if request.estimate.is_some() || request.title.is_some() => {
+            Some("`spec card clear`: --no-effect takes no --estimate and no --title")
+        }
+        _ => None,
+    }
+}
+
+/// The new card a correction is: the original's targets, flow and discipline,
+/// first in that flow; `Err` the refusal.
+fn correction_card(
+    config: &CardConfig,
+    card: &Card,
+    request: &CardClearRequest,
+    actor: &str,
+) -> Result<NewCard, String> {
+    let Some(flow) = config.flow(&card.flow) else {
+        return Err(format!(
+            "{} is in the flow `{}`, which `[card]` no longer holds: no correction stands in \
+             it; nothing changed",
+            card.id, card.flow
+        ));
+    };
+    let title = request
+        .title
+        .clone()
+        .unwrap_or_else(|| correction_title(&card.title));
+    if let Some(problem) = field_problem(
+        Some(&title),
+        None,
+        card.targets.len(),
+        &[],
+        request.estimate.as_deref(),
+        None,
+    ) {
+        return Err(problem);
+    }
+    Ok(NewCard {
+        flow: flow.name.clone(),
+        column: flow.first_column().to_owned(),
+        title,
+        goal: None,
+        discipline: card.discipline.clone(),
+        targets: card.targets.clone(),
+        criteria: Vec::new(),
+        assignee: None,
+        estimate: request.estimate.clone(),
+        due: None,
+        parent: None,
+        corrects: Some(card.id.clone()),
+        by: actor.to_owned(),
+    })
+}
+
+fn run_clear(
+    env: &Env,
+    globals: &Globals,
+    request: &CardClearRequest,
+    consent: Consent<'_>,
+) -> Result<CardOutcome, CliError> {
+    const ACTION: CardAction = CardAction::Clear;
+    let now = checked_now(&request.now)?;
+    if let Some(line) = clear_usage(request) {
+        return Ok(CardOutcome::usage(ACTION, line));
+    }
+    let actor = actor_of(request.actor.as_deref())?;
+    let seen = revision_of(request.revision.as_deref())?;
+    let id = written_card(&request.id)?;
+    let mut context = open_cards(env, globals)?;
+    let card = match named_card(&context, &request.id, id, ACTION)? {
+        Ok(card) => card,
+        Err(refused) => return Ok(*refused),
+    };
+    let refuse = |reason: &str, context: &CardContext, messages: Vec<Message>| {
+        Ok(CardOutcome::refused(
+            ACTION,
+            Some(&card.id),
+            Some((&card, &context.config)),
+            reason,
+            messages,
+        ))
+    };
+    let mut messages = Vec::new();
+    if let Some(problem) = clear_problem(&actor, &request.reason) {
+        return refuse(&problem, &context, messages);
+    }
+    let targets: BTreeSet<&String> = card.targets.iter().collect();
+    let norms = fresh_norms(env, &context.project, &targets, &mut messages)?;
+    let held = context
+        .queue
+        .live_correction(&card.id)
+        .map_err(queue_cannot)?;
+    let suspect = !suspect_on(&card, &norms).is_empty();
+    let correcting = request.outcome == CardClearOutcome::NeedsCorrection;
+    let problem = clear_refusal(&card, suspect, held.as_deref())
+        .or_else(|| {
+            seen.filter(|seen| *seen != card.revision)
+                .map(|_| stale_refusal(&card))
+        })
+        .or_else(|| correcting.then(|| correction_refusal(&card)).flatten());
+    if let Some(problem) = problem {
+        return refuse(&problem, &context, messages);
+    }
+    let correction = if correcting {
+        match correction_card(&context.config, &card, request, &actor) {
+            Ok(correction) => Some(correction),
+            Err(reason) => return refuse(&reason, &context, messages),
+        }
+    } else {
+        None
+    };
+    let (clearing, words) = match &correction {
+        Some(correction) => (
+            CardClearing::NeedsCorrection(correction),
+            "needs correction",
+        ),
+        None => (CardClearing::NoEffect, "no effect"),
+    };
+    let question = format!(
+        "clear {} ({}) as {actor}: {words}? [y/N]",
+        card.id, card.title
+    );
+    if !consent(&escape_controls(&one_line(&question))) {
+        return refuse(
+            &format!(
+                "`{}` not cleared: the answer was not `y`; nothing changed",
+                card.id
+            ),
+            &context,
+            messages,
+        );
+    }
+    let clear = CardClear {
+        reason: &request.reason,
+        norms: &norms,
+        actor: &actor,
+    };
+    let done = context
+        .queue
+        .clear_card(&card.id, Some(card.revision), &clearing, &clear, now);
+    let done = match done {
+        Ok(done) => done,
+        Err(error) => return store_refusal(error, ACTION, &card, &context),
+    };
+    if let Some(made) = &done.correction {
+        messages.push(Message::Note(format!(
+            "{} corrects {}: {}/{}",
+            made.id, card.id, made.flow, made.column
+        )));
+    }
+    Ok(CardOutcome::done(
+        ACTION,
+        done.card,
+        &context.config,
+        messages,
+    ))
+}
+
+/// `spec card clear --group REF`: every card suspect on a target in `within`
+/// of `REF` or of a document under it by `parent:`, no effect only, one
+/// transaction, one event each, after one consent. Only those entries are
+/// frozen again: a mark outside the group stays. A card whose mark a live
+/// correction holds is not suspect here. Exit 1 when `REF` names nothing or
+/// none is suspect.
+pub fn card_clear_group(
+    env: &Env,
+    globals: &Globals,
+    request: &CardClearGroupRequest,
+    consent: Consent<'_>,
+) -> Result<CardGroupOutcome, CliError> {
+    run_clear_group(env, globals, request, consent).map_err(escaped_error)
+}
+
+fn run_clear_group(
+    env: &Env,
+    globals: &Globals,
+    request: &CardClearGroupRequest,
+    consent: Consent<'_>,
+) -> Result<CardGroupOutcome, CliError> {
+    let now = checked_now(&request.now)?;
+    let actor = actor_of(request.actor.as_deref())?;
+    let mut context = open_cards(env, globals)?;
+    let group = request.group.trim();
+    let mut messages = Vec::new();
+    if let Some(problem) = clear_problem(&actor, &request.reason) {
+        return Ok(CardGroupOutcome::refused(
+            group,
+            CardCause::Refused,
+            &problem,
+            messages,
+        ));
+    }
+    let project = &context.project;
+    let scheme = &project.config.scheme;
+    let target = match classify(group, scheme, &mut messages, GROUP_REV_IGNORED)? {
+        Ok(target) => target,
+        Err(reason) => {
+            return Ok(CardGroupOutcome::refused(
+                group,
+                CardCause::Unknown,
+                &reason,
+                messages,
+            ));
+        }
+    };
+    let mut open = open_index(env, project)?;
+    let input = indexed_in(&mut open.index, project, &mut messages, false)?;
+    let graph = SpecGraph::new(&input, scheme, &project.config.paths);
+    let roots = match locate(&graph, &target, group)? {
+        Ok(roots) => roots,
+        Err(reason) => {
+            return Ok(CardGroupOutcome::refused(
+                group,
+                CardCause::Unknown,
+                &reason,
+                messages,
+            ));
+        }
+    };
+    let mut scope = BTreeSet::new();
+    for &root in &roots {
+        scope.extend(graph.within(root));
+        for document in held_documents(&graph, root) {
+            scope.extend(graph.within(document));
+        }
+    }
+    let listed = context.queue.list_cards().map_err(queue_cannot)?;
+    messages.extend(
+        listed
+            .unreadable
+            .iter()
+            .map(|row| Message::Note(one_line(&format!("{row}; not read")))),
+    );
+    let places = target_places(&graph, listed.cards.iter().flat_map(|card| &card.targets));
+    let stored = open.index.node_norms().map_err(crate::store_error)?;
+    let norms = target_norms(&graph, &stored, &places);
+    let held: BTreeSet<&str> = listed
+        .cards
+        .iter()
+        .filter(|card| !card.is_closed())
+        .filter_map(|card| card.corrects.as_deref())
+        .collect();
+    let inside: BTreeSet<String> = places
+        .iter()
+        .filter(|(_, nodes)| nodes.iter().any(|node| scope.contains(node)))
+        .map(|(target, _)| target.clone())
+        .collect();
+    let cards: Vec<(String, u64)> = listed
+        .cards
+        .iter()
+        .filter(|card| {
+            card.cancellation.is_none()
+                && !held.contains(card.id.as_str())
+                && suspect_on(card, &norms)
+                    .into_iter()
+                    .any(|target| inside.contains(target))
+        })
+        .map(|card| (card.id.clone(), card.revision))
+        .collect();
+    if cards.is_empty() {
+        return Ok(CardGroupOutcome::refused(
+            group,
+            CardCause::Refused,
+            &format!("no suspect card under `{group}`: there is no mark to clear; nothing changed"),
+            messages,
+        ));
+    }
+    let question = format!(
+        "clear {} cards of {group} as {actor}: no effect? [y/N]",
+        cards.len()
+    );
+    if !consent(&escape_controls(&one_line(&question))) {
+        return Ok(CardGroupOutcome::refused(
+            group,
+            CardCause::Refused,
+            &format!("`{group}` not cleared: the answer was not `y`; nothing changed"),
+            messages,
+        ));
+    }
+    let clear = CardClear {
+        reason: &request.reason,
+        norms: &norms,
+        actor: &actor,
+    };
+    match context.queue.clear_cards(&cards, &inside, &clear, now) {
+        Ok(cards) => Ok(CardGroupOutcome {
+            group: group.to_owned(),
+            cards,
+            notes: notes(&messages),
+            refusal: None,
+            cause: None,
+            messages,
+        }),
+        Err(QueueError::CardRefused { reason, .. }) => Ok(CardGroupOutcome::refused(
+            group,
+            CardCause::Refused,
+            &reason,
+            messages,
+        )),
+        Err(error) => Err(queue_cannot(error)),
+    }
 }
 
 // -------------------------------------------------------------- text
@@ -1826,6 +2681,21 @@ pub(crate) fn render_text(outcome: &CardOutcome) -> String {
         format!("{verb} {}: {}/{}\n", card.id, card.flow, card.column)
     };
     escape_controls(&line)
+}
+
+/// `cleared C-0001: <flow>/<column>`, a line per card; nothing when refused.
+pub(crate) fn render_group_text(outcome: &CardGroupOutcome) -> String {
+    let mut out = String::new();
+    for card in &outcome.cards {
+        out.push_str(&format!(
+            "{} {}: {}/{}\n",
+            CardAction::Clear.verb(),
+            card.id,
+            card.flow,
+            card.column
+        ));
+    }
+    escape_controls(&out)
 }
 
 /// The `key: value` lines of a card, cut at [`crate::OUTPUT_CAP_CHARS`];
@@ -1873,7 +2743,24 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
         "targets",
         card.targets.iter().map(|text| one_line(text)).collect(),
     );
-    lines.push(format!("snapshot: {}", optional(&card.snapshot)));
+    list(
+        &mut lines,
+        "snapshot",
+        card.snapshot
+            .iter()
+            .flatten()
+            .map(|entry| {
+                format!(
+                    "{} rev {} {}",
+                    one_line(&entry.id),
+                    entry
+                        .rev
+                        .map_or_else(|| ABSENT.to_owned(), |rev| rev.to_string()),
+                    entry.norm_hash.as_deref().unwrap_or(ABSENT)
+                )
+            })
+            .collect(),
+    );
     list(
         &mut lines,
         "criteria",
@@ -1906,9 +2793,12 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
     lines.push(format!(
         "acceptance: {}",
         card.acceptance.as_ref().map_or(ABSENT.to_owned(), |done| {
+            let departs = done.discrepancy.as_ref().map_or_else(String::new, |item| {
+                format!(" departs {} {item}", done.departs.join(", "))
+            });
             match &done.note {
-                Some(note) => format!("{} {}: {}", done.by, done.at, one_line(note)),
-                None => format!("{} {}", done.by, done.at),
+                Some(note) => format!("{} {}{departs}: {}", done.by, done.at, one_line(note)),
+                None => format!("{} {}{departs}", done.by, done.at),
             }
         })
     ));

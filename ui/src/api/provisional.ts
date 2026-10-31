@@ -1777,11 +1777,25 @@ export interface CardEvidence {
   at: string;
 }
 
-/** The reviewer's act. Source: `docs/canon/cards.md` "Store". */
+/** What an accept says of the result against its brief. Source: `docs/features/card-trace.md` "Data". */
+export type CardVerdict = "briefed" | "departs";
+
+/** The reviewer's act; a row stored without a verdict reads `briefed`. Source: `docs/features/card-trace.md` "Data". */
 export interface CardAcceptance {
   by: string;
   at: string;
   note: string | null;
+  verdict: CardVerdict;
+  departs: string[];
+  discrepancy: string | null;
+}
+
+/** One direct target as a card last saw it; a mark against it is computed per read. Source: `docs/features/card-trace.md` "Data". */
+export interface CardFrozen {
+  id: string;
+  rev: number | null;
+  norm_hash: string | null;
+  also: string[];
 }
 
 /** Who took the card out of its column, and why. Source: `docs/canon/cards.md` "Store". */
@@ -1799,7 +1813,7 @@ export interface CardEvent {
   payload: unknown;
 }
 
-/** `spec card show C --history --json`: every key present, absent `null`; `snapshot` held for a later slice. Source: `docs/canon/cards.md` "Documents and events". */
+/** `spec card show C --history --json`: every key present, absent `null`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data". */
 export interface Card {
   id: string;
   flow: string;
@@ -1809,7 +1823,7 @@ export interface Card {
   goal: string | null;
   discipline: string | null;
   targets: string[];
-  snapshot: string | null;
+  snapshot: CardFrozen[] | null;
   criteria: string[];
   assignee: string | null;
   reviewer: string | null;
@@ -1872,7 +1886,7 @@ export interface CardMoveBody {
   as: string | null;
 }
 
-/** POST `.../cards/:id/edit`: `edit_card`'s keys and the acting name; `-` clears a field, `["-"]` a list. Source: `docs/features/board-ui.md` "Routes". */
+/** POST `.../cards/:id/edit`: `edit_card`'s keys and the acting name; `-` clears a field, `["-"]` a list; `reason` says why an estimate the card holds changes. Source: `docs/features/board-ui.md` "Routes", `docs/features/card-trace.md` "Re-estimating". */
 export interface CardEditBody {
   title?: string;
   goal?: string;
@@ -1883,6 +1897,7 @@ export interface CardEditBody {
   parent?: string;
   corrects?: string;
   evidence?: string[];
+  reason?: string;
   revision: string;
   as: string | null;
 }
@@ -1902,9 +1917,92 @@ export interface CardCancelBody {
   as: string | null;
 }
 
-/** POST `.../cards/:id/accept`: the name is required, the page's dialog is the consent. Source: `docs/features/board-ui.md` "Routes". */
+/** POST `.../cards/:id/accept`: the name is required, the page's dialog is the consent; `briefed`, or `departs` with its three texts. Source: `docs/features/card-trace.md` "Accepting". */
 export interface CardAcceptBody {
   as: string;
   note: string | null;
   revision: string;
+  briefed?: boolean;
+  departs?: string[];
+  summary?: string;
+  observed?: string;
+  documented?: string;
+  gap_type?: string;
+}
+
+/** POST `.../cards/:id/clear`: the page's dialog is the consent; `estimate` and `title` a correction's. Source: `docs/features/card-trace.md` "Clearing". */
+export interface CardClearBody {
+  outcome: "no_effect" | "needs_correction";
+  reason: string;
+  estimate?: string;
+  title?: string;
+  revision: string;
+  as: string;
+}
+
+/** POST `.../trace/clear`: every suspect card of a node and what it holds, no effect only. Source: `docs/features/card-trace.md` "Clearing". */
+export interface CardClearGroupBody {
+  group: string;
+  reason: string;
+  as: string;
+}
+
+/** POST `.../trace/clear`'s answer, a refusal's reason the last of `notes`. Source: `docs/features/card-trace.md` "Clearing". */
+export interface CardClearGroupWrite {
+  group: string;
+  cleared: string[];
+  notes: string[];
+}
+
+/** A node's computed state, per read, never stored. Source: `docs/features/card-trace.md` "Rollup". */
+export type TraceRollup = "no card" | "departed" | "suspect" | "in work" | "confirmed";
+
+/** How many nodes stand in each state. Source: `docs/features/card-trace.md` "Data". */
+export interface TraceCounts {
+  no_card: number;
+  in_work: number;
+  suspect: number;
+  departed: number;
+  confirmed: number;
+}
+
+/** A card with its mark over a node; `mark` a word of the daemon's, told apart in `src/board/labels.ts` alone, `on` null when it says nothing. Source: `docs/features/card-trace.md` "Data". */
+export interface TraceCard {
+  id: string;
+  flow: string;
+  column: string;
+  title: string;
+  mark: string;
+  on: string | null;
+  discrepancy: string | null;
+  correction: string | null;
+}
+
+/** A node using another one, a consequence and never a mark. Source: `docs/features/card-trace.md` "Data". */
+export interface TraceUse {
+  id: string;
+  rollup: TraceRollup;
+  cards: number;
+}
+
+/** One node of `spec trace`. Source: `docs/features/card-trace.md` "Data". */
+export interface TraceNode {
+  id: string;
+  title: string | null;
+  path: string;
+  rollup: TraceRollup;
+  counts: TraceCounts;
+  cards: TraceCard[];
+  uses: TraceUse[];
+}
+
+/** `spec trace [REF] --json`. Source: `docs/features/card-trace.md` "Data". */
+export interface TraceDocument {
+  ref: string | null;
+  reason: string | null;
+  notes: string[];
+  counts: TraceCounts;
+  nodes: TraceNode[];
+  truncated: boolean;
+  omitted: number | null;
 }

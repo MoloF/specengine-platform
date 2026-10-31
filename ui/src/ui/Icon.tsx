@@ -77,6 +77,8 @@ const PATHS = {
   cardNew: "M8 3v10 M3 8h10",
   cardUp: "M8 13V3 M4.5 6.5 8 3l3.5 3.5",
   cardDown: "M8 3v10 M4.5 9.5 8 13l3.5-3.5",
+  // Against the brief (docs/features/card-trace.md): the result went another way.
+  cardDeparted: "M3 13 13 3 M7.5 3H13v5.5",
 } as const;
 
 export type IconName = keyof typeof PATHS;

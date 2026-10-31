@@ -163,9 +163,13 @@
 //!   [`card_assign`], [`card_cancel`], [`card_accept`]: `spec card …` (task
 //!   spec `card-store`), the lighter record of any trade's work, a queue row
 //!   under the project's `[card]`; `[card]` read here alone, no git, no task;
+//!   [`card_clear`], [`card_clear_group`]: a person answers a suspect mark;
 //!   the daemon decodes its routes' bodies as [`CardNewBody`] and its kin,
 //!   and reads the list uncut by [`CardListOutcome::in_view`] (task spec
 //!   `board-ui`);
+//! - [`trace()`]: `spec trace [REF]` (task spec `card-trace`), each node's
+//!   computed state against its cards, the marks core's `trace` reads per
+//!   read and never stores; exit 0 whatever is listed;
 //! - [`Exit`]: 0 answered, 1 not found (`show`, `tree`, `graph`, `flow`,
 //!   `bundle`, `refs`, `symbols`, `roadmap`), blocked (`check`, `verify`) or
 //!   refused by the proposal or its target (the queue's commands), 2 could not run
@@ -266,6 +270,7 @@ mod task;
 #[cfg(unix)]
 mod test_runner;
 mod tested;
+mod trace;
 mod tree;
 mod unmapped;
 mod verify;
@@ -290,10 +295,12 @@ pub use bundle::{
 pub use cap::{OUTPUT_CAP_CHARS, SHOW_TAIL_NAMES, View};
 pub use card::{
     CardAcceptBody, CardAcceptRequest, CardAction, CardAssignBody, CardAssignRequest,
-    CardCancelBody, CardCancelRequest, CardCause, CardEditBody, CardEditRequest, CardListOutcome,
-    CardListRequest, CardMoveBody, CardMoveRequest, CardNewBody, CardNewRequest, CardOutcome,
-    CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept, card_assign, card_cancel, card_edit,
-    card_list, card_move, card_new, card_show,
+    CardCancelBody, CardCancelRequest, CardCause, CardClearBody, CardClearGroupBody,
+    CardClearGroupRequest, CardClearOutcome, CardClearRequest, CardEditBody, CardEditRequest,
+    CardGroupOutcome, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest, CardNewBody,
+    CardNewRequest, CardOutcome, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept,
+    card_assign, card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move,
+    card_new, card_show,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
@@ -439,6 +446,9 @@ pub use task::{
     TaskListRequest, TaskNewRequest, TaskOutcome, TaskPlanRequest, TaskReportRequest,
     TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes, task_claim,
     task_complete, task_list, task_new, task_plan, task_report, task_show,
+};
+pub use trace::{
+    TraceCard, TraceNode, TraceOutcome, TraceRequest, TraceUse, trace, trace_with_view,
 };
 pub use tree::{TreeMark, TreeNode, TreeOutcome, TreeRequest, tree, tree_with_view};
 pub use unmapped::{UnmappedItem, UnmappedOutcome, UnmappedRequest, UnmappedRow, unmapped};
@@ -596,6 +606,8 @@ pub enum Outcome {
     Roadmap(Box<RoadmapOutcome>),
     /// `flow`: typed edges, lifted edges and gap rows.
     Flow(Box<FlowOutcome>),
+    /// `trace`: each node's state against its cards.
+    Trace(Box<TraceOutcome>),
     /// `impact`: what a change of a node or a code item reaches.
     Impact(Box<ImpactOutcome>),
     /// `refs`: what in the code names a node.
@@ -640,8 +652,10 @@ pub enum Outcome {
     TaskShow(Box<TaskShowOutcome>),
     /// `task list`.
     TaskList(TaskListOutcome),
-    /// `card new|move|edit|assign|cancel|accept`.
+    /// `card new|move|edit|assign|cancel|accept|clear`.
     Card(Box<CardOutcome>),
+    /// `card clear --group`.
+    CardGroup(Box<CardGroupOutcome>),
     /// `card show`: the card.
     CardShow(Box<CardShowOutcome>),
     /// `card list`: the flows and the cards.
@@ -687,6 +701,8 @@ impl Outcome {
             Self::Task(task) => task.exit(),
             Self::TaskShow(show) => show.exit(),
             Self::Card(card) => card.exit(),
+            Self::CardGroup(group) => group.exit(),
+            Self::Trace(trace) => trace.exit(),
             Self::CardShow(show) => show.exit(),
             Self::Round(run) => run.exit(),
             Self::RoundAnswers(answers) => answers.exit(),
@@ -737,6 +753,8 @@ impl Outcome {
             Self::TaskShow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::TaskList(outcome) => (&outcome.messages, None),
             Self::Card(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::CardGroup(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
+            Self::Trace(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::CardShow(outcome) => (&outcome.messages, outcome.reason.as_deref()),
             Self::CardList(outcome) => (&outcome.messages, None),
             Self::RoundSheet(outcome) => (&outcome.messages, None),
@@ -788,6 +806,8 @@ impl Outcome {
                 | Self::TaskShow(_)
                 | Self::TaskList(_)
                 | Self::Card(_)
+                | Self::CardGroup(_)
+                | Self::Trace(_)
                 | Self::CardShow(_)
                 | Self::CardList(_)
                 | Self::RoundSheet(_)
@@ -840,6 +860,8 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::TaskShow(outcome) => task::render_show_text(outcome),
         Outcome::TaskList(outcome) => task::render_list_text(outcome),
         Outcome::Card(outcome) => card::render_text(outcome),
+        Outcome::CardGroup(outcome) => card::render_group_text(outcome),
+        Outcome::Trace(outcome) => trace::render_text(outcome),
         Outcome::CardShow(outcome) => card::render_show_text(outcome),
         Outcome::CardList(outcome) => card::render_list_text(outcome),
         Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
@@ -888,6 +910,8 @@ impl serde::Serialize for Outcome {
             Self::TaskShow(outcome) => outcome.serialize(serializer),
             Self::TaskList(outcome) => outcome.serialize(serializer),
             Self::Card(outcome) => outcome.serialize(serializer),
+            Self::CardGroup(outcome) => outcome.serialize(serializer),
+            Self::Trace(outcome) => outcome.serialize(serializer),
             Self::CardShow(outcome) => outcome.serialize(serializer),
             Self::CardList(outcome) => outcome.serialize(serializer),
             Self::RoundSheet(outcome) => outcome.serialize(serializer),

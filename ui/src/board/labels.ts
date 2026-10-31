@@ -1,4 +1,4 @@
-import type { CardAllowed, CardFlow, CardMove } from "../api/types";
+import type { CardAllowed, CardFlow, CardMove, TraceCard } from "../api/types";
 import type { Look } from "../ui/Badge";
 
 // The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"): columns, flows
@@ -29,12 +29,71 @@ const EVENT_WORDS: ReadonlyMap<string, string> = new Map([
   ["card.edited", "Edited"],
   ["card.assigned", "Assigned"],
   ["card.cancelled", "Cancelled"],
+  ["card.cleared", "Cleared"],
+  ["card.reestimated", "Re-estimated"],
+  ["card.refreshed", "Refreshed"],
 ]);
 
 /** An event's words; an unknown type raw. */
 export function eventWords(type: string): string {
   return EVENT_WORDS.get(type) ?? type;
 }
+
+/** How each mark that says something looks, and its sentence (`docs/features/card-trace.md` "Rollup"). */
+const MARKS: ReadonlyMap<string, { look: Look; line: (mark: TraceCard) => string }> = new Map([
+  [
+    "suspect",
+    {
+      look: { label: "Suspect", tone: "card-suspect", icon: "specChanged" },
+      line: ({ on }: TraceCard) => `The brief changed at ${on ?? ""} after this card last read it.`,
+    },
+  ],
+  [
+    "departed",
+    {
+      look: { label: "Departed", tone: "card-departed", icon: "cardDeparted" },
+      line: ({ on, discrepancy }: TraceCard) => `Accepted as departing from ${on ?? ""}; ${discrepancy ?? "its discrepancy"} is not settled yet.`,
+    },
+  ],
+  [
+    "correcting",
+    {
+      look: { label: "Correcting", tone: "card-correcting", icon: "taskDraft" },
+      line: ({ on, correction }: TraceCard) => `The brief changed at ${on ?? ""}; ${correction ?? "a correction"} is putting it right.`,
+    },
+  ],
+] satisfies [string, { look: Look; line: (mark: TraceCard) => string }][]);
+
+/** Whether a mark says anything: a mark on no target is a plain state, and shows nothing. */
+export function isMarked({ on }: TraceCard): boolean {
+  return on !== null;
+}
+
+/** How a mark looks; one this build does not know raw and neutral; null for one that says nothing. */
+export function markLook(card: TraceCard): Look | null {
+  if (!isMarked(card)) {
+    return null;
+  }
+  return MARKS.get(card.mark)?.look ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" };
+}
+
+/** A mark in a sentence; one this build does not know, its target. */
+export function markLine(card: TraceCard): string {
+  return MARKS.get(card.mark)?.line(card) ?? card.on ?? "";
+}
+
+/** Whether a person can answer the mark: only a suspect one clears, a correcting one is held. */
+export function canClear({ mark }: TraceCard): boolean {
+  return mark === "suspect";
+}
+
+/** The gaps a departing accept can name; the first is the daemon's default. */
+export const GAP_TYPES: readonly { word: string; label: string }[] = [
+  { word: "contradicts", label: "Contradicts the brief" },
+  { word: "partial", label: "Part of the brief" },
+  { word: "missing", label: "Missing from the result" },
+  { word: "unrequested", label: "Not in the brief" },
+];
 
 /** The evidence kinds `spec card edit --evidence` takes, each with what to write. */
 export const EVIDENCE_KINDS: readonly { word: string; label: string; hint: string }[] = [

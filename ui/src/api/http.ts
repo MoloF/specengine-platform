@@ -9,6 +9,7 @@ import {
   type RoundOptions,
   type SearchOptions,
   type SpecEngineClient,
+  type TraceOptions,
   type TreeOptions,
 } from "./client";
 import type {
@@ -18,6 +19,9 @@ import type {
   CardAcceptBody,
   CardAssignBody,
   CardCancelBody,
+  CardClearBody,
+  CardClearGroupBody,
+  CardClearGroupWrite,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -44,6 +48,7 @@ import type {
   TaskList,
   TaskNotFound,
   TaskPackage,
+  TraceDocument,
   TreeView,
 } from "./types";
 
@@ -66,7 +71,8 @@ const API = "/api";
  * The queue's event types: the proposals' seven
  * (`docs/canon/proposal-queue.md` "States and events"; the stage's two after `apply_failed`:
  * `docs/canon/decision-staging.md` "Queue"), the tasks' nine (`docs/canon/tasks.md` "Store"), then
- * the cards' six (`docs/canon/cards.md` "Documents and events"). An EventSource hands a named event only to a listener of that name: a type missing here is
+ * the cards' nine (`docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md`
+ * "Data"). An EventSource hands a named event only to a listener of that name: a type missing here is
  * never seen.
  */
 export const QUEUE_EVENT_TYPES = [
@@ -92,6 +98,9 @@ export const QUEUE_EVENT_TYPES = [
   "card.edited",
   "card.assigned",
   "card.cancelled",
+  "card.cleared",
+  "card.reestimated",
+  "card.refreshed",
 ] as const;
 
 /** The first wait before a stream the browser gave up on is opened again; doubled per failure. */
@@ -148,6 +157,11 @@ function cardsPath(project: string): string {
 /** One card's path. */
 function cardPath(project: string, id: string): string {
   return `${cardsPath(project)}/${segment(id)}`;
+}
+
+/** A project's trace; the group clear's POST is under it. */
+function tracePath(project: string): string {
+  return `${projectPath(project)}/trace`;
 }
 
 const NOT_JSON = Symbol("not JSON");
@@ -503,6 +517,25 @@ export class HttpClient implements SpecEngineClient {
 
   async acceptCard(project: string, id: string, body: CardAcceptBody): Promise<CardWrite> {
     return (await request("POST", `${cardPath(project, id)}/accept`, { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  async clearCard(project: string, id: string, body: CardClearBody): Promise<CardWrite> {
+    return (await request("POST", `${cardPath(project, id)}/clear`, { body: JSON.stringify(body) })) as CardWrite;
+  }
+
+  /** Every suspect card of a node and what it holds, one transaction; a refusal (a 409 or 404 with `{group, cleared, notes}`) its last note. */
+  async clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite> {
+    return (await request("POST", `${tracePath(project)}/clear`, { body: JSON.stringify(body) })) as CardClearGroupWrite;
+  }
+
+  /**
+   * `spec trace [REF] --json` as the browser view (`docs/features/card-trace.md`):
+   * `ref` the one query. A 404 is the exit-1 document (a REF naming nothing, `reason` set), resolved as
+   * data; a 503 rejects in the daemon's words. Takes its query's AbortSignal.
+   */
+  async getTrace(project: string, options: TraceOptions = {}, signal?: AbortSignal): Promise<TraceDocument> {
+    const query = queryOf([["ref", options.ref]]);
+    return (await request("GET", `${tracePath(project)}${query}`, { signal })) as TraceDocument;
   }
 
   /**

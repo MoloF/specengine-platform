@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-31
 ---
 
 # Agent intake: queue tools, questions, discrepancies, decisions
@@ -45,7 +45,7 @@ Deterministic, never search.
 
 - **Corpus** (step 6, the index this call refreshed): per target, each link `spec show --links` lists (both directions, resolved, any type but `mentions`) whose other end lies in a live `class: decision` document with `status: accepted`, and that document when the target lies in one: a hit; one only `mentions`-linked -> related. Node kinds never consulted (ADR-0008). A whole document matches the decisions linked to its sections too.
 - **Queue** (step 7, store `create_intake`, inside the inserting `BEGIN IMMEDIATE`): rows of the project whose kind shares the item's shape (`intake_shape()`, exhaustive: `question` and `decision` one family, `discrepancy` another) (any repository, any state) sharing a canonical target; `normalized_summary` equal (Unicode whitespace runs -> one space, trimmed, `to_lowercase`) -> hit, other text -> related.
-- **Stored** only when every hit is named byte-equal in `distinct_from` (its `id`, else its path): the item, then the patch's update (next ID, `linked` both ways), a `proposal.created` each, committed; else rolled back, `id` `null`. Busy over 5 s -> exit 2.
+- **Stored** only when every hit is named byte-equal in `distinct_from` (its `id`, else its path; a departing card accept names them itself and is never refused: `spec-trace.md` "Accepting"): the item, then the patch's update (next ID, `linked` both ways), a `proposal.created` each, committed; else rolled back, `id` `null`. Busy over 5 s -> exit 2.
 - **Lists**: hits corpus by path then queue by ID number; 10 (`INTAKE_MATCHES_MAX`) in full, then a note `<n> more hit(s) by name only: A, B, …` (`related item(s)`), named as `distinct_from` takes them, up to 64 per list, the rest `; <r> more not listed`. Over 64 hits an item cannot be stored: the hits note adds `` ; more than 64 hits: `distinct_from` names at most 64, so this item cannot be stored (a known limit) ``, stdout `not stored: <that reason>` (`IntakeOutcome.unnameable`).
 
 ## Intake document

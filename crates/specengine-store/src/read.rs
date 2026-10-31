@@ -17,6 +17,44 @@ use crate::{
     Snippet, schema,
 };
 
+/// One node's `norm_hash` as the index stores it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NodeNorm {
+    pub path: String,
+    /// 0 the document, then its sections in source order.
+    pub ord: usize,
+    /// `None`: null (`docs/canon/node-revision.md` "Null").
+    pub norm_hash: Option<String>,
+}
+
+impl SqliteIndex {
+    /// Every node of the handle's worktree with its stored `norm_hash`, by
+    /// (path, position), in one snapshot; [`StoreError::NotIndexed`] as every
+    /// read of the worktree.
+    pub fn node_norms(&self) -> Result<Vec<NodeNorm>, StoreError> {
+        with_worktree(self, |tx, wt| {
+            let mut statement = tx
+                .prepare(
+                    "SELECT f.path, n.ord, n.norm_hash FROM nodes n
+                     JOIN files f ON f.file_id = n.file_id
+                     WHERE f.wt = ?1 ORDER BY f.path, n.ord",
+                )
+                .db()?;
+            statement
+                .query_map([wt], |row| {
+                    Ok(NodeNorm {
+                        path: row.get(0)?,
+                        ord: usize::try_from(row.get::<_, i64>(1)?).unwrap_or(usize::MAX),
+                        norm_hash: row.get(2)?,
+                    })
+                })
+                .db()?
+                .collect::<Result<Vec<_>, _>>()
+                .db()
+        })
+    }
+}
+
 /// Runs `read` over the handle's worktree in one read transaction;
 /// [`StoreError::NotIndexed`] when the stamp is stale or the worktree has no
 /// row.

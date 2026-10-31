@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
-import { useCard, useCards, useCardWrite } from "../api/queries";
+import { useCard, useCards, useCardWrite, useTrace } from "../api/queries";
 import type { Card, CardFlow, CardMoveBody, CardRow, CardWrite } from "../api/types";
 import { pushHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
@@ -19,7 +19,7 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { actingName, isActingLine, useActing } from "./acting";
 import { BoardCard, type CardActions } from "./BoardCard";
 import { BoardColumn } from "./BoardColumn";
-import { AcceptCardDialog, AssignDialog, CancelCardDialog, EditCardDialog, NewCardDialog } from "./CardDialogs";
+import { AcceptCardDialog, AssignDialog, CancelCardDialog, ClearCardDialog, EditCardDialog, NewCardDialog } from "./CardDialogs";
 import { CardPanel, isCard, type CardAction } from "./CardPanel";
 import { useToday } from "./due";
 import {
@@ -29,6 +29,7 @@ import {
   disciplineChoices,
   dropMove,
   lanesOf,
+  marksOf,
   matchesFilters,
   NO_FILTERS,
   openRows,
@@ -191,6 +192,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
 
   const cards = useCards(project, withCancelled ? { with_cancelled: true } : {});
   const panel = useCard(project, cardId);
+  const trace = useTrace(project);
   const write = useCardWrite(project);
   const today = useToday();
   const failure = useRetainedFailure(cards.error, cards.isFetching);
@@ -201,6 +203,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   }, [memory, project, chosenFlow, filters, withCancelled]);
 
   const list = cards.data;
+  const marks = useMemo(() => marksOf(trace.data), [trace.data]);
   const all = useMemo(() => list?.cards ?? [], [list]);
   const tabs = useMemo(() => (list === undefined ? [] : tabsOf(list)), [list]);
   const visible = useMemo(() => all.filter((row) => matchesFilters(row, filters)), [all, filters]);
@@ -635,6 +638,19 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
           }}
         />
       );
+    } else if (dialog.action === "clear") {
+      dialogShown = (
+        <ClearCardDialog
+          project={project}
+          card={currentCard(dialog.card)}
+          on={marks.get(dialog.card.id)?.on ?? null}
+          onClose={closeDialog}
+          onActingLine={setActingLine}
+          onDone={(answer) => {
+            written(answer, "is cleared", false);
+          }}
+        />
+      );
     } else if (dialog.action === "assign") {
       dialogShown = (
         <AssignDialog
@@ -712,6 +728,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
                   key={row.id}
                   project={project}
                   row={row}
+                  mark={marks.get(row.id)}
                   today={today}
                   tabbable={row.id === rovingId}
                   selected={row.id === cardId}
@@ -788,7 +805,18 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
         </div>
         {cardId !== null && (
           <RegionBoundary key={cardId} name="card" heading={cardId}>
-            <CardPanel project={project} id={cardId} query={panel} flowOf={flowOf} today={today} headingRef={panelHeading} onAct={onAct} onClose={closePanel} />
+            <CardPanel
+              project={project}
+              id={cardId}
+              query={panel}
+              flowOf={flowOf}
+              today={today}
+              mark={marks.get(cardId)}
+              markFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
+              headingRef={panelHeading}
+              onAct={onAct}
+              onClose={closePanel}
+            />
           </RegionBoundary>
         )}
       </div>

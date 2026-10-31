@@ -46,7 +46,8 @@ use specengine_core::lock::{
 };
 use specengine_core::patch::{is_section, span_bytes, splice, update_text};
 use specengine_core::proposal::{
-    ApplyTrailers, EDITORIAL, LOCK_MODE_TRAILER, LOCK_TRAILER, Revised,
+    ApplyTrailers, EDITORIAL, LOCK_MODE_TRAILER, LOCK_TRAILER, REVISION_TRAILER, Revised,
+    editorial_revision,
 };
 use specengine_core::raise::{
     RaiseRefusal, RevisionRow, closed_against_rev, meaning_changes, raised, revision_change,
@@ -54,7 +55,7 @@ use specengine_core::raise::{
 };
 use specengine_core::{NORM_RECIPE, norm_input};
 use specengine_model::{IdScheme, Node, ParsedFile};
-use specengine_store::{WorktreeGit, b3_hash, replace_file};
+use specengine_store::{CardRefresh, WorktreeGit, b3_hash, replace_file};
 
 use crate::lock::build_recipes;
 use crate::preflight::StepFailure;
@@ -227,6 +228,26 @@ impl Revisions {
                 id: &node.id,
                 rev: node.rev,
                 to: node.to(),
+            })
+            .collect()
+    }
+
+    /// What an editorial apply vouches for on the cards: each node's old
+    /// and new `norm_hash`; none for a meaning approve, whose raise rightly
+    /// marks them.
+    pub(crate) fn card_refresh(&self) -> Vec<CardRefresh> {
+        if !self.editorial {
+            return Vec::new();
+        }
+        self.nodes
+            .iter()
+            .filter_map(|node| {
+                let (old, new) = node.refreshable()?;
+                Some(CardRefresh {
+                    node: node.id.clone(),
+                    old: old.to_owned(),
+                    new: new.to_owned(),
+                })
             })
             .collect()
     }
@@ -675,6 +696,19 @@ pub(crate) fn lock_in_commit(
 pub(crate) fn editorial_commit(git: &WorktreeGit, commit: &str) -> bool {
     git.trailer_values(commit, LOCK_MODE_TRAILER)
         .is_ok_and(|values| values.iter().any(|value| value == EDITORIAL))
+}
+
+/// The nodes a commit's `Revision:` trailers keep under an editorial apply;
+/// none when it carries none or git cannot read them.
+pub(crate) fn editorial_nodes(git: &WorktreeGit, commit: &str) -> Vec<String> {
+    git.trailer_values(commit, REVISION_TRAILER)
+        .map(|values| {
+            values
+                .iter()
+                .filter_map(|value| editorial_revision(value).map(str::to_owned))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// Completion (task spec `rev-discipline` Q12): node `ord` of `parsed`

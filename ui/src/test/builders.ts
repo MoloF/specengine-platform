@@ -44,6 +44,9 @@ import type {
   TaskProposal,
   TaskRun,
   TestedRow,
+  TraceCard,
+  TraceDocument,
+  TraceNode,
   TreeNode,
   TreeView,
   UnappliedAmendment,
@@ -887,4 +890,19 @@ export function aCard(fields: Partial<Card> & { id: string }): Card {
 /** A write's document for a card. */
 export function aCardWrite(id: string, fields: Partial<CardWrite> = {}): CardWrite {
   return { id, flow: "work", column: "todo", position: 1, revision: "2", allowed: [], notes: [], ...fields };
+}
+
+/** A card with its mark over a node, as `spec trace --json` gives it. */
+export function aTraceCard(fields: Partial<TraceCard> & { id: string }): TraceCard {
+  return { flow: "work", column: "todo", title: `Card ${fields.id}`, mark: "open", on: null, discrepancy: null, correction: null, ...fields };
+}
+
+/** One node of `spec trace --json`. */
+export function aTraceNode(id: string, cards: TraceCard[], fields: Partial<TraceNode> = {}): TraceNode {
+  return { id, title: null, path: `docs/spec/${id}.md`, rollup: "in work", counts: { no_card: 0, in_work: 1, suspect: 0, departed: 0, confirmed: 0 }, cards, uses: [], ...fields };
+}
+
+/** `spec trace --json` over nodes. */
+export function aTrace(nodes: TraceNode[], fields: Partial<TraceDocument> = {}): TraceDocument {
+  return { ref: null, reason: null, notes: [], counts: { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 }, nodes, truncated: false, omitted: null, ...fields };
 }

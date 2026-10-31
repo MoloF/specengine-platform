@@ -12,6 +12,7 @@ import {
   type GraphOptions,
   type NodeOptions,
   type SearchOptions,
+  type TraceOptions,
   type TreeOptions,
 } from "./client";
 import { endOwnWrite, isOwnStageEvent, outsideSince, startOwnWrite, type OwnWrite } from "./ownStages";
@@ -20,6 +21,8 @@ import type {
   CardAcceptBody,
   CardAssignBody,
   CardCancelBody,
+  CardClearBody,
+  CardClearGroupBody,
   CardCreateBody,
   CardEditBody,
   CardMoveBody,
@@ -96,6 +99,8 @@ export const queryKeys = {
   cards: (project: string, options: CardsOptions = {}) => ["cards", project, { with_cancelled: options.with_cancelled ?? false }] as const,
   /** One card, its history with it. */
   card: (project: string, id: string) => ["card", project, id] as const,
+  /** Marks and rollups, joined per read; `ref` null: the whole project (`docs/features/card-trace.md`). */
+  trace: (project: string, options: TraceOptions = {}) => ["trace", project, options.ref ?? null] as const,
 };
 
 /** Every round sheet of a project, whatever its limit. */
@@ -116,6 +121,11 @@ function cardListsOf(project: string) {
 /** Every card read of a project. */
 function cardsOf(project: string) {
   return ["card", project] as const;
+}
+
+/** Every trace read of a project, whatever its REF. */
+function tracesOf(project: string) {
+  return ["trace", project] as const;
 }
 
 // What a request carries: absent options omitted (none at all: `undefined`), an empty array or a
@@ -228,13 +238,14 @@ function eventId(payload: unknown): string | null {
 /**
  * What an applied proposal changed besides the queue: a spec file, so the project's reads of the
  * spec (every tree, node, search, bundle, graph and flow of it, its check, its unapplied amendments,
- * its plan and its lock diffs, each `[read, project, …]`;
+ * its plan, its lock diffs and its trace, each `[read, project, …]`;
  * `docs/features/ui-live.md` "Rules and edge cases",
  * `docs/features/health-left.md` "Description and interactions",
  * `docs/features/roadmap-screen.md`: an item's file is a spec file; `docs/features/lock-diff-ui.md`:
- * a lock diff's spec side is the node's text against its entry's).
+ * a lock diff's spec side is the node's text against its entry's; `docs/features/card-trace.md`: a
+ * mark is a card against the node's text).
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff", "trace"] as const;
 
 /** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
@@ -311,9 +322,11 @@ const CARD_EVENT = "card.";
  * (`docs/features/ui-round.md` "Description and interactions"). The plan is read again on a
  * `task.*` event, `proposal.applied` and a gap, a read in flight aborted, never on a stage,
  * `.created`, `.approved`, `.rejected` or `.apply_failed` (`docs/features/roadmap-screen.md`). A
- * `card.*` event reads that project's card lists and that card again (no string `id`: every card of
- * it), never anything else and with no outside-change alert: a card is no decision
- * (`docs/features/board-ui.md` "Rules and edge cases"). No
+ * `card.*` event reads that project's card lists, that card (no string `id`: every card of it) and
+ * its trace again, never anything else and with no outside-change alert: a card is no decision
+ * (`docs/features/board-ui.md` "Rules and edge cases"). A rejected discrepancy settles a departure, so
+ * `.approved`, `.rejected` and `.apply_failed` read the trace too (`docs/features/card-trace.md`
+ * "Rollup"). No
  * other project's read, and no other read. A stream this client opened again after the browser gave up on it (events may be
  * missed, an apply among them) reads the inbox, every cached proposal, those spec reads, the task
  * reads, the round sheets and the cards of the project again. Only the reads on screen are fetched, once each
@@ -388,10 +401,15 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
     const readRoundAgain = () => {
       void queryClient.invalidateQueries({ queryKey: roundsOf(project) });
     };
-    /** The Board's lists and every card read of the project. */
+    /** Marks and rollups: a read of the project's cards against its spec. */
+    const readTraceAgain = () => {
+      void queryClient.invalidateQueries({ queryKey: tracesOf(project) });
+    };
+    /** The Board's lists, every card read of the project and its trace. */
     const readCardsAgain = () => {
       void queryClient.invalidateQueries({ queryKey: cardListsOf(project) });
       void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
+      readTraceAgain();
     };
     const unsubscribe = client.subscribe(
       project,
@@ -403,6 +421,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
           } else {
             void queryClient.invalidateQueries({ queryKey: cardListsOf(project) });
             void queryClient.invalidateQueries({ queryKey: queryKeys.card(project, id), exact: true });
+            readTraceAgain();
           }
           return;
         }
@@ -439,6 +458,7 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         }
         if (HEALTH_EVENTS.has(event.type)) {
           readHealthAgain();
+          readTraceAgain();
         }
       },
       () => {
@@ -840,6 +860,18 @@ export function useCard(project: string, id: string | null) {
 /** One card's read as the panel shares it. */
 export type CardQuery = ReturnType<typeof useCard>;
 
+/**
+ * Marks and rollups (`docs/features/card-trace.md`), never stored: read on entering the Board, after a
+ * card write, a `card.*` event, an apply, a decision on a proposal or a gap. A read superseded is aborted.
+ */
+export function useTrace(project: string, options: TraceOptions = {}) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.trace(project, options),
+    queryFn: ({ signal }) => client.getTrace(project, options.ref === undefined ? undefined : options, signal),
+  });
+}
+
 /** One of the card writes, as `useCardWrite` sends it (`docs/features/board-ui.md` "Routes"). */
 export type CardWriteRequest =
   | { write: "create"; body: CardCreateBody }
@@ -847,12 +879,13 @@ export type CardWriteRequest =
   | { write: "edit"; id: string; body: CardEditBody }
   | { write: "assign"; id: string; body: CardAssignBody }
   | { write: "cancel"; id: string; body: CardCancelBody }
-  | { write: "accept"; id: string; body: CardAcceptBody };
+  | { write: "accept"; id: string; body: CardAcceptBody }
+  | { write: "clear"; id: string; body: CardClearBody };
 
 /**
  * One card write per call; nothing is optimistic. After an answer, a refusal (409, a lost
- * compare-and-set too) or no such card (404), the project's card lists and that card are read again,
- * and the call settles once they have: the board on screen is the daemon's. Any other failure stored
+ * compare-and-set too) or no such card (404), the project's card lists, that card and its trace are
+ * read again, and the call settles once they have: the board on screen is the daemon's. Any other failure stored
  * nothing, and no answer at all (status 0) may have stored it: read again too.
  */
 export function useCardWrite(project: string) {
@@ -861,6 +894,7 @@ export function useCardWrite(project: string) {
   async function readAgain(id: string | null) {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: cardListsOf(project) }),
+      queryClient.invalidateQueries({ queryKey: tracesOf(project) }),
       id === null ? Promise.resolve() : queryClient.invalidateQueries({ queryKey: queryKeys.card(project, id), exact: true }),
     ]);
   }
@@ -879,6 +913,8 @@ export function useCardWrite(project: string) {
           return client.cancelCard(project, request.id, request.body);
         case "accept":
           return client.acceptCard(project, request.id, request.body);
+        case "clear":
+          return client.clearCard(project, request.id, request.body);
       }
     },
     onSuccess: (answer) => readAgain(answer.id),
@@ -886,6 +922,28 @@ export function useCardWrite(project: string) {
       const { status } = apiErrorOf(error);
       if (status === CARD_REFUSED || status === NO_SUCH_CARD || status === 0) {
         await readAgain(request.write === "create" ? null : request.id);
+      }
+    },
+  });
+}
+
+/**
+ * The group clear (`docs/features/card-trace.md` "Clearing"): one POST; as `useCardWrite`, the call
+ * settles once the lists, every card read and the trace have been read again.
+ */
+export function useCardClearGroup(project: string) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  async function readAgain() {
+    await Promise.all([cardListsOf(project), cardsOf(project), tracesOf(project)].map((queryKey) => queryClient.invalidateQueries({ queryKey })));
+  }
+  return useMutation({
+    mutationFn: (body: CardClearGroupBody) => client.clearCardGroup(project, body),
+    onSuccess: readAgain,
+    onError: async (error) => {
+      const { status } = apiErrorOf(error);
+      if (status === CARD_REFUSED || status === NO_SUCH_CARD || status === 0) {
+        await readAgain();
       }
     },
   });

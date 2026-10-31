@@ -110,9 +110,9 @@ use specengine_core::proposal::{
 use specengine_core::task::FollowUp;
 use specengine_model::IdScheme;
 use specengine_store::{
-    ApplyFailure, Decision, GitEnv, IndexWriter as _, KindFamily, NewTask, Proposal, ProposalKind,
-    ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, TaskRefresh,
-    WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
+    ApplyFailure, CardRefresh, Decision, GitEnv, IndexWriter as _, KindFamily, NewTask, Proposal,
+    ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _,
+    TaskRefresh, WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
 };
 
 use crate::location::open_index;
@@ -128,7 +128,10 @@ use crate::proposals::{
     with_diff, written_id,
 };
 use crate::review::stale_note;
-use crate::revisions::{apply_trailers, lock_in_commit, lock_unchanged, restore, restored_clause};
+use crate::revisions::{
+    apply_trailers, editorial_nodes, lock_in_commit, lock_unchanged, norm_hash, restore,
+    restored_clause,
+};
 use crate::stage::{self, Staging};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, pathspec_word};
 use crate::{create, decide, drift_apply, follow_up};
@@ -760,16 +763,19 @@ fn run_approve(
                 &prepared.bytes,
                 prepared.written(),
             );
+            let cards = prepared.revisions.card_refresh();
             let recorded = record_applied(
                 &mut context,
                 &id,
                 &commit,
                 Some(&decision),
                 refresh.as_ref(),
+                &cards,
                 now,
             )
-            .map(|(applied, refreshed)| {
+            .map(|(applied, refreshed, vouched)| {
                 refreshed_note(&proposal, &refreshed, &mut messages);
+                vouched_note(&proposal, &vouched, &mut messages);
                 applied
             });
             let applied = match recorded {
@@ -1172,26 +1178,38 @@ pub(crate) fn complete(
             staged_at: staging.staged_at(),
         };
         let refresh = completion_refresh(&request.git, context, proposal, commit);
+        let cards = completion_cards(&request.git, context, proposal, commit);
         record_applied(
             context,
             id,
             commit,
             Some(&decision),
             refresh.as_ref(),
+            &cards,
             &request.now,
         )
-        .map(|(applied, refreshed)| {
+        .map(|(applied, refreshed, vouched)| {
             refreshed_note(proposal, &refreshed, &mut messages);
+            vouched_note(proposal, &vouched, &mut messages);
             applied
         })
     } else {
         let refresh = completion_refresh(&request.git, context, proposal, commit);
-        record_applied(context, id, commit, None, refresh.as_ref(), &request.now).map(
-            |(applied, refreshed)| {
-                refreshed_note(proposal, &refreshed, &mut messages);
-                applied
-            },
+        let cards = completion_cards(&request.git, context, proposal, commit);
+        record_applied(
+            context,
+            id,
+            commit,
+            None,
+            refresh.as_ref(),
+            &cards,
+            &request.now,
         )
+        .map(|(applied, refreshed, vouched)| {
+            refreshed_note(proposal, &refreshed, &mut messages);
+            vouched_note(proposal, &vouched, &mut messages);
+            applied
+        })
     };
     let applied = match recorded {
         Ok(applied) => applied,
@@ -1219,28 +1237,31 @@ pub(crate) fn complete(
 }
 
 /// Step 10's and a completion's recording: `applied_with` (`decision`
-/// given) or `applied`, refreshing the task's snapshot in the same
-/// transaction when `refresh` is given; the nodes refreshed.
+/// given) or `applied`, refreshing the task's snapshot when `refresh` is
+/// given and vouching for an editorial change on the cards, in the same
+/// transaction; the nodes refreshed and the cards changed.
 fn record_applied(
     context: &mut QueueContext,
     id: &str,
     commit: &str,
     decision: Option<&Decision>,
     refresh: Option<&TaskRefresh>,
+    cards: &[CardRefresh],
     now: &str,
-) -> Result<(Proposal, Vec<String>), QueueError> {
-    match (refresh, decision) {
-        (Some(refresh), decision) => context
-            .queue
-            .applied_refreshing(id, commit, decision, refresh, now),
-        (None, Some(decision)) => context
-            .queue
-            .applied_with(id, commit, decision, now)
-            .map(|applied| (applied, Vec::new())),
-        (None, None) => context
-            .queue
-            .applied(id, commit, now)
-            .map(|applied| (applied, Vec::new())),
+) -> Result<(Proposal, Vec<String>, Vec<String>), QueueError> {
+    context
+        .queue
+        .applied_vouching(id, commit, decision, refresh, cards, now)
+}
+
+/// `<cards>: an editorial change vouched for by <PR>` when any was.
+fn vouched_note(proposal: &Proposal, vouched: &[String], messages: &mut Vec<Message>) {
+    if !vouched.is_empty() {
+        messages.push(Message::Note(format!(
+            "{}: an editorial change vouched for by `{}`",
+            vouched.join(", "),
+            proposal.id
+        )));
     }
 }
 
@@ -1367,6 +1388,59 @@ fn completion_refresh(
     let after = git.blob_at(commit, &path).ok()?;
     let recorded = recorded_project(&recorded_root(proposal), &context.slug).ok()?;
     task_refresh(context, proposal, &recorded.config.scheme, &before, &after)
+}
+
+/// What a completion vouches for on the cards: each node `commit`'s
+/// `Revision: <ID> <rev> (editorial)` trailers name, its `norm_hash` at the
+/// commit's first parent and at the commit, read where its history is
+/// ([`history`]), parsed under the recorded root's scheme. Empty when any of
+/// it cannot be read: a mark stays, which a person can clear.
+fn completion_cards(
+    git_env: &GitEnv,
+    context: &QueueContext,
+    proposal: &Proposal,
+    commit: &str,
+) -> Vec<CardRefresh> {
+    if proposal.kind.family() != KindFamily::Applies {
+        return Vec::new();
+    }
+    let read = || -> Option<Vec<CardRefresh>> {
+        let git = match history(git_env, context, proposal).ok()? {
+            History::Recorded(git) => git,
+            History::Current(git) => git.clone(),
+        };
+        let nodes = editorial_nodes(&git, commit);
+        if nodes.is_empty() {
+            return None;
+        }
+        let path = top_path(proposal);
+        let parent = git.parents(commit).ok()?.into_iter().next()?;
+        let before = git.blob_at(&parent, &path).ok()?;
+        let after = git.blob_at(commit, &path).ok()?;
+        let recorded = recorded_project(&recorded_root(proposal), &context.slug).ok()?;
+        let parse = |bytes: &[u8]| {
+            panic::catch_unwind(AssertUnwindSafe(|| {
+                specengine_core::parse(
+                    proposal.target_path.as_str(),
+                    bytes,
+                    &recorded.config.scheme,
+                )
+            }))
+            .ok()
+        };
+        let (parsed_before, parsed_after) = (parse(&before)?, parse(&after)?);
+        Some(
+            nodes
+                .into_iter()
+                .filter_map(|node| {
+                    let old = norm_hash(&parsed_before, &before, position(&parsed_before, &node)?)?;
+                    let new = norm_hash(&parsed_after, &after, position(&parsed_after, &node)?)?;
+                    Some(CardRefresh { node, old, new })
+                })
+                .collect(),
+        )
+    };
+    read().unwrap_or_default()
 }
 
 /// `applied` with `commit` refused because another run (a completion)

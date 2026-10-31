@@ -3,7 +3,7 @@
 //! as docs/features/review-form.md rewrites it (ADR-0054: only the owner's
 //! form stages; no tool input carries a choice):
 //!
-//! - `tools/list` is the twenty-eight of `TOOLS`, none named for a stage,
+//! - `tools/list` is the twenty-nine of `TOOLS`, none named for a stage,
 //!   an approve, a reject or a decision; no input property of any tool, at
 //!   any depth, is `choice`, `option`, `answer`, `reason`, `note`,
 //!   `editorial`, `canon`, `staged`, `staged_at`, `consent` or `decision`
@@ -354,7 +354,7 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
     for era in ERAS {
         let mut session = Session::open(era, &[], Some(&repo.linked), Home::At(&repo.home));
         let list = session.tools();
-        assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty-eight tools");
+        assert_eq!(tool_names(&list), TOOLS, "{era:?}: twenty-nine tools");
         let mut seen = 0;
         for tool in list["tools"].as_array().expect("tools") {
             let name = tool["name"].as_str().unwrap_or_default();
@@ -372,6 +372,14 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
                 // `decision` names the accepted decision an interpretation
                 // carries (a string ID or null), never a staged choice.
                 if path == "propose_change.decision" {
+                    assert_eq!(schema["type"], json!(["string", "null"]), "{schema}");
+                    assert!(schema.get("enum").is_none(), "{schema}");
+                    continue;
+                }
+                // docs/features/card-trace.md: `edit_card`'s `reason` says
+                // why an estimate changes (free text or null), never a
+                // decision's.
+                if path == "edit_card.reason" {
                     assert_eq!(schema["type"], json!(["string", "null"]), "{schema}");
                     assert!(schema.get("enum").is_none(), "{schema}");
                     continue;

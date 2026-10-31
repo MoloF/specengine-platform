@@ -1,14 +1,14 @@
 import { createContext, use, useEffect, useId, useMemo, useRef, useState, type ReactNode, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useCards, useCardWrite, type CardWriteRequest } from "../api/queries";
-import type { Card, CardCreateBody, CardEditBody, CardRow, CardWrite } from "../api/types";
+import type { Card, CardAcceptBody, CardClearBody, CardCreateBody, CardEditBody, CardRow, CardVerdict, CardWrite } from "../api/types";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
 import { actingName, isActingLine, useActing } from "./acting";
 import { assigneeChoices, disciplineChoices } from "./filter";
-import { EVIDENCE_KINDS, NAME_IS_TYPED } from "./labels";
+import { EVIDENCE_KINDS, GAP_TYPES, NAME_IS_TYPED } from "./labels";
 
 /** How `spec card edit` and `assign` write a cleared value (`docs/canon/cards.md` "Commands"). */
 const CLEAR = "-";
@@ -499,6 +499,9 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
   }
 
   const changes = editChanges(form, opened, value.trim() === "" ? null : `${evidenceKind}=${value.trim()}`);
+  // A change of an estimate the card holds, a clear too, says why and stands alone: the daemon judges and words it.
+  const reestimated = card.estimate !== null && changes.estimate !== undefined;
+  const [reason, setReason] = useState("");
 
   return (
     <WriteDialog
@@ -513,7 +516,9 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
         }
         return Object.keys(changes).length === 0 ? "Nothing to save: no field changed." : null;
       }}
-      onSubmit={() => send({ write: "edit", id: card.id, body: { ...changes, revision: card.revision, as: actingName(acting) } })}
+      onSubmit={() =>
+        send({ write: "edit", id: card.id, body: { ...changes, ...(reestimated && reason.trim() !== "" ? { reason: reason.trim() } : {}), revision: card.revision, as: actingName(acting) } })
+      }
     >
       <TextField label="Title" value={form.title} onChange={field("title")} required autoFocus invalid={form.title.trim() === ""} />
       <TextArea label="Goal" value={form.goal} onChange={field("goal")} />
@@ -523,6 +528,7 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
         <TextField label="Estimate" value={form.estimate} onChange={field("estimate")} hint="N or N-M, no unit." />
         <TextField label="Due" type="date" value={form.due} onChange={field("due")} />
       </div>
+      {reestimated && <TextArea label="Why the estimate changes" value={reason} onChange={setReason} required hint="A changed estimate is saved alone, with this reason." />}
       <div className="card-form-row">
         <TextField label="Parent" value={form.parent} onChange={field("parent")} hint="A card's ID." />
         <TextField label="Corrects" value={form.corrects} onChange={field("corrects")} hint="A card's ID." />
@@ -619,18 +625,36 @@ export function CancelCardDialog({ project, card, ...handlers }: { project: stri
 }
 
 /**
- * Accept: the acting name and a note, disabled while the name is empty; here the page's dialog is the
- * consent the CLI asks on a terminal. The rules are the daemon's and it words its refusal: the card
- * in the flow's accept column, the name its reviewer, never its assignee. The name is the Board's
- * one field, so typed here it stays in its header too; it stands last, so a refusal of it is said
- * right under it.
+ * Accept: the verdict, the acting name and a note, disabled while the name or a departure's text is
+ * empty; here the page's dialog is the consent the CLI asks on a terminal. The rules are the
+ * daemon's and it words its refusal: the card in the flow's accept column, the name its reviewer,
+ * never its assignee. "Departs" names direct targets and raises a discrepancy, which holds nothing
+ * up; a card with no targets has none to name. The name is the Board's one field, so typed here it
+ * stays in its header too; it stands last, so a refusal of it is said right under it.
  */
-export function AcceptCardDialog({ project, card, ...handlers }: { project: string; card: Pick<CardRow, "id" | "title" | "revision" | "assignee" | "reviewer"> } & WriteHandlers) {
+export function AcceptCardDialog({ project, card, ...handlers }: { project: string; card: Pick<CardRow, "id" | "title" | "revision" | "assignee" | "reviewer"> & Partial<Pick<CardRow, "targets">> } & WriteHandlers) {
   const { onClose } = handlers;
+  const targets = card.targets ?? [];
   const send = useSend(project, handlers);
+  const verdictId = useId();
+  const gapId = useId();
   const [acting, setActing] = useActing();
   const [note, setNote] = useState("");
+  const [verdict, setVerdict] = useState<CardVerdict>("briefed");
+  const [departs, setDeparts] = useState(targets.join("\n"));
+  const [summary, setSummary] = useState("");
+  const [observed, setObserved] = useState("");
+  const [documented, setDocumented] = useState("");
+  const [gapType, setGapType] = useState(GAP_TYPES[0]?.word ?? "");
   const name = actingName(acting);
+  const departing = verdict === "departs";
+  const departed = linesOf(departs);
+  const complete = !departing || (departed.length > 0 && summary.trim() !== "" && observed.trim() !== "" && documented.trim() !== "");
+
+  function bodyOf(as: string): CardAcceptBody {
+    const common = { as, note: note.trim() === "" ? null : note.trim(), revision: card.revision };
+    return departing ? { ...common, departs: departed, summary: summary.trim(), observed: observed.trim(), documented: documented.trim(), gap_type: gapType } : { ...common, briefed: true };
+  }
 
   return (
     <WriteDialog
@@ -638,11 +662,9 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
       action="Accept card"
       sending="Accepting"
       revision={card.revision}
-      canSubmit={name !== null}
+      canSubmit={name !== null && complete}
       onClose={onClose}
-      onSubmit={() =>
-        name === null ? Promise.resolve("A name is needed.") : send({ write: "accept", id: card.id, body: { as: name, note: note.trim() === "" ? null : note.trim(), revision: card.revision } })
-      }
+      onSubmit={() => (name === null ? Promise.resolve("A name is needed.") : send({ write: "accept", id: card.id, body: bodyOf(name) }))}
     >
       <p className="dialog-text">
         <bdi>{shownSlot(card.title)}</bdi>
@@ -658,8 +680,162 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
         </div>
       </dl>
       <p className="dialog-text dialog-effect">{NAME_IS_TYPED}</p>
+      <fieldset className="card-evidence-field">
+        <legend>Against the brief</legend>
+        <div className="card-field">
+          <label htmlFor={`${verdictId}-briefed`}>
+            <input
+              id={`${verdictId}-briefed`}
+              type="radio"
+              name={verdictId}
+              checked={!departing}
+              onChange={() => {
+                setVerdict("briefed");
+              }}
+            />{" "}
+            As briefed
+          </label>
+          <label htmlFor={`${verdictId}-departs`}>
+            <input
+              id={`${verdictId}-departs`}
+              type="radio"
+              name={verdictId}
+              checked={departing}
+              disabled={targets.length === 0}
+              onChange={() => {
+                setVerdict("departs");
+              }}
+            />{" "}
+            Departs from it
+          </label>
+        </div>
+      </fieldset>
+      {departing && (
+        <>
+          <TextArea label="Departs from" value={departs} onChange={setDeparts} required invalid={departed.length === 0} hint="Direct targets of this card, one per line." />
+          <TextField label="Summary" value={summary} onChange={setSummary} required invalid={summary.trim() === ""} />
+          <TextArea label="What the result does" value={observed} onChange={setObserved} required invalid={observed.trim() === ""} />
+          <TextArea label="What the brief says" value={documented} onChange={setDocumented} required invalid={documented.trim() === ""} />
+          <div className="card-field">
+            <label className="field-label" htmlFor={gapId}>
+              The gap
+            </label>
+            <select
+              id={gapId}
+              className="field"
+              value={gapType}
+              onChange={(event) => {
+                setGapType(event.target.value);
+              }}
+            >
+              {GAP_TYPES.map((entry) => (
+                <option key={entry.word} value={entry.word}>
+                  {entry.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <p className="dialog-text dialog-effect">This raises a discrepancy for the owner; it stops nothing and the card is accepted.</p>
+        </>
+      )}
       <TextArea label="Note" value={note} onChange={setNote} autoFocus={name !== null} />
       <TextField label="Accepting as" value={acting} onChange={setActing} required autoFocus={name === null} hint="Its reviewer's name, never its assignee's." />
+    </WriteDialog>
+  );
+}
+
+/**
+ * Clear: a person answers a suspect card (`docs/features/card-trace.md` "Clearing"), the page's dialog
+ * being the consent the CLI asks on a terminal. "No effect" takes a reason and vouches for the card
+ * against the brief as it stands; "Needs correction", for an accepted card alone, also takes an
+ * estimate and opens a new card, the original staying accepted. The rules are the daemon's. The name
+ * is the Board's one field and stands last, as in Accept, so a refusal of it is said right under it.
+ */
+export function ClearCardDialog({ project, card, on, ...handlers }: { project: string; card: Card; on: string | null } & WriteHandlers) {
+  const outcomeId = useId();
+  const { onClose } = handlers;
+  const send = useSend(project, handlers);
+  const [acting, setActing] = useActing();
+  const [outcome, setOutcome] = useState<CardClearBody["outcome"]>("no_effect");
+  const [reason, setReason] = useState("");
+  const [estimate, setEstimate] = useState("");
+  const [title, setTitle] = useState("");
+  const [checked, setChecked] = useState(false);
+  const name = actingName(acting);
+  const correcting = outcome === "needs_correction";
+  const accepted = card.acceptance !== null;
+
+  function bodyOf(as: string): CardClearBody {
+    const common = { outcome, reason: reason.trim(), revision: card.revision, as };
+    return correcting ? { ...common, estimate: estimate.trim(), ...(title.trim() === "" ? {} : { title: title.trim() }) } : common;
+  }
+
+  return (
+    <WriteDialog
+      title={`Clear ${card.id}`}
+      action="Clear card"
+      sending="Clearing"
+      revision={card.revision}
+      canSubmit={name !== null}
+      onClose={onClose}
+      check={() => {
+        setChecked(true);
+        if (reason.trim() === "") {
+          return "Say why the mark clears.";
+        }
+        return correcting && estimate.trim() === "" ? "A correction needs an estimate." : null;
+      }}
+      onSubmit={() => (name === null ? Promise.resolve("A name is needed.") : send({ write: "clear", id: card.id, body: bodyOf(name) }))}
+    >
+      <p className="dialog-text">
+        <bdi>{shownSlot(card.title)}</bdi>
+      </p>
+      {on !== null && (
+        <p className="dialog-text dialog-effect">
+          The brief changed at <bdi className="mono">{shownSlot(on)}</bdi>.
+        </p>
+      )}
+      <p className="dialog-text dialog-effect">{NAME_IS_TYPED}</p>
+      <fieldset className="card-evidence-field">
+        <legend>What the change means for this card</legend>
+        <div className="card-field">
+          <label htmlFor={`${outcomeId}-none`}>
+            <input
+              id={`${outcomeId}-none`}
+              type="radio"
+              name={outcomeId}
+              checked={!correcting}
+              onChange={() => {
+                setOutcome("no_effect");
+              }}
+            />{" "}
+            No effect
+          </label>
+          <label htmlFor={`${outcomeId}-correct`}>
+            <input
+              id={`${outcomeId}-correct`}
+              type="radio"
+              name={outcomeId}
+              checked={correcting}
+              disabled={!accepted}
+              onChange={() => {
+                setOutcome("needs_correction");
+              }}
+            />{" "}
+            Needs correction
+          </label>
+          {!accepted && <p className="card-field-hint">A correction answers an accepted card.</p>}
+        </div>
+      </fieldset>
+      <TextArea label="Reason" value={reason} onChange={setReason} required autoFocus={name !== null} invalid={checked && reason.trim() === ""} />
+      {correcting && (
+        <>
+          <TextField label="Estimate" value={estimate} onChange={setEstimate} required invalid={checked && estimate.trim() === ""} hint="N or N-M, no unit." />
+          <TextField label="Title of the correction" value={title} onChange={setTitle} hint={`Empty: Correct ${shownSlot(card.title)}`} />
+          <p className="dialog-text dialog-effect">This opens a new card. This one stays accepted, and its mark stands until the new card is accepted.</p>
+        </>
+      )}
+      <TextField label="Clearing as" value={acting} onChange={setActing} required autoFocus={name === null} hint="Your name: a person answers a mark." />
     </WriteDialog>
   );
 }

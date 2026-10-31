@@ -64,7 +64,8 @@ fn te8_nodes_carry_norm_hash_as_spec_show_does() {
         "NodeView lists its four top-level keys only"
     );
     // ui-node-bindings (TE-1): the node's set holds the key, between
-    // `sections` and `span_hash`; no other set does.
+    // `sections` and `span_hash`; no other set does, but a card's frozen
+    // entry (docs/features/card-trace.md "Data").
     let fixture: Value = serde_json::from_str(&keys).expect("daemon-keys.json");
     let holding: Vec<&String> = fixture
         .as_object()
@@ -79,8 +80,8 @@ fn te8_nodes_carry_norm_hash_as_spec_show_does() {
         .collect();
     assert_eq!(
         holding,
-        ["ShownNode"],
-        "the norm key in the node's set alone"
+        ["CardFrozen", "ShownNode"],
+        "the norm key in the node's set and a card's frozen entry alone"
     );
     let node: Vec<&str> = fixture["ShownNode"]
         .as_array()

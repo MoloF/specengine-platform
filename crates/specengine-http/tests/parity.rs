@@ -1043,7 +1043,7 @@ fn board_ac01_the_board_and_a_card_are_the_clis_byte_for_byte() {
     page_post(
         &server,
         &format!("{cards}/{done}/accept"),
-        &json!({"as": "ben", "note": "Read twice."}),
+        &json!({"briefed": true, "as": "ben", "note": "Read twice."}),
     );
     new_card(&pair, a, &["--title", "Refill the oil"]);
     new_card(&pair, b, &["--title", "Mend the net"]);

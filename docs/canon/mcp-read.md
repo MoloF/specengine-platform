@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-10-31
 ---
 
 # MCP read tools and resources
@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow` (`spec-flow.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. Launcher: `fixtures/mcp/mcp.json` (`probes` build, a scratch `HOME`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow` (`spec-flow.md`), `get_trace` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. Launcher: `fixtures/mcp/mcp.json` (`probes` build, a scratch `HOME`).
 
 ## Tools
 
@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue with `review_proposal`, the tasks, the cards, REF, the cut, the resources and the rules (`server.rs`), 2 047 B in every build, 1 939 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): 1 B left. Each description <= 2 048 (`get_node` 1 670, `get_context_bundle` 1 433), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, the reads on one line and the code tools on the next, then the queue with `review_proposal`, the tasks, the cards, REF, the cut, the resources and the rules (`server.rs`), 2 040 B in every build, 1 932 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): 8 B left (`; evidence computed, never typed` cut). Each description <= 2 048 (`get_node` 1 670, `get_context_bundle` 1 433), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 
@@ -52,7 +52,7 @@ Each request finds the project anew from the process's current directory and the
 
 ## Latency
 
-AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8-28 ms, warm 2-6 ms; a copy of this repository's docs (83 files) cold 178-236 ms, warm 19-72 ms; 3 000 synthetic candidates: `get_context_bundle` 886 ms, at budget 10 000 1 821 ms, `get_tree` 593 ms. A warm call over 1 s opens the lighter resolver (`spec-cli-graph.md` "Open").
+AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8-28 ms, warm 2-6 ms; 83 docs cold 178-236 ms, warm 19-72 ms; 3 000 synthetic candidates: `get_context_bundle` 886 ms, `get_tree` 593 ms. A warm call over 1 s opens the lighter resolver (`spec-cli-graph.md` "Open").
 
 ## Owner's check
 
@@ -64,17 +64,17 @@ AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Rec
 - `structuredContent` reaches the model: it gave `end_line` 18, `utf8` `true` of `get_node ADR-0031` (JSON only; `wc -l` 18).
 - Content only (`probe_output`, no lever): 48 000 characters inline; 60 000, 104 000, 200 000 stored in a file: the content cap lies in 48 000-60 000 (Phase 0: 48 000 in, 104 000 out).
 - Above it in total, `get_node` of 05 (text ≈ 40 000 characters, `truncated: false`, the same text in `structuredContent`, whose `truncated`, `sections` the model reported) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished. Read tools pass at this size: Q3's fallback untriggered.
-- `@specengine:` lists the template and documents by path; the `tree` resource was not seen.
+- `@specengine:` lists the template and documents by path, not the `tree` resource.
 - Not verified: which explanation holds (a probe with the lever; one with small text, large `structuredContent`); UTF-16 counting; the adversarial maxima (to ~268 000 combined, Size); `nextCursor` (< 200 resources here); inserting a node by `@`-mention.
 
 ## Tests
 
-`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default`, `mcp_read`, `mcp_flow`, `mcp_resources`, `mcp_session`, `mcp_door` (the single door), `mcp_intake`, `mcp_review_form`, `mcp_stage` (`review-form.md`), `mcp_tasks`, `mcp_cards`, `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
+`crates/specengine-mcp/tests` (harness: its README), over scratch copies of `fixtures/spec-a`, `-b`: `mcp_default`, `mcp_read`, `mcp_flow`, `mcp_trace`, `mcp_resources`, `mcp_session`, `mcp_door` (the single door), `mcp_intake`, `mcp_review_form`, `mcp_stage` (`review-form.md`), `mcp_tasks`, `mcp_cards`, `mcp_determinism`, `mcp_genre` (no kind literal, no P2-3 word in the default build), `mcp_index` (tables unchanged), `mcp_quiet`, `mcp_size`; `mcp_stdio` (`probes`). CLI `show_tail.rs`, `bounds.rs`, `locate.rs`; eval `build_graph.rs` pins MCP's `[dependencies]`.
 
 ## Open
 
 - AC-16's "not verified" items (Owner's check); 500 000 stays the working answer (A12).
 - Q3's fallback (if `structuredContent` counts and the lever fails: `nodes[].text`, `body` -> `null`), untriggered so far, bounds bulk text only; short-line `get_tree`/`search` JSON stays several times its text: the owner decides.
 - `get_node … with: ["links"]` lists a document's own heading as a self-mention, outgoing and incoming: a CLI/core fix.
-- A panic in the async wrapper, outside `spawn_blocking`, gets no response.
+- A panic outside `spawn_blocking` gets no response.
 - The Size residue. `resources/list` over a busy, corrupt or read-only database is untested.

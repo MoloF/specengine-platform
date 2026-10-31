@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-10-31
 ---
 
 # Proposal apply: revisions and the editorial approve
@@ -43,7 +43,7 @@ Lock: R-12
 Lock-mode: editorial
 ```
 
-`Revision: <ID> <rev> (editorial)` per changed node, file order; `Lock:` per node whose entries or block changed, then one `Lock-mode: editorial`.
+`Revision: <ID> <rev> (editorial)` per changed node, file order (cards vouch by these: `spec-trace.md` "Suspect"); `Lock:` per node whose entries or block changed, then one `Lock-mode: editorial`.
 
 ## Completion and reject
 

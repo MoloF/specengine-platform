@@ -145,17 +145,8 @@ fn answered(outcome: &Outcome) -> Answered {
                 },
             );
         }
-        Outcome::Card(card) => {
-            return caused(
-                outcome,
-                match card.cause {
-                    None => Some(StatusCode::OK),
-                    Some(CardCause::Usage) => None,
-                    Some(CardCause::Unknown) => Some(StatusCode::NOT_FOUND),
-                    Some(CardCause::Refused) => Some(StatusCode::CONFLICT),
-                },
-            );
-        }
+        Outcome::Card(card) => return caused(outcome, write_status(card.cause)),
+        Outcome::CardGroup(group) => return caused(outcome, write_status(group.cause)),
         _ => {}
     }
     let status = match (outcome, outcome.exit()) {
@@ -166,6 +157,16 @@ fn answered(outcome: &Outcome) -> Answered {
     Answered::Document {
         status,
         body: document(outcome),
+    }
+}
+
+/// A card write's status by its cause; `None` a usage defect.
+fn write_status(cause: Option<CardCause>) -> Option<StatusCode> {
+    match cause {
+        None => Some(StatusCode::OK),
+        Some(CardCause::Usage) => None,
+        Some(CardCause::Unknown) => Some(StatusCode::NOT_FOUND),
+        Some(CardCause::Refused) => Some(StatusCode::CONFLICT),
     }
 }
 

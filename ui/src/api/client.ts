@@ -5,6 +5,9 @@ import type {
   CardAcceptBody,
   CardAssignBody,
   CardCancelBody,
+  CardClearBody,
+  CardClearGroupBody,
+  CardClearGroupWrite,
   CardCreateBody,
   CardEditBody,
   CardList,
@@ -30,6 +33,7 @@ import type {
   TaskList,
   TaskNotFound,
   TaskPackage,
+  TraceDocument,
   TreeView,
 } from "./types";
 
@@ -105,6 +109,11 @@ export type RoadmapOptions = { release: string; pool?: never } | { pool: true; r
  */
 export interface CardsOptions {
   with_cancelled?: boolean;
+}
+
+/** `spec trace [REF]`: the node and what it holds; absent, every live document and every section a card targets. */
+export interface TraceOptions {
+  ref?: string;
 }
 
 /**
@@ -201,6 +210,12 @@ export interface SpecEngineClient {
   cancelCard(project: string, id: string, body: CardCancelBody): Promise<CardWrite>;
   /** POST /api/projects/:p/cards/:id/accept */
   acceptCard(project: string, id: string, body: CardAcceptBody): Promise<CardWrite>;
+  /** POST /api/projects/:p/cards/:id/clear (docs/features/card-trace.md "Clearing"; the page's dialog is the consent) */
+  clearCard(project: string, id: string, body: CardClearBody): Promise<CardWrite>;
+  /** POST /api/projects/:p/trace/clear (docs/features/card-trace.md "Clearing"; no effect only, one event per card) */
+  clearCardGroup(project: string, body: CardClearGroupBody): Promise<CardClearGroupWrite>;
+  /** GET /api/projects/:p/trace (docs/features/card-trace.md; = spec trace [REF] --json, the browser view; 404 the exit-1 document) */
+  getTrace(project: string, options?: TraceOptions, signal?: AbortSignal): Promise<TraceDocument>;
   /**
    * GET /api/projects/:p/events (SSE): `onEvent` per queue event of the project until the returned
    * function is called. `onGap` when the client opens the stream again after the browser gave up on

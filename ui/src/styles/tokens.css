@@ -193,6 +193,10 @@
   --card-accepted: var(--task-accepted);
   --card-cancelled: var(--task-cancelled);
   --card-overdue: var(--attention);
+  --card-suspect: var(--sync-broken-binding);
+  --card-departed: var(--sync-predated);
+  --card-correcting: var(--sync-spec-ahead);
+  --card-mark-unknown: var(--severity-unknown);
   --card-drop: var(--accent);
 
   /* Section diffs. */

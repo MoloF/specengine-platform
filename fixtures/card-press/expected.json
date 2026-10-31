@@ -1,11 +1,13 @@
 {
   "prefixes": [
     "PRN",
-    "SHT"
+    "SHT",
+    "STY"
   ],
   "kinds": [
     "broadsheet",
-    "print-run"
+    "print-run",
+    "style-ruling"
   ],
   "board": "flow copy | draft 0 | edit 0 | proof 0 | filed 0\nflow plates | queued 0 | blocked 0 | checked 0 | struck 0\n",
   "flows": [

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { aCardFlow, aCardList, aCardRow } from "../test/builders";
-import { assigneeChoices, disciplineChoices, dropMove, lanesOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf } from "./filter";
+import { aCardFlow, aCardList, aCardRow, aTrace, aTraceCard, aTraceNode } from "../test/builders";
+import { assigneeChoices, disciplineChoices, dropMove, lanesOf, marksOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf } from "./filter";
 
 // The Board's arrangement of one answer (docs/features/board-ui.md "Board", "Rules and edge cases").
 
@@ -38,6 +38,18 @@ describe("the filters", () => {
 
   it("keeps a chosen value no card holds any more listed", () => {
     expect(disciplineChoices([], "gone")).toEqual([{ key: "gone", label: "gone" }]);
+  });
+});
+
+describe("the marks of one trace read", () => {
+  it("keeps a mark that says something; a plain state says nothing; a clearable mark goes before any other", () => {
+    const departed = aTraceCard({ id: "C-1", mark: "departed", on: "A", discrepancy: "PR-1" });
+    const suspect = aTraceCard({ id: "C-1", mark: "suspect", on: "B" });
+    const plain = aTraceCard({ id: "C-2" });
+    const marks = marksOf(aTrace([aTraceNode("A", [departed, plain]), aTraceNode("B", [suspect])]));
+    expect([...marks.keys()]).toEqual(["C-1"]);
+    expect(marks.get("C-1")).toBe(suspect);
+    expect(marksOf(undefined).size).toBe(0);
   });
 });
 

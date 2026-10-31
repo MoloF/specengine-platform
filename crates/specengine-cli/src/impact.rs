@@ -41,6 +41,10 @@
 //!   nodes (each resolved now, with the sections it contains) meet a
 //!   reached node or a section within one, by number, each with the
 //!   reached nodes it names in radius order; never an exit.
+//! - **Cards** (task spec `card-trace`): the cards not cancelled with a
+//!   direct target among the same set, by number, each with its mark, read
+//!   as `spec trace` reads them and the reached nodes it names; never an
+//!   exit, and a queue that does not read is one note.
 //!
 //! ```text
 //! [seed symbol <QPATH>: <n> at <tier>]
@@ -52,6 +56,7 @@
 //! [  sig <signature>]
 //! test <row>
 //! task <T> | <state> | <title or -> | <node>, …
+//! card <id> | <flow>/<column> | <mark> | <title> | <node>, …
 //! seed <qpath> | <item_kind> | <path>:<start>-<end>
 //! <changed|added|removed> | <file>:<line> | <symbol> <item_kind>
 //! [truncated: <parts> not shown; lower --depth N or narrow the REF or --symbol]
@@ -59,8 +64,8 @@
 //! ```
 //!
 //! The cut: the seed header and the summary always print; then nodes,
-//! tested blocks, symbol rows, test rows (each with its lines), tasks, the seed matches
-//! and the delta's items, each whole, while the text stays within
+//! tested blocks, symbol rows, test rows (each with its lines), tasks, cards, the seed
+//! matches and the delta's items, each whole, while the text stays within
 //! [`crate::OUTPUT_CAP_CHARS`] (the first item whole whatever its size);
 //! the first item that does not fit and every later one are not shown.
 //! The JSON holds exactly the printed items; `truncated` is `null` uncut.
@@ -72,6 +77,7 @@ use specengine_code::query_name;
 use specengine_core::CodeConfig;
 use specengine_core::check::{CheckInput, NodeAt, SpecGraph};
 use specengine_core::lock::LockRelation;
+use specengine_core::trace::{CardMark, MarkFacts, card_mark, mark_notes};
 use specengine_model::{BindingRow, TaskStatus, TestedRow};
 use specengine_store::{
     CodeSnapshot, GitEnv, SnapshotSymbols, SqliteIndex, StoredSymbol, VerifyGit,
@@ -93,6 +99,7 @@ use crate::search::notes;
 use crate::show::{Target, classify};
 use crate::symbols::maps;
 use crate::tested::tested_line;
+use crate::trace::{CardMarkJson, queue_read, target_norms, target_places};
 use crate::unmapped::{Seeds, reached};
 use crate::verify_rows::read_code;
 use crate::{CliError, Env, Globals, Message, escape_controls, one_line, store_error};
@@ -102,6 +109,9 @@ const REV_IGNORED: &str = "`spec impact` reads the current files";
 
 /// The command the queue's other-repository note names.
 const COMMAND: &str = "spec impact";
+
+/// A queue or an index that does not read: the cards are left out, said so.
+const CARDS_UNREAD: &str = "cards not shown: the queue cannot be read (spec trace names the cause)";
 
 /// The hex digits of `--since`'s commit the text prints: a fixed prefix of
 /// the full OID, never git's abbreviation (which varies by repository).
@@ -157,6 +167,8 @@ pub struct ImpactOutcome {
     pub tests: Option<Vec<ImpactRow>>,
     /// By number.
     pub tasks: Vec<ImpactTask>,
+    /// The cards not cancelled with a target in the reached set, by number.
+    pub cards: Vec<ImpactCard>,
     /// `--since`'s code items changed, added and removed; `None` otherwise
     /// and at exit 1.
     pub(crate) delta: Option<CodeDelta>,
@@ -199,6 +211,19 @@ pub struct ImpactTask {
     pub nodes: Vec<String>,
 }
 
+/// A card with a direct target in the reached set.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImpactCard {
+    pub id: String,
+    pub flow: String,
+    pub column: String,
+    pub title: String,
+    /// Over all its direct targets.
+    pub mark: CardMark,
+    /// The reached nodes it names (ID, else path), in radius order.
+    pub nodes: Vec<String>,
+}
+
 /// How many of each list print.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 struct Shown {
@@ -208,6 +233,7 @@ struct Shown {
     symbols: usize,
     tests: usize,
     tasks: usize,
+    cards: usize,
     /// Of the delta's items in their printed order: changed, added,
     /// removed.
     delta: usize,
@@ -231,6 +257,7 @@ impl ImpactOutcome {
             symbols: None,
             tests: None,
             tasks: Vec::new(),
+            cards: Vec::new(),
             delta: None,
             code: None,
             shown: Shown::default(),
@@ -253,6 +280,7 @@ impl ImpactOutcome {
             || shown.symbols < self.symbols.as_ref().map_or(0, Vec::len)
             || shown.tests < self.tests.as_ref().map_or(0, Vec::len)
             || shown.tasks < self.tasks.len()
+            || shown.cards < self.cards.len()
             || shown.delta < self.delta.as_ref().map_or(0, CodeDelta::len)
     }
 }
@@ -753,6 +781,7 @@ fn radius(
     // The queue's notes, then the rows' one note.
     messages.extend(tasks.notes.into_iter().map(Message::Note));
     messages.extend(others_note(others, read.slug, COMMAND).map(Message::Note));
+    reached_cards(read, index, &walk.nodes, outcome, messages);
 
     // Rows: one judge over the reached set; without `[code]` none, no
     // note, the code index untouched.
@@ -783,6 +812,73 @@ fn radius(
         };
         outcome.symbols = Some(shown(symbols));
         outcome.tests = Some(shown(tests));
+    }
+}
+
+/// The cards not cancelled with a direct target in a reached node or a
+/// section within one, by number, each with its mark and the reached nodes
+/// it names; a queue or an index that does not read is one note, never an
+/// exit.
+fn reached_cards(
+    read: &RadiusRead<'_>,
+    index: &SqliteIndex,
+    nodes: &[(NodeAt, usize)],
+    outcome: &mut ImpactOutcome,
+    messages: &mut Vec<Message>,
+) {
+    let graph = read.graph;
+    let queue = match queue_read(read.env, read.slug) {
+        Ok(queue) => queue,
+        Err(_) => {
+            messages.push(Message::Note(CARDS_UNREAD.to_owned()));
+            return;
+        }
+    };
+    if queue.cards.is_empty() && queue.notes.is_empty() {
+        return;
+    }
+    let Ok(stored) = index.node_norms() else {
+        messages.push(Message::Note(CARDS_UNREAD.to_owned()));
+        return;
+    };
+    let places = target_places(graph, queue.cards.iter().flat_map(|card| &card.targets));
+    let norms = target_norms(graph, &stored, &places);
+    let facts = MarkFacts {
+        norms: &norms,
+        settled: &queue.settled,
+        corrections: &queue.corrections,
+    };
+    // Per node, the reached nodes holding it, by their place in the radius.
+    let mut reached: BTreeMap<NodeAt, Vec<usize>> = BTreeMap::new();
+    for (place, &(at, _)) in nodes.iter().enumerate() {
+        for node in graph.within(at) {
+            reached.entry(node).or_default().push(place);
+        }
+    }
+    messages.extend(queue.notes.iter().cloned().map(Message::Note));
+    for card in &queue.cards {
+        let on: BTreeSet<usize> = card
+            .targets
+            .iter()
+            .flat_map(|target| places.get(target).into_iter().flatten())
+            .flat_map(|node| reached.get(node).into_iter().flatten().copied())
+            .collect();
+        if on.is_empty() {
+            continue;
+        }
+        let named: Vec<String> = on
+            .into_iter()
+            .map(|place| graph.name(nodes[place].0))
+            .collect();
+        messages.extend(mark_notes(card, &norms).into_iter().map(Message::Note));
+        outcome.cards.push(ImpactCard {
+            id: card.id.clone(),
+            flow: card.flow.clone(),
+            column: card.column.clone(),
+            title: card.title.clone(),
+            mark: card_mark(card, &card.targets, &facts),
+            nodes: named,
+        });
     }
 }
 
@@ -870,6 +966,19 @@ fn task_line(task: &ImpactTask) -> String {
     ))
 }
 
+/// `card <id> | <flow>/<column> | <mark> | <title> | <node>, …`.
+fn card_line(card: &ImpactCard) -> String {
+    escape_controls(&format!(
+        "card {} | {}/{} | {} | {} | {}",
+        one_line(&card.id),
+        one_line(&card.flow),
+        one_line(&card.column),
+        one_line(&card.mark.text()),
+        one_line(&card.title),
+        one_line(&card.nodes.join(", "))
+    ))
+}
+
 /// `impact: nodes <n>, symbols <s or ->, tests <t or ->, tasks <k>[; code
 /// files <f> (.rs <r>, .ron <o>), skipped <s>][; left out: <g> generated,
 /// <a> archived]`, every list whole, zero left-out parts omitted.
@@ -928,7 +1037,7 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
             .map(|row| cost(&row_text(word, row)))
             .collect()
     };
-    let lists: [Vec<usize>; 7] = [
+    let lists: [Vec<usize>; 8] = [
         outcome
             .nodes
             .iter()
@@ -948,6 +1057,11 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
             .map(|task| task_line(task).chars().count() + 1)
             .collect(),
         outcome
+            .cards
+            .iter()
+            .map(|card| card_line(card).chars().count() + 1)
+            .collect(),
+        outcome
             .seeds
             .iter()
             .flatten()
@@ -962,7 +1076,7 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
     ];
     let mut used = cost(&fixed);
     let mut cut = false;
-    let mut fits = [0usize; 7];
+    let mut fits = [0usize; 8];
     for (at, costs) in lists.iter().enumerate() {
         if cut {
             break;
@@ -973,7 +1087,7 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
         used = now;
         cut = fit < costs.len();
     }
-    let [nodes, tested, symbols, tests, tasks, seeds, delta] = fits;
+    let [nodes, tested, symbols, tests, tasks, cards, seeds, delta] = fits;
     Shown {
         seeds,
         nodes,
@@ -981,6 +1095,7 @@ fn plan(outcome: &ImpactOutcome) -> Shown {
         symbols,
         tests,
         tasks,
+        cards,
         delta,
     }
 }
@@ -997,6 +1112,7 @@ struct NotShown {
     symbols: Option<usize>,
     tests: Option<usize>,
     tasks: usize,
+    cards: usize,
     seeds: Option<usize>,
     delta: Option<usize>,
 }
@@ -1019,6 +1135,7 @@ fn not_shown(outcome: &ImpactOutcome) -> NotShown {
             .as_ref()
             .map(|rows| rest(rows.len(), shown.tests)),
         tasks: rest(outcome.tasks.len(), shown.tasks),
+        cards: rest(outcome.cards.len(), shown.cards),
         seeds: outcome
             .seeds
             .as_ref()
@@ -1041,6 +1158,7 @@ fn tail(outcome: &ImpactOutcome) -> String {
         (rest.symbols, "symbols"),
         (rest.tests, "tests"),
         (Some(rest.tasks), "tasks"),
+        (Some(rest.cards), "cards"),
         (rest.seeds, "seed matches"),
         (rest.delta, "delta items"),
     ]
@@ -1083,6 +1201,7 @@ pub(crate) fn render_text(outcome: &ImpactOutcome) -> String {
         }
     }
     lines.extend(first(&outcome.tasks, shown.tasks).iter().map(task_line));
+    lines.extend(first(&outcome.cards, shown.cards).iter().map(card_line));
     if let Some(seeds) = &outcome.seeds {
         lines.extend(first(seeds, shown.seeds).iter().map(seed_line));
     }
@@ -1122,9 +1241,17 @@ struct ImpactJson<'a> {
     symbols: Option<&'a [&'a BindingRow]>,
     tests: Option<&'a [&'a BindingRow]>,
     tasks: &'a [ImpactTask],
+    cards: Vec<ImpactCardJson<'a>>,
     notes: Vec<String>,
     truncated: Option<TruncatedJson>,
     code: Option<CodeCount>,
+}
+
+#[derive(Serialize)]
+struct ImpactCardJson<'a> {
+    #[serde(flatten)]
+    card: CardMarkJson<'a>,
+    nodes: &'a [String],
 }
 
 #[derive(Serialize)]
@@ -1151,6 +1278,7 @@ struct TruncatedJson {
     symbols: Option<usize>,
     tests: Option<usize>,
     tasks: usize,
+    cards: usize,
     seeds: Option<usize>,
     /// `--since`'s delta items.
     delta: Option<usize>,
@@ -1178,6 +1306,7 @@ impl Serialize for ImpactOutcome {
                 symbols: rest.symbols,
                 tests: rest.tests,
                 tasks: rest.tasks,
+                cards: rest.cards,
                 seeds: rest.seeds,
                 delta: rest.delta,
             }
@@ -1212,6 +1341,19 @@ impl Serialize for ImpactOutcome {
             symbols: symbols.as_deref(),
             tests: tests.as_deref(),
             tasks: first(&self.tasks, shown.tasks),
+            cards: first(&self.cards, shown.cards)
+                .iter()
+                .map(|card| ImpactCardJson {
+                    card: CardMarkJson::of(
+                        &card.id,
+                        &card.flow,
+                        &card.column,
+                        &card.title,
+                        &card.mark,
+                    ),
+                    nodes: &card.nodes,
+                })
+                .collect(),
             notes: notes(&self.messages),
             truncated,
             code: self.code,

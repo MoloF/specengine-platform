@@ -51,8 +51,8 @@
 //! no file).
 //!
 //! AC-02 of docs/features/board-ui.md ("The fence stays"): the door changes
-//! for cards alone. `CARD_CALLS`, beside `TASK_READS`, lists the eight
-//! `card_` calls and any other `card_` name is forbidden, each caught in a
+//! for cards alone. `CARD_CALLS`, beside `TASK_READS`, lists the ten
+//! `card_` calls (eight, and docs/features/card-trace.md's two clears) and any other `card_` name is forbidden, each caught in a
 //! probe by path and bare; `approve`, `reject`, every `propose*`,
 //! `round_answer`, `import_state`, `export_*`, `init`, `index` and every
 //! `task_` writer stay forbidden. The two card GETs join the endpoints that
@@ -481,7 +481,7 @@ const TASK_READS: [&str; 2] = ["task_list", "task_show"];
 /// The CLI library's card calls a handler may make, reads and writes: a
 /// card is the one record the daemon writes beyond a stage (ADR-0056,
 /// docs/features/board-ui.md "The fence stays").
-const CARD_CALLS: [&str; 8] = [
+const CARD_CALLS: [&str; 10] = [
     "card_list",
     "card_show",
     "card_new",
@@ -490,6 +490,8 @@ const CARD_CALLS: [&str; 8] = [
     "card_assign",
     "card_cancel",
     "card_accept",
+    "card_clear",
+    "card_clear_group",
 ];
 
 /// The names no handler may call: the CLI's deciding, storing, exporting,
@@ -998,7 +1000,7 @@ fn ui_round_t02_the_scan_catches_a_round_walk_and_its_terminal_but_not_the_stagi
 // ------------------------------------------------------- board-ui, AC-02
 
 #[test]
-fn board_ui_ac02_the_scan_admits_the_eight_card_calls_and_no_other_card_name() {
+fn board_ui_ac02_the_scan_admits_the_ten_card_calls_and_no_other_card_name() {
     // Positive controls: a `card_` name outside the list, by path and bare;
     // a name the library may add later too.
     for name in [
@@ -1054,7 +1056,7 @@ fn board_ui_ac02_the_scan_admits_the_eight_card_calls_and_no_other_card_name() {
                    specengine_cli::card_reopen(env, globals, &reopen)\n\
                    }).await }";
     assert_eq!(caught(handler), ["task_claim", "card_reopen"], "{handler}");
-    // Negative controls: the eight, by path and bare; the handler of the
+    // Negative controls: the ten, by path and bare; the handler of the
     // slice with its yes; the types, the outcome's variant, the body's cap;
     // a method of something else; a name in a string or a comment.
     for name in CARD_CALLS {
@@ -1078,8 +1080,10 @@ fn board_ui_ac02_the_scan_admits_the_eight_card_calls_and_no_other_card_name() {
     }
 }
 
-/// docs/features/board-ui.md "The fence stays", 3: a card's write is a row
-/// and an event in the queue, nothing else. An open question stands for the
+/// docs/features/board-ui.md "The fence stays", 3, as
+/// docs/features/card-trace.md widens it (ADR-0057): a card's write is a row
+/// and an event in the queue, nothing else, a departing accept's one
+/// discrepancy apart. An open question stands for the
 /// proposals, an identity makes a commit possible, and the whole repository
 /// is compared byte for byte after every POST: each of the seven writes
 /// adds exactly its one `card.*` event; each refused one, past the door or
@@ -1096,8 +1100,8 @@ fn card_writes_touch_only_the_queue() {
     let q = ask(
         &home,
         &a,
-        &["SHT-FRONT"],
-        "Does the masthead keep its rule?",
+        &["SHT-BACK"],
+        "Does the tide table keep its rule?",
     );
     let ids = [q.as_str()];
     let before = round_state(&scratch, &home, &cwd, &a, &ids);
@@ -1141,7 +1145,7 @@ fn card_writes_touch_only_the_queue() {
         ),
         (
             "cards/C-0001/accept",
-            json!({"as": "ben", "note": "Read twice."}),
+            json!({"briefed": true, "as": "ben", "note": "Read twice."}),
             "card.accepted",
         ),
         (
@@ -1194,7 +1198,11 @@ fn card_writes_touch_only_the_queue() {
         ),
         (409, "cards/C-0003/move", json!({"to": "filed"})),
         (409, "cards/C-0003/move", json!({"to": "edit", "as": "ana"})),
-        (409, "cards/C-0003/accept", json!({"as": "ana"})),
+        (
+            409,
+            "cards/C-0003/accept",
+            json!({"briefed": true, "as": "ana"}),
+        ),
         (409, "cards/C-0001/edit", json!({"goal": "Again."})),
         (404, "cards/C-0099/cancel", json!({"reason": "Late."})),
         (400, "cards/C-0003/move", json!({})),
@@ -1209,6 +1217,43 @@ fn card_writes_touch_only_the_queue() {
             "{path} {body}: nothing changed"
         );
     }
+    // docs/features/card-trace.md: the one proposal a card's write makes: a
+    // departing accept stores its discrepancy, `proposal.created` then
+    // `card.accepted`, and git, the files and the open question stay. Past it
+    // no other write stores one.
+    for (path, body) in [
+        (
+            "cards",
+            json!({"title": "Long read", "discipline": "copy", "target": ["SHT-INNER"],
+                "as": "desk"}),
+        ),
+        (
+            "cards/C-0004/assign",
+            json!({"reviewer": "ben", "as": "desk"}),
+        ),
+        ("cards/C-0004/move", json!({"to": "edit", "as": "desk"})),
+        ("cards/C-0004/move", json!({"to": "proof", "as": "ana"})),
+    ] {
+        let reply = post(path, &body);
+        assert_eq!(reply.status, 200, "{path} {body}: {}", reply.text());
+    }
+    let seen = round_state(&scratch, &home, &cwd, &a, &ids);
+    let reply = post(
+        "cards/C-0004/accept",
+        &json!({"as": "ben", "departs": ["SHT-INNER"], "summary": "It left the brief.",
+            "observed": "Short.", "documented": "Long."}),
+    );
+    assert_eq!(reply.status, 200, "{}", reply.text());
+    let after = round_state(&scratch, &home, &cwd, &a, &ids);
+    assert_eq!(after.0, before.0, "git, the refs, every file");
+    assert_eq!(after.1, before.1, "the question as it was");
+    let added: Vec<&str> = after.2[seen.2.len()..]
+        .iter()
+        .map(|(_, kind, _)| kind.as_str())
+        .collect();
+    assert_eq!(added, ["proposal.created", "card.accepted"]);
+    let stored = after;
+
     // Refused at the door.
     let path = format!("{p}/cards/C-0003/edit");
     let body = b"{\"goal\":\"Again.\"}";

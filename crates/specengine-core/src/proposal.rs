@@ -305,6 +305,17 @@ pub const LOCK_MODE_TRAILER: &str = "Lock-mode";
 /// a staged approve's key, `Lock-mode: editorial`.
 pub const EDITORIAL: &str = "editorial";
 
+/// The node a `Revision:` trailer's value keeps under an editorial apply:
+/// `R-12` of `R-12 3 (editorial)`; `None` for a raise, or any other text.
+pub fn editorial_revision(value: &str) -> Option<&str> {
+    let rest = value
+        .strip_suffix(')')?
+        .strip_suffix(EDITORIAL)?
+        .strip_suffix(" (")?;
+    let (id, rev) = rest.rsplit_once(' ')?;
+    (!id.is_empty() && rev.parse::<u32>().is_ok()).then_some(id)
+}
+
 /// One node whose meaning an apply changes: its canonical ID, its revision
 /// as read, and what it was raised to (`None`: kept, an editorial approve).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

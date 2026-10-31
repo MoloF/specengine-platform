@@ -11,6 +11,9 @@
 //!
 //! docs/features/card-store.md AC-10: `src/card.rs` is scanned with the rest,
 //! the words of `fixtures/card-press` join the list.
+//!
+//! docs/features/card-trace.md: `src/trace.rs` is scanned with the rest, the
+//! ruling of that fixture joins the list, and `spec trace` joins the battery.
 
 #![cfg(unix)]
 
@@ -26,8 +29,9 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// repository's registered command prefix, docs/features/spec-cli-switch.md
 /// AC-15; docs/features/roadmap-items.md this repository's plan prefix and
 /// its shard; docs/features/flow-read.md the flow fixtures' prefixes and
-/// kinds; docs/features/card-store.md the card fixture's).
-const FORBIDDEN: [&str; 33] = [
+/// kinds; docs/features/card-store.md the card fixture's;
+/// docs/features/card-trace.md that fixture's ruling).
+const FORBIDDEN: [&str; 35] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -70,6 +74,10 @@ const FORBIDDEN: [&str; 33] = [
     "SHT-",
     "broadsheet",
     "print-run",
+    // docs/features/card-trace.md: no `spec trace` line by a word of a
+    // project it reads.
+    "STY-",
+    "style-ruling",
 ];
 
 fn cli_sources() -> Vec<PathBuf> {
@@ -258,6 +266,13 @@ fn the_read_loop_answers_alike_on_both_fixtures() {
         spec(&home, &root, &["flow", dangling]).code(1);
         spec(&home, &root, &["flow", lookalike]).code(2);
         spec(&home, &root, &["flow", &format!("other:{dangling}")]).code(2);
+        // docs/features/card-trace.md: `spec trace` reads either genre
+        // through its own config: a whole read, the refusals.
+        spec(&home, &root, &["trace"]).code(0);
+        spec(&home, &root, &["--json", "trace"]).code(0);
+        spec(&home, &root, &["trace", dangling]).code(1);
+        spec(&home, &root, &["trace", lookalike]).code(2);
+        spec(&home, &root, &["trace", &format!("other:{dangling}")]).code(2);
     }
 }
 

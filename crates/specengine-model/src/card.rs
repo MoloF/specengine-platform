@@ -51,12 +51,40 @@ pub struct CardEvidence {
     pub at: String,
 }
 
+/// What an accept says of the result against its brief.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CardVerdict {
+    /// As briefed; a row stored without a verdict reads this.
+    #[default]
+    Briefed,
+    /// It departs from the brief: a discrepancy says how.
+    Departs,
+}
+
+impl CardVerdict {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Briefed => "briefed",
+            Self::Departs => "departs",
+        }
+    }
+}
+
 /// `acceptance`: the reviewer's act.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CardAcceptance {
     pub by: String,
     pub at: String,
     pub note: Option<String>,
+    #[serde(default)]
+    pub verdict: CardVerdict,
+    /// The direct targets a departing accept names.
+    #[serde(default)]
+    pub departs: Vec<String>,
+    /// The discrepancy a departing accept made.
+    #[serde(default)]
+    pub discrepancy: Option<String>,
 }
 
 /// `cancellation`: who took the card out of its column, and why.
@@ -65,6 +93,20 @@ pub struct CardCancellation {
     pub by: String,
     pub at: String,
     pub reason: String,
+}
+
+/// One direct target as a card last saw it: the entry a meaning change is
+/// compared with. The state of a card against it is computed per read and
+/// never stored here.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CardFrozen {
+    /// The target as `targets` holds it.
+    pub id: String,
+    pub rev: Option<u32>,
+    pub norm_hash: Option<String>,
+    /// Hashes vouched for since (an editorial apply's), the last 16.
+    #[serde(default)]
+    pub also: Vec<String>,
 }
 
 /// A stored card.
@@ -84,8 +126,10 @@ pub struct Card {
     /// Canonical IDs or an id-less document's path, each once; none on a
     /// manual card.
     pub targets: Vec<String>,
-    /// Held for a later slice; `None` on every card this build writes.
-    pub snapshot: Option<String>,
+    /// Each direct target as frozen, in `targets` order, then any target
+    /// since dropped, inert until it returns; `None` on a card that never
+    /// froze one.
+    pub snapshot: Option<Vec<CardFrozen>>,
     pub criteria: Vec<String>,
     pub assignee: Option<String>,
     pub reviewer: Option<String>,
@@ -107,7 +151,8 @@ pub struct Card {
 }
 
 impl Card {
-    /// Accepted or cancelled: every write on it is refused.
+    /// Accepted or cancelled: every write of its own is refused; a person's
+    /// clear, and the accept of its correction, still reach an accepted card.
     pub const fn is_closed(&self) -> bool {
         self.acceptance.is_some() || self.cancellation.is_some()
     }

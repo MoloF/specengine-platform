@@ -26,6 +26,9 @@
 //! GET`); `.../cards/:id/{move,edit,assign,cancel,accept}` take POST alone
 //! (GET among the others: 405 `Allow: POST`); their POST from no page is the
 //! 403 of `same_origin()`, no `Allow`. None runs a call.
+//!
+//! docs/features/card-trace.md: `.../trace` is a read beside `flow`;
+//! `.../cards/:id/clear` and `.../trace/clear` join the writes, POST alone.
 
 mod common;
 
@@ -36,10 +39,10 @@ use common::{Reply, Scratch, Server, beyond_daemon, request_bytes};
 /// `tasks/:id`: docs/features/ui-live-tasks.md "Rules and edge cases";
 /// `round`: docs/features/ui-round.md "Data"; `roadmap`:
 /// docs/features/roadmap-surfaces.md, its answer on A a 503: no
-/// `[roadmap]`; `flow`: docs/features/flow-read.md; `cards/:id`:
-/// docs/features/board-ui.md "Data"; `cards` itself takes a POST too:
-/// [`CARDS`]).
-const READS: [&str; 16] = [
+/// `[roadmap]`; `flow`: docs/features/flow-read.md; `trace`:
+/// docs/features/card-trace.md; `cards/:id`: docs/features/board-ui.md
+/// "Data"; `cards` itself takes a POST too: [`CARDS`]).
+const READS: [&str; 17] = [
     "/api/projects",
     "/api/projects/lantern-keep/tree",
     "/api/projects/lantern-keep/nodes/MEC-STAMINA",
@@ -47,6 +50,7 @@ const READS: [&str; 16] = [
     "/api/projects/lantern-keep/bundle?node_ids=MEC-STAMINA",
     "/api/projects/lantern-keep/graph?ref=MEC-STAMINA",
     "/api/projects/lantern-keep/flow",
+    "/api/projects/lantern-keep/trace",
     "/api/projects/lantern-keep/check",
     "/api/projects/lantern-keep/roadmap",
     "/api/projects/lantern-keep/inbox",
@@ -67,20 +71,23 @@ const ROUND_ANSWERS: &str = "/api/projects/lantern-keep/round/answers";
 /// "Data").
 const CARDS: &str = "/api/projects/lantern-keep/cards";
 
-/// The five writes on one card.
-const CARD_WRITES: [&str; 5] = [
+/// The six writes on one card, and a group's clear
+/// (docs/features/card-trace.md).
+const CARD_WRITES: [&str; 7] = [
     "/api/projects/lantern-keep/cards/C-0001/move",
     "/api/projects/lantern-keep/cards/C-0001/edit",
     "/api/projects/lantern-keep/cards/C-0001/assign",
     "/api/projects/lantern-keep/cards/C-0001/cancel",
     "/api/projects/lantern-keep/cards/C-0001/accept",
+    "/api/projects/lantern-keep/cards/C-0001/clear",
+    "/api/projects/lantern-keep/trace/clear",
 ];
 
 /// Paths no route serves (`tasks/:id/transition`, 07 s3, stays one:
 /// docs/features/ui-live-tasks.md "Rules and edge cases"). `/` is the web
 /// UI's since docs/features/ui-embed.md; no SPA fallback, no `/index.html`
 /// alias, no `/assets` listing (T5).
-const UNKNOWN: [&str; 25] = [
+const UNKNOWN: [&str; 29] = [
     "/index.html",
     "/assets",
     "/api",
@@ -106,6 +113,10 @@ const UNKNOWN: [&str; 25] = [
     "/api/projects/lantern-keep/cards/C-0001/",
     "/api/projects/lantern-keep/cards/C-0001/reject",
     "/api/projects/lantern-keep/cards/C-0001/move/more",
+    "/api/projects/lantern-keep/trace/SHT-FRONT",
+    "/api/projects/lantern-keep/traces",
+    "/api/projects/lantern-keep/trace/clear/more",
+    "/api/projects/lantern-keep/cards/C-0001/clear/more",
 ];
 
 /// Every method but GET and POST.

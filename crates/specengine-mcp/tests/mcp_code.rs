@@ -1897,7 +1897,10 @@ fn code_mirrors_pin_the_q35_types() {
 /// [`as_of_review_form`] takes that back. 2 047 since
 /// docs/features/card-store.md "MCP": [`CARDS_LINE`] after the tasks line (112
 /// bytes), [`ERROR_SENTENCE`] and [`TASK_ID_CLAUSE`] cut (113 bytes);
-/// [`as_of_flow_read`] takes that back.
+/// [`as_of_flow_read`] takes that back. 2 040 since
+/// docs/features/card-trace.md: [`TRACE_READ`] ends the reads' line (25
+/// bytes), [`EVIDENCE_CLAUSE`] cut (32 bytes); [`as_of_card_store`] takes that
+/// back.
 const PLANNED_INSTRUCTIONS: &str = concat!(
     "SpecEngine keeps a project's spec in git. Each tool is a ",
     "spec command: content its `2>&1` output, structuredContent its --json document.\n",
@@ -1907,7 +1910,7 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, ",
     "budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, ",
     "pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, depth?) = \
-     flow.\n",
+     flow; get_trace(ref?) = trace.\n",
     "- Code: find_symbols(query|node|file|at, limit?) = symbols; refs(id) = refs; ",
     "unmapped(path?) = unmapped; check_binding(node, symbol?) = verify --node.\n",
     "Queue (writes only the queue; the owner decides on a terminal):\n",
@@ -1916,8 +1919,7 @@ const PLANNED_INSTRUCTIONS: &str = concat!(
     "- ask_question, report_discrepancy, report_decision = spec propose ",
     "question|discrepancy|decision: hits are what is decided or asked; stored only if ",
     "distinct_from names each; work on your working answer.\n",
-    "- report_drift = spec propose drift: queues HEAD's lock drift; evidence computed, never ",
-    "typed.\n",
+    "- report_drift = spec propose drift: queues HEAD's lock drift.\n",
     "- review_proposal = review --brief after the owner's form; only when the owner asks.\n",
     "- get_task, claim_task, submit_plan, report_run, complete_task = spec task ",
     "show|claim|plan|report|complete.\n",
@@ -1947,6 +1949,24 @@ const CARDS_LINE: &str = "- list_cards, get_card, create_card, edit_card, move_c
 const ERROR_SENTENCE: &str =
     " A REF naming nothing or a call that cannot run is an error result with the reason.";
 const TASK_ID_CLAUSE: &str = "; the three above take task_id";
+
+/// docs/features/card-trace.md: what the reads' line gains before its full
+/// stop (25 bytes).
+const TRACE_READ: &str = "; get_trace(ref?) = trace";
+
+/// docs/features/card-trace.md: what makes room for [`TRACE_READ`] beside the
+/// 1 byte left (32 bytes).
+const EVIDENCE_CLAUSE: &str = "; evidence computed, never typed";
+
+/// card-store's text (2 047 bytes) out of card-trace's (2 040): [`TRACE_READ`]
+/// taken out, [`EVIDENCE_CLAUSE`] put back.
+fn as_of_card_store(instructions: &str) -> String {
+    instructions.replacen(TRACE_READ, "", 1).replacen(
+        "queues HEAD's lock drift.\n",
+        &format!("queues HEAD's lock drift{EVIDENCE_CLAUSE}.\n"),
+        1,
+    )
+}
 
 /// flow-read's text (2 048 bytes) out of card-store's (2 047):
 /// [`CARDS_LINE`] taken out, the two cuts put back.
@@ -2032,12 +2052,12 @@ const SINCE_INPUT: &str = "|since";
 
 /// docs/features/impact.md "INSTRUCTIONS": the reads' line, its LF
 /// included (312 bytes; 318 since docs/features/impact-since.md; 350 since
-/// docs/features/flow-read.md).
+/// docs/features/flow-read.md; 375 since docs/features/card-trace.md).
 const READS_LINE: &str = "- get_tree(root?, depth?, kinds?, archive?) = tree; get_node(id, with?, archive?) = \
                           show; search(query, kinds?, limit?, archive?) = search; get_context_bundle(node_ids, \
                           budget?) = bundle; get_proposal(proposal_id) = review --brief; get_roadmap(release?, \
                           pool?) = roadmap; get_impact(id|symbol|since, depth?) = impact; get_flow(root?, \
-                          depth?) = flow.\n";
+                          depth?) = flow; get_trace(ref?) = trace.\n";
 
 /// docs/features/check-binding.md "INSTRUCTIONS": what the code line gains,
 /// before its full stop (46 bytes).
@@ -2094,8 +2114,14 @@ const PROBES_PARAGRAPH: &str = "\n\nProbes build: review_proposal, probe_output,
 /// docs/features/roadmap-surfaces.md, docs/features/check-binding.md,
 /// docs/features/show-bindings.md, docs/features/impact.md,
 /// docs/features/impact-since.md, docs/features/review-form.md,
-/// docs/features/flow-read.md and docs/features/card-store.md).
-const PLANNED_BLAKE3: &str = "8666a5184cf8ab8a34d782d5e68ef6222c500be5350ca741378c73b7892a80d5";
+/// docs/features/flow-read.md, docs/features/card-store.md and
+/// docs/features/card-trace.md).
+const PLANNED_BLAKE3: &str = "2f8e3e48411f0e6193c5c2ca7c28b892a578052994933250e93c38135c60bfce";
+
+/// card-store's text (2 047 bytes), [`as_of_card_store`] over
+/// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
+/// docs/features/card-trace.md.
+const CARD_STORE_BLAKE3: &str = "8666a5184cf8ab8a34d782d5e68ef6222c500be5350ca741378c73b7892a80d5";
 
 /// flow-read's text (2 048 bytes), [`as_of_flow_read`] over
 /// [`PLANNED_INSTRUCTIONS`]: its `PLANNED_BLAKE3` before
@@ -2139,13 +2165,14 @@ const ROADMAP_BLAKE3: &str = "415d6cadd8d7f19d6a00d520d16c41cff8a78ec83c0f9fb339
 /// its `PLANNED_BLAKE3` before docs/features/roadmap-surfaces.md.
 const CODE_TOOLS_BLAKE3: &str = "3d172b74534282e8ad7fa14eb29f5e2b51e09f96970babe3145173c51fd1ad9c";
 
-/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 939
-/// bytes since docs/features/card-store.md); flow-read's 1 910 was
-/// `322b35f2…`, review-form's 1 902 `f0924769…`, impact-since's 1 885
+/// The BLAKE3 of [`PLANNED_INSTRUCTIONS`] less [`TASKS_LINE`] (1 932
+/// bytes since docs/features/card-trace.md); card-store's 1 939 was
+/// `6e322b8c…`, flow-read's 1 910 `322b35f2…`, review-form's 1 902
+/// `f0924769…`, impact-since's 1 885
 /// `381344b2…`, impact's 1 879 `523f0715…`, show-bindings' 1 839
 /// `54d160f1…`.
 const PLANNED_LESS_TASKS_BLAKE3: &str =
-    "6e322b8c83a4f63b5dd0eee4abb714b4883ea2789cfccfe4d2910280f8a619cd";
+    "576f7ffed0cb1e5f22942a9d935836c4a07b798fc1cb29d89dd0db38b6eef861";
 
 /// RD-5 (Q31): `INSTRUCTIONS` are the planned text byte for byte: 1 892
 /// bytes, 1 754 less the tasks line (the spec's 1 755 is off by one: D1),
@@ -2183,10 +2210,15 @@ const PLANNED_LESS_TASKS_BLAKE3: &str =
 /// docs/features/card-store.md "MCP": [`CARDS_LINE`] after the tasks line,
 /// [`ERROR_SENTENCE`] and [`TASK_ID_CLAUSE`] cut: 2 047 bytes, 1 939 less the
 /// tasks line, 1 left; the text before it is flow-read's byte for byte.
+/// docs/features/card-trace.md: [`TRACE_READ`] ends the reads' line,
+/// [`EVIDENCE_CLAUSE`] cut: 2 040 bytes, 1 932 less the tasks line, 8 left;
+/// the text before it is card-store's byte for byte.
 #[test]
 fn rd5_instructions_are_the_planned_text() {
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2047, "card-store's figure");
+    assert_eq!(PLANNED_INSTRUCTIONS.len(), 2040, "card-trace's figure");
+    assert_eq!(TRACE_READ.len(), 25);
+    assert_eq!(EVIDENCE_CLAUSE.len(), 32);
     assert_eq!(CARDS_LINE.len(), 112);
     assert_eq!(ERROR_SENTENCE.len() + TASK_ID_CLAUSE.len(), 113);
     assert_eq!(FLOW_READ.len(), 32);
@@ -2199,7 +2231,7 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(ROADMAP_READ.len(), 40);
     assert_eq!(IMPACT_READ.len(), 46);
     assert_eq!(SINCE_INPUT.len(), 6);
-    assert_eq!(READS_LINE.len(), 350, "the spec's reads line");
+    assert_eq!(READS_LINE.len(), 375, "the spec's reads line");
     assert_eq!(CHECK_BINDING_CLAUSE.len(), 46);
     assert_eq!(BINDINGS_HINT.len(), 33);
     assert_eq!(NO_PROJECT_GLOSS.len(), 34);
@@ -2207,11 +2239,11 @@ fn rd5_instructions_are_the_planned_text() {
     assert_eq!(TASKS_LINE.len(), 108);
     assert_eq!(PROBES_PARAGRAPH.len(), 59);
     assert_eq!(instructions, PLANNED_INSTRUCTIONS);
-    assert_eq!(instructions.len(), 2047);
-    assert_eq!(2048 - instructions.len(), 1, "the room left");
+    assert_eq!(instructions.len(), 2040);
+    assert_eq!(2048 - instructions.len(), 8, "the room left");
     assert!(
         instructions.contains(&format!(
-            "never typed.\n{REVIEW_LINE}{TASKS_LINE}{CARDS_LINE}\n"
+            "lock drift.\n{REVIEW_LINE}{TASKS_LINE}{CARDS_LINE}\n"
         )),
         "the form's line, the tasks line, the cards line, an empty line"
     );
@@ -2228,9 +2260,9 @@ fn rd5_instructions_are_the_planned_text() {
     assert!(
         instructions.contains(
             "get_roadmap(release?, pool?) = roadmap; get_impact(id|symbol|since, depth?) = \
-             impact; get_flow(root?, depth?) = flow.\n"
+             impact; get_flow(root?, depth?) = flow; get_trace(ref?) = trace.\n"
         ),
-        "the reads' line ends with the flow clause, exactly"
+        "the reads' line ends with the trace clause, exactly"
     );
     assert_eq!(instructions.matches(CODE_LINE).count(), 1);
     assert_eq!(instructions.matches(ROADMAP_READ).count(), 1);
@@ -2255,9 +2287,10 @@ fn rd5_instructions_are_the_planned_text() {
     );
     assert!(
         instructions.contains(&format!(
-            "review --brief{ROADMAP_READ}{IMPACT_READ}{FLOW_READ}.\n{CODE_LINE}Queue ("
+            "review --brief{ROADMAP_READ}{IMPACT_READ}{FLOW_READ}{TRACE_READ}.\n{CODE_LINE}Queue ("
         )),
-        "the roadmap, impact and flow reads end the reads' line; the code line closes the reads"
+        "the roadmap, impact, flow and trace reads end the reads' line; the code line closes \
+         the reads"
     );
     assert!(instructions.contains("Hints use flags: --kind is kinds"));
     assert!(!instructions.contains("CLI flags"));
@@ -2273,6 +2306,10 @@ fn rd5_instructions_are_the_planned_text() {
         !instructions.contains(TASK_ID_CLAUSE),
         "docs/features/card-store.md cuts the clause"
     );
+    assert!(
+        !instructions.contains(EVIDENCE_CLAUSE),
+        "docs/features/card-trace.md cuts the clause"
+    );
     for name in TOOLS {
         assert!(has_word(instructions, name), "{name} unnamed");
     }
@@ -2281,10 +2318,19 @@ fn rd5_instructions_are_the_planned_text() {
     }
     assert!(instructions.contains("get_impact("), "get_impact(");
     assert!(instructions.contains("get_flow("), "get_flow(");
+    assert!(instructions.contains("get_trace("), "get_trace(");
     let less = instructions.replacen(TASKS_LINE, "", 1);
-    assert_eq!(less.len(), 1939, "2 047 less 108");
+    assert_eq!(less.len(), 1932, "2 040 less 108");
+    // The text before docs/features/card-trace.md: card-store's 2 047.
+    let card_store = as_of_card_store(instructions);
+    assert_eq!(card_store.len(), 2047);
+    assert_eq!(
+        blake3_hex(card_store.as_bytes()),
+        CARD_STORE_BLAKE3,
+        "only `get_trace` was added and the evidence clause cut"
+    );
     // The text before docs/features/card-store.md: flow-read's 2 048.
-    let flow_read = as_of_flow_read(instructions);
+    let flow_read = as_of_flow_read(&card_store);
     assert_eq!(flow_read.len(), 2048);
     assert_eq!(
         blake3_hex(flow_read.as_bytes()),
@@ -2362,7 +2408,9 @@ fn rd5_planned_instructions_hashes() {
         blake3_hex(PLANNED_INSTRUCTIONS.replacen(TASKS_LINE, "", 1).as_bytes()),
         PLANNED_LESS_TASKS_BLAKE3
     );
-    let flow_read = as_of_flow_read(PLANNED_INSTRUCTIONS);
+    let card_store = as_of_card_store(PLANNED_INSTRUCTIONS);
+    assert_eq!(blake3_hex(card_store.as_bytes()), CARD_STORE_BLAKE3);
+    let flow_read = as_of_flow_read(&card_store);
     assert_eq!(blake3_hex(flow_read.as_bytes()), FLOW_READ_BLAKE3);
     let review_form = as_of_review_form(&flow_read);
     assert_eq!(blake3_hex(review_form.as_bytes()), REVIEW_FORM_BLAKE3);

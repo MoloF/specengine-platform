@@ -45,8 +45,9 @@ use common::*;
 use serde_json::json;
 
 /// Every `kind = "…"` of the fixtures' configs: spec-a, spec-b, the
-/// non-Rust spec-c (07 s1.2 P2-5) and the flow fixtures
-/// (docs/features/flow-read.md AC-06).
+/// non-Rust spec-c (07 s1.2 P2-5), the flow fixtures
+/// (docs/features/flow-read.md AC-06) and the print shop
+/// (docs/features/card-trace.md).
 fn fixture_kinds() -> Vec<String> {
     let mut kinds = Vec::new();
     for name in [
@@ -56,6 +57,7 @@ fn fixture_kinds() -> Vec<String> {
         "flow-relay",
         "flow-hire",
         "flow-gaps",
+        "card-press",
     ] {
         let text = read_text(&fixture(name), "specengine.toml");
         for part in text.split("kind").skip(1) {
@@ -298,6 +300,11 @@ fn ac12_a_non_rust_corpus_gets_no_stack_word() {
         ("get_flow", json!({})),
         ("get_flow", json!({"root": "PLOT-GARDEN", "depth": 1})),
         ("get_flow", json!({"root": "CROP-NOPE"})),
+        // docs/features/card-trace.md: a trace of a corpus of no genre: a
+        // whole read, a REF, a REF naming nothing.
+        ("get_trace", json!({})),
+        ("get_trace", json!({"ref": "PLOT-GARDEN"})),
+        ("get_trace", json!({"ref": "CROP-NOPE"})),
         ("get_flow", json!({"depth": -1})),
     ];
     for era in ERAS {

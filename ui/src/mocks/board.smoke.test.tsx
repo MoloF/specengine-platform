@@ -183,10 +183,10 @@ describe("the Board over the mock", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
     await closed();
     const link = await screen.findByRole("link", { name: "Open it on the Board" });
-    expect(link.getAttribute("href")).toBe("#/harbor-sim/board/C-0010");
+    expect(link.getAttribute("href")).toBe("#/harbor-sim/board/C-0011");
     fireEvent.click(link);
-    window.location.hash = "#/harbor-sim/board/C-0010";
-    const source = await shows("C-0010");
+    window.location.hash = "#/harbor-sim/board/C-0011";
+    const source = await shows("C-0011");
     expect(within(source).getByRole("link", { name: "MEC-TIDES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDES");
   });
 
@@ -231,5 +231,118 @@ describe("the acting name over the mock", () => {
     expect(alert.textContent).toBe("spec: --as: 129 bytes; at most 128");
     expect(alert.closest(".board-acting")).not.toBeNull();
     expect(columnOf("C-0102")).toBe("ready");
+  });
+});
+
+describe("the card against its brief, over the mock", () => {
+  function clearDialog() {
+    return screen.findByRole("dialog", { name: /^Clear / });
+  }
+
+  it("marks the tile and the panel; No effect with a reason clears the mark, the typed name in the card's history (AC-10)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    renderMock("normal", "#/harbor-sim/board/C-0002");
+    const panel = await screen.findByRole("complementary", { name: "Caption the berth plans" });
+    await waitFor(() => {
+      expect(within(card("C-0002")).getByText("Suspect")).toBeTruthy();
+    });
+    expect(within(panel).getByRole("region", { name: "Against the brief" }).textContent).toContain("The brief changed at DOM-BERTHS");
+    fireEvent.click(within(panel).getByRole("button", { name: "Clear" }));
+    const dialog = await clearDialog();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("Say why the mark clears.");
+    type(dialog, "Reason", "Only the numbering moved.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    await closed();
+    await waitFor(() => {
+      expect(within(card("C-0002")).queryByText("Suspect")).toBeNull();
+    });
+    const history = await within(panel).findByRole("region", { name: "History" });
+    await within(history).findByText("Cleared");
+    expect(history.textContent).toContain("by Ivo Brandt");
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("an open card takes no correction: the choice is off, a correction answering an accepted card", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    renderMock("normal", "#/harbor-sim/board/C-0002");
+    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
+    const dialog = await clearDialog();
+    expect(within(dialog).getByRole<HTMLInputElement>("radio", { name: "Needs correction" }).disabled).toBe(true);
+  });
+
+  it("Needs correction on an accepted card: a new card, the original accepted and correcting; accepted, the correction ends the mark (AC-06)", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    renderMock("normal", "#/harbor-sim/board/C-0005");
+    fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
+    const dialog = await clearDialog();
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Needs correction" }));
+    type(dialog, "Reason", "The rates moved.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    expect((await within(dialog).findByRole("alert")).textContent).toBe("A correction needs an estimate.");
+    type(dialog, "Estimate", "2");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
+    await closed();
+    const made = await shows("C-0011");
+    expect(made.textContent).toContain("Correct Mooring fees table");
+    expect(columnOf("C-0011")).toBe("draft");
+    await waitFor(() => {
+      expect(within(card("C-0005")).getByText("Correcting")).toBeTruthy();
+    });
+    expect(within(card("C-0005")).getByText("Accepted")).toBeTruthy();
+    expect(await screen.findByText("C-0011 corrects C-0005: copy/draft")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
+  });
+
+  it("a card departed shows it, its discrepancy named; it takes no Clear", async () => {
+    renderMock("normal", "#/harbor-sim/board/C-0010");
+    const panel = await screen.findByRole("complementary", { name: "Deep-draft entry notice" });
+    const part = await within(panel).findByRole("region", { name: "Against the brief" });
+    expect(part.textContent).toContain("Departed");
+    expect(part.textContent).toContain("PR-0041");
+    expect(within(part).queryByRole("button")).toBeNull();
+    expect(within(panel).getByRole("region", { name: "Acceptance" }).textContent).toContain("Departs from RULE-TIDE-WINDOW: PR-0041");
+    expect(within(card("C-0010")).getByText("Departed")).toBeTruthy();
+  });
+
+  it("a departing accept raises its discrepancy in the Inbox and marks the card; nothing stops it", async () => {
+    window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
+    const { client } = renderMock("normal", "#/harbor-sim/board");
+    await choose("C-0004", "Accept");
+    const dialog = await screen.findByRole("dialog", { name: "Accept C-0004" });
+    fireEvent.click(within(dialog).getByRole("radio", { name: "Departs from it" }));
+    type(dialog, "Summary", "Hours printed from the old sheet");
+    type(dialog, "What the result does", "Lock B closes at six.");
+    type(dialog, "What the brief says", "Lock B closes at eight.");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
+    await closed();
+    await waitFor(() => {
+      expect(columnOf("C-0004")).toBe("filed");
+    });
+    await waitFor(() => {
+      expect(within(card("C-0004")).getByText("Departed")).toBeTruthy();
+    });
+    const raised = (await client.getInbox("harbor-sim")).proposals.at(-1);
+    expect([raised?.kind, raised?.summary]).toEqual(["discrepancy", "Hours printed from the old sheet"]);
+  });
+
+  it("the daemon's rules on the client: a clear of a card with no mark is refused; a group clear takes what is under its node, no other", async () => {
+    const client = new MockClient("normal", { delayMs: 0 });
+    await expect(client.clearCard("harbor-sim", "C-0001", { outcome: "no_effect", reason: "x", revision: "1", as: "Ivo Brandt" })).rejects.toThrow("C-0001 is not suspect: there is no mark to clear; nothing changed");
+    await expect(client.clearCard("harbor-sim", "C-0002", { outcome: "no_effect", reason: "x", revision: "1", as: "local" })).rejects.toThrow("`local` clears no mark");
+    await expect(client.clearCardGroup("harbor-sim", { group: "MEC-TIDES", reason: "x", as: "Ivo Brandt" })).rejects.toThrow("no suspect card under `MEC-TIDES`");
+    expect((await client.clearCardGroup("harbor-sim", { group: "DOM-BERTHS", reason: "Numbering only.", as: "Ivo Brandt" })).cleared).toEqual(expect.arrayContaining(["C-0002", "C-0005"]));
+    const { nodes } = await client.getTrace("harbor-sim");
+    expect(nodes.flatMap((node) => node.cards).filter((row) => row.on !== null).map((row) => row.id)).toEqual(["C-0010"]);
+    expect((await client.getTrace("harbor-sim", { ref: "NOPE" })).reason).toBe("no node `NOPE`");
+  });
+
+  it("a re-estimate of a card holding one says why, and stands alone", async () => {
+    const client = new MockClient("normal", { delayMs: 0 });
+    await expect(client.editCard("harbor-sim", "C-0007", { estimate: "5", revision: "1", as: null })).rejects.toThrow("C-0007 holds an estimate: --reason says why it changes");
+    await expect(client.editCard("harbor-sim", "C-0007", { estimate: "5", goal: "x", reason: "y", revision: "1", as: null })).rejects.toThrow("takes --reason and no other field");
+    await client.editCard("harbor-sim", "C-0007", { estimate: "5", reason: "The survey grew.", revision: "1", as: null });
+    const shown = await client.getCard("harbor-sim", "C-0007");
+    expect("history" in shown ? shown.history?.at(-1)?.type : null).toBe("card.reestimated");
   });
 });

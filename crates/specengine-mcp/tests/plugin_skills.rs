@@ -373,7 +373,7 @@ fn listed() -> Listed {
     assert_eq!(
         listed.tools.iter().map(String::as_str).collect::<Vec<_>>(),
         TOOLS,
-        "the default build's twenty-eight tools"
+        "the default build's twenty-nine tools"
     );
     assert!(
         listed.properties.contains("node_ids"),
@@ -1198,8 +1198,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/layer-c-reads.md; 0.21.0 since
     // docs/features/flow-read.md; 0.22.0 since
     // docs/features/flow-canvas.md; 0.23.0 since
-    // docs/features/card-store.md.
-    assert_eq!(manifest["version"], "0.23.0");
+    // docs/features/card-store.md; 0.24.0 since
+    // docs/features/card-trace.md.
+    assert_eq!(manifest["version"], "0.24.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1291,8 +1292,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/layer-c-reads.md; 0.21.0 since
     // docs/features/flow-read.md; 0.22.0 since
     // docs/features/flow-canvas.md; 0.23.0 since
-    // docs/features/card-store.md.
-    assert_eq!(manifest["version"], "0.23.0");
+    // docs/features/card-store.md; 0.24.0 since
+    // docs/features/card-trace.md.
+    assert_eq!(manifest["version"], "0.24.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1395,7 +1397,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.23.0",
+        manifest["version"], "0.24.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1532,8 +1534,9 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // `ask-owner`: `review_form_ask_owner_names_review_proposal`);
     // twenty-three since docs/features/flow-read.md (`get_flow`, which no
     // skill teaches yet); twenty-eight since docs/features/card-store.md
-    // (the card tools, one bullet of `read-spec`).
-    assert_eq!(TOOLS.len(), 28);
+    // (the card tools, one bullet of `read-spec`); twenty-nine since
+    // docs/features/card-trace.md (`get_trace`, one line of `read-spec`).
+    assert_eq!(TOOLS.len(), 29);
     assert!(CODE_TOOLS.iter().all(|tool| TOOLS.contains(tool)));
     assert!(
         READ_SPEC_CODE_TOOLS
@@ -2022,7 +2025,7 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        4_088,
+        4_228,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
          154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
          docs/features/card-store.md (the cards bullet)"
@@ -2127,7 +2130,7 @@ fn tested_reads_skills_name_tested() {
     };
     assert_eq!(
         (body(read_spec), read_spec.len()),
-        (3_767, 4_088),
+        (3_907, 4_228),
         "read-spec's bytes"
     );
     assert_eq!(

@@ -11,6 +11,7 @@ import {
   useCachedInbox,
   useCachedTasks,
   useCard,
+  useCardClearGroup,
   useCards,
   useCardWrite,
   useCheck,
@@ -26,6 +27,7 @@ import {
   useStageDecision,
   useTask,
   useTasks,
+  useTrace,
   useTree,
 } from "./queries";
 
@@ -512,5 +514,89 @@ describe("the cards (docs/features/board-ui.md \"Board\", \"Moving\")", () => {
       await expect(write?.mutateAsync({ write: "create", body: { title: "T", as: null } })).rejects.toThrow("no flow takes");
     });
     expect(client.getCard).not.toHaveBeenCalled();
+  });
+});
+
+describe("the trace and the clears (docs/features/card-trace.md)", () => {
+  it("keys a trace by project and REF, null the whole project; no option goes out unasked", async () => {
+    expect(queryKeys.trace("alpha")).toEqual(["trace", "alpha", null]);
+    expect(queryKeys.trace("alpha", { ref: "R-1" })).toEqual(["trace", "alpha", "R-1"]);
+    const client = stubClient();
+    function Reads() {
+      useTrace("alpha");
+      useTrace("alpha", { ref: "R-1" });
+      return null;
+    }
+    render(
+      <ApiProvider client={client}>
+        <Reads />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(argsOf(client.getTrace)).toEqual([["alpha"], ["alpha", { ref: "R-1" }]]);
+    });
+  });
+
+  it("a clear goes out as a write, and the list, the card and the trace are read before it settles", async () => {
+    const client = stubClient();
+    let write: ReturnType<typeof useCardWrite> | undefined;
+    function Board({ onWrite }: { onWrite: (latest: ReturnType<typeof useCardWrite>) => void }) {
+      useTrace("alpha");
+      useCards("alpha");
+      onWrite(useCardWrite("alpha"));
+      return null;
+    }
+    const queryClient = createQueryClient();
+    render(
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Board
+          onWrite={(latest) => {
+            write = latest;
+          }}
+        />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    client.getTrace.mockClear();
+    client.getCards.mockClear();
+    const body = { outcome: "no_effect", reason: "Wording only", revision: "3", as: "Mira Holt" } as const;
+    await act(async () => {
+      await write?.mutateAsync({ write: "clear", id: "C-0001", body });
+    });
+    expect(client.clearCard.mock.calls).toEqual([["alpha", "C-0001", body]]);
+    expect([client.getTrace.mock.calls.length, client.getCards.mock.calls.length]).toEqual([1, 1]);
+  });
+
+  it("a group clear reads every card read again", async () => {
+    const client = stubClient();
+    let clear: ReturnType<typeof useCardClearGroup> | undefined;
+    function Board({ onClear }: { onClear: (latest: ReturnType<typeof useCardClearGroup>) => void }) {
+      useCard("alpha", "C-0001");
+      useTrace("alpha");
+      onClear(useCardClearGroup("alpha"));
+      return null;
+    }
+    const queryClient = createQueryClient();
+    render(
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Board
+          onClear={(latest) => {
+            clear = latest;
+          }}
+        />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    client.getCard.mockClear();
+    client.getTrace.mockClear();
+    await act(async () => {
+      await clear?.mutateAsync({ group: "PRN-WEEKLY", reason: "Wording only", as: "Mira Holt" });
+    });
+    expect(client.clearCardGroup.mock.calls).toEqual([["alpha", { group: "PRN-WEEKLY", reason: "Wording only", as: "Mira Holt" }]]);
+    expect([client.getCard.mock.calls.length, client.getTrace.mock.calls.length]).toEqual([1, 1]);
   });
 });

@@ -92,9 +92,16 @@
   "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled"],
   "Card": ["id", "flow", "column", "position", "title", "goal", "discipline", "targets", "snapshot", "criteria", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "evidence", "acceptance", "cancellation", "created_by", "created_at", "updated_at", "revision", "allowed", "history", "notes"],
   "CardEvidence": ["kind", "value", "by", "at"],
-  "CardAcceptance": ["by", "at", "note"],
+  "CardAcceptance": ["by", "at", "note", "verdict", "departs", "discrepancy"],
   "CardCancellation": ["by", "at", "reason"],
   "CardEvent": ["seq", "type", "at", "payload"],
   "CardWrite": ["id", "flow", "column", "position", "revision", "allowed", "notes"],
-  "CardNotFound": ["id", "reason"]
+  "CardNotFound": ["id", "reason"],
+  "TraceDocument": ["ref", "reason", "notes", "counts", "nodes", "truncated", "omitted"],
+  "TraceCounts": ["no_card", "in_work", "suspect", "departed", "confirmed"],
+  "TraceNode": ["id", "title", "path", "rollup", "counts", "cards", "uses"],
+  "TraceCard": ["id", "flow", "column", "title", "mark", "on", "discrepancy", "correction"],
+  "TraceUse": ["id", "rollup", "cards"],
+  "CardFrozen": ["id", "rev", "norm_hash", "also"],
+  "CardClearGroupWrite": ["group", "cleared", "notes"]
 }

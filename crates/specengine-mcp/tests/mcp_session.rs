@@ -101,6 +101,8 @@ fn valid_args(tool: &str) -> Value {
         "get_card" => json!({"card_id": "C-0001"}),
         "list_cards" => json!({}),
         "move_card" => json!({"card_id": "C-0001", "to": "ready"}),
+        // docs/features/card-trace.md: a whole read.
+        "get_trace" => json!({}),
         other => panic!("no arguments for {other}"),
     }
 }

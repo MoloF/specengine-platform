@@ -378,14 +378,17 @@ fn ac16_the_descriptions_name_spec_approve_and_instructions_stay() {
     // 1 939 and 2 047 since docs/features/card-store.md "MCP" (the cards
     // line's 112 bytes in, 113 out); the values `mcp_code.rs`' re-pinned
     // `PLANNED_*_BLAKE3`.
-    assert_eq!(before.len(), 1939);
+    // 1 932 and 2 040 since docs/features/card-trace.md (`get_trace`'s 25
+    // bytes on the reads' line, the evidence clause's 32 out); the values
+    // `mcp_code.rs`' re-pinned `PLANNED_*_BLAKE3`.
+    assert_eq!(before.len(), 1932);
     assert_eq!(
         blake3_hex(before.as_bytes()),
-        "6e322b8c83a4f63b5dd0eee4abb714b4883ea2789cfccfe4d2910280f8a619cd"
+        "576f7ffed0cb1e5f22942a9d935836c4a07b798fc1cb29d89dd0db38b6eef861"
     );
-    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2047);
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2040);
     assert_eq!(
         blake3_hex(specengine_mcp::INSTRUCTIONS.as_bytes()),
-        "8666a5184cf8ab8a34d782d5e68ef6222c500be5350ca741378c73b7892a80d5"
+        "2f8e3e48411f0e6193c5c2ca7c28b892a578052994933250e93c38135c60bfce"
     );
 }

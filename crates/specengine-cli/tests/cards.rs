@@ -387,7 +387,7 @@ fn ac01_seven_writes_leave_git_alone_and_write_one_event_each() {
     }
     let accepted = pair.spec_pty(
         &pair.main,
-        &["card", "accept", "C-0001", "--as", "ben"],
+        &["card", "accept", "C-0001", "--as", "ben", "--briefed"],
         Some("y"),
     );
     assert_eq!(accepted.code, 0, "{}", accepted.output);
@@ -403,7 +403,8 @@ fn ac01_seven_writes_leave_git_alone_and_write_one_event_each() {
         seen.last(),
         Some(&(
             "card.accepted".to_owned(),
-            json!({"id": "C-0001", "from": "proof", "to": "filed", "position": 1, "as": "ben"})
+            json!({"id": "C-0001", "from": "proof", "to": "filed", "position": 1, "as": "ben",
+                "verdict": "briefed", "discrepancy": null})
         ))
     );
     assert_eq!(git_side(&pair), side);
@@ -413,7 +414,8 @@ fn ac01_seven_writes_leave_git_alone_and_write_one_event_each() {
 }
 
 /// "CLI": the write's document, keys in order; the row's fields as the
-/// flags gave them; `snapshot` `null`; `revision` raised by each change.
+/// flags gave them; `snapshot` each direct target frozen
+/// (docs/features/card-trace.md); `revision` raised by each change.
 #[test]
 fn a_writes_document_and_the_fields_it_stored() {
     let pair = Pair::new("cd-doc", PRESS);
@@ -468,7 +470,10 @@ fn a_writes_document_and_the_fields_it_stored() {
     assert_eq!(card["assignee"], "ana");
     assert_eq!(card["estimate"], "2-5");
     assert_eq!(card["due"], "2026-11-05");
-    assert_eq!(card["snapshot"], Value::Null, "RM-0047's");
+    let frozen = card["snapshot"].as_array().expect("a snapshot");
+    assert_eq!(frozen.len(), 2, "each direct target: {card}");
+    assert_eq!(frozen[0]["id"], "SHT-FRONT");
+    assert_eq!(frozen[1]["id"], "SHT-BACK");
     for absent in [
         "reviewer",
         "parent",
@@ -975,7 +980,7 @@ fn a_full_name_in_any_script_is_a_person_compared_exactly_after_trimming() {
     for name in [FULL_NAME, first, "agent", "local", " agent "] {
         let tried = pair.spec_pty(
             &pair.main,
-            &["card", "accept", &id, "--as", name],
+            &["card", "accept", &id, "--as", name, "--briefed"],
             Some("y"),
         );
         assert_eq!(tried.code, 1, "{name}: {}", tried.output);
@@ -988,7 +993,7 @@ fn a_full_name_in_any_script_is_a_person_compared_exactly_after_trimming() {
     }
     let accepted = pair.spec_pty(
         &pair.main,
-        &["card", "accept", &id, "--as", OTHER_NAME],
+        &["card", "accept", &id, "--as", OTHER_NAME, "--briefed"],
         Some("y"),
     );
     assert_eq!(accepted.code, 0, "{}", accepted.output);
@@ -1220,7 +1225,7 @@ fn ac04_only_the_reviewer_accepts_on_a_terminal() {
     let before = state(&pair);
     let early = pair.spec_pty(
         &pair.main,
-        &["card", "accept", &id, "--as", "ben"],
+        &["card", "accept", &id, "--as", "ben", "--briefed"],
         Some("y"),
     );
     assert_eq!(early.code, 1, "{}", early.output);
@@ -1236,7 +1241,7 @@ fn ac04_only_the_reviewer_accepts_on_a_terminal() {
     for name in ["ana", "cid", "agent", "local"] {
         let tried = pair.spec_pty(
             &pair.main,
-            &["card", "accept", &id, "--as", name],
+            &["card", "accept", &id, "--as", name, "--briefed"],
             Some("y"),
         );
         assert_eq!(tried.code, 1, "{name}: {}", tried.output);
@@ -1245,7 +1250,16 @@ fn ac04_only_the_reviewer_accepts_on_a_terminal() {
     }
     let wrong = pair.spec_pty(
         &pair.main,
-        &["card", "accept", &id, "--as", "ben", "--revision", "1"],
+        &[
+            "card",
+            "accept",
+            &id,
+            "--as",
+            "ben",
+            "--revision",
+            "1",
+            "--briefed",
+        ],
         Some("y"),
     );
     assert_eq!(wrong.code, 1, "{}", wrong.output);
@@ -1253,7 +1267,7 @@ fn ac04_only_the_reviewer_accepts_on_a_terminal() {
 
     let declined = pair.spec_pty(
         &pair.main,
-        &["card", "accept", &id, "--as", "ben"],
+        &["card", "accept", &id, "--as", "ben", "--briefed"],
         Some("n"),
     );
     assert!(declined.asked, "{}", declined.output);
@@ -1269,7 +1283,16 @@ fn ac04_only_the_reviewer_accepts_on_a_terminal() {
 
     let accepted = pair.spec_pty(
         &pair.main,
-        &["card", "accept", &id, "--as", "ben", "--note", "Fine."],
+        &[
+            "card",
+            "accept",
+            &id,
+            "--as",
+            "ben",
+            "--note",
+            "Fine.",
+            "--briefed",
+        ],
         Some("y"),
     );
     assert_eq!(accepted.code, 0, "{}", accepted.output);
@@ -1292,7 +1315,7 @@ fn ac04_only_the_reviewer_accepts_on_a_terminal() {
     }
     let again = pair.spec_pty(
         &pair.main,
-        &["card", "accept", &id, "--as", "ben"],
+        &["card", "accept", &id, "--as", "ben", "--briefed"],
         Some("y"),
     );
     assert_eq!(again.code, 1, "{}", again.output);
@@ -1351,7 +1374,7 @@ fn ac04_no_move_reaches_accept_to_and_no_self_acceptance() {
     let before = state(&pair);
     let tried = pair.spec_pty(
         &pair.main,
-        &["card", "accept", &id, "--as", "ben"],
+        &["card", "accept", &id, "--as", "ben", "--briefed"],
         Some("y"),
     );
     assert_eq!(tried.code, 1, "{}", tried.output);
@@ -1748,7 +1771,7 @@ fn a_blocked_column_is_a_column() {
     ok(&pair, &["card", "move", "C-0001", "--to", "checked"]);
     let accepted = pair.spec_pty(
         &pair.main,
-        &["card", "accept", "C-0001", "--as", "ben"],
+        &["card", "accept", "C-0001", "--as", "ben", "--briefed"],
         Some("y"),
     );
     assert_eq!(accepted.code, 0, "{}", accepted.output);
@@ -2002,7 +2025,16 @@ fn cards_queue(pair: &Pair) {
     assert_eq!(accepted, "C-0001");
     let by_hand = pair.spec_pty(
         &pair.main,
-        &["card", "accept", "C-0001", "--as", "ben", "--note", "Fine."],
+        &[
+            "card",
+            "accept",
+            "C-0001",
+            "--as",
+            "ben",
+            "--note",
+            "Fine.",
+            "--briefed",
+        ],
         Some("y"),
     );
     assert_eq!(by_hand.code, 0, "{}", by_hand.output);
@@ -2125,7 +2157,13 @@ fn ac07_cards_round_trip_through_a_format_3_dump() {
         assert!(row["cards"]["position"].is_i64(), "a number: {line}");
         assert!(row["cards"]["revision"].is_string(), "text: {line}");
         assert_eq!(row["cards"]["project"], "card-press");
-        assert_eq!(row["cards"]["snapshot"], Value::Null);
+        // docs/features/card-trace.md: the column as stored, the entries' JSON
+        // text on a card with a target, `NULL` on a manual one.
+        assert_eq!(
+            row["cards"]["snapshot"].is_string(),
+            row["cards"]["targets"] != "[]",
+            "{line}"
+        );
     }
 
     let fresh = pair.scratch.home("fresh");
@@ -2390,10 +2428,23 @@ fn ac07_the_binary_exports_and_imports_cards() {
 /// its exit and both streams.
 fn gate_answer(pair: &Pair) -> (i32, String, String) {
     let main = pair.main.to_str().unwrap();
-    let done = run(
-        pair,
-        &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
-    );
+    // `spec gate` answers within 3 s of wall clock (`GATE_DEADLINE`): a run a
+    // loaded machine starves past that says `unavailable` and nothing of the
+    // cards, so it is asked again (five tries; the last answer stands).
+    let mut done = None;
+    for _ in 0..5 {
+        let run = run(
+            pair,
+            &["gate", "--worktree", main, "--path", "src/a.rs", "--json"],
+        );
+        let starved = run.stdout.contains("\"reason\":\"deadline\"")
+            || run.stderr.contains("no answer within");
+        done = Some(run);
+        if !starved {
+            break;
+        }
+    }
+    let done = done.expect("a run");
     (done.code, done.stdout, done.stderr)
 }
 
@@ -2527,7 +2578,11 @@ fn ac09_a_look_alike_id_exits_2_naming_the_latin_form() {
         assert!(message.contains("`C-0001`"), "{args:?}: {message}");
         assert_eq!(state(&pair), before, "{args:?}");
     }
-    let accept = pair.spec_pty(&pair.main, &["card", "accept", alike, "--as", "ben"], None);
+    let accept = pair.spec_pty(
+        &pair.main,
+        &["card", "accept", alike, "--as", "ben", "--briefed"],
+        None,
+    );
     assert_eq!(accept.code, 2, "{}", accept.output);
     assert!(accept.output.contains("`C-0001`"), "{}", accept.output);
     assert_eq!(state(&pair), before);
@@ -2574,7 +2629,11 @@ fn ac09_c_in_ids_stops_spec_card_alone() {
             assert!(message.contains("`C`"), "{label}: {args:?}: {message}");
             assert_eq!(state(&pair), before, "{label}: {args:?}");
         }
-        let accept = pair.spec_pty(&pair.main, &["card", "accept", "C-0001", "--as", "b"], None);
+        let accept = pair.spec_pty(
+            &pair.main,
+            &["card", "accept", "C-0001", "--as", "b", "--briefed"],
+            None,
+        );
         assert_eq!(accept.code, 2, "{label}: {}", accept.output);
         assert!(!accept.asked, "{label}: {}", accept.output);
         run(&pair, &["tree"]).code(0);
@@ -2894,7 +2953,10 @@ fn fields_keep_their_caps_and_edit_replaces_or_clears() {
         events(&pair).last().map(|event| event.1["fields"].clone()),
         Some(json!(["targets", "criteria"]))
     );
-    ok(
+    // docs/features/card-trace.md: `-` changes a held estimate too: beside
+    // other fields exit 2, alone with its reason.
+    let held = state(&pair);
+    cannot(
         &pair,
         &[
             "card",
@@ -2908,6 +2970,33 @@ fn fields_keep_their_caps_and_edit_replaces_or_clears() {
             "-",
             "--estimate",
             "-",
+        ],
+    );
+    assert_eq!(state(&pair), held, "`--estimate -` beside other fields");
+    ok(
+        &pair,
+        &[
+            "card",
+            "edit",
+            &id,
+            "--goal",
+            "-",
+            "--target",
+            "-",
+            "--criterion",
+            "-",
+        ],
+    );
+    ok(
+        &pair,
+        &[
+            "card",
+            "edit",
+            &id,
+            "--estimate",
+            "-",
+            "--reason",
+            "Dropped.",
         ],
     );
     let card = show(&pair, &id);
@@ -3527,7 +3616,7 @@ fn ac10_five_flows_run_one_code() {
         }
         let accepted = pair.spec_pty(
             &pair.main,
-            &["card", "accept", "C-0001", "--as", "ben"],
+            &["card", "accept", "C-0001", "--as", "ben", "--briefed"],
             Some("y"),
         );
         assert_eq!(accepted.code, 0, "{}: {}", trade.label, accepted.output);
@@ -3553,13 +3642,16 @@ fn ac10_five_flows_run_one_code() {
 }
 
 /// The card sources of "Files in scope".
-const CARD_SOURCES: [&str; 6] = [
+const CARD_SOURCES: [&str; 8] = [
     "crates/specengine-model/src/card.rs",
     "crates/specengine-core/src/card.rs",
     "crates/specengine-core/src/card_toml.rs",
     "crates/specengine-store/src/queue/cards.rs",
     "crates/specengine-cli/src/card.rs",
     "crates/specengine-mcp/src/cards.rs",
+    // docs/features/card-trace.md: a mark, a rollup, a clear.
+    "crates/specengine-core/src/trace.rs",
+    "crates/specengine-cli/src/trace.rs",
 ];
 
 /// `text` up to its first `#[cfg(test)]` module.
@@ -3669,7 +3761,7 @@ fn the_words_of_a_flow_mean_nothing_to_the_engine() {
     ok(&pair, &["card", "move", "C-0001", "--to", "done"]);
     let accepted = pair.spec_pty(
         &pair.main,
-        &["card", "accept", "C-0001", "--as", "ben"],
+        &["card", "accept", "C-0001", "--as", "ben", "--briefed"],
         Some("y"),
     );
     assert_eq!(accepted.code, 0, "{}", accepted.output);
@@ -3755,7 +3847,7 @@ fn ac11_cancel_takes_a_card_out_and_freezes_it() {
     }
     let tried = pair.spec_pty(
         &pair.main,
-        &["card", "accept", "C-0002", "--as", "ben"],
+        &["card", "accept", "C-0002", "--as", "ben", "--briefed"],
         Some("y"),
     );
     assert_eq!(tried.code, 1, "{}", tried.output);

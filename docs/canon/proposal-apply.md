@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-10-31
 ---
 
 # Proposal apply: consent and steps
@@ -33,7 +33,7 @@ A lookup git could not make is printed above the question (`note: cannot tell wh
 7. **Approved**: `approve_from` on the state read; another run's change since -> exit 1, nothing written.
 8. **Write**: the place re-checked (branch, `HEAD` at step 2's commit, no operation; exit 1 here), the file re-read and equal to step 3's bytes (else exit 1 `` `<path>` changed while being applied; nothing written ``), then replaced atomically: a sibling `.<name>.specengine-<pid>-<n>.tmp` (a dot-name the walk skips) with its mode, synced, renamed over it; `--editorial`: then `spec.lock`.
 9. **Commit**: `git commit --only --cleanup=verbatim -F <scratch> -- :(literal)<path>` (`--editorial`: `spec.lock` too): only the path, whatever else is staged or modified; hooks run, never `--no-verify`. On failure, when the branch's (or `HEAD`'s) new tip carries this ID's `Proposal:` trailer, git made it anyway: a `warning:`, step 10 judges; else the bytes restored, reopened, exit 1 ``the commit of `<path>` failed, its bytes restored: <git's error>`` (+ ``; `<branch>` moved to <sha>, which has no `Proposal: PR` trailer (not this apply's commit)``).
-10. **Verify**: the branch's new commit has one parent, the old `HEAD`, changes only the path (`--editorial`: and `spec.lock`), its `Proposal:` is the ID -> `applied_with` (task-bound: `applied_refreshing` refreshes its task's snapshot, `tasks.md`; also when its hold was reopened meanwhile; recorded by another run: done, a note), then the index's `update_paths` (failure: a `warning:`). Else it stays `approved`, exit 1 naming the commit (the branch unmoved: `HEAD`'s) and the hint.
+10. **Verify**: the branch's new commit has one parent, the old `HEAD`, changes only the path (`--editorial`: and `spec.lock`), its `Proposal:` is the ID -> `applied_with` (task-bound: `applied_refreshing` refreshes its task's snapshot, `tasks.md`; also when its hold was reopened meanwhile; `--editorial`: `applied_vouching` vouches on cards, `spec-trace.md` "Suspect"; recorded by another run: done, a note), then the index's `update_paths` (failure: a `warning:`). Else it stays `approved`, exit 1 naming the commit (the branch unmoved: `HEAD`'s) and the hint.
 
 **Runs.** No lock until the daemon: runs meet in the queue. A run holds nothing before its own step 7, so a refusal there (steps 2-6, identity, step 7's compare-and-set) only logs (`log_failure`): `open` stays open, another run's `approved` stays approved. At steps 8-9 it reopens (`reopen_from`) only while the proposal is in the state it wrote; step 10 never reopens, a commit exists. One `proposal.apply_failed` per refusal at steps 2-10; none for the terminal check, a decline, another repository, a bad ID, an applied or rejected one.
 

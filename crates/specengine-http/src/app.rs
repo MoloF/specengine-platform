@@ -9,7 +9,8 @@
 //! read routes, `/` and `/assets/<file>`, are fenced like the API's
 //! (docs/features/ui-embed.md, [`crate::ui`]). A card's routes
 //! (docs/features/board-ui.md "Data"): `…/cards` a read and a write, its 405
-//! `Allow: GET, POST`; `…/cards/<id>` a read; its five writes `Allow: POST`.
+//! `Allow: GET, POST`; `…/cards/<id>` a read; its six writes `Allow: POST`.
+//! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data" and
@@ -25,10 +26,12 @@
 //! (POST on the round's answers, the same door: docs/features/ui-round.md
 //! "Data"), confirmed only on a terminal (ADR-0035, ADR-0038): no handler
 //! here walks a round or decides an item. A card's writes are the library's
-//! `card_new`, `card_move`, `card_edit`, `card_assign`, `card_cancel` and
-//! `card_accept`, through the same door (docs/features/board-ui.md "Data");
-//! they touch the queue alone, and no agent tool reaches them. The other
-//! writes are the reads' own, in the data directory.
+//! `card_new`, `card_move`, `card_edit`, `card_assign`, `card_cancel`,
+//! `card_accept`, `card_clear` and `card_clear_group`, through the same door
+//! (docs/features/board-ui.md "Data", docs/features/card-trace.md); they
+//! touch the queue alone, a departing accept making its one proposal there
+//! inside the library's accept (ADR-0057), and no agent tool reaches them.
+//! The other writes are the reads' own, in the data directory.
 
 use std::sync::Arc;
 
@@ -42,12 +45,13 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
-    BundleRequest, CardAcceptBody, CardAssignBody, CardCancelBody, CardEditBody, CardListRequest,
-    CardMoveBody, CardNewBody, CardOutcome, CardShowRequest, CheckRequest, CliError, FlowRequest,
-    GraphRequest, HealthRequest, InboxRequest, LockDiffRequest, Outcome, ReviewRequest,
-    RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
-    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TreeRequest,
-    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, utc_now,
+    BundleRequest, CardAcceptBody, CardAssignBody, CardCancelBody, CardClearBody,
+    CardClearGroupBody, CardEditBody, CardListRequest, CardMoveBody, CardNewBody, CardOutcome,
+    CardShowRequest, CheckRequest, CliError, FlowRequest, GraphRequest, HealthRequest,
+    InboxRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody,
+    RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest,
+    TaskListRequest, TaskShowRequest, TraceRequest, TreeRequest, UnstageRequest, View, process_git,
+    project_entry, roadmap_flags, round_limit, utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -112,6 +116,11 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/api/projects/{p}/search", read(search))
         .route("/api/projects/{p}/bundle", read(bundle))
         .route("/api/projects/{p}/flow", read(flow))
+        .route("/api/projects/{p}/trace", read(trace))
+        .route(
+            "/api/projects/{p}/trace/clear",
+            post(clear_group).fallback(only_post),
+        )
         .route("/api/projects/{p}/graph", read(graph))
         .route("/api/projects/{p}/check", read(check))
         .route("/api/projects/{p}/health", read(health))
@@ -148,6 +157,10 @@ pub(crate) fn router(app: Shared) -> Router {
         .route(
             "/api/projects/{p}/cards/{id}/accept",
             post(accept_card).fallback(only_post),
+        )
+        .route(
+            "/api/projects/{p}/cards/{id}/clear",
+            post(clear_card).fallback(only_post),
         )
         .route(
             "/api/projects/{p}/proposals/{id}/decision",
@@ -318,7 +331,7 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         StatusCode::NOT_FOUND,
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
-             nodes/<REF>, search, bundle, flow, graph, check, health, roadmap, lock-diff, \
+             nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
              inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events}}; the \
              web UI: / and /assets/<file>",
             uri.path()
@@ -774,6 +787,21 @@ async fn round_answers(State(app): State<Shared>, request: Request) -> Result<Re
     .await)
 }
 
+/// `GET …/trace?ref=`: `spec trace [REF] --json`, the browser view (every
+/// node, `truncated` false). A read; it changes nothing but the index.
+async fn trace(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    let args = args("trace", &["ref"], &uri)?;
+    let request = TraceRequest {
+        reference: args.text("ref").map_err(Refusal::bad_request)?,
+    };
+    Ok(run(project, move |env, globals| {
+        specengine_cli::trace_with_view(env, globals, &request, View::Browser)
+            .map(|outcome| Outcome::Trace(Box::new(outcome)))
+    })
+    .await)
+}
+
 /// `GET …/cards`: `spec card list --json`, the browser view (every row, in
 /// the flows' order, nothing cut). Filters ANDed, exact; `with_cancelled`
 /// is the flag `--with-cancelled`, nothing here reading a card's state.
@@ -923,13 +951,40 @@ async fn cancel_card(State(app): State<Shared>, request: Request) -> Result<Resp
 /// consent is the page's dialog, so the handler answers yes; the rules are
 /// the CLI's (`accept.from`, the card's reviewer, never its assignee). The
 /// name is self-declared, and no terminal asks here: a convention until
-/// the hub's named login (ADR-0034).
+/// the hub's named login (ADR-0034). A departing accept makes its one
+/// proposal inside that call (ADR-0057); no `propose` name is called here.
 async fn accept_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/accept")?;
     let body = written_body(request, CardAcceptBody::from_json).await?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_accept(env, globals, &body.request(id, utc_now()), &mut |_| true)
             .map(written)
+    })
+    .await)
+}
+
+/// `POST …/cards/<id>/clear`: `card_clear`, past [`new_card`]'s door. Its
+/// consent is the page's dialog, the name typed as an accept's: a convention
+/// until the hub's named login (ADR-0034). No agent tool reaches it.
+async fn clear_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, id) = written_target(&app, request.uri(), request.headers(), "/clear")?;
+    let body = written_body(request, CardClearBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_clear(env, globals, &body.request(id, utc_now()), &mut |_| true)
+            .map(written)
+    })
+    .await)
+}
+
+/// `POST …/trace/clear`: `card_clear_group`, past [`new_card`]'s door: one
+/// transaction, one event per card, no effect only.
+async fn clear_group(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(request.uri())?;
+    same_origin(request.headers())?;
+    let body = written_body(request, CardClearGroupBody::from_json).await?;
+    Ok(run(project, move |env, globals| {
+        specengine_cli::card_clear_group(env, globals, &body.request(utc_now()), &mut |_| true)
+            .map(|outcome| Outcome::CardGroup(Box::new(outcome)))
     })
     .await)
 }

@@ -1,12 +1,12 @@
 import { memo, type DragEvent, type MouseEvent } from "react";
-import type { CardRow } from "../api/types";
+import type { CardRow, TraceCard } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier } from "../ui/keys";
 import { shownSlot } from "../ui/text";
 import { isOverdue } from "./due";
-import { ACCEPTED, BY_HAND, CANCELLED, OVERDUE, UNASSIGNED } from "./labels";
+import { ACCEPTED, BY_HAND, CANCELLED, markLook, OVERDUE, UNASSIGNED } from "./labels";
 
 /** What a card asks of its board. */
 export interface CardActions {
@@ -49,6 +49,7 @@ function Source({ project, targets }: { project: string; targets: readonly strin
 export const BoardCard = memo(function BoardCard({
   project,
   row,
+  mark,
   today,
   tabbable,
   selected,
@@ -58,6 +59,8 @@ export const BoardCard = memo(function BoardCard({
 }: {
   project: string;
   row: CardRow;
+  /** What the last trace read says of it, when it says anything. */
+  mark: TraceCard | undefined;
   today: string;
   tabbable: boolean;
   selected: boolean;
@@ -67,6 +70,7 @@ export const BoardCard = memo(function BoardCard({
   actions: CardActions;
 }) {
   const closed = row.accepted || row.cancelled;
+  const markShown = mark === undefined ? null : markLook(mark);
 
   function onClick(event: MouseEvent<HTMLElement>) {
     if (!(event.target instanceof Element) || event.target.closest("a, button") === null) {
@@ -115,6 +119,7 @@ export const BoardCard = memo(function BoardCard({
           {row.accepted && <Badge look={ACCEPTED} />}
           {row.cancelled && <Badge look={CANCELLED} />}
           {isOverdue(row, today) && <Badge look={OVERDUE} />}
+          {markShown !== null && <Badge look={markShown} />}
         </div>
         <h3 className="board-card-title">
           <a href={sectionHash(project, "board", row.id)} tabIndex={-1} draggable={false} onClick={onTitleClick}>

@@ -132,6 +132,11 @@
 //!   and [`READ_SPEC_CARDS_0_23_0`] taken out 0.22.0's; a `SCHEMA_PINS` entry
 //!   0.23.0, 0.22.0's schemas today's without the card tools
 //!   ([`as_of_0_22_0`]).
+//! - docs/features/card-trace.md "Files in scope": 0.23.0 -> 0.24.0, MINOR: a
+//!   new tool, `get_trace`, `edit_card` takes `reason`, three documents' keys.
+//!   A `PINS` entry 0.24.0, the tree with the version set back and
+//!   [`READ_SPEC_TRACE_0_24_0`] taken out 0.23.0's; a `SCHEMA_PINS` entry
+//!   0.24.0, 0.23.0's schemas today's without those ([`as_of_0_23_0`]).
 //!
 //! The repository is only read.
 
@@ -383,7 +388,20 @@ const PINS: &[(&str, &str)] = &[
         "0.23.0",
         "781155e22aa3b7e0838ed2f2777a8ae48cb7e2177442b128f998efc5cf72ff17",
     ),
+    // docs/features/card-trace.md "Files in scope" (0.23.0 -> 0.24.0, MINOR:
+    // a tool the plugin's server gains, and `edit_card`'s `reason`):
+    // `read-spec` names `get_trace` in one line; the tree with the version
+    // set back and [`READ_SPEC_TRACE_0_24_0`] taken out hashes as 0.23.0's
+    // pin.
+    (
+        "0.24.0",
+        "69654a9e08fe93a6b1bd2638a1063c447207969401d6513557ee97c209d89b00",
+    ),
 ];
+
+/// docs/features/card-trace.md: `read-spec`'s line of 0.24.0, whole with its
+/// line feed (140 bytes).
+const READ_SPEC_TRACE_0_24_0: &str = "   - the state of a node against the cards answering it, which stops nothing: `get_trace`, with a `ref` to read one node and what it holds;\n";
 
 /// docs/features/card-store.md: `read-spec`'s bullet of 0.23.0, whole with
 /// its line feed (214 bytes).
@@ -565,6 +583,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.23.0",
         "04d8443e2ac1fe1ad31e4e2a0d2c2c310704ce8a19011330b514b2907f6d1341",
+    ),
+    // docs/features/card-trace.md "Data": `get_trace`, `edit_card`'s `reason`,
+    // `get_card`'s `snapshot` and `acceptance`, `get_impact`'s `cards`
+    // ([`as_of_0_23_0`] takes them out; no other tool's schema changed).
+    (
+        "0.24.0",
+        "4c331c198de8850438d38139e434f27e2de42648c75a938ac049f54c945966ca",
     ),
 ];
 
@@ -1684,10 +1709,38 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/card-trace.md (0.23.0 -> 0.24.0): plugin.json's version
+    // and `read-spec`'s one line; both set back, the tree is 0.23.0's pinned
+    // content. M: the version kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.24.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.24.0"),
+        "plugin.json's version"
+    );
+    assert_eq!(READ_SPEC_TRACE_0_24_0.len(), 140);
+    let at_0_23_0 = edited(
+        &edited(
+            &tree,
+            PLUGIN_JSON,
+            "\"version\": \"0.24.0\"",
+            "\"version\": \"0.23.0\"",
+        ),
+        READ_SPEC,
+        READ_SPEC_TRACE_0_24_0,
+        "",
+    );
+    assert_eq!(
+        content_hash(&at_0_23_0),
+        PINS[PINS.len() - 2].1,
+        "0.24.0 changes plugin.json's version and read-spec's one line only"
+    );
+    let tree = at_0_23_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/card-store.md (0.22.0 -> 0.23.0): plugin.json's version
     // and `read-spec`'s one bullet; both set back, the tree is 0.22.0's
     // pinned content. M: the version kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.23.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.23.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.23.0"),
@@ -1707,11 +1760,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_22_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.23.0 changes plugin.json's version and read-spec's one bullet only"
     );
     let tree = at_0_22_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/flow-canvas.md (0.21.0 -> 0.22.0): plugin.json's version
     // alone; set back, the tree is 0.21.0's pinned content. M: the version
     // kept; another file changed.
@@ -2343,6 +2396,37 @@ fn as_of_0_19_0(schemas: &mut Value) {
     });
 }
 
+/// `object` (a JSON Schema of an object) without its property `key`.
+fn without_key(object: &mut Value, key: &str) {
+    let properties = object["properties"]
+        .as_object_mut()
+        .expect("an object schema");
+    assert!(properties.remove(key).is_some(), "{key} listed");
+    if let Some(required) = object["required"].as_array_mut() {
+        required.retain(|name| name != key);
+    }
+}
+
+/// `schemas` as 0.23.0 listed them (docs/features/card-trace.md "Data"): no
+/// `get_trace`; `edit_card` without `reason`; `get_card`'s `snapshot` a string
+/// or null, its acceptance without the verdict's three keys; `get_impact`'s
+/// document without `cards` and its `truncated` without `cards`. No other
+/// tool's schema changed.
+fn as_of_0_23_0(schemas: &mut Value) {
+    let tools = schemas.as_object_mut().expect("schemas by tool");
+    assert!(tools.remove("get_trace").is_some(), "get_trace listed");
+    without_key(&mut schemas["edit_card"]["inputSchema"], "reason");
+    let card = &mut schemas["get_card"]["outputSchema"];
+    card["properties"]["snapshot"] = json!({"type": ["string", "null"]});
+    for key in ["verdict", "departs", "discrepancy"] {
+        let acceptance = &mut card["properties"]["acceptance"];
+        without_key(acceptance, key);
+    }
+    let impact = &mut schemas["get_impact"]["outputSchema"];
+    without_key(impact, "cards");
+    without_key(&mut impact["properties"]["truncated"], "cards");
+}
+
 /// `schemas` as 0.22.0 listed them (docs/features/card-store.md "MCP"): no
 /// card tool; no other tool's schema changed.
 fn as_of_0_22_0(schemas: &mut Value) {
@@ -2579,7 +2663,20 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[12].0, "0.21.0", "an entry for 0.21.0");
     assert_eq!(SCHEMA_PINS[13].0, "0.22.0", "an entry for 0.22.0");
     assert_eq!(SCHEMA_PINS[14].0, "0.23.0", "an entry for 0.23.0");
-    assert_eq!(SCHEMA_PINS.len(), 15, "0.23.0 the last entry");
+    assert_eq!(SCHEMA_PINS[15].0, "0.24.0", "an entry for 0.24.0");
+    assert_eq!(SCHEMA_PINS.len(), 16, "0.24.0 the last entry");
+    // docs/features/card-trace.md "Data": 0.23.0's schemas are today's
+    // without `get_trace`, `reason`, the snapshot's and acceptance's shapes
+    // and the impact's cards.
+    let mut at_0_23_0 = schemas.clone();
+    as_of_0_23_0(&mut at_0_23_0);
+    let at_0_23_0_hash = schema_hash(&at_0_23_0);
+    assert_eq!(
+        at_0_23_0_hash, SCHEMA_PINS[14].1,
+        "0.23.0's schemas are today's without card-trace's"
+    );
+    assert_ne!(at_0_23_0_hash, current, "card-trace changed the schemas");
+    let (schemas, current) = (at_0_23_0, at_0_23_0_hash);
     // docs/features/card-store.md "MCP": 0.22.0's schemas are today's without
     // the five card tools.
     let mut at_0_22_0 = schemas.clone();

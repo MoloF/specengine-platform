@@ -35,9 +35,10 @@ use std::time::{Duration, Instant};
 use common::{Scratch, fixture, repository_root};
 use serde_json::{Value, json};
 use specengine_core::card_toml::{CardConfig, CardFlow};
+use specengine_core::trace::TargetNorms;
 use specengine_model::EvidenceKind;
 use specengine_store::{
-    CARD_COLUMNS, CardChange, CardEdit, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
+    CARD_COLUMNS, CardAccept, CardChange, CardEdit, EVENT_CARD_ACCEPTED, EVENT_CARD_ASSIGNED,
     EVENT_CARD_CANCELLED, EVENT_CARD_CREATED, EVENT_CARD_EDITED, EVENT_CARD_MOVED, NewCard,
     NewTask, ProposalQueue as _, QUEUE_SCHEMA_VERSION, QueueCounts, QueueError, Restore,
     SqliteQueue, StoredCard, StoredEvent, StoredQueue, open_for_gate,
@@ -455,10 +456,10 @@ fn a_lost_compare_and_set_changes_nothing() {
     let dump = one.dump().expect("dump");
     for change in [
         to(flow, "checked"),
-        CardChange::Edit(CardEdit {
+        CardChange::Edit(Box::new(CardEdit {
             goal: Some(Some("G.".to_owned())),
             ..CardEdit::default()
-        }),
+        })),
         CardChange::Assign {
             assignee: Some(Some("ana".to_owned())),
             reviewer: None,
@@ -587,9 +588,11 @@ fn accept_is_the_reviewers_and_freezes_the_card() {
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
     let config = press();
     let flow = plates(&config);
-    let accept = CardChange::Accept {
+    let norms = TargetNorms::new();
+    let accept = CardAccept {
         flow: Some(flow),
-        note: Some("Fine.".to_owned()),
+        note: Some("Fine."),
+        norms: &norms,
     };
     queue
         .create_card(&new_card(flow, "Plate"), T0)
@@ -615,7 +618,7 @@ fn accept_is_the_reviewers_and_freezes_the_card() {
     );
     let dump = queue.dump().expect("dump");
     assert!(
-        refusal(queue.change_card("C-0001", None, &accept, "ben", T1)).contains("checked"),
+        refusal(queue.accept_card("C-0001", None, &accept, "ben", T1)).contains("checked"),
         "not in accept.from"
     );
     for name in ["agent", "local"] {
@@ -637,12 +640,13 @@ fn accept_is_the_reviewers_and_freezes_the_card() {
         .expect("moved");
     let dump = queue.dump().expect("dump");
     for name in ["ana", "cid", "agent", "local"] {
-        refusal(queue.change_card("C-0001", None, &accept, name, T1));
+        refusal(queue.accept_card("C-0001", None, &accept, name, T1));
         assert_eq!(queue.dump().expect("dump"), dump, "{name}");
     }
     let accepted = queue
-        .change_card("C-0001", Some(3), &accept, "ben", T2)
-        .expect("the reviewer's");
+        .accept_card("C-0001", Some(3), &accept, "ben", T2)
+        .expect("the reviewer's")
+        .card;
     assert_eq!(accepted.column, "struck");
     assert_eq!(accepted.position, 1);
     assert_eq!(accepted.revision, 4);
@@ -654,22 +658,26 @@ fn accept_is_the_reviewers_and_freezes_the_card() {
         card_events(&queue).last(),
         Some(&(
             EVENT_CARD_ACCEPTED.to_owned(),
-            json!({"id": "C-0001", "from": "checked", "to": "struck", "position": 1, "as": "ben"})
+            json!({"id": "C-0001", "from": "checked", "to": "struck", "position": 1, "as": "ben",
+                "verdict": "briefed", "discrepancy": null})
         ))
     );
     assert_eq!(
         sqlite3(&db, "SELECT acceptance FROM cards;"),
-        format!("{{\"by\":\"ben\",\"at\":\"{T2}\",\"note\":\"Fine.\"}}"),
+        format!(
+            "{{\"by\":\"ben\",\"at\":\"{T2}\",\"note\":\"Fine.\",\"verdict\":\"briefed\",\
+             \"departs\":[],\"discrepancy\":null}}"
+        ),
         "`{{by, at, note}}`"
     );
 
     let dump = queue.dump().expect("dump");
-    let closed: [CardChange<'_>; 5] = [
+    let closed: [CardChange<'_>; 4] = [
         to(flow, "queued"),
-        CardChange::Edit(CardEdit {
+        CardChange::Edit(Box::new(CardEdit {
             goal: Some(Some("G.".to_owned())),
             ..CardEdit::default()
-        }),
+        })),
         CardChange::Assign {
             assignee: Some(None),
             reviewer: None,
@@ -677,12 +685,13 @@ fn accept_is_the_reviewers_and_freezes_the_card() {
         CardChange::Cancel {
             reason: "No.".to_owned(),
         },
-        accept.clone(),
     ];
     for change in &closed {
         let reason = refusal(queue.change_card("C-0001", None, change, "ben", T2));
         assert!(reason.contains("--corrects"), "{reason}");
     }
+    let reason = refusal(queue.accept_card("C-0001", None, &accept, "ben", T2));
+    assert!(reason.contains("--corrects"), "{reason}");
     assert_eq!(queue.dump().expect("dump"), dump);
     assert_eq!(queue.get_card("C-0001").unwrap().unwrap().position, 1);
 }
@@ -765,7 +774,7 @@ fn edits_write_what_they_name_and_keep_links_acyclic() {
             .create_card(&new_card(flow, title), T0)
             .expect("a card");
     }
-    let edit = |edit: CardEdit| CardChange::Edit(edit);
+    let edit = |edit: CardEdit| CardChange::Edit(Box::new(edit));
     let edited = queue
         .change_card(
             "C-0001",
@@ -780,6 +789,8 @@ fn edits_write_what_they_name_and_keep_links_acyclic() {
                 parent: Some(Some("C-0002".to_owned())),
                 corrects: Some(Some("C-0002".to_owned())),
                 evidence: vec![(EvidenceKind::Note, "Read twice.".to_owned())],
+                reason: None,
+                norms: None,
             }),
             "ana",
             T1,
@@ -962,10 +973,10 @@ fn history_is_the_cards_own_last_events() {
     queue.create_card(&new_card(flow, "A"), T0).expect("a card");
     queue.create_card(&new_card(flow, "B"), T0).expect("a card");
     let edit = |goal: &str| {
-        CardChange::Edit(CardEdit {
+        CardChange::Edit(Box::new(CardEdit {
             goal: Some(Some(goal.to_owned())),
             ..CardEdit::default()
-        })
+        }))
     };
     for index in 0..5 {
         queue

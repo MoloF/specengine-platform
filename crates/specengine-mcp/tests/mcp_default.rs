@@ -18,7 +18,8 @@
 //!
 //! docs/features/review-form.md D1, D6, D7: twenty-two tools, twenty-three
 //! since docs/features/flow-read.md (`get_flow`, a read), twenty-eight
-//! since docs/features/card-store.md (the card tools); the owner's
+//! since docs/features/card-store.md (the card tools), twenty-nine since
+//! docs/features/card-trace.md (`get_trace`, a read); the owner's
 //! form `review_proposal` (`OWNER_TOOLS`) in the default build with the
 //! writers' hints and `_meta` exactly the size cap and
 //! `anthropic/requiresUserInteraction: true` (no other tool asks the

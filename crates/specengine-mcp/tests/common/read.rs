@@ -33,6 +33,9 @@
 //! docs/features/card-store.md: the five card tools join `TOOLS`
 //! (twenty-eight) as [`CARD_TOOLS`], their twins in [`card_library`], a
 //! write acting as `TOOL_ACTOR`.
+//!
+//! docs/features/card-trace.md: `get_trace` joins `TOOLS` (twenty-nine); its
+//! twin in [`library`] is `spec trace [REF]` (`TraceRequest {reference}`).
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -45,8 +48,8 @@ use specengine_cli::{
     IntakeSeverity, Outcome, ProposeRequest, ProposedText, QuestionRequest, RefsRequest,
     ReviewRequest, RoadmapRequest, SearchRequest, ShowRequest, SymbolsForm, SymbolsRequest,
     TOOL_ACTOR, TaskClaimRequest, TaskCompleteRequest, TaskPlanRequest, TaskReportRequest,
-    TaskShowRequest, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest, render_json,
-    render_text,
+    TaskShowRequest, TraceRequest, TreeRequest, UnmappedRequest, VerifiedTree, VerifyRequest,
+    render_json, render_text,
 };
 
 use super::{Finished, Home, Server, result, stateless_meta, with_meta};
@@ -103,8 +106,9 @@ pub const CODE_TOOLS: [&str; 4] = ["check_binding", "find_symbols", "refs", "unm
 /// twenty-one since docs/features/impact.md (`get_impact`), twenty-two
 /// since docs/features/review-form.md ([`OWNER_TOOLS`]), twenty-three since
 /// docs/features/flow-read.md (`get_flow`), twenty-eight since
-/// docs/features/card-store.md ([`CARD_TOOLS`]).
-pub const TOOLS: [&str; 28] = [
+/// docs/features/card-store.md ([`CARD_TOOLS`]), twenty-nine since
+/// docs/features/card-trace.md (`get_trace`).
+pub const TOOLS: [&str; 29] = [
     "ask_question",
     "check_binding",
     "claim_task",
@@ -120,6 +124,7 @@ pub const TOOLS: [&str; 28] = [
     "get_proposal",
     "get_roadmap",
     "get_task",
+    "get_trace",
     "get_tree",
     "list_cards",
     "move_card",
@@ -675,6 +680,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                 parent: text("parent"),
                 corrects: text("corrects"),
                 evidence: strings(&args["evidence"]),
+                reason: text("reason"),
                 revision: text("revision"),
                 actor,
                 now: now.to_owned(),
@@ -797,7 +803,8 @@ pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> E
 /// CLI's usage error, exit 2); `get_impact` = `spec impact [REF] [--symbol
 /// QPATH] [--since REV] [--depth N]` with the server's git environment,
 /// not exactly one non-null of `id`, `symbol` and `since` the tool's
-/// [`GET_IMPACT_ONE_FORM`]; `get_flow` = `spec flow [ROOT] [--depth N]`.
+/// [`GET_IMPACT_ONE_FORM`]; `get_flow` = `spec flow [ROOT] [--depth N]`;
+/// `get_trace` = `spec trace [REF]`.
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     if CODE_TOOLS.contains(&tool) {
         return code_library(tool, args, env, globals);
@@ -938,6 +945,14 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             },
         )
         .map(|outcome| Outcome::Flow(Box::new(outcome))),
+        "get_trace" => specengine_cli::trace(
+            env,
+            globals,
+            &TraceRequest {
+                reference: text("ref"),
+            },
+        )
+        .map(|outcome| Outcome::Trace(Box::new(outcome))),
         other => panic!("no CLI counterpart for tool {other}"),
     };
     expected(outcome)

@@ -491,6 +491,12 @@ fn patch_problem(patch: &ProposedPatch) -> Option<FieldProblem> {
         .or_else(|| required("proposed_patch.rationale", &patch.rationale, RATIONALE_MAX))
 }
 
+/// `name` can stand in a `distinct_from`: not empty, no control character,
+/// at most [`DISTINCT_ITEM_MAX`] bytes.
+pub fn distinct_entry_fits(name: &str) -> bool {
+    !name.is_empty() && !name.chars().any(char::is_control) && name.len() <= DISTINCT_ITEM_MAX
+}
+
 fn distinct_problem(distinct_from: &[String]) -> Option<FieldProblem> {
     if distinct_from.len() > DISTINCT_MAX {
         return Some(FieldProblem::new(

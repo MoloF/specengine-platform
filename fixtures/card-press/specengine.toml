@@ -4,7 +4,10 @@
 # at all, so every ordered pair of its open columns stands. Its `blocked`
 # column is a column like any other: nothing in the engine reads the word.
 # Kinds, prefixes, flows and columns are this project's own
-# (docs/features/card-store.md "Data", ADR-0008, ADR-0056).
+# (docs/features/card-store.md "Data", ADR-0008, ADR-0056). The five documents
+# under PRN-WEEKLY are the brief of docs/features/card-trace.md: SHT-BACK uses
+# SHT-FRONT-HEAD, and the accepted STY-0001, outside that tree, constrains
+# SHT-FRONT, so a departure from it meets a dedup hit.
 
 [project]
 slug = "card-press"
@@ -12,6 +15,7 @@ slug = "card-press"
 [ids]
 PRN = { kind = "print-run", shape = "name" }
 SHT = { kind = "broadsheet", shape = "name" }
+STY = { kind = "style-ruling", width = 4 }
 
 [[card.flow]]
 name = "copy"

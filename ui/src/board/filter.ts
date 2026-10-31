@@ -1,6 +1,6 @@
-import type { CardFlow, CardList, CardRow } from "../api/types";
+import type { CardFlow, CardList, CardRow, TraceCard, TraceDocument } from "../api/types";
 import { folded } from "../tasks/filter";
-import { NOT_IN_THE_FLOW, UNASSIGNED } from "./labels";
+import { canClear, isMarked, NOT_IN_THE_FLOW, UNASSIGNED } from "./labels";
 
 // The Board's arrangement of the one answer already read: the filters, the tabs, the columns, where
 // Up, Down and a drop put a card. Rows keep the daemon's order; no word of a project is read here.
@@ -65,6 +65,18 @@ export function assigneeChoices(rows: readonly CardRow[], kept: string): Choice[
     ),
     { key: NOBODY, label: UNASSIGNED },
   ];
+}
+
+/** Each card's mark from one trace read: the first that says something, one a person can clear before any. */
+export function marksOf(trace: TraceDocument | undefined): ReadonlyMap<string, TraceCard> {
+  const marks = new Map<string, TraceCard>();
+  for (const card of (trace?.nodes ?? []).flatMap((node) => node.cards)) {
+    const held = marks.get(card.id);
+    if (isMarked(card) && (held === undefined || (canClear(card) && !canClear(held)))) {
+      marks.set(card.id, card);
+    }
+  }
+  return marks;
 }
 
 /** One board's tab: a flow served, or one only a row still names. */

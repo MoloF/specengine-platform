@@ -552,6 +552,26 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"root": "MEC-STAMINA", "bogus": true}),
             ],
         ),
+        // docs/features/card-trace.md: spec-a has no `[card]`, so a whole
+        // read and a REF answer; a REF naming nothing is exit 1, a look-alike
+        // exit 2; a wrong type and an unknown field (`--depth` has no field)
+        // are bad arguments.
+        "get_trace" => (
+            vec![
+                json!({}),
+                json!({"ref": "DOM-MOVEMENT"}),
+                json!({"ref": "MEC-STAMINA#RULE-STAM-REGEN"}),
+                json!({"ref": null}),
+                json!({"ref": "MEC-NOPE"}),
+                json!({"ref": "M\u{0415}C-STAMINA"}),
+            ],
+            vec![
+                json!({"ref": 7}),
+                json!({"ref": ["MEC-STAMINA"]}),
+                json!({"depth": 1}),
+                json!({"ref": "MEC-STAMINA", "bogus": true}),
+            ],
+        ),
         // docs/features/card-store.md AC-01: spec-a has no `[card]`, so the
         // default flow answers; `create_card` runs first (tools by name), so
         // `C-0001` stands for the rest; a refusal is an error result, a wrong
@@ -584,10 +604,17 @@ fn calls_of(tool: &str, base: &str, root: &str) -> Option<(Vec<Value>, Vec<Value
                 json!({"card_id": "C-0001", "evidence": ["file=x"]}),
                 json!({"card_id": "C-0999", "goal": "G."}),
                 json!({"card_id": "C-0001", "goal": "G.", "revision": "1"}),
+                // docs/features/card-trace.md: a reason with no estimate
+                // held, a first estimate, then one without and with a reason.
+                json!({"card_id": "C-0001", "goal": "G.", "reason": "Why."}),
+                json!({"card_id": "C-0001", "estimate": "2"}),
+                json!({"card_id": "C-0001", "estimate": "3"}),
+                json!({"card_id": "C-0001", "estimate": "3", "reason": "Bigger."}),
             ],
             vec![
                 json!({}),
                 json!({"goal": "G."}),
+                json!({"card_id": "C-0001", "reason": 7}),
                 json!({"card_id": 7}),
                 json!({"card_id": "C-0001", "as": "ana"}),
                 json!({"card_id": "C-0001", "evidence": "note=x"}),
@@ -1061,6 +1088,7 @@ fn ac01_seven_writes_on_one_card_write_nothing_under_the_project_root() {
         &CardAcceptRequest {
             id: "C-0001".to_owned(),
             actor: "ben".to_owned(),
+            briefed: true,
             now: CLOCK.to_owned(),
             ..CardAcceptRequest::default()
         },

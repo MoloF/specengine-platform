@@ -16,6 +16,9 @@
 //! is a 403 before anything is read, no response carries an
 //! `Access-Control-*` header (a `same-origin` claim beside a foreign
 //! `Origin` or `Host` included: `cards.rs`, AC-03).
+//!
+//! docs/features/card-trace.md: the trace read and the two clears stand
+//! behind the same fence (`trace.rs`, AC-10).
 
 mod common;
 
@@ -130,6 +133,12 @@ fn endpoints(port: u16) -> Vec<(&'static str, String)> {
             "POST",
             "/api/projects/lantern-keep/cards/C-0001/accept".to_owned(),
         ),
+        (
+            "POST",
+            "/api/projects/lantern-keep/cards/C-0001/clear".to_owned(),
+        ),
+        ("GET", "/api/projects/lantern-keep/trace".to_owned()),
+        ("POST", "/api/projects/lantern-keep/trace/clear".to_owned()),
         ("GET", "/no/such/route".to_owned()),
         ("OPTIONS", "/api/projects".to_owned()),
         // The web UI (docs/features/ui-embed.md T4).

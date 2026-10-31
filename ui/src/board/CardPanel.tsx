@@ -1,7 +1,7 @@
 import { useId, type KeyboardEvent, type MouseEvent, type ReactNode, type Ref } from "react";
 import { apiErrorOf } from "../api/client";
 import type { CardQuery } from "../api/queries";
-import type { Card, CardEvent, CardFlow, CardNotFound } from "../api/types";
+import type { Card, CardEvent, CardFlow, CardNotFound, TraceCard } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
@@ -11,10 +11,10 @@ import { shownSlot, shownText } from "../ui/text";
 import { formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { isOverdue } from "./due";
-import { ACCEPTED, BY_HAND, CANCELLED, columnTitle, eventWords, OVERDUE, UNASSIGNED } from "./labels";
+import { ACCEPTED, BY_HAND, canClear, CANCELLED, columnTitle, eventWords, markLine, markLook, OVERDUE, UNASSIGNED } from "./labels";
 
-/** The panel's four writes, each a dialog. */
-export type CardAction = "edit" | "assign" | "cancel" | "accept";
+/** The panel's five writes, each a dialog. */
+export type CardAction = "edit" | "assign" | "cancel" | "accept" | "clear";
 
 /** Whether a card's read found one, rather than `{id, reason}`. */
 export function isCard(answer: Card | CardNotFound): answer is Card {
@@ -120,6 +120,16 @@ function Closure({ card }: { card: Card }) {
           <p>
             By <bdi>{shownSlot(card.acceptance.by)}</bdi>, <At at={card.acceptance.at} />
           </p>
+          {card.acceptance.verdict === "departs" && (
+            <p>
+              Departs from <bdi>{shownSlot(card.acceptance.departs.join(", "))}</bdi>
+              {card.acceptance.discrepancy !== null && (
+                <>
+                  : <bdi>{shownSlot(card.acceptance.discrepancy)}</bdi>
+                </>
+              )}
+            </p>
+          )}
           {card.acceptance.note !== null && <p className="board-text">{shownText(card.acceptance.note)}</p>}
         </Part>
       )}
@@ -132,6 +142,37 @@ function Closure({ card }: { card: Card }) {
         </Part>
       )}
     </>
+  );
+}
+
+/** What a read says of the card against its brief, closed or not: a suspect card's Clear stands here, an accepted card's too. */
+function BriefMark({ card, mark, onAct }: { card: Card; mark: TraceCard; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+  const look = markLook(mark);
+  if (look === null) {
+    return null;
+  }
+  return (
+    <Part title="Against the brief">
+      <p className="board-panel-state">
+        <Badge look={look} />
+        <span>
+          <bdi>{shownSlot(markLine(mark))}</bdi>
+        </span>
+      </p>
+      {canClear(mark) && (
+        <div className="board-panel-actions">
+          <button
+            type="button"
+            className="button"
+            onClick={(event) => {
+              onAct("clear", card, event.currentTarget);
+            }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
+    </Part>
   );
 }
 
@@ -166,12 +207,16 @@ function Details({
   card,
   flow,
   today,
+  mark,
+  markFailure,
   onAct,
 }: {
   project: string;
   card: Card;
   flow: CardFlow | undefined;
   today: string;
+  mark: TraceCard | undefined;
+  markFailure: string | null;
   onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
 }) {
   const accepted = card.acceptance !== null;
@@ -193,6 +238,14 @@ function Details({
             <li key={`${String(index)}-${note}`}>{note}</li>
           ))}
         </ul>
+      )}
+      {mark !== undefined && <BriefMark card={card} mark={mark} onAct={onAct} />}
+      {markFailure !== null && (
+        // Not known, never read as clean: no mark is shown for a read that failed.
+        <p className="note">
+          <Icon name="alert" />
+          <span>Whether the brief changed under this card could not be read: {markFailure}</span>
+        </p>
       )}
       {accepted || cancelled ? <Closure card={card} /> : <Actions card={card} flow={flow} onAct={onAct} />}
       {card.goal !== null && (
@@ -299,6 +352,8 @@ export function CardPanel({
   query,
   flowOf,
   today,
+  mark,
+  markFailure,
   headingRef,
   onAct,
   onClose,
@@ -308,6 +363,9 @@ export function CardPanel({
   query: CardQuery;
   flowOf: (name: string) => CardFlow | undefined;
   today: string;
+  mark: TraceCard | undefined;
+  /** Why the trace could not be read. */
+  markFailure: string | null;
   headingRef: Ref<HTMLHeadingElement>;
   onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
   onClose: () => void;
@@ -353,7 +411,7 @@ export function CardPanel({
       </div>
     );
   } else {
-    body = <Details project={project} card={card} flow={flowOf(card.flow)} today={today} onAct={onAct} />;
+    body = <Details project={project} card={card} flow={flowOf(card.flow)} today={today} mark={mark} markFailure={markFailure} onAct={onAct} />;
   }
 
   return (

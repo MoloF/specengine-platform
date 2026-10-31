@@ -5,7 +5,7 @@
 //!
 //! - The tools: both reads read-only, the three writes annotated as
 //!   `claim_task`; the twin's flags in snake case, `C` as `card_id`, no `as`;
-//!   no tool assigns, cancels or accepts (AC-04); `INSTRUCTIONS` 2 047 bytes
+//!   no tool assigns, cancels or accepts (AC-04); `INSTRUCTIONS` 2 040 bytes
 //!   with the cards line.
 //! - A tool acts as `agent` (AC-03): `by = ["desk"]` refuses it naming `desk`,
 //!   a flow listing `agent` admits it, the event records it.
@@ -15,7 +15,8 @@
 //!   is the daemon's alone).
 //! - `copy`, `plates` and the default flow of three projects run one tool
 //!   code (AC-10); no reply names a stack word.
-//! - The MCP sources hold no `card_accept`, `card_assign`, `card_cancel`.
+//! - The MCP sources hold no `card_accept`, `card_assign`, `card_cancel`,
+//!   `card_clear`.
 //!
 //! Every server has a cleared environment and a scratch `HOME`.
 
@@ -172,17 +173,17 @@ fn required(list: &Value, name: &str) -> Vec<String> {
 /// "MCP": five tools, the twin's flags in snake case, `card_id`, no `as`, no
 /// tool for `assign`, `cancel`, `accept`; reads read-only, writes annotated
 /// as `claim_task`; the write document's seven keys, `get_card`'s and
-/// `list_cards`'; `INSTRUCTIONS` 2 047 bytes holding the cards line once and
+/// `list_cards`'; `INSTRUCTIONS` 2 040 bytes holding the cards line once and
 /// naming every tool. M: a tool taking `as`; a sixth tool.
 #[test]
 fn ac10_the_card_tools_and_their_schemas() {
-    assert_eq!(TOOLS.len(), 28);
+    assert_eq!(TOOLS.len(), 29);
     for name in CARD_TOOLS {
         assert!(TOOLS.contains(&name), "{name}");
     }
     assert_eq!(CARDS_LINE.len(), 112);
     let instructions = specengine_mcp::INSTRUCTIONS;
-    assert_eq!(instructions.len(), 2047);
+    assert_eq!(instructions.len(), 2040);
     assert_eq!(instructions.matches(CARDS_LINE).count(), 1);
     assert!(
         instructions.contains(&format!(
@@ -242,6 +243,7 @@ fn ac10_the_card_tools_and_their_schemas() {
                     "evidence",
                     "goal",
                     "parent",
+                    "reason",
                     "revision",
                     "target",
                     "title",
@@ -629,8 +631,8 @@ fn ac04_move_card_never_reaches_accept_to() {
 }
 
 /// AC-04: the sources of the MCP crate hold no way to the person's acts:
-/// no `card_accept`, `card_assign`, `card_cancel`, in any file, comments
-/// too. M: a tool calling one.
+/// no `card_accept`, `card_assign`, `card_cancel`, `card_clear`, in any
+/// file, comments too. M: a tool calling one.
 #[test]
 fn ac04_the_mcp_sources_hold_no_persons_act() {
     let dir = repository_root().join("crates/specengine-mcp/src");
@@ -639,7 +641,7 @@ fn ac04_the_mcp_sources_hold_no_persons_act() {
         let path = entry.expect("an entry").path();
         let text = fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"));
         read += 1;
-        for name in ["card_accept", "card_assign", "card_cancel"] {
+        for name in ["card_accept", "card_assign", "card_cancel", "card_clear"] {
             assert!(!text.contains(name), "{}: {name}", path.display());
         }
     }

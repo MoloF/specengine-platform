@@ -57,8 +57,8 @@ use specengine_core::intake::{
 use specengine_core::proposal::Author;
 use specengine_model::{Direction, is_weak_link};
 use specengine_store::{
-    GitEnv, Intake, NewIntake, NewProposal, ProposalFinding, ProposalKind, ProposalQueue as _,
-    ProposalStatus, QueueError, QueueMatch,
+    GitEnv, Intake, NewIntake, NewProposal, Place, ProposalFinding, ProposalKind,
+    ProposalQueue as _, ProposalStatus, QueueError, QueueMatch,
 };
 
 use crate::cap::SHOW_TAIL_NAMES;
@@ -551,11 +551,51 @@ struct Item<'a> {
 }
 
 /// A target resolved at step 3.
-struct Target {
+pub(crate) struct IntakeTarget {
     /// Canonical: `ID`, `slug/ID`, or an id-less document's path.
-    id: String,
+    pub id: String,
     /// Its holder, root-relative.
-    path: String,
+    pub path: String,
+}
+
+/// Step 6 of a departing accept: the corpus's hits on `targets`, named as
+/// `distinct_from` names them, by path.
+pub(crate) fn departing_hits(graph: &SpecGraph<'_>, targets: &[IntakeTarget]) -> Vec<String> {
+    corpus_matches(graph, targets)
+        .0
+        .iter()
+        .map(|hit| hit.name().to_owned())
+        .collect()
+}
+
+/// The discrepancy a departing accept stores, `input` over `targets` at
+/// `place`; its `distinct_from` is the store's to write, under its lock.
+pub(crate) fn departure_intake(
+    input: &DiscrepancyInput,
+    targets: &[IntakeTarget],
+    place: Place,
+    author: Author,
+) -> NewIntake {
+    NewIntake {
+        kind: ProposalKind::Discrepancy,
+        target_path: targets
+            .first()
+            .map_or_else(String::new, |at| at.path.clone()),
+        place,
+        author,
+        intake: Intake {
+            target_ids: targets.iter().map(|target| target.id.clone()).collect(),
+            severity: input.severity,
+            gap_type: Some(input.gap_type),
+            summary: input.summary.clone(),
+            working_answer: None,
+            price_of_other: None,
+            evidence: input.evidence.clone(),
+            options: input.options.clone(),
+            recommendation: Some(input.recommendation),
+            distinct_from: Vec::new(),
+        },
+    }
 }
 
 fn run_intake(
@@ -576,7 +616,7 @@ fn run_intake(
     let input = indexed(env, &context.project, &mut messages, false)?;
 
     // 3. The nodes, each once.
-    let mut targets: Vec<Target> = Vec::with_capacity(item.node_ids.len());
+    let mut targets: Vec<IntakeTarget> = Vec::with_capacity(item.node_ids.len());
     for (index, written) in item.node_ids.iter().enumerate() {
         let field = format!("node_ids[{index}]");
         let (id, path) = match resolved_node(&context.project, &input, written)
@@ -599,7 +639,7 @@ fn run_intake(
                 messages,
             ));
         }
-        targets.push(Target { id, path });
+        targets.push(IntakeTarget { id, path });
     }
 
     // 4. The proposed patch: one of the targets, then `propose update`
@@ -852,7 +892,7 @@ fn unnameable_reason() -> String {
 /// by path; a hit is never related too.
 fn corpus_matches(
     graph: &SpecGraph<'_>,
-    targets: &[Target],
+    targets: &[IntakeTarget],
 ) -> (Vec<IntakeMatch>, Vec<IntakeMatch>) {
     let mut hits: Vec<usize> = Vec::new();
     let mut related: Vec<usize> = Vec::new();
@@ -934,7 +974,7 @@ fn corpus_matches(
 
 /// The graph node of a resolved target: the node of its holder declaring
 /// its bare ID; a path's, its holder's document.
-fn node_of(graph: &SpecGraph<'_>, target: &Target) -> Option<NodeAt> {
+fn node_of(graph: &SpecGraph<'_>, target: &IntakeTarget) -> Option<NodeAt> {
     let file = graph.file_of(&target.path)?;
     if is_path_target(&target.id) {
         return graph.document(file);

@@ -38,7 +38,7 @@ A Cards block (`src/trace/CardsBlock.tsx`) in `FlowDetails.tsx` and the tree's `
 
 ### The board tile
 
-A card can never look normal on the board while suspect or departed. `spec card list --marks` adds each row's `mark`, core `card_mark`'s, `null` without the flag, so other reads keep their bytes; the Board always sends `marks=true`, MCP `list_cards` gains `marks?`. `BoardCard.tsx` shows Suspect, Departed or Correcting first on the tile, a label and an icon from `src/board/labels.ts`, naming the target, the discrepancy or the correction; an accepted card's word yields to it.
+`card-trace` already shows the badge on the tile from `GET trace`, which misses a card on a gone target; this section moves it onto the list. A card can never look normal on the board while suspect or departed. `spec card list --marks` adds each row's `mark`, core `card_mark`'s, `null` without the flag, so other reads keep their bytes; the Board always sends `marks=true`, MCP `list_cards` gains `marks?`. `BoardCard.tsx` shows Suspect, Departed or Correcting first on the tile, a label and an icon from `src/board/labels.ts`, naming the target, the discrepancy or the correction; an accepted card's word yields to it.
 
 No marks, no tiles: an index that cannot be read is the read's 503, so `ErrorPanel` stands where a clean board would. `card.*` and `proposal.applied` read the list again, and so does window focus, for a hand edit.
 
@@ -129,6 +129,6 @@ Dates on the timeline: nothing here reads a clock. A `[flow]` key ordering stage
 - **Rust:** model `src/node.rs`; core `src/front_matter.rs`, `src/flow.rs`; store `src/lib.rs`, `tests/format_history.txt`; import `src/layout/typed.rs`; CLI `src/flow.rs`, `src/trace.rs`, `src/card.rs`, `src/main.rs`; MCP `src/read.rs`, `src/cards.rs`, `src/mirror.rs`; http `src/app.rs`; `plugin.json`, next MINOR.
 - **UI**, in `ui/src/`: `flow/{FlowView,FlowCanvas,FlowList,FlowDetails}.tsx`, `flow/labels.ts`; `tree/NodePane.tsx`; `board/{BoardCard,CardPanel}.tsx`, `board/labels.ts`, `BoardView.test.tsx`; `api/{provisional,client,http,queries}.ts`; `mocks/MockClient.ts`; `styles/app.css`; `policy.test.ts`.
 - **Pins:** `norm_recipe.rs`, `front_matter.rs` tests, eval `layout_cli.rs`, `flow_read.rs`, `mcp_flow.rs`, `SCHEMA_PINS`, `daemon-keys.json`, `daemon_keys.rs`, `daemonKeys.test.ts`, genre scans.
-- **Canon at shipping:** `spec-flow.md` "The read" (the reversal, `stage`, `--trace`), `node-revision.md` "Never counted", the card-trace canon, `spec-flow-screen.md`, `ui/README.md`.
+- **Canon at shipping:** `spec-flow.md` "The read" (the reversal, `stage`, `--trace`), `node-revision.md` "Never counted", `spec-trace.md`, `spec-flow-screen.md`, `ui/README.md`.
 
 ## Implementation
