@@ -14,7 +14,7 @@ Two findings of the browser checks on 2026-10-31. An empty Board column was 61 p
 
 ## Summary
 
-What became true is in `docs/canon/`. The Board: `board-ui.md` "Moving", CSS alone (D12), since `section.board-column` already takes the drop. The Flow: `spec-flow-screen.md` "Gap rows". A stored `specengine.flow.gaps-hidden` is left as it is and holds again when a row is found. A2: the canvas zoom rises with the freed column; no number is promised, and the gate's look decides.
+What became true is in `docs/canon/`. The Board: `board-ui.md` "Moving", CSS alone (D12), since `section.board-column` already takes the drop. The Flow: `spec-flow-screen.md` "Gap rows". A stored `specengine.flow.gaps-hidden` is left as it is and holds again when a row is found. A2: the canvas zoom rises with the freed column; no number is promised, and the gate's look decided: the text reads (below).
 
 ## Acceptance criteria
 
@@ -43,6 +43,6 @@ Beyond the spec: `FlowView.tsx` hands lost focus to `.flow-results` with `preven
 
 **AC-02, 2026-10-31.** Headless Chrome 156 at 1440x900, a real mouse drag through CDP on the production build, `?scenario=normal#/ledger-api/board`: the empty column is 224x532 (half the viewport is 450), and a drop at 80 % of its height moved the card. A control with `.board-columns{align-items:start;min-height:0}` injected gave 224x61 and the drop was lost. Limits: the mock judged the move, and the control is an injected style.
 
-**The Flow line, 2026-10-31.** The `?scenario=no-gaps` mock (flow-authoring) reaches it through the real React path; a headless look confirmed the line and the 1184 px canvas. On a real project the orchestrator looks at the gate.
+**The Flow line, 2026-10-31.** The `?scenario=no-gaps` mock (flow-authoring) reaches it through the real React path; a headless look confirmed the line and the 1184 px canvas. Seen on a real project at the gate the same day, a real daemon at 1440x900, a flow of 16 nodes and 15 edges with ten rows measured at 0: the line `No gaps: every row reads None` came through its real React path, the canvas took the full width and the text reads (a look, not a measure), an empty column of 227x480 took a real mouse drop at 80 % of its height, and the console stayed clean.
 
 **Known and accepted.** `clear` stands on the last read while a re-read is in flight, as the `None` rows did. "No gaps" reads Top's rows alone.
