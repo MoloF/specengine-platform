@@ -1252,6 +1252,71 @@ fn person_problem(key: &str, name: &str) -> Option<String> {
     card_person_problem(name).map(|problem| format!("{key}: {problem}"))
 }
 
+/// Why `login`, as a proxy sent it, can be no person on a hub. Pure: it
+/// reads and writes nothing. A login is recorded verbatim and compared
+/// exactly, so one person must have one spelling: refused are text the store
+/// would trim, what no card's person may hold, a comma (a proxy folding a
+/// client's copy gives `eve, mira`), a format character (`mira` and a
+/// zero-width character read as `mira` and are two people), [`LOCAL_ACTOR`]
+/// and [`AGENT_ACTOR`] in any case, and [`CLEAR`].
+///
+/// The login door's duty, not judged here: a Latin look-alike (a Cyrillic
+/// `o`), NFC against NFD, and an invisible mark outside category Cf (U+034F,
+/// a variation selector).
+pub fn hub_login_problem(login: &str) -> Option<String> {
+    if card_person(login) != login {
+        return Some("white space around the login".to_owned());
+    }
+    if let Some(problem) = card_person_problem(login) {
+        return Some(problem);
+    }
+    if login.contains(',') {
+        return Some("a comma: one login, not a list".to_owned());
+    }
+    if let Some(c) = login.chars().find(|&c| is_format_character(c)) {
+        return Some(format!(
+            "U+{:04X} in a name: no format character, which can read as another person",
+            u32::from(c)
+        ));
+    }
+    if login == CLEAR {
+        return Some(format!(
+            "`{CLEAR}` is the record's word for clearing a name"
+        ));
+    }
+    reviewer_problem(&login.to_ascii_lowercase())
+        .map(|_| format!("`{login}` is the record's word for no person"))
+}
+
+/// Unicode's general category Cf, which `char` does not expose (the same
+/// ranges in Unicode 15.1 and 17.0).
+fn is_format_character(c: char) -> bool {
+    matches!(
+        c,
+        '\u{ad}'
+            | '\u{600}'..='\u{605}'
+            | '\u{61c}'
+            | '\u{6dd}'
+            | '\u{70f}'
+            | '\u{890}'..='\u{891}'
+            | '\u{8e2}'
+            | '\u{180e}'
+            | '\u{200b}'..='\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{2064}'
+            | '\u{2066}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{110bd}'
+            | '\u{110cd}'
+            | '\u{13430}'..='\u{1343f}'
+            | '\u{1bca0}'..='\u{1bca3}'
+            | '\u{1d173}'..='\u{1d17a}'
+            | '\u{e0001}'
+            | '\u{e0020}'..='\u{e007f}'
+    )
+}
+
 /// The card a command names: `Ok(Err)` the refused outcome (exit 1).
 fn named_card(
     context: &CardContext,

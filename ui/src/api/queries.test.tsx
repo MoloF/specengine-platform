@@ -1,6 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { act, render, waitFor } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { aBundle, aCard, aCardList, aCardRow, aCheckReport, aGraphView, aHealthReport, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, NO_SUCH_PROPOSAL, STAGE_REFUSED } from "./client";
@@ -19,6 +19,7 @@ import {
   useFlowGroups,
   useGraph,
   useHealth,
+  useIdentity,
   useInbox,
   useNode,
   useProjects,
@@ -52,6 +53,8 @@ describe("query keys", () => {
     expect(queryKeys.bundle("p", { node_ids: ["R"] })).toEqual(["bundle", "p", { node_ids: ["R"], budget: null }]);
     expect(queryKeys.bundle("p", { node_ids: ["R"], budget: 9 })).toEqual(["bundle", "p", { node_ids: ["R"], budget: 9 }]);
     expect(queryKeys.inbox("p")).toEqual(["inbox", "p"]);
+    // AC-12 of docs/features/hub-identity.md: no project, a fact of the page.
+    expect(queryKeys.identity).toEqual(["identity"]);
     // `docs/features/daemon-read.md` "Data": one proposal's review document.
     expect(queryKeys.proposal("p", "PR-0001")).toEqual(["proposal", "p", "PR-0001"]);
     // AC-08 of docs/features/ui-tasks.md.
@@ -129,6 +132,7 @@ describe("requests", () => {
 /** One of each read, the check among them. */
 function EveryRead() {
   useProjects();
+  useIdentity();
   useInbox("alpha");
   useCachedInbox("beta");
   useProposal("alpha", "PR-1");
@@ -216,6 +220,7 @@ describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
     });
     const reads = {
       getProjects: client.getProjects,
+      getIdentity: client.getIdentity,
       getInbox: client.getInbox,
       getProposal: client.getProposal,
       getTree: client.getTree,
@@ -233,6 +238,64 @@ describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
     }
     expect(client.getCheck.mock.calls).toEqual([["alpha"]]);
     expect(client.getHealth.mock.calls).toEqual([["alpha"]]);
+  });
+});
+
+describe("useIdentity (AC-12 of hub-identity)", () => {
+  function Reader() {
+    useIdentity();
+    return null;
+  }
+
+  function reading(client: StubClient, queryClient: QueryClient) {
+    return render(
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Reader />
+      </ApiProvider>,
+    );
+  }
+
+  it("is one read for every field that asks, none again when a new one mounts", async () => {
+    const client = stubClient();
+    client.getIdentity.mockResolvedValue({ login: "mira" });
+    const queryClient = createQueryClient();
+    const first = reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryData(queryKeys.identity)).toEqual({ login: "mira" });
+    });
+    first.unmount();
+    reading(client, queryClient);
+    expect(client.getIdentity).toHaveBeenCalledTimes(1);
+  });
+
+  it("outlives every field on the page, so coming back never shows it loading", async () => {
+    const client = stubClient();
+    client.getIdentity.mockResolvedValue({ login: "mira" });
+    const queryClient = createQueryClient();
+    const view = reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryData(queryKeys.identity)).toEqual({ login: "mira" });
+    });
+    vi.useFakeTimers();
+    view.unmount();
+    vi.advanceTimersByTime(24 * 60 * 60 * 1000);
+    expect(queryClient.getQueryData(queryKeys.identity)).toEqual({ login: "mira" });
+  });
+
+  it("keeps no answer of a failed read: the next to mount asks again", async () => {
+    const client = stubClient();
+    client.getIdentity.mockRejectedValueOnce(new ClientError({ status: 503, message: "spec index unavailable" }));
+    const queryClient = createQueryClient();
+    const first = reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryState(queryKeys.identity)?.status).toBe("error");
+    });
+    first.unmount();
+    reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryData(queryKeys.identity)).toEqual({ login: null });
+    });
+    expect(client.getIdentity).toHaveBeenCalledTimes(2);
   });
 });
 

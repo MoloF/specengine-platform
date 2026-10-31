@@ -26,6 +26,8 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     // daemon-read serves the bundle, the projects and one proposal (docs/features/daemon-read.md "Data").
     ["getBundle", "/** GET /api/projects/:p/bundle */"],
     ["getProjects", "/** GET /api/projects */"],
+    // AC-12 of docs/features/hub-identity.md: the route the canon's "Routes" names, no project.
+    ["getIdentity", '/** GET /api/identity (docs/canon/hub.md "Routes"; a hub\'s login, null on a local daemon; no project) */'],
     ["getInbox", "/** GET /api/projects/:p/inbox */"],
     ["getProposal", "/** GET /api/projects/:p/proposals/:id */"],
     // AC-14 of docs/features/decision-staging.md: the stage's two writes on one path.

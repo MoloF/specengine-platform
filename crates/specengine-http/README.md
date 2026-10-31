@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-11-01
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -14,11 +14,11 @@ Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge),
 
 ## Binary
 
-`specengine-http --root DIR... [--port N]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`): `serve.md` "Start", "Lines". Exit 1: stopped after listening. SIGINT, SIGTERM end it at any point: every write is one SQLite transaction.
+`specengine-http --root DIR... [--port N] [--public-origin URL]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`): `serve.md` "Start", "Lines". Exit 1: stopped after listening.
 
 ## Fence
 
-Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`; any of them sent twice -> 403. No authentication (ADR-0034). No `Access-Control-*` header on any response, `OPTIONS` included; `Cache-Control: no-store` on every one.
+Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`; any of them sent twice -> 403. No authentication (ADR-0034). No `Access-Control-*` header on any response, `OPTIONS` included; `Cache-Control: no-store` on every one. A hub, `--public-origin`, has its own: `hub.md`.
 
 Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 405 `Allow: GET`; the decision route POST and DELETE, else 405 `Allow: POST, DELETE`, `round/answers` POST, else `Allow: POST`, both ending ``confirmed on a terminal``; the card routes `board-ui.md`'s; an unknown path -> 404 listing the routes (the web UI's last), whatever the method.
 
@@ -29,6 +29,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | Method, path | Query | Answer |
 |---|---|---|
 | GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order (CLI `project_entry`): `name` or `null`, `root` canonical, `branch` current or `null` (detached, no git) |
+| GET `/api/identity` | -- | `hub.md` |
 | GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json`, browser view |
 | GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json`, browser view |
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
@@ -69,7 +70,7 @@ Types: all stored (`proposal-queue.md` "States and events", `tasks.md` "Store", 
 
 ## Concurrency
 
-One request per project at a time, projects in parallel, beside the CLI's and MCP's direct writes: `serve.md` "Concurrency".
+One request per project at a time, projects in parallel: `serve.md` "Concurrency".
 
 ## Known limits
 
@@ -81,4 +82,4 @@ One request per project at a time, projects in parallel, beside the CLI's and MC
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's 105 key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs`, `turn.rs`, `methods.rs`, `stage.rs`, `round.rs`, `projects.rs`, `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs`, `turn.rs`, `methods.rs`, `stage.rs`, `round.rs`, `projects.rs`, `hub.rs`, `serve.rs` (`serve.md` "Tests"), `ui.rs` and the `src/ui.rs` units (`serve-ui.md` "Tests").

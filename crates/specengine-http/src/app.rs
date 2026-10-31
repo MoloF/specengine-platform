@@ -11,6 +11,8 @@
 //! (docs/features/board-ui.md "Data"): `…/cards` a read and a write, its 405
 //! `Allow: GET, POST`; `…/cards/<id>` a read; its six writes `Allow: POST`.
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
+//! `/api/identity` a read of the request's login, no project, no turn
+//! (docs/features/hub-identity.md); a hub has its own fence ([`crate::hub`]).
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data" and
@@ -56,8 +58,9 @@ use specengine_cli::{
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
 use crate::args::{Args, percent_decode, project_path};
+use crate::hub::{Hub, Login};
 use crate::start::Project;
-use crate::{tail, ui};
+use crate::{hub, tail, ui};
 
 /// What every handler shares.
 #[derive(Debug)]
@@ -66,15 +69,18 @@ pub(crate) struct App {
     pub projects: Vec<Arc<Project>>,
     /// The bound port, which `Host` and `Origin` must name.
     pub port: u16,
+    /// `--public-origin`: present, a hub, whose fence replaces [`fenced`].
+    pub hub: Option<Hub>,
 }
 
 pub(crate) type Shared = Arc<App>;
 
 impl App {
-    pub(crate) fn new(projects: Vec<Project>, port: u16) -> Self {
+    pub(crate) fn new(projects: Vec<Project>, port: u16, hub: Option<Hub>) -> Self {
         Self {
             projects: projects.into_iter().map(Arc::new).collect(),
             port,
+            hub,
         }
     }
 
@@ -110,6 +116,7 @@ impl App {
 /// route after routing, and miss a route added after it).
 pub(crate) fn router(app: Shared) -> Router {
     let routes = Router::new()
+        .route("/api/identity", read(identity))
         .route("/api/projects", read(projects))
         .route("/api/projects/{p}/tree", read(tree))
         .route("/api/projects/{p}/nodes/{*ref}", read(nodes))
@@ -199,9 +206,19 @@ where
 /// The fence, before routing (failing: 403, no `Allow`, nothing read):
 /// `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin`
 /// absent or `http://` and one of them; `Sec-Fetch-Site` absent,
-/// `same-origin` or `none`. Every response gets `Cache-Control: no-store`.
-async fn fence(State(app): State<Shared>, request: Request, next: Next) -> Response {
-    let mut response = if let Err(reason) = fenced(app.port, request.headers()) {
+/// `same-origin` or `none`. A hub judges [`Hub::fenced`] instead and hands
+/// the handlers its [`Login`]; a local daemon reads no login header. Every
+/// response gets `Cache-Control: no-store`.
+async fn fence(State(app): State<Shared>, mut request: Request, next: Next) -> Response {
+    let passed = match &app.hub {
+        Some(hub) => hub
+            .fenced(request.method(), request.uri().path(), request.headers())
+            .map(|login| {
+                request.extensions_mut().insert(login);
+            }),
+        None => fenced(app.port, request.headers()),
+    };
+    let mut response = if let Err(reason) = passed {
         error(StatusCode::FORBIDDEN, &reason)
     } else {
         next.run(request).await
@@ -243,7 +260,7 @@ fn fenced(port: u16, headers: &HeaderMap) -> Result<(), String> {
 }
 
 /// The one value of a header, if sent; sent twice is refused.
-fn single<'h>(
+pub(crate) fn single<'h>(
     headers: &'h HeaderMap,
     name: &HeaderName,
     label: &str,
@@ -332,8 +349,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
-             inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events}}; the \
-             web UI: / and /assets/<file>",
+             inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events}}, \
+             /api/identity; the web UI: / and /assets/<file>",
             uri.path()
         ),
     )
@@ -343,6 +360,18 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
 /// names checked (400).
 fn args(endpoint: &str, names: &[&str], uri: &Uri) -> Result<Args, Refusal> {
     Args::new(endpoint, names, uri.query()).map_err(Refusal::bad_request)
+}
+
+/// `GET /api/identity`: `{"login":"mira"}` on a hub, `{"login":null}` on a
+/// local daemon, the UI's one way to learn the mode. No project, no turn.
+async fn identity(request: Request) -> Result<Response, Refusal> {
+    args("identity", &[], request.uri())?;
+    let login = request
+        .extensions()
+        .get::<Login>()
+        .map(|Login(login)| login.as_str());
+    let body = serde_json::json!({ "login": login }).to_string();
+    Ok(json(StatusCode::OK, body))
 }
 
 /// `GET /api/projects`: `[{slug, name, root, branch}]`, in `--root` order.
@@ -906,15 +935,23 @@ fn written(outcome: CardOutcome) -> Outcome {
     Outcome::Card(Box::new(outcome))
 }
 
+/// The login the fence set on `request`: a hub's, never a local daemon's.
+fn login_of(request: &Request) -> Option<Login> {
+    request.extensions().get::<Login>().cloned()
+}
+
 /// `POST …/cards`: `card_new`, past `round_answers`' door in order, nothing
 /// read on a refusal: the served slug (404), a same-origin page (403),
-/// [`written_body`]. Then one call in the project's turn, one clock
-/// reading: 200 the write document, 400 usage, 404 `{id, reason}`, 409
-/// refused (the write document), 503 cannot run (`answer.rs`).
+/// [`written_body`], on a hub the login as `as` ([`hub::acting`], 403). Then
+/// one call in the project's turn, one clock reading: 200 the write
+/// document, 400 usage, 404 `{id, reason}`, 409 refused (the write
+/// document), 503 cannot run (`answer.rs`).
 async fn new_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(request.uri())?;
     same_origin(request.headers())?;
-    let body = written_body(request, CardNewBody::from_json).await?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CardNewBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_new(env, globals, &body.request(utc_now())).map(written)
     })
@@ -925,7 +962,9 @@ async fn new_card(State(app): State<Shared>, request: Request) -> Result<Respons
 /// lost compare-and-set, a move outside the flow, an `as` outside `by`: 409.
 async fn move_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/move")?;
-    let body = written_body(request, CardMoveBody::from_json).await?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CardMoveBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_move(env, globals, &body.request(id, utc_now())).map(written)
     })
@@ -935,7 +974,9 @@ async fn move_card(State(app): State<Shared>, request: Request) -> Result<Respon
 /// `POST …/cards/<id>/edit`: `card_edit`, past [`new_card`]'s door.
 async fn edit_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/edit")?;
-    let body = written_body(request, CardEditBody::from_json).await?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CardEditBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_edit(env, globals, &body.request(id, utc_now())).map(written)
     })
@@ -945,7 +986,9 @@ async fn edit_card(State(app): State<Shared>, request: Request) -> Result<Respon
 /// `POST …/cards/<id>/assign`: `card_assign`, past [`new_card`]'s door.
 async fn assign_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/assign")?;
-    let body = written_body(request, CardAssignBody::from_json).await?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CardAssignBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_assign(env, globals, &body.request(id, utc_now())).map(written)
     })
@@ -955,7 +998,9 @@ async fn assign_card(State(app): State<Shared>, request: Request) -> Result<Resp
 /// `POST …/cards/<id>/cancel`: `card_cancel`, past [`new_card`]'s door.
 async fn cancel_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/cancel")?;
-    let body = written_body(request, CardCancelBody::from_json).await?;
+    let login = login_of(&request);
+    let mut body = written_body(request, CardCancelBody::from_json).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_cancel(env, globals, &body.request(id, utc_now())).map(written)
     })

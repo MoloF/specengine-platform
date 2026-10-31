@@ -33,6 +33,7 @@ import type {
   FlowView,
   GraphView,
   HealthReport,
+  Identity,
   Inbox,
   LockDiffView,
   NodeView,
@@ -173,6 +174,12 @@ export class MockClient implements SpecEngineClient {
   async getProjects(): Promise<Project[]> {
     await this.read();
     return this.projects.map((entry) => structuredClone(entry.project));
+  }
+
+  /** No hub behind the mock: the answer of a local daemon (`docs/canon/hub.md` "Routes"). */
+  async getIdentity(): Promise<Identity> {
+    await this.read();
+    return { login: null };
   }
 
   async getInbox(project: string): Promise<Inbox> {

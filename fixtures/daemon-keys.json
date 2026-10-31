@@ -104,5 +104,6 @@
   "TraceUse": ["id", "rollup", "cards"],
   "CardFrozen": ["id", "rev", "norm_hash", "within_hash", "also"],
   "CardClearGroupWrite": ["group", "cleared", "notes"],
-  "TraceStage": ["stage", "distance", "counts"]
+  "TraceStage": ["stage", "distance", "counts"],
+  "Identity": ["login"]
 }

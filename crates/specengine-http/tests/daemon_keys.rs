@@ -211,6 +211,11 @@
 //! `TraceDocument` to 8 (`stages` after `counts`); `TraceNode` to 9 (`stage`,
 //! `distance` after `path`). Each `counts` these reads serve holds
 //! `TraceCounts`' keys.
+//!
+//! docs/features/hub-identity.md "Data": one set more, 107 in all, last, after
+//! `TraceStage`: `Identity` (`{login}`), from `GET /api/identity` on the local
+//! daemon, whose `login` is null; a hub's answer is the same key
+//! (`tests/hub.rs`, byte for byte).
 
 mod common;
 mod task_state;
@@ -527,6 +532,7 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             .status(200);
     }
     let projects = server.get("/api/projects").status(200).text().to_owned();
+    let identity = server.get("/api/identity").status(200).text().to_owned();
     let inbox = server
         .get(&format!("{p}/inbox"))
         .status(200)
@@ -1517,6 +1523,10 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "TraceStage",
             one_key_set("TraceStage", &trace_stages, keys_of),
         ),
+        (
+            "Identity",
+            one_key_set("Identity", std::slice::from_ref(&identity), keys_of),
+        ),
     ]
 }
 
@@ -1843,11 +1853,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        106,
+        107,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
-         board-ui: 98; card-trace: 105; trace-views: 106)"
+         board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2446,6 +2456,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // trace-views' one, last: docs/features/trace-views.md "Routes and types".
     assert_eq!(sets[105].0, "TraceStage");
     assert_eq!(sets[105].1, ["stage", "distance", "counts"]);
+    // hub-identity's one, last: docs/features/hub-identity.md "Data".
+    assert_eq!(sets[106].0, "Identity");
+    assert_eq!(sets[106].1, ["login"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -2466,7 +2479,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 106 sets (41 until
+/// unchanged, no new key): the fixture holds 107 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2480,7 +2493,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/flow-read.md its five, and
 /// docs/features/board-ui.md its twelve, AC-09, and
 /// docs/features/card-trace.md its seven, and
-/// docs/features/trace-views.md its `TraceStage`); a decision
+/// docs/features/trace-views.md its `TraceStage`, and
+/// docs/features/hub-identity.md its `Identity`); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -2494,14 +2508,14 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        106,
-        "106 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        107,
+        "107 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
-         card-trace's seven and trace-views' `TraceStage`"
+         card-trace's seven, trace-views' `TraceStage` and hub-identity's `Identity`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -2615,7 +2629,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 106 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 107 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2627,7 +2641,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/health-drift.md its six, TE-5,
 /// docs/features/ui-node-bindings.md its two, TE-1, and
 /// docs/features/lock-diff.md its five, TE-2, and
-/// docs/features/trace-views.md its `TraceStage`); the amendment of
+/// docs/features/trace-views.md its `TraceStage`, and
+/// docs/features/hub-identity.md its `Identity`); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -2644,14 +2659,14 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        106,
-        "106 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        107,
+        "107 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
-         card-trace's seven and trace-views' `TraceStage`"
+         card-trace's seven, trace-views' `TraceStage` and hub-identity's `Identity`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

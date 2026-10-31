@@ -18,6 +18,11 @@ export interface Project {
   branch: string | null;
 }
 
+/** Who this page acts as: a hub's login, `{"login":null}` on a local daemon, the UI's one way to learn the mode. Source: `docs/canon/hub.md` "Routes". */
+export interface Identity {
+  login: string | null;
+}
+
 /** Queue order, never a hold on work (ADR-0012). Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
 export type KnownSeverity = "high" | "normal" | "low";
 

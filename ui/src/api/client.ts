@@ -18,6 +18,7 @@ import type {
   FlowView,
   GraphView,
   HealthReport,
+  Identity,
   Inbox,
   LockDiffView,
   NodeView,
@@ -133,7 +134,7 @@ export interface TraceOptions {
  * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data", the plan's
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
  * "Route", the flow's `docs/features/flow-canvas.md` "Data", the cards' `docs/features/board-ui.md`
- * "Routes"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * "Routes", the identity's `docs/canon/hub.md` "Routes"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
  * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
@@ -162,6 +163,8 @@ export interface SpecEngineClient {
   readonly dataSource: "mock" | "daemon";
   /** GET /api/projects */
   getProjects(signal?: AbortSignal): Promise<Project[]>;
+  /** GET /api/identity (docs/canon/hub.md "Routes"; a hub's login, null on a local daemon; no project) */
+  getIdentity(signal?: AbortSignal): Promise<Identity>;
   /** GET /api/projects/:p/inbox */
   getInbox(project: string, signal?: AbortSignal): Promise<Inbox>;
   /** GET /api/projects/:p/proposals/:id */

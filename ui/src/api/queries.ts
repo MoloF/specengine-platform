@@ -42,6 +42,8 @@ import type {
  */
 export const queryKeys = {
   projects: ["projects"] as const,
+  /** Who this page acts as (`docs/canon/hub.md` "Routes"): no project, a fact of the page. */
+  identity: ["identity"] as const,
   inbox: (project: string) => ["inbox", project] as const,
   proposal: (project: string, id: string) => ["proposal", project, id] as const,
   tree: (project: string, options: TreeOptions = {}) =>
@@ -220,6 +222,16 @@ function bundleRequest(options: BundleOptions): BundleOptions {
 export function useProjects() {
   const client = useClient();
   return useQuery({ queryKey: queryKeys.projects, queryFn: ({ signal }) => client.getProjects(signal) });
+}
+
+/**
+ * Who this page acts as (`docs/canon/hub.md` "Routes"): one read for every field that asks, kept for
+ * the page, so opening a dialog reads nothing and a login once resolved never goes back to loading.
+ * A failed read keeps no answer: the next field to mount asks again.
+ */
+export function useIdentity() {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.identity, queryFn: ({ signal }) => client.getIdentity(signal), staleTime: Infinity, gcTime: Infinity });
 }
 
 export function useInbox(project: string) {

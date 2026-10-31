@@ -37,7 +37,9 @@ import type { LockDiffView, QueueEvent } from "./types";
 // a 503, an older daemon's 404 and no response reject, never read as none. UI-2 of
 // docs/features/lock-diff.md: the lock diff GETs its one path, `ref` its one query encoded once
 // (`#` as %23, `/` as %2F); a 404 document resolves as data; a 400, a 503 and an older daemon's
-// 404 error body reject in the daemon's words.
+// 404 error body reject in the daemon's words. AC-12 of docs/features/hub-identity.md: the identity
+// GETs its one path with the query's AbortSignal; a hub's login and a local daemon's null resolve as
+// sent; a refusal, an older daemon's 404 error body and no response reject, never read as no login.
 
 async function rejection(promise: Promise<unknown>): Promise<ClientError> {
   try {
@@ -60,6 +62,30 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+describe("the identity read (AC-12 of hub-identity)", () => {
+  it.each([
+    ["a hub", { login: "mira" }],
+    ["a local daemon", { login: null }],
+  ])("%s's answer resolves as sent", async (_case, identity) => {
+    stubFetch(() => jsonAnswer(200, identity));
+    expect(await new HttpClient().getIdentity()).toEqual(identity);
+  });
+
+  it.each([
+    [403, "refused: this hub needs one Remote-User header from its proxy"],
+    [404, "no route: the routes are /api/projects and the web UI"],
+    [503, "spec index unavailable"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getIdentity()))).toEqual({ status, message });
+  });
+
+  it("no response rejects with status 0", async () => {
+    stubFetch(() => Promise.reject(new TypeError("Failed to fetch")));
+    expect((await rejection(new HttpClient().getIdentity())).status).toBe(0);
+  });
+});
+
 describe("each method hits its URL (AC-09)", () => {
   let fetchStub: ReturnType<typeof stubFetch>;
 
@@ -69,6 +95,7 @@ describe("each method hits its URL (AC-09)", () => {
 
   it.each<[string, (client: HttpClient) => Promise<unknown>, string]>([
     ["getProjects", (client) => client.getProjects(), "/api/projects"],
+    ["getIdentity", (client) => client.getIdentity(), "/api/identity"],
     ["getInbox", (client) => client.getInbox("alpha"), "/api/projects/alpha/inbox"],
     ["getProposal", (client) => client.getProposal("alpha", "PR-0004"), "/api/projects/alpha/proposals/PR-0004"],
     ["getTree, no option", (client) => client.getTree("alpha"), "/api/projects/alpha/tree"],
@@ -248,6 +275,7 @@ describe("each method hits its URL (AC-09)", () => {
 
   it.each<[string, (client: HttpClient, signal: AbortSignal) => Promise<unknown>]>([
     ["getProjects", (client, signal) => client.getProjects(signal)],
+    ["getIdentity", (client, signal) => client.getIdentity(signal)],
     ["getInbox", (client, signal) => client.getInbox("alpha", signal)],
     ["getProposal", (client, signal) => client.getProposal("alpha", "PR-0004", signal)],
     ["getTree", (client, signal) => client.getTree("alpha", undefined, signal)],

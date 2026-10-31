@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-10-30
+reviewed: 2026-11-01
 ---
 
 # SpecEngine architecture rules
@@ -87,7 +87,7 @@ Layer C, rust-analyzer, is linked only into the separate executable `specengine-
 
 Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. The interface is in English; spec content is shown in the project's language, so search and token estimates must handle non-Latin scripts. ADR-0011, ADR-0014.
 
-The UI reads, stages decisions and writes cards only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data"; a decision is only staged, confirmed on a terminal (`#apply`); a card write takes a typed name, a convention until the hub. It computes no core logic and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036, ADR-0057.
+The UI reads, stages decisions and writes cards only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data"; a decision is only staged, confirmed on a terminal (`#apply`); a card write takes a typed name or, on a hub, the proxy's login. It computes no core logic and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036, ADR-0057, ADR-0059.
 
 <a id="checks-migration"></a>
 ## Documentation checks in projects
@@ -97,7 +97,7 @@ A project's own generators (schemas, registries, references derived from code) s
 <a id="documentation-convention"></a>
 ## Documentation convention — mandatory for every project
 
-The convention `docs/canon/documentation-system.md` is a built-in part of SpecEngine, not an option: it applies to every project under SpecEngine and to this repository, enforced here by `spec check` itself through roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
+The convention `docs/canon/documentation-system.md` is a built-in part of SpecEngine, not an option: it applies to every project under SpecEngine and to this repository, enforced here by `spec check` through roles, the pre-commit hook and CI (`docs/README.md` "Enforcement"). ADR-0022.
 
 <a id="language"></a>
 ## Repository language
@@ -107,9 +107,9 @@ All content of this repository — documentation, decisions, role prompts, code 
 <a id="distribution"></a>
 ## Distribution and mode
 
-`cargo install` + a Claude Code plugin (MCP, hooks, stack-neutral roles and prompts in one version; stack roles: `#tasks`). Single-user mode. A multi-user server mode (initial spec §6.1 Model A) is out of plan, but storage access goes through a trait and changes go through the `events` log. ADR-0015, ADR-0017, ADR-0027.
+`cargo install` + a Claude Code plugin (MCP, hooks, stack-neutral roles and prompts in one version; stack roles: `#tasks`). ADR-0015, ADR-0027. A daemon is local, for one person, or a hub, for people behind a proxy (`hub.md`). ADR-0058.
 
-No authentication inside SpecEngine, ever, on any surface: no token, key, account, session, WebAuthn or Touch ID; hosting or a shared machine needs infrastructure in front, per service. Threat model: `docs/canon/serve.md#trust`. ADR-0034.
+No authentication inside SpecEngine, ever, on any surface: no token, key, account, session, WebAuthn or Touch ID; hosting or a shared machine needs infrastructure in front, per service; a hub trusts its proxy's login header, no agent on its host. Threat model: `serve.md#trust`, `hub.md#trust`. ADR-0034, ADR-0059.
 
 <a id="implementation-base"></a>
 ## Own implementation

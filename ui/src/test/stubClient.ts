@@ -32,6 +32,7 @@ import type {
   FlowView,
   GraphView,
   HealthReport,
+  Identity,
   Inbox,
   LockDiffView,
   NodeView,
@@ -107,6 +108,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     dataSource: "mock" as const,
     state,
     getProjects: vi.fn<(signal?: AbortSignal) => Promise<Project[]>>(() => Promise.resolve(PROJECTS.map((project) => ({ ...project })))),
+    // A local daemon's answer (docs/canon/hub.md "Routes"); a test of a hub overrides it.
+    getIdentity: vi.fn<(signal?: AbortSignal) => Promise<Identity>>(() => Promise.resolve({ login: null })),
     getInbox: vi.fn<(project: string, signal?: AbortSignal) => Promise<Inbox>>(() =>
       Promise.resolve({ proposals: state.proposals.map((p) => entryOf(p)), notes: [...state.notes] }),
     ),

@@ -16,7 +16,7 @@ import { TabPanel, Tabs } from "../ui/Tabs";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { actingName, isActingLine, useActing } from "./acting";
+import { actingName, isActingLine, useActing, useHubLogin } from "./acting";
 import { BoardCard, type CardActions } from "./BoardCard";
 import { BoardColumn } from "./BoardColumn";
 import { AcceptCardDialog, AssignDialog, CancelCardDialog, ClearCardDialog, EditCardDialog, NewCardDialog } from "./CardDialogs";
@@ -177,6 +177,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   const [dragged, setDragged] = useState<CardRow | null>(null);
   const [dropAt, setDropAt] = useState<{ lane: string; before: string | null } | null>(null);
   const [acting, setActing] = useActing();
+  const login = useHubLogin();
   const results = useRef<HTMLDivElement>(null);
   const board = useRef<HTMLDivElement>(null);
   const panelHeading = useRef<HTMLHeadingElement>(null);
@@ -892,6 +893,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
           autoComplete="off"
           spellCheck={false}
           value={acting}
+          readOnly={login !== null}
           aria-invalid={actingLine !== null}
           aria-describedby={actingLine === null ? undefined : actingLineId}
           onChange={(event) => {

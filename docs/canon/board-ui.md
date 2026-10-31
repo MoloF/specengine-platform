@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-01
 ---
 
 # Board: card routes and screen
@@ -46,7 +46,7 @@ ADR-0056, ADR-0057, built by `board-ui` (RM-0046): an ordinary kanban on the loc
 
 ## Fence and trust
 
-`fence()` does not change: the `127.0.0.1` bind, `Host` and `Origin` naming the bound port, `Sec-Fetch-Site`, any sent twice a 403, no `Access-Control-*`, `no-store`. It runs before routing, so these routes are fenced.
+The local fence does not change: the `127.0.0.1` bind, `Host` and `Origin` naming the bound port, `Sec-Fetch-Site`, any sent twice a 403, no `Access-Control-*`, `no-store`. It runs before routing, so these routes are fenced. A hub fences otherwise and lists five of these routes, the login as `as`; accept and clear wait for `hub-confirm` (`hub.md` "Routes").
 
 **A convention until the hub's named login** (ADR-0057). The name is typed and nothing verifies it. `fence()` is the only guard, and any local process can send these headers, so an agent with a shell can post here under any name: `assign` a reviewer, then `accept` as that name, or `clear` a mark. `reviewer` and `by` stop slips only. No MCP tool reaches a route, and `specengine-mcp` holds no HTTP client. Only `spec card accept` and `spec card clear` ask on a terminal.
 
@@ -82,7 +82,7 @@ The panel lists every field; targets link to the tree, `parent` and `corrects` t
 
 ### The acting name
 
-"Acting as", in the board's header, lives in `localStorage` `specengine.board.as`, sent trimmed as `as`, empty as `null`; a 400 naming `--as` shows under its field. The accept dialog is the consent.
+"Acting as", in the board's header, lives in `localStorage` `specengine.board.as`, sent trimmed as `as`, empty as `null`; a 400 naming `--as` shows under its field. The accept dialog is the consent. On a hub the field is read-only and shows the login (`hub.md` "Screen").
 
 ### Keyboard, states
 
@@ -92,7 +92,7 @@ Loading: a skeleton. Failed: `ErrorPanel` verbatim, Retry; a bad `[card]` is tha
 
 ## Types
 
-`provisional.ts`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 106 sets, `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`; `CardRow` 21 keys. `QUEUE_EVENT_TYPES` 25.
+`provisional.ts`; `CardWrite`'s fields nullable, a refused `POST cards` having made no card. `fixtures/daemon-keys.json`: 107 sets, `CardList`, `CardFlow`, `CardColumn`, `CardMove`, `CardRow`, `Card`, `CardEvidence`, `CardAcceptance`, `CardCancellation`, `CardEvent`, `CardWrite`, `CardNotFound`, then `TraceDocument`, `TraceCounts`, `TraceNode`, `TraceCard`, `TraceUse`, `CardFrozen`, `CardClearGroupWrite`, `TraceStage`, `Identity`; `CardRow` 21 keys. `QUEUE_EVENT_TYPES` 25.
 
 ## Known limits
 

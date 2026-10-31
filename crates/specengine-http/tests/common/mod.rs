@@ -1278,6 +1278,60 @@ impl Stream {
         }
     }
 
+    /// As [`Stream::open`] with `headers` sent as given, `Accept` the one
+    /// addition: the `Host` is among them, so a hub's public one reaches it
+    /// (docs/canon/hub.md).
+    pub fn open_raw(port: u16, path: &str, headers: &[(&str, &str)]) -> Self {
+        let mut text = format!("GET {path} HTTP/1.1\r\nAccept: text/event-stream\r\n");
+        for (name, value) in headers {
+            text.push_str(&format!("{name}: {value}\r\n"));
+        }
+        text.push_str("\r\n");
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).expect("connect to the daemon");
+        stream
+            .write_all(text.as_bytes())
+            .expect("write the request");
+        stream
+            .set_read_timeout(Some(Duration::from_millis(50)))
+            .expect("timeout");
+        let mut raw = Vec::new();
+        let started = Instant::now();
+        let split = loop {
+            if let Some(split) = find(&raw, b"\r\n\r\n") {
+                break split;
+            }
+            assert!(started.elapsed() < HTTP_TIMEOUT, "no answer head to {path}");
+            let mut buffer = [0u8; 8192];
+            match stream.read(&mut buffer) {
+                Ok(0) => panic!(
+                    "closed before the head: {:?}",
+                    String::from_utf8_lossy(&raw)
+                ),
+                Ok(n) => raw.extend_from_slice(&buffer[..n]),
+                Err(error)
+                    if matches!(
+                        error.kind(),
+                        std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                    ) => {}
+                Err(error) => panic!("read: {error}"),
+            }
+        };
+        let reply = parse_reply(&raw[..split + 4]);
+        let chunked = reply
+            .headers
+            .iter()
+            .any(|(name, value)| name == "transfer-encoding" && value.contains("chunked"));
+        Self {
+            stream,
+            status: reply.status,
+            headers: reply.headers,
+            pending: Vec::new(),
+            raw: raw[split + 4..].to_vec(),
+            chunked,
+            ended: false,
+        }
+    }
+
     pub fn header(&self, name: &str) -> Option<&str> {
         let name = name.to_ascii_lowercase();
         self.headers

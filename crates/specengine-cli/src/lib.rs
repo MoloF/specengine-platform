@@ -303,7 +303,7 @@ pub use card::{
     CardGroupOutcome, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest, CardNewBody,
     CardNewRequest, CardOutcome, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept,
     card_assign, card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move,
-    card_new, card_show,
+    card_new, card_show, hub_login_problem,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};

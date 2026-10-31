@@ -60,6 +60,10 @@ describe("the normal scenario", () => {
     ]);
   });
 
+  it("is no hub: the identity read answers a local daemon's null (AC-12 of hub-identity)", async () => {
+    expect(await new MockClient("normal", { now: clock }).getIdentity()).toEqual({ login: null });
+  });
+
   it("holds every case the slice names in harbor-sim's queue", async () => {
     const client = new MockClient("normal", { now: clock });
     const { proposals } = await client.getInbox("harbor-sim");
@@ -218,6 +222,7 @@ describe("the other scenarios", () => {
     const client = new MockClient("error", { now: clock });
     for (const call of [
       client.getProjects(),
+      client.getIdentity(),
       client.getInbox("harbor-sim"),
       client.getNode("harbor-sim", "MEC-TIDES"),
       client.getTree("harbor-sim"),

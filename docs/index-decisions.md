@@ -26,7 +26,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0014](decisions/ADR-0014.md) The interface is in English · ui · accepted
 - [ADR-0015](decisions/ADR-0015.md) Distribution: cargo install + Claude Code plugin · architecture · accepted
 - [ADR-0016](decisions/ADR-0016.md) Legacy ID citations in code become weak mentions links · code · accepted
-- [ADR-0017](decisions/ADR-0017.md) Single-user mode · architecture · accepted
 - [ADR-0018](decisions/ADR-0018.md) Hybrid: revision in the marker + spec.lock for AST · code · accepted
 - [ADR-0019](decisions/ADR-0019.md) Own implementation with tracey's topology and discipline · architecture · accepted
 - [ADR-0020](decisions/ADR-0020.md) MVP: tree-sitter + markers; rust-analyzer as a precision layer in Phase 3 · code · accepted
@@ -66,3 +65,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0055](decisions/ADR-0055.md) Flow is three shared link types; cycles live in follows, never in depends_on · architecture · accepted
 - [ADR-0056](decisions/ADR-0056.md) A card is a separate lighter queue record; T- stays the code-work task · architecture · accepted
 - [ADR-0057](decisions/ADR-0057.md) The local page writes cards under a typed name, a convention until the hub · architecture · accepted
+- [ADR-0058](decisions/ADR-0058.md) A hub mode of specengine-http serves named people; the local daemon stays as it is · architecture · accepted
+- [ADR-0059](decisions/ADR-0059.md) A hub trusts one proxy-set login header and holds no account · architecture · accepted

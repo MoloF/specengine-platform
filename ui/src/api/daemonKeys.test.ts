@@ -47,6 +47,7 @@ import type {
   HealthDrift,
   HealthReport,
   HealthUnbound,
+  Identity,
   InboxEntry,
   Interpretation,
   LockDiffCodeSide,
@@ -153,10 +154,12 @@ import type {
 // card with its mark, a use, a frozen entry, the group clear's answer, the hundred-and-fifth
 // `CardClearGroupWrite`), with an acceptance's `verdict`, `departs`, `discrepancy`; and trace-views'
 // one (docs/features/trace-views.md "Routes and types": a lane, the hundred-and-sixth and last
-// `TraceStage`), with `FlowNode` at 15 keys, `CardRow` at 21, `TraceDocument` at 8, `TraceNode` at 9. A key the types
-// carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already
-// names fails. While that file is absent the comparison is skipped, saying so; once it exists it
-// names all one hundred and six, in the slices' order.
+// `TraceStage`), with `FlowNode` at 15 keys, `CardRow` at 21, `TraceDocument` at 8, `TraceNode` at 9; and
+// hub-identity's one (docs/features/hub-identity.md "Data": the answer of `GET /api/identity`, the
+// hundred-and-seventh and last `Identity`). A key the types carry ahead of the file is listed in
+// AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that file is absent
+// the comparison is skipped, saying so; once it exists it names all one hundred and seven, in the
+// slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -785,6 +788,8 @@ const KEYS = {
   TraceStage: { stage: true, distance: true, counts: true } satisfies Record<keyof TraceStage, true>,
   CardFrozen: { id: true, rev: true, norm_hash: true, within_hash: true, also: true } satisfies Record<keyof CardFrozen, true>,
   CardClearGroupWrite: { group: true, cleared: true, notes: true } satisfies Record<keyof CardClearGroupWrite, true>,
+  // docs/canon/hub.md "Routes": the identity read's answer.
+  Identity: { login: true } satisfies Record<keyof Identity, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -909,6 +914,7 @@ const CITED: Record<Named, string> = {
   TraceStage: "stage, distance, counts",
   CardFrozen: "id, rev, norm_hash, within_hash, also",
   CardClearGroupWrite: "group, cleared, notes",
+  Identity: "login",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1071,8 +1077,14 @@ const BEFORE_TRACE_VIEWS: readonly Named[] = [...BEFORE_CARD_TRACE, ...CARD_TRAC
 /** trace-views' one: a lane of `spec trace` (docs/features/trace-views.md "Routes and types"). */
 const TRACE_VIEWS: readonly Named[] = ["TraceStage"];
 
+/** The hundred and six types the fixture named before hub-identity. */
+const BEFORE_HUB_IDENTITY: readonly Named[] = [...BEFORE_TRACE_VIEWS, ...TRACE_VIEWS];
+
+/** hub-identity's one: the identity read's answer (docs/features/hub-identity.md "Data"). */
+const HUB_IDENTITY: readonly Named[] = ["Identity"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_TRACE_VIEWS, ...TRACE_VIEWS];
+const ALL: readonly Named[] = [...BEFORE_HUB_IDENTITY, ...HUB_IDENTITY];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1096,8 +1108,8 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * card-trace wrote its seven sets, the ninety-ninth to hundred-and-fifth and last
- * (docs/features/card-trace.md "Data").
+ * hub-identity wrote its one set, the hundred-and-seventh and last (docs/features/hub-identity.md
+ * "Route").
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1141,7 +1153,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_BOARD_UI.at(-1)).toBe("FlowInner");
     expect(BEFORE_CARD_TRACE.at(-1)).toBe("CardNotFound");
     expect(BEFORE_TRACE_VIEWS.at(-1)).toBe("CardClearGroupWrite");
-    expect(ALL.at(-1)).toBe("TraceStage");
+    expect(BEFORE_HUB_IDENTITY.at(-1)).toBe("TraceStage");
+    expect(ALL.at(-1)).toBe("Identity");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1170,7 +1183,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(106);
+    expect(ALL).toHaveLength(107);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1187,6 +1200,14 @@ describe("the daemon's document types (AC-09)", () => {
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
+  });
+
+  it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
+    expect(served("Identity")).toEqual(["login"]);
+    expect(declaredKeys("Identity")).toEqual(["login"]);
+    expect(source).toMatch(/^export interface Identity \{\n {2}login: string \| null;\n\}$/m);
+    const at = source.indexOf("export interface Identity ");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/hub.md` "Routes"');
   });
 
   it("counts lock-diff's five: 4, 4, 3, 3, 3, after ui-node-bindings' two, the seventy-seventh to eighty-first sets, declared so (UI-1 of lock-diff)", () => {
@@ -1279,8 +1300,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_BOARD_UI).toHaveLength(86);
     expect(BEFORE_CARD_TRACE).toHaveLength(98);
     expect(BEFORE_TRACE_VIEWS).toHaveLength(105);
-    expect(ALL).toHaveLength(106);
-    expect(new Set(ALL).size).toBe(106);
+    expect(BEFORE_HUB_IDENTITY).toHaveLength(106);
+    expect(ALL).toHaveLength(107);
+    expect(new Set(ALL).size).toBe(107);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1521,12 +1543,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and six types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven", () => {
+  it("names exactly the one hundred and seven types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and six, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and seven, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(106);
+    expect(Object.keys(sets)).toHaveLength(107);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1626,9 +1648,15 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
-  it("names trace-views' TraceStage last: a lane's three keys, the hundred-and-sixth; a document's stages after counts, a node's stage and distance after path (docs/features/trace-views.md \"Routes and types\")", () => {
-    expect(Object.keys(sets).slice(BEFORE_TRACE_VIEWS.length)).toEqual([...TRACE_VIEWS]);
-    expect(Object.keys(sets).at(-1)).toBe("TraceStage");
+  it('names hub-identity\'s Identity last: the identity read\'s one key, the hundred-and-seventh (docs/features/hub-identity.md "Data")', () => {
+    expect(Object.keys(sets).slice(BEFORE_HUB_IDENTITY.length)).toEqual([...HUB_IDENTITY]);
+    expect(Object.keys(sets).at(-1)).toBe("Identity");
+    expect(sets.Identity).toEqual(["login"]);
+  });
+
+  it("names trace-views' TraceStage after card-trace's seven, before hub-identity's Identity: a lane's three keys, the hundred-and-sixth; a document's stages after counts, a node's stage and distance after path (docs/features/trace-views.md \"Routes and types\")", () => {
+    expect(Object.keys(sets).slice(BEFORE_TRACE_VIEWS.length, BEFORE_HUB_IDENTITY.length)).toEqual([...TRACE_VIEWS]);
+    expect(Object.keys(sets).at(BEFORE_HUB_IDENTITY.length - 1)).toBe("TraceStage");
     expect(sets.TraceStage).toEqual(["stage", "distance", "counts"]);
     expect(declaredKeys("TraceStage")).toEqual(["stage", "distance", "counts"]);
     expect(sets.TraceDocument?.slice(3, 5)).toEqual(["counts", "stages"]);

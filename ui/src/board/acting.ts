@@ -1,11 +1,13 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { CARD_USAGE } from "../api/client";
+import { useIdentity } from "../api/queries";
 import type { ApiError } from "../api/types";
 import { ACTING_FLAG } from "./labels";
 
 // The acting name (`docs/features/board-ui.md` "The acting name, and acceptance"): a field in the
-// Board's header, kept per viewer, sent as `as` on every write. A convention until the hub's named
-// login: the name is typed and nothing verifies it (ADR-0034).
+// Board's header, kept per viewer, sent as `as` on every write. Locally a convention: the name is
+// typed and nothing verifies it (ADR-0034). On a hub the login takes its place once its read has
+// resolved, and the stored name is neither sent nor written (`docs/canon/hub.md` "Screen").
 
 /** Where the viewer's name is kept: per viewer, for every project. */
 export const ACTING_KEY = "specengine.board.as";
@@ -65,11 +67,26 @@ export function isActingLine({ status, message }: ApiError): boolean {
   return status === CARD_USAGE && message.includes(ACTING_FLAG);
 }
 
-/** The acting name as typed and its setter: every field showing it stays the same. */
+/**
+ * A hub's login, once its read has resolved. Null says only that no login is known: a local daemon,
+ * the read still out, the read failed. Each of those keeps the stored name, never an empty one, which
+ * a local write would record as `local` (`docs/canon/hub.md` "Screen").
+ */
+export function useHubLogin(): string | null {
+  return useIdentity().data?.login ?? null;
+}
+
+/** The setter a login comes with: a hub's page has nothing to keep. */
+function keepNothing(): void {
+  return undefined;
+}
+
+/** The acting name and its setter: every field showing it stays the same. A resolved login stands in for the name as typed. */
 export function useActing(): readonly [string, (name: string) => void] {
   const typed = useSyncExternalStore(subscribe, recallActing);
+  const login = useHubLogin();
   const set = useCallback((name: string) => {
     rememberActing(name);
   }, []);
-  return [typed, set];
+  return login === null ? [typed, set] : [login, keepNothing];
 }

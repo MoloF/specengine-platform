@@ -87,7 +87,7 @@ Readings of iteration 1, accepted by the review and recorded in canon: pool and 
 
 ## Out of scope
 
-The committed view (1b); the queue, `next`, MCP, HTTP (2); the screen (3a); moves (3b, parked); dates, velocity, capacity, assignees (ADR-0017); a gate on the chain (ADR-0012); release goal documents; `spec new`, `spec edit`; tracker sync, cross-project plans, agent write tools (ADR-0004).
+The committed view (1b); the queue, `next`, MCP, HTTP (2); the screen (3a); moves (3b, parked); dates, velocity, capacity, assignees; a gate on the chain (ADR-0012); release goal documents; `spec new`, `spec edit`; tracker sync, cross-project plans, agent write tools (ADR-0004).
 
 ## Implementation
 

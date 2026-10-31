@@ -36,8 +36,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0049.md](roadmap/RM-0049.md) hub-identity (Phase 7, step 8): a public origin, an identity header, a person in Author · crates/specengine-http, crates/specengine-core, crates/specengine-store · draft
-- [docs/roadmap/RM-0050.md](roadmap/RM-0050.md) hub-confirm (Phase 7, step 9): the UI confirms under a named login · crates/specengine-http, crates/specengine-cli, ui · draft
+- [docs/roadmap/RM-0050.md](roadmap/RM-0050.md) hub-confirm (Phase 7, step 9): the UI confirms under a named login, with [team] and a person in Author · crates/specengine-core, crates/specengine-http, crates/specengine-cli, ui · draft
 - [docs/roadmap/RM-0051.md](roadmap/RM-0051.md) hub-git (Phase 7, step 10): sole writer, merge and push, the index in the commit · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
 - [docs/roadmap/RM-0052.md](roadmap/RM-0052.md) board-in-git (Phase 7, step 10b): the board's snapshot on a dedicated branch · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
 - [docs/roadmap/RM-0053.md](roadmap/RM-0053.md) hub-mcp (Phase 7, step 11): /mcp with a session, identity to author, hub tools · crates/specengine-mcp, crates/specengine-http · draft

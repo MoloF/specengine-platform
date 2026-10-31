@@ -32,6 +32,7 @@ import type {
   FlowView,
   GraphView,
   HealthReport,
+  Identity,
   Inbox,
   LockDiffView,
   NodeView,
@@ -58,7 +59,8 @@ import type {
 // the question round `docs/features/ui-round.md` "Data", the unapplied amendments
 // `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
 // the lock diff `docs/features/lock-diff.md` "Route", the flow `docs/features/flow-canvas.md`
-// "Data", the cards `docs/features/board-ui.md` "Routes"): `fetch` and `EventSource`, no package.
+// "Data", the cards `docs/features/board-ui.md` "Routes", the identity `docs/canon/hub.md` "Routes"):
+// `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -297,6 +299,10 @@ export class HttpClient implements SpecEngineClient {
 
   async getProjects(signal?: AbortSignal): Promise<Project[]> {
     return (await request("GET", "/projects", { signal })) as Project[];
+  }
+
+  async getIdentity(signal?: AbortSignal): Promise<Identity> {
+    return (await request("GET", "/identity", { signal })) as Identity;
   }
 
   async getInbox(project: string, signal?: AbortSignal): Promise<Inbox> {

@@ -15,6 +15,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/archive/initial-architecture-spec.md](archive/initial-architecture-spec.md) abandoned
 - [ADR-0002](decisions/ADR-0002.md) superseded-by ADR-0026
 - [ADR-0006](decisions/ADR-0006.md) superseded-by ADR-0039
+- [ADR-0017](decisions/ADR-0017.md) superseded-by ADR-0058
 - [ADR-0037](decisions/ADR-0037.md) superseded-by ADR-0039
 - [docs/features/agent-intake.md](features/agent-intake.md) shipped
 - [docs/features/anchor-states.md](features/anchor-states.md) shipped
@@ -48,6 +49,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/health-drift.md](features/health-drift.md) shipped
 - [docs/features/health-left.md](features/health-left.md) shipped
 - [docs/features/health-ui-follow-up.md](features/health-ui-follow-up.md) shipped
+- [docs/features/hub-identity.md](features/hub-identity.md) shipped
 - [docs/features/hygiene-pass.md](features/hygiene-pass.md) shipped
 - [docs/features/impact-since.md](features/impact-since.md) shipped
 - [docs/features/impact.md](features/impact.md) shipped
@@ -166,6 +168,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0046.md](roadmap/RM-0046.md) shipped
 - [docs/roadmap/RM-0047.md](roadmap/RM-0047.md) shipped
 - [docs/roadmap/RM-0048.md](roadmap/RM-0048.md) shipped
+- [docs/roadmap/RM-0049.md](roadmap/RM-0049.md) shipped
 - [docs/roadmap/RM-0066.md](roadmap/RM-0066.md) shipped
 - [docs/roadmap/RM-0067.md](roadmap/RM-0067.md) shipped
 - [docs/roadmap/RM-0068.md](roadmap/RM-0068.md) shipped

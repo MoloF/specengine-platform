@@ -11,9 +11,11 @@
 //! (nothing created), else created; its `daemon.lock` locked exclusively
 //! (one daemon per data directory; held by another past 500 ms: exit 2
 //! naming it); then the bind, and `daemon.json` written with the bound
-//! port. Stdout: `serving <slug> <root>` per root, in `--root` order, then
-//! `listening http://127.0.0.1:<port>`. A start that fails exits 2 before
-//! listening with one `specengine-http: <reason>` on stderr. SIGINT and
+//! port. Stdout: `serving <slug> <root>` per root, in `--root` order, a
+//! hub's `public <origin>`, then `listening http://127.0.0.1:<port>`. A
+//! `--public-origin` is judged before all of it, so a refusal creates
+//! nothing. A start that fails exits 2 before listening with one
+//! `specengine-http: <reason>` on stderr. SIGINT and
 //! SIGTERM end the process (every write a read makes is one SQLite
 //! transaction); any end frees the lock, the discovery file stays.
 //!
@@ -28,12 +30,15 @@
 //! - [`args`]: the query string and the path's REF;
 //! - [`tail`]: the live tail of the queue's `events` (SSE);
 //! - [`ui`]: the web UI compiled in, `/` and `/assets/<file>` (task spec
-//!   `ui-embed`).
+//!   `ui-embed`);
+//! - [`hub`]: `--public-origin`, a hub's fence and its one trusted login
+//!   (task spec `hub-identity`); absent, a local daemon, nothing of it runs.
 
 mod answer;
 mod app;
 mod args;
 mod daemon;
+mod hub;
 mod start;
 mod tail;
 mod ui;
@@ -46,6 +51,8 @@ use std::sync::Arc;
 
 use clap::Parser;
 use specengine_cli::{Env, Exit};
+
+use crate::hub::Hub;
 
 #[derive(Parser)]
 #[command(
@@ -61,12 +68,21 @@ struct Cli {
     /// The port on 127.0.0.1; 0 takes a free one.
     #[arg(long, value_name = "N", default_value_t = 7777)]
     port: u16,
+    /// A hub's public origin, https://host[:port], served to named people
+    /// through a proxy on this host. Absent: a local daemon.
+    #[arg(long, value_name = "URL")]
+    public_origin: Option<String>,
 }
 
 fn main() -> ExitCode {
     let cli = match Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => return usage_error(&error),
+    };
+    // Before anything is created: a refused origin leaves no data directory.
+    let hub = match cli.public_origin.as_deref().map(Hub::parse).transpose() {
+        Ok(hub) => hub,
+        Err(reason) => return cannot_start(&reason),
     };
     let env = match Env::from_process() {
         Ok(env) => env,
@@ -87,13 +103,19 @@ fn main() -> ExitCode {
         Ok(runtime) => runtime,
         Err(error) => return cannot_start(&format!("cannot start the async runtime: {error}")),
     };
-    runtime.block_on(serve(served.projects, cli.port, lock))
+    runtime.block_on(serve(served.projects, cli.port, lock, hub))
 }
 
 /// Binds `127.0.0.1:<port>`, writes `daemon.json` beside the held `lock`,
 /// prints the start lines and serves until the process is ended (the lock
-/// held throughout).
-async fn serve(projects: Vec<start::Project>, port: u16, lock: daemon::Lock) -> ExitCode {
+/// held throughout). A hub binds the same address and keeps the same
+/// `daemon.json`.
+async fn serve(
+    projects: Vec<start::Project>,
+    port: u16,
+    lock: daemon::Lock,
+    hub: Option<Hub>,
+) -> ExitCode {
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let listener = match tokio::net::TcpListener::bind(address).await {
         Ok(listener) => listener,
@@ -115,13 +137,16 @@ async fn serve(projects: Vec<start::Project>, port: u16, lock: daemon::Lock) -> 
             project.root.display()
         ));
     }
+    if let Some(hub) = &hub {
+        lines.push_str(&format!("public {}\n", hub.origin()));
+    }
     lines.push_str(&format!("listening {url}\n"));
     {
         let mut stdout = std::io::stdout().lock();
         let _ = stdout.write_all(lines.as_bytes());
         let _ = stdout.flush();
     }
-    let state = Arc::new(app::App::new(projects, port));
+    let state = Arc::new(app::App::new(projects, port, hub));
     let served = axum::serve(listener, app::router(state)).await;
     drop(lock);
     match served {
