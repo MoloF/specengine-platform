@@ -67,7 +67,7 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 
 **Goal.** One tool for the whole development cycle of a game or any project. Writers, with an AI over MCP, build a flow diagram with branches, loops, reuse and collapsible groups. One plain kanban board carries the work of every trade. Cards and brief sections link both ways; accepted cards confirm the brief and fill a timeline; a changed brief marks its cards and records the consequences. Code binding is phase two and stays as it is: markers, `spec.lock`, verify, the gate, terminal approvals, local `T-` tasks and layers A-C.
 
-**First result: steps 0-7, 27-43 pipeline hours, local, no server.** The owner, alone on the local daemon, has his AI write a real flow, sees it collapse, cuts cards and moves them; accepted cards confirm their nodes, a changed node marks its cards, and the timeline fills. Trace (`card-trace`, `trace-views`) belongs to this result. The team result, steps 0-11 with `board-in-git`, is 45-73 hours; everything is 75-123 hours. Hours are pipeline hours at the measured pace (15 items, 33-54 "days", 37 hours), with a 1.25-2x margin for undecided design. Items keep them in their body, never in `estimate:`, whose unit is human-paced days, so the view counts them unestimated.
+**First result: steps 0-7, 27-43 pipeline hours, local, no server.** The owner, alone on the local daemon, has his AI write a real flow, sees it collapse, cuts cards and moves them; accepted cards confirm their nodes, a changed node marks its cards, and the timeline fills. Trace (`card-trace`, `trace-views`) belongs to this result. The team result, steps 0-11 with `board-in-git`, `hub-deploy` and `hub-accounts`, is 51-83 hours; everything is 81-133 hours. Hours are pipeline hours at the measured pace (15 items, 33-54 "days", 37 hours), with a 1.25-2x margin for undecided design. Items keep them in their body, never in `estimate:`, whose unit is human-paced days, so the view counts them unestimated.
 
 **This reverses the single-user premise, at step 8.** ADR-0017 ("One user, a local daemon; server and multi-user mode are out of plan") is superseded by a new ADR, `hub-mode`, issued by step 8. Nothing before step 8 depends on that reversal: steps 0-7 run on the local daemon under today's rules, ADR-0017 stands until that ADR is accepted, and the work can stop after step 7 with a whole local tool.
 
@@ -86,6 +86,8 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 | 10 | `hub-git` | RM-0051 | Sole writer, merge and push, index in the commit, push status | `apply-outputs` | 4-6 | 8 |
 | 10b | `board-in-git` | RM-0052 | The board's snapshot on a dedicated branch, checked by CI | `board-snapshot` | 2-4 | 10 |
 | 11 | `hub-mcp` | RM-0053 | `/mcp` with a session, identity to author, hub tools | - | 5-9 | 8 |
+| 11b | `hub-deploy` | RM-0064 | `deploy/`, the image workflow: Docker compose, Traefik TLS, Authelia, moving a project, dumps | only if the bind changes | 3-5 | 8, 9, 10, 10b, 11 |
+| 11c | `hub-accounts` | RM-0065 | `spec admin`: accounts, disable, reset, audit, recovery from the host | owner-confirmed, by the slice | 3-5 | 8, 11b |
 | 12 | `scale-reads` | RM-0054 | Edge table, trusted index, bundle counts, synthetic 10k and 100k | - | 6-10 | 2 |
 | 13 | `zone-index` | RM-0055 | Index-free zone, `status: retired` | `zone-index` | 2-3 | 12 |
 | 14 | `change-record` | RM-0056 | `CR-`, baseline tag, RM-0035, RM-0036 | `changeset` | 4-6 | 6, 10 |
@@ -115,7 +117,7 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 12. One confirm for a baseline, with the impact shown.
 13. Steps 0-7 run locally with no server, and trace belongs to the first result.
 
-**Only people can do:** the host, DNS, TLS, proxy, passkeys and backups, about a working day; the by-hand check that a writer's client attaches a remote MCP; judging how the canvas looks; a writers' trial of at least a calendar week. **Risks:** scope (§5 rates creep high, and this reverses a founding rule; the first result tests the idea before any hosting); a hub before `scale-reads` serialises the team behind O(n) reads; a forged identity header on the host passes as anyone, so only the proxy and an agent-free host stand behind it.
+**Only people can do:** the host, buying the domain and pointing its DNS at the VPS, TLS, proxy, passkeys and backups, about a working day; the by-hand check that a writer's client attaches a remote MCP; judging how the canvas looks; a writers' trial of at least a calendar week. **Risks:** scope (§5 rates creep high, and this reverses a founding rule; the first result tests the idea before any hosting); a hub before `scale-reads` serialises the team behind O(n) reads; a forged identity header on the host passes as anyone, so only the proxy and an agent-free host stand behind it.
 
 **Phase two** keeps the code layer exactly as it is, and the same repository puts brief nodes in every developer's walk. New work: a `card-task-link` and `.ron` binding by data ID (RM-0024); the layer items (RM-0021 to RM-0025) wait for it.
 
