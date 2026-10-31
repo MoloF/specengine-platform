@@ -11,8 +11,10 @@
  * "Data"; `docs/features/health-drift-ui.md` "Data"; src/mocks/health.ts). The Board
  * (`docs/features/board-ui.md`; src/mocks/cards.ts): `empty` keeps the columns and no card, `conflict`
  * refuses a project's first card write as changed meanwhile, `large` puts 231 cards in one column.
+ * `no-gaps`: as `normal` but harbor-sim's flow, each gap row at None, so its Flow shows the one line
+ * in place of the rows (`docs/features/screen-fit.md`; src/mocks/flow.ts); ledger-api keeps its rows.
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

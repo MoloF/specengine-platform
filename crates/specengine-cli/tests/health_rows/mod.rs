@@ -2535,7 +2535,8 @@ fn binding_rule_unknown_key_is_refused() {
         ),
         (
             "\n[[health.bound]]   # HERE\nrelations = [\"implements\"]\n",
-            "`[[health.bound]]` without a selector: give `kinds`, `classes`, `paths` or `when`",
+            "`[[health.bound]]` without a selector: give `kinds`, `classes`, `paths` or `when`; \
+             `when` is a table of front-matter key = \"value\"",
             true,
         ),
         (

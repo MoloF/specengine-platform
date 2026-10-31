@@ -292,14 +292,18 @@ fn get_flow_equals_the_cli_within_its_schema() {
     let broken = &results[1];
     assert_eq!(broken["isError"], json!(false));
     assert!(
-        content_text(broken).contains("gap two-starts | measured | 1 | LND-A + LND-B\n"),
+        content_text(broken).contains(
+            "gap two-starts | measured | 1 | LND-A + LND-B | more than one start: narrow \
+             [[flow.start]] to one\n"
+        ),
         "{}",
         content_text(broken)
     );
     assert_eq!(
         broken["structuredContent"]["gaps"][1],
         json!({"code": "two-starts", "state": "measured", "count": 1,
-            "items": [["LND-A", "LND-B"]], "cause": null})
+            "items": [["LND-A", "LND-B"]],
+            "cause": "more than one start: narrow [[flow.start]] to one"})
     );
     // A lifted edge carries its count.
     let lifted = &results[5];
@@ -496,6 +500,11 @@ fn the_tool_is_a_flat_read_that_writes_nothing() {
         let description = listed["description"].as_str().expect("a description");
         assert!(description.len() <= 2048, "{}", description.len());
         assert!(description.is_ascii(), "{era:?}");
+        // docs/features/flow-authoring.md "Budgets": it points to the skill.
+        assert!(
+            description.contains(" Skill: write-flow."),
+            "{era:?}: {description}"
+        );
 
         for args in [
             json!({"root": 7}),

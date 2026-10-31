@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow`, `conflict` (first stage, round or card POST refused), `large` (3000+ nodes, a long Board column), `cannot-check`, `editorial`, `code-cannot`, `not-configured` (`src/mocks/scenario.ts`); projects `harbor-sim` (`spec-roadmap-screen.md`), `ledger-api` (`proposal-drift.md`).
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow`, `conflict` (first POST refused), `large` (3000+ nodes, a long Board column), `cannot-check`, `editorial`, `code-cannot`, `not-configured`, `no-gaps` (`src/mocks/scenario.ts`); projects `harbor-sim` (`spec-roadmap-screen.md`), `ledger-api` (`proposal-drift.md`).
 
 ## Roles here
 

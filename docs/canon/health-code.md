@@ -67,7 +67,7 @@ relations = ["implements", "configures"]
 
 - `[health]` holds `bound` alone; `ProjectConfig` only name-checks `health`: a bad rule fails no other command, `spec check` judges none. No table, an empty one or `bound = []`: `not_configured`, cause ``no [[health.bound]] rule: which nodes must be bound is the project's to declare``, never "all unbound".
 - Selectors `kinds`, `classes`, `paths`, `when`: `[[check.rules]]`' grammar (`spec-check-process.md` "A rule"), at least one, ANDed, a list's items ORed. `relations`: optional, non-empty, of `implements`, `verifies`, `configures`, `assumes`; default the first three.
-- Errors: the first by line, `<config>:<line>: <message>`: row 5 `cannot`. Check's messages prefixed `` `[[health.bound]]` `` (`` without a selector: give `kinds`, `classes`, `paths` or `when` ``); another key: the TOML reader's `unknown field …`.
+- Errors: the first by line, `<config>:<line>: <message>`: row 5 `cannot`. Check's, prefixed `` `[[health.bound]]` `` (`` without a selector: give `kinds`, `classes`, `paths` or `when`; `when` is a table of front-matter key = "value" ``); another key: the TOML reader's `unknown field …`.
 
 **Candidates** (core `bound_candidates`): live (`is_live`) nodes with an ID in a file whose front-matter reads, from the md index's `CheckInput`. A document by its own fields (`kind:`, else its ID's prefix kind); a `{#ID}` section by its ID's prefix kind and its document's class, path and front-matter.
 
@@ -108,7 +108,7 @@ Rows 4-5 `cannot`, `code` null, row 3 measured, exit 0: a bad `[code]` (`<config
 ## Known limits
 
 - **Older queue schema**: neither the daemon nor `spec index` runs a queue schema step, so after an upgrade row 4 is `cannot` until a queue command runs.
-- **Flood**: without markers row 5 lists nearly every selected node, each broken item's (`cannot_verify`) too; reasons and mentions keep it readable.
+- **Flood**: without markers row 5 lists nearly every selected node, each broken item's (`cannot_verify`) too.
 - Row 5's sort is unpinned (stored in path order).
 
 ## Modules

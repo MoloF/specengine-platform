@@ -120,7 +120,8 @@ pub enum FlowNeed {
     Definition,
 }
 
-/// Why a row was not counted.
+/// What a row's `cause` is about: why it was not counted, or, for a row that
+/// found something, the code whose remedy the CLI words (D11).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum GapCause {
     /// The table holds no rule.
@@ -129,6 +130,8 @@ pub enum GapCause {
     Config(String),
     /// `no-start` fired: there is nothing to walk from.
     NoStart,
+    /// The row reads above 0.
+    Found(GapCode),
 }
 
 /// One gap row.
@@ -143,6 +146,7 @@ pub struct FlowGap {
     /// The files its items name, ascending; `no-start`'s scope is no
     /// document, so that row holds none.
     pub files: Vec<usize>,
+    /// Set on a row not counted and on one above 0; `None` on a row at 0.
     pub cause: Option<GapCause>,
 }
 
@@ -739,7 +743,8 @@ fn cycles(nodes: &BTreeSet<usize>, next: &Adjacency) -> Vec<Vec<usize>> {
     found
 }
 
-/// A counted row of documents: named and sorted, each item's members too.
+/// A counted row of documents: named and sorted, each item's members too;
+/// above 0 it carries [`GapCause::Found`].
 fn measured(graph: &SpecGraph<'_>, code: GapCode, items: &[Vec<usize>]) -> FlowGap {
     let files: BTreeSet<usize> = items.iter().flatten().copied().collect();
     let mut named: Vec<Vec<String>> = items
@@ -760,7 +765,7 @@ fn measured(graph: &SpecGraph<'_>, code: GapCode, items: &[Vec<usize>]) -> FlowG
         count: Some(named.len()),
         items: named,
         files: files.into_iter().collect(),
-        cause: None,
+        cause: (!items.is_empty()).then_some(GapCause::Found(code)),
     }
 }
 
@@ -820,6 +825,7 @@ fn gaps_of(
         if headless {
             row.items = vec![vec![ask.scope_name.to_owned()]];
             row.count = Some(1);
+            row.cause = Some(GapCause::Found(GapCode::NoStart));
         }
         row
     });

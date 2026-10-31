@@ -31,7 +31,7 @@ use serde::Serialize;
 use specengine_core::check::{NodeAt, SpecGraph};
 use specengine_core::trace::{Rollup, RollupCounts};
 use specengine_core::{
-    FlowAsk, FlowConfig, FlowEdge, FlowGap, FlowNeed, FlowNode, GapCause, flow_read,
+    FlowAsk, FlowConfig, FlowEdge, FlowGap, FlowNeed, FlowNode, GapCause, GapCode, flow_read,
 };
 
 use crate::cap::{View, lines_within};
@@ -272,21 +272,62 @@ fn header(outcome: &FlowOutcome) -> String {
     )
 }
 
-/// What a row says instead of a count.
+/// A row's one line: why it stands where it does and, where it can, how to
+/// clear it. A row at 0 has none to say.
 fn cause_text(cause: &GapCause) -> String {
     match cause {
         GapCause::NoRule(FlowNeed::Start) => {
-            "no [[flow.start]] rule: what starts a flow is the project's to declare".to_owned()
+            "no [[flow.start]] rule: add one naming the first step by paths".to_owned()
         }
         GapCause::NoRule(FlowNeed::End) => {
-            "no [[flow.end]] rule: what ends a flow is the project's to declare".to_owned()
+            "no [[flow.end]] rule: add one naming the last step by paths".to_owned()
         }
         GapCause::NoRule(FlowNeed::Definition) => {
-            "no [[flow.definition]] rule: what is a definition is the project's to declare"
+            "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds"
                 .to_owned()
         }
         GapCause::Config(message) => message.clone(),
         GapCause::NoStart => "no start and no entering edge to walk from".to_owned(),
+        GapCause::Found(code) => remedy(*code).to_owned(),
+    }
+}
+
+/// What a row above 0 means and how to clear it.
+const fn remedy(code: GapCode) -> &'static str {
+    match code {
+        GapCode::NoStart => {
+            "no step here is a start: match the flow's first step in [[flow.start]], or, reading \
+             a part, add a follows link into it from outside"
+        }
+        GapCode::TwoStarts => "more than one start: narrow [[flow.start]] to one",
+        GapCode::Unreachable => {
+            "no path from a start reaches it: add a follows link on it, naming a step before it"
+        }
+        GapCode::NoWayToEnd => {
+            "no path from it reaches an end: have a later step follow it, or match it in \
+             [[flow.end]]"
+        }
+        GapCode::TrapCycle => {
+            "a loop with no way out: have a step outside it follow a member, or match a member \
+             in [[flow.end]]"
+        }
+        GapCode::UnjoinedParallel => {
+            "a parallel fork with one branch, or branches that never meet: add a branch, or a \
+             later step following them all"
+        }
+        GapCode::CycleNoRepeat => {
+            "a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}"
+        }
+        GapCode::DefinitionUnused => {
+            "no document uses it: add a uses link to it, or drop it from [[flow.definition]]"
+        }
+        GapCode::DefinitionOnce => {
+            "only one document uses it: add a uses link from a second document, or fold it into \
+             that document"
+        }
+        GapCode::SupplyUnfed => {
+            "these only supply each other: add a supplies link into them from a node outside"
+        }
     }
 }
 

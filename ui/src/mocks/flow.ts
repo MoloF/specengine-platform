@@ -18,6 +18,7 @@ import { HARBOR_STAGES } from "./trace";
 // read holds it.
 // ledger-api: no `[flow]`, so its rows are `not_configured`. `empty`: no flow, the rows stay.
 // `large`: 500 documents in 25 groups, generated, past the canvas's cap once a few open.
+// `no-gaps`: harbor-sim's own links, its ten rows written down at None.
 // `spec flow --trace` is joined after this read, in src/mocks/trace.ts, as the CLI joins it.
 
 /** A live document as a read sees it; `stage` its front-matter's, project vocabulary. */
@@ -54,15 +55,31 @@ export interface MockFlow {
   leftOut: { generated: number; tier3: number };
 }
 
-const measured = (code: string, items: string[][] = []): FlowGap => ({ code, state: "measured", count: items.length, items, cause: null });
+/** A row's line above 0, as `spec flow` words it (`crates/specengine-cli/src/flow.rs` `remedy`). */
+export const GAP_REMEDIES: Readonly<Record<string, string>> = {
+  "no-start": "no step here is a start: match the flow's first step in [[flow.start]], or, reading a part, add a follows link into it from outside",
+  "two-starts": "more than one start: narrow [[flow.start]] to one",
+  unreachable: "no path from a start reaches it: add a follows link on it, naming a step before it",
+  "no-way-to-end": "no path from it reaches an end: have a later step follow it, or match it in [[flow.end]]",
+  "trap-cycle": "a loop with no way out: have a step outside it follow a member, or match a member in [[flow.end]]",
+  "unjoined-parallel": "a parallel fork with one branch, or branches that never meet: add a branch, or a later step following them all",
+  "cycle-no-repeat": "a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}",
+  "definition-unused": "no document uses it: add a uses link to it, or drop it from [[flow.definition]]",
+  "definition-once": "only one document uses it: add a uses link from a second document, or fold it into that document",
+  "supply-unfed": "these only supply each other: add a supplies link into them from a node outside",
+};
 
-const notConfigured = (code: string, table: string, what: string): FlowGap => ({
-  code,
-  state: "not_configured",
-  count: null,
-  items: [],
-  cause: `no [[flow.${table}]] rule: what ${what} is the project's to declare`,
-});
+/** A `not_configured` row's line by its table, as `spec flow` words it (`cause_text`). */
+const NO_RULE = {
+  start: "no [[flow.start]] rule: add one naming the first step by paths",
+  end: "no [[flow.end]] rule: add one naming the last step by paths",
+  definition: "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds",
+} as const;
+
+/** A counted row: above 0 it carries its remedy, at 0 `null`, as the daemon sends it. */
+const measured = (code: string, items: string[][] = []): FlowGap => ({ code, state: "measured", count: items.length, items, cause: items.length > 0 ? (GAP_REMEDIES[code] ?? null) : null });
+
+const notConfigured = (code: string, table: keyof typeof NO_RULE): FlowGap => ({ code, state: "not_configured", count: null, items: [], cause: NO_RULE[table] });
 
 const follows = (from: string, to: string, kind?: string, when?: string): FlowLink => ({ from, to, type: "follows", ...(kind === undefined ? {} : { kind }), ...(when === undefined ? {} : { when }) });
 
@@ -96,16 +113,19 @@ const HARBOR_ROWS: FlowGap[] = [
   measured("supply-unfed"),
 ];
 
+/** `no-gaps`: every row measured at 0, the Flow's one line in place of the rows (docs/features/screen-fit.md). */
+const NO_GAPS: FlowGap[] = HARBOR_ROWS.map((row) => measured(row.code));
+
 const NO_RULES: FlowGap[] = [
-  notConfigured("no-start", "start", "starts a flow"),
-  notConfigured("two-starts", "start", "starts a flow"),
-  notConfigured("unreachable", "start", "starts a flow"),
-  notConfigured("no-way-to-end", "end", "ends a flow"),
-  notConfigured("trap-cycle", "end", "ends a flow"),
+  notConfigured("no-start", "start"),
+  notConfigured("two-starts", "start"),
+  notConfigured("unreachable", "start"),
+  notConfigured("no-way-to-end", "end"),
+  notConfigured("trap-cycle", "end"),
   measured("unjoined-parallel"),
   measured("cycle-no-repeat"),
-  notConfigured("definition-unused", "definition", "is a definition"),
-  notConfigured("definition-once", "definition", "is a definition"),
+  notConfigured("definition-unused", "definition"),
+  notConfigured("definition-once", "definition"),
   measured("supply-unfed"),
 ];
 
@@ -185,7 +205,8 @@ function harborFlow(corpus: MockCorpus, scenario: Scenario): MockFlow {
     return largeFlow();
   }
   const { documents, leftOut } = documentsOf(corpus, HARBOR_STAGES);
-  return { documents, links: HARBOR_LINKS, starts: ["RULE-HIGH-WATER"], ends: ["MEC-MOORING"], steps: [], rows: documents.length === 0 ? NO_STEP : HARBOR_ROWS, leftOut };
+  const rows = documents.length === 0 ? NO_STEP : scenario === "no-gaps" ? NO_GAPS : HARBOR_ROWS;
+  return { documents, links: HARBOR_LINKS, starts: ["RULE-HIGH-WATER"], ends: ["MEC-MOORING"], steps: [], rows, leftOut };
 }
 
 function ledgerFlow(corpus: MockCorpus, scenario: Scenario): MockFlow {
@@ -281,8 +302,7 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
     if (options.root === undefined || row.state !== "measured") {
       return row;
     }
-    const items = row.items.filter((item) => item.every(inScope));
-    return { ...row, count: items.length, items };
+    return measured(row.code, row.items.filter((item) => item.every(inScope)));
   });
   const named = new Set(rows.flatMap((row) => (row.code === "no-start" ? [] : row.items.flat())));
   const holds = new Map<string, number>();

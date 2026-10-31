@@ -65,6 +65,17 @@ fn is_key_level(code: DiagnosticCode) -> bool {
 /// Statuses of a spec, by the convention.
 const SPEC_STATUS: [&str; 4] = ["draft", "in-progress", "shipped", "abandoned"];
 
+/// What a `key-missing` adds for `key`, so a writer need not guess its
+/// shape; a key with nothing to say adds nothing.
+fn key_wanted(class: DocClass, key: &str) -> String {
+    match key {
+        "status" if class == DocClass::Spec => format!(": one of {}", SPEC_STATUS.join(" | ")),
+        "scope" => ": a list, as [root]".to_owned(),
+        "reviewed" => ": a date, YYYY-MM-DD".to_owned(),
+        _ => String::new(),
+    }
+}
+
 /// Runs every rule over `input`. Reads nothing and writes nothing; the
 /// result depends only on the arguments, whatever the order of
 /// `input.files`.
@@ -484,7 +495,10 @@ impl FileCheck<'_, '_> {
                     "key-missing",
                     1,
                     key,
-                    format!("key `{key}` is required for class {class}"),
+                    format!(
+                        "key `{key}` is required for class {class}{}",
+                        key_wanted(class, key)
+                    ),
                 );
             }
         }

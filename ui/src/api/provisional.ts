@@ -1187,7 +1187,7 @@ export interface GraphView {
 /** How a gap row fared. Source: `docs/features/flow-read.md` "Output". */
 export type FlowGapState = "measured" | "not_configured" | "cannot" | Unlisted;
 
-/** A gap row: `count` the whole, null unless measured; `items` the printed ones, each a list of names; `cause` why it was not counted. It stops nothing (ADR-0012). Source: `docs/features/flow-read.md` "Output". */
+/** A gap row: `count` the whole, null unless measured; `items` the printed ones, each a list of names; `cause` one line, why a row was not counted or what one above 0 found, and where it can how to clear it, null at 0. It stops nothing (ADR-0012). Source: `docs/features/flow-read.md` "Output". */
 export interface FlowGap {
   code: string;
   state: FlowGapState;

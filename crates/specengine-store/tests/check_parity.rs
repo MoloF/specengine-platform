@@ -196,17 +196,19 @@ fn under(files: &BTreeSet<String>, dir: &str) -> BTreeSet<String> {
 
 // ------------------------------------------------------------------ AC-03
 
-/// The plugin's six skill bodies (the root `README.md` "Claude Code plugin",
+/// The plugin's seven skill bodies (the root `README.md` "Claude Code plugin",
 /// its Files bullet; `analyze` and `implement` since docs/features/plugin-gate.md,
 /// `feature` since docs/features/plugin-roles.md): under `roots` through
 /// `plugin`, kept out of the walk by `exclude` alone.
-const SKILL_FILES: [&str; 6] = [
+const SKILL_FILES: [&str; 7] = [
     "plugin/specengine/skills/analyze/SKILL.md",
     "plugin/specengine/skills/ask-owner/SKILL.md",
     "plugin/specengine/skills/feature/SKILL.md",
     "plugin/specengine/skills/implement/SKILL.md",
     "plugin/specengine/skills/propose-spec-change/SKILL.md",
     "plugin/specengine/skills/read-spec/SKILL.md",
+    // docs/features/flow-authoring.md "The skill".
+    "plugin/specengine/skills/write-flow/SKILL.md",
 ];
 
 /// The plugin's five agent bodies (docs/canon/plugin.md "Roles"): under
@@ -277,7 +279,7 @@ fn the_walk_is_the_std_walk_of_this_repository() {
 
     // docs/features/plugin-skills.md AC-12: `plugin` is a root; the
     // skill bodies stay out by `exclude` (the std walk's frozen
-    // `SKIP_FILES`), and dropping that exclude makes exactly the six join;
+    // `SKIP_FILES`), and dropping that exclude makes exactly the seven join;
     // the agent bodies likewise (docs/features/plugin-roles.md T-5).
     // Mutation: `plugin` out of `roots` — the first assertion fails, and
     // without the exclude nothing joins.

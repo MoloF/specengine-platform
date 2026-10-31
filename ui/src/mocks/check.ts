@@ -138,7 +138,7 @@ function ledgerFails(): CheckReport {
           path: "docs/spec/api/legacy-v0.md",
           line: 1,
           subject: "status",
-          message: "key `status` is required for class spec",
+          message: "key `status` is required for class spec: one of draft | in-progress | shipped | abandoned",
           debt: { reason: "legacy v0 API, retired in Q3", expires: "2026-09-30", expired: true },
         },
         {

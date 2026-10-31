@@ -131,7 +131,10 @@ struct RawFile {
 /// One `[ids]` entry; `script` and any other key are errors (ADR-0009:
 /// every prefix is Latin).
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(
+    deny_unknown_fields,
+    expecting = "a prefix table: `kind`, then `shape` or `width`"
+)]
 struct RawPrefix {
     kind: Spanned<String>,
     #[serde(default)]

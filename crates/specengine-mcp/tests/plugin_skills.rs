@@ -46,7 +46,8 @@
 //!   tools (`find_symbols`, `refs`, `unmapped` join) backticked across the
 //!   skills; `read-spec` backticks the three after the bundle and before
 //!   its files step; the descriptions unchanged (`read-spec`'s byte for
-//!   byte, the five model-invoked ones 1 170 bytes together, of 1 200).
+//!   byte; docs/features/flow-authoring.md: the six model-invoked ones 1 200
+//!   bytes together, the budget's whole).
 //!   M: a code tool unnamed; the three before the bundle; a description
 //!   edited or over 1 200 bytes.
 //! - docs/features/bevy-roles-reads.md "Plugin" (P1): 0.10.0, `find_symbols`'
@@ -56,6 +57,12 @@
 //!   package's `roadmap`, and only there of the skills; the plan named
 //!   advisory, its items changed only through the owner. M: `get_roadmap`
 //!   unnamed.
+//! - docs/features/flow-authoring.md "The skill", "Skill text", AC-05: seven
+//!   skills, `write-flow` under the same rules; its description, five steps
+//!   in order and the facts it must state, by word (the meaning is the
+//!   reviewer's). AC-07 calls its eight blocks; the path they walk:
+//!   `mcp_flow_authoring.rs`, and `specengine-cli/tests/flow_authoring.rs`
+//!   AC-01. M: a step dropped, `dry_run` unnamed, a backticked `links`.
 //!
 //! Compiles to nothing with `--features probes` (the ACs name the default
 //! build). The repository is only read.
@@ -83,7 +90,7 @@ use serde_json::Value;
 const PRECEDENCE: &str = "The project's CLAUDE.md and its roles take precedence over this skill.";
 
 /// AC-11's list: what each skill backticks.
-const NAMES: [(&str, &[&str]); 6] = [
+const NAMES: [(&str, &[&str]); 7] = [
     // docs/features/code-tools.md "Plugin": the three code tools join.
     (
         "read-spec",
@@ -175,6 +182,8 @@ const NAMES: [(&str, &[&str]); 6] = [
             "task_id",
         ],
     ),
+    // docs/features/flow-authoring.md "The skill".
+    ("write-flow", &["propose_change", "dry_run", "get_flow"]),
 ];
 
 /// The words no file under `plugin/` holds besides P2-3's (AC-08; the root
@@ -210,7 +219,8 @@ fn committed() -> Skills {
             "feature",
             "implement",
             "propose-spec-change",
-            "read-spec"
+            "read-spec",
+            "write-flow"
         ]
     );
     skills
@@ -560,6 +570,7 @@ fn ac07_problems(skills: &Skills, session: &mut Session) -> (Vec<String>, Vec<(S
     for (skill, tool) in [
         ("ask-owner", "ask_question"),
         ("propose-spec-change", "propose_change"),
+        ("write-flow", "propose_change"),
     ] {
         if !called
             .iter()
@@ -578,16 +589,20 @@ fn ac07_the_examples_are_arguments_the_server_takes() {
     let mut session = Session::open(Era::Legacy, &[], Some(&repo.root), Home::At(&repo.home));
     let (problems, called) = ac07_problems(&skills, &mut session);
     assert_eq!(problems, Vec::<String>::new());
-    assert_eq!(
-        called,
-        [
-            ("ask-owner".to_owned(), "ask_question".to_owned()),
-            (
-                "propose-spec-change".to_owned(),
-                "propose_change".to_owned()
-            ),
-        ]
-    );
+    // docs/features/flow-authoring.md "Data": `write-flow`'s eight `create`
+    // blocks after the two examples.
+    let mut wanted = vec![
+        ("ask-owner".to_owned(), "ask_question".to_owned()),
+        (
+            "propose-spec-change".to_owned(),
+            "propose_change".to_owned(),
+        ),
+    ];
+    wanted.extend(std::iter::repeat_n(
+        ("write-flow".to_owned(), "propose_change".to_owned()),
+        8,
+    ));
+    assert_eq!(called, wanted);
 
     // M: an extra key.
     let extra = edited(
@@ -691,7 +706,7 @@ fn plugin_files() -> BTreeMap<String, String> {
     }
     let mut out = BTreeMap::new();
     walk(&plugin_dir(), &plugin_dir(), &mut out);
-    assert_eq!(out.len(), 16, "{:?}", out.keys());
+    assert_eq!(out.len(), 17, "{:?}", out.keys());
     for agent in [
         "analyst",
         "implementer",
@@ -1202,8 +1217,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/card-trace.md; 0.25.0 since
     // docs/features/trace-views.md; 0.26.0 since
     // docs/features/trace-truth.md; 0.27.0 since
-    // docs/features/proposal-rehearsal.md.
-    assert_eq!(manifest["version"], "0.27.0");
+    // docs/features/proposal-rehearsal.md; 0.28.0 since
+    // docs/features/flow-authoring.md.
+    assert_eq!(manifest["version"], "0.28.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1299,8 +1315,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/card-trace.md; 0.25.0 since
     // docs/features/trace-views.md; 0.26.0 since
     // docs/features/trace-truth.md; 0.27.0 since
-    // docs/features/proposal-rehearsal.md.
-    assert_eq!(manifest["version"], "0.27.0");
+    // docs/features/proposal-rehearsal.md; 0.28.0 since
+    // docs/features/flow-authoring.md.
+    assert_eq!(manifest["version"], "0.28.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1403,13 +1420,13 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.27.0",
+        manifest["version"], "0.28.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
          bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0; \
          tested-reads: 0.18.0; review-form: 0.19.0; layer-c-reads: 0.20.0; flow-read: 0.21.0; \
-         flow-canvas: 0.22.0; card-store: 0.23.0"
+         flow-canvas: 0.22.0; card-store: 0.23.0; flow-authoring: 0.28.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1435,12 +1452,13 @@ const READ_SPEC_DESCRIPTION: &str = "Read the project's spec through the SpecEng
                                      tree; spec files only for what the bundle lacks.";
 
 /// The model-invoked skills, whose descriptions every session loads.
-const MODEL_INVOKED: [&str; 5] = [
+const MODEL_INVOKED: [&str; 6] = [
     "analyze",
     "ask-owner",
     "implement",
     "propose-spec-change",
     "read-spec",
+    "write-flow",
 ];
 
 /// The front-matter `description` of a skill's text.
@@ -1476,8 +1494,9 @@ const READ_SPEC_CODE_TOOLS: [&str; 3] = ["find_symbols", "refs", "unmapped"];
 
 /// RD-9's problems: `read-spec` backticks each code read, its first
 /// mention after the first `get_context_bundle` and before the files
-/// step; its description is [`READ_SPEC_DESCRIPTION`]; the five
-/// model-invoked descriptions are 1 170 bytes together, within 1 200.
+/// step; its description is [`READ_SPEC_DESCRIPTION`]; the six model-invoked
+/// descriptions are 1 200 bytes together, the whole budget
+/// (docs/features/flow-authoring.md "Budgets").
 fn rd9_problems(skills: &Skills) -> Vec<String> {
     let mut problems = Vec::new();
     let text = &skills["read-spec"];
@@ -1491,10 +1510,8 @@ fn rd9_problems(skills: &Skills) -> Vec<String> {
         .iter()
         .map(|skill| description_of(&skills[*skill]).map_or(0, str::len))
         .sum();
-    if total != 1_170 {
-        problems.push(format!(
-            "descriptions: {total} bytes together, not 1 170 (of 1 200)"
-        ));
+    if total != 1_200 {
+        problems.push(format!("descriptions: {total} bytes together, not 1 200"));
     }
     let body = text.splitn(3, "---\n").nth(2).unwrap_or_default();
     let Some(bundle) = body.find("`get_context_bundle`") else {
@@ -1581,7 +1598,7 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
             "the code tools first",
         );
     }
-    // M: the description edited (a word added: also over the 1 170).
+    // M: the description edited (a word added: also over the 1 200).
     let longer = edited(
         &skills,
         "read-spec",
@@ -1596,7 +1613,7 @@ fn code_tools_rd9_read_spec_names_the_code_tools_between_bundle_and_files() {
     // " Code too." is 10 bytes.
     assert_names(
         &rd9_problems(&longer),
-        "1180 bytes together",
+        "1210 bytes together",
         "description sum",
     );
 }
@@ -2243,4 +2260,169 @@ fn review_form_ask_owner_names_review_proposal() {
             "{from:?} -> {to:?}: {problems:?}"
         );
     }
+}
+
+// ------------------------------------------------------- flow-authoring
+
+/// docs/features/flow-authoring.md "Budgets": the words every session loads.
+const WRITE_FLOW_DESCRIPTION: &str = "Write a flow of spec documents";
+
+/// "The skill": the five steps, each by the word that makes it that step.
+const WRITE_FLOW_STEPS: [&str; 5] = [
+    "commit",
+    "`dry_run`",
+    "per document",
+    "`spec approve --open`",
+    "`get_flow`",
+];
+
+/// "The skill": the facts it must state, each as words of one line.
+const WRITE_FLOW_FACTS: [(&str, &[&str]); 8] = [
+    ("a plain fork declares nothing", &["fork", "nothing"]),
+    ("what a fork declares", &["parallel", "alternative"]),
+    ("a loop's edge", &["`kind: repeat`"]),
+    ("what `supplies` feeds", &["`supplies`", "feeds"]),
+    (
+        "`[[flow.step]]` is optional",
+        &["`[[flow.step]]`", "optional"],
+    ),
+    ("`paths` needs no key of its own", &["`paths`", "key"]),
+    ("a proposal needs a commit", &["proposal needs a commit"]),
+    // The review's stop line: a read that is not measured is no pass. The
+    // blocks do not show it, so AC-01 cannot; only these words do.
+    (
+        "a row not measured is no pass",
+        &["`get_flow`", "not measured"],
+    ),
+];
+
+/// `write-flow`'s own rules, those that no scan of every skill holds. By
+/// word: whether a sentence says it well is the reviewer's to read.
+fn write_flow_problems(skills: &Skills) -> Vec<String> {
+    let mut problems = Vec::new();
+    let text = &skills["write-flow"];
+    if description_of(text) != Some(WRITE_FLOW_DESCRIPTION) {
+        problems.push(format!(
+            "write-flow: the description {:?}",
+            description_of(text)
+        ));
+    }
+    let Ok((outside, blocks)) = split(text) else {
+        return vec!["write-flow: an unclosed json fence".to_owned()];
+    };
+    let steps: Vec<&str> = outside
+        .iter()
+        .map(|(_, line)| *line)
+        .filter(|line| {
+            line.split_once(". ").is_some_and(|(number, _)| {
+                !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit())
+            })
+        })
+        .collect();
+    if steps.len() != WRITE_FLOW_STEPS.len() {
+        problems.push(format!("write-flow: {} steps, not five", steps.len()));
+    }
+    for (step, word) in steps.iter().zip(WRITE_FLOW_STEPS) {
+        if !step.contains(word) {
+            problems.push(format!("write-flow: the step {step:?} lacks {word}"));
+        }
+    }
+    for (fact, words) in WRITE_FLOW_FACTS {
+        let stated = outside
+            .iter()
+            .any(|(_, line)| words.iter().all(|word| line.contains(word)));
+        if !stated {
+            problems.push(format!("write-flow: no line says {fact}"));
+        }
+    }
+    if blocks.len() != 8 {
+        problems.push(format!(
+            "write-flow: {} json blocks, not eight",
+            blocks.len()
+        ));
+    }
+    for span in backticked(text) {
+        if span == "links" || span == "create" {
+            problems.push(format!("write-flow: the backticked `{span}`"));
+        }
+    }
+    problems
+}
+
+/// docs/features/flow-authoring.md "The skill", "Skill text": `write-flow`
+/// states what the trial had to probe for. AC-06, AC-07, AC-08 and AC-11 hold
+/// it with the others: `committed` lists it. M: a step dropped; `dry_run`
+/// unnamed; the description one byte longer; a backticked `links`; the stop
+/// line back in its old words.
+#[test]
+fn flow_authoring_write_flow_states_its_path_and_grammar() {
+    let skills = committed();
+    assert_eq!(write_flow_problems(&skills), Vec::<String>::new());
+
+    let step = skills["write-flow"]
+        .lines()
+        .find(|line| line.starts_with("4. "))
+        .expect("the fourth step")
+        .to_owned();
+    let mut dropped = skills.clone();
+    let text = dropped["write-flow"].replacen(&format!("{step}\n"), "", 1);
+    dropped.insert("write-flow".to_owned(), text);
+    assert_names(&write_flow_problems(&dropped), "4 steps", "a step dropped");
+
+    let mut unnamed = skills.clone();
+    let text = unnamed["write-flow"].replace("`dry_run`", "a rehearsal flag");
+    unnamed.insert("write-flow".to_owned(), text);
+    assert_names(
+        &write_flow_problems(&unnamed),
+        "lacks `dry_run`",
+        "`dry_run` unnamed",
+    );
+    assert_names(
+        &ac11_problems(&unnamed),
+        "write-flow: `dry_run` not backticked",
+        "`dry_run` unnamed (AC-11's list)",
+    );
+
+    let longer = edited(
+        &skills,
+        "write-flow",
+        &format!("description: {WRITE_FLOW_DESCRIPTION}\n"),
+        &format!("description: {WRITE_FLOW_DESCRIPTION}s\n"),
+    );
+    assert_names(
+        &write_flow_problems(&longer),
+        "write-flow: the description",
+        "a description edited",
+    );
+    assert_names(
+        &rd9_problems(&longer),
+        "1201 bytes together",
+        "over the budget",
+    );
+
+    let stop = skills["write-flow"]
+        .lines()
+        .find(|line| line.starts_with("5. "))
+        .expect("the fifth step")
+        .to_owned();
+    let stale = edited(
+        &skills,
+        "write-flow",
+        &stop,
+        "5. **Read.** Call `get_flow` until no row finds anything.",
+    );
+    assert_names(
+        &write_flow_problems(&stale),
+        "no line says a row not measured is no pass",
+        "the stop line's old words",
+    );
+
+    let mut backticks = skills.clone();
+    let text = format!("{}\nThe `links` key.\n", backticks["write-flow"]);
+    backticks.insert("write-flow".to_owned(), text);
+    assert_names(
+        &write_flow_problems(&backticks),
+        "the backticked `links`",
+        "a backticked `links`",
+    );
 }

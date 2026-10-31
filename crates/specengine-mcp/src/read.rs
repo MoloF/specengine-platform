@@ -248,7 +248,7 @@ anything it holds is one.
 
 The ten rows come first, in one order, whatever the depth. state: measured, not_configured (the \
 project's `[flow]` has no rule for it, never 0) or cannot (with its cause). A row lists at most \
-50 items, count the whole. A row blocks nothing.
+50 items, count the whole. A row blocks nothing. Skill: write-flow.
 
 An answer above 40000 characters is cut, every row kept, with a tail saying how to narrow it (it \
 names the command's flags: ROOT is root). A root naming nothing: an error result with the \

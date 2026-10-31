@@ -42,6 +42,7 @@ describe("scenarioFromSearch", () => {
     ["?scenario=editorial", "editorial"],
     ["?scenario=code-cannot", "code-cannot"],
     ["?scenario=not-configured", "not-configured"],
+    ["?scenario=no-gaps", "no-gaps"],
     ["?scenario=bogus", "normal"],
     ["?other=1", "normal"],
   ])("reads %j as %s", (search, scenario) => {

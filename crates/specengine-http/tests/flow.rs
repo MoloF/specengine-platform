@@ -294,7 +294,9 @@ fn every_flow_is_the_clis_document_byte_for_byte() {
     assert_eq!(
         document["gaps"][7],
         json!({"code": "definition-unused", "state": "measured", "count": 3,
-            "items": [["PLT-FEED-A"], ["PLT-FEED-B"], ["PLT-UNUSED"]], "cause": null}),
+            "items": [["PLT-FEED-A"], ["PLT-FEED-B"], ["PLT-UNUSED"]],
+            "cause": "no document uses it: add a uses link to it, or drop it from \
+                      [[flow.definition]]"}),
         "{document}"
     );
 }

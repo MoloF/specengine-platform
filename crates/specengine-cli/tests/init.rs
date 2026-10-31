@@ -1,16 +1,40 @@
-//! AC-06 of docs/features/spec-cli.md: `spec init` writes exactly
-//! `[project]\nslug = "<slug>"\n` with `create_new`, derives the slug from
+//! AC-06 of docs/features/spec-cli.md: `spec init` writes
+//! `[project]\nslug = "<slug>"\n` and, since docs/features/flow-authoring.md,
+//! the comments of its "`spec init`", with `create_new`, derives the slug from
 //! the directory name, validates `--slug`, never walks, and writes nothing
-//! else (no directory, `.gitignore`, database or `[ids]`).
+//! else (no directory, `.gitignore`, database or active `[ids]`).
+//!
+//! docs/features/flow-authoring.md AC-04: a rerun exits 2
+//! (`init_never_overwrites`); the parsed config equals the bare one; the
+//! example with its `# ` removed parses, and reads; `genre.rs` passes. M: a
+//! `docs/` literal (`genre.rs`); an active line.
 
 #![cfg(unix)]
 
 mod common;
 
-use common::{Scratch, data_dir, read, snapshot, spec, write};
+use common::{Scratch, data_dir, read, read_text, snapshot, spec, write};
+use serde_json::{Value, json};
+use specengine_core::ProjectConfig;
+
+/// What follows the two lines, "`spec init`" verbatim: one prose comment, then
+/// the example.
+const SCAFFOLD: &str = "\n\
+    # Commit this file: a proposal needs a commit, and the project's rules live here.\n\
+    # [ids]\n\
+    # NODE = { kind = \"node\", shape = \"name\" }\n\
+    # [[flow.start]]\n\
+    # paths = [\"docs/spec/first.md\"]\n\
+    # [[flow.end]]\n\
+    # paths = [\"docs/spec/last.md\"]\n";
+
+/// The two lines `spec init` has always written.
+fn bare(slug: &str) -> String {
+    format!("[project]\nslug = \"{slug}\"\n")
+}
 
 fn config_bytes(slug: &str) -> Vec<u8> {
-    format!("[project]\nslug = \"{slug}\"\n").into_bytes()
+    format!("{}{SCAFFOLD}", bare(slug)).into_bytes()
 }
 
 #[test]
@@ -294,4 +318,151 @@ fn a_failed_write_leaves_no_partial_config() {
     let run = spec(&home, &dir, &["init"]);
     run.code(0);
     assert_eq!(read(&dir, "specengine.toml"), config_bytes("limited"));
+}
+
+/// docs/features/flow-authoring.md AC-04: the scaffold's comments parse to
+/// nothing: the whole table and `ProjectConfig` equal the bare file's, and a
+/// project reads the same bytes with either. M: an active line.
+#[test]
+fn flow_authoring_ac04_the_parsed_config_equals_the_bare_one() {
+    let scratch = Scratch::new("init-parsed");
+    let home = scratch.home("h");
+    let written = scratch.dir("scaffolded");
+    let run = spec(&home, &written, &["init", "--slug", "same"]);
+    run.code(0);
+    let text = read_text(&written, "specengine.toml");
+    let plain = bare("same");
+    assert_ne!(text, plain, "the comments are there");
+    assert_eq!(
+        toml::from_str::<toml::Table>(&text).expect("the scaffold parses"),
+        toml::from_str::<toml::Table>(&plain).expect("the bare file parses"),
+        "no table, no key"
+    );
+    assert_eq!(
+        ProjectConfig::from_toml(&text).expect("the scaffold reads"),
+        ProjectConfig::from_toml(&plain).expect("the bare file reads"),
+    );
+
+    let other_home = scratch.home("other");
+    let plain_root = scratch.dir("bare");
+    write(&plain_root, "specengine.toml", &plain);
+    for args in [
+        &["tree"][..],
+        &["flow"],
+        &["flow", "--json"],
+        &["check", "--json"],
+    ] {
+        let (one, other) = (
+            spec(&home, &written, args),
+            spec(&other_home, &plain_root, args),
+        );
+        assert_eq!(
+            (one.code, one.stdout, one.stderr),
+            (other.code, other.stdout, other.stderr),
+            "{args:?}"
+        );
+    }
+}
+
+/// The scaffold's example: its lines with their `# ` removed, the prose line
+/// above it, which is no TOML, left out; an active line is a problem.
+fn uncommented(scaffold: &str) -> Result<String, String> {
+    let mut example = String::new();
+    let mut lines = scaffold.lines();
+    if lines.next() != Some("") {
+        return Err(format!("no blank line first: {scaffold}"));
+    }
+    let prose = lines.next().unwrap_or_default();
+    if !prose.starts_with("# Commit this file: ") {
+        return Err(format!("no prose line: {prose}"));
+    }
+    for line in lines {
+        let active = line
+            .strip_prefix("# ")
+            .ok_or_else(|| format!("an active line: {line:?}"))?;
+        example.push_str(active);
+        example.push('\n');
+    }
+    Ok(example)
+}
+
+/// docs/features/flow-authoring.md AC-04: the example with its `# ` removed
+/// parses, and reads: on a project of its two files the start and end rows
+/// are measured at 0, `[[flow.definition]]` alone left unconfigured, and the
+/// check is clean.
+#[test]
+fn flow_authoring_ac04_the_example_uncommented_parses_and_reads() {
+    let scratch = Scratch::new("init-example");
+    let home = scratch.home("h");
+    let root = scratch.dir("project");
+    spec(&home, &root, &["init"]).code(0);
+    let written = read_text(&root, "specengine.toml");
+    let scaffold = written
+        .strip_prefix(&bare("project"))
+        .expect("the two lines first");
+    let example = uncommented(scaffold).expect("the scaffold's example");
+    let text = format!("{}{example}", bare("project"));
+
+    let table = toml::from_str::<toml::Table>(&text).expect("the example parses");
+    assert!(table["ids"].get("NODE").is_some(), "{table:?}");
+    assert!(table["flow"].get("start").is_some(), "{table:?}");
+    assert!(table["flow"].get("end").is_some(), "{table:?}");
+    let config = ProjectConfig::from_toml(&text).expect("the example reads");
+    assert_eq!(config.project.slug.as_deref(), Some("project"));
+
+    write(&root, "specengine.toml", &text);
+    let document = |id: &str, links: &str| {
+        format!(
+            "---\nid: {id}\nclass: canon\nowner: owner\nreviewed: 2026-01-01\n{links}---\n\n# \
+             A step\n"
+        )
+    };
+    write(&root, "docs/spec/first.md", document("NODE-first", ""));
+    write(
+        &root,
+        "docs/spec/last.md",
+        document("NODE-last", "links:\n  follows: [NODE-first]\n"),
+    );
+    let check = spec(&home, &root, &["check", "--json"]);
+    check.code(0);
+    assert_eq!(
+        check.json()["counts"]["warnings"],
+        json!(0),
+        "{}",
+        check.show()
+    );
+    assert_eq!(
+        check.json()["counts"]["errors"],
+        json!(0),
+        "{}",
+        check.show()
+    );
+
+    let flow = spec(&home, &root, &["flow", "--json"]);
+    flow.code(0);
+    let flow = flow.json();
+    for gap in flow["gaps"].as_array().expect("gaps") {
+        let code = gap["code"].as_str().expect("a code");
+        if code.starts_with("definition-") {
+            assert_eq!(gap["state"], "not_configured", "{gap}");
+        } else {
+            assert_eq!(gap["state"], "measured", "{gap}");
+            assert_eq!(gap["count"], json!(0), "{gap}");
+            assert_eq!(gap["cause"], Value::Null, "{gap}");
+        }
+    }
+}
+
+/// M: an active line: the reader of the test above names it, whatever the
+/// line, so the example cannot pass by skipping lines.
+#[test]
+fn flow_authoring_ac04_an_active_line_is_named() {
+    let active = SCAFFOLD.replacen("# [ids]\n", "[ids]\n", 1);
+    let problem = uncommented(&active).expect_err("the reader skipped an active line");
+    assert!(problem.contains("[ids]"), "{problem}");
+    assert_eq!(
+        uncommented(SCAFFOLD).expect("the scaffold").lines().next(),
+        Some("[ids]"),
+        "the prose line left out"
+    );
 }

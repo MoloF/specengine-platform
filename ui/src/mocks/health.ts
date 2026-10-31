@@ -180,7 +180,7 @@ export const CODE_CANNOT_CAUSES: Readonly<Record<string, { assumes: readonly str
   },
   "ledger-api": {
     assumes: ["the queue stands at schema 6; a queue command upgrades it"],
-    unbound: ["specengine.toml:31: `[[health.bound]]` without a selector: give `kinds`, `classes`, `paths` or `when`"],
+    unbound: ["specengine.toml:31: `[[health.bound]]` without a selector: give `kinds`, `classes`, `paths` or `when`; `when` is a table of front-matter key = \"value\""],
   },
 };
 

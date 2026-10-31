@@ -454,14 +454,14 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/trace-views.md "The key `stage:`": the typed `stage` makes
-/// `INDEX_FORMAT` 14, and the history is the thirteen earlier lines, verbatim
-/// (flow-links' `13` among them), followed by exactly one `14 <hash>` line (no
-/// earlier `14`). Replaces flow-links' format-13 pin, whose line stays
-/// verbatim. M: `INDEX_FORMAT` kept at 13; an earlier line edited.
+/// docs/features/flow-authoring.md "Formats": the stored parser messages make
+/// `INDEX_FORMAT` 15, and the history is the fourteen earlier lines, verbatim
+/// (trace-views' `14` among them), followed by exactly one `15 <hash>` line
+/// (no earlier `15`). Replaces trace-views' format-14 pin, whose line stays
+/// verbatim. M: `INDEX_FORMAT` kept at 14; an earlier line edited.
 #[test]
-fn trace_views_pin_format_14_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 14);
+fn flow_authoring_pins_format_15_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 15);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -484,11 +484,12 @@ fn trace_views_pin_format_14_with_one_new_history_line() {
         "11 1faa605a4770475ee82fbf05ba8a01ff12724866e707482d9454e98d6cb6f5c1",
         "12 e574d6ba1be0cf469ce377f2312a120f53d38e77b1ed5184ba75d5ce0c190834",
         "13 852a6f00f30fc19cd73f5bb63e34b332ea5959e53e66e2b04bc6bd230a5ea28b",
+        "14 f4ce2bdef1ce75632e1347967df4cf91671ec7abef451aa03876597bb2b0b28a",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "flow-links' history plus exactly one new line:\n{history}"
+        "trace-views' history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -497,15 +498,15 @@ fn trace_views_pin_format_14_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "14", "the new line is format 14: {last}");
+    assert_eq!(format, "15", "the new line is format 15: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("14 ")).count(),
+        lines.iter().filter(|line| line.starts_with("15 ")).count(),
         1,
-        "no earlier `14` line"
+        "no earlier `15` line"
     );
 }
 
@@ -588,6 +589,75 @@ fn a_stamp_12_index_loses_its_unknown_link_type_row_on_the_next_read() {
         modified,
         "the file is untouched"
     );
+}
+
+/// The stored messages of a code, through a raw connection.
+fn stored_messages(db: &Path, code: &str) -> Vec<String> {
+    let conn = rusqlite::Connection::open(db).expect("raw connection");
+    conn.busy_timeout(std::time::Duration::from_secs(5))
+        .expect("busy timeout");
+    let mut query = conn
+        .prepare("SELECT diagnostic FROM diagnostics WHERE code = ?1 ORDER BY file_id, ord")
+        .expect("prepare");
+    let rows = query
+        .query_map([code], |row| row.get::<_, String>(0))
+        .expect("query the rows");
+    rows.map(|row| {
+        let row: serde_json::Value =
+            serde_json::from_str(&row.expect("a row")).expect("a stored diagnostic");
+        row["message"].as_str().expect("a message").to_owned()
+    })
+    .collect()
+}
+
+/// docs/features/flow-authoring.md "Formats": parser messages are stored rows
+/// and an unchanged file re-parses only on a new stamp, so an index of stamp
+/// 14, its file untouched, takes the new words on the next read. M:
+/// `INDEX_FORMAT` kept at 14 (the stamp matches, nothing is re-parsed, the old
+/// message stays and the agent reads it).
+#[test]
+fn a_stamp_14_index_takes_the_new_messages_on_the_next_read() {
+    let scratch = Scratch::new("format-14");
+    let corpus = Corpus::copy_of("flow-relay", &scratch, "wt");
+    let path = "docs/spec/leg-start.md";
+    let file = corpus.root.join(path);
+    let text = std::fs::read_to_string(&file).expect("the file");
+    let text = text.replacen("---\n", "---\nlinks:\n  relates: []\n", 1);
+    std::fs::write(&file, text).expect("the unknown link type");
+
+    let db = scratch.db("index");
+    let mut index = corpus.open(&db);
+    corpus.update(&mut index);
+    let fresh = stored_messages(&db, "unknown-link-type");
+    assert_eq!(fresh.len(), 1, "{fresh:?}");
+    assert!(fresh[0].contains("; kept; the types: "), "{fresh:?}");
+
+    // What a build of stamp 14 stored.
+    {
+        let conn = rusqlite::Connection::open(&db).expect("raw connection");
+        conn.busy_timeout(std::time::Duration::from_secs(5))
+            .expect("busy timeout");
+        let row = serde_json::json!({
+            "code": "unknown-link-type",
+            "severity": "warning",
+            "line": 2,
+            "message": "link type `relates` is not one of the shared link types; kept",
+        });
+        conn.execute(
+            "UPDATE diagnostics SET diagnostic = ?1 WHERE code = 'unknown-link-type'",
+            [row.to_string().as_str()],
+        )
+        .expect("the row of an older build");
+    }
+    rewrite_stamp(&db, "14");
+    assert!(
+        !stored_messages(&db, "unknown-link-type")[0].contains("the types"),
+        "the old words stand"
+    );
+
+    let report = corpus.update(&mut index);
+    assert!(report.reparsed_all, "the stamp re-parses all: {report:?}");
+    assert_eq!(stored_messages(&db, "unknown-link-type"), fresh);
 }
 
 /// docs/features/proposal-apply.md AC-18, the stamp half: the proposal

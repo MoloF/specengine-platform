@@ -131,6 +131,9 @@ fn cli_sources_hold_no_project_words() {
     assert!(files.iter().any(|file| file.ends_with("main.rs")));
     assert!(files.iter().any(|file| file.ends_with("flow.rs")));
     assert!(files.iter().any(|file| file.ends_with("card.rs")));
+    // docs/features/flow-authoring.md AC-04: the scaffold's paths come from
+    // the default, never a literal. M: a `docs/` literal in `init.rs`.
+    assert!(files.iter().any(|file| file.ends_with("init.rs")));
     let mut found = Vec::new();
     for file in &files {
         let text = fs::read_to_string(file).expect("a UTF-8 source");
@@ -183,9 +186,11 @@ fn the_read_loop_answers_alike_on_both_fixtures() {
         let before = snapshot(&root);
         let init = spec(&home, &root, &["init"]);
         init.code(0);
-        assert_eq!(
-            read_text(&root, "specengine.toml"),
-            "[project]\nslug = \"copy\"\n"
+        // docs/features/flow-authoring.md AC-04: the two lines, then comments
+        // only (`init.rs` holds the bytes).
+        assert!(
+            read_text(&root, "specengine.toml").starts_with("[project]\nslug = \"copy\"\n"),
+            "{fixture}"
         );
         let mut after = snapshot(&root);
         after.remove("specengine.toml");

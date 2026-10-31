@@ -42,7 +42,7 @@ The flow drawn, lifting nothing (ADR-0033, ADR-0055), its boxes against their ca
 
 A list beside the canvas, outside the tabs: Top's ten rows as served, unknown states last; a group read's rows are not shown. All rows None on a fresh read: one line in the tools, no list, no side column.
 
-- **A row:** code raw, its meaning, a state in words: `None` at 0, `<n> found`; `Not configured` or `Cannot measure` with `cause` verbatim and no number, the latter in the `cannot-verify` colour and icon; another state a neutral badge.
+- **A row:** code raw, its meaning, a state in words: `None` at 0, `<n> found` with its `cause`; `Not configured` or `Cannot measure` with `cause` verbatim and no number, the latter in the `cannot-verify` colour and icon; another state a neutral badge.
 - **Items:** eight, then "Show all <n>", members joined ` + `; each a button, but `no-start`'s scope, text.
 - **Top not read.** A failed re-read of Top takes every row's state, items and cause ("Not read") and the top level's Gap marks; its line adds "Top-level boxes show no state until it reads.", not on the Timeline. Boxes under a group whose read landed keep theirs.
 - **Activating one** routes to the item's first member, marks all, centres the first; focus stays. In the List it scrolls to the row.
@@ -95,7 +95,7 @@ A select beside the tabs, hidden on the Timeline, its options the served lanes':
 
 ## Mock
 
-`ui/src/mocks/flow.ts`, harbor-sim's documents and kinds: DOM-HARBOR over four groups, every link type and `kind`, arcs with a kind and without, a self-repeat, a definition two levels down for `getTree`, a child of DOM-BERTHS with no flow link. ledger-api has no `[flow]`. `empty`: rows and no node. `large`: 500 documents in 25 groups. `ui/src/mocks/trace.ts` serves `spec trace` over the mock board, `withTrace` the badges. The mock alone may lift an edge and join a rollup. `flow200()` in `src/test/flowStub.ts` is the trial's input.
+`ui/src/mocks/flow.ts`, harbor-sim's documents and kinds: DOM-HARBOR over four groups, every link type and `kind`, arcs with a kind and without, a self-repeat, a definition two levels down for `getTree`, a child of DOM-BERTHS with no flow link. ledger-api has no `[flow]`. `empty`: rows and no node. `large`: 500 documents in 25 groups. `no-gaps`: harbor-sim's ten rows at None. `ui/src/mocks/trace.ts` serves `spec trace` over the mock board, `withTrace` the badges. The mock alone may lift an edge and join a rollup. `flow200()` in `src/test/flowStub.ts` is the trial's input.
 
 ## Known limits
 

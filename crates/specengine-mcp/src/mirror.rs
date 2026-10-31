@@ -1199,7 +1199,8 @@ pub(crate) struct FlowGap {
     pub count: Option<usize>,
     /// The printed items, each a list of names.
     pub items: Vec<Vec<String>>,
-    /// Why it was not counted.
+    /// One line: why it was not counted, or, above 0, how to clear it;
+    /// `null` at 0.
     pub cause: Option<String>,
 }
 

@@ -29,7 +29,8 @@ use common::{corpus_scheme, fixture, render_diagnostics, render_link, walked_md_
 use serde_json::Value;
 use specengine_core::check::{CheckInput, NodeAt, SpecGraph};
 use specengine_core::{
-    FlowAsk, FlowConfig, FlowNode, FlowRead, FlowTable, GapCode, GapState, ProjectConfig, flow_read,
+    FlowAsk, FlowConfig, FlowNode, FlowRead, FlowTable, GapCause, GapCode, GapState, ProjectConfig,
+    flow_read,
 };
 use specengine_model::{Direction, FLOW_LINK_TYPES, FOLLOWS, IdScheme, LINK_TYPES};
 
@@ -357,7 +358,10 @@ fn every_scope_gives_the_rows_of_expected_json() {
                     })
                     .collect();
                 assert_eq!(gap.items, items, "{scope}: {gap:?}");
-                assert!(gap.cause.is_none(), "{scope}: {gap:?}");
+                // docs/features/flow-authoring.md D11: a code above 0, for
+                // the CLI to word; `None` at 0.
+                let cause = (gap.count != Some(0)).then_some(GapCause::Found(gap.code));
+                assert_eq!(gap.cause, cause, "{scope}: {gap:?}");
             }
         }
     }

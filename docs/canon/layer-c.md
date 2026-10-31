@@ -75,7 +75,7 @@ A trigger first: `over the budget of <S> s`, `interrupted`, `malformed reply at 
 
 ## Tables
 
-`INDEX_FORMAT` 14 (`symbol-index.md` "Tables"): `STRICT`, in `FORMAT_TABLES` children first, before `code_worktrees`; columns: store `schema.rs`. Outside `CODE_TABLES` and 6a's dump-equals-rebuild: `CODE_INDEX_FORMAT` stays 4.
+`INDEX_FORMAT` 15 (`symbol-index.md` "Tables"): `STRICT`, in `FORMAT_TABLES` children first, before `code_worktrees`; columns: store `schema.rs`. Outside `CODE_TABLES` and 6a's dump-equals-rebuild: `CODE_INDEX_FORMAT` stays 4.
 
 | Table | Key | Columns |
 |---|---|---|

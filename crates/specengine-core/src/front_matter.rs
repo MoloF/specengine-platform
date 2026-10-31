@@ -9,7 +9,8 @@ use specengine_model::grammar::{self, Canon, Found};
 use specengine_model::link::is_link_type;
 use specengine_model::{
     CanonTarget, Diagnostic, DiagnosticCode, EdgeKind, EdgeLabel, ExtraEntry, FOLLOWS, Fields,
-    FmValue, IdScheme, IdScript, LinkTarget, OrderedMap, ParentRef, Reference, Span,
+    FmValue, IdScheme, IdScript, LINK_TYPES, LinkTarget, OrderedMap, ParentRef, PrefixSpec,
+    Reference, Span,
 };
 
 use crate::yaml::{self, YNode, YValue};
@@ -398,7 +399,11 @@ impl Reader<'_> {
                 Diagnostic::new(
                     DiagnosticCode::IdNotInScheme,
                     line,
-                    format!("`id: {text}` is not an ID of a prefix configured in `[ids]`; the document has no ID"),
+                    format!(
+                        "`id: {text}` is not an ID of a prefix configured in `[ids]`; the \
+                         document has no ID{}",
+                        prefix_wanted(text, self.scheme)
+                    ),
                 )
                 .with_span(at.map(|at| Span::new(at, at + text.len()))),
             ),
@@ -624,7 +629,9 @@ impl Reader<'_> {
                         DiagnosticCode::UnknownLinkType,
                         key_line,
                         format!(
-                            "link type `{link_type}` is not one of the shared link types; kept"
+                            "link type `{link_type}` is not one of the shared link types; kept; \
+                             the types: {}",
+                            LINK_TYPES.join(", ")
                         ),
                     )
                     .with_span(
@@ -876,6 +883,30 @@ pub const TYPED_KEYS: [(&str, KeyType); 31] = [
 /// Keys with a type: a null value leaves them absent.
 fn is_typed(name: &str) -> bool {
     TYPED_KEYS.iter().any(|(key, _)| *key == name)
+}
+
+/// What an `id-not-in-scheme` adds: the `[ids]` line that would take the
+/// written ID, its prefix the part before the first `-`. Nothing when no such
+/// line can help: no `-`, a prefix `[ids]` refuses (it is Latin, ADR-0009),
+/// one already configured, whose ID only has the wrong shape, or a body the
+/// line's `name` shape would not read as written. The scheme of that one line
+/// is built and asked, so the hint cannot drift from the grammar.
+fn prefix_wanted(id: &str, scheme: &IdScheme) -> String {
+    let Some((prefix, _)) = id.split_once('-') else {
+        return String::new();
+    };
+    if scheme.prefix(prefix).is_some() || scheme.alias(prefix).is_some() {
+        return String::new();
+    }
+    let Ok(wanted) = IdScheme::new(vec![PrefixSpec::name(prefix, "<kind>")]) else {
+        return String::new();
+    };
+    match grammar::parse_definition(id, 0, &wanted) {
+        Some(definition) if definition.homoglyph.is_none() => {
+            format!("; add to [ids]: {prefix} = {{ kind = \"<kind>\", shape = \"name\" }}")
+        }
+        _ => String::new(),
+    }
 }
 
 fn repeated_key(text: &str) -> String {

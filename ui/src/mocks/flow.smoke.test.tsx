@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { MockClient } from "./MockClient";
@@ -133,11 +133,30 @@ describe("the Flow over the mock", () => {
     expect(within(gaps).getByText("7 rows need [flow] rules in specengine.toml")).toBeTruthy();
     expect(within(gaps).getAllByText("Not configured")).toHaveLength(7);
     const row = within(gaps).getByText("no-start").closest("li");
-    expect(row?.textContent).toContain("no [[flow.start]] rule: what starts a flow is the project's to declare");
+    expect(row?.textContent).toContain("no [[flow.start]] rule: add one naming the first step by paths");
     expect(row?.textContent).not.toMatch(/\d/);
     await waitFor(() => {
       expect(boxes().length).toBeGreaterThan(0);
     });
+  });
+
+  it("harbor-sim: a found row says its remedy under its meaning, a row at None says none (AC-02 of flow-authoring)", async () => {
+    renderMock("normal", "#/harbor-sim/flow");
+    const gaps = await screen.findByRole("region", { name: "Gaps" });
+    const found = within(gaps).getByText("cycle-no-repeat").closest("li");
+    expect(found?.querySelector(".flow-gap-cause")?.textContent).toBe("a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}");
+    expect(within(gaps).getByText("no-start").closest("li")?.querySelector(".flow-gap-cause")).toBeNull();
+  });
+
+  it("no-gaps: the one line in the tools, no rows and no button; ledger-api keeps its rows (screen-fit)", async () => {
+    renderMock("no-gaps", "#/harbor-sim/flow");
+    expect(await screen.findByText("No gaps: every row reads None")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Hide gaps" })).toBeNull();
+    expect(screen.getByText("scenario: no-gaps")).toBeTruthy();
+    cleanup();
+    renderMock("no-gaps", "#/ledger-api/flow");
+    expect(within(await screen.findByRole("region", { name: "Gaps" })).getAllByText("Not configured")).toHaveLength(7);
   });
 
   it("empty: the meaning and the next step, the rows stay", async () => {

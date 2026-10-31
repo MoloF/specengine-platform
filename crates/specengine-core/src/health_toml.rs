@@ -343,8 +343,12 @@ pub(crate) fn no_selector(
         errors.push(
             span,
             format!(
-                "{rule} without a selector: give `{}`, `{}`, `{}` or `{}`",
-                SELECTOR_KEYS[0], SELECTOR_KEYS[1], SELECTOR_KEYS[2], SELECTOR_KEYS[3]
+                "{rule} without a selector: give `{}`, `{}`, `{}` or `{when}`; `{when}` is a \
+                 table of front-matter key = \"value\"",
+                SELECTOR_KEYS[0],
+                SELECTOR_KEYS[1],
+                SELECTOR_KEYS[2],
+                when = SELECTOR_KEYS[3]
             ),
         );
     }

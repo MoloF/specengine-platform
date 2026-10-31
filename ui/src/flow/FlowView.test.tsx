@@ -267,8 +267,18 @@ describe("gap rows (AC-08)", () => {
     expect(within(gapRow("no-start")).getByText("Nothing starts the flow.")).toBeTruthy();
   });
 
+  it("reads a found row's remedy verbatim under its meaning; a row at None holds none (AC-02 of flow-authoring)", async () => {
+    const gaps = tenGapRows([aFlowGap("two-starts", [["A", "B"]])]);
+    renderApp(flowClient(aFlowView(aLine(["A"]), [], { gaps })), "#/alpha/flow");
+    await top();
+    const cause = gapRow("two-starts").querySelector(".flow-gap-cause");
+    expect(cause?.textContent).toBe("more than one start: narrow [[flow.start]] to one");
+    expect(cause?.previousElementSibling?.textContent).toBe("The flow starts in more than one place.");
+    expect(gapRow("no-start").querySelector(".flow-gap-cause")).toBeNull();
+  });
+
   it("reads Not configured with its cause verbatim and no number, and says how many rows need rules", async () => {
-    const cause = "no [[flow.start]] rule: what starts a flow is the project's to declare";
+    const cause = "no [[flow.start]] rule: add one naming the first step by paths";
     const gaps = tenGapRows([aFlowGap("no-start", [], { state: "not_configured", count: null, cause }), aFlowGap("two-starts", [], { state: "not_configured", count: null, cause })]);
     renderApp(flowClient(aFlowView(aLine(["A"]), [], { gaps })), "#/alpha/flow");
     await top();
@@ -1071,7 +1081,7 @@ describe("a clean flow (docs/features/screen-fit.md)", () => {
   });
 
   it.each([
-    ["Not configured", aFlowGap("no-start", [], { state: "not_configured", count: null, cause: "no [[flow.start]] rule" })],
+    ["Not configured", aFlowGap("no-start", [], { state: "not_configured", count: null, cause: "no [[flow.start]] rule: add one naming the first step by paths" })],
     ["Cannot measure", aFlowGap("supply-unfed", [], { state: "cannot", count: null, cause: "a cause" })],
     ["an unknown state", aFlowGap("trap-cycle", [], { state: "weighed", count: 0 })],
     ["a measured row with no count", aFlowGap("trap-cycle", [], { count: null })],
@@ -2060,11 +2070,13 @@ describe("a read that failed again (trace-views)", () => {
   });
 
   it("takes a found row's count, items and cause away with it, and the rules line", async () => {
-    const reads = aFlowView(aLine(["A"]), [], { gaps: tenGapRows([aFlowGap("unreachable", [["A"]]), { code: "no-start", state: "not_configured", count: null, items: [], cause: "no [[flow.start]] rule" }]) });
+    const notConfigured = "no [[flow.start]] rule: add one naming the first step by paths";
+    const reads = aFlowView(aLine(["A"]), [], { gaps: tenGapRows([aFlowGap("unreachable", [["A"]]), { code: "no-start", state: "not_configured", count: null, items: [], cause: notConfigured }]) });
     await failedAfterRead(reads);
     expect(gapRow("unreachable").querySelector(".badge")?.textContent).toBe("State: Not read");
     expect(within(gapRow("unreachable")).queryByRole("button", { name: "A" })).toBeNull();
-    expect(screen.queryByText("no [[flow.start]] rule")).toBeNull();
+    expect(screen.queryByText(notConfigured)).toBeNull();
+    expect(gapRow("unreachable").querySelector(".flow-gap-cause")).toBeNull();
     expect(screen.queryByText(/rules in specengine.toml/)).toBeNull();
   });
 

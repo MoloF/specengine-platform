@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { FlowOptions } from "../api/client";
 import type { FlowEdge, FlowView } from "../api/types";
+import { GAP_REMEDIES as BUILDERS_REMEDIES } from "../test/builders";
+import { GAP_REMEDIES } from "./flow";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 
@@ -144,7 +146,29 @@ describe("ledger-api's flow", () => {
   });
 });
 
+describe("a row's cause (AC-02 of flow-authoring)", () => {
+  it("is a one-line remedy above 0 and null at 0, on every row, read whole and rooted", async () => {
+    const whole = await read({});
+    const rooted = await read({ root: "MEC-TIDES", depth: 1 });
+    expect(whole.gaps.filter((gap) => (gap.count ?? 0) > 0).length).toBeGreaterThan(rooted.gaps.filter((gap) => (gap.count ?? 0) > 0).length);
+    for (const gap of [...whole.gaps, ...rooted.gaps]) {
+      expect([gap.code, gap.cause]).toEqual([gap.code, gap.count === 0 ? null : GAP_REMEDIES[gap.code]]);
+    }
+  });
+
+  it("holds one table in the mock and the test builder, a remedy for each of the ten rows", async () => {
+    expect(BUILDERS_REMEDIES).toEqual(GAP_REMEDIES);
+    expect(Object.keys(GAP_REMEDIES).sort()).toEqual((await read({})).gaps.map((gap) => gap.code).sort());
+  });
+});
+
 describe("the scenarios", () => {
+  it("no-gaps: harbor-sim's flow with its ten rows at 0, no cause, no box counting a gap", async () => {
+    const top = await read({ root: "DOM-HARBOR", depth: 1 }, "harbor-sim", "no-gaps");
+    expect(top.nodes).toEqual((await read({ root: "DOM-HARBOR", depth: 1 })).nodes.map((node) => ({ ...node, gaps: 0 })));
+    expect(top.gaps.map((gap) => [gap.state, gap.count, gap.cause])).toEqual(Array.from({ length: 10 }, () => ["measured", 0, null]));
+  });
+
   it("empty: no node, the rows stay; `no-start` names the scope, `unreachable` cannot be measured", async () => {
     const top = await read({ depth: 0 }, "harbor-sim", "empty");
     expect(top.nodes).toEqual([]);

@@ -368,9 +368,23 @@ export function aBundle(refs: string[], fields: Partial<BundleView> = {}): Bundl
   };
 }
 
-/** A measured gap row for tests. */
+/** A row's line above 0, as `spec flow` words it; the policy keeps this file off the mocks, so `src/mocks/flow.test.ts` holds this table to theirs. */
+export const GAP_REMEDIES: Readonly<Record<string, string>> = {
+  "no-start": "no step here is a start: match the flow's first step in [[flow.start]], or, reading a part, add a follows link into it from outside",
+  "two-starts": "more than one start: narrow [[flow.start]] to one",
+  unreachable: "no path from a start reaches it: add a follows link on it, naming a step before it",
+  "no-way-to-end": "no path from it reaches an end: have a later step follow it, or match it in [[flow.end]]",
+  "trap-cycle": "a loop with no way out: have a step outside it follow a member, or match a member in [[flow.end]]",
+  "unjoined-parallel": "a parallel fork with one branch, or branches that never meet: add a branch, or a later step following them all",
+  "cycle-no-repeat": "a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}",
+  "definition-unused": "no document uses it: add a uses link to it, or drop it from [[flow.definition]]",
+  "definition-once": "only one document uses it: add a uses link from a second document, or fold it into that document",
+  "supply-unfed": "these only supply each other: add a supplies link into them from a node outside",
+};
+
+/** A measured gap row for tests: above 0 it carries its remedy, at 0 `null`, as the daemon sends it. */
 export function aFlowGap(code: string, items: string[][] = [], fields: Partial<FlowGap> = {}): FlowGap {
-  return { code, state: "measured", count: items.length, items, cause: null, ...fields };
+  return { code, state: "measured", count: items.length, items, cause: items.length > 0 ? (GAP_REMEDIES[code] ?? null) : null, ...fields };
 }
 
 /** The ten gap rows in table order, all measured at 0, `rows` replacing theirs by code. */

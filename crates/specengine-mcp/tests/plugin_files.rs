@@ -37,7 +37,7 @@
 //!   path, and `version`, are the last of [`PINS`]; versions strictly
 //!   increasing. M: a `SKILL.md` edited, `PINS` unchanged; an entry
 //!   repeating the version.
-//! - docs/features/plugin-roles.md R-1, R-2, T-1: the sixteen files (the
+//! - docs/features/plugin-roles.md R-1, R-2, T-1: the files (the
 //!   five agents `specengine/agents/*.md` and `skills/feature/SKILL.md`
 //!   join the ten); `PINS` last `0.3.0`. M: an unlisted
 //!   `specengine/agents/x.md`; `skills/feature/SKILL.md` removed; an agent
@@ -151,6 +151,12 @@
 //!   key a tool takes: `propose_change`'s `dry_run`. A `PINS` entry 0.27.0,
 //!   the tree with the version set back 0.26.0's; a `SCHEMA_PINS` entry
 //!   0.27.0, 0.26.0's schemas today's without it ([`as_of_0_26_0`]).
+//! - docs/features/flow-authoring.md AC-05: 0.27.0 -> 0.28.0, MINOR: a skill
+//!   added. The seventeenth file; a `PINS` entry 0.28.0, the tree without
+//!   `write-flow` and with the version set back 0.27.0's, so no other skill
+//!   moved; a `SCHEMA_PINS` entry 0.28.0, 0.27.0's schemas today's with
+//!   `cause`'s old line ([`as_of_0_27_0`]). Seven skills, every body within
+//!   4 096 B, the descriptions at 1 200 B. M: a 31-byte description.
 //!
 //! The repository is only read.
 
@@ -433,6 +439,13 @@ const PINS: &[(&str, &str)] = &[
         "0.27.0",
         "c5853d73bc55ba2b418d9469c4e542749eeb776611c279d46234c73bd6996ea4",
     ),
+    // docs/features/flow-authoring.md "Formats" (0.27.0 -> 0.28.0, MINOR: a
+    // skill added): `write-flow` and plugin.json's version; the tree without
+    // the one and with the other set back hashes as 0.27.0's pin.
+    (
+        "0.28.0",
+        "ec48bfca6e7d2391668e591a35b9ca862035ecb2ab9bceea11718f35d18b44dd",
+    ),
 ];
 
 /// docs/features/card-trace.md: `read-spec`'s line of 0.24.0, whole with its
@@ -648,12 +661,20 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
         "0.27.0",
         "96c272b247b6608019603677b1e411944be0637fb0c05be3e44fd4d16e0b531c",
     ),
+    // docs/features/flow-authoring.md D11: `FlowGap.cause`'s doc reworded, a
+    // row above 0 now carrying it ([`as_of_0_27_0`] restores the old line; no
+    // key changed and no other tool's schema).
+    (
+        "0.28.0",
+        "3b8383b6ce507a837863372c1ae5c2629df7d95eb0adcaaaab8731ba1e30a7e1",
+    ),
 ];
 
 /// The closed file set, relative to `plugin/`, in byte order: the README's
 /// ten (its Files bullet) and docs/canon/plugin-files.md "Changing it", Files
-/// (the five agents and `skills/feature/SKILL.md`), sixteen.
-const FILES: [&str; 16] = [
+/// (the five agents and `skills/feature/SKILL.md`), docs/features/flow-authoring.md
+/// `skills/write-flow/SKILL.md`, seventeen.
+const FILES: [&str; 17] = [
     ".claude-plugin/marketplace.json",
     "specengine/.claude-plugin/plugin.json",
     "specengine/.mcp.json",
@@ -670,6 +691,7 @@ const FILES: [&str; 16] = [
     "specengine/skills/implement/SKILL.md",
     "specengine/skills/propose-spec-change/SKILL.md",
     "specengine/skills/read-spec/SKILL.md",
+    "specengine/skills/write-flow/SKILL.md",
 ];
 
 const MARKETPLACE: &str = ".claude-plugin/marketplace.json";
@@ -1004,7 +1026,7 @@ fn ac03_problems(tree: &Tree) -> Vec<String> {
     let wanted = BTreeSet::from(FILES);
     let mut problems: Vec<String> = found
         .difference(&wanted)
-        .map(|path| format!("plugin/{path}: outside the sixteen files"))
+        .map(|path| format!("plugin/{path}: outside the seventeen files"))
         .collect();
     problems.extend(
         wanted
@@ -1061,7 +1083,7 @@ fn ac03_the_plugin_tree_is_data_s_ten_files() {
         write(&copy, extra, b"{}\n");
         assert_names(
             &ac03_problems(&read_tree(&copy)),
-            &format!("plugin/{extra}: outside the sixteen files"),
+            &format!("plugin/{extra}: outside the seventeen files"),
             extra,
         );
         fs::remove_file(copy.join(extra)).unwrap();
@@ -1334,6 +1356,7 @@ fn ac05_problems(tree: &Tree) -> Vec<String> {
 }
 
 const READ_SPEC: &str = "specengine/skills/read-spec/SKILL.md";
+const WRITE_FLOW: &str = "specengine/skills/write-flow/SKILL.md";
 const ANALYZE: &str = "specengine/skills/analyze/SKILL.md";
 
 /// What docs/features/roadmap-surfaces.md (0.11.0) adds to `analyze`'s
@@ -1416,7 +1439,7 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
         .keys()
         .filter(|path| path.ends_with("/SKILL.md"))
         .collect();
-    assert_eq!(skills.len(), 6, "{skills:?}");
+    assert_eq!(skills.len(), 7, "{skills:?}");
 
     // M: `name` other than the directory.
     let renamed = edited(&tree, READ_SPEC, "name: read-spec\n", "name: read-specs\n");
@@ -1647,6 +1670,61 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
     );
 }
 
+/// docs/features/flow-authoring.md AC-05: seven skills, every body within
+/// 4 096 B, the descriptions at the budget's whole, plugin.json 0.28.0. No
+/// room is left, so the next byte is over. M: a 31-byte description.
+#[test]
+fn flow_authoring_ac05_seven_skills_within_their_budgets() {
+    let tree = committed();
+    assert_eq!(
+        tree.files
+            .keys()
+            .filter_map(|path| skill_dir(path))
+            .collect::<Vec<&str>>(),
+        [
+            "analyze",
+            "ask-owner",
+            "feature",
+            "implement",
+            "propose-spec-change",
+            "read-spec",
+            "write-flow"
+        ]
+    );
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.28.0")
+    );
+    assert_eq!(ac05_problems(&tree), Vec::<String>::new());
+    let description = |tree: &Tree| {
+        split_skill(&tree.files[WRITE_FLOW], wanted_keys("write-flow"))
+            .unwrap()
+            .description
+            .len()
+    };
+    assert_eq!(description(&tree), 30, "\"Budgets\"");
+
+    let fits = with_description(&tree, WRITE_FLOW, &"a".repeat(30));
+    assert_eq!(
+        ac05_problems(&fits),
+        Vec::<String>::new(),
+        "1 200 B together"
+    );
+    assert_names(
+        &ac05_problems(&with_description(&tree, WRITE_FLOW, &"a".repeat(31))),
+        "together, over 1 200",
+        "a 31-byte description",
+    );
+
+    let at_cap = with_body_size(&tree, WRITE_FLOW, 4096);
+    assert_eq!(ac05_problems(&at_cap), Vec::<String>::new(), "4 096 B");
+    assert_names(
+        &ac05_problems(&with_body_size(&tree, WRITE_FLOW, 4097)),
+        "over 4 096",
+        "a body of 4 097 B",
+    );
+}
+
 // ------------------------------------------------------------------ AC-10
 
 /// The BLAKE3 of `path \0 length \0 bytes` per file under
@@ -1766,10 +1844,37 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/flow-authoring.md (0.27.0 -> 0.28.0): `write-flow` and
+    // plugin.json's version; the one out and the other set back, the tree is
+    // 0.27.0's pinned content, so no other skill moved. M: the version kept;
+    // another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.28.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.28.0"),
+        "plugin.json's version"
+    );
+    let mut at_0_27_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.28.0\"",
+        "\"version\": \"0.27.0\"",
+    );
+    assert!(
+        at_0_27_0.files.remove(WRITE_FLOW).is_some(),
+        "the new skill"
+    );
+    assert_eq!(
+        content_hash(&at_0_27_0),
+        PINS[PINS.len() - 2].1,
+        "0.28.0 adds a skill and changes plugin.json's version only"
+    );
+    let tree = at_0_27_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/proposal-rehearsal.md (0.26.0 -> 0.27.0): plugin.json's
     // version alone; set back, the tree is 0.26.0's pinned content. M: the
     // version kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.27.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.27.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.27.0"),
@@ -1783,11 +1888,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_26_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.27.0 changes plugin.json's version only"
     );
     let tree = at_0_26_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/trace-truth.md (0.25.0 -> 0.26.0): plugin.json's version
     // alone; set back, the tree is 0.25.0's pinned content. M: the version
     // kept; another file changed.
@@ -2550,6 +2655,21 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// docs/features/flow-authoring.md D11: `schemas` as 0.27.0 listed them:
+/// `get_flow`'s `cause` in its old line. No key changed and no other tool's
+/// schema.
+fn as_of_0_27_0(schemas: &mut Value) {
+    assert_eq!(
+        reworded(
+            &mut schemas["get_flow"]["outputSchema"],
+            "One line: why it was not counted, or, above 0, how to clear it;\n`null` at 0.",
+            "Why it was not counted.",
+        ),
+        1,
+        "`cause`'s line"
+    );
+}
+
 /// docs/features/proposal-rehearsal.md "Schema": `schemas` as 0.26.0 listed
 /// them: `propose_change` without `dry_run`. No other tool's schema changed.
 fn as_of_0_26_0(schemas: &mut Value) {
@@ -2879,7 +2999,22 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[16].0, "0.25.0", "an entry for 0.25.0");
     assert_eq!(SCHEMA_PINS[17].0, "0.26.0", "an entry for 0.26.0");
     assert_eq!(SCHEMA_PINS[18].0, "0.27.0", "an entry for 0.27.0");
-    assert_eq!(SCHEMA_PINS.len(), 19, "0.27.0 the last entry");
+    assert_eq!(SCHEMA_PINS[19].0, "0.28.0", "an entry for 0.28.0");
+    assert_eq!(SCHEMA_PINS.len(), 20, "0.28.0 the last entry");
+    // docs/features/flow-authoring.md D11: 0.27.0's schemas are today's with
+    // `cause`'s old line.
+    let mut at_0_27_0 = schemas.clone();
+    as_of_0_27_0(&mut at_0_27_0);
+    let at_0_27_0_hash = schema_hash(&at_0_27_0);
+    assert_eq!(
+        at_0_27_0_hash, SCHEMA_PINS[18].1,
+        "0.27.0's schemas are today's with `cause`'s old line"
+    );
+    assert_ne!(
+        at_0_27_0_hash, current,
+        "flow-authoring reworded the schemas"
+    );
+    let (schemas, current) = (at_0_27_0, at_0_27_0_hash);
     // docs/features/proposal-rehearsal.md "Schema": 0.26.0's schemas are
     // today's without `propose_change`'s `dry_run`.
     let mut at_0_26_0 = schemas.clone();

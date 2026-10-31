@@ -29,6 +29,8 @@
 //! - docs/features/trace-views.md AC-02 reverses `start` and `end` staying a
 //!   folded node's own: the two pins here flipped, the rest of the fold is
 //!   `trace_views.rs`.
+//! - docs/features/flow-authoring.md D11: a row above 0 carries its line, the
+//!   rows printed here with it; `flow_authoring.rs` holds the table.
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
@@ -79,9 +81,32 @@ const NEEDING_A_TABLE: [(&str, &str); 7] = [
 /// The rows needing no table.
 const NEEDING_NONE: [&str; 3] = ["unjoined-parallel", "cycle-no-repeat", "supply-unfed"];
 
-/// "Data": the cause of a row needing an absent `[[flow.start]]`, verbatim.
-const NO_START_CAUSE: &str =
-    "no [[flow.start]] rule: what starts a flow is the project's to declare";
+/// "Data": the cause of a row needing an absent `[[flow.start]]`, verbatim
+/// (docs/features/flow-authoring.md "`cause`": the prefix stays, its second
+/// half says how).
+const NO_START_CAUSE: &str = "no [[flow.start]] rule: add one naming the first step by paths";
+
+/// docs/features/flow-authoring.md "`cause`": the line of a row above 0, by
+/// the row. The whole table: `flow_authoring.rs`.
+const TWO_STARTS: &str = "more than one start: narrow [[flow.start]] to one";
+const UNREACHABLE: &str =
+    "no path from a start reaches it: add a follows link on it, naming a step before it";
+const NO_WAY_TO_END: &str =
+    "no path from it reaches an end: have a later step follow it, or match it in [[flow.end]]";
+const TRAP_CYCLE: &str = "a loop with no way out: have a step outside it follow a member, or match a member in \
+     [[flow.end]]";
+const UNJOINED_PARALLEL: &str = "a parallel fork with one branch, or branches that never meet: \
+                                 add a branch, or a later step following them all";
+const CYCLE_NO_REPEAT: &str =
+    "a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}";
+const DEFINITION_UNUSED: &str =
+    "no document uses it: add a uses link to it, or drop it from [[flow.definition]]";
+const DEFINITION_ONCE: &str = "only one document uses it: add a uses link from a second document, or fold it into that \
+     document";
+const SUPPLY_UNFED: &str =
+    "these only supply each other: add a supplies link into them from a node outside";
+const NO_START: &str = "no step here is a start: match the flow's first step in [[flow.start]], \
+                        or, reading a part, add a follows link into it from outside";
 
 /// A `[flow]` over flow-relay by `paths` alone: its kinds stay its own. Not
 /// `kit-oil.md`: no document `uses` it, a true `definition-unused`.
@@ -237,8 +262,9 @@ fn codes(document: &Value) -> Vec<&str> {
 }
 
 /// `document`'s rows are `expected.json`'s rows of `scope`, in order: the
-/// state always, the count and the items of a measured row, which has no
-/// cause; any other row has one.
+/// state always, the count and the items of a measured row, which has a
+/// cause above 0 and none at 0 (docs/features/flow-authoring.md D11); any
+/// other row has one.
 fn assert_rows(document: &Value, scope: &str) {
     let want = expected()["gaps"][scope].clone();
     let want = want.as_array().expect("the scope's rows");
@@ -249,7 +275,12 @@ fn assert_rows(document: &Value, scope: &str) {
         if want["state"] == "measured" {
             assert_eq!(gap["count"], want["count"], "{scope}: {gap}");
             assert_eq!(gap["items"], want["items"], "{scope}: {gap}");
-            assert_eq!(gap["cause"], Value::Null, "{scope}: {gap}");
+            assert_eq!(
+                gap["cause"].is_string(),
+                want["count"] != json!(0),
+                "{scope}: {gap}"
+            );
+            assert_eq!(gap["cause"].is_null(), want["count"] == json!(0));
         } else {
             assert!(gap["cause"].is_string(), "{scope}: {gap}");
         }
@@ -723,15 +754,20 @@ fn ac03_the_broken_wing_holds_every_gap() {
         gap_lines(&run.stdout),
         [
             "gap no-start | measured | 0",
-            "gap two-starts | measured | 1 | LND-A + LND-B",
-            "gap unreachable | measured | 1 | LND-STRAY",
-            "gap no-way-to-end | measured | 2 | LND-DEAD, LND-STRAY",
-            "gap trap-cycle | measured | 1 | LND-TRAP-A + LND-TRAP-B",
-            "gap unjoined-parallel | measured | 1 | LND-B",
-            "gap cycle-no-repeat | measured | 1 | LND-SPIN-A + LND-SPIN-B",
-            "gap definition-unused | measured | 3 | PLT-FEED-A, PLT-FEED-B, PLT-UNUSED",
-            "gap definition-once | measured | 1 | PLT-ONCE",
-            "gap supply-unfed | measured | 1 | PLT-FEED-A + PLT-FEED-B",
+            format!("gap two-starts | measured | 1 | LND-A + LND-B | {TWO_STARTS}").as_str(),
+            &format!("gap unreachable | measured | 1 | LND-STRAY | {UNREACHABLE}"),
+            &format!("gap no-way-to-end | measured | 2 | LND-DEAD, LND-STRAY | {NO_WAY_TO_END}"),
+            &format!("gap trap-cycle | measured | 1 | LND-TRAP-A + LND-TRAP-B | {TRAP_CYCLE}"),
+            &format!("gap unjoined-parallel | measured | 1 | LND-B | {UNJOINED_PARALLEL}"),
+            &format!(
+                "gap cycle-no-repeat | measured | 1 | LND-SPIN-A + LND-SPIN-B | {CYCLE_NO_REPEAT}"
+            ),
+            &format!(
+                "gap definition-unused | measured | 3 | PLT-FEED-A, PLT-FEED-B, PLT-UNUSED | \
+                 {DEFINITION_UNUSED}"
+            ),
+            &format!("gap definition-once | measured | 1 | PLT-ONCE | {DEFINITION_ONCE}"),
+            &format!("gap supply-unfed | measured | 1 | PLT-FEED-A + PLT-FEED-B | {SUPPLY_UNFED}"),
         ],
         "{}",
         run.show()
@@ -755,12 +791,18 @@ fn ac03_the_headless_wing_has_no_start() {
     let root = fixture(GAPS);
     let run = flow.text(&root, &["WING-HEADLESS"]);
     let lines = gap_lines(&run.stdout);
-    assert_eq!(lines[0], "gap no-start | measured | 1 | WING-HEADLESS");
+    assert_eq!(
+        lines[0],
+        format!("gap no-start | measured | 1 | WING-HEADLESS | {NO_START}")
+    );
     assert!(
         lines[2].starts_with("gap unreachable | cannot | "),
         "{lines:?}"
     );
-    assert_eq!(lines[3], "gap no-way-to-end | measured | 2 | LND-X, LND-Y");
+    assert_eq!(
+        lines[3],
+        format!("gap no-way-to-end | measured | 2 | LND-X, LND-Y | {NO_WAY_TO_END}")
+    );
     let document = flow.json(&root, &["WING-HEADLESS"]);
     assert_rows(&document, "WING-HEADLESS");
     assert_eq!(
@@ -1125,7 +1167,10 @@ fn ac06_the_same_binary_answers_on_four_projects() {
     // flow-hire's one parallel branch is a row of its own, not a failure.
     let run = flow.text(&fixture(HIRE), &[]);
     assert!(
-        gap_lines(&run.stdout).contains(&"gap unjoined-parallel | measured | 1 | JRN-UNLOCK"),
+        gap_lines(&run.stdout).contains(
+            &format!("gap unjoined-parallel | measured | 1 | JRN-UNLOCK | {UNJOINED_PARALLEL}")
+                .as_str()
+        ),
         "{}",
         run.show()
     );
@@ -1299,7 +1344,7 @@ fn a_row_prints_at_most_fifty_items() {
     let run = flow.text(&root, &[]);
     let names: Vec<String> = (2..=51).map(|step| format!("PACE-{step:04}")).collect();
     let want = format!(
-        "gap unreachable | measured | 59 | {}, \u{2026} and 9 more",
+        "gap unreachable | measured | 59 | {}, \u{2026} and 9 more | {UNREACHABLE}",
         names.join(", ")
     );
     assert!(
@@ -1328,7 +1373,10 @@ fn a_row_prints_at_most_fifty_items() {
         .find(|line| line.starts_with("gap unreachable "))
         .expect("the row")
         .to_owned();
-    assert!(line.ends_with(", PACE-0051"), "{line}");
+    assert!(
+        line.ends_with(&format!(", PACE-0051 | {UNREACHABLE}")),
+        "{line}"
+    );
     assert!(!line.contains('\u{2026}'), "{line}");
 }
 
@@ -2458,7 +2506,10 @@ fn a_one_branch_split_stays_listed() {
     );
     let run = flow.text(&root, &["WING-LEND"]);
     assert!(
-        gap_lines(&run.stdout).contains(&"gap unjoined-parallel | measured | 1 | LND-CHECK"),
+        gap_lines(&run.stdout).contains(
+            &format!("gap unjoined-parallel | measured | 1 | LND-CHECK | {UNJOINED_PARALLEL}")
+                .as_str()
+        ),
         "{}",
         run.show()
     );

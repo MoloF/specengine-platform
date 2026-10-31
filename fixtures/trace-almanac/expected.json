@@ -194,14 +194,14 @@
       "state": "not_configured",
       "count": null,
       "items": [],
-      "cause": "no [[flow.definition]] rule: what is a definition is the project's to declare"
+      "cause": "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds"
     },
     {
       "code": "definition-once",
       "state": "not_configured",
       "count": null,
       "items": [],
-      "cause": "no [[flow.definition]] rule: what is a definition is the project's to declare"
+      "cause": "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds"
     },
     {
       "code": "supply-unfed",

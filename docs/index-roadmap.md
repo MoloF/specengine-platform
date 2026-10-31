@@ -53,4 +53,3 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store · draft
 - [docs/roadmap/RM-0064.md](roadmap/RM-0064.md) hub-deploy (Phase 7, step 11b): Docker compose with Traefik, from a clean VPS to a hub · deploy, .github/workflows · draft
 - [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) hub-accounts (Phase 7, step 11c): accounts and recovery from a shell on the host · crates/specengine-cli, deploy · draft
-- [docs/roadmap/RM-0068.md](roadmap/RM-0068.md) flow-authoring (Phase 7, step 7c): a write-flow skill, gap rows that say how, errors that teach, a commented spec init · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft

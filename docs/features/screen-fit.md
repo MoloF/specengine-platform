@@ -43,6 +43,6 @@ Beyond the spec: `FlowView.tsx` hands lost focus to `.flow-results` with `preven
 
 **AC-02, 2026-10-31.** Headless Chrome 156 at 1440x900, a real mouse drag through CDP on the production build, `?scenario=normal#/ledger-api/board`: the empty column is 224x532 (half the viewport is 450), and a drop at 80 % of its height moved the card. A control with `.board-columns{align-items:start;min-height:0}` injected gave 224x61 and the drop was lost. Limits: the mock judged the move, and the control is an injected style.
 
-**Pending, not done.** The Flow line has not been seen through its real React path, since no mock serves an all-None flow; it is looked at on a real project at the gate.
+**The Flow line, 2026-10-31.** The `?scenario=no-gaps` mock (flow-authoring) reaches it through the real React path; a headless look confirmed the line and the 1184 px canvas. On a real project the orchestrator looks at the gate.
 
 **Known and accepted.** `clear` stands on the last read while a re-read is in flight, as the `None` rows did. "No gaps" reads Top's rows alone.

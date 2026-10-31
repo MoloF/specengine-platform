@@ -33,7 +33,7 @@ gap <code> | <state> | <count>[ | <item>, …][ | <cause>]
 [truncated: <k> of <n> nodes and <j> of <m> edges not shown; give a ROOT or lower --depth]
 ```
 
-JSON, every key present, absent `null`: `{root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, gaps, nodes, edges}`; a gap `{code, state, count, items, cause}`, `state` `measured | not_configured | cannot`, `items` a list of name lists; a node, 15 keys, `{id, kind, title, path, line, distance, group, stage, start, end, holds, inner, gaps, rollup, counts}`, `inner` `[{type, count}]`, `counts` `{no_card, in_work, suspect, departed, confirmed}`; an edge `{from, to, type, kind, when, count, path, line}`.
+JSON, every key present, absent `null`: `{root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, gaps, nodes, edges}`; a gap `{code, state, count, items, cause}`, `state` `measured | not_configured | cannot`, `items` a list of name lists, `cause` one line, `null` at 0; a node, 15 keys, `{id, kind, title, path, line, distance, group, stage, start, end, holds, inner, gaps, rollup, counts}`, `inner` `[{type, count}]`, `counts` `{no_card, in_work, suspect, departed, confirmed}`; an edge `{from, to, type, kind, when, count, path, line}`.
 
 **Cap** as `mcp-read.md` "Size": text at most `OUTPUT_CAP_CHARS` plus one tail, cut at a line, JSON the printed items only; the daemon's `View::Browser` uncut. **Exits** as `spec graph`: 0 answered, zero nodes and any gap included; 1 only a ROOT naming nothing, JSON `reason` (the daemon's 404); 2 usage, a bad `--depth`, a look-alike ID, config outside `[flow]`, `HOME`, `StoreError`.
 
@@ -56,20 +56,20 @@ Each table lists rules, a rule's selectors `kinds`, `classes`, `paths`, `when` i
 
 ## Gap rows
 
-| Code | Needs | An item | The rule |
-|---|---|---|---|
-| `no-start` | `start` | the scope | no start, and no `follows` edge enters from outside; a scope with no step fires it |
-| `two-starts` | `start` | all the starts | two or more starts |
-| `unreachable` | `start` | a step | no path from a start or entering edge; `cannot` under `no-start` |
-| `no-way-to-end` | `end` | a step | no path to an end or leaving edge, in no trap |
-| `trap-cycle` | `end` | its members | a `follows` cycle no member of which has such a path |
-| `unjoined-parallel` | - | the split step | one `parallel` branch, or no later step common to all branches |
-| `cycle-no-repeat` | - | its members | a cycle left once `repeat` edges are removed |
-| `definition-unused` | `definition` | a definition | no live document `uses` it |
-| `definition-once` | `definition` | a definition | one does |
-| `supply-unfed` | - | its members | a `supplies` cycle no node outside it feeds |
+| Code | Needs | An item | The rule | `cause` above 0 |
+|---|---|---|---|---|
+| `no-start` | `start` | the scope | no start, and no `follows` edge enters from outside; a scope with no step fires it | `no step here is a start: match the flow's first step in [[flow.start]], or, reading a part, add a follows link into it from outside` |
+| `two-starts` | `start` | all the starts | two or more starts | `more than one start: narrow [[flow.start]] to one` |
+| `unreachable` | `start` | a step | no path from a start or entering edge; `cannot` under `no-start` | `no path from a start reaches it: add a follows link on it, naming a step before it` |
+| `no-way-to-end` | `end` | a step | no path to an end or leaving edge, in no trap | `no path from it reaches an end: have a later step follow it, or match it in [[flow.end]]` |
+| `trap-cycle` | `end` | its members | a `follows` cycle no member of which has such a path | `a loop with no way out: have a step outside it follow a member, or match a member in [[flow.end]]` |
+| `unjoined-parallel` | - | the split step | one `parallel` branch, or no later step common to all branches | `a parallel fork with one branch, or branches that never meet: add a branch, or a later step following them all` |
+| `cycle-no-repeat` | - | its members | a cycle left once `repeat` edges are removed | `a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}` |
+| `definition-unused` | `definition` | a definition | no live document `uses` it | `no document uses it: add a uses link to it, or drop it from [[flow.definition]]` |
+| `definition-once` | `definition` | a definition | one does | `only one document uses it: add a uses link from a second document, or fold it into that document` |
+| `supply-unfed` | - | its members | a `supplies` cycle no node outside it feeds | `these only supply each other: add a supplies link into them from a node outside` |
 
-A cycle is Tarjan's component of two or more nodes or with a self-edge. Items sort by name. A row needing an absent table: `not_configured`, its cause beginning `` no [[flow.<table>]] rule: ``, never 0. A bad table: the first error by line, `<config>:<line>: <message>`; the rows needing it `cannot`, exit 0. An unknown key in `[flow]` marks all four tables.
+A cycle is Tarjan's component of two or more nodes or with a self-edge. Items sort by name. A `cause` is one line, why plus how, in text, JSON and the Flow screen; no key was added. Core `measured()` sets `GapCause::Found(code)` above 0, on the headless `no-start` row too; at 0 `null`. A row needing an absent table: `not_configured`, never 0, its cause `` no [[flow.<table>]] rule: add one naming `` the first step by paths, the last step by paths, or what steps share, by paths or kinds. A bad table: the first error by line, `<config>:<line>: <message>`; the rows needing it `cannot`, exit 0. An unknown key in `[flow]` marks all four tables.
 
 **`endless`: no new word.** ADR-0055's three kinds stand. An end step may carry a `repeat` edge to itself, and a loop that can reach an end is no trap, so a flow with no finish marks its resting step as an end and lists nothing.
 
@@ -90,7 +90,7 @@ A cycle is Tarjan's component of two or more nodes or with a self-edge. Items so
 - Model: `FLOW_LINK_TYPES`, with `USES` and `SUPPLIES` consts; the `Direction` reads the link, `In` running target to source.
 - Core `flow_toml.rs` reads `[flow]` table by table and never fails: a table's first error stays on it. Selectors share `health_toml.rs`' reader and `check/health.rs`' judge (`documents_selected`).
 - Core `flow.rs` `flow_read` takes resolved links from `SpecGraph::edges`, builds the scope and steps, computes the ten rows before any fold, then folds by depth. Tarjan is iterative. `flow_walk` -> `FlowWalk {steps, distance}` is that walk with no row computed, for `spec trace`'s lanes; `stage_of` reads a file's `stage:`; `FlowNode.file` is what a read joins by.
-- CLI `flow.rs` resolves ROOT, caps and renders, owns the causes' wording, and joins `TraceBadge` by file (`trace.rs` `flow_badges`). MCP `get_flow` with the closed `FlowDocument` mirror. Daemon route `View::Browser`.
+- CLI `flow.rs` resolves ROOT, caps and renders, owns the causes' wording (`cause_text`, `remedy`), and joins `TraceBadge` by file (`trace.rs` `flow_badges`). MCP `get_flow` with the closed `FlowDocument` mirror. Daemon route `View::Browser`.
 
 ## Known limits
 
@@ -100,4 +100,4 @@ A cycle is Tarjan's component of two or more nodes or with a self-edge. Items so
 
 ## Tests
 
-Fixtures `fixtures/flow-gaps` (a library's lending, no game word), `flow-relay`, `flow-hire`, `trace-almanac`, `spec-c`. Core and CLI `tests/flow_read.rs`, CLI `trace_views.rs`, MCP `tests/mcp_flow.rs`, http `tests/flow.rs`; `check_genre.rs`, `no_domain.rs` and the CLI and MCP genre scans cover the sources. Unpinned: cause wording beyond the prefix; three or more `parallel` branches.
+Fixtures `fixtures/flow-gaps` (a library's lending, no game word), `flow-relay`, `flow-hire`, `trace-almanac`, `spec-c`. Core and CLI `tests/flow_read.rs`, CLI `trace_views.rs`, MCP `tests/mcp_flow.rs`, http `tests/flow.rs`; the lines: CLI `flow_authoring.rs`, MCP `mcp_flow_authoring.rs`; `check_genre.rs`, `no_domain.rs` and the CLI and MCP genre scans cover the sources. Unpinned: three or more `parallel` branches.

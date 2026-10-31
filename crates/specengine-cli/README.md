@@ -18,7 +18,7 @@ The CLI: the agent read loop (search, read by ID) over an index refreshed on eve
 
 `--root DIR`, `--config FILE`, `--json` anywhere.
 
-- `spec init [--slug S]` writes `[project]\nslug = "<slug>"\n` (one there -> exit 2), prints `created <path> with slug <slug>`, JSON `{path, slug}`. Slug: `--slug`, else the directory name, ASCII letters and digits lower-cased, other runs -> `-`, trimmed; core `slug_problem` -> exit 2 naming `--slug`. A config in an ancestor -> a `warning:`.
+- `spec init [--slug S]` writes `[project]\nslug = "<slug>"\n`, then comments only (one there -> exit 2), JSON `{path, slug}`. Slug: `--slug`, else the directory name, ASCII letters and digits lower-cased, other runs -> `-`, trimmed; core `slug_problem` -> exit 2 naming `--slug`. A config in an ancestor -> a `warning:`.
 - `spec index [--full]`: store `update` (`--full`: `rebuild`); `indexed <slug>: walked 13, parsed 13, unchanged 0, removed 0, unreadable 0` (+ `, reparsed all`), `db <path>`; JSON `project`, `db`, `UpdateReport`'s fields. Then the code index: `code <slug>: …` before `db`, JSON `code` (`null` without `[code]`), its roles with `[code] frameworks` (`code-roles.md` "spec index"); a bad `[code]`: the md index printed, then its config line, exit 2; a code-walk gap: a `warning:`, exit 0 (`symbol-index.md` "spec refs and spec index").
 - `spec search QUERY… [--kind K]… [--limit N] [--archive]`: the store's FTS5 search. Terms under 3 chars dropped (a `note:`); none left -> exit 2 suggesting `spec show`; `--limit` 1..=200, default 20.
 - `spec symbols QUERY… [--limit N] | --node REF | --file PATH | --at PATH:LINE` (one form) and `spec unmapped [PATH]`: the code index's lookup, bindings, roles (with `[code] frameworks`), layer C and coverage (`symbol-reads.md`).

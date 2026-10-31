@@ -1,8 +1,9 @@
 //! `spec init [--slug S]`: creates exactly one file, `specengine.toml` at the
 //! project root (`--root` or the current directory, never a walk up),
-//! holding exactly `[project]\nslug = "<slug>"\n`. Created exclusively: an
-//! existing file (or anything by that name) is left as it is, exit 2.
-//! Nothing else: no directory, no ignore file, no database, no `[ids]`.
+//! holding `[project]\nslug = "<slug>"\n`, a blank line and comments that
+//! parse to nothing. Created exclusively: an existing file (or anything by
+//! that name) is left as it is, exit 2. Nothing else: no directory, no ignore
+//! file, no database, no active `[ids]`.
 //!
 //! The slug is `--slug` when given, else derived from the directory name:
 //! ASCII letters and digits lower-cased, every other run of bytes (non-UTF-8
@@ -14,10 +15,28 @@ use std::io::{self, Write as _};
 use std::path::Path;
 
 use serde::Serialize;
+use specengine_core::paths_toml::DEFAULT_SPEC;
 use specengine_core::slug_problem;
 
 use crate::project::{CONFIG_FILE, canonical_dir, find_config_dir};
 use crate::{CliError, Env, Globals, Message};
+
+/// What follows the two written lines: why to commit the file, and the tables
+/// a first document and a flow need, all comments, the paths under the default
+/// spec directory.
+fn scaffold() -> String {
+    format!(
+        r#"
+# Commit this file: a proposal needs a commit, and the project's rules live here.
+# [ids]
+# NODE = {{ kind = "node", shape = "name" }}
+# [[flow.start]]
+# paths = ["{DEFAULT_SPEC}/first.md"]
+# [[flow.end]]
+# paths = ["{DEFAULT_SPEC}/last.md"]
+"#
+    )
+}
 
 /// `spec init` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -80,7 +99,7 @@ pub fn init(env: &Env, globals: &Globals, request: &InitRequest) -> Result<InitO
         )));
     }
 
-    let content = format!("[project]\nslug = \"{slug}\"\n");
+    let content = format!("[project]\nslug = \"{slug}\"\n{}", scaffold());
     write_new(&dir.join(CONFIG_FILE), content.as_bytes()).map_err(|error| {
         if error.kind() == io::ErrorKind::AlreadyExists {
             CliError::spec(format!("{CONFIG_FILE} already exists; nothing was written"))
