@@ -1,10 +1,11 @@
-import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useIsMutating, useMutation, useQueries, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   apiErrorOf,
   NO_SUCH_PROPOSAL,
   STAGE_REFUSED,
   type BundleOptions,
+  type FlowOptions,
   type GraphOptions,
   type NodeOptions,
   type SearchOptions,
@@ -12,7 +13,7 @@ import {
 } from "./client";
 import { endOwnWrite, isOwnStageEvent, outsideSince, startOwnWrite, type OwnWrite } from "./ownStages";
 import { useClient } from "./provider";
-import type { Inbox, Proposal, RoundAnswerBody, RoundAnswersOutcome, StageChoice } from "./types";
+import type { FlowView, Inbox, Proposal, RoundAnswerBody, RoundAnswersOutcome, StageChoice, TreeView } from "./types";
 
 /**
  * Query keys: every argument present, an absent one as `null`, `[]` or `false`, so two reads that
@@ -60,6 +61,8 @@ export const queryKeys = {
         archive: options.archive ?? false,
       },
     ] as const,
+  /** One read of `spec flow`: `root` null at the top (`docs/features/flow-canvas.md` "Data"). */
+  flow: (project: string, options: FlowOptions) => ["flow", project, options.root ?? null, options.depth ?? null] as const,
   tasks: (project: string) => ["tasks", project] as const,
   task: (project: string, id: string) => ["task", project, id] as const,
   check: (project: string) => ["check", project] as const,
@@ -192,14 +195,14 @@ function eventId(payload: unknown): string | null {
 
 /**
  * What an applied proposal changed besides the queue: a spec file, so the project's reads of the
- * spec (every tree, node, search, bundle and graph of it, its check, its unapplied amendments, its
- * plan and its lock diffs, each `[read, project, …]`;
+ * spec (every tree, node, search, bundle, graph and flow of it, its check, its unapplied amendments,
+ * its plan and its lock diffs, each `[read, project, …]`;
  * `docs/features/ui-live.md` "Rules and edge cases",
  * `docs/features/health-left.md` "Description and interactions",
  * `docs/features/roadmap-screen.md`: an item's file is a spec file; `docs/features/lock-diff-ui.md`:
  * a lock diff's spec side is the node's text against its entry's).
  */
-const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "check", "health", "roadmap", "lock-diff"] as const;
+const READS_OF_THE_SPEC = ["tree", "node", "search", "bundle", "graph", "flow", "check", "health", "roadmap", "lock-diff"] as const;
 
 /** The spec reads that walk the whole corpus, kept when in flight (`READS_OF_THE_SPEC`'s check; the health read: readHealthAgain). */
 const WALKS: ReadonlySet<string> = new Set(["check"]);
@@ -491,6 +494,70 @@ export function useGraph(project: string, options: GraphOptions | null) {
     enabled: options !== null,
     placeholderData: keepPreviousData,
   });
+}
+
+/** The Flow's top read: the top boxes, the edges lifted to them, the gap rows (`docs/features/flow-canvas.md` "Reads"). */
+const FLOW_TOP: FlowOptions = { depth: 0 };
+
+/** The Flow's top read: `depth=0`, never a whole-flow read. */
+export function useFlow(project: string) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.flow(project, FLOW_TOP),
+    queryFn: ({ signal }) => client.getFlow(project, FLOW_TOP, signal),
+  });
+}
+
+/**
+ * One read per group, `root=G&depth=1`, in `names`' order, enabled only while the group is open: a
+ * live event reads again what is open and only marks the rest, a closed read stays in hand, and
+ * reopening reads nothing unless an event marked it. A read answered with a `reason` closed its group
+ * and stays enabled, so an event can lift the refusal. A mount reads what is open again, as the
+ * Flow's top read does, so a hand edit, which raises no event, shows on coming back to the screen.
+ */
+export function useFlowGroups(project: string, names: readonly string[], open: ReadonlySet<string>) {
+  const client = useClient();
+  return useQueries({
+    queries: names.map((root) => {
+      const options: FlowOptions = { root, depth: 1 };
+      return {
+        queryKey: queryKeys.flow(project, options),
+        queryFn: ({ signal }: { signal: AbortSignal }) => client.getFlow(project, options, signal),
+        enabled: (query: Query<FlowView>) => open.has(root) || (query.state.data?.reason ?? null) !== null,
+        staleTime: Infinity,
+        refetchOnMount: "always" as const,
+      };
+    }),
+    combine: (results) =>
+      results.map((result, index) => ({
+        name: names[index] ?? "",
+        data: result.data,
+        error: result.error,
+        fetching: result.isFetching,
+        /** Changes each time the read settles, even on an answer equal to the last. */
+        settled: `${String(result.dataUpdatedAt)}/${String(result.errorUpdateCount)}`,
+        retry: result.refetch,
+      })),
+  });
+}
+
+/**
+ * The whole tree, on demand: the Flow asks it only for the `parent` chain of a name no read holds,
+ * never to draw (`docs/features/flow-canvas.md` "Gap rows"). The Tree screen's entry, read again
+ * only once a live event marks it.
+ */
+export function useTreeOnDemand(project: string): () => Promise<TreeView> {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  return useCallback(
+    () =>
+      queryClient.query({
+        queryKey: queryKeys.tree(project, {}),
+        queryFn: ({ signal }) => client.getTree(project, undefined, signal),
+        staleTime: Infinity,
+      }),
+    [client, project, queryClient],
+  );
 }
 
 /** The project's tasks, one read for the whole list: filters never read again. */

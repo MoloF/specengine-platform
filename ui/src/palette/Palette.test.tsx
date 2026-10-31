@@ -258,6 +258,7 @@ describe("the dialog and its combobox (AC-11)", () => {
       "Inbox",
       "Tasks",
       "Roadmap",
+      "Flow",
       "Spec tree",
       "Graph",
       "Health",
@@ -273,9 +274,9 @@ describe("the dialog and its combobox (AC-11)", () => {
     key("ArrowUp");
     expect(activeOption()).toBe(options[1]);
     key("End");
-    expect(activeOption()).toBe(options[9]);
+    expect(activeOption()).toBe(options[10]);
     key("ArrowDown");
-    expect(activeOption()).toBe(options[9]);
+    expect(activeOption()).toBe(options[10]);
     key("Home");
     expect(activeOption()).toBe(options[0]);
     key("ArrowUp");
@@ -655,7 +656,7 @@ describe("failures in their group (AC-14)", () => {
     await screen.findByRole("listbox", { name: "Proposals by severity, then age" });
     await openPalette();
     expect(groups()).toEqual([
-      ["Sections", ["Overview", "Inbox", "Tasks", "Roadmap", "Spec tree", "Graph", "Health", "Questions"]],
+      ["Sections", ["Overview", "Inbox", "Tasks", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]],
       ["Projects, loading", []],
     ]);
     expect(within(palette() ?? document.body).queryByText("No project yet.")).toBeNull();
@@ -676,7 +677,7 @@ describe("failures in their group (AC-14)", () => {
     await screen.findByText("Projects could not be loaded:");
     await openPalette();
     expect(within(palette() ?? document.body).getByRole("alert").textContent).toBe("Projects could not be read: p");
-    expect(groups()).toEqual([["Sections", ["Overview", "Inbox", "Tasks", "Roadmap", "Spec tree", "Graph", "Health", "Questions"]]]);
+    expect(groups()).toEqual([["Sections", ["Overview", "Inbox", "Tasks", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]]]);
     fireEvent.click(within(listbox()).getByRole("option", { name: "Tasks" }));
     await hashIs("#/alpha/tasks");
     await openPalette();

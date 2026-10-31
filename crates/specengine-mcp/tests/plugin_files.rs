@@ -123,6 +123,10 @@
 //!   and [`READ_SPEC_FLOW_0_21_0`] taken out 0.20.0's; a `SCHEMA_PINS` entry
 //!   0.21.0, 0.20.0's schemas today's without `get_flow`
 //!   ([`as_of_0_20_0`]).
+//! - docs/features/flow-canvas.md "Files in scope": 0.21.0 -> 0.22.0, MINOR:
+//!   a key a tool returns, `FlowNode.gaps`. A `PINS` entry 0.22.0, the tree
+//!   with the version set back 0.21.0's; a `SCHEMA_PINS` entry 0.22.0,
+//!   0.21.0's schemas today's without that key ([`as_of_0_21_0`]).
 //!
 //! The repository is only read.
 
@@ -358,6 +362,14 @@ const PINS: &[(&str, &str)] = &[
         "0.21.0",
         "ca8d0720e1120062294e297eac8722623383e91096dcce3aee9d99f0a4889309",
     ),
+    // docs/features/flow-canvas.md "Files in scope" (0.21.0 -> 0.22.0, MINOR:
+    // a key a tool returns, `get_flow`'s `FlowNode.gaps`): plugin.json's
+    // version alone; the tree with the version set back hashes as 0.21.0's
+    // pin.
+    (
+        "0.22.0",
+        "504caec39e593f073696546a85e8d9a41c3a3e82d3499d6d7805e70e31f85488",
+    ),
 ];
 
 /// docs/features/flow-read.md: `read-spec`'s line of 0.21.0, whole with its
@@ -524,6 +536,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.21.0",
         "07317578f207ac8247a77f2def8acc9fbe2525d5dce0a3af90abf7e823e9825a",
+    ),
+    // docs/features/flow-canvas.md "Data": `get_flow`'s `FlowNode.gaps`
+    // ([`as_of_0_21_0`] takes it out; no other tool's schema changed).
+    (
+        "0.22.0",
+        "dbb3e9682d02395f84bd89cd258a2ace52db4ad42b66c473adcf95365a696106",
     ),
 ];
 
@@ -1643,10 +1661,32 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/flow-canvas.md (0.21.0 -> 0.22.0): plugin.json's version
+    // alone; set back, the tree is 0.21.0's pinned content. M: the version
+    // kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.22.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.22.0"),
+        "plugin.json's version"
+    );
+    let at_0_21_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.22.0\"",
+        "\"version\": \"0.21.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_21_0),
+        PINS[PINS.len() - 2].1,
+        "0.22.0 changes plugin.json's version only"
+    );
+    let tree = at_0_21_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/flow-read.md (0.20.0 -> 0.21.0): plugin.json's version
     // and `read-spec`'s one line; both set back, the tree is 0.20.0's pinned
     // content.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.21.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.21.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.21.0"),
@@ -1666,11 +1706,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_20_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.21.0 changes plugin.json's version and read-spec's one line only"
     );
     let tree = at_0_20_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/layer-c-reads.md (0.19.0 -> 0.20.0): plugin.json's
     // version alone; set back, the tree is 0.19.0's pinned content. M: the
     // version kept; another file changed.
@@ -2252,6 +2292,18 @@ fn as_of_0_19_0(schemas: &mut Value) {
     });
 }
 
+/// `schemas` as 0.21.0 listed them (docs/features/flow-canvas.md "Data"):
+/// `get_flow`'s node without `gaps`; no other tool's schema changed.
+fn as_of_0_21_0(schemas: &mut Value) {
+    let node = &mut schemas["get_flow"]["outputSchema"]["properties"]["nodes"]["items"];
+    let properties = node["properties"].as_object_mut().expect("a node schema");
+    assert!(properties.remove("gaps").is_some(), "gaps listed");
+    let required = node["required"].as_array_mut().expect("required");
+    let before = required.len();
+    required.retain(|name| name != "gaps");
+    assert_eq!(required.len(), before - 1, "gaps required");
+}
+
 /// `schemas` as 0.20.0 listed them (docs/features/flow-read.md): no
 /// `get_flow`; no other tool's schema changed.
 fn as_of_0_20_0(schemas: &mut Value) {
@@ -2465,7 +2517,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[10].0, "0.19.0", "an entry for 0.19.0");
     assert_eq!(SCHEMA_PINS[11].0, "0.20.0", "an entry for 0.20.0");
     assert_eq!(SCHEMA_PINS[12].0, "0.21.0", "an entry for 0.21.0");
-    assert_eq!(SCHEMA_PINS.len(), 13, "0.21.0 the last entry");
+    assert_eq!(SCHEMA_PINS[13].0, "0.22.0", "an entry for 0.22.0");
+    assert_eq!(SCHEMA_PINS.len(), 14, "0.22.0 the last entry");
+    // docs/features/flow-canvas.md "Data": 0.21.0's schemas are today's
+    // without `FlowNode.gaps`.
+    let mut at_0_21_0 = schemas.clone();
+    as_of_0_21_0(&mut at_0_21_0);
+    let at_0_21_0_hash = schema_hash(&at_0_21_0);
+    assert_eq!(
+        at_0_21_0_hash, SCHEMA_PINS[12].1,
+        "0.21.0's schemas are today's without FlowNode.gaps"
+    );
+    assert_ne!(at_0_21_0_hash, current, "FlowNode.gaps changed the schemas");
+    let (schemas, current) = (at_0_21_0, at_0_21_0_hash);
     // docs/features/flow-read.md: 0.20.0's schemas are today's without
     // `get_flow`, a read flat in `root` and `depth`.
     let flow_input = &schemas["get_flow"]["inputSchema"]["properties"];

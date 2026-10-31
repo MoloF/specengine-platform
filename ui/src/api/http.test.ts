@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { aFlowView } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import {
   aCheckFinding,
@@ -155,6 +156,9 @@ describe("each method hits its URL (AC-09)", () => {
       "/api/projects/alpha/tasks/%D0%A2-0001%2Fx",
     ],
     // UI-6 of docs/features/roadmap-screen.md: the three queries; the screen sends the first.
+    ["getFlow: the top, depth 0 sent", (client) => client.getFlow("harbor-sim", { depth: 0 }), "/api/projects/harbor-sim/flow?depth=0"],
+    ["getFlow: a group, root then depth", (client) => client.getFlow("alpha", { root: "DOM-HARBOR", depth: 1 }), "/api/projects/alpha/flow?root=DOM-HARBOR&depth=1"],
+    ["getFlow: a path ROOT's `/` as %2F, non-Latin text as UTF-8", (client) => client.getFlow("a b", { root: `docs/${String.fromCodePoint(0x417)}.md`, depth: 1 }), "/api/projects/a%20b/flow?root=docs%2F%D0%97.md&depth=1"],
     ["getRoadmap: no query, the whole plan", (client) => client.getRoadmap("harbor-sim"), "/api/projects/harbor-sim/roadmap"],
     [
       "getRoadmap: `release` encoded once, non-Latin text as UTF-8",
@@ -249,6 +253,7 @@ describe("each method hits its URL (AC-09)", () => {
     ["search", (client, signal) => client.search("alpha", { query: "tide" }, signal)],
     ["getBundle", (client, signal) => client.getBundle("alpha", { node_ids: ["R-1"] }, signal)],
     ["getGraph", (client, signal) => client.getGraph("alpha", { ref: "R-1" }, signal)],
+    ["getFlow", (client, signal) => client.getFlow("alpha", { depth: 0 }, signal)],
     ["getTasks", (client, signal) => client.getTasks("alpha", signal)],
     ["getTask", (client, signal) => client.getTask("alpha", "T-0001", signal)],
     ["getRoadmap", (client, signal) => client.getRoadmap("alpha", undefined, signal)],
@@ -503,6 +508,15 @@ describe("answers (AC-09)", () => {
     const unknown = aGraphView([], [], { ref: "R-404", reason: "`R-404` resolves to no ID and no alias", types: [], depth: null });
     stubFetch(() => jsonAnswer(404, unknown));
     expect(await new HttpClient().getGraph("alpha", { ref: "R-404" })).toEqual(unknown);
+  });
+
+  it("resolves the flow's 404 exit-1 document as data, its reason set; a 503 rejects in the daemon's words (flow-canvas)", async () => {
+    const unknown = aFlowView([], [], { root: "NOPE", reason: "`NOPE` resolves to no ID and no alias", gaps: [] });
+    stubFetch(() => jsonAnswer(404, unknown));
+    expect(await new HttpClient().getFlow("alpha", { root: "NOPE", depth: 1 })).toEqual(unknown);
+    stubFetch(() => errorAnswer(503, "spec: --depth: `-1` is not a number of 0 or more"));
+    const error = await rejection(new HttpClient().getFlow("alpha", { depth: -1 }));
+    expect(apiErrorOf(error)).toEqual({ status: 503, message: "spec: --depth: `-1` is not a number of 0 or more" });
   });
 
   it("resolves a graph as sent, uncut: every node and edge, `truncated` as the daemon says", async () => {

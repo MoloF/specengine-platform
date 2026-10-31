@@ -58,6 +58,19 @@ const GRAPH_KEYS: readonly Shortcut[] = [
   [["?"], "Show this list"],
 ];
 
+/** The Flow's keys (docs/features/flow-canvas.md "Keyboard, motion, width"): the canvas, one tab stop; no key changes the spec. */
+const FLOW_KEYS: readonly Shortcut[] = [
+  [["Down arrow", "Up arrow"], "Canvas: the next or previous box in the column"],
+  [["Left arrow", "Right arrow"], "Canvas: the nearest box of the column beside; Left from a first column goes to the group's head, Right on an open head into it, Right from a group's last column out past it"],
+  [["Enter"], "Canvas: select the box, focus to its panel"],
+  [["Space"], "Canvas: open or close the group, focus kept"],
+  [["o"], "Canvas: open the box in the spec tree"],
+  [["c"], "Canvas: centre the view on the box"],
+  [["Esc"], "Close the panel, focus back on the box; a dialog: close it"],
+  JUMP,
+  [["?"], "Show this list"],
+];
+
 /** The Tasks screen's keys (docs/features/ui-tasks.md "Implementation", List and Detail): no key acts on a task. */
 const TASKS_KEYS: readonly Shortcut[] = [
   [["j", "Down arrow"], "Task list: next task"],
@@ -92,6 +105,7 @@ const INTRO: Partial<Record<SectionId, string>> = {
   inbox: `Letter keys act while focus is in the Inbox queue, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} The decision keys open the dialog of that decision for the selected proposal.`,
   tree: `Keys act where focus is (the tree, the hits, the tabs), outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} Arrows only move; Enter and clicks open, one history entry each.`,
   graph: `Keys act on the canvas's focused box, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One box holds the tab stop; arrows only move it. The List view holds every node and edge as text.`,
+  flow: `Keys act on the canvas's focused box, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One box holds the tab stop; arrows only move it. The List view holds every box and edge as text. Nothing here writes: changes go through your AI, as proposals.`,
   tasks: `Keys act where focus is (the task list, the tabs), outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} Arrows only move; Enter and clicks open, one history entry each. No key changes a task: owner actions are commands you copy to a terminal.`,
   health: `Keys act on the findings' focused row, outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED} One row holds the Tab stop; arrows only move it. Health is read only: nothing here fixes a finding.`,
   roadmap: `No key moves an item: the Roadmap is read only, and an item moves when its file's release, priority or depends_on changes. Keys act outside a text field, without Ctrl, Alt or Cmd; ${CHORD_EXCEPTED}`,
@@ -105,6 +119,9 @@ function keysOf(section: SectionId | null): readonly Shortcut[] {
   }
   if (section === "graph") {
     return GRAPH_KEYS;
+  }
+  if (section === "flow") {
+    return FLOW_KEYS;
   }
   if (section === "tasks") {
     return TASKS_KEYS;

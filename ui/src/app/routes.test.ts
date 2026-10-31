@@ -12,6 +12,8 @@ describe("hash routes", () => {
     ["#/alpha/tree/R-12", { type: "section", project: "alpha", section: "tree", id: "R-12" }],
     ["#/alpha/roadmap", { type: "section", project: "alpha", section: "roadmap", id: null }],
     ["#/alpha/roadmap/RM-0004", { type: "section", project: "alpha", section: "roadmap", id: "RM-0004" }],
+    ["#/alpha/flow", { type: "section", project: "alpha", section: "flow", id: null }],
+    ["#/a/flow/MEC-TIDES", { type: "section", project: "a", section: "flow", id: "MEC-TIDES" }],
     ["#/alpha", { type: "project", project: "alpha" }],
     ["#/alpha/", { type: "project", project: "alpha" }],
     ["#/a%20b", { type: "project", project: "a b" }],
@@ -26,12 +28,13 @@ describe("hash routes", () => {
     expect(parseHash(hash)).toEqual(route);
   });
 
-  it("lists the nav: Overview to the home, then the seven sections, Roadmap third", () => {
+  it("lists the nav: Overview to the home, then the eight sections, Roadmap third, Flow fourth", () => {
     expect(navOf("a b").map(({ label, hash }) => [label, hash])).toEqual([
       ["Overview", "#/a%20b"],
       ["Inbox", "#/a%20b/inbox"],
       ["Tasks", "#/a%20b/tasks"],
       ["Roadmap", "#/a%20b/roadmap"],
+      ["Flow", "#/a%20b/flow"],
       ["Spec tree", "#/a%20b/tree"],
       ["Graph", "#/a%20b/graph"],
       ["Health", "#/a%20b/health"],
@@ -46,6 +49,7 @@ describe("hash routes", () => {
     expect(sectionHash("alpha", "inbox", "PR-1")).toBe("#/alpha/inbox/PR-1");
     expect(sectionHash("alpha", "roadmap")).toBe("#/alpha/roadmap");
     expect(sectionHash("alpha", "roadmap", "RM-0004")).toBe("#/alpha/roadmap/RM-0004");
+    expect(sectionHash("alpha", "flow", "MEC-TIDES")).toBe("#/alpha/flow/MEC-TIDES");
     expect(parseHash(sectionHash("alpha", "roadmap", "RM-0004"))).toEqual({ type: "section", project: "alpha", section: "roadmap", id: "RM-0004" });
     expect(parseHash(sectionHash("a b", "graph", "X/Y"))).toEqual({
       type: "section",

@@ -1,6 +1,7 @@
 import {
   ClientError,
   type BundleOptions,
+  type FlowOptions,
   type GraphOptions,
   type NodeOptions,
   type RoadmapOptions,
@@ -13,6 +14,7 @@ import type {
   ApiError,
   BundleView,
   CheckReport,
+  FlowView,
   GraphView,
   HealthReport,
   Inbox,
@@ -39,7 +41,8 @@ import type {
 // `docs/features/ui-live-tasks.md` "Data", the stage `docs/canon/decision-staging.md` "Daemon",
 // the question round `docs/features/ui-round.md` "Data", the unapplied amendments
 // `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
-// the lock diff `docs/features/lock-diff.md` "Route"): `fetch` and `EventSource`, no package.
+// the lock diff `docs/features/lock-diff.md` "Route", the flow `docs/features/flow-canvas.md`
+// "Data"): `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -310,6 +313,19 @@ export class HttpClient implements SpecEngineClient {
       ["archive", options.archive === true ? true : undefined],
     ]);
     return (await request("GET", `${projectPath(project)}/graph${query}`, { signal })) as GraphView;
+  }
+
+  /**
+   * `spec flow [ROOT] [--depth N] --json` as the browser view, uncut (`docs/canon/spec-flow.md`
+   * "The read"): `root` a query value, encoded once, an absent option left out. A 404 is the exit-1
+   * document (a ROOT naming nothing, `reason` set), resolved as data. Takes its query's AbortSignal.
+   */
+  async getFlow(project: string, options: FlowOptions, signal?: AbortSignal): Promise<FlowView> {
+    const query = queryOf([
+      ["root", options.root],
+      ["depth", options.depth],
+    ]);
+    return (await request("GET", `${projectPath(project)}/flow${query}`, { signal })) as FlowView;
   }
 
   /**

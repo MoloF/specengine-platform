@@ -97,6 +97,9 @@ const ASSUMED = ["pending", "as-assumed", "otherwise", "applied", "rejected", "m
 const UNBOUND = ["homoglyph", "unanchored", "cannot-verify", "relation", "unknown"];
 // docs/features/roadmap-screen.md: the Roadmap's marks, the neutral item status, the range bar and its track.
 const ROADMAP = ["current", "cut", "cycle", "waits", "unestimated", "status", "bar", "bar-track"];
+// docs/features/flow-canvas.md: an edge's colour by its type's place, the gap rows' states, the walk's marks.
+const FLOW_EDGE = ["0", "1", "2", "3"];
+const FLOW_GAP = ["none", "found", "not-configured", "unknown"];
 const STATUS = [
   ...["high", "normal", "low", "unknown"].map((value) => `--severity-${value}`),
   ...LINK.map((value) => `--link-${value}`),
@@ -112,6 +115,11 @@ const STATUS = [
   ...ASSUMED.map((value) => `--assumed-${value}`),
   ...UNBOUND.map((value) => `--unbound-${value}`),
   ...ROADMAP.map((value) => `--roadmap-${value}`),
+  ...FLOW_EDGE.map((value) => `--flow-edge-${value}`),
+  ...FLOW_GAP.map((value) => `--flow-gap-${value}`),
+  "--flow-start",
+  "--flow-end",
+  "--flow-marked",
   "--attention",
   // The graph canvas (docs/features/ui-graph.md): edges and minimap nodes are read against the surfaces.
   "--graph-edge",
@@ -227,6 +235,29 @@ describe("tokens.css (AC-09)", () => {
     }
   });
 
+  it("gives the flow's edge types four colours, each at least 3:1 on every surface, none a state's (AC-06 of flow-canvas)", () => {
+    const colours = FLOW_EDGE.map((value) => resolve(`--flow-edge-${value}`).toLowerCase());
+    expect(new Set(colours).size).toBe(4);
+    for (const value of FLOW_EDGE) {
+      for (const surface of [...SURFACES, "--flow-box-surface", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
+        expect([value, surface, contrast(`--flow-edge-${value}`, surface) >= 3]).toEqual([value, surface, true]);
+      }
+    }
+    const states = ["--sync-ok", "--sync-conflict", "--sync-cannot-verify", "--attention"].map((name) => resolve(name).toLowerCase());
+    expect(colours.filter((colour) => states.includes(colour))).toEqual([]);
+  });
+
+  it("keeps a gap row that cannot be measured off None's colour, and None's off cannot-verify's (AC-08 of flow-canvas)", () => {
+    expect(resolve("--flow-gap-none").toLowerCase()).not.toBe(resolve("--sync-cannot-verify").toLowerCase());
+    for (const state of FLOW_GAP.filter((value) => value !== "none")) {
+      expect([state, resolve(`--flow-gap-${state}`).toLowerCase() === resolve("--flow-gap-none").toLowerCase()]).toEqual([state, false]);
+    }
+    for (const surface of ["--flow-box-surface", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
+      expect(contrast("--text-primary", surface)).toBeGreaterThanOrEqual(4.5);
+      expect(contrast("--text-secondary", surface)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
   it("never gives a binding row ok's colour unless it is in sync, nor one not judged cannot-verify's (bundle-bindings)", () => {
     const ok = resolve("--sync-ok").toLowerCase();
     for (const state of SYNC.filter((value) => value !== "ok")) {
@@ -262,6 +293,14 @@ describe("focus and motion (AC-10)", () => {
     const reduced = declarations(motionBlock);
     for (const name of durations) {
       expect(reduced.get(name)).toMatch(/^0(ms|s)?$/);
+    }
+  });
+
+  it("never animates a frame or a box of the Flow (AC-13 of flow-canvas)", () => {
+    const rules = [...appCss.matchAll(/([^{}]*\.flow-[^{}]*)\{([^}]*)\}/g)];
+    expect(rules.length).toBeGreaterThan(10);
+    for (const [, selector, body] of rules) {
+      expect([selector?.trim(), /transition|animation/.test(body ?? "")]).toEqual([selector?.trim(), false]);
     }
   });
 

@@ -65,6 +65,12 @@ const PATHS = {
   current: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M8 5.8a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z",
   cutLine: "M1.5 8h2.5 M6.75 8h2.5 M12 8h2.5 M8 2.5v3 M8 10.5v3",
   debtExpired: "M2.5 3.5h11v10h-11Z M2.5 6.5h11 M5.5 2v3 M10.5 2v3 M6 8.6l4 3.3 M10 8.6l-4 3.3",
+  // The Flow (docs/features/flow-canvas.md): a start, an end, a gap, a box marked by a gap item, the arc.
+  flowStart: "M4.5 3v10 M7.5 4.5 12 8l-4.5 3.5Z",
+  flowEnd: "M3.5 3v10 M6.5 3.5h6.5v9H6.5Z",
+  flowGap: "M2.5 5V2.5H5 M11 2.5h2.5V5 M13.5 11v2.5H11 M5 13.5H2.5V11 M8 5.2v3.4 M8 10.8v.2",
+  flowMarked: "M8 2.5 9.7 6l3.8.5-2.8 2.6.7 3.8L8 11.1l-3.4 1.8.7-3.8L2.5 6.5 6.3 6 8 2.5Z",
+  flowLoop: "M12.5 8a4.5 4.5 0 1 1-1.4-3.3 M12.8 2.6v2.6h-2.6",
 } as const;
 
 export type IconName = keyof typeof PATHS;

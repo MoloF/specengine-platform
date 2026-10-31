@@ -23,7 +23,9 @@
 //!   to itself stays an edge while the document is shown. A shown node's
 //!   `distance` is the least of what it holds, itself included, so a screen
 //!   orders the top level without reading the whole flow; `start` and `end`
-//!   stay its own.
+//!   stay its own. Its `gaps` counts the documents this read's rows name
+//!   among what it holds, itself included, each once: rows before any fold
+//!   or cap, so a depth never moves the sum over a read's nodes.
 //! - **Gaps.** All ten, always in [`GapCode::ALL`]'s order, computed before
 //!   any fold, so a depth never changes one. A `follows` edge crossing the
 //!   scope is an entry or a way out, so a sub-flow is not called broken;
@@ -136,6 +138,9 @@ pub struct FlowGap {
     pub count: Option<usize>,
     /// By name, each item's members by name.
     pub items: Vec<Vec<String>>,
+    /// The files its items name, ascending; `no-start`'s scope is no
+    /// document, so that row holds none.
+    pub files: Vec<usize>,
     pub cause: Option<GapCause>,
 }
 
@@ -158,6 +163,9 @@ pub struct FlowNode {
     pub holds: usize,
     /// The edges with both ends in it, per type, by type.
     pub inner: Vec<FlowInner>,
+    /// The documents this read's gap rows name among what it holds, itself
+    /// included, each once.
+    pub gaps: usize,
 }
 
 /// An `inner` entry.
@@ -305,8 +313,9 @@ pub fn flow_read(graph: &SpecGraph<'_>, ask: &FlowAsk<'_>) -> FlowRead {
     let scope = scope_of(graph, ask.roots, &links, &strays, &selected, &admitted);
     let steps = steps_of(&scope.members, &links, &strays, &selected);
     let gaps = gaps_of(graph, ask, &scope.members, &links, &steps, &selected);
+    let named: BTreeSet<usize> = gaps.iter().flat_map(|gap| gap.files.clone()).collect();
     let tree = tree_of(graph, &scope);
-    let (nodes, edges) = shown(graph, ask.depth, &scope, &tree, &links, &steps);
+    let (nodes, edges) = shown(graph, ask.depth, &scope, &tree, &links, &steps, &named);
     FlowRead {
         left_out: scope.left_out.into_iter().collect(),
         gaps,
@@ -692,17 +701,27 @@ fn cycles(nodes: &BTreeSet<usize>, next: &Adjacency) -> Vec<Vec<usize>> {
     found
 }
 
-/// A counted row: its items sorted.
-fn measured(code: GapCode, mut items: Vec<Vec<String>>) -> FlowGap {
-    for item in &mut items {
-        item.sort();
-    }
-    items.sort();
+/// A counted row of documents: named and sorted, each item's members too.
+fn measured(graph: &SpecGraph<'_>, code: GapCode, items: &[Vec<usize>]) -> FlowGap {
+    let files: BTreeSet<usize> = items.iter().flatten().copied().collect();
+    let mut named: Vec<Vec<String>> = items
+        .iter()
+        .map(|item| {
+            let mut members: Vec<String> = item
+                .iter()
+                .map(|&file| graph.name(document(file)))
+                .collect();
+            members.sort();
+            members
+        })
+        .collect();
+    named.sort();
     FlowGap {
         code,
         state: GapState::Measured,
-        count: Some(items.len()),
-        items,
+        count: Some(named.len()),
+        items: named,
+        files: files.into_iter().collect(),
         cause: None,
     }
 }
@@ -714,6 +733,7 @@ fn unmeasured(code: GapCode, state: GapState, cause: GapCause) -> FlowGap {
         state,
         count: None,
         items: Vec::new(),
+        files: Vec::new(),
         cause: Some(cause),
     }
 }
@@ -758,20 +778,20 @@ fn gaps_of(
 
     let headless = steps.marked.is_empty() && steps.entering.is_empty();
     let no_start = start(GapCode::NoStart).unwrap_or_else(|| {
-        let items = if headless {
-            vec![vec![ask.scope_name.to_owned()]]
-        } else {
-            Vec::new()
-        };
-        measured(GapCode::NoStart, items)
+        let mut row = measured(graph, GapCode::NoStart, &[]);
+        if headless {
+            row.items = vec![vec![ask.scope_name.to_owned()]];
+            row.count = Some(1);
+        }
+        row
     });
     let two_starts = start(GapCode::TwoStarts).unwrap_or_else(|| {
         let items = if steps.marked.len() >= 2 {
-            vec![names(graph, &steps.marked)]
+            vec![steps.marked.iter().copied().collect()]
         } else {
             Vec::new()
         };
-        measured(GapCode::TwoStarts, items)
+        measured(graph, GapCode::TwoStarts, &items)
     });
     let unreachable = start(GapCode::Unreachable)
         .or_else(|| step(GapCode::Unreachable))
@@ -781,8 +801,8 @@ fn gaps_of(
             }
             let sources = steps.marked.iter().chain(&steps.entering).copied();
             let reached = reach(sources, &steps.next);
-            let items = one_each(graph, steps.steps.difference(&reached).copied());
-            measured(GapCode::Unreachable, items)
+            let items = one_each(steps.steps.difference(&reached).copied());
+            measured(graph, GapCode::Unreachable, &items)
         });
 
     let finishing = reach(
@@ -802,10 +822,10 @@ fn gaps_of(
                 .iter()
                 .copied()
                 .filter(|step| !finishing.contains(step) && !trapped.contains(step));
-            measured(GapCode::NoWayToEnd, one_each(graph, stuck))
+            measured(graph, GapCode::NoWayToEnd, &one_each(stuck))
         });
-    let trap_cycle = end(GapCode::TrapCycle)
-        .unwrap_or_else(|| measured(GapCode::TrapCycle, each_cycle(graph, &traps)));
+    let trap_cycle =
+        end(GapCode::TrapCycle).unwrap_or_else(|| measured(graph, GapCode::TrapCycle, &traps));
 
     let unjoined = unjoined_splits(members, links, &follows_forward(links));
     let loose = cycles(&steps.steps, &without_repeats(members, links));
@@ -813,7 +833,7 @@ fn gaps_of(
     let used_by = |wanted: usize| {
         let defined = selected.definition.intersection(members).copied();
         let matching = defined.filter(|file| users.get(file).map_or(0, BTreeSet::len) == wanted);
-        one_each(graph, matching)
+        one_each(matching)
     };
     vec![
         no_start,
@@ -821,38 +841,19 @@ fn gaps_of(
         unreachable,
         no_way,
         trap_cycle,
-        measured(GapCode::UnjoinedParallel, one_each(graph, unjoined)),
-        measured(GapCode::CycleNoRepeat, each_cycle(graph, &loose)),
+        measured(graph, GapCode::UnjoinedParallel, &one_each(unjoined)),
+        measured(graph, GapCode::CycleNoRepeat, &loose),
         definition(GapCode::DefinitionUnused)
-            .unwrap_or_else(|| measured(GapCode::DefinitionUnused, used_by(0))),
+            .unwrap_or_else(|| measured(graph, GapCode::DefinitionUnused, &used_by(0))),
         definition(GapCode::DefinitionOnce)
-            .unwrap_or_else(|| measured(GapCode::DefinitionOnce, used_by(1))),
-        measured(
-            GapCode::SupplyUnfed,
-            each_cycle(graph, &unfed(members, links)),
-        ),
+            .unwrap_or_else(|| measured(graph, GapCode::DefinitionOnce, &used_by(1))),
+        measured(graph, GapCode::SupplyUnfed, &unfed(members, links)),
     ]
 }
 
-/// The names of `files`.
-fn names<'f>(graph: &SpecGraph<'_>, files: impl IntoIterator<Item = &'f usize>) -> Vec<String> {
-    files
-        .into_iter()
-        .map(|&file| graph.name(document(file)))
-        .collect()
-}
-
 /// One item per file.
-fn one_each(graph: &SpecGraph<'_>, files: impl IntoIterator<Item = usize>) -> Vec<Vec<String>> {
-    files
-        .into_iter()
-        .map(|file| vec![graph.name(document(file))])
-        .collect()
-}
-
-/// One item per cycle, its members together.
-fn each_cycle(graph: &SpecGraph<'_>, cycles: &[Vec<usize>]) -> Vec<Vec<String>> {
-    cycles.iter().map(|cycle| names(graph, cycle)).collect()
+fn one_each(files: impl IntoIterator<Item = usize>) -> Vec<Vec<usize>> {
+    files.into_iter().map(|file| vec![file]).collect()
 }
 
 /// Every admitted `follows` link, forward.
@@ -975,6 +976,7 @@ fn shown(
     tree: &Tree,
     links: &[Link<'_>],
     steps: &Steps,
+    named: &BTreeSet<usize>,
 ) -> (Vec<FlowNode>, Vec<FlowEdge>) {
     let shown_as = |file: usize| -> usize {
         let Some(depth) = depth else {
@@ -991,10 +993,14 @@ fn shown(
     };
     let mut holds: BTreeMap<usize, usize> = BTreeMap::new();
     let mut least: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut gaps: BTreeMap<usize, usize> = BTreeMap::new();
     for &member in &scope.members {
         let shown = shown_as(member);
         if shown != member {
             *holds.entry(shown).or_default() += 1;
+        }
+        if named.contains(&member) {
+            *gaps.entry(shown).or_default() += 1;
         }
         if let Some(&distance) = steps.distance.get(&member) {
             least
@@ -1063,6 +1069,7 @@ fn shown(
                     .flatten()
                     .map(|(&link_type, &count)| FlowInner { link_type, count })
                     .collect(),
+                gaps: gaps.get(&file).copied().unwrap_or(0),
             }
         })
         .collect();

@@ -4,8 +4,8 @@
  * Contrast (WCAG 2.2 AA, checked by src/styles/tokens.test.ts): text primary, secondary and accent
  * at least 4.5:1 on every surface, primary also on the diff surfaces, on-accent on accent; focus
  * ring, control border and every status colour at least 3:1 on every surface; primary text on the
- * search highlight; the graph's edge and minimap colours at least 3:1 on every surface. Dark
- * theme only.
+ * search highlight; the graph's edge and minimap colours, the flow's edge types and marks at least
+ * 3:1 on every surface. Dark theme only.
  */
 :root {
   color-scheme: dark;
@@ -166,6 +166,26 @@
   --graph-minimap-node-stroke-width: 0;
   --graph-selection-surface: rgba(114, 178, 255, 0.12);
   --graph-selection-border: 1px dotted var(--accent);
+
+  /* The Flow (docs/features/flow-canvas.md): an edge's colour goes by its type's place, never its
+     name, and four are told apart by hue so a dash is never the only difference; none is a state
+     colour's. A gap row stops nothing, so "found" draws attention and no alarm; a row that cannot be
+     measured takes cannot-verify's own colour and icon, never None's. */
+  --flow-edge-0: #7fb8ff;
+  --flow-edge-1: #dfe6f2;
+  --flow-edge-2: #f0a6c8;
+  --flow-edge-3: #6fd6c4;
+  --flow-gap-none: var(--sync-ok);
+  --flow-gap-found: var(--attention);
+  --flow-gap-not-configured: var(--severity-low);
+  --flow-gap-unknown: var(--severity-unknown);
+  --flow-start: var(--accent);
+  --flow-end: var(--accent);
+  --flow-marked: var(--attention);
+  --flow-box-surface: var(--surface-raised);
+  --flow-frame-surface: var(--surface-panel);
+  --flow-frame-surface-nested: var(--surface-canvas);
+  --flow-repeat-width: 2.25;
 
   /* Section diffs. */
   --diff-added-surface: #123628;

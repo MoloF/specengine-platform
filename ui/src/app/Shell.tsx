@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
 import { useLiveQueue, useProjects } from "../api/queries";
 import type { Project } from "../api/types";
+import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
 import { GraphView } from "../graph/GraphView";
 import { HealthView } from "../health/HealthView";
 import type { GraphMemory, GraphSettings } from "../graph/settings";
@@ -139,7 +140,7 @@ function ProjectSwitcher({
   );
 }
 
-/** Header, the home and the seven sections, the current view inside its own error boundary, the jump palette. */
+/** Header, the home and the eight sections, the current view inside its own error boundary, the jump palette. */
 export function Shell({ scenario }: { scenario: string | null }) {
   const hash = useHash();
   const route = parseHash(hash);
@@ -178,6 +179,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
       recall: (project) => roadmapTabs.current.get(project),
       remember: (project, tab) => {
         roadmapTabs.current.set(project, tab);
+      },
+    }),
+    [],
+  );
+  /** The Flow's tab and open groups per project for this page's life; never in the hash (docs/features/flow-canvas.md "Data"). */
+  const flowStates = useRef(new Map<string, FlowState>());
+  const flowMemory = useMemo<FlowMemory>(
+    () => ({
+      recall: (project) => flowStates.current.get(project),
+      remember: (project, state) => {
+        flowStates.current.set(project, state);
       },
     }),
     [],
@@ -357,6 +369,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
   } else if (route.section === "roadmap") {
     view = <RoadmapView key={route.project} project={route.project} itemId={route.id} memory={roadmapMemory} />;
+  } else if (route.section === "flow") {
+    view = <FlowView key={route.project} project={route.project} nodeRef={route.id} memory={flowMemory} />;
   } else if (route.section === "tree") {
     view = <TreeView key={route.project} project={route.project} nodeRef={route.id} />;
   } else if (route.section === "graph") {

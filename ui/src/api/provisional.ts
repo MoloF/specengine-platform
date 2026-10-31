@@ -1202,7 +1202,7 @@ export interface FlowInner {
   count: number;
 }
 
-/** A shown document: `distance` the steps from the starts, the least of what it holds, null where none is reached; `group` the shown node holding it; `holds` the documents folded into it. Source: `docs/features/flow-read.md` "Output". */
+/** A shown document: `distance` the steps from the starts, the least of what it holds, null where none is reached; `group` the shown node holding it; `holds` the documents folded into it; `gaps` the documents this read's gap rows name among what it holds, each once. Source: `docs/features/flow-read.md` "Output", `docs/features/flow-canvas.md` "Data". */
 export interface FlowNode {
   id: string | null;
   kind: string | null;
@@ -1215,6 +1215,7 @@ export interface FlowNode {
   end: boolean;
   holds: number;
   inner: FlowInner[];
+  gaps: number;
 }
 
 /** A shown edge in reading direction, so a screen draws an arrow with no branch on a type; `when` only at a count of 1. Source: `docs/features/flow-read.md` "Output". */

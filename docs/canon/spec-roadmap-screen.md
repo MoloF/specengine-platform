@@ -12,7 +12,7 @@ The plan drawn read-only, computing nothing (ADR-0052, ADR-0033); `roadmap-scree
 
 ## Route and read
 
-`#/<p>/roadmap[/<ID>]`, nav third of seven. The ID only selects: its card `aria-current` and focused, its box outlined; an ID no group lists: a note and a Tree link. One read, `useRoadmap`: `getRoadmap(p, undefined, signal)`: `spec roadmap --json` uncut (`crates/specengine-http/README.md` "Endpoints"), key `["roadmap", p]`. `RoadmapOptions` `{ release: string; pool?: never } | { pool: true; release?: never }`: the 400 pair does not type.
+`#/<p>/roadmap[/<ID>]`, nav third of eight. The ID only selects: its card `aria-current` and focused, its box outlined; an ID no group lists: a note and a Tree link. One read, `useRoadmap`: `getRoadmap(p, undefined, signal)`: `spec roadmap --json` uncut (`crates/specengine-http/README.md` "Endpoints"), key `["roadmap", p]`. `RoadmapOptions` `{ release: string; pool?: never } | { pool: true; release?: never }`: the 400 pair does not type.
 
 ## Layout
 

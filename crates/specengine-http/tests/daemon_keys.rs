@@ -173,7 +173,7 @@
 //!
 //! docs/features/flow-read.md "Files in scope": five sets more, 86 in all,
 //! last, after `LockDiffCodeSide`: `FlowView` (11 keys), `FlowGap` (5),
-//! `FlowNode` (11), `FlowEdge` (8) and `FlowInner` (2), from `GET flow` on a
+//! `FlowNode` (12), `FlowEdge` (8) and `FlowInner` (2), from `GET flow` on a
 //! git copy of `fixtures/flow-gaps`: a whole read, the fold at depth 1 (its
 //! `inner` lists hold entries) and the exit-1 document of `?root=NOPE-1`.
 
@@ -1988,7 +1988,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "FlowNode",
             &[
                 "id", "kind", "title", "path", "line", "distance", "group", "start", "end",
-                "holds", "inner",
+                "holds", "inner", "gaps",
             ],
         ),
         (

@@ -91,7 +91,6 @@ The literals ` | ` and `-` hold no letter, so `norm_recipe.rs`' source scan need
 
 - One exception to one diagnostic per map: `follows: [{[a]: b}]` gives a second `frontmatter-type`, rule 1's and the one `extra` gives a collection used as a key.
 - A `to` naming no reference is `unparsed-reference`, a warning: the item is dropped, the rest of the map kept, and `norm_hash` null.
-- `ui/src/policy.test.ts` lists link types by hand and does not hold these three yet (RM-0044).
 
 ## Tests
 

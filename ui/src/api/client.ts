@@ -2,6 +2,7 @@ import type {
   ApiError,
   BundleView,
   CheckReport,
+  FlowView,
   GraphView,
   HealthReport,
   Inbox,
@@ -66,6 +67,16 @@ export interface GraphOptions {
   archive?: boolean;
 }
 
+/**
+ * `spec flow`: ROOT, `--depth N`. The screen always sends a `depth`: the top is `depth=0`, a group
+ * `root=G&depth=1`; a whole-flow read, which fails at volume, is never made
+ * (`docs/features/flow-canvas.md` "Reads").
+ */
+export interface FlowOptions {
+  root?: string;
+  depth?: number;
+}
+
 /** `spec round new`: `--limit N`, 1 to 200 (absent: the daemon's default, 20). */
 export interface RoundOptions {
   limit?: number;
@@ -83,8 +94,8 @@ export type RoadmapOptions = { release: string; pool?: never } | { pool: true; r
  * endpoints (`docs/features/daemon-read.md` "Data", `docs/features/ui-live.md` "Data",
  * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data", the plan's
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
- * "Route"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
- * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, task, roadmap, lock-diff) resolves
+ * "Route", the flow's `docs/features/flow-canvas.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
  * the daemon's status and message verbatim (exit 2: 503; no response: 0; a read the daemon does not
@@ -124,6 +135,8 @@ export interface SpecEngineClient {
   getBundle(project: string, options: BundleOptions, signal?: AbortSignal): Promise<BundleView>;
   /** GET /api/projects/:p/graph (crates/specengine-http/README.md "Endpoints"; the browser view, uncut) */
   getGraph(project: string, options: GraphOptions, signal?: AbortSignal): Promise<GraphView>;
+  /** GET /api/projects/:p/flow (docs/canon/spec-flow.md "The read"; = spec flow --json, the browser view, uncut; 404 the exit-1 document) */
+  getFlow(project: string, options: FlowOptions, signal?: AbortSignal): Promise<FlowView>;
   /** GET /api/projects/:p/tasks (crates/specengine-http/README.md "Endpoints"; = spec task list --json) */
   getTasks(project: string, signal?: AbortSignal): Promise<TaskList>;
   /** GET /api/projects/:p/tasks/:id (crates/specengine-http/README.md "Endpoints"; = spec task show T --json, uncut; 404 the exit-1 document) */

@@ -11,6 +11,10 @@ import type {
   CheckFinding,
   CheckReport,
   DriftRow,
+  FlowEdge,
+  FlowGap,
+  FlowNode,
+  FlowView,
   GraphEdge,
   GraphNode,
   GraphView,
@@ -352,6 +356,65 @@ export function aBundle(refs: string[], fields: Partial<BundleView> = {}): Bundl
     layers: someLayers({ targets: refs.map((name) => aBundleItem({ name })) }),
     tail: [],
     more: 0,
+    ...fields,
+  };
+}
+
+/** A measured gap row for tests. */
+export function aFlowGap(code: string, items: string[][] = [], fields: Partial<FlowGap> = {}): FlowGap {
+  return { code, state: "measured", count: items.length, items, cause: null, ...fields };
+}
+
+/** The ten gap rows in table order, all measured at 0, `rows` replacing theirs by code. */
+export function tenGapRows(rows: FlowGap[] = []): FlowGap[] {
+  const codes = ["no-start", "two-starts", "unreachable", "no-way-to-end", "trap-cycle", "unjoined-parallel", "cycle-no-repeat", "definition-unused", "definition-once", "supply-unfed"];
+  return codes.map((code) => rows.find((row) => row.code === code) ?? aFlowGap(code));
+}
+
+/** One box of a flow read for tests: a live step, not a group. */
+export function aFlowNode(fields: Partial<FlowNode> & Pick<FlowNode, "id" | "distance">): FlowNode {
+  return {
+    kind: "widget",
+    title: `Title of ${fields.id ?? "the node"}`,
+    path: `docs/spec/${(fields.id ?? "node").toLowerCase()}.md`,
+    line: 1,
+    group: null,
+    start: false,
+    end: false,
+    holds: 0,
+    inner: [],
+    gaps: 0,
+    ...fields,
+  };
+}
+
+/** One edge of a flow read for tests: a plain edge of an invented type, written once. */
+export function aFlowEdge(fields: Partial<FlowEdge> & Pick<FlowEdge, "from" | "to">): FlowEdge {
+  return {
+    type: "alpha_link",
+    kind: null,
+    when: null,
+    count: 1,
+    path: `docs/spec/${fields.to.toLowerCase()}.md`,
+    line: 3,
+    ...fields,
+  };
+}
+
+/** A whole flow read for tests: every key present, the ten rows at 0. */
+export function aFlowView(nodes: FlowNode[], edges: FlowEdge[], fields: Partial<FlowView> = {}): FlowView {
+  return {
+    root: null,
+    reason: null,
+    depth: 0,
+    notes: [],
+    left_out: { generated: 0, tier3: 0 },
+    truncated: false,
+    omitted_nodes: 0,
+    omitted_edges: 0,
+    gaps: tenGapRows(),
+    nodes,
+    edges,
     ...fields,
   };
 }

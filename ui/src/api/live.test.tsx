@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { BindingsPanel } from "../tree/BindingsPanel";
 import { LockDiffPanel } from "../tree/LockDiffPanel";
-import { aCheckFinding, aCheckReport, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage, entryOf } from "../test/builders";
+import { aCheckFinding, aCheckReport, aFlowView, aGraphNode, aGraphView, aProposal, aTaskEntry, aTaskPackage, entryOf } from "../test/builders";
 import { errorAnswer, FakeEventSource, jsonAnswer, openStreams, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import { HttpClient, QUEUE_EVENT_TYPES, REOPEN_FIRST_MS } from "./http";
 import { ApiProvider, createQueryClient } from "./provider";
@@ -14,6 +14,8 @@ import {
   useCheck,
   useGraph,
   useInbox,
+  useFlow,
+  useFlowGroups,
   useLiveQueue,
   useNode,
   useProposal,
@@ -958,6 +960,38 @@ describe("the Bindings tab on the live tail (UI-6 of ui-node-bindings)", () => {
       await screen.findByRole("button", { name: "Read again" });
     }
     expect(methodsOf(fetchStub)).toEqual(["GET", "GET"]);
+  });
+});
+
+describe("the flow on the live tail (flow-canvas)", () => {
+  const FLOW_READS = ["/api/projects/alpha/flow?depth=0", "/api/projects/alpha/flow?root=G-1&depth=1"];
+
+  function FlowReads() {
+    useLiveQueue("alpha");
+    useFlow("alpha");
+    useFlowGroups("alpha", ["G-1", "G-2"], new Set(["G-1"]));
+    return null;
+  }
+
+  it("proposal.applied reads the top and each open group again, a closed one not: a flow read is a read of the spec", async () => {
+    const fetchStub = stubFetch((url) => (FLOW_READS.includes(url) ? jsonAnswer(200, aFlowView([], [])) : errorAnswer(404, `no route ${url}`)));
+    render(
+      <ApiProvider client={new HttpClient()} queryClient={createQueryClient()}>
+        <FlowReads />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(urlsOf(fetchStub).sort()).toEqual(FLOW_READS);
+    });
+    const source = stream("/api/projects/alpha/events");
+    source.open();
+    fetchStub.mockClear();
+    act(() => {
+      source.emit("proposal.applied", '{"id":"PR-0002","commit":"abc1234"}', "51");
+    });
+    await waitFor(() => {
+      expect(urlsOf(fetchStub).filter((url) => url.includes("/flow")).sort()).toEqual(FLOW_READS);
+    });
   });
 });
 

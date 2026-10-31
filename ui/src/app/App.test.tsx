@@ -30,7 +30,7 @@ function navLink(name: string): HTMLElement {
 }
 
 describe("the shell (AC-11)", () => {
-  it("lists the home and the seven sections in order and marks the current one", async () => {
+  it("lists the home and the eight sections in order and marks the current one", async () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
     expect(navLinks().map((link) => link.textContent)).toEqual([
@@ -38,12 +38,13 @@ describe("the shell (AC-11)", () => {
       "Inbox",
       "Tasks",
       "Roadmap",
+      "Flow",
       "Spec tree",
       "Graph",
       "Health",
       "Questions",
     ]);
-    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null]);
+    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null, null]);
     expect(navLinks()[0]?.getAttribute("href")).toBe("#/alpha");
     expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/tasks");
   });
@@ -97,6 +98,16 @@ describe("the shell (AC-11)", () => {
     ]);
     const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Health");
+  });
+
+  it("builds the Flow: its heading, the gap rows' section, no stand-in (flow-canvas)", async () => {
+    const client = stubClient();
+    renderApp(client, "#/alpha/flow");
+    expect(await screen.findByRole("heading", { level: 1, name: "Flow" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "Gaps" })).toBeTruthy();
+    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    expect(current?.textContent).toBe("Flow");
+    expect(client.getFlow.mock.calls.every((call) => call[1].depth !== undefined)).toBe(true);
   });
 
   it("builds Tasks: its heading and list, no stand-in; the about speaks of what waits, not of a board (AC-15 of ui-tasks)", async () => {

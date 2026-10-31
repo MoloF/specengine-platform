@@ -1133,6 +1133,9 @@ pub(crate) struct FlowNode {
     /// The documents folded into it.
     pub holds: usize,
     pub inner: Vec<FlowInner>,
+    /// The documents this read's gap rows name among what it holds, itself
+    /// included, each once.
+    pub gaps: usize,
 }
 
 /// The edges inside a node, of one type.

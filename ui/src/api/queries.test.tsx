@@ -11,6 +11,8 @@ import {
   useCachedInbox,
   useCachedTasks,
   useCheck,
+  useFlow,
+  useFlowGroups,
   useGraph,
   useHealth,
   useInbox,
@@ -128,6 +130,8 @@ function EveryRead() {
   useSearch("alpha", { query: "q" });
   useBundle("alpha", { node_ids: ["R-1"] }, true);
   useGraph("alpha", { ref: "R-1" });
+  useFlow("alpha");
+  useFlowGroups("alpha", ["G-1"], new Set(["G-1"]));
   useTasks("alpha");
   useCachedTasks("beta");
   useTask("alpha", "T-0001");
@@ -135,6 +139,60 @@ function EveryRead() {
   useHealth("alpha");
   return null;
 }
+
+describe("the flow's reads (flow-canvas)", () => {
+  const OPEN = new Set(["G-1", "G-2"]);
+
+  function FlowReads() {
+    useFlow("alpha");
+    useFlowGroups("alpha", ["G-1", "G-2"], OPEN);
+    return null;
+  }
+
+  it("keys a read by [flow, project, root, depth], root null at the top", () => {
+    expect(queryKeys.flow("alpha", { depth: 0 })).toEqual(["flow", "alpha", null, 0]);
+    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1 })).toEqual(["flow", "alpha", "G-1", 1]);
+  });
+
+  it("always carries a depth: the top at 0, each group's root at 1, never a whole-flow read (AC-02)", async () => {
+    const client = stubClient();
+    render(
+      <ApiProvider client={client}>
+        <FlowReads />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(client.getFlow).toHaveBeenCalledTimes(3);
+    });
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0 }, { root: "G-1", depth: 1 }, { root: "G-2", depth: 1 }]);
+  });
+
+  it("reads a group only while it is open; closing and reopening reads nothing", async () => {
+    const client = stubClient();
+    function Asked({ open }: { open: ReadonlySet<string> }) {
+      useFlowGroups("alpha", ["G-1", "G-2"], open);
+      return null;
+    }
+    const queryClient = createQueryClient();
+    const mounted = (open: ReadonlySet<string>) => (
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Asked open={open} />
+      </ApiProvider>
+    );
+    const { rerender } = render(mounted(new Set(["G-1"])));
+    await waitFor(() => {
+      expect(client.getFlow).toHaveBeenCalledTimes(1);
+    });
+    expect(client.getFlow.mock.calls[0]?.[1]).toEqual({ root: "G-1", depth: 1 });
+    rerender(mounted(new Set()));
+    rerender(mounted(new Set(["G-1"])));
+    rerender(mounted(new Set(["G-1", "G-2"])));
+    await waitFor(() => {
+      expect(client.getFlow).toHaveBeenCalledTimes(2);
+    });
+    expect(client.getFlow.mock.calls[1]?.[1]).toEqual({ root: "G-2", depth: 1 });
+  });
+});
 
 describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
   it("hand every read its query's AbortSignal last, the check and the health read none: a walk in flight is never aborted (AC-U1 of health-left)", async () => {
@@ -158,6 +216,7 @@ describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
       search: client.search,
       getBundle: client.getBundle,
       getGraph: client.getGraph,
+      getFlow: client.getFlow,
       getTasks: client.getTasks,
       getTask: client.getTask,
     };

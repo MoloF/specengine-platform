@@ -10,6 +10,10 @@
 //! The door (`mcp_door.rs`), the size (`mcp_size.rs`) and the genre scan
 //! (`mcp_genre.rs`) hold the rest of AC-07 and AC-06.
 //!
+//! docs/features/flow-canvas.md AC-14: `FlowNode.gaps` reaches the agent in
+//! both the text and the document, and the schema requires it. The count
+//! itself is `specengine-cli`'s `flow_read.rs`.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -17,8 +21,8 @@
 mod common;
 
 use common::read::{
-    ERAS, Session, assert_bad_arguments, checked_call, cli_env, content_text, flat_input_problems,
-    output_schemas,
+    ERAS, Session, assert_bad_arguments, checked_call, cli_env, conforms, content_text,
+    flat_input_problems, output_schemas,
 };
 use common::*;
 use serde_json::{Value, json};
@@ -117,6 +121,76 @@ fn get_flow_equals_the_cli_within_its_schema() {
             "kind": "alternative", "when": null, "count": 2,
             "path": "docs/spec/lnd-a.md", "line": 10}])
     );
+}
+
+/// docs/features/flow-canvas.md AC-14: `get_flow` serves `gaps` 1, 12, 2,
+/// 0 at depth 1, its sum 15 at every depth, the text line ending ` | gaps
+/// <g>` above 0, each document within the tool's schema, which requires the
+/// key as a count: a node without it, or holding a word, does not conform.
+#[test]
+fn ac14_get_flow_serves_each_nodes_gaps_within_its_schema() {
+    let project = Project::new("flow-gaps");
+    let results = parity(
+        &project,
+        &[
+            json!({"root": "WING-LIBRARY", "depth": 0}),
+            json!({"root": "WING-LIBRARY", "depth": 1}),
+            json!({"root": "WING-LIBRARY", "depth": 2}),
+            json!({"root": "WING-LIBRARY"}),
+        ],
+    );
+    let gaps = |result: &Value, id: &str| {
+        let nodes = result["structuredContent"]["nodes"]
+            .as_array()
+            .expect("nodes");
+        let node = nodes.iter().find(|node| node["id"] == id);
+        node.unwrap_or_else(|| panic!("no node {id}: {result}"))["gaps"].clone()
+    };
+    for (id, want) in [
+        ("WING-LEND", 1),
+        ("WING-BROKEN", 12),
+        ("WING-HEADLESS", 2),
+        ("WING-LIBRARY", 0),
+    ] {
+        assert_eq!(gaps(&results[1], id), json!(want), "{id}");
+    }
+    for result in &results {
+        let nodes = result["structuredContent"]["nodes"]
+            .as_array()
+            .expect("nodes");
+        let sum: u64 = nodes
+            .iter()
+            .map(|node| node["gaps"].as_u64().expect("a count"))
+            .sum();
+        assert_eq!(sum, 15, "{result}");
+    }
+    let text = content_text(&results[1]);
+    assert!(
+        text.contains(
+            "- WING-HEADLESS | wing | The back room | docs/spec/wing-headless.md:1 | group \
+             WING-LIBRARY | holds 2, inner 1 | gaps 2\n"
+        ),
+        "{text}"
+    );
+    assert!(
+        text.contains("- WING-LIBRARY | wing | The public library | docs/spec/wing-library.md:1\n"),
+        "0 prints no field: {text}"
+    );
+
+    let mut session = project.session(ERAS[0]);
+    let schemas = output_schemas(&session.tools());
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+    let schema = &schemas["get_flow"];
+    let served = &results[1]["structuredContent"];
+    assert_eq!(conforms(schema, served, "get_flow"), Ok(()));
+    let mut without = served.clone();
+    let node = without["nodes"][0].as_object_mut().expect("a node");
+    assert!(node.remove("gaps").is_some(), "gaps served");
+    assert!(conforms(schema, &without, "get_flow").is_err(), "{without}");
+    let mut worded = served.clone();
+    worded["nodes"][0]["gaps"] = json!("twelve");
+    assert!(conforms(schema, &worded, "get_flow").is_err(), "{worded}");
 }
 
 /// AC-07 and "Exits" of the spec: a gap is no error; a ROOT naming nothing

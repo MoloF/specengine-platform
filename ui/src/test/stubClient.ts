@@ -2,6 +2,7 @@ import { vi } from "vitest";
 import {
   ClientError,
   type BundleOptions,
+  type FlowOptions,
   type GraphOptions,
   type NodeOptions,
   type RoadmapOptions,
@@ -13,6 +14,7 @@ import {
 import type {
   BundleView,
   CheckReport,
+  FlowView,
   GraphView,
   HealthReport,
   Inbox,
@@ -35,6 +37,7 @@ import type {
 import {
   aBundle,
   aCheckReport,
+  aFlowView,
   aGraphNode,
   aGraphView,
   aHealthReport,
@@ -113,6 +116,9 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
           archive: options.archive ?? false,
         }),
       ),
+    ),
+    getFlow: vi.fn<(project: string, options: FlowOptions, signal?: AbortSignal) => Promise<FlowView>>((_project, options) =>
+      Promise.resolve(aFlowView([], [], { root: options.root ?? null, depth: options.depth ?? null })),
     ),
     getTasks: vi.fn<(project: string, signal?: AbortSignal) => Promise<TaskList>>(() => Promise.resolve({ tasks: [], notes: [] })),
     getTask: vi.fn<(project: string, id: string, signal?: AbortSignal) => Promise<TaskPackage | TaskNotFound>>((_project, id) =>

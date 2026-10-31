@@ -15,7 +15,7 @@ A read of the flow links (`flow-links.md`): `spec flow [ROOT] [--depth N] [--jso
 - **Scope.** ROOT's holders and every document within them by `parent:`, flow links or not. No ROOT: every live document holding or receiving a flow link or selected by a `[flow]` rule, with its `parent:` ancestors. So a rooted read can hold a document the whole read lacks: `AREA-HIRE` in `spec-c`, whose whole read has no node. Documents only: a link to `ID#SECTION` lands on its document. Tier 3 and generated stay out (`left_out`).
 - **Typed edges.** Every resolved link of `FLOW_LINK_TYPES` with both ends in scope; containment is `group`. `from` and `to` give the reading direction, so a screen draws an arrow with no branch on a type and picks by `type` what it shows.
 - **Walk.** `distance`: breadth-first over `follows` from the starts (marked, else steps no `follows` edge enters), null where unreached. It is the scope's walk: under a ROOT it restarts at that scope's starts. Nodes by (distance, unreached last, path), edges by (`from`, `to`, type, kind).
-- **Depth** counts from the roots (0), as `spec tree`; default unbounded. A document deeper than N shows as its ancestor at N. A shown node's `distance` is the least of what it holds, itself included, null only when nothing it holds is reached; `start` and `end` stay its own. An edge with both ends in one shown node joins its `inner`; any other is lifted, merged by (`from`, `to`, `type`, `kind`) with `count`; `when` only at count 1; `path`, `line` the first written. `--depth` never changes a gap row.
+- **Depth** counts from the roots (0), as `spec tree`; default unbounded. A document deeper than N shows as its ancestor at N. A shown node's `distance` is the least of what it holds, itself included, null only when nothing it holds is reached; `start` and `end` stay its own. An edge with both ends in one shown node joins its `inner`; any other is lifted, merged by (`from`, `to`, `type`, `kind`) with `count`; `when` only at count 1; `path`, `line` the first written. `--depth` never changes a gap row. A node's `gaps` counts the documents this read's measured rows name among what it holds, itself included; the set is taken before any fold or cap, so a depth moves no document's count, and `no-start`'s scope is no document (`FlowGap.files` carries each row's files, not printed).
 
 **Stages and reuse are not here:** `stage:` is RM-0048's; `pack:` and overrides RM-0058's.
 
@@ -26,12 +26,12 @@ Gap rows first, all ten in table order, so a cut never hides them; a row prints 
 ```text
 flow <ROOT or all> | nodes <n>, edges <e>, depth <N or ->[; left out: …]
 gap <code> | <state> | <count>[ | <item>, …][ | <cause>]
-<distance or -> <name> | <kind or -> | <title or -> | <path>:<line>[ | start][ | end][ | group <name>][ | holds <h>, inner <i>]
+<distance or -> <name> | <kind or -> | <title or -> | <path>:<line>[ | start][ | end][ | group <name>][ | holds <h>, inner <i>][ | gaps <g>]
 <from> -> <to> | <type> | x<count>[ | kind <kind>][ | when <when>] | <path>:<line>
 [truncated: <k> of <n> nodes and <j> of <m> edges not shown; give a ROOT or lower --depth]
 ```
 
-JSON, every key present, absent `null`: `{root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, gaps, nodes, edges}`; a gap `{code, state, count, items, cause}`, `state` `measured | not_configured | cannot`, `items` a list of name lists; a node `{id, kind, title, path, line, distance, group, start, end, holds, inner}`, `inner` `[{type, count}]`; an edge `{from, to, type, kind, when, count, path, line}`.
+JSON, every key present, absent `null`: `{root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, gaps, nodes, edges}`; a gap `{code, state, count, items, cause}`, `state` `measured | not_configured | cannot`, `items` a list of name lists; a node `{id, kind, title, path, line, distance, group, start, end, holds, inner, gaps}`, `inner` `[{type, count}]`; an edge `{from, to, type, kind, when, count, path, line}`.
 
 **Cap** as `mcp-read.md` "Size": text at most `OUTPUT_CAP_CHARS` plus one tail, cut at a line, JSON the printed items only; the daemon's `View::Browser` uncut. **Exits** as `spec graph`: 0 answered, zero nodes and any gap included; 1 only a ROOT naming nothing, JSON `reason` (the daemon's 404); 2 usage, a bad `--depth`, a look-alike ID, config outside `[flow]`, `HOME`, `StoreError`.
 
@@ -80,6 +80,7 @@ A cycle is Tarjan's component of two or more nodes or with a self-edge. Items so
 - **A left-out source:** a live document receiving `follows` from a left-out document is neither step nor member.
 - **Crossing edges.** Under a ROOT, a `follows` edge crossing the scope is an entry or a way out, so a sub-flow is not called broken. It is no edge of that read.
 - **`unjoined-parallel`** walks only splits of two or more branches, breadth-first, one step per branch in turn, stopping at the first step all branches reached; a one-branch split is listed with no walk; a split with no join still walks each branch to its end. The walk covers every admitted document, beyond the scope too, so a sub-flow is not called broken.
+- **`gaps`.** A row can name a document outside the read, which no node counts; two holders of one ID count as two.
 - **`definition-*` and `supply-unfed`** list what is in scope and read links over every live document: domain-free, by links alone.
 
 ## Code

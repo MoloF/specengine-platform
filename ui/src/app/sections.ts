@@ -1,4 +1,4 @@
-/** The seven sections of the nav, in order (07 §3 "Web UI — screens"), each with what it shows. */
+/** The eight sections of the nav, in order (07 §3 "Web UI — screens"), each with what it shows. */
 export const SECTIONS = [
   { id: "inbox", label: "Inbox", about: "Proposals waiting for your decision." },
   {
@@ -10,6 +10,11 @@ export const SECTIONS = [
     id: "roadmap",
     label: "Roadmap",
     about: "The plan: its items by release, the MVP cut, the pool, what each item waits on and the tasks executing it.",
+  },
+  {
+    id: "flow",
+    label: "Flow",
+    about: "The project as a diagram running forward: its steps, branches and loops, groups that fold, and the gaps measured over it.",
   },
   {
     id: "tree",

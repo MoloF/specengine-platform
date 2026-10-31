@@ -666,6 +666,7 @@ const KEYS = {
     end: true,
     holds: true,
     inner: true,
+    gaps: true,
   } satisfies Record<keyof FlowNode, true>,
   FlowEdge: {
     from: true,
@@ -779,7 +780,7 @@ const CITED: Record<Named, string> = {
   LockDiffCodeSide: "blob, file, diff",
   FlowView: "root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, gaps, nodes, edges",
   FlowGap: "code, state, count, items, cause",
-  FlowNode: "id, kind, title, path, line, distance, group, start, end, holds, inner",
+  FlowNode: "id, kind, title, path, line, distance, group, start, end, holds, inner, gaps",
   FlowEdge: "from, to, type, kind, when, count, path, line",
   FlowInner: "type, count",
 };
@@ -1475,13 +1476,13 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
-  it("names flow-read's five after LockDiffCodeSide, last: 11, 5, 11, 8, 2 keys in the types' order, the eighty-sixth and last FlowInner (docs/features/flow-read.md)", () => {
+  it("names flow-read's five after LockDiffCodeSide, last: 11, 5, 12, 8, 2 keys in the types' order, the eighty-sixth and last FlowInner (docs/features/flow-read.md, flow-canvas.md)", () => {
     expect(Object.keys(sets).slice(BEFORE_FLOW_READ.length)).toEqual([...FLOW_READ]);
     expect(Object.keys(sets).indexOf("FlowView")).toBe(81);
     expect(Object.keys(sets)).toHaveLength(86);
     expect(Object.keys(sets).at(-1)).toBe("FlowInner");
     expect(FLOW_READ.map((name) => sets[name])).toEqual(FLOW_READ.map((name) => served(name)));
-    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([11, 5, 11, 8, 2]);
+    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([11, 5, 12, 8, 2]);
     expect(FLOW_READ.map((name) => declaredKeys(name))).toEqual(FLOW_READ.map((name) => served(name)));
   });
 

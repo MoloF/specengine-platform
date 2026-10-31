@@ -6,7 +6,7 @@
 //! ```text
 //! flow <ROOT or all> | nodes <n>, edges <e>, depth <N or ->[; left out: …]
 //! gap <code> | <state> | <count>[ | <item>, …][ | <cause>]
-//! <distance or -> <name> | <kind or -> | <title or -> | <path>:<line>[ | start][ | end][ | group <name>][ | holds <h>, inner <i>]
+//! <distance or -> <name> | <kind or -> | <title or -> | <path>:<line>[ | start][ | end][ | group <name>][ | holds <h>, inner <i>][ | gaps <g>]
 //! <from> -> <to> | <type> | x<count>[ | kind <kind>][ | when <when>] | <path>:<line>
 //! [truncated: <k> of <n> nodes and <j> of <m> edges not shown; give a ROOT or lower --depth]
 //! ```
@@ -324,6 +324,9 @@ fn node_line(node: &FlowNode) -> String {
     if node.holds > 0 || inner > 0 {
         line.push_str(&format!(" | holds {}, inner {inner}", node.holds));
     }
+    if node.gaps > 0 {
+        line.push_str(&format!(" | gaps {}", node.gaps));
+    }
     line
 }
 
@@ -413,6 +416,7 @@ struct NodeJson<'a> {
     end: bool,
     holds: usize,
     inner: Vec<InnerJson>,
+    gaps: usize,
 }
 
 #[derive(Serialize)]
@@ -466,6 +470,7 @@ fn node_json(node: &FlowNode) -> NodeJson<'_> {
                 count: inner.count,
             })
             .collect(),
+        gaps: node.gaps,
     }
 }
 

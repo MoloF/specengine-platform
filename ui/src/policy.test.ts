@@ -14,14 +14,14 @@ const sources = import.meta.glob<string>("/src/**/*.{ts,tsx,css}", {
   eager: true,
 });
 
-function offending(pattern: RegExp, skip: (path: string) => boolean = () => false): string[] {
+function offending(pattern: RegExp, skip: (path: string) => boolean = () => false, seen: (path: string, line: string) => string = (_path, line) => line): string[] {
   const hits: string[] = [];
   for (const [path, text] of Object.entries(sources)) {
     if (skip(path)) {
       continue;
     }
     text.split("\n").forEach((line, index) => {
-      if (pattern.test(line)) {
+      if (pattern.test(seen(path, line))) {
         hits.push(`${path}:${String(index + 1)}: ${line.trim()}`);
       }
     });
@@ -75,6 +75,15 @@ const TREE_DRIFT: readonly string[] = ["/src/tree/drift.ts", "/src/tree/RowConte
 
 /** The Bindings tab's "Changes since the lock" (docs/features/lock-diff-ui.md): its rows and sides under Health's rules for rows (UI-7). */
 const LOCK_DIFF: readonly string[] = ["/src/tree/LockDiffPanel.tsx", "/src/tree/lockDiff.ts"];
+
+/**
+ * The one `.kind` the kind scan lets through (AC-07 of docs/features/flow-canvas.md): `edge.kind`
+ * under src/flow/, which is the closed `FlowEdgeKind` of the daemon's schema, no project vocabulary,
+ * so a repeat is always dotted. `node.kind` stays scanned there, and `edge.kind` everywhere else.
+ */
+function withoutFlowEdgeKind(path: string, line: string): string {
+  return path.startsWith("/src/flow/") ? line.replace(/\bedge\.kind\b/g, "edge") : line;
+}
 
 /** Health, the Bindings tab, the drift card, the tree's badges and the lock diff: the row sources AC-U6 and the no-sort rule cover. */
 const ROW_SOURCES: readonly string[] = [...BINDINGS_TAB, ...DRIFT_CARD, ...TREE_DRIFT, ...LOCK_DIFF];
@@ -195,7 +204,7 @@ describe("source policy", () => {
   });
 
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/"];
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
@@ -278,10 +287,17 @@ describe("source policy", () => {
       "working_answer",
       "canon",
       "adopts",
+      // ADR-0055's three (AC-07 of docs/features/flow-canvas.md): a flow's arrows, layers and arcs ask no type.
+      "follows",
+      "uses",
+      "supplies",
     ];
     const appCode = (path: string) =>
       path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
-    expect(offending(new RegExp(`["'\`](${types.join("|")})["'\`]`), appCode)).toEqual([]);
+    const quoted = new RegExp(`["'\`](${types.join("|")})["'\`]`);
+    expect(offending(quoted, appCode)).toEqual([]);
+    // The detector itself: the slice's mutation M5 is caught.
+    expect(quoted.test('const walked = edge.type === "follows";')).toBe(true);
   });
 
   it("compares no role, profile or kind in app code: project vocabulary is shown, never branched on (AC-13 of ui-tasks)", () => {
@@ -306,7 +322,15 @@ describe("source policy", () => {
         `\\.(includes|has|indexOf|startsWith|endsWith|test)\\([^)]*${field}`,
       ].join("|"),
     );
-    expect(offending(compared, appCode)).toEqual([]);
+    expect(offending(compared, appCode, withoutFlowEdgeKind)).toEqual([]);
+    // The exception itself (AC-07 of docs/features/flow-canvas.md): `edge.kind` under src/flow/ passes; `node.kind` there and `edge.kind` elsewhere stay red.
+    const kindScan = (path: string, line: string) => compared.test(withoutFlowEdgeKind(path, line));
+    expect(kindScan("/src/flow/labels.ts", 'if (edge.kind === "repeat") {')).toBe(false);
+    expect(kindScan("/src/flow/labels.ts", "const dash = KIND_DASHES[edge.kind];")).toBe(false);
+    expect(kindScan("/src/flow/layout.ts", 'if (node.kind === "step") {')).toBe(true);
+    expect(kindScan("/src/flow/labels.ts", "const dash = DASHES[node.kind];")).toBe(true);
+    expect(kindScan("/src/tree/labels.ts", 'if (edge.kind === "repeat") {')).toBe(true);
+    expect(kindScan("/src/graph/layout.ts", "const dash = KIND_DASHES[edge.kind];")).toBe(true);
     // The detector itself.
     for (const line of [
       "if (task.profile === x) {",
@@ -339,8 +363,9 @@ describe("source policy", () => {
     }
   });
 
-  it("compares no kind, class, status, state, sync, link type, reason, ID state, binding, relation or category in Health, the Bindings tab, the drift card, the tree's badges or the lock diff but in the label maps: rows 3 to 6, binding rows and stored drift rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui, UI-7 of ui-node-bindings, UI-6 of ui-drift-evidence, UI-6 of ui-tree-drift and UI-7 of lock-diff-ui)", () => {
-    const outside = (path: string) => !(path.startsWith("/src/health/") || ROW_SOURCES.includes(path)) || /\.test\.tsx?$/.test(path);
+  it("compares no kind, class, status, state, sync, link type, reason, ID state, binding, relation or category in Health, the Bindings tab, the drift card, the tree's badges, the lock diff or the Flow but in the label maps: rows 3 to 6, binding rows, stored drift rows and gap rows shown raw or labelled, never branched on (AC-U6 of health-left, extended by UI-2 of health-code-ui, UI-3 of health-drift-ui, UI-7 of ui-node-bindings, UI-6 of ui-drift-evidence, UI-6 of ui-tree-drift, UI-7 of lock-diff-ui and AC-07 of flow-canvas)", () => {
+    const flowSource = (path: string) => path.startsWith("/src/flow/") && path !== "/src/flow/labels.ts";
+    const outside = (path: string) => !(path.startsWith("/src/health/") || ROW_SOURCES.includes(path) || flowSource(path)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => !outside(path))).toEqual(
       expect.arrayContaining([
         "/src/health/AmendmentsPart.tsx",
@@ -353,8 +378,13 @@ describe("source policy", () => {
         ...DRIFT_CARD,
         ...TREE_DRIFT,
         ...LOCK_DIFF,
+        "/src/flow/layout.ts",
+        "/src/flow/FlowView.tsx",
+        "/src/flow/FlowCanvas.tsx",
+        "/src/flow/FlowGaps.tsx",
       ]),
     );
+    expect(Object.keys(sources).filter((path) => !outside(path))).not.toContain("/src/flow/labels.ts");
     // `category` since ui-drift-evidence: a stored drift row's category is told apart in labels.ts alone.
     const field = "\\.(kind|class|status|state|sync|type|reason|id_state|binding|relation|category)\\b";
     const equality = "([!=]==?)(?!=)";
@@ -407,6 +437,11 @@ describe("source policy", () => {
       'if (line.class === "fix") {',
       "counts[line.class] += 1;",
       'const fixes = lines.filter((line) => line.class === "fix").length;',
+      // AC-07 of flow-canvas: a link type, a gap state or an edge's kind branched on outside labels.ts.
+      'const walked = edge.type === "follows";',
+      'gaps.filter((gap) => gap.state === "measured")',
+      'const dotted = edge.kind === "repeat";',
+      "const dash = DASHES.get(edge.type);",
       // UI-7 of lock-diff-ui: a kept row's state branched on in the panel.
       'const both = entry.row.state === "conflict";',
       '{row.state !== "code_ahead" && <SpecSide side={spec} />}',

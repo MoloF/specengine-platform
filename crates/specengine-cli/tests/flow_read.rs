@@ -23,6 +23,9 @@
 //!   bad `[[flow.step]]`, a derived start, a folded node's `distance`, a
 //!   depth of documents, the rows reading every live document, an unresolved
 //!   `follows`. M9, M10.
+//! - docs/features/flow-canvas.md AC-14, `FlowNode.gaps`: the distinct
+//!   documents the rows name among what a node holds, on the same corpora.
+//!   Its M8 (counting per row) turns `ac14_` red.
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
@@ -685,7 +688,7 @@ fn every_key_is_present() {
                 keys(node),
                 BTreeSet::from([
                     "id", "kind", "title", "path", "line", "distance", "group", "start", "end",
-                    "holds", "inner",
+                    "holds", "inner", "gaps",
                 ]),
                 "{node}"
             );
@@ -2592,4 +2595,360 @@ fn two_holders_of_one_id_both_stand() {
         .collect();
     assert!(paths.contains("docs/spec/other.md"), "{document}");
     assert!(paths.contains("docs/spec/wing-headless.md"), "{document}");
+}
+
+// ------------------------------------------------- flow-canvas.md, AC-14
+
+/// `gaps` of each shown node, by name.
+fn gaps_by_node(document: &Value) -> BTreeMap<&str, u64> {
+    document["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .map(|node| {
+            let id = node["id"].as_str().expect("an ID");
+            (id, node["gaps"].as_u64().expect("a count"))
+        })
+        .collect()
+}
+
+/// The sum of `gaps` over a read's nodes.
+fn gaps_sum(document: &Value) -> u64 {
+    gaps_by_node(document).values().sum()
+}
+
+/// `(name, gaps)` pairs as a map, for comparing with [`gaps_by_node`].
+fn gaps_of<const N: usize>(pairs: [(&str, u64); N]) -> BTreeMap<&str, u64> {
+    BTreeMap::from(pairs)
+}
+
+/// How many times the rows name each document: `no-start`'s scope is no
+/// document, so that row is left out.
+fn naming_rows(document: &Value) -> BTreeMap<String, usize> {
+    let mut named = BTreeMap::new();
+    for gap in document["gaps"].as_array().expect("gaps") {
+        if gap["code"] == "no-start" {
+            continue;
+        }
+        for item in gap["items"].as_array().expect("items") {
+            for member in item.as_array().expect("members") {
+                let member = member.as_str().expect("a name").to_owned();
+                *named.entry(member).or_default() += 1;
+            }
+        }
+    }
+    named
+}
+
+/// AC-14: `gaps` 1, 12, 2 on the three wings, 0 on the library, and a
+/// document two rows name counted once. M8.
+#[test]
+fn ac14_each_wing_counts_its_documents_once() {
+    let flow = Flow::new("flow-count");
+    let root = fixture(GAPS);
+    let args = ["WING-LIBRARY", "--depth", "1"];
+    let document = flow.json(&root, &args);
+    assert_eq!(
+        gaps_by_node(&document),
+        gaps_of([
+            ("WING-BROKEN", 12),
+            ("WING-HEADLESS", 2),
+            ("WING-LEND", 1),
+            ("WING-LIBRARY", 0),
+        ]),
+        "{document}"
+    );
+
+    // The rows name 15 documents 21 times, six of them twice, so counting
+    // per row cannot give the 15.
+    let named = naming_rows(&document);
+    assert_eq!(named.len(), 15, "{named:?}");
+    assert_eq!(named.values().sum::<usize>(), 21, "{named:?}");
+    let twice: Vec<&str> = named
+        .iter()
+        .filter(|(_, rows)| **rows == 2)
+        .map(|(name, _)| name.as_str())
+        .collect();
+    assert_eq!(
+        twice,
+        [
+            "LND-B",
+            "LND-STRAY",
+            "LND-X",
+            "LND-Y",
+            "PLT-FEED-A",
+            "PLT-FEED-B"
+        ]
+    );
+
+    // A repeat is the same document, byte for byte.
+    let mut with_json = args.to_vec();
+    with_json.push("--json");
+    assert_eq!(
+        bytes_of(&flow.run(&root, &with_json)),
+        bytes_of(&flow.run(&root, &with_json))
+    );
+}
+
+/// AC-14: unfolded, a node is 1 where the rows name it, however many, and 0
+/// where none does; every node, not only the planted.
+#[test]
+fn ac14_unfolded_a_named_document_is_one() {
+    let flow = Flow::new("flow-one");
+    let root = fixture(GAPS);
+    let document = flow.json(&root, &["WING-LIBRARY"]);
+    let named = naming_rows(&document);
+    let served = gaps_by_node(&document);
+    assert_eq!(served.len(), 29, "{document}");
+    for (id, gaps) in served {
+        assert_eq!(gaps, u64::from(named.contains_key(id)), "{id}: {document}");
+    }
+}
+
+/// AC-14: the sum over a read's nodes is 15 at depth 0, 1, 2 and unbounded,
+/// with a ROOT and without: rows before any fold, so no depth moves it.
+#[test]
+fn ac14_no_depth_moves_the_sum() {
+    let flow = Flow::new("flow-sum");
+    let root = fixture(GAPS);
+    for args in [
+        &["WING-LIBRARY", "--depth", "0"][..],
+        &["WING-LIBRARY", "--depth", "1"],
+        &["WING-LIBRARY", "--depth", "2"],
+        &["WING-LIBRARY"],
+        &["--depth", "0"],
+        &["--depth", "1"],
+        &["--depth", "2"],
+        &[],
+    ] {
+        let document = flow.json(&root, args);
+        assert_eq!(gaps_sum(&document), 15, "{args:?}: {document}");
+    }
+    let top = flow.json(&root, &["WING-LIBRARY", "--depth", "0"]);
+    assert_eq!(gaps_by_node(&top), gaps_of([("WING-LIBRARY", 15)]), "{top}");
+}
+
+/// AC-14: each read counts by its own rows: WING-LEND read alone has no
+/// gap, though the library's read counts `LND-ASK` a second start; a read
+/// of WING-BROKEN keeps its 12.
+#[test]
+fn ac14_each_read_counts_by_its_own_rows() {
+    let flow = Flow::new("flow-own");
+    let root = fixture(GAPS);
+    let lend = flow.json(&root, &["WING-LEND", "--depth", "0"]);
+    assert_eq!(gaps_by_node(&lend), gaps_of([("WING-LEND", 0)]), "{lend}");
+    let broken = flow.json(&root, &["WING-BROKEN", "--depth", "0"]);
+    assert_eq!(
+        gaps_by_node(&broken),
+        gaps_of([("WING-BROKEN", 12)]),
+        "{broken}"
+    );
+}
+
+/// AC-14: `no-start`'s scope is no document: WING-HEADLESS names itself
+/// there, and stays 0 at unbounded depth; folded it holds its two steps,
+/// not three.
+#[test]
+fn ac14_the_no_start_scope_counts_as_no_document() {
+    let flow = Flow::new("flow-scope-row");
+    let root = fixture(GAPS);
+    let document = flow.json(&root, &["WING-HEADLESS"]);
+    assert_eq!(
+        row(&document, "no-start")["items"],
+        json!([["WING-HEADLESS"]]),
+        "{document}"
+    );
+    assert_eq!(
+        gaps_by_node(&document),
+        gaps_of([("LND-X", 1), ("LND-Y", 1), ("WING-HEADLESS", 0)]),
+        "{document}"
+    );
+    let folded = flow.json(&root, &["WING-HEADLESS", "--depth", "0"]);
+    assert_eq!(
+        gaps_by_node(&folded),
+        gaps_of([("WING-HEADLESS", 2)]),
+        "{folded}"
+    );
+}
+
+/// AC-14: a text node line ends ` | gaps <g>` above 0 and holds no such
+/// field at 0: the depth-1 read whole, then every line of every depth
+/// against its document.
+#[test]
+fn ac14_a_text_line_ends_gaps_above_zero() {
+    let flow = Flow::new("flow-text");
+    let root = fixture(GAPS);
+    let run = flow.text(&root, &["WING-LIBRARY", "--depth", "1"]);
+    assert_eq!(
+        node_lines(&run.stdout),
+        [
+            "0 WING-BROKEN | wing | The closed wing | docs/spec/wing-broken.md:1 | group \
+             WING-LIBRARY | holds 16, inner 17 | gaps 12",
+            "0 WING-LEND | wing | The lending wing | docs/spec/wing-lend.md:1 | group \
+             WING-LIBRARY | holds 7, inner 11 | gaps 1",
+            "- WING-HEADLESS | wing | The back room | docs/spec/wing-headless.md:1 | group \
+             WING-LIBRARY | holds 2, inner 1 | gaps 2",
+            "- WING-LIBRARY | wing | The public library | docs/spec/wing-library.md:1",
+        ],
+        "{}",
+        run.show()
+    );
+    let headless = flow.text(&root, &["WING-HEADLESS"]);
+    assert_eq!(
+        node_lines(&headless.stdout),
+        [
+            "0 LND-Y | lending | A key with no lock | docs/spec/lnd-y.md:1 | start | group \
+             WING-HEADLESS | gaps 1",
+            "1 LND-X | lending | A lock with one key | docs/spec/lnd-x.md:1 | group \
+             WING-HEADLESS | gaps 1",
+            "- WING-HEADLESS | wing | The back room | docs/spec/wing-headless.md:1",
+        ],
+        "{}",
+        headless.show()
+    );
+
+    for args in [
+        &["WING-LIBRARY", "--depth", "0"][..],
+        &["WING-LIBRARY", "--depth", "1"],
+        &["WING-LIBRARY"],
+        &["WING-LEND"],
+    ] {
+        let run = flow.text(&root, args);
+        let document = flow.json(&root, args);
+        let nodes = document["nodes"].as_array().expect("nodes");
+        let lines = node_lines(&run.stdout);
+        assert_eq!(lines.len(), nodes.len(), "{args:?}: {}", run.show());
+        for (line, node) in lines.iter().zip(nodes) {
+            let gaps = node["gaps"].as_u64().expect("a count");
+            assert!(head(line).ends_with(node["id"].as_str().expect("an ID")));
+            let tail = line.rsplit(" | ").next().expect("a field");
+            if gaps > 0 {
+                assert_eq!(tail, format!("gaps {gaps}"), "{args:?}: {line}");
+            } else {
+                assert!(!line.contains(" | gaps "), "{args:?}: {line}");
+            }
+        }
+    }
+}
+
+/// AC-14 and "Data": `gaps` reads the measured rows, before any cap: 59
+/// documents in a row printing 50.
+#[test]
+fn ac14_the_count_reads_past_a_rows_item_cap() {
+    let flow = Flow::new("flow-count-cap");
+    let table = "\n[[flow.step]]\nkinds = [\"pace\"]\n\n\
+                 [[flow.start]]\npaths = [\"docs/spec/pace-0001.md\"]\n\n\
+                 [[flow.end]]\npaths = [\"docs/spec/pace-0001.md\"]\n";
+    let root = generated(&flow.scratch, "items", table, 60, "A step", |step| {
+        if step == 1 {
+            String::new()
+        } else {
+            "parent: PACE-0001\n".to_owned()
+        }
+    });
+    let folded = flow.json(&root, &["--depth", "0"]);
+    assert_eq!(row(&folded, "unreachable")["count"], json!(59));
+    assert_eq!(
+        row(&folded, "unreachable")["items"]
+            .as_array()
+            .expect("items")
+            .len(),
+        50,
+        "the row prints 50"
+    );
+    assert_eq!(
+        gaps_by_node(&folded),
+        gaps_of([("PACE-0001", 59)]),
+        "{folded}"
+    );
+    assert_eq!(gaps_sum(&flow.json(&root, &[])), 59);
+}
+
+/// AC-14: a row's member outside the read is held by no node: a supply
+/// cycle crossing the scope names both, the read counts the one it holds.
+#[test]
+fn ac14_a_member_outside_the_read_is_held_by_no_node() {
+    let flow = Flow::new("flow-outside");
+    let root = flow.scratch.copy(GAPS, "gaps");
+    replace(
+        &root,
+        "docs/spec/plt-feed-b.md",
+        "parent: WING-BROKEN\n",
+        "parent: WING-LEND\n",
+    );
+    let document = flow.json(&root, &["WING-BROKEN", "--depth", "0"]);
+    assert_eq!(
+        row(&document, "supply-unfed")["items"],
+        json!([["PLT-FEED-A", "PLT-FEED-B"]]),
+        "{document}"
+    );
+    assert_eq!(
+        gaps_by_node(&document),
+        gaps_of([("WING-BROKEN", 11)]),
+        "{document}"
+    );
+}
+
+/// AC-14: two holders of one ID are two documents, so the count goes by
+/// file and not by name.
+#[test]
+fn ac14_two_holders_of_one_id_are_two_documents() {
+    let flow = Flow::new("flow-count-dup");
+    let root = flow.scratch.copy(GAPS, "gaps");
+    write(
+        &root,
+        "docs/spec/lnd-stray-too.md",
+        "---\nid: LND-STRAY\nclass: canon\ntitle: A second stray\nparent: WING-BROKEN\n\
+         owner: owner\nreviewed: 2026-10-01\n---\n\n# A second stray\n\nA step.\n",
+    );
+    let document = flow.json(&root, &["WING-LIBRARY", "--depth", "1"]);
+    assert_eq!(
+        gaps_by_node(&document)["WING-BROKEN"],
+        13,
+        "12 and the second holder: {document}"
+    );
+}
+
+/// AC-14: a row not measured names nothing: a bad `[[flow.definition]]`
+/// takes the two definition rows out of the count; the two documents
+/// `supply-unfed` also names stay.
+#[test]
+fn ac14_an_unmeasured_row_names_no_document() {
+    let flow = Flow::new("flow-count-bad");
+    let root = flow.copy(GAPS, "gaps", "\n[[flow.definition]]\n");
+    let document = flow.json(&root, &["WING-LIBRARY", "--depth", "1"]);
+    assert_eq!(row(&document, "definition-unused")["state"], "cannot");
+    assert_eq!(row(&document, "definition-once")["state"], "cannot");
+    assert_eq!(
+        gaps_by_node(&document),
+        gaps_of([
+            ("WING-BROKEN", 10),
+            ("WING-HEADLESS", 2),
+            ("WING-LEND", 1),
+            ("WING-LIBRARY", 0),
+        ]),
+        "{document}"
+    );
+}
+
+/// AC-14 on another project (ADR-0008): flow-relay, its own kinds, with one
+/// definition nothing uses: a game's document counts as a library's does.
+#[test]
+fn ac14_the_count_holds_on_another_project() {
+    let flow = Flow::new("flow-count-relay");
+    let extra = format!("{RELAY_FLOW}\n[[flow.definition]]\npaths = [\"docs/spec/kit-oil.md\"]\n");
+    let root = flow.copy(RELAY, "relay", &extra);
+    let document = flow.json(&root, &[]);
+    assert_eq!(row(&document, "definition-unused")["count"], json!(1));
+    let named = naming_rows(&document);
+    assert_eq!(gaps_sum(&document), named.len() as u64, "{document}");
+    assert_eq!(node(&document, "KIT-OIL")["gaps"], json!(1), "{document}");
+
+    // No `[flow]` at all: three rows still measure; the rest name nothing.
+    let plain = flow.json(&fixture(RELAY), &[]);
+    assert_eq!(
+        gaps_sum(&plain),
+        naming_rows(&plain).len() as u64,
+        "{plain}"
+    );
 }

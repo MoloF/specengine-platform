@@ -8,7 +8,7 @@ reviewed: 2026-10-21
 
 # ui -- the web UI
 
-The owner's screens: 07 s3 "Web UI — screens", flow 06 s3.3-3.4. Rules, with their ADRs: `docs/canon/architecture.md#ui`; nothing blocked (`#control`).
+The owner's screens: 07 s3, flow 06 s3.3-3.4. Rules: `docs/canon/architecture.md#ui`; nothing blocked (`#control`).
 
 ## Stack
 
@@ -18,7 +18,7 @@ A standalone pnpm project on strict TypeScript: no root `package.json`, no works
 
 - One interface, `src/api/client.ts` `SpecEngineClient`, methods named after the daemon's endpoints (07 s3); reads take the query's `AbortSignal` (superseded: aborted; never the check or health read), writes none. The bootstrap `src/main.tsx` alone picks one: `src/api/http.ts` `HttpClient` by default (`vite.config.ts` proxies `/api` to :7777), the mock `src/mocks/` for any `?scenario=`, lazily (a loading line; failed: why, reload).
 - App code imports domain types only from `src/api/types.ts`, re-exporting `src/api/provisional.ts` now, the generated types (`src/api/generated/`) later. Provisional types copy documented shapes, each citing its source as `` `<path>` "Heading" `` (replaced, never extended: `#ui`).
-- An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent (none now), `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
+- An endpoint 07 s3 lacks is named in the slice spec's "Open", never invented; the mock may serve it, flagged in the interface; `HttpClient` rejects it unsent, `ClientError {status: 501, notServed: true}`: "Not built yet", no Retry. Status 0: no response.
 - The UI renders what the daemon returns: diffs as hunks, decisions by `apply_proposal`, refusals in its own words. An owner action with no endpoint is its `spec` command to copy (fixed words, a validated ID); a decision is at most staged, confirmed on a terminal (`decision-staging.md`).
 
 ## Screen rules
@@ -26,13 +26,13 @@ A standalone pnpm project on strict TypeScript: no root `package.json`, no works
 Every slice keeps these (UI tests, `ui_policy.rs`).
 
 - **Tokens**: `src/styles/tokens.css` holds every colour literal (semantic roles) and the spacing, type, motion (0 if reduced), `--target-min: 24px` tokens; dark only. WCAG 2.2 AA: text >= 4.5:1; focus ring, control border, statuses >= 3:1; `cannot-verify` its own colour and icon.
-- **Status** never by colour alone: label and icon. An unknown value: a neutral badge, the raw text, sorted last; `kind`, `contour`, `role`, `profile`, spec statuses, link types (but `mentions`) stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests.
+- **Status** never by colour alone: label and icon. An unknown value: a neutral badge, the raw text, sorted last; `kind`, `contour`, `role`, `profile`, spec statuses, link types (but `mentions`) stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests; but `edge.kind` in `src/flow/` (`spec-flow-screen.md`).
 - **States**: loading: a skeleton, `aria-busy`; empty: the meaning, the next step; error: the daemon's message verbatim, Retry. Live regions (polite for results, assertive for a 409) sit outside any inert subtree.
 - **Dialogs** in-app (`role="dialog"`, `aria-modal`, focus trap, Esc but mid-IME, focus back to the trigger; a scrim click closes only the palette; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while pending no dialog closes or opens; a refusal keeps the dialog, the typed text and a `role="alert"`; a proposal revised meanwhile shows as changed, to submit again.
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4); `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, no other on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never left on `body` nor under a sticky bar (scroll padding).
 - **Text**: data is text, no HTML sink, each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), anything cut can be seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
 - **Canvas** (`@xyflow/react`, lazy, a hand-written layout): read-only, key options `null`, the wheel scrolls the page; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text.
-- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), but the Tree's Show drift in `localStorage`; a root error boundary and one per view.
+- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home), eight sections; "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), but the Tree's Show drift and `specengine.flow.gaps-hidden` in `localStorage`; a root error boundary and one per view.
 
 ## Dependencies
 
@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow` (1.5 s), `conflict` (first stage or round POST refused), `large` (3000+ nodes), `cannot-check`, `editorial` (`proposal-revisions.md`), `code-cannot` (rows 4-6 `cannot`), `not-configured` (no row-5 rule); projects `harbor-sim` (a plan: `spec-roadmap-screen.md`), `ledger-api` (drift items: `proposal-drift.md`), stages kept to a reload.
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow`, `conflict` (first stage or round POST refused), `large` (3000+ nodes), `cannot-check`, `editorial`, `code-cannot`, `not-configured` (`src/mocks/scenario.ts`); projects `harbor-sim` (`spec-roadmap-screen.md`), `ledger-api` (`proposal-drift.md`), stages kept to a reload.
 3. The slice's checks: its spec's "Owner's manual check".
 
 ## Roles here

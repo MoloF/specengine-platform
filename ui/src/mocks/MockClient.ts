@@ -3,6 +3,7 @@ import {
   NO_SUCH_PROPOSAL,
   STAGE_REFUSED,
   type BundleOptions,
+  type FlowOptions,
   type GraphOptions,
   type NodeOptions,
   type RoadmapOptions,
@@ -14,6 +15,7 @@ import {
 import type {
   BundleView,
   CheckReport,
+  FlowView,
   GraphView,
   HealthReport,
   Inbox,
@@ -38,6 +40,7 @@ import { inboxEntryOf, noReview, stamp, type MockProject, type MockProposal, typ
 import { checkReportOf } from "./check";
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { editorialScenario } from "./editorial";
+import { flowOf } from "./flow";
 import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
@@ -173,6 +176,12 @@ export class MockClient implements SpecEngineClient {
   async getGraph(project: string, options: GraphOptions): Promise<GraphView> {
     await this.read();
     return graphOf(this.project(project).corpus, options);
+  }
+
+  /** The project's flow for the scenario (src/mocks/flow.ts); the daemon serves its own (`docs/canon/spec-flow.md` "The read"). */
+  async getFlow(project: string, options: FlowOptions): Promise<FlowView> {
+    await this.read();
+    return structuredClone(flowOf(project, this.project(project).corpus, this.scenario, options));
   }
 
   /** The mock's task list; the daemon serves its own (`docs/features/ui-live-tasks.md` "Data"). */
