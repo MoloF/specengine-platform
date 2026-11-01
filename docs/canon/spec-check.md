@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-11-01
 ---
 
 # spec check: what it enforces
 
-Increments 1–4: one check of the convention — §11.1–4 of `docs/canon/documentation-system.md`, the ADR-0009 ID checks, an expiring debt baseline, the project's process rules (`docs/canon/spec-check-process.md`) — driven only by `specengine.toml`; the source names no prefix, path or file of a project (`#universal`). Engine `specengine_core::check::run` (pure), loader `specengine_store::load_check` (fresh parse), commands: `docs/canon/spec-check-cli.md`, measurement `specengine-eval check` (APIs: their READMEs). Nothing is written, no status or flag set (`#control`, `#apply`): the homoglyph fix is data for `apply_proposal`. It gates this repository (`docs/README.md` "Enforcement").
+Increments 1–4: one check of the convention — §11.1–4 of `docs/canon/documentation-system.md`, the ADR-0009 ID checks, an expiring debt baseline, the project's process rules (`spec-check-process.md`) — driven only by `specengine.toml`; the source names no prefix, path or file of a project (`#universal`). Engine `specengine_core::check::run` (pure), loader `specengine_store::load_check` (fresh parse), commands: `spec-check-cli.md`, measurement `specengine-eval check` (APIs: their READMEs). Nothing is written, no status or flag set (`#control`, `#apply`): the homoglyph fix is data for `apply_proposal`. It gates this repository (`docs/README.md` "Enforcement").
 
 ## Engine types (`specengine_core::check`)
 
@@ -55,7 +55,7 @@ Defaults: the four §4 caps above, `canon_bytes` none; `bundle_node`, `bundle_ta
 - **Walk.** Non-UTF-8 names → one warning `name-skipped` per problem path, its message counting them; a missing written root, an unreadable file or directory → cannot check; a missing default role root is ignored.
 - **Parser codes** pass as themselves through one table, `PARSER_SEVERITY`, with the parser's severity but `homoglyph`, `duplicate-id` (errors).
 
-The check's own codes (`CHECK_CODES`, 36) are the errors named above, `name-skipped`, the seven of `spec-check-graph.md` (§11.5–6, inline mentions, graph), the two file-link warnings of `spec-check-links.md`, the six of `spec-check-process.md` and `rev-not-raised` (`--staged`, `--changed`: `node-revision.md` "Raising").
+The check's own codes (`CHECK_CODES`, 37) are the errors named above, `name-skipped`, the seven of `spec-check-graph.md` (§11.5–6, inline mentions, graph), the two file-link warnings of `spec-check-links.md`, the six of `spec-check-process.md`, `rev-not-raised` (`--staged`, `--changed`: `node-revision.md` "Raising") and `team-config` (`hub-team.md` "Check").
 
 ## Findings, debt, verdict
 

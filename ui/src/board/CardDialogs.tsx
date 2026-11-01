@@ -6,9 +6,9 @@ import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
-import { actingName, isActingLine, useActing } from "./acting";
+import { actingName, isActingLine, useActing, useHubLogin, useTeamRow } from "./acting";
 import { assigneeChoices, disciplineChoices } from "./filter";
-import { EVIDENCE_KINDS, GAP_TYPES, NAME_IS_TYPED } from "./labels";
+import { EVIDENCE_KINDS, GAP_TYPES, NAME_IS_LOGIN, NAME_IS_TYPED } from "./labels";
 
 /** How `spec card edit` and `assign` write a cleared value (`docs/canon/cards.md` "Commands"). */
 const CLEAR = "-";
@@ -59,16 +59,18 @@ function TextField({
   autoFocus = false,
   list,
   invalid = false,
+  readOnly = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
-  hint?: string;
+  hint?: ReactNode;
   type?: "text" | "date";
   required?: boolean;
   autoFocus?: boolean;
   list?: string;
   invalid?: boolean;
+  readOnly?: boolean;
 }) {
   const id = useId();
   const hintId = useId();
@@ -80,10 +82,10 @@ function TextField({
       </label>
       <input
         id={id}
-        className="field"
+        className={readOnly ? "field field-fixed" : "field"}
         type={type}
         value={value}
-        readOnly={pending}
+        readOnly={pending || readOnly}
         list={list}
         autoComplete="off"
         spellCheck={false}
@@ -151,6 +153,42 @@ function TextArea({
       )}
     </div>
   );
+}
+
+/**
+ * Who a person-answered act goes out as: the typed field locally, its `hint` what to type. On a hub
+ * the login stands read-only in the same field, `[team]`'s `name` beside it when read, shown only and
+ * never sent (`docs/features/hub-team.md` "Description and interactions"). It takes no `required`
+ * there: nothing can be missing from it.
+ */
+function ActingField({
+  project,
+  label,
+  value,
+  onChange,
+  autoFocus,
+  hint,
+}: {
+  project: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  autoFocus: boolean;
+  hint: string;
+}) {
+  const login = useHubLogin();
+  const team = useTeamRow(project);
+  if (login === null) {
+    return <TextField label={label} value={value} onChange={onChange} required autoFocus={autoFocus} hint={hint} />;
+  }
+  const name = team?.name ?? null;
+  return <TextField label={label} value={login} onChange={onChange} readOnly hint={name === null ? undefined : <bdi>{shownSlot(name)}</bdi>} />;
+}
+
+/** What a dialog says of the name it goes out under: typed locally, the login on a hub. */
+function ActingNote() {
+  const login = useHubLogin();
+  return <p className="dialog-text dialog-effect">{login === null ? NAME_IS_TYPED : NAME_IS_LOGIN}</p>;
 }
 
 /**
@@ -679,7 +717,7 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
           <dd>{card.assignee === null ? "-" : <bdi>{shownSlot(card.assignee)}</bdi>}</dd>
         </div>
       </dl>
-      <p className="dialog-text dialog-effect">{NAME_IS_TYPED}</p>
+      <ActingNote />
       <fieldset className="card-evidence-field">
         <legend>Against the brief</legend>
         <div className="card-field">
@@ -739,7 +777,7 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
         </>
       )}
       <TextArea label="Note" value={note} onChange={setNote} autoFocus={name !== null} />
-      <TextField label="Accepting as" value={acting} onChange={setActing} required autoFocus={name === null} hint="Its reviewer's name, never its assignee's." />
+      <ActingField project={project} label="Accepting as" value={acting} onChange={setActing} autoFocus={name === null} hint="Its reviewer's name, never its assignee's." />
     </WriteDialog>
   );
 }
@@ -795,7 +833,7 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
           The brief changed at <bdi className="mono">{shownSlot(on)}</bdi>.
         </p>
       )}
-      <p className="dialog-text dialog-effect">{NAME_IS_TYPED}</p>
+      <ActingNote />
       <fieldset className="card-evidence-field">
         <legend>What the change means for this card</legend>
         <div className="card-field">
@@ -835,17 +873,20 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
           <p className="dialog-text dialog-effect">This opens a new card. This one stays accepted, and its mark stands until the new card is accepted.</p>
         </>
       )}
-      <TextField label="Clearing as" value={acting} onChange={setActing} required autoFocus={name === null} hint="Your name: a person answers a mark." />
+      <ActingField project={project} label="Clearing as" value={acting} onChange={setActing} autoFocus={name === null} hint="Your name: a person answers a mark." />
     </WriteDialog>
   );
 }
 
 /**
  * Clear all (docs/features/trace-views.md "A node's cards"): every suspect card of a group, no effect
- * only, one POST, the dialog the consent. A refusal keeps it open, in the daemon's words.
+ * only, one POST, the dialog the consent. A refusal keeps it open, in the daemon's words. On a hub the
+ * POST carries `count`, the number the dialog shows, and the daemon refuses any other
+ * (`docs/features/hub-team.md` "Data"); locally there is no such key.
  */
 export function ClearGroupDialog({ project, group, cards, onClose, onDone }: { project: string; group: string; cards: number; onClose: () => void; onDone: (answer: CardClearGroupWrite) => void }) {
   const clear = useCardClearGroup(project);
+  const login = useHubLogin();
   const [acting, setActing] = useActing();
   const [reason, setReason] = useState("");
   const [checked, setChecked] = useState(false);
@@ -853,7 +894,7 @@ export function ClearGroupDialog({ project, group, cards, onClose, onDone }: { p
 
   async function send(as: string): Promise<string | null> {
     try {
-      onDone(await clear.mutateAsync({ group, reason: reason.trim(), as }));
+      onDone(await clear.mutateAsync({ group, reason: reason.trim(), as, ...(login === null ? {} : { count: cards }) }));
       return null;
     } catch (error) {
       return apiErrorOf(error).message;
@@ -874,11 +915,11 @@ export function ClearGroupDialog({ project, group, cards, onClose, onDone }: { p
       onSubmit={() => (name === null ? Promise.resolve("A name is needed.") : send(name))}
     >
       <p className="dialog-text">
-        {cards === 1 ? "1 suspect card" : `${String(cards)} suspect cards`} of <bdi className="mono">{shownSlot(group)}</bdi> and what it holds clear as no effect. A card a correction holds is passed over.
+        {cards === 1 ? "1 suspect card" : `${String(cards)} suspect cards`} of <bdi className="mono">{shownSlot(group)}</bdi> and what it holds clear as no effect. A card a correction holds, or one that reads departed, is passed over.
       </p>
-      <p className="dialog-text dialog-effect">{NAME_IS_TYPED}</p>
+      <ActingNote />
       <TextArea label="Reason" value={reason} onChange={setReason} required autoFocus={name !== null} invalid={checked && reason.trim() === ""} />
-      <TextField label="Clearing as" value={acting} onChange={setActing} required autoFocus={name === null} hint="Your name: a person answers a mark." />
+      <ActingField project={project} label="Clearing as" value={acting} onChange={setActing} autoFocus={name === null} hint="Your name: a person answers a mark." />
     </WriteDialog>
   );
 }

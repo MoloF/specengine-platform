@@ -3,6 +3,8 @@ import { apiErrorOf } from "../api/client";
 import { useProjects, useRoundPosting, useStageDecision, useStageRoundAnswers, type RoundQuery } from "../api/queries";
 import type { RoundAnswersOutcome, RoundItem, RoundSheet } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { useAllowed } from "../board/acting";
+import { ActOff } from "../board/ActOff";
 import { useAnnounce } from "../ui/announcer";
 import { CopyButton } from "../ui/CopyButton";
 import { focusIsLost } from "../ui/focus";
@@ -82,12 +84,14 @@ function without<T>(map: ReadonlyMap<string, T>, id: string): ReadonlyMap<string
  * (`memory`), not here: a POST that settles after the owner left and came back clears its drafts
  * and leaves its outcome for whichever screen is on view, and while one is on its way no screen
  * sends again. A re-read drops the drafts of items no longer on the sheet, saying so, and marks
- * those whose item changed since.
+ * those whose item changed since. Where a hub's `allowed` omits `stage` the sheet is there to read:
+ * its answers stand off, Stage and Unstage stay focusable and do nothing.
  */
 export function RoundScreen({ project, round, memory }: { project: string; round: RoundQuery; memory: RoundMemory }) {
   const stage = useStageRoundAnswers(project);
   const posting = useRoundPosting(project);
   const decide = useStageDecision(project);
+  const canStage = useAllowed(project)("stage");
   const projects = useProjects();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
@@ -184,7 +188,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
    * the words name the project.
    */
   async function submit() {
-    if (sending.current || busy || ready.length === 0) {
+    if (sending.current || busy || !canStage || ready.length === 0) {
       return;
     }
     sending.current = true;
@@ -376,6 +380,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
             draft={drafts.get(item.id)}
             result={refused.get(item.id)}
             busy={busy || round.isPlaceholderData}
+            canStage={canStage}
             unstageRefusal={unstageRefusal !== null && unstageRefusal.id === item.id ? unstageRefusal.message : null}
             onDraft={changeDraft}
             onUnstage={onUnstage}
@@ -458,10 +463,11 @@ export function RoundScreen({ project, round, memory }: { project: string; round
             </button>
           </p>
         )}
+        {!canStage && <ActOff act="stage" />}
         <button
           type="button"
           className="button button-primary"
-          aria-disabled={busy || answered === 0}
+          aria-disabled={busy || !canStage || answered === 0}
           onClick={() => {
             void submit();
           }}

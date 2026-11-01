@@ -19,6 +19,8 @@
 
 #![allow(dead_code)]
 
+pub mod hub;
+
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::fs;

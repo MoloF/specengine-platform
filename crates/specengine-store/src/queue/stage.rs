@@ -31,9 +31,10 @@ use super::{
 };
 use crate::error::Db;
 
-/// `proposal.staged`, with `staged` (the stage, an object) and `staged_at`.
+/// `proposal.staged`, with `staged` (the stage, an object) and `staged_at`,
+/// and `as` on a hub alone.
 pub const EVENT_STAGED: &str = "proposal.staged";
-/// `proposal.unstaged`.
+/// `proposal.unstaged`, with `as` on a hub alone.
 pub const EVENT_UNSTAGED: &str = "proposal.unstaged";
 
 /// The owner's choice staged on an `open` proposal, the flags `spec
@@ -374,29 +375,48 @@ pub(super) fn upgrade_stages(conn: &rusqlite::Connection) -> Result<(), QueueErr
     Ok(())
 }
 
-/// `{"id":…,"staged":{…},"staged_at":…}`, keys in this order.
-fn staged_payload(id: &str, stage: &Stage, at: &str) -> String {
-    let text = |value: &str| Value::String(value.to_owned()).to_string();
+/// `value` as one JSON string.
+fn json_text(value: &str) -> String {
+    Value::String(value.to_owned()).to_string()
+}
+
+/// The event's trailing `as`, a hub's login; nothing locally, so a local
+/// event stays byte for byte.
+fn as_key(actor: Option<&str>) -> String {
+    actor.map_or_else(String::new, |actor| format!(",\"as\":{}", json_text(actor)))
+}
+
+/// `{"id":…,"staged":{…},"staged_at":…}`, then `as` on a hub, keys in this
+/// order.
+fn staged_payload(id: &str, stage: &Stage, at: &str, actor: Option<&str>) -> String {
     format!(
-        "{{\"id\":{},\"staged\":{},\"staged_at\":{}}}",
-        text(id),
+        "{{\"id\":{},\"staged\":{},\"staged_at\":{}{}}}",
+        json_text(id),
         stage.to_json(),
-        text(at)
+        json_text(at),
+        as_key(actor)
     )
 }
 
+/// `{"id":…}`, then `as` on a hub.
+fn unstaged_payload(id: &str, actor: Option<&str>) -> String {
+    format!("{{\"id\":{}{}}}", json_text(id), as_key(actor))
+}
+
 impl SqliteQueue {
-    /// [`ProposalQueue::stage_from`] (`stage` given) and
-    /// [`ProposalQueue::unstage_from`] (`None`): the stored proposal, and
-    /// whether anything was written.
+    /// [`ProposalQueue::stage_as`] (`stage` given) and
+    /// [`ProposalQueue::unstage_as`] (`None`): the stored proposal, and
+    /// whether anything was written. `actor` joins the event alone, never a
+    /// column.
     ///
-    /// [`ProposalQueue::stage_from`]: super::ProposalQueue::stage_from
-    /// [`ProposalQueue::unstage_from`]: super::ProposalQueue::unstage_from
+    /// [`ProposalQueue::stage_as`]: super::ProposalQueue::stage_as
+    /// [`ProposalQueue::unstage_as`]: super::ProposalQueue::unstage_as
     pub(super) fn stage_if(
         &mut self,
         id: &str,
         seen: &Seen,
         stage: Option<&Stage>,
+        actor: Option<&str>,
         now: &str,
     ) -> Result<(Proposal, bool), QueueError> {
         check_time(now)?;
@@ -424,7 +444,7 @@ impl SqliteQueue {
                     &tx,
                     &project,
                     EVENT_STAGED,
-                    &staged_payload(id, stage, now),
+                    &staged_payload(id, stage, now, actor),
                     now,
                 )?;
             }
@@ -440,12 +460,13 @@ impl SqliteQueue {
                     [now, id, project.as_str()],
                 )
                 .db()?;
-                let payload = Value::Object(
-                    [("id".to_owned(), Value::String(id.to_owned()))]
-                        .into_iter()
-                        .collect(),
-                );
-                log_text(&tx, &project, EVENT_UNSTAGED, &payload.to_string(), now)?;
+                log_text(
+                    &tx,
+                    &project,
+                    EVENT_UNSTAGED,
+                    &unstaged_payload(id, actor),
+                    now,
+                )?;
             }
         }
         let stored = existing(&tx, &project, id)?;

@@ -1046,6 +1046,7 @@ fn ac09_a_claimed_task_passes_whatever_else_is_open() {
             },
             now: "2026-10-07T09:30:00Z".to_owned(),
             git: pair.git_env(&main),
+            actor: None,
         },
     )
     .expect("stage");

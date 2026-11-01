@@ -1,26 +1,39 @@
-//! Hub mode (`docs/canon/hub.md`, ADR-0058, ADR-0059, task spec
-//! `hub-identity`): a second fence, not a second daemon. `--public-origin`
-//! is the whole switch; without it nothing here runs and `Remote-User` is
-//! never read.
+//! Hub mode (`docs/canon/hub.md`, ADR-0058, ADR-0059, task specs
+//! `hub-identity`, `hub-team`): a second fence, not a second daemon.
+//! `--public-origin` is the whole switch; without it nothing here runs,
+//! `Remote-User` is never read and `[team]` is never judged.
 //!
 //! [`Hub::parse`] judges the flag before anything is created. [`Hub::fenced`]
 //! judges every request before routing, failing closed: the public `Host`
 //! byte for byte, `Origin`, `Sec-Fetch-Site` (but for the landing), one
 //! well-formed `Remote-User`, then the method and path. Any method but GET
-//! is refused unless [`listed`] names it, so a route added later stays local
-//! until it is listed here. [`acting`] binds a body's `as` to the login.
+//! is refused unless [`class`] names it, so a route added later stays local
+//! until it is listed here. A [`Class::Confirm`] route takes no query and
+//! needs `Origin`: the fence reads the path alone otherwise, and a proxy's
+//! rule anchored on the path's end must see the one byte form.
+//!
+//! The handlers do the rest, in order, nothing read or stored on a refusal:
+//! [`member`] on a team or confirm route, the `[team]` of the root the
+//! route's slug names, read per request and held nowhere, before a body is
+//! read and again once it is in; [`acting`], which
+//! binds a body's `as` to the login, on a plain or confirm route; [`needs`] on
+//! a confirm route. A plain write never reads `[team]`, so a bad one stops
+//! none (ADR-0012), and a role is authority over the queue, no trade
+//! (ADR-0008).
 //!
 //! The daemon cannot tell its proxy's header from anything else reaching its
 //! socket: that is the deployment's guarantee (`docs/canon/hub.md` "Trust").
 
 use std::net::Ipv4Addr;
+use std::sync::Arc;
 
 use axum::http::header::{HOST, ORIGIN};
 use axum::http::{HeaderMap, HeaderName, Method, StatusCode};
-use specengine_cli::hub_login_problem;
+use specengine_cli::{TeamEntry, hub_login_problem, team_read};
 
-use crate::answer::Refusal;
+use crate::answer::{self, Refusal};
 use crate::app::single;
+use crate::start::Project;
 
 /// The proxy's one login header: a constant, so no flag can name a header
 /// the proxy does not scrub.
@@ -30,9 +43,25 @@ const SEC_FETCH_SITE: HeaderName = HeaderName::from_static("sec-fetch-site");
 const SEC_FETCH_MODE: HeaderName = HeaderName::from_static("sec-fetch-mode");
 const SEC_FETCH_DEST: HeaderName = HeaderName::from_static("sec-fetch-dest");
 
-/// The last segment of a card's plain writes. Accept and clear stay off this
-/// list until `hub-confirm`: each takes a consent no login gives yet.
+/// The last segment of a card's plain writes.
 const WRITES: [&str; 4] = ["move", "edit", "assign", "cancel"];
+
+/// The last segment of a card's confirm routes: each takes a `Consent`.
+const CONFIRMS: [&str; 2] = ["accept", "clear"];
+
+/// How a write is judged on a hub (task spec `hub-team`, "Classes"). The
+/// confirm class is the acts taking a `Consent`; a stage takes none.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Class {
+    /// Any login: the handler binds `as` ([`acting`]).
+    Plain,
+    /// A `[team]` login: the handler reads it ([`member`]).
+    Team,
+    /// A `[team]` login, with no query and a required `Origin` here, and in
+    /// the handler [`member`], [`acting`] and [`needs`]. RM-0064 adds the
+    /// proxy's step-up on this class, which the daemon cannot see.
+    Confirm,
+}
 
 /// A hub's public origin, normalised.
 #[derive(Debug)]
@@ -119,11 +148,13 @@ impl Hub {
     }
 
     /// The request's login, else why it is refused. In order: `Host`,
-    /// `Origin`, `Sec-Fetch-Site`, `Remote-User`, the method and path.
+    /// `Origin`, `Sec-Fetch-Site`, `Remote-User`, the method and path, then a
+    /// [`Class::Confirm`] route's `query` and `Origin`.
     pub(crate) fn fenced(
         &self,
         method: &Method,
         path: &str,
+        query: Option<&str>,
         headers: &HeaderMap,
     ) -> Result<Login, String> {
         let host = single(headers, &HOST, "Host")?;
@@ -133,7 +164,8 @@ impl Hub {
                 self.authority
             ));
         }
-        if let Some(origin) = single(headers, &ORIGIN, "Origin")?
+        let origin = single(headers, &ORIGIN, "Origin")?;
+        if let Some(origin) = origin
             && origin != self.origin.as_bytes()
         {
             return Err(format!(
@@ -151,13 +183,19 @@ impl Hub {
             );
         }
         let login = judged_login(headers)?;
-        if !(method == Method::GET || (method == Method::POST && listed(path))) {
-            return Err(
-                "refused: this hub serves GET and five card writes: this route stays local"
-                    .to_owned(),
-            );
+        if method == Method::GET {
+            return Ok(login);
         }
-        Ok(login)
+        match class(method, path) {
+            None => Err("refused: this hub does not serve this route".to_owned()),
+            Some(Class::Confirm) if query.is_some() => {
+                Err("refused: this route takes no query".to_owned())
+            }
+            Some(Class::Confirm) if origin.is_none() => {
+                Err("refused: this route needs the Origin header".to_owned())
+            }
+            Some(_) => Ok(login),
+        }
     }
 }
 
@@ -213,17 +251,44 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
     Ok(Login(login.to_owned()))
 }
 
-/// `path`, raw, is one of a hub's five writes: POST on `.../cards` or
-/// `.../cards/:id/{move,edit,assign,cancel}`. Exact segments, so an encoded
-/// or trailing form of any other route is not listed.
-fn listed(path: &str) -> bool {
+/// The class of a write, default deny: `None` for a route this hub does not
+/// serve. Exact raw segments, so an encoded or trailing form of a route is
+/// not listed. Plain: POST on `.../cards` or
+/// `.../cards/:id/{move,edit,assign,cancel}`. Team: POST, DELETE on
+/// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
+/// `.../cards/:id/{accept,clear}` and `.../trace/clear`.
+fn class(method: &Method, path: &str) -> Option<Class> {
+    let post = method == Method::POST;
     let segments: Vec<&str> = path.split('/').collect();
-    match segments.as_slice() {
-        ["", "api", "projects", project, "cards"] => !project.is_empty(),
-        ["", "api", "projects", project, "cards", id, verb] => {
-            !project.is_empty() && !id.is_empty() && WRITES.contains(verb)
+    let ["", "api", "projects", project, route @ ..] = segments.as_slice() else {
+        return None;
+    };
+    if project.is_empty() {
+        return None;
+    }
+    match route {
+        ["cards"] if post => Some(Class::Plain),
+        ["cards", id, verb] if post && !id.is_empty() => {
+            if WRITES.contains(verb) {
+                Some(Class::Plain)
+            } else if CONFIRMS.contains(verb) {
+                Some(Class::Confirm)
+            } else {
+                None
+            }
         }
-        _ => false,
+        // The last segment read off the raw path: a route path is the one
+        // literal that may name these two words (`tests/no_domain.rs`).
+        ["proposals", id, _]
+            if !id.is_empty()
+                && (post || method == Method::DELETE)
+                && path.ends_with("/decision") =>
+        {
+            Some(Class::Team)
+        }
+        ["round", _] if post && path.ends_with("/round/answers") => Some(Class::Team),
+        ["trace", "clear"] if post => Some(Class::Confirm),
+        _ => None,
     }
 }
 
@@ -238,13 +303,68 @@ pub(crate) fn acting(login: Option<&Login>, actor: &mut Option<String>) -> Resul
         None => *actor = Some(login.clone()),
         Some(named) if named == login => {}
         Some(named) => {
-            return Err(Refusal::new(
-                StatusCode::FORBIDDEN,
-                format!("refused: `as` names {named}; this request's login is {login}"),
-            ));
+            return Err(forbidden(format!(
+                "refused: `as` names {named}; this request's login is {login}"
+            )));
         }
     }
     Ok(())
+}
+
+/// The door of a team or confirm route, before the turn: the login's entry
+/// in the `[team]` of the root the route's slug names, read now and kept by
+/// nobody. No [`Login`] (a local daemon), `None` and nothing read. A bad
+/// `[team]` is a 503, no `[team]` and an absent login a 403: an absent login
+/// is never a role. A route with a body calls it twice: first, so an outsider
+/// is refused with no body read; again once the body is in, so a login taken
+/// out of `[team]` while a slow body was open keeps no power.
+pub(crate) async fn member(
+    project: &Arc<Project>,
+    login: Option<&Login>,
+) -> Result<Option<TeamEntry>, Refusal> {
+    let Some(Login(login)) = login else {
+        return Ok(None);
+    };
+    let team = answer::read(Arc::clone(project), |env, globals, _| {
+        team_read(env, globals)
+    })
+    .await?;
+    let Some(team) = team else {
+        return Err(forbidden("refused: this project has no `[team]`"));
+    };
+    match team.entry(login) {
+        Some(entry) => Ok(Some(entry.clone())),
+        None => Err(forbidden(format!(
+            "refused: {login} is not in this project's `[team]`: reads and plain writes"
+        ))),
+    }
+}
+
+/// A group clear past [`member`]: a role that clears no group is a 403 before
+/// the body is read; whether a `lead` covers the group is judged with the set
+/// known, by the library. No entry (a local daemon): nothing judged.
+pub(crate) fn clears_groups(entry: Option<&TeamEntry>) -> Result<(), Refusal> {
+    match entry {
+        Some(entry) if !entry.role.clears_groups() => Err(forbidden(format!(
+            "refused: {} is a `member`: this act needs a `lead`",
+            entry.login
+        ))),
+        _ => Ok(()),
+    }
+}
+
+/// A confirm route on a hub needs `key`, the compare of what the page showed:
+/// a 400 when it was not `sent`. No [`Login`] (a local daemon): as built.
+pub(crate) fn needs(login: Option<&Login>, key: &str, sent: bool) -> Result<(), Refusal> {
+    if login.is_some() && !sent {
+        return Err(Refusal::bad_request(format!("a hub needs `{key}`")));
+    }
+    Ok(())
+}
+
+/// A 403, the fence's answer.
+fn forbidden(message: impl Into<String>) -> Refusal {
+    Refusal::new(StatusCode::FORBIDDEN, message)
 }
 
 #[cfg(test)]
@@ -281,11 +401,11 @@ mod tests {
     }
 
     fn get(path: &str, headers: &HeaderMap) -> Result<Login, String> {
-        hub().fenced(&Method::GET, path, headers)
+        hub().fenced(&Method::GET, path, None, headers)
     }
 
     fn post(path: &str, headers: &HeaderMap) -> Result<Login, String> {
-        hub().fenced(&Method::POST, path, headers)
+        hub().fenced(&Method::POST, path, None, headers)
     }
 
     #[test]
@@ -498,7 +618,7 @@ mod tests {
             assert!(get("/assets/x.js", &headers).is_err(), "{site}");
             assert!(post("/", &headers).is_err(), "{site}");
             assert!(
-                hub().fenced(&Method::HEAD, "/", &headers).is_err(),
+                hub().fenced(&Method::HEAD, "/", None, &headers).is_err(),
                 "{site}"
             );
         }
@@ -683,42 +803,115 @@ mod tests {
         }
     }
 
+    /// hub-team, "Classes": default deny by exact raw segments and exact methods,
+    /// each class on its own routes; the confirm class's own two refusals in the
+    /// fence, a team or a plain route taking neither. M: `fenced` reading the
+    /// path alone.
     #[test]
     fn a_write_is_refused_until_listed() {
-        for path in [
+        let line = "refused: this hub does not serve this route";
+        let page = || proxied(&[("origin", ORIGIN_SERVED.as_bytes())]);
+        let plain = [
             "/api/projects/p/cards",
             "/api/projects/p/cards/C-0001/move",
             "/api/projects/p/cards/C-0001/edit",
             "/api/projects/p/cards/C-0001/assign",
             "/api/projects/p/cards/C-0001/cancel",
-        ] {
-            assert!(post(path, &proxied(&[])).is_ok(), "{path}");
-            for method in [Method::PUT, Method::DELETE, Method::PATCH, Method::HEAD] {
-                assert!(
-                    hub().fenced(&method, path, &proxied(&[])).is_err(),
+        ];
+        let team = [
+            "/api/projects/p/proposals/PR-0001/decision",
+            "/api/projects/p/round/answers",
+        ];
+        let confirm = [
+            "/api/projects/p/cards/C-0001/accept",
+            "/api/projects/p/cards/C-0001/clear",
+            "/api/projects/p/trace/clear",
+        ];
+        for path in plain.iter().chain(&team).chain(&confirm) {
+            assert!(post(path, &page()).is_ok(), "{path}");
+            for method in [Method::PUT, Method::PATCH, Method::HEAD] {
+                assert_eq!(
+                    hub().fenced(&method, path, None, &page()).err().as_deref(),
+                    Some(line),
                     "{method} {path}"
                 );
             }
         }
-        let line = "refused: this hub serves GET and five card writes: this route stays local";
+        // A team route takes DELETE on the stage alone.
+        assert!(
+            hub()
+                .fenced(&Method::DELETE, team[0], None, &page())
+                .is_ok()
+        );
+        for path in plain.iter().chain(&team[1..]).chain(&confirm) {
+            assert_eq!(
+                hub()
+                    .fenced(&Method::DELETE, path, None, &page())
+                    .err()
+                    .as_deref(),
+                Some(line),
+                "DELETE {path}"
+            );
+        }
+        // No `Origin` and a query: the confirm class's alone, a bare `?` too.
+        for path in plain.iter().chain(&team) {
+            assert!(post(path, &proxied(&[])).is_ok(), "{path}");
+            assert!(
+                hub()
+                    .fenced(&Method::POST, path, Some("x=1"), &page())
+                    .is_ok(),
+                "{path}"
+            );
+        }
+        for path in confirm {
+            assert_eq!(
+                post(path, &proxied(&[])).err().as_deref(),
+                Some("refused: this route needs the Origin header"),
+                "{path}"
+            );
+            for query in ["x=/move", "x=1", ""] {
+                assert_eq!(
+                    hub()
+                        .fenced(&Method::POST, path, Some(query), &page())
+                        .err()
+                        .as_deref(),
+                    Some("refused: this route takes no query"),
+                    "{path}?{query}"
+                );
+            }
+        }
         for path in [
             "/",
             "/api/identity",
             "/api/projects",
             "/api/projects/p/tree",
-            "/api/projects/p/proposals/PR-0001/decision",
-            "/api/projects/p/round/answers",
-            "/api/projects/p/trace/clear",
             "/api/projects/p/cards/C-0001",
-            "/api/projects/p/cards/C-0001/accept",
-            "/api/projects/p/cards/C-0001/clear",
+            "/api/projects/p/cards/C-0001/archive",
             "/api/projects/p/cards/C-0001/%6Dove",
             "/api/projects/p/cards/C-0001/Move",
             "/api/projects/p/cards/C-0001/move/",
             "/api/projects/p/cards/",
             "/api/projects/p/cards/C-0001/move/x",
+            "/api/projects/p/cards/C-0001/accept/",
+            "/api/projects/p/cards/C-0001/%61ccept",
+            "/api/projects/p/cards//accept",
+            "/api/projects/p/proposals/PR-0001/decision/",
+            "/api/projects/p/proposals//decision",
+            "/api/projects/p/proposals/PR-0001/%64ecision",
+            "/api/projects/p/proposals/PR-0001/undecision",
+            "/api/projects/p/proposals/decision",
+            "/api/projects/p/round/answers/",
+            "/api/projects/p/round/%61nswers",
+            "/api/projects/p/round/xanswers",
+            "/api/projects/p/round",
+            "/api/projects/p/trace/clear/",
+            "/api/projects/p/trace/%63lear",
+            "/api/projects/p/trace",
             "/api/projects//cards",
             "/api/projects//cards/C-0001/move",
+            "/api/projects//trace/clear",
+            "/api/projects//round/answers",
+            "/api/projects//proposals/PR-0001/decision",
             "/api/projects/p/cards//move",
             "//api/projects/p/cards",
             "/API/projects/p/cards",
@@ -726,34 +919,19 @@ mod tests {
             "/api/projects/p/nothing",
             "*",
         ] {
-            assert_eq!(
-                post(path, &proxied(&[])).err().as_deref(),
-                Some(line),
-                "{path}"
-            );
+            assert_eq!(post(path, &page()).err().as_deref(), Some(line), "{path}");
         }
         let unknown = Method::from_bytes(b"post").expect("an extension method");
         for method in [Method::OPTIONS, Method::CONNECT, Method::TRACE, unknown] {
             assert_eq!(
                 hub()
-                    .fenced(&method, "/api/projects/p/cards", &proxied(&[]))
+                    .fenced(&method, "/api/projects/p/cards", None, &page())
                     .err()
                     .as_deref(),
                 Some(line),
                 "{method}"
             );
         }
-        assert_eq!(
-            hub()
-                .fenced(
-                    &Method::DELETE,
-                    "/api/projects/p/proposals/PR-0001/decision",
-                    &proxied(&[])
-                )
-                .err()
-                .as_deref(),
-            Some(line)
-        );
         // A read of any path past the fence: the routes answer it.
         assert!(get("/api/projects/p/inbox", &proxied(&[])).is_ok());
         assert!(get("/api/projects/p/nothing", &proxied(&[])).is_ok());

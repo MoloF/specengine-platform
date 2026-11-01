@@ -37,6 +37,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/health-code.md](canon/health-code.md) Health's code rows: assumes and unbound · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http · tier 2
 - [docs/canon/health-drift.md](canon/health-drift.md) Health's row 6: drift · crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/health.md](canon/health.md) Health: what is left, measured · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2
+- [docs/canon/hub-team.md](canon/hub-team.md) Hub team: who acts past the plain writes · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · tier 2
 - [docs/canon/hub.md](canon/hub.md) Hub mode: a public origin and one trusted login · crates/specengine-http, ui · tier 2
 - [docs/canon/import-layout-verifier.md](canon/import-layout-verifier.md) Import layout: verifier, attribution, output · crates/specengine-eval · tier 2
 - [docs/canon/import-layout.md](canon/import-layout.md) Import layout: the emitter and the after-tree · crates/specengine-import, crates/specengine-eval · tier 2

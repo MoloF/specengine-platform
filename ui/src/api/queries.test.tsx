@@ -28,6 +28,7 @@ import {
   useStageDecision,
   useTask,
   useTasks,
+  useTeam,
   useTrace,
   useTraceLanes,
   useTraceSummary,
@@ -238,6 +239,80 @@ describe("abort signals (ui-live-tasks: a superseded read is aborted)", () => {
     }
     expect(client.getCheck.mock.calls).toEqual([["alpha"]]);
     expect(client.getHealth.mock.calls).toEqual([["alpha"]]);
+  });
+});
+
+describe("useTeam (A9 of hub-team)", () => {
+  function Reader({ enabled }: { enabled: boolean }) {
+    useTeam("alpha", enabled);
+    return null;
+  }
+
+  function reading(client: StubClient, queryClient: QueryClient, enabled = true) {
+    return render(
+      <ApiProvider client={client} queryClient={queryClient}>
+        <Reader enabled={enabled} />
+      </ApiProvider>,
+    );
+  }
+
+  const ROW = { login: "mira", name: "Mira K", allowed: ["stage"] };
+
+  it("reads nothing until enabled: a local daemon has no such route", async () => {
+    const client = stubClient();
+    const queryClient = createQueryClient();
+    const first = reading(client, queryClient, false);
+    await act(() => new Promise((settle) => setTimeout(settle, 0)));
+    expect(client.getTeam).not.toHaveBeenCalled();
+    first.unmount();
+    client.getTeam.mockResolvedValue(ROW);
+    reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryData(queryKeys.team("alpha"))).toEqual(ROW);
+    });
+  });
+
+  it("keys a read by project and hands the fetch its AbortSignal", async () => {
+    expect(queryKeys.team("alpha")).toEqual(["team", "alpha"]);
+    const client = stubClient();
+    client.getTeam.mockResolvedValue(ROW);
+    reading(client, createQueryClient());
+    await waitFor(() => {
+      expect(client.getTeam).toHaveBeenCalledTimes(1);
+    });
+    expect(client.getTeam.mock.calls[0]?.[0]).toBe("alpha");
+    expect(client.getTeam.mock.calls[0]?.[1]).toBeInstanceOf(AbortSignal);
+  });
+
+  it("is one read for every field that asks, none again when a new one mounts", async () => {
+    const client = stubClient();
+    client.getTeam.mockResolvedValue(ROW);
+    const queryClient = createQueryClient();
+    const first = reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryData(queryKeys.team("alpha"))).toEqual(ROW);
+    });
+    first.unmount();
+    reading(client, queryClient);
+    await act(() => new Promise((settle) => setTimeout(settle, 0)));
+    expect(client.getTeam).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps no answer of a failed read: the next to mount asks again", async () => {
+    const client = stubClient();
+    client.getTeam.mockRejectedValueOnce(new ClientError({ status: 503, message: "spec index unavailable" }));
+    client.getTeam.mockResolvedValue(ROW);
+    const queryClient = createQueryClient();
+    const first = reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryState(queryKeys.team("alpha"))?.status).toBe("error");
+    });
+    first.unmount();
+    reading(client, queryClient);
+    await waitFor(() => {
+      expect(queryClient.getQueryData(queryKeys.team("alpha"))).toEqual(ROW);
+    });
+    expect(client.getTeam).toHaveBeenCalledTimes(2);
   });
 });
 

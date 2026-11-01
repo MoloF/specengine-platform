@@ -124,6 +124,8 @@ pub struct StageRequest {
     /// The caller's environment; git runs without its local `GIT_*`
     /// variables.
     pub git: GitEnv,
+    /// A hub's login, `proposal.staged`'s `as`. `None` everywhere else.
+    pub actor: Option<String>,
 }
 
 /// [`unstage`]'s options.
@@ -133,6 +135,8 @@ pub struct UnstageRequest {
     pub id: String,
     pub now: String,
     pub git: GitEnv,
+    /// A hub's login, `proposal.unstaged`'s `as`. `None` everywhere else.
+    pub actor: Option<String>,
 }
 
 /// Why [`stage`] or [`unstage`] stored nothing.
@@ -307,7 +311,11 @@ pub(crate) fn stage_with(
     {
         span_hash.clone_from(&run.span);
     }
-    match context.queue.stage_from(&id, &proposal.seen(), &stage, now) {
+    let actor = request.actor.as_deref();
+    match context
+        .queue
+        .stage_as(&id, &proposal.seen(), &stage, actor, now)
+    {
         Ok(stored) => {
             let document = document_with(&request.git, context, &stored, run);
             Ok(StageOutcome::done(document, messages))
@@ -332,7 +340,8 @@ fn run_unstage(
         Err(outcome) => return Ok(outcome),
     };
     let id = proposal.id.clone();
-    match context.queue.unstage_from(&id, &proposal.seen(), now) {
+    let actor = request.actor.as_deref();
+    match context.queue.unstage_as(&id, &proposal.seen(), actor, now) {
         Ok(_) => {
             let stored = match context.queue.get(&id) {
                 Ok(Some(stored)) => stored,

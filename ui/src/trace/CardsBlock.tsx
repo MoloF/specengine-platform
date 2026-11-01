@@ -3,6 +3,8 @@ import { apiErrorOf } from "../api/client";
 import { useCard, useTrace } from "../api/queries";
 import type { CardWrite, TraceCard, TraceDocument, TraceNode, TraceUse } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { useAllowed } from "../board/acting";
+import { ActOff } from "../board/ActOff";
 import { ClearCardDialog, ClearGroupDialog, NewCardDialog } from "../board/CardDialogs";
 import { isCard } from "../board/CardPanel";
 import { canClear, cardStateLook, isMarked } from "../board/labels";
@@ -58,8 +60,8 @@ function OwnKeys({ children }: { children: ReactNode }) {
   );
 }
 
-/** One card: its title, a link to the Board, the word for where it stands, where it is, Clear on a suspect one. */
-function CardLine({ project, card, onClear }: { project: string; card: TraceCard; onClear: (card: TraceCard, trigger: HTMLElement) => void }) {
+/** One card: its title, a link to the Board, the word for where it stands, where it is, Clear on a suspect one, idle as a hub's `allowed` says. */
+function CardLine({ project, card, clears, onClear }: { project: string; card: TraceCard; clears: boolean; onClear: (card: TraceCard, trigger: HTMLElement) => void }) {
   return (
     <li className="cards-line">
       <a className="cards-line-title" href={sectionHash(project, "board", card.id)}>
@@ -73,8 +75,11 @@ function CardLine({ project, card, onClear }: { project: string; card: TraceCard
         <button
           type="button"
           className="button"
+          aria-disabled={!clears}
           onClick={(event) => {
-            onClear(card, event.currentTarget);
+            if (clears) {
+              onClear(card, event.currentTarget);
+            }
           }}
         >
           Clear <span className="sr-only">{card.id}</span>
@@ -112,11 +117,13 @@ function ClearCard({ project, clearing, onClose, onDone }: { project: string; cl
  * A node's cards (docs/features/trace-views.md "A node's cards"), beside it in the Flow's panel and the
  * Spec tree: `getTrace(ref)`'s rollup, each card with its mark, linked to the Board, the nodes using
  * it, New card. A suspect card takes its Clear here, the dialog of the Board; a group's block adds
- * Clear all, no effect only. Nothing here is counted: a group says the counts served for it.
+ * Clear all, no effect only. Nothing here is counted: a group says the counts served for it. On a hub
+ * Clear and Clear all stand idle where `allowed` omits them (`docs/features/hub-team.md`).
  */
 export function CardsBlock({ project, nodeRef, section, heading: Heading }: { project: string; nodeRef: string; section: "flow" | "tree"; heading: "h2" | "h3" }) {
   const read = useTrace(project, { ref: nodeRef });
   const failure = useRetainedFailure(read.error, read.isFetching);
+  const allows = useAllowed(project);
   const announce = useAnnounce();
   const focusLater = useFocusLater();
   const [creating, setCreating] = useState(false);
@@ -169,6 +176,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
     const uses = usesOf(trace);
     const group = trace.nodes.length > 1;
     const clearable = cards.filter(canClear).length;
+    const clearsAll = allows("group_clear");
     body = (
       <>
         {/* A state read before a failure is no state now: the failure line below speaks for what stands under it. */}
@@ -209,6 +217,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
                 key={shown.id}
                 project={project}
                 card={shown}
+                clears={allows("clear")}
                 onClear={(card, trigger) => {
                   presses.current += 1;
                   setClearing({ card, trigger, asked: presses.current });
@@ -217,6 +226,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
             ))}
           </ul>
         )}
+        {clearable > 0 && !allows("clear") && <ActOff act="clear" />}
         {uses.length > 0 && (
           <>
             <p className="field-label">Used by</p>
@@ -240,14 +250,18 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
               type="button"
               className="button"
               aria-haspopup="dialog"
+              aria-disabled={!clearsAll}
               onClick={() => {
-                setClearingAll(true);
+                if (clearsAll) {
+                  setClearingAll(true);
+                }
               }}
             >
               Clear all
             </button>
           </p>
         )}
+        {group && clearable > 0 && !clearsAll && <ActOff act="group_clear" />}
         {clearingAll && (
           <OwnKeys>
             <ClearGroupDialog

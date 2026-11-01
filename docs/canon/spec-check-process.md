@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-11-01
 ---
 
 # spec check: process rules
@@ -56,7 +56,7 @@ A rule needs a selector and a requirement; selectors AND, the items of a list OR
 
 **Messages that say what they want**; none newly refuses (ADR-0012). `` key `K` is required for class C `` adds `: one of draft | in-progress | shipped | abandoned` on `status`, class spec alone; `: a list, as [root]` on `scope` and `: a date, YYYY-MM-DD` on `reviewed`, any class. `unknown-link-type` ends `; kept; the types: ` and `LINK_TYPES`. `id-not-in-scheme` adds `; add to [ids]: <PREFIX> = { kind = "<kind>", shape = "name" }`, `<kind>` printed literally, only when the part before the first `-` matches `[A-Z][A-Z0-9]*`, is neither a configured prefix nor an alias, and the body reads under `name_body`'s grammar; else today's text. An `[ids]` entry that is no table expects ``a prefix table: `kind`, then `shape` or `width` ``, no Rust type.
 
-`CHECK_CODES` holds 36: the 29 before, the six above (`key-missing` reused) and `rev-not-raised` (`node-revision.md` "Raising"). Lines and subjects never depend on a rule's position, so debt (code, path, subject) survives moved lines and reordered rules. Findings of one file equal in code, line, subject and message are one, an error over a warning; messages name no rule. A class contract and a rule requiring the same key give two `key-missing` lines (two messages); one debt entry covers both.
+`CHECK_CODES` holds 37: the 29 before, the six above (`key-missing` reused), `rev-not-raised` (`node-revision.md` "Raising") and `team-config` (`hub-team.md` "Check"). Lines and subjects never depend on a rule's position, so debt (code, path, subject) survives moved lines and reordered rules. Findings of one file equal in code, line, subject and message are one, an error over a warning; messages name no rule. A class contract and a rule requiring the same key give two `key-missing` lines (two messages); one debt entry covers both.
 
 Severity, modes, debt, `(pre-existing)`: as every finding. A warning never blocks, counts in `warnings` and prints only with detail. Under `--staged` and `--changed` the base is judged with the checked `CheckConfig`, rules included (`docs/canon/spec-check-git.md` "The base"): with `enforce-introduced` a commit adding a rule is not blocked by violations `HEAD` already holds; a new one blocks. Rules never read task or queue state (`#control`, ADR-0012).
 

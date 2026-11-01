@@ -12,7 +12,9 @@
 //! `Allow: GET, POST`; `…/cards/<id>` a read; its six writes `Allow: POST`.
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
 //! `/api/identity` a read of the request's login, no project, no turn
-//! (docs/features/hub-identity.md); a hub has its own fence ([`crate::hub`]).
+//! (docs/features/hub-identity.md); a hub has its own fence ([`crate::hub`]),
+//! and `…/team`, the asker's own row of a project's `[team]`, is a route of a
+//! hub alone (docs/features/hub-team.md): locally it is no route at all.
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data" and
@@ -34,6 +36,13 @@
 //! touch the queue alone, a departing accept making its one proposal there
 //! inside the library's accept (ADR-0057), and no agent tool reaches them.
 //! The other writes are the reads' own, in the data directory.
+//!
+//! On a hub the stage, the round's answers and the three card acts taking a
+//! consent open to the logins a project's `[team]` names, past
+//! [`hub::member`], before their body is read and again once it is in, so an
+//! outsider costs no body and a slow body outlives no entry; locally that
+//! call reads nothing and every handler is as it was
+//! (docs/features/hub-team.md).
 
 use std::sync::Arc;
 
@@ -48,12 +57,13 @@ use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAssignBody, CardCancelBody, CardClearBody,
-    CardClearGroupBody, CardEditBody, CardListRequest, CardMoveBody, CardNewBody, CardOutcome,
-    CardShowRequest, CheckRequest, CliError, FlowRequest, GraphRequest, HealthRequest,
-    InboxRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest, RoundAnswersBody,
-    RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody, StageRequest,
-    TaskListRequest, TaskShowRequest, TraceRequest, TreeRequest, UnstageRequest, View, process_git,
-    project_entry, roadmap_flags, round_limit, utc_now,
+    CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest, CardMoveBody,
+    CardNewBody, CardOutcome, CardShowRequest, CheckRequest, CliError, FlowRequest, GraphRequest,
+    HealthRequest, InboxRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest,
+    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
+    StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest,
+    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, team_read,
+    utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
@@ -182,7 +192,14 @@ pub(crate) fn router(app: Shared) -> Router {
         // The web UI (docs/features/ui-embed.md "Data"): reads like the
         // API's, no config, no turn.
         .route("/", read(ui::page))
-        .route("/assets/{file}", read(ui::asset))
+        .route("/assets/{file}", read(ui::asset));
+    // A hub's alone: a local daemon has no such route, on any method.
+    let routes = if app.hub.is_some() {
+        routes.route("/api/projects/{p}/team", read(team))
+    } else {
+        routes
+    };
+    let routes = routes
         .fallback(unknown_route)
         // A route without its own 405 (none today): the error body, axum's
         // `Allow`.
@@ -211,11 +228,13 @@ where
 /// response gets `Cache-Control: no-store`.
 async fn fence(State(app): State<Shared>, mut request: Request, next: Next) -> Response {
     let passed = match &app.hub {
-        Some(hub) => hub
-            .fenced(request.method(), request.uri().path(), request.headers())
-            .map(|login| {
-                request.extensions_mut().insert(login);
-            }),
+        Some(hub) => {
+            let uri = request.uri();
+            hub.fenced(request.method(), uri.path(), uri.query(), request.headers())
+                .map(|login| {
+                    request.extensions_mut().insert(login);
+                })
+        }
         None => fenced(app.port, request.headers()),
     };
     let mut response = if let Err(reason) = passed {
@@ -371,6 +390,30 @@ async fn identity(request: Request) -> Result<Response, Refusal> {
         .get::<Login>()
         .map(|Login(login)| login.as_str());
     let body = serde_json::json!({ "login": login }).to_string();
+    Ok(json(StatusCode::OK, body))
+}
+
+/// `GET …/team`, a hub's alone: the asker's own row of the `[team]` the root
+/// reads now, `{login, name, allowed}`, no turn. Outside `[team]`, or with
+/// none: a 200, `name` null, `allowed` empty; a bad `[team]` a 503. It tells a
+/// page what to offer; the route's own 403 stays the truth.
+async fn team(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
+    let uri = request.uri();
+    let (project, _) = app.project_of(uri)?;
+    args("team", &[], uri)?;
+    let Some(Login(login)) = login_of(&request) else {
+        return Err(unknown_route_of(uri));
+    };
+    let row = answer::read(project, move |env, globals, _| {
+        team_read(env, globals).map(|team| TeamRow::of(team.as_ref(), login))
+    })
+    .await?;
+    let body = serde_json::to_string(&row).map_err(|failure| {
+        Refusal::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("internal error: cannot encode the row: {failure}"),
+        )
+    })?;
     Ok(json(StatusCode::OK, body))
 }
 
@@ -754,18 +797,24 @@ fn stage_target(
 /// otherwise; at most [`STAGE_BODY_MAX`] bytes: 413; a body that does not
 /// decode: 400 with the CLI's line); 200 the review document, 400 a usage
 /// defect, 404 unknown, 409 refused (the refused review document), 503
-/// cannot run (`answer.rs`).
+/// cannot run (`answer.rs`). On a hub a `[team]` login alone, past the
+/// page's origin and again past the body ([`hub::member`]), named `as` in the
+/// event.
 async fn stage(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = stage_target(&app, request.uri(), request.headers())?;
+    let login = login_of(&request);
+    hub::member(&project, login.as_ref()).await?;
     json_typed(request.headers())?;
     let bytes = body(request, STAGE_BODY_MAX).await?;
     let body = StageBody::from_json(&bytes).map_err(|error| Refusal::bad_request(error.message))?;
+    hub::member(&project, login.as_ref()).await?;
     Ok(run(project, move |env, globals| {
         let request = StageRequest {
             id,
             body,
             now: utc_now(),
             git: process_git(env),
+            actor: login.map(|Login(login)| login),
         };
         specengine_cli::stage(env, globals, &request)
             .map(|outcome| Outcome::Stage(Box::new(outcome)))
@@ -775,14 +824,17 @@ async fn stage(State(app): State<Shared>, request: Request) -> Result<Response, 
 
 /// `DELETE …/proposals/<id>/decision`: the staged choice cleared through
 /// the CLI library's `unstage` (nothing staged: the document, no event);
-/// the body is never read.
+/// the body is never read. On a hub as [`stage`].
 async fn unstage(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = stage_target(&app, request.uri(), request.headers())?;
+    let login = login_of(&request);
+    hub::member(&project, login.as_ref()).await?;
     Ok(run(project, move |env, globals| {
         let request = UnstageRequest {
             id,
             now: utc_now(),
             git: process_git(env),
+            actor: login.map(|Login(login)| login),
         };
         specengine_cli::unstage(env, globals, &request)
             .map(|outcome| Outcome::Stage(Box::new(outcome)))
@@ -798,19 +850,23 @@ async fn unstage(State(app): State<Shared>, request: Request) -> Result<Response
 /// most 200 answers; else a 400 with its line). Then one call in the
 /// project's turn, one clock reading: 200 with the answers document
 /// whatever became of each answer (`answer.rs`), 503 cannot run. An answer
-/// only stages; nothing is decided here.
+/// only stages; nothing is decided here. On a hub as [`stage`].
 async fn round_answers(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(request.uri())?;
     same_origin(request.headers())?;
+    let login = login_of(&request);
+    hub::member(&project, login.as_ref()).await?;
     json_typed(request.headers())?;
     let bytes = body(request, ROUND_BODY_MAX).await?;
     let answers = RoundAnswersBody::from_json(&bytes, &project.slug)
         .map_err(|error| Refusal::bad_request(error.message))?;
+    hub::member(&project, login.as_ref()).await?;
     Ok(run(project, move |env, globals| {
         let request = RoundAnswersRequest {
             body: answers,
             now: utc_now(),
             git: process_git(env),
+            actor: login.map(|Login(login)| login),
         };
         specengine_cli::round_stage_answers(env, globals, &request)
             .map(|outcome| Outcome::RoundAnswers(Box::new(outcome)))
@@ -1013,9 +1069,17 @@ async fn cancel_card(State(app): State<Shared>, request: Request) -> Result<Resp
 /// name is self-declared, and no terminal asks here: a convention until
 /// the hub's named login (ADR-0034). A departing accept makes its one
 /// proposal inside that call (ADR-0057); no `propose` name is called here.
+/// On a hub, past [`hub::member`], judged again once the body is in: the
+/// login as `as` before `request()`, which would default it to `local`, and a
+/// required `revision`, so a dialog answers for the card it showed.
 async fn accept_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/accept")?;
-    let body = written_body(request, CardAcceptBody::from_json).await?;
+    let login = login_of(&request);
+    hub::member(&project, login.as_ref()).await?;
+    let mut body = written_body(request, CardAcceptBody::from_json).await?;
+    hub::member(&project, login.as_ref()).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    hub::needs(login.as_ref(), "revision", body.revision.is_some())?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_accept(env, globals, &body.request(id, utc_now()), &mut |_| true)
             .map(written)
@@ -1025,10 +1089,16 @@ async fn accept_card(State(app): State<Shared>, request: Request) -> Result<Resp
 
 /// `POST …/cards/<id>/clear`: `card_clear`, past [`new_card`]'s door. Its
 /// consent is the page's dialog, the name typed as an accept's: a convention
-/// until the hub's named login (ADR-0034). No agent tool reaches it.
+/// until the hub's named login (ADR-0034). No agent tool reaches it. On a hub
+/// as [`accept_card`].
 async fn clear_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/clear")?;
-    let body = written_body(request, CardClearBody::from_json).await?;
+    let login = login_of(&request);
+    hub::member(&project, login.as_ref()).await?;
+    let mut body = written_body(request, CardClearBody::from_json).await?;
+    hub::member(&project, login.as_ref()).await?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    hub::needs(login.as_ref(), "revision", body.revision.is_some())?;
     Ok(run(project, move |env, globals| {
         specengine_cli::card_clear(env, globals, &body.request(id, utc_now()), &mut |_| true)
             .map(written)
@@ -1037,13 +1107,28 @@ async fn clear_card(State(app): State<Shared>, request: Request) -> Result<Respo
 }
 
 /// `POST …/trace/clear`: `card_clear_group`, past [`new_card`]'s door: one
-/// transaction, one event per card, no effect only.
+/// transaction, one event per card, no effect only. On a hub as
+/// [`accept_card`], a `member` refused before the body and after it
+/// ([`hub::clears_groups`]) and a required `count`; the library judges the
+/// entry read last, its cover, and the count with the set known, before its
+/// consent.
 async fn clear_group(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(request.uri())?;
     same_origin(request.headers())?;
-    let body = written_body(request, CardClearGroupBody::from_json).await?;
+    let login = login_of(&request);
+    let entry = hub::member(&project, login.as_ref()).await?;
+    hub::clears_groups(entry.as_ref())?;
+    let mut body = written_body(request, CardClearGroupBody::from_json).await?;
+    let entry = hub::member(&project, login.as_ref()).await?;
+    hub::clears_groups(entry.as_ref())?;
+    hub::acting(login.as_ref(), &mut body.actor)?;
+    hub::needs(login.as_ref(), "count", body.count.is_some())?;
     Ok(run(project, move |env, globals| {
-        specengine_cli::card_clear_group(env, globals, &body.request(utc_now()), &mut |_| true)
+        let request = CardClearGroupRequest {
+            entry,
+            ..body.request(utc_now())
+        };
+        specengine_cli::card_clear_group(env, globals, &request, &mut |_| true)
             .map(|outcome| Outcome::CardGroup(Box::new(outcome)))
     })
     .await)

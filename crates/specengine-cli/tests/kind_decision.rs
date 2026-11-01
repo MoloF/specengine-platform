@@ -263,6 +263,7 @@ fn stage_of(
             },
             now: now.to_owned(),
             git: pair.git_env(cwd),
+            actor: None,
         },
     )
     .unwrap_or_else(|error| panic!("stage {id}: {error}"))

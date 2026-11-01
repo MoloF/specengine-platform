@@ -131,7 +131,8 @@ enum Answered {
 /// usage defect 400 (the error body, the CLI's line), unknown 404, refused
 /// 409 (the refused review document); a card write's alike
 /// (docs/features/board-ui.md "Data"): 404 `{id, reason}`, 409 the write
-/// document, a lost compare-and-set too.
+/// document, a lost compare-and-set too, 403 a hub's group clear outside the
+/// login's `[team]` cover (docs/features/hub-team.md).
 fn answered(outcome: &Outcome) -> Answered {
     match outcome {
         Outcome::Stage(stage) => {
@@ -167,6 +168,7 @@ fn write_status(cause: Option<CardCause>) -> Option<StatusCode> {
         Some(CardCause::Usage) => None,
         Some(CardCause::Unknown) => Some(StatusCode::NOT_FOUND),
         Some(CardCause::Refused) => Some(StatusCode::CONFLICT),
+        Some(CardCause::Outside) => Some(StatusCode::FORBIDDEN),
     }
 }
 

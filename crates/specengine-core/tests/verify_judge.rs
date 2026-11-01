@@ -846,15 +846,14 @@ fn row_keys_order_as_lock_keys_keyless_first() {
 
 /// RD-9: verify adds no check code: `CHECK_CODES` stayed 35; slice 4b-2
 /// adds the rule `rev-not-raised` as the 36th (docs/features/rev-rule.md
-/// RD-2), no other. M: a verify code added to the check.
+/// RD-2), and hub-team `team-config` as the 37th
+/// (docs/features/hub-team.md "Data"), no other. M: a verify code
+/// added to the check.
 #[test]
 fn check_codes_stay_35() {
-    assert_eq!(CHECK_CODES.len(), 36, "{CHECK_CODES:?}");
-    assert_eq!(
-        CHECK_CODES.last(),
-        Some(&"rev-not-raised"),
-        "{CHECK_CODES:?}"
-    );
+    assert_eq!(CHECK_CODES.len(), 37, "{CHECK_CODES:?}");
+    assert_eq!(CHECK_CODES.last(), Some(&"team-config"), "{CHECK_CODES:?}");
+    assert_eq!(CHECK_CODES[35], "rev-not-raised", "{CHECK_CODES:?}");
     assert!(
         CHECK_CODES.iter().all(|code| !code.contains("verify")),
         "{CHECK_CODES:?}"

@@ -1050,6 +1050,7 @@ fn drift_item_cannot_be_staged() {
                 body: body.clone(),
                 now: DECIDED.to_owned(),
                 git: repo.git_env(&repo.root),
+                actor: None,
             },
         )
         .expect("an answer");

@@ -28,7 +28,7 @@ What a card froze of its targets, which `spec-trace.md` "Suspect" compares with 
 | a clear | `cleared` | each suspect entry in reach frozen again |
 | an editorial apply | `vouched` | the new hash of the entry's kind joins `also` |
 
-**Dropped entries** are inert to marks (`suspect_on` walks `targets`), so neither `edit_card` nor two edits can remove a mark, and a target that returns finds its old hash. A card with all its targets dropped keeps its snapshot. An editorial apply still vouches for them, logging `card.refreshed` and raising `revision`, rightly: a returning target must not mark falsely. An accept writes `targets`' entries alone, and nothing returns after it: a closed card takes no edit. They have no cap, bounded only by the distinct nodes a card ever targeted: a cap would reopen the hole a dropped entry closes.
+**Dropped entries** are inert to marks (`suspect_on` walks `targets`), so neither `edit_card` nor two edits can remove a mark's hash, and a target that returns finds it and marks again. The mark itself leaves with its target: a retarget or a cancel of an open card reads `no card`, recorded under the actor, with no `clear`. A card with all its targets dropped keeps its snapshot. An editorial apply still vouches for them, logging `card.refreshed` and raising `revision`, rightly: a returning target must not mark falsely. An accept writes `targets`' entries alone, and nothing returns after it: a closed card takes no edit. They have no cap, bounded only by the distinct nodes a card ever targeted: a cap would reopen the hole a dropped entry closes.
 
 ## Within
 
@@ -47,6 +47,8 @@ What a card froze of its targets, which `spec-trace.md` "Suspect" compares with 
 ## Events
 
 A departure's discrepancy: `node_ids`, `summary` its flags; `gap_type` `--gap-type` or `contradicts`; `severity` `normal`; `evidence` `[{file: "C-0001", observed, documented}]`; `options` core's two, change the brief and rework the result, each `not priced at acceptance`; `recommendation` 0; author `human`.
+
+**The dedup never refuses a departure** (ADR-0012). Hits are read under the write lock as `create_intake` reads them, but the accept writes them into the item's `distinct_from` itself, the corpus's first, the first 64 (`DISTINCT_MAX`) that fit (`agent-intake.md` "Dedup"), and its notes list them all. Nobody types one; the exit stays 0.
 
 `card.accepted` gains `verdict`, `discrepancy`. `card.cleared {id, outcome, nodes: [{id, rev, from, to}], correction, reason, as}`, `outcome` `no_effect`, `needs_correction`, `corrected`; a node's `id` is the target, `from` and `to` what its entry compares, so they differ even when the own hash held, `rev` the target's own, so a `Revision:` join for a nested change walks `within`. `card.reestimated {id, old, new, reason, as}`; `card.refreshed {id, node, proposal}`, one per (card, node): the dedupe in `refresh_snapshots` is the store's rule for a node repeated in a refresh, which a duplicated `{#ID}` can reach. A card row that does not decode is left alone: recording a commit never fails for a card's sake. For `CR-` (RM-0056): consequences from `spec impact --json`, `spec trace --json`; the estimate delta from `card.reestimated` plus each correction's `estimate`.
 

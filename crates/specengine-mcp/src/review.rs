@@ -402,6 +402,7 @@ impl SpecEngineServer {
                     body,
                     now: utc_now(),
                     git: git.clone(),
+                    actor: None,
                 };
                 let staged = match specengine_cli::stage(&env, &globals, &request) {
                     Ok(outcome) if outcome.cause.is_none() => outcome.proposal.document,

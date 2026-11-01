@@ -23,6 +23,19 @@ export interface Identity {
   login: string | null;
 }
 
+/** The acts `GET .../team` may list: a word of the queue's authority, no role and no trade. Source: `docs/features/hub-team.md` "Data". */
+export type KnownTeamAct = "stage" | "accept" | "clear" | "group_clear";
+
+/** An act as sent; other strings kept, as RM-0050 adds one. Source: `docs/features/hub-team.md` "Data". */
+export type TeamAct = KnownTeamAct | Unlisted;
+
+/** What `[team]` says of the asking login: a hub's route alone; `name` null and `allowed` empty for a login it does not list. Source: `docs/features/hub-team.md` "Data". */
+export interface Team {
+  login: string;
+  name: string | null;
+  allowed: TeamAct[];
+}
+
 /** Queue order, never a hold on work (ADR-0012). Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
 export type KnownSeverity = "high" | "normal" | "low";
 
@@ -1957,11 +1970,12 @@ export interface CardClearBody {
   as: string;
 }
 
-/** POST `.../trace/clear`: every suspect card of a node and what it holds, no effect only. Source: `docs/features/card-trace.md` "Clearing". */
+/** POST `.../trace/clear`: every suspect card of a node and what it holds, no effect only; `count` the number the dialog showed, sent on a hub alone. Source: `docs/features/card-trace.md` "Clearing", `docs/features/hub-team.md` "Data". */
 export interface CardClearGroupBody {
   group: string;
   reason: string;
   as: string;
+  count?: number;
 }
 
 /** POST `.../trace/clear`'s answer, a refusal's reason the last of `notes`. Source: `docs/features/card-trace.md` "Clearing". */

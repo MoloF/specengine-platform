@@ -49,6 +49,7 @@ import type {
   TaskList,
   TaskNotFound,
   TaskPackage,
+  Team,
   TraceDocument,
   TreeView,
 } from "../api/types";
@@ -180,6 +181,12 @@ export class MockClient implements SpecEngineClient {
   async getIdentity(): Promise<Identity> {
     await this.read();
     return { login: null };
+  }
+
+  /** No hub behind the mock: a local daemon has no such route (`docs/features/hub-team.md` A7), and the page never asks it. */
+  async getTeam(): Promise<Team> {
+    await this.read();
+    throw new ClientError({ status: 404, message: "no route /api/projects/<slug>/team: the routes are /api/projects and the web UI (mock)" });
   }
 
   async getInbox(project: string): Promise<Inbox> {

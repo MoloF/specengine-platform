@@ -16,7 +16,7 @@ import { TabPanel, Tabs } from "../ui/Tabs";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { actingName, isActingLine, useActing, useHubLogin } from "./acting";
+import { actingName, isActingLine, useActing, useAllowed, useHubLogin } from "./acting";
 import { BoardCard, type CardActions } from "./BoardCard";
 import { BoardColumn } from "./BoardColumn";
 import { AcceptCardDialog, AssignDialog, CancelCardDialog, ClearCardDialog, EditCardDialog, NewCardDialog } from "./CardDialogs";
@@ -178,6 +178,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   const [dropAt, setDropAt] = useState<{ lane: string; before: string | null } | null>(null);
   const [acting, setActing] = useActing();
   const login = useHubLogin();
+  const allows = useAllowed(project);
   const results = useRef<HTMLDivElement>(null);
   const board = useRef<HTMLDivElement>(null);
   const panelHeading = useRef<HTMLHeadingElement>(null);
@@ -377,7 +378,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
     }
   }
 
-  /** The menu's lines: the column's moves in served order, then Up, Down, then Accept in the accept column. */
+  /** The menu's lines: the column's moves in served order, then Up, Down, then Accept in the accept column, unless a hub's `allowed` omits it. */
   function choicesFor(row: CardRow): BoardChoice[] {
     const read = outsideRead.data;
     const moves = menuOutside ? (read !== undefined && isCard(read) ? read.allowed : []) : movesFrom(flow, row.column);
@@ -407,7 +408,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
         });
       }
     }
-    if (row.column === flow?.accept.from) {
+    if (row.column === flow?.accept.from && allows("accept")) {
       choices.push({ key: "accept", label: "Accept", detail: null, icon: "taskAccepted", asked: null, spoken: null });
     }
     return choices;
@@ -888,7 +889,7 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
         </label>
         <input
           id={actingId}
-          className="field"
+          className={login === null ? "field" : "field field-fixed"}
           type="text"
           autoComplete="off"
           spellCheck={false}

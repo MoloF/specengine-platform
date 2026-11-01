@@ -71,6 +71,7 @@ fn stage_editorial(
             },
             now: STAGED.to_owned(),
             git: pair.git_env(&pair.main),
+            actor: None,
         },
     )
     .unwrap_or_else(|error| panic!("stage {id}: {error}"))

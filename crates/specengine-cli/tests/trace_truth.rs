@@ -1289,6 +1289,7 @@ fn ac05_a_staged_editorial_of_the_section_vouches_for_the_document() {
             },
             now: "2026-10-05T22:00:00Z".to_owned(),
             git: pair.git_env(&pair.main),
+            actor: None,
         },
     )
     .expect("the stage");

@@ -115,7 +115,8 @@ function Concern({ project, target }: { project: string; target: RoundItem["targ
  * Leave open; without, Take the working answer (when given), Your answer, Reject, Leave open. Nothing
  * is picked for the owner, the recommended option only marked. A staged choice shows as the Inbox
  * shows it, with its terminal command and Unstage. Memoised: typing in one item renders that item
- * alone (a sheet holds up to 200), so the callbacks take the item and are stable.
+ * alone (a sheet holds up to 200), so the callbacks take the item and are stable. Where a hub's
+ * `allowed` omits `stage` the item is to read: its choices stand off and no answer is written.
  */
 export const RoundItemCard = memo(function RoundItemCard({
   project,
@@ -123,6 +124,7 @@ export const RoundItemCard = memo(function RoundItemCard({
   draft,
   result,
   busy,
+  canStage,
   unstageRefusal,
   onDraft,
   onUnstage,
@@ -134,6 +136,8 @@ export const RoundItemCard = memo(function RoundItemCard({
   result: RoundAnswerEntry | undefined;
   /** A write is on its way: Unstage stays focusable but does nothing. */
   busy: boolean;
+  /** False: a hub's `allowed` omits `stage`. */
+  canStage: boolean;
   unstageRefusal: string | null;
   onDraft: (id: string, draft: Draft) => void;
   onUnstage: (item: RoundItem) => void;
@@ -266,7 +270,7 @@ export const RoundItemCard = memo(function RoundItemCard({
           <StagedChoice
             id={item.id}
             review={item}
-            busy={busy}
+            busy={busy || !canStage}
             refusal={unstageRefusal}
             onUnstage={() => {
               onUnstage(item);
@@ -274,7 +278,7 @@ export const RoundItemCard = memo(function RoundItemCard({
           />
         )}
 
-        <fieldset ref={choices} className="option-choice round-choice">
+        <fieldset ref={choices} className="option-choice round-choice" disabled={!canStage}>
           <legend>
             {item.staged_at === null ? "Answer" : "Answer again: replaces the staged choice"}{" "}
             <span className="sr-only">{item.id}</span>
@@ -314,7 +318,7 @@ export const RoundItemCard = memo(function RoundItemCard({
           {radio("open", <span className="option-radio-label">Leave open</span>)}
         </fieldset>
 
-        {cap !== null && current !== undefined && (
+        {canStage && cap !== null && current !== undefined && (
           <DraftText
             label={shown === "reject" ? `Reason for rejecting ${item.id}` : `Your answer to ${item.id}`}
             value={shown === "reject" ? current.reason : current.answer}

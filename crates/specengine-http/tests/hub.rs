@@ -22,8 +22,9 @@
 //!   overwriting silently.
 //! - AC-07: a flow's `by` stops a login. M: skipping the actor in `move_card`'s
 //!   handler.
-//! - AC-08: what needs consent stays local, writes default deny. M: adding
-//!   `accept` to the list; defaulting to allow.
+//! - AC-08, its form in docs/features/hub-team.md: writes stay default deny, the
+//!   team routes open to `[team]` alone, so a project with none refuses them.
+//!   M: defaulting to allow; `accept` listed as a plain write.
 //! - AC-09: `hub_trusts_the_header_on_its_socket`, then what the daemon can
 //!   judge of a login. M: taking the first of two; a shared secret.
 //! - AC-10, its new half: a local daemon never reads `Remote-User`. M: reading
@@ -49,23 +50,18 @@ mod common;
 
 use std::ffi::OsStr;
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
+use common::hub::{
+    AUTHORITY, ORIGIN, P, Proxied, Setup, assert_plain, assert_refused, events_of, five_writes,
+    hub_args, through,
+};
 use common::{
     Reply, Scratch, Server, Stream, ask, beyond_daemon, data_dir, files_ending, read_text, replace,
-    repository_root, request_bytes, root_args, snapshot, spec, spec_json,
+    repository_root, request_bytes, snapshot, spec, spec_json,
 };
 use serde_json::{Value, json};
-use specengine_cli::{Env, Globals, events_after};
-
-/// The public origin of every hub here, and its authority.
-const ORIGIN: &str = "https://hub.example.test";
-const AUTHORITY: &str = "hub.example.test";
-
-/// The print shop's project.
-const P: &str = "/api/projects/card-press";
 
 /// The refusal lines of docs/canon/hub.md "Fence".
 const HOST_LINE: &str =
@@ -74,8 +70,13 @@ const ORIGIN_LINE: &str = "refused: the Origin header, when sent, must be https:
 const SITE_LINE: &str = "refused: Sec-Fetch-Site, when sent, must be `same-origin` or `none`";
 const NO_LOGIN_LINE: &str = "refused: this hub needs one Remote-User header from its proxy";
 const TWO_LOGINS_LINE: &str = "refused: the Remote-User header is sent more than once";
-const LOCAL_LINE: &str =
-    "refused: this hub serves GET and five card writes: this route stays local";
+const OFF_LIST_LINE: &str = "refused: this hub does not serve this route";
+
+/// The fence's lines of a confirm route (docs/features/hub-team.md "Data").
+const NO_QUERY_LINE: &str = "refused: this route takes no query";
+
+/// A project with no `[team]` (docs/features/hub-team.md "Data").
+const NO_TEAM_LINE: &str = "refused: this project has no `[team]`";
 
 /// `same_origin()`'s line: a listed write keeps the board's door.
 const PAGE: &str = "a write needs a same-origin page (not authentication: ADR-0034)";
@@ -87,109 +88,6 @@ const FULL_NAME: &str =
 /// Where a `Remote-User` value goes that a `&str` cannot hold ([`spliced`]).
 const MARKER: &str = "@LOGIN@";
 
-// ---------------------------------------------------------- the test proxy
-
-/// One request as the proxy hands it to the daemon: the test's Traefik
-/// (docs/canon/hub.md "Tests"). What the browser sent, the public `Host` kept
-/// (`passHostHeader`), the `Sec-Fetch-*` of its kind of request, the one
-/// `Remote-User` the login door answered, and the `X-Forwarded-*` Traefik adds
-/// to every request. It proves the daemon's half; the real proxy's half is
-/// RM-0064's.
-#[derive(Debug, Clone)]
-struct Proxied {
-    headers: Vec<(String, String)>,
-}
-
-impl Proxied {
-    fn browser(login: &str, fetch: [(&str, &str); 3]) -> Self {
-        let mut headers = vec![("Host".to_owned(), AUTHORITY.to_owned())];
-        headers.extend(fetch.map(|(name, value)| (name.to_owned(), value.to_owned())));
-        headers.push(("Remote-User".to_owned(), login.to_owned()));
-        for (name, value) in [
-            ("X-Forwarded-For", "203.0.113.7"),
-            ("X-Forwarded-Host", AUTHORITY),
-            ("X-Forwarded-Port", "443"),
-            ("X-Forwarded-Proto", "https"),
-            ("X-Forwarded-Server", "edge"),
-        ] {
-            headers.push((name.to_owned(), value.to_owned()));
-        }
-        Self { headers }
-    }
-
-    /// A read of the page's own: a same-origin `fetch`, which sends no
-    /// `Origin` on a GET.
-    fn fetch(login: &str) -> Self {
-        Self::browser(
-            login,
-            [
-                ("Sec-Fetch-Site", "same-origin"),
-                ("Sec-Fetch-Mode", "cors"),
-                ("Sec-Fetch-Dest", "empty"),
-            ],
-        )
-    }
-
-    /// A write of the page's own: its `Origin` and its JSON.
-    fn write(login: &str) -> Self {
-        Self::fetch(login)
-            .plus("Origin", ORIGIN)
-            .plus("Content-Type", "application/json")
-    }
-
-    /// A top-level navigation arriving from `site`.
-    fn navigation(site: &str, login: &str) -> Self {
-        Self::browser(
-            login,
-            [
-                ("Sec-Fetch-Site", site),
-                ("Sec-Fetch-Mode", "navigate"),
-                ("Sec-Fetch-Dest", "document"),
-            ],
-        )
-    }
-
-    /// With `name` holding `value` alone, added when absent.
-    fn set(self, name: &str, value: &str) -> Self {
-        self.without(name).plus(name, value)
-    }
-
-    /// With one line more, whatever is there.
-    fn plus(mut self, name: &str, value: &str) -> Self {
-        self.headers.push((name.to_owned(), value.to_owned()));
-        self
-    }
-
-    fn without(mut self, name: &str) -> Self {
-        self.headers.retain(|(held, _)| held != name);
-        self
-    }
-
-    fn pairs(&self) -> Vec<(&str, &str)> {
-        self.headers
-            .iter()
-            .map(|(name, value)| (name.as_str(), value.as_str()))
-            .collect()
-    }
-
-    /// The request's bytes, a `Content-Length` with a body.
-    fn bytes(&self, method: &str, path: &str, body: &[u8]) -> Vec<u8> {
-        let length = body.len().to_string();
-        let mut headers = self.pairs();
-        if !body.is_empty() {
-            headers.push(("Content-Length", length.as_str()));
-        }
-        let mut bytes = request_bytes(method, path, &headers);
-        bytes.extend_from_slice(body);
-        bytes
-    }
-}
-
-/// `method path` through the proxy.
-fn through(server: &Server, method: &str, path: &str, proxied: &Proxied, body: &[u8]) -> Reply {
-    server.raw(&proxied.bytes(method, path, body))
-}
-
 /// `bytes` with [`MARKER`] replaced by `value`.
 fn spliced(bytes: &[u8], value: &[u8]) -> Vec<u8> {
     let at = bytes
@@ -197,228 +95,6 @@ fn spliced(bytes: &[u8], value: &[u8]) -> Vec<u8> {
         .position(|window| window == MARKER.as_bytes())
         .expect("the marker");
     [&bytes[..at], value, &bytes[at + MARKER.len()..]].concat()
-}
-
-// ----------------------------------------------------------------- a hub
-
-/// `--root` per root, `--port 0`, `--public-origin origin`.
-fn hub_args<'a>(roots: &[&Path], origin: &'a str) -> Vec<&'a OsStr> {
-    let mut args: Vec<&'a OsStr> = root_args(roots);
-    args.push(OsStr::new("--public-origin"));
-    args.push(OsStr::new(origin));
-    args
-}
-
-/// A git repository of a fixture, a `HOME` and a working directory, with no
-/// daemon yet. An identity in the repository, as an owner's has one: a write
-/// through the daemon could commit.
-struct Setup {
-    root: PathBuf,
-    home: PathBuf,
-    cwd: PathBuf,
-    scratch: Scratch,
-}
-
-impl Setup {
-    fn new(name: &str, fixture: &str) -> Self {
-        let scratch = Scratch::new(name);
-        let root = scratch.repo(fixture, "served", "main");
-        let git = scratch.git();
-        git.run(&root, &["config", "user.name", "Owner"]);
-        git.run(&root, &["config", "user.email", "owner@example.invalid"]);
-        let home = scratch.home("h");
-        let cwd = scratch.dir("cwd");
-        Self {
-            root,
-            home,
-            cwd,
-            scratch,
-        }
-    }
-
-    fn start(self) -> Hub {
-        let server = Server::start(&self.home, &self.cwd, &hub_args(&[&self.root], ORIGIN));
-        Hub {
-            server,
-            setup: self,
-        }
-    }
-}
-
-/// A running hub. `server` is first: it stops before the scratch goes.
-struct Hub {
-    server: Server,
-    setup: Setup,
-}
-
-/// What a refusal must leave of the queue, as AC-08 names it.
-#[derive(Debug, PartialEq)]
-struct Stored {
-    events: Vec<(String, Value)>,
-    board: String,
-    inbox: String,
-    round: String,
-    proposals: Vec<Value>,
-}
-
-impl Hub {
-    /// `GET path` by `login`.
-    fn get(&self, login: &str, path: &str) -> Reply {
-        through(&self.server, "GET", path, &Proxied::fetch(login), b"")
-    }
-
-    /// `POST <P>/path` with the JSON `body` by `login`.
-    fn post(&self, login: &str, path: &str, body: &Value) -> Reply {
-        through(
-            &self.server,
-            "POST",
-            &format!("{P}/{path}"),
-            &Proxied::write(login),
-            body.to_string().as_bytes(),
-        )
-    }
-
-    /// As [`Hub::post`], the answer a 200.
-    fn done(&self, login: &str, path: &str, body: &Value) -> Value {
-        let reply = self.post(login, path, body);
-        assert_eq!(reply.status, 200, "{login} {path} {body}: {}", reply.text());
-        reply.json()
-    }
-
-    /// `show`'s document, as a page reads it.
-    fn show(&self, id: &str) -> Value {
-        self.get("mira", &format!("{P}/cards/{id}"))
-            .status(200)
-            .json()
-    }
-
-    /// Every stored event, `(type, payload)`.
-    fn events(&self) -> Vec<(String, Value)> {
-        events_of(&self.setup.home, &self.setup.root)
-    }
-
-    /// The events and the board as a page reads it: every row and event.
-    fn board(&self) -> (Vec<(String, Value)>, String) {
-        let board = self
-            .get("mira", &format!("{P}/cards?with_cancelled=true"))
-            .status(200)
-            .text()
-            .to_owned();
-        (self.events(), board)
-    }
-
-    /// `git status`, `HEAD`, the refs, the worktrees and every file.
-    fn repository(&self) -> Vec<String> {
-        let git = self.setup.scratch.git();
-        let root = &self.setup.root;
-        let files: Vec<String> = snapshot(root)
-            .into_iter()
-            .filter(|(path, _)| path != ".git/index")
-            .map(|(path, bytes)| format!("{path} {bytes:?}"))
-            .collect();
-        vec![
-            git.run(root, &["status", "--porcelain", "--untracked-files=all"]),
-            git.run(root, &["rev-parse", "HEAD"]),
-            git.run(root, &["for-each-ref", "--format=%(refname) %(objectname)"]),
-            git.run(root, &["worktree", "list", "--porcelain"]),
-            files.join("\n"),
-        ]
-    }
-
-    /// A proposal's stored fields, read through the CLI: the review's preview
-    /// is computed when asked.
-    fn proposal(&self, id: &str) -> Value {
-        let setup = &self.setup;
-        let mut review = spec_json(&setup.home, &setup.cwd, &setup.root, &["review", id]).json();
-        review.as_object_mut().expect("an object").retain(|key, _| {
-            [
-                "id",
-                "status",
-                "decided_by",
-                "decided_at",
-                "decision_note",
-                "applied_commit",
-                "updated_at",
-                "record_id",
-                "staged",
-                "staged_at",
-            ]
-            .contains(&key.as_str())
-        });
-        review
-    }
-
-    fn stored(&self, ids: &[&str]) -> Stored {
-        let (events, board) = self.board();
-        Stored {
-            events,
-            board,
-            inbox: self.text("tomas", "inbox"),
-            round: self.text("tomas", "round"),
-            proposals: ids.iter().map(|id| self.proposal(id)).collect(),
-        }
-    }
-
-    /// `GET <P>/path`, a 200, its bytes.
-    fn text(&self, login: &str, path: &str) -> String {
-        self.get(login, &format!("{P}/{path}"))
-            .status(200)
-            .text()
-            .to_owned()
-    }
-}
-
-fn events_of(home: &Path, root: &Path) -> Vec<(String, Value)> {
-    let env = Env {
-        cwd: root.to_path_buf(),
-        home: Some(home.as_os_str().to_os_string()),
-        xdg_data_home: None,
-    };
-    let globals = Globals {
-        root: Some(root.to_path_buf()),
-        config: None,
-    };
-    events_after(&env, &globals, Some(0))
-        .expect("the events read")
-        .events
-        .into_iter()
-        .map(|event| {
-            let payload = serde_json::from_str(&event.payload).expect("a JSON payload");
-            (event.event_type, payload)
-        })
-        .collect()
-}
-
-/// The hub's five writes (docs/canon/hub.md "Routes") on a new card `id`, in
-/// an order that lands, on the print shop's `plates`, which has no `moves`.
-fn five_writes(id: &str) -> [(String, Value, &'static str); 5] {
-    [
-        (
-            "cards".to_owned(),
-            json!({"title": "Back page", "discipline": "plates"}),
-            "card.created",
-        ),
-        (
-            format!("cards/{id}/move"),
-            json!({"to": "checked"}),
-            "card.moved",
-        ),
-        (
-            format!("cards/{id}/edit"),
-            json!({"goal": "Fill the back."}),
-            "card.edited",
-        ),
-        (
-            format!("cards/{id}/assign"),
-            json!({"assignee": "ana"}),
-            "card.assigned",
-        ),
-        (
-            format!("cards/{id}/cancel"),
-            json!({"reason": "Pulled for space."}),
-            "card.cancelled",
-        ),
-    ]
 }
 
 /// `endpoints()` of `tests/fence.rs`, read when the test runs and not copied:
@@ -499,40 +175,6 @@ fn assert_page(reply: &Reply, context: &str) {
             "{context}: the landing keeps the page's policy: {policy}"
         );
     }
-}
-
-/// No `Access-Control-*`, `no-store`.
-fn assert_plain(reply: &Reply, context: &str) {
-    assert!(
-        reply.cors_headers().is_empty(),
-        "{context}: an Access-Control-* header: {:?}",
-        reply.headers
-    );
-    assert_eq!(
-        reply.header("cache-control"),
-        Some("no-store"),
-        "{context}: {:?}",
-        reply.headers
-    );
-}
-
-/// The local fence's way of saying no (docs/canon/hub.md "Fence"): 403, the
-/// error body holding `line`, no `Allow`, `no-store`, no `Access-Control-*`.
-fn assert_refused(reply: &Reply, line: &str, context: &str) {
-    assert_eq!(
-        reply.status,
-        403,
-        "{context}: {}",
-        String::from_utf8_lossy(&reply.body)
-    );
-    assert_eq!(reply.error_message(), line, "{context}");
-    assert_plain(reply, context);
-    assert_eq!(
-        reply.header("allow"),
-        None,
-        "{context}: {:?}",
-        reply.headers
-    );
 }
 
 /// A 403 of the fence that names `header`, whichever line of "Fence" it took.
@@ -922,7 +564,7 @@ fn ac02_a_foreign_origin_is_refused_on_every_route_with_a_good_login() {
 #[test]
 fn the_fence_judges_host_origin_site_login_route_in_that_order() {
     let hub = Setup::new("hub-order", "spec-a").start();
-    let path = "/api/projects/lantern-keep/trace/clear";
+    let path = "/api/projects/lantern-keep/cards/C-0001/archive";
     let person = Proxied::fetch("mira");
     let no_login = person.clone().without("Remote-User");
     let cases = [
@@ -946,7 +588,7 @@ fn the_fence_judges_host_origin_site_login_route_in_that_order() {
             SITE_LINE,
         ),
         (no_login, NO_LOGIN_LINE),
-        (person, LOCAL_LINE),
+        (person, OFF_LIST_LINE),
     ];
     for (proxied, line) in &cases {
         assert_refused(
@@ -1493,11 +1135,26 @@ fn consent_waits(name: &str) -> (Setup, String, String) {
     (setup, asked, staged)
 }
 
-/// AC-08: whatever needs consent stays local, and the list of writes is
-/// default deny, whoever asks: nothing stored moves ([`consent_waits`]). The
-/// reads stay served.
+/// `[team]` for [`raw_forms_of_a_local_route_and_other_methods_stay_refused`]:
+/// `tomas`, the card's reviewer in [`consent_waits`], in it, committed.
+fn tomas_on_the_team(setup: &Setup) {
+    let mut config = read_text(&setup.root, "specengine.toml");
+    config.push_str(
+        "\n[team.tomas]\nname = \"Tomas B\"\nrole = \"member\"\nemail = \"tomas@example.org\"\n",
+    );
+    fs::write(setup.root.join("specengine.toml"), config).expect("the config");
+    let git = setup.scratch.git();
+    git.run(&setup.root, &["commit", "-qam", "tomas joins"]);
+}
+
+/// AC-08, its hub-team form: a project opts in by a reviewed commit, so with no
+/// `[team]` each act past the plain writes is a 403 naming the table, on every
+/// route at once, whoever asks, each request one that would land
+/// ([`consent_waits`]); the list of writes stays default deny; nothing stored
+/// moves; the reads stay served. M: defaulting to allow; `accept` listed as a
+/// plain write.
 #[test]
-fn ac08_what_needs_consent_stays_local_and_writes_are_default_deny() {
+fn ac08_with_no_team_the_acts_are_refused_and_writes_are_default_deny() {
     let (setup, asked, staged) = consent_waits("hub-local-only");
     let hub = setup.start();
     let ids = [asked.as_str(), staged.as_str()];
@@ -1507,9 +1164,13 @@ fn ac08_what_needs_consent_stays_local_and_writes_are_default_deny() {
         .as_str()
         .expect("updated_at")
         .to_owned();
+    let revision = hub.show("C-0001")["revision"]
+        .as_str()
+        .expect("a revision")
+        .to_owned();
     let stage = json!({"decision": "reject", "reason": "Asked before.", "updated_at": at});
     let answers = json!({"project": "card-press", "answers": [{"id": asked, "stage": stage}]});
-    let local_only = [
+    let no_team = [
         (
             "POST",
             format!("{P}/proposals/{asked}/decision"),
@@ -1529,27 +1190,31 @@ fn ac08_what_needs_consent_stays_local_and_writes_are_default_deny() {
         (
             "POST",
             format!("{P}/cards/C-0001/accept"),
-            json!({"briefed": true, "note": "Read twice.", "as": "tomas"}).to_string(),
+            json!({"briefed": true, "note": "Read twice.", "revision": revision, "as": "tomas"})
+                .to_string(),
         ),
         (
             "POST",
             format!("{P}/cards/C-0001/clear"),
-            json!({"outcome": "no_effect", "reason": "A reprint.", "as": "tomas"}).to_string(),
+            json!({"outcome": "no_effect", "reason": "A reprint.", "revision": revision,
+                "as": "tomas"})
+            .to_string(),
         ),
         (
             "POST",
             format!("{P}/trace/clear"),
-            json!({"group": "PRN-WEEKLY", "reason": "A reprint.", "as": "tomas"}).to_string(),
+            json!({"group": "PRN-WEEKLY", "reason": "A reprint.", "count": 1, "as": "tomas"})
+                .to_string(),
         ),
     ];
     let page = Proxied::write("tomas");
-    for (method, path, body) in &local_only {
+    for (method, path, body) in &no_team {
         let reply = through(&hub.server, method, path, &page, body.as_bytes());
-        assert_refused(&reply, LOCAL_LINE, &format!("{method} {path}"));
+        assert_refused(&reply, NO_TEAM_LINE, &format!("{method} {path}"));
     }
-    assert_eq!(hub.stored(&ids), before, "what stays local changed nothing");
+    assert_eq!(hub.stored(&ids), before, "no act landed with no `[team]`");
 
-    // Every path but the five, exact raw segments, and a read route's 405.
+    // Every path off the list, exact raw segments, and a read route's 405.
     let body = json!({"title": "Back page", "discipline": "plates"}).to_string();
     let unlisted = [
         "/no/such/route".to_owned(),
@@ -1571,19 +1236,29 @@ fn ac08_what_needs_consent_stays_local_and_writes_are_default_deny() {
     ];
     for path in &unlisted {
         let reply = through(&hub.server, "POST", path, &page, body.as_bytes());
-        assert_refused(&reply, LOCAL_LINE, &format!("POST {path}"));
+        assert_refused(&reply, OFF_LIST_LINE, &format!("POST {path}"));
     }
 
-    // Any method but GET, on a listed route too.
+    // Any method off the list, on a listed route too. DELETE stands on the
+    // stage route alone.
     for method in ["PUT", "PATCH", "DELETE", "OPTIONS", "TRACE"] {
         for path in [
             format!("{P}/cards"),
             format!("{P}/cards/C-0001/move"),
+            format!("{P}/cards/C-0001/accept"),
+            format!("{P}/cards/C-0001/clear"),
+            format!("{P}/trace/clear"),
+            format!("{P}/round/answers"),
             "/api/projects".to_owned(),
         ] {
             let reply = through(&hub.server, method, &path, &page, b"");
-            assert_refused(&reply, LOCAL_LINE, &format!("{method} {path}"));
+            assert_refused(&reply, OFF_LIST_LINE, &format!("{method} {path}"));
         }
+    }
+    for method in ["PUT", "PATCH", "OPTIONS", "TRACE"] {
+        let path = format!("{P}/proposals/{staged}/decision");
+        let reply = through(&hub.server, method, &path, &page, b"");
+        assert_refused(&reply, OFF_LIST_LINE, &format!("{method} {path}"));
     }
 
     // A HEAD carries no body to read a line from.
@@ -1617,18 +1292,29 @@ fn ac08_what_needs_consent_stays_local_and_writes_are_default_deny() {
 }
 
 /// The security review's raw-socket table, kept: `listed` matches exact raw
-/// segments, so no spelling of a local route reaches its handler, whatever a
-/// router or a proxy would normalise it to, and only the two exact methods pass
-/// the fence. Each form names a request that would land ([`consent_waits`]),
-/// with a good login and a same-origin page, so the 403 is the list's alone.
+/// segments, so no spelling of a route reaches its handler, whatever a router or
+/// a proxy would normalise it to, and only the listed methods pass the fence.
+/// Each form names a request that would land ([`consent_waits`]): `tomas` is on
+/// the project's `[team]`, the card's reviewer, the body holds its `revision`,
+/// with a good `Origin` and a same-origin page, so the 403 is the list's alone.
+/// `accept?x=/move` is the fence's query refusal (hub-team A5, which holds the
+/// rest); the plain form lands, last, so the table is no refusal of everything.
+/// M: `Hub::fenced` reading the path alone.
 #[test]
-fn raw_forms_of_a_local_route_and_other_methods_stay_local() {
+fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
     let (setup, asked, staged) = consent_waits("hub-raw-forms");
+    tomas_on_the_team(&setup);
     let hub = setup.start();
     let ids = [asked.as_str(), staged.as_str()];
     let before = hub.stored(&ids);
     let page = Proxied::write("tomas");
-    let accept = json!({"briefed": true, "note": "Read twice.", "as": "tomas"}).to_string();
+    let revision = hub.show("C-0001")["revision"]
+        .as_str()
+        .expect("a revision")
+        .to_owned();
+    let accept =
+        json!({"briefed": true, "note": "Read twice.", "revision": revision, "as": "tomas"})
+            .to_string();
     let card = format!("{P}/cards/C-0001");
     let forms = [
         format!("{card}/accept/"),
@@ -1642,15 +1328,14 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_local() {
         format!("{card}/move%2Faccept"),
         format!("{card}/accept;x"),
         format!("{card}/accept%00"),
-        format!("{card}/accept?x=/move"),
-        format!("{P}/trace/clear"),
-        format!("{P}/round/answers"),
-        format!("{P}/proposals/{asked}/decision"),
     ];
     for path in &forms {
         let reply = through(&hub.server, "POST", path, &page, accept.as_bytes());
-        assert_refused(&reply, LOCAL_LINE, &format!("POST {path}"));
+        assert_refused(&reply, OFF_LIST_LINE, &format!("POST {path}"));
     }
+    let queried = format!("{card}/accept?x=/move");
+    let reply = through(&hub.server, "POST", &queried, &page, accept.as_bytes());
+    assert_refused(&reply, NO_QUERY_LINE, &format!("POST {queried}"));
 
     let listed_and_local = [
         format!("{P}/cards"),
@@ -1673,11 +1358,15 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_local() {
                 assert_eq!(reply.status, 403, "{context}");
                 assert_plain(&reply, &context);
             } else {
-                assert_refused(&reply, LOCAL_LINE, &context);
+                assert_refused(&reply, OFF_LIST_LINE, &context);
             }
         }
     }
     assert_eq!(hub.stored(&ids), before, "no form reached a handler");
+
+    let path = format!("{card}/accept");
+    let reply = through(&hub.server, "POST", &path, &page, accept.as_bytes());
+    assert_eq!(reply.status, 200, "the plain form lands: {}", reply.text());
 }
 
 // ----------------------------------------------------------- the GET routes
@@ -1691,7 +1380,7 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_local() {
 /// has decided the new route is safe on a hub, and writes it here. Do not add a
 /// line to make the test pass: add it once the route has been judged, for what
 /// it reads and for what a login may learn from it.
-const GET_ROUTES: [&str; 23] = [
+const GET_ROUTES: [&str; 24] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1712,6 +1401,7 @@ const GET_ROUTES: [&str; 23] = [
     "/api/projects/{p}/search",
     "/api/projects/{p}/tasks",
     "/api/projects/{p}/tasks/{id}",
+    "/api/projects/{p}/team",
     "/api/projects/{p}/trace",
     "/api/projects/{p}/tree",
     "/assets/{file}",

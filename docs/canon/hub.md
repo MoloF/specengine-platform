@@ -8,7 +8,7 @@ reviewed: 2026-11-01
 
 # Hub mode: a public origin and one trusted login
 
-ADR-0058, ADR-0059, built by `hub-identity` (RM-0049). `specengine-http --public-origin` serves named people on a public URL, behind a proxy on the same host, with no account inside SpecEngine. It is a second fence, not a second daemon: the routes, the library calls, the queue and SQLite are the local daemon's (`serve.md`, `crates/specengine-http/README.md`). It gives nobody power over the brief: whatever needs consent stays on a local daemon until `hub-confirm` (RM-0050). Code: http `hub.rs`, `app.rs` `fence`, `main.rs`; CLI `card.rs` `hub_login_problem`; UI `src/board/acting.ts`.
+ADR-0058, ADR-0059, built by `hub-identity` (RM-0049). `specengine-http --public-origin` serves named people on a public URL, behind a proxy on the same host, with no account inside SpecEngine. It is a second fence, not a second daemon: the routes, the library calls, the queue and SQLite are the local daemon's (`serve.md`, `crates/specengine-http/README.md`). No spec file changes on a hub until `hub-confirm` (RM-0050); who acts past the plain writes is `[team]`'s (`hub-team.md`). Code: http `hub.rs`, `app.rs` `fence`, `main.rs`; core `card.rs` `hub_login_problem`; UI `src/board/acting.ts`.
 
 ## Entry
 
@@ -28,7 +28,7 @@ In `fence()`, before routing, in this order. A failure is the local fence's answ
 2. `Origin` absent or byte for byte the origin.
 3. `Sec-Fetch-Site` absent, `same-origin` or `none`, but for the landing.
 4. `Remote-User`: "Identity".
-5. The method and path: "Routes".
+5. The method and path, then a confirm route's query and `Origin`: "Routes".
 
 ```text
 refused: the Host header must be <authority>: this hub serves its public origin only
@@ -37,7 +37,7 @@ refused: Sec-Fetch-Site, when sent, must be `same-origin` or `none`
 refused: the <header> header is sent more than once
 refused: this hub needs one Remote-User header from its proxy
 refused: Remote-User: <why>
-refused: this hub serves GET and five card writes: this route stays local
+refused: this hub does not serve this route
 ```
 
 **The landing.** One exception, for the hub alone: `GET /` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` passes step 3 whatever `Sec-Fetch-Site` says. The login door's page, on a sibling subdomain, navigates back as `same-site`, a chat link arrives as `cross-site`, and refusing them lands a person on a JSON 403. The page is static bytes and `frame-ancestors 'none'` stands (`serve-ui.md`). Every other route, `/assets/<file>` included, refuses both, and `/` takes the rest of the fence.
@@ -46,19 +46,19 @@ refused: this hub serves GET and five card writes: this route stays local
 
 `Remote-User`, one constant in `hub.rs`, no flag: `deploy/` ships at the same version, so a changed login door changes both in one commit, and a flag could name a header the proxy does not scrub. `Remote-Name`, `Remote-Email`, `Remote-Groups` are never read, so the deployment guards one header.
 
-Judged on every request, `/` and assets too. None or a bad one: 403, never a 401, whose challenge the daemon does not own. An empty value counts as none; two values give `refused: the Remote-User header is sent more than once`, from `single()`. `hub.rs` keeps those steps and UTF-8; `hub_login_problem` (CLI `card.rs`) refuses the rest: a login `.trim()` would change; `card_person_problem` (`cards.md` "Who acts"); a comma (a proxy folding a client's copy gives `eve, mira`); a Unicode format character (Cf) anywhere; `local` and `agent` in any ASCII case, the record's words for no person, and `-`, its word for clearing a name. hyper answers 400 to a control byte but a tab, before the fence.
+Judged on every request, `/` and assets too. None or a bad one: 403, never a 401, whose challenge the daemon does not own. An empty value counts as none; two values give `refused: the Remote-User header is sent more than once`, from `single()`. `hub.rs` keeps those steps and UTF-8; `hub_login_problem` (core `card.rs`, re-exported) refuses the rest: a login `.trim()` would change; `card_person_problem` (`cards.md` "Who acts"); a comma (a proxy folding a client's copy gives `eve, mira`); a Unicode format character (Cf) anywhere; `local` and `agent` in any ASCII case, the record's words for no person, and `-`, its word for clearing a name. hyper answers 400 to a control byte but a tab, before the fence.
 
 The login door's duty, not judged here: Latin look-alikes, NFC against NFD, and invisible marks outside Cf (U+034F, variation selectors, U+3164). RM-0065's `spec admin` should refuse them at account creation.
 
-The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the five writes set the `actor` of their `Card*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person for the first time, if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). `Author` and `Decided-by` do not change; the daemon reaches neither on a hub (RM-0050).
+The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the five writes and the confirm class set the `actor` of their `Card*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person for the first time, if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). `Author` and `Decided-by` do not change until RM-0050.
 
 ## Routes
 
-A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode.
+A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode. `GET .../team`, a hub's alone: `hub-team.md`.
 
-Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless it is POST on `.../cards` or `.../cards/:id/{move,edit,assign,cancel}`, matched by exact raw segments. A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
+Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the five plain writes, POST on `.../cards` or `.../cards/:id/{move,edit,assign,cancel}`, and the team and confirm classes of `hub-team.md` "Classes". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
 
-The line between the lists: a stage, or a library call taking a `Consent`. Local until `hub-confirm`: POST, DELETE `.../proposals/:id/decision`; POST `.../round/answers`, `.../cards/:id/accept`, `.../cards/:id/clear`, `.../trace/clear`. No approve route exists. A move cannot reach `accept.to` (`cards.md` "Config"), so accept has no back door, and the handlers' always-yes consents are unreachable. ADR-0057 stands locally, and for accept and clear until `hub-confirm`.
+No approve route exists. A move cannot reach `accept.to` (`cards.md` "Config"), so accept has no back door. ADR-0057 stands locally.
 
 Identity is judged in the fence, so a refused request never queues for a turn. MCP is untouched: no `/mcp` route, tools keep acting as `agent` locally (RM-0053).
 
@@ -72,11 +72,11 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
 - Other sites' pages and sibling subdomains: `Host`, `Origin`, `Sec-Fetch-Site`, `Sec-Fetch-Site: same-origin` on a write, JSON only, no CORS. The login door's cookie is the first ambient credential here, so none of this leans on its `SameSite`.
 - A missing, doubled, folded or malformed `Remote-User`, and the words `local` and `agent`.
 - A body's `as` other than the login.
-- Every route off the list, whoever asks: no login reaches a stage, an accept or a clear.
+- Every route off the list, whoever asks; a login outside `[team]` reaches no stage, accept or clear.
 
 **The daemon cannot defend:**
 
-- **A forged header.** It cannot tell the proxy's header from any process reaching its socket: a raw client sending `Remote-User: anyone` gets a 200 and `anyone` recorded, and `hub_trusts_the_header_on_its_socket` pins that. A shared secret would be the token ADR-0034 forbids.
+- **A forged header.** It cannot tell the proxy's header from any process reaching its socket: a raw client sending `Remote-User: anyone` gets a 200 and `anyone` recorded, a `[team]` login's name accepts, and `hub_trusts_the_header_on_its_socket` pins that. A shared secret would be the token ADR-0034 forbids.
 - **What a login may do.** Any login reads everything served and makes the five writes. `by` alone stops a person. `GET /api/projects` shows the absolute `root` to every login: accepted; in a container it is the mount path.
 - **A forgotten proxy.** A forgotten flag fails closed: a local daemon refuses the public `Host`. A forgotten proxy fails open to whatever reaches the socket.
 
@@ -91,7 +91,7 @@ Unverified until that "Done": that Traefik keeps the client's `Host` by default 
 
 ## Screen
 
-With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-ui.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. The eight call sites of `useActing` (`acting.ts`) stay as they are; `useHubLogin` beside it gives the box its `readOnly`. Accept, Clear, stages and round answers stay on the page and show the daemon's 403; hiding them is `hub-confirm`'s, when they open.
+With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-ui.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. The eight call sites of `useActing` (`acting.ts`) stay as they are; `useHubLogin` beside it gives the box its `readOnly`. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen".
 
 ## Known limits
 
@@ -100,9 +100,8 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0064).
 - **Scale.** Until `scale-reads` (RM-0054) a team waits behind O(n) reads.
 - **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. AC-01 keeps `daemon.json`'s five keys, and it fails closed (RM-0064).
-- **A mark leaves without `clear`.** `edit --target -` or a cancel takes a suspect mark away on a hub without `clear`'s consent, recorded under the login, and does so locally too. Decided in RM-0050.
+- **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy must reject or encode `#` (RM-0064).
 - **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`), so a new one fails until decided.
-- **Dialogs.** `Accepting as` and `Clearing as` still look editable on a hub, and `NAME_IS_TYPED` reads false there: step 9.
 - **Before the login resolves.** While the identity loads or after a failed read the box is as today, so a typed name can reach the key, and a stored name sent then gets the daemon's 403.
 - **One login per page.** The login is kept for the page, so changing login in another tab gives the `as` 403 until a reload.
 - **The mock.** A `?scenario=` query on the landing opens the mock on the hub's origin, with its banner; past the page nothing reaches the daemon.
@@ -110,4 +109,4 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 
 ## Tests
 
-http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is RM-0064's. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.
+http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is RM-0064's. `tests/hub_team.rs`: `hub-team.md`. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.

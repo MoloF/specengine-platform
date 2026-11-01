@@ -2447,6 +2447,8 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                             reason,
                             actor: Some(actor),
                             now: now(),
+                            count: None,
+                            entry: None,
                         },
                         &mut consent,
                     )?,

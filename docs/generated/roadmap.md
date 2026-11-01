@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 42 open, 29 done; current mvp; to mvp 2-3 days; total 13-21 days, 21 unestimated
+roadmap: 41 open, 30 done; current mvp; to mvp 2-3 days; total 13-21 days, 20 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -25,28 +25,27 @@ roadmap: 42 open, 29 done; current mvp; to mvp 2-3 days; total 13-21 days, 21 un
 5. [RM-0018](../roadmap/RM-0018.md) | URL-mode elicitation onto UI cards | draft | could | 2-3
 6. [RM-0038](../roadmap/RM-0038.md) | task-stage: the owner's staging form approve_task | draft | could | 2-3
 
-## release v3 | 20 open, 13 done | 0 days, 20 unestimated
+## release v3 | 19 open, 14 done | 0 days, 19 unestimated
 
-1. [RM-0071](../roadmap/RM-0071.md) | hub-team (Phase 7, step 9a): accept, clear and stages under a [team] login, no spec file changed | draft | must | -
-2. [RM-0050](../roadmap/RM-0050.md) | hub-confirm (Phase 7, step 9b): one click confirms one staged choice, a commit in the hub's checkout, nothing pushed | draft | should | - | waits on RM-0071
-3. [RM-0051](../roadmap/RM-0051.md) | hub-git (Phase 7, step 10): sole writer, merge and push, the index in the commit | draft | should | - | waits on RM-0050
-4. [RM-0035](../roadmap/RM-0035.md) | node-history: spec show --history and the node's History tab | draft | should | - | waits on RM-0051
-5. [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | - | waits on RM-0051
-6. [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10b): the board's snapshot on a dedicated branch | draft | should | - | waits on RM-0051
-7. [RM-0053](../roadmap/RM-0053.md) | hub-mcp (Phase 7, step 11): /mcp with a session, identity to author, hub tools | draft | should | -
-8. [RM-0064](../roadmap/RM-0064.md) | hub-deploy (Phase 7, step 11b): Docker compose with Traefik, from a clean VPS to a hub | draft | must | - | waits on RM-0050, RM-0051, RM-0052, RM-0053
-9. [RM-0065](../roadmap/RM-0065.md) | hub-accounts (Phase 7, step 11c): accounts and recovery from a shell on the host | draft | must | - | waits on RM-0064
-10. [RM-0054](../roadmap/RM-0054.md) | scale-reads (Phase 7, step 12): an edge table, a trusted index, reads at 100 000 nodes | draft | should | -
-11. [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | - | waits on RM-0054
-12. [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0051, RM-0035, RM-0036
-13. [RM-0070](../roadmap/RM-0070.md) | trial-followups (Phase 7): what the second trial and earlier review left | draft | should | -
-14. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | -
-15. [RM-0057](../roadmap/RM-0057.md) | draft-overlay (Phase 7, step 15): revisable drafts in reads | draft | could | - | waits on RM-0053
-16. [RM-0058](../roadmap/RM-0058.md) | reuse-overrides (Phase 7, step 16): overrides, variants, usage reads | draft | could | -
-17. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, step 17): similar and distinct_from on create | draft | could | - | waits on RM-0054
-18. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill | draft | could | - | waits on RM-0059
-19. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, step 19): spec init --pack and a config proposal | draft | could | -
-20. [RM-0062](../roadmap/RM-0062.md) | writer-skills (Phase 7, step 20): a profile plugin or MCP prompts | draft | could | - | waits on RM-0053
+1. [RM-0050](../roadmap/RM-0050.md) | hub-confirm (Phase 7, step 9b): one click confirms one staged choice, a commit in the hub's checkout, nothing pushed | draft | should | -
+2. [RM-0051](../roadmap/RM-0051.md) | hub-git (Phase 7, step 10): sole writer, merge and push, the index in the commit | draft | should | - | waits on RM-0050
+3. [RM-0035](../roadmap/RM-0035.md) | node-history: spec show --history and the node's History tab | draft | should | - | waits on RM-0051
+4. [RM-0036](../roadmap/RM-0036.md) | impact-daemon: spec impact on the daemon and the graph's impact mode | draft | should | - | waits on RM-0051
+5. [RM-0052](../roadmap/RM-0052.md) | board-in-git (Phase 7, step 10b): the board's snapshot on a dedicated branch | draft | should | - | waits on RM-0051
+6. [RM-0053](../roadmap/RM-0053.md) | hub-mcp (Phase 7, step 11): /mcp with a session, identity to author, hub tools | draft | should | -
+7. [RM-0064](../roadmap/RM-0064.md) | hub-deploy (Phase 7, step 11b): Docker compose with Traefik, from a clean VPS to a hub | draft | must | - | waits on RM-0050, RM-0051, RM-0052, RM-0053
+8. [RM-0065](../roadmap/RM-0065.md) | hub-accounts (Phase 7, step 11c): accounts and recovery from a shell on the host | draft | must | - | waits on RM-0064
+9. [RM-0054](../roadmap/RM-0054.md) | scale-reads (Phase 7, step 12): an edge table, a trusted index, reads at 100 000 nodes | draft | should | -
+10. [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | - | waits on RM-0054
+11. [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0051, RM-0035, RM-0036
+12. [RM-0070](../roadmap/RM-0070.md) | trial-followups (Phase 7): what the second trial and earlier review left | draft | should | -
+13. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | -
+14. [RM-0057](../roadmap/RM-0057.md) | draft-overlay (Phase 7, step 15): revisable drafts in reads | draft | could | - | waits on RM-0053
+15. [RM-0058](../roadmap/RM-0058.md) | reuse-overrides (Phase 7, step 16): overrides, variants, usage reads | draft | could | -
+16. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, step 17): similar and distinct_from on create | draft | could | - | waits on RM-0054
+17. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill | draft | could | - | waits on RM-0059
+18. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, step 19): spec init --pack and a config proposal | draft | could | -
+19. [RM-0062](../roadmap/RM-0062.md) | writer-skills (Phase 7, step 20): a profile plugin or MCP prompts | draft | could | - | waits on RM-0053
 
 ## pool | 15 open, 1 done | 7-12 days, 11 unestimated
 

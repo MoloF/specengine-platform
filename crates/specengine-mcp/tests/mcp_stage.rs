@@ -145,6 +145,7 @@ impl Repo {
                 body: body(updated_at),
                 now: STAGED.to_owned(),
                 git: self.git_env(&self.linked),
+                actor: None,
             },
         )
         .unwrap_or_else(|error| panic!("stage {id}: {error}"));

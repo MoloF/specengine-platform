@@ -621,6 +621,26 @@ impl<'a> Reading<'a> {
     }
 }
 
+/// What a read of `roots` says of each card, by ID: its mark on every row
+/// holding it, the rows and the marks `spec trace` gives. A group's clear
+/// takes these words, so what a page counts and what the act clears agree.
+pub(crate) fn group_marks(
+    graph: &SpecGraph<'_>,
+    read: &QueueRead,
+    norms: &TargetNorms,
+    places: &BTreeMap<String, Vec<NodeAt>>,
+    roots: &[NodeAt],
+) -> BTreeMap<String, Vec<CardMark>> {
+    let reading = Reading::new(graph, read, norms, places);
+    let mut marks: BTreeMap<String, Vec<CardMark>> = BTreeMap::new();
+    for at in listed(&reading, Some(roots)) {
+        for (card, mark) in reading.state(at).1 {
+            marks.entry(card.id.clone()).or_default().push(mark);
+        }
+    }
+    marks
+}
+
 /// `spec trace`, cut at the output cap.
 pub fn trace(
     env: &Env,

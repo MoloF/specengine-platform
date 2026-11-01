@@ -22,6 +22,9 @@
 //!   is the config file's name in any ASCII case, at any depth (a new
 //!   project config below the root would re-root the files under it),
 //!   else the first listed zone with a glob matching it.
+//! - **`[zones]`** has its own reader, [`zones_from_toml`], which a hub's
+//!   `[team]` takes too (the gate never reads `[team]`): gate `off` still
+//!   leaves the table unread here.
 //! - The core knows no zone by name: every name comes from the config.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -90,6 +93,14 @@ pub struct Zone {
     compiled: Vec<Glob>,
 }
 
+impl Zone {
+    /// One of the zone's globs matches the root-relative `rel` (`/`-joined,
+    /// folded), compared case-sensitively.
+    pub fn covers(&self, rel: &str) -> bool {
+        self.compiled.iter().any(|glob| glob.matches(rel))
+    }
+}
+
 /// `[gate]` with the zones it controls, checked.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GateConfig {
@@ -131,7 +142,7 @@ impl GateConfig {
         }
         self.zones
             .iter()
-            .find(|zone| zone.compiled.iter().any(|glob| glob.matches(rel)))
+            .find(|zone| zone.covers(rel))
             .map(|zone| Control {
                 zone: Some(zone.name.clone()),
             })
@@ -319,48 +330,7 @@ pub fn gate_from_toml(text: &str) -> Result<Option<GateConfig>, ProjectError> {
         ));
     }
 
-    let raw: RawZonesFile = toml::from_str(text)
-        .map_err(|error| error_at(error.span(), error.message().trim().to_owned()))?;
-    let declared = match raw.zones {
-        Some(zones) => zones.into_inner(),
-        None => BTreeMap::new(),
-    };
-    let mut checked: BTreeMap<String, Zone> = BTreeMap::new();
-    for (name, globs) in declared {
-        let span = globs.span();
-        if let Some(problem) = zone_name_problem(&name) {
-            return Err(error_at(Some(span), format!("`[zones] {name}`: {problem}")));
-        }
-        let globs = globs.into_inner();
-        if globs.is_empty() {
-            return Err(error_at(
-                Some(span),
-                format!("`[zones] {name}` has no glob: a zone names at least one"),
-            ));
-        }
-        let mut written = Vec::with_capacity(globs.len());
-        let mut compiled = Vec::with_capacity(globs.len());
-        for glob in globs {
-            let glob_span = glob.span();
-            let glob = glob.into_inner();
-            if let Some(problem) = glob_problem(&glob) {
-                return Err(error_at(
-                    Some(glob_span),
-                    format!("`[zones] {name}`: {problem}"),
-                ));
-            }
-            compiled.push(Glob::new(&glob));
-            written.push(glob);
-        }
-        checked.insert(
-            name.clone(),
-            Zone {
-                name,
-                globs: written,
-                compiled,
-            },
-        );
-    }
+    let checked = zones_from_toml(text)?;
     let mut seen = BTreeSet::new();
     let mut zones = Vec::with_capacity(names.len());
     for name in names {
@@ -414,6 +384,57 @@ pub fn gate_from_toml(text: &str) -> Result<Option<GateConfig>, ProjectError> {
         zones,
         slug: Some(slug),
     }))
+}
+
+/// `[zones]` of `text`, every entry checked (see the module documentation):
+/// name to zone, empty without the table. A [`ProjectError`] at the line.
+pub fn zones_from_toml(text: &str) -> Result<BTreeMap<String, Zone>, ProjectError> {
+    let error_at = |span: Range<usize>, message: String| ProjectError {
+        line: Some(line_of(text, span.start)),
+        message,
+    };
+    let raw: RawZonesFile = toml::from_str(text).map_err(|error| ProjectError {
+        line: error.span().map(|span| line_of(text, span.start)),
+        message: error.message().trim().to_owned(),
+    })?;
+    let declared = match raw.zones {
+        Some(zones) => zones.into_inner(),
+        None => BTreeMap::new(),
+    };
+    let mut checked: BTreeMap<String, Zone> = BTreeMap::new();
+    for (name, globs) in declared {
+        let span = globs.span();
+        if let Some(problem) = zone_name_problem(&name) {
+            return Err(error_at(span, format!("`[zones] {name}`: {problem}")));
+        }
+        let globs = globs.into_inner();
+        if globs.is_empty() {
+            return Err(error_at(
+                span,
+                format!("`[zones] {name}` has no glob: a zone names at least one"),
+            ));
+        }
+        let mut written = Vec::with_capacity(globs.len());
+        let mut compiled = Vec::with_capacity(globs.len());
+        for glob in globs {
+            let glob_span = glob.span();
+            let glob = glob.into_inner();
+            if let Some(problem) = glob_problem(&glob) {
+                return Err(error_at(glob_span, format!("`[zones] {name}`: {problem}")));
+            }
+            compiled.push(Glob::new(&glob));
+            written.push(glob);
+        }
+        checked.insert(
+            name.clone(),
+            Zone {
+                name,
+                globs: written,
+                compiled,
+            },
+        );
+    }
+    Ok(checked)
 }
 
 /// One of `text`'s lines names the `gate` table, as a header or a key, the

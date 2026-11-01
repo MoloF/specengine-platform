@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useNode, type ProposalQuery } from "../api/queries";
 import type { Choice, InboxEntry, Proposal, ProposalOption } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { ActOff } from "../board/ActOff";
 import { Prose } from "../markdown/Prose";
 import { DEFAULT_TEXT_MODE, TextModeSwitch, type TextMode } from "../markdown/TextMode";
 import { Badge } from "../ui/Badge";
@@ -448,7 +449,8 @@ function ReviewBody({
  * needs the document (its options and `updated_at`); until it is read the buttons do nothing. A
  * staged choice shows under the decisions, with its terminal command and Unstage. A drift item
  * (the document's `drift`) offers no decision to stage: its terminal commands stand in their place,
- * and it has no options or section diff to show.
+ * and it has no options or section diff to show. Where a hub's `allowed` omits `stage`, the decisions
+ * that stage and Unstage stay focusable and do nothing; the two that send nothing stay as they are.
  */
 export function ProposalCard({
   project,
@@ -457,6 +459,7 @@ export function ProposalCard({
   others,
   now,
   deciding,
+  canStage,
   unstageRefusal,
   onDecide,
   onUnstage,
@@ -471,6 +474,8 @@ export function ProposalCard({
   now: number;
   /** A stage or an unstage is being sent: the buttons stay focusable but do nothing. */
   deciding: boolean;
+  /** False: a hub's `allowed` omits `stage`. */
+  canStage: boolean;
   /** The daemon's words when it refused to unstage this proposal. */
   unstageRefusal: string | null;
   onDecide: (kind: DecisionKind) => void;
@@ -568,25 +573,31 @@ export function ProposalCard({
         {reviewed !== undefined && reviewed.drift !== null ? (
           <TerminalDecision id={id} worktree={reviewed.worktree} />
         ) : (
-          <div className="decision-bar" role="group" aria-label={`Decide ${id}`}>
-            {DECISION_KEYS.map(([kind, key]) => (
-              <button
-                key={kind}
-                type="button"
-                className={kind === "accept" ? "button button-primary" : kind === "reject" ? "button button-danger" : "button"}
-                aria-keyshortcuts={key}
-                aria-disabled={deciding || !ready}
-                onClick={() => {
-                  if (!deciding && ready) {
-                    onDecide(kind);
-                  }
-                }}
-              >
-                <span>{WORDING[kind].verb}</span>
-                <kbd aria-hidden="true">{key}</kbd>
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="decision-bar" role="group" aria-label={`Decide ${id}`}>
+              {DECISION_KEYS.map(([kind, key]) => {
+                const idle = deciding || !ready || (WORDING[kind].staged && !canStage);
+                return (
+                  <button
+                    key={kind}
+                    type="button"
+                    className={kind === "accept" ? "button button-primary" : kind === "reject" ? "button button-danger" : "button"}
+                    aria-keyshortcuts={key}
+                    aria-disabled={idle}
+                    onClick={() => {
+                      if (!idle) {
+                        onDecide(kind);
+                      }
+                    }}
+                  >
+                    <span>{WORDING[kind].verb}</span>
+                    <kbd aria-hidden="true">{key}</kbd>
+                  </button>
+                );
+              })}
+            </div>
+            {!canStage && <ActOff act="stage" />}
+          </>
         )}
         {reviewed !== undefined && reviewed.id === id && reviewed.staged !== null && reviewed.staged_at !== null && (
           <Suspense
@@ -596,7 +607,7 @@ export function ProposalCard({
               </p>
             }
           >
-            <StagedChoice id={id} review={reviewed} busy={deciding} refusal={unstageRefusal} onUnstage={onUnstage} />
+            <StagedChoice id={id} review={reviewed} busy={deciding || !canStage} refusal={unstageRefusal} onUnstage={onUnstage} />
           </Suspense>
         )}
       </header>

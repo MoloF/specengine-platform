@@ -270,6 +270,7 @@ mod state;
 mod state_file;
 mod symbols;
 mod task;
+mod team;
 #[cfg(unix)]
 mod test_runner;
 mod tested;
@@ -303,7 +304,7 @@ pub use card::{
     CardGroupOutcome, CardListOutcome, CardListRequest, CardMoveBody, CardMoveRequest, CardNewBody,
     CardNewRequest, CardOutcome, CardShowOutcome, CardShowRequest, TOOL_ACTOR, card_accept,
     card_assign, card_cancel, card_clear, card_clear_group, card_edit, card_list, card_move,
-    card_new, card_show, hub_login_problem,
+    card_new, card_show,
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
@@ -392,9 +393,10 @@ pub use serve::{
 pub use show::{
     NestedSection, ShowOutcome, ShowRequest, ShownBindings, ShownNode, show, show_with_view,
 };
-pub use specengine_core::ProjectConfig;
 /// A card's caps (core's).
-pub use specengine_core::card::{EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, HISTORY_MAX};
+pub use specengine_core::card::{
+    EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, HISTORY_MAX, hub_login_problem,
+};
 /// The intake's input types, enums and caps (core's), for the bridges;
 /// the names of the kinds `propose_change` takes and of a decision, and a
 /// kind's name with its article.
@@ -418,6 +420,7 @@ pub use specengine_core::task::{
     NOTE_MAX, PACKAGE_BINDINGS_MAX, PACKAGE_BUDGET, PLAN_MAX, RUN_SUMMARY_MAX, SNAPSHOT_MAX,
     TITLE_MAX,
 };
+pub use specengine_core::{ProjectConfig, TeamConfig, TeamEntry, TeamRole};
 /// The task package and its parts (the model's), for the bridges.
 pub use specengine_model::{RunOutcome, TaskPackage, TaskStatus};
 /// The caller's git environment a queue request carries.
@@ -450,6 +453,7 @@ pub use task::{
     TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes, task_claim,
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
+pub use team::{TeamRow, team_read};
 pub use trace::{
     TraceBadge, TraceCard, TraceNode, TraceOutcome, TraceRequest, TraceStage, TraceUse, trace,
     trace_with_view,

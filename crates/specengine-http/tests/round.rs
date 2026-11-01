@@ -1398,6 +1398,7 @@ fn r07_an_answer_on_a_staged_item_names_the_stage_it_replaced() {
             },
             now: EARLIER.to_owned(),
             git: s.calls.git_env(),
+            actor: None,
         },
     )
     .expect("stage");

@@ -134,8 +134,8 @@ spec export index [--stdout]                         # [paths] index, its shards
 ## 3. HTTP (daemon)
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` by `spec serve` (`docs/canon/serve.md`).
-- A hub, `specengine-http --public-origin URL`, keeps that bind behind a proxy on its host, fences its public origin and one proxy-set `Remote-User` on every request, and of the writes keeps five card routes; a stage, an accept or a clear stays local until `hub-confirm` (ADR-0058, ADR-0059, `docs/canon/hub.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|flow|check|health|roadmap|lock-diff|inbox|proposals/:id|tasks|tasks/:id|round` (built); `/api/identity`, the login or `null`; `symbols` to come
+- A hub, `specengine-http --public-origin URL`, keeps that bind behind a proxy on its host, fences its public origin and one proxy-set `Remote-User` on every request, and of the writes keeps five card routes for any login and, for the logins a project's `[team]` names, stages, round answers, accept and clear; no spec file changes until `hub-confirm` (ADR-0058, ADR-0059, ADR-0060, `docs/canon/hub.md`, `docs/canon/hub-team.md`).
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|flow|check|health|roadmap|lock-diff|inbox|proposals/:id|tasks|tasks/:id|round` (built); `/api/identity`, the login or `null`; `/api/projects/:p/team`, a hub's alone, the asker's row of `[team]`; `symbols` to come
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), on a trigger and only with GET/SSE (see §1.1)

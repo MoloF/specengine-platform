@@ -738,6 +738,8 @@ pub struct RoundAnswersRequest {
     /// every stage's `staged_at`.
     pub now: String,
     pub git: GitEnv,
+    /// A hub's login, each `proposal.staged`'s `as`. `None` everywhere else.
+    pub actor: Option<String>,
 }
 
 /// What became of one structured answer, in the request's order.
@@ -980,7 +982,15 @@ fn run_stage_answers(
             reason: refusal.map(|reason| trimmed(&reason).to_owned()),
         })
         .collect();
-    for (at, proposal, stored) in stage_planned(env, &mut context, planned, now, &request.git) {
+    let stored = stage_planned(
+        env,
+        &mut context,
+        planned,
+        now,
+        &request.git,
+        request.actor.as_deref(),
+    );
+    for (at, proposal, stored) in stored {
         let entry = &mut entries[at];
         match stored {
             Ok(choice) => {
@@ -1282,7 +1292,7 @@ fn staged_answers(
         })
         .collect();
     let mut walked = Vec::new();
-    for (index, proposal, stored) in stage_planned(env, context, planned, now, git) {
+    for (index, proposal, stored) in stage_planned(env, context, planned, now, git, None) {
         let stored = match stored {
             Ok(stored) => stored,
             Err(reason) => {
@@ -1745,15 +1755,16 @@ struct Planned {
 
 /// Each of `planned` staged in round order as the decision route stages
 /// ([`stage_with`]: checked again, a compare-and-set on its own read, one
-/// `proposal.staged` each), all at the one clock reading `now`: in round
-/// order, its position, the proposal as checked, and the stage stored or
-/// why not (a lost one is refused).
+/// `proposal.staged` each), all at the one clock reading `now` and under the
+/// one `actor`: in round order, its position, the proposal as checked, and
+/// the stage stored or why not (a lost one is refused).
 fn stage_planned(
     env: &Env,
     context: &mut QueueContext,
     mut planned: Vec<Planned>,
     now: &str,
     git: &GitEnv,
+    actor: Option<&str>,
 ) -> Vec<(usize, Proposal, Result<StagedChoice, String>)> {
     planned.sort_by(|a, b| a.key.cmp(&b.key));
     let mut stored = Vec::with_capacity(planned.len());
@@ -1766,6 +1777,7 @@ fn stage_planned(
             body,
             now: now.to_owned(),
             git: git.clone(),
+            actor: actor.map(str::to_owned),
         };
         let choice = match stage_with(env, context, &request) {
             Ok(outcome) => stored_choice(outcome),

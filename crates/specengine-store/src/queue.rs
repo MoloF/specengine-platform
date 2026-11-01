@@ -1376,11 +1376,35 @@ pub trait ProposalQueue {
         seen: &Seen,
         stage: &Stage,
         now: &str,
+    ) -> Result<Proposal, QueueError> {
+        self.stage_as(id, seen, stage, None, now)
+    }
+    /// [`Self::stage_from`], the event naming `actor` as `as` when there is
+    /// one: a hub's login. `None` logs the event as a local one, byte for
+    /// byte.
+    fn stage_as(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        stage: &Stage,
+        actor: Option<&str>,
+        now: &str,
     ) -> Result<Proposal, QueueError>;
     /// Clears an `open` proposal's stage as [`Self::stage_from`] sets one
     /// (`updated_at` = `now`), logging `proposal.unstaged`: `Ok(true)`;
     /// nothing staged: `Ok(false)`, nothing written, no event.
-    fn unstage_from(&mut self, id: &str, seen: &Seen, now: &str) -> Result<bool, QueueError>;
+    fn unstage_from(&mut self, id: &str, seen: &Seen, now: &str) -> Result<bool, QueueError> {
+        self.unstage_as(id, seen, None, now)
+    }
+    /// [`Self::unstage_from`], the event naming `actor` as [`Self::stage_as`]
+    /// does.
+    fn unstage_as(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        actor: Option<&str>,
+        now: &str,
+    ) -> Result<bool, QueueError>;
     /// The project's events, by `seq`.
     fn events(&self) -> Result<Vec<Event>, QueueError>;
 }
@@ -3987,19 +4011,26 @@ impl ProposalQueue for SqliteQueue {
         self.reject_from(id, seen, decision, now)
     }
 
-    fn stage_from(
+    fn stage_as(
         &mut self,
         id: &str,
         seen: &Seen,
         stage: &Stage,
+        actor: Option<&str>,
         now: &str,
     ) -> Result<Proposal, QueueError> {
-        self.stage_if(id, seen, Some(stage), now)
+        self.stage_if(id, seen, Some(stage), actor, now)
             .map(|(stored, _)| stored)
     }
 
-    fn unstage_from(&mut self, id: &str, seen: &Seen, now: &str) -> Result<bool, QueueError> {
-        self.stage_if(id, seen, None, now)
+    fn unstage_as(
+        &mut self,
+        id: &str,
+        seen: &Seen,
+        actor: Option<&str>,
+        now: &str,
+    ) -> Result<bool, QueueError> {
+        self.stage_if(id, seen, None, actor, now)
             .map(|(_, written)| written)
     }
 

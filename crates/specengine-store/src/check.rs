@@ -25,6 +25,12 @@
 //! a cause naming `HEAD:spec.lock` or `spec.lock`. [`bump_staged`] and
 //! [`bump_changed`] give the same run's rows (`spec bump`). A plain check
 //! never reads the lock.
+//!
+//! A bad `[team]` (task spec `hub-team`) is never a cause: through
+//! [`load_config`] a typo in one table would stop every run. [`load_check`]
+//! reads it apart into [`CheckSetup::team`], the finding `team-config` every
+//! run adds to its report, at the config's line. A run against `HEAD` judges
+//! only the checked side: `HEAD`'s config gives its mode alone.
 
 use std::fs;
 use std::io;
@@ -34,12 +40,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use specengine_core::check::rev_rule::{self, BumpRow};
 use specengine_core::check::{
-    self, Base, Baseline, Cause, CheckConfig, CheckFile, CheckInput, Mode, Problem, ProblemKind,
-    Report,
+    self, Base, Baseline, Cause, CheckConfig, CheckFile, CheckInput, Finding, Mode, Problem,
+    ProblemKind, Report,
 };
 use specengine_core::lock::{LOCK_FILE, Lock};
-use specengine_core::{IdSchemeToml, Paths, ProjectConfig};
-use specengine_model::IdScheme;
+use specengine_core::{IdSchemeToml, Paths, ProjectConfig, TeamConfig};
+use specengine_model::{IdScheme, Severity};
 
 use crate::base::{BaseRun, Head, HeadWalk, Placed};
 use crate::error::StoreError;
@@ -142,6 +148,8 @@ pub struct CheckSetup {
     /// `[budgets]`, `[classes]`, `[check]`, `[[generators]]`.
     pub config: CheckConfig,
     pub baseline: Baseline,
+    /// `team-config`, a bad `[team]`; `None` a good one or none.
+    pub team: Option<Finding>,
 }
 
 /// The baseline at the root, [`BASELINE_FILE`], when an entry of that name
@@ -240,7 +248,47 @@ pub fn load_check(
         project,
         config: check_config,
         baseline,
+        team: team_finding(config),
     })
+}
+
+/// The file's `[team]` judged apart from the config, an error at its line:
+/// `team-config`, whatever `[check] mode` says of it. Bytes that do not read
+/// never reach here ([`load_config`] stopped them).
+fn team_finding(config: &NamedBytes) -> Option<Finding> {
+    let bytes = config.bytes.as_ref().ok()?;
+    let text = std::str::from_utf8(bytes).ok()?;
+    let error = TeamConfig::from_toml(text).err()?;
+    Some(Finding {
+        code: "team-config".to_owned(),
+        severity: Severity::Error,
+        path: config.name.clone(),
+        line: error.line.unwrap_or(1),
+        subject: "team".to_owned(),
+        message: error.message,
+        fix: None,
+        debt: None,
+        introduced: None,
+    })
+}
+
+/// [`check::run`] over `input` as `setup` says, then `setup`'s `team-config`
+/// under its baseline.
+fn run_setup(input: &CheckInput, setup: &CheckSetup, today: &str) -> Report {
+    let report = check::run(
+        input,
+        &setup.project.scheme,
+        &setup.project.paths,
+        &setup.config,
+        &setup.baseline,
+        today,
+    );
+    check::add_findings(
+        report,
+        setup.team.iter().cloned().collect(),
+        &setup.baseline,
+        today,
+    )
 }
 
 /// A `cannot-check` report of one cause.
@@ -331,14 +379,7 @@ pub(crate) fn parse_file(path: String, bytes: Vec<u8>, scheme: &IdScheme) -> Che
 /// The check of `source` with a loaded setup, `today` as `YYYY-MM-DD`.
 pub fn check_source(source: &dyn Source, setup: &CheckSetup, today: &str) -> Report {
     let input = check_input(source, &setup.project.scheme);
-    check::run(
-        &input,
-        &setup.project.scheme,
-        &setup.project.paths,
-        &setup.config,
-        &setup.baseline,
-        today,
-    )
+    run_setup(&input, setup, today)
 }
 
 /// [`check_source`] over the working tree under `root`; a root that cannot
@@ -527,14 +568,7 @@ fn staged_run(
             let notes = head.notes(&config_place, checked_mode);
             let mut index = GitIndex::from_walk(staged, walk);
             let input = check_input(&index, &setup.project.scheme);
-            let report = check::run(
-                &input,
-                &setup.project.scheme,
-                &setup.project.paths,
-                &setup.config,
-                &setup.baseline,
-                today,
-            );
+            let report = run_setup(&input, &setup, today);
             let run = match head_walk.findings(&mut index, input, &setup, today) {
                 Ok(run) => run,
                 Err(mut causes) => {
@@ -675,14 +709,7 @@ fn changed_run(
         }
     };
     let input = check_input(&tree, &setup.project.scheme);
-    let report = check::run(
-        &input,
-        &setup.project.scheme,
-        &setup.project.paths,
-        &setup.config,
-        &setup.baseline,
-        today,
-    );
+    let report = run_setup(&input, &setup, today);
     let run = match head_walk.findings_by_bytes(session.objects, input, &setup, today) {
         Ok(run) => run,
         Err(mut causes) => {

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, plugin]
 owner: owner
-reviewed: 2026-10-08
+reviewed: 2026-11-01
 ---
 
 # Task gate: the write hook
@@ -29,7 +29,7 @@ mode  = "selective"    # off | observe | selective
 zones = ["code"]       # the controlled zones; required unless off
 ```
 
-Read apart (core `GateConfig::from_toml`); `ProjectConfig` only name-checks both tables, so `spec show` and MCP answer whatever `[gate]` holds.
+Read apart (core `GateConfig::from_toml`); `ProjectConfig` only name-checks both tables, so `spec show` and MCP answer whatever `[gate]` holds. `[zones]` has its own reader, `zones_from_toml`, which `[team]` also takes, whether or not `[gate]` is on (`hub-team.md`), and `Zone::covers` is the glob test of both; the gate never reads `[team]` or `team-config` (ADR-0039).
 
 - **Modes**: no `[gate]` table is `off`; `off` reads only `[gate]`'s keys and `mode` (`[zones]` unread), so it always recovers; `observe` passes every write and records an uncovered one (`gate.observed`); `selective` refuses an uncovered one.
 - **Globs**: the dialect of `[paths]` exclude, relative and clean: `*`, `**`, `?`, every other character literal, case-sensitive; `[`, `]`, `{`, `}`, `\` and control characters refused.

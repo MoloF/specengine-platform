@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-11-01
 ---
 
 # Decision staging: UI prepares, terminal confirms
@@ -15,7 +15,7 @@ ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), b
 - A decision on a proposal, approve or reject, is confirmed only on a terminal by **its own `[y/N]`**: `spec approve|reject PR`'s, or `spec round answer`'s per staged answer (ADR-0038). The only control point stays the owner's task approval (ADR-0012, `#control`).
 - Anything else only **stages**: the UI's decision dialog and Questions screen (`round-ui.md`) and the owner's MCP form (`review-form.md`); later perhaps URL mode onto a UI card (08 Phase 5). A stage is one replaceable choice per `open` proposal, the same flags as the CLI's, kept only in the queue: no file, no git, no apply step. It is an attribute, not a status: a staged proposal is `open`, listed, and blocks nothing; a task's `task_id`, snapshot and package are untouched.
 - Agents never choose a stage: no tool takes a choice; `review_proposal` stages only the owner's answer in its form (ADR-0054); `round answer` exits 2 without a terminal; `get_proposal` shows one, `ask-owner` counts it as no answer.
-- Who staged is unknowable (ADR-0034): the commit's provenance stays the terminal's (ADR-0005); the event log keeps every stage.
+- Who staged is unknowable (ADR-0034), but a hub's event names its `as` (`hub-team.md` "Stages"): the commit's provenance stays the terminal's (ADR-0005); the event log keeps every stage.
 
 ## The stage
 
@@ -44,7 +44,7 @@ Events `proposal.staged` `{"id":"PR-0004","staged":{...},"staged_at":"..."}`, `p
 
 ## Daemon
 
-`specengine-http` writes this one pair of columns through the CLI library, never the store: `stage(.., &StageRequest {id, body, now, git})`, `unstage(.., &UnstageRequest {id, now, git})` -> `StageOutcome {proposal, cause: Option<StageCause>}` (`Outcome::Stage`, a review document). `StageBody` (serde, `deny_unknown_fields`, an approve's absent keys `null`) is a stage's only decoder (`RoundAnswersBody` wraps it), none in the daemon; `StageCause` `Usage` (a usage line), `Unknown`, `Refused` (the last note). A third, `round_stage_answers`, stages `POST .../round/answers` (`round-ui.md`): the steps below less the ID's, a 4 MiB cap, then 400 or 200.
+`specengine-http` writes this one pair of columns through the CLI library, never the store: `stage(.., &StageRequest)`, `unstage(.., &UnstageRequest)` -> `StageOutcome {proposal, cause: Option<StageCause>}` (`Outcome::Stage`, a review document). `StageBody` (serde, `deny_unknown_fields`, an approve's absent keys `null`) is a stage's only decoder (`RoundAnswersBody` wraps it), none in the daemon; `StageCause` `Usage` (a usage line), `Unknown`, `Refused` (the last note). A third, `round_stage_answers`, stages `POST .../round/answers` (`round-ui.md`): the steps below less the ID's, a 4 MiB cap, then 400 or 200.
 
 | On `/api/projects/:p/proposals/:id/decision` | Answer |
 |---|---|

@@ -216,6 +216,12 @@
 //! `TraceStage`: `Identity` (`{login}`), from `GET /api/identity` on the local
 //! daemon, whose `login` is null; a hub's answer is the same key
 //! (`tests/hub.rs`, byte for byte).
+//!
+//! docs/features/hub-team.md "Data": one set more, 108 in all, last, after
+//! `Identity`: `Team` (`{login, name, allowed}`), from `GET .../team` on a hub
+//! over `fixtures/card-press` ([`team_rows`]), a login on its `[team]` and one
+//! outside it, so the row and the empty row hold one order of keys. A local
+//! daemon does not serve it (`tests/hub_team.rs`).
 
 mod common;
 mod task_state;
@@ -223,8 +229,10 @@ mod task_state;
 use std::fmt;
 use std::fs;
 
+use common::hub::{P, Setup};
 use common::{
-    Scratch, Server, ask, propose_update, repository_root, run_product, spec, spec_bin, spec_json,
+    Scratch, Server, ask, propose_update, read_text, repository_root, run_product, spec, spec_bin,
+    spec_json, write,
 };
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 
@@ -384,6 +392,25 @@ fn raw_items(json: &str, key: &str) -> Vec<String> {
     out
 }
 
+/// `GET .../team` of a login on a hub's `[team]` and of one outside it.
+fn team_rows() -> Vec<String> {
+    let setup = Setup::new("daemon-keys-team", "card-press");
+    let mut config = read_text(&setup.root, "specengine.toml");
+    config.push_str(
+        "\n[team.mira]\nname = \"Mira K\"\nrole = \"member\"\nemail = \"mira@example.org\"\n",
+    );
+    write(&setup.root, "specengine.toml", config);
+    let hub = setup.start();
+    ["mira", "eve"]
+        .map(|login| {
+            hub.get(login, &format!("{P}/team"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .to_vec()
+}
+
 fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let scratch = Scratch::new("daemon-keys");
     let a = scratch.repo("spec-a", "a", "main");
@@ -533,6 +560,7 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     }
     let projects = server.get("/api/projects").status(200).text().to_owned();
     let identity = server.get("/api/identity").status(200).text().to_owned();
+    let teams = team_rows();
     let inbox = server
         .get(&format!("{p}/inbox"))
         .status(200)
@@ -1527,6 +1555,7 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             "Identity",
             one_key_set("Identity", std::slice::from_ref(&identity), keys_of),
         ),
+        ("Team", one_key_set("Team", &teams, keys_of)),
     ]
 }
 
@@ -1853,11 +1882,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        107,
+        108,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
-         board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107)"
+         board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2459,6 +2488,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // hub-identity's one, last: docs/features/hub-identity.md "Data".
     assert_eq!(sets[106].0, "Identity");
     assert_eq!(sets[106].1, ["login"]);
+    // hub-team's one, last: docs/features/hub-team.md "Data".
+    assert_eq!(sets[107].0, "Team");
+    assert_eq!(sets[107].1, ["login", "name", "allowed"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -2479,7 +2511,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 107 sets (41 until
+/// unchanged, no new key): the fixture holds 108 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2494,7 +2526,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/board-ui.md its twelve, AC-09, and
 /// docs/features/card-trace.md its seven, and
 /// docs/features/trace-views.md its `TraceStage`, and
-/// docs/features/hub-identity.md its `Identity`); a decision
+/// docs/features/hub-identity.md its `Identity`, and
+/// docs/features/hub-team.md its `Team`); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -2508,14 +2541,15 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        107,
-        "107 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        108,
+        "108 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
-         card-trace's seven, trace-views' `TraceStage` and hub-identity's `Identity`"
+         card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity` and \
+         hub-team's `Team`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -2629,7 +2663,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 107 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 108 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2642,7 +2676,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/ui-node-bindings.md its two, TE-1, and
 /// docs/features/lock-diff.md its five, TE-2, and
 /// docs/features/trace-views.md its `TraceStage`, and
-/// docs/features/hub-identity.md its `Identity`); the amendment of
+/// docs/features/hub-identity.md its `Identity`, and
+/// docs/features/hub-team.md its `Team`); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -2659,14 +2694,15 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        107,
-        "107 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        108,
+        "108 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
-         card-trace's seven, trace-views' `TraceStage` and hub-identity's `Identity`"
+         card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity` and \
+         hub-team's `Team`"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

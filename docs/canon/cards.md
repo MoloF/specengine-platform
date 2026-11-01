@@ -49,7 +49,7 @@ flow <name> | <column> <n> | ...
 
 ## Who acts
 
-`--as N` is self-declared, recorded and compared with a move's `by`, never verified, so `by` stops a slip, not a person; on a hub the proxy's login acts (`hub.md`). Absent: `local`. A person (`card_person_problem`, no ID: ADR-0057): trimmed, one line, at most 128 bytes, no control character, U+2028, U+2029 or bidi mark, any script and inner spaces, compared exactly. Off it, `--as` exits 2 and `--assignee`, `--reviewer` exit 1; each a 400 at the daemon. A tool acts as `agent`, so `by = ["lead"]` holds against tools, and a flow admits them by listing `agent`. `agent`, `local` are no one's name: refused as a reviewer, at `assign` and `accept`, and as a clearer (`clearer_problem`).
+`--as N` is self-declared, recorded and compared with a move's `by`, never verified, so `by` stops a slip, not a person; on a hub the login acts (`hub-team.md`). Absent: `local`. A person (`card_person_problem`, no ID: ADR-0057): trimmed, one line, at most 128 bytes, no control character, U+2028, U+2029 or bidi mark, any script and inner spaces, compared exactly. Off it, `--as` exits 2 and `--assignee`, `--reviewer` exit 1; each a 400 at the daemon. A tool acts as `agent`, so `by = ["lead"]` holds against tools, and a flow admits them by listing `agent`. `agent`, `local` are no one's name: refused as a reviewer, at `assign` and `accept`, and as a clearer (`clearer_problem`).
 
 A control point exists only where a flow writes `by`; the default writes none.
 

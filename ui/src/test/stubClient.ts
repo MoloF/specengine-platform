@@ -48,6 +48,7 @@ import type {
   TaskList,
   TaskNotFound,
   TaskPackage,
+  Team,
   TraceDocument,
   TreeView,
 } from "../api/types";
@@ -110,6 +111,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getProjects: vi.fn<(signal?: AbortSignal) => Promise<Project[]>>(() => Promise.resolve(PROJECTS.map((project) => ({ ...project })))),
     // A local daemon's answer (docs/canon/hub.md "Routes"); a test of a hub overrides it.
     getIdentity: vi.fn<(signal?: AbortSignal) => Promise<Identity>>(() => Promise.resolve({ login: null })),
+    // A local daemon's answer: its unknown route (docs/features/hub-team.md A7); a test of a hub overrides it.
+    getTeam: vi.fn<(project: string, signal?: AbortSignal) => Promise<Team>>(() => Promise.reject(new ClientError({ status: 404, message: "no route /api/projects/alpha/team: the routes are /api/projects and the web UI" }))),
     getInbox: vi.fn<(project: string, signal?: AbortSignal) => Promise<Inbox>>(() =>
       Promise.resolve({ proposals: state.proposals.map((p) => entryOf(p)), notes: [...state.notes] }),
     ),

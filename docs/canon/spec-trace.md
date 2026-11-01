@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-01
 ---
 
 # spec trace: suspect marks, clearing, verdicts, rollup
@@ -50,9 +50,7 @@ spec card accept C --as N (--briefed | --departs REF... --summary T --observed T
 
 A person's act, on a terminal as `task approve`, or on the page by `POST .../accept` (ADR-0057): a stdin that is no terminal exits 2 before anything is read, no `--yes`. Prompt `accept C-0001 (<title>) as <N>? [y/N]`; not `y`: exit 1, no event. `card_accept` asks through its `Consent`, then compares `revision`. One verdict, else exit 2; a departure takes its three texts, `--briefed` none. Rules: `cards.md` "Rules".
 
-`--departs` names 1-16 direct targets, a manual card having none, and makes a discrepancy in one `Immediate` transaction with the accept (`accept_departing`), events `proposal.created` then `card.accepted`; a failure leaves neither. Its fields: `spec-trace-record.md` "Events".
-
-**The dedup never refuses a departure** (ADR-0012). Hits are read under the write lock as `create_intake` reads them, but the accept writes them into the item's `distinct_from` itself, the corpus's first, the first 64 (`DISTINCT_MAX`) that fit (`agent-intake.md` "Dedup"), and its notes list them all. Nobody types one; the exit stays 0.
+`--departs` names 1-16 direct targets, a manual card having none, and makes a discrepancy in one `Immediate` transaction with the accept (`accept_departing`), events `proposal.created` then `card.accepted`; a failure leaves neither. Its fields and dedup: `spec-trace-record.md` "Events".
 
 **Git.** The item binds a place as `propose update` step 5, so `--departs` alone reads git, reads only (exit 2 outside a worktree, nothing changed). `--briefed` runs at a root with no `.git`.
 
@@ -70,7 +68,7 @@ A person's act, on a terminal as `accept` (prompt `clear C-0001 (<title>) as <N>
 
 - **No effect**, open or accepted cards: re-freezes each suspect entry. One on a gone target takes a null hash and keeps its last `rev`: not suspect, a note on every read. The next meaning change marks again.
 - **Needs correction**, accepted cards only: a new card with `corrects`, the targets, flow and discipline, first in that flow, `--estimate`, title `Correct <title>` by default. The original stays accepted, its row untouched, its mark held: it reads `correcting C-0002`, the node `in work` through it. The correction accepted re-freezes the original; cancelled, the original is suspect again.
-- **Group**, scoped: a card qualifies only when suspect on a target inside `within` of REF or of a document under it by `parent:`, only those entries re-freeze, and a mark outside stays. A card a correction holds is passed over. One transaction, one `card.cleared` each; one refusal leaves every card as it was. Exit 1 when REF names nothing or none qualifies. No effect only, no `--revision`.
+- **Group**, scoped, in both modes: a card is taken when a row of `spec trace REF` reads it `suspect`; only its entries suspect on a target inside `within` of REF or of a document under it by `parent:` re-freeze, never a gone target, and a mark outside stays. A correcting card is passed over, and so is one with a suspect entry, no row reading `suspect` and a row reading `departed`, with the note `C-0001 reads departed PR-0001: passed over; clear it alone once that is settled`. `count`, the cover and the dialog use this one set (`hub-team.md` "Group clear"). One transaction, one `card.cleared` each; one refusal leaves every card as it was. Exit 1 when REF names nothing or none is taken. No effect only, no `--revision`.
 
 `card.cleared` names (node, `rev`), which `Revision:` trailers join to a commit; under needs correction `nodes` are the entries the correction answers, not yet moved.
 
@@ -99,13 +97,14 @@ Scope: REF's holders and what they hold by `parent:`; no REF: every live documen
 
 **`spec card list --marks`** adds each row's mark over all its targets, core's `card_mark`, with `on`, `discrepancy`, `correction`. A gone target stands on no node, so `spec trace` says it in a note alone and a node's row reads clean; the list shows the mark, and the page takes it from there, Clear included. A cancelled card has none. An index that cannot be read is the read's error: exit 2, the daemon's 503, never a clean row. `spec card show C --marks` reads one card alike; `get_card` always asks it.
 
-**`spec flow --trace`** joins each shown node's `rollup` and `counts` (`spec-flow.md` "The read"). It never fails a flow: a queue that cannot be read, a newer one included, leaves `rollup` and `counts` null with a note, never `no card`; one below this build's is named.
+**`spec flow --trace`** joins each shown node's `rollup` and `counts` and never fails a flow (`spec-flow.md` "The read").
 
 **`spec impact`** adds the cards not cancelled with a direct target in the reached set: `spec-impact.md`. Its mark is over all a card's targets, unlike a node's row here.
 
 ## Known limits
 
 - `raise.rs` `meaning_changes` pairs nodes with an ID only, so a card on an id-less document by path gets no `card.refreshed` on `--editorial` and reads suspect: marking falsely, never fresh.
+- A card departed on one row and suspect on another is taken by a group clear, and if its departed target is also suspect that entry re-freezes too, because `clear_cards` takes one scope for all cards.
 - Stage lines are never cut, as `spec flow`'s gap rows: a project with more stages than the cap holds passes `OUTPUT_CAP_CHARS`.
 - A literal `stage: "-"` cannot be reached by `--stage`, where `-` asks the steps with none; its line reads as theirs, and JSON tells them apart.
 

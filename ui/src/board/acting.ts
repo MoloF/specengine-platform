@@ -1,13 +1,15 @@
 import { useCallback, useSyncExternalStore } from "react";
 import { CARD_USAGE } from "../api/client";
-import { useIdentity } from "../api/queries";
-import type { ApiError } from "../api/types";
+import { useIdentity, useTeam } from "../api/queries";
+import type { ApiError, KnownTeamAct, Team } from "../api/types";
 import { ACTING_FLAG } from "./labels";
 
 // The acting name (`docs/features/board-ui.md` "The acting name, and acceptance"): a field in the
 // Board's header, kept per viewer, sent as `as` on every write. Locally a convention: the name is
 // typed and nothing verifies it (ADR-0034). On a hub the login takes its place once its read has
-// resolved, and the stored name is neither sent nor written (`docs/canon/hub.md` "Screen").
+// resolved, and the stored name is neither sent nor written (`docs/canon/hub.md` "Screen"); what that
+// login may do on a project is `allowed`, read here and never told apart by any word but the act's
+// (`docs/features/hub-team.md` "Description and interactions").
 
 /** Where the viewer's name is kept: per viewer, for every project. */
 export const ACTING_KEY = "specengine.board.as";
@@ -74,6 +76,27 @@ export function isActingLine({ status, message }: ApiError): boolean {
  */
 export function useHubLogin(): string | null {
   return useIdentity().data?.login ?? null;
+}
+
+/**
+ * What `[team]` says of this login on `project`, once read. Null says only that nothing is known: no
+ * login, which keeps a local daemon from being asked a route it does not have; the read still out;
+ * the read failed, a last answer no longer holding.
+ */
+export function useTeamRow(project: string): Team | null {
+  const login = useHubLogin();
+  const read = useTeam(project, login !== null);
+  return read.error === null ? (read.data ?? null) : null;
+}
+
+/**
+ * Whether a control of an act stands on. Off only where an answer read says so: unknown, it stays on
+ * and the route answers for itself, a 403 in the daemon's words being the truth either way. This
+ * shapes the page and judges nobody.
+ */
+export function useAllowed(project: string): (act: KnownTeamAct) => boolean {
+  const team = useTeamRow(project);
+  return (act) => team === null || team.allowed.includes(act);
 }
 
 /** The setter a login comes with: a hub's page has nothing to keep. */

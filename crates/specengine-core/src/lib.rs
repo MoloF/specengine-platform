@@ -133,6 +133,7 @@ pub mod round;
 pub mod scheme_toml;
 pub mod symbol_delta;
 pub mod task;
+pub mod team_toml;
 pub mod tokens;
 pub mod trace;
 pub mod verify;
@@ -172,6 +173,7 @@ pub use roadmap::{
 };
 pub use roadmap_toml::{MAX_UNIT_BYTES, RoadmapConfig, roadmap_from_toml};
 pub use scheme_toml::{IdSchemeToml, scheme_from_toml};
+pub use team_toml::{TEAM_ENTRIES_MAX, TeamConfig, TeamEntry, TeamRole, team_from_toml};
 pub use tokens::tokens_est;
 pub use verify::{VerifyConfig, verify_from_toml};
 pub use walk_scope::{DOCUMENT_EXTENSION, WalkScope, is_clean_relative, is_under};

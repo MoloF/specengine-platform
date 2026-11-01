@@ -49,6 +49,7 @@ import type {
   TaskList,
   TaskNotFound,
   TaskPackage,
+  Team,
   TraceDocument,
   TreeView,
 } from "./types";
@@ -303,6 +304,11 @@ export class HttpClient implements SpecEngineClient {
 
   async getIdentity(signal?: AbortSignal): Promise<Identity> {
     return (await request("GET", "/identity", { signal })) as Identity;
+  }
+
+  /** A hub's route alone (`docs/features/hub-team.md` "Data"): asked once a login is known, a local daemon answering its unknown-route 404. */
+  async getTeam(project: string, signal?: AbortSignal): Promise<Team> {
+    return (await request("GET", `${projectPath(project)}/team`, { signal })) as Team;
   }
 
   async getInbox(project: string, signal?: AbortSignal): Promise<Inbox> {

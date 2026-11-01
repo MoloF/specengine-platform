@@ -28,6 +28,8 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     ["getProjects", "/** GET /api/projects */"],
     // AC-12 of docs/features/hub-identity.md: the route the canon's "Routes" names, no project.
     ["getIdentity", '/** GET /api/identity (docs/canon/hub.md "Routes"; a hub\'s login, null on a local daemon; no project) */'],
+    // docs/features/hub-team.md "Data": a hub's route alone; the page asks it once a login is known.
+    ["getTeam", '/** GET /api/projects/:p/team (docs/features/hub-team.md "Data"; a hub alone: the asking login\'s row of `[team]`, a local daemon\'s unknown route) */'],
     ["getInbox", "/** GET /api/projects/:p/inbox */"],
     ["getProposal", "/** GET /api/projects/:p/proposals/:id */"],
     // AC-14 of docs/features/decision-staging.md: the stage's two writes on one path.

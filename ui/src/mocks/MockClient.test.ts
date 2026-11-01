@@ -64,6 +64,10 @@ describe("the normal scenario", () => {
     expect(await new MockClient("normal", { now: clock }).getIdentity()).toEqual({ login: null });
   });
 
+  it("is no hub: the team read answers a local daemon's unknown route (A7 of hub-team)", async () => {
+    expect((await rejection(new MockClient("normal", { now: clock }).getTeam())).status).toBe(404);
+  });
+
   it("holds every case the slice names in harbor-sim's queue", async () => {
     const client = new MockClient("normal", { now: clock });
     const { proposals } = await client.getInbox("harbor-sim");
@@ -223,6 +227,7 @@ describe("the other scenarios", () => {
     for (const call of [
       client.getProjects(),
       client.getIdentity(),
+      client.getTeam(),
       client.getInbox("harbor-sim"),
       client.getNode("harbor-sim", "MEC-TIDES"),
       client.getTree("harbor-sim"),

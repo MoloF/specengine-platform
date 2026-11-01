@@ -86,6 +86,25 @@ describe("the identity read (AC-12 of hub-identity)", () => {
   });
 });
 
+describe("the team read (A9 of hub-team)", () => {
+  it.each([
+    ["a listed login", { login: "mira", name: "Mira K", allowed: ["stage", "accept", "clear", "group_clear"] }],
+    ["a login `[team]` does not list", { login: "eve", name: null, allowed: [] }],
+    ["an act this build does not know", { login: "mira", name: "Mira K", allowed: ["stage", "confirm"] }],
+  ])("%s's answer resolves as sent", async (_case, team) => {
+    stubFetch(() => jsonAnswer(200, team));
+    expect(await new HttpClient().getTeam("alpha")).toEqual(team);
+  });
+
+  it.each([
+    [404, "no route /api/projects/alpha/team: the routes are /api/projects and the web UI"],
+    [503, "specengine.toml:9: team.mira: role: `boss` is none of owner, lead, member"],
+  ])("a %i error body rejects in the daemon's words", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getTeam("alpha")))).toEqual({ status, message });
+  });
+});
+
 describe("each method hits its URL (AC-09)", () => {
   let fetchStub: ReturnType<typeof stubFetch>;
 
@@ -96,6 +115,7 @@ describe("each method hits its URL (AC-09)", () => {
   it.each<[string, (client: HttpClient) => Promise<unknown>, string]>([
     ["getProjects", (client) => client.getProjects(), "/api/projects"],
     ["getIdentity", (client) => client.getIdentity(), "/api/identity"],
+    ["getTeam, a slug as a segment", (client) => client.getTeam("my project"), "/api/projects/my%20project/team"],
     ["getInbox", (client) => client.getInbox("alpha"), "/api/projects/alpha/inbox"],
     ["getProposal", (client) => client.getProposal("alpha", "PR-0004"), "/api/projects/alpha/proposals/PR-0004"],
     ["getTree, no option", (client) => client.getTree("alpha"), "/api/projects/alpha/tree"],
@@ -276,6 +296,7 @@ describe("each method hits its URL (AC-09)", () => {
   it.each<[string, (client: HttpClient, signal: AbortSignal) => Promise<unknown>]>([
     ["getProjects", (client, signal) => client.getProjects(signal)],
     ["getIdentity", (client, signal) => client.getIdentity(signal)],
+    ["getTeam", (client, signal) => client.getTeam("alpha", signal)],
     ["getInbox", (client, signal) => client.getInbox("alpha", signal)],
     ["getProposal", (client, signal) => client.getProposal("alpha", "PR-0004", signal)],
     ["getTree", (client, signal) => client.getTree("alpha", undefined, signal)],
@@ -292,6 +313,19 @@ describe("each method hits its URL (AC-09)", () => {
     const controller = new AbortController();
     await call(new HttpClient(), controller.signal);
     expect(fetchStub.mock.calls[0]?.[1]?.signal).toBe(controller.signal);
+  });
+
+  it("a refused group clear rejects with its reason alone, the last note: a note before it does not reach the dialog", async () => {
+    const reason = "`A` holds 3 suspect cards, not 2; nothing changed";
+    fetchStub.mockImplementation(() => Promise.resolve(jsonAnswer(409, { group: "A", cleared: [], notes: ["C-0001 reads departed PR-0001: passed over; clear it alone once that is settled", reason] })));
+    expect(apiErrorOf(await rejection(new HttpClient().clearCardGroup("alpha", { group: "A", reason: "x", as: "mira", count: 2 })))).toEqual({ status: 409, message: reason });
+  });
+
+  it("sends a group clear's count as given, and no such key when none is given", async () => {
+    const client = new HttpClient();
+    await client.clearCardGroup("alpha", { group: "A", reason: "x", as: "mira", count: 2 });
+    await client.clearCardGroup("alpha", { group: "A", reason: "x", as: "Ivo Brandt" });
+    expect(fetchStub.mock.calls.map((call) => call[1]?.body)).toEqual([JSON.stringify({ group: "A", reason: "x", as: "mira", count: 2 }), JSON.stringify({ group: "A", reason: "x", as: "Ivo Brandt" })]);
   });
 
   it("sends the check, the health read, a stage and an unstage with no AbortSignal: a walk in flight is never aborted, a write's answer always taken", async () => {

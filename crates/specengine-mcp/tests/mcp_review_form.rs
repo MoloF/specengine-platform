@@ -329,6 +329,7 @@ impl Repo {
                 body: body(updated_at),
                 now: LATER.to_owned(),
                 git: server_git(&env),
+                actor: None,
             },
         );
         if let Ok(outcome) = &outcome {
@@ -372,6 +373,7 @@ impl Repo {
                 body: body(updated_at),
                 now: now.to_owned(),
                 git: self.git_env(&self.linked),
+                actor: None,
             },
         )
         .unwrap_or_else(|error| panic!("stage {id}: {error}"))

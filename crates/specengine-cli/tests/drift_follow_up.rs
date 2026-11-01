@@ -841,6 +841,7 @@ fn follow_up_on_a_non_drift_kind_is_a_usage_error() {
             },
             now: DECIDED.to_owned(),
             git: repo.git_env(&repo.root),
+            actor: None,
         },
     )
     .expect("a stage");

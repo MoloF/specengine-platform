@@ -5,6 +5,8 @@ import type { ApiError, Proposal, StageChoice } from "../api/types";
 import { replaceHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { useAllowed } from "../board/acting";
+import { ACT_OFF } from "../board/labels";
 import { useAnnounce } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -59,6 +61,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
   const decide = useStageDecision(project);
+  const canStage = useAllowed(project)("stage");
   const now = useNow();
   const openShortcuts = useOpenShortcuts();
   const focusLater = useFocusLater();
@@ -146,7 +149,8 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
    * Opens a decision on the selected proposal once its review document is read (the options come
    * from it, and the `updated_at` a stage is sent against); nothing while a dialog is open or a
    * stage pending. A drift item opens none: decided on a terminal only, it is never staged
-   * (`docs/features/drift-queue.md` "Review, inbox, round, stage"); its key only says so.
+   * (`docs/features/drift-queue.md` "Review, inbox, round, stage"); its key only says so. Nor does a
+   * decision that stages where a hub's `allowed` omits `stage`: its key says that too.
    */
   function openDialog(kind: DecisionKind) {
     if (selected === null || reviewed === null || reviewed.updated_at === null || openDecision.current !== null || deciding.current || decide.isPending) {
@@ -154,6 +158,10 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     }
     if (reviewed.drift !== null) {
       announce(`${selected.id} is a drift item, decided on a terminal only; nothing is staged here. Its card lists the commands.`);
+      return;
+    }
+    if (WORDING[kind].staged && !canStage) {
+      announce(ACT_OFF.stage);
       return;
     }
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -383,6 +391,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             others={ordered.filter((other) => sharesTarget(other, selected))}
             now={now}
             deciding={decide.isPending}
+            canStage={canStage}
             unstageRefusal={unstageRefusal !== null && unstageRefusal.id === selected.id ? unstageRefusal.message : null}
             onDecide={openDialog}
             onUnstage={() => {

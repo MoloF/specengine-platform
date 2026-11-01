@@ -44,6 +44,8 @@ export const queryKeys = {
   projects: ["projects"] as const,
   /** Who this page acts as (`docs/canon/hub.md` "Routes"): no project, a fact of the page. */
   identity: ["identity"] as const,
+  /** What `[team]` says of this login, per project (`docs/features/hub-team.md` "Data"). */
+  team: (project: string) => ["team", project] as const,
   inbox: (project: string) => ["inbox", project] as const,
   proposal: (project: string, id: string) => ["proposal", project, id] as const,
   tree: (project: string, options: TreeOptions = {}) =>
@@ -232,6 +234,17 @@ export function useProjects() {
 export function useIdentity() {
   const client = useClient();
   return useQuery({ queryKey: queryKeys.identity, queryFn: ({ signal }) => client.getIdentity(signal), staleTime: Infinity, gcTime: Infinity });
+}
+
+/**
+ * This login's row of the project's `[team]` (`docs/features/hub-team.md` "Data"): a hub's route, so
+ * unread until `enabled`, a login known. One read per project however many fields ask; a failed one
+ * is asked again by the next to mount, as the identity's. `[team]` changes by a commit, which raises
+ * no event, so window focus reads it again.
+ */
+export function useTeam(project: string, enabled: boolean) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.team(project), queryFn: ({ signal }) => client.getTeam(project, signal), enabled, refetchOnMount: false, refetchOnWindowFocus: true });
 }
 
 export function useInbox(project: string) {

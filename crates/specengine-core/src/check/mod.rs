@@ -121,10 +121,11 @@ pub use working_set::worst_w;
 /// link warnings), then increment 4 (the process rules' codes beyond the
 /// reused `key-missing`, at each rule's severity; the warning
 /// `parent-cycle`), then slice 4b-2's `rev-not-raised` (added by the
-/// store's runs against `HEAD` only). A stale baseline entry is no finding:
-/// it goes to [`Report::stale`], labelled `debt-stale` only in the detail
-/// lines.
-pub const CHECK_CODES: [&str; 36] = [
+/// store's runs against `HEAD` only), then `team-config`, a bad `[team]`
+/// (added by every store run from its setup, never a `cannot-check`). A
+/// stale baseline entry is no finding: it goes to [`Report::stale`], labelled
+/// `debt-stale` only in the detail lines.
+pub const CHECK_CODES: [&str; 37] = [
     "class-missing",
     "class-unknown",
     "key-missing",
@@ -161,4 +162,5 @@ pub const CHECK_CODES: [&str; 36] = [
     "text-empty",
     "parent-cycle",
     "rev-not-raised",
+    "team-config",
 ];

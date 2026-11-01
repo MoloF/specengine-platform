@@ -1,4 +1,4 @@
-import type { CardAllowed, CardFlow, CardMove, CardRow, TraceCard } from "../api/types";
+import type { CardAllowed, CardFlow, CardMove, CardRow, KnownTeamAct, TraceCard } from "../api/types";
 import type { Look } from "../ui/Badge";
 
 // The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"): columns, flows
@@ -21,6 +21,17 @@ export const ACTING_FLAG = "--as: ";
 
 /** Said wherever a name is typed for an accept (ADR-0034). */
 export const NAME_IS_TYPED = "This is a convention until a named login: the name is typed and nothing verifies it.";
+
+/** Said in its place on a hub: the name is the request's login, which a person cannot type over (`docs/features/hub-team.md` "Description and interactions"). */
+export const NAME_IS_LOGIN = "This is recorded under your login.";
+
+/** Said beside a control `allowed` omits. The page's words: a refusal stays the daemon's. */
+export const ACT_OFF: Readonly<Record<KnownTeamAct, string>> = {
+  stage: "Your login does not stage on this project; each item stays open for someone who does.",
+  accept: "Your login does not accept cards on this project.",
+  clear: "Your login does not clear marks on this project.",
+  group_clear: "Your login does not clear a whole group on this project.",
+};
 
 /** The words of a card's events, by their stored type (`docs/canon/cards.md` "Documents and events"). */
 const EVENT_WORDS: ReadonlyMap<string, string> = new Map([

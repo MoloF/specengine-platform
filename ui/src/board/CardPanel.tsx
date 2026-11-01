@@ -11,6 +11,8 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { shownSlot, shownText } from "../ui/text";
 import { formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
+import { useAllowed } from "./acting";
+import { ActOff } from "./ActOff";
 import { isOverdue } from "./due";
 import { ACCEPTED, BY_HAND, canClear, CANCELLED, columnTitle, eventWords, markLine, markLook, OVERDUE, UNASSIGNED, type CardMark } from "./labels";
 
@@ -146,8 +148,11 @@ function Closure({ card }: { card: Card }) {
   );
 }
 
-/** What a read says of the card against its brief, closed or not: a suspect card's Clear stands here, an accepted card's too. */
-function BriefMark({ card, mark, onAct }: { card: Card; mark: CardMark; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+/**
+ * What a read says of the card against its brief, closed or not: a suspect card's Clear stands here,
+ * an accepted card's too; idle, as a hub's `allowed` says, it stays where it is and does nothing.
+ */
+function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; clears: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
   const look = markLook(mark);
   if (look === null) {
     return null;
@@ -165,14 +170,18 @@ function BriefMark({ card, mark, onAct }: { card: Card; mark: CardMark; onAct: (
           <button
             type="button"
             className="button"
+            aria-disabled={!clears}
             onClick={(event) => {
-              onAct("clear", card, event.currentTarget);
+              if (clears) {
+                onAct("clear", card, event.currentTarget);
+              }
             }}
           >
             Clear
           </button>
         </div>
       )}
+      {canClear(mark) && !clears && <ActOff act="clear" />}
     </Part>
   );
 }
@@ -182,29 +191,33 @@ function TargetState({ rollup }: { rollup: string | undefined }) {
   return rollup === undefined ? null : <Badge look={rollupLook(rollup)} />;
 }
 
-function Actions({ card, flow, onAct }: { card: Card; flow: CardFlow | undefined; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+function Actions({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | undefined; accepts: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+  const inAcceptColumn = card.column === flow?.accept.from;
   function act(action: CardAction) {
     return (event: MouseEvent<HTMLButtonElement>) => {
       onAct(action, card, event.currentTarget);
     };
   }
   return (
-    <div className="board-panel-actions" role="group" aria-label="Actions">
-      {card.column === flow?.accept.from && (
-        <button type="button" className="button button-primary" onClick={act("accept")}>
-          Accept
+    <>
+      <div className="board-panel-actions" role="group" aria-label="Actions">
+        {inAcceptColumn && (
+          <button type="button" className="button button-primary" aria-disabled={!accepts} onClick={accepts ? act("accept") : undefined}>
+            Accept
+          </button>
+        )}
+        <button type="button" className="button" onClick={act("edit")}>
+          Edit
         </button>
-      )}
-      <button type="button" className="button" onClick={act("edit")}>
-        Edit
-      </button>
-      <button type="button" className="button" onClick={act("assign")}>
-        Assign
-      </button>
-      <button type="button" className="button button-danger" onClick={act("cancel")}>
-        Cancel card
-      </button>
-    </div>
+        <button type="button" className="button" onClick={act("assign")}>
+          Assign
+        </button>
+        <button type="button" className="button button-danger" onClick={act("cancel")}>
+          Cancel card
+        </button>
+      </div>
+      {inAcceptColumn && !accepts && <ActOff act="accept" />}
+    </>
   );
 }
 
@@ -229,6 +242,7 @@ function Details({
   stateFailure: string | null;
   onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
 }) {
+  const allows = useAllowed(project);
   const accepted = card.acceptance !== null;
   const cancelled = card.cancellation !== null;
   const history = [...(card.history ?? [])].sort((a, b) => a.seq - b.seq);
@@ -249,7 +263,7 @@ function Details({
           ))}
         </ul>
       )}
-      {mark !== null && <BriefMark card={card} mark={mark} onAct={onAct} />}
+      {mark !== null && <BriefMark card={card} mark={mark} clears={allows("clear")} onAct={onAct} />}
       {markFailure !== null && (
         // Not known, never read as clean: no mark is shown for a read that failed.
         <p className="note">
@@ -263,7 +277,7 @@ function Details({
           <span>The state of this card's targets could not be read: {stateFailure}</span>
         </p>
       )}
-      {accepted || cancelled ? <Closure card={card} /> : <Actions card={card} flow={flow} onAct={onAct} />}
+      {accepted || cancelled ? <Closure card={card} /> : <Actions card={card} flow={flow} accepts={allows("accept")} onAct={onAct} />}
       {card.goal !== null && (
         <Part title="Goal">
           <p className="board-text">{shownText(card.goal)}</p>

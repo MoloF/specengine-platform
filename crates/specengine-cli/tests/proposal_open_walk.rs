@@ -1242,6 +1242,7 @@ fn a_staged_item_shows_its_stage() {
             },
             now: STAGED.to_owned(),
             git: pair.git_env(&pair.main),
+            actor: None,
         },
     )
     .unwrap_or_else(|error| panic!("stage: {error}"));
@@ -1288,6 +1289,7 @@ fn a_row_with_a_reject_staged_is_never_asked_and_stands_in_left() {
             },
             now: STAGED.to_owned(),
             git: pair.git_env(&pair.main),
+            actor: None,
         },
     )
     .unwrap_or_else(|error| panic!("stage: {error}"));
@@ -1345,6 +1347,7 @@ fn a_reject_staged_during_the_walk_is_not_asked_either() {
                     },
                     now: STAGED.to_owned(),
                     git: pair.git_env(&pair.main),
+                    actor: None,
                 },
             )
             .unwrap_or_else(|error| panic!("stage: {error}"));

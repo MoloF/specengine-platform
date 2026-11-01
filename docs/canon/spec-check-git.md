@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-20
+reviewed: 2026-11-01
 ---
 
 # spec check against HEAD
@@ -34,7 +34,7 @@ reviewed: 2026-10-20
 
 `--staged` and `--changed` are judged against `HEAD` in every mode, a plain run never (owner's Q4 of 2026-09-30; 2a.2 Q4–Q9, Q1–Q4 of 2026-10-01: `docs/features/spec-cli-introduced.md`; no ADR, Q9). Introduced, new debt, verdict: `docs/canon/spec-check.md`.
 
-- **Base**: `HEAD`'s tree under the root, judged by `check::run` with the checked scheme, `[paths]`, `CheckConfig`, no baseline and the same date; causes dropped, findings kept (a root absent at `HEAD`: all introduced); unborn → empty; during a merge or rebase, still `HEAD`. Under `--staged` a path at the index's OID reuses the checked parse (bytes shared by OID; `--changed`: by bytes), never a parse across paths. No rename detection: a `git mv` or `mv`, an NFD name over a precomposed one re-introduce; a deleted document's old path is parsed from `HEAD`, so a citation of its ID reads introduced.
+- **Base**: `HEAD`'s tree under the root, judged by `check::run` with the checked scheme, `[paths]`, `CheckConfig`, no baseline and the same date; causes dropped, findings kept (a root absent at `HEAD`: all introduced); unborn → empty; during a merge or rebase, still `HEAD`. Under `--staged` a path at the index's OID reuses the checked parse (bytes shared by OID; `--changed`: by bytes), never a parse across paths. No rename detection: a `git mv` or `mv`, an NFD name over a precomposed one re-introduce; a deleted document's old path is parsed from `HEAD`, so a citation of its ID reads introduced. `team-config` is judged on the checked side alone, so a bad `[team]` at `HEAD` counts as introduced until fixed.
 - **Mode**: the stricter of the checked config's and `HEAD`'s (2a.2 Q6), its only use of `HEAD`'s config. **New debt** against `HEAD`'s baseline (absent → empty): here a new `.spec-debt.toml` entry or a later `expires` takes the owner's `--no-verify` (2a.2 Q5, Q7). Pilots: `enforce-introduced`, agents' `--changed`, the same hook, CI plain = `enforce` (Q2: no `--base REF`).
 - **Notes** (stderr `note:`, never JSON), in order: `HEAD`'s config unknown — a symlink, gitlink, missing blob, not UTF-8 or invalid (`HEAD's specengine.toml is not a valid config (line N): …`), `--config` outside the root — so the checked mode; `HEAD`'s stricter mode; `HEAD`'s baseline unknown likewise or `--baseline` outside the root: new debt unjudged (Q3, Q4). Outside: the canonical path not below the canonical root; else the root-relative path names `HEAD`'s file; a given file is named as typed.
 - **A partial base fails closed**: a listed `HEAD` document not given as a blob → a cause at its path, `HEAD's blob is missing from the git object database`, `HEAD's object is not a blob` or `HEAD's blob was not read`; cannot-check in the checked mode with the checked run's causes, no findings, no notes; under `--staged` only, a (path, OID) the index shares is the checked run's own cause.

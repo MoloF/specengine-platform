@@ -248,6 +248,7 @@ fn stage_now(pair: &Pair, cwd: &Path, id: &str, body: impl FnOnce(String) -> Sta
             body: body(updated_at),
             now: now.to_owned(),
             git: pair.git_env(cwd),
+            actor: None,
         },
     )
     .unwrap_or_else(|error| panic!("stage {id}: {error}"));
@@ -2066,6 +2067,7 @@ fn stage_checks_its_clock_and_id_before_the_queue_is_opened() {
         },
         now: now.to_owned(),
         git: pair.git_env(&main),
+        actor: None,
     };
     let env = pair.env(&main);
     let bad_clock = stage(&env, &Globals::default(), &request("PR-0001", "yesterday"));
@@ -2102,6 +2104,7 @@ fn stage_checks_its_clock_and_id_before_the_queue_is_opened() {
         },
         now: ROUND.to_owned(),
         git: pair.git_env(&main),
+        actor: None,
     };
     let stale = stage(&env, &Globals::default(), &option("2000-01-01T00:00:00Z")).expect("stage");
     let reason = stale.proposal.refusal.clone().expect("refused");
@@ -2940,6 +2943,7 @@ fn stage_answers(
             },
             now: now.to_owned(),
             git: pair.git_env(cwd),
+            actor: None,
         },
     )
 }
@@ -3401,6 +3405,7 @@ fn ui_round_the_answers_body_the_project_the_clock_and_the_limit_are_judged_firs
             },
             now: ROUND.to_owned(),
             git: pair.git_env(&main),
+            actor: None,
         },
     );
     assert_eq!(

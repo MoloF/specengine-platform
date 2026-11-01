@@ -31,7 +31,10 @@
 //! spec `board-ui`) writes through these same calls: each `Card*Body` is a
 //! route's JSON, decoded here, its `as` as self-declared as the flag. A
 //! person is core's `card_person_problem`: any script, inner spaces, trimmed
-//! wherever it is stored or compared; no grammar of a task or a proposal.
+//! wherever it is stored or compared; no grammar of a task or a proposal. A
+//! hub's handlers set `as` to the login first; its group clear also gives the
+//! `[team]` entry whose cover is judged, and the count the page showed, both
+//! here, the set known, before the consent. A terminal gives neither.
 //!
 //! Exits as the queue's: 0 done; 1 refused (no such card, a move outside its
 //! flow, a closed card, a cap, a declined prompt, a stale `--revision`); 2
@@ -47,6 +50,7 @@ use std::slice;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use specengine_core::TeamEntry;
 use specengine_core::card::{
     AGENT_ACTOR, AllowedMove, CLEAR, CardIdError, EVIDENCE_ENTRIES_MAX, HISTORY_MAX, LOCAL_ACTOR,
     accept_refusal, allowed_moves, card_look_alike_message, card_move as decide_move, card_number,
@@ -54,7 +58,7 @@ use specengine_core::card::{
     estimate_problem, parse_card_id, parse_evidence, reviewer_problem, stale_refusal,
 };
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
-use specengine_core::check::SpecGraph;
+use specengine_core::check::{NodeAt, SpecGraph};
 use specengine_core::intake::{AuthorInput, GapType, discrepancy_problem};
 use specengine_core::proposal::{Author, prefix_clash};
 use specengine_core::task::{
@@ -82,8 +86,8 @@ use crate::search::notes;
 use crate::show::classify;
 use crate::task::resolved_list;
 use crate::trace::{
-    QueueRead, correction_of, facts_of, fresh_norms, held_documents, norms_read, settled_of,
-    target_norms, target_places,
+    QueueRead, correction_of, facts_of, fresh_norms, group_marks, held_documents, norms_read,
+    settled_of, target_norms, target_places,
 };
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line, process_git};
 
@@ -256,6 +260,12 @@ pub struct CardClearGroupRequest {
     /// `--as N`, required: a person, never `local` or `agent`.
     pub actor: Option<String>,
     pub now: String,
+    /// The number of cards the page showed: another number is refused.
+    /// `None`: not compared.
+    pub count: Option<u64>,
+    /// A hub's `[team]` entry of the login: every node the clear re-freezes
+    /// must lie in its cover. `None`: nothing judged.
+    pub entry: Option<TeamEntry>,
 }
 
 /// `bytes` as the JSON of one route's body, `shape` its keys; else exit 2
@@ -607,13 +617,15 @@ pub struct CardClearGroupBody {
     /// The acting name; `null`: `local`, who can clear nothing.
     #[serde(rename = "as")]
     pub actor: Option<String>,
+    /// The number of cards the page showed, sent on a hub alone.
+    pub count: Option<u64>,
 }
 
 impl CardClearGroupBody {
     /// `bytes` decoded; else exit 2 naming the defect, nothing read or
     /// changed.
     pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
-        let body: Self = decoded(bytes, "\"group\",\"reason\",\"as\"")?;
+        let body: Self = decoded(bytes, "\"group\",\"reason\",\"as\",\"count\"")?;
         persons_named(body.actor.as_deref(), &[])?;
         Ok(body)
     }
@@ -625,6 +637,8 @@ impl CardClearGroupBody {
             reason: self.reason,
             actor: self.actor,
             now,
+            count: self.count,
+            entry: None,
         }
     }
 }
@@ -667,6 +681,9 @@ pub enum CardCause {
     Unknown,
     /// A rule, a cap, a stale revision, a declined prompt.
     Refused,
+    /// A hub's `[team]` entry does not cover what the act re-freezes: the
+    /// daemon's 403.
+    Outside,
 }
 
 /// What a card-changing command answered.
@@ -693,7 +710,7 @@ impl CardOutcome {
         match self.cause {
             None => Exit::Answered,
             Some(CardCause::Usage) => Exit::CannotRun,
-            Some(CardCause::Unknown | CardCause::Refused) => Exit::NotFound,
+            Some(CardCause::Unknown | CardCause::Refused | CardCause::Outside) => Exit::NotFound,
         }
     }
 
@@ -824,7 +841,7 @@ impl CardGroupOutcome {
         match self.cause {
             None => Exit::Answered,
             Some(CardCause::Usage) => Exit::CannotRun,
-            Some(CardCause::Unknown | CardCause::Refused) => Exit::NotFound,
+            Some(CardCause::Unknown | CardCause::Refused | CardCause::Outside) => Exit::NotFound,
         }
     }
 
@@ -1250,71 +1267,6 @@ fn reason_problem(reason: &str, why: &str) -> Option<String> {
 /// Why `name` cannot be a person a card names.
 fn person_problem(key: &str, name: &str) -> Option<String> {
     card_person_problem(name).map(|problem| format!("{key}: {problem}"))
-}
-
-/// Why `login`, as a proxy sent it, can be no person on a hub. Pure: it
-/// reads and writes nothing. A login is recorded verbatim and compared
-/// exactly, so one person must have one spelling: refused are text the store
-/// would trim, what no card's person may hold, a comma (a proxy folding a
-/// client's copy gives `eve, mira`), a format character (`mira` and a
-/// zero-width character read as `mira` and are two people), [`LOCAL_ACTOR`]
-/// and [`AGENT_ACTOR`] in any case, and [`CLEAR`].
-///
-/// The login door's duty, not judged here: a Latin look-alike (a Cyrillic
-/// `o`), NFC against NFD, and an invisible mark outside category Cf (U+034F,
-/// a variation selector).
-pub fn hub_login_problem(login: &str) -> Option<String> {
-    if card_person(login) != login {
-        return Some("white space around the login".to_owned());
-    }
-    if let Some(problem) = card_person_problem(login) {
-        return Some(problem);
-    }
-    if login.contains(',') {
-        return Some("a comma: one login, not a list".to_owned());
-    }
-    if let Some(c) = login.chars().find(|&c| is_format_character(c)) {
-        return Some(format!(
-            "U+{:04X} in a name: no format character, which can read as another person",
-            u32::from(c)
-        ));
-    }
-    if login == CLEAR {
-        return Some(format!(
-            "`{CLEAR}` is the record's word for clearing a name"
-        ));
-    }
-    reviewer_problem(&login.to_ascii_lowercase())
-        .map(|_| format!("`{login}` is the record's word for no person"))
-}
-
-/// Unicode's general category Cf, which `char` does not expose (the same
-/// ranges in Unicode 15.1 and 17.0).
-fn is_format_character(c: char) -> bool {
-    matches!(
-        c,
-        '\u{ad}'
-            | '\u{600}'..='\u{605}'
-            | '\u{61c}'
-            | '\u{6dd}'
-            | '\u{70f}'
-            | '\u{890}'..='\u{891}'
-            | '\u{8e2}'
-            | '\u{180e}'
-            | '\u{200b}'..='\u{200f}'
-            | '\u{202a}'..='\u{202e}'
-            | '\u{2060}'..='\u{2064}'
-            | '\u{2066}'..='\u{206f}'
-            | '\u{feff}'
-            | '\u{fff9}'..='\u{fffb}'
-            | '\u{110bd}'
-            | '\u{110cd}'
-            | '\u{13430}'..='\u{1343f}'
-            | '\u{1bca0}'..='\u{1bca3}'
-            | '\u{1d173}'..='\u{1d17a}'
-            | '\u{e0001}'
-            | '\u{e0020}'..='\u{e007f}'
-    )
 }
 
 /// The card a command names: `Ok(Err)` the refused outcome (exit 1).
@@ -2717,9 +2669,12 @@ fn run_clear(
 /// `spec card clear --group REF`: every card suspect on a target in `within`
 /// of `REF` or of a document under it by `parent:`, no effect only, one
 /// transaction, one event each, after one consent. Only those entries are
-/// frozen again: a mark outside the group stays. A card whose mark a live
-/// correction holds is not suspect here. Exit 1 when `REF` names nothing or
-/// none is suspect.
+/// frozen again: a mark outside the group stays. The read's word decides: a
+/// card is taken when a row of `spec trace REF` reads it `suspect`, so one a
+/// live correction holds is passed over, and one reading `departed` is too,
+/// with a note naming it: it keeps its reading, and a person clears it alone
+/// once its discrepancy is settled. Exit 1 when `REF` names nothing or none is
+/// suspect.
 pub fn card_clear_group(
     env: &Env,
     globals: &Globals,
@@ -2727,6 +2682,24 @@ pub fn card_clear_group(
     consent: Consent<'_>,
 ) -> Result<CardGroupOutcome, CliError> {
     run_clear_group(env, globals, request, consent).map_err(escaped_error)
+}
+
+/// The first path, by text, of every node of the `targets` the clear
+/// re-freezes that `entry` does not cover. `owner` covers all of it.
+fn outside_cover(
+    entry: &TeamEntry,
+    graph: &SpecGraph<'_>,
+    places: &BTreeMap<String, Vec<NodeAt>>,
+    targets: impl Iterator<Item = String>,
+) -> Option<String> {
+    let judged: BTreeSet<&str> = targets
+        .flat_map(|target| &places[&target])
+        .map(|at| graph.paths()[at.file])
+        .collect();
+    judged
+        .into_iter()
+        .find(|path| !entry.covers(path))
+        .map(str::to_owned)
 }
 
 fn run_clear_group(
@@ -2789,33 +2762,52 @@ fn run_clear_group(
             .iter()
             .map(|row| Message::Note(one_line(&format!("{row}; not read")))),
     );
-    let places = target_places(&graph, listed.cards.iter().flat_map(|card| &card.targets));
+    // What `spec trace` reads, so the words below are its own.
+    let mut read = QueueRead::default();
+    for card in listed.cards {
+        if card.cancellation.is_none() {
+            facts_of(&context.queue, &card, &mut read);
+            read.cards.push(card);
+        }
+    }
+    messages.extend(read.notes.iter().cloned().map(Message::Note));
+    let places = target_places(&graph, read.cards.iter().flat_map(|card| &card.targets));
     let stored = open.index.node_norms().map_err(crate::store_error)?;
     let norms = target_norms(&graph, &stored, &places);
-    let held: BTreeSet<&str> = listed
-        .cards
-        .iter()
-        .filter(|card| !card.is_closed())
-        .filter_map(|card| card.corrects.as_deref())
-        .collect();
     let inside: BTreeSet<String> = places
         .iter()
         .filter(|(_, nodes)| nodes.iter().any(|node| scope.contains(node)))
         .map(|(target, _)| target.clone())
         .collect();
-    let cards: Vec<(String, u64)> = listed
-        .cards
-        .iter()
-        .filter(|card| {
-            card.cancellation.is_none()
-                && !held.contains(card.id.as_str())
-                && suspect_on(card, &norms)
-                    .into_iter()
-                    .any(|target| inside.contains(target))
-        })
-        .map(|card| (card.id.clone(), card.revision))
-        .collect();
-    if cards.is_empty() {
+    let frozen_again = |card: &Card| -> Vec<String> {
+        suspect_on(card, &norms)
+            .into_iter()
+            .filter(|target| inside.contains(*target))
+            .map(str::to_owned)
+            .collect()
+    };
+    let marks = group_marks(&graph, &read, &norms, &places, &roots);
+    let mut chosen: Vec<&Card> = Vec::new();
+    for card in &read.cards {
+        let rows = marks.get(&card.id).map_or(&[][..], Vec::as_slice);
+        if rows
+            .iter()
+            .any(|mark| matches!(mark, CardMark::Suspect { .. }))
+        {
+            chosen.push(card);
+        } else if !frozen_again(card).is_empty()
+            && let Some(departed) = rows
+                .iter()
+                .find(|mark| matches!(mark, CardMark::Departed { .. }))
+        {
+            messages.push(Message::Note(format!(
+                "{} reads {}: passed over; clear it alone once that is settled",
+                card.id,
+                departed.text()
+            )));
+        }
+    }
+    if chosen.is_empty() {
         return Ok(CardGroupOutcome::refused(
             group,
             CardCause::Refused,
@@ -2823,6 +2815,37 @@ fn run_clear_group(
             messages,
         ));
     }
+    if let Some(entry) = &request.entry {
+        let targets = chosen.iter().flat_map(|card| frozen_again(card));
+        if let Some(outside) = outside_cover(entry, &graph, &places, targets) {
+            let reason = format!(
+                "refused: {} leads {}; {outside} lies outside them",
+                entry.login,
+                entry.zones_text()
+            );
+            return Ok(CardGroupOutcome::refused(
+                group,
+                CardCause::Outside,
+                &reason,
+                messages,
+            ));
+        }
+    }
+    if let Some(count) = request.count.filter(|count| *count != chosen.len() as u64) {
+        return Ok(CardGroupOutcome::refused(
+            group,
+            CardCause::Refused,
+            &format!(
+                "`{group}` holds {} suspect cards, not {count}; nothing changed",
+                chosen.len()
+            ),
+            messages,
+        ));
+    }
+    let cards: Vec<(String, u64)> = chosen
+        .iter()
+        .map(|card| (card.id.clone(), card.revision))
+        .collect();
     let question = format!(
         "clear {} cards of {group} as {actor}: no effect? [y/N]",
         cards.len()
