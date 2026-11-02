@@ -30,6 +30,7 @@ import type {
   CardNotFound,
   CardWrite,
   CheckReport,
+  ConfirmRead,
   FlowView,
   GraphView,
   HealthReport,
@@ -101,6 +102,9 @@ const NOTE_MAX_BYTES = 4096;
 
 /** The `conflict` scenario's stage made elsewhere: a reject another page staged meanwhile. */
 const ELSEWHERE: Stage = { decision: "reject", reason: "Staged in another tab (mock scenario: conflict)" };
+
+/** A local daemon's unknown route, the mock's words: a hub alone confirms (`docs/features/hub-confirm.md` B8). */
+const NO_CONFIRM_ROUTE = "no route /api/projects/<slug>/proposals/<id>/confirm: the routes are /api/projects and the web UI (mock)";
 
 /** The mock's question round, in a chunk of its own: only the Questions screen reads it. */
 function loadRound() {
@@ -363,6 +367,18 @@ export class MockClient implements SpecEngineClient {
     const staged: Stage = stage.decision === "approve" ? { ...stage, span_hash: current.base_hash } : stage;
     const at = this.stamp();
     return structuredClone(this.store(entry, index, stored, { ...current, staged, staged_at: at, updated_at: at }));
+  }
+
+  /** No hub behind the mock: a local daemon has no such route (`docs/features/hub-confirm.md` B8), and the page never asks it. */
+  async getConfirm(): Promise<ConfirmRead> {
+    await this.read();
+    throw new ClientError({ status: NO_SUCH_PROPOSAL, message: NO_CONFIRM_ROUTE });
+  }
+
+  /** As `getConfirm`: nothing is confirmed in a browser without a hub. */
+  async confirmProposal(): Promise<Proposal> {
+    await this.wait();
+    throw new ClientError({ status: NO_SUCH_PROPOSAL, message: NO_CONFIRM_ROUTE });
   }
 
   /** Drops the staged choice of an open proposal; nothing staged: the document as it is. */

@@ -30,3 +30,8 @@ clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rust-embed.workspace = true
+
+# `regex` reads the proxy's step-up rule out of `docs/canon/hub.md` for a unit
+# test of `src/hub.rs` (docs/features/hub-confirm.md B11); already in the graph.
+[dev-dependencies]
+regex.workspace = true

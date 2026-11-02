@@ -21,7 +21,9 @@
 //! answer (`docs/canon/decision-staging.md` "Daemon") is keyed on its
 //! cause: none 200, a usage defect 400, unknown 404, refused 409 (a
 //! `CliError` is still a 503); a card write's alike
-//! (docs/features/board-ui.md "Data"). A body is
+//! (docs/features/board-ui.md "Data"), and a hub's confirm: none 200, unknown
+//! 404, refused 409, outside the login's cover 403, the error body
+//! (docs/features/hub-confirm.md "Data"). A body is
 //! `application/json; charset=utf-8`, compact: the CLI's bytes without the
 //! final line end. The error body is `{"status":<code>,"message":"…"}`,
 //! exactly two keys. The store and `rusqlite` are never touched here.
@@ -33,8 +35,8 @@ use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use specengine_cli::{
-    CardCause, CliError, Env, Exit, Globals, Outcome, ProjectRoot, StageCause, discover,
-    render_json,
+    CardCause, CliError, ConfirmCause, Env, Exit, Globals, Outcome, ProjectRoot, StageCause,
+    discover, render_json,
 };
 
 use crate::start::Project;
@@ -132,7 +134,8 @@ enum Answered {
 /// 409 (the refused review document); a card write's alike
 /// (docs/features/board-ui.md "Data"): 404 `{id, reason}`, 409 the write
 /// document, a lost compare-and-set too, 403 a hub's group clear outside the
-/// login's `[team]` cover (docs/features/hub-team.md).
+/// login's `[team]` cover (docs/features/hub-team.md); a confirm's by its
+/// cause too (docs/features/hub-confirm.md "Data").
 fn answered(outcome: &Outcome) -> Answered {
     match outcome {
         Outcome::Stage(stage) => {
@@ -148,6 +151,17 @@ fn answered(outcome: &Outcome) -> Answered {
         }
         Outcome::Card(card) => return caused(outcome, write_status(card.cause)),
         Outcome::CardGroup(group) => return caused(outcome, write_status(group.cause)),
+        Outcome::Confirm(confirm) => {
+            return match confirm.cause {
+                None => caused(outcome, Some(StatusCode::OK)),
+                Some(ConfirmCause::Unknown) => caused(outcome, Some(StatusCode::NOT_FOUND)),
+                Some(ConfirmCause::Refused) => caused(outcome, Some(StatusCode::CONFLICT)),
+                Some(ConfirmCause::Outside) => Answered::Refused {
+                    status: StatusCode::FORBIDDEN,
+                    message: confirm.proposal.refusal.clone().unwrap_or_default(),
+                },
+            };
+        }
         _ => {}
     }
     let status = match (outcome, outcome.exit()) {

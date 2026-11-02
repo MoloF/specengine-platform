@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-11-03
 ---
 
 # Round routes and screen
 
-ADR-0035, ADR-0038 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), built by `ui-round` (2026-10-08). The daemon serves the round's sheet and stages the owner's structured answers in one request; the browser prepares, the terminal confirms each with its own `[y/N]` (`spec round answer --staged`, `round.md` "Run"). Code: CLI `round.rs` (`round_stage_answers`, `RoundAnswersBody`, `round_limit`), http `app.rs` (`round`, `round_answers`), `answer.rs`; UI `src/round/`.
+ADR-0035, ADR-0038 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), built by `ui-round` (2026-10-08). The daemon serves the round's sheet and stages the owner's structured answers in one request; the browser prepares, the terminal confirms each with its own `[y/N]` (`spec round answer --staged`, `round.md` "Run"), or on a hub each staged item takes its own Confirm click (`hub-confirm.md` "Screen"); nothing confirms a set. Code: CLI `round.rs` (`round_stage_answers`, `RoundAnswersBody`, `round_limit`), http `app.rs` (`round`, `round_answers`), `answer.rs`; UI `src/round/`.
 
 ## Sheet route
 

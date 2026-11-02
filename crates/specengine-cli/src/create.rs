@@ -429,6 +429,9 @@ pub(crate) fn checked_file(
     what: &str,
     exists_tail: &str,
 ) -> Result<Result<Checked, String>, CliError> {
+    if let Some(reason) = path_control(path) {
+        return Ok(Err(reason));
+    }
     if base.is_some() {
         return Ok(Err(format!(
             "nothing at `{path}`: a new file is written against no base; drop --base"
@@ -506,9 +509,26 @@ pub(crate) fn reserved_refusal(
     Ok(reason)
 }
 
-/// Step 2's path rules of a new file: clean, `.md`, in the walk, not under
-/// `[paths] generated`, none of the index's files (`index`: [`index_files`]).
+/// The refusal of a new file's `path` holding a control character, LF and
+/// TAB included (`proposal-kinds.md` "Target"): a file name a person cannot
+/// read as written, which a hub's confirm question would show broken. The
+/// path is written escaped, the first such character named.
+fn path_control(path: &str) -> Option<String> {
+    let c = path.chars().find(|c| c.is_control())?;
+    Some(format!(
+        "{path:?} holds U+{:04X}, a control character: a new file's path holds none, a line \
+         feed included; nothing stored",
+        u32::from(c)
+    ))
+}
+
+/// Step 2's path rules of a new file: control-free ([`path_control`]),
+/// clean, `.md`, in the walk, not under `[paths] generated`, none of the
+/// index's files (`index`: [`index_files`]).
 fn new_file_path(paths: &Paths, index: &[(String, &str)], path: &str) -> Result<(), String> {
+    if let Some(reason) = path_control(path) {
+        return Err(reason);
+    }
     if !is_clean_relative(path) {
         return Err(format!(
             "`{path}` is no clean root-relative path (no leading `/`, no `.`, `..` or empty \

@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-02
 ---
 
 # SpecEngine architecture rules
 
-The rules all code is written by, each with the ADRs that introduced it and hold its reasons; a rule changes only through a new decision in the same change (promotion rule). Its detail is one step away, in the document its section names (the code layer's: `docs/canon/architecture-code.md`); the design: `docs/specs/specengine-platform/`.
+The rules all code is written by, each with the ADRs that introduced it and hold its reasons; a rule changes only through a new decision in the same change. Its detail is one step away, in the document its section names (the code layer's: `docs/canon/architecture-code.md`); the design: `docs/specs/specengine-platform/`.
 
 <a id="storage"></a>
 ## Storage
@@ -29,11 +29,11 @@ Directories come from `specengine.toml` `[paths]`, so a consumer's existing `doc
 <a id="apply"></a>
 ## Applying proposals
 
-An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`docs/canon/proposal-apply.md`). Spec files are written only by `apply_proposal` on a decision the owner confirms on a terminal, one `[y/N]` each; the UI and the owner's MCP form only stage, and no tool takes a choice from an agent (`docs/canon/decision-staging.md`, `review-form.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038, ADR-0054.
+An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`proposal-apply.md`). Spec files are written only by `apply_proposal` once a person confirms: on a terminal, one `[y/N]` each, or on a hub alone under a login `[team]` entitles, one click per item; else the UI and the owner's MCP form only stage, and no tool takes a choice from an agent (`decision-staging.md`, `hub-confirm.md`, `review-form.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038, ADR-0054, ADR-0061.
 
 A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue, a project's generator its output). ADR-0003, ADR-0013, ADR-0022; owner, Q3, 2026-09-30.
 
-`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `docs/canon/architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the blobs the owner accepted, never the current tree; never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
+`spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the blobs the owner accepted, never the current tree; never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
 <a id="control"></a>
 ## Control and no blocking
@@ -87,7 +87,7 @@ Layer C, rust-analyzer, is linked only into the separate executable `specengine-
 
 Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. The interface is in English; spec content is shown in the project's language, so search and token estimates must handle non-Latin scripts. ADR-0011, ADR-0014.
 
-The UI reads, stages decisions and writes cards only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data"; a decision is only staged, confirmed on a terminal (`#apply`); a card write takes a typed name or, on a hub, the proxy's login. It computes no core logic and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036, ADR-0057, ADR-0059.
+The UI reads, stages or confirms decisions (`#apply`) and writes cards only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data"; a card write takes a typed name or, on a hub, the proxy's login. It computes no core logic and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036, ADR-0057, ADR-0059.
 
 <a id="checks-migration"></a>
 ## Documentation checks in projects

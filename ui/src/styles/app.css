@@ -2810,6 +2810,27 @@ mark {
   font-weight: 600;
 }
 
+/* A Confirm (docs/features/hub-confirm.md): the text scrolls, the refusal and the actions stay in view,
+   so focus starting on Cancel moves nothing away from the top of the diff. */
+.confirm-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(48rem, 100%);
+  overflow: hidden;
+}
+
+.confirm-body {
+  display: grid;
+  gap: var(--space-3);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.confirm-dialog .verbatim {
+  overflow-wrap: anywhere;
+}
+
 /* A stage changed outside this tab: above the view, until dismissed. */
 .notice-outside-stage {
   margin-bottom: var(--space-4);

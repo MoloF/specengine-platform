@@ -134,7 +134,8 @@ impl AuthorType {
 
 /// The author's self-reported provenance (A5), stored as the JSON
 /// `{type, role, model, run}`; an absent field is `null` and reads
-/// `unknown` in the commit.
+/// `unknown` in the commit. A hub's departing accept adds `login`, and only
+/// it, so every other row, dump and trailer stays byte for byte.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Author {
     #[serde(rename = "type")]
@@ -142,6 +143,9 @@ pub struct Author {
     pub role: Option<String>,
     pub model: Option<String>,
     pub run: Option<String>,
+    /// The person's login on a hub; the key is left out when there is none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub login: Option<String>,
 }
 
 impl Author {
@@ -152,6 +156,7 @@ impl Author {
             role: None,
             model: None,
             run: None,
+            login: None,
         }
     }
 
@@ -182,15 +187,21 @@ impl Author {
             role,
             model,
             run,
+            login: None,
         })
     }
 
     /// `<type> role=<role> model=<model> run=<run>`, each absent field
-    /// `unknown`: the `Proposed-by:` trailer's value.
+    /// `unknown`, then ` login=<login>` only when set: the `Proposed-by:`
+    /// trailer's value.
     pub fn provenance(&self) -> String {
         let field = |value: &Option<String>| value.clone().unwrap_or_else(|| "unknown".to_owned());
+        let login = self
+            .login
+            .as_ref()
+            .map_or_else(String::new, |login| format!(" login={login}"));
         format!(
-            "{} role={} model={} run={}",
+            "{} role={} model={} run={}{login}",
             self.author_type.as_str(),
             field(&self.role),
             field(&self.model),

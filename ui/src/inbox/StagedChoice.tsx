@@ -31,7 +31,9 @@ function stagedLabel(label: string | undefined) {
  * terminal command that confirms it with Copy (fixed words and a checked ID, never free text), what
  * is staged, and Unstage. Nothing staged: nothing shown. The proposal stays open and listed. An
  * editorial approve copies the same bare command, which confirms the stage with its note, and shows
- * an Editorial row (`docs/features/rev-discipline.md` "UI").
+ * an Editorial row (`docs/features/rev-discipline.md` "UI"). On a hub, for a login `[team]` entitles,
+ * Confirm stands beside Unstage (`docs/features/hub-confirm.md`): it opens a dialog on this one item,
+ * and no local page has it.
  */
 export function StagedChoice({
   id,
@@ -39,6 +41,8 @@ export function StagedChoice({
   busy,
   refusal,
   onUnstage,
+  onConfirm,
+  confirmBusy = false,
 }: {
   id: string;
   review: StagedOf;
@@ -47,6 +51,10 @@ export function StagedChoice({
   /** The daemon's words when it refused the last unstage. */
   refusal: string | null;
   onUnstage: () => void;
+  /** Opens the Confirm dialog on this item; absent: no control, a local daemon's page among them. */
+  onConfirm?: (() => void) | undefined;
+  /** A write is being sent: Confirm stays focusable but does nothing. */
+  confirmBusy?: boolean;
 }) {
   const headingId = useId();
   const staged = review.staged;
@@ -118,6 +126,20 @@ export function StagedChoice({
         )}
       </dl>
       <div className="staged-actions">
+        {onConfirm !== undefined && (
+          <button
+            type="button"
+            className="button button-primary"
+            aria-disabled={confirmBusy}
+            onClick={() => {
+              if (!confirmBusy) {
+                onConfirm();
+              }
+            }}
+          >
+            Confirm <span className="sr-only">{id}</span>
+          </button>
+        )}
         <button
           type="button"
           className="button"

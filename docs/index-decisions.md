@@ -68,3 +68,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0058](decisions/ADR-0058.md) A hub mode of specengine-http serves named people; the local daemon stays as it is · architecture · accepted
 - [ADR-0059](decisions/ADR-0059.md) A hub trusts one proxy-set login header and holds no account · architecture · accepted
 - [ADR-0060](decisions/ADR-0060.md) A hub's [team] entitles a login to accept, clear and stage · architecture · accepted
+- [ADR-0061](decisions/ADR-0061.md) On a hub a login [team] entitles confirms one staged choice · architecture · accepted

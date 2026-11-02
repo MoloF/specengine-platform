@@ -36,7 +36,7 @@ Principles:
 
 1. **One core, four adapters.** CLI, MCP, HTTP and the CI check call the same core functions, so their results cannot diverge: the gate and the editor show the same numbers.
 2. **Git is the truth for specs and bindings; SQLite is the index and the work queue** (see 03 §2.1; the DB: `crates/specengine-cli/README.md`).
-3. **One writing door** into spec files — `apply_proposal`, confirmed by a human on a terminal; the UI or an MCP form only stages (ADR-0035). Agents read and propose, never write (ADR-0004).
+3. **One writing door** into spec files — `apply_proposal`, confirmed by a human on a terminal or, on a hub alone, by one click under a login `[team]` entitles (ADR-0061); else the UI or an MCP form only stages (ADR-0035). Agents read and propose, never write (ADR-0004).
 4. **Local and native.** The daemon listens on `127.0.0.1` only. Docker is a launch option, not the primary mode.
 5. **Several projects in one daemon**: consumer projects are registered by path. The shared library (§3.6) is a separate project they reference.
 6. **One daemon per data directory** (tracey topology, 04 §1.5), for the browser; hooks never need it (ADR-0039). CLI and stdio MCP write SQLite directly (WAL, CAS). A `spec mcp` socket bridge, auto-starting it as sole writer, waits for a trigger: a watcher index, MCP staging forms, measured busy exits.

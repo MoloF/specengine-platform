@@ -244,6 +244,29 @@ pub struct RejectRequest {
 /// consents).
 pub type Consent<'a> = &'a mut dyn FnMut(&str) -> bool;
 
+/// A hub's run of an approve or a reject ([`crate::confirm`], task spec
+/// `hub-confirm`); a terminal's has none.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HubRun<'a> {
+    /// The state the confirm judged. The row this run reads must be it, so
+    /// no row but the judged one is ever asked, staged value included.
+    pub judged: &'a Seen,
+    /// The read's run: [`failed`] logs nothing, so a read writes no event.
+    pub rehearsal: bool,
+}
+
+impl HubRun<'_> {
+    /// Why `proposal`, as this run read it, is not the row judged.
+    fn moved(&self, proposal: &Proposal) -> Option<String> {
+        (proposal.seen() != *self.judged).then(|| {
+            format!(
+                "`{}` changed since it was judged; read it again; nothing changed",
+                proposal.id
+            )
+        })
+    }
+}
+
 /// `spec approve`: applies an open proposal (steps 2–10), or completes one
 /// whose own commit is on its branch; no flag ([`approve_with`]).
 pub fn approve(
@@ -264,7 +287,7 @@ pub fn approve_with(
     flags: &ApproveFlags,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_approve(env, globals, request, flags, false, consent).map_err(escaped_error)
+    run_approve(env, globals, request, flags, false, None, consent).map_err(escaped_error)
 }
 
 /// `spec approve --open` (see the module documentation): `main` has
@@ -467,21 +490,23 @@ pub fn approve_editorial(
     flags: &ApproveFlags,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_approve(env, globals, request, flags, true, consent).map_err(escaped_error)
+    run_approve(env, globals, request, flags, true, None, consent).map_err(escaped_error)
 }
 
-fn run_approve(
+pub(crate) fn run_approve(
     env: &Env,
     globals: &Globals,
     request: &ApproveRequest,
     flags: &ApproveFlags,
     editorial: bool,
+    hub: Option<HubRun<'_>>,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Approve;
     let now = checked_now(&request.now)?;
     let id = written_id(&request.id)?;
     let mut context = open_context(env, globals, &request.git)?;
+    context.rehearsal = hub.is_some_and(|hub| hub.rehearsal);
     let Some(id) = id else {
         return Ok(ProposalOutcome::refused(
             COMMAND,
@@ -505,6 +530,14 @@ fn run_approve(
     let read = proposal.seen();
     let mut messages = Vec::new();
     let document = |proposal: &Proposal, scratch: &Path| with_diff(proposal, &request.git, scratch);
+    if let Some(reason) = hub.and_then(|hub| hub.moved(&proposal)) {
+        return Ok(ProposalOutcome::refused(
+            COMMAND,
+            document(&proposal, &context.data_dir),
+            &reason,
+            messages,
+        ));
+    }
     match proposal.status {
         ProposalStatus::Applied => {
             let mut reason = format!(
@@ -1204,7 +1237,8 @@ pub(crate) fn verify_leaving(
 /// run holds nothing and the state stays as it is, whoever left it. Exit
 /// 2 as an error, exit 1 as the refused document (an update's with its
 /// `preview`). A proposal applied or rejected meanwhile logs nothing; its
-/// document is the stored one.
+/// document is the stored one. A rehearsal ([`HubRun`]) logs nothing and
+/// reopens nothing: it holds nothing, and a read writes no event.
 pub(crate) fn failed(
     context: &mut QueueContext,
     request: &ApproveRequest,
@@ -1219,6 +1253,7 @@ pub(crate) fn failed(
         reason: failure.reason.clone(),
     };
     let logged = match held {
+        _ if context.rehearsal => Ok(proposal.clone()),
         Some(held) => context
             .queue
             .reopen_from(&proposal.id, held, &attempt, &request.now),
@@ -1753,7 +1788,7 @@ pub fn reject(
     request: &RejectRequest,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_reject(env, globals, request, None, consent).map_err(escaped_error)
+    run_reject(env, globals, request, None, None, consent).map_err(escaped_error)
 }
 
 /// `spec reject PR --reason T --follow-up code|spec` (task spec
@@ -1771,14 +1806,15 @@ pub fn reject_follow_up(
     follow_up: FollowUp,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
-    run_reject(env, globals, request, Some(follow_up), consent).map_err(escaped_error)
+    run_reject(env, globals, request, Some(follow_up), None, consent).map_err(escaped_error)
 }
 
-fn run_reject(
+pub(crate) fn run_reject(
     env: &Env,
     globals: &Globals,
     request: &RejectRequest,
     follow_up: Option<FollowUp>,
+    hub: Option<HubRun<'_>>,
     consent: Consent<'_>,
 ) -> Result<ProposalOutcome, CliError> {
     const COMMAND: QueueCommand = QueueCommand::Reject;
@@ -1818,6 +1854,12 @@ fn run_reject(
         return Err(CliError::spec(follow_up::ONLY_DRIFT));
     }
     let mut messages = Vec::new();
+    if let Some(reason) = hub.and_then(|hub| hub.moved(&proposal)) {
+        let document = with_diff(&proposal, &request.git, &context.data_dir);
+        return Ok(ProposalOutcome::refused(
+            COMMAND, document, &reason, messages,
+        ));
+    }
     // `find` gives another repository's proposal only when it is gone.
     let orphan = !same_repository(&proposal.place.git_common_dir, &context.common_dir);
     if orphan {

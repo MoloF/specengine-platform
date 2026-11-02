@@ -17,9 +17,10 @@
 //! route's slug names, read per request and held nowhere, before a body is
 //! read and again once it is in; [`acting`], which
 //! binds a body's `as` to the login, on a plain or confirm route; [`needs`] on
-//! a confirm route. A plain write never reads `[team]`, so a bad one stops
-//! none (ADR-0012), and a role is authority over the queue, no trade
-//! (ADR-0008).
+//! a confirm route. A confirm of a staged choice has no `as` and no optional
+//! key, and adds [`confirms`] ([`crate::confirm`]). A plain write never reads
+//! `[team]`, so a bad one stops none (ADR-0012), and a role is authority over
+//! the queue, no trade (ADR-0008).
 //!
 //! The daemon cannot tell its proxy's header from anything else reaching its
 //! socket: that is the deployment's guarantee (`docs/canon/hub.md` "Trust").
@@ -29,7 +30,7 @@ use std::sync::Arc;
 
 use axum::http::header::{HOST, ORIGIN};
 use axum::http::{HeaderMap, HeaderName, Method, StatusCode};
-use specengine_cli::{TeamEntry, hub_login_problem, team_read};
+use specengine_cli::{TeamConfig, TeamEntry, hub_login_problem, team_read};
 
 use crate::answer::{self, Refusal};
 use crate::app::single;
@@ -50,7 +51,8 @@ const WRITES: [&str; 4] = ["move", "edit", "assign", "cancel"];
 const CONFIRMS: [&str; 2] = ["accept", "clear"];
 
 /// How a write is judged on a hub (task spec `hub-team`, "Classes"). The
-/// confirm class is the acts taking a `Consent`; a stage takes none.
+/// confirm class is the acts a person confirms, each behind the proxy's
+/// step-up; a stage is none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Class {
     /// Any login: the handler binds `as` ([`acting`]).
@@ -256,7 +258,8 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
 /// not listed. Plain: POST on `.../cards` or
 /// `.../cards/:id/{move,edit,assign,cancel}`. Team: POST, DELETE on
 /// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
-/// `.../cards/:id/{accept,clear}` and `.../trace/clear`.
+/// `.../cards/:id/{accept,clear}`, `.../trace/clear` and
+/// `.../proposals/:id/confirm`.
 fn class(method: &Method, path: &str) -> Option<Class> {
     let post = method == Method::POST;
     let segments: Vec<&str> = path.split('/').collect();
@@ -286,6 +289,7 @@ fn class(method: &Method, path: &str) -> Option<Class> {
         {
             Some(Class::Team)
         }
+        ["proposals", id, "confirm"] if post && !id.is_empty() => Some(Class::Confirm),
         ["round", _] if post && path.ends_with("/round/answers") => Some(Class::Team),
         ["trace", "clear"] if post => Some(Class::Confirm),
         _ => None,
@@ -329,14 +333,30 @@ pub(crate) async fn member(
         team_read(env, globals)
     })
     .await?;
+    entry_in(team.as_ref(), login).map(Some).map_err(forbidden)
+}
+
+/// `login`'s entry in `team` as read, else the 403's line: no `[team]`, or a
+/// login outside it, which is never a role.
+fn entry_in(team: Option<&TeamConfig>, login: &str) -> Result<TeamEntry, String> {
     let Some(team) = team else {
-        return Err(forbidden("refused: this project has no `[team]`"));
+        return Err("refused: this project has no `[team]`".to_owned());
     };
-    match team.entry(login) {
-        Some(entry) => Ok(Some(entry.clone())),
-        None => Err(forbidden(format!(
-            "refused: {login} is not in this project's `[team]`: reads and plain writes"
-        ))),
+    team.entry(login).cloned().ok_or_else(|| {
+        format!("refused: {login} is not in this project's `[team]`: reads and plain writes")
+    })
+}
+
+/// A confirm's entry as read inside the project's turn, the one judged
+/// (docs/features/hub-confirm.md "Rules and edge cases"): `login`'s in
+/// `team`, of a role that confirms; else the 403's line, as [`member`] and
+/// [`confirms`] word it. A login demoted or taken out of `[team]` while its
+/// request waited for the turn keeps no power.
+pub(crate) fn confirming(team: Option<&TeamConfig>, login: &str) -> Result<TeamEntry, String> {
+    let entry = entry_in(team, login)?;
+    match confirms_nothing(&entry) {
+        Some(line) => Err(line),
+        None => Ok(entry),
     }
 }
 
@@ -351,6 +371,25 @@ pub(crate) fn clears_groups(entry: Option<&TeamEntry>) -> Result<(), Refusal> {
         ))),
         _ => Ok(()),
     }
+}
+
+/// A confirm of a staged choice past [`member`], before its body is read; the
+/// library judges the cover with the row known. No entry: nothing judged.
+pub(crate) fn confirms(entry: Option<&TeamEntry>) -> Result<(), Refusal> {
+    match entry.and_then(confirms_nothing) {
+        Some(line) => Err(forbidden(line)),
+        None => Ok(()),
+    }
+}
+
+/// The 403's line of `entry` when its role confirms nothing.
+fn confirms_nothing(entry: &TeamEntry) -> Option<String> {
+    (!entry.role.confirms()).then(|| {
+        format!(
+            "refused: {} is a `member`: this act needs a `lead`",
+            entry.login
+        )
+    })
 }
 
 /// A confirm route on a hub needs `key`, the compare of what the page showed:
@@ -961,5 +1000,178 @@ mod tests {
             assert_eq!(refused.into_response().status(), StatusCode::FORBIDDEN);
             assert_eq!(actor.as_deref(), Some(named), "nothing overwritten");
         }
+    }
+
+    /// The router's call, spelled apart: `tests/hub.rs` reads every `src` file
+    /// for it, and this is no route.
+    const ROUTER_CALL: &str = concat!(".", "route(");
+
+    /// The four routes of the confirm class, as the router spells them.
+    const STEPPED_UP: [&str; 4] = [
+        "/api/projects/{p}/cards/{id}/accept",
+        "/api/projects/{p}/cards/{id}/clear",
+        "/api/projects/{p}/proposals/{id}/confirm",
+        "/api/projects/{p}/trace/clear",
+    ];
+
+    /// Each line of a fenced block of `text` that opens as a route pattern.
+    fn fenced_patterns(text: &str) -> Vec<&str> {
+        let mut inside = false;
+        let mut found = Vec::new();
+        for line in text.lines().map(str::trim) {
+            if line.starts_with("```") {
+                inside = !inside;
+            } else if inside && line.starts_with("^/api/projects/") {
+                found.push(line);
+            }
+        }
+        found
+    }
+
+    /// Every method but GET of every router call in `source`, with its path,
+    /// comment lines left out, as `tests/hub.rs`'s `get_routes_in` reads the
+    /// GET ones. A path that is no literal panics: it could not be judged.
+    fn writes_in(source: &str) -> Vec<(Method, String)> {
+        let code: String = source
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .map(|line| format!("{line}\n"))
+            .collect();
+        let mut writes = Vec::new();
+        for (at, _) in code.match_indices(ROUTER_CALL) {
+            let rest = &code[at + ROUTER_CALL.len()..];
+            let mut depth = 1;
+            let end = rest
+                .char_indices()
+                .find(|(_, letter)| {
+                    match letter {
+                        '(' => depth += 1,
+                        ')' => depth -= 1,
+                        _ => {}
+                    }
+                    depth == 0
+                })
+                .map(|(end, _)| end)
+                .expect("a closed call");
+            let (path, methods) = rest[..end]
+                .trim_start()
+                .strip_prefix('"')
+                .and_then(|call| call.split_once('"'))
+                .unwrap_or_else(|| panic!("a path that is no literal: {}", &rest[..end]));
+            for (word, method) in [
+                ("post(", Method::POST),
+                ("put(", Method::PUT),
+                ("patch(", Method::PATCH),
+                ("delete(", Method::DELETE),
+            ] {
+                if methods.contains(word) {
+                    writes.push((method, path.to_owned()));
+                }
+            }
+        }
+        writes
+    }
+
+    /// `route` as a request names it: each `{..}` segment a value.
+    fn sampled(route: &str) -> String {
+        route
+            .split('/')
+            .map(|segment| {
+                if segment.starts_with('{') {
+                    "x1"
+                } else {
+                    segment
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+
+    /// B11 of docs/features/hub-confirm.md: the proxy's step-up regex, read from
+    /// its own fenced block of the hub's canon, against the router's every
+    /// write, read from `app.rs` as `get_routes_in` reads the GET ones. It
+    /// matches the four routes of the confirm class and no other write, and it
+    /// agrees with [`class`] on each, so neither the route, the class nor the
+    /// regex can move alone. M: renaming a route alone.
+    #[test]
+    fn the_step_up_regex_is_the_confirm_class() {
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        // Spelled apart: `tests/no_domain.rs` reads this word in any literal.
+        let page = manifest
+            .join("../../docs")
+            .join(concat!("ca", "non"))
+            .join("hub.md");
+        let text = std::fs::read_to_string(&page)
+            .unwrap_or_else(|error| panic!("{}: {error}", page.display()));
+        let patterns = fenced_patterns(&text);
+        assert_eq!(
+            patterns.len(),
+            1,
+            "one fenced pattern in {}: {patterns:?}",
+            page.display()
+        );
+        let regex = regex::Regex::new(patterns[0]).expect("a pattern");
+
+        let router = manifest.join("src/app.rs");
+        let source = std::fs::read_to_string(&router).expect("the router's source");
+        let writes = writes_in(&source);
+        assert!(writes.len() > STEPPED_UP.len(), "{writes:?}");
+        let mut matched: Vec<&str> = writes
+            .iter()
+            .filter(|(_, route)| regex.is_match(&sampled(route)))
+            .map(|(_, route)| route.as_str())
+            .collect();
+        matched.sort_unstable();
+        assert_eq!(matched, STEPPED_UP, "the four, and no other write");
+        for (method, route) in &writes {
+            let path = sampled(route);
+            assert_eq!(
+                regex.is_match(&path),
+                class(method, &path) == Some(Class::Confirm),
+                "{method} {route}: the regex and `class`"
+            );
+        }
+
+        // The pattern's own controls: one byte form, so a suffix, a query or a
+        // sibling route is no match.
+        for route in STEPPED_UP {
+            let path = sampled(route);
+            assert!(regex.is_match(&path), "{path}");
+            for form in [
+                format!("{path}/"),
+                format!("{path}?x=1"),
+                format!("{path}/x"),
+                format!("/x{path}"),
+            ] {
+                assert!(!regex.is_match(&form), "{form}");
+            }
+        }
+        for path in [
+            "/api/projects/x1/proposals/x1/decision",
+            "/api/projects/x1/round/answers",
+            "/api/projects/x1/cards",
+            "/api/projects/x1/cards/x1/move",
+            "/api/projects/x1/trace",
+        ] {
+            assert!(!regex.is_match(path), "{path}");
+        }
+
+        // The reader's controls: what it must see and what it must leave.
+        let probe = "let r = R::new()\n    @\"/a\", read(a))\n    \
+                     @\"/b\", post(b).fallback(only_post))\n    \
+                     // @\"/c\", post(c))\n    \
+                     @\n        \"/d\",\n        get(d)\n            .post(e)\n            \
+                     .delete(f),\n    );\n"
+            .replace('@', ROUTER_CALL);
+        assert_eq!(
+            writes_in(&probe),
+            [
+                (Method::POST, "/b".to_owned()),
+                (Method::POST, "/d".to_owned()),
+                (Method::DELETE, "/d".to_owned()),
+            ]
+        );
+        let block = "text\n```text\n^/api/projects/a$\n```\n^/api/projects/b$\n";
+        assert_eq!(fenced_patterns(block), ["^/api/projects/a$"]);
     }
 }

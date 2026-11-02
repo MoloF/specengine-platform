@@ -3,14 +3,14 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-02
 ---
 
 # specengine-http -- SpecEngine over HTTP
 
-An HTTP adapter over the CLI library, 05 s1's fourth: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The daemon, one per data directory, `spec serve` launches (`serve.md`), serving the web UI compiled in (`serve-ui.md`); not ADR-0019's: no sole writer, socket bridge, auto-start, gate or watcher. No second consent channel: a staged decision is confirmed only on a terminal (ADR-0035); no hook consults it (ADR-0039).
+An HTTP adapter over the CLI library: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The daemon, one per data directory, `spec serve` launches (`serve.md`), serving the web UI compiled in (`serve-ui.md`); not ADR-0019's: no sole writer, socket bridge, auto-start, gate or watcher. A staged decision is confirmed on a terminal (ADR-0035) or, on a hub, `hub-confirm.md`; no hook consults it (ADR-0039).
 
-Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`, `rust-embed` (`debug-embed`); a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
+Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`, `rust-embed` (`debug-embed`), dev `regex`; a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
 
 ## Binary
 
@@ -29,7 +29,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | Method, path | Query | Answer |
 |---|---|---|
 | GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order (CLI `project_entry`): `name` or `null`, `root` canonical, `branch` current or `null` (detached, no git) |
-| GET `/api/identity`, a hub's `.../team` | -- | `hub.md`, `hub-team.md` |
+| GET `/api/identity`; a hub's `.../team`, GET, POST `.../proposals/:id/confirm` | -- | `hub.md`, `hub-team.md` |
 | GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json`, browser view |
 | GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json`, browser view |
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
@@ -50,15 +50,15 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET, POST `.../cards`, GET `.../cards/:id`, POST its six verbs, GET `.../trace`, POST `.../trace/clear` | `board-ui.md` | the Board |
 | GET `/`, `/assets/<file>` | ignored | the web UI (`serve-ui.md`) |
 
-**Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space, a literal plus `%2B`), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` `links`, `bindings`, `status` by `TaskStatus::parse` . 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `health`, `tasks/:id` take none), a scalar repeated, a bad value, `release` with `pool=true`, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent` (`#` -> `%23`, `/` -> `%2F`), an empty REF is an unknown route.
+**Query**, raw (`args.rs`): split on `&` (empty parts skipped), each at its first `=`, form-decoded (`+` a space, a literal plus `%2B`), strictly: a bad `%` or non-UTF-8 -> 400 naming the parameter. Arrays repeat the key, in order; integers decimal, booleans `true`|`false`, `with` `links`, `bindings`, `status` by `TaskStatus::parse`. 400 also, nothing run: an unknown name (listing the endpoint's; `check`, `health`, `tasks/:id` take none), a scalar repeated, a bad value, `release` with `pool=true`, `query`, `node_ids` or `ref` missing. **Path**: the slug, the proposal or task ID, the REF (all after `nodes/`) percent-decoded once, strictly, as UTF-8; the client sends `encodeURIComponent`; an empty REF is an unknown route.
 
 **Browser view** (CLI `View::Browser`; CLI and MCP keep `Capped`): no `OUTPUT_CAP_CHARS` cut, `graph`, `roadmap`, `flow`, `trace` too (`truncated` false, `omitted` null, `roadmap`'s 0, the same keys); a hit's `snippet` is `{segments: [{text, hit}], cut_start, cut_end}`, `null` when empty.
 
 ## Answers and statuses
 
-One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {root}`, `render_json`), the config found again first (a changed slug, a config `discover` refuses -> 503 with the reason, `check` too: no cannot-check report; `/api/projects` 503 if any). Exit 0 -> 200, the document; 1 -> 404, the exit-1 document (`reason` set: data, not an error); 2 -> 503, the error body, `message` the `CliError` line(s) verbatim. **The exceptions** (`answered`), never a verdict word: `Outcome::Check` (a report), `Outcome::RoundAnswers` 200 whatever the exit; `Outcome::Stage`, `Outcome::Card{,Group}` by their cause (`caused`; `decision-staging.md` "Daemon"); a `CliError` 503. **Error body** `{"status":<code>,"message":"..."}`, exactly two keys: 400, 403, 404 (an unknown slug or route, listing the served ones), 405, 413, 415, 500 (a caught panic), 503. Bodies `application/json; charset=utf-8`, the CLI's stdout less the final LF; stderr not carried (a read's notes: JSON `notes`).
+One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {root}`, `render_json`), the config found again first (a changed slug, a config `discover` refuses -> 503 with the reason, `check` too: no cannot-check report; `/api/projects` 503 if any). Exit 0 -> 200, the document; 1 -> 404, the exit-1 document; 2 -> 503, the error body, `message` the `CliError` line(s) verbatim. **The exceptions** (`answered`), never a verdict word: `Outcome::Check` (a report), `Outcome::RoundAnswers` 200 whatever the exit; `Outcome::{Stage,Confirm}`, `Outcome::Card{,Group}` by their cause (`caused`; `decision-staging.md` "Daemon"); a `CliError` 503. **Error body** `{"status":<code>,"message":"..."}`, exactly two keys: 400, 403, 404 (an unknown slug or route, listing the served ones), 405, 413, 415, 500 (a caught panic), 503. Bodies `application/json; charset=utf-8`, the CLI's stdout less the final LF; stderr not carried (a read's notes: JSON `notes`).
 
-**One door.** The write routes stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps, or write a card (`board-ui.md`). No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`, any `card_` outside `CARD_CALLS`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and six more names. A departing accept's proposal stands inside `card_accept` (ADR-0057). No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, all in the data directory: stages and cards in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`).
+**One door.** The write routes stage, unstage (the CLI's `stage`, `unstage`, `round_stage_answers`), past `decision-staging.md` "Daemon"'s steps, or write a card (`board-ui.md`). No handler calls `approve`, `reject`, `propose`, `round_answer`, `import_state`, `export_*`, `init`, `index`, any `task_` but `task_list`, `task_show`, any `card_` outside `CARD_CALLS`, `confirm_*` outside `src/confirm.rs`; `check` only plain (`CheckRequest::default()`); `tests/door.rs` scans `src` for these and six more names. A departing accept's proposal stands inside `card_accept` (ADR-0057). No `src` literal holds a verdict, a `LINK_TYPES` name, a configured kind or a task state as a word, `decision`, `answers` only as whole route-path segments (ADR-0008, `tests/no_domain.rs`). The only writes, but a hub's confirm, in the data directory: stages and cards in the queue, the reads' index refresh, the start's `daemon.lock`, `daemon.json` (`architecture.md#storage`).
 
 **Worktrees**: the corpus reads read the root's files on disk (uncommitted edits too, never `HEAD`; `check`, `health` untracked and ignored ones, `check` no git); `inbox` the root's repository, every worktree; `proposals/:id` previews in the proposal's recorded worktree, naming it and its branch; `tasks`, `tasks/:id` the root's repository and a task's compared place (`tasks.md` "Place"), by git reads only.
 
@@ -74,7 +74,7 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Known limits
 
-- Repositories of one slug share `<slug>.db` and its events: a tail carries every one's (the UI refetches).
+- Repositories of one slug share `<slug>.db` and its events: a tail carries every one's.
 - U+0002 to U+0004 in the corpus can fake a snippet's hit or cut, capped too.
 - One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's connections.
 - A database replaced under a live stream: its events up to the stream's cursor are never sent.
@@ -82,4 +82,4 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets, a drift item raised on a code-a copy; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs`, `turn.rs`, `methods.rs`, `stage.rs`, `round.rs`, `projects.rs`, `hub{,_team}.rs`, `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs`, `turn.rs`, `methods.rs`, `stage.rs`, `round.rs`, `projects.rs`, `hub{,_team,_confirm}.rs`, `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

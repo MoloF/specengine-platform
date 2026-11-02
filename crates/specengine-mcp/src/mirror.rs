@@ -671,14 +671,27 @@ pub(crate) enum ProposalState {
     Rejected,
 }
 
-/// Who raised it.
+/// Who raised it. `login` is the one key the CLI leaves out rather than writes
+/// `null`: a hub's departing accept alone holds it, so an author has two
+/// shapes, each with every key `required`.
 #[derive(JsonSchema)]
-pub(crate) struct ProposalAuthor {
-    #[schemars(rename = "type")]
-    pub author_type: AuthorType,
-    pub role: Option<String>,
-    pub model: Option<String>,
-    pub run: Option<String>,
+#[schemars(untagged)]
+pub(crate) enum ProposalAuthor {
+    Plain {
+        #[schemars(rename = "type")]
+        author_type: AuthorType,
+        role: Option<String>,
+        model: Option<String>,
+        run: Option<String>,
+    },
+    Login {
+        #[schemars(rename = "type")]
+        author_type: AuthorType,
+        role: Option<String>,
+        model: Option<String>,
+        run: Option<String>,
+        login: String,
+    },
 }
 
 #[derive(JsonSchema)]

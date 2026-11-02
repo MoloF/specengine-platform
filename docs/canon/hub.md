@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-02
 ---
 
 # Hub mode: a public origin and one trusted login
 
-ADR-0058, ADR-0059, built by `hub-identity` (RM-0049). `specengine-http --public-origin` serves named people on a public URL, behind a proxy on the same host, with no account inside SpecEngine. It is a second fence, not a second daemon: the routes, the library calls, the queue and SQLite are the local daemon's (`serve.md`, `crates/specengine-http/README.md`). No spec file changes on a hub until `hub-confirm` (RM-0050); who acts past the plain writes is `[team]`'s (`hub-team.md`). Code: http `hub.rs`, `app.rs` `fence`, `main.rs`; core `card.rs` `hub_login_problem`; UI `src/board/acting.ts`.
+ADR-0058, ADR-0059, built by `hub-identity` (RM-0049). `specengine-http --public-origin` serves named people on a public URL, behind a proxy on the same host, with no account inside SpecEngine. It is a second fence, not a second daemon: the routes, the library calls, the queue and SQLite are the local daemon's (`serve.md`, `crates/specengine-http/README.md`). A spec file changes on a hub only by a confirm, nothing pushed (`hub-confirm.md`); who acts past the plain writes is `[team]`'s (`hub-team.md`). Code: http `hub.rs`, `app.rs` `fence`, `main.rs`; core `card.rs` `hub_login_problem`; UI `src/board/acting.ts`.
 
 ## Entry
 
@@ -50,7 +50,7 @@ Judged on every request, `/` and assets too. None or a bad one: 403, never a 401
 
 The login door's duty, not judged here: Latin look-alikes, NFC against NFD, and invisible marks outside Cf (U+034F, variation selectors, U+3164). RM-0065's `spec admin` should refuse them at account creation.
 
-The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the five writes and the confirm class set the `actor` of their `Card*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person for the first time, if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). `Author` and `Decided-by` do not change until RM-0050.
+The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the five writes and the confirm class set the `actor` of their `Card*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person for the first time, if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). A confirm's `Decided-by` and a departing accept's `Author` take the login: `hub-confirm.md`.
 
 ## Routes
 
@@ -58,25 +58,25 @@ A read needs the origin and one identity. Any identity reads every served projec
 
 Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the five plain writes, POST on `.../cards` or `.../cards/:id/{move,edit,assign,cancel}`, and the team and confirm classes of `hub-team.md` "Classes". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
 
-No approve route exists. A move cannot reach `accept.to` (`cards.md` "Config"), so accept has no back door. ADR-0057 stands locally.
+`.../proposals/:id/confirm`, a hub's alone, is the one approve route: `hub-confirm.md`. A move cannot reach `accept.to` (`cards.md` "Config"), so accept has no back door. ADR-0057 stands locally.
 
 Identity is judged in the fence, so a refused request never queues for a turn. MCP is untouched: no `/mcp` route, tools keep acting as `agent` locally (RM-0053).
 
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or session and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub stores nothing new: the login lands in existing queue fields in the data directory.
+No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or session and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub stores nothing new: the login lands in existing queue fields and a confirm's commit.
 
 **The daemon can defend**, at its fence:
 
-- Other sites' pages and sibling subdomains: `Host`, `Origin`, `Sec-Fetch-Site`, `Sec-Fetch-Site: same-origin` on a write, JSON only, no CORS. The login door's cookie is the first ambient credential here, so none of this leans on its `SameSite`.
+- Other sites' pages and sibling subdomains: `Host`, `Origin`, `Sec-Fetch-Site`, `same-origin` on a write, JSON only, no CORS. The login door's cookie is the first ambient credential here, so none of this leans on its `SameSite`.
 - A missing, doubled, folded or malformed `Remote-User`, and the words `local` and `agent`.
 - A body's `as` other than the login.
-- Every route off the list, whoever asks; a login outside `[team]` reaches no stage, accept or clear.
+- Every route off the list, whoever asks; a login outside `[team]` reaches no stage, accept, clear or confirm.
 
 **The daemon cannot defend:**
 
-- **A forged header.** It cannot tell the proxy's header from any process reaching its socket: a raw client sending `Remote-User: anyone` gets a 200 and `anyone` recorded, a `[team]` login's name accepts, and `hub_trusts_the_header_on_its_socket` pins that. A shared secret would be the token ADR-0034 forbids.
+- **A forged header.** It cannot tell the proxy's header from any process reaching its socket: a raw client sending `Remote-User: anyone` gets a 200 and `anyone` recorded, a `[team]` login's name accepts and confirms, and `hub_trusts_the_header_on_its_socket` pins that. A shared secret would be the token ADR-0034 forbids.
 - **What a login may do.** Any login reads everything served and makes the five writes. `by` alone stops a person. `GET /api/projects` shows the absolute `root` to every login: accepted; in a container it is the mount path.
 - **A forgotten proxy.** A forgotten flag fails closed: a local daemon refuses the public `Host`. A forgotten proxy fails open to whatever reaches the socket.
 
@@ -86,12 +86,17 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
 2. `Remote-User` is in `authResponseHeaders` on every router reaching the daemon, and no router or `bypass` rule reaches it without forward-auth: the proxy removes a client's copy only of a header so listed.
 3. `passHostHeader` stays on, so the daemon sees the public `Host`.
 4. No agent, and nothing else untrusted, runs on the host.
+5. Every router reaching the daemon steps up on the confirm class's four routes, by this rule alone:
+
+   ```text
+   ^/api/projects/[^/]+/(proposals/[^/]+/confirm|cards/[^/]+/(accept|clear)|trace/clear)$
+   ```
 
 Unverified until that "Done": that Traefik keeps the client's `Host` by default and drops a client's copy of a listed header also when the login door returns none (from memory), and that the login door on a sibling subdomain makes the landing a `same-site` navigation (from the Fetch Metadata rules, tried in no browser).
 
 ## Screen
 
-With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-ui.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. The eight call sites of `useActing` (`acting.ts`) stay as they are; `useHubLogin` beside it gives the box its `readOnly`. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen".
+With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-ui.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. `useHubLogin` beside `useActing` (`acting.ts`) gives the box its `readOnly`. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen".
 
 ## Known limits
 
@@ -109,4 +114,4 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 
 ## Tests
 
-http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is RM-0064's. `tests/hub_team.rs`: `hub-team.md`. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.
+http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is RM-0064's. `tests/hub_{team,confirm}.rs`: `hub-team.md`, `hub-confirm.md`. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.

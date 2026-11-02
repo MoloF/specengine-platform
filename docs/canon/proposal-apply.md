@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-02
 ---
 
 # Proposal apply: consent and steps
@@ -19,6 +19,8 @@ reviewed: 2026-10-31
 - `reject [approved ]PR-0001 (<target_id> in <path> on <branch> in <worktree>)? [y/N]`.
 
 A lookup git could not make is printed above the question (`note: cannot tell whether …`) and in the outcome's notes. A pseudo-terminal passes (ADR-0034). A stage it confirms is printed above, the question marked `staged` (`decision-staging.md` "Terminal").
+
+**A hub's confirm** (`hub-confirm.md`, ADR-0061) runs this same approve or reject with no terminal, for one staged choice: `confirm_question` rehearses it, answering no, to return the question above with its stage line; `confirm_staged` runs it again, its one consent `asked == question` against the text the page sent back, byte for byte. Every step below runs unchanged, under the login's git identity; an editorial stage, a drift item, a task-bound proposal, an approve staged with no `span_hash` where the kind carries one, and an `approved` row's completion stay a terminal's.
 
 **`spec approve --open`** (`approve_open`; the same terminal check first; beside a `PR`, `--note`, `--option`, `--answer`, `--canon` or `--editorial`: a usage error, exit 2) walks this repository's `open` rows of applying kinds (`family()` `Applies`), listed once at its start, by ID number, on one clock reading. Each runs the ordinary `spec approve PR`: its own question, `[y/N]`, commit and `Proposal:`; an approve staged shows its stage. One key per item: no consent over a set (ADR-0038), no `--yes`. An `approved` row is not walked (`spec approve PR` completes it); an item needing a flag takes its own `spec approve`.
 
@@ -45,7 +47,7 @@ Text: each item's own output in turn, then `open walk: <a> applied, <k> left ope
 9. **Commit**: `git commit --only --cleanup=verbatim -F <scratch> -- :(literal)<path>` (`--editorial`: `spec.lock` too): only the path, whatever else is staged or modified; hooks run, never `--no-verify`. On failure, when the branch's (or `HEAD`'s) new tip carries this ID's `Proposal:` trailer, git made it anyway: a `warning:`, step 10 judges; else the bytes restored, reopened, exit 1 ``the commit of `<path>` failed, its bytes restored: <git's error>`` (+ ``; `<branch>` moved to <sha>, which has no `Proposal: PR` trailer (not this apply's commit)``).
 10. **Verify**: the branch's new commit has one parent, the old `HEAD`, changes only the path (`--editorial`: and `spec.lock`), its `Proposal:` is the ID -> `applied_with` (task-bound: `applied_refreshing` refreshes its task's snapshot, `tasks.md`; also when its hold was reopened meanwhile; `--editorial`: `applied_vouching` vouches on cards, `spec-trace.md` "Suspect"; recorded by another run: done, a note), then the index's `update_paths` (failure: a `warning:`). Else it stays `approved`, exit 1 naming the commit (the branch unmoved: `HEAD`'s) and the hint.
 
-**Runs.** No lock until the daemon: runs meet in the queue. A run holds nothing before its own step 7, so a refusal there (steps 2-6, identity, step 7's compare-and-set) only logs (`log_failure`): `open` stays open, another run's `approved` stays approved. At steps 8-9 it reopens (`reopen_from`) only while the proposal is in the state it wrote; step 10 never reopens, a commit exists. One `proposal.apply_failed` per refusal at steps 2-10; none for the terminal check, a decline, another repository, a bad ID, an applied or rejected one.
+**Runs.** No lock until the daemon: runs meet in the queue. A run holds nothing before its own step 7, so a refusal there (steps 2-6, identity, step 7's compare-and-set) only logs (`log_failure`): `open` stays open, another run's `approved` stays approved. At steps 8-9 it reopens (`reopen_from`) only while the proposal is in the state it wrote; step 10 never reopens, a commit exists. One `proposal.apply_failed` per refusal at steps 2-10; none for the terminal check, a decline, another repository, a bad ID, an applied or rejected one, a hub's confirm read (`HubRun.rehearsal`).
 
 **Commit** (core `commit_message`; an update's commit is its record):
 
@@ -60,7 +62,7 @@ Proposed-by: agent role=spec-writer model=claude-opus-5-5 run=unknown
 Base-commit: <40 or 64 hex>
 ```
 
-`Decided-by`: the step-7 identity. `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply". `Revision:`, `Lock:`, `Lock-mode:` follow `Base-commit:`.
+`Decided-by`: the step-7 identity (a hub's confirm: `<login> <email>` from `[team]`). `Proposed-by`: `<agent|human> role=<r> model=<m> run=<run>`, an absent field `unknown`, then ` login=<login>` on a hub's departing accept alone. An interpretation adds a consent line, a step-4 check of its decision, two paragraphs, `Interprets: <ID>` last: `proposal-interpretation.md` "Apply". `Revision:`, `Lock:`, `Lock-mode:` follow `Base-commit:`.
 
 ## Known limits
 

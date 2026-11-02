@@ -106,5 +106,6 @@
   "CardClearGroupWrite": ["group", "cleared", "notes"],
   "TraceStage": ["stage", "distance", "counts"],
   "Identity": ["login"],
-  "Team": ["login", "name", "allowed"]
+  "Team": ["login", "name", "allowed"],
+  "ConfirmRead": ["id", "question", "updated_at"]
 }

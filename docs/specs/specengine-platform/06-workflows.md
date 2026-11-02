@@ -13,7 +13,7 @@ ref: research-2026-09-28
 
 | Who | Where | What they can do |
 |---|---|---|
-| **Owner** | CLI in a terminal; Web UI, later forms in Claude Code (both only stage, ADR-0035) | everything: edit specs, decide proposals (confirmed on a terminal), prepare and approve tasks |
+| **Owner** | CLI in a terminal; Web UI, later forms in Claude Code (both only stage, ADR-0035, but a hub's one click, ADR-0061) | everything: edit specs, decide proposals (confirmed on a terminal or on a hub), prepare and approve tasks |
 | **Analyst agent** (`requirement-analyst`) | MCP | read; create proposals, questions and a draft plan |
 | **Spec author agent** (the project's, or `specengine:spec-author`) | MCP | read; propose spec changes bound to a task; writes no spec file |
 | **Developer agent** (the project's implementer, e.g. `rust-developer`) | MCP + code | read; claim a `ready` task; report discrepancies; place `@implements` markers |

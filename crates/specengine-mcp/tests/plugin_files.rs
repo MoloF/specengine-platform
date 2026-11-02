@@ -157,6 +157,11 @@
 //!   moved; a `SCHEMA_PINS` entry 0.28.0, 0.27.0's schemas today's with
 //!   `cause`'s old line ([`as_of_0_27_0`]). Seven skills, every body within
 //!   4 096 B, the descriptions at 1 200 B. M: a 31-byte description.
+//! - docs/features/hub-confirm.md "Data": 0.28.0 -> 0.29.0, MINOR: a key a tool
+//!   returns: an author's `login`, a second closed shape of `ProposalAuthor`. A
+//!   `PINS` entry 0.29.0, the tree with the version set back 0.28.0's; a
+//!   `SCHEMA_PINS` entry 0.29.0, 0.28.0's schemas today's with each author in
+//!   its one shape of four keys ([`as_of_0_28_0`]).
 //!
 //! The repository is only read.
 
@@ -446,6 +451,13 @@ const PINS: &[(&str, &str)] = &[
         "0.28.0",
         "ec48bfca6e7d2391668e591a35b9ca862035ecb2ab9bceea11718f35d18b44dd",
     ),
+    // docs/features/hub-confirm.md "Data" (0.28.0 -> 0.29.0, MINOR: a key a
+    // tool returns, an author's `login`): plugin.json's version alone; the
+    // tree with the version set back hashes as 0.28.0's pin.
+    (
+        "0.29.0",
+        "626c7a101f3e573167da1dcb9644a295c97ca28db435ab02de1d4f26af0b2815",
+    ),
 ];
 
 /// docs/features/card-trace.md: `read-spec`'s line of 0.24.0, whole with its
@@ -667,6 +679,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.28.0",
         "3b8383b6ce507a837863372c1ae5c2629df7d95eb0adcaaaab8731ba1e30a7e1",
+    ),
+    // docs/features/hub-confirm.md "Data": each `ProposalAuthor` in two closed
+    // shapes, the second with `login` ([`as_of_0_28_0`] folds them back to the
+    // one of four keys; no other tool's schema changed).
+    (
+        "0.29.0",
+        "691111eeee31c9296a9f41aae20c10b71f980cba033668019f259618f7084972",
     ),
 ];
 
@@ -1671,8 +1690,9 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 }
 
 /// docs/features/flow-authoring.md AC-05: seven skills, every body within
-/// 4 096 B, the descriptions at the budget's whole, plugin.json 0.28.0. No
-/// room is left, so the next byte is over. M: a 31-byte description.
+/// 4 096 B, the descriptions at the budget's whole, plugin.json 0.29.0 since
+/// docs/features/hub-confirm.md. No room is left, so the next byte is over. M: a
+/// 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     let tree = committed();
@@ -1693,7 +1713,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.28.0")
+        json!("0.29.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -1844,11 +1864,33 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/hub-confirm.md (0.28.0 -> 0.29.0): plugin.json's version
+    // alone; set back, the tree is 0.28.0's pinned content. M: the version
+    // kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.29.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.29.0"),
+        "plugin.json's version"
+    );
+    let at_0_28_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.29.0\"",
+        "\"version\": \"0.28.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_28_0),
+        PINS[PINS.len() - 2].1,
+        "0.29.0 changes plugin.json's version only"
+    );
+    let tree = at_0_28_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/flow-authoring.md (0.27.0 -> 0.28.0): `write-flow` and
     // plugin.json's version; the one out and the other set back, the tree is
     // 0.27.0's pinned content, so no other skill moved. M: the version kept;
     // another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.28.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.28.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.28.0"),
@@ -1866,11 +1908,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_27_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.28.0 adds a skill and changes plugin.json's version only"
     );
     let tree = at_0_27_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/proposal-rehearsal.md (0.26.0 -> 0.27.0): plugin.json's
     // version alone; set back, the tree is 0.26.0's pinned content. M: the
     // version kept; another file changed.
@@ -2655,6 +2697,54 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// docs/features/hub-confirm.md "Data": `schemas` as 0.28.0 listed them: each
+/// `ProposalAuthor`, `get_proposal`'s, `propose_change`'s, `review_proposal`'s
+/// and `get_task`'s, in its one shape of four keys under the struct's doc, "Who
+/// raised it." No other tool's schema changed.
+fn as_of_0_28_0(schemas: &mut Value) {
+    assert_eq!(one_shaped_authors(schemas), 4, "the four authors");
+}
+
+/// The four-key shape of an author of two shapes, `node`, under the old line;
+/// `None` for any other node.
+fn first_shape(node: &Value) -> Option<Value> {
+    let shapes = node.get("anyOf")?.as_array()?;
+    let two = shapes.len() == 2
+        && shapes[0]["properties"].get("run").is_some()
+        && shapes[0]["properties"].get("login").is_none()
+        && shapes[1]["properties"].get("login").is_some();
+    two.then(|| {
+        let mut one = shapes[0].clone();
+        one["description"] = json!("Who raised it.");
+        one
+    })
+}
+
+/// Each author of two shapes in `schema` folded into its first, the old line
+/// its description, a nullable one (`anyOf` with `null`) as the old struct's
+/// `type: ["object", "null"]`: how many.
+fn one_shaped_authors(schema: &mut Value) -> usize {
+    if let Some(one) = first_shape(schema) {
+        *schema = one;
+        return 1;
+    }
+    let nullable = schema
+        .get("anyOf")
+        .and_then(Value::as_array)
+        .filter(|options| options.len() == 2 && options[1] == json!({"type": "null"}))
+        .and_then(|options| first_shape(&options[0]));
+    if let Some(mut one) = nullable {
+        one["type"] = json!(["object", "null"]);
+        *schema = one;
+        return 1;
+    }
+    match schema {
+        Value::Object(object) => object.values_mut().map(one_shaped_authors).sum(),
+        Value::Array(items) => items.iter_mut().map(one_shaped_authors).sum(),
+        _ => 0,
+    }
+}
+
 /// docs/features/flow-authoring.md D11: `schemas` as 0.27.0 listed them:
 /// `get_flow`'s `cause` in its old line. No key changed and no other tool's
 /// schema.
@@ -3000,7 +3090,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[17].0, "0.26.0", "an entry for 0.26.0");
     assert_eq!(SCHEMA_PINS[18].0, "0.27.0", "an entry for 0.27.0");
     assert_eq!(SCHEMA_PINS[19].0, "0.28.0", "an entry for 0.28.0");
-    assert_eq!(SCHEMA_PINS.len(), 20, "0.28.0 the last entry");
+    assert_eq!(SCHEMA_PINS[20].0, "0.29.0", "an entry for 0.29.0");
+    assert_eq!(SCHEMA_PINS.len(), 21, "0.29.0 the last entry");
+    // docs/features/hub-confirm.md "Data": 0.28.0's schemas are today's with
+    // each author in its one shape of four keys.
+    let mut at_0_28_0 = schemas.clone();
+    as_of_0_28_0(&mut at_0_28_0);
+    let at_0_28_0_hash = schema_hash(&at_0_28_0);
+    assert_eq!(
+        at_0_28_0_hash, SCHEMA_PINS[19].1,
+        "0.28.0's schemas are today's with each author of four keys"
+    );
+    assert_ne!(at_0_28_0_hash, current, "hub-confirm changed the schemas");
+    let (schemas, current) = (at_0_28_0, at_0_28_0_hash);
     // docs/features/flow-authoring.md D11: 0.27.0's schemas are today's with
     // `cause`'s old line.
     let mut at_0_27_0 = schemas.clone();

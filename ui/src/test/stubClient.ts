@@ -29,6 +29,8 @@ import type {
   CardNotFound,
   CardWrite,
   CheckReport,
+  ConfirmBody,
+  ConfirmRead,
   FlowView,
   GraphView,
   HealthReport,
@@ -176,6 +178,13 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
       state.proposals = state.proposals.map((proposal) => (proposal.id === id ? updated : proposal));
       return Promise.resolve(structuredClone(updated));
     }),
+    // A local daemon's answers: its unknown route (docs/features/hub-confirm.md B8); a test of a hub overrides them.
+    getConfirm: vi.fn<(project: string, id: string, signal?: AbortSignal) => Promise<ConfirmRead>>((project, id) =>
+      Promise.reject(new ClientError({ status: 404, message: `no route /api/projects/${project}/proposals/${id}/confirm: the routes are /api/projects and the web UI` })),
+    ),
+    confirmProposal: vi.fn<(project: string, id: string, body: ConfirmBody) => Promise<Proposal>>((project, id) =>
+      Promise.reject(new ClientError({ status: 404, message: `no route /api/projects/${project}/proposals/${id}/confirm: the routes are /api/projects and the web UI` })),
+    ),
     // The plan: one release, current, holding one open item (docs/features/roadmap-screen.md).
     getRoadmap: vi.fn<(project: string, options?: RoadmapOptions, signal?: AbortSignal) => Promise<RoadmapDocument>>(() =>
       Promise.resolve(aRoadmap([aRoadmapGroup("release", "beta", [aRoadmapItem({ id: "RM-0001", title: "First item" })], { current: true })])),

@@ -318,7 +318,7 @@ fn no_row(login: &str) -> String {
 }
 
 const MEMBER_ACTS: [&str; 3] = ["stage", "accept", "clear"];
-const LEAD_ACTS: [&str; 4] = ["stage", "accept", "clear", "group_clear"];
+const LEAD_ACTS: [&str; 5] = ["stage", "accept", "clear", "group_clear", "confirm"];
 
 // --------------------------------------------------------------- the six acts
 

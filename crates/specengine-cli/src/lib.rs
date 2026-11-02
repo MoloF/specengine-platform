@@ -216,6 +216,7 @@ mod check;
 mod code_delta;
 mod code_index;
 mod code_walk;
+mod confirm;
 mod corpus;
 mod create;
 mod decide;
@@ -308,6 +309,10 @@ pub use card::{
 };
 pub use check::{CheckOutcome, CheckRequest, CheckedTree, check};
 pub use code_index::{CodeRefresh, known_frameworks, listed_code_files, refresh_code};
+pub use confirm::{
+    ConfirmBody, ConfirmCause, ConfirmOutcome, ConfirmRead, ConfirmRequest, confirm_question,
+    confirm_staged,
+};
 pub use corpus::LeftOut;
 pub use create::{
     CreateRequest, propose_create, propose_create_brief, propose_create_brief_with_task,
@@ -649,6 +654,9 @@ pub enum Outcome {
     /// [`stage`], [`unstage`] (no command; the daemon's): the review
     /// document, and why nothing was stored.
     Stage(Box<StageOutcome>),
+    /// [`confirm_question`], [`confirm_staged`] (no command; a hub's): the
+    /// question or the review document, and why nothing changed.
+    Confirm(Box<ConfirmOutcome>),
     Inbox(InboxOutcome),
     /// `export state`: the dump written.
     StateExport(ExportStateOutcome),
@@ -708,6 +716,7 @@ impl Outcome {
             Self::Intake(intake) => intake.exit(),
             Self::Drift(drift) => drift.exit(),
             Self::Stage(stage) => stage.exit(),
+            Self::Confirm(confirm) => confirm.exit(),
             Self::StateImport(import) => import.exit(),
             Self::Task(task) => task.exit(),
             Self::TaskShow(show) => show.exit(),
@@ -756,6 +765,10 @@ impl Outcome {
             Self::Intake(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Drift(outcome) => (&outcome.messages, outcome.refusal.as_deref()),
             Self::Stage(outcome) => (
+                &outcome.proposal.messages,
+                outcome.proposal.refusal.as_deref(),
+            ),
+            Self::Confirm(outcome) => (
                 &outcome.proposal.messages,
                 outcome.proposal.refusal.as_deref(),
             ),
@@ -812,6 +825,7 @@ impl Outcome {
                 | Self::Intake(_)
                 | Self::Drift(_)
                 | Self::Stage(_)
+                | Self::Confirm(_)
                 | Self::Inbox(_)
                 | Self::StateExport(_)
                 | Self::StateImport(_)
@@ -867,6 +881,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Intake(outcome) => intake::render_text(outcome),
         Outcome::Drift(outcome) => drift::render_text(outcome),
         Outcome::Stage(outcome) => proposals::render_text(&outcome.proposal),
+        Outcome::Confirm(outcome) => proposals::render_text(&outcome.proposal),
         Outcome::Inbox(outcome) => inbox::render_text(outcome),
         Outcome::StateExport(outcome) => state::render_export_text(outcome),
         Outcome::StateImport(outcome) => state::render_import_text(outcome),
@@ -918,6 +933,7 @@ impl serde::Serialize for Outcome {
             Self::Intake(outcome) => outcome.serialize(serializer),
             Self::Drift(outcome) => outcome.serialize(serializer),
             Self::Stage(outcome) => outcome.serialize(serializer),
+            Self::Confirm(outcome) => outcome.serialize(serializer),
             Self::Inbox(outcome) => outcome.serialize(serializer),
             Self::StateExport(outcome) => outcome.serialize(serializer),
             Self::StateImport(outcome) => outcome.serialize(serializer),

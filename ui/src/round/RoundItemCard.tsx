@@ -116,7 +116,9 @@ function Concern({ project, target }: { project: string; target: RoundItem["targ
  * is picked for the owner, the recommended option only marked. A staged choice shows as the Inbox
  * shows it, with its terminal command and Unstage. Memoised: typing in one item renders that item
  * alone (a sheet holds up to 200), so the callbacks take the item and are stable. Where a hub's
- * `allowed` omits `stage` the item is to read: its choices stand off and no answer is written.
+ * `allowed` omits `stage` the item is to read: its choices stand off and no answer is written. Where
+ * it lists `confirm` the staged choice has its own Confirm: this item's alone, a round staging many
+ * and each taking its own click (`docs/features/hub-confirm.md`).
  */
 export const RoundItemCard = memo(function RoundItemCard({
   project,
@@ -125,9 +127,11 @@ export const RoundItemCard = memo(function RoundItemCard({
   result,
   busy,
   canStage,
+  canConfirm,
   unstageRefusal,
   onDraft,
   onUnstage,
+  onConfirm,
 }: {
   project: string;
   item: RoundItem;
@@ -138,9 +142,12 @@ export const RoundItemCard = memo(function RoundItemCard({
   busy: boolean;
   /** False: a hub's `allowed` omits `stage`. */
   canStage: boolean;
+  /** True: a hub's `allowed` lists `confirm`. */
+  canConfirm: boolean;
   unstageRefusal: string | null;
   onDraft: (id: string, draft: Draft) => void;
   onUnstage: (item: RoundItem) => void;
+  onConfirm: (item: RoundItem) => void;
 }) {
   const headingId = useId();
   const choices = useRef<HTMLFieldSetElement>(null);
@@ -275,6 +282,14 @@ export const RoundItemCard = memo(function RoundItemCard({
             onUnstage={() => {
               onUnstage(item);
             }}
+            onConfirm={
+              canConfirm
+                ? () => {
+                    onConfirm(item);
+                  }
+                : undefined
+            }
+            confirmBusy={busy}
           />
         )}
 

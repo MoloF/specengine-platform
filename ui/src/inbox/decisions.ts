@@ -1,3 +1,5 @@
+import type { Proposal } from "../api/types";
+
 /**
  * The owner's four decisions on a proposal, as the Inbox offers them (06 §3.3): each a button, a key
  * and a dialog. Only accept and reject are staged, and confirmed on a terminal
@@ -64,6 +66,15 @@ export const WORDING: Record<DecisionKind, Wording> = {
     missing: "",
   },
 };
+
+/**
+ * What a Confirm says once the daemon answered, from the review document it answered: the state as
+ * sent and the commit `apply_proposal` made, when one was (`docs/features/hub-confirm.md`).
+ */
+export function confirmedLine(id: string, review: Proposal): string {
+  const state = review.status ?? "no state sent";
+  return review.applied_commit === null ? `Confirmed ${id}: ${state}; no commit.` : `Confirmed ${id}: ${state} as commit ${review.applied_commit}, in this hub's checkout; nothing is pushed.`;
+}
 
 /** The decisions in the order and with the keys of 06 §3.3; keys are lower case, as typed. */
 export const DECISION_KEYS: readonly (readonly [DecisionKind, string])[] = [

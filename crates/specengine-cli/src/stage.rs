@@ -306,8 +306,7 @@ pub(crate) fn stage_with(
     let mut messages = Vec::new();
     let run = preview_run(env, &request.git, context, &proposal, &mut messages);
     if let Stage::Approve { span_hash, .. } = &mut stage
-        && proposal.kind.family() == KindFamily::Applies
-        && !proposal.new_file()
+        && records_span(&proposal)
     {
         span_hash.clone_from(&run.span);
     }
@@ -588,6 +587,15 @@ fn refused_by_queue(
         &format!("{error}; nothing staged"),
         messages,
     ))
+}
+
+/// Whether an approve staged on `proposal` records its target's span hash:
+/// a kind that applies to an existing file (an `update`, an
+/// `interpretation`, a section-form `create`). A new file and a kind that
+/// decides record none; a stage whose preview failed holds `None` (canon
+/// `decision-staging`, "The stage").
+pub(crate) fn records_span(proposal: &Proposal) -> bool {
+    proposal.kind.family() == KindFamily::Applies && !proposal.new_file()
 }
 
 /// The stage `body` names for `proposal`, checked as the terminal checks

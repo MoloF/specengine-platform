@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useInbox, useProposal, useStageDecision } from "../api/queries";
-import type { ApiError, Proposal, StageChoice } from "../api/types";
+import type { ApiError, Proposal, StageChoice, Team } from "../api/types";
 import { replaceHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
-import { useAllowed } from "../board/acting";
+import { useAllowed, useConfirmer } from "../board/acting";
 import { ACT_OFF } from "../board/labels";
 import { useAnnounce } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
@@ -15,7 +15,7 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useNow } from "../ui/useNow";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
-import { confirmCommand, DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
+import { confirmCommand, confirmedLine, DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
 import { matchesFilter } from "./filter";
 import { severityRank } from "./labels";
 import { queueOrder } from "./order";
@@ -28,6 +28,9 @@ import { sharesTarget } from "./targets";
  * what opened it and nothing else opens (the dialog counts as open).
  */
 const DecisionDialog = lazy(() => import("./DecisionDialog").then((module) => ({ default: module.DecisionDialog })));
+
+/** The Confirm dialog, a hub's alone, so a local page never loads its chunk. */
+const ConfirmDialog = lazy(() => import("./ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 
 const LETTERS = new Map<string, DecisionKind>(DECISION_KEYS.map(([kind, key]) => [key, kind]));
 
@@ -55,13 +58,16 @@ interface OpenDecision {
  * review document, the four decisions. Accept and Reject stage the owner's choice, confirmed only
  * by `spec approve|reject PR` on a terminal (`docs/canon/decision-staging.md` "UI", ADR-0035); a
  * staged proposal stays listed, its card showing the command and Unstage. Needs clarification and
- * Defer send nothing.
+ * Defer send nothing. On a hub a login `[team]` entitles also has Confirm on a staged choice, one
+ * dialog per proposal (`docs/features/hub-confirm.md`); the dialog sits outside the queue, so its
+ * keys never reach the queue's.
  */
 export function InboxView({ project, selectedId }: { project: string; selectedId: string | null }) {
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
   const decide = useStageDecision(project);
   const canStage = useAllowed(project)("stage");
+  const confirmer = useConfirmer(project);
   const now = useNow();
   const openShortcuts = useOpenShortcuts();
   const focusLater = useFocusLater();
@@ -80,6 +86,8 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   const retried = useRef(false);
   const [query, setQuery] = useState("");
   const [dialog, setDialog] = useState<OpenDecision | null>(null);
+  /** The open Confirm dialog: its proposal and the `[team]` row it opened under. */
+  const [confirming, setConfirming] = useState<{ id: string; team: Team } | null>(null);
   const [result, setResult] = useState("");
   /** The daemon's words refusing the last unstage, by proposal. */
   const [unstageRefusal, setUnstageRefusal] = useState<{ id: string; message: string } | null>(null);
@@ -153,7 +161,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
    * decision that stages where a hub's `allowed` omits `stage`: its key says that too.
    */
   function openDialog(kind: DecisionKind) {
-    if (selected === null || reviewed === null || reviewed.updated_at === null || openDecision.current !== null || deciding.current || decide.isPending) {
+    if (selected === null || reviewed === null || reviewed.updated_at === null || openDecision.current !== null || confirming !== null || deciding.current || decide.isPending) {
       return;
     }
     if (reviewed.drift !== null) {
@@ -231,9 +239,38 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     return refusal.message;
   }
 
+  /** Opens the Confirm dialog on `id`, nothing while another dialog is open or a stage is on its way. */
+  function openConfirm(id: string) {
+    if (confirmer === null || confirming !== null || openDecision.current !== null || deciding.current || decide.isPending) {
+      return;
+    }
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setConfirming({ id, team: confirmer });
+  }
+
+  /** Cancel keeps the stage: nothing is sent, focus goes back to what opened the dialog. */
+  function closeConfirm() {
+    setConfirming(null);
+    const back = returnFocus.current;
+    focusLater(() => (back?.isConnected === true ? back : null));
+  }
+
+  /** The daemon's answer, spoken and shown; the item has left the queue, so focus goes to the one now selected. */
+  function confirmed(id: string, answered: Proposal) {
+    const said = confirmedLine(id, answered);
+    announce(said);
+    if (!mounted.current) {
+      return;
+    }
+    setUnstageRefusal(null);
+    setResult(said);
+    setConfirming(null);
+    focusLater(() => queue.current?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ?? heading.current);
+  }
+
   /** Drops the selected proposal's staged choice: one call; a refusal shows on the card in the daemon's words. */
   async function unstage(id: string) {
-    if (deciding.current || openDecision.current !== null) {
+    if (deciding.current || openDecision.current !== null || confirming !== null) {
       return;
     }
     deciding.current = true;
@@ -261,7 +298,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   }
 
   function onQueueKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (dialog !== null || decide.isPending || hasModifier(event) || isTextField(event.target)) {
+    if (dialog !== null || confirming !== null || decide.isPending || hasModifier(event) || isTextField(event.target)) {
       return;
     }
     const inList = event.target instanceof Element && event.target.closest('[role="listbox"]') !== null;
@@ -397,6 +434,13 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             onUnstage={() => {
               void unstage(selected.id);
             }}
+            onConfirm={
+              confirmer === null
+                ? undefined
+                : () => {
+                    openConfirm(selected.id);
+                  }
+            }
             onSelect={(id) => {
               select(id, true);
             }}
@@ -429,6 +473,20 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             kind={dialog.kind}
             onCancel={closeDialog}
             onSubmit={(stage, updatedAt) => submitStage(dialog.id, stage, updatedAt)}
+          />
+        </Suspense>
+      )}
+      {confirming !== null && (
+        <Suspense fallback={null}>
+          <ConfirmDialog
+            key={confirming.id}
+            project={project}
+            id={confirming.id}
+            team={confirming.team}
+            onClose={closeConfirm}
+            onConfirmed={(answered) => {
+              confirmed(confirming.id, answered);
+            }}
           />
         </Suspense>
       )}

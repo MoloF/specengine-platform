@@ -99,6 +99,20 @@ export function useAllowed(project: string): (act: KnownTeamAct) => boolean {
   return (act) => team === null || team.allowed.includes(act);
 }
 
+/** The word of `allowed` the Confirm control follows (`docs/features/hub-confirm.md`). */
+const CONFIRM = "confirm";
+
+/**
+ * This login's row of `[team]` when an answer read lists `confirm`, else null. The other way round
+ * from `useAllowed`: unknown is off, since a local daemon, a read still out and a failed read all
+ * read as unknown, and a local daemon has no such control and no such route. A terminal confirms
+ * whatever this says.
+ */
+export function useConfirmer(project: string): Team | null {
+  const team = useTeamRow(project);
+  return team?.allowed.includes(CONFIRM) === true ? team : null;
+}
+
 /** The setter a login comes with: a hub's page has nothing to keep. */
 function keepNothing(): void {
   return undefined;

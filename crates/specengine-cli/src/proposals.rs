@@ -457,6 +457,9 @@ pub(crate) struct QueueContext {
     pub git: WorktreeGit,
     /// The current repository's canonical git common dir.
     pub common_dir: PathBuf,
+    /// A hub's read of a confirm: a refusal is logged by nobody
+    /// (`crate::apply::failed`).
+    pub rehearsal: bool,
 }
 
 /// Finds the project and opens its queue (see the module documentation):
@@ -493,6 +496,7 @@ pub(crate) fn open_context(
         queue,
         git,
         common_dir,
+        rehearsal: false,
     })
 }
 

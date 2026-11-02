@@ -221,6 +221,9 @@ pub struct CardAcceptRequest {
     pub documented: Option<String>,
     /// `--gap-type G`; `None`: `contradicts`.
     pub gap_type: Option<String>,
+    /// A hub's login: a departing accept's `Author.login`, the one place a
+    /// proposal names a person. `None` everywhere else.
+    pub login: Option<String>,
 }
 
 /// What a clear says of a mark.
@@ -561,6 +564,7 @@ impl CardAcceptBody {
             observed: self.observed,
             documented: self.documented,
             gap_type: self.gap_type,
+            login: None,
         }
     }
 }
@@ -2255,7 +2259,10 @@ fn departing(
         documented: &documented,
         gap_type,
     });
-    let author = Author::human();
+    let author = Author {
+        login: request.login.clone(),
+        ..Author::human()
+    };
     let anonymous = AuthorInput {
         role: None,
         model: None,

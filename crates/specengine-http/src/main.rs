@@ -37,6 +37,7 @@
 mod answer;
 mod app;
 mod args;
+mod confirm;
 mod daemon;
 mod hub;
 mod start;

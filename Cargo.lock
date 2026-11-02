@@ -2781,6 +2781,7 @@ dependencies = [
  "axum",
  "clap",
  "futures-util",
+ "regex",
  "rust-embed",
  "serde",
  "serde_json",

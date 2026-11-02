@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
 import { useProjects, useRoundPosting, useStageDecision, useStageRoundAnswers, type RoundQuery } from "../api/queries";
-import type { RoundAnswersOutcome, RoundItem, RoundSheet } from "../api/types";
+import type { Proposal, RoundAnswersOutcome, RoundItem, RoundSheet, Team } from "../api/types";
 import { sectionHash } from "../app/routes";
-import { useAllowed } from "../board/acting";
+import { useAllowed, useConfirmer } from "../board/acting";
 import { ActOff } from "../board/ActOff";
+import { confirmedLine } from "../inbox/decisions";
 import { useAnnounce } from "../ui/announcer";
 import { CopyButton } from "../ui/CopyButton";
 import { focusIsLost } from "../ui/focus";
@@ -20,6 +21,9 @@ import { RoundItemCard } from "./RoundItemCard";
 import { ROUND_COMMAND, ROUND_LIMIT_MAX } from "./text";
 
 const COPY_FAILED = "Copy failed: select the command and copy it";
+
+/** The Confirm dialog, a hub's alone, so a local page never loads its chunk. */
+const ConfirmDialog = lazy(() => import("../inbox/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
 
 /** The outcome of an answer the daemon staged. */
 const STAGED = "staged";
@@ -85,13 +89,17 @@ function without<T>(map: ReadonlyMap<string, T>, id: string): ReadonlyMap<string
  * and leaves its outcome for whichever screen is on view, and while one is on its way no screen
  * sends again. A re-read drops the drafts of items no longer on the sheet, saying so, and marks
  * those whose item changed since. Where a hub's `allowed` omits `stage` the sheet is there to read:
- * its answers stand off, Stage and Unstage stay focusable and do nothing.
+ * its answers stand off, Stage and Unstage stay focusable and do nothing. Where it lists `confirm`
+ * each staged item has its own Confirm: Stage still only stages, and nothing here confirms a set
+ * (`docs/features/hub-confirm.md`). The dialog sits above the sheet's branches: a re-read that empties
+ * the sheet cannot take a refusal away with it.
  */
 export function RoundScreen({ project, round, memory }: { project: string; round: RoundQuery; memory: RoundMemory }) {
   const stage = useStageRoundAnswers(project);
   const posting = useRoundPosting(project);
   const decide = useStageDecision(project);
   const canStage = useAllowed(project)("stage");
+  const confirmer = useConfirmer(project);
   const projects = useProjects();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
@@ -106,7 +114,13 @@ export function RoundScreen({ project, round, memory }: { project: string; round
   const unstaged = useRef<string | null>(null);
   /** The last sheet whose items the drafts were held against. */
   const seen = useRef<RoundSheet | null>(null);
+  /** What opened the Confirm dialog: focus goes back there on Cancel. */
+  const returnFocus = useRef<HTMLElement | null>(null);
   const [unstageRefusal, setUnstageRefusal] = useState<{ id: string; message: string } | null>(null);
+  /** The open Confirm dialog: its item and the `[team]` row it opened under. */
+  const [confirming, setConfirming] = useState<{ id: string; team: Team } | null>(null);
+  /** The last Confirm's outcome, a visible copy of what was spoken. */
+  const [confirmedSaid, setConfirmedSaid] = useState<string | null>(null);
   const entry = useRoundEntry(memory, project);
   const { drafts, refused, result, failure: postFailure, dropped, limit } = entry;
 
@@ -248,13 +262,43 @@ export function RoundScreen({ project, round, memory }: { project: string; round
     }
   }
 
-  // The cards are memoised: they get one stable callback, which calls this render's unstage.
+  /** Opens the Confirm dialog on this one item, nothing while a write is on its way. */
+  function openConfirm(item: RoundItem) {
+    if (confirmer === null || confirming !== null || sending.current || busy || round.isPlaceholderData) {
+      return;
+    }
+    returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setConfirming({ id: item.id, team: confirmer });
+  }
+
+  /** Cancel keeps the stage: nothing is sent, focus goes back to the item's Confirm. */
+  function closeConfirm() {
+    setConfirming(null);
+    const back = returnFocus.current;
+    focusLater(() => (back?.isConnected === true ? back : null));
+  }
+
+  /** The daemon's answer, spoken and shown; the item has left the sheet, so focus goes to the sheet. */
+  function confirmed(id: string, answered: Proposal) {
+    const said = confirmedLine(id, answered);
+    announce(memory.onView(project) ? said : `Questions of ${project}: ${said}`);
+    setConfirmedSaid(said);
+    setConfirming(null);
+    focusLater(() => top.current);
+  }
+
+  // The cards are memoised: they get stable callbacks, which call this render's functions.
   const latestUnstage = useRef(unstage);
+  const latestConfirm = useRef(openConfirm);
   useEffect(() => {
     latestUnstage.current = unstage;
+    latestConfirm.current = openConfirm;
   });
   const onUnstage = useCallback((item: RoundItem) => {
     void latestUnstage.current(item);
+  }, []);
+  const onConfirm = useCallback((item: RoundItem) => {
+    latestConfirm.current(item);
   }, []);
 
   if (sheet === undefined) {
@@ -280,6 +324,23 @@ export function RoundScreen({ project, round, memory }: { project: string; round
     );
   }
 
+  const confirmDialog =
+    confirming === null ? null : (
+      <Suspense key="confirm" fallback={null}>
+        <ConfirmDialog
+          key={confirming.id}
+          project={project}
+          id={confirming.id}
+          team={confirming.team}
+          onClose={closeConfirm}
+          onConfirmed={(answered) => {
+            confirmed(confirming.id, answered);
+          }}
+        />
+      </Suspense>
+    );
+  // A visible copy; screen readers hear it through the page's live region (useAnnounce).
+  const confirmedResult = confirmedSaid === null ? null : <p className="decision-result">{confirmedSaid}</p>;
   const notes =
     sheet.notes.length === 0 ? null : (
       <ul className="note-list" aria-label="Notes from the daemon">
@@ -320,6 +381,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
   if (items.length === 0) {
     return (
       <div className="round" ref={top} tabIndex={-1}>
+        {confirmedResult}
         {droppedNotice}
         <div className="empty-state">
           <h2>No open questions or discrepancies.</h2>
@@ -334,6 +396,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
           </p>
         </div>
         {rereadFailure}
+        {confirmDialog}
       </div>
     );
   }
@@ -368,6 +431,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
           </span>
         </p>
       </div>
+      {confirmedResult}
       {droppedNotice}
       {rereadFailure}
       {staged > 0 && <ConfirmOnTerminal root={root} count={staged} />}
@@ -381,9 +445,11 @@ export function RoundScreen({ project, round, memory }: { project: string; round
             result={refused.get(item.id)}
             busy={busy || round.isPlaceholderData}
             canStage={canStage}
+            canConfirm={confirmer !== null}
             unstageRefusal={unstageRefusal !== null && unstageRefusal.id === item.id ? unstageRefusal.message : null}
             onDraft={changeDraft}
             onUnstage={onUnstage}
+            onConfirm={onConfirm}
           />
         ))}
       </ol>
@@ -475,6 +541,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
           {posting ? "Staging" : `Stage ${counted(answered, "answer")}`}
         </button>
       </section>
+      {confirmDialog}
     </div>
   );
 }

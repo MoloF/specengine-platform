@@ -29,6 +29,8 @@ import type {
   CardNotFound,
   CardWrite,
   CheckReport,
+  ConfirmBody,
+  ConfirmRead,
   FlowView,
   GraphView,
   HealthReport,
@@ -60,8 +62,8 @@ import type {
 // the question round `docs/features/ui-round.md` "Data", the unapplied amendments
 // `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
 // the lock diff `docs/features/lock-diff.md` "Route", the flow `docs/features/flow-canvas.md`
-// "Data", the cards `docs/features/board-ui.md` "Routes", the identity `docs/canon/hub.md` "Routes"):
-// `fetch` and `EventSource`, no package.
+// "Data", the cards `docs/features/board-ui.md` "Routes", the identity `docs/canon/hub.md` "Routes",
+// the confirm `docs/features/hub-confirm.md` "Data"): `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -147,6 +149,11 @@ function decisionPath(project: string, id: string): string {
   return `${projectPath(project)}/proposals/${segment(id)}/decision`;
 }
 
+/** A proposal's confirm path: a hub's read and its POST. */
+function confirmPath(project: string, id: string): string {
+  return `${projectPath(project)}/proposals/${segment(id)}/confirm`;
+}
+
 /** The round's sheet; its answers' POST is under it. */
 function roundPath(project: string): string {
   return `${projectPath(project)}/round`;
@@ -215,10 +222,14 @@ function reasonOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/** What a request sends besides its method and path: a POST's JSON body, a read's AbortSignal. */
+/**
+ * What a request sends besides its method and path: a POST's JSON body, a read's AbortSignal;
+ * `judged`, a read answered as a write is: its refusal a ClientError, a document's last note too.
+ */
 interface Sent {
   body?: string;
   signal?: AbortSignal;
+  judged?: boolean;
 }
 
 /** A read, or one of the stage's two writes. */
@@ -231,9 +242,9 @@ type Method = "GET" | "POST" | "DELETE";
  * Any other answer: a ClientError with the HTTP status and the error body's `message` verbatim
  * (another body: its text verbatim). No answer: status 0. Aborted through `signal` (the read was
  * superseded): the abort error as `fetch` gave it, never a ClientError, since the daemon was not
- * at fault.
+ * at fault. A `judged` read's refusal goes as a write's: nothing of it resolves as data.
  */
-async function request(method: Method, path: string, { body, signal }: Sent = {}): Promise<unknown> {
+async function request(method: Method, path: string, { body, signal, judged = false }: Sent = {}): Promise<unknown> {
   const url = `${API}${path}`;
   const asked = `${method} ${url}`;
   let response: Response;
@@ -271,10 +282,11 @@ async function request(method: Method, path: string, { body, signal }: Sent = {}
   if (refusal !== null) {
     throw new ClientError({ status: response.status, message: refusal.message });
   }
-  if (method === "GET" && response.status === 404 && value !== NOT_JSON) {
+  const read = method === "GET" && !judged;
+  if (read && response.status === 404 && value !== NOT_JSON) {
     return value;
   }
-  const refused = method === "GET" ? null : refusedReasonOf(value);
+  const refused = read ? null : refusedReasonOf(value);
   if (refused !== null) {
     throw new ClientError({ status: response.status, message: refused });
   }
@@ -464,6 +476,27 @@ export class HttpClient implements SpecEngineClient {
   /** Drops the staged choice: DELETE on the same path, no body, no AbortSignal; 200 the review document. */
   async unstageDecision(project: string, id: string): Promise<Proposal> {
     return (await request("DELETE", decisionPath(project, id))) as Proposal;
+  }
+
+  /**
+   * What a terminal would ask of a staged proposal (`docs/features/hub-confirm.md` "Data"): a hub's
+   * read, asked when a Confirm dialog opens, judged as the POST is, so a refusal rejects in the
+   * daemon's words whatever its body and no 404 resolves as data. A one-factor session's `fetch`
+   * meets the login door's redirect: status 0 (`docs/canon/hub.md` "Known limits").
+   */
+  async getConfirm(project: string, id: string, signal?: AbortSignal): Promise<ConfirmRead> {
+    return (await request("GET", confirmPath(project, id), { signal, judged: true })) as ConfirmRead;
+  }
+
+  /**
+   * Confirms one staged proposal (`docs/features/hub-confirm.md` "Data"): a JSON body of exactly the
+   * read's `question` and `updated_at`, written out here so nothing else can travel; no AbortSignal
+   * (a write's answer is always taken). 200: the review document. A refusal carrying a document
+   * (409, 404): its last note; an error body (400, 403, 503): its message verbatim.
+   */
+  async confirmProposal(project: string, id: string, { question, updated_at }: ConfirmBody): Promise<Proposal> {
+    const sent: ConfirmBody = { question, updated_at };
+    return (await request("POST", confirmPath(project, id), { body: JSON.stringify(sent) })) as Proposal;
   }
 
   /**

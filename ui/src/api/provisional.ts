@@ -23,10 +23,14 @@ export interface Identity {
   login: string | null;
 }
 
-/** The acts `GET .../team` may list: a word of the queue's authority, no role and no trade. Source: `docs/features/hub-team.md` "Data". */
+/**
+ * The acts a control stands off for when `GET .../team` omits them: a word of the queue's authority,
+ * no role and no trade. RM-0050's `confirm` is not among them: a login it omits has no control to
+ * stand off (`useConfirmer`). Source: `docs/features/hub-team.md` "Data".
+ */
 export type KnownTeamAct = "stage" | "accept" | "clear" | "group_clear";
 
-/** An act as sent; other strings kept, as RM-0050 adds one. Source: `docs/features/hub-team.md` "Data". */
+/** An act as sent; other strings kept, RM-0050's `confirm` among them. Source: `docs/features/hub-team.md` "Data". */
 export type TeamAct = KnownTeamAct | Unlisted;
 
 /** What `[team]` says of the asking login: a hub's route alone; `name` null and `allowed` empty for a login it does not list. Source: `docs/features/hub-team.md` "Data". */
@@ -34,6 +38,26 @@ export interface Team {
   login: string;
   name: string | null;
   allowed: TeamAct[];
+}
+
+/**
+ * What a terminal would ask of a staged proposal: `question` verbatim, the staged line, the option
+ * line, a stale note and the raise with it; a hub's read alone, judged as the POST is. Source:
+ * `docs/features/hub-confirm.md` "Data".
+ */
+export interface ConfirmRead {
+  id: string;
+  question: string;
+  updated_at: string;
+}
+
+/**
+ * The confirm POST's body: exactly the read's `question` and `updated_at`, closed keys, so the page
+ * can send no choice; the choice is the stage's. Source: `docs/features/hub-confirm.md` "Data".
+ */
+export interface ConfirmBody {
+  question: string;
+  updated_at: string;
 }
 
 /** Queue order, never a hold on work (ADR-0012). Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
@@ -67,12 +91,16 @@ export type KnownPreview = "applies" | "rebases" | "conflicts" | "unavailable";
 /** A preview as sent; other strings kept. Source: `docs/features/ui-shell.md` "Data". */
 export type Preview = KnownPreview | Unlisted;
 
-/** Who wrote a proposal. Source: `docs/canon/proposal-queue.md` "Store". */
+/**
+ * Who wrote a proposal; `login` only a departing accept's on a hub, skipped when none. Sources:
+ * `docs/canon/proposal-queue.md` "Store"; `docs/features/hub-confirm.md` "Data".
+ */
 export interface Author {
   type: "human" | "agent" | Unlisted;
   role: string | null;
   model: string | null;
   run: string | null;
+  login?: string;
 }
 
 /** What the code says against what the spec says. Source: `docs/specs/specengine-platform/06-workflows.md` "3.2. What the agent sends". */
@@ -224,8 +252,8 @@ export interface StagedReject {
 
 /**
  * One staged choice of an open proposal, replaceable, kept only in the queue: an attribute, not a
- * status; confirmed only by `spec approve|reject PR` on a terminal.
- * Source: `docs/canon/decision-staging.md` "The stage".
+ * status; confirmed by `spec approve|reject PR` on a terminal, or on a hub by the confirm route.
+ * Sources: `docs/canon/decision-staging.md` "The stage"; `docs/features/hub-confirm.md` "Data".
  */
 export type Stage = StagedApprove | StagedReject;
 
@@ -321,7 +349,7 @@ export interface Proposal {
   choice: Choice | null;
   /** The task it was raised for (`--task`), never changed; null unbound. */
   task_id: string | null;
-  /** The owner's staged choice, confirmed only on a terminal; null when none is staged. */
+  /** The owner's staged choice, confirmed on a terminal or, on a hub, by the confirm route; null when none is staged. */
   staged: Stage | null;
   /** When it was staged, UTC as stored (`YYYY-MM-DDTHH:MM:SSZ`); null when none is staged. */
   staged_at: string | null;

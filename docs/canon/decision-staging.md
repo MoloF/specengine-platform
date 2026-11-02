@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-02
 ---
 
 # Decision staging: UI prepares, terminal confirms
@@ -12,10 +12,10 @@ ADR-0035 under ADR-0034 (`docs/canon/architecture.md#apply`, `#distribution`), b
 
 ## Rule
 
-- A decision on a proposal, approve or reject, is confirmed only on a terminal by **its own `[y/N]`**: `spec approve|reject PR`'s, or `spec round answer`'s per staged answer (ADR-0038). The only control point stays the owner's task approval (ADR-0012, `#control`).
-- Anything else only **stages**: the UI's decision dialog and Questions screen (`round-ui.md`) and the owner's MCP form (`review-form.md`); later perhaps URL mode onto a UI card (08 Phase 5). A stage is one replaceable choice per `open` proposal, the same flags as the CLI's, kept only in the queue: no file, no git, no apply step. It is an attribute, not a status: a staged proposal is `open`, listed, and blocks nothing; a task's `task_id`, snapshot and package are untouched.
+- A decision on a proposal, approve or reject, is confirmed on a terminal by **its own `[y/N]`**: `spec approve|reject PR`'s, or `spec round answer`'s per staged answer (ADR-0038); or on a hub alone by one click under a login (`hub-confirm.md`). The only control point stays the owner's task approval (ADR-0012, `#control`).
+- Anything else only **stages**: the UI's decision dialog and Questions screen (`round-ui.md`) and the owner's MCP form (`review-form.md`). A stage is one replaceable choice per `open` proposal, the same flags as the CLI's, kept only in the queue: no file, no git, no apply step. It is an attribute, not a status: a staged proposal is `open`, listed, and blocks nothing; a task's `task_id`, snapshot and package are untouched.
 - Agents never choose a stage: no tool takes a choice; `review_proposal` stages only the owner's answer in its form (ADR-0054); `round answer` exits 2 without a terminal; `get_proposal` shows one, `ask-owner` counts it as no answer.
-- Who staged is unknowable (ADR-0034), but a hub's event names its `as` (`hub-team.md` "Stages"): the commit's provenance stays the terminal's (ADR-0005); the event log keeps every stage.
+- Who staged is unknowable (ADR-0034), but a hub's event names its `as` (`hub-team.md` "Stages"): the commit's provenance is its confirmer's (ADR-0005); the event log keeps every stage.
 
 ## The stage
 

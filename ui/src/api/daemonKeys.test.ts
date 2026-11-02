@@ -26,6 +26,7 @@ import type {
   CheckCounts,
   CheckFinding,
   CheckReport,
+  ConfirmRead,
   DebtEntry,
   DriftCounts,
   DriftEvidence,
@@ -158,10 +159,12 @@ import type {
 // `TraceStage`), with `FlowNode` at 15 keys, `CardRow` at 21, `TraceDocument` at 8, `TraceNode` at 9; and
 // hub-identity's one (docs/features/hub-identity.md "Data": the answer of `GET /api/identity`, the
 // hundred-and-seventh `Identity`); and hub-team's one (docs/features/hub-team.md "Data": the answer of
-// `GET .../team`, the hundred-and-eighth and last `Team`). A key the types carry ahead of the file is
-// listed in AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that file
-// is absent the comparison is skipped, saying so; once it exists it names all one hundred and eight,
-// in the slices' order.
+// `GET .../team`, the hundred-and-eighth `Team`); and hub-confirm's one (docs/features/hub-confirm.md
+// "Data": the answer of `GET .../confirm`, the hundred-and-ninth and last `ConfirmRead`), with an
+// author's optional `login`, in no set. A key the types carry ahead of the file is listed in
+// AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that file is absent
+// the comparison is skipped, saying so; once it exists it names all one hundred and nine, in the
+// slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -399,7 +402,8 @@ const KEYS = {
     changed_files: true,
   } satisfies Record<keyof TaskRun, true>,
   TaskBundle: { node_ids: true, budget: true, bundle_hash: true } satisfies Record<keyof TaskBundle, true>,
-  Author: { type: true, role: true, model: true, run: true } satisfies Record<keyof Author, true>,
+  // docs/features/hub-confirm.md "Data" `login`: a departing accept's on a hub alone, skipped when none.
+  Author: { type: true, role: true, model: true, run: true, login: true } satisfies Record<keyof Author, true>,
   // docs/canon/round.md "JSON": the sheet, an item's 19 keys, a target, a task.
   RoundSheet: { project: true, items: true, more: true, minutes: true, notes: true } satisfies Record<keyof RoundSheet, true>,
   RoundItem: {
@@ -794,6 +798,8 @@ const KEYS = {
   Identity: { login: true } satisfies Record<keyof Identity, true>,
   // docs/features/hub-team.md "Data": the team read's answer, the asker's own row, no role.
   Team: { login: true, name: true, allowed: true } satisfies Record<keyof Team, true>,
+  // docs/features/hub-confirm.md "Data": the confirm read's answer.
+  ConfirmRead: { id: true, question: true, updated_at: true } satisfies Record<keyof ConfirmRead, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -845,7 +851,7 @@ const CITED: Record<Named, string> = {
   TaskClaim: "at, role, worktree, branch",
   TaskRun: "run, role, started_at, ended_at, outcome, summary, changed_files",
   TaskBundle: "node_ids, budget, bundle_hash",
-  Author: "type, role, model, run",
+  Author: "type, role, model, run, login?",
   RoundSheet: "project, items, more, minutes, notes",
   RoundItem:
     "id, kind, severity, gap_type, summary, working_answer, price_of_other, options, recommendation, evidence, targets, tasks, worktree, branch, author, staged, staged_at, created_at, updated_at",
@@ -920,6 +926,7 @@ const CITED: Record<Named, string> = {
   CardClearGroupWrite: "group, cleared, notes",
   Identity: "login",
   Team: "login, name, allowed",
+  ConfirmRead: "id, question, updated_at",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1094,18 +1101,27 @@ const BEFORE_HUB_TEAM: readonly Named[] = [...BEFORE_HUB_IDENTITY, ...HUB_IDENTI
 /** hub-team's one: the team read's answer (docs/features/hub-team.md "Data"). */
 const HUB_TEAM: readonly Named[] = ["Team"];
 
+/** The hundred and eight types the fixture named before hub-confirm. */
+const BEFORE_HUB_CONFIRM: readonly Named[] = [...BEFORE_HUB_TEAM, ...HUB_TEAM];
+
+/** hub-confirm's one: the confirm read's answer (docs/features/hub-confirm.md "Data"). */
+const HUB_CONFIRM: readonly Named[] = ["ConfirmRead"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_HUB_TEAM, ...HUB_TEAM];
+const ALL: readonly Named[] = [...BEFORE_HUB_CONFIRM, ...HUB_CONFIRM];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
- * serves them (`docs/canon/spec-check.md` "Findings, debt, verdict"; docs/features/ui-live.md "Data").
+ * serves them (`docs/canon/spec-check.md` "Findings, debt, verdict"; docs/features/ui-live.md "Data");
+ * and an author's `login`, skipped when none, so the file keeps `Author` at four keys
+ * (docs/features/hub-confirm.md "Data").
  */
 const NEVER_SERVED: readonly (readonly [Named, string])[] = [
   ["CheckReport", "new_debt"],
   ["CheckCounts", "introduced"],
   ["CheckCounts", "new_debt"],
   ["CheckFinding", "introduced"],
+  ["Author", "login"],
 ];
 
 /** The keys the daemon sends for a type: its record's, less the never-served ones. */
@@ -1119,7 +1135,7 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * hub-team wrote its one set, the hundred-and-eighth and last (docs/features/hub-team.md "Data").
+ * hub-confirm wrote its one set, the hundred-and-ninth and last (docs/features/hub-confirm.md "Data").
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1165,7 +1181,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_TRACE_VIEWS.at(-1)).toBe("CardClearGroupWrite");
     expect(BEFORE_HUB_IDENTITY.at(-1)).toBe("TraceStage");
     expect(BEFORE_HUB_TEAM.at(-1)).toBe("Identity");
-    expect(ALL.at(-1)).toBe("Team");
+    expect(BEFORE_HUB_CONFIRM.at(-1)).toBe("Team");
+    expect(ALL.at(-1)).toBe("ConfirmRead");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1194,7 +1211,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(108);
+    expect(ALL).toHaveLength(109);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1228,6 +1245,26 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^export type TeamAct = KnownTeamAct \| Unlisted;$/m);
     const at = source.indexOf("export interface Team ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/hub-team.md` "Data"');
+  });
+
+  it('types the confirm read\'s answer as the spec writes it: three keys, citing `docs/features/hub-confirm.md` "Data"; the POST\'s body the read less its `id`, closed, no choice in it (B10 of hub-confirm)', () => {
+    expect(served("ConfirmRead")).toEqual(["id", "question", "updated_at"]);
+    expect(declaredKeys("ConfirmRead")).toEqual(served("ConfirmRead"));
+    expect(source).toMatch(/^export interface ConfirmRead \{\n {2}id: string;\n {2}question: string;\n {2}updated_at: string;\n\}$/m);
+    expect(declaredKeys("ConfirmBody")).toEqual(["question", "updated_at"]);
+    expect(source).toMatch(/^export interface ConfirmBody \{\n {2}question: string;\n {2}updated_at: string;\n\}$/m);
+    for (const type of ["ConfirmRead", "ConfirmBody"]) {
+      const at = source.indexOf(`export interface ${type} `);
+      expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/hub-confirm.md` "Data"');
+    }
+  });
+
+  it('gives an author an optional `login`, last, never in the file\'s four keys: skipped when none (docs/features/hub-confirm.md "Data")', () => {
+    expect(declaredKeys("Author")).toEqual(["type", "role", "model", "run", "login"]);
+    expect(source).toMatch(/^ {2}run: string \| null;\n {2}login\?: string;\n\}$/m);
+    expect(served("Author")).toEqual(["type", "role", "model", "run"]);
+    const at = source.indexOf("export interface Author ");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/hub-confirm.md` "Data"');
   });
 
   it("gives the group clear's body an optional count, last: a key of a request, no set (docs/features/hub-team.md \"Data\")", () => {
@@ -1327,8 +1364,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_TRACE_VIEWS).toHaveLength(105);
     expect(BEFORE_HUB_IDENTITY).toHaveLength(106);
     expect(BEFORE_HUB_TEAM).toHaveLength(107);
-    expect(ALL).toHaveLength(108);
-    expect(new Set(ALL).size).toBe(108);
+    expect(BEFORE_HUB_CONFIRM).toHaveLength(108);
+    expect(ALL).toHaveLength(109);
+    expect(new Set(ALL).size).toBe(109);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1490,6 +1528,7 @@ describe("the daemon's document types (AC-09)", () => {
       "CheckCounts.introduced",
       "CheckCounts.new_debt",
       "CheckFinding.introduced",
+      "Author.login",
     ]);
     for (const [name, key] of NEVER_SERVED) {
       expect([name, key, CITED[name].split(", ").includes(`${key}?`)]).toEqual([name, key, true]);
@@ -1569,12 +1608,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and eight types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one", () => {
+  it("names exactly the one hundred and nine types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and eight, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and nine, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(108);
+    expect(Object.keys(sets)).toHaveLength(109);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1674,9 +1713,16 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
-  it('names hub-team\'s Team last: the team read\'s three keys, the hundred-and-eighth (docs/features/hub-team.md "Data")', () => {
-    expect(Object.keys(sets).slice(BEFORE_HUB_TEAM.length)).toEqual([...HUB_TEAM]);
-    expect(Object.keys(sets).at(-1)).toBe("Team");
+  it('names hub-confirm\'s ConfirmRead last, the hundred-and-ninth, and keeps an author at four keys (docs/features/hub-confirm.md "Data")', () => {
+    expect(Object.keys(sets).slice(BEFORE_HUB_CONFIRM.length)).toEqual([...HUB_CONFIRM]);
+    expect(Object.keys(sets).at(-1)).toBe("ConfirmRead");
+    expect(sets.ConfirmRead).toEqual(["id", "question", "updated_at"]);
+    expect(sets.Author).toEqual(["type", "role", "model", "run"]);
+  });
+
+  it('names hub-team\'s Team after Identity, before hub-confirm\'s ConfirmRead: the team read\'s three keys, the hundred-and-eighth (docs/features/hub-team.md "Data")', () => {
+    expect(Object.keys(sets).slice(BEFORE_HUB_TEAM.length, BEFORE_HUB_CONFIRM.length)).toEqual([...HUB_TEAM]);
+    expect(Object.keys(sets).at(BEFORE_HUB_CONFIRM.length - 1)).toBe("Team");
     expect(sets.Team).toEqual(["login", "name", "allowed"]);
   });
 

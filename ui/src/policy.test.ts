@@ -140,7 +140,7 @@ describe("source policy", () => {
     }
     expect(wrong).toEqual([]);
     const exported = (path: string) => Object.keys(textModules[path] ?? {}).sort();
-    expect(exported("/src/ui/text.ts")).toEqual(["shownSlot", "shownText"]);
+    expect(exported("/src/ui/text.ts")).toEqual(["shownConfirmSlot", "shownConfirmText", "shownSlot", "shownText"]);
     // Nothing of the shared module re-exported here: its importers move, never route through the round.
     expect(exported("/src/round/text.ts")).toEqual(["ANSWER_MAX_BYTES", "REASON_MAX_BYTES", "ROUND_COMMAND", "ROUND_LIMIT_MAX", "utf8Bytes"]);
     // The detector itself.

@@ -463,6 +463,7 @@ export function ProposalCard({
   unstageRefusal,
   onDecide,
   onUnstage,
+  onConfirm,
   onSelect,
 }: {
   project: string;
@@ -480,6 +481,8 @@ export function ProposalCard({
   unstageRefusal: string | null;
   onDecide: (kind: DecisionKind) => void;
   onUnstage: () => void;
+  /** Opens the Confirm dialog on this proposal; absent: no control (`docs/features/hub-confirm.md`). */
+  onConfirm: (() => void) | undefined;
   onSelect: (id: string) => void;
 }) {
   const failure = useRetainedFailure(review.error, review.isFetching);
@@ -603,11 +606,12 @@ export function ProposalCard({
           <Suspense
             fallback={
               <p className="staged-pending" aria-busy="true">
-                Staged <time dateTime={reviewed.staged_at}>{reviewed.staged_at}</time>; confirmed only on a terminal.
+                Staged <time dateTime={reviewed.staged_at}>{reviewed.staged_at}</time>
+                {onConfirm === undefined ? "; confirmed only on a terminal." : "."}
               </p>
             }
           >
-            <StagedChoice id={id} review={reviewed} busy={deciding || !canStage} refusal={unstageRefusal} onUnstage={onUnstage} />
+            <StagedChoice id={id} review={reviewed} busy={deciding || !canStage} refusal={unstageRefusal} onUnstage={onUnstage} onConfirm={onConfirm} confirmBusy={deciding} />
           </Suspense>
         )}
       </header>

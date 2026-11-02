@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-02
 ---
 
 # Hub team: who acts past the plain writes
 
-ADR-0060, built by `hub-team` (RM-0071). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages and round answers to the logins it names, and no spec file changes: a terminal on the host confirms until `hub-confirm` (RM-0050). No route proposes until RM-0053 and no real hub exists before RM-0064, so this is a mechanism and its proofs. Working answers, the owner's review open (ADR-0060). Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
+ADR-0060, ADR-0061, built by `hub-team` (RM-0071) and `hub-confirm` (RM-0050). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages, round answers and a confirm to the logins it names; a terminal on the host still confirms. No route proposes until RM-0053 and no real hub exists before RM-0064, so this is a mechanism and its proofs. Working answers, the owner's review open. Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
 
 <a id="team"></a>
 ## Team
@@ -46,10 +46,11 @@ Read per request, no cache in `App`, through `answer::read`, before the turn, fr
 | Accept | POST `.../cards/:id/accept` | a `[team]` login, the card's reviewer, never its assignee | confirm |
 | Clear | POST `.../cards/:id/clear` | any `[team]` login | confirm |
 | Group clear | POST `.../trace/clear` | a `lead` whose zones cover every node it re-freezes; `owner` | confirm |
+| Confirm a stage | GET, POST `.../proposals/:id/confirm` | a `lead` whose zones cover every target; `owner` | confirm |
 
-`member`: all above but group clear. `lead`: also group clear inside its zones. `owner`: all, a path in no zone too.
+`member`: all above but group clear and confirm. `lead`: those two inside its zones. `owner`: all, a path in no zone too.
 
-**Only a group clear judges a cover.** A path in no zone is `owner` only there. A group clear cannot reach a gone target, which stands on no node of the group, while a single clear by any `[team]` login can re-freeze one (`spec-trace.md` "Clearing"), whatever its zones: a zone bounds no single card.
+**Only a group clear and a confirm judge a cover.** A path in no zone is `owner` only there, a confirm's gone target too (`hub-confirm.md` "Rules"). A group clear cannot reach a gone target, which stands on no node of the group, while a single clear by any `[team]` login can re-freeze one (`spec-trace.md` "Clearing"), whatever its zones: a zone bounds no single card.
 
 ## Classes
 
@@ -57,31 +58,32 @@ Default deny, in `Hub::fenced`, by exact raw segments and exact methods (`class`
 
 - **Plain**: `hub::acting` binds the body's `as` to the login.
 - **Team**: `hub::member`, the login's entry.
-- **Confirm**: in the fence no query, a bare `?` too, and a required `Origin`; in the handler `member`, `acting`, then `needs`, a required `revision` or `count`. A group clear adds `clears_groups` after each `member`.
+- **Confirm**: in the fence no query, a bare `?` too, and a required `Origin`; in the handler `member`, `acting`, then `needs`, a required `revision` or `count`. A group clear adds `clears_groups` after each `member`; a confirm, with no `as`, `confirms`.
 
-`member` runs before a body is read, so an outsider costs no body, and again once it is in, in `stage`, `round_answers`, `accept_card`, `clear_card`, `clear_group`, so a login taken out of `[team]` during a slow body keeps no power; `unstage` reads no body. `acting` runs before `.request()`, since `CardAcceptBody` defaults to `local`. The handlers' always-yes consents are reached past these judges alone: the dialog is the consent, as locally (ADR-0057).
+`member` runs before a body is read, so an outsider costs no body, and again once it is in, in `stage`, `round_answers`, `accept_card`, `clear_card`, `clear_group`, `confirm::write`, so a login taken out of `[team]` during a slow body keeps no power; `unstage` reads no body. `acting` runs before `.request()`, since `CardAcceptBody` defaults to `local`. Accept's and clear's always-yes consents are reached past these judges alone: the dialog is the consent, as locally (ADR-0057). A confirm has none.
 
-A local daemon has no `Login`: `member` and `needs` read nothing, `[team]` changes nothing for a typed `as` or `spec card accept --as`, and `GET .../team` is the unknown-route 404. `tests/fence.rs`, `methods.rs`, `door.rs` and the local `fn fenced` are as they were.
+A local daemon has no `Login`: `member` and `needs` read nothing, `[team]` changes nothing for a typed `as` or `spec card accept --as`, and `GET .../team` is the unknown-route 404. `tests/fence.rs`, `methods.rs` and the local `fn fenced` are as they were.
 
-The confirm class is the acts taking a `Consent`; a stage takes none. RM-0050 adds its fourth route and RM-0064 the proxy's step-up on the four, which the daemon cannot see: a marker header is a second one to scrub (ADR-0059). The fence gives the proxy one byte form: it passes the path alone, so without the refusal `.../accept?x=1` would reach the handler while a `$`-anchored rule missed it. `Origin` is byte for byte, with `Sec-Fetch-Site: same-origin`, JSON, no CORS.
+The confirm class is the acts a person confirms; a stage is none. RM-0064 adds the proxy's step-up on its four routes (`hub.md` "Trust"), which the daemon cannot see: a marker header is a second one to scrub (ADR-0059). The fence gives the proxy one byte form: it passes the path alone, so without the refusal `.../accept?x=1` would reach the handler while a `$`-anchored rule missed it. `Origin` is byte for byte, with `Sec-Fetch-Site: same-origin`, JSON, no CORS.
 
 ## Answers
 
 `GET .../team`, a hub's alone, no turn, no query, the asker's own row (`GET_ROUTES` 24; `Team`, set 108 of `fixtures/daemon-keys.json`):
 
 ```json
-{"login":"mira","name":"Mira K","allowed":["stage","accept","clear","group_clear"]}
+{"login":"mira","name":"Mira K","allowed":["stage","accept","clear","group_clear","confirm"]}
 ```
 
-`member` the first three, `lead` and `owner` all four; RM-0050 adds `confirm` for those two. Outside `[team]` or no `[team]`: 200, `name` null, `allowed` empty.
+`member` the first three, `lead` and `owner` all five. Outside `[team]` or no `[team]`: 200, `name` null, `allowed` empty.
 
 | When | Answer, nothing stored |
 |---|---|
 | Bad `[team]`, `GET .../team` too | 503 `specengine.toml:<line>: <message>` |
 | No `[team]` | 403 ``refused: this project has no `[team]` `` |
 | Outside `[team]` | 403 ``refused: <login> is not in this project's `[team]`: reads and plain writes`` |
-| A `member`'s group clear | 403 ``refused: <login> is a `member`: this act needs a `lead` `` |
+| A `member`'s group clear or confirm | 403 ``refused: <login> is a `member`: this act needs a `lead` `` |
 | Outside a zone | 403 ``refused: <login> leads <zones>; <path> lies outside them`` |
+| A confirm's gone target | 403 ``refused: <login> leads <zones>; <why>: this act needs an `owner` `` |
 | Confirm class: a query, no `Origin` | 403 ``refused: this route takes no query``, ``refused: this route needs the Origin header`` |
 | Null `revision` or `count` | 400 ``a hub needs `revision` ``, `count` alike |
 | A count that differs | 409 `` `<group>` holds <n> suspect cards, not <m>; nothing changed `` |
@@ -91,13 +93,17 @@ The confirm class is the acts taking a `Consent`; a stage takes none. RM-0050 ad
 
 Which cards a group takes is `spec-trace.md` "Clearing", so `count`, the cover and the dialog use one set. `run_clear_group` judges with it known, before its consent: none taken, the cover, the count. `count` joins `CardClearGroupBody`: the page sends it on a hub alone, a hub requires it, a local daemon compares it when sent, and `spec card clear --group` has none.
 
-The cover: `CardClearGroupRequest.entry`, the daemon's last `member`, must cover every path holding a target the clear re-freezes, the first outside named by text. `Zone::covers` is the gate's glob test; `owner` covers all. `CardCause::Outside` is the 403 in `write_status`. No new `card_` name: `door.rs` stays unedited.
+The cover: `CardClearGroupRequest.entry`, the daemon's last `member`, must cover every path holding a target the clear re-freezes, the first outside named by text. `Zone::covers` is the gate's glob test; `owner` covers all. `CardCause::Outside` is the 403 in `write_status`. No new `card_` name.
 
 ## Stages
 
 `StageRequest`, `UnstageRequest`, `RoundAnswersRequest` take `actor`, `None` everywhere but a hub. Store `stage_as`, `unstage_as` add it to `proposal.staged`, `.unstaged` as a trailing `as`, never a column, so a local event stays byte for byte; `stage_from`, `unstage_from` call them with `None`. No queue, index, `spec.lock`, `export state`, `daemon.json` or event type bump.
 
-The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): many logins can race a stage, last wins, each event names its `as`. RM-0050's confirm takes the staged value into its compare.
+The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): many logins can race a stage, last wins, each event names its `as`. A confirm takes the staged value into its compare.
+
+## Confirm
+
+`.../proposals/:id/confirm`, a hub's alone: one staged choice per click, never a choice sent; an approve is a commit in the hub's checkout, nothing pushed. Who: "Acts"; the rest: `hub-confirm.md`.
 
 ## Check
 
@@ -108,7 +114,6 @@ The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): 
 - **ADR-0012 holds.** `[team]` is read only by the acts above past the plain writes; no read, move, `by`, status, flow, gate or check of a discrepancy reads it, so a bad one leaves reads, plain writes and `spec card` as they are. With no lead free, items stay open and a terminal may still confirm: a role is no second control point. A terminal is never judged, a shell on the host being the operator's.
 - **ADR-0008, `by`.** Role words name authority over the queue, no trade; the UI branches on `allowed`. `by` stays literal, else a bad `[team]` stops a plain write, so a project lists logins.
 - **A suspect mark** stays as built, no consent added: a suspect card moves and is accepted, an accepted card refuses `edit` and `cancel`, so `confirmed` is never reached that way, and an open card's retarget or cancel reads `no card`, recorded under the login. A retarget keeps its entry, so a returning target marks again (`spec-trace-record.md` "Snapshot"). Refusing them would be a discrepancy blocking work (ADR-0012).
-- **Until 9b** a departing accept stores `Author::human()`; `card.accepted` names the login.
 
 ## Screen
 
@@ -123,10 +128,10 @@ Controls follow `GET .../team`, the route's 403 staying the truth: `useTeam` in 
 - **`assign` is a plain write.** An assignee can drop themself or reassign and name themself reviewer, each step recorded under a login.
 - **Free text.** `by` and assignee are compared exactly with a login, so a display name in `assignee` does not trip "never its assignee".
 - **A removed login's open browser** keeps reading what it has: any login reads (`hub.md` "Routes"), and `allowed` is read again on focus alone.
-- **A forged `Remote-User` now accepts**: `hub.md` "Trust".
-- **The step-up is session-level** (RM-0064): a second factor on the session, not a person behind each click.
+- **A forged `Remote-User` now accepts and confirms**: `hub.md` "Trust".
+- **The step-up is session-level** (RM-0064): a second factor on the session, not a person behind each click: `hub-confirm.md`.
 - **A refused group document** shows only its last note on the page.
 
 ## Tests
 
-http `tests/hub_team.rs`, `tests/common/hub.rs`, `tests/hub.rs` (the raw table), `src/hub.rs` `a_write_is_refused_until_listed`, `daemon_keys.rs`; core `tests/team_toml.rs`; CLI `tests/team_config.rs`, `card_trace.rs`; UI `src/board/hubIdentity.test.tsx`, `src/api/`'s.
+http `tests/hub_team.rs`, `tests/hub_confirm.rs`, `tests/common/hub.rs`, `tests/hub.rs` (the raw table), `src/hub.rs` `a_write_is_refused_until_listed`, `daemon_keys.rs`; core `tests/team_toml.rs`; CLI `tests/team_config.rs`, `card_trace.rs`; UI `src/board/hubIdentity.test.tsx`, `src/api/`'s.

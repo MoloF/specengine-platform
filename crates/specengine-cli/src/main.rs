@@ -2420,6 +2420,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                     observed,
                     documented,
                     gap_type,
+                    login: None,
                 },
                 &mut consent,
             )?)

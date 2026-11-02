@@ -15,6 +15,9 @@
 //!   its row's four keys, `within_hash`, no new argument, an index error an
 //!   error result.
 //!
+//! - docs/features/hub-confirm.md "Data": `get_proposal`'s `author` has two
+//!   closed shapes, four keys and a hub's departing accept's five.
+//!
 //! The door (`mcp_door.rs`), the genre scan (`mcp_genre.rs`) and the
 //! `INSTRUCTIONS` pins hold the rest.
 
@@ -869,4 +872,62 @@ fn no_tool_reaches_a_verdict() {
         "{reply}"
     );
     drop(session.finish());
+}
+
+/// An accept departing from `node`, `login` a hub's login when there is one.
+fn departure(node: &str, login: Option<&str>) -> CardAcceptRequest {
+    CardAcceptRequest {
+        departs: vec![node.to_owned()],
+        summary: Some("The result left the brief.".to_owned()),
+        observed: Some("The lead runs below the fold.".to_owned()),
+        documented: Some("The lead runs above the fold.".to_owned()),
+        login: login.map(str::to_owned),
+        ..CardAcceptRequest::default()
+    }
+}
+
+/// docs/features/hub-confirm.md "Data": `login` is the one key the CLI leaves out
+/// rather than writes `null`, so an `Author` has two shapes. A hub's departing
+/// accept, its five keys, and a local one, its four, each answer `get_proposal`
+/// as the CLI does, in both eras, within the tool's output schema under the
+/// strict walker, `login` last. Each shape is closed: the schema takes no `null`
+/// login and no sixth key. M: `ProposalAuthor` of four keys alone; `login`
+/// optional in one shape.
+#[test]
+fn a_hubs_five_key_author_conforms_to_get_proposals_schema() {
+    let repo = Repo::new("mcp-author-login");
+    let hub = repo.in_proof("Long read", &["SHT-INNER"]);
+    repo.accept(&hub, departure("SHT-INNER", Some("tomas")));
+    let local = repo.in_proof("Notices", &["SHT-BACK"]);
+    repo.accept(&local, departure("SHT-BACK", None));
+    let four = json!({"type": "human", "role": null, "model": null, "run": null});
+    let mut five = four.clone();
+    five["login"] = json!("tomas");
+    let (env, globals) = (repo.env(), Globals::default());
+    for era in ERAS {
+        let mut session = repo.session(era);
+        let schemas = output_schemas(&session.tools());
+        for (id, author) in [("PR-0001", &five), ("PR-0002", &four)] {
+            let result = checked_call(
+                &mut session,
+                &schemas,
+                "get_proposal",
+                json!({"proposal_id": id}),
+                &env,
+                &globals,
+            );
+            assert_eq!(result["structuredContent"]["author"], *author, "{era:?}");
+        }
+        let schema = &schemas["get_proposal"]["properties"]["author"];
+        conforms(schema, &five, "$").expect("five keys");
+        conforms(schema, &four, "$").expect("four keys");
+        let mut null_login = four.clone();
+        null_login["login"] = Value::Null;
+        conforms(schema, &null_login, "$").expect_err("a `null` login");
+        let mut sixth = five.clone();
+        sixth["seat"] = json!("desk");
+        conforms(schema, &sixth, "$").expect_err("a sixth key");
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
 }

@@ -18,6 +18,12 @@
 //!   since docs/features/task-package.md's tasks line (138 bytes); the
 //!   `probes` build sends them with the probe paragraph, 2 035 bytes.
 //!
+//! - B12 of docs/features/hub-confirm.md (`docs/canon/proposal-kinds.md`
+//!   "Propose", its Target item): a new file's path holding a control character, LF and U+0007
+//!   among them, is refused as `spec propose create` refuses it, the twin's
+//!   text, nothing stored, nothing written; the clean path is stored. M: the
+//!   path check skipped on the MCP path.
+//!
 //! The setup's git runs in the CLI tests' sandbox (`common/git.rs`,
 //! included by path, its repositories with automatic maintenance off);
 //! every server with a cleared environment and a scratch `HOME`.
@@ -463,4 +469,46 @@ fn ac17_the_probes_build_sends_instructions_alone() {
     assert_eq!(2048 - sent.len(), 8, "the room left");
     assert!(sent.contains(CHANGE_LINE));
     drop(session.finish());
+}
+
+/// B12: `propose_change {kind: "create"}` with a new-file path holding LF,
+/// U+0007, CR or DEL answers an error result, its text the twin's, and stores
+/// nothing and writes nothing; the same call at the clean path stores
+/// `PR-0001`, so the character is the refusal. M: the path check skipped on the
+/// MCP path.
+#[test]
+fn b12_a_new_file_path_with_a_control_character_is_refused() {
+    let repo = Repo::new("mcp-create-controls");
+    let cwd = repo.linked.clone();
+    let twin_home = repo.scratch.home("twin");
+    let before = repo.files();
+    let call = |target: &str| {
+        json!({"kind": "create", "target": target, "text": t13(),
+            "rationale": "sprint needs it", "author_role": "writer"})
+    };
+    let mut session = Session::open(Era::Stateless, &[], Some(&cwd), Home::At(&repo.home));
+    for (label, target) in [
+        ("LF", "docs/records/R/R-1\n3.md"),
+        ("BEL", "docs/records/R/R-13\u{7}.md"),
+        ("CR", "docs/records/R/R-13\r.md"),
+        ("DEL", "docs/records/R/R-13\u{7f}.md"),
+    ] {
+        let args = call(target);
+        let reply = session.call("propose_change", args.clone());
+        assert_eq!(result(&reply)["isError"], json!(true), "{label}: {reply}");
+        let want = create_twin(&args, &cwd, &twin_home, "2026-10-06T12:00:00Z");
+        assert!(want.is_error, "{label}: the twin refuses it too");
+        assert_twin(&reply, &want, label);
+        assert_eq!(repo.stored(&repo.home), Vec::<String>::new(), "{label}");
+        assert_eq!(repo.files(), before, "{label}: nothing written");
+        assert_eq!(repo.statuses(), (String::new(), String::new()), "{label}");
+    }
+    let reply = session.call("propose_change", call(R13));
+    assert_eq!(
+        result(&reply)["structuredContent"]["id"],
+        json!("PR-0001"),
+        "{reply}"
+    );
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
 }

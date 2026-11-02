@@ -15,6 +15,8 @@ import type {
   CardNotFound,
   CardWrite,
   CheckReport,
+  ConfirmBody,
+  ConfirmRead,
   FlowView,
   GraphView,
   HealthReport,
@@ -135,7 +137,8 @@ export interface TraceOptions {
  * `docs/features/ui-live-tasks.md` "Data", `docs/features/health-left.md` "Data", the plan's
  * `crates/specengine-http/README.md` "Endpoints", the lock diff's `docs/features/lock-diff.md`
  * "Route", the flow's `docs/features/flow-canvas.md` "Data", the cards' `docs/features/board-ui.md`
- * "Routes", the identity's `docs/canon/hub.md` "Routes", the team's `docs/features/hub-team.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
+ * "Routes", the identity's `docs/canon/hub.md` "Routes", the team's `docs/features/hub-team.md` "Data",
+ * the confirm's `docs/features/hub-confirm.md` "Data"; 07 §3). Only the bootstrap, src/main.tsx, picks the implementation. A read answered
  * with exit 1 (404 for tree, nodes, bundle, a proposal, graph, flow, task, roadmap, lock-diff) resolves
  * to its document, `reason` (a proposal: the last of `notes`) set; the check answers every verdict as a 200 report, data too, and the health read
  * zero amendments as a 200 too; every other failure rejects with a ClientError carrying
@@ -143,7 +146,9 @@ export interface TraceOptions {
  * serve yet, none today: `notServed`, 501, nothing requested). A decision is only staged here and
  * confirmed on a terminal by `spec approve|reject PR` (`docs/canon/decision-staging.md` "Daemon",
  * ADR-0035): the stage's two writes answer the review document; a write refused with the review
- * document (409 not open or changed since read, 404 unknown) rejects with its last note. The
+ * document (409 not open or changed since read, 404 unknown) rejects with its last note. On a hub
+ * alone a login `[team]` entitles confirms one staged proposal at a time, the POST taking the read's
+ * question and no choice. The
  * question round (`docs/features/ui-round.md` "Data") reads the sheet and stages its answers in one
  * POST, answered 200 whatever each answer became; `spec round answer --staged` confirms them on a
  * terminal. Tasks are read only: an owner action is a command for a terminal (docs/features/ui-tasks.md).
@@ -202,6 +207,18 @@ export interface SpecEngineClient {
   stageDecision(project: string, id: string, stage: StageChoice, updatedAt: string): Promise<Proposal>;
   /** DELETE /api/projects/:p/proposals/:id/decision (docs/canon/decision-staging.md "Daemon"; nothing staged: no event) */
   unstageDecision(project: string, id: string): Promise<Proposal>;
+  /**
+   * GET /api/projects/:p/proposals/:id/confirm, docs/features/hub-confirm.md "Data": a hub alone,
+   * asked when a Confirm dialog opens, a local daemon's unknown route; judged as the POST is, so every
+   * refusal, a 403, 404 or 409 among them, rejects and none resolves as data.
+   */
+  getConfirm(project: string, id: string, signal?: AbortSignal): Promise<ConfirmRead>;
+  /**
+   * POST /api/projects/:p/proposals/:id/confirm, docs/features/hub-confirm.md "Data": a hub alone,
+   * one staged proposal per call, no route takes a set; the body exactly the read's `question` and
+   * `updated_at`, never a choice; 200 the review document; no AbortSignal.
+   */
+  confirmProposal(project: string, id: string, body: ConfirmBody): Promise<Proposal>;
   /** GET /api/projects/:p/round (docs/features/ui-round.md "Data"; = spec round new [--limit N] --json, uncut) */
   getRound(project: string, options?: RoundOptions, signal?: AbortSignal): Promise<RoundSheet>;
   /**

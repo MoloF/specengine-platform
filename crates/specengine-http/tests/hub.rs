@@ -1380,7 +1380,7 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// has decided the new route is safe on a hub, and writes it here. Do not add a
 /// line to make the test pass: add it once the route has been judged, for what
 /// it reads and for what a login may learn from it.
-const GET_ROUTES: [&str; 24] = [
+const GET_ROUTES: [&str; 25] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1396,6 +1396,7 @@ const GET_ROUTES: [&str; 24] = [
     "/api/projects/{p}/lock-diff",
     "/api/projects/{p}/nodes/{*ref}",
     "/api/projects/{p}/proposals/{id}",
+    "/api/projects/{p}/proposals/{id}/confirm",
     "/api/projects/{p}/roadmap",
     "/api/projects/{p}/round",
     "/api/projects/{p}/search",

@@ -60,6 +60,21 @@
 //! `git status`, `HEAD`, the refs, the files and the proposals alone and
 //! adds one `card.*` event; a refused one adds none. M: a handler calling
 //! `task_claim` or an unlisted `card_` name.
+//!
+//! B7 of docs/features/hub-confirm.md: the door changes for a hub's confirm
+//! alone, by addition. `forbidden()` still holds `approve`, `approve_with` and
+//! `reject` for every `src` file, hub code included; [`HUB_CONFIRM_CALLS`] are
+//! caught in any file but `src/confirm.rs`, and `src/confirm.rs` holds no `|_|`
+//! closure, by the file-aware [`caught_in`] and its positive controls. The
+//! `git diff` half of B7, that this file loses no line, is a command. M:
+//! `app.rs` calling `confirm_staged`; `confirm.rs` calling `approve_with` with
+//! `|_| true`.
+//!
+//! B7 as amended (iteration 2): the always-yes scan also reads
+//! `crates/specengine-cli/src/confirm.rs`, which holds the real consent
+//! closures, and the exempt `src/confirm.rs` holds no `use ... as`, which would
+//! rename a call past the scan. M: the CLI's `confirm.rs` answering `|_| true`;
+//! `use specengine_cli::confirm_staged as go;` in `src/confirm.rs`.
 
 mod common;
 
@@ -1277,4 +1292,310 @@ fn card_writes_touch_only_the_queue() {
             "{headers:?}: nothing changed"
         );
     }
+}
+
+// ----------------------------------------------------- hub-confirm, B7
+
+/// The CLI library's confirm calls (docs/features/hub-confirm.md
+/// "Rules and edge cases"): the read of the question and the one call that may commit
+/// under a login. Only `src/confirm.rs` names them: a handler anywhere else
+/// could confirm past that file's judges.
+const HUB_CONFIRM_CALLS: [&str; 2] = ["confirm_question", "confirm_staged"];
+
+/// The one file allowed [`HUB_CONFIRM_CALLS`].
+const HUB_CONFIRM_FILE: &str = "src/confirm.rs";
+
+/// Each closure in `code` whose one argument is `_` or `_name`: a consent that
+/// reads no question, the shape of an always-yes (`code` already blanked by
+/// [`code_only`]). Spaces do not hide one.
+fn ignoring_closures(code: &str) -> Vec<String> {
+    let chars: Vec<char> = code.chars().filter(|c| !c.is_whitespace()).collect();
+    let mut found = Vec::new();
+    for (at, c) in chars.iter().enumerate() {
+        if *c != '|' || chars.get(at + 1) != Some(&'_') {
+            continue;
+        }
+        let mut end = at + 2;
+        while chars
+            .get(end)
+            .is_some_and(|c| c.is_alphanumeric() || *c == '_')
+        {
+            end += 1;
+        }
+        if matches!(chars.get(end), Some('|' | ':')) {
+            found.push("|_|".to_owned());
+        }
+    }
+    found
+}
+
+/// What the scan reports in `code`, the text of the `src` file `path`:
+/// [`caught`] in every file, so the door's writers stay forbidden in
+/// [`HUB_CONFIRM_FILE`] too; a call of [`HUB_CONFIRM_CALLS`] not after a `.` in
+/// any other file; in that one file, a closure ignoring its argument.
+fn caught_in(path: &Path, code: &str) -> Vec<String> {
+    let mut found = caught(code);
+    let blanked = code_only(code);
+    if path.ends_with(HUB_CONFIRM_FILE) {
+        found.extend(ignoring_closures(&blanked));
+        found.extend(renaming_uses(&blanked));
+    } else {
+        found.extend(
+            identifiers(&blanked)
+                .into_iter()
+                .filter(|(before, name)| {
+                    *before != '.' && HUB_CONFIRM_CALLS.contains(&name.as_str())
+                })
+                .map(|(_, name)| name),
+        );
+    }
+    found
+}
+
+/// B7, the file-aware scan's controls. `approve`, `approve_with` and `reject`
+/// are caught by path and bare in every file, the confirm file first among
+/// them; [`HUB_CONFIRM_CALLS`] everywhere but there; a `|_|` closure there,
+/// however it is spelled; each `M:` of the criterion gives a finding.
+/// Negative controls: the confirm file's own calls, a method of something
+/// else, a closure reading its argument, a name in a string or a comment. M:
+/// `app.rs` calling it; `confirm.rs` calling `approve_with` with `|_| true`.
+#[test]
+fn hub_confirm_b7_the_scan_knows_which_file_it_reads() {
+    let confirm = Path::new("crates/specengine-http/src/confirm.rs");
+    let others = [
+        "app.rs",
+        "hub.rs",
+        "answer.rs",
+        "main.rs",
+        "extra/confirm.rs",
+    ]
+    .map(|name| PathBuf::from("crates/specengine-http/src").join(name));
+    let probes = |name: &str| {
+        [
+            format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}"),
+            format!("fn f() {{ {name}(&env, &globals, &r)?; }}"),
+        ]
+    };
+    // The door's writers: every file, the confirm file first.
+    for path in std::iter::once(confirm).chain(others.iter().map(PathBuf::as_path)) {
+        for name in ["approve", "approve_with", "reject"] {
+            for probe in probes(name) {
+                assert_eq!(
+                    caught_in(path, &probe),
+                    [name],
+                    "{}: {probe}",
+                    path.display()
+                );
+            }
+        }
+    }
+    // The confirm calls: any file but one.
+    for name in HUB_CONFIRM_CALLS {
+        for probe in probes(name) {
+            for path in &others {
+                assert_eq!(
+                    caught_in(path, &probe),
+                    [name],
+                    "{}: {probe}",
+                    path.display()
+                );
+            }
+            assert_eq!(caught_in(confirm, &probe), Vec::<String>::new(), "{probe}");
+        }
+        let imported = format!("use specengine_cli::{{Env, {name}}};");
+        assert_eq!(caught_in(&others[0], &imported), [name], "{imported}");
+    }
+    // A file named like it is not it.
+    assert_eq!(
+        caught_in(&others[4], "fn f() { confirm_staged(e, g, &r); }"),
+        ["confirm_staged"]
+    );
+    assert!(!Path::new("src/confirm.rs.orig").ends_with(HUB_CONFIRM_FILE));
+
+    // A closure ignoring its argument, in the confirm file.
+    for closure in [
+        "|_| true",
+        "| _ | true",
+        "|_: &str| true",
+        "|_asked| true",
+        "|_asked: &str| true",
+        "move |_| true",
+    ] {
+        let probe = format!("fn f() {{ let mut yes = {closure}; run(&mut yes); }}");
+        assert_eq!(caught_in(confirm, &probe), ["|_|"], "{probe}");
+    }
+    // The criterion's two mutations.
+    let handler = "async fn accept(request: Request) {\n\
+                   run(project, move |env, globals| {\n\
+                   specengine_cli::confirm_staged(env, globals, &request)\n\
+                   }).await }";
+    assert_eq!(
+        caught_in(&others[0], handler),
+        ["confirm_staged"],
+        "{handler}"
+    );
+    let always_yes = "async fn confirm(request: Request) {\n\
+                      run(project, move |env, globals| {\n\
+                      specengine_cli::approve_with(env, globals, &request, &flags, &mut |_| true)\n\
+                      }).await }";
+    assert_eq!(
+        caught_in(confirm, always_yes),
+        ["approve_with", "|_|"],
+        "{always_yes}"
+    );
+
+    // Negative controls.
+    for probe in [
+        "fn f() { specengine_cli::confirm_staged(env, globals, &request) }",
+        "fn f() { specengine_cli::confirm_question(env, globals, &request) }",
+        "fn f() { let mut asked = |question: &str| question == read; run(&mut asked); }",
+        "fn f() { let on = a || b; let mask = a | b; let g = || true; }",
+        "fn f() { let s = \"|_| true\"; } // run(&mut |_| true), approve_with(x)",
+    ] {
+        assert_eq!(caught_in(confirm, probe), Vec::<String>::new(), "{probe}");
+    }
+    for probe in [
+        "fn f() { queue.confirm_staged(); }",
+        "fn f() { let r: ConfirmStagedRequest = todo!(); let s = \"confirm_staged\"; }",
+        "fn f() {} // confirm_staged(x), confirm_question(y)",
+        // The closure is the confirm file's duty: `.map_err(|_| ..)` is plain elsewhere.
+        "fn f() { let n = text.parse::<u16>().map_err(|_| refused()); }",
+    ] {
+        assert_eq!(
+            caught_in(&others[0], probe),
+            Vec::<String>::new(),
+            "{probe}"
+        );
+    }
+}
+
+/// B7, over the daemon as it stands: the scan reads `src/confirm.rs`, which
+/// holds the one call of `confirm_staged`, so the exemption is not vacuous; no
+/// file holds a finding of [`caught_in`]; and every file read, whatever its
+/// name, still catches the door's writers. M: `app.rs` calling
+/// `confirm_staged`; `confirm.rs` calling `approve_with` with `|_| true`.
+#[test]
+fn hub_confirm_b7_the_daemon_confirms_from_one_file_with_no_closure() {
+    let files = sources();
+    let confirm = files
+        .iter()
+        .find(|(path, _)| path.ends_with(HUB_CONFIRM_FILE))
+        .unwrap_or_else(|| panic!("no {HUB_CONFIRM_FILE} among the daemon's sources"));
+    let names: Vec<String> = identifiers(&code_only(&confirm.1))
+        .into_iter()
+        .map(|(_, name)| name)
+        .collect();
+    assert!(
+        names.iter().any(|name| name == "confirm_staged"),
+        "{HUB_CONFIRM_FILE} names no `confirm_staged`: the exemption guards nothing"
+    );
+    let mut named = Vec::new();
+    for (path, text) in &files {
+        for name in caught_in(path, text) {
+            named.push(format!("{}: {name}", path.display()));
+        }
+        for writer in ["approve", "approve_with", "reject"] {
+            let probe = format!("fn f() {{ specengine_cli::{writer}(env, globals, &r); }}");
+            assert_eq!(
+                caught_in(path, &probe),
+                [writer],
+                "{}: the door's writers stay caught here",
+                path.display()
+            );
+        }
+    }
+    assert!(named.is_empty(), "past the confirm door: {named:#?}");
+}
+
+// --------------------------------------------- hub-confirm, B7 as amended
+
+/// The library's file holding the confirm's consent closures, the ones that
+/// answer the question.
+const CLI_CONFIRM_FILE: &str = "crates/specengine-cli/src/confirm.rs";
+
+/// Each `use` item in `code` (blanked by [`code_only`]) renaming what it brings
+/// in: a re-export under another name passes the scan of names, so the exempt
+/// file holds none. `as _`, a trait brought into scope unnamed, renames nothing.
+fn renaming_uses(code: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    for item in code.split(';') {
+        let names: Vec<String> = identifiers(item)
+            .into_iter()
+            .map(|(_, name)| name)
+            .collect();
+        let Some(start) = names.iter().position(|name| name == "use") else {
+            continue;
+        };
+        let renames = names[start..]
+            .windows(2)
+            .any(|pair| pair[0] == "as" && pair[1] != "_");
+        if renames {
+            found.push("use as".to_owned());
+        }
+    }
+    found
+}
+
+/// B7, the amended scan's controls: a closure ignoring its argument in the
+/// library's confirm file, however spelled, and a `use ... as` in the exempt
+/// file, each caught; a closure reading its question, a cast, a trait brought in
+/// as `_`, a name in a string or a comment, not. M: the CLI's `confirm.rs`
+/// answering `|_| true`; `use specengine_cli::confirm_staged as go;` in
+/// `src/confirm.rs`.
+#[test]
+fn hub_confirm_b7_the_amended_scan_knows_the_library_file_and_a_rename() {
+    for closure in ["|_| true", "| _ | true", "|_: &str| true", "|_asked| true"] {
+        let probe = format!("fn f() {{ let mut same = {closure}; run(&mut same); }}");
+        assert_eq!(ignoring_closures(&code_only(&probe)), ["|_|"], "{probe}");
+    }
+    let reading = "fn f() { let mut same = |asked: &str| { moved = asked != sent; !moved }; }";
+    assert_eq!(ignoring_closures(&code_only(reading)), Vec::<String>::new());
+
+    let confirm = Path::new("crates/specengine-http/src/confirm.rs");
+    for probe in [
+        "use specengine_cli::confirm_staged as go;",
+        "use specengine_cli::{Env, confirm_question as ask};",
+        "pub use specengine_cli::confirm_staged as go;",
+        "pub(crate) use specengine_cli::{\n    ConfirmBody,\n    confirm_staged as go,\n};",
+    ] {
+        assert_eq!(caught_in(confirm, probe), ["use as"], "{probe}");
+    }
+    for probe in [
+        "use specengine_cli::{ConfirmBody, ConfirmOutcome, Env, confirm_staged};",
+        "use std::io::Write as _;",
+        "fn f() -> u16 { let n = x as u16; n }",
+        "fn f() { let s = \"use a as b\"; } // use specengine_cli::confirm_staged as go;",
+    ] {
+        assert_eq!(caught_in(confirm, probe), Vec::<String>::new(), "{probe}");
+    }
+}
+
+/// B7 over the sources as they stand: the library's confirm file holds no
+/// closure ignoring its argument, and the exempt daemon file no `use ... as`.
+/// M: the CLI's `confirm.rs` answering `|_| true`; `use
+/// specengine_cli::confirm_staged as go;` in `src/confirm.rs`.
+#[test]
+fn hub_confirm_b7_no_always_yes_in_the_library_and_no_rename_in_the_daemon() {
+    let library = fs::read_to_string(repository_root().join(CLI_CONFIRM_FILE))
+        .unwrap_or_else(|error| panic!("{CLI_CONFIRM_FILE}: {error}"));
+    assert!(
+        library.contains("confirm_staged"),
+        "{CLI_CONFIRM_FILE} is the library's confirm"
+    );
+    assert_eq!(
+        ignoring_closures(&code_only(&library)),
+        Vec::<String>::new(),
+        "{CLI_CONFIRM_FILE}: a consent that reads no question"
+    );
+    let files = sources();
+    let (path, text) = files
+        .iter()
+        .find(|(path, _)| path.ends_with(HUB_CONFIRM_FILE))
+        .expect("the daemon's confirm file");
+    assert_eq!(
+        renaming_uses(&code_only(text)),
+        Vec::<String>::new(),
+        "{}: a call renamed past the scan",
+        path.display()
+    );
 }

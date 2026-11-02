@@ -27,6 +27,7 @@ import type {
   CardEditBody,
   CardMoveBody,
   CardWrite,
+  ConfirmBody,
   FlowView,
   Inbox,
   Proposal,
@@ -48,6 +49,8 @@ export const queryKeys = {
   team: (project: string) => ["team", project] as const,
   inbox: (project: string) => ["inbox", project] as const,
   proposal: (project: string, id: string) => ["proposal", project, id] as const,
+  /** What a terminal would ask of a staged proposal (`docs/features/hub-confirm.md` "Data"): no event reads it, its dialog alone. */
+  confirmRead: (project: string, id: string) => ["confirm", project, id] as const,
   tree: (project: string, options: TreeOptions = {}) =>
     [
       "tree",
@@ -853,6 +856,57 @@ export function useStageDecision(project: string) {
       }
       if (status === STAGE_REFUSED || status === NO_SUCH_PROPOSAL) {
         readAgain(id);
+      }
+    },
+  });
+}
+
+/**
+ * What a terminal would ask of a staged proposal (`docs/features/hub-confirm.md` "Data"): a hub's
+ * read, asked when a Confirm dialog opens and kept as read while it stands, whatever the live tail
+ * says, so the words on screen are the words the POST sends; only the dialog's Read again asks
+ * again. A closed dialog keeps no answer: the next opening asks anew.
+ */
+export function useConfirmRead(project: string, id: string) {
+  const client = useClient();
+  return useQuery({ queryKey: queryKeys.confirmRead(project, id), queryFn: ({ signal }) => client.getConfirm(project, id, signal), staleTime: Infinity, gcTime: 0 });
+}
+
+/** One Confirm as a dialog sends it: the proposal, and the read's `question` and `updated_at`. */
+export interface ConfirmRequest {
+  id: string;
+  body: ConfirmBody;
+}
+
+/**
+ * One confirmProposal call per click (`docs/features/hub-confirm.md` "Description and interactions"):
+ * nothing is optimistic. After an answer, a refusal (409), no such proposal (404) or no answer at all
+ * (status 0, which may have reached the daemon), that project's inbox, that proposal and its round
+ * sheets are read again, and the call settles once they have, so the item is gone from what shows
+ * before the dialog closes. Tasks and the reads of the spec follow the live tail's
+ * `proposal.applied`, as after a terminal's confirm; no `.unstaged` is logged, so no outside-change
+ * alert either (`docs/canon/decision-staging.md` "Queue").
+ */
+export function useConfirmProposal(project: string) {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  async function readAgain(id: string) {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.inbox(project), exact: true }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.proposal(project, id), exact: true }),
+      queryClient.invalidateQueries({ queryKey: roundsOf(project) }),
+    ]);
+  }
+  return useMutation({
+    mutationFn: ({ id, body }: ConfirmRequest) => client.confirmProposal(project, id, body),
+    onSuccess: async (review, { id }) => {
+      queryClient.setQueryData<Proposal>(queryKeys.proposal(project, id), review);
+      await readAgain(id);
+    },
+    onError: async (error, { id }) => {
+      const { status } = apiErrorOf(error);
+      if (status === STAGE_REFUSED || status === NO_SUCH_PROPOSAL || status === 0) {
+        await readAgain(id);
       }
     },
   });

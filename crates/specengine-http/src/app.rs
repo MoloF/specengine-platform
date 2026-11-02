@@ -13,8 +13,10 @@
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
 //! `/api/identity` a read of the request's login, no project, no turn
 //! (docs/features/hub-identity.md); a hub has its own fence ([`crate::hub`]),
-//! and `…/team`, the asker's own row of a project's `[team]`, is a route of a
-//! hub alone (docs/features/hub-team.md): locally it is no route at all.
+//! and `…/team`, the asker's own row of a project's `[team]`, and
+//! `…/proposals/<id>/confirm` ([`crate::confirm`]) are routes of a hub alone
+//! (docs/features/hub-team.md, docs/features/hub-confirm.md): locally they are
+//! no routes at all.
 //!
 //! One door (docs/features/daemon-read.md "Rules and edge cases", amended
 //! by docs/features/ui-live.md "Data" and
@@ -28,9 +30,11 @@
 //! fence only from a same-origin page: `Sec-Fetch-Site: same-origin`, which
 //! is not authentication, ADR-0034), and through its `round_stage_answers`
 //! (POST on the round's answers, the same door: docs/features/ui-round.md
-//! "Data"), confirmed only on a terminal (ADR-0035, ADR-0038): no handler
-//! here walks a round or decides an item. A card's writes are the library's
-//! `card_new`, `card_move`, `card_edit`, `card_assign`, `card_cancel`,
+//! "Data"), confirmed on a terminal (ADR-0035, ADR-0038) or, on a hub alone,
+//! by [`crate::confirm`], one item at a time, which takes a stage and never
+//! a choice: no handler here walks a round or decides an item. A card's
+//! writes are the library's `card_new`, `card_move`, `card_edit`,
+//! `card_assign`, `card_cancel`,
 //! `card_accept`, `card_clear` and `card_clear_group`, through the same door
 //! (docs/features/board-ui.md "Data", docs/features/card-trace.md); they
 //! touch the queue alone, a departing accept making its one proposal there
@@ -56,21 +60,21 @@ use axum::response::Response;
 use axum::routing::{MethodRouter, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
-    BundleRequest, CardAcceptBody, CardAssignBody, CardCancelBody, CardClearBody,
-    CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest, CardMoveBody,
-    CardNewBody, CardOutcome, CardShowRequest, CheckRequest, CliError, FlowRequest, GraphRequest,
-    HealthRequest, InboxRequest, LockDiffRequest, Outcome, ReviewRequest, RoadmapRequest,
-    RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest, ShowRequest, StageBody,
-    StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest, TreeRequest,
-    UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit, team_read,
-    utc_now,
+    BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
+    CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest,
+    CardMoveBody, CardNewBody, CardOutcome, CardShowRequest, CheckRequest, CliError, FlowRequest,
+    GraphRequest, HealthRequest, InboxRequest, LockDiffRequest, Outcome, ReviewRequest,
+    RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
+    ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest,
+    TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit,
+    team_read, utc_now,
 };
 
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
 use crate::args::{Args, percent_decode, project_path};
 use crate::hub::{Hub, Login};
 use crate::start::Project;
-use crate::{hub, tail, ui};
+use crate::{confirm, hub, tail, ui};
 
 /// What every handler shares.
 #[derive(Debug)]
@@ -195,7 +199,10 @@ pub(crate) fn router(app: Shared) -> Router {
         .route("/assets/{file}", read(ui::asset));
     // A hub's alone: a local daemon has no such route, on any method.
     let routes = if app.hub.is_some() {
-        routes.route("/api/projects/{p}/team", read(team))
+        routes.route("/api/projects/{p}/team", read(team)).route(
+            "/api/projects/{p}/proposals/{id}/confirm",
+            get(confirm::read).post(confirm::write),
+        )
     } else {
         routes
     };
@@ -377,7 +384,7 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
 
 /// The endpoint's query (the raw query string of `uri`), decoded and its
 /// names checked (400).
-fn args(endpoint: &str, names: &[&str], uri: &Uri) -> Result<Args, Refusal> {
+pub(crate) fn args(endpoint: &str, names: &[&str], uri: &Uri) -> Result<Args, Refusal> {
     Args::new(endpoint, names, uri.query()).map_err(Refusal::bad_request)
 }
 
@@ -761,7 +768,7 @@ const CARD_BODY_MAX: usize = 1_048_576;
 /// Only a same-origin page writes (`Sec-Fetch-Site: same-origin`; absent or
 /// `none`, which the fence lets a read through, is refused: 403). This is
 /// no authentication (ADR-0034): any local process can send the header.
-fn same_origin(headers: &HeaderMap) -> Result<(), Refusal> {
+pub(crate) fn same_origin(headers: &HeaderMap) -> Result<(), Refusal> {
     let site = headers.get(HeaderName::from_static("sec-fetch-site"));
     if site.is_none_or(|site| site.as_bytes() != b"same-origin") {
         return Err(Refusal::new(
@@ -992,7 +999,7 @@ fn written(outcome: CardOutcome) -> Outcome {
 }
 
 /// The login the fence set on `request`: a hub's, never a local daemon's.
-fn login_of(request: &Request) -> Option<Login> {
+pub(crate) fn login_of(request: &Request) -> Option<Login> {
     request.extensions().get::<Login>().cloned()
 }
 
@@ -1071,7 +1078,8 @@ async fn cancel_card(State(app): State<Shared>, request: Request) -> Result<Resp
 /// proposal inside that call (ADR-0057); no `propose` name is called here.
 /// On a hub, past [`hub::member`], judged again once the body is in: the
 /// login as `as` before `request()`, which would default it to `local`, and a
-/// required `revision`, so a dialog answers for the card it showed.
+/// required `revision`, so a dialog answers for the card it showed; a
+/// departing accept's proposal names the login.
 async fn accept_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/accept")?;
     let login = login_of(&request);
@@ -1081,8 +1089,11 @@ async fn accept_card(State(app): State<Shared>, request: Request) -> Result<Resp
     hub::acting(login.as_ref(), &mut body.actor)?;
     hub::needs(login.as_ref(), "revision", body.revision.is_some())?;
     Ok(run(project, move |env, globals| {
-        specengine_cli::card_accept(env, globals, &body.request(id, utc_now()), &mut |_| true)
-            .map(written)
+        let request = CardAcceptRequest {
+            login: login.map(|Login(login)| login),
+            ..body.request(id, utc_now())
+        };
+        specengine_cli::card_accept(env, globals, &request, &mut |_| true).map(written)
     })
     .await)
 }
@@ -1136,7 +1147,7 @@ async fn clear_group(State(app): State<Shared>, request: Request) -> Result<Resp
 
 /// The body is JSON: one `Content-Type` whose media type is
 /// `application/json` (any parameter after it), else 415.
-fn json_typed(headers: &HeaderMap) -> Result<(), Refusal> {
+pub(crate) fn json_typed(headers: &HeaderMap) -> Result<(), Refusal> {
     let mut types = headers.get_all(CONTENT_TYPE).iter();
     let json = match (types.next(), types.next()) {
         (Some(value), None) => value.to_str().is_ok_and(|value| {
@@ -1158,7 +1169,7 @@ fn json_typed(headers: &HeaderMap) -> Result<(), Refusal> {
 
 /// The request's body, at most `max` bytes (a longer one, or one declared
 /// longer, is a 413 and is not read further).
-async fn body(request: Request, max: usize) -> Result<Vec<u8>, Refusal> {
+pub(crate) async fn body(request: Request, max: usize) -> Result<Vec<u8>, Refusal> {
     let too_large = || {
         Refusal::new(
             StatusCode::PAYLOAD_TOO_LARGE,

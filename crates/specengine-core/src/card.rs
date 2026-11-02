@@ -366,8 +366,10 @@ pub fn hub_login_problem(login: &str) -> Option<String> {
 }
 
 /// Unicode's general category Cf, which `char` does not expose (the same
-/// ranges in Unicode 15.1 and 17.0).
-fn is_format_character(c: char) -> bool {
+/// ranges in Unicode 15.1 and 17.0): what a login refuses, and what a hub's
+/// confirm escapes in the text it asks to be confirmed (CLI `confirm.rs`; the
+/// web UI's `ui/text.ts` keeps a copy of these ranges, which must agree).
+pub fn is_format_character(c: char) -> bool {
     matches!(
         c,
         '\u{ad}'

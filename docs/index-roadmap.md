@@ -36,7 +36,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0050.md](roadmap/RM-0050.md) hub-confirm (Phase 7, step 9b): one click confirms one staged choice, a commit in the hub's checkout, nothing pushed · crates/specengine-core, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp, ui · draft
 - [docs/roadmap/RM-0051.md](roadmap/RM-0051.md) hub-git (Phase 7, step 10): sole writer, merge and push, the index in the commit · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
 - [docs/roadmap/RM-0052.md](roadmap/RM-0052.md) board-in-git (Phase 7, step 10b): the board's snapshot on a dedicated branch · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
 - [docs/roadmap/RM-0053.md](roadmap/RM-0053.md) hub-mcp (Phase 7, step 11): /mcp with a session, identity to author, hub tools · crates/specengine-mcp, crates/specengine-http · draft
@@ -49,7 +48,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0060.md](roadmap/RM-0060.md) collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill · crates/specengine-core, crates/specengine-cli, plugin · draft
 - [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) pack (Phase 7, step 19): spec init --pack and a config proposal · crates/specengine-cli, crates/specengine-core · draft
 - [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
-- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store · draft
+- [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store, crates/specengine-http · draft
 - [docs/roadmap/RM-0064.md](roadmap/RM-0064.md) hub-deploy (Phase 7, step 11b): Docker compose with Traefik, from a clean VPS to a hub · deploy, .github/workflows · draft
 - [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) hub-accounts (Phase 7, step 11c): accounts and recovery from a shell on the host · crates/specengine-cli, deploy · draft
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft

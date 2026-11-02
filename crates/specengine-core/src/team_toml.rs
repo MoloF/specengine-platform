@@ -70,12 +70,17 @@ impl TeamRole {
     pub const fn allowed(self) -> &'static [&'static str] {
         match self {
             Self::Member => &["stage", "accept", "clear"],
-            Self::Lead | Self::Owner => &["stage", "accept", "clear", "group_clear"],
+            Self::Lead | Self::Owner => &["stage", "accept", "clear", "group_clear", "confirm"],
         }
     }
 
     /// A group clear is open to the role, inside whatever it covers.
     pub const fn clears_groups(self) -> bool {
+        matches!(self, Self::Lead | Self::Owner)
+    }
+
+    /// A confirm is open to the role, inside whatever it covers.
+    pub const fn confirms(self) -> bool {
         matches!(self, Self::Lead | Self::Owner)
     }
 }
@@ -94,9 +99,9 @@ pub struct TeamEntry {
 }
 
 impl TeamEntry {
-    /// The entry may re-freeze a node at the root-relative `path`: `owner`
-    /// anywhere, an unzoned path too; else inside one of its zones, so a
-    /// `member`, leading none, nowhere.
+    /// The entry may re-freeze a node or confirm a change at the root-relative
+    /// `path`: `owner` anywhere, an unzoned path too; else inside one of its
+    /// zones, so a `member`, leading none, nowhere.
     pub fn covers(&self, path: &str) -> bool {
         self.role == TeamRole::Owner || self.zones.iter().any(|zone| zone.covers(path))
     }
