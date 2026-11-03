@@ -106,6 +106,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/roadmap-view.md](features/roadmap-view.md) shipped
 - [docs/features/roadmap.md](features/roadmap.md) abandoned
 - [docs/features/round.md](features/round.md) shipped
+- [docs/features/scale-eval.md](features/scale-eval.md) shipped
 - [docs/features/screen-fit.md](features/screen-fit.md) shipped
 - [docs/features/show-bindings.md](features/show-bindings.md) shipped
 - [docs/features/spec-check-graph.md](features/spec-check-graph.md) shipped
@@ -191,4 +192,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0072.md](roadmap/RM-0072.md) shipped
 - [docs/roadmap/RM-0075.md](roadmap/RM-0075.md) shipped
 - [docs/roadmap/RM-0076.md](roadmap/RM-0076.md) shipped
+- [docs/roadmap/RM-0077.md](roadmap/RM-0077.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

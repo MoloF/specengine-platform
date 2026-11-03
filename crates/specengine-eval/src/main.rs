@@ -21,6 +21,7 @@ mod parse;
 #[cfg(all(feature = "ra", unix))]
 mod ra;
 mod ron;
+mod scale;
 mod w;
 
 use std::path::{Path, PathBuf};
@@ -111,6 +112,14 @@ enum Measurement {
     /// recomputed once more in reverse order. `--config`, `--scheme` and
     /// `--today` as `layout`.
     W(WArgs),
+    /// Today's read cost on a seeded synthetic corpus, per size
+    /// (`docs/features/scale-eval.md`): each `--nodes` size generated into
+    /// `--out/scale/<label>/n<N>/tree/`, indexed and checked, then `show`
+    /// (with and without links), `search` and `bundle` timed warm through
+    /// the CLI library as MCP calls them, each step of those reads replayed
+    /// alone, and W_after over 20 targets. No corpus is read: no `--pilot`,
+    /// `--config` or `--scheme`.
+    Scale(ScaleArgs),
     /// Syntactic Bevy registration detector; with `--dump`, compared against a
     /// `bevy_dev_tools::schedule_data` dump (`app_data.ron`) (05 §5.1).
     #[command(alias = "bevy")]
@@ -225,6 +234,45 @@ pub struct WArgs {
     /// default 10000. Anything else: refused (exit 2).
     #[arg(long, value_name = "N")]
     pub budget: Option<u64>,
+}
+
+/// `scale`: flags of its own (`docs/features/scale-eval.md`
+/// "Acceptance criteria", SE-6): the corpus is generated, never read, so
+/// there is no `--pilot`, `--config` or `--scheme`. Any flag out of its
+/// range is refused (exit 2) before anything is written.
+#[derive(Args, Clone)]
+pub struct ScaleArgs {
+    /// Scratch directory; the run writes only under `<out>/scale/<label>/`.
+    /// Refused (exit 2) when it and this repository are nested either way,
+    /// or when `<out>/scale` or `<out>/scale/<label>` is a symbolic link.
+    #[arg(long, value_name = "DIR")]
+    pub out: PathBuf,
+    /// Label in the JSON envelope and the detail directory under
+    /// `<out>/scale/`; default `synthetic`. Anything but one plain path
+    /// component is refused (exit 2).
+    #[arg(long, value_name = "LABEL")]
+    pub label: Option<String>,
+    /// The sizes in part nodes, comma-separated, strictly ascending, each
+    /// 500 to 200000; default `1000,10000,100000`. Empty, unsorted or
+    /// repeated: refused (exit 2).
+    #[arg(long, value_name = "N[,N...]")]
+    pub nodes: Option<String>,
+    /// The generator's seed; one seed and one size give one tree.
+    #[arg(long, value_name = "U64", default_value_t = 1)]
+    pub seed: u64,
+    /// The budget of every bundle, estimated tokens, 1 to 4294967295;
+    /// default 10000. Anything else: refused (exit 2).
+    #[arg(long, value_name = "N")]
+    pub budget: Option<u64>,
+    /// Wall-clock budget of the whole run, generation included, in
+    /// seconds; on overrun `result` is the string "timeout" (exit 0) and
+    /// the sizes already finished keep their `size.json`.
+    #[arg(long, value_name = "SECONDS", default_value_t = 600)]
+    pub timeout: u64,
+    /// Write each size's tree and `size.json` only: no index, no check, no
+    /// timing.
+    #[arg(long)]
+    pub corpus_only: bool,
 }
 
 /// `bevy-detector`: the shared arguments plus the optional schedule dump.
@@ -418,6 +466,21 @@ fn main() -> ExitCode {
                 w::run,
             )
         }
+        Measurement::Scale(args) => match scale::prepare(&args) {
+            Ok((label, setup)) => {
+                run_measured(scale::MEASUREMENT, label, args.timeout, move || {
+                    scale::run(setup)
+                })
+            }
+            Err(HarnessError::Refused(message)) => {
+                eprintln!("{}: refused: {message}", scale::MEASUREMENT);
+                ExitCode::from(2)
+            }
+            Err(HarnessError::Internal(message)) => {
+                eprintln!("{}: internal failure: {message}", scale::MEASUREMENT);
+                ExitCode::from(1)
+            }
+        },
         Measurement::BevyDetector(args) => {
             let dump = args.dump.clone();
             measure_with(
@@ -525,10 +588,24 @@ where
         }
     };
     let label = corpus.label.clone();
+    run_measured(name, label, args.timeout, move || run(&corpus, prepared))
+}
+
+/// Runs `work` under `timeout` seconds and prints the envelope of `name`
+/// and `label` with its result: exit 0 when measured or timed out (the
+/// result is then the string `"timeout"`), 1 when `work` failed or
+/// panicked. The wall clock starts here.
+fn run_measured<R>(
+    name: &'static str,
+    label: String,
+    timeout: u64,
+    work: impl FnOnce() -> Result<R, String> + Send + 'static,
+) -> ExitCode
+where
+    R: Serialize + Send + 'static,
+{
     let started = Instant::now();
-    let outcome = harness::run_with_timeout(Duration::from_secs(args.timeout), move || {
-        run(&corpus, prepared)
-    });
+    let outcome = harness::run_with_timeout(Duration::from_secs(timeout), work);
     let result = match outcome {
         Outcome::Finished(Ok(result)) => match serde_json::to_value(result) {
             Ok(value) => value,
@@ -542,7 +619,7 @@ where
             return ExitCode::from(1);
         }
         Outcome::TimedOut => {
-            eprintln!("{name}: timed out after {} s", args.timeout);
+            eprintln!("{name}: timed out after {timeout} s");
             Value::String("timeout".to_owned())
         }
         Outcome::Panicked => {

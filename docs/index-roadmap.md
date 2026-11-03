@@ -50,6 +50,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
 - [docs/roadmap/RM-0073.md](roadmap/RM-0073.md) spec-ids (Phase 7): spec IDs that a hub and a terminal never mint twice · crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft
 - [docs/roadmap/RM-0074.md](roadmap/RM-0074.md) hub-ops (Phase 7, step 11b-2): off-host dumps, restore, upgrade, health and turning on --push · scripts/deploy · draft
-- [docs/roadmap/RM-0077.md](roadmap/RM-0077.md) scale-eval (Phase 7, step 12b): a seeded synthetic corpus and today's read cost at 1 000, 10 000 and 100 000 nodes · crates/specengine-eval · draft
 - [docs/roadmap/RM-0078.md](roadmap/RM-0078.md) edge-table (Phase 7, step 12c): resolved edges kept in the index, incrementally · crates/specengine-store, crates/specengine-core · draft
 - [docs/roadmap/RM-0079.md](roadmap/RM-0079.md) store-reads (Phase 7, step 12d): show, --links and bundle read a subset from the index · crates/specengine-cli, crates/specengine-store, crates/specengine-core · draft

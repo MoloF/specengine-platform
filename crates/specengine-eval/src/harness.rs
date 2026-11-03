@@ -196,7 +196,7 @@ pub fn prepare_with<C>(
 /// `label` is exactly one normal path component: not empty, no separator,
 /// not `.` or `..`, not absolute — so `<out>/<measurement>/<label>` stays
 /// under `--out`.
-fn is_single_component(label: &str) -> bool {
+pub(crate) fn is_single_component(label: &str) -> bool {
     let mut components = Path::new(label).components();
     match (components.next(), components.next()) {
         (Some(Component::Normal(name)), None) => name == label && !label.contains('/'),
@@ -204,13 +204,22 @@ fn is_single_component(label: &str) -> bool {
     }
 }
 
+/// This repository's root, located from the crate directory as written
+/// (not canonicalised).
+fn repository_dir() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..")
+}
+
 /// `fixtures/<name>` of this repository, located from the crate directory.
 fn fixture_dir(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("..")
-        .join("..")
-        .join("fixtures")
-        .join(name)
+    repository_dir().join("fixtures").join(name)
+}
+
+/// This repository's root, located as [`fixture_dir`] locates it and
+/// canonicalised; `None` when that path is absent (a binary run away from
+/// its checkout), so nothing can be compared with it.
+pub(crate) fn repository_root() -> Option<PathBuf> {
+    fs::canonicalize(repository_dir()).ok()
 }
 
 /// Absolute path resolved component by component: every prefix that exists is

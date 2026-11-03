@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-eval]
 owner: owner
-reviewed: 2026-10-05
+reviewed: 2026-11-04
 ---
 
 # W measurement: every task, before and after
@@ -78,7 +78,7 @@ Corpus bytes of the distinct paths: Tier 0 (`[paths] tier0`, before scheme), Tie
 
 ## W_after
 
-Tier 0 + Tier 1 + `Bundle.bytes` (`Globals{root: tree}`, the REFs, the budget), not post-processed; Tier 0 / 1 from the tree when it holds the path, else the corpus. No index, no de-duplication.
+Tier 0 + Tier 1 + `Bundle.bytes` (`Globals{root: tree}`, the REFs, the budget), not post-processed; Tier 0 / 1 from the tree when it holds the path, else the corpus. No index, no de-duplication. `specengine-eval scale` applies the formula to one target per bundle on a seeded synthetic corpus (`docs/canon/scale-eval.md`).
 
 ## Follow-ups and outcomes
 

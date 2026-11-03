@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 41 open, 38 done; current mvp; to mvp 2-3 days; total 13-21 days, 20 unestimated
+roadmap: 40 open, 39 done; current mvp; to mvp 2-3 days; total 13-21 days, 19 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -25,7 +25,7 @@ roadmap: 41 open, 38 done; current mvp; to mvp 2-3 days; total 13-21 days, 20 un
 5. [RM-0018](../roadmap/RM-0018.md) | URL-mode elicitation onto UI cards | draft | could | 2-3
 6. [RM-0038](../roadmap/RM-0038.md) | task-stage: the owner's staging form approve_task | draft | could | 2-3
 
-## release v3 | 19 open, 22 done | 0 days, 19 unestimated
+## release v3 | 18 open, 23 done | 0 days, 18 unestimated
 
 1. [RM-0074](../roadmap/RM-0074.md) | hub-ops (Phase 7, step 11b-2): off-host dumps, restore, upgrade, health and turning on --push | draft | must | -
 2. [RM-0035](../roadmap/RM-0035.md) | node-history: spec show --history and the node's History tab | draft | should | -
@@ -34,18 +34,17 @@ roadmap: 41 open, 38 done; current mvp; to mvp 2-3 days; total 13-21 days, 20 un
 5. [RM-0056](../roadmap/RM-0056.md) | change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it | draft | should | - | waits on RM-0035, RM-0036
 6. [RM-0070](../roadmap/RM-0070.md) | trial-followups (Phase 7): what the second trial and earlier review left | draft | should | -
 7. [RM-0073](../roadmap/RM-0073.md) | spec-ids (Phase 7): spec IDs that a hub and a terminal never mint twice | draft | should | -
-8. [RM-0077](../roadmap/RM-0077.md) | scale-eval (Phase 7, step 12b): a seeded synthetic corpus and today's read cost at 1 000, 10 000 and 100 000 nodes | draft | should | -
-9. [RM-0078](../roadmap/RM-0078.md) | edge-table (Phase 7, step 12c): resolved edges kept in the index, incrementally | draft | should | - | waits on RM-0077
-10. [RM-0079](../roadmap/RM-0079.md) | store-reads (Phase 7, step 12d): show, --links and bundle read a subset from the index | draft | should | - | waits on RM-0078
-11. [RM-0054](../roadmap/RM-0054.md) | read-trust (Phase 7, step 12e): read freshness, a hub's trusted index and the bars at 100 000 nodes | draft | should | - | waits on RM-0079
-12. [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | - | waits on RM-0054
-13. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | -
-14. [RM-0057](../roadmap/RM-0057.md) | draft-overlay (Phase 7, step 15): revisable drafts in reads | draft | could | -
-15. [RM-0058](../roadmap/RM-0058.md) | reuse-overrides (Phase 7, step 16): overrides, variants, usage reads | draft | could | -
-16. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, step 17): similar and distinct_from on create | draft | could | - | waits on RM-0054
-17. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill | draft | could | - | waits on RM-0059
-18. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, step 19): spec init --pack and a config proposal | draft | could | -
-19. [RM-0062](../roadmap/RM-0062.md) | writer-skills (Phase 7, step 20): a profile plugin or MCP prompts | draft | could | -
+8. [RM-0078](../roadmap/RM-0078.md) | edge-table (Phase 7, step 12c): resolved edges kept in the index, incrementally | draft | should | -
+9. [RM-0079](../roadmap/RM-0079.md) | store-reads (Phase 7, step 12d): show, --links and bundle read a subset from the index | draft | should | - | waits on RM-0078
+10. [RM-0054](../roadmap/RM-0054.md) | read-trust (Phase 7, step 12e): read freshness, a hub's trusted index and the bars at 100 000 nodes | draft | should | - | waits on RM-0079
+11. [RM-0055](../roadmap/RM-0055.md) | zone-index (Phase 7, step 13): an index-free zone and status: retired | draft | should | - | waits on RM-0054
+12. [RM-0017](../roadmap/RM-0017.md) | Notifications | draft | could | -
+13. [RM-0057](../roadmap/RM-0057.md) | draft-overlay (Phase 7, step 15): revisable drafts in reads | draft | could | -
+14. [RM-0058](../roadmap/RM-0058.md) | reuse-overrides (Phase 7, step 16): overrides, variants, usage reads | draft | could | -
+15. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, step 17): similar and distinct_from on create | draft | could | - | waits on RM-0054
+16. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, step 18): candidates, a pair ledger, a skill | draft | could | - | waits on RM-0059
+17. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, step 19): spec init --pack and a config proposal | draft | could | -
+18. [RM-0062](../roadmap/RM-0062.md) | writer-skills (Phase 7, step 20): a profile plugin or MCP prompts | draft | could | -
 
 ## pool | 15 open, 1 done | 7-12 days, 11 unestimated
 

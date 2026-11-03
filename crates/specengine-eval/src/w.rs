@@ -1883,7 +1883,7 @@ fn statistic(figures: &[Figure], names: &[&str]) -> (Statistic, Option<String>) 
 }
 
 /// The 0-based index of the nearest-rank `p`-th percentile of `n` values.
-fn nearest_rank(n: usize, p: usize) -> Option<usize> {
+pub(crate) fn nearest_rank(n: usize, p: usize) -> Option<usize> {
     if n == 0 {
         return None;
     }

@@ -62,6 +62,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/round-sheet.md](canon/round-sheet.md) Question rounds: the sheet · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/round-ui.md](canon/round-ui.md) Round routes and screen · crates/specengine-http, ui · tier 2
 - [docs/canon/round.md](canon/round.md) Question rounds · crates/specengine-core, crates/specengine-cli · tier 2
+- [docs/canon/scale-eval.md](canon/scale-eval.md) Scale eval: read cost on a seeded synthetic corpus · crates/specengine-eval · tier 2
 - [docs/canon/serve-ui.md](canon/serve-ui.md) Daemon: the web UI it serves · crates/specengine-http, ui · tier 2
 - [docs/canon/serve.md](canon/serve.md) Daemon: spec serve · crates/specengine-cli, crates/specengine-http · tier 2
 - [docs/canon/stack.md](canon/stack.md) Stack: toolchain and pinned crates · crates · tier 2
