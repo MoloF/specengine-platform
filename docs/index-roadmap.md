@@ -36,8 +36,8 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0038.md](roadmap/RM-0038.md) task-stage: the owner's staging form approve_task · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, plugin · draft
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
-- [docs/roadmap/RM-0051.md](roadmap/RM-0051.md) hub-git (Phase 7, step 10): sole writer, merge and push, the index in the commit · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
-- [docs/roadmap/RM-0052.md](roadmap/RM-0052.md) board-in-git (Phase 7, step 10b): the board's snapshot on a dedicated branch · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
+- [docs/roadmap/RM-0051.md](roadmap/RM-0051.md) hub-git (Phase 7, step 10b): fetch, merge and push, never rebase, with a push status on screen · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0052.md](roadmap/RM-0052.md) board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
 - [docs/roadmap/RM-0053.md](roadmap/RM-0053.md) hub-mcp (Phase 7, step 11): /mcp with a session, identity to author, hub tools · crates/specengine-mcp, crates/specengine-http · draft
 - [docs/roadmap/RM-0054.md](roadmap/RM-0054.md) scale-reads (Phase 7, step 12): an edge table, a trusted index, reads at 100 000 nodes · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-eval · draft
 - [docs/roadmap/RM-0055.md](roadmap/RM-0055.md) zone-index (Phase 7, step 13): an index-free zone and status: retired · crates/specengine-core, docs · draft
@@ -52,3 +52,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0064.md](roadmap/RM-0064.md) hub-deploy (Phase 7, step 11b): Docker compose with Traefik, from a clean VPS to a hub · deploy, .github/workflows · draft
 - [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) hub-accounts (Phase 7, step 11c): accounts and recovery from a shell on the host · crates/specengine-cli, deploy · draft
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
+- [docs/roadmap/RM-0072.md](roadmap/RM-0072.md) apply-outputs (Phase 7, step 10a): the index in every apply commit, and a hub's own PR- range, no network · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
