@@ -144,6 +144,7 @@ use specengine_core::record::record_id;
 use specengine_model::Severity;
 
 use crate::error::{Db, StoreError};
+use crate::floor::read_floor;
 use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
@@ -1413,6 +1414,9 @@ pub trait ProposalQueue {
 pub struct SqliteQueue {
     conn: Connection,
     project: String,
+    /// The database's directory, the data directory: where its proposal
+    /// floor lies ([`crate::floor`]), read by every mint.
+    dir: PathBuf,
 }
 
 impl SqliteQueue {
@@ -1459,6 +1463,7 @@ impl SqliteQueue {
         Ok(Self {
             conn,
             project: project.to_owned(),
+            dir: parent.to_path_buf(),
         })
     }
 
@@ -3107,8 +3112,10 @@ fn log_text(
     Ok(())
 }
 
-/// The next ID: the highest number of any stored ID, plus one.
-fn next_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
+/// The next ID: the highest number of any stored ID plus one, never below
+/// `floor`, the data directory's proposal floor ([`read_floor`]; 1 when it
+/// stores none).
+fn next_id(tx: &Transaction<'_>, floor: u64) -> Result<String, QueueError> {
     let mut statement = tx.prepare("SELECT id FROM main.proposals").db()?;
     let mut rows = statement.query([]).db()?;
     let mut highest = 0;
@@ -3124,7 +3131,7 @@ fn next_id(tx: &Transaction<'_>) -> Result<String, QueueError> {
             proposal_id(highest)
         )))
     })?;
-    Ok(proposal_id(next))
+    Ok(proposal_id(next.max(floor)))
 }
 
 /// Inserts `proposal` (a kind that applies) as `open` under the next ID,
@@ -3137,6 +3144,7 @@ fn insert_update(
     proposal: &NewProposal,
     linked: Option<&str>,
     task: Option<&str>,
+    floor: u64,
     now: &str,
 ) -> Result<String, QueueError> {
     let author = to_json(&proposal.author)?;
@@ -3153,7 +3161,7 @@ fn insert_update(
         })
         .transpose()?;
     let interpretation = proposal.interpretation.as_ref().map(to_json).transpose()?;
-    let id = next_id(tx)?;
+    let id = next_id(tx, floor)?;
     let place = &proposal.place;
     tx.execute(
         &format!(
@@ -3369,6 +3377,7 @@ fn insert_intake(
     project: &str,
     new: &NewIntake,
     task: Option<&str>,
+    floor: u64,
     now: &str,
 ) -> Result<String, QueueError> {
     let intake = &new.intake;
@@ -3380,7 +3389,7 @@ fn insert_intake(
     let options = discrepancy.then(|| to_json(&intake.options)).transpose()?;
     let recommendation = intake.recommendation.map(|index| index.to_string());
     let distinct_from = to_json(&intake.distinct_from)?;
-    let id = next_id(tx)?;
+    let id = next_id(tx, floor)?;
     let place = &new.place;
     tx.execute(
         &format!(
@@ -3506,12 +3515,13 @@ fn insert_drift(
     tx: &Transaction<'_>,
     project: &str,
     item: &NewDrift,
+    floor: u64,
     now: &str,
 ) -> Result<String, QueueError> {
     let author = to_json(&item.author)?;
     let diagnostics = to_json(&Vec::<ProposalFinding>::new())?;
     let target_ids = to_json(&[item.target_id.as_str()])?;
-    let id = next_id(tx)?;
+    let id = next_id(tx, floor)?;
     let place = &item.place;
     tx.execute(
         &format!(
@@ -3675,6 +3685,7 @@ impl ProposalQueue for SqliteQueue {
             return Err(QueueError::Invalid(problem));
         }
         let project = self.project.clone();
+        let dir = self.dir.clone();
         let tx = self.write()?;
         if let Some(task) = task {
             tasks::check_binding(&tx, &project, task, &proposal.place)?;
@@ -3693,7 +3704,8 @@ impl ProposalQueue for SqliteQueue {
                 }
             }
         }
-        let id = insert_update(&tx, &project, proposal, None, task, now)?;
+        let floor = read_floor(&dir)?;
+        let id = insert_update(&tx, &project, proposal, None, task, floor, now)?;
         log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
         let stored = existing(&tx, &project, &id)?;
         tx.commit().db()?;
@@ -3750,6 +3762,7 @@ impl ProposalQueue for SqliteQueue {
             ));
         }
         let project = self.project.clone();
+        let dir = self.dir.clone();
         let tx = self.write()?;
         if let Some(task) = task {
             tasks::check_binding(&tx, &project, task, &intake.place)?;
@@ -3775,12 +3788,13 @@ impl ProposalQueue for SqliteQueue {
                 linked: None,
             });
         }
-        let id = insert_intake(&tx, &project, intake, task, now)?;
+        let floor = read_floor(&dir)?;
+        let id = insert_intake(&tx, &project, intake, task, floor, now)?;
         log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
         let mut linked = None;
         if let Some(patch) = patch {
             // The linked update takes the item's task, in this transaction.
-            let update = insert_update(&tx, &project, patch, Some(&id), task, now)?;
+            let update = insert_update(&tx, &project, patch, Some(&id), task, floor, now)?;
             tx.execute(
                 "UPDATE main.proposals SET linked = ?1 WHERE id = ?2 AND project = ?3",
                 [update.as_str(), id.as_str(), project.as_str()],
@@ -3809,6 +3823,7 @@ impl ProposalQueue for SqliteQueue {
             return Err(QueueError::Invalid(problem));
         }
         let project = self.project.clone();
+        let dir = self.dir.clone();
         let tx = self.write()?;
         let mut tasks: Vec<(&str, &Place)> = Vec::new();
         for item in items {
@@ -3824,6 +3839,8 @@ impl ProposalQueue for SqliteQueue {
         // The dedup reads under the write lock it inserts under: a raise
         // racing this one waits, then finds what this one stored.
         let mut results = Vec::with_capacity(items.len());
+        // The floor read once, at the transaction's first mint.
+        let mut read = None;
         for item in items {
             let rows = drift_rows(&tx, &project, item)?;
             let live = rows.iter().rev().find(|(_, status, ..)| {
@@ -3852,7 +3869,11 @@ impl ProposalQueue for SqliteQueue {
             }
             let reverted = equal(ProposalStatus::Applied)
                 .map(|(id, _, _, commit)| (id.clone(), commit.clone()));
-            let id = insert_drift(&tx, &project, item, now)?;
+            let floor = match read {
+                Some(floor) => floor,
+                None => *read.insert(read_floor(&dir)?),
+            };
+            let id = insert_drift(&tx, &project, item, floor, now)?;
             log(&tx, &project, EVENT_CREATED, &json!({ "id": id }), now)?;
             results.push(DriftResult::Created {
                 proposal: Box::new(existing(&tx, &project, &id)?),

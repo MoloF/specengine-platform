@@ -1165,9 +1165,16 @@ fn departure(node: &str) -> Value {
     })
 }
 
-/// The note of a card the group passes over (`group_marks`).
+/// The note of a card the group passes over (`group_marks`), on a local
+/// daemon.
 const PASSED_OVER: &str = "C-0001 reads departed PR-0001: passed over; clear it alone once that is \
                            settled";
+
+/// [`PASSED_OVER`] on a hub, whose queue mints from its floor
+/// (docs/features/apply-outputs.md "A hub's `PR-` floor"): the departing
+/// accept's item is PR-100001.
+const PASSED_OVER_HUB: &str = "C-0001 reads departed PR-100001: passed over; clear it alone once \
+                               that is settled";
 
 /// A group's document holds `note`.
 fn assert_noted(reply: &Reply, note: &str, context: &str) {
@@ -1206,13 +1213,13 @@ fn a_departed_card_is_no_part_of_a_group_clear() {
         "`PRN-WEEKLY` holds 1 suspect cards, not 2; nothing changed",
         "the departed card counted",
     );
-    assert_noted(&reply, PASSED_OVER, "on the refusal");
+    assert_noted(&reply, PASSED_OVER_HUB, "on the refusal");
     assert_eq!(hub.board(), before, "a count of two changed nothing");
 
     let reply = hub.post("olga", "trace/clear", &group(1));
     assert_eq!(reply.status, 200, "{}", reply.text());
     assert_eq!(reply.json()["cleared"], json!([open]), "{}", reply.text());
-    assert_noted(&reply, PASSED_OVER, "on the clear");
+    assert_noted(&reply, PASSED_OVER_HUB, "on the clear");
     let cleared = payloads(&hub, "card.cleared");
     assert_eq!(cleared.len(), 1, "{cleared:?}");
     assert_eq!(cleared[0]["id"], json!(open), "{}", cleared[0]);

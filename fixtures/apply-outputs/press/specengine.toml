@@ -1,0 +1,27 @@
+# Fixture corpus apply-outputs/press: an invented harbour newsletter, "Harbour
+# Weekly", no game word and no code, for docs/features/apply-outputs.md
+# (RM-0072) on a project of another nature than apply-outputs/forge
+# (ADR-0008). Its `[[generators]]` entry has `index = true` and an archive
+# shard; its roots reach beyond `docs/` (`style`). The index's outputs are
+# not part of the fixture: each test renders them with `spec export index`
+# before its first commit. The prefixes and kinds are card-press's, so no
+# fixture vocabulary is added.
+
+[project]
+name = "harbour-weekly"
+slug = "harbour-weekly"
+
+[paths]
+roots = ["docs", "style"]
+index = "docs/index.md"
+
+[ids]
+PRN = { kind = "print-run",    shape = "name" }
+SHT = { kind = "broadsheet",   shape = "name" }
+STY = { kind = "style-ruling", width = 4 }
+
+[[generators]]
+command = "spec export index"
+writes  = ["docs/index.md", "docs/index-archive.md"]
+index   = true
+shards  = [{ path = "docs/index-archive.md", tier3 = true }]

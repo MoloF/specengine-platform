@@ -58,8 +58,8 @@ use common::hub::{
     hub_args, through,
 };
 use common::{
-    Reply, Scratch, Server, Stream, ask, beyond_daemon, data_dir, files_ending, read_text, replace,
-    repository_root, request_bytes, snapshot, spec, spec_json,
+    Reply, Scratch, Server, Stream, ask, beyond_daemon, beyond_hub, data_dir, files_ending,
+    read_text, replace, repository_root, request_bytes, snapshot, spec, spec_json,
 };
 use serde_json::{Value, json};
 
@@ -515,9 +515,9 @@ fn ac02_a_foreign_origin_is_refused_on_every_route_with_a_good_login() {
         }
     }
     assert!(
-        beyond_daemon(&hub.setup.home).is_empty(),
+        beyond_hub(&hub.setup.home).is_empty(),
         "a refused request read nothing: the fresh HOME holds {:?}",
-        beyond_daemon(&hub.setup.home)
+        beyond_hub(&hub.setup.home)
     );
 
     // The control: nothing foreign, the same login, and the reads pass with
@@ -622,9 +622,9 @@ fn a_header_sent_twice_is_refused() {
         }
     }
     assert!(
-        beyond_daemon(&hub.setup.home).is_empty(),
+        beyond_hub(&hub.setup.home).is_empty(),
         "{:?}",
-        beyond_daemon(&hub.setup.home)
+        beyond_hub(&hub.setup.home)
     );
 }
 
@@ -753,9 +753,9 @@ fn ac04_no_login_is_refused_on_every_route_and_reads_nothing() {
         assert_refused(&reply, NO_LOGIN_LINE, &format!("{method} {path}"));
     }
     assert!(
-        beyond_daemon(&hub.setup.home).is_empty(),
+        beyond_hub(&hub.setup.home).is_empty(),
         "a refused request read nothing: the fresh HOME holds {:?}",
-        beyond_daemon(&hub.setup.home)
+        beyond_hub(&hub.setup.home)
     );
 }
 
@@ -779,9 +779,9 @@ fn ac04_a_card_post_with_no_login_adds_no_card_and_no_event() {
         assert_refused(&reply, NO_LOGIN_LINE, &body.to_string());
     }
     assert!(
-        beyond_daemon(&hub.setup.home).is_empty(),
+        beyond_hub(&hub.setup.home).is_empty(),
         "{:?}",
-        beyond_daemon(&hub.setup.home)
+        beyond_hub(&hub.setup.home)
     );
     assert!(hub.events().is_empty(), "{:?}", hub.events());
     let board = hub
@@ -1853,9 +1853,9 @@ fn the_identity_route_is_a_plain_read_in_both_modes() {
     );
     assert_plain(&reply, "on a hub");
     assert!(
-        beyond_daemon(&hub.setup.home).is_empty(),
+        beyond_hub(&hub.setup.home).is_empty(),
         "no project, no turn: {:?}",
-        beyond_daemon(&hub.setup.home)
+        beyond_hub(&hub.setup.home)
     );
     let reply = hub.get("mira", "/api/identity?login=tomas");
     assert_eq!(reply.status, 400, "{}", reply.text());

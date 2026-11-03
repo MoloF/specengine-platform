@@ -52,9 +52,12 @@
 //! repository (the recorded one) when the worktree is not there; an
 //! orphan's in the current repository ([`trailer_lookup_here`]). One
 //! completes the proposal with one parent, changing only the target's
-//! path, its text there step 5's on its parent's blob (what the apply
-//! wrote on top of it) or on its own blob (the new text; a split or
-//! cherry-picked apply's merge), each blob read under the `specengine.toml`
+//! path (beside it, in every judge but a drift item's, only the outputs of
+//! the `index = true` entry of its parent's root config an apply may write,
+//! added or modified: task spec `apply-outputs`), its text there step 5's
+//! on its parent's blob (what the apply wrote on top of it) or on its own
+//! blob (the new text; a split or cherry-picked apply's merge), each blob
+//! read under the `specengine.toml`
 //! of its commit's tree, the one read now when the tree has none. A base
 //! commit not there (pruned after a rebase): the branch's whole history is
 //! read; a branch not there is named with the way out. A question's or a
@@ -96,6 +99,7 @@ use crate::create::{Corpus, canonical_in};
 use crate::interpret::{Decided, decision_step};
 use crate::location::{OpenIndex, open_index};
 use crate::lock::LockMode;
+use crate::outputs::{Beside, parent_outputs};
 use crate::project::{CONFIG_FILE, ProjectRoot, config_error};
 use crate::proposals::{Preview, QueueContext, top_of, top_path};
 use crate::propose::is_path_target;
@@ -1163,7 +1167,10 @@ fn trailer_commits(
 }
 
 /// One trailer commit of a question or a discrepancy judged: it completes
-/// it with one parent, adding exactly the record's path, its blob there the
+/// it with one parent, adding exactly the record's path (beside it only the
+/// outputs of the index entry in its parent's root config an apply may
+/// write, added or modified, their bytes unjudged: task spec
+/// `apply-outputs`, [`parent_outputs`]), its blob there the
 /// stored `record_text` byte for byte (never rendered again). A proposal
 /// with no record issued has nothing to compare: none completes it.
 fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> TrailerCommit {
@@ -1173,9 +1180,16 @@ fn record_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Trai
             let path = top_of(proposal, &record.path);
             match git.parents(&commit) {
                 Ok(parents) => match parents.as_slice() {
-                    [parent] => {
-                        adds_file(git, parent, &commit, &path, &record.text, "the record").err()
-                    }
+                    [parent] => adds_file(
+                        git,
+                        parent,
+                        &commit,
+                        &path,
+                        &record.text,
+                        "the record",
+                        Beside::Outputs(&parent_outputs(git, parent, proposal, &record.path)),
+                    )
+                    .err(),
                     parents => Some(format!("has {} parents", parents.len())),
                 },
                 Err(error) => Some(one_line(&format!("cannot be read: {error}"))),
@@ -1255,7 +1269,10 @@ fn lock_commit_problem(
 }
 
 /// One trailer commit of a create's new file judged: it completes it with
-/// one parent, adding exactly the target's path, its blob there the stored
+/// one parent, adding exactly the target's path (beside it only the
+/// outputs of the index entry in its parent's root config an apply may
+/// write, added or modified, their bytes unjudged: task spec
+/// `apply-outputs`, [`parent_outputs`]), its blob there the stored
 /// `new_text` byte for byte.
 fn file_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> TrailerCommit {
     let path = top_path(proposal);
@@ -1268,6 +1285,12 @@ fn file_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Traile
                 &path,
                 &proposal.new_text,
                 "the proposal's text",
+                Beside::Outputs(&parent_outputs(
+                    git,
+                    parent,
+                    proposal,
+                    &proposal.target_path,
+                )),
             )
             .err(),
             parents => Some(format!("has {} parents", parents.len())),
@@ -1283,7 +1306,8 @@ fn file_commit(git: &WorktreeGit, proposal: &Proposal, commit: String) -> Traile
 }
 
 /// `commit` against `parent` adds exactly `path` (top-relative) and
-/// nothing else, its blob there `text` byte for byte; else why not:
+/// nothing else but what `beside` allows (index outputs, task spec
+/// `apply-outputs`), its blob there `text` byte for byte; else why not:
 /// `changes <status> <path>, …`, `does not carry <what>` (`the record`,
 /// `the proposal's text`), `cannot be read: <git's error>`.
 pub(crate) fn adds_file(
@@ -1293,10 +1317,12 @@ pub(crate) fn adds_file(
     path: &str,
     text: &str,
     what: &str,
+    beside: Beside<'_>,
 ) -> Result<(), String> {
     let unreadable = |error: &dyn std::fmt::Display| one_line(&format!("cannot be read: {error}"));
+    let adds = |changed: &[specengine_store::ChangedPath]| matches!(beside.rest(changed).as_slice(), [one] if one.adds(path));
     match git.name_status(parent, commit) {
-        Ok(changed) if changed.len() == 1 && changed[0].adds(path) => {}
+        Ok(changed) if adds(&changed) => {}
         Ok(changed) => {
             let listed: Vec<String> = changed.iter().map(ToString::to_string).collect();
             return Err(format!("changes {}", listed.join(", ")));
@@ -1313,7 +1339,10 @@ pub(crate) fn adds_file(
 /// One trailer commit judged: it completes the proposal with one parent,
 /// changing only the target's path (or that path and `spec.lock`, its
 /// `Lock-mode:` trailer `editorial`: an editorial apply's, task spec
-/// `rev-discipline`), its text there step 5's on its parent
+/// `rev-discipline`; beside them only the outputs of the index entry in
+/// its parent's root config an apply may write, added or modified, their
+/// bytes unjudged: task spec `apply-outputs`), its text there step 5's on
+/// its parent
 /// ([`written_on`]: what the apply wrote on top of it, with or without the
 /// revisions a meaning approve raises) or on itself ([`settled`]: the new
 /// text, a split or cherry-picked apply's merge).
@@ -1334,22 +1363,31 @@ fn trailer_commit(
         _ => false,
     };
     let lock_path = top_of(proposal, LOCK_FILE);
-    let only = |changed: &[String]| {
+    let only = |parent: &str, status: &[specengine_store::ChangedPath]| {
+        let outputs = parent_outputs(git, parent, proposal, &proposal.target_path);
+        let rest = Beside::Outputs(&outputs).rest(status);
+        let changed: Vec<&str> = rest.iter().map(|changed| changed.path.as_str()).collect();
         changed == [path.as_str()]
             || (changed.len() == 2
-                && changed.contains(&path)
-                && changed.contains(&lock_path)
+                && changed.contains(&path.as_str())
+                && changed.contains(&lock_path.as_str())
                 && editorial_commit(git, &commit))
     };
     let not_completing = match &parents {
         Ok(parents) => match parents.as_slice() {
-            [parent] => match git.changed_paths(parent, &commit) {
-                Ok(changed) if only(&changed) => match &held {
+            [parent] => match git.name_status(parent, &commit) {
+                Ok(changed) if only(parent, &changed) => match &held {
                     Err(why) => Some(why.clone()),
                     Ok(_) if carries => None,
                     Ok(held) => settled(git, scratch, held, proposal),
                 },
-                Ok(changed) => Some(format!("changes {}", changed.join(", "))),
+                Ok(changed) => {
+                    let names: Vec<&str> = changed
+                        .iter()
+                        .map(|changed| changed.path.as_str())
+                        .collect();
+                    Some(format!("changes {}", names.join(", ")))
+                }
                 Err(error) => Some(one_line(&format!("cannot be read: {error}"))),
             },
             parents => Some(format!("has {} parents", parents.len())),

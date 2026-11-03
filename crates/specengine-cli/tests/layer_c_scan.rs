@@ -154,6 +154,9 @@ const LATER: &[&str] = &[
     "crates/specengine-cli/src/lock_rebase.rs",
     "crates/specengine-cli/src/roadmap.rs",
     "crates/specengine-cli/src/verify_node.rs",
+    // docs/features/apply-outputs.md: an output's inspection joins its
+    // path components with `/`, as `export.rs` does; no SCIP descriptor.
+    "crates/specengine-cli/src/outputs.rs",
 ];
 
 /// R10's Cargo words: no literal of the store, core or CLI holds one.

@@ -65,7 +65,7 @@ Identity is judged in the fence, so a refused request never queues for a turn. M
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or session and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub stores nothing new: the login lands in existing queue fields and a confirm's commit.
+No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or session and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub adds only a floor file (`queue-backup.md`): the login lands in queue fields and a confirm's commit.
 
 **The daemon can defend**, at its fence:
 

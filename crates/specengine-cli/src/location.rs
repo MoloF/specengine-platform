@@ -15,7 +15,8 @@ use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
-use specengine_store::SqliteIndex;
+use specengine_core::proposal::HUB_PROPOSAL_FLOOR;
+use specengine_store::{SqliteIndex, store_floor};
 
 use crate::project::ProjectRoot;
 use crate::{CliError, Env, store_error};
@@ -97,6 +98,18 @@ pub fn prepared_data_dir(env: &Env, project: &ProjectRoot) -> Result<PathBuf, Cl
         ))
     })?;
     Ok(dir)
+}
+
+/// A hub's start (task spec `apply-outputs`, "A hub's `PR-` floor"): the
+/// data directory's `proposal-floor` written atomically holding
+/// [`HUB_PROPOSAL_FLOOR`] when absent (a dot-named sibling written and
+/// synced, hard-linked to `proposal-floor`, which never replaces a name,
+/// the sibling removed, the directory synced), else read and never
+/// rewritten; the floor stored. `Err`: the reason, naming
+/// the file (`<data dir>/proposal-floor: not a proposal floor (…)`), for a
+/// start that exits 2 before listening. A local start never calls it.
+pub fn store_hub_floor(data_dir: &Path) -> Result<u64, String> {
+    store_floor(data_dir, HUB_PROPOSAL_FLOOR).map_err(|error| error.to_string())
 }
 
 /// The data directory, refused as [`prepared_data_dir`] refuses it, but

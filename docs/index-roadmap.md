@@ -52,5 +52,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0064.md](roadmap/RM-0064.md) hub-deploy (Phase 7, step 11b): Docker compose with Traefik, from a clean VPS to a hub · deploy, .github/workflows · draft
 - [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) hub-accounts (Phase 7, step 11c): accounts and recovery from a shell on the host · crates/specengine-cli, deploy · draft
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
-- [docs/roadmap/RM-0072.md](roadmap/RM-0072.md) apply-outputs (Phase 7, step 10a): the index in every apply commit, and a hub's own PR- range, no network · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
 - [docs/roadmap/RM-0073.md](roadmap/RM-0073.md) spec-ids (Phase 7): spec IDs that a hub and a terminal never mint twice · crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft

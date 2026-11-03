@@ -81,6 +81,31 @@ pub fn parse_proposal_id(written: &str) -> Result<String, ProposalIdError> {
     Err(ProposalIdError::NotAnId)
 }
 
+/// The proposal floor a hub's first start stores in its data directory
+/// (task spec `apply-outputs`, "Data"): every queue there mints `PR-` no
+/// lower. Readers use the stored number, never this one.
+pub const HUB_PROPOSAL_FLOOR: u64 = 100_001;
+
+/// What a proposal floor file holds that is not one: its readers' refusal.
+pub const FLOOR_PROBLEM: &str = "not a proposal floor (a decimal number from 1, then LF)";
+
+/// The floor `bytes` hold: the decimal number, no sign or leading zero, at
+/// least 1, then one LF and nothing else; `None` for anything else.
+pub fn parse_floor(bytes: &[u8]) -> Option<u64> {
+    let digits = bytes.strip_suffix(b"\n")?;
+    if digits.is_empty() || digits.first() == Some(&b'0') || !digits.iter().all(u8::is_ascii_digit)
+    {
+        return None;
+    }
+    let number: u64 = std::str::from_utf8(digits).ok()?.parse().ok()?;
+    (number >= 1).then_some(number)
+}
+
+/// The bytes of a floor file holding `floor`: its decimal number, then LF.
+pub fn floor_text(floor: u64) -> String {
+    format!("{floor}\n")
+}
+
 /// One line naming the Latin form of a look-alike proposal ID.
 pub fn look_alike_message(written: &str, fix: &str) -> String {
     format!(

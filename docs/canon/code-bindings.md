@@ -51,7 +51,7 @@ A bound item gives its `qpath`, `kind()`, node's first line (attributes excluded
 
 ## ID state
 
-The token and the ID: `code-identity.md` "Marker grammar". The ID is re-read by `grammar::parse_reference` and resolved by `spec show`'s resolver (`crates/specengine-cli/README.md` "Rules"); a malformed rev leaves the ID before `@` (`GOAL-01@` resolves as `GOAL-01`).
+The token and the ID: `code-identity.md` "Marker grammar". The ID is re-read by `grammar::parse_reference` and resolved by `spec show`'s resolver (`spec-cli-read.md` "Resolution"); a malformed rev leaves the ID before `@` (`GOAL-01@` resolves as `GOAL-01`).
 
 | `id_state` | Meaning | Listed under |
 |---|---|---|

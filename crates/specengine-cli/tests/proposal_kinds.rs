@@ -1844,8 +1844,8 @@ fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
             assert_eq!(
                 reason,
                 format!(
-                    "`{path}` is {what}: only `spec export index` writes it, never a proposal; \
-                     nothing stored"
+                    "`{path}` is {what}: SpecEngine renders it (`spec export index`, an apply's \
+                     commit), never a proposal; nothing stored"
                 ),
                 "{path}"
             );
@@ -1856,8 +1856,8 @@ fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
     let reason = refused(&outcome, "apply step 3");
     assert!(
         reason.contains(
-            "`docs/spec/index-records.md` is a shard of the index: only `spec export index` \
-             writes it, never a proposal; nothing changed"
+            "`docs/spec/index-records.md` is a shard of the index: SpecEngine renders it (`spec \
+             export index`, an apply's commit), never a proposal; nothing changed"
         ),
         "{reason}"
     );
@@ -1873,8 +1873,8 @@ fn n4_the_index_and_its_shards_are_never_created_by_a_proposal() {
     let reason = refused(&outcome, "apply step 3 of the view");
     assert!(
         reason.contains(
-            "`docs/spec/plan-view.md` is the index's roadmap view: only `spec export index` \
-             writes it, never a proposal; nothing changed"
+            "`docs/spec/plan-view.md` is the index's roadmap view: SpecEngine renders it (`spec \
+             export index`, an apply's commit), never a proposal; nothing changed"
         ),
         "{reason}"
     );

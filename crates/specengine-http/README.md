@@ -14,7 +14,7 @@ Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge),
 
 ## Binary
 
-`specengine-http --root DIR... [--port N] [--public-origin URL]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`): `serve.md` "Start", "Lines". Exit 1: stopped after listening.
+`specengine-http --root DIR... [--port N] [--public-origin URL]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`), a hub's floor: `serve.md` "Start", "Lines". Exit 1: stopped after listening.
 
 ## Fence
 
@@ -82,4 +82,4 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs`, `turn.rs`, `methods.rs`, `stage.rs`, `round.rs`, `projects.rs`, `hub{,_team,_confirm}.rs`, `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs`, `turn.rs`, `methods.rs`, `stage.rs`, `round.rs`, `projects.rs`, `hub{,_team,_confirm,_ids}.rs`, `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

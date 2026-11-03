@@ -67,6 +67,7 @@ use specengine_model::{IdScheme, Node, ParsedFile};
 use specengine_store::{CardRefresh, WorktreeGit, b3_hash, replace_file};
 
 use crate::lock::build_recipes;
+use crate::outputs::Beside;
 use crate::package::position;
 use crate::preflight::StepFailure;
 use crate::project::CONFIG_FILE;
@@ -781,7 +782,9 @@ pub(crate) fn restored_clause(files: &[(&str, Restored)]) -> String {
 
 /// Step 10's checks of an editorial commit beside one parent, the old
 /// `HEAD`, and its `Proposal:` trailer: exactly the text's path and the
-/// lock's changed; a `Lock:` trailer per node whose entries changed; its
+/// lock's changed, beside them no path but the index's `outputs` the apply
+/// wrote (from the top; step 10's blob compare judges them, task spec
+/// `apply-outputs`); a `Lock:` trailer per node whose entries changed; its
 /// lock blob the bytes confirmed (a hook rewriting the lock fails it, a
 /// commit deleting it too); each refreshed `spec_hash` the committed text
 /// blob's `norm_hash`. Else why not.
@@ -795,14 +798,22 @@ pub(crate) fn lock_in_commit(
     nodes: &[NodeRevision],
     path: &str,
     scheme: &IdScheme,
+    outputs: &BTreeSet<String>,
 ) -> Result<(), String> {
-    let mut changed = git
-        .changed_paths(old_head, commit)
+    let status = git
+        .name_status(old_head, commit)
         .map_err(|error| error.to_string())?;
+    let mut changed: Vec<String> = status.iter().map(|changed| changed.path.clone()).collect();
     changed.sort();
+    let mut rest: Vec<String> = Beside::Written(outputs)
+        .rest(&status)
+        .into_iter()
+        .map(|changed| changed.path.clone())
+        .collect();
+    rest.sort();
     let mut wanted = vec![text_top.to_owned(), lock.top_path.clone()];
     wanted.sort();
-    if changed != wanted {
+    if rest != wanted {
         return Err(format!(
             "it changes {}, not {} alone",
             if changed.is_empty() {

@@ -19,13 +19,18 @@
 //!    the state as it is;
 //! 8. write: the place re-checked (`HEAD` on the recorded branch at the
 //!    commit step 2 found, no operation in progress), the file read again,
-//!    equal to step 3's bytes, replaced atomically, its mode kept;
-//! 9. commit: `git commit --only` of the one path with the message and its
-//!    four trailers, hooks run; a failure restores the bytes and reopens,
-//!    unless git made this run's commit anyway (the branch's or `HEAD`'s
-//!    new commit carries the `Proposal:` trailer): then step 10 judges it;
+//!    equal to step 3's bytes; the index's outputs rendered from the
+//!    committed tree and inspected ([`crate::outputs`], task spec
+//!    `apply-outputs`); the file replaced atomically, its mode kept, then
+//!    each changed output;
+//! 9. commit: `git commit --only` of the path and the written outputs with
+//!    the message and its four trailers, hooks run; a failure restores the
+//!    bytes (the outputs' too) and reopens, unless git made this run's
+//!    commit anyway (the branch's or `HEAD`'s new commit carries the
+//!    `Proposal:` trailer): then step 10 judges it;
 //! 10. verify: the new commit's one parent is the old `HEAD`, it changes
-//!     only the path, its `Proposal:` trailer is the ID → `applied` (even
+//!     only the path and the written outputs, its `Proposal:` trailer is
+//!     the ID → `applied` (even
 //!     when the hold was reopened meanwhile: the commit is this run's), the
 //!     index updated (failure: a warning); else it stays `approved`, exit 1
 //!     naming the commit (the branch did not move: the commit `HEAD` names
@@ -115,6 +120,7 @@
 //! rest. A kind that decides and a drift item are never asked, each named
 //! in a note. No `--yes`: one key per item.
 
+use std::collections::BTreeSet;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
@@ -133,6 +139,7 @@ use specengine_store::{
 
 use crate::inbox::repository_proposals;
 use crate::location::open_index;
+use crate::outputs::{self, Beside, Outputs};
 use crate::package::position;
 use crate::preflight::{
     History, LookupError, Missing, Prepared, StepFailure, StepRead, TrailerCommit, completes_when,
@@ -146,8 +153,8 @@ use crate::proposals::{
 };
 use crate::review::stale_note;
 use crate::revisions::{
-    apply_trailers, editorial_nodes, lock_in_commit, lock_unchanged, named_refresh, restore,
-    restored_clause,
+    Restored, apply_trailers, editorial_nodes, lock_in_commit, lock_unchanged, named_refresh,
+    restore, restored_clause,
 };
 use crate::round::{RoundTerminal, named};
 use crate::stage::{self, Staging};
@@ -507,6 +514,7 @@ pub(crate) fn run_approve(
     let id = written_id(&request.id)?;
     let mut context = open_context(env, globals, &request.git)?;
     context.rehearsal = hub.is_some_and(|hub| hub.rehearsal);
+    context.hub = hub.is_some();
     let Some(id) = id else {
         return Ok(ProposalOutcome::refused(
             COMMAND,
@@ -836,6 +844,18 @@ pub(crate) fn run_approve(
             messages,
         );
     }
+    // The index's outputs rendered from the committed tree before anything
+    // is written (task spec `apply-outputs`): `HEAD` with the text (and the
+    // lock) laid over it.
+    let mut overlay: Vec<(&str, &[u8])> = vec![(path, prepared.written())];
+    overlay.extend(lock.map(|lock| (LOCK_FILE, lock.rendered.as_bytes())));
+    let mut outputs = Outputs::render(
+        &prepared.git,
+        &prepared.recorded,
+        &proposal,
+        &prepared.head,
+        &overlay,
+    );
     if let Err(error) = replace_file(&file, prepared.written()) {
         let failure = StepFailure::refused(
             8,
@@ -878,9 +898,15 @@ pub(crate) fn run_approve(
             messages,
         );
     }
+    outputs.write(&proposal.place.worktree, &mut messages);
 
-    // Step 9: an interpretation's commit carries its two texts and its
-    // decision (task spec `kind-interpretation`, "Data").
+    // Step 9: the outputs staged on their own (a failure narrows the
+    // commit to the text); an interpretation's commit carries its two
+    // texts and its decision (task spec `kind-interpretation`, "Data").
+    outputs.stage(&prepared.git, &proposal.place.worktree, &mut messages);
+    if let Some(gap) = outputs.gap() {
+        messages.push(Message::Warning(gap.to_owned()));
+    }
     let interprets = proposal
         .interpretation
         .as_ref()
@@ -903,8 +929,11 @@ pub(crate) fn run_approve(
         interprets.as_ref(),
         &apply_trailers(&revised, &locked),
     );
+    let output_tops = outputs.top_paths();
     let mut paths = vec![prepared.top_path.as_str()];
     paths.extend(lock.map(|lock| lock.top_path.as_str()));
+    paths.extend(output_tops.iter().map(String::as_str));
+    let written: BTreeSet<String> = output_tops.iter().cloned().collect();
     if let Err(error) = prepared
         .git
         .commit_only_paths(&context.data_dir, &message, &paths)
@@ -926,6 +955,9 @@ pub(crate) fn run_approve(
                 )));
             }
             Made::Nothing { foreign } => {
+                // The outputs put back first, each only while it holds this
+                // run's bytes (one absent before removed).
+                let fared = outputs.restore(&prepared.git, &proposal.place.worktree, &mut messages);
                 let restored = match lock {
                     // Both put back by accept's rules: each only while it
                     // holds this run's bytes.
@@ -946,24 +978,37 @@ pub(crate) fn run_approve(
                             &lock.bytes,
                             &mut messages,
                         );
-                        restored_clause(&[(path, text), (LOCK_FILE, locked)])
+                        let mut files = vec![(path, text), (LOCK_FILE, locked)];
+                        files.extend(fared.iter().map(|(path, how)| (path.as_str(), *how)));
+                        restored_clause(&files)
                     }
-                    None => match replace_file(&file, &prepared.bytes) {
-                        Ok(()) => "its bytes restored".to_owned(),
-                        Err(restore) => {
-                            messages.push(Message::Warning(format!(
-                                "cannot restore `{path}` in {}: {restore}; it holds the \
-                                 proposal's bytes, uncommitted",
-                                proposal.place.worktree
-                            )));
-                            "its bytes NOT restored".to_owned()
+                    None => {
+                        let text = match replace_file(&file, &prepared.bytes) {
+                            Ok(()) => Restored::Back,
+                            Err(restore) => {
+                                messages.push(Message::Warning(format!(
+                                    "cannot restore `{path}` in {}: {restore}; it holds the \
+                                     proposal's bytes, uncommitted",
+                                    proposal.place.worktree
+                                )));
+                                Restored::Failed
+                            }
+                        };
+                        match (text, fared.is_empty()) {
+                            (Restored::Back, true) => "its bytes restored".to_owned(),
+                            (_, true) => "its bytes NOT restored".to_owned(),
+                            (text, false) => {
+                                let mut files = vec![(path, text)];
+                                files.extend(fared.iter().map(|(path, how)| (path.as_str(), *how)));
+                                restored_clause(&files)
+                            }
                         }
-                    },
+                    }
                 };
-                let path = match lock {
-                    Some(_) => format!("{path}` and `{LOCK_FILE}"),
-                    None => path.to_owned(),
-                };
+                let mut named = vec![path];
+                named.extend(lock.map(|_| LOCK_FILE));
+                named.extend(fared.iter().map(|(path, _)| path.as_str()));
+                let path = outputs::names(&named);
                 let foreign = foreign.map_or_else(String::new, |tip| {
                     format!(
                         "; `{branch}` moved to {tip}, which has no `{PROPOSAL_TRAILER}: {id}` \
@@ -1001,10 +1046,24 @@ pub(crate) fn run_approve(
             &prepared.revisions.nodes,
             path,
             &prepared.recorded.config.scheme,
+            &written,
         ),
-        None => match prepared.git.changed_paths(&prepared.head, commit) {
-            Ok(changed) if changed == [prepared.top_path.as_str()] => Ok(()),
-            Ok(changed) => Err(format!("it changes {}", changed.join(", "))),
+        None => match prepared.git.name_status(&prepared.head, commit) {
+            Ok(changed) => {
+                let only = matches!(
+                    Beside::Written(&written).rest(&changed).as_slice(),
+                    [one] if one.path == prepared.top_path && one.status == "M"
+                );
+                if only {
+                    Ok(())
+                } else {
+                    let names: Vec<&str> = changed
+                        .iter()
+                        .map(|changed| changed.path.as_str())
+                        .collect();
+                    Err(format!("it changes {}", names.join(", ")))
+                }
+            }
             Err(error) => Err(error.to_string()),
         },
     };
@@ -1031,6 +1090,9 @@ pub(crate) fn run_approve(
         left.as_deref(),
     ) {
         Ok(commit) => {
+            // The outputs' committed blobs against this run's bytes: a
+            // warning, never a refusal.
+            messages.extend(outputs.compare(&prepared.git, &commit));
             let refresh = task_refresh(
                 &context,
                 &proposal,
@@ -1072,16 +1134,22 @@ pub(crate) fn run_approve(
                 recorded,
                 ..
             } = prepared;
+            let mut updated = vec![path];
+            updated.extend(outputs.paths());
             if let Err(error) = index
                 .index
-                .update_paths(&tree, &recorded.config.scheme, &[path])
+                .update_paths(&tree, &recorded.config.scheme, &updated)
             {
                 messages.push(Message::Warning(format!(
                     "the index was not updated after the commit: {error}; the next command \
                      updates it"
                 )));
             }
-            let document = with_diff(&applied, &request.git, &context.data_dir);
+            messages.extend(outputs.note());
+            let mut document = with_diff(&applied, &request.git, &context.data_dir);
+            if context.hub {
+                document.notes.extend(outputs.gap().map(str::to_owned));
+            }
             Ok(ProposalOutcome::done(COMMAND, document, messages))
         }
         Err(reason) => {

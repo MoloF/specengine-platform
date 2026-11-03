@@ -19,6 +19,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0037](decisions/ADR-0037.md) superseded-by ADR-0039
 - [docs/features/agent-intake.md](features/agent-intake.md) shipped
 - [docs/features/anchor-states.md](features/anchor-states.md) shipped
+- [docs/features/apply-outputs.md](features/apply-outputs.md) shipped
 - [docs/features/bevy-roles-reads.md](features/bevy-roles-reads.md) shipped
 - [docs/features/bevy-roles.md](features/bevy-roles.md) shipped
 - [docs/features/board-ui.md](features/board-ui.md) shipped
@@ -177,4 +178,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0068.md](roadmap/RM-0068.md) shipped
 - [docs/roadmap/RM-0069.md](roadmap/RM-0069.md) shipped
 - [docs/roadmap/RM-0071.md](roadmap/RM-0071.md) shipped
+- [docs/roadmap/RM-0072.md](roadmap/RM-0072.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

@@ -54,7 +54,7 @@ spec-writer (bytes after / cap):
 ## Risks
 
 - **Version skew**: a 1a `spec` refuses the root config holding the key (`deny_unknown_fields`) in `check`, `export index` and approve's checks: install `spec`, `specengine-mcp`, `specengine-http` from one commit.
-- **N12 wider**: a consumer project's item update changing release, priority, estimate, `depends_on`, title or status meets the view's `index-drift` under an `enforce` hook, as a `create` meets the index's; the N12 ADR is due before 3b.
+- **N12 wider**: a consumer project's item update changing release, priority, estimate, `depends_on`, title or status meets the view's `index-drift` under an `enforce` hook, as a `create` meets the index's; the N12 ADR is due before 3b. Met 2026-11-03: ADR-0062 (`apply-outputs`) puts the changed view in the apply's commit.
 - **Noise**: `spec review` lists the view's `index-drift` among an item proposal's introduced findings (never refusing); raw titles may render oddly on GitHub, as in the index.
 
 ## Out of scope

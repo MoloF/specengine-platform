@@ -58,6 +58,7 @@ use super::{
     QueueError, SqliteQueue, check_time, existing, insert_intake, log, queue_matches, to_json,
 };
 use crate::error::{Db, StoreError};
+use crate::floor::read_floor;
 use crate::schema;
 
 /// `card.created`, with `flow`, `column`, `position`, `assignee`, `as`.
@@ -481,6 +482,7 @@ impl SqliteQueue {
         {
             return Err(QueueError::Invalid(problem));
         }
+        let dir = self.dir.clone();
         let (card, (corrected, result)) = self.written(id, seen, actor, now, |row| {
             let (hits, related) = queue_matches(row.tx, row.project, intake)?;
             let mut item = intake.clone();
@@ -493,7 +495,8 @@ impl SqliteQueue {
                 .take(DISTINCT_MAX)
                 .map(str::to_owned)
                 .collect();
-            let made = insert_intake(row.tx, row.project, &item, None, now)?;
+            let floor = read_floor(&dir)?;
+            let made = insert_intake(row.tx, row.project, &item, None, floor, now)?;
             log(
                 row.tx,
                 row.project,

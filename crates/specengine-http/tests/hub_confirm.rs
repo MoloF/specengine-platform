@@ -31,6 +31,11 @@
 //!   `round_answers` confirming; rehearsing through `failed()`.
 //! - B11, the trailers: `login=tomas` in `Proposed-by` on a hub, a local trailer
 //!   byte for byte. M: `login` written on a local row.
+//! - docs/features/apply-outputs.md (RM-0072) O2 and O8's hub half, over
+//!   `fixtures/apply-outputs/forge`: a confirm's commit carries the index's
+//!   outputs as a terminal's does, and a gap commits the target alone with the
+//!   warning in the POST's `notes`. M: render only on the terminal path; the
+//!   partial walk rendered.
 //!
 //! Elsewhere: B7 is `door.rs`, with its `git diff` a command; B10's dialog is
 //! `ui/src/inbox/ConfirmDialog.test.tsx`; B11's step-up regex is the unit
@@ -3456,4 +3461,169 @@ fn b13_an_entry_changed_while_its_post_waits_for_the_turn_is_judged_anew() {
             "{label}: her target as it was"
         );
     }
+}
+
+// ------------------------------------------- apply-outputs (RM-0072): O2, O8
+
+/// The game of docs/features/apply-outputs.md (`fixtures/apply-outputs/forge`).
+const FORGE: &str = "/api/projects/ember-forge";
+
+/// "Data"'s new file and its text, as the terminal's `tests/apply_outputs.rs`
+/// raises it.
+const STAMINA_PATH: &str = "docs/features/stamina.md";
+const STAMINA_TEXT: &str = "---\nclass: spec\nstatus: draft\nscope: [forge]\n---\n\n\
+     # Smith stamina {#MEC-STAMINA}\n\nEach strike costs the smith one stamina; at zero the \
+     hammer stops until the smith rests.\n";
+
+/// The game's team: `ann` its owner.
+const FORGE_TEAM: &str = "\n[team.ann]\nrole = \"owner\"\nemail = \"ann@example.org\"\n";
+
+/// The game with its index's outputs rendered by `spec export index` and its
+/// team, committed; `roots` edits the `[paths] roots` line first (the fixture's
+/// own when `None`).
+fn forge(name: &str, roots: Option<&str>) -> Setup {
+    let setup = Setup::new(name, "apply-outputs/forge");
+    spec(&setup.home, &setup.root, &["export", "index"]).code(0);
+    if let Some(roots) = roots {
+        replace(
+            &setup.root,
+            "specengine.toml",
+            "roots = [\"README.md\", \"docs\", \"design\"]",
+            roots,
+        );
+    }
+    append_config(&setup.root, FORGE_TEAM);
+    committed(&setup, "the index and the team");
+    setup
+}
+
+/// `spec propose create` of [`STAMINA_TEXT`] on the hub's host, its data
+/// directory: the ID.
+fn stamina_raised(setup: &Setup) -> String {
+    let root = setup.root.to_str().expect("UTF-8 root");
+    let run = run_product(
+        &spec_bin(),
+        &setup.home,
+        &setup.cwd,
+        &[
+            "--root",
+            root,
+            "propose",
+            "create",
+            STAMINA_PATH,
+            "--text-file",
+            "-",
+            "--rationale",
+            "The smith tires.",
+        ],
+        STAMINA_TEXT.as_bytes(),
+    );
+    run.code(0);
+    run.stdout.lines().next().unwrap_or_default().to_owned()
+}
+
+/// `git diff-tree --name-status` of `commit` in the hub's checkout.
+fn name_status_of(desk: &Desk, commit: &str) -> Vec<String> {
+    desk.git(&["diff-tree", "-r", "--no-commit-id", "--name-status", commit])
+        .lines()
+        .map(str::to_owned)
+        .collect()
+}
+
+/// The `index-*` findings of `spec check` over the hub's checkout.
+fn index_findings_of(desk: &Desk) -> Vec<Value> {
+    let setup = desk.setup();
+    let report = spec_json(&setup.home, &setup.cwd, &setup.root, &["check"]).json();
+    report["findings"]
+        .as_array()
+        .expect("findings")
+        .iter()
+        .filter(|finding| {
+            finding["code"]
+                .as_str()
+                .is_some_and(|code| code.starts_with("index-"))
+        })
+        .cloned()
+        .collect()
+}
+
+/// O2: O1's create raised on the hub's host, its data directory (so
+/// `PR-100001`, the hub's floor), staged and confirmed by `POST
+/// .../proposals/PR-100001/confirm` as the `[team]` `owner`: 200, `applied`,
+/// one commit whose name-status equals O1's, `A` of the new file beside `M
+/// docs/index.md`, no warning, and no index finding after. M: render
+/// only on the terminal path.
+#[test]
+fn o2_a_hubs_confirm_commits_the_index_as_a_terminals_apply() {
+    let desk = Desk::new(forge("confirm-outputs", None), FORGE);
+    let id = stamina_raised(desk.setup());
+    assert_eq!(id, "PR-100001", "the hub's floor");
+    desk.staged("ann", &id, &approved_choice());
+    let parent = desk.head();
+    let document = desk.confirmed("ann", &id);
+    let commit = desk.head();
+    assert_eq!(document["status"], json!("applied"), "{document}");
+    assert_eq!(document["applied_commit"], json!(commit), "{document}");
+    assert_eq!(desk.parents(&commit), [parent], "one commit");
+    assert_eq!(
+        name_status_of(&desk, &commit),
+        [format!("A\t{STAMINA_PATH}"), "M\tdocs/index.md".to_owned()]
+    );
+    assert_eq!(
+        desk.trailers(&commit, "Proposal"),
+        std::slice::from_ref(&id)
+    );
+    assert!(
+        !document.to_string().contains("were not rendered"),
+        "no warning: {document}"
+    );
+    assert_eq!(index_findings_of(&desk), Vec::<Value>::new());
+    assert_eq!(
+        desk.git(&["status", "--porcelain", "--untracked-files=all"]),
+        "",
+        "the checkout clean"
+    );
+}
+
+/// O8's hub half: `HEAD`'s config lists the root `notes`, present in the
+/// checkout and absent from `HEAD`'s tree: the confirm answers 200, `applied`,
+/// the commit holds the target alone, and the POST's review document holds the
+/// warning's text in `notes`, the `MissingRoot` gap and `spec export index`
+/// named. M: render the partial walk; refuse the apply; the warning kept from
+/// the page.
+#[test]
+fn o8_a_hubs_confirm_with_a_gap_commits_the_target_alone_and_notes_why() {
+    let desk = Desk::new(
+        forge(
+            "confirm-outputs-gap",
+            Some("roots = [\"README.md\", \"docs\", \"design\", \"notes\"]"),
+        ),
+        FORGE,
+    );
+    write(
+        desk.root(),
+        "notes/plan.md",
+        "---\nclass: spec\nstatus: draft\nscope: [forge]\n---\n\n# A plan\n\nTo sort.\n",
+    );
+    let id = stamina_raised(desk.setup());
+    desk.staged("ann", &id, &approved_choice());
+    let document = desk.confirmed("ann", &id);
+    let commit = desk.head();
+    assert_eq!(document["status"], json!("applied"), "{document}");
+    assert_eq!(
+        name_status_of(&desk, &commit),
+        [format!("A\t{STAMINA_PATH}")]
+    );
+    let warning = format!(
+        "the commit carries `{STAMINA_PATH}` alone: the index's outputs were not rendered: the \
+         `[paths] roots` entry `notes` names no directory and no `.md` file; `spec export index` \
+         writes them"
+    );
+    let notes = document["notes"].as_array().expect("notes");
+    assert!(
+        notes
+            .iter()
+            .any(|note| note.as_str().is_some_and(|note| note.contains(&warning))),
+        "the warning in notes: {document}"
+    );
 }

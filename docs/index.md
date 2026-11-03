@@ -19,7 +19,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 
 ## Specs
 
-- [docs/features/apply-outputs.md](features/apply-outputs.md) apply-outputs: the index in every apply commit, and a hub's own PR- range (RM-0072) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
 - [docs/features/hub-git.md](features/hub-git.md) hub-git: fetch, merge and push, never rebase, with a push status on screen (RM-0051) · crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/features/hub-mcp.md](features/hub-mcp.md) hub-mcp: /mcp/<slug> on a hub, sessions bound to a login, proposals and cards under it, nothing decided (RM-0053) · crates/specengine-mcp, crates/specengine-http, crates/specengine-cli, crates/specengine-eval, ui · draft

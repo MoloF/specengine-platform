@@ -34,8 +34,8 @@ Then the trailer lookup ("Completion"); then in the recorded worktree, each refu
 - **1** Consent: stderr `record <ID> at <path>:`, the record escaped, indented two spaces, then `apply PR-0004 as <ID> (option 1 | the working answer | the given answer) on <branch> in <worktree>? [y/N]`.
 - **7** `approve_record_from`: the ID issued; `Issued` -> exit 1 naming the next ID (run again; nothing written).
 - **8** Write: the place and step 4 re-checked (exit 1); store `create_file`: missing `dir` components made one by one, the bytes to a new dot-named sibling, synced, **hard-linked** to the path (`link` never replaces: an entry appearing meanwhile -> exit 1, untouched; no hard links: exit 1), the sibling removed, the directory synced.
-- **9** Commit: `git add --intent-to-add -- :(literal)<path>`, then an update's `git commit --only` of that path: whatever else is staged or modified stays. Body `<ID>: <title>`, the four trailers. Failed with no commit of this ID made: `git rm --cached --quiet --ignore-unmatch`, the file and this run's directories removed (innermost first, if empty), reopened, the ID kept, exit 1 ``the commit of `<path>` failed, the record removed: <git's error>``.
-- **10** Verify: one parent, the old `HEAD`, name-status exactly `A <path>`, its blob `record_text`, `Proposal:` the ID -> `applied_with`, `update_paths`; stdout `applied PR-0004 as <sha> on <branch>: <ID> <path>`; a note names a linked update still to approve, else that the `canon:` section's text is unchanged, naming `spec propose interpretation <target> --decision <ID>` (`proposal-interpretation.md`).
+- **9** Commit: `git add --intent-to-add -- :(literal)<path>`, then an update's `git commit --only` of that path and the index's outputs (`proposal-outputs.md` "Steps"): whatever else is staged or modified stays. Body `<ID>: <title>`, the four trailers. Failed with no commit of this ID made: `git rm --cached --quiet --ignore-unmatch`, the file and this run's directories removed (innermost first, if empty), reopened, the ID kept, exit 1 ``the commit of `<path>` failed, the record removed: <git's error>``.
+- **10** Verify: one parent, the old `HEAD`, name-status exactly `A <path>` beside written outputs' `A` or `M`, its blob `record_text`, `Proposal:` the ID -> `applied_with`, `update_paths`; stdout `applied PR-0004 as <sha> on <branch>: <ID> <path>`; a note names a linked update still to approve, else that the `canon:` section's text is unchanged, naming `spec propose interpretation <target> --decision <ID>` (`proposal-interpretation.md`).
 
 ## ID
 
@@ -43,7 +43,7 @@ Then the trailer lookup ("Completion"); then in the recorded worktree, each refu
 
 ## Completion
 
-By the `Proposal:` trailer, as an update's (`proposal-completion.md` "Completion"): one parent, name-status exactly `A <record_path>`, its blob the stored `record_text` byte for byte, never re-rendered; else why (`changes M a, A b`, `does not carry the record`, `has N parents`). With no record issued none completes it; a trailer commit that does not complete it refuses a new apply (step 4). **A held record completed by hand**: `record_text` committed at `record_path` with the trailer; `spec approve PR` completes it (`approved`: no prompt; `open`: the `complete` question). An open item holding a record completes as recorded: `--option` or `--answer` naming another choice, or `--canon` reading back another canon -> exit 2 naming the stored ones, no prompt, nothing changed.
+By the `Proposal:` trailer, as an update's (`proposal-completion.md` "Completion"): one parent, name-status exactly `A <record_path>` beside the outputs the parent's config names, its blob the stored `record_text` byte for byte, never re-rendered; else why (`changes M a, A b`, `does not carry the record`, `has N parents`). With no record issued none completes it; a trailer commit that does not complete it refuses a new apply (step 4). **A held record completed by hand**: `record_text` committed at `record_path` with the trailer; `spec approve PR` completes it (`approved`: no prompt; `open`: the `complete` question). An open item holding a record completes as recorded: `--option` or `--answer` naming another choice, or `--canon` reading back another canon -> exit 2 naming the stored ones, no prompt, nothing changed.
 
 ## Killed run
 
@@ -66,7 +66,7 @@ Queue step 2 -> 3 (`QUEUE_SCHEMA_VERSION` 3): `ADD COLUMN ... TEXT` `record_id`,
 
 Accepted at shipping (2026-10-06); none blocks.
 
-- A record hand-written under the issued ID elsewhere: `id-taken` at merge. A foreign file taking a kept ID's `<dir>/<ID>.md` (a merge) refuses every approve `exists` for good: only reject.
+- A record hand-written under the issued ID elsewhere: `id-taken` at merge. IDs take no floor: a hub's queue and a terminal's can issue one ID, which a merge shows, and a person renumbers (`queue-backup.md` "ID floor"). A foreign file taking a kept ID's `<dir>/<ID>.md` (a merge) refuses every approve `exists` for good: only reject.
 - A queue restored from before step 7 while the record's commit is in a readable history: neither approve nor reject takes it.
 - Free text with a refused character is only rejected; a path target meets its record in corpus dedup only if `canon:` lands on it.
 - The killed-run hint with the project root below its worktree's top is tried by hand only; the no-title exit 2, unreachable past the intake caps, untested.

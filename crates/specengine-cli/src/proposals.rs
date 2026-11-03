@@ -460,6 +460,10 @@ pub(crate) struct QueueContext {
     /// A hub's read of a confirm: a refusal is logged by nobody
     /// (`crate::apply::failed`).
     pub rehearsal: bool,
+    /// A hub's confirm runs it: an apply's gap warning goes into the
+    /// review document's `notes` too, no stderr reaching the page (task
+    /// spec `apply-outputs`).
+    pub hub: bool,
 }
 
 /// Finds the project and opens its queue (see the module documentation):
@@ -497,6 +501,7 @@ pub(crate) fn open_context(
         git,
         common_dir,
         rehearsal: false,
+        hub: false,
     })
 }
 

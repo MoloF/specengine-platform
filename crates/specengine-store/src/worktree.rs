@@ -15,7 +15,9 @@
 //! letters ([`WorktreeGit::status_entries`]), whether a path is ignored
 //! ([`WorktreeGit::is_ignored`]) and a path's index entry set back to
 //! `HEAD`'s ([`WorktreeGit::reset_path`]), the name-status of a commit
-//! ([`WorktreeGit::name_status`]).
+//! ([`WorktreeGit::name_status`]), and whether a path is skip-worktree
+//! ([`WorktreeGit::is_skip_worktree`]: an index output a sparse checkout
+//! leaves out is never written, task spec `apply-outputs`).
 //! `crate::git` stays the read side of `spec check`, resolving `GIT_*`
 //! against the caller; here nothing of the caller's repository is used.
 //!
@@ -587,6 +589,18 @@ impl WorktreeGit {
             .any(|entry| entry == path.as_bytes()))
     }
 
+    /// `path`'s index entry has the skip-worktree bit (a sparse checkout's
+    /// path outside its cone, or `update-index --skip-worktree`): `ls-files
+    /// -t -z -- :(literal)<path>` tags it `S`. No entry: `false`.
+    pub fn is_skip_worktree(&self, path: &str) -> Result<bool, GitError> {
+        let spec = literal(path);
+        let output = self.read("ls-files", &["ls-files", "-t", "-z", "--", &spec])?;
+        Ok(output
+            .split(|&byte| byte == 0)
+            .filter_map(|record| record.split_first_chunk::<2>())
+            .any(|(tag, named)| tag == b"S " && named == path.as_bytes()))
+    }
+
     /// `path`'s index entry is an intent-to-add one (`git add
     /// --intent-to-add`): `status --porcelain=v2 -z --untracked-files=no --
     /// :(literal)<path>` gives it the `.A` status. No entry: `false`.
@@ -768,7 +782,9 @@ impl WorktreeGit {
     /// `git commit --only --cleanup=verbatim -F <scratch file> --
     /// :(literal)<path>…`: commits exactly the working-tree bytes of
     /// `paths` (an editorial apply's text and `spec.lock`, task spec
-    /// `rev-discipline`), other staged paths left staged; the hooks run. A
+    /// `rev-discipline`; an apply's target and the index's outputs it
+    /// rendered, task spec `apply-outputs`), other staged paths left
+    /// staged; the hooks run. A
     /// failure carries git's stderr (a hook's output, `index.lock`).
     pub fn commit_only_paths(
         &self,
@@ -947,6 +963,26 @@ impl WorktreeGit {
         }
         let object = format!("{commit}:{path}");
         self.read(COMMAND, &["cat-file", "--end-of-options", "blob", &object])
+    }
+
+    /// [`Self::blob_at`] with `GIT_NO_LAZY_FETCH=1`: a blob a partial clone
+    /// lacks is a failure, never fetched from a promisor remote (the
+    /// completion's read of a parent's config, task spec `apply-outputs`).
+    pub fn local_blob_at(&self, commit: &str, path: &str) -> Result<Vec<u8>, GitError> {
+        const COMMAND: &str = "cat-file";
+        if path.is_empty() || path.starts_with("./") || path.starts_with("../") {
+            return Err(GitError::Unreadable { command: COMMAND });
+        }
+        let object = format!("{commit}:{path}");
+        let args = [
+            OsStr::new("cat-file"),
+            OsStr::new("--end-of-options"),
+            OsStr::new("blob"),
+            OsStr::new(&object),
+        ];
+        let mut command = self.command(&args, true);
+        command.env("GIT_NO_LAZY_FETCH", "1");
+        success(COMMAND, run(command, self.deadline)?)
     }
 
     /// Whether `commit`'s tree holds the top-relative `path`, a file or a
@@ -1295,6 +1331,77 @@ pub fn replace_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
         let _ = dir.sync_all();
     }
     Ok(())
+}
+
+/// What the file system holds under the name an index output is written
+/// to ([`disk_name`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DiskName {
+    /// Every component there is listed byte for byte as asked, or the path
+    /// stops existing on the way (an absent file).
+    AsAsked,
+    /// A component is listed under another name, found by its identity (a
+    /// case or Unicode-form variant on a file system that ignores it): the
+    /// path as the file system holds it.
+    Held(String),
+    /// A component exists, yet no entry of its directory's listing is it,
+    /// by exact name or by identity: which file the name reaches is not
+    /// known.
+    CannotTell,
+}
+
+/// The name the file system holds for the clean root-relative `relative`
+/// under `root`: each existing component looked up in its directory's
+/// listing by its exact name, else by its identity (device and inode)
+/// (`docs/Index.md` asked, `docs/index.md` held). An index output is
+/// written only under its exact name (task spec `apply-outputs`).
+pub fn disk_name(root: &Path, relative: &str) -> io::Result<DiskName> {
+    let mut dir = root.to_path_buf();
+    let mut held: Vec<String> = Vec::new();
+    let mut variant = false;
+    for component in relative.split('/') {
+        let asked = dir.join(component);
+        let meta = match fs::symlink_metadata(&asked) {
+            Ok(meta) => meta,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => break,
+            Err(error) => return Err(error),
+        };
+        let names = fs::read_dir(&dir)?
+            .map(|entry| entry.map(|entry| entry.file_name()))
+            .collect::<io::Result<Vec<_>>>()?;
+        if names.iter().any(|name| name == OsStr::new(component)) {
+            held.push(component.to_owned());
+        } else {
+            let same = names.into_iter().find(|name| {
+                fs::symlink_metadata(dir.join(name))
+                    .is_ok_and(|found| same_file_identity(&found, &meta))
+            });
+            let Some(name) = same else {
+                return Ok(DiskName::CannotTell);
+            };
+            variant = true;
+            held.push(name.to_string_lossy().into_owned());
+        }
+        dir = asked;
+    }
+    Ok(if variant {
+        DiskName::Held(held.join("/"))
+    } else {
+        DiskName::AsAsked
+    })
+}
+
+/// Two metadata name one file: device and inode (never on a platform
+/// without them).
+#[cfg(unix)]
+fn same_file_identity(a: &fs::Metadata, b: &fs::Metadata) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    a.dev() == b.dev() && a.ino() == b.ino()
+}
+
+#[cfg(not(unix))]
+fn same_file_identity(_: &fs::Metadata, _: &fs::Metadata) -> bool {
+    false
 }
 
 /// One path a commit changed ([`WorktreeGit::name_status`]).

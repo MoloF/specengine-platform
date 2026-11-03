@@ -23,7 +23,7 @@ reviewed: 2026-11-01
 
 ## Start
 
-`specengine-http --root DIR... [--port N]` (`start::served`, `main.rs`): each root canonicalised, its config read, a slug required; the data directory guarded against every root (nothing created), then created (`prepared_data_dir`); `daemon.lock` opened (created if absent, never written or deleted), `File::try_lock`ed (exclusive `flock`), `WouldBlock` retried every 50 ms up to 500 ms; then the runtime, the bind, `daemon.json` written (`daemon.json.tmp`, renamed), the start lines. A refusal after the lock (the port taken, `daemon.json` unwritable) leaves the data directory and an empty `daemon.lock`. Any end, `SIGKILL` included, frees the lock; `daemon.json` is never removed.
+`specengine-http --root DIR... [--port N]` (`start::served`, `main.rs`): each root canonicalised, its config read, a slug required; the data directory guarded against every root (nothing created), then created (`prepared_data_dir`); `daemon.lock` opened (created if absent, never written or deleted), `File::try_lock`ed (exclusive `flock`), `WouldBlock` retried every 50 ms up to 500 ms; a hub (`--public-origin`) then stores its `proposal-floor` once (CLI `store_hub_floor`; an invalid one: exit 2, `queue-backup.md` "ID floor"); then the runtime, the bind, `daemon.json` written (`daemon.json.tmp`, renamed), the start lines. A refusal after the lock (the port taken, `daemon.json` unwritable) leaves the data directory and an empty `daemon.lock`. Any end, `SIGKILL` included, frees the lock; `daemon.json` is never removed.
 
 ## Files
 
@@ -45,6 +45,8 @@ Beside `<slug>.db`, never under a root (ADR-0003). `daemon.lock`: empty, its `fl
 ```
 
 `pid` `std::process::id()`; `port` the bound one (`--port 0`: the chosen); `url` the `listening` line's; `projects` in `--root` order, `root` canonical (as `/api/projects`); `started` `utc_now()`. No token, key, secret, version or build (ADR-0034). Readers take the five keys and ignore others; one missing or mistyped: unreadable.
+
+`proposal-floor`, a hub's alone: its `PR-` floor, written once at its start (`queue-backup.md` "ID floor").
 
 ## Lines
 

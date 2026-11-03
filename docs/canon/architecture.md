@@ -14,7 +14,7 @@ The rules all code is written by, each with the ADRs that introduced it and hold
 ## Storage
 
 - The source of truth for specs and bindings is files in the project's git repository (Markdown + YAML front-matter) and `spec.lock`. SQLite is a rebuildable index plus the operational queue (proposals, tasks, runs). ADR-0001.
-- The operational database lives outside the repository, in `~/Library/Application Support/specengine/` beside the daemon's files (`docs/canon/serve.md`). Git will receive the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `docs/canon/queue-backup.md`). ADR-0003.
+- The operational database lives outside the repository, in the data directory beside the daemon's files (`docs/canon/serve.md`). Git will receive the generated `docs/generated/queue.md`, never the queue's dump (`spec export state`, `docs/canon/queue-backup.md`). ADR-0003.
 - A plan item is a `spec`-class file whose `id:` has the prefix `[roadmap]` names; tasks execute it from the queue; its position is computed per read, never stored, its `depends_on` chain ordering work, never gating it (`docs/canon/spec-roadmap.md`). ADR-0052.
 
 <a id="layout"></a>
@@ -31,7 +31,7 @@ Directories come from `specengine.toml` `[paths]`, so a consumer's existing `doc
 
 An approved proposal is applied only in the worktree, branch and base commit it was raised on (a task's: its worktree, so the spec travels with the code) and committed at once as its own commit `spec: apply PR-…` with provenance (`proposal-apply.md`). Spec files are written only by `apply_proposal` once a person confirms: on a terminal, one `[y/N]` each, or on a hub alone under a login `[team]` entitles, one click per item; else the UI and the owner's MCP form only stage, and no tool takes a choice from an agent (`decision-staging.md`, `hub-confirm.md`, `review-form.md`, `round.md`). ADR-0004, ADR-0005, ADR-0032, ADR-0035, ADR-0038, ADR-0054, ADR-0061.
 
-A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue, a project's generator its output). ADR-0003, ADR-0013, ADR-0022; owner, Q3, 2026-09-30.
+A `generated` document is no spec file: only its registered generator writes it (`spec export` the queue; SpecEngine the `index = true` entry's outputs, by `export index` or in an apply's commit, never a spec file: `proposal-outputs.md`; a project's generator its own). ADR-0003, ADR-0013, ADR-0022, ADR-0062; owner, Q3, 2026-09-30.
 
 `spec.lock` is neither: only the owner's terminal `[y/N]` writes it, by the writers of `architecture-code.md#spec-lock`; a lock of another format or recipe is carried over only by a rebase from the blobs the owner accepted, never the current tree; never otherwise `apply_proposal`, nor an MCP tool, a role, a check or a hand edit. ADR-0041, ADR-0043, ADR-0044, ADR-0045, ADR-0050.
 
@@ -41,8 +41,8 @@ A `generated` document is no spec file: only its registered generator writes it 
 - Discrepancies, questions and proposals block nothing: a node may have several open proposals, rebased on `base_hash` when applied; an agent keeps working on a working answer, marked `// @assumes PR-…`, and a decision unlike it makes a follow-up task. ADR-0012.
 - The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`docs/canon/gate.md`). ADR-0012, ADR-0039.
 - `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; `spec propose drift` queues items that stop nothing; a binding it cannot verify is never `ok`. How: `docs/canon/architecture-code.md#verify`. ADR-0042, ADR-0045, ADR-0050.
-- Reads of nodes (bundle, `show --bindings`, tree, task package, impact) show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it; a code-layer failure leaves a read's spec part and exit as they were, `sync` unknown, never `ok`. How: `docs/canon/architecture-code.md#sync-in-reads`. ADR-0046.
-- `spec health` lists, read-only, markers naming a queue item, an archived node or one in question; live nodes the project's `[[health.bound]]` rules select that no marker binds, both from the code index the call refreshes, as `spec refs` reads it; plain `spec verify`'s non-`ok` findings. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them. How: `docs/canon/architecture-code.md#health`. ADR-0047, ADR-0051.
+- Reads of nodes (bundle, `show --bindings`, tree, task package, impact) show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it. How: `docs/canon/architecture-code.md#sync-in-reads`. ADR-0046.
+- `spec health` lists, read-only, markers naming a queue item, an archived node or one in question; live nodes the project's `[[health.bound]]` rules select that no marker binds; plain `spec verify`'s non-`ok` findings. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them. How: `docs/canon/architecture-code.md#health`. ADR-0047, ADR-0051.
 
 <a id="tasks"></a>
 ## Tasks and stack skills

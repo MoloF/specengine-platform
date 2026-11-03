@@ -47,10 +47,13 @@
 //! run killed between its steps 8 and 9 left: the two ways out named), the
 //! new IDs free; 5–6 the text and its new IDs checked again; the committer
 //! identity; 1 the owner's consent; 7 `approved` as a compare-and-set; 8 the
-//! file created by a hard link, never replacing one; 9 its intent-to-add
-//! entry and `git commit --only` of that path (a failure undoes the entry,
-//! the file and the directories made); 10 the commit verified: one parent,
-//! the old `HEAD`, exactly `A <path>`, its blob the proposal's text. A
+//! index's outputs rendered from the committed tree ([`crate::outputs`],
+//! task spec `apply-outputs`), the file created by a hard link, never
+//! replacing one, then each changed output; 9 its intent-to-add entry and
+//! `git commit --only` of that path and the outputs (a failure undoes the
+//! entry, the file and the directories made, the outputs' bytes); 10 the
+//! commit verified: one parent, the old `HEAD`, exactly `A <path>` beside
+//! the written outputs (`A` or `M`), its blob the proposal's text. A
 //! create's sections apply as an update ([`crate::preflight`]).
 //!
 //! The proposer names the path and the IDs (the core knows no subject
@@ -88,6 +91,7 @@ use crate::apply::{
 use crate::corpus::indexed;
 use crate::decide::{exists, path_free};
 use crate::location::{OpenIndex, open_index};
+use crate::outputs::{Beside, Outputs, names, outputs_clause};
 use crate::preflight::{
     Placed, StepFailure, adds_file, completes_when, completing, place_step, place_unchanged,
     recorded_project, trailer_lookup,
@@ -551,8 +555,8 @@ fn new_file_path(paths: &Paths, index: &[(String, &str)], path: &str) -> Result<
     }
     if let Some((_, what)) = index.iter().find(|(file, _)| file == path) {
         return Err(format!(
-            "`{path}` is {what}: only `spec export index` writes it, never a proposal; nothing \
-             stored"
+            "`{path}` is {what}: SpecEngine renders it (`spec export index`, an apply's commit), \
+             never a proposal; nothing stored"
         ));
     }
     Ok(())
@@ -1513,6 +1517,10 @@ pub(crate) fn approve_file(
     ) {
         return after(context, StepFailure::refused(8, reason), messages);
     }
+    // The index's outputs rendered from the committed tree before anything
+    // is written (task spec `apply-outputs`): `HEAD` with the new file.
+    let overlay: [(&str, &[u8]); 1] = [(path, proposal.new_text.as_bytes())];
+    let mut outputs = Outputs::render(&git, &recorded, proposal, &head, &overlay);
     let created = match create_file(&recorded.root, path, proposal.new_text.as_bytes()) {
         Ok(created) => created,
         Err(CreateFileError::Exists) => {
@@ -1528,7 +1536,15 @@ pub(crate) fn approve_file(
         }
     };
 
-    // Step 9: its index entry, then the commit of that one path.
+    outputs.write(&place.worktree, &mut messages);
+
+    // Step 9: the outputs staged on their own (a failure narrows the commit
+    // to the new file), then its index entry and the commit of that path
+    // and the outputs.
+    outputs.stage(&git, &place.worktree, &mut messages);
+    if let Some(gap) = outputs.gap() {
+        messages.push(Message::Warning(gap.to_owned()));
+    }
     let message = commit_message(&CommitFacts {
         id,
         rationale: &proposal.rationale,
@@ -1536,9 +1552,13 @@ pub(crate) fn approve_file(
         author: &proposal.author,
         base_commit: &place.base_commit,
     });
+    let output_tops = outputs.top_paths();
+    let mut paths = vec![top_path.as_str()];
+    paths.extend(output_tops.iter().map(String::as_str));
+    let written: BTreeSet<String> = output_tops.iter().cloned().collect();
     let committed = git
         .intent_to_add(&top_path)
-        .and_then(|()| git.commit_only(&context.data_dir, &message, &top_path));
+        .and_then(|()| git.commit_only_paths(&context.data_dir, &message, &paths));
     if let Err(error) = committed {
         let branch = &place.branch;
         match made_anyway(&git, &head, proposal) {
@@ -1564,22 +1584,33 @@ pub(crate) fn approve_file(
                 for left in created.remove() {
                     messages.push(Message::Warning(left));
                 }
+                let fared = outputs.restore(&git, &place.worktree, &mut messages);
                 let foreign = foreign.map_or_else(String::new, |tip| {
                     format!(
                         "; `{branch}` moved to {tip}, which has no `{PROPOSAL_TRAILER}: {id}` \
                          trailer (not this apply's commit)"
                     )
                 });
+                let mut named = vec![path];
+                named.extend(fared.iter().map(|(path, _)| path.as_str()));
+                let restored = match outputs_clause(&fared) {
+                    clause if clause.is_empty() => String::new(),
+                    clause => format!(", {clause}"),
+                };
                 let failure = StepFailure::refused(
                     9,
-                    format!("the commit of `{path}` failed, the file removed: {error}{foreign}"),
+                    format!(
+                        "the commit of `{}` failed, the file removed{restored}: {error}{foreign}",
+                        names(&named)
+                    ),
                 );
                 return after(context, failure, messages);
             }
         }
     }
 
-    // Step 10: this run's commit adds the file and nothing else.
+    // Step 10: this run's commit adds the file and the outputs it wrote,
+    // nothing else.
     let adds_the_file = |commit: &str| -> Result<(), String> {
         adds_file(
             &git,
@@ -1588,6 +1619,7 @@ pub(crate) fn approve_file(
             &top_path,
             &proposal.new_text,
             "the proposal's text",
+            Beside::Written(&written),
         )
         .map_err(|why| format!("it {why}"))
     };
@@ -1595,6 +1627,9 @@ pub(crate) fn approve_file(
         Ok(commit) => commit,
         Err(reason) => return after(context, StepFailure::refused(10, reason), messages),
     };
+    // The outputs' committed blobs against this run's bytes: a warning,
+    // never a refusal.
+    messages.extend(outputs.compare(&git, &commit));
     let applied = match context
         .queue
         .applied_with(id, &commit, &decision, &request.now)
@@ -1611,14 +1646,20 @@ pub(crate) fn approve_file(
             }
         },
     };
+    let mut updated = vec![path];
+    updated.extend(outputs.paths());
     if let Err(error) = index
         .index
-        .update_paths(&tree, &recorded.config.scheme, &[path])
+        .update_paths(&tree, &recorded.config.scheme, &updated)
     {
         messages.push(Message::Warning(format!(
             "the index was not updated after the commit: {error}; the next command updates it"
         )));
     }
-    let document = with_diff(&applied, &request.git, &context.data_dir);
+    messages.extend(outputs.note());
+    let mut document = with_diff(&applied, &request.git, &context.data_dir);
+    if context.hub {
+        document.notes.extend(outputs.gap().map(str::to_owned));
+    }
     Ok(ProposalOutcome::done(COMMAND, document, messages))
 }

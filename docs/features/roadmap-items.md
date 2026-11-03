@@ -81,7 +81,7 @@ Q-1..Q-7, N1..N13: 2026-10-20 under the owner's pre-approval, review open, as th
 | N8, N13 | parked lists not harvested; seeded once; no back-fill |
 | N9 | a seventh UI section (3a) |
 | N10 | typed keys, `estimate` `TextOrInteger`, never counted; `INDEX_FORMAT` 12 |
-| N12 | before 3b, an ADR letting an apply commit carry rendered outputs; 3b parked |
+| N12 | before 3b, an ADR letting an apply commit carry rendered outputs; 3b parked. Issued 2026-11-03 as ADR-0062 by `apply-outputs` (RM-0072), unparking 3b (RM-0019) |
 
 Readings of iteration 1, accepted by the review and recorded in canon: pool and unplaced always listed; a self-edge is a one-item cycle; a mistyped release unplaced (`release mistyped`), a mistyped estimate noted as its compact JSON; `007` reads 7, `3-3` prints `3`, the unit verbatim; `n` counts every listed item. The review's nits, decided for iteration 2 (RD-8): a mistyped priority noted; no tail when k = 0; an open duplicate noted.
 

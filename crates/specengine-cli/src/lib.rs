@@ -251,6 +251,7 @@ mod lock_diff;
 mod lock_rebase;
 mod lock_regen;
 mod node_set;
+mod outputs;
 mod package;
 mod preflight;
 mod project;
@@ -355,7 +356,9 @@ pub use layer_c::{
     ResolveOutcome, ResolveRequest, ResolvedWorkspace, layer_c_state, resolve,
 };
 pub use links::{ShownLink, ShownLinks};
-pub use location::{OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir};
+pub use location::{
+    OpenIndex, checked_data_dir, data_dir, db_path, open_index, prepared_data_dir, store_hub_floor,
+};
 pub use lock::{
     LockAcceptRequest, LockConsent, LockMode, LockOutcome, LockPrompt, LockRow, LockTrailer,
     LockWritten, lock_accept,

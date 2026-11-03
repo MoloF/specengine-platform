@@ -393,6 +393,23 @@ pub fn beyond_daemon(home: &Path) -> Vec<String> {
         .collect()
 }
 
+/// The proposal floor a hub's first start writes into its data directory
+/// (docs/features/apply-outputs.md "Data"), and its bytes.
+pub const FLOOR_FILE: &str = "proposal-floor";
+pub const HUB_FLOOR: &[u8] = b"100001\n";
+
+/// [`beyond_daemon`] for a hub (`--public-origin`): its start writes
+/// `proposal-floor` too, `100001` and LF, which is the start's own; a floor
+/// of any other bytes is listed.
+pub fn beyond_hub(home: &Path) -> Vec<String> {
+    let floor = data_dir(home).join(FLOOR_FILE);
+    let own = fs::read(&floor).is_ok_and(|bytes| bytes == HUB_FLOOR);
+    beyond_daemon(home)
+        .into_iter()
+        .filter(|key| !(own && home.join(key) == floor))
+        .collect()
+}
+
 /// Every file under `dir` whose name ends `suffix`, relative.
 pub fn files_ending(dir: &Path, suffix: &str) -> Vec<String> {
     snapshot(dir)

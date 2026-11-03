@@ -269,13 +269,8 @@ Nothing below is written before this slice's commit. Free bytes are as of 2026-1
   - `#apply`: after "one click per item", add "; a hub's `--push` sync merges others' commits, `spec.lock` too, never rebasing and authoring neither (`hub-git.md`)", and add ADR `hub-push` to its list (D1, D2).
   - The generated paragraph, after 10a: "in an apply's commit" becomes "in a commit it makes" (A12, ADR `hub-push`); 10a's ADR keeps "an apply's commit".
   - `#distribution`: "(`hub.md`). ADR-0058." becomes "(`hub.md`), only its `--push` online, by git and the deployment's credentials. ADR-0058, ADR `hub-push`." (D6).
-  - Room, never a raised cap: repeated passages move out to the canon pages they repeat, which the sentence points at:
-    - `#control`'s "; a code-layer failure leaves ... never `ok`" (`architecture-code.md#sync-in-reads`);
-    - "both from the code index the call refreshes, as `spec refs` reads it" (`architecture-code.md` rows 4-5);
-    - `#storage`'s macOS-only path, wrong on a Linux hub (the CLI README "Database").
-
-    These three free 215 B. With 10a's line (+97 B) about 94 B more are needed, found the same way.
-- **`hub.md`** (24 B): the intro, "only by a confirm (`hub-confirm.md`) or a sync's merge (`hub-git.md`)"; "Trust", "no account, token, key or session (git's: `hub-git.md`)". For room, "Tests" drops "`tests/hub_{team,confirm}.rs`: `hub-team.md`, `hub-confirm.md`.", leaving 27 B after 10a.
+  - Room, never a raised cap: 10a (shipped 2026-11-03) already moved out the three repeated passages planned here (`#control`'s code-layer failure clause, Health's "both from the code index ..." clause, `#storage`'s macOS-only path) to make room for its own line, leaving 55 B. The rest is found the same way: a repeated passage moves to the canon page it repeats, which the sentence points at.
+- **`hub.md`** (9 B after 10a): the intro, "only by a confirm (`hub-confirm.md`) or a sync's merge (`hub-git.md`)"; "Trust", "no account, token, key or session (git's: `hub-git.md`)". For room, "Tests" drops "`tests/hub_{team,confirm}.rs`: `hub-team.md`, `hub-confirm.md`."; recount at this step's ship.
 - **`hub-confirm.md`:**
   - The intro: "a `--push` sync carries the branch (`hub-git.md`)".
   - **Where it ends**: "`applied` means committed on this hub: a `--push` sync pushes it, never awaited by a confirm nor refusing one (`hub-git.md`); without `--push` the operator pushes by hand".

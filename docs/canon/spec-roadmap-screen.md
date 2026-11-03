@@ -27,7 +27,7 @@ Loading a skeleton, `aria-busy`. A refusal or the exit-1 document: `ErrorPanel`,
 
 ## Rules
 
-- No write: an item moves by an edit of its file, shown on Read again (3b parked: `roadmap-items.md` N12).
+- No write: an item moves by an edit of its file, shown on Read again (3b, RM-0019, unparked by ADR-0062 on 2026-11-03, not built).
 - Marks a label and an icon; no hold word (ADR-0012); no release, priority, unit or item-status literal in app code (`ui_policy.rs`).
 - Texts: `ui/src/roadmap/text.ts`, the views; pinned by tests.
 - Key sets: the ten, `RoadmapDocument` to `TaskRoadmap`, in `provisional.ts`, last of the 66 in `fixtures/daemon-keys.json`.

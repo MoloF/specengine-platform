@@ -10,7 +10,9 @@
 //! roots of one slug refused; the data directory refused inside any root
 //! (nothing created), else created; its `daemon.lock` locked exclusively
 //! (one daemon per data directory; held by another past 500 ms: exit 2
-//! naming it); then the bind, and `daemon.json` written with the bound
+//! naming it); a hub's `proposal-floor` stored once under it (task spec
+//! `apply-outputs`: created exclusively, never rewritten; an invalid one
+//! exits 2); then the bind, and `daemon.json` written with the bound
 //! port. Stdout: `serving <slug> <root>` per root, in `--root` order, a
 //! hub's `public <origin>`, then `listening http://127.0.0.1:<port>`. A
 //! `--public-origin` is judged before all of it, so a refusal creates
@@ -97,6 +99,14 @@ fn main() -> ExitCode {
         Ok(lock) => lock,
         Err(reason) => return cannot_start(&reason),
     };
+    // A hub's own `PR-` range (task spec `apply-outputs`): its floor stored
+    // once, under the lock and before listening; a local start never
+    // writes or reads it.
+    if hub.is_some()
+        && let Err(reason) = specengine_cli::store_hub_floor(&served.data_dir)
+    {
+        return cannot_start(&reason);
+    }
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()

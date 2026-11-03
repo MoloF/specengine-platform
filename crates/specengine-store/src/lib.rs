@@ -107,9 +107,11 @@ mod check;
 mod code;
 mod dump;
 mod error;
+mod floor;
 mod git;
 mod index;
 mod layer_c;
+mod outputs;
 mod queue;
 mod read;
 mod roles;
@@ -141,12 +143,14 @@ pub use code::{
     StoredMarker, StoredMention, StoredName, StoredNames, StoredSymbol,
 };
 pub use error::StoreError;
+pub use floor::{PROPOSAL_FLOOR_FILE, read_floor, store_floor};
 pub use git::{GitEnv, same_dir};
 pub use index::{DbSettings, SqliteIndex};
 pub use layer_c::{
     CodeTreeFile, CodeTreeRows, LayerCFile, LayerCFileRows, LayerCHead, LayerCItem, LayerCRead,
     LayerCSnapshot, LayerCStamp,
 };
+pub use outputs::{Committed, CommittedTree, HeadFile, committed_tree};
 pub use queue::{
     APPLY_VERIFY_STEP, ApplyFailure, CARD_COLUMNS, CardAccept, CardAccepted, CardChange, CardClear,
     CardCleared, CardClearing, CardDeparture, CardEdit, CardList, CardRefresh, Choice, Decision,
@@ -178,8 +182,9 @@ pub use verify_git::{
     IndexRefusal, MISSING_COMMIT_BLOB, ObjectBlob, VerifyGit,
 };
 pub use worktree::{
-    ChangedPath, CreateFileError, CreatedFile, GitError, ListedWorktree, Merge, Operation,
-    PlaceError, StatusEntry, WorktreeGit, create_file, replace_file, same_repository,
+    ChangedPath, CreateFileError, CreatedFile, DiskName, GitError, ListedWorktree, Merge,
+    Operation, PlaceError, StatusEntry, WorktreeGit, create_file, disk_name, replace_file,
+    same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change

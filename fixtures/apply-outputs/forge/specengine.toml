@@ -1,0 +1,33 @@
+# Fixture corpus apply-outputs/forge: an invented smithing game, "Ember
+# Forge", for docs/features/apply-outputs.md (RM-0072). Its `[[generators]]`
+# entry has `index = true` and an archive shard, and its roots reach beyond
+# `docs/` (`README.md`, `design`): the synthetic config of the spec's "Data".
+# The index's outputs are not part of the fixture: each test renders them
+# with `spec export index` before its first commit. The prefixes and kinds
+# are spec-a's, so no fixture vocabulary is added. The decision template
+# lies outside the roots.
+
+[project]
+name = "ember-forge"
+slug = "ember-forge"
+
+[paths]
+roots = ["README.md", "docs", "design"]
+index = "docs/index.md"
+
+[ids]
+MEC  = { kind = "mechanic",  shape = "name" }
+RULE = { kind = "rule",      shape = "name" }
+EDGE = { kind = "edge-case", shape = "name" }
+DEC  = { kind = "decision",  width = 4 }
+
+[decision_records]
+prefix   = "DEC"
+dir      = "docs/records/DEC"
+template = "templates/decision.md"
+
+[[generators]]
+command = "spec export index"
+writes  = ["docs/index.md", "docs/index-archive.md"]
+index   = true
+shards  = [{ path = "docs/index-archive.md", tier3 = true }]

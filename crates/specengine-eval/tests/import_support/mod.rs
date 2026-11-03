@@ -192,9 +192,10 @@ pub fn git_status(dir: &Path, pathspec: &str) -> String {
 /// `fixtures/flow-relay` and `fixtures/flow-hire`
 /// (docs/features/flow-links.md), `fixtures/flow-gaps`
 /// (docs/features/flow-read.md), `fixtures/card-press`
-/// (docs/features/card-store.md) or `fixtures/trace-almanac`
-/// (docs/features/trace-views.md), each untracked until the owner commits it,
-/// nothing else.
+/// (docs/features/card-store.md), `fixtures/trace-almanac`
+/// (docs/features/trace-views.md) or `fixtures/apply-outputs`
+/// (docs/features/apply-outputs.md), each untracked until the owner commits
+/// it, nothing else.
 pub fn assert_fixtures_status_clean() {
     let status = git_status(&repository_root(), "fixtures/");
     let foreign: Vec<&str> = status
@@ -211,6 +212,7 @@ pub fn assert_fixtures_status_clean() {
                 && !path.starts_with("fixtures/flow-gaps/")
                 && !path.starts_with("fixtures/card-press/")
                 && !path.starts_with("fixtures/trace-almanac/")
+                && !path.starts_with("fixtures/apply-outputs/")
                 && path != "fixtures/daemon-keys.json"
         })
         .collect();
@@ -219,7 +221,7 @@ pub fn assert_fixtures_status_clean() {
         "git status -- fixtures/ shows more than fixtures/import-*, fixtures/pilot-w, \
          fixtures/spec-c, fixtures/ui-dist, fixtures/ui-dist-pageless, fixtures/flow-relay, \
          fixtures/flow-hire, fixtures/flow-gaps, fixtures/card-press, \
-         fixtures/trace-almanac and fixtures/daemon-keys.json:\n{}",
+         fixtures/trace-almanac, fixtures/apply-outputs and fixtures/daemon-keys.json:\n{}",
         foreign.join("\n")
     );
 }

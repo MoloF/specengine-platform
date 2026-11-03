@@ -376,9 +376,15 @@ impl SqliteQueue {
         if version > QUEUE_SCHEMA_VERSION {
             return Err(QueueError::SchemaTooNew { found: version });
         }
+        let dir = match db.parent() {
+            Some(parent) if parent.as_os_str().is_empty() => Path::new("."),
+            Some(parent) => parent,
+            None => Path::new("."),
+        };
         Ok(Some(Self {
             conn,
             project: project.to_owned(),
+            dir: dir.to_path_buf(),
         }))
     }
 
