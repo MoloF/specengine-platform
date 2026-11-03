@@ -2841,10 +2841,12 @@ dependencies = [
  "rmcp",
  "rust-embed",
  "serde",
+ "serde-saphyr",
  "serde_json",
  "specengine-cli",
  "specengine-mcp",
  "tokio",
+ "toml",
 ]
 
 [[package]]

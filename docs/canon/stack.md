@@ -39,6 +39,8 @@ Edition 2024, `rust-version = 1.90`; `specengine-ra` needs rustc >= 1.98 (the `r
 | `libc` | =0.2.189 (`default-features = false`) | `specengine-cli`, a plain dependency: the process groups and signals of `verify --tests` and `resolve` (`group.rs`); `specengine-eval` feature `ra`: peak RSS and process groups; the `specengine-ra` binary: `getrusage`, `getpgrp`, `kill` (`docs/canon/layer-c-protocol.md`) |
 | `syn` / `quote` / `proc-macro2` | =3.0.6 (+ `extra-traits`) / =1.0.47 / =1.0.107 | comparison only, behind `specengine-eval`'s `syn` feature: not an identity source (no name resolution) and not the digest (05 s5.2, ADR-0021) |
 
+**Deployment.** A hub's third-party images (Traefik v3.7.17, Authelia 4.39.28, Debian 13 slim, Node 24.22.2, the Rust 1.90.0 builder) and `image.yml`'s four actions are pinned by version and digest or commit SHA in the files, listed in `hub-deploy.md` "Pins": recorded 2026-11-03 under the owner's approval of new dependencies, they await the owner's confirmation. pnpm stays `ui/package.json`'s.
+
 ## Not taken
 
 `rusqlite_migration` (the queue's `user_version` steps; `refinery` and `sqlx` conflict), `similar` (`git diff`, `merge-file`), CRDTs (`loro` 1.16, `automerge` 0.12, `yrs` 0.28): one human writer and N proposing agents is a review-queue problem, not collaborative editing; optimistic locking by `base_hash` + SSE is enough.

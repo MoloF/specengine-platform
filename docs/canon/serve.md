@@ -102,7 +102,7 @@ Requests of one project run one at a time on the blocking pool (a read refreshes
 - Deleting the data directory under a live daemon lets a second start lock a new file.
 - Version skew: crates 0.1.0, no build id; an old daemon after `cargo install` answers `SchemaTooNew` 503s: restart it.
 - `daemon.json.tmp` is one fixed name, safe because the lock serialises starts.
-- **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. AC-01 keeps `daemon.json`'s five keys, and it fails closed (RM-0064).
+- **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. AC-01 keeps `daemon.json`'s five keys, and it fails closed (the guide, `scripts/deploy/README.md`).
 
 ## Tests
 

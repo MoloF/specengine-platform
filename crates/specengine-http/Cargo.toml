@@ -41,3 +41,8 @@ specengine-mcp = { path = "../specengine-mcp" }
 # test of `src/hub.rs` (docs/features/hub-confirm.md B11); already in the graph.
 [dev-dependencies]
 regex.workspace = true
+# `serde-saphyr` reads the deployment's YAML (`scripts/deploy/`, `image.yml`) and
+# `toml` the root `Cargo.toml`'s `rust-version` for `tests/deploy.rs`
+# (docs/features/hub-deploy.md D1-D15); both already in the graph through core.
+serde-saphyr.workspace = true
+toml.workspace = true

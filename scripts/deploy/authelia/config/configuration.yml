@@ -1,0 +1,35 @@
+# Authelia's configuration (docs/features/hub-deploy.md "Data"), rendered by the
+# template filter (X_AUTHELIA_CONFIG_FILTERS) from the service's environment;
+# the three secrets arrive as files under /run/secrets. Deny by default, and no
+# rule lets a request through without a session: the hub host's first rule
+# steps up on trust item 5's regex alone, the second takes one factor.
+# Sessions live in memory: a restart logs everyone out.
+server:
+  address: 'tcp://:9091/'
+  endpoints:
+    authz:
+      forward-auth:
+        implementation: ForwardAuth
+        # A cookie session alone: no Basic at the door.
+        authn_strategies: [{name: CookieSession}]
+authentication_backend:
+  # A lost password is the operator's (S8).
+  password_reset: {disable: true}
+  file: {path: /users/users.yml, watch: true}
+access_control:
+  default_policy: deny
+  rules:
+    - domain: '{{ env "HUB_HOST" }}'
+      resources: ['^/api/projects/[^/]+/(proposals/[^/]+/confirm|cards/[^/]+/(accept|clear)|trace/clear)$']
+      policy: two_factor
+    - domain: '{{ env "HUB_HOST" }}'
+      policy: one_factor
+session:
+  cookies:
+    - domain: '{{ env "HUB_DOMAIN" }}'
+      authelia_url: 'https://{{ env "DOOR_HOST" }}'
+      default_redirection_url: 'https://{{ env "HUB_HOST" }}/'
+storage: {local: {path: /var/lib/authelia/db.sqlite3}}
+notifier: {filesystem: {filename: /var/lib/authelia/notification.txt}}
+totp: {issuer: '{{ env "HUB_HOST" }}'}
+webauthn: {enable_passkey_login: true}

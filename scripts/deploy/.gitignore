@@ -1,0 +1,6 @@
+# What the guide makes on the host (docs/features/hub-deploy.md "Files"): never committed.
+.env
+secrets/
+projects/
+authelia/users/
+traefik/mcp-users/

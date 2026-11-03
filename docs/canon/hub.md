@@ -14,7 +14,7 @@ ADR-0058, ADR-0059, built by `hub-identity` (RM-0049). `specengine-http --public
 
 `--public-origin https://host[:port]` is the whole switch. Present: a hub. Absent: a local daemon, `App.hub` `None`, the local fence byte for byte, `Remote-User` never read. No `[hub]` table: `specengine.toml` reaches every developer through git, and the mode belongs to the process, which serves several `--root`. `spec serve` has no such flag and passes only `--root` and `--port` (`serve.md` "Launcher"), so a launched daemon is never a hub.
 
-The bind does not change: `127.0.0.1`, `--host` and `--bind` exit 2, `--port` as ever. The proxy reaches loopback through a shared network namespace (RM-0064). `daemon.json` keeps its five keys and loopback `url`.
+The bind does not change: `127.0.0.1`, `--host` and `--bind` exit 2, `--port` as ever. The proxy reaches loopback through a shared network namespace (`hub-deploy.md`). `daemon.json` keeps its five keys and loopback `url`.
 
 Parsed by hand before anything is created; a refusal exits 2, `specengine-http: --public-origin <given>: <reason>`. The scheme is exactly `https://`; the host lower-cased, labels of `[a-z0-9-]` joined by `.`; an optional canonical port, 1 to 65535, no leading zero or `+`, `:443` dropped. Refused: a path (even `/`), query, fragment or userinfo; a loopback host (`localhost`, `*.localhost`, a loopback or unspecified IPv4). A numeric host (a last label of digits or `0x...`) must be a dotted quad. Both checks are a guard against an operator's mistake, not a guarantee: they read the text given, and `127.0.0.1.nip.io` cannot be caught.
 
@@ -80,10 +80,10 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
 - **What a login may do.** Any login reads everything served and makes the five writes. `by` alone stops a person. `GET /api/projects` shows the absolute `root` to every login: accepted; in a container it is the mount path.
 - **A forgotten proxy.** A forgotten flag fails closed: a local daemon refuses the public `Host`. A forgotten proxy fails open to whatever reaches the socket.
 
-**RM-0064 must guarantee,** its "Done" testing on a clean VM all a test can reach:
+**The deployment guarantees** (`hub-deploy.md#door`), a test pinning each file:
 
 1. The daemon's port is never published, and nothing but the proxy shares its network namespace.
-2. `Remote-User` is in `authResponseHeaders` on every router reaching the daemon, and no router or `bypass` rule reaches it without forward-auth: the proxy removes a client's copy only of a header so listed.
+2. Only the proxy sets `Remote-User`: forward-auth lists it in `authResponseHeaders` on every router reaching the daemon but item 6's, where the MCP credential's check sets it; no router or `bypass` rule reaches the daemon without one of the two.
 3. `passHostHeader` stays on, so the daemon sees the public `Host`.
 4. No agent, and nothing else untrusted, runs on the host.
 5. Every router reaching the daemon steps up on the confirm class's four routes, by this rule alone:
@@ -94,25 +94,23 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
 
 6. The MCP credential opens only `/mcp` routers: `hub-mcp.md#trust`, its rule read by a test.
 
-Unverified until that "Done": that Traefik keeps the client's `Host` by default and drops a client's copy of a listed header also when the login door returns none (from memory), and that the login door on a sibling subdomain makes the landing a `same-site` navigation (from the Fetch Metadata rules, tried in no browser).
-
 ## Screen
 
 With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-ui.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. `useHubLogin` beside `useActing` (`acting.ts`) gives the box its `readOnly`. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen".
 
 ## Known limits
 
-- **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. RM-0064 checks what the door answers to a JSON request.
+- **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. The gate (step 11b-3) checks what the door answers to a JSON request.
 - **Streams.** `tail.rs` is judged at connect, so a stream outlives a session until RM-0065.
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0074).
 - **Scale.** Until `scale-reads` (RM-0054) a team waits behind O(n) reads.
-- **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy must reject or encode `#` (RM-0064).
+- **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy encodes it, `%23` (`hub-deploy.md`).
 - **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`), so a new one fails until decided.
 - **Before the login resolves.** While the identity loads or after a failed read the box is as today, so a typed name can reach the key, and a stored name sent then gets the daemon's 403.
 - **One login per page.** The login is kept for the page, so changing login in another tab gives the `as` 403 until a reload.
 - **The mock.** A `?scenario=` query on the landing opens the mock on the hub's origin, with its banner; past the page nothing reaches the daemon.
-- **Headers.** The focus is the daemon: `nosniff` on JSON and COOP on the page are hardening for RM-0064.
+- **Headers.** `nosniff`, HSTS and COOP are set at the proxy (`hub-deploy.md`).
 
 ## Tests
 
-http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is RM-0064's. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.
+http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is `hub-deploy.md`'s. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.

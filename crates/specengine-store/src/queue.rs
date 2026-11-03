@@ -126,6 +126,7 @@ use rusqlite::types::ValueRef;
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Row, Transaction, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use specengine_core::card::hub_login_problem;
 use specengine_core::check::Finding;
 use specengine_core::drift::{DriftEvidence, StoredJson, is_drift_hash};
 pub use specengine_core::intake::Interpretation;
@@ -2304,6 +2305,13 @@ impl RawRow {
             if let Some(problem) = field.as_deref().and_then(author_field_problem) {
                 return Err(corrupt(&id, "author", problem));
             }
+        }
+        // A hub's login is a person's, never an author field: non-ASCII and
+        // inner spaces are valid logins, so it takes the hub's own grammar; a
+        // row with no `login` key reads as before:
+        // docs/features/hub-deploy.md "Store: `Author.login` on decode".
+        if let Some(problem) = author.login.as_deref().and_then(hub_login_problem) {
+            return Err(corrupt(&id, "author", problem));
         }
         let diagnostics_text = required(take(), "diagnostics")?;
         let diagnostics: Vec<ProposalFinding> = serde_json::from_str(&diagnostics_text)

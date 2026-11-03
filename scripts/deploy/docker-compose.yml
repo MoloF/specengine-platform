@@ -1,0 +1,75 @@
+# A hub's whole host (docs/features/hub-deploy.md "The host"): three services and
+# nothing else. Traefik holds TLS, the routers and the door's forward-auth;
+# Authelia the accounts and sessions; the daemon runs inside Traefik's network
+# namespace on its loopback bind, its port never published (trust item 1).
+# Traefik's static configuration is its command list (S1); the dynamic one is
+# traefik/dynamic/hub.yml. Pins: exact versions and index digests, pending the
+# owner (Q7).
+services:
+  traefik:
+    # Traefik v3.7.17, the multi-arch index (Docker Hub, 2026-11-03).
+    image: traefik:v3.7.17@sha256:68ae5fe5b64ca166704b746a9e8afcd385e36b3f569a5691401bf652d57b3748
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment: {HUB_HOST: "${HUB_HOST}", DOOR_HOST: "${DOOR_HOST}"}
+    command:
+      - --global.checknewversion=false
+      - --global.sendanonymoususage=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.transport.respondingtimeouts.readtimeout=300s
+      # An alias of a managed header (`Remote_User`) is refused, never passed on.
+      - --entrypoints.websecure.http.aliasHeadersStrategy=reject
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
+      - --certificatesresolvers.le.acme.caserver=${ACME_CA_SERVER}
+      - --certificatesresolvers.le.acme.storage=/acme/acme.json
+      - --certificatesresolvers.le.acme.tlschallenge=true
+    volumes:
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - ./traefik/mcp-users:/etc/traefik/mcp-users:ro
+      - traefik-acme:/acme
+  authelia:
+    # Authelia 4.39.28, the multi-arch index (Docker Hub, 2026-11-03).
+    image: authelia/authelia:4.39.28@sha256:bd97cff4fcbf715b5ff1f9ae286afbe6033afce385302520b0368122d43a6f54
+    restart: unless-stopped
+    environment:
+      X_AUTHELIA_CONFIG_FILTERS: template
+      HUB_DOMAIN: "${HUB_DOMAIN}"
+      HUB_HOST: "${HUB_HOST}"
+      DOOR_HOST: "${DOOR_HOST}"
+      AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_secret
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_secret
+    secrets: [authelia_session_secret, authelia_storage_key, authelia_jwt_secret]
+    volumes:
+      - ./authelia/config:/config:ro
+      - ./authelia/users:/users
+      - authelia-data:/var/lib/authelia
+  specengine:
+    image: ghcr.io/molof/specengine:${SPECENGINE_VERSION:?set SPECENGINE_VERSION in .env}
+    restart: unless-stopped
+    # The daemon installs no signal handler: the init reaps the git children a
+    # sync's deadline kills.
+    init: true
+    network_mode: "service:traefik"
+    depends_on:
+      traefik: {condition: service_started, restart: true}
+    environment:
+      HUB_HOST: "${HUB_HOST}"
+      SPECENGINE_PUSH: "${SPECENGINE_PUSH}"
+      GIT_SSH_COMMAND: ssh -i /run/secrets/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=/run/secrets/known_hosts -o StrictHostKeyChecking=yes
+    secrets: [deploy_key, known_hosts]
+    volumes:
+      - ./projects:/projects
+      - specengine-data:/data
+secrets:
+  deploy_key: {file: ./secrets/deploy_key}
+  known_hosts: {file: ./secrets/known_hosts}
+  authelia_session_secret: {file: ./secrets/authelia_session_secret}
+  authelia_storage_key: {file: ./secrets/authelia_storage_key}
+  authelia_jwt_secret: {file: ./secrets/authelia_jwt_secret}
+volumes: {specengine-data: {}, authelia-data: {}, traefik-acme: {}}

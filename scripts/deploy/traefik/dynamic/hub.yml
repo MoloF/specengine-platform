@@ -1,0 +1,50 @@
+# Traefik's dynamic configuration, the file provider's one file
+# (docs/features/hub-deploy.md "Data"). A router to the daemon is one whose
+# service is `specengine`: each carries `door` (forward-auth, the browser's
+# session) or, on trust item 6's matcher alone, `mcp-credential` (a person's
+# random secret, its user the door login); never neither, never both.
+# `hardening` is on every such router. No middleware holds a body back, so SSE
+# and MCP streams pass as they come. The users file is read when the
+# middleware is built: touch this file after editing it.
+http:
+  routers:
+    hub:
+      rule: 'Host(`{{ env "HUB_HOST" }}`)'
+      entryPoints: [websecure]
+      priority: 10
+      middlewares: [door, hardening]
+      service: specengine
+      tls: {certResolver: le}
+    hub-mcp:
+      rule: 'Host(`{{ env "HUB_HOST" }}`) && PathRegexp(`^/mcp/[^/]+$`)'
+      entryPoints: [websecure]
+      priority: 20
+      middlewares: [mcp-credential, hardening]
+      service: specengine
+      tls: {certResolver: le}
+    login:
+      rule: 'Host(`{{ env "DOOR_HOST" }}`)'
+      entryPoints: [websecure]
+      service: authelia
+      tls: {certResolver: le}
+  middlewares:
+    door:
+      forwardAuth:
+        address: http://authelia:9091/api/authz/forward-auth
+        trustForwardHeader: false
+        authResponseHeaders: [Remote-User]
+    mcp-credential:
+      basicAuth:
+        usersFile: /etc/traefik/mcp-users/users
+        headerField: Remote-User
+        removeHeader: true
+    hardening:
+      headers:
+        contentTypeNosniff: true
+        stsSeconds: 31536000
+        customResponseHeaders: {Cross-Origin-Opener-Policy: same-origin}
+  services:
+    specengine:
+      loadBalancer: {servers: [{url: "http://127.0.0.1:7777"}], passHostHeader: true}
+    authelia:
+      loadBalancer: {servers: [{url: "http://authelia:9091"}]}

@@ -1,0 +1,151 @@
+# The hub's image (docs/features/hub-deploy.md "`image.yml`"), on a version tag
+# alone: one version, one build (ADR-0015). `check` refuses any tag but `v` +
+# the plugin's version and runs the deployment's tests and checks (C2, C3)
+# before anything builds; `build` builds natively per architecture, smoke-tests
+# (C1) and pushes `<v>-<arch>`; `merge` publishes the list `<v>`. Both push only
+# on the owner's repository, and fail before pushing when `<v>` is published
+# already, so a published version is never replaced. Every action is pinned to
+# a commit, its version beside it, pending the owner (Q7). The runner's own
+# cargo; no secret but GITHUB_TOKEN.
+name: image
+"on": {push: {tags: ["v*"]}}
+permissions: {contents: read}
+env:
+  IMAGE: ghcr.io/molof/specengine
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - name: The tag is v and the plugin's version
+        run: sh scripts/deploy/tag-check.sh "$GITHUB_REF_NAME"
+      - name: The deployment's tests
+        run: |
+          cargo test --locked -p specengine-http --test deploy
+          cargo test --locked -p specengine-cli --test deploy_clone
+      - name: compose config
+        run: >-
+          docker compose --project-directory scripts/deploy
+          -f scripts/deploy/docker-compose.yml
+          --env-file scripts/deploy/.env.example
+          config --quiet
+      - name: The Dockerfile's checks (C2)
+        run: docker build --check -f scripts/deploy/Dockerfile .
+      - name: Authelia accepts its configuration (C3)
+        run: |
+          set -eu
+          image=$(docker compose --project-directory scripts/deploy \
+            -f scripts/deploy/docker-compose.yml \
+            --env-file scripts/deploy/.env.example config --images | grep '^authelia/')
+          scratch=$(mktemp -d)
+          mkdir "$scratch/secrets" "$scratch/users"
+          for name in authelia_session_secret authelia_storage_key authelia_jwt_secret; do
+            openssl rand -hex 32 > "$scratch/secrets/$name"
+          done
+          docker run --rm \
+            --env-file scripts/deploy/.env.example \
+            -e X_AUTHELIA_CONFIG_FILTERS=template \
+            -e AUTHELIA_SESSION_SECRET_FILE=/run/secrets/authelia_session_secret \
+            -e AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE=/run/secrets/authelia_storage_key \
+            -e AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE=/run/secrets/authelia_jwt_secret \
+            -v "$PWD/scripts/deploy/authelia/config:/config:ro" \
+            -v "$scratch/secrets:/run/secrets:ro" \
+            -v "$scratch/users:/users" \
+            "$image" authelia validate-config --config /config/configuration.yml
+          rm -rf "$scratch"
+  build:
+    needs: check
+    # A fork's tag publishes nothing.
+    if: github.repository_owner == 'MoloF'
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - {platform: linux/amd64, runner: ubuntu-24.04, arch: amd64}
+          - {platform: linux/arm64, runner: ubuntu-24.04-arm, arch: arm64}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 90
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: {persist-credentials: false}
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: The version is not published yet
+        run: |
+          set -eu
+          version=${GITHUB_REF_NAME#v}
+          if docker buildx imagetools inspect "$IMAGE:$version" > /dev/null 2>&1; then
+            echo "$IMAGE:$version is published: one version, one build, never replaced" >&2
+            exit 1
+          fi
+      - name: The image's reference
+        id: ref
+        env: {ARCH: "${{ matrix.arch }}"}
+        run: printf 'ref=%s:%s-%s\n' "$IMAGE" "${GITHUB_REF_NAME#v}" "$ARCH" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: scripts/deploy/Dockerfile
+          platforms: ${{ matrix.platform }}
+          load: true
+          push: false
+          provenance: false
+          sbom: false
+          tags: ${{ steps.ref.outputs.ref }}
+      - name: Smoke (C1)
+        env: {REF: "${{ steps.ref.outputs.ref }}"}
+        run: |
+          set -eu
+          git_version=$(docker run --rm --entrypoint git "$REF" --version)
+          printf '%s\n' "$git_version"
+          printf '%s\n' "$git_version" |
+            awk '{ split($3, v, "."); if (v[1] < 2 || (v[1] == 2 && v[2] < 38)) exit 1 }'
+          if docker run --rm --entrypoint git "$REF" lfs version; then
+            echo "git lfs is in the image" >&2
+            exit 1
+          fi
+          docker run -d --name smoke --network host --entrypoint sh "$REF" -c \
+            'set -eu; mkdir /tmp/smoke; cd /tmp/smoke; git init -q; spec init; exec specengine-http --root /tmp/smoke --port 7777'
+          trap 'docker logs smoke || true; docker rm -f smoke > /dev/null 2>&1 || true' EXIT
+          page="$RUNNER_TEMP/page.html"
+          code=$(curl -sS --retry 30 --retry-delay 1 --retry-connrefused \
+            -o "$page" -w '%{http_code}' http://127.0.0.1:7777/)
+          [ "$code" = 200 ]
+          grep -q '<div id="root">' "$page"
+      - name: Push
+        env: {REF: "${{ steps.ref.outputs.ref }}"}
+        run: docker push "$REF"
+  merge:
+    needs: build
+    if: github.repository_owner == 'MoloF'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions: {contents: read, packages: write}
+    steps:
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - name: The version is not published yet
+        run: |
+          set -eu
+          version=${GITHUB_REF_NAME#v}
+          if docker buildx imagetools inspect "$IMAGE:$version" > /dev/null 2>&1; then
+            echo "$IMAGE:$version is published: one version, one build, never replaced" >&2
+            exit 1
+          fi
+      - name: Publish the list
+        run: |
+          set -eu
+          version=${GITHUB_REF_NAME#v}
+          docker buildx imagetools create -t "$IMAGE:$version" \
+            "$IMAGE:$version-amd64" "$IMAGE:$version-arm64"

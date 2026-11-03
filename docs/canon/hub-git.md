@@ -74,11 +74,11 @@ The rest name their cause (no branch, shallow or partial, an operation, outside 
 
 ## Credentials
 
-Git's, set by the deployment; SpecEngine holds none (supplementing ADR-0034, ADR-0059). RM-0064: a write deploy key for this one repository, a Docker secret mounted only into `specengine`, wired outside every `--root`, a pinned `known_hosts`. No `src` string names one: no `GIT_SSH_COMMAND`, `core.sshCommand`, `credential.` setting or key path. A prompt fails at once (`GIT_TERMINAL_PROMPT=0`, stdin null). A URL with a password (`user:pass@`, any scheme), or with any user name on `http`, `https`, `ftp` or `ftps`, is refused before any connection and never shown; an ssh user (`git@host:x`) passes.
+Git's, set by the deployment; SpecEngine holds none (supplementing ADR-0034, ADR-0059). The deployment's (`hub-deploy.md`): a deploy key for the repository and a pinned `known_hosts`, Docker secrets of `specengine` alone, outside every `--root`. No `src` string names one: no `GIT_SSH_COMMAND`, `core.sshCommand`, `credential.` setting or key path. A prompt fails at once (`GIT_TERMINAL_PROMPT=0`, stdin null). A URL with a password (`user:pass@`, any scheme), or with any user name on `http`, `https`, `ftp` or `ftps`, is refused before any connection and never shown; an ssh user (`git@host:x`) passes.
 
 ## Sparse set
 
-`spec sparse-set [--json]`, read-only, prints, from the root's `specengine.toml` at `HEAD`, paths from the repository's top in config order: `specengine.toml`, `spec.lock`, `.spec-debt.toml`, every `[paths] roots` entry, `[decision_records] dir` and `template`, the `index = true` entry's `writes`. A directory ends in `/`; a path inside a listed directory is dropped. A path `HEAD` holds that the worktree lacks adds `warning: <path> is in HEAD but not in this checkout: widen the sparse checkout`. `--json`: `{"paths", "missing"}`. Exit 0 whatever is missing; exit 2 for no repository, no commit or a bad config. RM-0064's clone reads the list, and the look checks the same set.
+`spec sparse-set [--json]`, read-only, prints, from the root's `specengine.toml` at `HEAD`, paths from the repository's top in config order: `specengine.toml`, `spec.lock`, `.spec-debt.toml`, every `[paths] roots` entry, `[decision_records] dir` and `template`, the `index = true` entry's `writes`. A directory ends in `/`; a path inside a listed directory is dropped. A path `HEAD` holds that the worktree lacks adds `warning: <path> is in HEAD but not in this checkout: widen the sparse checkout`. `--json`: `{"paths", "missing"}`. Exit 0 whatever is missing; exit 2 for no repository, no commit or a bad config. The deployment's clone reads the list, and the look checks the same set.
 
 ## Screen
 

@@ -17,7 +17,8 @@
 //! entry. AC-12 of docs/features/spec-cli-switch.md: the eight specengine
 //! crates are the default members, no second-implementation package is left
 //! in the metadata or `Cargo.lock`, `.cargo/config.toml` holds only the
-//! build directory, and `scripts/` only the hook installer. AC-08 of
+//! build directory, and `scripts/` only the hook installer and `deploy/`
+//! (docs/features/hub-deploy.md Q1). AC-08 of
 //! docs/features/daemon-read.md: `specengine-http` a default member, its
 //! `[dependencies]` and the `axum` / `futures-util` pins, the CLI never
 //! reaching it or an HTTP stack, and its normal graph's licences. B1 of
@@ -107,7 +108,9 @@ fn default_members_are_exactly_the_core_packages() {
 
 /// AC-12 of docs/features/spec-cli-switch.md, the files: `Cargo.lock` has
 /// no retired package, `.cargo/config.toml` keeps only `[build] target-dir`
-/// (no alias), `scripts/` holds only `hooks-install.sh`.
+/// (no alias), `scripts/` holds only `hooks-install.sh` and, a decided
+/// change of docs/features/hub-deploy.md (Q1, "Data" "Files"), the folder
+/// `deploy/`, a hub's compose deployment and image, never a retired script.
 #[test]
 fn no_retired_package_alias_or_script_is_left() {
     let root = workspace_root();
@@ -133,7 +136,11 @@ fn no_retired_package_alias_or_script_is_left() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     scripts.sort();
-    assert_eq!(scripts, ["hooks-install.sh"]);
+    assert_eq!(scripts, ["deploy", "hooks-install.sh"]);
+    assert!(
+        root.join("scripts/deploy").is_dir(),
+        "scripts/deploy is a folder"
+    );
 }
 
 /// The version constants in `specengine_code::grammar` are synced by hand

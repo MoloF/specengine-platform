@@ -10,7 +10,7 @@ reviewed: 2026-11-02
 
 An HTTP adapter over the CLI library: the CLI's `--json` documents, the queue's live `events` and stages, on `127.0.0.1`, for the web UI (`ui/README.md` "Contract seam"). The daemon, one per data directory, `spec serve` launches (`serve.md`), serving the web UI compiled in (`serve-ui.md`); not ADR-0019's: no sole writer, socket bridge, auto-start, gate or watcher. A staged decision is confirmed on a terminal (ADR-0035) or, on a hub, `hub-confirm.md`; no hook consults it (ADR-0039).
 
-Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `specengine-mcp` and `rmcp` (`transport-streamable-http-server`), named in `src/mcp.rs` alone, `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`, `rust-embed` (`debug-embed`), dev `regex`; a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
+Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge), `specengine-mcp` and `rmcp` (`transport-streamable-http-server`), named in `src/mcp.rs` alone, `axum` (`http1`, `tokio` only), `tokio`, `futures-util`, `clap`, `serde`, `serde_json`, `rust-embed` (`debug-embed`), dev `regex`, `serde-saphyr`, `toml`; a std-only build script `src/build.rs`; a default member; pins, licences: eval `build_graph.rs`.
 
 ## Binary
 
@@ -83,4 +83,4 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp}.rs`, `common/mcp_http.rs`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

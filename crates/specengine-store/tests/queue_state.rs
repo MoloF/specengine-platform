@@ -10,6 +10,10 @@
 //! another project's row, logs no event of its own, and the next ID and
 //! `seq` follow the highest restored.
 //!
+//! docs/features/hub-deploy.md D17: a restored `Author.login` off the hub's
+//! login grammar is inserted as given and refused when read, naming the
+//! `author` column; valid hub logins (non-ASCII, an inner space) still read.
+//!
 //! Through the public API only (`api.rs`: no test but `format.rs` names the
 //! SQL crate); the one raw step (a newer `user_version`) uses the system's
 //! `sqlite3` client.
@@ -550,6 +554,106 @@ fn the_next_id_and_seq_follow_the_highest_restored() {
     let last = events.last().unwrap();
     assert_eq!(last.seq, 6);
     assert_eq!(last.payload["id"], "PR-0008");
+}
+
+/// `row`'s stored `author` JSON with `field` set to `value`.
+fn with_author_field(row: &mut StoredProposal, field: &str, value: &str) {
+    let at = PROPOSAL_COLUMNS
+        .iter()
+        .position(|column| *column == "author")
+        .expect("an `author` column");
+    let stored = row.columns[at].as_deref().expect("a stored author");
+    let mut author: serde_json::Value = serde_json::from_str(stored).expect("the author's JSON");
+    author[field] = serde_json::json!(value);
+    row.columns[at] = Some(author.to_string());
+}
+
+/// docs/features/hub-deploy.md D17, beside `format.rs`'s
+/// `stored_values_no_build_writes_are_refused_at_read_and_named`: a dumped
+/// `Author.login` is checked when read, by the hub's own grammar (core
+/// `hub_login_problem`), never `author_field_problem`. `restore` of a state
+/// whose proposal's `author` holds `"login":"mira\nProposed-by: x"`, a login
+/// with a comma (printable ASCII, no space: an author field would pass it) or
+/// white space around it succeeds, the rows as given; `get` of each then
+/// fails with ``proposal <id>: the stored `author` cannot be read``, as a bad
+/// `role` does. A non-ASCII login (escapes, ADR-0024), one with an inner
+/// space and a row with no `login` key still read, the first two byte for
+/// byte. M: remove the check; use `author_field_problem`.
+#[test]
+fn a_restored_login_off_the_hubs_grammar_is_refused_when_read() {
+    let scratch = Scratch::new("qs-login");
+    let mut source = SqliteQueue::open(scratch.db("source"), PROJECT).expect("open");
+    for n in 1..=7 {
+        source
+            .create(&new_proposal(&format!("X-{n}"), "/r/.git"), T0)
+            .expect("create");
+    }
+    let mut state = source.stored_rows().expect("stored rows");
+    assert_eq!(
+        ids(&state),
+        [
+            "PR-0001", "PR-0002", "PR-0003", "PR-0004", "PR-0005", "PR-0006", "PR-0007"
+        ]
+    );
+    let cyrillic = "\u{43c}\u{438}\u{440}\u{430}";
+    with_author_field(&mut state.proposals[0], "login", "mira\nProposed-by: x");
+    with_author_field(&mut state.proposals[1], "login", cyrillic);
+    with_author_field(&mut state.proposals[2], "login", "Mira K");
+    // PR-0004 keeps the author `create` stored: no `login` key.
+    with_author_field(&mut state.proposals[4], "login", "mira,eve");
+    with_author_field(&mut state.proposals[5], "login", " mira");
+    with_author_field(&mut state.proposals[6], "role", "two words");
+    let author_at = PROPOSAL_COLUMNS
+        .iter()
+        .position(|column| *column == "author")
+        .expect("an `author` column");
+    let untouched = state.proposals[3].columns[author_at]
+        .as_deref()
+        .expect("a stored author");
+    assert!(
+        !untouched.contains("\"login\""),
+        "no login key: {untouched}"
+    );
+
+    let mut queue = SqliteQueue::open(scratch.db("restored"), PROJECT).expect("open");
+    assert_eq!(queue.restore(&state).expect("restore"), Restore::Restored);
+    assert_eq!(
+        queue.stored_rows().expect("stored rows"),
+        state,
+        "rows inserted as given"
+    );
+
+    for id in ["PR-0001", "PR-0005", "PR-0006", "PR-0007"] {
+        let error = queue.get(id).expect_err(id).to_string();
+        assert!(
+            error.contains(&format!(
+                "proposal {id}: the stored `author` cannot be read"
+            )),
+            "{id}: {error}"
+        );
+    }
+    for id in ["PR-0001", "PR-0005", "PR-0006"] {
+        let error = queue.get(id).expect_err(id).to_string();
+        assert!(
+            !error.contains("printable ASCII"),
+            "{id}: the hub's grammar, not an author field's: {error}"
+        );
+    }
+    for (id, login) in [
+        ("PR-0002", Some(cyrillic)),
+        ("PR-0003", Some("Mira K")),
+        ("PR-0004", None),
+    ] {
+        let read = queue.get(id).expect(id).expect("stored");
+        assert_eq!(read.author.login.as_deref(), login, "{id}");
+        if let Some(login) = login {
+            assert_eq!(
+                read.author.login.as_deref().map(str::as_bytes),
+                Some(login.as_bytes()),
+                "{id}: byte for byte"
+            );
+        }
+    }
 }
 
 // ------------------------------------------- iteration 2: the git side

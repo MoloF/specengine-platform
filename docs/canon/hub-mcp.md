@@ -107,7 +107,7 @@ As in `hub.md#trust`, there is no authentication inside SpecEngine (ADR-0034). T
 
 **The daemon cannot defend:** an MCP client's `Remote-User` looks like a browser's, so only the proxy keeps the credential off every other path.
 
-**RM-0064 must guarantee,** beside `hub.md#trust`'s items 1-5:
+**The deployment guarantees** (`hub-deploy.md#door`), beside `hub.md#trust`'s items 1-5:
 
 6. The credential an MCP client holds opens only the routers matching this rule:
 
@@ -123,7 +123,7 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 
 - AI reads wait in the turn beside the page's, until RM-0054.
 - A login's AI reads others' proposals and cards: they are data, never a decision.
-- A bearer `Remote-User` that is an email or a UUID splits a person in two; RM-0064 guarantees the browser login.
+- A bearer `Remote-User` that is an email or a UUID would split a person in two; the deployment's Basic user is the door login.
 - Answers carry the corpus to the client's model provider.
 - A GET stream outlives a login door session, as `tail.rs`'s stream does.
 - A forged `Remote-User` raises proposals as anyone: no real use before the gate, step 11b-3.
@@ -137,7 +137,7 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 
 ## Client check
 
-By hand, not yet run; each finding is recorded here with the client's version and the date.
+By hand at the gate, not yet run; findings land in `hub-deploy.md` "Gate" with the client's version and the date.
 1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http ... --header "Authorization: Basic ..."`. Expected: the session and GET stream hold, 17 tools, `login` on a proposal and a card, a second login's own sessions.
 2. **claude.ai and Claude Desktop, at the gate, step 11b-3,** on the public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
 
