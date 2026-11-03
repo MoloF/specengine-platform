@@ -25,6 +25,8 @@ jobs:
         run: |
           cargo test --locked -p specengine-http --test deploy
           cargo test --locked -p specengine-cli --test deploy_clone
+          # After the CLI's test, which builds the `spec` that AC12 pipes into `check`.
+          cargo test --locked -p specengine-http --test deploy_admin
       - name: compose config
         run: >-
           docker compose --project-directory scripts/deploy
@@ -36,9 +38,10 @@ jobs:
       - name: Authelia accepts its configuration (C3)
         run: |
           set -eu
+          # `authelia` and `admin` share one image: one line.
           image=$(docker compose --project-directory scripts/deploy \
             -f scripts/deploy/docker-compose.yml \
-            --env-file scripts/deploy/.env.example config --images | grep '^authelia/')
+            --env-file scripts/deploy/.env.example config --images | grep '^authelia/' | sort -u)
           scratch=$(mktemp -d)
           mkdir "$scratch/secrets" "$scratch/users"
           for name in authelia_session_secret authelia_storage_key authelia_jwt_secret; do

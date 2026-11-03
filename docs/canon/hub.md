@@ -48,7 +48,7 @@ refused: this hub does not serve this route
 
 Judged on every request, `/` and assets too. None or a bad one: 403, never a 401, whose challenge the daemon does not own. An empty value counts as none; two values give `refused: the Remote-User header is sent more than once`, from `single()`. `hub.rs` keeps those steps and UTF-8; `hub_login_problem` (core `card.rs`, re-exported) refuses the rest: a login `.trim()` would change; `card_person_problem` (`cards.md` "Who acts"); a comma (a proxy folding a client's copy gives `eve, mira`); a Unicode format character (Cf) anywhere; `local` and `agent` in any ASCII case, the record's words for no person, and `-`, its word for clearing a name. hyper answers 400 to a control byte but a tab, before the fence.
 
-The login door's duty, not judged here: Latin look-alikes, NFC against NFD, and invisible marks outside Cf (U+034F, variation selectors, U+3164). RM-0065's `spec admin` should refuse them at account creation.
+The login door's duty, not judged here: Latin look-alikes, NFC against NFD, and invisible marks outside Cf (U+034F, variation selectors, U+3164). `hub-admin` refuses them at account creation by an ASCII grammar (`hub-deploy.md#accounts`).
 
 The login is the person: recorded verbatim, compared exactly, never a display name, so a renamed login is another person. The handlers of the five writes and the confirm class set the `actor` of their `Card*Body` to it before the library call; the body's `as` must be null or the login, byte for byte, else 403, ``refused: `as` names <name>; this request's login is <login>``, nothing stored; a name off the person grammar is `from_json`'s 400 first. `spec card --as` keeps its meaning on a terminal: a shell on the host is the operator's. `by` compares with the login, so a flow's `by` stops a person for the first time, if it lists logins: `by = ["lead"]` refuses everyone with a 409 (`cards.md` "Rules"). A confirm's `Decided-by` and a departing accept's `Author` take the login: `hub-confirm.md`.
 
@@ -65,7 +65,7 @@ Identity is judged in the fence, so a refused request never queues for a turn. M
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or login session (git's: `hub-git.md`; an MCP session: `hub-mcp.md`) and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub adds only a floor file (`queue-backup.md`): the login lands in queue fields and a confirm's commit.
+No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery, acted on from the host's shell (`hub-deploy.md#accounts`); the daemon holds no account, token, key or login session (git's: `hub-git.md`; an MCP session: `hub-mcp.md`) and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub adds only a floor file (`queue-backup.md`): the login lands in queue fields and a confirm's commit.
 
 **The daemon can defend**, at its fence:
 

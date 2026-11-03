@@ -12,17 +12,24 @@
 //!
 //! The table's own errors are core's `tests/team_toml.rs`; the daemon's half is
 //! `specengine-http`'s `tests/hub_team.rs`.
+//!
+//! docs/features/hub-accounts.md (RM-0065) AC15, `spec team`: the table's
+//! rows in byte order of the login, plain and `--json`, nothing with no
+//! `[team]`, exit 2 with a bad one, and no file written. M: drop a row; sort by
+//! `name`. Its pipe into `hub-admin check` is `specengine-http`'s
+//! `tests/deploy_admin.rs` (AC12).
 
 #![cfg(unix)]
 
 mod common;
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
 use common::check::line_of;
 use common::proposal::Pair;
-use common::{Run, Scratch, read_text, replace, spec, write};
-use serde_json::Value;
+use common::{Run, Scratch, read_text, replace, snapshot, spec, write};
+use serde_json::{Value, json};
 
 /// The keys of a good member.
 const MEMBER: &str = "role = \"member\"\nemail = \"mira@example.org\"\n";
@@ -503,4 +510,126 @@ fn a_departed_card_is_no_part_of_a_group_clear_on_a_terminal() {
         done.output
     );
     assert_eq!(doc(&pair, &["card", "show", &departed]), held);
+}
+
+// ------------------------------------------------------------------ hub-accounts AC15
+
+/// The bytes under a root and under `HOME`.
+type Files = (
+    BTreeMap<String, Option<Vec<u8>>>,
+    BTreeMap<String, Option<Vec<u8>>>,
+);
+
+/// AC15's table: `owner` (no name), `mira` leading `maps`, and `"Mira K"`,
+/// whose byte order (`M` before `m` before `o`) is neither their order here
+/// nor their names' order.
+const TEAM_OF_THREE: &str = "
+[zones]
+maps = [\"docs/maps/**\"]
+
+[team.owner]
+role = \"owner\"
+email = \"owner@example.org\"
+
+[team.mira]
+name = \"Mira K\"
+role = \"lead\"
+zones = [\"maps\"]
+email = \"mira@example.org\"
+
+[team.\"Mira K\"]
+name = \"Mira Kowal\"
+role = \"member\"
+email = \"mira.k@example.org\"
+";
+
+/// hub-accounts AC15: over a copy of `fixtures/spec-a`, with no `[team]`
+/// `spec team` prints nothing and exits 0, `--json` `{"team":null}`; with
+/// `owner`, `mira` and `"Mira K"` it prints three `<login>\t<role>\t<email>`
+/// lines in byte order of the login (`Mira K`, `mira`, `owner`), the same from
+/// another folder with `--root`, and `--json` gives the rows of "Data" in that
+/// order, a repeat the same bytes; a bad `[team]` prints one stderr line
+/// `spec: specengine.toml:<line>: <message>` (`spec team` adds the prefix,
+/// which `team_read`'s other callers do not print) and exits 2; a folder with
+/// no project exits 2 too.
+/// The root and `HOME` hold no new file afterwards. M: drop a row; sort by
+/// `name`.
+#[test]
+fn hub_accounts_ac15_spec_team_prints_the_table_in_login_order_and_writes_nothing() {
+    let scratch = Scratch::new("spec-team");
+    let home = scratch.home("h");
+    let root = scratch.copy("spec-a", "copy");
+    let elsewhere = scratch.dir("elsewhere");
+    let original = read_text(&root, "specengine.toml");
+    let files = || -> Files { (snapshot(&root), snapshot(&home)) };
+
+    let before = files();
+    let none = spec(&home, &root, &["team"]);
+    none.code(0);
+    assert_eq!(none.stdout, "", "no [team]: nothing printed");
+    let none = spec(&home, &root, &["--json", "team"]);
+    none.code(0);
+    assert_eq!(none.json(), json!({"team": null}));
+    assert_eq!(files(), before, "no [team]: no file written");
+
+    let text = append_config(&root, TEAM_OF_THREE);
+    let before = files();
+    let plain = spec(&home, &root, &["team"]);
+    plain.code(0);
+    assert_eq!(
+        plain.stdout,
+        "Mira K\tmember\tmira.k@example.org\nmira\tlead\tmira@example.org\nowner\towner\towner@example.org\n",
+        "{}",
+        plain.show()
+    );
+    let root_text = root.to_str().expect("a UTF-8 root");
+    let rooted = spec(&home, &elsewhere, &["team", "--root", root_text]);
+    rooted.code(0);
+    assert_eq!(rooted.stdout, plain.stdout, "--root from another folder");
+    let json_run = spec(&home, &root, &["--json", "team"]);
+    json_run.code(0);
+    assert_eq!(
+        json_run.json(),
+        json!({"team": [
+            {"login": "Mira K", "name": "Mira Kowal", "role": "member", "zones": [], "email": "mira.k@example.org"},
+            {"login": "mira", "name": "Mira K", "role": "lead", "zones": ["maps"], "email": "mira@example.org"},
+            {"login": "owner", "name": null, "role": "owner", "zones": [], "email": "owner@example.org"},
+        ]}),
+        "{}",
+        json_run.show()
+    );
+    let again = spec(&home, &root, &["--json", "team"]);
+    assert_eq!(again.stdout, json_run.stdout, "a repeat");
+    assert_eq!(files(), before, "[team] of three: no file written");
+    assert_eq!(read_text(&root, "specengine.toml"), text);
+
+    let bad_text = format!("{original}{BAD_TEAM}");
+    write(&root, "specengine.toml", &bad_text);
+    let before = files();
+    let line = line_of(&bad_text, "role = \"editor\"");
+    for args in [vec!["team"], vec!["--json", "team"]] {
+        let bad = spec(&home, &root, &args);
+        bad.code(2);
+        assert_eq!(
+            bad.stderr_lines().len(),
+            1,
+            "{args:?}: one stderr line: {}",
+            bad.show()
+        );
+        assert!(
+            bad.stderr
+                .starts_with(&format!("spec: specengine.toml:{line}: ")),
+            "{args:?}: `spec team` adds the `spec: ` prefix: {}",
+            bad.show()
+        );
+        assert_eq!(bad.stdout, "", "{args:?}");
+    }
+    assert_eq!(files(), before, "a bad [team]: no file written");
+
+    let no_project = scratch.dir("no-project");
+    let before = (snapshot(&no_project), snapshot(&home));
+    let lost = spec(&home, &no_project, &["team"]);
+    lost.code(2);
+    assert!(lost.stderr.starts_with("spec: "), "{}", lost.show());
+    assert_eq!((snapshot(&no_project), snapshot(&home)), before);
 }

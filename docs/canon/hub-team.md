@@ -8,7 +8,7 @@ reviewed: 2026-11-02
 
 # Hub team: who acts past the plain writes
 
-ADR-0060, ADR-0061, built by `hub-team` (RM-0071) and `hub-confirm` (RM-0050). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages, round answers and a confirm to the logins it names; a terminal on the host still confirms. `/mcp` proposes under a login (`hub-mcp.md`); no real hub exists before step 11b-3, so this is a mechanism and its proofs. Working answers, the owner's review open. Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
+ADR-0060, ADR-0061, built by `hub-team` (RM-0071) and `hub-confirm` (RM-0050). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages, round answers and a confirm to the logins it names; a terminal on the host still confirms. `/mcp` proposes under a login (`hub-mcp.md`); no real hub exists before step 11b-3. Working answers, the owner's review open. Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
 
 <a id="team"></a>
 ## Team
@@ -24,7 +24,7 @@ zones = ["maps"]            # a lead's, required
 email = "mira@example.org"  # required
 ```
 
-Read apart: core `TeamConfig::from_toml`, `None` with no `[team]`; `ProjectConfig` only name-checks the table, and older binaries refuse the file. Its `[zones]` comes through `zones_from_toml` (`gate.md` "Config"), only when a `[team]` exists, so a bad `[zones]` under an existing `[team]` is a bad `[team]`. Every error names its line. A project with no `[team]` opts in by a reviewed commit, the natural second switch.
+Read apart: core `TeamConfig::from_toml`, `None` with no `[team]`; `ProjectConfig` only name-checks the table, and older binaries refuse the file. Its `[zones]` comes through `zones_from_toml` (`gate.md` "Config"), only when a `[team]` exists, so a bad `[zones]` under an existing `[team]` is a bad `[team]`. Every error names its line. A project with no `[team]` opts in by a reviewed commit. `spec team` prints `login role email` lines read-only for `hub-admin check`.
 
 - **Entries**: closed keys, at most 256 (`TEAM_ENTRIES_MAX`).
 - **A login key** passes `hub_login_problem` (`hub.md` "Identity"), holds no `<` or `>`, and neither opens nor ends in a character git trims (`.,:;"'\`): any of these would change a `Decided-by`.

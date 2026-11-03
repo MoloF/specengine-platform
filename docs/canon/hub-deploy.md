@@ -8,17 +8,17 @@ reviewed: 2026-11-03
 
 # Hub deploy: compose, Traefik, Authelia and the image
 
-ADR-0066, ADR-0067, built by `hub-deploy` (RM-0064, step 11b-1). Working answers of the orchestrator, 2026-11-03, the owner's review open. One compose file is a hub's whole host. It guarantees what the daemon cannot defend (`hub.md#trust` items 1-5, `hub-mcp.md#trust` item 6), each item a file a test pins. The operator's guide: `scripts/deploy/README.md`. Files: `scripts/deploy/` (`Dockerfile`, `Dockerfile.dockerignore`, `docker-compose.yml`, `.env.example`, `.gitignore`, `entrypoint.sh`, `clone.sh`, `tag-check.sh`, `traefik/dynamic/hub.yml`, `authelia/config/configuration.yml`) and `.github/workflows/image.yml`. Dumps, restore, upgrade, health and turning on `--push`: RM-0074.
+ADR-0066, ADR-0067, ADR-0068, built by `hub-deploy` (RM-0064, step 11b-1) and `hub-accounts` (RM-0065, step 11c-1). Working answers of the orchestrator, 2026-11-03, the owner's review open. One compose file is a hub's whole host. It guarantees what the daemon cannot defend (`hub.md#trust` items 1-5, `hub-mcp.md#trust` item 6), each item a file a test pins. The operator's guide: `scripts/deploy/README.md`. Files: `scripts/deploy/` and `.github/workflows/image.yml`. Dumps, restore, upgrade, health and turning on `--push`: RM-0074.
 
 ## Host
 
-Three services and nothing else; RM-0065 adds a one-shot `admin`. Each `restart: unless-stopped`.
+Three services, each `restart: unless-stopped`, and the one-shot `admin` (`#accounts`).
 
 - **`traefik`** publishes 80 and 443 alone. Its static configuration is its `command:` list, since Traefik's static sources exclude each other; the dynamic one is `traefik/dynamic/hub.yml` on the file provider, watched. `web` only redirects to `websecure`. ACME by TLS-ALPN, the CA from `.env`, staging first. No API, dashboard, version check or usage report.
-- **`authelia`**, the login door at `DOOR_HOST`: the file users backend (`authelia/users/users.yml`); SQLite storage and the filesystem notifier on the `authelia-data` volume; sessions in memory; passkeys and TOTP; password reset off. Its config is rendered by its template filter from the service's environment.
+- **`authelia`**, the login door at `DOOR_HOST`: the file users backend (`authelia/users/users.yml`, mounted read-only, a person re-read on every request: `refresh_interval: always`); SQLite storage and the filesystem notifier on the `authelia-data` volume; sessions in memory; passkeys and TOTP; password reset off. Its config is rendered by its template filter from the service's environment.
 - **`specengine`**, the image: `network_mode: "service:traefik"`, no port or network of its own; `init: true`, since the daemon installs no signal handler and git children a sync's deadline kills must be reaped; `depends_on` `traefik` with `restart: true`; `/projects` bind-mounted; `/data` the named volume `specengine-data` (`XDG_DATA_HOME`), so the data directory lies outside every root.
 
-`.env` keys, each read, none secret: `HUB_DOMAIN` (the door's cookie domain: a domain for the hub alone), `HUB_HOST`, `DOOR_HOST`, `ACME_EMAIL`, `ACME_CA_SERVER`, `SPECENGINE_VERSION` (the plugin's version, the image tag; `:?` guarded, never `latest`), `SPECENGINE_PUSH` (`0` or `1`). Secrets are files under `secrets/`, as Docker secrets: `deploy_key` and `known_hosts` to `specengine` alone, named by `GIT_SSH_COMMAND` (git's: `hub-git.md` "Credentials"); `authelia_session_secret`, `authelia_storage_key`, `authelia_jwt_secret` to `authelia` alone, as `*_FILE`. Directories are mounted, never single files. `.gitignore` keeps `.env`, `secrets/`, `projects/`, `authelia/users/` and `traefik/mcp-users/` out of git.
+`.env` keys, each read, none secret: `HUB_DOMAIN` (the door's cookie domain: a domain for the hub alone), `HUB_HOST`, `DOOR_HOST`, `ACME_EMAIL`, `ACME_CA_SERVER`, `SPECENGINE_VERSION` (the plugin's version, the image tag; `:?` guarded, never `latest`), `SPECENGINE_PUSH` (`0` or `1`). Secrets are files under `secrets/`, as Docker secrets: `deploy_key` and `known_hosts` to `specengine` alone, named by `GIT_SSH_COMMAND` (git's: `hub-git.md` "Credentials"); `authelia_session_secret`, `authelia_jwt_secret` to `authelia` alone, `authelia_storage_key` to it and `admin`, as `*_FILE`. Directories are mounted, never single files. `.gitignore` keeps `.env`, `secrets/`, `projects/`, `authelia/users/`, `traefik/mcp-users/`, `admin-log/` and the stamp out of git.
 
 <a id="door"></a>
 ## Door
@@ -30,7 +30,7 @@ Three services and nothing else; RM-0065 adds a one-shot `admin`. Each `restart:
 | 3 | One service, `http://127.0.0.1:7777`, `passHostHeader: true` |
 | 4 | The compose file is the host: no Docker socket, the file provider alone, nothing privileged or host-mode |
 | 5 | The hub host's two Authelia rules: first `two_factor`, whose one resource is item 5's regex; then `one_factor` |
-| 6 | `mcp-credential`: `basicAuth` on `traefik/mcp-users/users` (`<login>:<bcrypt hash>`, one line per person), `headerField: Remote-User`, `removeHeader: true`, only on a router whose `PathRegexp` is item 6's regex |
+| 6 | `mcp-credential`: `basicAuth` on `traefik/mcp-users/users` (`<login>:<bcrypt hash>`, one line per person, written by `hub-admin`), `headerField: Remote-User`, `removeHeader: true`, only on a router whose `PathRegexp` is item 6's regex |
 
 Every router to the daemon also carries `hardening` (`nosniff`, HSTS, COOP `same-origin`); none buffers or compresses. `websecure`'s `readTimeout` is 300 s, with no write timeout. `Authorization` stays in place on `hub`, so the daemon's refusal outside `/mcp` is a second line.
 
@@ -66,9 +66,16 @@ Exact, recorded 2026-11-03, each pending the owner; full digests and SHAs are in
 | pnpm | 10.28.2, `ui/package.json` |
 | Actions | `actions/checkout` v7.0.1 `3d3c42e5`, `docker/login-action` v4.7.0 `81c6f93d`, `docker/setup-buildx-action` v4.4.1 `f87e5991`, `docker/build-push-action` v7.4.0 `c3c9e263` |
 
+<a id="accounts"></a>
+## Accounts
+
+ADR-0068. Root is the host's shell: `docker compose run --rm admin <act>` runs `admin/hub-admin`, POSIX `sh` on the door's own image and CLI. `admin` has `network_mode: none`, `logging: {driver: none}`, no port, `depends_on` or restart, and `profiles: [admin]`, so `up -d` never starts it; `specengine` mounts nothing of it; an act that writes, or `code`, needs a terminal. No crate holds account code.
+
+It alone writes `users.yml`, the MCP users file and the stamp `traefik/dynamic/mcp-stamp.yml` (an unused value that goes up, so Traefik builds anew), each staged, read back and renamed under the lock `admin-log/lock/`, logged to `admin-log/acts.log` without secrets. Logins match `^[a-z]([a-z0-9._-]{0,62}[a-z0-9])?$`, never `local`, `agent`, `null`, `true`, `false`; names and the users file refuse what the door's YAML parser rejects. `disable` writes the door first; a `reset` that left a passkey exits 1, and the account stays disabled until one leaves none. `add` prints the `[team]` row; `spec team | hub-admin check` compares. The read-only users folder and a first `add` before `up -d` close 11b-1's possible default user. Acts and procedures: the guide.
+
 ## Gate
 
-Step 11b-3, by hand: the owner's session on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here with versions and dates. Not yet run; `--push` and real people wait for it.
+Step 11b-3, by hand: the owner's session on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md`, G1-G10 of `hub-accounts.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here with versions and dates. Not yet run; `--push` and real people wait for it.
 
 ## Known limits
 
@@ -80,10 +87,11 @@ Step 11b-3, by hand: the owner's session on a clean VM, then the VPS, through H1
 - AI on a hub means Claude Code until the claude.ai check; writers without it use the web UI.
 - Sessions live in memory: an Authelia restart logs everyone out.
 - A `specengine.toml` below its repository's top is not served.
-- The MCP users file is read when its middleware is built: the guide touches `hub.yml` after an edit (from memory).
+- The MCP users file is read when its middleware is built (from memory), hence the stamp; VF2 open.
+- `hub-admin` until VF1-VF3 (`docs/features/hub-accounts.md`): the door's CLI flags and "nothing to delete" answers are from memory, busybox `od` and `awk` untested, the NUL case proven on macOS awk alone. Its smaller limits: the guide.
 - A private GHCR package needs a pull credential on the host.
 - Unverified until the gate (from memory): that Traefik keeps the client's `Host` and drops a client's copy of a listed header also when the door returns none; that the door on a sibling subdomain makes the landing a `same-site` navigation (from the Fetch Metadata rules, tried in no browser).
 
 ## Tests
 
-http `tests/deploy.rs` (D1-D15: the files read with `serde-saphyr` and `toml`, the canon's two fences read as `src/hub.rs`'s units do, the entrypoint run with a stub daemon; no network, no Docker); CLI `tests/deploy_clone.rs` (D16, `file://` bare repositories); store `tests/queue_state.rs` `a_restored_login_off_the_hubs_grammar_is_refused_when_read` (D17, `Author.login` checked on decode); eval `build_graph.rs` (`scripts/` holds the hook installer and `deploy/`). CI: `image.yml`'s checks, C1-C3.
+http `tests/deploy_admin.rs` (`hub-accounts`: `hub-admin` under `sh` with a stub door, no Docker); `tests/deploy.rs` (D1-D15: the files read with `serde-saphyr` and `toml`, the canon's two fences read as `src/hub.rs`'s units do, the entrypoint run with a stub daemon; no network, no Docker); CLI `tests/deploy_clone.rs` (D16, `file://` bare repositories); store `tests/queue_state.rs` `a_restored_login_off_the_hubs_grammar_is_refused_when_read` (D17, `Author.login` checked on decode); eval `build_graph.rs` (`scripts/` holds the hook installer and `deploy/`). CI: `image.yml`'s checks, C1-C3.

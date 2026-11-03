@@ -472,7 +472,7 @@ pub use task::{
     TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes, task_claim,
     task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
-pub use team::{TeamRow, team_read};
+pub use team::{TeamEntryRow, TeamOutcome, TeamRow, team, team_read};
 pub use trace::{
     TraceBadge, TraceCard, TraceNode, TraceOutcome, TraceRequest, TraceStage, TraceUse, trace,
     trace_with_view,
@@ -701,6 +701,8 @@ pub enum Outcome {
     RoundAnswers(Box<RoundAnswersOutcome>),
     /// `sparse-set`: the paths a hub's sparse checkout must hold.
     SparseSet(SparseOutcome),
+    /// `team`: the project's `[team]` entries, by login.
+    Team(TeamOutcome),
 }
 
 impl Outcome {
@@ -803,6 +805,8 @@ impl Outcome {
             Self::Round(outcome) => (&outcome.messages, None),
             Self::RoundAnswers(outcome) => (&outcome.messages, None),
             Self::SparseSet(outcome) => (&outcome.messages, None),
+            // A read of the config alone: nothing to note.
+            Self::Team(_) => return Vec::new(),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -915,6 +919,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::Round(outcome) => round::render_text(outcome),
         Outcome::RoundAnswers(outcome) => round::answers_outcome_text(outcome),
         Outcome::SparseSet(outcome) => sparse::render_text(outcome),
+        Outcome::Team(outcome) => team::render_text(outcome),
     }
 }
 
@@ -968,6 +973,7 @@ impl serde::Serialize for Outcome {
             Self::Round(outcome) => outcome.serialize(serializer),
             Self::RoundAnswers(outcome) => outcome.serialize(serializer),
             Self::SparseSet(outcome) => outcome.serialize(serializer),
+            Self::Team(outcome) => outcome.serialize(serializer),
         }
     }
 }

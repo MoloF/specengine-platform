@@ -15,6 +15,9 @@ server:
 authentication_backend:
   # A lost password is the operator's (S8).
   password_reset: {disable: true}
+  # A person is read again on every request, so a disable ends a session at its
+  # next request (hub-accounts).
+  refresh_interval: always
   file: {path: /users/users.yml, watch: true}
 access_control:
   default_policy: deny

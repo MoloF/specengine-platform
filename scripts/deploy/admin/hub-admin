@@ -1,0 +1,1234 @@
+#!/bin/sh
+# hub-admin <act> [<argument>...], as in docs/features/hub-accounts.md
+# "`hub-admin`": a hub's account acts, run on the host's terminal as
+# `docker compose run --rm admin <act>`, a one-shot service with no network on
+# the door's own image, whose CLI hashes passwords and deletes passkeys and
+# TOTP. Root is the host's shell: every act that writes, and `code`, refuses
+# unless stdin is a terminal. It writes the door's users file, the proxy's MCP
+# users file and its stamp (S1), each through a staging file renamed in its
+# own folder, under the lock admin-log/lock/, and appends the act log; the
+# door's output is caught under the container's own /tmp (R4). Passwords and
+# secrets reach the door's CLI on stdin alone and are printed once, never
+# logged. It never writes [team]: `add` prints a row for a reviewed commit.
+# Every path sits under HUB_ADMIN_ROOT, empty in the container (S7).
+# POSIX sh and awk: busybox in the image, macOS's sh, dash; bytes are checked
+# under LC_ALL=C.
+set -u
+LC_ALL=C
+export LC_ALL
+umask 077
+
+me=hub-admin
+root=${HUB_ADMIN_ROOT:-}
+
+users_dir=$root/users
+users_file=$users_dir/users.yml
+users_tmp=$users_dir/.users.yml.$$.tmp
+users_prev_tmp=$users_dir/.users.yml.prev.$$.tmp
+mcp_dir=$root/mcp-users
+mcp_file=$mcp_dir/users
+mcp_tmp=$mcp_dir/.users.$$.tmp
+mcp_prev_tmp=$mcp_dir/.users.prev.$$.tmp
+stamp_dir=$root/traefik-dynamic
+stamp_file=$stamp_dir/mcp-stamp.yml
+stamp_tmp=$stamp_dir/.mcp-stamp.tmp
+log_dir=$root/var/lib/hub-admin
+log_file=$log_dir/acts.log
+lock_dir=$log_dir/lock
+# Scratch, in no host mount (R4): a SIGKILL leaves nothing of it on the host.
+tmp_dir=$root/tmp
+door_out=$tmp_dir/hub-admin.$$.out.tmp
+door_err=$tmp_dir/hub-admin.$$.err.tmp
+door_dir=$root/var/lib/authelia
+door_db=$door_dir/db.sqlite3
+notice_file=$door_dir/notification.txt
+
+# The lowest cost the pinned CLI accepts (VF1): the 256-bit secret is what
+# protects the digest, and every MCP request pays the cost.
+BCRYPT_COST=10
+
+# ------------------------------------------------------------------ messages
+
+say() {
+    printf '%s: %s\n' "$me" "$1" >&2
+}
+
+# A bad call: exit 2, before anything is read, locked, written or called.
+bad_call() {
+    say "$1"
+    exit 2
+}
+
+# Refused by the state: exit 1, nothing written.
+refuse() {
+    say "$1"
+    exit 1
+}
+
+print_usage() {
+    cat <<'EOF'
+usage: docker compose run --rm admin <act> [<argument>...]
+  add <login> --name <display name> --email <address>
+  disable <login>          enable <login>          reset <login>
+  mcp rotate <login>       mcp revoke <login>      code
+  list                     log
+  check                    (spec team's lines on stdin)
+EOF
+}
+
+usage() {
+    say "$1"
+    print_usage >&2
+    exit 2
+}
+
+# ------------------------------------------------------------------ the exit
+
+lock_held=
+door_pid=
+door_status=0
+# Where the act is (R7): set before each door call and each write, so a run
+# that fails or is stopped logs what it left (stopped_log).
+stage=
+act=
+login=-
+# A reset's deletes the door did not confirm (R3).
+passkeys_left=
+totp_left=
+
+# A reset's log detail, as detail: `passkeys-left`, `totp-left`, both, or
+# empty.
+reset_detail() {
+    detail=
+    if [ -n "$passkeys_left" ]; then detail=passkeys-left; fi
+    if [ -n "$totp_left" ]; then detail="${detail:+$detail }totp-left"; fi
+}
+
+# A run that fails or is stopped after it changed something: its log line and
+# what is left to do. A stage before the first change logs nothing.
+stopped_log() {
+    case $act/$stage in
+        reset/passkeys)
+            passkeys_left=1
+            totp_left=1
+            ;;
+        reset/totp) totp_left=1 ;;
+        disable/door)
+            # A signal in the rename itself (R13): a shell runs the trap only
+            # once `mv` returns, so the file says whether the door step was
+            # done.
+            if users_query "$users_file" "$login" 2>/dev/null && [ "$state" = disabled ]; then
+                stage=mcp
+            fi
+            ;;
+    esac
+    case $act/$stage in
+        reset/passkeys | reset/totp | reset/write)
+            reset_detail
+            log_act reset "$login" "${detail:+$detail }password-not-written"
+            say "the new password was not written: run reset again"
+            ;;
+        disable/mcp)
+            log_act disable "$login" mcp-line-left
+            say "disabled at the door; MCP line left: run disable again"
+            ;;
+        disable/stamp) log_act disable "$login" "mcp line removed" ;;
+        mcp-revoke/stamp) log_act mcp-revoke "$login" - ;;
+        mcp-rotate/stamp) log_act mcp-rotate "$login" stamp-not-written ;;
+    esac
+}
+
+# On every exit: stop the door's CLI if it still runs. Only a run holding the
+# lock (R4) logs a failed act, removes its temp files, then the lock; a run
+# refused by the lock removes nothing.
+cleanup() {
+    status=$?
+    trap '' HUP INT TERM
+    if [ -n "$door_pid" ]; then
+        kill "$door_pid" 2>/dev/null
+        door_pid=
+    fi
+    if [ -n "$lock_held" ]; then
+        if [ "$status" -ne 0 ]; then stopped_log; fi
+        rm -f "$users_tmp" "$users_prev_tmp" "$mcp_tmp" "$mcp_prev_tmp" "$stamp_tmp" \
+            "$door_out" "$door_err" "$lock_dir/taken" 2>/dev/null
+        rmdir "$lock_dir" 2>/dev/null
+        lock_held=
+    fi
+    exit "$status"
+}
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+# ------------------------------------------------------------------ checks
+
+need_terminal() {
+    [ -t 0 ] ||
+        bad_call "$1 needs a terminal: run it as \`docker compose run --rm admin $1 ...\`, never piped"
+}
+
+# Q5, R2: a new login is a lower-case letter, then lower case, digits, `.`,
+# `_` or `-`, a letter or digit last, at most 64 bytes, so never a YAML
+# number; no word the record keeps for no person, nor YAML's null or a
+# boolean.
+check_new_login() {
+    case $1 in
+        local | agent)
+            bad_call "the login $1 is the record's word for no person"
+            ;;
+        null | true | false)
+            bad_call "the login $1 is YAML's null or a boolean"
+            ;;
+        '' | *[!abcdefghijklmnopqrstuvwxyz0123456789._-]* | \
+            [!abcdefghijklmnopqrstuvwxyz]* | \
+            *[!abcdefghijklmnopqrstuvwxyz0123456789])
+            bad_call "the login '$1': a lower-case letter first, then a-z, 0-9, '.', '_' or '-', a letter or digit last"
+            ;;
+    esac
+    [ "${#1}" -le 64 ] || bad_call "the login $1 is longer than 64 bytes"
+}
+
+byte_count() {
+    printf '%s' "$1" | wc -c | tr -d ' '
+}
+
+# R1, R8, R12: the bytes on stdin as UTF-8. Exit 1 printing `<line>:
+# <problem>` for the first line holding ill-formed UTF-8 (an overlong form, a
+# surrogate, past U+10FFFF, a cut sequence), a C1 control, U+2028, U+2029,
+# U+FEFF, U+FFFE, U+FFFF, DEL, or an ASCII control byte but a line end (NUL
+# included); with `$1` = name, a line end too. Exit 0 printing nothing when
+# every byte reads. `od` turns the bytes into numbers, so no awk meets a byte
+# past ASCII. R9, fail closed: exit 3 printing what failed when `od` fails,
+# answers off its shape or reads nothing, so a scan that read nothing never
+# passes.
+utf8_scan() {
+    { od -An -v -tu1 || echo FAIL; } | HA_SCAN=${1:-file} awk '
+        function bad(why) {
+            printf "%d: %s\n", line, why
+            failed = 1
+            exit 1
+        }
+        function scan_failed() {
+            print "the byte scan failed: od failed, lacks -v or -tu1, or read nothing"
+            failed = 3
+            exit 3
+        }
+        BEGIN {
+            line = 1
+            need = 0
+            name = (ENVIRON["HA_SCAN"] == "name")
+        }
+        {
+            for (i = 1; i <= NF; i++) {
+                if ($i !~ /^[0-9]+$/ || $i + 0 > 255) scan_failed()
+                seen = 1
+                b = $i + 0
+                if (need) {
+                    if (b < lo || b > hi) bad("ill-formed UTF-8")
+                    cp = cp * 64 + b - 128
+                    lo = 128
+                    hi = 191
+                    need--
+                    if (need) continue
+                    if (cp >= 128 && cp <= 159) bad(sprintf("U+%04X, a C1 control", cp))
+                    if (cp == 8232 || cp == 8233) bad(sprintf("U+%04X, a line or paragraph separator", cp))
+                    if (cp == 65279) bad("U+FEFF, a byte-order mark")
+                    if (cp == 65534 || cp == 65535) bad(sprintf("U+%04X, a noncharacter", cp))
+                    continue
+                }
+                if (b < 128) {
+                    if (b == 10 && !name) {
+                        line++
+                        continue
+                    }
+                    if (b == 9 && !name) bad("a tab: indent with spaces")
+                    if (b < 32 || b == 127) bad(sprintf("an ASCII control byte 0x%02X", b))
+                    continue
+                }
+                lo = 128
+                hi = 191
+                if (b >= 194 && b <= 223) {
+                    need = 1
+                    cp = b - 192
+                } else if (b >= 224 && b <= 239) {
+                    need = 2
+                    cp = b - 224
+                    if (b == 224) lo = 160
+                    if (b == 237) hi = 159
+                } else if (b >= 240 && b <= 244) {
+                    need = 3
+                    cp = b - 240
+                    if (b == 240) lo = 144
+                    if (b == 244) hi = 143
+                } else {
+                    bad("ill-formed UTF-8")
+                }
+            }
+        }
+        END {
+            if (failed) exit failed
+            if (!seen) scan_failed()
+            if (need) bad("ill-formed UTF-8")
+        }'
+}
+
+check_name() {
+    count=$(byte_count "$1")
+    [ "$count" -ge 1 ] && [ "$count" -le 128 ] ||
+        bad_call "--name takes 1-128 bytes, not $count"
+    problem=$(printf '%s' "$1" | utf8_scan name)
+    case $? in
+        0) ;;
+        1) bad_call "--name holds ${problem#*: }" ;;
+        *) refuse "--name: ${problem:-the byte scan failed}" ;;
+    esac
+}
+
+check_email() {
+    count=$(byte_count "$1")
+    [ "$count" -le 254 ] || bad_call "--email takes at most 254 bytes, not $count"
+    [ "$(printf '%s' "$1" | tr -d '!-~' | wc -c | tr -d ' ')" -eq 0 ] ||
+        bad_call "--email is printable ASCII with no space"
+    case $1 in
+        *'"'* | *"'"* | *'\'* | *'<'* | *'>'* | *'#'* | *','*)
+            bad_call "--email holds none of \" ' \\ < > # ,"
+            ;;
+        *@*@*) bad_call "--email holds one @" ;;
+        ?*@?*) ;;
+        *) bad_call "--email is <name>@<domain>" ;;
+    esac
+}
+
+# `"` and `\` escaped: a YAML double-quoted value and a TOML basic string alike.
+quoted() {
+    printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+}
+
+# ------------------------------------------------------------------ the readers
+
+# The users file's and the MCP file's readers ("The users file, read"; "The
+# MCP users file"), one awk program: HA_MODE `query` (one login's state),
+# `mcp` (one login's MCP line), `list` or `check` (stdin, `spec team`'s lines).
+# A file in an unknown layout prints its one message and exits 3; a bad stdin
+# line exits 4.
+readers='
+function ufail(n, msg) {
+    uerr = "users.yml:" n ": " msg
+    return 0
+}
+
+# A value: double-quoted, single-quoted or plain, then an optional comment.
+# Sets vtext (`\"` and `\\` read; any other escape kept as written) and vkind.
+function value(v,    i, c, len, out, rest) {
+    len = length(v)
+    c = substr(v, 1, 1)
+    if (c == "\"") {
+        out = ""
+        for (i = 2; i <= len; i++) {
+            c = substr(v, i, 1)
+            if (c == "\\" && i < len) {
+                i++
+                c = substr(v, i, 1)
+                out = out ((c == "\"" || c == "\\") ? c : "\\" c)
+            } else if (c == "\"") {
+                rest = substr(v, i + 1)
+                if (rest !~ /^( *| +#.*)$/) {
+                    verr = "text after a quoted value"
+                    return 0
+                }
+                vtext = out
+                vkind = "quoted"
+                return 1
+            } else {
+                out = out c
+            }
+        }
+        verr = "a quote left open: a value stays on its line"
+        return 0
+    }
+    if (c == Q) {
+        out = ""
+        for (i = 2; i <= len; i++) {
+            c = substr(v, i, 1)
+            if (c == Q && substr(v, i + 1, 1) == Q) {
+                out = out Q
+                i++
+            } else if (c == Q) {
+                rest = substr(v, i + 1)
+                if (rest !~ /^( *| +#.*)$/) {
+                    verr = "text after a quoted value"
+                    return 0
+                }
+                vtext = out
+                vkind = "quoted"
+                return 1
+            } else {
+                out = out c
+            }
+        }
+        verr = "a quote left open: a value stays on its line"
+        return 0
+    }
+    if (c == "#") {
+        verr = "no value on the line"
+        return 0
+    }
+    if (index(INDICATORS, c) || v ~ /^[-?:]( |$)/) {
+        verr = "flow style, an anchor, an alias, a tag or a block: one plain or quoted value"
+        return 0
+    }
+    i = index(v, " #")
+    if (i) v = substr(v, 1, i - 1)
+    sub(/ +$/, "", v)
+    if (index(v, ": ") || v ~ /:$/) {
+        verr = "a plain value holding `: `: quote it"
+        return 0
+    }
+    vtext = v
+    vkind = "plain"
+    return 1
+}
+
+function users_line(line, n,    body, c, key, rest, name) {
+    if (index(line, "\t")) return ufail(n, "a tab: indent with spaces")
+    if (line ~ /[[:cntrl:]]/) return ufail(n, "a control character")
+    if (line ~ /^ *$/ || line ~ /^ *#/) return 1
+    if (!has_users) {
+        if (line ~ /^users:( *| +#.*)$/) {
+            has_users = 1
+            return 1
+        }
+        return ufail(n, "the first line is `users:`")
+    }
+    if (line ~ /^  [^ ]/) {
+        body = substr(line, 3)
+        c = index(body, ":")
+        if (c == 0) return ufail(n, "an entry is `  <login>:`")
+        key = substr(body, 1, c - 1)
+        rest = substr(body, c + 1)
+        if (key == "") return ufail(n, "an empty login")
+        if (rest ~ /^ *[[{]/) return ufail(n, "flow style: one field per line")
+        if (rest !~ /^( *| +#.*)$/) return ufail(n, "an entry `  <login>:` holds nothing else on its line")
+        if (index(key, "#") || index(key, "\"") || index(key, Q))
+            return ufail(n, "a login holding #, \" or \047")
+        if (key ~ / $/) return ufail(n, "a login ending with a space")
+        if (index(INDICATORS, substr(key, 1, 1)) || key ~ /^[-?]( |$)/)
+            return ufail(n, "a login starting with a YAML indicator")
+        if (key in entry_at) return ufail(n, "the login " key " twice")
+        cur = key
+        order[++nusers] = key
+        entry_at[key] = n
+        last_at[key] = n
+        return 1
+    }
+    if (line ~ /^    [^ ]/) {
+        if (cur == "") return ufail(n, "a field outside an entry")
+        body = substr(line, 5)
+        c = index(body, ":")
+        if (c == 0) return ufail(n, "a field is `    <name>: <value>`")
+        name = substr(body, 1, c - 1)
+        rest = substr(body, c + 1)
+        if (name != "displayname" && name != "email" && name != "password" && name != "disabled")
+            return ufail(n, "the field `" name "`: an entry holds displayname, email, password and disabled alone")
+        if ((cur SUBSEP name) in seen) return ufail(n, "the field " name " twice in " cur)
+        if (rest !~ /^ +[^ ]/) return ufail(n, "the field " name " has no value on its line")
+        sub(/^ +/, "", rest)
+        if (!value(rest)) return ufail(n, verr)
+        seen[cur SUBSEP name] = 1
+        last_at[cur] = n
+        if (name == "password") {
+            password_at[cur] = n
+        } else if (name == "email") {
+            email[cur] = vtext
+        } else if (name == "displayname") {
+            display[cur] = vtext
+        } else {
+            if (vkind != "plain" || vtext !~ /^(true|True|TRUE|false|False|FALSE)$/)
+                return ufail(n, "disabled is true or false")
+            disabled_at[cur] = n
+            disabled[cur] = (vtext ~ /^[tT]/)
+        }
+        return 1
+    }
+    if (line ~ /^[^ ]/) return ufail(n, "a key beside `users:`: the file holds `users:` alone")
+    return ufail(n, "the indentation: an entry takes two spaces, a field four")
+}
+
+# The users file `file` ("" a missing one, an empty `users:`).
+function users_read(file,    line, n, r, i) {
+    if (file == "") return 1
+    n = 0
+    while ((r = (getline line < file)) > 0) {
+        n++
+        if (!users_line(line, n)) {
+            close(file)
+            return 0
+        }
+    }
+    close(file)
+    if (r < 0) {
+        uerr = "users.yml: cannot be read"
+        return 0
+    }
+    for (i = 1; i <= nusers; i++)
+        if (!(order[i] in password_at))
+            return ufail(entry_at[order[i]], order[i] " has no password")
+    return 1
+}
+
+function is_disabled(key) {
+    return (key in disabled) && disabled[key]
+}
+
+function mfail(n, msg, file) {
+    merr = "traefik/mcp-users/users:" n ": " msg
+    close(file)
+    return 0
+}
+
+# The MCP users file `file` ("" a missing one): `<login>:<bcrypt digest>`
+# lines, blank lines skipped as Traefik skips them (R5); a padded line or a
+# control character is refused.
+function mcp_read(file,    line, n, r, c, key, digest) {
+    if (file == "") return 1
+    n = 0
+    while ((r = (getline line < file)) > 0) {
+        n++
+        if (line ~ /^ *$/) continue
+        if (line ~ /[[:cntrl:]]/) return mfail(n, "a control character", file)
+        if (line ~ /^ / || line ~ / $/) return mfail(n, "leading or trailing whitespace", file)
+        c = index(line, ":")
+        if (c < 2) return mfail(n, "not `<login>:<bcrypt digest>`", file)
+        key = substr(line, 1, c - 1)
+        digest = substr(line, c + 1)
+        if (length(digest) != 60 || digest !~ BCRYPT)
+            return mfail(n, "not `<login>:<bcrypt digest>`", file)
+        if (key in mcp_at) return mfail(n, "the login " key " twice", file)
+        mcp_at[key] = n
+        mcp_order[++nmcp] = key
+    }
+    close(file)
+    if (r < 0) {
+        merr = "traefik/mcp-users/users: cannot be read"
+        return 0
+    }
+    return 1
+}
+
+BEGIN {
+    Q = "\047"
+    INDICATORS = "[]{}&*!|>%@`,#\"" Q
+    BCRYPT = "^[$]2[aby][$][0-9][0-9][$][./A-Za-z0-9]+$"
+    has_users = 0
+    nusers = 0
+    nmcp = 0
+    cur = ""
+    mode = ENVIRON["HA_MODE"]
+    want = ENVIRON["HA_LOGIN"]
+    if (mode == "query") {
+        if (!users_read(ENVIRON["HA_USERS"])) {
+            print uerr
+            exit 3
+        }
+        enabled = 0
+        for (i = 1; i <= nusers; i++)
+            if (!is_disabled(order[i])) enabled++
+        if (want in entry_at)
+            print 1, (is_disabled(want) ? "disabled" : "enabled"), entry_at[want], last_at[want], \
+                ((want in disabled_at) ? disabled_at[want] : 0), password_at[want], enabled, has_users
+        else
+            print 0, "-", 0, 0, 0, 0, enabled, has_users
+        exit 0
+    }
+    if (mode == "mcp") {
+        if (!mcp_read(ENVIRON["HA_MCP"])) {
+            print merr
+            exit 3
+        }
+        print ((want in mcp_at) ? mcp_at[want] : 0)
+        exit 0
+    }
+    if (mode == "list") {
+        if (!users_read(ENVIRON["HA_USERS"])) {
+            print uerr
+            exit 3
+        }
+        if (!mcp_read(ENVIRON["HA_MCP"])) {
+            print merr
+            exit 3
+        }
+        for (i = 1; i <= nusers; i++) {
+            key = order[i]
+            printf "%s\t%s\t%s\t%s\t%s\n", key, (is_disabled(key) ? "disabled" : "enabled"), \
+                ((key in mcp_at) ? "mcp" : "-"), ((key in email) ? email[key] : "-"), \
+                ((key in display) ? display[key] : "-")
+        }
+        for (i = 1; i <= nmcp; i++) {
+            key = mcp_order[i]
+            if (!(key in entry_at)) print "orphan mcp line: " key " (no account)"
+            else if (is_disabled(key)) print "orphan mcp line: " key " (disabled)"
+        }
+        exit 0
+    }
+    if (mode == "check") {
+        if (!users_read(ENVIRON["HA_USERS"])) {
+            print uerr
+            exit 3
+        }
+        logins = 0
+        findings = 0
+        out = ""
+        while ((getline line) > 0) {
+            logins++
+            fields = split(line, field, "\t")
+            if (fields != 3 || field[1] == "" || field[2] == "" || field[3] == "") {
+                # Named as read, a control character shown as `?`.
+                gsub(/[[:cntrl:]]/, "?", line)
+                print "stdin:" logins ": not three tab-separated fields (login, role, email): " line
+                exit 4
+            }
+            key = field[1]
+            if (!(key in entry_at)) {
+                out = out "no account: " key "\n"
+                findings++
+            } else if (is_disabled(key)) {
+                out = out "disabled: " key "\n"
+                findings++
+            }
+            if (index(key, ":")) {
+                out = out "holds " Q ":" Q ": " key "\n"
+                findings++
+            }
+            if (key in entry_at) {
+                door = (key in email) ? email[key] : ""
+                if (door != field[3]) {
+                    out = out "email differs: " key ": team " field[3] ", door " (door == "" ? "-" : door) "\n"
+                    findings++
+                }
+            }
+        }
+        printf "%scheck: %d logins, %d findings\n", out, logins, findings
+        exit 0
+    }
+    print "an unknown reader mode"
+    exit 2
+}
+'
+
+# `$1` (empty: a missing file) for the readers.
+present() {
+    if [ -e "$1" ]; then printf '%s' "$1"; fi
+}
+
+# R1, R8, R12: the users file `$1` holds no byte the door's parser rejects;
+# else says `users.yml:<line>: <problem>` and fails. A missing or empty file
+# has no byte to scan (an empty `users:`); a scan that failed (R9) fails too,
+# naming it.
+users_scan() {
+    [ -s "$1" ] || return 0
+    [ -r "$1" ] || {
+        say "users.yml: cannot be read"
+        return 1
+    }
+    problem=$(utf8_scan file 2>/dev/null < "$1")
+    case $? in
+        0) return 0 ;;
+        1) say "users.yml:$problem" ;;
+        *) say "users.yml: ${problem:-the byte scan failed}" ;;
+    esac
+    return 1
+}
+
+# The users file `$1`'s state for the login `$2`: found, state, entry_at,
+# last_at, disabled_at, password_at (line numbers, 0 none), enabled (how many
+# accounts are), has_users. 1 on a file in an unknown layout, said.
+users_query() {
+    users_scan "$1" || return 1
+    query=$(HA_MODE=query HA_USERS=$(present "$1") HA_LOGIN=$2 awk "$readers")
+    case $? in
+        0) ;;
+        3) say "$query"; return 1 ;;
+        *) say "the users file could not be read"; return 1 ;;
+    esac
+    # Eight words, none empty: split on purpose.
+    set -- $query
+    found=$1 state=$2 entry_at=$3 last_at=$4 disabled_at=$5 password_at=$6 enabled=$7 has_users=$8
+}
+
+# The MCP file `$1`'s line number for the login `$2` (0 none), as mcp_at.
+mcp_query() {
+    mcp_at=$(HA_MODE=mcp HA_MCP=$(present "$1") HA_LOGIN=$2 awk "$readers")
+    case $? in
+        0) ;;
+        3) say "$mcp_at"; return 1 ;;
+        *) say "the MCP users file could not be read"; return 1 ;;
+    esac
+}
+
+# The stamp's current value (0 with no stamp) as stamp_value.
+stamp_read() {
+    stamp_value=0
+    [ -e "$stamp_file" ] || return 0
+    stamp_value=$(awk '
+        /^ *X-Mcp-Users-Stamp: "[0-9]+"$/ { found++; value = $0 }
+        END {
+            if (found != 1) exit 1
+            sub(/^[^"]*"/, "", value)
+            sub(/"$/, "", value)
+            print value
+        }' "$stamp_file") || {
+        say "traefik/dynamic/mcp-stamp.yml holds no one stamp value: remove it, then run the act again"
+        return 1
+    }
+    stamp_value=${stamp_value#"${stamp_value%%[!0]*}"}
+    [ -n "$stamp_value" ] || stamp_value=0
+    [ "${#stamp_value}" -le 15 ] || {
+        say "traefik/dynamic/mcp-stamp.yml holds a stamp too large: remove it, then run the act again"
+        return 1
+    }
+}
+
+# ------------------------------------------------------------------ the lock
+
+take_lock() {
+    [ -d "$log_dir" ] ||
+        refuse "$log_dir is missing: the admin service mounts ./admin-log there"
+    chmod 700 "$log_dir" 2>/dev/null
+    if mkdir "$lock_dir" 2>/dev/null; then
+        lock_held=1
+        date -u +%Y-%m-%dT%H:%M:%SZ > "$lock_dir/taken"
+        return 0
+    fi
+    taken=$(cat "$lock_dir/taken" 2>/dev/null)
+    refuse "another act holds admin-log/lock (taken ${taken:-at an unknown time}); if none runs, remove it"
+}
+
+# One act log line, under the lock: UTC time, act, login, detail. No password,
+# secret, digest or code ever enters it.
+log_act() {
+    if printf '%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" "$2" "$3" >> "$log_file"; then
+        chmod 600 "$log_file" 2>/dev/null
+    else
+        say "warning: the act log admin-log/acts.log was not written"
+    fi
+}
+
+need_dir() {
+    [ -d "$1" ] || refuse "$1 is missing: the admin service mounts $2 there"
+}
+
+# ------------------------------------------------------------------ the door's CLI
+
+door_cli=
+find_door_cli() {
+    door_cli=$(command -v authelia 2>/dev/null) || door_cli=
+    if [ -z "$door_cli" ] && [ -x "$root/app/authelia" ]; then
+        door_cli=$root/app/authelia
+    fi
+    [ -n "$door_cli" ] || refuse "the door's CLI is not found: authelia on PATH or at /app/authelia"
+}
+
+# The door's CLI with `$1` (empty: none) on stdin and the rest as its
+# arguments, its stdout in door_out and its stderr in door_err, both under
+# tmp_dir (R4). In the background, so a signal stops the act at once and the
+# trap ends the CLI.
+door_run() {
+    door_input=$1
+    shift
+    [ -d "$tmp_dir" ] || mkdir -p "$tmp_dir" ||
+        refuse "cannot make $tmp_dir for the door's output; nothing changed"
+    if [ -n "$door_input" ]; then
+        printf '%s\n' "$door_input" | "$door_cli" "$@" > "$door_out" 2> "$door_err" &
+    else
+        "$door_cli" "$@" < /dev/null > "$door_out" 2> "$door_err" &
+    fi
+    door_pid=$!
+    wait "$door_pid"
+    door_status=$?
+    door_pid=
+    return "$door_status"
+}
+
+# The door's last non-blank stderr line, a control character shown as `?`;
+# its exit status when it said nothing.
+door_said() {
+    said=$(awk 'NF { last = $0 } END { gsub(/[[:cntrl:]]/, "?", last); print last }' "$door_err" 2>/dev/null)
+    printf '%s' "${said:-no message, exit $door_status}"
+}
+
+# The one `Digest: ` line of door_out, its prefix stripped, if it has the
+# shape of `$1` (argon2 or bcrypt).
+digest_of() {
+    HA_KIND=$1 awk '
+        /^Digest: / { found++; digest = substr($0, 9) }
+        END {
+            if (found != 1) exit 1
+            if (ENVIRON["HA_KIND"] == "argon2")
+                fits = digest ~ "^[$]argon2id[$]v=19[$]m=[0-9]+,t=[0-9]+,p=[0-9]+[$][A-Za-z0-9+/]+[$][A-Za-z0-9+/]+$"
+            else
+                fits = length(digest) == 60 && digest ~ "^[$]2[aby][$][0-9][0-9][$][./A-Za-z0-9]+$"
+            if (!fits) exit 1
+            print digest
+        }' "$door_out"
+}
+
+# Sets digest to the argon2 digest of the password `$1`.
+hash_password() {
+    stage=hash
+    door_run "$1" crypto hash generate argon2 ||
+        refuse "the door's CLI failed hashing the password: $(door_said); nothing changed"
+    digest=$(digest_of argon2) ||
+        refuse "the door's CLI answered off its shape: no one \`Digest: \$argon2id\$...\` line; nothing changed"
+    rm -f "$door_out" "$door_err"
+}
+
+# Sets digest to the bcrypt digest of the secret `$1`.
+hash_secret() {
+    stage=hash
+    door_run "$1" crypto hash generate bcrypt --cost "$BCRYPT_COST" ||
+        refuse "the door's CLI failed hashing the secret: $(door_said); nothing changed"
+    digest=$(digest_of bcrypt) ||
+        refuse "the door's CLI answered off its shape: no one \`Digest: \$2b\$...\` line; nothing changed"
+    rm -f "$door_out" "$door_err"
+}
+
+# The login `$1`'s passkeys deleted; `--` before the login (R7).
+delete_passkeys() {
+    stage=passkeys
+    door_run "" storage user webauthn delete --all --sqlite.path "$door_db" -- "$1"
+}
+
+# The login `$1`'s TOTP deleted; `--` before the login (R7).
+delete_totp() {
+    stage=totp
+    door_run "" storage user totp delete --sqlite.path "$door_db" -- "$1"
+}
+
+# `$1` random bytes from /dev/urandom, as lower-case hex, in random.
+random_hex() {
+    random=$(od -An -N"$1" -tx1 /dev/urandom | tr -d ' \n')
+    [ "${#random}" -eq $(($1 * 2)) ] || refuse "cannot read $1 random bytes from /dev/urandom"
+    case $random in
+        *[!0123456789abcdef]*) refuse "cannot read $1 random bytes from /dev/urandom" ;;
+    esac
+}
+
+# ------------------------------------------------------------------ the writers
+
+# The file `$1` is empty or ends with a line end.
+ends_with_newline() {
+    [ -s "$1" ] || return 0
+    [ "$(tail -c 1 "$1" | od -An -tx1 | tr -d ' \n')" = 0a ]
+}
+
+# The file `$1` as it is (none when missing), a final line end added if one
+# was missing, then the lines `$2`... appended.
+appended() {
+    appended_file=$1
+    shift
+    if [ -e "$appended_file" ]; then
+        cat "$appended_file" || return 1
+        if ! ends_with_newline "$appended_file"; then printf '\n' || return 1; fi
+    fi
+    printf '%s\n' "$@"
+}
+
+# edit_lines <op> <from> <to> <line> [<text>]: the file <from> copied into
+# <to> with its line <line> edited: `replace` it with <text>, `insert` <text>
+# after it, or `delete` it. Every other byte stays, a missing final line end
+# too.
+edit_lines() {
+    if ends_with_newline "$2"; then final=1; else final=0; fi
+    HA_OP=$1 HA_AT=$4 HA_TEXT=${5:-} HA_NL=$final awk '
+        BEGIN { op = ENVIRON["HA_OP"]; at = ENVIRON["HA_AT"] + 0; text = ENVIRON["HA_TEXT"] }
+        function put(line) {
+            if (written++) printf "\n"
+            printf "%s", line
+        }
+        {
+            if (FNR == at && op == "delete") next
+            put((FNR == at && op == "replace") ? text : $0)
+            if (FNR == at && op == "insert") put(text)
+        }
+        END { if (written && ENVIRON["HA_NL"] == "1") printf "\n" }' "$2" > "$3"
+}
+
+# Renames the checked temp file `$1` over `$2`, mode 600, keeping the old file
+# as `$2.prev` (mode 600) through the temp file `$3`.
+install_file() {
+    chmod 600 "$1" || return 1
+    if [ -e "$2" ]; then
+        cp "$2" "$3" && chmod 600 "$3" && mv -f "$3" "$2.prev" || return 1
+    fi
+    mv -f "$1" "$2"
+}
+
+# users_tmp checked with the reader: the login `$1` holds the state `$2`.
+# A refusal names the file as it was: what else the act did, `stopped_log`
+# says.
+users_installed() {
+    users_query "$users_tmp" "$1" ||
+        refuse "the users file as written does not read back; authelia/users/users.yml is as it was"
+    [ "$found" = 1 ] && [ "$state" = "$2" ] ||
+        refuse "the users file as written does not hold $1 $2; authelia/users/users.yml is as it was"
+    install_file "$users_tmp" "$users_file" "$users_prev_tmp" ||
+        refuse "cannot replace authelia/users/users.yml; it is as it was"
+}
+
+# mcp_tmp checked with the reader: the login `$1` has a line (`$2` = 1) or
+# none (0).
+mcp_installed() {
+    mcp_query "$mcp_tmp" "$1" ||
+        refuse "the MCP users file as written does not read back; traefik/mcp-users/users is as it was"
+    if [ "$2" = 1 ]; then [ "$mcp_at" != 0 ]; else [ "$mcp_at" = 0 ]; fi ||
+        refuse "the MCP users file as written is not as meant; traefik/mcp-users/users is as it was"
+    install_file "$mcp_tmp" "$mcp_file" "$mcp_prev_tmp" ||
+        refuse "cannot replace traefik/mcp-users/users; it is as it was"
+}
+
+# S1: one unused middleware whose value goes up by one, so Traefik builds its
+# configuration anew and mcp-credential reads its users file again; written
+# last, through a name the file provider never loads.
+write_stamp() {
+    stage=stamp
+    next=$((stamp_value + 1))
+    {
+        printf '%s\n' \
+            '# Written by hub-admin (docs/canon/hub-deploy.md "Accounts"): a new value makes' \
+            '# Traefik build its configuration anew, so mcp-credential reads its users file again.' \
+            'http:' \
+            '  middlewares:' \
+            '    mcp-users-stamp:' \
+            '      headers:' \
+            '        customRequestHeaders:' &&
+            printf '          X-Mcp-Users-Stamp: "%s"\n' "$next"
+    } > "$stamp_tmp" && chmod 644 "$stamp_tmp" && mv -f "$stamp_tmp" "$stamp_file"
+}
+
+# What a stamp that could not be written leaves to the operator.
+stamp_failed="the MCP users file changed, but the stamp was not written: the proxy may still read the old one; run \`docker compose restart traefik\`"
+
+# The MCP file without the login `$1`'s line mcp_at, then the stamp; a stamp
+# that fails is logged as the act done (`stopped_log`).
+remove_mcp_line() {
+    stage=mcp
+    edit_lines delete "$mcp_file" "$mcp_tmp" "$mcp_at" ||
+        refuse "cannot write the MCP users file; traefik/mcp-users/users is as it was"
+    mcp_installed "$1" 0
+    write_stamp || refuse "$stamp_failed"
+}
+
+# ------------------------------------------------------------------ the acts
+
+# A writing act's common start: a terminal, one login argument, the lock.
+one_login() {
+    need_terminal "$act"
+    [ "$#" -eq 1 ] || usage "$act takes one login"
+    login=$1
+    take_lock
+    users_query "$users_file" "$login" || exit 1
+    [ "$found" = 1 ] || bad_call "no account $login: the users file holds no such login"
+}
+
+act_add() {
+    need_terminal add
+    [ "$#" -ge 1 ] || usage "add takes a login, --name and --email"
+    login=$1
+    shift
+    name=
+    email=
+    have_name=
+    have_email=
+    while [ "$#" -gt 0 ]; do
+        case $1 in
+            --name)
+                [ "$#" -ge 2 ] && [ -z "$have_name" ] || usage "add takes --name once, with a value"
+                name=$2
+                have_name=1
+                shift 2
+                ;;
+            --email)
+                [ "$#" -ge 2 ] && [ -z "$have_email" ] || usage "add takes --email once, with a value"
+                email=$2
+                have_email=1
+                shift 2
+                ;;
+            *) usage "add: an unknown option or argument: $1" ;;
+        esac
+    done
+    [ -n "$have_name" ] && [ -n "$have_email" ] || usage "add takes --name and --email"
+    check_new_login "$login"
+    check_name "$name"
+    check_email "$email"
+
+    take_lock
+    users_query "$users_file" "$login" || exit 1
+    [ "$found" = 0 ] || bad_call "the login $login exists"
+    mcp_query "$mcp_file" "$login" || exit 1
+    [ "$mcp_at" = 0 ] ||
+        bad_call "traefik/mcp-users/users holds a line for $login: a new account would take over that secret; remove the line first"
+    need_dir "$users_dir" ./authelia/users
+    find_door_cli
+
+    random_hex 16
+    password=$random
+    hash_password "$password"
+    yaml_name=$(quoted "$name")
+    stage=write
+    # A file with no `users:` yet (missing, empty or comments alone) gets one.
+    if [ "$has_users" = 1 ]; then set --; else set -- 'users:'; fi
+    appended "$users_file" "$@" \
+        "  $login:" \
+        "    displayname: \"$yaml_name\"" \
+        "    email: \"$email\"" \
+        "    password: \"$digest\"" \
+        '    disabled: false' > "$users_tmp" ||
+        refuse "cannot write the users file; authelia/users/users.yml is as it was"
+    users_installed "$login" enabled
+    log_act add "$login" -
+
+    case $login in
+        *.*) key="\"$login\"" ;;
+        *) key=$login ;;
+    esac
+    printf 'added %s\n' "$login"
+    printf 'password, shown once; relay it privately: %s\n' "$password"
+    printf "[team] row for a reviewed commit to the project's specengine.toml (ADR-0060):\n"
+    printf '[team.%s]\n' "$key"
+    printf 'name  = "%s"\n' "$yaml_name"
+    printf 'role  = "member"            # owner | lead | member; a lead adds zones\n'
+    printf 'email = "%s"\n' "$email"
+}
+
+# R5, R13: the door step first, before the MCP file or the stamp is read, so
+# a bad MCP line never blocks it; from the rename on, a failure or a signal
+# logs `mcp-line-left` (`stopped_log`).
+act_disable() {
+    one_login "$@"
+    door_done=
+    if [ "$state" = enabled ]; then
+        need_dir "$users_dir" ./authelia/users
+        if [ "$enabled" -le 1 ]; then
+            say "$login is the last enabled account; the host can still restore one"
+            printf 'disable %s? [y/N] ' "$login" >&2
+            answer=
+            read -r answer || answer=
+            [ "$answer" = y ] || refuse "nothing disabled: the answer was not y"
+        fi
+        stage=door
+        if [ "$disabled_at" != 0 ]; then
+            edit_lines replace "$users_file" "$users_tmp" "$disabled_at" '    disabled: true'
+        else
+            edit_lines insert "$users_file" "$users_tmp" "$last_at" '    disabled: true'
+        fi || refuse "cannot write the users file; authelia/users/users.yml is as it was"
+        users_installed "$login" disabled
+        stage=mcp
+        door_done=1
+    fi
+    mcp_query "$mcp_file" "$login" || exit 1
+    if [ "$mcp_at" = 0 ]; then
+        [ -n "$door_done" ] || {
+            printf 'unchanged %s\n' "$login"
+            exit 0
+        }
+        stage=done
+        log_act disable "$login" -
+        printf 'disabled %s\n' "$login"
+        return 0
+    fi
+    stamp_read || exit 1
+    need_dir "$mcp_dir" ./traefik/mcp-users
+    need_dir "$stamp_dir" ./traefik/dynamic
+    remove_mcp_line "$login"
+    stage=done
+    log_act disable "$login" "mcp line removed"
+    printf 'disabled %s\n' "$login"
+    printf 'mcp line removed\n'
+}
+
+act_enable() {
+    one_login "$@"
+    if [ "$state" = enabled ]; then
+        printf 'unchanged %s\n' "$login"
+        exit 0
+    fi
+    need_dir "$users_dir" ./authelia/users
+    stage=write
+    edit_lines replace "$users_file" "$users_tmp" "$disabled_at" '    disabled: false' ||
+        refuse "cannot write the users file; authelia/users/users.yml is as it was"
+    users_installed "$login" enabled
+    log_act enable "$login" -
+    printf 'enabled %s\n' "$login"
+}
+
+# R3: the hash first, whose failure changes nothing; then both deletes, each
+# run whatever the other answered, a failed one a warning quoting the door
+# and a `-left` in the log; then the password, written whatever they did.
+act_reset() {
+    one_login "$@"
+    need_dir "$users_dir" ./authelia/users
+    find_door_cli
+    random_hex 16
+    password=$random
+    hash_password "$password"
+    if ! delete_passkeys "$login"; then
+        passkeys_left=1
+        say "warning: passkeys not deleted: $(door_said)"
+    fi
+    if ! delete_totp "$login"; then
+        totp_left=1
+        say "warning: TOTP not deleted: $(door_said)"
+    fi
+    stage=write
+    edit_lines replace "$users_file" "$users_tmp" "$password_at" "    password: \"$digest\"" ||
+        refuse "cannot write the users file; authelia/users/users.yml is as it was"
+    users_installed "$login" "$state"
+    stage=done
+    reset_detail
+    log_act reset "$login" "${detail:-password passkeys totp}"
+    printf 'reset %s\n' "$login"
+    printf 'password, shown once; relay it privately: %s\n' "$password"
+    # R10: a passkey left is a first factor someone may still hold.
+    [ -z "$passkeys_left" ] ||
+        refuse "passkeys not deleted: do not enable this account until reset ends without passkeys-left"
+}
+
+act_mcp_rotate() {
+    one_login "$@"
+    [ "$state" = enabled ] || bad_call "$login is disabled: enable it before an MCP secret"
+    mcp_query "$mcp_file" "$login" || exit 1
+    stamp_read || exit 1
+    need_dir "$mcp_dir" ./traefik/mcp-users
+    need_dir "$stamp_dir" ./traefik/dynamic
+    find_door_cli
+    random_hex 32
+    secret=$random
+    hash_secret "$secret"
+    stage=mcp
+    if [ "$mcp_at" != 0 ]; then
+        edit_lines replace "$mcp_file" "$mcp_tmp" "$mcp_at" "$login:$digest"
+    else
+        appended "$mcp_file" "$login:$digest" > "$mcp_tmp"
+    fi || refuse "cannot write the MCP users file; traefik/mcp-users/users is as it was"
+    mcp_installed "$login" 1
+    # R11: the file holds the new digest whatever the stamp does, so the
+    # secret is printed either way; a stamp that failed is logged and exits 1.
+    stamped=1
+    write_stamp || stamped=
+    stage=done
+    if [ -n "$stamped" ]; then
+        log_act mcp-rotate "$login" -
+    else
+        log_act mcp-rotate "$login" stamp-not-written
+    fi
+
+    basic=$(printf '%s:%s' "$login" "$secret" | base64 | tr -d '\n')
+    host=${HUB_HOST:-}
+    [ -n "$host" ] || host='<hub host>'
+    printf 'mcp secret for %s, shown once; relay it privately: %s\n' "$login" "$secret"
+    printf "on %s's machine, once per project slug:\n" "$login"
+    printf 'claude mcp add --transport http --scope user hub-<slug> https://%s/mcp/<slug> --header "Authorization: Basic %s"\n' \
+        "$host" "$basic"
+    [ -n "$stamped" ] || refuse "$stamp_failed"
+}
+
+# R5: any login holding a line, an orphan with no account included.
+act_mcp_revoke() {
+    [ "$#" -eq 1 ] || usage "mcp revoke takes one login"
+    login=$1
+    take_lock
+    users_query "$users_file" "$login" || exit 1
+    mcp_query "$mcp_file" "$login" || exit 1
+    if [ "$mcp_at" = 0 ]; then
+        [ "$found" = 1 ] ||
+            bad_call "no account $login and no MCP line for it: the files hold no such login"
+        printf 'unchanged %s\n' "$login"
+        exit 0
+    fi
+    stamp_read || exit 1
+    need_dir "$mcp_dir" ./traefik/mcp-users
+    need_dir "$stamp_dir" ./traefik/dynamic
+    remove_mcp_line "$login"
+    stage=done
+    log_act mcp-revoke "$login" -
+    printf 'revoked %s\n' "$login"
+}
+
+act_code() {
+    need_terminal code
+    [ "$#" -eq 0 ] || usage "code takes no argument"
+    take_lock
+    if [ -e "$notice_file" ]; then
+        cat "$notice_file" || refuse "cannot read the door's notice"
+    else
+        printf 'no notice\n'
+    fi
+    log_act code - -
+}
+
+act_list() {
+    [ "$#" -eq 0 ] || usage "list takes no argument"
+    users_scan "$users_file" || exit 1
+    listed=$(HA_MODE=list HA_USERS=$(present "$users_file") HA_MCP=$(present "$mcp_file") awk "$readers")
+    case $? in
+        0) ;;
+        3) refuse "$listed" ;;
+        *) refuse "the users files could not be read" ;;
+    esac
+    if [ -n "$listed" ]; then printf '%s\n' "$listed"; fi
+}
+
+act_check() {
+    [ "$#" -eq 0 ] || usage "check takes no argument: spec team's lines on stdin"
+    users_scan "$users_file" || exit 1
+    checked=$(HA_MODE=check HA_USERS=$(present "$users_file") awk "$readers")
+    case $? in
+        0) printf '%s\n' "$checked" ;;
+        3) refuse "$checked" ;;
+        4) bad_call "$checked" ;;
+        *) refuse "the users file could not be read" ;;
+    esac
+}
+
+act_log() {
+    [ "$#" -eq 0 ] || usage "log takes no argument"
+    if [ -e "$log_file" ]; then
+        cat "$log_file" || refuse "cannot read the act log"
+    fi
+}
+
+[ "$#" -ge 1 ] || usage "give an act"
+act=$1
+shift
+case $act in
+    add) act_add "$@" ;;
+    disable) act_disable "$@" ;;
+    enable) act_enable "$@" ;;
+    reset) act_reset "$@" ;;
+    mcp)
+        [ "$#" -ge 1 ] || usage "mcp takes rotate or revoke"
+        case $1 in
+            rotate)
+                act=mcp-rotate
+                need_terminal "mcp rotate"
+                shift
+                act_mcp_rotate "$@"
+                ;;
+            revoke)
+                act=mcp-revoke
+                need_terminal "mcp revoke"
+                shift
+                act_mcp_revoke "$@"
+                ;;
+            *) usage "an unknown mcp act: $1" ;;
+        esac
+        ;;
+    code) act_code "$@" ;;
+    list) act_list "$@" ;;
+    check) act_check "$@" ;;
+    log) act_log "$@" ;;
+    *) usage "an unknown act: $act" ;;
+esac
+exit 0

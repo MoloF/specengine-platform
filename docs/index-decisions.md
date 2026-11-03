@@ -75,3 +75,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0065](decisions/ADR-0065.md) A hub serves MCP at /mcp/<slug> under each request's login; its protocol sessions identify no one · architecture · accepted
 - [ADR-0066](decisions/ADR-0066.md) A hub ships as a container image built on a version tag; local use stays cargo install and the plugin · architecture · accepted
 - [ADR-0067](decisions/ADR-0067.md) A hub's compose file is its whole host, and only the proxy sets Remote-User: the door's session, or on /mcp a per-person secret · architecture · accepted
+- [ADR-0068](decisions/ADR-0068.md) A hub's accounts are the deployment's script, run from the host's shell in a one-shot container with no network · architecture · accepted

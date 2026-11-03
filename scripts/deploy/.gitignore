@@ -4,3 +4,7 @@ secrets/
 projects/
 authelia/users/
 traefik/mcp-users/
+# hub-admin's (docs/features/hub-accounts.md "Files"): the act log and the lock,
+# and the stamp that makes the proxy read its MCP users file again.
+admin-log/
+traefik/dynamic/mcp-stamp.yml

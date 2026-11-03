@@ -1,7 +1,9 @@
-# A hub's whole host (docs/features/hub-deploy.md "The host"): three services and
+# A hub's whole host (docs/features/hub-deploy.md "The host"): four services and
 # nothing else. Traefik holds TLS, the routers and the door's forward-auth;
 # Authelia the accounts and sessions; the daemon runs inside Traefik's network
-# namespace on its loopback bind, its port never published (trust item 1).
+# namespace on its loopback bind, its port never published (trust item 1);
+# `admin` is the one-shot account acts (docs/features/hub-accounts.md), which
+# `up -d` never starts.
 # Traefik's static configuration is its command list (S1); the dynamic one is
 # traefik/dynamic/hub.yml. Pins: exact versions and index digests, pending the
 # owner (Q7).
@@ -47,7 +49,7 @@ services:
     secrets: [authelia_session_secret, authelia_storage_key, authelia_jwt_secret]
     volumes:
       - ./authelia/config:/config:ro
-      - ./authelia/users:/users
+      - ./authelia/users:/users:ro      # hub-admin is the only writer (Q4)
       - authelia-data:/var/lib/authelia
   specengine:
     image: ghcr.io/molof/specengine:${SPECENGINE_VERSION:?set SPECENGINE_VERSION in .env}
@@ -66,6 +68,26 @@ services:
     volumes:
       - ./projects:/projects
       - specengine-data:/data
+  admin:
+    # The account acts (docs/canon/hub-deploy.md "Accounts"): one-shot, run as
+    # `docker compose run --rm admin <act>` on the host's terminal; no network.
+    # Authelia 4.39.28, the authelia service's image byte for byte: its CLI.
+    image: authelia/authelia:4.39.28@sha256:bd97cff4fcbf715b5ff1f9ae286afbe6033afce385302520b0368122d43a6f54
+    profiles: [admin]
+    network_mode: none
+    logging: {driver: none}         # no password, secret or code reaches a log driver (R6)
+    entrypoint: ["/bin/sh", "/opt/hub-admin/hub-admin"]
+    environment:
+      HUB_HOST: "${HUB_HOST}"
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key
+    secrets: [authelia_storage_key]
+    volumes:
+      - ./admin:/opt/hub-admin:ro
+      - ./admin-log:/var/lib/hub-admin
+      - ./authelia/users:/users
+      - ./traefik/mcp-users:/mcp-users
+      - ./traefik/dynamic:/traefik-dynamic
+      - authelia-data:/var/lib/authelia
 secrets:
   deploy_key: {file: ./secrets/deploy_key}
   known_hosts: {file: ./secrets/known_hosts}

@@ -34,6 +34,10 @@
 //! `GITHUB_TOKEN`, comments each pinned `uses:` with its version, and uses no
 //! Rust toolchain action.
 //!
+//! D7, D9 and D11 are as docs/features/hub-accounts.md "Acceptance criteria"
+//! (RM-0065, its decided changes to 11b-1's tests) rewrites them, for the one-shot `admin` service;
+//! that slice's own criteria are `tests/deploy_admin.rs`.
+//!
 //! Iteration 2's hardenings: Traefik rejects alias headers (D4); the runtime
 //! carries the source label (D14); every pushing job refuses a published
 //! version before it pushes, its check's step run as a runner runs it with a
@@ -67,6 +71,9 @@ const HUB_HOST: &str = r#"{{ env "HUB_HOST" }}"#;
 
 /// The Traefik service, and the compose service, of the daemon.
 const DAEMON: &str = "specengine";
+
+/// The one-shot account service (docs/features/hub-accounts.md "Data").
+const ADMIN: &str = "admin";
 
 /// The host D12 gives the entrypoint.
 const HOST: &str = "hub.example.org";
@@ -1181,10 +1188,12 @@ fn d06_the_daemons_one_server_is_the_entrypoints_loopback_port() {
 
 // ------------------------------------------------------------- D7-D11: the host
 
-/// D7: `specengine` has `network_mode: service:traefik` and no `ports`,
-/// `expose` or `networks`; no other service has a `network_mode`; only
-/// `traefik` has `ports`, exactly `80:80` and `443:443`. M: publish 7777;
-/// give `authelia` the namespace.
+/// D7, as docs/features/hub-accounts.md "Acceptance criteria" (its decided
+/// changes to 11b-1's tests) rewrites it: `specengine` has `network_mode:
+/// service:traefik` and no `ports`, `expose` or `networks`; `admin`'s
+/// `network_mode` is `none`, and no service but `specengine` and `admin` has
+/// one; only `traefik` has `ports`, exactly `80:80` and `443:443`. M: publish
+/// 7777; give `authelia` the namespace; put `admin` on `service:traefik`.
 #[test]
 fn d07_the_daemon_lives_in_traefiks_namespace_and_only_traefik_publishes() {
     let compose = compose();
@@ -1196,8 +1205,15 @@ fn d07_the_daemon_lives_in_traefiks_namespace_and_only_traefik_publishes() {
     for key in ["ports", "expose", "networks"] {
         assert!(daemon.get(key).is_none(), "specengine has `{key}`");
     }
+    assert_eq!(
+        service(&compose, ADMIN)
+            .get("network_mode")
+            .and_then(Value::as_str),
+        Some("none"),
+        "admin has no network (hub-accounts)"
+    );
     for (name, service) in services(&compose) {
-        if name != DAEMON {
+        if name != DAEMON && name != ADMIN {
             assert!(
                 service.get("network_mode").is_none(),
                 "{name} has a network_mode"
@@ -1285,18 +1301,32 @@ fn d08_nothing_on_the_host_but_the_file_provider() {
     }
 }
 
-/// D9: the services are exactly `traefik`, `authelia`, `specengine`;
-/// `specengine`'s image is `ghcr.io/molof/specengine:${SPECENGINE_VERSION:?...}`,
-/// every other an exact `x.y.z` and `@sha256:` + 64 hex, never `latest`; no
-/// YAML file under `scripts/deploy/` or `image.yml` holds an anchor, an alias
-/// or a `<<` merge key; `.env.example`'s `SPECENGINE_VERSION` is
-/// `plugin.json`'s version. M: `traefik:latest`; drop the `:?`; add a
-/// service; bump `plugin.json` alone.
+/// D9, as docs/features/hub-accounts.md "Acceptance criteria" (its decided
+/// changes to 11b-1's tests) rewrites it: the services are exactly `admin`,
+/// `authelia`, `specengine`, `traefik`, with `admin`'s image equal to
+/// `authelia`'s; `specengine`'s image is
+/// `ghcr.io/molof/specengine:${SPECENGINE_VERSION:?...}`, every other an exact
+/// `x.y.z` and `@sha256:` + 64 hex, never `latest`; no YAML file under
+/// `scripts/deploy/` or `image.yml` holds an anchor, an alias or a `<<` merge
+/// key; `.env.example`'s `SPECENGINE_VERSION` is `plugin.json`'s version. M:
+/// `traefik:latest`; drop the `:?`; add a service; bump `plugin.json` alone;
+/// give `admin` another image.
 #[test]
-fn d09_three_services_pinned_images_no_anchors_and_one_version() {
+fn d09_four_services_pinned_images_no_anchors_and_one_version() {
     let compose = compose();
     let names: BTreeSet<&str> = services(&compose).keys().map(String::as_str).collect();
-    assert_eq!(names, BTreeSet::from(["authelia", "specengine", "traefik"]));
+    assert_eq!(
+        names,
+        BTreeSet::from([ADMIN, "authelia", "specengine", "traefik"])
+    );
+    assert_eq!(
+        string(at(service(&compose, ADMIN), &["image"]), "admin's image"),
+        string(
+            at(service(&compose, "authelia"), &["image"]),
+            "authelia's image"
+        ),
+        "admin runs the door's own image, byte for byte (hub-accounts)"
+    );
     let required = Regex::new(r"^ghcr\.io/molof/specengine:\$\{SPECENGINE_VERSION:\?[^}]*\}$")
         .expect("a pattern");
     let daemon = string(
@@ -1444,25 +1474,30 @@ fn ignored(gitignore: &Path, paths: &[&str]) -> Vec<(String, bool)> {
         .collect()
 }
 
-/// D11: `deploy_key` and `known_hosts` are granted to `specengine` alone,
-/// the three `authelia_*` secrets to `authelia` alone, each a `file:` under
-/// `./secrets/`; `specengine` mounts only `./projects` and `specengine-data`,
-/// nothing of `./authelia`, `./traefik` or `./secrets`; every `environment`
-/// name holding `SECRET`, `PASSWORD`, `TOKEN` or `KEY` ends `_FILE` with a
-/// value under `/run/secrets/`; `scripts/deploy/.gitignore` ignores `.env`,
-/// `secrets/`, `projects/`, `authelia/users/` and `traefik/mcp-users/`, and
-/// none of the committed files. M: grant `deploy_key` to `authelia`; mount
+/// D11, as docs/features/hub-accounts.md "Acceptance criteria" (its decided
+/// changes to 11b-1's tests) rewrites it: `deploy_key` and `known_hosts` are
+/// granted to `specengine` alone, `authelia_jwt_secret` and
+/// `authelia_session_secret` to `authelia` alone, `authelia_storage_key` to
+/// `authelia` and `admin`, each a `file:` under `./secrets/`; `specengine`
+/// mounts only `./projects` and `specengine-data`, nothing of `./authelia`,
+/// `./traefik` or `./secrets`; every `environment` name holding `SECRET`,
+/// `PASSWORD`, `TOKEN` or `KEY` ends `_FILE` with a value under
+/// `/run/secrets/`; `scripts/deploy/.gitignore` ignores `.env`, `secrets/`,
+/// `projects/`, `authelia/users/`, `traefik/mcp-users/`, `admin-log/acts.log`
+/// and `traefik/dynamic/mcp-stamp.yml`, and none of the committed files,
+/// `admin/hub-admin` among them. M: grant `deploy_key` to `authelia`; mount
 /// `./authelia/users` into `specengine`; set `AUTHELIA_SESSION_SECRET` to a
-/// literal; drop `.env` from `.gitignore`.
+/// literal; drop `.env` from `.gitignore`; grant `authelia_session_secret` to
+/// `admin`.
 #[test]
 fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
     let compose = compose();
-    let owners = BTreeMap::from([
-        ("authelia_jwt_secret", "authelia"),
-        ("authelia_session_secret", "authelia"),
-        ("authelia_storage_key", "authelia"),
-        ("deploy_key", DAEMON),
-        ("known_hosts", DAEMON),
+    let owners: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::from([
+        ("authelia_jwt_secret", BTreeSet::from(["authelia"])),
+        ("authelia_session_secret", BTreeSet::from(["authelia"])),
+        ("authelia_storage_key", BTreeSet::from(["authelia", ADMIN])),
+        ("deploy_key", BTreeSet::from([DAEMON])),
+        ("known_hosts", BTreeSet::from([DAEMON])),
     ]);
     let declared = object(at(&compose, &["secrets"]), "secrets");
     let names: BTreeSet<&str> = declared.keys().map(String::as_str).collect();
@@ -1477,7 +1512,7 @@ fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
     for (name, service) in services(&compose) {
         let want: BTreeSet<String> = owners
             .iter()
-            .filter(|(_, owner)| *owner == name)
+            .filter(|(_, granted)| granted.contains(name.as_str()))
             .map(|(secret, _)| (*secret).to_owned())
             .collect();
         assert_eq!(grants(service, name), want, "{name}'s secrets");
@@ -1522,6 +1557,8 @@ fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
         "projects/forge/specengine.toml",
         "authelia/users/users.yml",
         "traefik/mcp-users/users",
+        "admin-log/acts.log",
+        "traefik/dynamic/mcp-stamp.yml",
     ];
     let committed = [
         ".env.example",
@@ -1535,6 +1572,7 @@ fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
         "tag-check.sh",
         "traefik/dynamic/hub.yml",
         "authelia/config/configuration.yml",
+        "admin/hub-admin",
     ];
     let mut paths = private.to_vec();
     paths.extend_from_slice(&committed);

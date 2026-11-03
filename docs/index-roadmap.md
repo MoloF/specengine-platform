@@ -47,7 +47,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0061.md](roadmap/RM-0061.md) pack (Phase 7, step 19): spec init --pack and a config proposal · crates/specengine-cli, crates/specengine-core · draft
 - [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
 - [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store, crates/specengine-http · draft
-- [docs/roadmap/RM-0065.md](roadmap/RM-0065.md) hub-accounts (Phase 7, step 11c-1): accounts and recovery from a shell on the host · scripts/deploy, crates/specengine-cli, crates/specengine-http · draft
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
 - [docs/roadmap/RM-0073.md](roadmap/RM-0073.md) spec-ids (Phase 7): spec IDs that a hub and a terminal never mint twice · crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft
 - [docs/roadmap/RM-0074.md](roadmap/RM-0074.md) hub-ops (Phase 7, step 11b-2): off-host dumps, restore, upgrade, health and turning on --push · scripts/deploy · draft
