@@ -44,7 +44,7 @@ refused: this hub does not serve this route
 
 ## Identity
 
-`Remote-User`, one constant in `hub.rs`, no flag: `deploy/` ships at the same version, so a changed login door changes both in one commit, and a flag could name a header the proxy does not scrub. `Remote-Name`, `Remote-Email`, `Remote-Groups` are never read, so the deployment guards one header.
+`Remote-User`, one constant in `hub.rs`, no flag: `scripts/deploy/` ships at the same version, so a changed login door changes both in one commit, and a flag could name a header the proxy does not scrub. `Remote-Name`, `Remote-Email`, `Remote-Groups` are never read, so the deployment guards one header.
 
 Judged on every request, `/` and assets too. None or a bad one: 403, never a 401, whose challenge the daemon does not own. An empty value counts as none; two values give `refused: the Remote-User header is sent more than once`, from `single()`. `hub.rs` keeps those steps and UTF-8; `hub_login_problem` (core `card.rs`, re-exported) refuses the rest: a login `.trim()` would change; `card_person_problem` (`cards.md` "Who acts"); a comma (a proxy folding a client's copy gives `eve, mira`); a Unicode format character (Cf) anywhere; `local` and `agent` in any ASCII case, the record's words for no person, and `-`, its word for clearing a name. hyper answers 400 to a control byte but a tab, before the fence.
 
@@ -104,7 +104,7 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 
 - **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. RM-0064 checks what the door answers to a JSON request.
 - **Streams.** `tail.rs` is judged at connect, so a stream outlives a session until RM-0065.
-- **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0064).
+- **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0074).
 - **Scale.** Until `scale-reads` (RM-0054) a team waits behind O(n) reads.
 - **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy must reject or encode `#` (RM-0064).
 - **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`), so a new one fails until decided.

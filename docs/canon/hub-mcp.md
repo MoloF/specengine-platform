@@ -126,7 +126,7 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 - A bearer `Remote-User` that is an email or a UUID splits a person in two; RM-0064 guarantees the browser login.
 - Answers carry the corpus to the client's model provider.
 - A GET stream outlives a login door session, as `tail.rs`'s stream does.
-- A forged `Remote-User` raises proposals as anyone: no real use before RM-0064's "Done".
+- A forged `Remote-User` raises proposals as anyone: no real use before the gate, step 11b-3.
 - No limit bounds the calls waiting for one project's turn (RM-0054).
 - A request body's buffer is reserved from its `Content-Length`, at most the 4 MiB cap.
 - A body that is no JSON-RPC message but names an unknown tool is refused as one, where rmcp would answer a parse error.
@@ -139,7 +139,7 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 
 By hand, not yet run; each finding is recorded here with the client's version and the date.
 1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http ... --header "Authorization: Basic ..."`. Expected: the session and GET stream hold, 17 tools, `login` on a proposal and a card, a second login's own sessions.
-2. **claude.ai and Claude Desktop, at RM-0064's start** on its public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
+2. **claude.ai and Claude Desktop, at the gate, step 11b-3,** on the public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
 
 ## Tests
 

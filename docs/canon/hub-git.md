@@ -89,7 +89,7 @@ Git's, set by the deployment; SpecEngine holds none (supplementing ADR-0034, ADR
 - ADR-0012, ADR-0039: no status, check, health row, verify, gate, hook verdict or read derives anything from push state; a confirm never waits on a sync, fails by one, or is refused for being behind, diverged, `held` or `stopped`; an operator mid-merge gets apply step 2's 503.
 - The premise: the hub as the brief zone's sole writer is a convention nothing enforces; a terminal's apply there is never refused, its conflict shows as `held`, and the operator merges `<r>/<m>` on the host's terminal while confirms go on.
 - ADR-0008: no `[hub]` table; remote and branch are the checkout's upstream, the set comes from the config.
-- `--push` stays off until RM-0064's "Done": a forged `Remote-User` would reach the shared remote.
+- `--push` stays off until the gate, step 11b-3: a forged `Remote-User` would reach the shared remote.
 
 ## Known limits
 
