@@ -42,9 +42,16 @@
 //! ever written: spec files change only through `apply_proposal` on an
 //! owner action (ADR-0004, ADR-0005), which no tool here runs. Stdout is
 //! the protocol channel: nothing else is ever printed there.
+//!
+//! The hub mode (`hub.rs`, docs/features/hub-mcp.md): the same server in a
+//! hub's daemon at `/mcp/<slug>`, built by [`SpecEngineServer::hub`] over a
+//! [`HubSeam`] the daemon implements: seventeen tools, [`HUB_INSTRUCTIONS`],
+//! each call in the project's turn and under the request's login. This
+//! crate names no HTTP crate: the transport is the daemon's.
 
 mod cards;
 mod code;
+mod hub;
 mod intake;
 mod mirror;
 #[cfg(feature = "probes")]
@@ -55,5 +62,6 @@ mod review;
 mod server;
 mod tasks;
 
+pub use hub::{Command, HUB_INSTRUCTIONS, HUB_TOOLS, HubSeam, TurnFuture};
 pub use read::MAX_RESULT_CHARS;
 pub use server::{INSTRUCTIONS, Lifecycle, ServeError, SpecEngineServer, serve_stdio};

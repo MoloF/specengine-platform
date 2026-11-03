@@ -8,7 +8,7 @@ reviewed: 2026-10-31
 
 # Agent intake: queue tools, questions, discrepancies, decisions
 
-Phase 2 slice 3: an agent proposes a change, asks a question, reports a discrepancy or a decision it took (`proposal-decision.md`) over MCP or the CLI, a queue record with evidence and priced options checked against what is decided and asked, and works on its working answer (ADR-0012). Only the queue is written: nothing under the root, no commit, no proposal's state changed; the owner decides on a terminal (`proposal-{queue,apply}.md`). The stdio server writes through the CLI library per request until the daemon (ADR-0019). Code: core `intake` (kinds, enums, caps, checks), store `create_intake`, CLI and MCP `intake.rs`.
+Phase 2 slice 3: an agent proposes a change, asks a question, reports a discrepancy or a decision it took (`proposal-decision.md`) over MCP or the CLI, a queue record with evidence and priced options checked against what is decided and asked, and works on its working answer (ADR-0012). Only the queue is written: nothing under the root, no commit, no proposal's state changed; the owner decides on a terminal (`proposal-{queue,apply}.md`). The stdio server writes through the CLI library per request until the daemon (ADR-0019). A hub's `/mcp` serves the four without `task_id` (`hub-mcp.md`). Code: core `intake` (kinds, enums, caps, checks), store `create_intake`, CLI and MCP `intake.rs`.
 
 ## Tools
 
@@ -68,7 +68,7 @@ The intake keys of `spec review` and `get_proposal`, `--brief`, the inbox's entr
 
 ## Authors
 
-`author_role` is required over MCP (missing: rmcp's parameter error), stored verbatim, no enum (P2-7): `{"type":"agent","role":"nest-developer","model":null,"run":null}`. Grammar (core `author_problem`): printable ASCII without spaces, 1-128 bytes, named `author_role`, `author_model`, `run`. Exits differ, as built: `propose update` (± `--brief`, `propose_change`) -> exit 2 `spec: author_role: <problem>`, no document; the intake commands -> exit 1 with the document. The twin without `A` stores `human`.
+`author_role` is required over MCP (missing: rmcp's parameter error), stored verbatim, no enum (P2-7): `{"type":"agent","role":"nest-developer","model":null,"run":null}`. Grammar (core `author_problem`): printable ASCII without spaces, 1-128 bytes, named `author_role`, `author_model`, `run`. Exits differ, as built: `propose update` (± `--brief`, `propose_change`) -> exit 2 `spec: author_role: <problem>`, no document; the intake commands -> exit 1 with the document. The twin without `A` stores `human`. Over a hub's `/mcp`, `login` is the request's (`hub-mcp.md` "Identity"); stdio rows hold none.
 
 ## Known limits
 

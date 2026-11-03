@@ -79,6 +79,17 @@ describe("the UI over the mock", () => {
     expect(screen.getByText("scenario: conflict")).toBeTruthy();
   });
 
+  it("shows PR-0043's login, raised over a hub's `/mcp`, in its Provenance after Author (H15 of hub-mcp)", async () => {
+    renderMock("normal", "#/harbor-sim/inbox/PR-0043");
+    const provenance = (await within(await screen.findByRole("article")).findByRole("heading", { level: 3, name: "Provenance" })).closest("section");
+    const pairs = Array.from(provenance?.querySelectorAll("dt") ?? [], (term) => [term.textContent, term.nextElementSibling?.textContent]);
+    expect(pairs.slice(0, 3)).toEqual([
+      ["Author", "agent, role requirement-analyst"],
+      ["Login", "mira"],
+      ["Model", "claude-opus-5-5"],
+    ]);
+  });
+
   it("error: the inbox says the daemon's message and offers Retry", async () => {
     renderMock("error", "#/harbor-sim/inbox");
     const alert = await screen.findByRole("alert");

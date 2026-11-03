@@ -8,7 +8,7 @@ reviewed: 2026-11-02
 
 # Hub team: who acts past the plain writes
 
-ADR-0060, ADR-0061, built by `hub-team` (RM-0071) and `hub-confirm` (RM-0050). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages, round answers and a confirm to the logins it names; a terminal on the host still confirms. No route proposes until RM-0053 and no real hub exists before RM-0064, so this is a mechanism and its proofs. Working answers, the owner's review open. Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
+ADR-0060, ADR-0061, built by `hub-team` (RM-0071) and `hub-confirm` (RM-0050). On a hub (`hub.md`) a project's `[team]` opens accept, clear, group clear, stages, round answers and a confirm to the logins it names; a terminal on the host still confirms. `/mcp` proposes under a login (`hub-mcp.md`); no real hub exists before RM-0064, so this is a mechanism and its proofs. Working answers, the owner's review open. Code: core `team_toml.rs`, `gate.rs`; store `check.rs`, `queue/stage.rs`; CLI `team.rs`, `card.rs` `run_clear_group`, `trace.rs` `group_marks`; http `hub.rs`, `app.rs`; UI `src/board/acting.ts`, `ActOff.tsx`.
 
 <a id="team"></a>
 ## Team

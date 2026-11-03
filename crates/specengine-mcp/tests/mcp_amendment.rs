@@ -161,6 +161,7 @@ fn amend_twin(args: &Value, cwd: &Path, home: &Path, now: &str) -> common::read:
             author_role: text("author_role"),
             author_model: text("author_model"),
             run: text("run"),
+            login: None,
             now: now.to_owned(),
             git: GitEnv::new(cwd, [("HOME", home.as_os_str())]),
         },

@@ -429,6 +429,7 @@ fn asked(setup: &Setup, targets: &[&str], text: &str) -> String {
         author_role: Some("developer".to_owned()),
         author_model: Some("claude-opus-5-5".to_owned()),
         run: None,
+        login: None,
         now: utc_now(),
         git: terminal_git(setup),
     };
@@ -490,6 +491,7 @@ fn reported_with(
                 author_role: Some("developer".to_owned()),
                 author_model: Some("claude-opus-5-5".to_owned()),
                 run: None,
+                login: None,
                 now: utc_now(),
                 git: terminal_git(setup),
             },

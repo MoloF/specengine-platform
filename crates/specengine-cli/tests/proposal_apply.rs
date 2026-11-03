@@ -1063,6 +1063,7 @@ fn a_root_below_the_top_applies_at_its_top_relative_path() {
             author_role: None,
             author_model: None,
             run: None,
+            login: None,
             now: common::proposal::NOW.to_owned(),
             git: genv(&linked.join("proj")),
         },

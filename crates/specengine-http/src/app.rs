@@ -57,7 +57,7 @@ use axum::http::header::{ALLOW, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_TYPE, HOS
 use axum::http::{HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri};
 use axum::middleware::{self, Next};
 use axum::response::Response;
-use axum::routing::{MethodRouter, get, post};
+use axum::routing::{MethodRouter, any, get, post};
 use futures_util::StreamExt as _;
 use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
@@ -73,6 +73,7 @@ use specengine_cli::{
 use crate::answer::{self, NO_STORE, Refusal, error, json, run};
 use crate::args::{Args, percent_decode, project_path};
 use crate::hub::{Hub, Login};
+use crate::mcp::{self, Mounts};
 use crate::start::Project;
 use crate::sync::{Push, RepoSync, Syncs};
 use crate::{confirm, hub, tail, ui};
@@ -89,6 +90,9 @@ pub(crate) struct App {
     /// `--push` (a hub's alone): each repository's sync
     /// (docs/features/hub-git.md); absent, nothing fetches or pushes.
     pub syncs: Option<Syncs>,
+    /// A hub's `/mcp/<slug>` (docs/features/hub-mcp.md): one MCP service per
+    /// project and the session table; absent on a local daemon.
+    pub mcp: Option<Mounts>,
 }
 
 pub(crate) type Shared = Arc<App>;
@@ -102,11 +106,14 @@ impl App {
     ) -> Self {
         let projects: Vec<Arc<Project>> = projects.into_iter().map(Arc::new).collect();
         let syncs = push.map(|push| Syncs::new(&projects, push));
+        // `--public-origin` is the whole switch (S5): no flag of its own.
+        let mcp = hub.as_ref().map(|hub| Mounts::new(&projects, hub));
         Self {
             projects,
             port,
             hub,
             syncs,
+            mcp,
         }
     }
 
@@ -124,6 +131,12 @@ impl App {
         let Some((raw, rest)) = project_path(uri.path()) else {
             return Err(unknown_route_of(uri));
         };
+        Ok((self.project_named(raw)?, rest.to_owned()))
+    }
+
+    /// The project a raw path segment names, as [`Self::project_of`] judges
+    /// it: an unknown slug is a 404, a slug that does not decode a 400.
+    pub(crate) fn project_named(&self, raw: &str) -> Result<Arc<Project>, Refusal> {
         let slug = percent_decode(raw).map_err(Refusal::bad_request)?;
         let project = self
             .projects
@@ -139,7 +152,7 @@ impl App {
                     ),
                 )
             })?;
-        Ok((Arc::clone(project), rest.to_owned()))
+        Ok(Arc::clone(project))
     }
 }
 
@@ -217,12 +230,17 @@ pub(crate) fn router(app: Shared) -> Router {
         // API's, no config, no turn.
         .route("/", read(ui::page))
         .route("/assets/{file}", read(ui::asset));
-    // A hub's alone: a local daemon has no such route, on any method.
+    // A hub's alone: a local daemon has no such route, on any method. MCP's
+    // every method goes to its handler, past the fence's class `Mcp`
+    // (docs/features/hub-mcp.md S3).
     let routes = if app.hub.is_some() {
-        routes.route("/api/projects/{p}/team", read(team)).route(
-            "/api/projects/{p}/proposals/{id}/confirm",
-            get(confirm::read).post(confirm::write),
-        )
+        routes
+            .route("/api/projects/{p}/team", read(team))
+            .route(
+                "/api/projects/{p}/proposals/{id}/confirm",
+                get(confirm::read).post(confirm::write),
+            )
+            .route("/mcp/{p}", any(mcp::serve))
     } else {
         routes
     };

@@ -804,6 +804,7 @@ mod tests {
                 author_role: None,
                 author_model: None,
                 run: None,
+                login: None,
                 now: NOW.to_owned(),
                 git: git_env.clone(),
             },

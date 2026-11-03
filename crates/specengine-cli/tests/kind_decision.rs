@@ -128,6 +128,7 @@ fn request(pair: &Pair, cwd: &Path, input: DecisionInput) -> DecisionRequest {
         author_role: Some("developer".to_owned()),
         author_model: Some("claude-opus-5-5".to_owned()),
         run: None,
+        login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
     }
@@ -645,6 +646,7 @@ fn ac_r3_a_question_and_a_decision_hit_each_other_a_discrepancy_neither() {
             author_role: Some("developer".to_owned()),
             author_model: None,
             run: None,
+            login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&cwd),
         },

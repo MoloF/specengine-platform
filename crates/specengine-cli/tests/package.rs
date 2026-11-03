@@ -1197,6 +1197,7 @@ fn ac06_a_section_form_create_refreshes_and_a_file_form_one_does_not() {
                 author_role: Some("writer".to_owned()),
                 author_model: None,
                 run: None,
+                login: None,
                 now: common::proposal::NOW.to_owned(),
                 git: pair.git_env(&main),
             },

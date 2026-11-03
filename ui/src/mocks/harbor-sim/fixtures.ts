@@ -39,6 +39,9 @@ import { nodeKinds, specStatuses } from "./kinds";
 // roots of the tree, their amends links among the corpus's: the accepted decision DEC-0014, whose
 // RULE-QUAY-LIGHTS names nothing any more, and a draft feature spec with no ID amending
 // RULE-BERTH-DRAFT, resolved. src/mocks/health.ts lists them as `spec health` does.
+//
+// hub-mcp (docs/features/hub-mcp.md "Identity"): PR-0043 raised over a hub's `/mcp`, its author
+// carrying the asking person's `login`, which the card shows in a Login row.
 
 const SLUG = "harbor-sim";
 
@@ -919,7 +922,7 @@ export function harborSim(now: number): MockProject {
         ],
         recommendation: 0,
         working_answer: "Plans use the local name and fall back to North basin when a font lacks the glyphs.",
-        author: agent("requirement-analyst", "R-2154"),
+        author: { ...agent("requirement-analyst", "R-2154"), login: "mira" },
         created_at: at(26 * 60),
       }),
       proposal({

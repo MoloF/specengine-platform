@@ -122,6 +122,7 @@ impl Decided {
                 author_role: Some("developer".to_owned()),
                 author_model: None,
                 run: None,
+                login: None,
                 now: NOW.to_owned(),
                 git: decided.git_env(&decided.linked),
             },

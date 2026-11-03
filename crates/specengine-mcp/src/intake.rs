@@ -17,7 +17,10 @@
 //! here is an agent's. An optional `task_id` binds the item to a task
 //! (`spec propose … --task T`;
 //! `docs/canon/tasks.md` "Task-bound proposals"). `get_proposal` reads
-//! only.
+//! only. A hub's four raising tools (`crate::hub`) take the `Hub…Args`
+//! below, which hold no `task_id`, and pass the request's login into the
+//! CLI request's `login` (docs/features/hub-mcp.md "Identity"); over stdio
+//! it stays `None`.
 
 use std::borrow::Cow;
 
@@ -636,6 +639,213 @@ pub(crate) struct ProposalArgs {
     pub proposal_id: String,
 }
 
+/// A hub's `propose_change` arguments (docs/features/hub-mcp.md "Data"):
+/// [`ChangeArgs`] without `task_id`, since no task runs on a hub; an
+/// unknown name, `task_id` or `login` too, is refused before any call.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HubChangeArgs {
+    /// `update`: replace the node's span; `create`: new ID sections in it,
+    /// or a new file; `interpretation`: an update carrying an accepted
+    /// decision (`decision`, `how`, `why`); `amendment`: a new file
+    /// declaring the live nodes it amends.
+    pub kind: ChangeKind,
+    /// The node's ID or `slug/ID`, or a root-relative `.md` path (its
+    /// document; a new file: a path naming nothing yet).
+    pub target: String,
+    /// get_node's `span_hash` of the node; absent or `null` only for a new
+    /// file (always for an amendment).
+    pub base: Option<String>,
+    /// An interpretation's accepted decision: its ID (or `slug/ID`, or a
+    /// root-relative `.md` path); absent or `null` for any other kind.
+    pub decision: Option<String>,
+    /// An interpretation's: how the decision was applied; absent or `null`
+    /// for any other kind.
+    pub how: Option<String>,
+    /// An interpretation's: why interpretation was needed; absent or `null`
+    /// for any other kind.
+    pub why: Option<String>,
+    /// The new text, inline.
+    pub text: String,
+    /// Why; the commit's body when applied.
+    pub rationale: String,
+    /// The proposing agent's role.
+    pub author_role: String,
+    /// The proposing agent's model.
+    pub author_model: Option<String>,
+    /// The proposing agent's run.
+    pub run: Option<String>,
+    /// true: every refusal and the diagnostics of the real call, nothing stored; update and create only.
+    pub dry_run: Option<bool>,
+}
+
+impl From<HubChangeArgs> for ChangeArgs {
+    fn from(args: HubChangeArgs) -> Self {
+        Self {
+            kind: args.kind,
+            target: args.target,
+            base: args.base,
+            decision: args.decision,
+            how: args.how,
+            why: args.why,
+            text: args.text,
+            rationale: args.rationale,
+            author_role: args.author_role,
+            author_model: args.author_model,
+            run: args.run,
+            task_id: None,
+            dry_run: args.dry_run,
+        }
+    }
+}
+
+/// A hub's `ask_question` arguments: [`QuestionArgs`] without `task_id`.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HubQuestionArgs {
+    /// The IDs (or `slug/ID`, or root-relative `.md` paths) it is about.
+    pub node_ids: Vec<String>,
+    /// The question.
+    pub text: String,
+    /// The answer worked on until the owner answers.
+    pub working_answer: String,
+    /// What another answer would cost.
+    pub price_of_other: String,
+    /// Absent: `normal`.
+    #[schemars(with = "Option<mirror::IntakeSeverity>")]
+    pub severity: Option<IntakeSeverity>,
+    /// Hits (an id, else a path) it is declared distinct from.
+    pub distinct_from: Option<Vec<String>>,
+    /// The asking agent's role.
+    pub author_role: String,
+    /// The asking agent's model.
+    pub author_model: Option<String>,
+    /// The asking agent's run.
+    pub run: Option<String>,
+}
+
+impl From<HubQuestionArgs> for QuestionArgs {
+    fn from(args: HubQuestionArgs) -> Self {
+        Self {
+            node_ids: args.node_ids,
+            text: args.text,
+            working_answer: args.working_answer,
+            price_of_other: args.price_of_other,
+            severity: args.severity,
+            distinct_from: args.distinct_from,
+            author_role: args.author_role,
+            author_model: args.author_model,
+            run: args.run,
+            task_id: None,
+        }
+    }
+}
+
+/// A hub's `report_discrepancy` arguments: [`DiscrepancyArgs`] without
+/// `task_id`.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HubDiscrepancyArgs {
+    /// The IDs (or `slug/ID`, or root-relative `.md` paths) it is about.
+    pub node_ids: Vec<String>,
+    /// What departs from the spec.
+    pub summary: String,
+    #[schemars(with = "mirror::GapType")]
+    pub gap_type: GapType,
+    #[schemars(with = "mirror::IntakeSeverity")]
+    pub severity: IntakeSeverity,
+    /// What was observed against what is documented.
+    #[schemars(with = "Vec<mirror::Evidence>")]
+    pub evidence: Vec<Evidence>,
+    /// Priced ways to settle it.
+    #[schemars(with = "Vec<mirror::IntakeOption>")]
+    pub options: Vec<IntakeOption>,
+    /// The index of the recommended option, from 0.
+    pub recommendation: u64,
+    /// What is worked on meanwhile.
+    pub working_answer: Option<String>,
+    /// A new text for one of the nodes: a linked update.
+    #[schemars(with = "Option<mirror::ProposedPatch>")]
+    pub proposed_patch: Option<ProposedPatch>,
+    /// Hits (an id, else a path) it is declared distinct from.
+    pub distinct_from: Option<Vec<String>>,
+    /// The reporting agent's role.
+    pub author_role: String,
+    /// The reporting agent's model.
+    pub author_model: Option<String>,
+    /// The reporting agent's run.
+    pub run: Option<String>,
+}
+
+impl From<HubDiscrepancyArgs> for DiscrepancyArgs {
+    fn from(args: HubDiscrepancyArgs) -> Self {
+        Self {
+            node_ids: args.node_ids,
+            summary: args.summary,
+            gap_type: args.gap_type,
+            severity: args.severity,
+            evidence: args.evidence,
+            options: args.options,
+            recommendation: args.recommendation,
+            working_answer: args.working_answer,
+            proposed_patch: args.proposed_patch,
+            distinct_from: args.distinct_from,
+            author_role: args.author_role,
+            author_model: args.author_model,
+            run: args.run,
+            task_id: None,
+        }
+    }
+}
+
+/// A hub's `report_decision` arguments: [`DecisionArgs`] without
+/// `task_id`.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct HubDecisionArgs {
+    /// The IDs (or `slug/ID`, or root-relative `.md` paths) it is about,
+    /// the section the decision governs first.
+    pub node_ids: Vec<String>,
+    /// What had to be decided.
+    pub text: String,
+    /// The decision taken, worked on until the owner confirms it.
+    pub working_answer: String,
+    /// What another answer would cost.
+    pub price_of_other: String,
+    /// Absent: `normal`.
+    #[schemars(with = "Option<mirror::IntakeSeverity>")]
+    pub severity: Option<IntakeSeverity>,
+    /// The rule's new text for one of the nodes: a linked update.
+    #[schemars(with = "Option<mirror::ProposedPatch>")]
+    pub proposed_patch: Option<ProposedPatch>,
+    /// Hits (an id, else a path) it is declared distinct from.
+    pub distinct_from: Option<Vec<String>>,
+    /// The deciding agent's role.
+    pub author_role: String,
+    /// The deciding agent's model.
+    pub author_model: Option<String>,
+    /// The deciding agent's run.
+    pub run: Option<String>,
+}
+
+impl From<HubDecisionArgs> for DecisionArgs {
+    fn from(args: HubDecisionArgs) -> Self {
+        Self {
+            node_ids: args.node_ids,
+            text: args.text,
+            working_answer: args.working_answer,
+            price_of_other: args.price_of_other,
+            severity: args.severity,
+            proposed_patch: args.proposed_patch,
+            distinct_from: args.distinct_from,
+            author_role: args.author_role,
+            author_model: args.author_model,
+            run: args.run,
+            task_id: None,
+        }
+    }
+}
+
 #[tool_router(router = intake_tools, vis = "pub(crate)")]
 impl SpecEngineServer {
     /// `spec propose update|create|interpretation|amendment … --brief`.
@@ -654,6 +864,148 @@ impl SpecEngineServer {
     async fn propose_change(
         &self,
         Parameters(args): Parameters<ChangeArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        self.change(args, None).await
+    }
+
+    /// `spec propose question`.
+    #[tool(
+        description = QUESTION_DESCRIPTION,
+        input_schema = input_schema::<QuestionArgs>(),
+        output_schema = output_schema::<IntakeDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn ask_question(
+        &self,
+        Parameters(args): Parameters<QuestionArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self.question(args, None).await)
+    }
+
+    /// `spec propose discrepancy`.
+    #[tool(
+        description = DISCREPANCY_DESCRIPTION,
+        input_schema = input_schema::<DiscrepancyArgs>(),
+        output_schema = output_schema::<IntakeDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn report_discrepancy(
+        &self,
+        Parameters(args): Parameters<DiscrepancyArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self.discrepancy(args, None).await)
+    }
+
+    /// `spec propose decision`.
+    #[tool(
+        description = DECISION_DESCRIPTION,
+        input_schema = input_schema::<DecisionArgs>(),
+        output_schema = output_schema::<IntakeDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn report_decision(
+        &self,
+        Parameters(args): Parameters<DecisionArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self.decision(args, None).await)
+    }
+
+    /// `spec propose drift`.
+    #[tool(
+        description = DRIFT_DESCRIPTION,
+        input_schema = input_schema::<DriftArgs>(),
+        output_schema = output_schema::<DriftDocument>(),
+        annotations(
+            read_only_hint = false,
+            destructive_hint = false,
+            idempotent_hint = false,
+            open_world_hint = false
+        ),
+        meta = result_size_meta()
+    )]
+    async fn report_drift(
+        &self,
+        Parameters(args): Parameters<DriftArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        // Absent is a sweep; given, one node at least (a form error).
+        if args.node_ids.as_ref().is_some_and(Vec::is_empty) {
+            return Err(ErrorData::invalid_params(
+                format!("node_ids: 1 to {NODE_IDS_MAX} nodes, or absent for every drifting node"),
+                None,
+            ));
+        }
+        Ok(self
+            .call(move |env, globals| {
+                let request = DriftRequest {
+                    references: args.node_ids.unwrap_or_default(),
+                    author_role: Some(args.author_role),
+                    author_model: args.author_model,
+                    run: args.run,
+                    now: utc_now(),
+                    git: process_git(env),
+                };
+                specengine_cli::propose_drift(env, globals, &request, args.task_id.as_deref())
+                    .map(|outcome| Outcome::Drift(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("report_drift"))
+    }
+
+    /// `spec review PR --brief`.
+    #[tool(
+        description = PROPOSAL_DESCRIPTION,
+        input_schema = input_schema::<ProposalArgs>(),
+        output_schema = output_schema::<ReviewDocument>(),
+        annotations(read_only_hint = true, destructive_hint = false, open_world_hint = false),
+        meta = result_size_meta()
+    )]
+    async fn get_proposal(
+        &self,
+        Parameters(args): Parameters<ProposalArgs>,
+    ) -> Result<CallToolResult, ErrorData> {
+        Ok(self
+            .call(move |env, globals| {
+                let request = ReviewRequest {
+                    id: args.proposal_id,
+                    git: process_git(env),
+                };
+                specengine_cli::review_brief(env, globals, &request)
+                    .map(|outcome| Outcome::Proposal(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("get_proposal"))
+    }
+}
+
+/// The four raising tools' calls, shared by stdio's tools and a hub's
+/// (`crate::hub`): `login` `None` over stdio, so a row stores no `login`
+/// key; on a hub the request's, into the CLI request's `login` and so
+/// `Author.login` (docs/features/hub-mcp.md "Identity"). A hub passes no
+/// `task_id`, which its argument types do not hold.
+impl SpecEngineServer {
+    /// `spec propose update|create|interpretation|amendment … --brief`.
+    pub(crate) async fn change(
+        &self,
+        args: ChangeArgs,
+        login: Option<String>,
     ) -> Result<CallToolResult, ErrorData> {
         let ChangeArgs {
             kind,
@@ -755,6 +1107,7 @@ impl SpecEngineServer {
                                 author_role,
                                 author_model,
                                 run,
+                                login,
                                 now,
                                 git,
                             },
@@ -771,6 +1124,7 @@ impl SpecEngineServer {
                             author_role,
                             author_model,
                             run,
+                            login,
                             now,
                             git,
                         },
@@ -785,6 +1139,7 @@ impl SpecEngineServer {
                             author_role,
                             author_model,
                             run,
+                            login,
                             now,
                             git,
                         };
@@ -803,6 +1158,7 @@ impl SpecEngineServer {
                             author_role,
                             author_model,
                             run,
+                            login,
                             now,
                             git,
                         };
@@ -824,209 +1180,110 @@ impl SpecEngineServer {
     }
 
     /// `spec propose question`.
-    #[tool(
-        description = QUESTION_DESCRIPTION,
-        input_schema = input_schema::<QuestionArgs>(),
-        output_schema = output_schema::<IntakeDocument>(),
-        annotations(
-            read_only_hint = false,
-            destructive_hint = false,
-            idempotent_hint = false,
-            open_world_hint = false
-        ),
-        meta = result_size_meta()
-    )]
-    async fn ask_question(
+    pub(crate) async fn question(
         &self,
-        Parameters(args): Parameters<QuestionArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        Ok(self
-            .call(move |env, globals| {
-                let request = QuestionRequest {
+        args: QuestionArgs,
+        login: Option<String>,
+    ) -> CallToolResult {
+        self.call(move |env, globals| {
+            let request = QuestionRequest {
+                node_ids: args.node_ids,
+                text: args.text,
+                working_answer: args.working_answer,
+                price_of_other: args.price_of_other,
+                severity: args.severity,
+                distinct_from: args.distinct_from.unwrap_or_default(),
+                author_role: Some(args.author_role),
+                author_model: args.author_model,
+                run: args.run,
+                login,
+                now: utc_now(),
+                git: process_git(env),
+            };
+            specengine_cli::propose_question_with_task(
+                env,
+                globals,
+                &request,
+                args.task_id.as_deref(),
+            )
+            .map(|outcome| Outcome::Intake(Box::new(outcome)))
+        })
+        .await
+        .into_tool_result("ask_question")
+    }
+
+    /// `spec propose discrepancy`.
+    pub(crate) async fn discrepancy(
+        &self,
+        args: DiscrepancyArgs,
+        login: Option<String>,
+    ) -> CallToolResult {
+        self.call(move |env, globals| {
+            let request = DiscrepancyRequest {
+                input: DiscrepancyInput {
+                    node_ids: args.node_ids,
+                    summary: args.summary,
+                    gap_type: args.gap_type,
+                    severity: args.severity,
+                    evidence: args.evidence,
+                    options: args.options,
+                    recommendation: args.recommendation,
+                    working_answer: args.working_answer,
+                    proposed_patch: args.proposed_patch,
+                    distinct_from: args.distinct_from,
+                },
+                author_role: Some(args.author_role),
+                author_model: args.author_model,
+                run: args.run,
+                login,
+                now: utc_now(),
+                git: process_git(env),
+            };
+            specengine_cli::propose_discrepancy_with_task(
+                env,
+                globals,
+                &request,
+                args.task_id.as_deref(),
+            )
+            .map(|outcome| Outcome::Intake(Box::new(outcome)))
+        })
+        .await
+        .into_tool_result("report_discrepancy")
+    }
+
+    /// `spec propose decision`.
+    pub(crate) async fn decision(
+        &self,
+        args: DecisionArgs,
+        login: Option<String>,
+    ) -> CallToolResult {
+        self.call(move |env, globals| {
+            let request = DecisionRequest {
+                input: DecisionInput {
                     node_ids: args.node_ids,
                     text: args.text,
                     working_answer: args.working_answer,
                     price_of_other: args.price_of_other,
                     severity: args.severity,
-                    distinct_from: args.distinct_from.unwrap_or_default(),
-                    author_role: Some(args.author_role),
-                    author_model: args.author_model,
-                    run: args.run,
-                    now: utc_now(),
-                    git: process_git(env),
-                };
-                specengine_cli::propose_question_with_task(
-                    env,
-                    globals,
-                    &request,
-                    args.task_id.as_deref(),
-                )
-                .map(|outcome| Outcome::Intake(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("ask_question"))
-    }
-
-    /// `spec propose discrepancy`.
-    #[tool(
-        description = DISCREPANCY_DESCRIPTION,
-        input_schema = input_schema::<DiscrepancyArgs>(),
-        output_schema = output_schema::<IntakeDocument>(),
-        annotations(
-            read_only_hint = false,
-            destructive_hint = false,
-            idempotent_hint = false,
-            open_world_hint = false
-        ),
-        meta = result_size_meta()
-    )]
-    async fn report_discrepancy(
-        &self,
-        Parameters(args): Parameters<DiscrepancyArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        Ok(self
-            .call(move |env, globals| {
-                let request = DiscrepancyRequest {
-                    input: DiscrepancyInput {
-                        node_ids: args.node_ids,
-                        summary: args.summary,
-                        gap_type: args.gap_type,
-                        severity: args.severity,
-                        evidence: args.evidence,
-                        options: args.options,
-                        recommendation: args.recommendation,
-                        working_answer: args.working_answer,
-                        proposed_patch: args.proposed_patch,
-                        distinct_from: args.distinct_from,
-                    },
-                    author_role: Some(args.author_role),
-                    author_model: args.author_model,
-                    run: args.run,
-                    now: utc_now(),
-                    git: process_git(env),
-                };
-                specengine_cli::propose_discrepancy_with_task(
-                    env,
-                    globals,
-                    &request,
-                    args.task_id.as_deref(),
-                )
-                .map(|outcome| Outcome::Intake(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("report_discrepancy"))
-    }
-
-    /// `spec propose decision`.
-    #[tool(
-        description = DECISION_DESCRIPTION,
-        input_schema = input_schema::<DecisionArgs>(),
-        output_schema = output_schema::<IntakeDocument>(),
-        annotations(
-            read_only_hint = false,
-            destructive_hint = false,
-            idempotent_hint = false,
-            open_world_hint = false
-        ),
-        meta = result_size_meta()
-    )]
-    async fn report_decision(
-        &self,
-        Parameters(args): Parameters<DecisionArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        Ok(self
-            .call(move |env, globals| {
-                let request = DecisionRequest {
-                    input: DecisionInput {
-                        node_ids: args.node_ids,
-                        text: args.text,
-                        working_answer: args.working_answer,
-                        price_of_other: args.price_of_other,
-                        severity: args.severity,
-                        proposed_patch: args.proposed_patch,
-                        distinct_from: args.distinct_from,
-                    },
-                    author_role: Some(args.author_role),
-                    author_model: args.author_model,
-                    run: args.run,
-                    now: utc_now(),
-                    git: process_git(env),
-                };
-                specengine_cli::propose_decision_with_task(
-                    env,
-                    globals,
-                    &request,
-                    args.task_id.as_deref(),
-                )
-                .map(|outcome| Outcome::Intake(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("report_decision"))
-    }
-
-    /// `spec propose drift`.
-    #[tool(
-        description = DRIFT_DESCRIPTION,
-        input_schema = input_schema::<DriftArgs>(),
-        output_schema = output_schema::<DriftDocument>(),
-        annotations(
-            read_only_hint = false,
-            destructive_hint = false,
-            idempotent_hint = false,
-            open_world_hint = false
-        ),
-        meta = result_size_meta()
-    )]
-    async fn report_drift(
-        &self,
-        Parameters(args): Parameters<DriftArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        // Absent is a sweep; given, one node at least (a form error).
-        if args.node_ids.as_ref().is_some_and(Vec::is_empty) {
-            return Err(ErrorData::invalid_params(
-                format!("node_ids: 1 to {NODE_IDS_MAX} nodes, or absent for every drifting node"),
-                None,
-            ));
-        }
-        Ok(self
-            .call(move |env, globals| {
-                let request = DriftRequest {
-                    references: args.node_ids.unwrap_or_default(),
-                    author_role: Some(args.author_role),
-                    author_model: args.author_model,
-                    run: args.run,
-                    now: utc_now(),
-                    git: process_git(env),
-                };
-                specengine_cli::propose_drift(env, globals, &request, args.task_id.as_deref())
-                    .map(|outcome| Outcome::Drift(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("report_drift"))
-    }
-
-    /// `spec review PR --brief`.
-    #[tool(
-        description = PROPOSAL_DESCRIPTION,
-        input_schema = input_schema::<ProposalArgs>(),
-        output_schema = output_schema::<ReviewDocument>(),
-        annotations(read_only_hint = true, destructive_hint = false, open_world_hint = false),
-        meta = result_size_meta()
-    )]
-    async fn get_proposal(
-        &self,
-        Parameters(args): Parameters<ProposalArgs>,
-    ) -> Result<CallToolResult, ErrorData> {
-        Ok(self
-            .call(move |env, globals| {
-                let request = ReviewRequest {
-                    id: args.proposal_id,
-                    git: process_git(env),
-                };
-                specengine_cli::review_brief(env, globals, &request)
-                    .map(|outcome| Outcome::Proposal(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("get_proposal"))
+                    proposed_patch: args.proposed_patch,
+                    distinct_from: args.distinct_from,
+                },
+                author_role: Some(args.author_role),
+                author_model: args.author_model,
+                run: args.run,
+                login,
+                now: utc_now(),
+                git: process_git(env),
+            };
+            specengine_cli::propose_decision_with_task(
+                env,
+                globals,
+                &request,
+                args.task_id.as_deref(),
+            )
+            .map(|outcome| Outcome::Intake(Box::new(outcome)))
+        })
+        .await
+        .into_tool_result("report_decision")
     }
 }

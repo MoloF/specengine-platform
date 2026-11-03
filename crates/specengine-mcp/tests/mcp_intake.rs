@@ -152,6 +152,7 @@ impl Repo {
                 author_role: Some("writer".to_owned()),
                 author_model: None,
                 run: None,
+                login: None,
                 now: NOW.to_owned(),
                 git: self.git_env(&self.linked),
             },
@@ -563,6 +564,7 @@ fn ac05_eight_parallel_asks_and_the_twin_store_one_row() {
                 author_role: Some("writer".to_owned()),
                 author_model: None,
                 run: None,
+                login: None,
                 now: NOW.to_owned(),
                 git: repo.git_env(&repo.main),
             };

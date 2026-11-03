@@ -80,6 +80,7 @@ fn request(
         author_role: Some("spec-author".to_owned()),
         author_model: Some("claude-opus-5-5".to_owned()),
         run: None,
+        login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
     }
@@ -1766,6 +1767,7 @@ fn w7_never_flags_a_section_form_create() {
             author_role: Some("spec-author".to_owned()),
             author_model: None,
             run: None,
+            login: None,
             now: NOW.to_owned(),
             git: pair.git_env(&main),
         },

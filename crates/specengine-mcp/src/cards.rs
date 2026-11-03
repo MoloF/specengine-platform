@@ -3,7 +3,10 @@
 //! queue as `claim_task` does, each one call into the CLI library with a
 //! `spec card` twin, answering what the CLI answers (`read.rs`'s mapping). A
 //! tool acts as `agent`, so a flow's `by` holds against tools until it lists
-//! that name. `assign`, `cancel`, `accept` and `clear` have no tool: a person
+//! that name; on a hub's `/mcp` it acts as the request's login instead
+//! (`crate::hub`, docs/features/hub-mcp.md "Identity"), its hub variant's
+//! arguments these, which hold no `as`. `assign`, `cancel`, `accept` and
+//! `clear` have no tool: a person
 //! accepts a card and answers its mark, on a terminal or the local page
 //! (ADR-0056). They write only the queue in SpecEngine's data directory:
 //! nothing under the project root, and no git.
@@ -353,27 +356,7 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<CreateCardArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        Ok(self
-            .call(move |env, globals| {
-                let request = CardNewRequest {
-                    title: args.title,
-                    goal: args.goal,
-                    discipline: args.discipline,
-                    targets: args.target.unwrap_or_default(),
-                    criteria: args.criterion.unwrap_or_default(),
-                    assignee: args.assignee,
-                    estimate: args.estimate,
-                    due: args.due,
-                    parent: args.parent,
-                    corrects: args.corrects,
-                    actor: Some(TOOL_ACTOR.to_owned()),
-                    now: utc_now(),
-                };
-                specengine_cli::card_new(env, globals, &request)
-                    .map(|outcome| Outcome::Card(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("create_card"))
+        Ok(self.card_new(args, TOOL_ACTOR.to_owned()).await)
     }
 
     /// `spec card edit C …`.
@@ -393,30 +376,7 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<EditCardArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        Ok(without_no_card(
-            self.call(move |env, globals| {
-                let request = CardEditRequest {
-                    id: args.card_id,
-                    title: args.title,
-                    goal: args.goal,
-                    targets: args.target.unwrap_or_default(),
-                    criteria: args.criterion.unwrap_or_default(),
-                    estimate: args.estimate,
-                    due: args.due,
-                    parent: args.parent,
-                    corrects: args.corrects,
-                    evidence: args.evidence.unwrap_or_default(),
-                    reason: args.reason,
-                    revision: args.revision,
-                    actor: Some(TOOL_ACTOR.to_owned()),
-                    now: utc_now(),
-                };
-                specengine_cli::card_edit(env, globals, &request)
-                    .map(|outcome| Outcome::Card(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("edit_card"),
-        ))
+        Ok(self.card_edit(args, TOOL_ACTOR.to_owned()).await)
     }
 
     /// `spec card move C [--to K] [--before C]`.
@@ -436,14 +396,77 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<MoveCardArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        Ok(without_no_card(
+        Ok(self.card_move(args, TOOL_ACTOR.to_owned()).await)
+    }
+}
+
+/// The three card writes' calls, shared by stdio's tools and a hub's
+/// (`crate::hub`): `actor` [`TOOL_ACTOR`] over stdio; on a hub the
+/// request's login, so a flow's `by` holds against the person
+/// (docs/features/hub-mcp.md "Identity").
+impl SpecEngineServer {
+    /// `spec card new`.
+    pub(crate) async fn card_new(&self, args: CreateCardArgs, actor: String) -> CallToolResult {
+        self.call(move |env, globals| {
+            let request = CardNewRequest {
+                title: args.title,
+                goal: args.goal,
+                discipline: args.discipline,
+                targets: args.target.unwrap_or_default(),
+                criteria: args.criterion.unwrap_or_default(),
+                assignee: args.assignee,
+                estimate: args.estimate,
+                due: args.due,
+                parent: args.parent,
+                corrects: args.corrects,
+                actor: Some(actor),
+                now: utc_now(),
+            };
+            specengine_cli::card_new(env, globals, &request)
+                .map(|outcome| Outcome::Card(Box::new(outcome)))
+        })
+        .await
+        .into_tool_result("create_card")
+    }
+
+    /// `spec card edit C …`.
+    pub(crate) async fn card_edit(&self, args: EditCardArgs, actor: String) -> CallToolResult {
+        without_no_card(
+            self.call(move |env, globals| {
+                let request = CardEditRequest {
+                    id: args.card_id,
+                    title: args.title,
+                    goal: args.goal,
+                    targets: args.target.unwrap_or_default(),
+                    criteria: args.criterion.unwrap_or_default(),
+                    estimate: args.estimate,
+                    due: args.due,
+                    parent: args.parent,
+                    corrects: args.corrects,
+                    evidence: args.evidence.unwrap_or_default(),
+                    reason: args.reason,
+                    revision: args.revision,
+                    actor: Some(actor),
+                    now: utc_now(),
+                };
+                specengine_cli::card_edit(env, globals, &request)
+                    .map(|outcome| Outcome::Card(Box::new(outcome)))
+            })
+            .await
+            .into_tool_result("edit_card"),
+        )
+    }
+
+    /// `spec card move C [--to K] [--before C]`.
+    pub(crate) async fn card_move(&self, args: MoveCardArgs, actor: String) -> CallToolResult {
+        without_no_card(
             self.call(move |env, globals| {
                 let request = CardMoveRequest {
                     id: args.card_id,
                     to: args.to,
                     before: args.before,
                     revision: args.revision,
-                    actor: Some(TOOL_ACTOR.to_owned()),
+                    actor: Some(actor),
                     now: utc_now(),
                 };
                 specengine_cli::card_move(env, globals, &request)
@@ -451,6 +474,6 @@ impl SpecEngineServer {
             })
             .await
             .into_tool_result("move_card"),
-        ))
+        )
     }
 }

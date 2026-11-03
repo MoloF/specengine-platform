@@ -497,6 +497,7 @@ fn get_proposal_counts_format_1_entries() {
             author_role: Some("spec-writer".to_owned()),
             author_model: Some("claude-opus-5-5".to_owned()),
             run: None,
+            login: None,
             now: "2026-10-14T09:00:00Z".to_owned(),
             git: git.clone(),
         },

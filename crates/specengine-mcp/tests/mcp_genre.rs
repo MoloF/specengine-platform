@@ -669,3 +669,71 @@ fn a_garden_with_code_gets_rows_and_no_stack_word() {
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }
 }
+
+/// A hub seam that knows no login and runs nothing: enough to build the hub
+/// server and read its texts (docs/features/hub-mcp.md).
+struct IdleSeam;
+
+impl specengine_mcp::HubSeam for IdleSeam {
+    fn login(&self, _extensions: &rmcp::model::Extensions) -> Option<String> {
+        None
+    }
+
+    fn turn(&self, command: specengine_mcp::Command) -> specengine_mcp::TurnFuture {
+        drop(command);
+        Box::pin(async {})
+    }
+}
+
+/// H11 of docs/features/hub-mcp.md: the hub's texts are in `src/hub.rs`, a
+/// module of the default build, so the literal scan of
+/// [`ac12_the_sources_hold_no_fixture_kind_and_no_stack_word`] reads them;
+/// and since that scan pairs quotes per line, the texts as served are read
+/// too: `HUB_INSTRUCTIONS` and each of the seventeen descriptions hold no
+/// P2-3 word and no game-only kind. M: a stack word in a hub description; the
+/// hub texts behind `probes`.
+#[test]
+fn hub_mcp_h11_the_hub_texts_hold_no_stack_word_and_no_game_kind() {
+    use rmcp::ServerHandler as _;
+
+    let src = repository_root().join("crates/specengine-mcp/src");
+    let hub = fs::read_to_string(src.join("hub.rs")).expect("src/hub.rs");
+    assert!(hub.contains("HUB_INSTRUCTIONS"), "the hub texts' module");
+    assert!(
+        !probes_only_modules(&src).contains(&"hub.rs".to_owned()),
+        "hub.rs is in the default build"
+    );
+    assert!(!literals(&hub).is_empty(), "the scan sees hub.rs' literals");
+
+    let server = specengine_mcp::SpecEngineServer::hub(std::sync::Arc::new(IdleSeam));
+    let mut texts = vec![(
+        "HUB_INSTRUCTIONS".to_owned(),
+        specengine_mcp::HUB_INSTRUCTIONS.to_owned(),
+    )];
+    for name in specengine_mcp::HUB_TOOLS {
+        let tool = server
+            .get_tool(name)
+            .unwrap_or_else(|| panic!("the hub routes no {name}"));
+        texts.push((
+            name.to_owned(),
+            tool.description.as_deref().unwrap_or_default().to_owned(),
+        ));
+    }
+    assert_eq!(
+        texts.len(),
+        18,
+        "the instructions and seventeen descriptions"
+    );
+    let mut offenders = Vec::new();
+    for (name, text) in &texts {
+        for word in stack_words(text) {
+            offenders.push(format!("{name}: the P2-3 word {word:?}"));
+        }
+        for word in ["mechanic", "edge-case", "domain"] {
+            if has_word(text, word) {
+                offenders.push(format!("{name}: {word:?}"));
+            }
+        }
+    }
+    assert!(offenders.is_empty(), "{offenders:#?}");
+}

@@ -939,6 +939,7 @@ fn ac11_a_file_form_create_stages_no_span_hash_and_a_section_form_its_targets() 
                 author_role: Some("writer".to_owned()),
                 author_model: None,
                 run: None,
+                login: None,
                 now: CLOCK.to_owned(),
                 git: pair.git_env(&pair.linked),
             },

@@ -492,6 +492,7 @@ fn question_on(repo: &LockRepo, node: &str, text: &str) -> String {
         author_role: Some("developer".to_owned()),
         author_model: Some("claude-opus-5-5".to_owned()),
         run: None,
+        login: None,
         now: RAISED.to_owned(),
         git: repo.git_env(&repo.root),
     };

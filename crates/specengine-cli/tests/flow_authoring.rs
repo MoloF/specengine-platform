@@ -438,6 +438,7 @@ impl Project {
                 author_role: Some(block.author_role.clone()),
                 author_model: None,
                 run: None,
+                login: None,
                 now: NOW.to_owned(),
                 git: self.git_env(),
             },

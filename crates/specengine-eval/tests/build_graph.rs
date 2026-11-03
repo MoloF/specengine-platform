@@ -1939,26 +1939,51 @@ fn cli_direct_dependencies_are_unchanged_by_w() {
 // ---------------------------------------------------------------------------
 
 /// The daemon's `[dependencies]`, exactly (`rust-embed`:
-/// docs/features/ui-embed.md "Data", plain like every entry but `tokio`).
-const HTTP_DEPENDENCIES: [&str; 8] = [
+/// docs/features/ui-embed.md "Data", plain like every entry but `tokio` and
+/// `rmcp`). Ten since docs/features/hub-mcp.md ("Implementation", the pins):
+/// `rmcp`, with `transport-streamable-http-server` alone (S4), and
+/// `specengine-mcp` by path, the hub's MCP server.
+const HTTP_DEPENDENCIES: [&str; 10] = [
     "axum",
     "clap",
     "futures-util",
+    "rmcp",
     "rust-embed",
     "serde",
     "serde_json",
     "specengine-cli",
+    "specengine-mcp",
     "tokio",
 ];
 
+/// The one feature `specengine-http` adds to the workspace's rmcp
+/// (docs/features/hub-mcp.md S4): the Streamable HTTP Tower service. The
+/// root pin keeps its three, so a stdio-only build compiles none of it.
+const HTTP_RMCP_FEATURES: [&str; 1] = ["transport-streamable-http-server"];
+
+/// The crates rmcp's Streamable HTTP server adds to the daemon's normal graph,
+/// each at the version docs/features/hub-mcp.md "Data" records in its
+/// **Dependency** table under the owner's approval of new dependencies: each
+/// resolves once, there.
+const HUB_MCP_PINS: [(&str, &str); 7] = [
+    ("rand", "0.10.2"),
+    ("rand_core", "0.10.1"),
+    ("chacha20", "0.10.2"),
+    ("base64", "0.23.1"),
+    ("tokio-stream", "0.1.19"),
+    ("sse-stream", "0.2.6"),
+    ("async-trait", "0.1.92"),
+];
+
 /// `specengine-http` declares exactly [`HTTP_DEPENDENCIES`]:
-/// `specengine-cli` by path, every other a `[workspace.dependencies]`
-/// entry with no version or default-features of its own, `tokio` adding
-/// exactly `net` (the listener) and `sync` (the per-project turn, declared
-/// rather than borrowed from hyper's feature set); no target-specific, build or optional
-/// dependency; the direct normal graph is the same; the store and
-/// `rusqlite` reach it only through the CLI library; the pins it shares
-/// with the MCP server are `main`'s.
+/// `specengine-cli` and `specengine-mcp` by path, one key each, every other a
+/// `[workspace.dependencies]` entry with no version or default-features of its
+/// own, `tokio` adding exactly `net` (the listener) and `sync` (the
+/// per-project turn, declared rather than borrowed from hyper's feature set),
+/// `rmcp` exactly [`HTTP_RMCP_FEATURES`] (docs/features/hub-mcp.md S4); no
+/// target-specific, build or optional dependency; the direct normal graph is
+/// the same; the store and `rusqlite` reach it only through the CLI library;
+/// the pins it shares with the MCP server are `main`'s.
 #[test]
 fn http_direct_dependencies_are_the_cli_library_axum_and_tokio() {
     let (names, targeted) = declared_normal_dependencies("specengine-http");
@@ -1982,13 +2007,13 @@ fn http_direct_dependencies_are_the_cli_library_axum_and_tokio() {
         let spec = spec
             .as_table()
             .unwrap_or_else(|| panic!("dependencies.{name} pins a version: {spec:?}"));
-        if name == "specengine-cli" {
+        if name == "specengine-cli" || name == "specengine-mcp" {
             assert_eq!(
                 spec.get("path").and_then(toml::Value::as_str),
-                Some("../specengine-cli"),
+                Some(format!("../{name}").as_str()),
                 "{spec:?}"
             );
-            assert_eq!(spec.len(), 1, "specengine-cli: extra keys {spec:?}");
+            assert_eq!(spec.len(), 1, "{name}: extra keys {spec:?}");
             continue;
         }
         assert_eq!(
@@ -1996,7 +2021,7 @@ fn http_direct_dependencies_are_the_cli_library_axum_and_tokio() {
             Some(true),
             "dependencies.{name} is not a workspace entry: {spec:?}"
         );
-        let allowed: &[&str] = if name == "tokio" {
+        let allowed: &[&str] = if name == "tokio" || name == "rmcp" {
             &["workspace", "features"]
         } else {
             &["workspace"]
@@ -2015,6 +2040,15 @@ fn http_direct_dependencies_are_the_cli_library_axum_and_tokio() {
         ])),
         "tokio adds exactly `net` (the listener) and `sync` (the per-project turn, \
          `tokio::sync::Mutex`), in that order"
+    );
+    assert_eq!(
+        deps["rmcp"].get("features"),
+        Some(&toml::Value::Array(
+            HTTP_RMCP_FEATURES
+                .map(|feature| toml::Value::String(feature.to_owned()))
+                .to_vec()
+        )),
+        "rmcp adds exactly the Streamable HTTP server (docs/features/hub-mcp.md S4)"
     );
 
     let direct = cargo_tree(&["-p", "specengine-http", "-e", "normal", "--depth", "1"]);
@@ -2147,7 +2181,21 @@ fn daemon_pins_are_the_approved_ones() {
             "{name} resolves once, at rust-embed's version"
         );
     }
+    // docs/features/hub-mcp.md "Data", **Dependency**: the seven crates rmcp's
+    // Streamable HTTP server brings, each once, at its recorded version, and
+    // each in the daemon's normal graph at that version.
     let graph = http_graph_licences();
+    for (name, version) in HUB_MCP_PINS {
+        assert_eq!(
+            locked_versions(name),
+            [version],
+            "{name} resolves once, at docs/features/hub-mcp.md's {version}"
+        );
+        assert!(
+            graph.iter().any(|(n, v, _)| n == name && v == version),
+            "{name} {version} is in the daemon's normal graph: {graph:?}"
+        );
+    }
     for absent in [
         "tower-http",
         "notify",
@@ -2331,6 +2379,11 @@ fn every_package_of_the_daemons_normal_graph_is_licensed_within_the_allowed_set(
         "rust-embed",
         "rust-embed-impl",
         "rust-embed-utils",
+        // docs/features/hub-mcp.md ("Implementation", the pins): the hub's
+        // MCP transport and the one new crate whose version only rmcp's lock
+        // recorded.
+        "rmcp",
+        "sse-stream",
     ] {
         assert!(
             graph.iter().any(|(name, _, _)| name == wanted),

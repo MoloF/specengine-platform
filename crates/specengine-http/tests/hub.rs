@@ -63,6 +63,9 @@ use common::{
 };
 use serde_json::{Value, json};
 
+/// docs/features/hub-mcp.md "Data": `Authorization` outside `/mcp/<slug>`.
+const AUTHORIZATION_LINE: &str = "refused: the Authorization header is for /mcp alone: this route takes the login door's session";
+
 /// The refusal lines of docs/canon/hub.md "Fence".
 const HOST_LINE: &str =
     "refused: the Host header must be hub.example.test: this hub serves its public origin only";
@@ -560,13 +563,17 @@ fn ac02_a_foreign_origin_is_refused_on_every_route_with_a_good_login() {
     );
 }
 
-/// "Fence": "in this order", each step's own line when several fail.
+/// "Fence": "in this order", each step's own line when several fail. Since
+/// docs/features/hub-mcp.md (Q5) step 5 opens on `Authorization` outside
+/// `/mcp/<slug>`, before the class: a login's bad route with the header gets
+/// the header's line, a request with no login the login's.
 #[test]
 fn the_fence_judges_host_origin_site_login_route_in_that_order() {
     let hub = Setup::new("hub-order", "spec-a").start();
     let path = "/api/projects/lantern-keep/cards/C-0001/archive";
     let person = Proxied::fetch("mira");
     let no_login = person.clone().without("Remote-User");
+    let basic = "Basic bWlyYTp4";
     let cases = [
         (
             no_login
@@ -587,7 +594,12 @@ fn the_fence_judges_host_origin_site_login_route_in_that_order() {
             no_login.clone().set("Sec-Fetch-Site", "cross-site"),
             SITE_LINE,
         ),
+        (no_login.clone().plus("Authorization", basic), NO_LOGIN_LINE),
         (no_login, NO_LOGIN_LINE),
+        (
+            person.clone().plus("Authorization", basic),
+            AUTHORIZATION_LINE,
+        ),
         (person, OFF_LIST_LINE),
     ];
     for (proxied, line) in &cases {
@@ -1385,7 +1397,13 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// 26th: mounted on a hub with `--push` alone, it reads the push status of the
 /// project's repository (`ahead`, `behind`, the last sync's state and its
 /// escaped error, never a URL), which every login may read (P18).
-const GET_ROUTES: [&str; 26] = [
+///
+/// docs/features/hub-mcp.md (RM-0053) judged `/mcp/{p}`, the 27th: mounted on
+/// a hub alone, `any(..)` for POST, GET and DELETE, its GET is a legacy MCP
+/// session's SSE stream, which carries only that session's own messages to the
+/// login that opened it (a session of another login is the rmcp 404, "Rules",
+/// **Sessions**), and the fence refuses its query on every method.
+const GET_ROUTES: [&str; 27] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1412,6 +1430,7 @@ const GET_ROUTES: [&str; 26] = [
     "/api/projects/{p}/trace",
     "/api/projects/{p}/tree",
     "/assets/{file}",
+    "/mcp/{p}",
 ];
 
 /// Whether the method expression of a route serves GET. Only the shape known

@@ -254,8 +254,13 @@ where
 }
 
 /// The project as its config reads now, which must name the slug it is
-/// served under, else exit 2 naming both.
-fn found(env: &Env, globals: &Globals, project: &Project) -> Result<ProjectRoot, CliError> {
+/// served under, else exit 2 naming both. A hub's MCP turn judges it too
+/// ([`crate::mcp`]).
+pub(crate) fn found(
+    env: &Env,
+    globals: &Globals,
+    project: &Project,
+) -> Result<ProjectRoot, CliError> {
     let found = discover(env, globals)?;
     let slug = found.slug()?;
     if slug != project.slug {

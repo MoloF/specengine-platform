@@ -10,7 +10,7 @@ import { Badge } from "../ui/Badge";
 import { DiffView } from "../ui/DiffView";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
-import { shownSlot } from "../ui/text";
+import { shownConfirmText, shownSlot } from "../ui/text";
 import { ErrorPanel, Section, Skeleton } from "../ui/states";
 import { formatAge, formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -171,6 +171,8 @@ function ReviewBody({
 }) {
   const preview = previewLabel(review.preview);
   const author = review.author;
+  // A hub's alone, the request's login of who raised it; absent: no row (`docs/features/hub-mcp.md` "Identity").
+  const login = author?.login;
   const diagnostics = review.diagnostics ?? [];
   // A drift item (its `drift` key, never its kind): its evidence first; no options, no section diff.
   const drift = review.drift;
@@ -302,6 +304,15 @@ function ReviewBody({
               ? "Unknown"
               : [author.type, author.role === null ? null : `role ${author.role}`].filter((part) => part !== null).join(", ")}
           </dd>
+          {login !== undefined && (
+            <>
+              <dt>Login</dt>
+              {/* Data, as a Confirm dialog shows it: every control and format character `\u{..}`, isolated. */}
+              <dd className="mono">
+                <bdi>{shownConfirmText(login)}</bdi>
+              </dd>
+            </>
+          )}
           <dt>Model</dt>
           <dd className="mono">{author?.model ?? "Unknown"}</dd>
           {author !== null && author.run !== null && (

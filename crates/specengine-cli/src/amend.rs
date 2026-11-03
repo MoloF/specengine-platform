@@ -73,6 +73,9 @@ pub struct AmendmentRequest {
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
+    /// A hub's login, as [`crate::ProposeRequest`]'s: a hub's `/mcp` alone
+    /// sets it.
+    pub login: Option<String>,
     /// The injected clock: `YYYY-MM-DDTHH:MM:SSZ`; its date is the
     /// validation's today.
     pub now: String,
@@ -123,12 +126,13 @@ fn run_amend(
     }) {
         return Err(CliError::spec(problem));
     }
-    let author = Author::new(
+    let mut author = Author::new(
         request.author_role.clone(),
         request.author_model.clone(),
         request.run.clone(),
     )
     .map_err(CliError::spec)?;
+    author.login.clone_from(&request.login);
     let mut context = open_context(env, globals, &request.git)?;
     let place = context.git.place(&context.project.root).map_err(|error| {
         CliError::spec(format!(

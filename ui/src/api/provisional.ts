@@ -114,8 +114,9 @@ export type KnownPreview = "applies" | "rebases" | "conflicts" | "unavailable";
 export type Preview = KnownPreview | Unlisted;
 
 /**
- * Who wrote a proposal; `login` only a departing accept's on a hub, skipped when none. Sources:
- * `docs/canon/proposal-queue.md` "Store"; `docs/features/hub-confirm.md` "Data".
+ * Who wrote a proposal; `login` a hub's alone, a departing accept's or one raised over its `/mcp`,
+ * skipped when none. Sources: `docs/canon/proposal-queue.md` "Store";
+ * `docs/features/hub-confirm.md` "Data"; `docs/features/hub-mcp.md` "Identity".
  */
 export interface Author {
   type: "human" | "agent" | Unlisted;

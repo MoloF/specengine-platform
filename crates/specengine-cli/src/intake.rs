@@ -108,6 +108,9 @@ pub struct QuestionRequest {
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
+    /// A hub's login, as [`crate::ProposeRequest`]'s: a hub's `/mcp` alone
+    /// sets it.
+    pub login: Option<String>,
     /// The injected clock: `YYYY-MM-DDTHH:MM:SSZ`.
     pub now: String,
     /// The caller's environment; git runs without its local `GIT_*`
@@ -123,6 +126,9 @@ pub struct DiscrepancyRequest {
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
+    /// A hub's login, as [`crate::ProposeRequest`]'s: a hub's `/mcp` alone
+    /// sets it.
+    pub login: Option<String>,
     /// The injected clock: `YYYY-MM-DDTHH:MM:SSZ`; its date is a patch's
     /// validation's today.
     pub now: String,
@@ -137,6 +143,9 @@ pub struct DecisionRequest {
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
+    /// A hub's login, as [`crate::ProposeRequest`]'s: a hub's `/mcp` alone
+    /// sets it.
+    pub login: Option<String>,
     /// The injected clock: `YYYY-MM-DDTHH:MM:SSZ`; its date is a patch's
     /// validation's today.
     pub now: String,
@@ -443,6 +452,7 @@ fn run_question(
             patch: None,
             distinct_from: &request.distinct_from,
             author: (&request.author_role, &request.author_model, &request.run),
+            login: &request.login,
             now: &request.now,
             git: &request.git,
             task,
@@ -481,6 +491,7 @@ fn run_discrepancy(
             patch: input.proposed_patch.as_ref(),
             distinct_from: input.distinct_from.as_deref().unwrap_or_default(),
             author: (&request.author_role, &request.author_model, &request.run),
+            login: &request.login,
             now: &request.now,
             git: &request.git,
             task,
@@ -521,6 +532,7 @@ fn run_decision(
             patch: input.proposed_patch.as_ref(),
             distinct_from: input.distinct_from.as_deref().unwrap_or_default(),
             author: (&request.author_role, &request.author_model, &request.run),
+            login: &request.login,
             now: &request.now,
             git: &request.git,
             task,
@@ -545,6 +557,8 @@ struct Item<'a> {
     distinct_from: &'a [String],
     /// Role, model, run.
     author: (&'a Option<String>, &'a Option<String>, &'a Option<String>),
+    /// A hub's login: `Author.login`, the linked update's too.
+    login: &'a Option<String>,
     now: &'a str,
     git: &'a GitEnv,
     /// `--task T` as written.
@@ -611,7 +625,9 @@ fn run_intake(
         return Ok(IntakeOutcome::refused(&problem.to_string(), Vec::new()));
     }
     let (role, model, run) = item.author;
-    let author = Author::new(role.clone(), model.clone(), run.clone()).map_err(CliError::spec)?;
+    let mut author =
+        Author::new(role.clone(), model.clone(), run.clone()).map_err(CliError::spec)?;
+    author.login.clone_from(item.login);
     let mut context = open_context(env, globals, item.git)?;
     let mut messages = Vec::new();
     let input = indexed(env, &context.project, &mut messages, false)?;

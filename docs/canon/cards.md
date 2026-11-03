@@ -49,17 +49,17 @@ flow <name> | <column> <n> | ...
 
 ## Who acts
 
-`--as N` is self-declared, recorded and compared with a move's `by`, never verified, so `by` stops a slip, not a person; on a hub the login acts (`hub-team.md`). Absent: `local`. A person (`card_person_problem`, no ID: ADR-0057): trimmed, one line, at most 128 bytes, no control character, U+2028, U+2029 or bidi mark, any script and inner spaces, compared exactly. Off it, `--as` exits 2 and `--assignee`, `--reviewer` exit 1; each a 400 at the daemon. A tool acts as `agent`, so `by = ["lead"]` holds against tools, and a flow admits them by listing `agent`. `agent`, `local` are no one's name: refused as a reviewer, at `assign` and `accept`, and as a clearer (`clearer_problem`).
+`--as N` is self-declared, recorded and compared with a move's `by`, never verified, so `by` stops a slip, not a person; on a hub the login acts (`hub-team.md`). Absent: `local`. A person (`card_person_problem`, no ID: ADR-0057): trimmed, one line, at most 128 bytes, no control character, U+2028, U+2029 or bidi mark, any script and inner spaces, compared exactly. Off it, `--as` exits 2 and `--assignee`, `--reviewer` exit 1; each a 400 at the daemon. A tool acts as `agent`, so `by = ["lead"]` holds against tools, admitted by listing `agent`. `agent`, `local` are no one's name: refused as a reviewer, at `assign` and `accept`, and as a clearer (`clearer_problem`).
 
 A control point exists only where a flow writes `by`; the default writes none.
 
 ## MCP
 
-Five tools, as `mcp-read.md`, acting as `agent`: reads `list_cards`, `get_card`; writes `create_card`, `edit_card`, `move_card`, annotated as `claim_task`. Arguments: the twin's flags in snake case, `C` as `card_id`, no `as`. No tool for `assign`, `cancel`, `accept` or `clear`. `{id, reason}` drops `structuredContent`, as `get_task`. `read-spec` names the five.
+Five tools, as `mcp-read.md`, acting as `agent`, on a hub as the login (`hub-mcp.md`): reads `list_cards`, `get_card`; writes `create_card`, `edit_card`, `move_card`, annotated as `claim_task`. Arguments: the twin's flags in snake case, `C` as `card_id`, no `as`. No tool for `assign`, `cancel`, `accept` or `clear`. `{id, reason}` drops `structuredContent`, as `get_task`. `read-spec` names the five.
 
 ## Config
 
-Core `CardConfig::from_toml`, `flow_toml.rs`' family, the first error by line; `ProjectConfig` only name-checks `card`. A bad `[card]` exits 2 `<config>:<line>: <message>` for `spec card` alone and fails no other command, finding or gate.
+Core `CardConfig::from_toml` (`flow_toml.rs`' family), the first error by line; `ProjectConfig` only name-checks `card`. A bad `[card]` exits 2 `<config>:<line>: <message>` for `spec card` alone and fails no other command, finding or gate.
 
 ```toml
 [[card.flow]]
@@ -75,9 +75,9 @@ moves = [
 
 - `[card]` holds `flow` alone, at most 32. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
 - `accept` required, two columns; `to` is reached only by an accept, `spec card accept` or `POST .../accept`, so it may not be the first column, and a move at it, either end, is a config error.
-- `moves` `{from, to, by?}` of two columns, each pair once. No `by`, or `by: []` as served: anyone. No `moves`: every ordered pair of the other columns, expanded by the reader, so a reader looks moves up and never judges them.
+- `moves` `{from, to, by?}` of two columns, each pair once. No `by`, or `by: []` as served: anyone. No `moves`: every ordered pair of the other columns, expanded by the reader, so moves are looked up, never judged.
 - **A new card** takes the first column of the first flow listing its discipline, else of the one flow listing none, else exit 1 naming why.
-- **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so a project pasting it changes nothing: `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, `--discipline` free.
+- **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so pasting it changes nothing: `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, `--discipline` free.
 
 ## Store
 

@@ -88,7 +88,11 @@ No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distr
 
 ## Concurrency
 
-Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-6 (ADR-0051), its first call building the whole code index inside the turn, and row 6 spawning verify's read-only git there (`rev-parse`, the unmerged check, `hash-object` without `-w`: `health-drift.md` "Route"), no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. A `--push` hub's sync takes the turns of its repository's projects, in `--root` order, for its merge alone; its fetch and push take none (`hub-git.md`). With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
+Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-6 (ADR-0051), its first call building the whole code index inside the turn, and row 6 spawning verify's read-only git there (`rev-parse`, the unmerged check, `hash-object` without `-w`: `health-drift.md` "Route"), no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. A `--push` hub's sync takes the turns of its repository's projects, in `--root` order, for its merge alone; its fetch and push take none (`hub-git.md`). A hub's `/mcp` calls and resource reads take their project's turn, the wait raced with the request's cancellation; its handshakes and lists take none (`hub-mcp.md`). With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
+
+## Live tail
+
+`GET .../events`, the stream: `crates/specengine-http/README.md` "Live tail". Types: all stored (`proposal-queue.md` "States and events", `tasks.md` "Store", `gate.md` "Event", `spec-verify-tests.md`); a row with a NULL type or payload or CR, LF in its type skipped. Polls at most 250 ms apart, at once after a full page (`EVENTS_PAGE_MAX`, 512 rows read, skipped ones counted), each reads the config (a changed slug ends the stream), then one short read transaction on the stream's own connection (CLI `EventsTail`), kept between polls, reopened when the file is replaced, dropped when gone; no database created. A poll that cannot run ends the stream; a client gone ends it and the connection.
 
 ## Known limits
 
@@ -98,6 +102,7 @@ Requests of one project run one at a time on the blocking pool (a read refreshes
 - Deleting the data directory under a live daemon lets a second start lock a new file.
 - Version skew: crates 0.1.0, no build id; an old daemon after `cargo install` answers `SchemaTooNew` 503s: restart it.
 - `daemon.json.tmp` is one fixed name, safe because the lock serialises starts.
+- **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. AC-01 keeps `daemon.json`'s five keys, and it fails closed (RM-0064).
 
 ## Tests
 

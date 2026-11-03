@@ -28,7 +28,7 @@ In `fence()`, before routing, in this order. A failure is the local fence's answ
 2. `Origin` absent or byte for byte the origin.
 3. `Sec-Fetch-Site` absent, `same-origin` or `none`, but for the landing.
 4. `Remote-User`: "Identity".
-5. The method and path, then a confirm route's query and `Origin`: "Routes".
+5. The method and path, then a confirm route's query and `Origin`: "Routes"; `/mcp` and `Authorization`: `hub-mcp.md`.
 
 ```text
 refused: the Host header must be <authority>: this hub serves its public origin only
@@ -60,12 +60,12 @@ Writes are default deny, in the fence, so a non-GET route added later is refused
 
 `.../proposals/:id/confirm`, a hub's alone, is the one approve route: `hub-confirm.md`. A move cannot reach `accept.to` (`cards.md` "Config"), so accept has no back door. ADR-0057 stands locally.
 
-Identity is judged in the fence, so a refused request never queues for a turn. MCP is untouched: no `/mcp` route, tools keep acting as `agent` locally (RM-0053).
+Identity is judged in the fence, so a refused request never queues for a turn. MCP: `/mcp/<slug>`, a hub's alone, under the login (`hub-mcp.md`).
 
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or session (git's: `hub-git.md`) and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub adds only a floor file (`queue-backup.md`): the login lands in queue fields and a confirm's commit.
+No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or login session (git's: `hub-git.md`; an MCP session: `hub-mcp.md`) and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub adds only a floor file (`queue-backup.md`): the login lands in queue fields and a confirm's commit.
 
 **The daemon can defend**, at its fence:
 
@@ -92,6 +92,8 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
    ^/api/projects/[^/]+/(proposals/[^/]+/confirm|cards/[^/]+/(accept|clear)|trace/clear)$
    ```
 
+6. The MCP credential opens only `/mcp` routers: `hub-mcp.md#trust`, its rule read by a test.
+
 Unverified until that "Done": that Traefik keeps the client's `Host` by default and drops a client's copy of a listed header also when the login door returns none (from memory), and that the login door on a sibling subdomain makes the landing a `same-site` navigation (from the Fetch Metadata rules, tried in no browser).
 
 ## Screen
@@ -104,7 +106,6 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 - **Streams.** `tail.rs` is judged at connect, so a stream outlives a session until RM-0065.
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0064).
 - **Scale.** Until `scale-reads` (RM-0054) a team waits behind O(n) reads.
-- **A launcher attaches to a hub.** `spec serve --root <served>` exits 0 with `already running` and a loopback URL that answers 403, and another root is told to stop the hub. AC-01 keeps `daemon.json`'s five keys, and it fails closed (RM-0064).
 - **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy must reject or encode `#` (RM-0064).
 - **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`), so a new one fails until decided.
 - **Before the login resolves.** While the identity loads or after a failed read the box is as today, so a typed name can reach the key, and a stored name sent then gets the daemon's 403.

@@ -17,7 +17,7 @@ Shipped with the read tools (canon `docs/canon/mcp-read.md`, `crates/specengine-
 
 - Tool-set levels as in Task Master: `core` (agents by default) and `admin`.
 - A status header, a "Delta — what changed since the last request" section and "Hints — what to ask next" (as in tracey); `compact: bool` on reading tools (detail levels as in code-graph-mcp), on measured need.
-- **Primary transport: stdio** (`specengine-mcp` in `.mcp.json`; a `spec mcp` bridge to the daemon on a trigger, 05 §1 (6)): Claude Code (≥ 2.1.84) GETs the MCP HTTP endpoint for an SSE stream, a stateless 2026-07-28 server answers 405 and the connection drops (claude-code#39790, "not planned"). HTTP `/mcp` comes later, with GET/SSE and `legacy_session_mode`.
+- **Primary transport: stdio** (`specengine-mcp` in `.mcp.json`; a `spec mcp` bridge to the daemon on a trigger, 05 §1 (6)): Claude Code (≥ 2.1.84) GETs the MCP HTTP endpoint for an SSE stream, a stateless 2026-07-28 server answers 405 and the connection drops (claude-code#39790, "not planned"). HTTP MCP is built on a hub alone, `/mcp/<slug>`, with GET/SSE and `legacy_session_mode` (`docs/canon/hub-mcp.md`, ADR-0065).
 - State passes only via explicit handles (`task_id`, `proposal_id`).
 - **Long operations** (reindex, verify) may run past 120 s: Claude Code backgrounds the call, its result a notification (MCP README): no polling tool, no "call again" protocol, no long-blocking "wait for approval".
 
@@ -138,7 +138,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 - `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|flow|check|health|roadmap|lock-diff|inbox|proposals/:id|tasks|tasks/:id|round` (built); `/api/identity`, the login or `null`; `/api/projects/:p/team`, a hub's alone, the asker's row of `[team]`; `.../proposals/:id/confirm`, a hub's alone, the question a confirm answers; `symbols` to come
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035); `POST .../proposals/:id/confirm`, a hub's alone, confirms one stage (ADR-0061)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
-- `/mcp` — MCP Streamable HTTP (rmcp Tower service in axum), on a trigger and only with GET/SSE (see §1.1)
+- `/mcp/<slug>` — MCP Streamable HTTP (rmcp Tower service in axum), a hub's alone, both eras, GET/SSE (built: `docs/canon/hub-mcp.md`)
 - `/`, `/assets/<file>` -- the Web UI compiled in (built: `docs/canon/serve-ui.md`)
 
 ### Web UI — screens

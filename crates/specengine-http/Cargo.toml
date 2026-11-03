@@ -30,6 +30,12 @@ clap.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 rust-embed.workspace = true
+# A hub's `/mcp/<slug>` (docs/features/hub-mcp.md S3, S4): rmcp's Streamable HTTP
+# Tower service, its feature declared here alone, so the root pin and
+# `specengine-mcp`'s manifest stay stdio-only. `specengine-mcp` holds the hub
+# server and its `HubSeam`; `src/mcp.rs` is the one module naming either.
+rmcp = { workspace = true, features = ["transport-streamable-http-server"] }
+specengine-mcp = { path = "../specengine-mcp" }
 
 # `regex` reads the proxy's step-up rule out of `docs/canon/hub.md` for a unit
 # test of `src/hub.rs` (docs/features/hub-confirm.md B11); already in the graph.

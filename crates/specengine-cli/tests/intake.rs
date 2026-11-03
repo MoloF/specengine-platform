@@ -54,6 +54,7 @@ fn question(pair: &Pair, cwd: &Path, node_ids: &[&str], text: &str) -> QuestionR
         author_role: Some("developer".to_owned()),
         author_model: None,
         run: None,
+        login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
     }
@@ -112,6 +113,7 @@ fn report(pair: &Pair, cwd: &Path, input: DiscrepancyInput) -> Result<IntakeOutc
             author_role: Some("developer".to_owned()),
             author_model: None,
             run: None,
+            login: None,
             now: NOW.to_owned(),
             git: pair.git_env(cwd),
         },

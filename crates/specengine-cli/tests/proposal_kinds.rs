@@ -101,6 +101,7 @@ fn request(pair: &Pair, cwd: &Path, target: &str, base: Option<&str>, text: &str
         author_role: Some("writer".to_owned()),
         author_model: None,
         run: None,
+        login: None,
         now: CLOCK.to_owned(),
         git: pair.git_env(cwd),
     }

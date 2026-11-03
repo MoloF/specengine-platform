@@ -1178,6 +1178,7 @@ fn ac11_a_decided_item_answers_the_same_question_again() {
             author_role: Some("developer".to_owned()),
             author_model: None,
             run: None,
+            login: None,
             now: CLOCK.to_owned(),
             git: pair.git_env(&pair.linked),
         },

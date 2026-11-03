@@ -93,6 +93,7 @@ fn question(
         author_role: Some("developer".to_owned()),
         author_model: Some("claude-opus-5-5".to_owned()),
         run: None,
+        login: None,
         now: now.to_owned(),
         git: calls.git_env(),
     };
@@ -156,6 +157,7 @@ fn gap(calls: &Calls, targets: &[&str], summary: &str, severity: IntakeSeverity)
                 author_role: Some("developer".to_owned()),
                 author_model: Some("claude-opus-5-5".to_owned()),
                 run: None,
+                login: None,
                 now: OLDER.to_owned(),
                 git: calls.git_env(),
             },

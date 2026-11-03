@@ -10,7 +10,11 @@
 //! is refused unless [`class`] names it, so a route added later stays local
 //! until it is listed here. A [`Class::Confirm`] route takes no query and
 //! needs `Origin`: the fence reads the path alone otherwise, and a proxy's
-//! rule anchored on the path's end must see the one byte form.
+//! rule anchored on the path's end must see the one byte form. `/mcp/<slug>`
+//! (docs/features/hub-mcp.md) takes no query on any method, its POST and
+//! DELETE are [`Class::Mcp`], and it is the one path `Authorization` may
+//! reach: anywhere else the header is refused before the class, by its
+//! presence, since the proxy's MCP credential opens that route alone.
 //!
 //! The handlers do the rest, in order, nothing read or stored on a refusal:
 //! [`member`] on a team or confirm route, the `[team]` of the root the
@@ -28,7 +32,7 @@
 use std::net::Ipv4Addr;
 use std::sync::Arc;
 
-use axum::http::header::{HOST, ORIGIN};
+use axum::http::header::{AUTHORIZATION, HOST, ORIGIN};
 use axum::http::{HeaderMap, HeaderName, Method, StatusCode};
 use specengine_cli::{TeamConfig, TeamEntry, hub_login_problem, team_read};
 
@@ -63,7 +67,18 @@ enum Class {
     /// the handler [`member`], [`acting`] and [`needs`]. RM-0064 adds the
     /// proxy's step-up on this class, which the daemon cannot see.
     Confirm,
+    /// POST and DELETE on `/mcp/<slug>` (docs/features/hub-mcp.md "Data"):
+    /// any login, `[team]` never read, and no query on any method of the
+    /// route. The board's same-origin door is not asked of it: no MCP
+    /// client sends `Sec-Fetch-Site`, and rmcp judges JSON and `Accept`.
+    Mcp,
 }
+
+/// The fence's line for `Authorization` outside `/mcp/<slug>` (Q5): that
+/// header is the MCP credential's, and every other route takes the login
+/// door's browser session alone.
+const AUTHORIZATION_REFUSED: &str = "refused: the Authorization header is for /mcp alone: this \
+                                     route takes the login door's session";
 
 /// A hub's public origin, normalised.
 #[derive(Debug)]
@@ -149,9 +164,28 @@ impl Hub {
         &self.origin
     }
 
+    /// The authority served, `host[:port]` with no `:443`: what `Host` must
+    /// be, and the one host rmcp's service admits ([`crate::mcp`]).
+    pub(crate) fn authority(&self) -> &str {
+        &self.authority
+    }
+
+    /// The origin with its port always written, `:443` when the origin
+    /// omits it: rmcp's `Origin` allow-list entry ([`crate::mcp`]), which
+    /// would match any port without one.
+    pub(crate) fn origin_with_port(&self) -> String {
+        if self.authority.contains(':') {
+            self.origin.clone()
+        } else {
+            format!("{}:443", self.origin)
+        }
+    }
+
     /// The request's login, else why it is refused. In order: `Host`,
-    /// `Origin`, `Sec-Fetch-Site`, `Remote-User`, the method and path, then a
-    /// [`Class::Confirm`] route's `query` and `Origin`.
+    /// `Origin`, `Sec-Fetch-Site`, `Remote-User`, then step 5: `Authorization`
+    /// on any path but `/mcp/<slug>`, a query on `/mcp/<slug>` whatever the
+    /// method, the method and path, then a [`Class::Confirm`] route's `query`
+    /// and `Origin`.
     pub(crate) fn fenced(
         &self,
         method: &Method,
@@ -185,6 +219,17 @@ impl Hub {
             );
         }
         let login = judged_login(headers)?;
+        // Step 5, before the class: `Authorization`, once or more, any value,
+        // is refused by its presence outside `/mcp/<slug>`, nothing read; on
+        // it the header passes, never read (docs/features/hub-mcp.md Q5).
+        let mcp = mcp_route(path);
+        if !mcp && headers.contains_key(AUTHORIZATION) {
+            return Err(AUTHORIZATION_REFUSED.to_owned());
+        }
+        // `/mcp/<slug>` takes no query on any method, GET's included.
+        if mcp && query.is_some() {
+            return Err("refused: this route takes no query".to_owned());
+        }
         if method == Method::GET {
             return Ok(login);
         }
@@ -259,9 +304,12 @@ fn judged_login(headers: &HeaderMap) -> Result<Login, String> {
 /// `.../cards/:id/{move,edit,assign,cancel}`. Team: POST, DELETE on
 /// `.../proposals/:id/decision`, POST on `.../round/answers`. Confirm: POST on
 /// `.../cards/:id/{accept,clear}`, `.../trace/clear` and
-/// `.../proposals/:id/confirm`.
+/// `.../proposals/:id/confirm`. Mcp: POST, DELETE on `/mcp/<slug>`.
 fn class(method: &Method, path: &str) -> Option<Class> {
     let post = method == Method::POST;
+    if mcp_route(path) {
+        return (post || method == Method::DELETE).then_some(Class::Mcp);
+    }
     let segments: Vec<&str> = path.split('/').collect();
     let ["", "api", "projects", project, route @ ..] = segments.as_slice() else {
         return None;
@@ -294,6 +342,13 @@ fn class(method: &Method, path: &str) -> Option<Class> {
         ["trace", "clear"] if post => Some(Class::Confirm),
         _ => None,
     }
+}
+
+/// `path` is `/mcp/<seg>`, `<seg>` one non-empty raw segment: the MCP route
+/// and the one path `Authorization` may reach.
+fn mcp_route(path: &str) -> bool {
+    path.strip_prefix("/mcp/")
+        .is_some_and(|segment| !segment.is_empty() && !segment.contains('/'))
 }
 
 /// Binds a card write's `actor` to the login, before any turn: no [`Login`]
@@ -1030,7 +1085,9 @@ mod tests {
 
     /// Every method but GET of every router call in `source`, with its path,
     /// comment lines left out, as `tests/hub.rs`'s `get_routes_in` reads the
-    /// GET ones. A path that is no literal panics: it could not be judged.
+    /// GET ones; an `any(..)` route serves each of the four (`/mcp/{p}`,
+    /// docs/features/hub-mcp.md S3). A path that is no literal panics: it
+    /// could not be judged.
     fn writes_in(source: &str) -> Vec<(Method, String)> {
         let code: String = source
             .lines()
@@ -1058,13 +1115,16 @@ mod tests {
                 .strip_prefix('"')
                 .and_then(|call| call.split_once('"'))
                 .unwrap_or_else(|| panic!("a path that is no literal: {}", &rest[..end]));
+            let methods =
+                methods.trim_start_matches(|letter: char| letter == ',' || letter.is_whitespace());
+            let any = methods.starts_with("any(") || methods.contains(".any(");
             for (word, method) in [
                 ("post(", Method::POST),
                 ("put(", Method::PUT),
                 ("patch(", Method::PATCH),
                 ("delete(", Method::DELETE),
             ] {
-                if methods.contains(word) {
+                if any || methods.contains(word) {
                     writes.push((method, path.to_owned()));
                 }
             }
@@ -1173,5 +1233,226 @@ mod tests {
         );
         let block = "text\n```text\n^/api/projects/a$\n```\n^/api/projects/b$\n";
         assert_eq!(fenced_patterns(block), ["^/api/projects/a$"]);
+    }
+
+    /// Every path of every router call in `source`, any method, comment lines
+    /// left out, each once, as [`writes_in`] reads the writes.
+    fn routes_in(source: &str) -> Vec<String> {
+        let code: String = source
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .map(|line| format!("{line}\n"))
+            .collect();
+        let mut routes: Vec<String> = Vec::new();
+        for (at, _) in code.match_indices(ROUTER_CALL) {
+            let rest = &code[at + ROUTER_CALL.len()..];
+            let path = rest
+                .trim_start()
+                .strip_prefix('"')
+                .and_then(|call| call.split_once('"'))
+                .map(|(path, _)| path.to_owned())
+                .unwrap_or_else(|| {
+                    panic!("a path that is no literal: {}", &rest[..40.min(rest.len())])
+                });
+            if !routes.contains(&path) {
+                routes.push(path);
+            }
+        }
+        routes
+    }
+
+    /// Each line of a fenced block of `text`, trimmed, that opens with
+    /// `prefix`: a fence inside a list item is indented, its rule too.
+    fn fenced_lines<'a>(text: &'a str, prefix: &str) -> Vec<&'a str> {
+        let mut inside = false;
+        let mut found = Vec::new();
+        for line in text.lines().map(str::trim) {
+            if line.starts_with("```") {
+                inside = !inside;
+            } else if inside && line.starts_with(prefix) {
+                found.push(line);
+            }
+        }
+        found
+    }
+
+    /// `route` with its slug, its ID, its REF and its file filled in.
+    fn filled(route: &str, slug: &str, id: &str) -> String {
+        route
+            .split('/')
+            .map(|segment| match segment {
+                "{p}" => slug,
+                "{id}" => id,
+                "{*ref}" => "MEC-STAMINA",
+                "{file}" => "x.js",
+                other => other,
+            })
+            .collect::<Vec<_>>()
+            .join("/")
+    }
+
+    /// The slugs the hub tests serve, and the IDs of a proposal, a card and a
+    /// task; `x1` the sampler's.
+    const SLUGS: [&str; 4] = ["lantern-keep", "zerkalo", "card-press", "x1"];
+    const IDS: [&str; 5] = ["PR-0001", "PR-100001", "C-0001", "T-0001", "x1"];
+
+    /// What makes `rule` other than item 6's: the router's `/mcp/{p}` not
+    /// matched with a slug, or another route matched with one.
+    fn mcp_rule_problems(rule: &regex::Regex, router: &str) -> Vec<String> {
+        let routes = routes_in(router);
+        let mut problems = Vec::new();
+        if !routes.iter().any(|route| route == "/mcp/{p}") {
+            problems.push("no /mcp/{p} route".to_owned());
+        }
+        for route in &routes {
+            for slug in SLUGS {
+                for id in IDS {
+                    let path = filled(route, slug, id);
+                    if rule.is_match(&path) != (route == "/mcp/{p}") {
+                        problems.push(format!("{route} as {path}"));
+                    }
+                }
+            }
+        }
+        problems
+    }
+
+    /// H12 of docs/features/hub-mcp.md: trust item 6's rule, read from the one
+    /// fenced `^/` line of `docs/canon/hub-mcp.md`, in its "Trust", against
+    /// the router: it matches `/mcp/{p}` with each served slug and no other
+    /// route, every route of `app.rs`, `GET_ROUTES`' and `class`'s writes,
+    /// with slugs and IDs filled in, nor a suffix, a query or a prefix; `class`
+    /// calls POST and DELETE on what it matches `Mcp`; item 5's rule
+    /// (`hub.md`) matches no `/mcp` path. M: MCP served at
+    /// `/api/projects/{p}/mcp`.
+    #[test]
+    fn the_mcp_credential_rule_is_the_mcp_route() {
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        // Spelled apart: `tests/no_domain.rs` reads this word in any literal.
+        let pages = manifest.join("../../docs").join(concat!("ca", "non"));
+        let page = pages.join("hub-mcp.md");
+        let text = std::fs::read_to_string(&page)
+            .unwrap_or_else(|error| panic!("{}: {error}", page.display()));
+        let rules = fenced_lines(&text, "^/mcp/");
+        assert_eq!(rules.len(), 1, "item 6's one fenced pattern: {rules:?}");
+        assert_eq!(
+            fenced_lines(&text, "^/"),
+            rules,
+            "the page's only fenced line starting `^/`"
+        );
+        let trust = text
+            .split_once("## Trust")
+            .map(|(_, rest)| rest.split("\n## ").next().unwrap_or(rest))
+            .unwrap_or_else(|| panic!("{}: no \"Trust\"", page.display()));
+        assert_eq!(
+            fenced_lines(trust, "^/mcp/"),
+            rules,
+            "the pattern lives in \"Trust\""
+        );
+        let rule = regex::Regex::new(rules[0]).expect("a pattern");
+
+        let router = std::fs::read_to_string(manifest.join("src/app.rs")).expect("the router");
+        assert_eq!(
+            mcp_rule_problems(&rule, &router),
+            Vec::<String>::new(),
+            "item 6's pattern against the router"
+        );
+        for slug in SLUGS {
+            let path = format!("/mcp/{slug}");
+            assert!(rule.is_match(&path), "{path}");
+            assert_eq!(class(&Method::POST, &path), Some(Class::Mcp), "{path}");
+            assert_eq!(class(&Method::DELETE, &path), Some(Class::Mcp), "{path}");
+            // Paths alone: a router's path rule never sees the query, and the
+            // fence refuses one on every method of `/mcp/<slug>`.
+            for form in [
+                format!("{path}/"),
+                format!("{path}/x"),
+                format!("/x{path}"),
+                format!("/api/projects/{slug}/mcp"),
+                "/mcp".to_owned(),
+                "/mcp/".to_owned(),
+            ] {
+                assert!(!rule.is_match(&form), "{form}");
+            }
+        }
+        // The writes `any(..)` serves are read: `/mcp/{p}`'s four, of which
+        // `class` admits POST and DELETE; the pattern and `class` agree on
+        // every write the router serves.
+        let writes = writes_in(&router);
+        for method in [Method::POST, Method::PUT, Method::PATCH, Method::DELETE] {
+            assert!(
+                writes.contains(&(method.clone(), "/mcp/{p}".to_owned())),
+                "{method} /mcp/{{p}} among the writes: {writes:?}"
+            );
+        }
+        for (method, route) in &writes {
+            let path = sampled(route);
+            let admitted = class(method, &path);
+            if admitted == Some(Class::Mcp) {
+                assert!(rule.is_match(&path), "{method} {route}: `Mcp`, not matched");
+            }
+            if rule.is_match(&path) {
+                let want =
+                    (*method == Method::POST || *method == Method::DELETE).then_some(Class::Mcp);
+                assert_eq!(admitted, want, "{method} {route}: the pattern and `class`");
+            }
+        }
+
+        let hub = std::fs::read_to_string(pages.join("hub.md")).expect("hub.md");
+        let step_up = regex::Regex::new(fenced_patterns(&hub)[0]).expect("item 5's pattern");
+        for slug in SLUGS {
+            for path in [format!("/mcp/{slug}"), format!("/mcp/{slug}/x")] {
+                assert!(!step_up.is_match(&path), "item 5's pattern matches {path}");
+            }
+        }
+    }
+
+    /// H12's checker on a copy in memory of the live router, with the rule as
+    /// the spec writes it (docs/features/hub-mcp.md "Rules and edge cases"), so
+    /// the named mutation repeats on every run and writes nothing under `src`:
+    /// the router as it is passes, and MCP moved to `/api/projects/{p}/mcp`
+    /// does not.
+    #[test]
+    fn the_mcp_rule_checker_sees_a_moved_route() {
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let router = std::fs::read_to_string(manifest.join("src/app.rs")).expect("the router");
+        let rule = regex::Regex::new("^/mcp/[^/]+$").expect("the spec's pattern");
+        assert_eq!(mcp_rule_problems(&rule, &router), Vec::<String>::new());
+        let at = "\"/mcp/{p}\"";
+        assert_eq!(router.matches(at).count(), 1, "the route's one literal");
+        let moved = router.replacen(at, "\"/api/projects/{p}/mcp\"", 1);
+        let problems = mcp_rule_problems(&rule, &moved);
+        assert!(
+            problems
+                .iter()
+                .any(|problem| problem == "no /mcp/{p} route"),
+            "{problems:?}"
+        );
+        let everything = regex::Regex::new("^/").expect("every path");
+        assert!(!mcp_rule_problems(&everything, &router).is_empty());
+
+        // The route reader's control: `any(..)` serves the four writes.
+        let probe = "let r = R::new()\n    @\"/m\", any(m))\n    @\"/n\", read(n))\n"
+            .replace('@', ROUTER_CALL);
+        assert_eq!(
+            writes_in(&probe),
+            [
+                (Method::POST, "/m".to_owned()),
+                (Method::PUT, "/m".to_owned()),
+                (Method::PATCH, "/m".to_owned()),
+                (Method::DELETE, "/m".to_owned()),
+            ]
+        );
+        assert_eq!(routes_in(&probe), ["/m", "/n"]);
+
+        // The reader's controls: a fence indented in a list item, a rule
+        // outside any fence, another fenced rule.
+        let page = "1. Item six:\n\n   ```text\n   ^/mcp/[^/]+$\n   ```\n^/mcp/outside\n\
+                    ```text\n^/api/projects/a$\n```\n";
+        assert_eq!(fenced_lines(page, "^/mcp/"), ["^/mcp/[^/]+$"]);
+        assert_eq!(
+            fenced_lines(page, "^/"),
+            ["^/mcp/[^/]+$", "^/api/projects/a$"]
+        );
     }
 }

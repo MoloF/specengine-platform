@@ -564,6 +564,7 @@ pub fn ask(
         author_role: Some("developer".to_owned()),
         author_model: Some("claude-opus-5-5".to_owned()),
         run: None,
+        login: None,
         now: NOW.to_owned(),
         git: pair.git_env(cwd),
     };
@@ -611,6 +612,7 @@ pub fn report_gap(
                 author_role: Some("developer".to_owned()),
                 author_model: Some("claude-opus-5-5".to_owned()),
                 run: None,
+                login: None,
                 now: NOW.to_owned(),
                 git: pair.git_env(cwd),
             },

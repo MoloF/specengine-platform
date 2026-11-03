@@ -68,6 +68,8 @@ petgraph = { version = "=0.8.3", default-features = false }
 # the legacy `elicitation/create` request goes through `Peer::send_cancellable_request`.
 # No `request-state` (the sealed-state codec): `review_proposal`'s `requestState` is
 # unsealed JSON.
+# `specengine-http` adds `transport-streamable-http-server` in its own manifest for a
+# hub's `/mcp/<slug>` (docs/features/hub-mcp.md S4); this pin stays stdio-only.
 rmcp = { version = "=3.5.0", default-features = false, features = ["server", "macros", "transport-io"] }
 # Already in the graph through `rmcp`; direct and pinned for the runtime. `schemars` is
 # used through the `rmcp::schemars` re-export (1.2.2, as in 04 §6). Approved by the owner

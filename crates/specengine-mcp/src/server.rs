@@ -1,18 +1,24 @@
 //! The server handler: server info and `instructions`, the protocol versions
-//! served, the tool routers, the resources, and the stdio loop.
+//! served, the tool routers, the resources, and the stdio loop. A hub's
+//! server (`crate::hub`) is this handler with its own tool set and
+//! `instructions`, its resource reads in the project's turn.
 
 use std::borrow::Cow;
+use std::sync::Arc;
 
 use rmcp::handler::server::router::tool::ToolRouter;
+use rmcp::handler::server::tool::ToolCallContext;
 use rmcp::model::{
-    CacheScope, Implementation, ListResourceTemplatesResult, ListResourcesResult,
-    PaginatedRequestParams, ProtocolVersion, ReadResourceRequestParams, ReadResourceResponse,
-    ReadResourceResult, ServerCapabilities, ServerConfig,
+    CacheScope, CallToolRequestParams, CallToolResponse, Implementation,
+    ListResourceTemplatesResult, ListResourcesResult, PaginatedRequestParams, ProtocolVersion,
+    ReadResourceRequestParams, ReadResourceResponse, ReadResourceResult, ServerCapabilities,
+    ServerConfig,
 };
 use rmcp::service::{QuitReason, RequestContext, ServerInitializeError};
 use rmcp::{ErrorData, RoleServer, ServerHandler, ServiceExt, tool_handler};
 use specengine_cli::{Env, Globals, OUTPUT_CAP_CHARS};
 
+use crate::hub::{self, HUB_INSTRUCTIONS, HubSeam};
 use crate::read::{holds, holds_number};
 use crate::resources;
 
@@ -108,7 +114,7 @@ files change only when the owner approves.
 
 /// Claude Code truncates `instructions` and tool descriptions at this length
 /// (`crates/specengine-mcp/README.md`, "Claude Code client").
-const TEXT_LIMIT: usize = 2048;
+pub(crate) const TEXT_LIMIT: usize = 2048;
 
 const _: () = assert!(INSTRUCTIONS.is_ascii());
 const _: () = assert!(INSTRUCTIONS.len() <= TEXT_LIMIT);
@@ -160,15 +166,21 @@ impl Lifecycle {
     }
 }
 
-/// The SpecEngine MCP server: one instance per stdio connection.
+/// The SpecEngine MCP server: one instance per stdio connection, or a hub's
+/// per MCP session or stateless request ([`SpecEngineServer::hub`]).
 ///
 /// Holds no project state: each read finds the project from the process's
-/// current directory and `globals` when it runs, and keeps nothing after it.
+/// current directory and `globals` when it runs, and keeps nothing after it;
+/// on a hub every such call runs through its [`HubSeam`] instead.
 pub struct SpecEngineServer {
-    lifecycle: Lifecycle,
-    /// `--root`, `--config`: the CLI globals of every read.
-    globals: Globals,
-    tool_router: ToolRouter<Self>,
+    pub(crate) lifecycle: Lifecycle,
+    /// `--root`, `--config`: the CLI globals of every read (stdio's alone;
+    /// a hub's turn hands each call its project's).
+    pub(crate) globals: Globals,
+    pub(crate) tool_router: ToolRouter<Self>,
+    /// A hub's daemon: the login of a request and the project's turn.
+    /// `None` over stdio, where nothing of it runs.
+    pub(crate) hub: Option<Arc<dyn HubSeam>>,
 }
 
 impl SpecEngineServer {
@@ -186,12 +198,18 @@ impl SpecEngineServer {
             lifecycle,
             globals,
             tool_router,
+            hub: None,
         }
     }
 
     /// The CLI globals of every read.
     pub(crate) fn globals(&self) -> &Globals {
         &self.globals
+    }
+
+    /// A hub's seam; `None` over stdio.
+    pub(crate) fn seam(&self) -> Option<&dyn HubSeam> {
+        self.hub.as_deref()
     }
 }
 
@@ -207,8 +225,12 @@ fn cache_hints(context: &RequestContext<RoleServer>) -> bool {
 impl ServerHandler for SpecEngineServer {
     fn get_info(&self) -> ServerConfig {
         // Every build, the measurement tools' too: the probe tools'
-        // descriptions say what each does.
-        let instructions = INSTRUCTIONS.to_owned();
+        // descriptions say what each does. A hub's are its own: its tool
+        // set and its Confirm (docs/features/hub-mcp.md "Data", its texts).
+        let instructions = match self.hub {
+            Some(_) => HUB_INSTRUCTIONS.to_owned(),
+            None => INSTRUCTIONS.to_owned(),
+        };
         ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_resources()
@@ -226,20 +248,57 @@ impl ServerHandler for SpecEngineServer {
         Cow::Borrowed(self.lifecycle.protocol_versions())
     }
 
+    /// The router's call, as `tool_handler` would write it; on a hub the
+    /// call runs knowing its request, so a call cancelled while it waits
+    /// for the project's turn never runs (`crate::hub`).
+    async fn call_tool(
+        &self,
+        request: CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<CallToolResponse, ErrorData> {
+        if self.hub.is_none() {
+            let tcc = ToolCallContext::new(self, request, context);
+            return self.tool_router.call(tcc).await;
+        }
+        let scoped = context.clone();
+        let tcc = ToolCallContext::new(self, request, context);
+        hub::in_request(scoped, self.tool_router.call(tcc)).await
+    }
+
     async fn list_resources(
         &self,
         request: Option<PaginatedRequestParams>,
         context: RequestContext<RoleServer>,
     ) -> Result<ListResourcesResult, ErrorData> {
         let cursor = request.and_then(|request| request.cursor);
-        let globals = self.globals.clone();
-        // No usable current directory: no project is found.
-        let page = tokio::task::spawn_blocking(move || match Env::from_process() {
-            Ok(env) => resources::list(&env, &globals, cursor.as_deref()),
-            Err(_) => Ok(resources::Page::default()),
-        })
-        .await
-        .map_err(|_| ErrorData::internal_error("internal error: resources/list failed", None))??;
+        let page = if let Some(seam) = self.seam() {
+            // A hub: in the project's turn, the wait racing the request's
+            // cancellation; a call that cannot run (a changed slug) is
+            // -32603 with its line, as a read's exit 2.
+            hub::in_request(
+                context.clone(),
+                hub::turned(
+                    seam,
+                    move |env, globals| resources::list(env, globals, cursor.as_deref()),
+                    |error| Err(ErrorData::internal_error(error.message, None)),
+                ),
+            )
+            .await
+            .ok_or_else(|| {
+                ErrorData::internal_error("internal error: resources/list failed", None)
+            })??
+        } else {
+            let globals = self.globals.clone();
+            // No usable current directory: no project is found.
+            tokio::task::spawn_blocking(move || match Env::from_process() {
+                Ok(env) => resources::list(&env, &globals, cursor.as_deref()),
+                Err(_) => Ok(resources::Page::default()),
+            })
+            .await
+            .map_err(|_| {
+                ErrorData::internal_error("internal error: resources/list failed", None)
+            })??
+        };
         let mut result = ListResourcesResult::with_all_items(page.resources);
         result.next_cursor = page.next_cursor;
         if cache_hints(&context) {
@@ -267,14 +326,32 @@ impl ServerHandler for SpecEngineServer {
     ) -> Result<ReadResourceResponse, ErrorData> {
         let uri = request.uri;
         let parsed = resources::parse(&uri)?;
-        let globals = self.globals.clone();
-        let contents = tokio::task::spawn_blocking(move || {
-            let env = Env::from_process()
-                .map_err(|error| ErrorData::internal_error(error.message, None))?;
-            resources::read(&env, &globals, &uri, &parsed)
-        })
-        .await
-        .map_err(|_| ErrorData::internal_error("internal error: resources/read failed", None))??;
+        let contents = if let Some(seam) = self.seam() {
+            // A hub: in the project's turn, as `resources/list`.
+            hub::in_request(
+                context.clone(),
+                hub::turned(
+                    seam,
+                    move |env, globals| resources::read(env, globals, &uri, &parsed),
+                    |error| Err(ErrorData::internal_error(error.message, None)),
+                ),
+            )
+            .await
+            .ok_or_else(|| {
+                ErrorData::internal_error("internal error: resources/read failed", None)
+            })??
+        } else {
+            let globals = self.globals.clone();
+            tokio::task::spawn_blocking(move || {
+                let env = Env::from_process()
+                    .map_err(|error| ErrorData::internal_error(error.message, None))?;
+                resources::read(&env, &globals, &uri, &parsed)
+            })
+            .await
+            .map_err(|_| {
+                ErrorData::internal_error("internal error: resources/read failed", None)
+            })??
+        };
         let mut result = ReadResourceResult::new(vec![contents]);
         if cache_hints(&context) {
             result = result.with_ttl_ms(0).with_cache_scope(CacheScope::Public);

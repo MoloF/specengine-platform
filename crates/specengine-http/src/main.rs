@@ -38,7 +38,10 @@
 //!   (task spec `hub-identity`); absent, a local daemon, nothing of it runs;
 //! - [`sync`]: a hub's `--push` (task spec `hub-git`), one sync per
 //!   repository, fetching, merging and pushing outside every turn but the
-//!   merge's; absent, no git child reaches a remote.
+//!   merge's; absent, no git child reaches a remote;
+//! - [`mcp`]: a hub's `/mcp/<slug>` (task spec `hub-mcp`), the MCP server
+//!   over Streamable HTTP, each call in the project's turn, its sessions
+//!   bound to a login; absent on a local daemon.
 
 mod answer;
 mod app;
@@ -46,6 +49,7 @@ mod args;
 mod confirm;
 mod daemon;
 mod hub;
+mod mcp;
 mod start;
 mod sync;
 mod tail;
@@ -226,7 +230,12 @@ async fn serve(
     if let Some(syncs) = &state.syncs {
         syncs.start();
     }
-    let served = axum::serve(listener, app::router(state)).await;
+    let served = axum::serve(listener, app::router(Arc::clone(&state))).await;
+    // A hub's `/mcp` services (`mcp::Mounts`, built by `App::new`): their
+    // shared token ends every MCP session and stream once serving has ended.
+    if let Some(mounts) = &state.mcp {
+        mounts.shutdown();
+    }
     drop(lock);
     match served {
         Ok(()) => ExitCode::SUCCESS,

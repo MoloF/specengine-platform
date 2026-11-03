@@ -1599,3 +1599,50 @@ fn hub_confirm_b7_no_always_yes_in_the_library_and_no_rename_in_the_daemon() {
         path.display()
     );
 }
+
+/// The daemon's one file that may name the MCP crate (**The door** of
+/// docs/features/hub-mcp.md "Rules and edge cases").
+const HUB_MCP_FILE: &str = "mcp.rs";
+
+/// Whether `code` names `specengine_mcp` as code: a path segment or a `use`,
+/// never a comment or a literal.
+fn names_the_mcp_crate(code: &str) -> bool {
+    identifiers(&code_only(code))
+        .iter()
+        .any(|(_, name)| name == "specengine_mcp")
+}
+
+/// H9 of docs/features/hub-mcp.md: the daemon raises proposals for a hub's
+/// `/mcp` alone, through the MCP crate's hub server, on ADR-0057's precedent:
+/// `src/mcp.rs` is the one file of `crates/specengine-http/src` naming
+/// `specengine_mcp` (`main.rs` names no item of it), and no file calls a
+/// `propose*` name ([`ac03_the_daemon_names_no_deciding_or_writing_call`],
+/// unchanged). The reader's controls first: a `use` and a path are seen, a
+/// comment and a literal are not. M: `main.rs` or `app.rs` naming
+/// `specengine_mcp`.
+#[test]
+fn hub_mcp_h9_the_mcp_crate_is_named_in_src_mcp_rs_alone() {
+    assert!(names_the_mcp_crate("use specengine_mcp::HubSeam;"));
+    assert!(names_the_mcp_crate(
+        "fn f() { let s = specengine_mcp::SpecEngineServer::hub(seam); }"
+    ));
+    assert!(!names_the_mcp_crate(
+        "// specengine_mcp::HubSeam\nfn f() { let s = \"specengine_mcp\"; }"
+    ));
+    let src = repository_root().join("crates/specengine-http/src");
+    let naming: Vec<String> = sources()
+        .into_iter()
+        .filter(|(_, text)| names_the_mcp_crate(text))
+        .map(|(path, _)| {
+            path.strip_prefix(&src)
+                .expect("under src")
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    assert_eq!(
+        naming,
+        [HUB_MCP_FILE],
+        "the files of crates/specengine-http/src naming specengine_mcp"
+    );
+}

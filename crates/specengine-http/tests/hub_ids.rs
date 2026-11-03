@@ -190,6 +190,7 @@ fn forty(setup: &Setup) -> PathBuf {
                 author_role: Some("spec-writer".to_owned()),
                 author_model: None,
                 run: None,
+                login: None,
                 now: utc_now(),
                 git: git.clone(),
             },

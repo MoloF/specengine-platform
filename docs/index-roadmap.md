@@ -37,7 +37,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0052.md](roadmap/RM-0052.md) board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
-- [docs/roadmap/RM-0053.md](roadmap/RM-0053.md) hub-mcp (Phase 7, step 11): /mcp with a session, identity to author, hub tools · crates/specengine-mcp, crates/specengine-http, crates/specengine-cli, crates/specengine-eval, ui · draft
 - [docs/roadmap/RM-0054.md](roadmap/RM-0054.md) scale-reads (Phase 7, step 12): an edge table, a trusted index, reads at 100 000 nodes · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-eval · draft
 - [docs/roadmap/RM-0055.md](roadmap/RM-0055.md) zone-index (Phase 7, step 13): an index-free zone and status: retired · crates/specengine-core, docs · draft
 - [docs/roadmap/RM-0056.md](roadmap/RM-0056.md) change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft

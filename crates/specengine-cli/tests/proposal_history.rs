@@ -945,6 +945,7 @@ fn a_root_below_the_top_completes_by_its_commit() {
             author_role: None,
             author_model: None,
             run: None,
+            login: None,
             now: NOW.to_owned(),
             git: genv(&linked.join("proj")),
         },

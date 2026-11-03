@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow {root?, depth?, trace?}` (`spec-flow.md`), `get_trace {ref?, stage?, summary?}` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"; `list_cards` `marks?`), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. Launcher: `fixtures/mcp/mcp.json` (`probes` build, a scratch `HOME`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow {root?, depth?, trace?}` (`spec-flow.md`), `get_trace {ref?, stage?, summary?}` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"; `list_cards` `marks?`), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. A hub serves 17 of these at `/mcp/<slug>` (`hub-mcp.md`).
 
 ## Tools
 

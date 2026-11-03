@@ -1396,6 +1396,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 author_role,
                 author_model,
                 run,
+                login: None,
                 now: now(),
                 git: process_git(env),
             };
@@ -1439,6 +1440,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 author_role,
                 author_model,
                 run,
+                login: None,
                 now: now(),
                 git: process_git(env),
             };
@@ -1491,6 +1493,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 author_role,
                 author_model,
                 run,
+                login: None,
                 now: now(),
                 git: process_git(env),
             };
@@ -1526,6 +1529,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 author_role,
                 author_model,
                 run,
+                login: None,
                 now: now(),
                 git: process_git(env),
             };
@@ -1564,6 +1568,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 author_role,
                 author_model,
                 run,
+                login: None,
                 now: now(),
                 git: process_git(env),
             },
@@ -1593,6 +1598,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_role,
                     author_model,
                     run,
+                    login: None,
                     now: now(),
                     git: process_git(env),
                 },
@@ -1623,6 +1629,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                     author_role,
                     author_model,
                     run,
+                    login: None,
                     now: now(),
                     git: process_git(env),
                 },

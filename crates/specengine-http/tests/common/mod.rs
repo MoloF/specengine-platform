@@ -20,6 +20,7 @@
 #![allow(dead_code)]
 
 pub mod hub;
+pub mod mcp_http;
 
 use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
@@ -1518,7 +1519,12 @@ pub struct Mcp {
 impl Mcp {
     /// Started in `cwd` under `HOME=home`, initialized.
     pub fn start(home: &Path, cwd: &Path) -> Self {
-        let mut child = alarmed(&mcp_bin(), &[], &product_env(home))
+        Self::start_with(home, cwd, &[])
+    }
+
+    /// As [`Mcp::start`] with `args` (`--root R`, say).
+    pub fn start_with(home: &Path, cwd: &Path, args: &[&OsStr]) -> Self {
+        let mut child = alarmed(&mcp_bin(), args, &product_env(home))
             .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())

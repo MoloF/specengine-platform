@@ -82,6 +82,9 @@ pub struct InterpretRequest {
     pub author_role: Option<String>,
     pub author_model: Option<String>,
     pub run: Option<String>,
+    /// A hub's login, as [`crate::ProposeRequest`]'s: a hub's `/mcp` alone
+    /// sets it.
+    pub login: Option<String>,
     /// The injected clock: `YYYY-MM-DDTHH:MM:SSZ`.
     pub now: String,
     /// The caller's environment; git runs without its local `GIT_*`
@@ -153,12 +156,13 @@ fn run_interpret(
     }) {
         return Err(CliError::spec(problem));
     }
-    let author = Author::new(
+    let mut author = Author::new(
         request.author_role.clone(),
         request.author_model.clone(),
         request.run.clone(),
     )
     .map_err(CliError::spec)?;
+    author.login.clone_from(&request.login);
 
     // Creation 1: the target as written, then over the index refreshed now.
     let written = request.target.trim();

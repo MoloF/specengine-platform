@@ -175,6 +175,7 @@ fn question_request(
         author_role: Some("developer".to_owned()),
         author_model: Some("claude-opus-5-5".to_owned()),
         run: None,
+        login: None,
         now: now.to_owned(),
         git: pair.git_env(cwd),
     }
@@ -207,6 +208,7 @@ fn create_file(pair: &Pair, cwd: &Path) -> String {
             author_role: Some("writer".to_owned()),
             author_model: None,
             run: None,
+            login: None,
             now: NOW.to_owned(),
             git: pair.git_env(cwd),
         },
@@ -3457,6 +3459,7 @@ fn interpretation(pair: &Pair, cwd: &Path) -> String {
             author_role: Some("spec-author".to_owned()),
             author_model: None,
             run: None,
+            login: None,
             now: NOW.to_owned(),
             git: pair.git_env(cwd),
         },

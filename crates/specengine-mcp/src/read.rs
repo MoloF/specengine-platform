@@ -10,7 +10,8 @@
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
-//! library function, its rendering. Nothing is kept after it. The answer is
+//! library function, its rendering; on a hub, the same in the project's
+//! turn (`crate::hub`). Nothing is kept after it. The answer is
 //! the CLI's, byte for byte: `content` = its stderr lines then its stdout
 //! text (`spec … 2>&1`), `structuredContent` = its `--json` document parsed.
 //! Exit 1 is an error result with that document, and so is an exit 2 the
@@ -791,20 +792,7 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<RoadmapArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let release = args.release;
-        let pool = args.pool.unwrap_or(false);
-        Ok(self
-            .call(move |env, globals| {
-                let request = RoadmapRequest {
-                    release,
-                    pool,
-                    git: process_git(env),
-                };
-                specengine_cli::roadmap_with_view(env, globals, &request, View::Capped)
-                    .map(|outcome| Outcome::Roadmap(Box::new(outcome)))
-            })
-            .await
-            .into_tool_result("get_roadmap"))
+        Ok(self.roadmap(args).await)
     }
 
     /// `spec flow`.
@@ -899,6 +887,27 @@ impl SpecEngineServer {
     }
 }
 
+/// `get_roadmap`'s call, shared by stdio's tool and a hub's, whose text alone
+/// differs (`crate::hub`).
+impl SpecEngineServer {
+    /// `spec roadmap`.
+    pub(crate) async fn roadmap(&self, args: RoadmapArgs) -> CallToolResult {
+        let release = args.release;
+        let pool = args.pool.unwrap_or(false);
+        self.call(move |env, globals| {
+            let request = RoadmapRequest {
+                release,
+                pool,
+                git: process_git(env),
+            };
+            specengine_cli::roadmap_with_view(env, globals, &request, View::Capped)
+                .map(|outcome| Outcome::Roadmap(Box::new(outcome)))
+        })
+        .await
+        .into_tool_result("get_roadmap")
+    }
+}
+
 /// What one CLI library call gave, rendered on the blocking pool.
 pub(crate) enum Answer {
     /// The command rendered its answer: exit 0; exit 1 (found nothing, a
@@ -973,11 +982,23 @@ impl SpecEngineServer {
     /// Runs `command` once on the blocking pool with the process's `Env` and
     /// the server's globals, and renders its outcome there. A blocking call
     /// always runs to its end (its only write: the index); for a cancelled
-    /// request rmcp drops the answer, and `ping` is served meanwhile.
+    /// request rmcp drops the answer, and `ping` is served meanwhile. On a
+    /// hub the same call runs inside the project's turn, through the seam
+    /// (docs/features/hub-mcp.md "A call"): a call that cannot run there (a
+    /// changed slug) is the CLI's exit-2 line, as an error result.
     pub(crate) async fn call<F>(&self, command: F) -> Answer
     where
         F: FnOnce(&Env, &Globals) -> Result<Outcome, CliError> + Send + 'static,
     {
+        if let Some(seam) = self.seam() {
+            return crate::hub::turned(
+                seam,
+                move |env, globals| answer_of(command(env, globals)),
+                Answer::CannotRun,
+            )
+            .await
+            .unwrap_or(Answer::Panicked);
+        }
         let globals = self.globals().clone();
         let joined = tokio::task::spawn_blocking(move || {
             answer_of(Env::from_process().and_then(|env| command(&env, &globals)))
