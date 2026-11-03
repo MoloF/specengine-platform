@@ -331,11 +331,14 @@ pub fn flow_read(graph: &SpecGraph<'_>, ask: &FlowAsk<'_>) -> FlowRead {
     let admitted = |file: usize| graph.standing(file) == Standing::Live || asked.contains(&file);
     let (links, strays) = read_links(graph, &admitted);
     let selected = Selected::of(graph, ask.config);
-    let scope = scope_of(graph, ask.roots, &links, &strays, &selected, &admitted);
+    let parents = parents_of(graph);
+    let scope = scope_of(
+        graph, ask.roots, &links, &strays, &selected, &admitted, &parents,
+    );
     let steps = steps_of(&scope.members, &links, &strays, &selected);
     let gaps = gaps_of(graph, ask, &scope.members, &links, &steps, &selected);
     let named: BTreeSet<usize> = gaps.iter().flat_map(|gap| gap.files.clone()).collect();
-    let tree = tree_of(graph, &scope);
+    let tree = tree_of(&parents, &scope);
     let (nodes, edges) = shown(graph, ask.depth, &scope, &tree, &links, &steps, &named);
     FlowRead {
         left_out: scope.left_out.into_iter().collect(),
@@ -352,7 +355,10 @@ pub fn flow_walk(graph: &SpecGraph<'_>, roots: Option<&[NodeAt]>, config: &FlowC
     let admitted = |file: usize| graph.standing(file) == Standing::Live || asked.contains(&file);
     let (links, strays) = read_links(graph, &admitted);
     let selected = Selected::of(graph, config);
-    let scope = scope_of(graph, roots, &links, &strays, &selected, &admitted);
+    let parents = parents_of(graph);
+    let scope = scope_of(
+        graph, roots, &links, &strays, &selected, &admitted, &parents,
+    );
     let steps = steps_of(&scope.members, &links, &strays, &selected);
     FlowWalk {
         steps: steps.steps,
@@ -440,7 +446,7 @@ fn read_links<'g>(
 }
 
 /// The documents read: `ROOT`'s subtree, or every flow document with its
-/// ancestors.
+/// ancestors, climbed through `parents` ([`parents_of`]).
 fn scope_of(
     graph: &SpecGraph<'_>,
     roots: Option<&[NodeAt]>,
@@ -448,6 +454,7 @@ fn scope_of(
     strays: &[Stray],
     selected: &Selected,
     admitted: &impl Fn(usize) -> bool,
+    parents: &[Option<usize>],
 ) -> Scope {
     let mut members = BTreeSet::new();
     let mut left_out = BTreeSet::new();
@@ -497,20 +504,30 @@ fn scope_of(
                     }
                 }
             }
+            // Everything above an ancestor already walked is in `members` or
+            // `left_out` already, so the walk stops there: each file is
+            // climbed from at most once per read. A file past the map has no
+            // parent document, so its walk is empty.
+            let mut walked = vec![false; parents.len()];
             for member in members.clone() {
-                for at in graph.ancestors(document(member)) {
-                    if at.file == member {
-                        continue;
-                    }
-                    if !admitted(at.file) {
-                        left_out.insert(at.file);
+                let mut at = member;
+                while let Some(done) = walked.get_mut(at) {
+                    if std::mem::replace(done, true) {
                         break;
                     }
-                    members.insert(at.file);
+                    let Some(parent) = parent_document(parents, at) else {
+                        break;
+                    };
+                    if !admitted(parent) {
+                        left_out.insert(parent);
+                        break;
+                    }
+                    members.insert(parent);
+                    at = parent;
                 }
             }
             let parented = |file: usize| {
-                parent_of(graph, file).is_some_and(|parent| members.contains(&parent))
+                parent_document(parents, file).is_some_and(|parent| members.contains(&parent))
             };
             members
                 .iter()
@@ -526,22 +543,47 @@ fn scope_of(
     }
 }
 
-/// The document `file` is listed under, through a section of it or not.
-fn parent_of(graph: &SpecGraph<'_>, file: usize) -> Option<usize> {
-    graph
-        .ancestors(document(file))
-        .into_iter()
-        .map(|at| at.file)
-        .find(|&other| other != file)
+/// Each file's parent document, by file: the document it is listed under,
+/// through a section of it or not. Computed once per read and read by the
+/// scope's walk, `parented` and [`tree_of`], so a read stays linear in
+/// `parent:` depth (`docs/canon/spec-flow.md` "Code").
+fn parents_of(graph: &SpecGraph<'_>) -> Vec<Option<usize>> {
+    (0..graph.paths().len())
+        .map(|file| listed_outside(graph, file))
+        .collect()
+}
+
+/// The file of the first node on `file`'s document's chain outside `file`.
+/// The chain leaves a file once and never comes back: a `parent:` cycle is
+/// cut at a document (`SpecGraph::cycles`), and a section climbs to its own
+/// document. So the chain is read only up to that node, never past it.
+fn listed_outside(graph: &SpecGraph<'_>, file: usize) -> Option<usize> {
+    // Bounded by the file's own nodes, as `SpecGraph::ancestors` is by a
+    // repeat: a chain still in `file` after them all has no way out.
+    let mut within = graph.nodes(file).len();
+    let mut current = graph.listed_under(document(file));
+    while let Some(at) = current {
+        if at.file != file {
+            return Some(at.file);
+        }
+        within = within.checked_sub(1)?;
+        current = graph.listed_under(at);
+    }
+    None
+}
+
+/// `file`'s parent document in `parents` ([`parents_of`]).
+fn parent_document(parents: &[Option<usize>], file: usize) -> Option<usize> {
+    parents.get(file).copied().flatten()
 }
 
 /// The levels of the scope, breadth-first from its roots.
-fn tree_of(graph: &SpecGraph<'_>, scope: &Scope) -> Tree {
+fn tree_of(parents: &[Option<usize>], scope: &Scope) -> Tree {
     let parent: BTreeMap<usize, usize> = scope
         .members
         .iter()
         .filter_map(|&file| {
-            parent_of(graph, file)
+            parent_document(parents, file)
                 .filter(|parent| scope.members.contains(parent))
                 .map(|parent| (file, parent))
         })
@@ -1022,19 +1064,8 @@ fn shown(
     steps: &Steps,
     named: &BTreeSet<usize>,
 ) -> (Vec<FlowNode>, Vec<FlowEdge>) {
-    let shown_as = |file: usize| -> usize {
-        let Some(depth) = depth else {
-            return file;
-        };
-        let mut at = file;
-        while tree.level.get(&at).is_some_and(|&level| level > depth) {
-            match tree.up.get(&at) {
-                Some(&above) => at = above,
-                None => break,
-            }
-        }
-        at
-    };
+    let fold = folded(tree, depth);
+    let shown_as = |file: usize| -> usize { fold.get(&file).copied().unwrap_or(file) };
     let mut holds: BTreeMap<usize, usize> = BTreeMap::new();
     let mut least: BTreeMap<usize, usize> = BTreeMap::new();
     let mut gaps: BTreeMap<usize, usize> = BTreeMap::new();
@@ -1150,6 +1181,34 @@ fn shown(
     (nodes, edges)
 }
 
+/// Each member's shown node at `depth`: itself at a level of at most
+/// `depth` or with no `up`, else its `up`'s shown node. Filled in level
+/// order, so an `up` is filled before what hangs under it and no member
+/// climbs more than once per read. Empty with no depth: a member missing
+/// from it shows as itself.
+fn folded(tree: &Tree, depth: Option<usize>) -> BTreeMap<usize, usize> {
+    let mut shown = BTreeMap::new();
+    let Some(depth) = depth else {
+        return shown;
+    };
+    let mut order: Vec<(usize, usize)> = tree
+        .level
+        .iter()
+        .map(|(&file, &level)| (level, file))
+        .collect();
+    order.sort_unstable();
+    for (level, file) in order {
+        let above = if level > depth {
+            tree.up.get(&file)
+        } else {
+            None
+        };
+        let at = above.map_or(file, |above| shown.get(above).copied().unwrap_or(*above));
+        shown.insert(file, at);
+    }
+    shown
+}
+
 /// An edge's merge key, in print order; the files tell two holders of one
 /// name apart.
 #[derive(PartialEq, Eq, PartialOrd, Ord)]
@@ -1168,4 +1227,588 @@ struct Merged<'a> {
     when: Option<&'a str>,
     file: usize,
     line: usize,
+}
+
+/// docs/features/flow-linear.md AC-10 "The forest differential": today's
+/// `scope_of`, `parent_of`, `tree_of` and `shown_as` (the parent of this
+/// slice, `e863186`) kept verbatim as the reference, and 300 seeded forests
+/// read by both. Non-Latin characters are Unicode escapes (ADR-0024).
+#[cfg(test)]
+mod forest_differential {
+    use std::collections::btree_map::Entry;
+    use std::collections::{BTreeMap, BTreeSet, VecDeque};
+
+    use specengine_model::IdScheme;
+
+    use super::{
+        Link, NodeAt, Scope, Selected, SpecGraph, Standing, Stray, Tree, document, folded,
+        parents_of, read_links, scope_of, tree_of,
+    };
+    // A parse of bytes, named apart from the source scan's word for file
+    // access (core does no file I/O; `specengine-eval` `build_graph.rs`).
+    use crate::check::{CheckFile as Parsed, CheckInput};
+    use crate::flow_toml::FlowConfig;
+    use crate::{IdSchemeToml as _, Paths};
+
+    /// The read before this slice, verbatim but for the closure `shown_as`
+    /// (`shown`), here a function of the tree and the depth.
+    mod reference {
+        use super::*;
+
+        /// The documents read: `ROOT`'s subtree, or every flow document with its
+        /// ancestors.
+        pub(super) fn scope_of(
+            graph: &SpecGraph<'_>,
+            roots: Option<&[NodeAt]>,
+            links: &[Link<'_>],
+            strays: &[Stray],
+            selected: &Selected,
+            admitted: &impl Fn(usize) -> bool,
+        ) -> Scope {
+            let mut members = BTreeSet::new();
+            let mut left_out = BTreeSet::new();
+            let roots: Vec<usize> = match roots {
+                Some(roots) => {
+                    let files: BTreeSet<usize> = roots.iter().map(|at| at.file).collect();
+                    let mut stack: Vec<NodeAt> = files.iter().map(|&file| document(file)).collect();
+                    let mut seen: BTreeSet<NodeAt> = stack.iter().copied().collect();
+                    members.extend(files.iter().copied());
+                    while let Some(at) = stack.pop() {
+                        for &child in graph.children(at) {
+                            if !admitted(child.file) {
+                                left_out.insert(child.file);
+                            } else if seen.insert(child) {
+                                members.insert(child.file);
+                                stack.push(child);
+                            }
+                        }
+                    }
+                    for stray in strays {
+                        if members.contains(&stray.source) {
+                            left_out.extend(stray.target);
+                        }
+                        if stray.target.is_some_and(|target| members.contains(&target)) {
+                            left_out.insert(stray.source);
+                        }
+                    }
+                    files.into_iter().collect()
+                }
+                None => {
+                    for link in links {
+                        members.extend([link.from, link.to]);
+                    }
+                    for file in selected.all() {
+                        if admitted(file) {
+                            members.insert(file);
+                        } else {
+                            left_out.insert(file);
+                        }
+                    }
+                    for stray in strays {
+                        for file in std::iter::once(stray.source).chain(stray.target) {
+                            if !admitted(file) {
+                                left_out.insert(file);
+                            } else if file == stray.source {
+                                members.insert(file);
+                            }
+                        }
+                    }
+                    for member in members.clone() {
+                        for at in graph.ancestors(document(member)) {
+                            if at.file == member {
+                                continue;
+                            }
+                            if !admitted(at.file) {
+                                left_out.insert(at.file);
+                                break;
+                            }
+                            members.insert(at.file);
+                        }
+                    }
+                    let parented = |file: usize| {
+                        parent_of(graph, file).is_some_and(|parent| members.contains(&parent))
+                    };
+                    members
+                        .iter()
+                        .copied()
+                        .filter(|&file| !parented(file))
+                        .collect()
+                }
+            };
+            Scope {
+                members,
+                roots,
+                left_out,
+            }
+        }
+
+        /// The document `file` is listed under, through a section of it or not.
+        pub(super) fn parent_of(graph: &SpecGraph<'_>, file: usize) -> Option<usize> {
+            graph
+                .ancestors(document(file))
+                .into_iter()
+                .map(|at| at.file)
+                .find(|&other| other != file)
+        }
+
+        /// The levels of the scope, breadth-first from its roots.
+        pub(super) fn tree_of(graph: &SpecGraph<'_>, scope: &Scope) -> Tree {
+            let parent: BTreeMap<usize, usize> = scope
+                .members
+                .iter()
+                .filter_map(|&file| {
+                    parent_of(graph, file)
+                        .filter(|parent| scope.members.contains(parent))
+                        .map(|parent| (file, parent))
+                })
+                .collect();
+            let mut kids: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+            for (&child, &of) in &parent {
+                kids.entry(of).or_default().push(child);
+            }
+            let mut level = BTreeMap::new();
+            let mut up = BTreeMap::new();
+            let mut queue = VecDeque::new();
+            for &root in &scope.roots {
+                if level.insert(root, 0).is_none() {
+                    queue.push_back(root);
+                }
+            }
+            // Every member hangs under a root; one that does not stands as a root.
+            let mut pending = scope.members.iter();
+            loop {
+                while let Some(at) = queue.pop_front() {
+                    let below = level.get(&at).copied().unwrap_or(0) + 1;
+                    for &kid in kids.get(&at).into_iter().flatten() {
+                        if let Entry::Vacant(free) = level.entry(kid) {
+                            free.insert(below);
+                            up.insert(kid, at);
+                            queue.push_back(kid);
+                        }
+                    }
+                }
+                let Some(&next) = pending.find(|file| !level.contains_key(file)) else {
+                    break;
+                };
+                level.insert(next, 0);
+                queue.push_back(next);
+            }
+            Tree { parent, level, up }
+        }
+
+        /// `shown`'s closure `shown_as`, its body verbatim.
+        pub(super) fn shown_as(tree: &Tree, depth: Option<usize>, file: usize) -> usize {
+            let Some(depth) = depth else {
+                return file;
+            };
+            let mut at = file;
+            while tree.level.get(&at).is_some_and(|&level| level > depth) {
+                match tree.up.get(&at) {
+                    Some(&above) => at = above,
+                    None => break,
+                }
+            }
+            at
+        }
+    }
+
+    /// The forests' config: three prefixes, the `stage` kind a flow step.
+    const CONFIG: &str = "[project]\nslug = \"forest\"\n\n[ids]\n\
+                          DOC = { kind = \"group\", width = 2 }\n\
+                          STP = { kind = \"stage\", width = 2 }\n\
+                          SEC = { kind = \"part\", width = 2 }\n\n\
+                          [[flow.step]]\nkinds = [\"stage\"]\n";
+
+    /// Seeded forests read.
+    const FORESTS: u64 = 300;
+
+    /// A forest's documents at most, and its chains' depth at most.
+    const MOST_DOCUMENTS: usize = 60;
+    const MOST_DEPTH: usize = 30;
+
+    struct Lcg(u64);
+
+    impl Lcg {
+        fn new(seed: u64) -> Self {
+            Self(
+                seed.wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1_442_695_040_888_963_407),
+            )
+        }
+
+        fn next(&mut self) -> u64 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            self.0 >> 33
+        }
+
+        fn below(&mut self, n: usize) -> usize {
+            usize::try_from(self.next() % u64::try_from(n.max(1)).expect("small")).expect("small")
+        }
+    }
+
+    /// How a document stands.
+    #[derive(Clone, Copy, PartialEq)]
+    enum Class {
+        Live,
+        Generated,
+        Tier3,
+    }
+
+    /// One document of a forest.
+    struct Doc {
+        step: bool,
+        class: Class,
+        section: bool,
+        /// The document its `parent:` names, and whether through its section.
+        parent: Option<(usize, bool)>,
+        /// Flow links: (type, target document, through its section).
+        links: Vec<(&'static str, usize, bool)>,
+    }
+
+    struct Forest {
+        docs: Vec<Doc>,
+        /// The input order of the files: a shuffle of the documents.
+        order: Vec<usize>,
+        cycle: bool,
+        depth: usize,
+    }
+
+    fn id(docs: &[Doc], doc: usize) -> String {
+        let prefix = if docs[doc].step { "STP" } else { "DOC" };
+        format!("{prefix}-{:02}", doc + 1)
+    }
+
+    fn section_id(doc: usize) -> String {
+        format!("SEC-{:02}", doc + 1)
+    }
+
+    /// `doc`, or its section when `through` and it has one.
+    fn named(docs: &[Doc], doc: usize, through: bool) -> String {
+        if through && docs[doc].section {
+            section_id(doc)
+        } else {
+            id(docs, doc)
+        }
+    }
+
+    impl Forest {
+        fn random(seed: u64) -> Self {
+            let mut lcg = Lcg::new(seed);
+            let count = 2 + lcg.below(MOST_DOCUMENTS - 1);
+            let mut docs: Vec<Doc> = Vec::new();
+            let mut depth: Vec<usize> = Vec::new();
+            for doc in 0..count {
+                let class = match lcg.below(16) {
+                    0 => Class::Generated,
+                    1 => Class::Tier3,
+                    _ => Class::Live,
+                };
+                let parent = if doc > 0 && lcg.below(8) != 0 {
+                    // Chains: mostly the one before, so depth grows.
+                    let above = if lcg.below(4) != 0 {
+                        doc - 1
+                    } else {
+                        lcg.below(doc)
+                    };
+                    (depth[above] < MOST_DEPTH).then(|| (above, lcg.below(2) == 0))
+                } else {
+                    None
+                };
+                depth.push(parent.map_or(0, |(above, _)| depth[above] + 1));
+                docs.push(Doc {
+                    step: lcg.below(5) == 0,
+                    class,
+                    section: lcg.below(3) == 0,
+                    parent,
+                    links: Vec::new(),
+                });
+            }
+            // Flow links on a random subset.
+            for doc in &mut docs {
+                if lcg.below(4) == 0 {
+                    let link_type = if lcg.below(3) == 0 { "uses" } else { "follows" };
+                    let to = lcg.below(count);
+                    let through = lcg.below(4) == 0;
+                    doc.links.push((link_type, to, through));
+                }
+            }
+            // A cycle planted: a chain's top names a document below it.
+            let mut cycle = false;
+            if lcg.below(3) == 0 {
+                let low = lcg.below(count);
+                let mut top = low;
+                while let Some((above, _)) = docs[top].parent {
+                    top = above;
+                }
+                if top != low {
+                    docs[top].parent = Some((low, lcg.below(2) == 0));
+                    cycle = true;
+                }
+            }
+            // Now and then a document under its own section.
+            if lcg.below(12) == 0 {
+                let doc = lcg.below(count);
+                docs[doc].section = true;
+                docs[doc].parent = Some((doc, true));
+                cycle = true;
+            }
+            let mut order: Vec<usize> = (0..count).collect();
+            for at in (1..count).rev() {
+                order.swap(at, lcg.below(at + 1));
+            }
+            let depth = depth.into_iter().max().unwrap_or(0);
+            Self {
+                docs,
+                order,
+                cycle,
+                depth,
+            }
+        }
+
+        fn text(&self, doc: usize) -> String {
+            let docs = &self.docs;
+            let me = &docs[doc];
+            let class = match me.class {
+                Class::Live => "class: canon\n",
+                Class::Generated => "class: generated\n",
+                Class::Tier3 => "class: spec\nstatus: shipped\n",
+            };
+            let parent = me.parent.map_or_else(String::new, |(above, through)| {
+                format!("parent: {}\n", named(docs, above, through))
+            });
+            let links = if me.links.is_empty() {
+                String::new()
+            } else {
+                let mut by_type: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+                for &(link_type, to, through) in &me.links {
+                    by_type
+                        .entry(link_type)
+                        .or_default()
+                        .push(named(docs, to, through));
+                }
+                let lines: String = by_type
+                    .into_iter()
+                    .map(|(link_type, ids)| format!("  {link_type}: [{}]\n", ids.join(", ")))
+                    .collect();
+                format!("links:\n{lines}")
+            };
+            let section = if me.section {
+                format!("\n## A part {{#{}}}\n\nA part.\n", section_id(doc))
+            } else {
+                String::new()
+            };
+            format!(
+                "---\nid: {}\n{class}title: A document\n{parent}owner: owner\n\
+                 reviewed: 2026-10-01\n{links}---\n\n# A document\n\nA body.\n{section}",
+                id(docs, doc)
+            )
+        }
+
+        /// The parsed corpus, its files in [`Forest::order`].
+        fn input(&self, scheme: &IdScheme) -> CheckInput {
+            CheckInput {
+                files: self
+                    .order
+                    .iter()
+                    .map(|&doc| {
+                        let path = format!("forest/{}.md", id(&self.docs, doc).to_lowercase());
+                        Parsed::parse(&path, self.text(doc).into_bytes(), scheme)
+                    })
+                    .collect(),
+                problems: Vec::new(),
+            }
+        }
+    }
+
+    /// What a seed reached, so a generator that never plants a case is seen.
+    #[derive(Default, Debug)]
+    struct Reached {
+        /// The whole read took in an ancestor no link or rule names.
+        walked: usize,
+        /// ... two levels of them on one chain: the walk goes past one parent.
+        walked_twice: usize,
+        /// ... and left out a non-admitted ancestor with a live one above it.
+        stopped_below_live: usize,
+        cycles: usize,
+        through_section: usize,
+        deep: usize,
+        folded: usize,
+    }
+
+    /// The scope, the tree and the shown nodes of one read, both ways.
+    fn compare(
+        graph: &SpecGraph<'_>,
+        selected: &Selected,
+        parents: &[Option<usize>],
+        roots: Option<&[NodeAt]>,
+        context: &str,
+        reached: &mut Reached,
+    ) {
+        let asked: BTreeSet<usize> = roots.into_iter().flatten().map(|at| at.file).collect();
+        let admitted =
+            |file: usize| graph.standing(file) == Standing::Live || asked.contains(&file);
+        let (links, strays): (Vec<Link<'_>>, Vec<Stray>) = read_links(graph, &admitted);
+        let got = scope_of(graph, roots, &links, &strays, selected, &admitted, parents);
+        let want = reference::scope_of(graph, roots, &links, &strays, selected, &admitted);
+        assert_eq!(got.members, want.members, "{context}: members");
+        assert_eq!(got.roots, want.roots, "{context}: roots");
+        assert_eq!(got.left_out, want.left_out, "{context}: left_out");
+        let got_tree: Tree = tree_of(parents, &got);
+        let want_tree: Tree = reference::tree_of(graph, &want);
+        assert_eq!(got_tree.parent, want_tree.parent, "{context}: parent");
+        assert_eq!(got_tree.level, want_tree.level, "{context}: level");
+        assert_eq!(got_tree.up, want_tree.up, "{context}: up");
+        for depth in [None, Some(0), Some(1), Some(2), Some(3)] {
+            let fold = folded(&got_tree, depth);
+            for &member in &want.members {
+                let shown = fold.get(&member).copied().unwrap_or(member);
+                let before = reference::shown_as(&want_tree, depth, member);
+                assert_eq!(shown, before, "{context}: {member} at depth {depth:?}");
+                if depth.is_some() && before != member {
+                    reached.folded += 1;
+                }
+            }
+        }
+        if roots.is_none() {
+            note_the_walk(graph, &links, &strays, selected, &want, reached);
+        }
+    }
+
+    /// What the whole read's ancestor walk did, from the reference alone.
+    fn note_the_walk(
+        graph: &SpecGraph<'_>,
+        links: &[Link<'_>],
+        strays: &[Stray],
+        selected: &Selected,
+        want: &Scope,
+        reached: &mut Reached,
+    ) {
+        let mut named: BTreeSet<usize> = selected.all().collect();
+        for link in links {
+            named.extend([link.from, link.to]);
+        }
+        named.extend(strays.iter().map(|stray| stray.source));
+        let walked: BTreeSet<usize> = want.members.difference(&named).copied().collect();
+        if !walked.is_empty() {
+            reached.walked += 1;
+        }
+        let parent = |file: usize| reference::parent_of(graph, file);
+        if walked
+            .iter()
+            .any(|&file| parent(file).is_some_and(|above| walked.contains(&above)))
+        {
+            reached.walked_twice += 1;
+        }
+        let live_above = |file: usize| {
+            let mut at = parent(file);
+            let mut seen = BTreeSet::from([file]);
+            while let Some(above) = at {
+                if !seen.insert(above) {
+                    return false;
+                }
+                if graph.standing(above) == Standing::Live {
+                    return true;
+                }
+                at = parent(above);
+            }
+            false
+        };
+        if want.left_out.iter().any(|&file| {
+            graph.standing(file) != Standing::Live
+                && want
+                    .members
+                    .iter()
+                    .any(|&member| parent(member) == Some(file))
+                && live_above(file)
+        }) {
+            reached.stopped_below_live += 1;
+        }
+    }
+
+    /// AC-10 "The forest differential": over 300 seeded forests (up to 60
+    /// documents, chains up to 30 deep, `parent:` naming a document or its
+    /// ID section, one document in eight generated or Tier 3, planted
+    /// cycles, flow links on a random subset), each file's parent document
+    /// and, for the whole read and the read under each document as ROOT,
+    /// the scope (`members`, `roots`, `left_out`), the tree (`parent`,
+    /// `level`, `up`) and every member's shown node at no depth and depths
+    /// 0 to 3 are the reference's. M: the walk stopping after one parent;
+    /// the walk passing a non-admitted ancestor.
+    #[test]
+    fn every_forest_reads_as_the_read_before() {
+        let scheme = IdScheme::from_toml(CONFIG).expect("[ids]");
+        let paths = Paths::from_toml(CONFIG).expect("[paths]");
+        let flow = FlowConfig::from_toml(CONFIG, &scheme);
+        let mut reached = Reached::default();
+        let mut not_live = 0;
+        for seed in 0..FORESTS {
+            let forest = Forest::random(seed);
+            let input = forest.input(&scheme);
+            let graph = SpecGraph::new(&input, &scheme, &paths);
+            let selected = Selected::of(&graph, &flow);
+            let parents = parents_of(&graph);
+            let files = graph.paths().len();
+            assert_eq!(parents.len(), files, "seed {seed}");
+            for (file, parent) in parents.iter().enumerate() {
+                assert_eq!(
+                    *parent,
+                    reference::parent_of(&graph, file),
+                    "seed {seed}: the parent document of {}",
+                    graph.paths()[file]
+                );
+            }
+            not_live += (0..files)
+                .filter(|&file| graph.standing(file) != Standing::Live)
+                .count();
+            if forest.cycle {
+                assert!(!graph.cycles().is_empty(), "seed {seed}: a planted cycle");
+                reached.cycles += 1;
+            }
+            if forest.docs.iter().any(|doc| {
+                doc.parent
+                    .is_some_and(|(above, through)| through && forest.docs[above].section)
+            }) {
+                reached.through_section += 1;
+            }
+            if forest.depth >= 10 {
+                reached.deep += 1;
+            }
+            compare(
+                &graph,
+                &selected,
+                &parents,
+                None,
+                &format!("seed {seed}, whole"),
+                &mut reached,
+            );
+            for file in 0..files {
+                let roots = [document(file)];
+                compare(
+                    &graph,
+                    &selected,
+                    &parents,
+                    Some(&roots),
+                    &format!("seed {seed}, ROOT {}", graph.paths()[file]),
+                    &mut reached,
+                );
+            }
+        }
+        // The seeds reach every case: a generator that never planted one
+        // proves nothing about it.
+        assert!(not_live >= 300, "{not_live} files not live");
+        for (name, count) in [
+            ("walked", reached.walked),
+            ("walked_twice", reached.walked_twice),
+            ("stopped_below_live", reached.stopped_below_live),
+            ("cycles", reached.cycles),
+            ("through_section", reached.through_section),
+            ("deep", reached.deep),
+            ("folded", reached.folded),
+        ] {
+            assert!(count >= 20, "{name}: only {count}: {reached:?}");
+        }
+    }
 }

@@ -39,7 +39,10 @@
 //!   ` | outline`, the not-included reserve, its count every candidate and
 //!   row) is the minimum (below it: exit 2); then each item and row, in
 //!   layer order, enters iff the body with it, the frame
-//!   parts not placed yet and the reserve still fits. A target degrades
+//!   parts not placed yet and the reserve still fits. Running sums of the
+//!   parts' characters and thousandths (`Measure`), rounded once
+//!   ([`tokens_of`]), make that decision, so each part is estimated once
+//!   and the body never again. A target degrades
 //!   (text → outline → its header alone), never cut; the not-included list
 //!   (an outlined target's child ID sections first) prints at most
 //!   [`BUNDLE_TAIL_LINES`] lines, each while the body fits, the rest as
@@ -85,6 +88,7 @@ use specengine_core::check::{
     bundle_layers, bundle_node_from_toml,
 };
 use specengine_core::lock::LockRelation;
+use specengine_core::tokens::{thousandths, tokens_of};
 use specengine_core::{CodeConfig, tokens_est};
 use specengine_model::{BindingRow, TestedRow};
 use specengine_store::{GitEnv, SqliteIndex, b3_hash};
@@ -706,6 +710,42 @@ enum Placed {
     Row(BundleRow),
 }
 
+/// What a text adds to the body: its characters and its thousandths of a
+/// token. Summed over parts and rounded once ([`tokens_of`]), it decides
+/// exactly what [`tokens_est`] of their concatenation decides, so each part
+/// is estimated once (canon `spec-cli-bundle`, "Fitting").
+#[derive(Clone, Copy, Default)]
+struct Measure {
+    chars: usize,
+    thousandths: u64,
+}
+
+impl Measure {
+    /// The one place a part is estimated.
+    fn of(text: &str) -> Self {
+        #[cfg(test)]
+        fit_differential::MEASURED
+            .with(|measured| measured.set(measured.get() + text.chars().count()));
+        Self {
+            chars: text.chars().count(),
+            thousandths: thousandths(text),
+        }
+    }
+
+    /// Both parts together; both fields saturating.
+    fn plus(self, other: Self) -> Self {
+        Self {
+            chars: self.chars.saturating_add(other.chars),
+            thousandths: self.thousandths.saturating_add(other.thousandths),
+        }
+    }
+
+    /// Within [`OUTPUT_CAP_CHARS`] and within `budget` tokens.
+    fn fits(self, budget: u32) -> bool {
+        self.chars <= OUTPUT_CAP_CHARS && tokens_of(self.thousandths) <= budget
+    }
+}
+
 /// The frame, the minimum, then the greedy fit (see the module
 /// documentation).
 fn assemble(
@@ -747,6 +787,9 @@ fn assemble(
         .map(|&at| one_line(&graph.name(at)))
         .collect();
     let mut body = format!("# Bundle: {}\n\n## Targets\n", names.join(", "));
+    // `body`'s measure: each part pushed onto it adds its own, so a fit is
+    // decided over running sums, never over the body again.
+    let mut measured = Measure::of(&body);
     let reserved = candidates.len()
         + targets
             .iter()
@@ -758,6 +801,7 @@ fn assemble(
     } else {
         String::new()
     };
+    let reserve_measure = Measure::of(&reserve);
     // The frame parts of targets `i..`: their marked headers (none past the
     // end, so an empty target list cannot panic).
     let rest = |from: usize| -> String {
@@ -768,10 +812,6 @@ fn assemble(
             .map(|target| format!("\n{}\n", target.marked))
             .collect()
     };
-    let fits = |parts: &[&str]| -> bool {
-        let text: String = parts.concat();
-        text.chars().count() <= OUTPUT_CAP_CHARS && tokens_est(&text) <= budget
-    };
 
     // The minimum: the frame.
     let frame = format!(
@@ -779,8 +819,9 @@ fn assemble(
         targets.first().map_or("", |target| target.marked.as_str()),
         rest(1)
     );
-    let minimum = tokens_est(&frame);
-    let frame_chars = frame.chars().count();
+    let framed = Measure::of(&frame);
+    let minimum = tokens_of(framed.thousandths);
+    let frame_chars = framed.chars;
     if frame_chars > OUTPUT_CAP_CHARS {
         return Err(CliError::spec(format!(
             "this bundle's frame (its title, target headers and not-included line) is \
@@ -807,18 +848,31 @@ fn assemble(
     let mut outlined: Vec<TailEntry> = Vec::new();
     for (index, target) in targets.iter().enumerate() {
         let separator = if index > 0 { "\n" } else { "" };
-        let after = rest(index + 1);
+        let separator_measure = Measure::of(separator);
+        // The later targets' headers are measured anew for each target: the
+        // frame's character ceiling bounds that.
+        let around = measured
+            .plus(separator_measure)
+            .plus(Measure::of(&rest(index + 1)))
+            .plus(reserve_measure);
         let header = format!("{}\n", target.marked);
         let mut forms = vec![(ItemForm::Text, &target.full)];
         if let Some(outline) = &target.outline {
             forms.push((ItemForm::Outline, outline));
         }
-        let (form, text) = forms
+        let (form, text, text_measure) = forms
             .into_iter()
-            .find(|(_, text)| fits(&[body.as_str(), separator, text.as_str(), &after, &reserve]))
-            .unwrap_or((ItemForm::Header, &header));
+            .find_map(|(form, text)| {
+                let text_measure = Measure::of(text);
+                around
+                    .plus(text_measure)
+                    .fits(budget)
+                    .then_some((form, text, text_measure))
+            })
+            .unwrap_or_else(|| (ItemForm::Header, &header, Measure::of(&header)));
         body.push_str(separator);
         body.push_str(text);
+        measured = measured.plus(separator_measure).plus(text_measure);
         if form != ItemForm::Text {
             outlined.extend(target.children.iter().cloned());
         }
@@ -838,9 +892,11 @@ fn assemble(
         } else {
             format!("\n## {}\n", layer_heading(candidate.layer))
         };
-        if fits(&[body.as_str(), &heading, &candidate.text, &reserve]) {
+        let part = Measure::of(&heading).plus(Measure::of(&candidate.text));
+        if measured.plus(part).plus(reserve_measure).fits(budget) {
             body.push_str(&heading);
             body.push_str(&candidate.text);
+            measured = measured.plus(part);
             current = Some(candidate.layer);
             match candidate.placed {
                 Placed::Item(item) => {
@@ -865,33 +921,46 @@ fn assemble(
     let mut tail = Vec::new();
     if !listed.is_empty() {
         let section = "\n## Not included\n";
+        let section_measure = Measure::of(section);
+        let more_measure = Measure::of(&reserved_more);
         let mut lines = String::new();
+        let mut lines_measure = Measure::default();
         for (index, entry) in listed.iter().enumerate().take(BUNDLE_TAIL_LINES) {
             let line = tail_line(entry);
+            let line_measure = Measure::of(&line);
             let more = if index + 1 < listed.len() {
-                reserved_more.as_str()
+                more_measure
             } else {
-                ""
+                Measure::default()
             };
-            if !fits(&[body.as_str(), section, &lines, &line, more]) {
+            let with = measured
+                .plus(section_measure)
+                .plus(lines_measure)
+                .plus(line_measure)
+                .plus(more);
+            if !with.fits(budget) {
                 break;
             }
             lines.push_str(&line);
+            lines_measure = lines_measure.plus(line_measure);
             tail.push(entry.clone());
         }
         body.push_str(section);
         body.push_str(&lines);
+        measured = measured.plus(section_measure).plus(lines_measure);
         let more = listed.len() - tail.len();
         if more > 0 {
-            body.push_str(&format!("- {more} more\n"));
+            let more_line = format!("- {more} more\n");
+            body.push_str(&more_line);
+            measured = measured.plus(Measure::of(&more_line));
         }
     }
     let more = listed.len() - tail.len();
 
     Ok(Bundle {
         budget,
-        tokens: tokens_est(&body),
-        chars: body.chars().count(),
+        tokens: tokens_of(measured.thousandths),
+        chars: measured.chars,
         bytes: body.len(),
         bundle_hash: b3_hash(body.as_bytes()),
         body,
@@ -1400,5 +1469,327 @@ fn view(outcome: &BundleOutcome) -> BundleJson<'_> {
 impl Serialize for BundleOutcome {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         view(self).serialize(serializer)
+    }
+}
+
+/// flow-linear AC-11, "The differential" and "The counter": [`Measure`]
+/// decides what the concatenating `fits` before the slice decided, and
+/// [`assemble`] measures each part about once. Non-Latin characters are
+/// Unicode escapes.
+#[cfg(test)]
+mod fit_differential {
+    use std::cell::Cell;
+    use std::collections::BTreeMap;
+
+    use specengine_core::check::{CheckFile, CheckInput, NodeAt, SpecGraph, bundle_layers};
+    use specengine_core::{IdSchemeToml as _, Paths, tokens_est};
+    use specengine_model::IdScheme;
+
+    use super::{
+        BUNDLE_TAIL_LINES, BudgetSource, CodeRows, Measure, OUTPUT_CAP_CHARS, assemble,
+        layer_heading, prepare, tail_line, target_forms,
+    };
+
+    thread_local! {
+        /// The characters [`Measure::of`] measured on this thread.
+        pub(super) static MEASURED: Cell<usize> = const { Cell::new(0) };
+    }
+
+    /// `assemble`'s `fits` before this slice, verbatim but for `budget`
+    /// passed in: the concatenation, estimated whole.
+    fn concatenating_fits(parts: &[&str], budget: u32) -> bool {
+        let text: String = parts.concat();
+        text.chars().count() <= OUTPUT_CAP_CHARS && tokens_est(&text) <= budget
+    }
+
+    /// The same decision over running sums.
+    fn measured_fits(parts: &[&str], budget: u32) -> bool {
+        parts
+            .iter()
+            .fold(Measure::default(), |sum, part| sum.plus(Measure::of(part)))
+            .fits(budget)
+    }
+
+    struct Lcg(u64);
+
+    impl Lcg {
+        fn new(seed: u64) -> Self {
+            Self(seed.wrapping_mul(2_862_933_555_777_941_757).wrapping_add(3))
+        }
+
+        fn below(&mut self, n: u32) -> u32 {
+            self.0 = self
+                .0
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            u32::try_from((self.0 >> 33) % u64::from(n.max(1))).expect("below n")
+        }
+
+        fn pick(&mut self, from: &str) -> char {
+            let all: Vec<char> = from.chars().collect();
+            all[usize::try_from(self.below(u32::try_from(all.len()).expect("small")))
+                .expect("small")]
+        }
+
+        /// A character of `class`: 0 ASCII letters and digits, 1 other
+        /// ASCII, 2 whitespace, 3 Cyrillic, 4 CJK, 5 emoji.
+        fn of_class(&mut self, class: u32) -> char {
+            let at = |base: u32, span: u32, lcg: &mut Self| {
+                char::from_u32(base + lcg.below(span)).expect("a scalar value")
+            };
+            match class {
+                0 => self.pick("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"),
+                1 => self.pick("#-|.,:;!?()[]{}*_`'\"/\\<>=+~@$%^&"),
+                2 => self.pick(" \n\t\r"),
+                3 => at(0x0410, 0x40, self),
+                4 => at(0x4E00, 0x0500, self),
+                _ => at(0x1F600, 0x50, self),
+            }
+        }
+
+        /// A character, any class.
+        fn any(&mut self) -> char {
+            let class = self.below(6);
+            self.of_class(class)
+        }
+
+        /// A character, a multi-byte one nine times in ten.
+        fn mostly_wide(&mut self) -> char {
+            let class = if self.below(10) == 0 {
+                self.below(3)
+            } else {
+                3 + self.below(3)
+            };
+            self.of_class(class)
+        }
+    }
+
+    /// The token bound: 10 000 short seeded lists of 1 to 6 parts, at
+    /// budgets within 2 tokens of the concatenation's estimate. M: round
+    /// per part.
+    #[test]
+    fn the_running_sums_decide_as_the_concatenation_on_tokens() {
+        let (mut fits, mut refused) = (0, 0);
+        for seed in 0..10_000u64 {
+            let mut lcg = Lcg::new(seed);
+            let parts: Vec<String> = (0..1 + lcg.below(6))
+                .map(|_| (0..lcg.below(9)).map(|_| lcg.any()).collect())
+                .collect();
+            let borrowed: Vec<&str> = parts.iter().map(String::as_str).collect();
+            let whole = tokens_est(&borrowed.concat());
+            let budget = (whole + lcg.below(5)).saturating_sub(2);
+            let want = concatenating_fits(&borrowed, budget);
+            assert_eq!(
+                measured_fits(&borrowed, budget),
+                want,
+                "seed {seed}: {parts:?} at {budget} (whole {whole})"
+            );
+            if want {
+                fits += 1;
+            } else {
+                refused += 1;
+            }
+        }
+        assert!(
+            fits >= 100 && refused >= 100,
+            "{fits} fit, {refused} refused"
+        );
+    }
+
+    /// The character bound: 400 seeded lists of mostly multi-byte
+    /// characters, 1 to 6 parts, within 3 characters of the ceiling, at a
+    /// budget their tokens never reach. M: count bytes.
+    #[test]
+    fn the_running_sums_decide_as_the_concatenation_on_characters() {
+        let (mut fits, mut refused) = (0, 0);
+        for seed in 0..400u64 {
+            let mut lcg = Lcg::new(seed + 1_000_000);
+            let length = usize::try_from(lcg.below(7)).expect("small") + OUTPUT_CAP_CHARS - 3;
+            let count = 1 + usize::try_from(lcg.below(6)).expect("small");
+            let mut cuts: Vec<usize> = (1..count)
+                .map(|_| {
+                    usize::try_from(lcg.below(u32::try_from(length).expect("small")))
+                        .expect("small")
+                })
+                .collect();
+            cuts.push(0);
+            cuts.push(length);
+            cuts.sort_unstable();
+            let parts: Vec<String> = cuts
+                .windows(2)
+                .map(|pair| (pair[0]..pair[1]).map(|_| lcg.mostly_wide()).collect())
+                .collect();
+            let borrowed: Vec<&str> = parts.iter().map(String::as_str).collect();
+            let concatenated = borrowed.concat();
+            assert_eq!(concatenated.chars().count(), length);
+            assert!(
+                concatenated.len() > OUTPUT_CAP_CHARS + 3,
+                "mostly multi-byte"
+            );
+            let budget = u32::MAX;
+            assert!(tokens_est(&concatenated) < budget);
+            let want = concatenating_fits(&borrowed, budget);
+            assert_eq!(
+                measured_fits(&borrowed, budget),
+                want,
+                "seed {seed}: {length} characters in {count} parts"
+            );
+            if want {
+                fits += 1;
+            } else {
+                refused += 1;
+            }
+        }
+        assert!(
+            fits >= 100 && refused >= 100,
+            "{fits} fit, {refused} refused"
+        );
+    }
+
+    /// The worked decision of the spec's "Data": `abc` and ` d` fit a
+    /// budget of 2 together (1 550 thousandths), though rounded apart they
+    /// cost 3; and the characters of its escapes count one each.
+    #[test]
+    fn the_worked_decision_rounds_once() {
+        assert!(concatenating_fits(&["abc", " d"], 2));
+        assert!(measured_fits(&["abc", " d"], 2));
+        assert!(!measured_fits(&["abc", " d"], 1));
+        for (text, chars) in [
+            ("\u{0434}", 1),
+            ("\u{4E2D}", 1),
+            ("\u{1F600}", 1),
+            ("a\u{0434}\u{4E2D}\u{1F600}", 4),
+        ] {
+            assert_eq!(Measure::of(text).chars, chars, "{text:?}");
+        }
+    }
+
+    /// The questions on the target.
+    const QUESTIONS: usize = 12_000;
+
+    /// The counter's corpus: a target, an answer and [`QUESTIONS`] open
+    /// questions on the target, each with that working answer.
+    const CONFIG: &str = "[project]\nslug = \"counter\"\n\n[ids]\n\
+                          TGT = { kind = \"subject\", width = 2 }\n\
+                          ANS = { kind = \"answer\", width = 2 }\n\
+                          QST = { kind = \"question\", width = 5 }\n";
+
+    /// "The counter": `assemble` in memory over one target and 12 000 open
+    /// questions on it, at a budget that places some and refuses others,
+    /// measures at least the candidates' characters and at most twice the
+    /// characters of the frame, the reserve, the target's forms, the
+    /// candidates' texts with their headings and the tail's lines with the
+    /// more line. M: the concatenating `fits` restored through
+    /// `Measure::of` (the upper bound) or through `tokens_est` (the lower
+    /// bound).
+    #[test]
+    fn the_fit_measures_each_part_about_once() {
+        let scheme = IdScheme::from_toml(CONFIG).expect("[ids]");
+        let paths = Paths::from_toml(CONFIG).expect("[paths]");
+        let mut files = vec![
+            (
+                "spec/tgt-01.md".to_owned(),
+                "---\nid: TGT-01\nclass: canon\ntitle: The subject\nowner: owner\n\
+                 reviewed: 2026-09-20\n---\n\n# The subject\n\nThe subject holds a lamp that \
+                 burns through the night, and the night is long.\n"
+                    .to_owned(),
+            ),
+            (
+                "spec/ans-01.md".to_owned(),
+                "---\nid: ANS-01\nclass: canon\ntitle: An answer\nowner: owner\n\
+                 reviewed: 2026-09-20\n---\n\n# An answer\n\nUntil dawn.\n"
+                    .to_owned(),
+            ),
+        ];
+        for n in 0..QUESTIONS {
+            files.push((
+                format!("spec/questions/qst-{n:05}.md"),
+                format!(
+                    "---\nid: QST-{n:05}\nclass: canon\nstatus: open\nworking_answer: ANS-01\n\
+                     refs: [TGT-01]\nowner: owner\nreviewed: 2026-09-20\n---\n\n\
+                     # Question {n}\n\nHow long does the lamp burn at night?\n"
+                ),
+            ));
+        }
+        let input = CheckInput {
+            files: files
+                .into_iter()
+                .map(|(path, text)| CheckFile::parse(path, text.into_bytes(), &scheme))
+                .collect(),
+            problems: Vec::new(),
+        };
+        let graph = SpecGraph::new(&input, &scheme, &paths);
+        let target: NodeAt = (0..graph.paths().len())
+            .flat_map(|file| (0..graph.nodes(file).len()).map(move |ord| NodeAt { file, ord }))
+            .find(|&at| graph.name(at) == "TGT-01")
+            .expect("the target");
+        let layers = bundle_layers(&graph, &[target]);
+        assert!(
+            layers.candidates.len() >= QUESTIONS,
+            "{} candidates",
+            layers.candidates.len()
+        );
+        let code = CodeRows {
+            bindings: Vec::new(),
+            tests: Vec::new(),
+            tested: BTreeMap::new(),
+            note: None,
+        };
+
+        MEASURED.with(|measured| measured.set(0));
+        let bundle =
+            assemble(&graph, &layers, &code, 2_000, &BudgetSource::Flag).expect("the frame fits");
+        let counted = MEASURED.with(Cell::get);
+
+        let placed: usize = bundle.layers.iter().map(|(_, items)| items.len()).sum();
+        let refused = bundle.not_included();
+        assert!(placed > 1, "placed {placed}");
+        assert!(refused >= QUESTIONS / 2, "refused {refused}");
+
+        // The parts as `assemble` builds them.
+        let forms = target_forms(&graph, target, "");
+        let prepared: Vec<_> = layers
+            .candidates
+            .iter()
+            .map(|candidate| prepare(&graph, candidate, ""))
+            .collect();
+        let chars = |text: &str| text.chars().count();
+        let reserved = prepared.len() + forms.children.len();
+        let reserve = format!("\n## Not included\n- {reserved} more\n");
+        let title = format!("# Bundle: {}\n\n## Targets\n", graph.name(target));
+        let frame = chars(&title) + chars(&forms.marked) + 1 + chars(&reserve);
+        let target_parts = chars(&forms.full)
+            + forms.outline.as_deref().map_or(0, chars)
+            + chars(&forms.marked)
+            + 1;
+        let candidates: usize = prepared.iter().map(|part| chars(&part.text)).sum();
+        let headings: usize = prepared
+            .iter()
+            .map(|part| chars(&format!("\n## {}\n", layer_heading(part.layer))))
+            .sum();
+        let longest_line = prepared
+            .iter()
+            .map(|part| chars(&tail_line(&part.entry)))
+            .max()
+            .unwrap_or(0);
+        let tail: usize = bundle
+            .tail
+            .iter()
+            .map(|entry| chars(&tail_line(entry)))
+            .sum::<usize>()
+            + longest_line
+            + chars("\n## Not included\n")
+            + 2 * chars(&format!("- {reserved} more\n"));
+        assert!(bundle.tail.len() <= BUNDLE_TAIL_LINES);
+        let bound = frame + chars(&reserve) + target_parts + candidates + headings + tail;
+        assert!(
+            counted >= candidates,
+            "measured {counted} characters, the candidates alone hold {candidates}"
+        );
+        assert!(
+            counted <= 2 * bound,
+            "measured {counted} characters, twice the parts is {}",
+            2 * bound
+        );
     }
 }

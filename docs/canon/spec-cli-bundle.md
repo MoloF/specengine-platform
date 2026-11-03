@@ -40,7 +40,7 @@ Item header `<name> | <kind or -> | <title or -> | <path>:<line>`, + ` | status 
 
 ## Fitting
 
-Order: layer 1 → 9, then the not-included list; a row is an item. One empty line before each `##` heading and between items; a text gains `\n` if missing; an empty layer prints no heading. **Fits**: the body as it would print, with the frame parts not yet placed and the reserve, has `tokens_est` ≤ the budget and ≤ `OUTPUT_CAP_CHARS` (40 000, one ceiling for every interface) characters. The CLI never cuts a bundle.
+Order: layer 1 → 9, then the not-included list; a row is an item. One empty line before each `##` heading and between items; a text gains `\n` if missing; an empty layer prints no heading. **Fits**: the body as it would print, with the frame parts not yet placed and the reserve, has `tokens_est` ≤ the budget and ≤ `OUTPUT_CAP_CHARS` (40 000, one ceiling for every interface) characters. Running sums of characters and thousandths make that decision, rounding once (`tokens_of`): each candidate is estimated once. The CLI never cuts a bundle.
 
 1. **Frame**: `# Bundle: <target names, ", ">`, `## Targets`, each target's header marked ` | outline`, then the **reserve** `## Not included` + `- <n> more`, n = every candidate and row plus the targets' direct child ID sections; n = 0 → no reserve. `tokens_est(frame)` is the **minimum** (it moves with rows, never `tested` lines): a budget below it → exit 2 naming the minimum and the budget's source (`--budget N`, `` `[budgets] bundle_node = N` (<config>:<line>) ``, the default); a frame over 40 000 characters → exit 2 whatever the budget.
 2. **Targets degrade, never cut**: each takes its first form that fits: `text` (layer 1's header and bytes), `outline` (the marked header and its document's summary; a section or a summary-less document has none), `header` (the marked header alone; always fits, it is the frame's). An outlined or header-only target's direct child ID sections lead the not-included list. 05 §6's "always" means placed first, not over budget (ADR-0027).
@@ -87,7 +87,7 @@ Determinism: the orders above, never rowid, insertion, time, `HashMap` order or 
 - store: `b3_hash(&[u8]) -> String`.
 - CLI: `bundle`; `BundleRequest {references, budget: Option<i64>, git}`, `BundleOutcome {references, reason, messages, bundle}`, `Bundle {budget, tokens, chars, bytes, bundle_hash, body, layers, bindings, tests, tail, more}` (`not_included`, `placed(layer)`; `layers` no items in 5, 9), `BundleRow {row, tokens_est}`, `BundleItem`, `ItemForm`, `WorkingAnswer`, `TailEntry`; `layer_key`, `layer_heading`, `DEFAULT_BUNDLE_BUDGET`, `BUNDLE_TAIL_LINES`; `Outcome::Bundle`.
 
-Tests: CLI `bundle.rs` (layers, REFs, keys), `bundle_fit.rs` (fitting, the hash, determinism), `bundle_config.rs` (budget source, read-only, format, stack words), `bundle_bindings.rs` (layers 5, 9), `common/bundle.rs`, over scratch copies of `fixtures/spec-a`, `-b`; core `bundle_layers.rs`, `check_config.rs`.
+Tests: CLI `bundle.rs` (layers, REFs, keys), `bundle_fit.rs` (fitting, the hash, determinism), `bundle_config.rs` (budget source, read-only, format, stack words), `bundle_bindings.rs` (layers 5, 9), `flow_linear.rs` (the bytes before), `common/bundle.rs`, over scratch copies of `fixtures/spec-a`, `-b`; core `bundle_layers.rs`, `check_config.rs`.
 
 ## Not yet
 
@@ -95,5 +95,5 @@ Tests: CLI `bundle.rs` (layers, REFs, keys), `bundle_fit.rs` (fitting, the hash,
 
 ## Open
 
-- Fitting re-estimates the whole body per candidate (`fits`): 3 000 candidates 1.13 s against `spec graph`'s 0.62 s (debug), on top of pass 3's per-call re-parse; MCP inherits both (`docs/canon/mcp-read.md` "Latency"); a target may hold hundreds of rows. Running counts next.
+- Each call re-parses every file (pass 3), MCP inheriting it (`docs/canon/mcp-read.md` "Latency"): RM-0079.
 - A `working_answer:` written as a Cyrillic legacy alias makes no link (`unparsed-reference`): the question drops out of open questions.

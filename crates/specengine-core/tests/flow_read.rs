@@ -10,6 +10,8 @@
 //! - a seeded brute-force reading of the graph rows, whole and under a ROOT,
 //!   from the spec's definitions alone: transitive closures, no Tarjan;
 //! - the walks are no recursion: a ring and a `parent:` chain of thousands;
+//! - docs/features/flow-linear.md AC-10: a `parent:` chain of 20 000, and
+//!   a read linear in the chain's depth, unbounded and at `--depth 0`;
 //! - docs/features/trace-views.md "Folded start and end": at every depth a
 //!   shown node's `start` and `end` over what it holds, its `stage` its own,
 //!   read from the unfolded read alone.
@@ -23,6 +25,8 @@ mod common;
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::fs;
+use std::hint::black_box;
+use std::time::{Duration, Instant};
 
 use common::check::{Config, fixture_input};
 use common::{corpus_scheme, fixture, render_diagnostics, render_link, walked_md_files};
@@ -1051,15 +1055,14 @@ fn a_random_flow_reads_as_its_closures_do() {
 
 // ------------------------------------------------------------ deep corpora
 
-/// A ring of 4 000 steps and, beside it, a `parent:` chain of 1 200
-/// documents: no stack depth grows with them. The chain stays short because
-/// a read grows with the square of a tree's depth (the handover names it),
-/// not because a deeper one fails.
+/// A ring of 4 000 steps and, beside it, a `parent:` chain of 20 000
+/// documents, IDs at width 5: no stack depth grows with them
+/// (docs/features/flow-linear.md AC-10 "The deep test").
 #[test]
 fn a_long_ring_and_a_deep_tree_are_walked_without_recursion() {
-    let (ring, chain) = (4000, 1200);
+    let (ring, chain) = (4000, 20_000);
     let text = "[project]\nslug = \"deep\"\n\n[ids]\nSTEP = { kind = \"stage\", width = 4 }\n\
-                DEEP = { kind = \"layer\", width = 4 }\n"
+                DEEP = { kind = \"layer\", width = 5 }\n"
         .to_owned();
     let config = Config::from_toml(&text);
     let mut files = Vec::new();
@@ -1077,12 +1080,12 @@ fn a_long_ring_and_a_deep_tree_are_walked_without_recursion() {
         let parent = if step == 1 {
             String::new()
         } else {
-            format!("parent: DEEP-{:04}\n", step - 1)
+            format!("parent: DEEP-{:05}\n", step - 1)
         };
         files.push((
-            format!("docs/spec/deep-{step:04}.md"),
+            format!("docs/spec/deep-{step:05}.md"),
             format!(
-                "---\nid: DEEP-{step:04}\nclass: canon\ntitle: A layer\n{parent}owner: owner\n\
+                "---\nid: DEEP-{step:05}\nclass: canon\ntitle: A layer\n{parent}owner: owner\n\
                  reviewed: 2026-10-01\nlinks:\n  uses: [STEP-0001]\n---\n\n# A layer\n"
             ),
         ));
@@ -1098,7 +1101,122 @@ fn a_long_ring_and_a_deep_tree_are_walked_without_recursion() {
     assert_eq!(cycle.len(), 1, "one cycle");
     assert_eq!(cycle[0].len(), ring, "of every member");
 
-    let got = read_input(&text, &config, &input, Some("DEEP-0001"), Some(0));
+    let got = read_input(&text, &config, &input, Some("DEEP-00001"), Some(0));
     assert_eq!(got.nodes.len(), 1, "the chain folds into its root");
     assert_eq!(got.nodes[0].holds, chain - 1);
+}
+
+/// A `parent:` chain of `layers` documents, each using one step, so every
+/// layer is in the whole read before its ancestor walk: the corpus of the
+/// ratio (docs/features/flow-linear.md AC-10).
+fn chain_of(layers: usize) -> (String, Config, CheckInput) {
+    let text = "[project]\nslug = \"chain\"\n\n[ids]\nSTEP = { kind = \"stage\", width = 5 }\n\
+                DEEP = { kind = \"layer\", width = 5 }\n"
+        .to_owned();
+    let config = Config::from_toml(&text);
+    let mut files = vec![(
+        "docs/spec/step-00001.md".to_owned(),
+        "---\nid: STEP-00001\nclass: canon\ntitle: A step\nowner: owner\n\
+         reviewed: 2026-10-01\n---\n\n# A step\n"
+            .to_owned(),
+    )];
+    for layer in 1..=layers {
+        let parent = if layer == 1 {
+            String::new()
+        } else {
+            format!("parent: DEEP-{:05}\n", layer - 1)
+        };
+        files.push((
+            format!("docs/spec/deep-{layer:05}.md"),
+            format!(
+                "---\nid: DEEP-{layer:05}\nclass: canon\ntitle: A layer\n{parent}owner: owner\n\
+                 reviewed: 2026-10-01\nlinks:\n  uses: [STEP-00001]\n---\n\n# A layer\n"
+            ),
+        ));
+    }
+    let borrowed: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(path, body)| (path.as_str(), body.as_str()))
+        .collect();
+    let input = config.input(&borrowed);
+    (text, config, input)
+}
+
+/// The time of one whole read of `graph` at `depth`, `flow_read` alone.
+fn read_time(graph: &SpecGraph<'_>, flow: &FlowConfig, depth: Option<usize>) -> Duration {
+    let started = Instant::now();
+    let read = flow_read(
+        graph,
+        &FlowAsk {
+            roots: None,
+            depth,
+            config: flow,
+            config_label: LABEL,
+            scope_name: "the-whole",
+        },
+    );
+    let elapsed = started.elapsed();
+    black_box(read);
+    elapsed
+}
+
+/// AC-10 "The ratio": a whole read of a `parent:` chain of 8 000 costs at
+/// most 8x one of 2 000 (linear: 4x; quadratic: 16x), timed on `flow_read`
+/// alone, each graph built before, unbounded and at `--depth 0`; each
+/// measure the best of three, the sizes alternating, the 2 000 time floored
+/// at 50 ms. M: a per-member `ancestors` in `scope_of`, `parented` or
+/// `tree_of`; the fold climbing per call (at depth 0).
+#[test]
+fn a_chain_four_times_as_deep_reads_in_at_most_eight_times_the_time() {
+    let (small, large) = (2_000, 8_000);
+    let corpora = [chain_of(small), chain_of(large)];
+    let graphs: Vec<(SpecGraph<'_>, FlowConfig)> = corpora
+        .iter()
+        .map(|(text, config, input)| {
+            (
+                SpecGraph::new(input, &config.scheme, &config.paths),
+                FlowConfig::from_toml(text, &config.scheme),
+            )
+        })
+        .collect();
+    // The reads are the chain: every layer and the step, one edge.
+    for ((graph, flow), layers) in graphs.iter().zip([small, large]) {
+        let read = flow_read(
+            graph,
+            &FlowAsk {
+                roots: None,
+                depth: Some(0),
+                config: flow,
+                config_label: LABEL,
+                scope_name: "the-whole",
+            },
+        );
+        assert_eq!(
+            read.nodes.len(),
+            2,
+            "{layers}: the chain folds into its top"
+        );
+        let top = read
+            .nodes
+            .iter()
+            .find(|node| name_of(node) == "DEEP-00001")
+            .expect("the top");
+        assert_eq!(top.holds, layers - 1);
+    }
+    for depth in [None, Some(0)] {
+        let mut best = [Duration::MAX; 2];
+        for _ in 0..3 {
+            for (at, (graph, flow)) in graphs.iter().enumerate() {
+                best[at] = best[at].min(read_time(graph, flow, depth));
+            }
+        }
+        let floor = best[0].max(Duration::from_millis(50));
+        assert!(
+            best[1] <= floor * 8,
+            "depth {depth:?}: {large} layers took {:?}, {small} took {:?} (floored {floor:?}): \
+             more than 8x",
+            best[1],
+            best[0]
+        );
+    }
 }

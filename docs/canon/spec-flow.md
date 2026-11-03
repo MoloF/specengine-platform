@@ -89,15 +89,15 @@ A cycle is Tarjan's component of two or more nodes or with a self-edge. Items so
 
 - Model: `FLOW_LINK_TYPES`, with `USES` and `SUPPLIES` consts; the `Direction` reads the link, `In` running target to source.
 - Core `flow_toml.rs` reads `[flow]` table by table and never fails: a table's first error stays on it. Selectors share `health_toml.rs`' reader and `check/health.rs`' judge (`documents_selected`).
-- Core `flow.rs` `flow_read` takes resolved links from `SpecGraph::edges`, builds the scope and steps, computes the ten rows before any fold, then folds by depth. Tarjan is iterative. `flow_walk` -> `FlowWalk {steps, distance}` is that walk with no row computed, for `spec trace`'s lanes; `stage_of` reads a file's `stage:`; `FlowNode.file` is what a read joins by.
+- Core `flow.rs` `flow_read` takes resolved links from `SpecGraph::edges`, builds the scope and steps, computes the ten rows before any fold, then folds by depth; one parent map and one fold per read keep it linear in `parent:` depth. Tarjan is iterative. `flow_walk` -> `FlowWalk {steps, distance}` is that walk with no row computed, for `spec trace`'s lanes; `stage_of` reads a file's `stage:`; `FlowNode.file` is what a read joins by.
 - CLI `flow.rs` resolves ROOT, caps and renders, owns the causes' wording (`cause_text`, `remedy`), and joins `TraceBadge` by file (`trace.rs` `flow_badges`). MCP `get_flow` with the closed `FlowDocument` mirror. Daemon route `View::Browser`.
 
 ## Known limits
 
 - Gap rows are never cut, so one `cycle-no-repeat` or `two-starts` item can pass `OUTPUT_CAP_CHARS`: a 4 000-member ring measured 48 034 characters on one row. The tail's "lower --depth" cannot shrink a row.
-- The read is quadratic in `parent:` depth: a chain of 1 000, 2 000, 4 000 took 0.58, 2.39, 9.79 s in debug (RM-0076).
+- `--trace` and `spec trace` count each node's held documents again (`trace.rs` `counts`): quadratic in `parent:` depth (RM-0070).
 - A read names no exit step: `Steps.leaving` is computed for rows, not served.
 
 ## Tests
 
-Fixtures `fixtures/flow-gaps` (a library's lending, no game word), `flow-relay`, `flow-hire`, `trace-almanac`, `spec-c`. Core and CLI `tests/flow_read.rs`, CLI `trace_views.rs`, MCP `tests/mcp_flow.rs`, http `tests/flow.rs`; the lines: CLI `flow_authoring.rs`, MCP `mcp_flow_authoring.rs`; `check_genre.rs`, `no_domain.rs` and the CLI and MCP genre scans cover the sources. Unpinned: three or more `parallel` branches.
+Fixtures `fixtures/flow-gaps` (a library's lending, no game word), `flow-relay`, `flow-hire`, `trace-almanac`, `spec-c`. Core and CLI `tests/flow_read.rs`, CLI `trace_views.rs`, `flow_linear.rs`, MCP `tests/mcp_flow.rs`, http `tests/flow.rs`; the lines: CLI `flow_authoring.rs`, MCP `mcp_flow_authoring.rs`; `check_genre.rs`, `no_domain.rs` and the CLI and MCP genre scans cover the sources. Unpinned: three or more `parallel` branches.

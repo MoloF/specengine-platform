@@ -50,7 +50,7 @@ Alias expansion cap 10 000 (`MAX_ALIAS_EXPANSION`) replayed events, over it one 
 
 ## Token estimator
 
-`tokens_est = ceil(Σ weight(char))`, in thousandths per class: ASCII letter or digit 350, other ASCII 1400, whitespace 150, Cyrillic 450, other 1000; a document costs the whole file, a section its span; saturating `u32`. Calibrated against `claude-opus-5-5` (`count_tokens`, 2026-10-04: `fixtures/token-calibration/reference.json`): each sample ±15 %, sum not below; a new tokenizer: a new reference and `INDEX_FORMAT`.
+`tokens_est = tokens_of(thousandths)`: Σ weight(char), thousandths per class: ASCII letter or digit 350, other ASCII 1400, whitespace 150, Cyrillic 450, other 1000; rounded up once, saturating `u32`; a document costs its file, a section its span. Calibrated on `claude-opus-5-5` (2026-10-04, `fixtures/token-calibration/reference.json`): each sample ±15 %, sum not below; a new tokenizer: a new reference and `INDEX_FORMAT`.
 
 ## Open owner questions
 

@@ -31,11 +31,24 @@ mod weight {
 }
 
 /// Estimated tokens of `text`; 0 for an empty text, saturating at `u32::MAX`.
+/// Always `tokens_of(thousandths(text))`: a caller that sums the parts'
+/// [`thousandths`] and rounds once gets exactly the concatenation's estimate.
 pub fn tokens_est(text: &str) -> u32 {
-    let mut thousandths: u64 = 0;
+    tokens_of(thousandths(text))
+}
+
+/// Σ weight(char) of `text`, in thousandths of a token, saturating. Additive:
+/// `thousandths(a + b) == thousandths(a).saturating_add(thousandths(b))`.
+pub fn thousandths(text: &str) -> u64 {
+    let mut sum: u64 = 0;
     for c in text.chars() {
-        thousandths = thousandths.saturating_add(weight_of(c));
+        sum = sum.saturating_add(weight_of(c));
     }
+    sum
+}
+
+/// Thousandths rounded up once to tokens, saturating at `u32::MAX`.
+pub fn tokens_of(thousandths: u64) -> u32 {
     u32::try_from(thousandths.div_ceil(1000)).unwrap_or(u32::MAX)
 }
 

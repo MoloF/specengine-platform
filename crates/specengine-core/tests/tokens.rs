@@ -10,12 +10,18 @@
 //! the whole, Russian prose costs more than English of equal character
 //! count, repeat calls agree, and every fixture node carries the estimate of
 //! its own span.
+//!
+//! docs/features/flow-linear.md AC-11 "The halves": `tokens_est` is
+//! `tokens_of(thousandths(..))` on every fixture text and on seeded texts
+//! of every character class; `thousandths` adds over any split; `tokens_of`
+//! rounds up once and saturates.
 
 mod common;
 
 use std::fs;
 
 use serde_json::Value;
+use specengine_core::tokens::{thousandths, tokens_of};
 use specengine_core::tokens_est;
 
 use common::{corpus_scheme, fixture, md_files, text_of};
@@ -265,5 +271,111 @@ fn the_weights_carry_reasons_and_the_module_doc_names_the_reference() {
             module_doc.contains(named),
             "module doc names {named}: {module_doc}"
         );
+    }
+}
+
+// ------------------------------------------------- flow-linear: the halves
+
+/// A seeded text of every character class: ASCII letters and digits, other
+/// ASCII, whitespace, Cyrillic, CJK, emoji, accented Latin.
+fn seeded_text(seed: u64) -> String {
+    let mut state = seed.wrapping_mul(2_862_933_555_777_941_757).wrapping_add(3);
+    let mut next = |n: u32| -> u32 {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        u32::try_from((state >> 33) % u64::from(n)).expect("below n")
+    };
+    let length = next(120);
+    (0..length)
+        .map(|_| {
+            let (base, span) = match next(7) {
+                0 => (u32::from(b'a'), 26),
+                1 => (u32::from(b'0'), 10),
+                2 => (u32::from(b'!'), 15),
+                3 => (u32::from(b' '), 1),
+                4 => (0x0410, 0x40),
+                5 => (0x4E00, 0x0500),
+                _ => (0x1F600, 0x50),
+            };
+            char::from_u32(base + next(span)).expect("a scalar value")
+        })
+        .chain(std::iter::once('\u{e9}').take(usize::from(seed.is_multiple_of(3))))
+        .collect()
+}
+
+/// AC-11 "The halves": `tokens_est(t) == tokens_of(thousandths(t))` on the
+/// fixture texts and on 2 000 seeded texts.
+#[test]
+fn the_estimate_is_its_two_halves() {
+    for (name, text) in fixture_texts() {
+        assert_eq!(tokens_est(&text), tokens_of(thousandths(&text)), "{name}");
+    }
+    for seed in 0..2_000 {
+        let text = seeded_text(seed);
+        assert_eq!(tokens_est(&text), tokens_of(thousandths(&text)), "{text:?}");
+    }
+}
+
+/// AC-11 "The halves": `thousandths(a + b) == thousandths(a) +
+/// thousandths(b)`, over every fixture text cut at a few character
+/// boundaries and over seeded pairs; the spec's worked weights.
+#[test]
+fn thousandths_add_over_any_split() {
+    for (name, text) in fixture_texts() {
+        let ends: Vec<usize> = text
+            .char_indices()
+            .map(|(at, _)| at)
+            .chain(std::iter::once(text.len()))
+            .collect();
+        let step = (ends.len() / 7).max(1);
+        for &at in ends.iter().step_by(step) {
+            let (a, b) = text.split_at(at);
+            assert_eq!(
+                thousandths(&text),
+                thousandths(a) + thousandths(b),
+                "{name} at {at}"
+            );
+        }
+    }
+    for seed in 0..1_000 {
+        let (a, b) = (seeded_text(seed), seeded_text(seed + 50_000));
+        assert_eq!(
+            thousandths(&format!("{a}{b}")),
+            thousandths(&a) + thousandths(&b),
+            "{a:?} + {b:?}"
+        );
+    }
+    // docs/features/flow-linear.md "Data", the decision worked.
+    assert_eq!(thousandths("abc"), 1_050);
+    assert_eq!(thousandths(" d"), 500);
+    assert_eq!(thousandths("abc d"), 1_550);
+    assert_eq!(tokens_of(thousandths("abc d")), 2);
+    assert_eq!(
+        tokens_of(thousandths("abc")) + tokens_of(thousandths(" d")),
+        3
+    );
+    assert_eq!(thousandths("\u{0434}"), 450);
+    assert_eq!(thousandths("\u{4E2D}"), 1_000);
+    assert_eq!(thousandths("\u{1F600}"), 1_000);
+    assert_eq!(thousandths(""), 0);
+}
+
+/// AC-11 "The halves": `tokens_of` rounds up once and saturates at
+/// `u32::MAX`.
+#[test]
+fn tokens_of_rounds_up_once_and_saturates() {
+    for (thousandths, tokens) in [
+        (0, 0),
+        (1, 1),
+        (999, 1),
+        (1_000, 1),
+        (1_001, 2),
+        (2_000, 2),
+        (u64::from(u32::MAX) * 1_000, u32::MAX),
+        (u64::from(u32::MAX) * 1_000 + 1, u32::MAX),
+        (u64::MAX, u32::MAX),
+    ] {
+        assert_eq!(tokens_of(thousandths), tokens, "{thousandths}");
     }
 }
