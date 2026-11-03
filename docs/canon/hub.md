@@ -101,7 +101,7 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 ## Known limits
 
 - **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. The gate (step 11b-3) checks what the door answers to a JSON request.
-- **Streams.** `tail.rs` is judged at connect, so a stream outlives a session until RM-0065.
+- **Streams.** `tail.rs` is judged at connect, so a stream outlives a session until RM-0075.
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0074).
 - **Scale.** Until `scale-reads` (RM-0054) a team waits behind O(n) reads.
 - **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy encodes it, `%23` (`hub-deploy.md`).

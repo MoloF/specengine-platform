@@ -125,7 +125,7 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 - A login's AI reads others' proposals and cards: they are data, never a decision.
 - A bearer `Remote-User` that is an email or a UUID would split a person in two; the deployment's Basic user is the door login.
 - Answers carry the corpus to the client's model provider.
-- A GET stream outlives a login door session, as `tail.rs`'s stream does.
+- A GET stream outlives a login door session, as `tail.rs`'s does, until RM-0075.
 - A forged `Remote-User` raises proposals as anyone: no real use before the gate, step 11b-3.
 - No limit bounds the calls waiting for one project's turn (RM-0054).
 - A request body's buffer is reserved from its `Content-Length`, at most the 4 MiB cap.
