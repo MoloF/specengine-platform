@@ -30,6 +30,10 @@
 //!   (`SessionConfig.keep_alive`), a DELETE by its own login or an eviction
 //!   ends one. A session id is never printed, stored or answered but in
 //!   rmcp's own header; it only refuses, and is no login, author or actor.
+//!   A 2xx GET's stream ends [`STREAM_LIFE`] after its answer, between two
+//!   frames, sending nothing more; the session is neither closed nor
+//!   unbound, and the client reopens the stream through the fence and the
+//!   judge, `Last-Event-ID` resuming it. A POST's answer is never capped.
 //!
 //! The stateless era (2026-07-28) opens no session: nothing is bound.
 
@@ -64,7 +68,7 @@ use tokio::sync::{Mutex, oneshot};
 
 use crate::answer::{self, error};
 use crate::app::{Shared, unknown_route_of};
-use crate::hub::{Hub, Login};
+use crate::hub::{Hub, Login, STREAM_LIFE, lived};
 use crate::start::Project;
 
 /// Sessions one login may hold in one project (S1).
@@ -174,6 +178,8 @@ pub(crate) struct Mounts {
 struct Inner {
     mounts: Vec<Mount>,
     table: Mutex<Table>,
+    /// A GET stream's life ([`crate::hub::lived`]): it ends, its session not.
+    life: Duration,
     /// Calls of rmcp's `handle` (H19's counting seam): test builds alone.
     #[cfg(test)]
     handled: AtomicUsize,
@@ -193,7 +199,7 @@ impl fmt::Debug for Mounts {
 
 impl Mounts {
     /// The mounts of a hub serving `projects` at `hub`'s origin, rmcp's idle
-    /// end its default (300 s).
+    /// end its default (300 s), a GET stream's life [`STREAM_LIFE`].
     pub(crate) fn new(projects: &[Arc<Project>], hub: &Hub) -> Self {
         Self::with_idle(projects, hub, None)
     }
@@ -201,6 +207,17 @@ impl Mounts {
     /// As [`Self::new`], a session ending after `idle` without a request
     /// when given (H17's unit test).
     pub(crate) fn with_idle(projects: &[Arc<Project>], hub: &Hub, idle: Option<Duration>) -> Self {
+        Self::with_ends(projects, hub, idle, STREAM_LIFE)
+    }
+
+    /// As [`Self::with_idle`], a GET stream ending `life` after its answer
+    /// (the units of docs/features/stream-life.md "Acceptance criteria").
+    pub(crate) fn with_ends(
+        projects: &[Arc<Project>],
+        hub: &Hub,
+        idle: Option<Duration>,
+        life: Duration,
+    ) -> Self {
         // rmcp's defaults but the two allow-lists (docs/features/hub-mcp.md
         // "Data"): legacy sessions on, SSE responses, keep-alive 15 s, retry
         // 3 s, a 4 MiB body, no session store, no stateless metadata
@@ -238,6 +255,7 @@ impl Mounts {
             inner: Arc::new(Inner {
                 mounts,
                 table: Mutex::new(Table::default()),
+                life,
                 #[cfg(test)]
                 handled: AtomicUsize::new(0),
             }),
@@ -314,8 +332,23 @@ impl Mounts {
         if method == Method::POST && named.is_none() {
             return inner.bound(mount, login, response).await;
         }
+        // A GET stream ends at its life, the session held and bound; a POST's
+        // answer ends with it, never capped (`docs/canon/hub-mcp.md`
+        // "Sessions").
+        if method == Method::GET {
+            return lived_body(response, inner.life);
+        }
         response
     }
+}
+
+/// `response` with its body ended `life` after this call, between two of
+/// rmcp's frames, each one whole event or keep-alive comment; nothing is
+/// sent at the end, and nothing is closed or unbound.
+fn lived_body(response: Response, life: Duration) -> Response {
+    let (parts, body) = response.into_parts();
+    let frames = lived(body.into_data_stream(), Some(life));
+    Response::from_parts(parts, Body::from_stream(frames))
 }
 
 /// Answers an `initialize` (rmcp's answer, then the bind or the 503) in a
@@ -680,6 +713,12 @@ impl Mounts {
         bound.sort();
         (held, bound)
     }
+
+    /// The life of a 2xx GET answer's body (docs/features/stream-life.md
+    /// SL2, SL4).
+    pub(crate) fn life(&self) -> Duration {
+        self.inner.life
+    }
 }
 
 #[cfg(test)]
@@ -780,6 +819,153 @@ mod tests {
             let login = format!("m{:02}", n / MCP_SESSIONS_PER_LOGIN);
             assert!(open(&mounts, &login).await.is_some(), "a freed place: {n}");
         }
+    }
+
+    /// SL4's GET life: short, yet past the time a debug build takes to answer.
+    const LIFE: Duration = Duration::from_secs(1);
+
+    /// A GET naming `id` as the fence hands it on: the hub's `Host`, SSE out,
+    /// the legacy protocol version, and `Last-Event-ID` when given.
+    fn stream_get(id: &str, last_event_id: Option<&str>) -> Request {
+        let mut builder = axum::http::Request::builder()
+            .method(Method::GET)
+            .uri(format!("/mcp/{SLUG}"))
+            .header("host", "hub.example.test")
+            .header("accept", "text/event-stream")
+            .header("mcp-session-id", id)
+            .header("mcp-protocol-version", "2025-11-25");
+        if let Some(last) = last_event_id {
+            builder = builder.header("last-event-id", last);
+        }
+        builder.body(Body::empty()).expect("a request")
+    }
+
+    /// `response`'s body read to its end: its text and when it ended since
+    /// `started`; a failure when it is still open at `started + by`.
+    async fn ended_body(
+        response: Response,
+        started: tokio::time::Instant,
+        by: Duration,
+    ) -> (String, Duration) {
+        use futures_util::StreamExt as _;
+        let mut body = response.into_body().into_data_stream();
+        let mut sent = Vec::new();
+        loop {
+            match tokio::time::timeout_at(started + by, body.next()).await {
+                Ok(Some(chunk)) => sent.extend_from_slice(&chunk.expect("a body chunk")),
+                Ok(None) => {
+                    return (String::from_utf8(sent).expect("UTF-8"), started.elapsed());
+                }
+                Err(_) => panic!("still open at {by:?}: {:?}", String::from_utf8_lossy(&sent)),
+            }
+        }
+    }
+
+    /// `response` is `text/event-stream`.
+    fn assert_sse(response: &Response, context: &str) {
+        let kind = response
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok());
+        assert!(
+            kind.is_some_and(|kind| kind.starts_with("text/event-stream")),
+            "{context}: {kind:?}"
+        );
+    }
+
+    /// SL4 of docs/features/stream-life.md: `Mounts` with the GET life
+    /// [`LIFE`] and rmcp's idle end its default. A GET naming a session is a
+    /// 200 `text/event-stream` opening with the priming (`id: 0`,
+    /// `retry: 3000`), and ends at no less than `LIFE` and before 2 s past
+    /// it, on a blank line. The session lives on: its `tools/list` is a 200,
+    /// and rmcp and the table both hold it. A GET with `Last-Event-ID: 0` is
+    /// a 200 `text/event-stream` and ends again at no less than `LIFE`;
+    /// another login naming the id gets the 404 bytes. M: no wrap on a GET;
+    /// the end closing or unbinding the session; `Mounts::new`'s life in
+    /// place of the injected one.
+    #[tokio::test]
+    async fn sl4_a_get_stream_ends_after_its_life_and_the_session_lives_on() {
+        let project = Arc::new(Project {
+            slug: SLUG.to_owned(),
+            root: std::env::temp_dir(),
+            turn: Arc::new(Mutex::new(())),
+        });
+        let hub = Hub::parse("https://hub.example.test").expect("an origin");
+        let mounts = Mounts::with_ends(&[project], &hub, None, LIFE);
+        assert_eq!(mounts.life(), LIFE, "the injected life");
+        let id = open(&mounts, "mira").await.expect("a session");
+        let both = (vec![id.clone()], vec![id.clone()]);
+        let by = LIFE + Duration::from_secs(2);
+
+        let started = tokio::time::Instant::now();
+        let first = mounts.answer(SLUG, "mira", stream_get(&id, None)).await;
+        assert_eq!(first.status(), StatusCode::OK, "the GET");
+        assert_sse(&first, "the GET");
+        let (sent, ended) = ended_body(first, started, by).await;
+        assert!(
+            ended >= LIFE,
+            "the GET ended at {ended:?}, before its life: {sent:?}"
+        );
+        assert!(
+            sent.ends_with("\n\n"),
+            "the GET's end is no blank line: {sent:?}"
+        );
+        let mut blocks = sent.trim_end_matches('\n').split("\n\n");
+        let priming: Vec<&str> = blocks.next().unwrap_or_default().lines().collect();
+        assert!(
+            priming.contains(&"id: 0") && priming.contains(&"retry: 3000"),
+            "the priming: {sent:?}"
+        );
+        assert!(
+            blocks.all(|block| block.lines().all(|line| line.starts_with(':'))),
+            "past the priming, keep-alive comments alone: {sent:?}"
+        );
+
+        let listed = mounts.answer(SLUG, "mira", post(Some(&id), LIST)).await;
+        assert_eq!(
+            listed.status(),
+            StatusCode::OK,
+            "tools/list after the GET's end"
+        );
+        let listed = tokio::time::timeout(Duration::from_secs(10), body_of(listed))
+            .await
+            .expect("the tools/list body ends");
+        let listed = String::from_utf8_lossy(&listed);
+        assert!(listed.contains("\"tools\""), "{listed}");
+        assert_eq!(
+            mounts.sessions(SLUG).await,
+            both,
+            "rmcp and the table hold the session"
+        );
+
+        let started = tokio::time::Instant::now();
+        let resumed = mounts
+            .answer(SLUG, "mira", stream_get(&id, Some("0")))
+            .await;
+        assert_eq!(
+            resumed.status(),
+            StatusCode::OK,
+            "the GET with Last-Event-ID: 0"
+        );
+        assert_sse(&resumed, "the GET with Last-Event-ID: 0");
+        let (sent, ended) = ended_body(resumed, started, by).await;
+        assert!(
+            ended >= LIFE,
+            "the second GET ended at {ended:?}, before its life: {sent:?}"
+        );
+        assert_eq!(
+            mounts.sessions(SLUG).await,
+            both,
+            "the session held past the second end"
+        );
+
+        let foreign = mounts.answer(SLUG, "tomas", stream_get(&id, None)).await;
+        assert_eq!(
+            foreign.status(),
+            StatusCode::NOT_FOUND,
+            "another login's GET"
+        );
+        assert_eq!(body_of(foreign).await, SESSION_NOT_FOUND.as_bytes());
     }
 
     /// A hub serving `lantern-keep` alone, rmcp's idle end its default.

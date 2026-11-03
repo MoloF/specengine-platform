@@ -125,6 +125,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/spec-parser.md](features/spec-parser.md) shipped
 - [docs/features/spec-serve.md](features/spec-serve.md) shipped
 - [docs/features/spec-verify.md](features/spec-verify.md) shipped
+- [docs/features/stream-life.md](features/stream-life.md) shipped
 - [docs/features/symbol-discriminator.md](features/symbol-discriminator.md) shipped
 - [docs/features/symbol-index.md](features/symbol-index.md) shipped
 - [docs/features/symbol-reads.md](features/symbol-reads.md) shipped
@@ -187,4 +188,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0069.md](roadmap/RM-0069.md) shipped
 - [docs/roadmap/RM-0071.md](roadmap/RM-0071.md) shipped
 - [docs/roadmap/RM-0072.md](roadmap/RM-0072.md) shipped
+- [docs/roadmap/RM-0075.md](roadmap/RM-0075.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

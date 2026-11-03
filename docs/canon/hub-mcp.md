@@ -42,7 +42,7 @@ Held in memory only: session id -> slug, login, last use. The ids are rmcp's, a 
   - A login's fifth session in a project closes that login's least recently used one there.
   - Past 64, the new session is closed and the answer is 503 `refused: this hub holds 64 MCP sessions, its cap: try again once one ends`.
   - No login's session is ever closed for another's.
-- **Life.** A session ends at a restart, after 300 s idle, at a DELETE by its own login, or at an eviction. The stateless era opens none.
+- **Life.** A session ends at a restart, after 300 s idle, at its own login's DELETE, or at an eviction. The stateless era opens none. A GET stream (one resuming a POST's too) ends 300 s after it opens, not its session, which rmcp's idle, re-armed by that GET first, ends. Nothing rides it (no hub tool notifies or asks): a reconnect loses nothing.
 - **Stored nowhere, naming no one.** No id appears in the queue, an event, a dump, a trailer, a commit, an answer body or stderr. A session only refuses: it is never a login, an author, an actor, a `run` or an argument.
 
 ## Turn
@@ -121,26 +121,23 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 
 ## Known limits
 
-- AI reads wait in the turn beside the page's, until RM-0054.
+- Until RM-0054, AI reads wait in the turn beside the page's, and no limit bounds the calls waiting for a project's turn.
 - A login's AI reads others' proposals and cards: they are data, never a decision.
 - A bearer `Remote-User` that is an email or a UUID would split a person in two; the deployment's Basic user is the door login.
 - Answers carry the corpus to the client's model provider.
-- A GET stream outlives a login door session, as `tail.rs`'s does, until RM-0075.
 - A forged `Remote-User` raises proposals as anyone: no real use before the gate, step 11b-3.
-- No limit bounds the calls waiting for one project's turn (RM-0054).
 - A request body's buffer is reserved from its `Content-Length`, at most the 4 MiB cap.
 - A body that is no JSON-RPC message but names an unknown tool is refused as one, where rmcp would answer a parse error.
 - A duplicated JSON key can cost up to three parses of one body.
 - `Mounts::shutdown` effectively never runs: sessions end with the process.
 - The drop-safe bind has no end-to-end test; the window is one task's step.
-- Open until the client check: whether claude.ai sends an `Origin` header and PAR, and which `Remote-User` a bearer request gets.
 
 ## Client check
 
 By hand at the gate, not yet run; findings land in `hub-deploy.md` "Gate" with the client's version and the date.
-1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http ... --header "Authorization: Basic ..."`. Expected: the session and GET stream hold, 17 tools, `login` on a proposal and a card, a second login's own sessions.
+1. **Claude Code on the laptop:** a hub on a name resolving to loopback (not `localhost`), behind a local TLS proxy with `basicAuth` on `/mcp` and `headerField: Remote-User`; `claude mcp add --transport http ... --header "Authorization: Basic ..."`. Expected: the session holds, the GET stream reopens at 300 s, 17 tools, `login` on a proposal and a card, a second login's own sessions.
 2. **claude.ai and Claude Desktop, at the gate, step 11b-3,** on the public origin: whether the connector's OAuth client sends PAR, which Authelia requires of bearer-authz clients; whether it sends an `Origin`; which `Remote-User` a bearer request gets. Until then "writers install nothing" is a working answer.
 
 ## Tests
 
-http `tests/hub_mcp.rs` (H1-H11, H13-H20 of `docs/features/hub-mcp.md`), its client `tests/common/mcp_http.rs` (both eras, `Mcp-Session-Id`, SSE frames); `tests/hub.rs` (`GET_ROUTES` with `/mcp/{p}`, the fence order with `Authorization`); `tests/door.rs` (`specengine_mcp` named in `src/mcp.rs` alone); units in `src/hub.rs` (item 6's rule) and `src/mcp.rs` (idle, the bound count, the `handle` counter: H17's idle and H19 are proven there alone). mcp `tests/mcp_hub.rs` (the 17, the texts' budget), `mcp_genre.rs`; eval `build_graph.rs` (the daemon's ten dependencies, rmcp's feature, the seven crates' versions). UI `src/inbox/ProposalCard.test.tsx`.
+http `tests/hub_mcp.rs` (H1-H11, H13-H20 of `docs/features/hub-mcp.md`), its client `tests/common/mcp_http.rs` (both eras, `Mcp-Session-Id`, SSE frames); `tests/hub.rs` (`GET_ROUTES` with `/mcp/{p}`, the fence order with `Authorization`); `tests/door.rs` (`specengine_mcp` named in `src/mcp.rs` alone); units in `src/hub.rs` (item 6's rule) and `src/mcp.rs` (idle, life, the bound count, the `handle` counter: H17's idle and H19 are proven there alone). mcp `tests/mcp_hub.rs` (the 17, the texts' budget), `mcp_genre.rs`; eval `build_graph.rs` (the daemon's ten dependencies, rmcp's feature, the seven crates' versions). UI `src/inbox/ProposalCard.test.tsx`.

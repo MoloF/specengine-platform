@@ -31,9 +31,12 @@
 
 use std::net::Ipv4Addr;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::http::header::{AUTHORIZATION, HOST, ORIGIN};
 use axum::http::{HeaderMap, HeaderName, Method, StatusCode};
+use futures_util::future::Either;
+use futures_util::{Stream, StreamExt as _};
 use specengine_cli::{TeamConfig, TeamEntry, hub_login_problem, team_read};
 
 use crate::answer::{self, Refusal};
@@ -43,6 +46,25 @@ use crate::start::Project;
 /// The proxy's one login header: a constant, so no flag can name a header
 /// the proxy does not scrub.
 pub(crate) const REMOTE_USER: HeaderName = HeaderName::from_static("remote-user");
+
+/// A hub's streams' maximum life: the events tail and `/mcp`'s GET (ADR-0068,
+/// RM-0075). A constant, so no flag, key or variable can lift the bound a
+/// disable relies on; not below rmcp's idle end, 300 s, so a GET-only
+/// client's reconnects keep no idle session (`docs/canon/hub-mcp.md`
+/// "Sessions").
+pub(crate) const STREAM_LIFE: Duration = Duration::from_secs(300);
+
+/// `stream`, ending once `life` has passed since this call, on tokio's
+/// clock, between two items, sending nothing more: an item taken from
+/// `stream` is always yielded whole, so a client's last event ID is the last
+/// whole event's (`docs/canon/serve.md` "Live tail"). `None`: `stream` as
+/// given, never ended for its age (a local daemon).
+pub(crate) fn lived<S: Stream>(stream: S, life: Option<Duration>) -> impl Stream<Item = S::Item> {
+    match life {
+        Some(life) => Either::Left(stream.take_until(tokio::time::sleep(life))),
+        None => Either::Right(stream),
+    }
+}
 
 const SEC_FETCH_SITE: HeaderName = HeaderName::from_static("sec-fetch-site");
 const SEC_FETCH_MODE: HeaderName = HeaderName::from_static("sec-fetch-mode");
@@ -1454,5 +1476,81 @@ mod tests {
             fenced_lines(page, "^/"),
             ["^/mcp/[^/]+$", "^/api/projects/a$"]
         );
+    }
+
+    // ------------------------------------------------- stream-life SL1
+
+    /// SL1's life: short, yet long against a loaded debug build's scheduling.
+    const SL1_LIFE: Duration = Duration::from_millis(800);
+
+    /// Three items at once, then nothing.
+    fn three_then_nothing() -> impl Stream<Item = u8> {
+        use futures_util::StreamExt as _;
+        futures_util::stream::iter([1, 2, 3]).chain(futures_util::stream::pending())
+    }
+
+    /// SL1 of docs/features/stream-life.md, a life: the three come at once,
+    /// whole and in order, then the stream ends at no less than its life and
+    /// before a second past it, nothing yielded in between. M: the stream
+    /// passed through; ended at once.
+    #[tokio::test]
+    async fn sl1_a_lived_stream_ends_after_its_life_between_items() {
+        use futures_util::StreamExt as _;
+        let started = tokio::time::Instant::now();
+        let mut items = std::pin::pin!(lived(three_then_nothing(), Some(SL1_LIFE)));
+        let by = started + SL1_LIFE + Duration::from_secs(1);
+        let mut got = Vec::new();
+        let ended = loop {
+            match tokio::time::timeout_at(by, items.next()).await {
+                Ok(Some(item)) => got.push((item, started.elapsed())),
+                Ok(None) => break started.elapsed(),
+                Err(_) => panic!("still open a second past its life, after {got:?}"),
+            }
+        };
+        let order: Vec<u8> = got.iter().map(|(item, _)| *item).collect();
+        assert_eq!(order, [1, 2, 3], "the three, whole and in order");
+        for (item, at) in &got {
+            assert!(*at < SL1_LIFE, "{item} came at {at:?}, not at once");
+        }
+        assert!(ended >= SL1_LIFE, "ended at {ended:?}, before its life");
+        assert!(
+            ended < SL1_LIFE + Duration::from_secs(1),
+            "ended at {ended:?}"
+        );
+    }
+
+    /// SL1, no life: the three come, and the stream is still open at three
+    /// times the life above. M: `None` read as a life of 3L or less.
+    #[tokio::test]
+    async fn sl1_a_stream_with_no_life_is_still_open_at_three_lives() {
+        use futures_util::StreamExt as _;
+        let mut items = std::pin::pin!(lived(three_then_nothing(), None));
+        for want in [1, 2, 3] {
+            let got = tokio::time::timeout(SL1_LIFE, items.next()).await;
+            assert_eq!(got.ok(), Some(Some(want)), "item {want} at once");
+        }
+        let after = tokio::time::timeout(SL1_LIFE * 3, items.next()).await;
+        assert!(after.is_err(), "no life, yet at 3L: {after:?}");
+    }
+
+    /// SL1, no life, past 3L: `None` is the stream as given
+    /// (docs/features/stream-life.md "Data"), with no timer, so it is polled
+    /// outside any runtime. M: `None` read as any life, `STREAM_LIFE`
+    /// included, which a real clock cannot wait for.
+    #[test]
+    fn sl1_no_life_is_the_stream_as_given_with_no_timer() {
+        use std::task::{Context, Poll, Waker};
+        let mut items = std::pin::pin!(lived(three_then_nothing(), None));
+        let mut cx = Context::from_waker(Waker::noop());
+        for want in [1, 2, 3] {
+            assert_eq!(items.as_mut().poll_next(&mut cx), Poll::Ready(Some(want)));
+        }
+        for _ in 0..2 {
+            assert_eq!(
+                items.as_mut().poll_next(&mut cx),
+                Poll::Pending,
+                "still open"
+            );
+        }
     }
 }

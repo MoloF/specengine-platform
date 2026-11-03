@@ -50,4 +50,3 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
 - [docs/roadmap/RM-0073.md](roadmap/RM-0073.md) spec-ids (Phase 7): spec IDs that a hub and a terminal never mint twice · crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft
 - [docs/roadmap/RM-0074.md](roadmap/RM-0074.md) hub-ops (Phase 7, step 11b-2): off-host dumps, restore, upgrade, health and turning on --push · scripts/deploy · draft
-- [docs/roadmap/RM-0075.md](roadmap/RM-0075.md) stream-life (Phase 7, step 11c-2): a hub's streams end after a maximum life · crates/specengine-http · draft

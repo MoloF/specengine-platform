@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-02
+reviewed: 2026-11-03
 ---
 
 # Hub mode: a public origin and one trusted login
@@ -54,7 +54,7 @@ The login is the person: recorded verbatim, compared exactly, never a display na
 
 ## Routes
 
-A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode. `GET .../team`, a hub's alone: `hub-team.md`; `.../sync`: `hub-git.md`.
+A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode. `GET .../team`, a hub's alone: `hub-team.md`; `.../sync`: `hub-git.md`. A hub's streams, the events tail and `/mcp`'s GET, end 300 s after they open (`serve.md` "Live tail", `hub-mcp.md` "Sessions"), so one outlives a disable or an expired door session by at most that.
 
 Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the five plain writes, POST on `.../cards` or `.../cards/:id/{move,edit,assign,cancel}`, and the team and confirm classes of `hub-team.md` "Classes". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
 
@@ -101,7 +101,7 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 ## Known limits
 
 - **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. The gate (step 11b-3) checks what the door answers to a JSON request.
-- **Streams.** `tail.rs` is judged at connect, so a stream outlives a session until RM-0075.
+- **A stalled reader.** A client that stops reading keeps its socket past a stream's life, not its events: the end waits for it to read again.
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0074).
 - **Scale.** Until `scale-reads` (RM-0054) a team waits behind O(n) reads.
 - **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy encodes it, `%23` (`hub-deploy.md`).

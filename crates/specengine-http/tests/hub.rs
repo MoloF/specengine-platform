@@ -44,6 +44,10 @@
 //! route added under GET that the pin does not list, kept as a test on a copy
 //! in memory of the live router.
 //!
+//! From docs/features/stream-life.md (RM-0075): SL5, a tail resumed through
+//! the proxy with `Last-Event-ID` gets every later event once. M: the opening
+//! cursor ignoring `Last-Event-ID`; resuming at `seq >= n`.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 mod common;
@@ -1986,4 +1990,101 @@ fn any_login_reads_every_served_project() {
             through(&server, "GET", &path, &person, b"").status(200);
         }
     }
+}
+
+// ------------------------------------------------- stream-life SL5
+
+/// The opening block of `tail`: its `id`, with no `event` and no `data`.
+fn opening_of(tail: &mut Stream) -> String {
+    loop {
+        let frame = tail
+            .next_frame(Duration::from_secs(20))
+            .expect("the opening block");
+        if frame.id.is_none() && frame.event.is_none() && frame.data.is_none() {
+            continue;
+        }
+        assert!(frame.event.is_none() && frame.data.is_none(), "{frame:?}");
+        return frame.id.expect("the opening id");
+    }
+}
+
+/// The next event on `tail`: its seq, type and payload.
+fn sequenced(tail: &mut Stream) -> (i64, String, Value) {
+    let frame = tail
+        .next_event(Duration::from_secs(20))
+        .expect("an event on the tail");
+    let seq = frame.id.as_deref().expect("an id").parse().expect("a seq");
+    let kind = frame.event.clone().expect("an event type");
+    let data = serde_json::from_str(frame.data.as_deref().expect("data")).expect("JSON");
+    (seq, kind, data)
+}
+
+/// SL5 of docs/features/stream-life.md: a resume loses nothing on a hub,
+/// through the test proxy. `mira`'s tail, opened with `Last-Event-ID: 0`,
+/// reads `C-0001`'s creation, seq c, then drops, as a life's end does;
+/// `tomas` moves and then edits the card; the tail reopened with
+/// `Last-Event-ID: c` opens `id: c`, then gives the move and the edit, in
+/// order, once each, and nothing else within 1 s. M: the opening cursor
+/// ignoring `Last-Event-ID` (the highest seq); resuming at `seq >= n`.
+#[test]
+fn sl5_a_resume_through_the_proxy_gets_each_later_event_once() {
+    let hub = Setup::new("hub-resume", "card-press").start();
+    let path = format!("{P}/events");
+    let mut tail = Stream::open_raw(
+        hub.server.port,
+        &path,
+        &Proxied::fetch("mira").plus("Last-Event-ID", "0").pairs(),
+    );
+    assert_eq!(tail.status, 200);
+    assert_eq!(opening_of(&mut tail), "0", "the first tail opens at 0");
+    let made = hub.done(
+        "mira",
+        "cards",
+        &json!({"title": "Back page", "discipline": "plates"}),
+    );
+    assert_eq!(made["id"], json!("C-0001"), "{made}");
+    let (c, kind, data) = sequenced(&mut tail);
+    assert_eq!(kind, "card.created", "{data}");
+    assert_eq!(data["id"], json!("C-0001"), "{data}");
+    assert_eq!(data["as"], json!("mira"), "{data}");
+    drop(tail);
+
+    hub.done("tomas", "cards/C-0001/move", &json!({"to": "checked"}));
+    hub.done(
+        "tomas",
+        "cards/C-0001/edit",
+        &json!({"goal": "Fill the back."}),
+    );
+    let stored: Vec<String> = hub.events().into_iter().map(|(kind, _)| kind).collect();
+    assert_eq!(stored, ["card.created", "card.moved", "card.edited"]);
+
+    let mut again = Stream::open_raw(
+        hub.server.port,
+        &path,
+        &Proxied::fetch("mira")
+            .plus("Last-Event-ID", &c.to_string())
+            .pairs(),
+    );
+    assert_eq!(again.status, 200);
+    assert_eq!(
+        opening_of(&mut again),
+        c.to_string(),
+        "the resume opens at c"
+    );
+    let (moved, kind, data) = sequenced(&mut again);
+    assert_eq!(kind, "card.moved", "first past c: {data}");
+    assert_eq!(data["id"], json!("C-0001"), "{data}");
+    assert_eq!(data["as"], json!("tomas"), "{data}");
+    assert!(moved > c, "the move {moved}, c {c}");
+    let (edited, kind, data) = sequenced(&mut again);
+    assert_eq!(kind, "card.edited", "second past c: {data}");
+    assert_eq!(data["id"], json!("C-0001"), "{data}");
+    assert_eq!(data["as"], json!("tomas"), "{data}");
+    assert!(edited > moved, "the edit {edited}, the move {moved}");
+    let rest = again.frames_within(Duration::from_secs(1));
+    assert!(
+        rest.iter()
+            .all(|frame| frame.id.is_none() && frame.event.is_none() && frame.data.is_none()),
+        "nothing else within 1 s: {rest:?}"
+    );
 }

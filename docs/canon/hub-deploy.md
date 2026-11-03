@@ -75,7 +75,7 @@ It alone writes `users.yml`, the MCP users file and the stamp `traefik/dynamic/m
 
 ## Gate
 
-Step 11b-3, by hand: the owner's session on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md`, G1-G10 of `hub-accounts.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here with versions and dates. Not yet run; `--push` and real people wait for it.
+Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md`, G1-G10 of `hub-accounts.md`, SG1-SG2 of `stream-life.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here, with versions and dates; `--push` and real people wait for it.
 
 ## Known limits
 

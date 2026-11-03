@@ -49,6 +49,7 @@
 //! (docs/features/hub-team.md).
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::Router;
 use axum::extract::{Request, State};
@@ -93,6 +94,9 @@ pub(crate) struct App {
     /// A hub's `/mcp/<slug>` (docs/features/hub-mcp.md): one MCP service per
     /// project and the session table; absent on a local daemon.
     pub mcp: Option<Mounts>,
+    /// A stream's maximum life: `Some(STREAM_LIFE)` on a hub, `None` locally,
+    /// where no stream ends for its age ([`hub::lived`]).
+    pub life: Option<Duration>,
 }
 
 pub(crate) type Shared = Arc<App>;
@@ -108,12 +112,17 @@ impl App {
         let syncs = push.map(|push| Syncs::new(&projects, push));
         // `--public-origin` is the whole switch (S5): no flag of its own.
         let mcp = hub.as_ref().map(|hub| Mounts::new(&projects, hub));
+        // A hub's streams end at their life, a local daemon's never: the
+        // switch is `hub` alone, no flag, key or variable
+        // (`docs/canon/serve.md` "Live tail").
+        let life = hub.as_ref().map(|_| hub::STREAM_LIFE);
         Self {
             projects,
             port,
             hub,
             syncs,
             mcp,
+            life,
         }
     }
 
@@ -1325,5 +1334,22 @@ mod tests {
             )
             .is_err()
         );
+    }
+
+    /// SL2 of docs/features/stream-life.md: the choice of life. `STREAM_LIFE`
+    /// is 300 s; a hub's `App` has it, and so do its mounts' GET streams; a
+    /// local daemon's has none and no mounts. M: `None` on a hub; `Some`
+    /// locally; 60 s.
+    #[tokio::test]
+    async fn sl2_a_hub_takes_the_stream_life_and_a_local_daemon_none() {
+        assert_eq!(hub::STREAM_LIFE, Duration::from_secs(300));
+        let origin = Hub::parse("https://hub.example.test").expect("an origin");
+        let on_hub = App::new(vec![], 0, Some(origin), None);
+        assert_eq!(on_hub.life, Some(hub::STREAM_LIFE), "a hub's life");
+        let mounts = on_hub.mcp.as_ref().expect("a hub's mounts");
+        assert_eq!(mounts.life(), hub::STREAM_LIFE, "its mounts' life");
+        let local = App::new(vec![], 0, None, None);
+        assert_eq!(local.life, None, "a local daemon's life");
+        assert!(local.mcp.is_none(), "{:?}", local.mcp);
     }
 }
