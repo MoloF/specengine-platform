@@ -239,7 +239,7 @@ Unless one says otherwise, each criterion runs `specengine-http --public-origin 
 
 ## Out of scope
 
-The board snapshot (RM-0052, step 10c); `/mcp` (RM-0053); `deploy/`, the clone script, the guide, the secret, forge rules and the image's git (RM-0064); `spec admin` (RM-0065); tags (RM-0056); `pushRemote` or a second branch; spec-ID collisions; a conflict-resolution UI; signed commits; a `spec check` before a push, which would be a gate; any route or terminal command that runs a sync; blob-filtered and shallow clones, which are refused.
+The board snapshot (RM-0052, step 10c); `/mcp` (RM-0053); `deploy/`, the clone script, the guide, the secret, forge rules and the image's git (RM-0064); `spec admin` (RM-0065); tags (RM-0056); `pushRemote` or a second branch; spec-ID collisions (RM-0073); a conflict-resolution UI; signed commits; a `spec check` before a push, which would be a gate; any route or terminal command that runs a sync; blob-filtered and shallow clones, which are refused.
 
 ## Implementation
 

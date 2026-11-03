@@ -92,7 +92,7 @@ Releases, priority, a `depends_on` chain, range estimates, a computed position, 
 | 10a | `apply-outputs` | RM-0072 | The index in every apply commit, rendered from the committed tree, terminal and hub; a hub mints `PR-` from a stored floor, `PR-100001`; no network | `apply-outputs`, `hub-ids` | 2-3 | 9b |
 | 10b | `hub-git` | RM-0051 | Sole writer, fetch, merge never rebase, push; push status and "N not pushed" in the UI | `hub-push` | 3-4.5 | 10a |
 | 10c | `board-in-git` | RM-0052 | The board's snapshot on a dedicated branch, checked by CI | `board-snapshot` | 2-4 | 10b |
-| 11 | `hub-mcp` | RM-0053 | `/mcp` with a session, identity to author, hub tools | - | 5-9 | 8 |
+| 11 | `hub-mcp` | RM-0053 | `/mcp` with a session, identity to author, hub tools | - | 6-9 | 8 |
 | 11b | `hub-deploy` | RM-0064 | `deploy/`, the image workflow: Docker compose, Traefik TLS, Authelia, moving a project, dumps | only if the bind changes | 3-5 | 8, 9b, 10b, 10c, 11 |
 | 11c | `hub-accounts` | RM-0065 | `spec admin`: accounts, disable, reset, audit, recovery from the host | owner-confirmed, by the slice | 3-5 | 8, 11b |
 | 12 | `scale-reads` | RM-0054 | Edge table, trusted index, bundle counts, synthetic 10k and 100k | - | 6-10 | 2 |
