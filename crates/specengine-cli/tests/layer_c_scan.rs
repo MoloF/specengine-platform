@@ -157,6 +157,12 @@ const LATER: &[&str] = &[
     // docs/features/apply-outputs.md: an output's inspection joins its
     // path components with `/`, as `export.rs` does; no SCIP descriptor.
     "crates/specengine-cli/src/outputs.rs",
+    // docs/features/hub-git.md: the sparse set ends a directory in `/`, the
+    // sync joins a ref's and a root's place with `/`, refuses the remote
+    // `.` and reads `push --porcelain`'s `!` flag; no SCIP descriptor.
+    "crates/specengine-cli/src/sync.rs",
+    "crates/specengine-store/src/sparse.rs",
+    "crates/specengine-store/src/sync.rs",
 ];
 
 /// R10's Cargo words: no literal of the store, core or CLI holds one.

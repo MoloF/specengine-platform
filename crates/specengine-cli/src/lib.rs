@@ -127,6 +127,10 @@
 //!   ([`Serve::Start`], `main` execs it); [`DaemonFile`] is `daemon.json`,
 //!   which only the daemon writes ([`prepared_data_dir`], [`checked_data_dir`]
 //!   its data directory, created and guarded);
+//! - [`sync_once`]: a hub's `--push` sync of one repository (task spec
+//!   `hub-git`), the look, fetch, merge (inside the caller's turns) and push,
+//!   never a rebase; [`hub_sync`] its status document; [`sparse`]: `spec
+//!   sparse-set`, the paths a hub's sparse checkout must hold;
 //! - [`verify`]: `spec verify [--changed] [--task T]`, a state per lock key
 //!   and marker binding, Fix, Check or Pre-existing findings, the verdict
 //!   under `[verify] mode`; its run causes are in the report (exit 2);
@@ -267,10 +271,12 @@ mod round;
 mod search;
 mod serve;
 mod show;
+mod sparse;
 mod stage;
 mod state;
 mod state_file;
 mod symbols;
+mod sync;
 mod task;
 mod team;
 #[cfg(unix)]
@@ -401,6 +407,7 @@ pub use serve::{
 pub use show::{
     NestedSection, ShowOutcome, ShowRequest, ShownBindings, ShownNode, show, show_with_view,
 };
+pub use sparse::{SparseOutcome, sparse};
 /// A card's caps (core's).
 pub use specengine_core::card::{
     EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, HISTORY_MAX, hub_login_problem,
@@ -454,6 +461,10 @@ pub use symbols::{
     SYMBOLS_LIMIT_DEFAULT, SYMBOLS_LIMIT_MAX, SYMBOLS_LIMIT_MIN, SymbolBinding, SymbolRole,
     SymbolTarget, SymbolsForm, SymbolsLayerC, SymbolsOutcome, SymbolsRequest, symbols,
     symbols_limit_error,
+};
+pub use sync::{
+    HubSync, SyncOutcome, SyncRepository, SyncState, hub_sync, shown_error, sync_key, sync_line,
+    sync_once,
 };
 pub use task::{
     TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListEntry, TaskListOutcome,
@@ -688,6 +699,8 @@ pub enum Outcome {
     /// [`round_stage_answers`] (no command; the daemon's): each structured
     /// answer staged or refused.
     RoundAnswers(Box<RoundAnswersOutcome>),
+    /// `sparse-set`: the paths a hub's sparse checkout must hold.
+    SparseSet(SparseOutcome),
 }
 
 impl Outcome {
@@ -789,6 +802,7 @@ impl Outcome {
             Self::RoundSheet(outcome) => (&outcome.messages, None),
             Self::Round(outcome) => (&outcome.messages, None),
             Self::RoundAnswers(outcome) => (&outcome.messages, None),
+            Self::SparseSet(outcome) => (&outcome.messages, None),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -843,6 +857,7 @@ impl Outcome {
                 | Self::RoundSheet(_)
                 | Self::Round(_)
                 | Self::RoundAnswers(_)
+                | Self::SparseSet(_)
         ) {
             for line in &mut lines {
                 *line = escape_controls(line);
@@ -899,6 +914,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::RoundSheet(outcome) => round::sheet_text(outcome),
         Outcome::Round(outcome) => round::render_text(outcome),
         Outcome::RoundAnswers(outcome) => round::answers_outcome_text(outcome),
+        Outcome::SparseSet(outcome) => sparse::render_text(outcome),
     }
 }
 
@@ -951,6 +967,7 @@ impl serde::Serialize for Outcome {
             Self::RoundSheet(outcome) => outcome.serialize(serializer),
             Self::Round(outcome) => outcome.serialize(serializer),
             Self::RoundAnswers(outcome) => outcome.serialize(serializer),
+            Self::SparseSet(outcome) => outcome.serialize(serializer),
         }
     }
 }

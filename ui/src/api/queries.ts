@@ -51,6 +51,8 @@ export const queryKeys = {
   proposal: (project: string, id: string) => ["proposal", project, id] as const,
   /** What a terminal would ask of a staged proposal (`docs/features/hub-confirm.md` "Data"): no event reads it, its dialog alone. */
   confirmRead: (project: string, id: string) => ["confirm", project, id] as const,
+  /** A `--push` hub's push status of the project's repository (`docs/features/hub-git.md` "Data"): no event reads it. */
+  sync: (project: string) => ["sync", project] as const,
   tree: (project: string, options: TreeOptions = {}) =>
     [
       "tree",
@@ -248,6 +250,27 @@ export function useIdentity() {
 export function useTeam(project: string, enabled: boolean) {
   const client = useClient();
   return useQuery({ queryKey: queryKeys.team(project), queryFn: ({ signal }) => client.getTeam(project, signal), enabled, refetchOnMount: false, refetchOnWindowFocus: true });
+}
+
+/** How often the shell asks a hub's push status while the page has focus (`docs/features/hub-git.md` "Status and the screen"). */
+export const SYNC_EVERY_MS = 30_000;
+
+/**
+ * The push status of the project's repository (`docs/features/hub-git.md` "Status and the screen"):
+ * a hub's route, so unread until `enabled`, a login known; then on window focus and every
+ * SYNC_EVERY_MS while the page is in front. A sync raises no event, so nothing else reads it again.
+ * A 404 (a local daemon's or a hub's without `--push`) and any other failure reject: the read says
+ * nothing then, and the next tick or focus asks again.
+ */
+export function useSync(project: string, enabled: boolean) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.sync(project),
+    queryFn: ({ signal }) => client.getSync(project, signal),
+    enabled,
+    refetchOnWindowFocus: true,
+    refetchInterval: SYNC_EVERY_MS,
+  });
 }
 
 export function useInbox(project: string) {

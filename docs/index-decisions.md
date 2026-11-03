@@ -71,3 +71,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0061](decisions/ADR-0061.md) On a hub a login [team] entitles confirms one staged choice · architecture · accepted
 - [ADR-0062](decisions/ADR-0062.md) An apply commit carries the index's outputs, rendered from the committed tree · architecture · accepted
 - [ADR-0063](decisions/ADR-0063.md) A hub's queue mints proposal IDs from a stored floor, PR-100001 upward · architecture · accepted
+- [ADR-0064](decisions/ADR-0064.md) A hub with --push fetches, merges and pushes its branch, never rebasing; credentials are git's · architecture · accepted

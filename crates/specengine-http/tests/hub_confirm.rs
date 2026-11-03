@@ -36,6 +36,9 @@
 //!   outputs as a terminal's does, and a gap commits the target alone with the
 //!   warning in the POST's `notes`. M: render only on the terminal path; the
 //!   partial walk rendered.
+//! - docs/features/hub-git.md (RM-0051) "The confirm dialog after a 200", the
+//!   daemon's half: a clean confirm's 200 document holds `notes: []`, with and
+//!   without the index's outputs in its commit. M: the outputs' note in `notes`.
 //!
 //! Elsewhere: B7 is `door.rs`, with its `git diff` a command; B10's dialog is
 //! `ui/src/inbox/ConfirmDialog.test.tsx`; B11's step-up regex is the unit
@@ -3625,5 +3628,41 @@ fn o8_a_hubs_confirm_with_a_gap_commits_the_target_alone_and_notes_why() {
             .iter()
             .any(|note| note.as_str().is_some_and(|note| note.contains(&warning))),
         "the warning in notes: {document}"
+    );
+}
+
+/// docs/features/hub-git.md "Status and the screen", **The confirm dialog after
+/// a 200**, the daemon's half: the dialog stays open on any note, so a clean
+/// confirm's 200 document holds `notes: []`. Two clean confirms: an update of
+/// the print shop, which renders no index, and O2's create on the game, whose
+/// one commit carries the index's outputs, rendered with no gap: the outputs'
+/// `note:` is the terminal's stderr alone, and only a gap's warning reaches the
+/// POST's `notes` (docs/canon/proposal-outputs.md "Messages"). M: the outputs'
+/// note appended to `notes`; a note on every confirm.
+#[test]
+fn a_clean_confirms_document_holds_no_notes() {
+    let (desk, id) = back_update_staged("confirm-clean-notes");
+    let document = desk.confirmed("lena", &id);
+    assert_eq!(document["status"], json!("applied"), "{document}");
+    assert_eq!(
+        document["notes"],
+        json!([]),
+        "an update, no index: {document}"
+    );
+
+    let desk = Desk::new(forge("confirm-clean-notes-outputs", None), FORGE);
+    let id = stamina_raised(desk.setup());
+    desk.staged("ann", &id, &approved_choice());
+    let document = desk.confirmed("ann", &id);
+    assert_eq!(document["status"], json!("applied"), "{document}");
+    assert_eq!(
+        name_status_of(&desk, &desk.head()),
+        [format!("A\t{STAMINA_PATH}"), "M\tdocs/index.md".to_owned()],
+        "the premise: the outputs rendered and committed"
+    );
+    assert_eq!(
+        document["notes"],
+        json!([]),
+        "a create with its outputs, no gap: {document}"
     );
 }

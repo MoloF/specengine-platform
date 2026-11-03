@@ -32,7 +32,7 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 - **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4); `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, no other on `document` or `window` for keys (`provider.tsx`'s `focusManager` is for focus). Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never left on `body` nor under a sticky bar (scroll padding).
 - **Text**: data is text, no HTML sink, each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), anything cut can be seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
 - **Canvas** (`@xyflow/react`, lazy, a hand-written layout): read-only, key options `null`, the wheel scrolls the page; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text.
-- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home), nine sections; "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`; `FlowState` with `stage`, `lanes`), but the Tree's Show drift, `specengine.flow.gaps-hidden` and `specengine.board.as` in `localStorage`; a root error boundary and one per view.
+- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home), nine sections; "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`; `FlowState` with `stage`, `lanes`), but the Tree's Show drift, `specengine.flow.gaps-hidden` and `specengine.board.as` in `localStorage`; a root error boundary and one per view; a hub's `SyncLine` beside the view (`hub-git.md`).
 
 ## Dependencies
 
@@ -84,7 +84,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow`, `conflict` (first POST refused), `large` (3000+ nodes, long columns), `cannot-check`, `editorial`, `code-cannot`, `not-configured`, `no-gaps` (`src/mocks/scenario.ts`); projects `harbor-sim` (`spec-roadmap-screen.md`), `ledger-api` (`proposal-drift.md`).
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#`: `normal`, `empty`, `error` (503s), `slow`, `conflict`, `large`, `cannot-check`, `editorial`, `code-cannot`, `not-configured`, `no-gaps` (`src/mocks/scenario.ts`); projects `harbor-sim` (`spec-roadmap-screen.md`), `ledger-api` (`proposal-drift.md`).
 
 ## Roles here
 

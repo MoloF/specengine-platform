@@ -1380,7 +1380,12 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// has decided the new route is safe on a hub, and writes it here. Do not add a
 /// line to make the test pass: add it once the route has been judged, for what
 /// it reads and for what a login may learn from it.
-const GET_ROUTES: [&str; 25] = [
+///
+/// docs/features/hub-git.md (RM-0051) judged `/api/projects/{p}/sync`, the
+/// 26th: mounted on a hub with `--push` alone, it reads the push status of the
+/// project's repository (`ahead`, `behind`, the last sync's state and its
+/// escaped error, never a URL), which every login may read (P18).
+const GET_ROUTES: [&str; 26] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1400,6 +1405,7 @@ const GET_ROUTES: [&str; 25] = [
     "/api/projects/{p}/roadmap",
     "/api/projects/{p}/round",
     "/api/projects/{p}/search",
+    "/api/projects/{p}/sync",
     "/api/projects/{p}/tasks",
     "/api/projects/{p}/tasks/{id}",
     "/api/projects/{p}/team",

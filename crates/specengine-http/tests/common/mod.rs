@@ -457,7 +457,10 @@ pub fn product_path() -> OsString {
     std::env::join_paths(dirs).expect("PATH")
 }
 
-fn real_git() -> PathBuf {
+/// The first executable `git` on the test process's `PATH`, else
+/// `/usr/bin/git`: the git every setup command and every wrapper of a test
+/// runs by its absolute path.
+pub fn real_git() -> PathBuf {
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
             let candidate = dir.join("git");
@@ -517,16 +520,22 @@ impl Git {
         }
     }
 
-    /// `git args` in `cwd`, which must succeed; its stdout.
-    pub fn run(&self, cwd: &Path, args: &[&str]) -> String {
-        let output = Command::new(real_git())
+    /// `git args` in `cwd`, whatever its outcome (an exit 1 that answers, as
+    /// `merge-base --is-ancestor`'s).
+    pub fn output(&self, cwd: &Path, args: &[&str]) -> std::process::Output {
+        Command::new(real_git())
             .env_clear()
             .envs(self.vars.iter().map(|(k, v)| (k, v)))
             .current_dir(cwd)
             .args(args)
             .stdin(Stdio::null())
             .output()
-            .expect("spawn git");
+            .expect("spawn git")
+    }
+
+    /// `git args` in `cwd`, which must succeed; its stdout.
+    pub fn run(&self, cwd: &Path, args: &[&str]) -> String {
+        let output = self.output(cwd, args);
         assert!(
             output.status.success(),
             "git {args:?} in {}: {}\n{}",
@@ -541,13 +550,18 @@ impl Git {
 // ------------------------------------------------------------ products
 
 /// The environment of a product process (daemon, `spec`,
-/// `specengine-mcp`): `HOME`, `PATH`, git's configs off.
+/// `specengine-mcp`): `HOME`, `PATH`, git's configs off, and git's transports
+/// limited to `file` (docs/features/hub-git.md "Rules and edge cases",
+/// **Tests**): every remote of a test is a bare repository in its scratch, so
+/// a mistaken `ssh://` or `https://` fails in git before any resolver or
+/// connection (`p22_*` in `tests/hub_git.rs` proves it).
 pub fn product_env(home: &Path) -> Vec<(OsString, OsString)> {
     vec![
         ("HOME".into(), home.as_os_str().into()),
         ("PATH".into(), product_path()),
         ("GIT_CONFIG_NOSYSTEM".into(), "1".into()),
         ("GIT_CONFIG_GLOBAL".into(), "/dev/null".into()),
+        ("GIT_ALLOW_PROTOCOL".into(), "file".into()),
     ]
 }
 

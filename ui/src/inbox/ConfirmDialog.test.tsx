@@ -1,11 +1,13 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { ClientError, type SpecEngineClient } from "../api/client";
+import { ApiProvider } from "../api/provider";
 import type { ConfirmRead, Proposal, QueueEvent, Stage, Team } from "../api/types";
 import { ACT_OFF } from "../board/labels";
 import { aProposal, aRoundItem, aRoundSheet } from "../test/builders";
 import { renderApp } from "../test/render";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 // B10 and B12 of docs/features/hub-confirm.md on a stub client, one click per item as
 // `docs/canon/hub-confirm.md` "Rules" states it: a login
@@ -492,7 +494,7 @@ describe("a confirm", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    const line = "Confirmed PR-0007: applied as commit 1a2b3c4, in this hub's checkout; nothing is pushed.";
+    const line = "Confirmed PR-0007: applied as commit 1a2b3c4, in this hub's checkout; this click pushes nothing.";
     await waitFor(() => {
       expect(resultLine()).toBe(line);
     });
@@ -503,6 +505,16 @@ describe("a confirm", () => {
       expect(document.activeElement).toBe(option);
     });
     expect(screen.queryByRole("option", { name: /PR-0007/ })).toBeNull();
+  });
+
+  it("a staged approve says what the click does, true on every hub: one commit here, under the login, and the click pushes nothing (U1 of hub-git)", async () => {
+    renderApp(hubClient(LEAD), "#/alpha/inbox");
+    const dialog = await opened();
+    await ready(dialog);
+    expect(dialog.querySelector(".dialog-effect")?.textContent).toBe(
+      "Confirming applies this staged choice as one commit in this hub's checkout, under your login; this click pushes nothing.",
+    );
+    expect(dialog.textContent).not.toMatch(/nothing is pushed/);
   });
 
   it("a staged reject says so, sends the same two strings and shows no commit", async () => {
@@ -885,5 +897,157 @@ describe("one click per item", () => {
 
   it("keeps ACT_OFF to the acts with a control to stand off: confirm has none", () => {
     expect(Object.keys(ACT_OFF)).not.toContain("confirm");
+  });
+});
+
+// U1 of docs/features/hub-git.md ("Status and the screen"): after a 200 whose review document holds
+// notes, 10a's gap warning among them (docs/features/apply-outputs.md), the dialog stays open with
+// `Confirmed.` and the notes as text, escaped as the rest of the dialog, Confirm gone and focus on
+// Close; `onConfirmed` fires once, on Close. With no notes, as a clean confirm's document holds
+// (crates/specengine-cli: `with_diff` writes none, the gap note only when the outputs were not
+// rendered), it fires at once.
+
+/** 10a's gap warning as an applying confirm's review document carries it in `notes`. */
+const GAP =
+  "the commit carries `docs/spec/maps/hold.md` alone: the index's outputs were not rendered: the `[paths] roots` entry `notes` names no directory and no `.md` file; `spec export index` writes them";
+
+/** The stub's POST, answering the applied document with `notes`. */
+function confirmedWith(client: StubClient, notes: string[]) {
+  client.confirmProposal.mockImplementation((_project, id) => {
+    const proposal = client.state.proposals.find((candidate) => candidate.id === id);
+    client.state.proposals = client.state.proposals.filter((candidate) => candidate.id !== id);
+    client.state.round = { ...client.state.round, items: client.state.round.items.filter((item) => item.id !== id) };
+    return Promise.resolve({ ...(proposal ?? aProposal({ id })), status: "applied", staged: null, staged_at: null, applied_commit: "1a2b3c4", notes });
+  });
+}
+
+/** The dialog alone over a hub's stub, its two callbacks counted. */
+function dialogAlone(client: StubClient) {
+  const onClose = vi.fn<() => void>();
+  const onConfirmed = vi.fn<(review: Proposal) => void>();
+  render(
+    <ApiProvider client={client}>
+      <ConfirmDialog project="alpha" id="PR-0007" team={LEAD} onClose={onClose} onConfirmed={onConfirmed} />
+    </ApiProvider>,
+  );
+  return { onClose, onConfirmed };
+}
+
+describe("a confirm answered with notes (U1 of hub-git)", () => {
+  it("keeps the dialog open: `Confirmed.`, the gap warning as text, Confirm gone, focus on Close", async () => {
+    const client = hubClient(LEAD, [staged("PR-0007", { severity: "high" }), staged("PR-0008")]);
+    confirmedWith(client, [GAP]);
+    renderApp(client, "#/alpha/inbox");
+    const dialog = await opened();
+    fireEvent.click(await ready(dialog));
+    expect(await within(dialog).findByText("Confirmed.")).toBeTruthy();
+    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(within(dialog).getByRole("list", { name: "The daemon's notes" }).textContent).toBe(GAP);
+    expect(within(dialog).queryByRole("button", { name: /^Confirm/ })).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(within(dialog).queryByRole("alert")).toBeNull();
+    expect(dialog.textContent).not.toMatch(/nothing (was|is) confirmed/i);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(buttonIn(dialog, "Close"));
+    });
+    // Not handed on yet: no result line until Close.
+    expect(resultLine()).toBeUndefined();
+    expect(client.confirmProposal).toHaveBeenCalledTimes(1);
+  });
+
+  it("Close hands the document on: the result with its commit, the dialog gone, the next item focused", async () => {
+    const client = hubClient(LEAD, [staged("PR-0007", { severity: "high" }), staged("PR-0008")]);
+    confirmedWith(client, [GAP]);
+    renderApp(client, "#/alpha/inbox");
+    const dialog = await opened();
+    fireEvent.click(await ready(dialog));
+    fireEvent.click(await within(dialog).findByRole("button", { name: "Close" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(resultLine()).toBe("Confirmed PR-0007: applied as commit 1a2b3c4, in this hub's checkout; this click pushes nothing.");
+    const option = within(await screen.findByRole("listbox")).getByRole("option", { selected: true });
+    expect(option.textContent).toContain("PR-0008");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(option);
+    });
+  });
+
+  it("fires onConfirmed once, on Close, with the document as sent; Esc and a second press hand nothing more", async () => {
+    const client = hubClient(LEAD);
+    confirmedWith(client, [GAP, "a second note"]);
+    const { onClose, onConfirmed } = dialogAlone(client);
+    const dialog = await screen.findByRole("dialog", { name: "Confirm PR-0007" });
+    fireEvent.click(await ready(dialog));
+    const close = await within(dialog).findByRole("button", { name: "Close" });
+    await tick();
+    expect(onConfirmed).not.toHaveBeenCalled();
+    expect(within(dialog).getAllByRole("listitem").map((item) => item.textContent)).toEqual([GAP, "a second note"]);
+    fireEvent.click(close);
+    fireEvent.click(close);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(onConfirmed).toHaveBeenCalledTimes(1);
+    expect(onConfirmed.mock.calls[0]?.[0]).toMatchObject({ id: "PR-0007", status: "applied", applied_commit: "1a2b3c4", notes: [GAP, "a second note"] });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("Esc on it hands the document on as Close does", async () => {
+    const client = hubClient(LEAD);
+    confirmedWith(client, [GAP]);
+    const { onClose, onConfirmed } = dialogAlone(client);
+    const dialog = await screen.findByRole("dialog", { name: "Confirm PR-0007" });
+    fireEvent.click(await ready(dialog));
+    await within(dialog).findByText("Confirmed.");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(onConfirmed).toHaveBeenCalledTimes(1);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("with no notes hands the document on at once: no `Confirmed.` in the dialog, nothing to close", async () => {
+    const client = hubClient(LEAD);
+    confirmedWith(client, []);
+    const { onClose, onConfirmed } = dialogAlone(client);
+    const dialog = await screen.findByRole("dialog", { name: "Confirm PR-0007" });
+    fireEvent.click(await ready(dialog));
+    await waitFor(() => {
+      expect(onConfirmed).toHaveBeenCalledTimes(1);
+    });
+    expect(onConfirmed.mock.calls[0]?.[0]).toMatchObject({ id: "PR-0007", status: "applied", notes: [] });
+    expect(within(dialog).queryByText("Confirmed.")).toBeNull();
+    expect(within(dialog).queryByRole("button", { name: "Close" })).toBeNull();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("writes the notes as text, every control and format character `\\u{..}`, no element made of them", async () => {
+    const note = `<b>x</b>${String.fromCodePoint(0x202e)} hold${String.fromCodePoint(0x200b)}`;
+    const client = hubClient(LEAD);
+    confirmedWith(client, [note]);
+    renderApp(client, "#/alpha/inbox");
+    const dialog = await opened();
+    fireEvent.click(await ready(dialog));
+    const notes = await within(dialog).findByRole("list", { name: "The daemon's notes" });
+    expect(notes.textContent).toBe("<b>x</b>\\u{202e} hold\\u{200b}");
+    expect(notes.querySelector("b")).toBeNull();
+    expect(notes.querySelector("li")?.getAttribute("dir")).toBe("auto");
+    expect(dialog.textContent).not.toContain(String.fromCodePoint(0x202e));
+  });
+
+  it("on the Questions screen too: the dialog stays on the notes, Close hands it on and the sheet takes focus", async () => {
+    const client = hubClient(LEAD, [staged("PR-0002", { kind: "question" })]);
+    client.state.round = aRoundSheet([aRoundItem({ id: "PR-0002", staged: APPROVE, staged_at: STAGED_AT, updated_at: STAGED_AT })]);
+    confirmedWith(client, [GAP]);
+    renderApp(client, "#/alpha/questions");
+    const dialog = await opened("PR-0002");
+    fireEvent.click(await ready(dialog));
+    await within(dialog).findByText("Confirmed.");
+    expect(resultLine()).toBeUndefined();
+    fireEvent.click(buttonIn(dialog, "Close"));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(resultLine()).toMatch(/^Confirmed PR-0002: applied as commit 1a2b3c4/);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(document.querySelector(".round"));
+    });
   });
 });

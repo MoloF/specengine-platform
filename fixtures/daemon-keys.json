@@ -107,5 +107,6 @@
   "TraceStage": ["stage", "distance", "counts"],
   "Identity": ["login"],
   "Team": ["login", "name", "allowed"],
-  "ConfirmRead": ["id", "question", "updated_at"]
+  "ConfirmRead": ["id", "question", "updated_at"],
+  "HubSync": ["ahead", "behind", "state", "error", "at"]
 }

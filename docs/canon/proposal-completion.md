@@ -41,6 +41,7 @@ None blocks; the apply's own: `proposal-apply.md` "Known limits".
 - A reject running while a live apply commits between reject's second check and its write leaves it rejected with its commit in history (the apply's step 10 exits 1, `rejected`): needs a cross-process lock.
 - An end-of-line or clean/smudge filter on spec files (`core.autocrlf`, `eol=crlf`): completion compares raw blobs with worktree bytes: an apply interrupted at step 10 is neither completed nor rejected (later: `cat-file --filters`).
 - The trailer names no project: with several SpecEngine roots in a repository, a reset data directory, or two developers' queues (a hub's has its own range: `queue-backup.md` "ID floor"), another proposal's same-ID commit on the branch blocks reject; with the base pruned the whole-branch read finds older ones too; approve refuses only when that commit applied the text.
+- A `--push` hub's merges bring other queues' `spec: apply` commits into its branch: below the hub's floor their IDs never meet a hub ID, but a dump-imported orphan below the floor can meet a developer's same-ID commit, which blocks its reject; the cure is to raise it again (`hub-git.md`).
 - A reverted apply commit: approve refused at step 5, reject refused; way out: a completing commit (the hint).
 - A drift item is rejected while a commit naming it but not completing it sits in history (the note).
 - A follow-up refused for an unread file names no file: the index records an unreadable file as unparsed (`CheckFile::unreadable`), and step 1 cannot tell the two apart.

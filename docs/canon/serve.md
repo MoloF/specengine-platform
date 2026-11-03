@@ -50,7 +50,7 @@ Beside `<slug>.db`, never under a root (ADR-0003). `daemon.lock`: empty, its `fl
 
 ## Lines
 
-stdout. A start (`specengine-http`): `serving <slug> <root>` per root, then `listening http://127.0.0.1:<port>`. Already running (`spec`, exit 0): `already running: pid <pid>`, `serving <slug> <root>` per requested root, `listening <url>`.
+stdout. A start (`specengine-http`): `serving <slug> <root>` per root, a hub's `public <origin>` and a `--push` hub's `push every <N> min` (`hub-git.md`), then `listening http://127.0.0.1:<port>`. Already running (`spec`, exit 0): `already running: pid <pid>`, `serving <slug> <root>` per requested root, `listening <url>`.
 
 Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first:
 
@@ -70,6 +70,7 @@ Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first:
 | `a daemon already runs under <data dir>: pid <pid>, <url>, serving <slug> <root>[, ...]; stop it first` | http, lock held |
 | `cannot write <daemon.json>: <error>` | http, after the bind |
 | `cannot listen on 127.0.0.1:<port>: <error>` | http, the port taken |
+| `--push needs --public-origin: only a hub pushes`; `--push-every needs --push`; `--push-every takes 1 to 1440 minutes, not <n>`, `--push-deadline` alike | http, `hub-git.md` "Flags" |
 
 ## Rules
 
@@ -87,7 +88,7 @@ No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distr
 
 ## Concurrency
 
-Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-6 (ADR-0051), its first call building the whole code index inside the turn, and row 6 spawning verify's read-only git there (`rev-parse`, the unmerged check, `hash-object` without `-w`: `health-drift.md` "Route"), no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
+Requests of one project run one at a time on the blocking pool (a read refreshes its index; `health` both, for rows 4-6 (ADR-0051), its first call building the whole code index inside the turn, and row 6 spawning verify's read-only git there (`rev-parse`, the unmerged check, `hash-object` without `-w`: `health-drift.md` "Route"), no timeout bounding it, a call once started never cancelled (`health-code.md` "Route"); `check`, refreshing none, too): each awaits its project's turn (a `tokio` mutex) in its own task, so one whose client left first is dropped unrun; the turn goes with the call to the pool. Projects run in parallel; `/api/projects` and the tail's polls take no turn. A `--push` hub's sync takes the turns of its repository's projects, in `--root` order, for its merge alone; its fetch and push take none (`hub-git.md`). With the CLI and the plugin's MCP server: one more direct writer of the index and the queue (WAL, `busy_timeout`; `proposal-queue.md` "Store"); one daemon and one queue per data directory.
 
 ## Known limits
 

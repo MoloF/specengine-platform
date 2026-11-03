@@ -91,6 +91,10 @@
 //!   [`RecordApproval`]), the new file [`create_file`] makes without ever
 //!   replacing one (a create's new file too); a create's new IDs held while
 //!   it is live ([`Reservation`], [`QueueError::Reserved`]);
+//! - a hub's sync (task spec `hub-git`): [`SyncGit`], the only `fetch` and
+//!   `push` of any crate, its look, merge parts and push, [`ahead_behind`]
+//!   per status read; [`sparse_set`], the paths a hub's sparse checkout must
+//!   hold, from `HEAD`'s config;
 //! - the task gate's side of the queue (`docs/canon/gate.md`):
 //!   [`open_for_gate`] (read-only, nothing created, no schema step),
 //!   [`GateQueue::tasks`] (a repository's tasks, only `id`, `status`,
@@ -119,7 +123,9 @@ mod rows;
 mod schema;
 mod search;
 mod source;
+mod sparse;
 mod symbols;
+mod sync;
 mod update;
 mod verify_git;
 mod worktree;
@@ -175,7 +181,12 @@ pub use queue::{
 pub use read::NodeNorm;
 pub use roles::{RoleCandidate, StoredRole};
 pub use source::{GitIndex, Listing, Source, WorkingTree};
+pub use sparse::{SparseError, SparseSet, sparse_set};
 pub use symbols::{SymbolHit, SymbolTier};
+pub use sync::{
+    CommitFailure, Looked, MergedTree, NetFailure, Pushed, Relation, Replacement, SyncGit,
+    TreeEntry, Upstream, ahead_behind, file_mode, holds_secret, named, sync_place,
+};
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use verify_git::{
     COMMIT_NOT_A_BLOB, CommitEntry, CommitEntryKind, CommitFile, CommitListing, INDEX_LABEL,
@@ -183,8 +194,8 @@ pub use verify_git::{
 };
 pub use worktree::{
     ChangedPath, CreateFileError, CreatedFile, DiskName, GitError, ListedWorktree, Merge,
-    Operation, PlaceError, StatusEntry, WorktreeGit, create_file, disk_name, replace_file,
-    same_repository,
+    Operation, PlaceError, STDERR_MAX, StatusEntry, WorktreeGit, create_file, disk_name,
+    replace_file, same_repository,
 };
 
 /// The format stamp stored in `index_meta` (`('format', '2')`). Any change

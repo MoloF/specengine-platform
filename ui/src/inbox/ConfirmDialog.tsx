@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
 import { useConfirmProposal, useConfirmRead, useProposal } from "../api/queries";
 import type { ApiError, Proposal, Team } from "../api/types";
@@ -31,7 +31,11 @@ function lacksDiff(review: Proposal): boolean {
   return review.new_text !== null && review.diff === null;
 }
 
-/** What the confirm does to the staged choice, the page's words; the question says it in the terminal's. */
+/**
+ * What the confirm does to the staged choice, the page's words; the question says it in the terminal's.
+ * True on every hub: the click pushes nothing, though a `--push` hub's sync sends the commit later
+ * (`docs/features/hub-git.md`).
+ */
 function effectOf(review: Proposal): string | null {
   const stage = review.staged;
   if (stage === null) {
@@ -39,7 +43,7 @@ function effectOf(review: Proposal): string | null {
   }
   return stage.decision === "reject"
     ? "Confirming rejects this proposal under your login; no spec file changes."
-    : "Confirming applies this staged choice as one commit in this hub's checkout, under your login; nothing is pushed.";
+    : "Confirming applies this staged choice as one commit in this hub's checkout, under your login; this click pushes nothing.";
 }
 
 /**
@@ -98,6 +102,11 @@ function ChangeShown({ review }: { review: Proposal }) {
  * to read again, never that nothing was confirmed. Everything of an agent's or the daemon's shows as
  * text, written as the CLI prints it with every format character escaped too (shownConfirmText in
  * src/ui/text.ts), never as markup.
+ *
+ * A 200 whose review document holds notes (an apply's gap warning, `docs/features/apply-outputs.md`;
+ * a reject's follow-up) keeps the dialog open (`docs/features/hub-git.md` "Status and the screen"):
+ * `Confirmed.` and the notes as text, Confirm gone, focus on Close; Close, or Esc, hands the document
+ * on, once. A clean confirm's document holds none, so it is handed on at once, as before.
  */
 export function ConfirmDialog({
   project,
@@ -111,7 +120,7 @@ export function ConfirmDialog({
   /** This login's row of `[team]`, as read when the dialog opened: a later read cannot pull it away. */
   team: Team;
   onClose: () => void;
-  /** The daemon confirmed it: its answer, the review document. The caller closes the dialog. */
+  /** The daemon confirmed it: its answer, the review document, handed on once. The caller closes the dialog. */
   onConfirmed: (review: Proposal) => void;
 }) {
   const read = useConfirmRead(project, id);
@@ -125,6 +134,12 @@ export function ConfirmDialog({
   /** The view is on screen: a refusal after the owner left (browser Back) is only spoken. */
   const mounted = useRef(false);
   const cancelButton = useRef<HTMLButtonElement>(null);
+  /** A 200 whose document holds notes: shown here until Close hands it on. */
+  const [done, setDone] = useState<Proposal | null>(null);
+  /** The document went to onConfirmed: never twice, whatever is pressed after. */
+  const handedOn = useRef(false);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const doneId = useId();
 
   useEffect(() => {
     mounted.current = true;
@@ -132,6 +147,21 @@ export function ConfirmDialog({
       mounted.current = false;
     };
   }, []);
+
+  // Confirm went with its answer: focus moves to Close, never left on the page's body.
+  useEffect(() => {
+    if (done !== null) {
+      closeButton.current?.focus();
+    }
+  }, [done]);
+
+  /** The daemon's answer to the caller, once. */
+  function handOn(review: Proposal) {
+    if (!handedOn.current) {
+      handedOn.current = true;
+      onConfirmed(review);
+    }
+  }
 
   const failure = refusal ?? (failedRead === null ? null : apiErrorOf(failedRead));
   const asked = failedRead === null ? read.data : undefined;
@@ -145,7 +175,9 @@ export function ConfirmDialog({
   const stale = !pending && !read.isFetching && (failure !== null || moved || noDiff);
 
   function cancel() {
-    if (!inFlight.current) {
+    if (done !== null) {
+      handOn(done);
+    } else if (!inFlight.current) {
       onClose();
     }
   }
@@ -179,7 +211,39 @@ export function ConfirmDialog({
       }
       return;
     }
-    onConfirmed(answered);
+    // Notes to read: the dialog stays, Confirm gone; the POST is spent, so nothing sends it again.
+    if (answered.notes.length > 0 && mounted.current) {
+      setPending(false);
+      setDone(answered);
+      return;
+    }
+    handOn(answered);
+  }
+
+  if (done !== null) {
+    return (
+      <Dialog title={`Confirm ${id}`} onClose={cancel} className="confirm-dialog">
+        <div id={doneId} className="confirm-body" role="group" aria-label={`What confirming ${id} did`} tabIndex={0}>
+          <p className="dialog-text confirm-done">
+            {/* A check, no state's icon: a staged reject is confirmed too. */}
+            <Icon name="selected" />
+            <span>Confirmed.</span>
+          </p>
+          <ul className="note-list" aria-label="The daemon's notes">
+            {done.notes.map((note, index) => (
+              <li key={`${String(index)}-${note}`} className="agent-text" dir="auto">
+                {shownConfirmText(note)}
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="dialog-actions">
+          <button ref={closeButton} type="button" className="button" data-autofocus="" aria-describedby={doneId} onClick={cancel}>
+            Close
+          </button>
+        </div>
+      </Dialog>
+    );
   }
 
   const effect = review === undefined ? null : effectOf(review);

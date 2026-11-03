@@ -34,6 +34,7 @@ import type {
   FlowView,
   GraphView,
   HealthReport,
+  HubSync,
   Identity,
   Inbox,
   LockDiffView,
@@ -63,7 +64,8 @@ import type {
 // `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
 // the lock diff `docs/features/lock-diff.md` "Route", the flow `docs/features/flow-canvas.md`
 // "Data", the cards `docs/features/board-ui.md` "Routes", the identity `docs/canon/hub.md` "Routes",
-// the confirm `docs/features/hub-confirm.md` "Data"): `fetch` and `EventSource`, no package.
+// the confirm `docs/features/hub-confirm.md` "Data", the sync `docs/features/hub-git.md` "Data"):
+// `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
 // query repeats an array's key, an absent option is left out. Every answer is the CLI's document
@@ -497,6 +499,15 @@ export class HttpClient implements SpecEngineClient {
   async confirmProposal(project: string, id: string, { question, updated_at }: ConfirmBody): Promise<Proposal> {
     const sent: ConfirmBody = { question, updated_at };
     return (await request("POST", confirmPath(project, id), { body: JSON.stringify(sent) })) as Proposal;
+  }
+
+  /**
+   * The push status of a hub with `--push` (`docs/features/hub-git.md` "Data"): asked once a login
+   * is known, judged, so a 404, the unknown route of a local daemon or of a hub without `--push`,
+   * rejects as every other refusal does and nothing but a 200 resolves as data.
+   */
+  async getSync(project: string, signal?: AbortSignal): Promise<HubSync> {
+    return (await request("GET", `${projectPath(project)}/sync`, { signal, judged: true })) as HubSync;
   }
 
   /**

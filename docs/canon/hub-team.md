@@ -103,7 +103,7 @@ The stage's compare runs on a one-second clock (`decision-staging.md` "Queue"): 
 
 ## Confirm
 
-`.../proposals/:id/confirm`, a hub's alone: one staged choice per click, never a choice sent; an approve is a commit in the hub's checkout, nothing pushed. Who: "Acts"; the rest: `hub-confirm.md`.
+`.../proposals/:id/confirm`, a hub's alone: one staged choice per click, never a choice sent; an approve is a commit in the hub's checkout, pushed by a `--push` sync (`hub-git.md`). Who: "Acts"; the rest: `hub-confirm.md`.
 
 ## Check
 

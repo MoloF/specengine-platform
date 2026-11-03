@@ -143,6 +143,14 @@ impl ConfirmOutcome {
         }
     }
 
+    /// A confirm that committed: no cause, and the review document `applied`
+    /// (a hub's `--push` sync is signalled on it, task spec `hub-git`).
+    pub fn committed(&self) -> bool {
+        self.cause.is_none()
+            && self.read.is_none()
+            && self.proposal.document.status.as_deref() == Some("applied")
+    }
+
     /// A refusal judged before the library is called, `reason` its line: a
     /// login the daemon's read inside the project's turn finds outside
     /// `[team]`, or of a role that confirms nothing (a 403 on a hub).

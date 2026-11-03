@@ -293,6 +293,8 @@ enum Command {
         #[command(subcommand)]
         what: Export,
     },
+    /// Print the paths a hub's sparse checkout must hold, from the repository's top, out of the root's specengine.toml at HEAD (the config, the lock, the debt file, each `[paths] roots` entry, `[decision_records]`, the index's outputs), a directory ending in `/`; read-only. A path HEAD holds that this checkout lacks is also a warning. Exit 0 whatever is missing, 2 with no repository, no commit or a config HEAD holds that cannot be used.
+    SparseSet,
     /// Propose a change to one node or a new one, ask the owner a question, report a discrepancy, raise a decision taken during work or queue HEAD's lock drift; no file is touched until the owner approves a change.
     Propose {
         #[command(subcommand)]
@@ -1271,6 +1273,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 &SymbolsRequest { form },
             )?))
         }
+        Command::SparseSet => Outcome::SparseSet(specengine_cli::sparse(env, globals)?),
         Command::Unmapped { path } => Outcome::Unmapped(Box::new(specengine_cli::unmapped(
             env,
             globals,

@@ -60,6 +60,28 @@ export interface ConfirmBody {
   updated_at: string;
 }
 
+/** The five outcomes of a hub's last sync, `none` before the first ends: a push's, not a binding's sync. Source: `docs/features/hub-git.md` "Data". */
+export type KnownHubSyncState = "none" | "ok" | "retrying" | "held" | "stopped";
+
+/** A hub sync's outcome as sent; other strings kept. Source: `docs/features/hub-git.md` "Data". */
+export type HubSyncState = KnownHubSyncState | Unlisted;
+
+/**
+ * The push status of a project's repository: a hub with `--push` alone, any other daemon's unknown
+ * route. `ahead` and `behind` are counted from git on each read, null with no tracking ref; `state`,
+ * `error` and `at` are the daemon's memory of its last sync, `none`, null, null after a start.
+ * `error` is the daemon's words, then git's stderr, every control but LF and every Cf written
+ * `\u{XX}`, no URL; `at` the last sync's end, RFC 3339 UTC. All five keys always present. Source:
+ * `docs/features/hub-git.md` "Data".
+ */
+export interface HubSync {
+  ahead: number | null;
+  behind: number | null;
+  state: HubSyncState;
+  error: string | null;
+  at: string | null;
+}
+
 /** Queue order, never a hold on work (ADR-0012). Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
 export type KnownSeverity = "high" | "normal" | "low";
 

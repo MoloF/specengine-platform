@@ -141,9 +141,18 @@ pub(crate) async fn write(
     let sent =
         ConfirmBody::from_json(&bytes).map_err(|error| Refusal::bad_request(error.message))?;
     let login = entered(&project, login.as_ref(), &uri).await?;
+    // A `--push` hub's sync, signalled once the confirm committed, never
+    // awaited (docs/features/hub-git.md "The sync").
+    let sync = app.sync_of(&project);
     Ok(run(project, move |env, globals| {
         judged(env, globals, &login, id, |request| {
-            specengine_cli::confirm_staged(env, globals, request, &sent)
+            let outcome = specengine_cli::confirm_staged(env, globals, request, &sent)?;
+            if outcome.committed()
+                && let Some(sync) = &sync
+            {
+                sync.signal();
+            }
+            Ok(outcome)
         })
     })
     .await)

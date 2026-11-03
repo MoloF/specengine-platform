@@ -34,6 +34,7 @@ import type {
   FlowView,
   GraphView,
   HealthReport,
+  HubSync,
   Identity,
   Inbox,
   LockDiffView,
@@ -105,6 +106,8 @@ const ELSEWHERE: Stage = { decision: "reject", reason: "Staged in another tab (m
 
 /** A local daemon's unknown route, the mock's words: a hub alone confirms (`docs/features/hub-confirm.md` B8). */
 const NO_CONFIRM_ROUTE = "no route /api/projects/<slug>/proposals/<id>/confirm: the routes are /api/projects and the web UI (mock)";
+
+const NO_SYNC_ROUTE = "no route /api/projects/<slug>/sync: the routes are /api/projects and the web UI (mock)";
 
 /** The mock's question round, in a chunk of its own: only the Questions screen reads it. */
 function loadRound() {
@@ -379,6 +382,12 @@ export class MockClient implements SpecEngineClient {
   async confirmProposal(): Promise<Proposal> {
     await this.wait();
     throw new ClientError({ status: NO_SUCH_PROPOSAL, message: NO_CONFIRM_ROUTE });
+  }
+
+  /** No hub with `--push` behind the mock: a local daemon has no such route (`docs/features/hub-git.md` "Status and the screen"), and the page never asks it. */
+  async getSync(): Promise<HubSync> {
+    await this.read();
+    throw new ClientError({ status: 404, message: NO_SYNC_ROUTE });
   }
 
   /** Drops the staged choice of an open proposal; nothing staged: the document as it is. */

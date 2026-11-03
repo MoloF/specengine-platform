@@ -48,6 +48,7 @@ import type {
   HealthDrift,
   HealthReport,
   HealthUnbound,
+  HubSync,
   Identity,
   InboxEntry,
   Interpretation,
@@ -160,10 +161,11 @@ import type {
 // hub-identity's one (docs/features/hub-identity.md "Data": the answer of `GET /api/identity`, the
 // hundred-and-seventh `Identity`); and hub-team's one (docs/features/hub-team.md "Data": the answer of
 // `GET .../team`, the hundred-and-eighth `Team`); and hub-confirm's one (docs/features/hub-confirm.md
-// "Data": the answer of `GET .../confirm`, the hundred-and-ninth and last `ConfirmRead`), with an
-// author's optional `login`, in no set. A key the types carry ahead of the file is listed in
+// "Data": the answer of `GET .../confirm`, the hundred-and-ninth `ConfirmRead`), with an
+// author's optional `login`, in no set; and hub-git's one (docs/features/hub-git.md "Data": the answer
+// of `GET .../sync`, set 110 `HubSync`, the last). A key the types carry ahead of the file is listed in
 // AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that file is absent
-// the comparison is skipped, saying so; once it exists it names all one hundred and nine, in the
+// the comparison is skipped, saying so; once it exists it names all one hundred and ten, in the
 // slices' order.
 
 const KEYS = {
@@ -800,6 +802,8 @@ const KEYS = {
   Team: { login: true, name: true, allowed: true } satisfies Record<keyof Team, true>,
   // docs/features/hub-confirm.md "Data": the confirm read's answer.
   ConfirmRead: { id: true, question: true, updated_at: true } satisfies Record<keyof ConfirmRead, true>,
+  // docs/features/hub-git.md "Data": the sync read's answer, all five keys always present.
+  HubSync: { ahead: true, behind: true, state: true, error: true, at: true } satisfies Record<keyof HubSync, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -927,6 +931,7 @@ const CITED: Record<Named, string> = {
   Identity: "login",
   Team: "login, name, allowed",
   ConfirmRead: "id, question, updated_at",
+  HubSync: "ahead, behind, state, error, at",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1107,8 +1112,14 @@ const BEFORE_HUB_CONFIRM: readonly Named[] = [...BEFORE_HUB_TEAM, ...HUB_TEAM];
 /** hub-confirm's one: the confirm read's answer (docs/features/hub-confirm.md "Data"). */
 const HUB_CONFIRM: readonly Named[] = ["ConfirmRead"];
 
+/** The hundred and nine types the fixture named before hub-git. */
+const BEFORE_HUB_GIT: readonly Named[] = [...BEFORE_HUB_CONFIRM, ...HUB_CONFIRM];
+
+/** hub-git's one: the sync read's answer, set 110 (docs/features/hub-git.md "Data"). */
+const HUB_GIT: readonly Named[] = ["HubSync"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_HUB_CONFIRM, ...HUB_CONFIRM];
+const ALL: readonly Named[] = [...BEFORE_HUB_GIT, ...HUB_GIT];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1135,7 +1146,7 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * hub-confirm wrote its one set, the hundred-and-ninth and last (docs/features/hub-confirm.md "Data").
+ * hub-git's test wrote its one set, the hundred-and-tenth and last (docs/features/hub-git.md "Data").
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1182,7 +1193,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HUB_IDENTITY.at(-1)).toBe("TraceStage");
     expect(BEFORE_HUB_TEAM.at(-1)).toBe("Identity");
     expect(BEFORE_HUB_CONFIRM.at(-1)).toBe("Team");
-    expect(ALL.at(-1)).toBe("ConfirmRead");
+    expect(BEFORE_HUB_GIT.at(-1)).toBe("ConfirmRead");
+    expect(ALL.at(-1)).toBe("HubSync");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1211,7 +1223,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(109);
+    expect(ALL).toHaveLength(110);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1222,7 +1234,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since lock-diff's TE-2 wrote its five sets into the file (UI-1 of lock-diff)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since hub-git's test wrote set 110 into the file (UI-1 of lock-diff, U1 of hub-git)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1257,6 +1269,16 @@ describe("the daemon's document types (AC-09)", () => {
       const at = source.indexOf(`export interface ${type} `);
       expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/hub-confirm.md` "Data"');
     }
+  });
+
+  it('types the sync read\'s answer as the spec writes it: five keys, always present, the counts and the times nullable, a state kept whatever its word, citing `docs/features/hub-git.md` "Data" (U1 of hub-git)', () => {
+    expect(served("HubSync")).toEqual(["ahead", "behind", "state", "error", "at"]);
+    expect(declaredKeys("HubSync")).toEqual(served("HubSync"));
+    expect(source).toMatch(/^export interface HubSync \{\n {2}ahead: number \| null;\n {2}behind: number \| null;\n {2}state: HubSyncState;\n {2}error: string \| null;\n {2}at: string \| null;\n\}$/m);
+    expect(source).toMatch(/^export type KnownHubSyncState = "none" \| "ok" \| "retrying" \| "held" \| "stopped";$/m);
+    expect(source).toMatch(/^export type HubSyncState = KnownHubSyncState \| Unlisted;$/m);
+    const at = source.indexOf("export interface HubSync ");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/hub-git.md` "Data"');
   });
 
   it('gives an author an optional `login`, last, never in the file\'s four keys: skipped when none (docs/features/hub-confirm.md "Data")', () => {
@@ -1365,8 +1387,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HUB_IDENTITY).toHaveLength(106);
     expect(BEFORE_HUB_TEAM).toHaveLength(107);
     expect(BEFORE_HUB_CONFIRM).toHaveLength(108);
-    expect(ALL).toHaveLength(109);
-    expect(new Set(ALL).size).toBe(109);
+    expect(BEFORE_HUB_GIT).toHaveLength(109);
+    expect(ALL).toHaveLength(110);
+    expect(new Set(ALL).size).toBe(110);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1608,12 +1631,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and nine types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one", () => {
+  it("names exactly the one hundred and ten types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and nine, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and ten, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(109);
+    expect(Object.keys(sets)).toHaveLength(110);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1713,9 +1736,17 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(sets.LockDiffCodeSide).toEqual(["blob", "file", "diff"]);
   });
 
-  it('names hub-confirm\'s ConfirmRead last, the hundred-and-ninth, and keeps an author at four keys (docs/features/hub-confirm.md "Data")', () => {
-    expect(Object.keys(sets).slice(BEFORE_HUB_CONFIRM.length)).toEqual([...HUB_CONFIRM]);
-    expect(Object.keys(sets).at(-1)).toBe("ConfirmRead");
+  it('names hub-git\'s HubSync last, after ConfirmRead, the hundred-and-tenth, with its five keys in the types\' order (docs/features/hub-git.md "Data")', () => {
+    expect(Object.keys(sets).slice(BEFORE_HUB_GIT.length)).toEqual([...HUB_GIT]);
+    expect(Object.keys(sets).at(-1)).toBe("HubSync");
+    expect(Object.keys(sets).indexOf("HubSync")).toBe(109);
+    expect(sets.HubSync).toEqual(["ahead", "behind", "state", "error", "at"]);
+    expect(sets.HubSync).toEqual(served("HubSync"));
+  });
+
+  it('names hub-confirm\'s ConfirmRead after Team, before hub-git\'s HubSync, the hundred-and-ninth, and keeps an author at four keys (docs/features/hub-confirm.md "Data")', () => {
+    expect(Object.keys(sets).slice(BEFORE_HUB_CONFIRM.length, BEFORE_HUB_GIT.length)).toEqual([...HUB_CONFIRM]);
+    expect(Object.keys(sets).at(BEFORE_HUB_GIT.length - 1)).toBe("ConfirmRead");
     expect(sets.ConfirmRead).toEqual(["id", "question", "updated_at"]);
     expect(sets.Author).toEqual(["type", "role", "model", "run"]);
   });

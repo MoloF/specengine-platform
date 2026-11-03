@@ -69,11 +69,12 @@ export const WORDING: Record<DecisionKind, Wording> = {
 
 /**
  * What a Confirm says once the daemon answered, from the review document it answered: the state as
- * sent and the commit `apply_proposal` made, when one was (`docs/features/hub-confirm.md`).
+ * sent and the commit `apply_proposal` made, when one was (`docs/features/hub-confirm.md`). The click
+ * pushes nothing, on every hub; a `--push` hub's sync sends the commit later (`docs/features/hub-git.md`).
  */
 export function confirmedLine(id: string, review: Proposal): string {
   const state = review.status ?? "no state sent";
-  return review.applied_commit === null ? `Confirmed ${id}: ${state}; no commit.` : `Confirmed ${id}: ${state} as commit ${review.applied_commit}, in this hub's checkout; nothing is pushed.`;
+  return review.applied_commit === null ? `Confirmed ${id}: ${state}; no commit.` : `Confirmed ${id}: ${state} as commit ${review.applied_commit}, in this hub's checkout; this click pushes nothing.`;
 }
 
 /** The decisions in the order and with the keys of 06 §3.3; keys are lower case, as typed. */

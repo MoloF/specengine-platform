@@ -395,6 +395,83 @@ impl Outputs {
     }
 }
 
+/// What [`render_tree`] made of a tree.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum TreeRender {
+    /// The tree's config has no `index = true` entry: nothing rendered.
+    NoIndex,
+    /// The outputs, root-relative, in the render's order, and their bytes.
+    Rendered(Vec<(String, Vec<u8>)>),
+    /// Nothing rendered: why, one line.
+    Gap(String),
+}
+
+/// The index entry's outputs rendered from the tree-ish `tree` under the
+/// root `root` (task spec `hub-git`, "Outputs": a sync's merge commit), as
+/// [`Outputs::render`] renders from a committed tree: the tree's own config
+/// and entry, every listed document read from the tree with no lazy fetch.
+/// A gap: the config unknown or invalid, `[paths] index` unset, a path that
+/// can never be an output or one the tree holds as a document that is not
+/// generated or cannot read, a walk gap, an unread blob. Git runs with
+/// `git`'s variables. Nothing is written.
+pub(crate) fn render_tree(root: &Path, git: &GitEnv, tree: &str) -> TreeRender {
+    let committed = match committed_tree(root, git, tree, &[]) {
+        CommittedTree::NoIndex => return TreeRender::NoIndex,
+        CommittedTree::Unknown(why) => return TreeRender::Gap(why),
+        CommittedTree::Indexed(committed) => committed,
+    };
+    let Some(generator) = committed.check.index_generator() else {
+        return TreeRender::NoIndex;
+    };
+    let project = &committed.project;
+    let Some(index_path) = project.paths.index.as_deref() else {
+        return TreeRender::Gap("`[paths] index` is not set".to_owned());
+    };
+    for path in output_paths(index_path, generator) {
+        let why = never_output(path, "", &project.paths)
+            .map(str::to_owned)
+            .or_else(|| match committed.at_head(path) {
+                HeadFile::Bytes(bytes) => (document_class(path, bytes, &project.scheme)
+                    != Class::Generated)
+                    .then(|| SPEC_DOCUMENT.to_owned()),
+                HeadFile::Absent => None,
+                HeadFile::Unreadable(why) => Some(why.clone()),
+            });
+        if let Some(why) = why {
+            return TreeRender::Gap(format!("`{path}` can never be an output ({why})"));
+        }
+    }
+    let mut input = check_input(&committed.tree, &project.scheme);
+    input
+        .files
+        .retain(|file| !committed.unread.contains_key(&file.path));
+    if let Some(why) = incomplete(&input, &project.paths) {
+        return TreeRender::Gap(why);
+    }
+    if let Some(why) = committed.unread.values().next() {
+        return TreeRender::Gap(why.clone());
+    }
+    TreeRender::Rendered(
+        render_index_set(&input, index_path, generator)
+            .into_iter()
+            .map(|output| (output.path, output.bytes.into_bytes()))
+            .collect(),
+    )
+}
+
+/// The outputs of the `index = true` entry of a config read as `project`
+/// and `check`, root-relative, in the render's order; none without such an
+/// entry or without `[paths] index`.
+pub(crate) fn index_outputs(project: &ProjectConfig, check: &CheckConfig) -> Vec<String> {
+    match (check.index_generator(), project.paths.index.as_deref()) {
+        (Some(generator), Some(index)) => output_paths(index, generator)
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
 /// The outputs of the index entry `generator`, root-relative, in the
 /// render's order: `[paths] index`, the shards, the roadmap view.
 fn output_paths<'a>(index: &'a str, generator: &'a Generator) -> Vec<&'a str> {

@@ -45,7 +45,7 @@ use std::fmt;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write as _};
 use std::path::{Component, Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -74,7 +74,11 @@ const LOCAL_ENV_VARS: [&str; 15] = [
 ];
 
 /// The most bytes of git's stderr an error keeps.
-const STDERR_MAX: usize = 4096;
+pub const STDERR_MAX: usize = 4096;
+
+/// How long a child given SIGTERM at a sync's deadline has to end before
+/// SIGKILL (task spec `hub-git`, "The deadline"): git removes its own locks.
+const TERM_GRACE: Duration = Duration::from_secs(2);
 
 /// The start of git's one message for "no repository found from here"
 /// (`setup.c`: up to the file system root or a ceiling directory, or up to
@@ -269,6 +273,9 @@ pub struct WorktreeGit {
     vars: BTreeMap<OsString, OsString>,
     /// Every command killed when it outlives it ([`GitError::Deadline`]).
     deadline: Option<Instant>,
+    /// At the deadline: SIGTERM, then SIGKILL this long after (a sync's
+    /// handles, [`Self::until`]); `None`: SIGKILL at once.
+    grace: Option<Duration>,
 }
 
 impl WorktreeGit {
@@ -311,6 +318,7 @@ impl WorktreeGit {
             dir,
             vars,
             deadline,
+            grace: None,
         })
     }
 
@@ -326,11 +334,33 @@ impl WorktreeGit {
             .map(|(name, value)| (name.as_os_str(), value.as_os_str()))
     }
 
+    /// This handle with every later command stopped when it outlives
+    /// `deadline` instead (task spec `hub-git`: each git child of a sync
+    /// gets its own): SIGTERM, then SIGKILL 2 s later unless it ended, so
+    /// git removes its own locks. The variables are kept, nothing is run.
+    pub(crate) fn until(&self, deadline: Instant) -> Self {
+        Self {
+            dir: self.dir.clone(),
+            vars: self.vars.clone(),
+            deadline: Some(deadline),
+            grace: Some(TERM_GRACE),
+        }
+    }
+
+    /// `command` run under this handle's deadline and grace.
+    fn bounded(&self, command: Command) -> Result<Output, GitError> {
+        run_with_input(command, self.deadline, self.grace, None)
+    }
+
+    /// `git -C <dir> <args>` with the handle's variables, stdin null, and
+    /// `GIT_NO_LAZY_FETCH=1` (task spec `hub-git`: a blob a partial clone
+    /// lacks is never fetched by a local command).
     fn command(&self, args: &[&OsStr], read_only: bool) -> Command {
         let mut command = Command::new("git");
         command
             .env_clear()
             .envs(&self.vars)
+            .env("GIT_NO_LAZY_FETCH", "1")
             .arg("-C")
             .arg(&self.dir)
             .args(args)
@@ -344,7 +374,34 @@ impl WorktreeGit {
     }
 
     fn output(&self, args: &[&OsStr], read_only: bool) -> Result<Output, GitError> {
-        run(self.command(args, read_only), self.deadline)
+        self.bounded(self.command(args, read_only))
+    }
+
+    /// One command's whole output, whatever its exit (the sync's own
+    /// children, `crate::sync`).
+    pub(crate) fn output_of(&self, args: &[&OsStr], read_only: bool) -> Result<Output, GitError> {
+        self.output(args, read_only)
+    }
+
+    /// [`Self::output_of`] with `input` on the command's stdin, written from
+    /// another thread so neither pipe can fill while the other waits.
+    pub(crate) fn output_with_input(
+        &self,
+        args: &[&OsStr],
+        read_only: bool,
+        input: &[u8],
+    ) -> Result<Output, GitError> {
+        let mut command = self.command(args, read_only);
+        command.stdin(Stdio::piped());
+        run_with_input(command, self.deadline, self.grace, Some(input.to_vec()))
+    }
+
+    /// A command that reaches a remote (the sync's alone, `crate::sync`):
+    /// [`Self::output_of`], not read-only, without `GIT_NO_LAZY_FETCH`.
+    pub(crate) fn network_output(&self, args: &[&OsStr]) -> Result<Output, GitError> {
+        let mut command = self.command(args, false);
+        command.env_remove("GIT_NO_LAZY_FETCH");
+        self.bounded(command)
     }
 
     /// A read-only command whose output must not depend on the user's or
@@ -356,7 +413,7 @@ impl WorktreeGit {
         command
             .env("GIT_CONFIG_GLOBAL", "/dev/null")
             .env("GIT_CONFIG_NOSYSTEM", "1");
-        run(command, self.deadline)
+        self.bounded(command)
     }
 
     /// Runs a read-only command to success; its stdout.
@@ -416,7 +473,7 @@ impl WorktreeGit {
         let args = [OsStr::new("rev-parse"), OsStr::new("--show-toplevel")];
         let mut command = self.command(&args, true);
         command.env("LC_ALL", "C").env_remove("LANGUAGE");
-        let output = run(command, self.deadline)?;
+        let output = self.bounded(command)?;
         if output.status.success() {
             return self.path_of(COMMAND, &output.stdout).map(Some);
         }
@@ -751,7 +808,7 @@ impl WorktreeGit {
         if let Some(parent) = dir.parent() {
             command.env("GIT_CEILING_DIRECTORIES", parent);
         }
-        let output = run(command, self.deadline)?;
+        let output = self.bounded(command)?;
         drop(files);
         match output.status.code() {
             Some(0) => Ok(Vec::new()),
@@ -982,7 +1039,7 @@ impl WorktreeGit {
         ];
         let mut command = self.command(&args, true);
         command.env("GIT_NO_LAZY_FETCH", "1");
-        success(COMMAND, run(command, self.deadline)?)
+        success(COMMAND, self.bounded(command)?)
     }
 
     /// Whether `commit`'s tree holds the top-relative `path`, a file or a
@@ -1691,6 +1748,7 @@ fn local_env_vars(
             vars.iter()
                 .filter(|(name, _)| !name.as_encoded_bytes().starts_with(b"GIT_")),
         )
+        .env("GIT_NO_LAZY_FETCH", "1")
         .args(["rev-parse", "--local-env-vars"])
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -1710,14 +1768,42 @@ fn local_env_vars(
 /// `command`'s output: unbounded without a deadline; with one, polled and
 /// killed (and reaped) once it passes ([`GitError::Deadline`]), its pipes
 /// read on their own threads so a full pipe never stalls it.
-fn run(mut command: Command, deadline: Option<Instant>) -> Result<Output, GitError> {
-    let Some(deadline) = deadline else {
+fn run(command: Command, deadline: Option<Instant>) -> Result<Output, GitError> {
+    run_with_input(command, deadline, None, None)
+}
+
+/// [`run`], `input` (when given; its stdin piped by the caller) written to
+/// the child's stdin from its own thread and the pipe closed after it. With
+/// a `grace`, a child past the deadline gets SIGTERM first ([`terminate`])
+/// and SIGKILL only if it has not ended `grace` later.
+fn run_with_input(
+    mut command: Command,
+    deadline: Option<Instant>,
+    grace: Option<Duration>,
+    input: Option<Vec<u8>>,
+) -> Result<Output, GitError> {
+    if deadline.is_none() && input.is_none() {
         return command.output().map_err(GitError::NotRunnable);
-    };
-    if Instant::now() >= deadline {
+    }
+    if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
         return Err(GitError::Deadline);
     }
     let mut child = command.spawn().map_err(GitError::NotRunnable)?;
+    let writer = match (child.stdin.take(), input) {
+        (Some(mut stdin), Some(input)) => Some(thread::spawn(move || {
+            // A child that exits before reading all of it closes the pipe:
+            // its own exit status tells.
+            let _ = stdin.write_all(&input);
+        })),
+        _ => None,
+    };
+    let Some(deadline) = deadline else {
+        let output = child.wait_with_output().map_err(GitError::NotRunnable);
+        if let Some(writer) = writer {
+            let _ = writer.join();
+        }
+        return output;
+    };
     let drain = |pipe: Option<Box<dyn io::Read + Send>>| {
         pipe.map(|mut pipe| {
             thread::spawn(move || {
@@ -1752,13 +1838,15 @@ fn run(mut command: Command, deadline: Option<Instant>) -> Result<Output, GitErr
         }
         let now = Instant::now();
         if now >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
+            stop(&mut child, grace);
             return Err(GitError::Deadline);
         }
         thread::sleep(pause.min(deadline - now));
         pause = (pause * 2).min(Duration::from_millis(1));
     };
+    if let Some(writer) = writer {
+        let _ = writer.join();
+    }
     let joined = |reader: Option<thread::JoinHandle<Vec<u8>>>| {
         reader
             .and_then(|reader| reader.join().ok())
@@ -1771,8 +1859,53 @@ fn run(mut command: Command, deadline: Option<Instant>) -> Result<Output, GitErr
     })
 }
 
+/// A child past its deadline stopped and reaped: with a `grace`, SIGTERM,
+/// then SIGKILL once `grace` passed without it ending; else SIGKILL.
+fn stop(child: &mut Child, grace: Option<Duration>) {
+    if let Some(grace) = grace
+        && terminate(child)
+    {
+        let until = Instant::now() + grace;
+        let mut pause = Duration::from_millis(1);
+        loop {
+            match child.try_wait() {
+                Ok(Some(_)) | Err(_) => return,
+                Ok(None) => {}
+            }
+            let now = Instant::now();
+            if now >= until {
+                break;
+            }
+            thread::sleep(pause.min(until - now));
+            pause = (pause * 2).min(Duration::from_millis(20));
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+/// SIGTERM to `child`, not yet reaped (so its ID names it still), through
+/// the shell's own `kill`; whether it was sent.
+#[cfg(unix)]
+fn terminate(child: &Child) -> bool {
+    Command::new("sh")
+        .args(["-c", "kill -TERM \"$1\"", "sh"])
+        .arg(child.id().to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+/// No SIGTERM off Unix: SIGKILL alone.
+#[cfg(not(unix))]
+fn terminate(_: &Child) -> bool {
+    false
+}
+
 /// `output`'s stdout when it succeeded, else [`GitError::Failed`].
-fn success(command: &'static str, output: Output) -> Result<Vec<u8>, GitError> {
+pub(crate) fn success(command: &'static str, output: Output) -> Result<Vec<u8>, GitError> {
     if output.status.success() {
         Ok(output.stdout)
     } else {
@@ -1782,24 +1915,30 @@ fn success(command: &'static str, output: Output) -> Result<Vec<u8>, GitError> {
 
 /// [`GitError::Failed`] of `output`: its stderr, or its stdout when stderr
 /// is empty (`git commit` says "nothing to commit" on stdout).
-fn failed(command: &'static str, output: &Output) -> GitError {
+pub(crate) fn failed(command: &'static str, output: &Output) -> GitError {
     let mut stderr = String::from_utf8_lossy(&output.stderr).trim().to_owned();
     if stderr.is_empty() {
         stderr = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     }
-    if stderr.len() > STDERR_MAX {
-        let mut end = STDERR_MAX;
-        while !stderr.is_char_boundary(end) {
-            end -= 1;
-        }
-        stderr.truncate(end);
-        stderr.push('…');
-    }
     GitError::Failed {
         command,
         code: output.status.code(),
-        stderr,
+        stderr: cut_stderr(stderr),
     }
+}
+
+/// `text` cut at [`STDERR_MAX`] bytes, on a character boundary, an
+/// ellipsis marking the cut.
+pub(crate) fn cut_stderr(mut text: String) -> String {
+    if text.len() > STDERR_MAX {
+        let mut end = STDERR_MAX;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text.truncate(end);
+        text.push('…');
+    }
+    text
 }
 
 /// The records of `status --porcelain=v1 -z --no-renames`: `XY SP <path>`
@@ -1823,7 +1962,7 @@ fn status_records(command: &'static str, output: &[u8]) -> Result<Vec<StatusEntr
 }
 
 /// The one line of `output`: its trailing LF dropped; `None` when empty.
-fn one_line(output: &[u8]) -> Option<&[u8]> {
+pub(crate) fn one_line(output: &[u8]) -> Option<&[u8]> {
     let line = output.strip_suffix(b"\n").unwrap_or(output);
     (!line.is_empty()).then_some(line)
 }

@@ -74,6 +74,7 @@ use crate::answer::{self, NO_STORE, Refusal, error, json, run};
 use crate::args::{Args, percent_decode, project_path};
 use crate::hub::{Hub, Login};
 use crate::start::Project;
+use crate::sync::{Push, RepoSync, Syncs};
 use crate::{confirm, hub, tail, ui};
 
 /// What every handler shares.
@@ -85,17 +86,36 @@ pub(crate) struct App {
     pub port: u16,
     /// `--public-origin`: present, a hub, whose fence replaces [`fenced`].
     pub hub: Option<Hub>,
+    /// `--push` (a hub's alone): each repository's sync
+    /// (docs/features/hub-git.md); absent, nothing fetches or pushes.
+    pub syncs: Option<Syncs>,
 }
 
 pub(crate) type Shared = Arc<App>;
 
 impl App {
-    pub(crate) fn new(projects: Vec<Project>, port: u16, hub: Option<Hub>) -> Self {
+    pub(crate) fn new(
+        projects: Vec<Project>,
+        port: u16,
+        hub: Option<Hub>,
+        push: Option<Push>,
+    ) -> Self {
+        let projects: Vec<Arc<Project>> = projects.into_iter().map(Arc::new).collect();
+        let syncs = push.map(|push| Syncs::new(&projects, push));
         Self {
-            projects: projects.into_iter().map(Arc::new).collect(),
+            projects,
             port,
             hub,
+            syncs,
         }
+    }
+
+    /// The sync of `project`'s repository, on a hub with `--push`.
+    pub(crate) fn sync_of(&self, project: &Project) -> Option<Arc<RepoSync>> {
+        self.syncs
+            .as_ref()
+            .and_then(|syncs| syncs.of(&project.slug))
+            .map(Arc::clone)
     }
 
     /// The project the path names (`/api/projects/<slug>/…`): an unknown
@@ -203,6 +223,12 @@ pub(crate) fn router(app: Shared) -> Router {
             "/api/projects/{p}/proposals/{id}/confirm",
             get(confirm::read).post(confirm::write),
         )
+    } else {
+        routes
+    };
+    // A `--push` hub's alone (docs/features/hub-git.md): elsewhere no route.
+    let routes = if app.syncs.is_some() {
+        routes.route("/api/projects/{p}/sync", read(sync_status))
     } else {
         routes
     };
@@ -421,6 +447,26 @@ async fn team(State(app): State<Shared>, request: Request) -> Result<Response, R
             format!("internal error: cannot encode the row: {failure}"),
         )
     })?;
+    Ok(json(StatusCode::OK, body))
+}
+
+/// `GET …/sync`, a `--push` hub's alone: `{ahead, behind, state, error, at}`
+/// for the project's repository, `ahead` and `behind` from git now, no turn,
+/// no query (docs/features/hub-git.md "Data").
+async fn sync_status(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    args("sync", &[], &uri)?;
+    let (Some(syncs), Some(sync)) = (&app.syncs, app.sync_of(&project)) else {
+        return Err(unknown_route_of(&uri));
+    };
+    let internal = || {
+        Refusal::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "internal error: cannot read the sync",
+        )
+    };
+    let status = sync.status(syncs.deadline()).await.ok_or_else(internal)?;
+    let body = serde_json::to_string(&status).map_err(|_| internal())?;
     Ok(json(StatusCode::OK, body))
 }
 

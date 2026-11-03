@@ -34,6 +34,7 @@ import type {
   FlowView,
   GraphView,
   HealthReport,
+  HubSync,
   Identity,
   Inbox,
   LockDiffView,
@@ -184,6 +185,10 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     ),
     confirmProposal: vi.fn<(project: string, id: string, body: ConfirmBody) => Promise<Proposal>>((project, id) =>
       Promise.reject(new ClientError({ status: 404, message: `no route /api/projects/${project}/proposals/${id}/confirm: the routes are /api/projects and the web UI` })),
+    ),
+    // A local daemon's answer and a hub's without `--push`: the unknown route (docs/features/hub-git.md "Status and the screen"); a test of a pushing hub overrides it.
+    getSync: vi.fn<(project: string, signal?: AbortSignal) => Promise<HubSync>>((project) =>
+      Promise.reject(new ClientError({ status: 404, message: `no route /api/projects/${project}/sync: the routes are /api/projects and the web UI` })),
     ),
     // The plan: one release, current, holding one open item (docs/features/roadmap-screen.md).
     getRoadmap: vi.fn<(project: string, options?: RoadmapOptions, signal?: AbortSignal) => Promise<RoadmapDocument>>(() =>

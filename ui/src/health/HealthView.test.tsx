@@ -144,10 +144,11 @@ async function settle() {
 }
 
 describe("what the route reads (AC-01; its counting stub adds getHealth, AC-U5 and AC-U7 of health-left)", () => {
-  it("#/alpha/health: one getCheck, one getInbox and one getHealth, nothing else but the shell's projects", async () => {
+  it("#/alpha/health: one getCheck, one getInbox and one getHealth, nothing else but the shell's projects and identity", async () => {
     const client = await openHealth();
     await settle();
-    expect(callsOf(client)).toEqual({ getProjects: 1, getCheck: 1, getInbox: 1, getHealth: 1 });
+    // The shell's one identity read: a local page's `{login: null}`, so no sync read follows (docs/features/hub-git.md "Status and the screen").
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getCheck: 1, getInbox: 1, getHealth: 1 });
     expect(client.getCheck).toHaveBeenCalledWith("alpha");
     expect(argsOf(client.getInbox)).toContainEqual(["alpha"]);
     // A walk, as the check: no AbortSignal is handed over.

@@ -8,7 +8,7 @@ reviewed: 2026-11-02
 
 # Hub mode: a public origin and one trusted login
 
-ADR-0058, ADR-0059, built by `hub-identity` (RM-0049). `specengine-http --public-origin` serves named people on a public URL, behind a proxy on the same host, with no account inside SpecEngine. It is a second fence, not a second daemon: the routes, the library calls, the queue and SQLite are the local daemon's (`serve.md`, `crates/specengine-http/README.md`). A spec file changes on a hub only by a confirm, nothing pushed (`hub-confirm.md`); who acts past the plain writes is `[team]`'s (`hub-team.md`). Code: http `hub.rs`, `app.rs` `fence`, `main.rs`; core `card.rs` `hub_login_problem`; UI `src/board/acting.ts`.
+ADR-0058, ADR-0059, built by `hub-identity` (RM-0049). `specengine-http --public-origin` serves named people on a public URL, behind a proxy on the same host, with no account inside SpecEngine. It is a second fence, not a second daemon: the routes, the library calls, the queue and SQLite are the local daemon's (`serve.md`, `crates/specengine-http/README.md`). A spec file changes on a hub only by a confirm (`hub-confirm.md`) or a sync's merge (`hub-git.md`); who acts past the plain writes is `[team]`'s (`hub-team.md`). Code: http `hub.rs`, `app.rs` `fence`, `main.rs`; core `card.rs` `hub_login_problem`; UI `src/board/acting.ts`.
 
 ## Entry
 
@@ -54,7 +54,7 @@ The login is the person: recorded verbatim, compared exactly, never a display na
 
 ## Routes
 
-A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode. `GET .../team`, a hub's alone: `hub-team.md`.
+A read needs the origin and one identity. Any identity reads every served project. With no `ui/dist`, `/` past the fence is the not-built 503, as locally. `GET /api/identity`, both modes, no turn: `{"login":"mira"}`, or `{"login":null}` on a local daemon, the UI's one way to learn the mode. `GET .../team`, a hub's alone: `hub-team.md`; `.../sync`: `hub-git.md`.
 
 Writes are default deny, in the fence, so a non-GET route added later is refused until listed ("Known limits" for a GET). On a hub any method but GET is 403, a read route's 405 too, unless `hub.rs` `class` lists it, by exact raw segments: the five plain writes, POST on `.../cards` or `.../cards/:id/{move,edit,assign,cancel}`, and the team and confirm classes of `hub-team.md` "Classes". A listed write then keeps the door of `board-ui.md`: `Sec-Fetch-Site: same-origin`, JSON, the flow's `by`.
 
@@ -65,7 +65,7 @@ Identity is judged in the fence, so a refused request never queues for a turn. M
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or session and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub adds only a floor file (`queue-backup.md`): the login lands in queue fields and a confirm's commit.
+No authentication inside SpecEngine (ADR-0034): the login door owns accounts, sessions, passkeys and recovery; the daemon holds no account, token, key or session (git's: `hub-git.md`) and trusts one header (ADR-0059). A refused login is a door, not a discrepancy: no status, check or gate reads identity, open items stay open, the hook never asks the hub (ADR-0012, ADR-0039). A hub adds only a floor file (`queue-backup.md`): the login lands in queue fields and a confirm's commit.
 
 **The daemon can defend**, at its fence:
 
@@ -114,4 +114,4 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 
 ## Tests
 
-http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is RM-0064's. `tests/hub_{team,confirm}.rs`: `hub-team.md`, `hub-confirm.md`. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.
+http `tests/hub.rs`, whose test proxy sends what Traefik sends: public `Host`, `Origin`, `Sec-Fetch-*`, one `Remote-User`. It proves the daemon's half; the real proxy's half is RM-0064's. Units in `src/hub.rs`; `door.rs` and `no_domain.rs` scan `hub.rs` as they do every `src` file; `daemon_keys.rs` (`Identity`). UI: `src/board/hubIdentity.test.tsx`, beside `src/api/`'s, jsdom only.

@@ -29,6 +29,7 @@ import { ErrorBoundary } from "./ErrorBoundary";
 import { pushHash, replaceHash, useHash } from "./location";
 import { homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
+import { SyncLine } from "./SyncLine";
 import { NotFound, ViewFailure } from "./views";
 
 /** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl. */
@@ -211,9 +212,11 @@ export function Shell({ scenario }: { scenario: string | null }) {
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
   const routeProject = projectOf(route);
-  // The shown project's live queue, once the daemon has named it among its projects; a stage it
-  // says changed outside this tab is an alert above the view (docs/canon/decision-staging.md "UI").
-  const live = useLiveQueue(routeProject !== null && projects.data?.some((project) => project.slug === routeProject) === true ? routeProject : null);
+  /** The route's project once the daemon has named it among its projects. */
+  const shownProject = routeProject !== null && projects.data?.some((project) => project.slug === routeProject) === true ? routeProject : null;
+  // The shown project's live queue; a stage it says changed outside this tab is an alert above the
+  // view (docs/canon/decision-staging.md "UI").
+  const live = useLiveQueue(shownProject);
 
   // `#/` is the first project's home, without a history entry of its own.
   useEffect(() => {
@@ -454,6 +457,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
             </ul>
           </nav>
           <main id="main" ref={main} tabIndex={-1} className="app-main">
+            {/* A hub's push status, above the view, no control (docs/features/hub-git.md "Status and the screen"). */}
+            {shownProject !== null && <SyncLine key={shownProject} project={shownProject} />}
             {live.outside !== null && (
               // A new alert per change, so each is spoken.
               <OutsideStageAlert

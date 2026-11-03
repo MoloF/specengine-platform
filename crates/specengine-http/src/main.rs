@@ -14,8 +14,9 @@
 //! `apply-outputs`: created exclusively, never rewritten; an invalid one
 //! exits 2); then the bind, and `daemon.json` written with the bound
 //! port. Stdout: `serving <slug> <root>` per root, in `--root` order, a
-//! hub's `public <origin>`, then `listening http://127.0.0.1:<port>`. A
-//! `--public-origin` is judged before all of it, so a refusal creates
+//! hub's `public <origin>`, a `--push` hub's `push every <N> min`, then
+//! `listening http://127.0.0.1:<port>`. A `--public-origin` and `--push`
+//! with its settings are judged before all of it, so a refusal creates
 //! nothing. A start that fails exits 2 before listening with one
 //! `specengine-http: <reason>` on stderr. SIGINT and
 //! SIGTERM end the process (every write a read makes is one SQLite
@@ -34,7 +35,10 @@
 //! - [`ui`]: the web UI compiled in, `/` and `/assets/<file>` (task spec
 //!   `ui-embed`);
 //! - [`hub`]: `--public-origin`, a hub's fence and its one trusted login
-//!   (task spec `hub-identity`); absent, a local daemon, nothing of it runs.
+//!   (task spec `hub-identity`); absent, a local daemon, nothing of it runs;
+//! - [`sync`]: a hub's `--push` (task spec `hub-git`), one sync per
+//!   repository, fetching, merging and pushing outside every turn but the
+//!   merge's; absent, no git child reaches a remote.
 
 mod answer;
 mod app;
@@ -43,6 +47,7 @@ mod confirm;
 mod daemon;
 mod hub;
 mod start;
+mod sync;
 mod tail;
 mod ui;
 
@@ -51,6 +56,7 @@ use std::net::{Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::sync::Arc;
+use std::time::Duration;
 
 use clap::Parser;
 use specengine_cli::{Env, Exit};
@@ -75,6 +81,56 @@ struct Cli {
     /// through a proxy on this host. Absent: a local daemon.
     #[arg(long, value_name = "URL")]
     public_origin: Option<String>,
+    /// A hub only: fetch, merge and push the checkout's branch to its
+    /// upstream, at start, after each confirm that commits and on a timer.
+    #[arg(long)]
+    push: bool,
+    /// With --push: the minutes between syncs, 1 to 1440 (default 5).
+    #[arg(long, value_name = "MINUTES", allow_negative_numbers = true)]
+    push_every: Option<u64>,
+    /// With --push: the seconds each git child of a sync may take, 1 to
+    /// 3600 (default 120).
+    #[arg(long, value_name = "SECONDS", allow_negative_numbers = true)]
+    push_deadline: Option<u64>,
+}
+
+/// `--push-every`'s default, in minutes.
+const PUSH_EVERY: u64 = 5;
+
+/// `--push-deadline`'s default, in seconds.
+const PUSH_DEADLINE: u64 = 120;
+
+/// `--push` and its two settings judged, before anything is created: only a
+/// hub pushes, and each setting needs `--push` and its range.
+fn push_of(cli: &Cli, hub: Option<&Hub>) -> Result<Option<sync::Push>, String> {
+    let ranged = |option: &str, given: Option<u64>, unit: &str, max: u64, default: u64| match given
+    {
+        Some(_) if !cli.push => Err(format!("{} needs --push", option)),
+        Some(value) if !(1..=max).contains(&value) => Err(format!(
+            "{} takes 1 to {} {}, not {}",
+            option, max, unit, value
+        )),
+        Some(value) => Ok(value),
+        None => Ok(default),
+    };
+    let every = ranged("--push-every", cli.push_every, "minutes", 1440, PUSH_EVERY)?;
+    let deadline = ranged(
+        "--push-deadline",
+        cli.push_deadline,
+        "seconds",
+        3600,
+        PUSH_DEADLINE,
+    )?;
+    if !cli.push {
+        return Ok(None);
+    }
+    if hub.is_none() {
+        return Err("--push needs --public-origin: only a hub pushes".to_owned());
+    }
+    Ok(Some(sync::Push {
+        every: Duration::from_secs(every * 60),
+        deadline: Duration::from_secs(deadline),
+    }))
 }
 
 fn main() -> ExitCode {
@@ -85,6 +141,10 @@ fn main() -> ExitCode {
     // Before anything is created: a refused origin leaves no data directory.
     let hub = match cli.public_origin.as_deref().map(Hub::parse).transpose() {
         Ok(hub) => hub,
+        Err(reason) => return cannot_start(&reason),
+    };
+    let push = match push_of(&cli, hub.as_ref()) {
+        Ok(push) => push,
         Err(reason) => return cannot_start(&reason),
     };
     let env = match Env::from_process() {
@@ -114,7 +174,7 @@ fn main() -> ExitCode {
         Ok(runtime) => runtime,
         Err(error) => return cannot_start(&format!("cannot start the async runtime: {error}")),
     };
-    runtime.block_on(serve(served.projects, cli.port, lock, hub))
+    runtime.block_on(serve(served.projects, cli.port, lock, hub, push))
 }
 
 /// Binds `127.0.0.1:<port>`, writes `daemon.json` beside the held `lock`,
@@ -126,6 +186,7 @@ async fn serve(
     port: u16,
     lock: daemon::Lock,
     hub: Option<Hub>,
+    push: Option<sync::Push>,
 ) -> ExitCode {
     let address = SocketAddr::from((Ipv4Addr::LOCALHOST, port));
     let listener = match tokio::net::TcpListener::bind(address).await {
@@ -151,13 +212,20 @@ async fn serve(
     if let Some(hub) = &hub {
         lines.push_str(&format!("public {}\n", hub.origin()));
     }
+    if let Some(push) = &push {
+        lines.push_str(&format!("push every {} min\n", push.every.as_secs() / 60));
+    }
     lines.push_str(&format!("listening {url}\n"));
     {
         let mut stdout = std::io::stdout().lock();
         let _ = stdout.write_all(lines.as_bytes());
         let _ = stdout.flush();
     }
-    let state = Arc::new(app::App::new(projects, port, hub));
+    let state = Arc::new(app::App::new(projects, port, hub, push));
+    // Once listening (task spec `hub-git`): each repository's first sync.
+    if let Some(syncs) = &state.syncs {
+        syncs.start();
+    }
     let served = axum::serve(listener, app::router(state)).await;
     drop(lock);
     match served {

@@ -80,10 +80,11 @@ describe("the home route (AC-01)", () => {
 });
 
 describe("what the home reads (AC-02)", () => {
-  it("reads the projects, the inbox and the tasks once each, nothing else", async () => {
+  it("reads the projects, the inbox and the tasks once each, nothing else but the shell's identity", async () => {
     const client = await openHome();
     await settle();
-    expect(callsOf(client)).toEqual({ getProjects: 1, getInbox: 1, getTasks: 1 });
+    // The shell's one identity read: a local page's `{login: null}`, so no sync read follows (docs/features/hub-git.md "Status and the screen").
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getInbox: 1, getTasks: 1 });
     expect(argsOf(client.getInbox)).toEqual([["alpha"]]);
     expect(argsOf(client.getTasks)).toEqual([["alpha"]]);
   });
@@ -267,7 +268,7 @@ describe("each region's states (AC-06)", () => {
     retry.focus();
     fireEvent.click(retry);
     await within(tasks).findByRole("link", { name: "T-0002: Plan to read" });
-    expect(callsOf(client)).toEqual({ getProjects: 1, getInbox: 1, getTasks: 2 });
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getInbox: 1, getTasks: 2 });
     await waitFor(() => {
       expect(document.activeElement).toBe(within(tasks).getByRole("heading", { level: 2, name: "Tasks" }));
     });
@@ -282,7 +283,7 @@ describe("each region's states (AC-06)", () => {
     await within(region("Tasks")).findByRole("link", { name: "T-0002: Plan to read" });
     fireEvent.click(within(inbox).getByRole("button", { name: "Retry" }));
     await within(inbox).findByRole("link", { name: "PR-2: High" });
-    expect(callsOf(client)).toEqual({ getProjects: 1, getInbox: 2, getTasks: 1 });
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getInbox: 2, getTasks: 1 });
   });
 
   it("keeps a region's render failure in that region", async () => {

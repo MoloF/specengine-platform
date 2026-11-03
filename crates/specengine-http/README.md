@@ -14,7 +14,7 @@ Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge),
 
 ## Binary
 
-`specengine-http --root DIR... [--port N] [--public-origin URL]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`), a hub's floor: `serve.md` "Start", "Lines". Exit 1: stopped after listening.
+`specengine-http --root DIR... [--port N] [--public-origin URL [--push ...]]` (`main.rs`, `start.rs` `served`, `daemon.rs`), foreground, by `spec serve` or directly; `--root` repeats, served in order; `--port` 7777, `0` a free one; `127.0.0.1` only (`--host`, `--bind` -> exit 2). The start, its stdout lines and its exit 2 before listening (one stderr line `specengine-http: <reason>`), a hub's floor: `serve.md` "Start", "Lines"; `--push`, `sync.rs`: `hub-git.md`. Exit 1: stopped after listening.
 
 ## Fence
 
@@ -29,7 +29,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | Method, path | Query | Answer |
 |---|---|---|
 | GET `/api/projects` | -- | `[{slug, name, root, branch}]`, `--root` order (CLI `project_entry`): `name` or `null`, `root` canonical, `branch` current or `null` (detached, no git) |
-| GET `/api/identity`; a hub's `.../team`, GET, POST `.../proposals/:id/confirm` | -- | `hub.md`, `hub-team.md` |
+| GET `/api/identity`; a hub's `.../team`, GET, POST `.../proposals/:id/confirm`; a `--push` hub's `.../sync` | -- | `hub.md`, `hub-team.md`, `hub-git.md` |
 | GET `/api/projects/:p/tree` | `root`, `depth`, `kinds`, `archive` | `spec tree --json`, browser view |
 | GET `.../nodes/{*ref}` | `with`, `archive` | `spec show REF --json`, browser view |
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
@@ -78,8 +78,8 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 - U+0002 to U+0004 in the corpus can fake a snippet's hit or cut, capped too.
 - One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's connections.
 - A database replaced under a live stream: its events up to the stream's cursor are never sent.
-- In the project's turn, other reads wait: `check`, `health` walk the tree; a package read runs `git diff --no-index` per changed node.
+- In the project's turn, other reads wait (`serve.md` "Concurrency").
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), `drift.rs`, `turn.rs`, `methods.rs`, `stage.rs`, `round.rs`, `projects.rs`, `hub{,_team,_confirm,_ids}.rs`, `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git}.rs`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

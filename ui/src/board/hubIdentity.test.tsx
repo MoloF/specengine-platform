@@ -432,16 +432,22 @@ describe("a failed identity read", () => {
 
   it("is asked again by the next field to open, and a login then takes the box", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ana");
-    const client = boardClient({ login: "mira" });
-    client.getIdentity.mockRejectedValueOnce(new ClientError({ status: 503, message: "spec index unavailable" }));
+    const client = boardClient(() => Promise.reject(new ClientError({ status: 503, message: "spec index unavailable" })));
     renderApp(client, "#/alpha/board");
     const field = await box();
+    // The box and the shell's push status line (docs/features/hub-git.md "Status and the screen")
+    // ask as each opens, the line once the projects are in: every read fails so far.
     await waitFor(() => {
-      expect(client.getIdentity).toHaveBeenCalledTimes(1);
+      expect(screen.getByLabelText<HTMLSelectElement>("Project").disabled).toBe(false);
     });
+    await tick();
+    const asked = client.getIdentity.mock.calls.length;
+    expect(asked).toBeGreaterThan(0);
+    expect(field.readOnly).toBe(false);
+    client.getIdentity.mockImplementation(() => Promise.resolve({ login: "mira" }));
     await dialogOf("New card");
     await shows("mira");
-    expect(client.getIdentity).toHaveBeenCalledTimes(2);
+    expect(client.getIdentity).toHaveBeenCalledTimes(asked + 1);
     expect(field.readOnly).toBe(true);
     expect(stored()).toBe("Ana");
   });
