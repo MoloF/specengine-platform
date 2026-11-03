@@ -95,7 +95,7 @@ A cycle is Tarjan's component of two or more nodes or with a self-edge. Items so
 ## Known limits
 
 - Gap rows are never cut, so one `cycle-no-repeat` or `two-starts` item can pass `OUTPUT_CAP_CHARS`: a 4 000-member ring measured 48 034 characters on one row. The tail's "lower --depth" cannot shrink a row.
-- The read is quadratic in `parent:` depth: a chain of 1 000, 2 000, 4 000 took 0.58, 2.39, 9.79 s in debug (RM-0054).
+- The read is quadratic in `parent:` depth: a chain of 1 000, 2 000, 4 000 took 0.58, 2.39, 9.79 s in debug (RM-0076).
 - A read names no exit step: `Steps.leaving` is computed for rows, not served.
 
 ## Tests

@@ -37,7 +37,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0039.md](roadmap/RM-0039.md) check-parity-b3: gap B3 of pilot A, before its id-width debt expires · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0040.md](roadmap/RM-0040.md) check-parity: what pilot A's own docs check still does beside spec check · crates/specengine-core, crates/specengine-cli · draft
 - [docs/roadmap/RM-0052.md](roadmap/RM-0052.md) board-in-git (Phase 7, step 10c): the board's snapshot on a dedicated branch · crates/specengine-store, crates/specengine-cli, crates/specengine-http · draft
-- [docs/roadmap/RM-0054.md](roadmap/RM-0054.md) scale-reads (Phase 7, step 12): an edge table, a trusted index, reads at 100 000 nodes · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-eval · draft
+- [docs/roadmap/RM-0054.md](roadmap/RM-0054.md) read-trust (Phase 7, step 12e): read freshness, a hub's trusted index and the bars at 100 000 nodes · crates/specengine-store, crates/specengine-core, crates/specengine-cli, crates/specengine-eval, crates/specengine-http, crates/specengine-mcp · draft
 - [docs/roadmap/RM-0055.md](roadmap/RM-0055.md) zone-index (Phase 7, step 13): an index-free zone and status: retired · crates/specengine-core, docs · draft
 - [docs/roadmap/RM-0056.md](roadmap/RM-0056.md) change-record (Phase 7, step 14): what a change invalidated, cost and who accepted it · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0057.md](roadmap/RM-0057.md) draft-overlay (Phase 7, step 15): revisable drafts in reads · crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · draft
@@ -50,3 +50,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
 - [docs/roadmap/RM-0073.md](roadmap/RM-0073.md) spec-ids (Phase 7): spec IDs that a hub and a terminal never mint twice · crates/specengine-core, crates/specengine-store, crates/specengine-cli · draft
 - [docs/roadmap/RM-0074.md](roadmap/RM-0074.md) hub-ops (Phase 7, step 11b-2): off-host dumps, restore, upgrade, health and turning on --push · scripts/deploy · draft
+- [docs/roadmap/RM-0076.md](roadmap/RM-0076.md) flow-linear (Phase 7, step 12a): a flow read linear in parent: depth, a bundle fit that estimates each part once · crates/specengine-core, crates/specengine-cli · draft
+- [docs/roadmap/RM-0077.md](roadmap/RM-0077.md) scale-eval (Phase 7, step 12b): a seeded synthetic corpus and today's read cost at 1 000, 10 000 and 100 000 nodes · crates/specengine-eval · draft
+- [docs/roadmap/RM-0078.md](roadmap/RM-0078.md) edge-table (Phase 7, step 12c): resolved edges kept in the index, incrementally · crates/specengine-store, crates/specengine-core · draft
+- [docs/roadmap/RM-0079.md](roadmap/RM-0079.md) store-reads (Phase 7, step 12d): show, --links and bundle read a subset from the index · crates/specengine-cli, crates/specengine-store, crates/specengine-core · draft
