@@ -60,7 +60,7 @@ A number-shape definition whose digit count differs from its `width` gets no `id
 
 ## Older binaries
 
-A `spec` from before this release mints by the highest number of either side: after a merge it mints in the hub's range, and its check reports a hub's IDs `id-width`, red under `enforce`. So every `spec` that writes to the repository, each developer's and the host's, runs this release or later before the hub's first record or create (RM-0074 "Upgrade", `scripts/deploy/README.md` "Limits").
+A `spec` from before this release mints by the highest number of either side: after a merge it mints in the hub's range, and its check reports a hub's IDs `id-width`, red under `enforce`. So every `spec` that writes to the repository, each developer's and the host's, runs this release or later before the hub's first record or create (`hub-ops.md` "Upgrade", `scripts/deploy/README.md` "Limits").
 
 ## API
 

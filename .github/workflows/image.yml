@@ -1,8 +1,8 @@
 # The hub's image (docs/features/hub-deploy.md "`image.yml`"), on a version tag
 # alone: one version, one build (ADR-0015). `check` refuses any tag but `v` +
-# the plugin's version and runs the deployment's tests and checks (C2, C3)
+# the plugin's version and runs the deployment's tests and checks (C2, C3, C5)
 # before anything builds; `build` builds natively per architecture, smoke-tests
-# (C1) and pushes `<v>-<arch>`; `merge` publishes the list `<v>`. Both push only
+# (C1, C4) and pushes `<v>-<arch>`; `merge` publishes the list `<v>`. Both push only
 # on the owner's repository, and fail before pushing when `<v>` is published
 # already, so a published version is never replaced. Every action is pinned to
 # a commit, its version beside it, pending the owner (Q7). The runner's own
@@ -27,6 +27,8 @@ jobs:
           cargo test --locked -p specengine-cli --test deploy_clone
           # After the CLI's test, which builds the `spec` that AC12 pipes into `check`.
           cargo test --locked -p specengine-http --test deploy_admin
+          # hub-ops under the runner's sh, dash, and health.sh under its bash 5 (OP22).
+          cargo test --locked -p specengine-http --test deploy_ops
       - name: compose config
         run: >-
           docker compose --project-directory scripts/deploy
@@ -58,6 +60,34 @@ jobs:
             -v "$scratch/users:/users" \
             "$image" authelia validate-config --config /config/configuration.yml
           rm -rf "$scratch"
+      - name: The pinned door and restic images hold what hub-ops calls (C5)
+        run: |
+          set -eu
+          images=$(docker compose --project-directory scripts/deploy \
+            -f scripts/deploy/docker-compose.yml \
+            --env-file scripts/deploy/.env.example config --images)
+          # `authelia`, `admin` and `dump-door` share one image: one line.
+          door=$(printf '%s\n' "$images" | grep '^authelia/' | sort -u)
+          restic=$(printf '%s\n' "$images" | grep '^restic/' | sort -u)
+          door_help() {
+            docker run --rm --network none "$door" authelia "$@" --help > /dev/null
+          }
+          door_help storage user webauthn export
+          door_help storage user webauthn import
+          door_help storage user totp export
+          door_help storage user totp import
+          door_help storage migrate up
+          version=$(docker run --rm --network none --entrypoint restic "$restic" version)
+          printf '%s\n' "$version"
+          printf '%s\n' "$version" |
+            awk '$1 == "restic" { split($2, v, "."); if (v[1] + 0 > 0 || v[2] + 0 >= 17) ok = 1 } END { exit !ok }'
+          # The tools `upload`, `fresh` and the acts call in backup, and `door` and
+          # `hub-admin dump` in dump-door (VF6, VF7 judge how they behave); the
+          # door's `timeout` takes `SECS PROG`, as hub-admin's DUMP_BOUND calls it.
+          docker run --rm --network none --entrypoint /bin/sh "$restic" -c \
+            'for tool in sh cp find ln touch date awk ls mkdir rm sleep tr cat; do command -v "$tool" > /dev/null || { echo "restic image: no $tool" >&2; exit 1; }; done'
+          docker run --rm --network none --entrypoint /bin/sh "$door" -c \
+            'for tool in sh find date awk ls mkdir mv rm sleep tr cat chmod rmdir timeout; do command -v "$tool" > /dev/null || { echo "door image: no $tool" >&2; exit 1; }; done; timeout 5 true'
   build:
     needs: check
     # A fork's tag publishes nothing.
@@ -122,6 +152,31 @@ jobs:
             -o "$page" -w '%{http_code}' http://127.0.0.1:7777/)
           [ "$code" = 200 ]
           grep -q '<div id="root">' "$page"
+      - name: The probe (C4)
+        env: {REF: "${{ steps.ref.outputs.ref }}"}
+        run: |
+          set -eu
+          # The smoke's local daemon on 7777, answering a loopback GET / 200, and
+          # a hub on 7778, whose fence answers it 403; each is the other's open
+          # "proxy" port.
+          docker run -d --name probe-local --network host --entrypoint sh "$REF" -c \
+            'set -eu; mkdir /tmp/smoke; cd /tmp/smoke; git init -q; spec init; exec specengine-http --root /tmp/smoke --port 7777'
+          docker run -d --name probe-hub --network host --entrypoint sh "$REF" -c \
+            'set -eu; mkdir /tmp/smoke; cd /tmp/smoke; git init -q; spec init; exec specengine-http --root /tmp/smoke --port 7778 --public-origin https://hub.example.org'
+          trap 'docker logs probe-local || true; docker logs probe-hub || true; docker rm -f probe-local probe-hub > /dev/null 2>&1 || true' EXIT
+          for port in 7777 7778; do
+            curl -sS --retry 30 --retry-delay 1 --retry-connrefused -o /dev/null "http://127.0.0.1:$port/"
+          done
+          probe() {
+            docker run --rm --network host \
+              -e SPECENGINE_HEALTH_PORT="$1" -e SPECENGINE_HEALTH_PROXY_PORT="$2" \
+              --entrypoint specengine-health "$REF"
+          }
+          if probe 7777 7778; then
+            echo "specengine-health passed a daemon that answers a loopback GET / 200" >&2
+            exit 1
+          fi
+          probe 7778 7777
       - name: Push
         env: {REF: "${{ steps.ref.outputs.ref }}"}
         run: docker push "$REF"

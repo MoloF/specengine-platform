@@ -78,3 +78,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0068](decisions/ADR-0068.md) A hub's accounts are the deployment's script, run from the host's shell in a one-shot container with no network · architecture · accepted
 - [ADR-0069](decisions/ADR-0069.md) A read trusts a file's stat key outside a 2 s racy window, and a hub's reads alone trust the index its writers keep · architecture · accepted
 - [ADR-0070](decisions/ADR-0070.md) A hub mints spec IDs from 100001 and a terminal below it; propose refuses the other side, apply never · architecture · accepted
+- [ADR-0071](decisions/ADR-0071.md) A hub's state leaves the host every 15 minutes, restic-encrypted, by the deployment's sidecars; no key and no SpecEngine code · scripts/deploy · accepted

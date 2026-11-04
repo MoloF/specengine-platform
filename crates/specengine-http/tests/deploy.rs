@@ -25,9 +25,9 @@
 //! `TRAEFIK_*` variable adds static configuration; no service mounts an
 //! absolute host path; every `{{ ... }}` template is a plain `env` read; the
 //! Dockerfile has three stages, sets `XDG_DATA_HOME=/data` and
-//! `HOME=/var/lib/specengine/home`, installs the two scripts under their
+//! `HOME=/var/lib/specengine/home`, installs the three scripts under their
 //! image names and runs the entrypoint; its context keeps every manifest, `Cargo.lock`,
-//! `crates/`, `ui/` and the two scripts, and every source a stage copies
+//! `crates/`, `ui/` and the three scripts, and every source a stage copies
 //! from it, each an existing path, and drops `ui/dist`;
 //! `.gitignore` keeps every committed deploy file; `image.yml` runs
 //! `tag-check.sh` as its check job's first step, names no secret but
@@ -37,6 +37,11 @@
 //! D7, D9 and D11 are as docs/features/hub-accounts.md "Acceptance criteria"
 //! (RM-0065, its decided changes to 11b-1's tests) rewrites them, for the one-shot `admin` service;
 //! that slice's own criteria are `tests/deploy_admin.rs`.
+//!
+//! D7, D9, D11 and D14 are then as docs/features/hub-ops.md "Acceptance criteria"
+//! OP23 (RM-0074) rewrites them: seven services, the new images pinned, each
+//! secret granted per OP3, three scripts copied into the image. OP6 (no version
+//! moves) is here too; that slice's other criteria are `tests/deploy_ops.rs`.
 //!
 //! Iteration 2's hardenings: Traefik rejects alias headers (D4); the runtime
 //! carries the source label (D14); every pushing job refuses a published
@@ -1188,12 +1193,13 @@ fn d06_the_daemons_one_server_is_the_entrypoints_loopback_port() {
 
 // ------------------------------------------------------------- D7-D11: the host
 
-/// D7, as docs/features/hub-accounts.md "Acceptance criteria" (its decided
-/// changes to 11b-1's tests) rewrites it: `specengine` has `network_mode:
-/// service:traefik` and no `ports`, `expose` or `networks`; `admin`'s
-/// `network_mode` is `none`, and no service but `specengine` and `admin` has
-/// one; only `traefik` has `ports`, exactly `80:80` and `443:443`. M: publish
-/// 7777; give `authelia` the namespace; put `admin` on `service:traefik`.
+/// D7, as docs/features/hub-ops.md "Acceptance criteria" OP23 rewrites it
+/// (after docs/features/hub-accounts.md's): `specengine` has `network_mode:
+/// service:traefik` and no `ports`, `expose` or `networks`; `admin`,
+/// `dump-queue` and `dump-door` have `network_mode: none`, and no other
+/// service has one (`backup` joins its own network, OP2); only `traefik` has
+/// `ports`, exactly `80:80` and `443:443`. M: publish 7777; give `authelia`
+/// the namespace; put `admin` on `service:traefik`.
 #[test]
 fn d07_the_daemon_lives_in_traefiks_namespace_and_only_traefik_publishes() {
     let compose = compose();
@@ -1205,15 +1211,18 @@ fn d07_the_daemon_lives_in_traefiks_namespace_and_only_traefik_publishes() {
     for key in ["ports", "expose", "networks"] {
         assert!(daemon.get(key).is_none(), "specengine has `{key}`");
     }
-    assert_eq!(
-        service(&compose, ADMIN)
-            .get("network_mode")
-            .and_then(Value::as_str),
-        Some("none"),
-        "admin has no network (hub-accounts)"
-    );
+    let unnetworked = [ADMIN, "dump-queue", "dump-door"];
+    for name in unnetworked {
+        assert_eq!(
+            service(&compose, name)
+                .get("network_mode")
+                .and_then(Value::as_str),
+            Some("none"),
+            "{name} has no network (hub-accounts, hub-ops)"
+        );
+    }
     for (name, service) in services(&compose) {
-        if name != DAEMON && name != ADMIN {
+        if name != DAEMON && !unnetworked.contains(&name.as_str()) {
             assert!(
                 service.get("network_mode").is_none(),
                 "{name} has a network_mode"
@@ -1301,32 +1310,44 @@ fn d08_nothing_on_the_host_but_the_file_provider() {
     }
 }
 
-/// D9, as docs/features/hub-accounts.md "Acceptance criteria" (its decided
-/// changes to 11b-1's tests) rewrites it: the services are exactly `admin`,
-/// `authelia`, `specengine`, `traefik`, with `admin`'s image equal to
-/// `authelia`'s; `specengine`'s image is
+/// D9, as docs/features/hub-ops.md "Acceptance criteria" OP23 rewrites it
+/// (after docs/features/hub-accounts.md's): the services are exactly the
+/// seven, `admin`, `authelia`, `backup`, `dump-door`, `dump-queue`,
+/// `specengine`, `traefik`, with `admin`'s and `dump-door`'s image equal to
+/// `authelia`'s and `dump-queue`'s to `specengine`'s; `specengine`'s image is
 /// `ghcr.io/molof/specengine:${SPECENGINE_VERSION:?...}`, every other an exact
-/// `x.y.z` and `@sha256:` + 64 hex, never `latest`; no YAML file under
-/// `scripts/deploy/` or `image.yml` holds an anchor, an alias or a `<<` merge
-/// key; `.env.example`'s `SPECENGINE_VERSION` is `plugin.json`'s version. M:
-/// `traefik:latest`; drop the `:?`; add a service; bump `plugin.json` alone;
-/// give `admin` another image.
+/// `x.y.z` and `@sha256:` + 64 hex, never `latest` (restic's too); no YAML
+/// file under `scripts/deploy/` or `image.yml` holds an anchor, an alias or a
+/// `<<` merge key; `.env.example`'s `SPECENGINE_VERSION` is `plugin.json`'s
+/// version. M: `traefik:latest`; drop the `:?`; add a service; bump
+/// `plugin.json` alone; give `admin` another image; `restic/restic:latest`.
 #[test]
-fn d09_four_services_pinned_images_no_anchors_and_one_version() {
+fn d09_seven_services_pinned_images_no_anchors_and_one_version() {
     let compose = compose();
     let names: BTreeSet<&str> = services(&compose).keys().map(String::as_str).collect();
     assert_eq!(
         names,
-        BTreeSet::from([ADMIN, "authelia", "specengine", "traefik"])
+        BTreeSet::from([
+            ADMIN,
+            "authelia",
+            "backup",
+            "dump-door",
+            "dump-queue",
+            "specengine",
+            "traefik"
+        ])
     );
-    assert_eq!(
-        string(at(service(&compose, ADMIN), &["image"]), "admin's image"),
-        string(
-            at(service(&compose, "authelia"), &["image"]),
-            "authelia's image"
-        ),
-        "admin runs the door's own image, byte for byte (hub-accounts)"
-    );
+    for (name, of) in [
+        (ADMIN, "authelia"),
+        ("dump-door", "authelia"),
+        ("dump-queue", DAEMON),
+    ] {
+        assert_eq!(
+            string(at(service(&compose, name), &["image"]), name),
+            string(at(service(&compose, of), &["image"]), of),
+            "{name} runs {of}'s own image, byte for byte (hub-accounts, hub-ops)"
+        );
+    }
     let required = Regex::new(r"^ghcr\.io/molof/specengine:\$\{SPECENGINE_VERSION:\?[^}]*\}$")
         .expect("a pattern");
     let daemon = string(
@@ -1338,7 +1359,7 @@ fn d09_four_services_pinned_images_no_anchors_and_one_version() {
         Regex::new(r"^[a-z0-9][a-z0-9._/-]*:v?[0-9]+\.[0-9]+\.[0-9]+@sha256:[0-9a-f]{64}$")
             .expect("a pattern");
     for (name, service) in services(&compose) {
-        if name != DAEMON {
+        if name != DAEMON && name != "dump-queue" {
             let image = string(at(service, &["image"]), name);
             assert!(
                 pinned.is_match(image) && !image.contains("latest"),
@@ -1474,30 +1495,37 @@ fn ignored(gitignore: &Path, paths: &[&str]) -> Vec<(String, bool)> {
         .collect()
 }
 
-/// D11, as docs/features/hub-accounts.md "Acceptance criteria" (its decided
-/// changes to 11b-1's tests) rewrites it: `deploy_key` and `known_hosts` are
-/// granted to `specengine` alone, `authelia_jwt_secret` and
-/// `authelia_session_secret` to `authelia` alone, `authelia_storage_key` to
-/// `authelia` and `admin`, each a `file:` under `./secrets/`; `specengine`
-/// mounts only `./projects` and `specengine-data`, nothing of `./authelia`,
-/// `./traefik` or `./secrets`; every `environment` name holding `SECRET`,
-/// `PASSWORD`, `TOKEN` or `KEY` ends `_FILE` with a value under
-/// `/run/secrets/`; `scripts/deploy/.gitignore` ignores `.env`, `secrets/`,
-/// `projects/`, `authelia/users/`, `traefik/mcp-users/`, `admin-log/acts.log`
-/// and `traefik/dynamic/mcp-stamp.yml`, and none of the committed files,
-/// `admin/hub-admin` among them. M: grant `deploy_key` to `authelia`; mount
+/// D11, as docs/features/hub-ops.md "Acceptance criteria" OP23 rewrites it
+/// (after docs/features/hub-accounts.md's), each secret granted per OP3:
+/// `deploy_key` and `known_hosts` to `specengine` alone,
+/// `authelia_jwt_secret` and `authelia_session_secret` to `authelia` alone,
+/// `authelia_storage_key` to `authelia`, `admin` and `dump-door`,
+/// `restic_password` and `restic_env` to `backup` alone, each a `file:` under
+/// `./secrets/`; `specengine` mounts only `./projects` and `specengine-data`,
+/// nothing of `./authelia`, `./traefik` or `./secrets`; every `environment`
+/// name holding `SECRET`, `PASSWORD`, `TOKEN` or `KEY` ends `_FILE` with a
+/// value under `/run/secrets/`; `scripts/deploy/.gitignore` ignores `.env`,
+/// `secrets/`, `projects/`, `authelia/users/`, `traefik/mcp-users/`,
+/// `admin-log/acts.log`, `traefik/dynamic/mcp-stamp.yml` and `restore/`, and
+/// none of the committed files, `admin/hub-admin`, `ops/hub-ops` and
+/// `health.sh` among them. M: grant `deploy_key` to `authelia`; mount
 /// `./authelia/users` into `specengine`; set `AUTHELIA_SESSION_SECRET` to a
 /// literal; drop `.env` from `.gitignore`; grant `authelia_session_secret` to
-/// `admin`.
+/// `admin`; grant `restic_env` to `dump-door`.
 #[test]
 fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
     let compose = compose();
     let owners: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::from([
         ("authelia_jwt_secret", BTreeSet::from(["authelia"])),
         ("authelia_session_secret", BTreeSet::from(["authelia"])),
-        ("authelia_storage_key", BTreeSet::from(["authelia", ADMIN])),
+        (
+            "authelia_storage_key",
+            BTreeSet::from(["authelia", ADMIN, "dump-door"]),
+        ),
         ("deploy_key", BTreeSet::from([DAEMON])),
         ("known_hosts", BTreeSet::from([DAEMON])),
+        ("restic_password", BTreeSet::from(["backup"])),
+        ("restic_env", BTreeSet::from(["backup"])),
     ]);
     let declared = object(at(&compose, &["secrets"]), "secrets");
     let names: BTreeSet<&str> = declared.keys().map(String::as_str).collect();
@@ -1554,11 +1582,15 @@ fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
         ".env",
         "secrets/deploy_key",
         "secrets/known_hosts",
+        "secrets/restic_password",
+        "secrets/restic_env",
         "projects/forge/specengine.toml",
         "authelia/users/users.yml",
         "traefik/mcp-users/users",
         "admin-log/acts.log",
         "traefik/dynamic/mcp-stamp.yml",
+        "restore/queue/forge.jsonl",
+        "restore/door/users.yml",
     ];
     let committed = [
         ".env.example",
@@ -1573,6 +1605,8 @@ fn d11_secrets_reach_their_service_alone_and_stay_out_of_git() {
         "traefik/dynamic/hub.yml",
         "authelia/config/configuration.yml",
         "admin/hub-admin",
+        "ops/hub-ops",
+        "health.sh",
     ];
     let mut paths = private.to_vec();
     paths.extend_from_slice(&committed);
@@ -2071,8 +2105,11 @@ fn excluded(patterns: &[(bool, Vec<String>)], path: &str) -> bool {
 /// `org.opencontainers.image.source` =
 /// `https://github.com/MoloF/specengine-platform` (iteration 2);
 /// `Dockerfile.dockerignore` excludes `target`, `target.noindex`, `.git`
-/// and `node_modules`. M: add `git-lfs`; remove `USER`; build the UI after
-/// cargo; `rust:1.91`; drop the source label.
+/// and `node_modules`. As docs/features/hub-ops.md "Acceptance criteria"
+/// OP23 rewrites it: three scripts copied into the image, `health.sh` as
+/// `specengine-health` beside the entrypoint and the clone, and the context
+/// keeps all three. M: add `git-lfs`; remove `USER`; build the UI after
+/// cargo; `rust:1.91`; drop the source label; drop the probe's `COPY`.
 #[test]
 fn d14_the_image_three_pinned_stages_and_its_context() {
     let path = deploy().join("Dockerfile");
@@ -2227,7 +2264,7 @@ fn d14_the_image_three_pinned_stages_and_its_context() {
         "the runtime's source label links the package to its repository"
     );
 
-    // "Data": the data directory and HOME, the two scripts, the entrypoint.
+    // "Data": the data directory and HOME, the three scripts, the entrypoint.
     let env = image_env(runtime);
     assert_eq!(env.get("XDG_DATA_HOME").map(String::as_str), Some("/data"));
     // The image user's home lies outside every root and outside `/data`.
@@ -2244,6 +2281,7 @@ fn d14_the_image_three_pinned_stages_and_its_context() {
     for (script, name) in [
         ("entrypoint.sh", "/usr/local/bin/specengine-entrypoint"),
         ("clone.sh", "/usr/local/bin/specengine-clone"),
+        ("health.sh", "/usr/local/bin/specengine-health"),
     ] {
         assert!(
             installs
@@ -2278,6 +2316,7 @@ fn d14_the_image_three_pinned_stages_and_its_context() {
         "ui/src/main.tsx".to_owned(),
         "scripts/deploy/entrypoint.sh".to_owned(),
         "scripts/deploy/clone.sh".to_owned(),
+        "scripts/deploy/health.sh".to_owned(),
     ];
     for member in fs::read_dir(repository().join("crates"))
         .expect("crates/")
@@ -2937,4 +2976,52 @@ fn d15_tag_check_takes_v_and_the_plugins_version_exactly() {
         ".env.example off the plugin's version: {}",
         ran.show()
     );
+}
+
+/// docs/features/hub-ops.md "Acceptance criteria" OP6, and "Decisions" S11:
+/// no version moves. `.env.example`'s `SPECENGINE_VERSION` and
+/// `plugin.json`'s version are both 0.29.1; `tag-check.sh` accepts `v0.29.1`
+/// and refuses `v0.29.2`; `image.yml`'s check job runs it as its first step,
+/// before any cargo line. M: `.env.example` at 0.29.2; `plugin.json` alone
+/// bumped; the `tag-check.sh` step moved after the tests.
+#[test]
+fn op06_no_version_moves() {
+    assert_eq!(
+        plugin_version(),
+        "0.29.1",
+        "plugin.json stays at 0.29.1 (S11)"
+    );
+    let versions: Vec<String> = env_example()
+        .into_iter()
+        .filter(|(key, _)| key == "SPECENGINE_VERSION")
+        .map(|(_, value)| value)
+        .collect();
+    assert_eq!(versions, ["0.29.1"], ".env.example stays at 0.29.1 (S11)");
+
+    let script = deploy().join("tag-check.sh");
+    let scratch = Scratch::new("op06");
+    let elsewhere = scratch.dir("elsewhere");
+    let ran = tag_check(&script, "v0.29.1", &elsewhere);
+    assert_eq!(ran.code, 0, "{}", ran.show());
+    assert_eq!(ran.stdout, "0.29.1\n");
+    refused_tag(
+        &tag_check(&script, "v0.29.2", &elsewhere),
+        "v0.29.2",
+        "0.29.1",
+    );
+
+    let workflow = workflow();
+    let runs: Vec<&str> = steps(at(&workflow, &["jobs", "check"]))
+        .into_iter()
+        .filter_map(run_text)
+        .collect();
+    assert!(
+        runs.first().is_some_and(|run| run.contains("tag-check.sh")),
+        "tag-check.sh is the check job's first step: {runs:?}"
+    );
+    let cargo = runs
+        .iter()
+        .position(|run| run.contains("cargo "))
+        .unwrap_or_else(|| panic!("the check job runs no cargo: {runs:?}"));
+    assert!(cargo > 0, "the tests come after tag-check.sh: {runs:?}");
 }

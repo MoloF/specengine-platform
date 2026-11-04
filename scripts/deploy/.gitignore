@@ -8,3 +8,6 @@ traefik/mcp-users/
 # and the stamp that makes the proxy read its MCP users file again.
 admin-log/
 traefik/dynamic/mcp-stamp.yml
+# hub-ops (docs/features/hub-ops.md "Files"): a restore's plaintext folder,
+# which the runbook deletes.
+restore/

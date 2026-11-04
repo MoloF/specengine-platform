@@ -40,6 +40,21 @@
 //!
 //! AC15 is `specengine-cli`'s `tests/team_config.rs`; D7, D9 and D11 as decided
 //! are `tests/deploy.rs`. AC17 is RM-0075's. VF1-VF3 and G1-G10 are by hand.
+//!
+//! docs/features/hub-ops.md (RM-0074, Phase 7 step 11b-2) OP11-OP15, the door's
+//! half of the dumps: `hub-admin dump` and `restore`, and `hub-ops door` with the
+//! real `hub-admin`. The stub `authelia` gains the shapes "`hub-admin`: `dump`
+//! and `restore`" records (from memory until VF4): `storage user webauthn|totp
+//! export --file F` writes `# the stub <kind> export, call <n>` to `F`, `storage
+//! migrate up --sqlite.path D` makes `D`, and the two imports exit 0; a `watch`
+//! control file names a path whose bytes each call keeps (OP14's order). Its
+//! hold loop sleeps by `/bin/sleep`, so a stub `sleep` never sees it. `hub-ops`
+//! runs as `dump-door` mounts it: the scratch root is both `HUB_ADMIN_ROOT` and
+//! `HUB_OPS_ROOT`, `opt/hub-admin/hub-admin` a shim that counts each try and
+//! execs the real script, with `tests/deploy_ops.rs`'s stub `date` and `sleep`
+//! first on `PATH`, no `HUB_HOST` (compose gives `dump-door` none), and under
+//! `/bin/sh` and `/bin/dash` (OP22). OP23 rewrites AC8 for the lock's new
+//! message.
 
 #![cfg(unix)]
 
@@ -108,11 +123,15 @@ if [ -t 0 ]; then
 else
     cat > "$door/stdin.$n"
 fi
+if [ -f "$door/watch" ]; then
+    watched=$(cat "$door/watch")
+    if [ -e "$watched" ]; then cat "$watched" > "$door/watch.$n"; else : > "$door/unwatched.$n"; fi
+fi
 if listed hold-at; then
     : > "$door/held"
     waited=0
     while [ ! -e "$door/release" ] && [ "$waited" -lt 600 ]; do
-        sleep 0.1
+        /bin/sleep 0.1
         waited=$((waited + 1))
     done
 fi
@@ -155,11 +174,61 @@ case "$1 $2 $3 $4" in
             exit 1
         fi
         ;;
+    "storage user webauthn export" | "storage user totp export")
+        if [ "$fail" = yes ]; then
+            echo "Error: the stub fails call $n" >&2
+            exit 1
+        fi
+        file=
+        previous=
+        for argument in "$@"; do
+            if [ "$previous" = --file ]; then file=$argument; fi
+            previous=$argument
+        done
+        if [ -z "$file" ]; then
+            echo "Error: the stub's export was given no --file" >&2
+            exit 1
+        fi
+        printf '# the stub %s export, call %s\n' "$3" "$n" > "$file" || exit 1
+        ;;
+    "storage migrate up"*)
+        if [ "$fail" = yes ]; then
+            echo "Error: the stub fails call $n" >&2
+            exit 1
+        fi
+        db=
+        previous=
+        for argument in "$@"; do
+            if [ "$previous" = --sqlite.path ]; then db=$argument; fi
+            previous=$argument
+        done
+        if [ -n "$db" ]; then : > "$db"; fi
+        ;;
+    "storage user webauthn import" | "storage user totp import")
+        if [ "$fail" = yes ]; then
+            echo "Error: the stub fails call $n" >&2
+            exit 1
+        fi
+        ;;
     *)
         echo "Error: the stub holds no recording for: $*" >&2
         exit 1
         ;;
 esac
+"#;
+
+/// The door image's `timeout BOUND CMD...`, which macOS lacks
+/// (docs/features/hub-ops.md "`hub-admin`: `dump` and `restore`", iteration
+/// 2's bound on each export): it keeps the bound and the command, then runs
+/// it, or, when `timeout-exit` holds a status, exits with it at once, as a
+/// bound that passed does (124, or 143 for the command killed). `@DOOR@` is
+/// the stub's records' folder.
+const TIMEOUT_SHIM: &str = r#"#!/bin/sh
+printf '%s %s\n' "$1" "$2" >> '@DOOR@/timeout.log'
+code=$(cat '@DOOR@/timeout-exit' 2>/dev/null)
+if [ -n "$code" ]; then exit "$code"; fi
+shift
+exec "$@"
 "#;
 
 /// busybox's `base64` as the pinned image has it: wrapped at 76 columns.
@@ -583,6 +652,10 @@ impl Hub {
                 first_existing(&["/usr/bin/base64", "/bin/base64"], "base64"),
             ),
         );
+        executable(
+            &bin.join("timeout"),
+            &TIMEOUT_SHIM.replace("@DOOR@", text_of(&door)),
+        );
         Self {
             scratch,
             root,
@@ -619,6 +692,10 @@ impl Hub {
 
     fn notice(&self) -> PathBuf {
         self.root.join("var/lib/authelia/notification.txt")
+    }
+
+    fn db(&self) -> PathBuf {
+        self.root.join("var/lib/authelia/db.sqlite3")
     }
 
     fn put(&self, path: &Path, text: &str) {
@@ -952,6 +1029,10 @@ impl Hub {
         }
     }
 }
+
+/// The lock's message for [`Hub::hold_lock`]'s lock (docs/features/hub-ops.md
+/// "`hub-admin`: `dump` and `restore`").
+const HELD_LOCK: &str = "another act or a dump holds admin-log/lock (taken 2026-11-04T09:00:00Z); if none runs, remove it";
 
 /// `add`'s arguments for `lena`, a login no test's file holds.
 const ADD_LENA: [&str; 6] = [
@@ -1953,10 +2034,13 @@ fn ac07_a_stamp_that_cannot_be_written_still_shows_the_secret() {
 // ------------------------------------------------------------- AC8: the lock
 
 /// AC8: while `admin-log/lock/` exists, `add`, `disable`, `enable`, `reset`,
-/// `mcp rotate` and `mcp revoke` on a terminal exit 1 naming it (`another act
-/// holds admin-log/lock`), write nothing and call nothing, and the holder's
-/// `.mcp-stamp.tmp` survives each refused run (R4). M: no lock check; remove
-/// temp files without holding the lock.
+/// `mcp rotate` and `mcp revoke` on a terminal exit 1 naming it, write nothing
+/// and call nothing, and the holder's `.mcp-stamp.tmp` survives each refused
+/// run (R4). As docs/features/hub-ops.md "Acceptance criteria" OP23 rewrites
+/// it, the line is "Data"'s new lock message, the holder's `taken` in it:
+/// `another act or a dump holds admin-log/lock (taken <time>); if none runs,
+/// remove it`. M: no lock check; remove temp files without holding the lock;
+/// the old message.
 #[test]
 fn ac08_a_held_lock_refuses_every_act_that_writes() {
     let hub = Hub::new("ac08");
@@ -1986,8 +2070,8 @@ fn ac08_a_held_lock_refuses_every_act_that_writes() {
         let act = hub.terminal(args, &[]);
         act.refused(1);
         assert!(
-            act.stderr.contains("another act holds admin-log/lock"),
-            "{}",
+            act.says(HELD_LOCK),
+            "the lock's message `{HELD_LOCK}`: {}",
             act.show()
         );
         assert_eq!(
@@ -2676,6 +2760,1184 @@ fn data_a_bad_call_exits_2_and_touches_nothing() {
     }
 }
 
+// ------------------------------------------------------------- OP11-OP15: dump and restore
+
+/// `tests/deploy_ops.rs`'s stub `date`: the clock file's epoch, in UTC.
+const OPS_DATE_STUB: &str = r#"#!/bin/sh
+rec='@REC@'
+when=$(cat "$rec/clock")
+utc=no
+format=
+while [ "$#" -gt 0 ]; do
+    case $1 in
+        -u) utc=yes ;;
+        -d) shift; when=${1#@} ;;
+        -r) shift; when=$1 ;;
+        +*) format=$1 ;;
+        *) printf '%s\n' "$1" >> "$rec/date-odd" ;;
+    esac
+    shift
+done
+[ "$utc" = yes ] || printf 'date without -u\n' >> "$rec/date-not-utc"
+[ -n "$format" ] || format='+%a %b %e %H:%M:%S UTC %Y'
+if [ "$format" = +%s ]; then
+    printf '%s\n' "$when"
+    exit 0
+fi
+/bin/date -u -r "$when" "$format" 2>/dev/null || /bin/date -u -d "@$when" "$format"
+"#;
+
+/// `tests/deploy_ops.rs`'s stub `sleep`: it keeps each argument, returns at
+/// once, and sends TERM to its parent at the call `sleep-term-at` names (or
+/// the hundredth).
+const OPS_SLEEP_STUB: &str = r#"#!/bin/sh
+rec='@REC@'
+n=1
+if [ -f "$rec/sleep.count" ]; then n=$(( $(cat "$rec/sleep.count") + 1 )); fi
+printf '%s\n' "$n" > "$rec/sleep.count"
+printf '%s\n' "$*" >> "$rec/sleep.log"
+if [ "$(cat "$rec/sleep-term-at" 2>/dev/null)" = "$n" ] || [ "$n" -ge 100 ]; then
+    kill -TERM "$PPID"
+fi
+exit 0
+"#;
+
+/// The shim `dump-door` runs as `/opt/hub-admin/hub-admin`: it counts each
+/// try, then execs the real script. `@REC@`, `@SHELL@`, `@HUB_ADMIN@`.
+const ADMIN_SHIM: &str = r#"#!/bin/sh
+printf '%s\n' "$*" >> '@REC@/admin.log'
+exec '@SHELL@' '@HUB_ADMIN@' "$@"
+"#;
+
+/// 2026-11-04T00:00:00Z, a UTC midnight.
+const DAY: i64 = 1_793_750_400;
+
+/// `epoch` as `date -u +%Y%m%dT%H%M%SZ` prints it: a generation's name.
+fn stamp(epoch: i64) -> String {
+    let days = epoch.div_euclid(86_400);
+    let secs = epoch.rem_euclid(86_400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}{month:02}{day:02}T{:02}{:02}{:02}Z",
+        secs / 3600,
+        secs / 60 % 60,
+        secs % 60
+    )
+}
+
+/// The shells `hub-ops` runs under (docs/features/hub-ops.md OP22): `/bin/sh`,
+/// `/bin/dash` where it exists, `HUB_OPS_SH` when set; one per binary.
+fn ops_shells() -> Vec<String> {
+    let mut candidates = vec!["/bin/sh".to_owned(), "/bin/dash".to_owned()];
+    if let Ok(extra) = std::env::var("HUB_OPS_SH") {
+        candidates.push(extra);
+    }
+    let mut found: Vec<(PathBuf, String)> = Vec::new();
+    for shell in candidates {
+        let Ok(real) = fs::canonicalize(&shell) else {
+            continue;
+        };
+        if !found.iter().any(|(seen, _)| *seen == real) {
+            found.push((real, shell));
+        }
+    }
+    found.into_iter().map(|(_, shell)| shell).collect()
+}
+
+fn inode(path: &Path) -> u64 {
+    fs::metadata(path)
+        .unwrap_or_else(|error| panic!("{}: {error}", path.display()))
+        .ino()
+}
+
+fn kill_term(pid: u32) {
+    let kill = first_existing(&["/bin/kill", "/usr/bin/kill"], "kill");
+    let sent = Command::new(kill)
+        .args(["-TERM", &pid.to_string()])
+        .status()
+        .expect("kill");
+    assert!(sent.success(), "SIGTERM to {pid}");
+}
+
+/// The names in `dir`, sorted, dot-names included; none when it is missing.
+fn names_in(dir: &Path) -> Vec<String> {
+    let Ok(found) = fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = found
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+/// `hub-ops` beside a [`Hub`], as `dump-door` runs it: the hub's root is also
+/// `HUB_OPS_ROOT`, with `dumps/` and the shim at `opt/hub-admin/hub-admin`;
+/// the stub `date` and `sleep` first on `PATH`, then the hub's stubs.
+struct Ops<'a> {
+    hub: &'a Hub,
+    bin: PathBuf,
+    rec: PathBuf,
+    shell: String,
+}
+
+impl<'a> Ops<'a> {
+    fn new(hub: &'a Hub, ops_shell: &str) -> Self {
+        let bin = hub.scratch.dir("ops-bin");
+        let rec = hub.scratch.dir("ops-rec");
+        executable(
+            &bin.join("date"),
+            &OPS_DATE_STUB.replace("@REC@", text_of(&rec)),
+        );
+        executable(
+            &bin.join("sleep"),
+            &OPS_SLEEP_STUB.replace("@REC@", text_of(&rec)),
+        );
+        fs::create_dir_all(hub.root.join("dumps")).expect("the hub-dumps mount");
+        let opt = hub.root.join("opt/hub-admin");
+        fs::create_dir_all(&opt).expect("the ./admin mount");
+        executable(
+            &opt.join("hub-admin"),
+            &ADMIN_SHIM
+                .replace("@REC@", text_of(&rec))
+                .replace("@SHELL@", &shell())
+                .replace("@HUB_ADMIN@", text_of(&hub_admin())),
+        );
+        fs::write(rec.join("clock"), format!("{}\n", DAY + 12 * 3600)).expect("the clock");
+        Self {
+            hub,
+            bin,
+            rec,
+            shell: ops_shell.to_owned(),
+        }
+    }
+
+    fn set_clock(&self, epoch: i64) {
+        fs::write(self.rec.join("clock"), format!("{epoch}\n")).expect("the clock");
+    }
+
+    fn door_dumps(&self) -> PathBuf {
+        self.hub.root.join("dumps/door")
+    }
+
+    fn sleeps(&self) -> Vec<String> {
+        fs::read_to_string(self.rec.join("sleep.log"))
+            .map(|text| text.lines().map(str::to_owned).collect())
+            .unwrap_or_default()
+    }
+
+    fn tries(&self) -> Vec<String> {
+        fs::read_to_string(self.rec.join("admin.log"))
+            .map(|text| text.lines().map(str::to_owned).collect())
+            .unwrap_or_default()
+    }
+
+    /// `sh hub-ops args` with `dump-door`'s environment, stdin `/dev/null`,
+    /// under a watchdog; `tick` gets the PID at every poll, then `None` once
+    /// it has exited. The run, and when it ended.
+    fn run(&self, args: &[&str], tick: &mut dyn FnMut(Option<u32>)) -> (Act, Instant) {
+        let mut path = OsString::from(&self.bin);
+        path.push(":");
+        path.push(&self.hub.bin);
+        path.push(":/usr/bin:/bin");
+        let label = format!("{} hub-ops {args:?}", self.shell);
+        let mut command = Command::new("/usr/bin/perl");
+        command
+            .env_clear()
+            .env("PATH", path)
+            .env("HOME", &self.hub.home)
+            .env("LANG", "en_US.UTF-8")
+            .env("LC_ALL", "en_US.UTF-8")
+            .env("HUB_OPS_ROOT", &self.hub.root)
+            .env("HUB_ADMIN_ROOT", &self.hub.root)
+            .env(
+                "AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE",
+                "/run/secrets/authelia_storage_key",
+            )
+            .current_dir(&self.hub.runs)
+            .arg("-e")
+            .arg("alarm 120; umask 022; exec @ARGV or die \"exec: $!\"")
+            .arg(&self.shell)
+            .arg(deploy().join("ops/hub-ops"))
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        let started = Instant::now();
+        let mut child = command
+            .spawn()
+            .unwrap_or_else(|error| panic!("{label}: {error}"));
+        let pid = child.id();
+        let mut stdout = child.stdout.take().expect("stdout");
+        let mut stderr = child.stderr.take().expect("stderr");
+        let out = std::thread::spawn(move || {
+            let mut collected = Vec::new();
+            let _ = stdout.read_to_end(&mut collected);
+            collected
+        });
+        let err = std::thread::spawn(move || {
+            let mut collected = Vec::new();
+            let _ = stderr.read_to_end(&mut collected);
+            collected
+        });
+        let status = loop {
+            if let Some(status) = child.try_wait().expect("wait") {
+                break status;
+            }
+            if started.elapsed() > RUN_TIMEOUT {
+                let _ = child.kill();
+                let _ = child.wait();
+                tick(None);
+                panic!("{label} ran longer than {RUN_TIMEOUT:?}; killed");
+            }
+            tick(Some(pid));
+            std::thread::sleep(Duration::from_millis(5));
+        };
+        let ended = Instant::now();
+        tick(None);
+        assert!(
+            !self.rec.join("date-not-utc").exists(),
+            "{label}: a `date` without -u (R10)"
+        );
+        let act = Act {
+            code: status.code().unwrap_or_else(|| {
+                -std::os::unix::process::ExitStatusExt::signal(&status).unwrap_or(0)
+            }),
+            stdout: String::from_utf8_lossy(&out.join().expect("stdout")).into_owned(),
+            stderr: String::from_utf8_lossy(&err.join().expect("stderr")).into_owned(),
+            screen: String::new(),
+            asked: false,
+            label,
+        };
+        (act, ended)
+    }
+
+    fn once(&self) -> Act {
+        self.run(&["door", "once"], &mut |_: Option<u32>| {}).0
+    }
+}
+
+/// Every line of a run opens `hub-ops: door <t>: ` (docs/features/hub-ops.md
+/// "`hub-ops`", its Lines item).
+fn door_prefixed(act: &Act, t: &str) {
+    let prefix = format!("hub-ops: door {t}: ");
+    for line in act.stdout.lines().chain(act.stderr.lines()) {
+        if !line.is_empty() {
+            assert!(
+                line.starts_with(&prefix),
+                "a line not opening `{prefix}`: {line:?}\n{}",
+                act.show()
+            );
+        }
+    }
+}
+
+/// The door's own files: what a dump must leave as they were.
+fn door_state(hub: &Hub) -> BTreeMap<String, Option<Vec<u8>>> {
+    hub.files()
+        .into_iter()
+        .filter(|(path, _)| {
+            ["users", "mcp-users", "traefik-dynamic", "var"]
+                .iter()
+                .any(|top| path == top || path.starts_with(&format!("{top}/")))
+        })
+        .collect()
+}
+
+/// A door with two accounts, an MCP line, an act log and a database.
+fn filled_door(hub: &Hub, database: bool) {
+    hub.put(
+        &hub.users(),
+        &users_file(&[
+            &entry("mira", "Mira K", "mira@example.org", false),
+            &entry("olek", "Olek", "olek@example.org", false),
+        ]),
+    );
+    hub.put(&hub.mcp(), &mcp_line("mira", 'M'));
+    hub.put(
+        &hub.log(),
+        "2026-11-03T09:12:03Z\tadd\tmira\t-\n2026-11-03T09:20:41Z\tadd\tolek\t-\n",
+    );
+    if database {
+        hub.put(&hub.db(), "the door's database, never copied\n");
+    }
+}
+
+/// The `--file` export call of `kind` into `dir`, as "`hub-admin`: `dump` and
+/// `restore`" gives it.
+fn export_call(kind: &str, dir: &str, db: &Path) -> Vec<String> {
+    [
+        "storage",
+        "user",
+        kind,
+        "export",
+        "--file",
+        &format!("{dir}/{kind}.yml"),
+        "--sqlite.path",
+        text_of(db),
+    ]
+    .iter()
+    .map(|word| (*word).to_owned())
+    .collect()
+}
+
+/// docs/features/hub-ops.md "Acceptance criteria" OP11, and "A `door`
+/// round": `hub-ops door once` with the real `hub-admin` leaves one
+/// generation (mode 700, its files 600) whose `users.yml`, `mcp-users` and
+/// `acts.log` are their sources byte for byte and whose `webauthn.yml` and
+/// `totp.yml` are the stub's; the stub saw exactly the two `--file` exports
+/// into the staging; the door's files and the act log are unchanged and the
+/// lock gone. Without `db.sqlite3`, no CLI call and the three files alone. M:
+/// copy before the lock; log the dump; skip an export; call the CLI with no
+/// database.
+#[test]
+fn op11_a_door_round_dumps_the_door_with_the_real_hub_admin() {
+    for shell in ops_shells() {
+        let hub = Hub::new("op11");
+        filled_door(&hub, true);
+        let ops = Ops::new(&hub, &shell);
+        let e = DAY + 12 * 3600 + 15 * 60;
+        ops.set_clock(e);
+        let t = stamp(e);
+        let before = door_state(&hub);
+
+        let act = ops.once();
+        act.code(0);
+        door_prefixed(&act, &t);
+        assert_eq!(
+            names_in(&ops.door_dumps()),
+            std::slice::from_ref(&t),
+            "{}",
+            act.show()
+        );
+        let generation = ops.door_dumps().join(&t);
+        assert_eq!(mode(&generation), 0o700, "{shell}: the generation's mode");
+        assert_eq!(
+            names_in(&generation),
+            [
+                "acts.log",
+                "mcp-users",
+                "totp.yml",
+                "users.yml",
+                "webauthn.yml"
+            ],
+            "{shell}"
+        );
+        for name in names_in(&generation) {
+            assert_eq!(
+                mode(&generation.join(&name)),
+                0o600,
+                "{shell}: {name}'s mode"
+            );
+        }
+        for (copy, source) in [
+            ("users.yml", hub.users()),
+            ("mcp-users", hub.mcp()),
+            ("acts.log", hub.log()),
+        ] {
+            assert_eq!(
+                bytes(&generation.join(copy)),
+                bytes(&source),
+                "{shell}: {copy} byte for byte"
+            );
+        }
+        assert_eq!(
+            read(&generation.join("webauthn.yml")),
+            "# the stub webauthn export, call 1\n"
+        );
+        assert_eq!(
+            read(&generation.join("totp.yml")),
+            "# the stub totp export, call 2\n"
+        );
+
+        let calls = hub.calls();
+        assert_eq!(calls.len(), 2, "{shell}: {calls:?}");
+        let file = calls[0]
+            .args
+            .get(5)
+            .unwrap_or_else(|| panic!("{shell}: {calls:?}"));
+        let staging = file
+            .strip_suffix("/webauthn.yml")
+            .unwrap_or_else(|| panic!("{shell}: --file {file}"));
+        let shape = Regex::new(&format!(
+            r"^{}/dumps/door/\.{t}\.[0-9]+\.tmp$",
+            regex::escape(text_of(&hub.root))
+        ))
+        .expect("a pattern");
+        assert!(shape.is_match(staging), "{shell}: the staging {staging}");
+        assert_eq!(
+            calls[0].args,
+            export_call("webauthn", staging, &hub.db()),
+            "{shell}"
+        );
+        assert_eq!(
+            calls[1].args,
+            export_call("totp", staging, &hub.db()),
+            "{shell}"
+        );
+        assert!(
+            calls.iter().all(|call| !call.on_terminal),
+            "{shell}: no terminal"
+        );
+        assert_eq!(
+            read(&hub.door.join("timeout.log")),
+            format!("300 {0}/authelia\n300 {0}/authelia\n", hub.bin.display()),
+            "{shell}: each export under `timeout 300` (DUMP_BOUND)"
+        );
+
+        assert_eq!(
+            door_state(&hub),
+            before,
+            "{shell}: the door and the act log unchanged"
+        );
+        assert!(!hub.lock().exists(), "{shell}: the lock is gone");
+        assert!(hub.temps().is_empty(), "{shell}: {:?}", hub.temps());
+
+        let bare = Hub::new("op11-bare");
+        filled_door(&bare, false);
+        let ops = Ops::new(&bare, &shell);
+        ops.set_clock(e);
+        ops.once().code(0);
+        assert!(bare.calls().is_empty(), "{shell}: no database, no CLI call");
+        assert_eq!(
+            names_in(&ops.door_dumps().join(&t)),
+            ["acts.log", "mcp-users", "users.yml"],
+            "{shell}: the three files alone"
+        );
+    }
+}
+
+/// docs/features/hub-ops.md "Acceptance criteria" OP12, and "Rules" R8: with
+/// `admin-log/lock/` held, `door once` makes 13 tries, the first and "Data"'s
+/// "tries again, 12 times" (the orchestrator's reading of OP12's "12 tries"),
+/// `sleep 10` 12 times,
+/// leaves no generation and no staging, keeps the lock and its `taken` byte
+/// for byte, logs `skipped: <hub-admin's last line>` and exits 1. While a
+/// `dump` holds the lock (its export held), `disable` is refused with the new
+/// message. TERM to `door` mid-export ends it at once, 143, leaving no lock,
+/// no staging and no temp file. M: the lock broken; no retry; no trap; the
+/// old message.
+#[test]
+fn op12_a_dump_and_an_act_never_share_the_lock() {
+    for shell in ops_shells() {
+        let hub = Hub::new("op12");
+        filled_door(&hub, true);
+        hub.hold_lock();
+        let lock = common::snapshot(&hub.lock());
+        let ops = Ops::new(&hub, &shell);
+        let act = ops.once();
+        act.code(1);
+        assert_eq!(
+            ops.tries().len(),
+            13,
+            "{shell}: a try and 12 more: {}",
+            act.show()
+        );
+        assert_eq!(ops.sleeps(), vec!["10"; 12], "{shell}: 10 s apart");
+        assert!(
+            names_in(&ops.door_dumps()).is_empty(),
+            "{shell}: {:?}",
+            names_in(&ops.door_dumps())
+        );
+        assert_eq!(
+            common::snapshot(&hub.lock()),
+            lock,
+            "{shell}: the lock is never broken"
+        );
+        assert!(hub.calls().is_empty(), "{shell}: nothing called");
+        assert!(
+            act.stderr
+                .lines()
+                .any(|line| line.starts_with("hub-ops: door ")
+                    && line.contains("skipped: ")
+                    && line.contains(HELD_LOCK)),
+            "{shell}: `skipped: <hub-admin's last line>`: {}",
+            act.show()
+        );
+
+        let hub = Hub::new("op12-term");
+        filled_door(&hub, true);
+        hub.control("hold-at", &[1]);
+        let ops = Ops::new(&hub, &shell);
+        let mut sent: Option<Instant> = None;
+        let (act, ended) = ops.run(&["door", "once"], &mut |pid: Option<u32>| match pid {
+            Some(pid) => {
+                if sent.is_none() && hub.door.join("held").exists() {
+                    kill_term(pid);
+                    sent = Some(Instant::now());
+                }
+            }
+            None => fs::write(hub.door.join("release"), "").expect("the stub's release"),
+        });
+        let sent = sent.unwrap_or_else(|| panic!("{shell}: the export never held: {}", act.show()));
+        act.code(143);
+        assert!(
+            ended - sent < Duration::from_secs(10),
+            "{shell}: TERM ends the running dump at once: {}",
+            act.show()
+        );
+        assert!(!hub.lock().exists(), "{shell}: TERM leaves no lock");
+        assert!(
+            names_in(&ops.door_dumps()).is_empty(),
+            "{shell}: no staging, no generation"
+        );
+        assert!(hub.temps().is_empty(), "{shell}: {:?}", hub.temps());
+    }
+
+    let hub = Hub::new("op12-busy");
+    filled_door(&hub, true);
+    hub.control("hold-at", &[1]);
+    let out = hub.scratch.dir("dump-out");
+    let users = bytes(&hub.users());
+    std::thread::scope(|scope| {
+        let dumping = scope.spawn(|| hub.null(&["dump", text_of(&out)]));
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while !hub.door.join("held").exists() {
+            assert!(Instant::now() < deadline, "the dump's export never held");
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let act = hub.terminal(&["disable", "olek"], &[]);
+        fs::write(hub.door.join("release"), "").expect("the stub's release");
+        act.refused(1);
+        let message = Regex::new(
+            r"^another act or a dump holds admin-log/lock \(taken [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z\); if none runs, remove it$",
+        )
+        .expect("a pattern");
+        assert!(
+            act.stderr
+                .lines()
+                .any(|line| message.is_match(line.strip_prefix(REFUSAL).unwrap_or(line))),
+            "the lock's new message: {}",
+            act.show()
+        );
+        assert_eq!(
+            bytes(&hub.users()),
+            users,
+            "the refused disable wrote nothing"
+        );
+        dumping.join().expect("the dump").code(0);
+    });
+    assert!(!hub.lock().exists(), "the dump released the lock");
+}
+
+/// docs/features/hub-ops.md "Acceptance criteria" OP21, `door`'s twin: with
+/// the clock fixed at E, `door` runs a round at start, then asks for `900 -
+/// E % 900`.
+#[test]
+fn op21_the_door_loop_runs_a_round_then_waits_for_the_grid() {
+    let e = DAY + 12 * 3600 + 7 * 60 + 30;
+    for shell in ops_shells() {
+        let hub = Hub::new("op21-door");
+        filled_door(&hub, false);
+        let ops = Ops::new(&hub, &shell);
+        ops.set_clock(e);
+        fs::write(ops.rec.join("sleep-term-at"), "1").expect("a control file");
+        let (act, _) = ops.run(&["door"], &mut |_: Option<u32>| {});
+        act.code(143);
+        assert_eq!(
+            ops.sleeps(),
+            [(900 - e % 900).to_string()],
+            "{shell}: {}",
+            act.show()
+        );
+        assert_eq!(ops.tries().len(), 1, "{shell}: one round at start");
+        assert_eq!(names_in(&ops.door_dumps()), [stamp(e)], "{shell}");
+    }
+}
+
+/// docs/features/hub-ops.md "Acceptance criteria" OP13, and "`hub-admin`:
+/// `dump` and `restore`": `dump` exits 2, nothing locked, called or written,
+/// for no argument, two, a missing, non-empty, `-`-led or non-folder `DIR`,
+/// also with the lock held (the check comes first); with the lock held a
+/// good call is exit 1, the lock's message, `DIR` empty; a failing export is
+/// exit 1 naming it, the lock released, no act log line; with stdin
+/// `/dev/null` or a pipe it runs, copies under `umask 077`, prints `dumped
+/// <files>`, and dumps each file only when present. M: a non-empty `DIR`
+/// accepted; a terminal required; `stopped_log` on `dump`; copy before the
+/// lock.
+#[test]
+fn op13_dump_needs_no_terminal_and_refuses_before_the_lock() {
+    let hub = Hub::new("op13");
+    filled_door(&hub, true);
+    let empty = hub.scratch.dir("empty");
+    let other = hub.scratch.dir("other");
+    let full = hub.scratch.dir("full");
+    fs::write(full.join("left"), "x").expect("a file");
+    let file = hub.scratch.path().join("a-file");
+    fs::write(&file, "x").expect("a file");
+    let missing = hub.scratch.path().join("missing");
+    fs::create_dir_all(hub.runs.join("-d")).expect("an empty folder named -d");
+    let bad: [&[&str]; 6] = [
+        &["dump"],
+        &["dump", text_of(&empty), text_of(&other)],
+        &["dump", text_of(&missing)],
+        &["dump", text_of(&full)],
+        &["dump", "-d"],
+        &["dump", text_of(&file)],
+    ];
+    for held in [false, true] {
+        if held {
+            hub.hold_lock();
+        }
+        let before = hub.files();
+        for args in bad {
+            let act = hub.null(args);
+            act.refused(2);
+            assert_eq!(hub.files(), before, "held {held}: {}", act.label);
+            assert!(hub.calls().is_empty(), "held {held}: {}", act.label);
+            assert!(names_in(&empty).is_empty() && names_in(&hub.runs.join("-d")).is_empty());
+        }
+    }
+
+    let act = hub.null(&["dump", text_of(&empty)]);
+    act.refused(1);
+    assert!(act.says(HELD_LOCK), "the lock's message: {}", act.show());
+    assert!(
+        names_in(&empty).is_empty(),
+        "nothing copied before the lock"
+    );
+    assert!(hub.calls().is_empty());
+    fs::remove_dir_all(hub.lock()).expect("the lock released by hand");
+
+    let logged = bytes(&hub.log());
+    for (call, kind) in [(1, "passkey"), (2, "TOTP")] {
+        let hub = Hub::new("op13-fail");
+        filled_door(&hub, true);
+        hub.control("fail-at", &[call]);
+        let dir = hub.scratch.dir("out");
+        let act = hub.null(&["dump", text_of(&dir)]);
+        act.refused(1);
+        assert!(
+            act.says(&format!(
+                "the door's {kind} export failed: Error: the stub fails call {call}"
+            )),
+            "{}",
+            act.show()
+        );
+        assert!(!hub.lock().exists(), "{kind}: the lock released");
+        assert_eq!(bytes(&hub.log()), logged, "{kind}: no act log line");
+        assert!(hub.temps().is_empty(), "{kind}: {:?}", hub.temps());
+    }
+
+    for piped in [false, true] {
+        let hub = Hub::new("op13-run");
+        filled_door(&hub, true);
+        let dir = hub.scratch.dir("out");
+        let before = door_state(&hub);
+        let act = if piped {
+            hub.piped(&["dump", text_of(&dir)], b"")
+        } else {
+            hub.null(&["dump", text_of(&dir)])
+        };
+        act.code(0);
+        let found = names_in(&dir);
+        assert_eq!(
+            found,
+            [
+                "acts.log",
+                "mcp-users",
+                "totp.yml",
+                "users.yml",
+                "webauthn.yml"
+            ],
+            "{}",
+            act.show()
+        );
+        for name in &found {
+            assert_eq!(mode(&dir.join(name)), 0o600, "{name}: umask 077");
+        }
+        let lines = act.lines();
+        assert_eq!(lines.len(), 1, "{}", act.show());
+        let listed: BTreeSet<String> = lines[0]
+            .strip_prefix("dumped ")
+            .unwrap_or_else(|| panic!("`dumped <files>`: {}", act.show()))
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .filter(|word| !word.is_empty())
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(listed, found.iter().cloned().collect::<BTreeSet<_>>());
+        assert_eq!(
+            door_state(&hub),
+            before,
+            "dump writes nothing of the door's"
+        );
+        assert!(!hub.lock().exists() && hub.temps().is_empty());
+    }
+
+    let hub = Hub::new("op13-some");
+    hub.put(
+        &hub.users(),
+        &users_file(&[&entry("mira", "Mira K", "mira@example.org", false)]),
+    );
+    let dir = hub.scratch.dir("out");
+    hub.null(&["dump", text_of(&dir)]).code(0);
+    assert_eq!(names_in(&dir), ["users.yml"], "each file only when present");
+    assert!(hub.calls().is_empty(), "no database, no export");
+
+    // Iteration 2: a door with no users file, or an empty one, is no door to
+    // dump: exit 1 under the lock, nothing copied, the lock released.
+    for users in [None, Some("")] {
+        let hub = Hub::new("op13-no-users");
+        hub.put(&hub.mcp(), &mcp_line("mira", 'M'));
+        hub.put(&hub.log(), "2026-11-03T09:12:03Z\tadd\tmira\t-\n");
+        hub.put(&hub.db(), "the door's database\n");
+        if let Some(text) = users {
+            hub.put(&hub.users(), text);
+        }
+        let dir = hub.scratch.dir("out");
+        let act = hub.null(&["dump", text_of(&dir)]);
+        act.refused(1);
+        assert!(
+            act.stderr.contains("the door has no users file"),
+            "{users:?}: {}",
+            act.show()
+        );
+        assert!(names_in(&dir).is_empty(), "{users:?}: nothing dumped");
+        assert!(hub.calls().is_empty(), "{users:?}: nothing called");
+        assert!(!hub.lock().exists(), "{users:?}: the lock released");
+    }
+}
+
+/// Beside docs/features/hub-ops.md "Acceptance criteria" OP12, iteration 2:
+/// an export that passes its `timeout 300` (the shim exits 124, or 143 for a
+/// command it killed) makes `dump` say "the dump timed out", and the round
+/// tries no more: no `sleep`, one try, no generation, no staging, no lock, no
+/// temp file, exit 1.
+#[test]
+fn data_a_dump_that_times_out_is_not_tried_again() {
+    for code in ["124", "143"] {
+        let hub = Hub::new("timed-out");
+        filled_door(&hub, true);
+        fs::write(hub.door.join("timeout-exit"), code).expect("the shim's exit");
+        let dir = hub.scratch.dir("out");
+        let act = hub.null(&["dump", text_of(&dir)]);
+        act.refused(1);
+        assert!(
+            act.stderr
+                .contains("the dump timed out: the door's passkey export ran past 300 s"),
+            "timeout {code}: {}",
+            act.show()
+        );
+        assert!(!hub.lock().exists(), "timeout {code}: the lock released");
+
+        for shell in ops_shells() {
+            let hub = Hub::new("timed-out-round");
+            filled_door(&hub, true);
+            fs::write(hub.door.join("timeout-exit"), code).expect("the shim's exit");
+            let ops = Ops::new(&hub, &shell);
+            let act = ops.once();
+            act.code(1);
+            assert_eq!(
+                ops.tries().len(),
+                1,
+                "{shell} {code}: no retry: {}",
+                act.show()
+            );
+            assert!(ops.sleeps().is_empty(), "{shell} {code}: no sleep");
+            assert!(
+                act.stderr
+                    .lines()
+                    .any(|line| line.starts_with("hub-ops: door ")
+                        && line.contains("skipped: ")
+                        && line.contains("the dump timed out")),
+                "{shell} {code}: {}",
+                act.show()
+            );
+            assert!(
+                names_in(&ops.door_dumps()).is_empty(),
+                "{shell} {code}: {:?}",
+                names_in(&ops.door_dumps())
+            );
+            assert!(!hub.lock().exists(), "{shell} {code}: no lock left");
+            assert!(hub.temps().is_empty(), "{shell} {code}: {:?}", hub.temps());
+        }
+    }
+}
+
+/// Beside docs/features/hub-ops.md "Acceptance criteria" OP15, iteration 2:
+/// a restore stopped by SIGTERM while the door imports says `stopped: remove
+/// the door volume's db.sqlite3 before restore runs again`, writes no act
+/// log and leaves the users file as it was, the lock gone.
+#[test]
+fn data_a_stopped_restore_says_what_to_remove() {
+    let hub = Hub::new("stopped-restore");
+    empty_door(&hub);
+    let dir = restore_dir(&hub, true);
+    hub.control("hold-at", &[2]);
+    let kill = first_existing(&["/bin/kill", "/usr/bin/kill"], "kill");
+    let mut sent = false;
+    let act = hub.terminal_with(&["restore", text_of(&dir)], &["y"], &mut |pid: &Path| {
+        if sent || !hub.door.join("held").exists() {
+            return;
+        }
+        sent = true;
+        let pid = read(pid).trim().to_owned();
+        let status = Command::new(kill)
+            .args(["-TERM", &pid])
+            .status()
+            .expect("kill");
+        assert!(status.success(), "SIGTERM to {pid}");
+        std::thread::sleep(Duration::from_millis(300));
+        fs::write(hub.door.join("release"), "").expect("the stub's release");
+    });
+    assert!(sent, "the import never held: {}", act.show());
+    assert_eq!(act.code, 143, "{}", act.show());
+    assert!(
+        act.stderr.contains(
+            "hub-admin: stopped: remove the door volume's db.sqlite3 before restore runs again"
+        ),
+        "{}",
+        act.show()
+    );
+    assert!(!hub.log().exists(), "no act log: {:?}", hub.log_lines());
+    assert_eq!(read(&hub.users()), "", "the users file as it was");
+    assert!(!hub.lock().exists(), "the lock gone");
+}
+
+/// A restore folder as `hub-ops restore` leaves `restore/door/`: two
+/// accounts, an MCP line, an act log, and, when `credentials`, the two
+/// exports.
+fn restore_dir(hub: &Hub, credentials: bool) -> PathBuf {
+    let dir = hub.scratch.dir("restore-door");
+    fs::write(
+        dir.join("users.yml"),
+        users_file(&[
+            &entry("mira", "Mira K", "mira@example.org", false),
+            &entry("olek", "Olek", "olek@example.org", true),
+        ]),
+    )
+    .expect("users.yml");
+    fs::write(dir.join("mcp-users"), mcp_line("mira", 'R')).expect("mcp-users");
+    fs::write(
+        dir.join("acts.log"),
+        "2026-11-03T09:12:03Z\tadd\tmira\t-\n2026-11-03T10:01:44Z\tdisable\tolek\t-\n",
+    )
+    .expect("acts.log");
+    if credentials {
+        fs::write(dir.join("webauthn.yml"), "webauthn_devices: []\n").expect("webauthn.yml");
+        fs::write(dir.join("totp.yml"), "totp_configurations: []\n").expect("totp.yml");
+    }
+    dir
+}
+
+/// The new host's empty door: an empty users file, nothing else.
+fn empty_door(hub: &Hub) {
+    hub.put(&hub.users(), "");
+}
+
+/// docs/features/hub-ops.md "Acceptance criteria" OP14, and "`hub-admin`:
+/// `dump` and `restore`": into an empty door, on a terminal, answered `y`,
+/// the stub sees `migrate up`, `webauthn import` and `totp import` in that
+/// order, `DIR`'s files after `--`, while the users file is still empty; then
+/// `users.yml` and the MCP users file are `DIR`'s bytes, each a new inode of
+/// mode 600; the stamp goes up; `acts.log` is `DIR`'s bytes plus one
+/// `restore` line; stdout is the two lines. Answered `n`: exit 1, nothing
+/// called or written. `yes` restores too, and a `DIR` with no exports calls
+/// nothing. M: the users file before the imports; no stamp; the log without
+/// the `restore` line, or without `DIR`'s lines.
+#[test]
+fn op14_restore_fills_an_empty_door_after_the_imports() {
+    let hub = Hub::new("op14");
+    empty_door(&hub);
+    let dir = restore_dir(&hub, true);
+    let dir_text = text_of(&dir).to_owned();
+    let old_inode = inode(&hub.users());
+    fs::write(hub.door.join("watch"), text_of(&hub.users())).expect("the watch");
+
+    let act = hub.terminal(&["restore", &dir_text], &["y"]);
+    act.code(0);
+    assert!(act.asked, "{}", act.show());
+    assert!(
+        act.everything()
+            .contains(&format!("restore 2 account(s) from {dir_text}")),
+        "the question: {}",
+        act.show()
+    );
+    let db = text_of(&hub.db()).to_owned();
+    let calls: Vec<Vec<String>> = hub.calls().into_iter().map(|call| call.args).collect();
+    let want: Vec<Vec<String>> = [
+        vec!["storage", "migrate", "up", "--sqlite.path", &db],
+        vec![
+            "storage",
+            "user",
+            "webauthn",
+            "import",
+            "--sqlite.path",
+            &db,
+            "--",
+            &format!("{dir_text}/webauthn.yml"),
+        ],
+        vec![
+            "storage",
+            "user",
+            "totp",
+            "import",
+            "--sqlite.path",
+            &db,
+            "--",
+            &format!("{dir_text}/totp.yml"),
+        ],
+    ]
+    .iter()
+    .map(|call| call.iter().map(|word| (*word).to_owned()).collect())
+    .collect();
+    assert_eq!(calls, want, "{}", act.show());
+    for n in 1..=3 {
+        assert_eq!(
+            fs::read(hub.door.join(format!("watch.{n}"))).ok(),
+            Some(Vec::new()),
+            "the users file is still empty at call {n}: the imports come first"
+        );
+    }
+    for (installed, source) in [
+        (hub.users(), dir.join("users.yml")),
+        (hub.mcp(), dir.join("mcp-users")),
+    ] {
+        assert_eq!(bytes(&installed), bytes(&source), "{}", installed.display());
+        assert_eq!(mode(&installed), 0o600, "{}", installed.display());
+        assert_ne!(
+            inode(&installed),
+            inode(&source),
+            "{}: a new inode",
+            installed.display()
+        );
+    }
+    assert_ne!(inode(&hub.users()), old_inode, "users.yml: a new inode");
+    assert_eq!(stamp_value(&hub.stamp()), 1, "the stamp went up");
+    let log = read(&hub.log());
+    let restored = read(&dir.join("acts.log"));
+    let added = log
+        .strip_prefix(&restored)
+        .unwrap_or_else(|| panic!("the act log opens with DIR's bytes: {log:?}"));
+    let added: Vec<&str> = added.lines().collect();
+    assert_eq!(added.len(), 1, "one line added: {log:?}");
+    assert_logged(added[0], "restore", "-", "users mcp passkeys totp");
+    assert_eq!(
+        act.lines(),
+        [
+            format!("restored 2 account(s) from {dir_text}"),
+            "next: docker compose up -d traefik authelia specengine".to_owned(),
+        ],
+        "{}",
+        act.show()
+    );
+    assert!(
+        !hub.lock().exists() && hub.temps().is_empty(),
+        "{:?}",
+        hub.temps()
+    );
+
+    let hub = Hub::new("op14-no");
+    empty_door(&hub);
+    let dir = restore_dir(&hub, true);
+    let before = hub.files();
+    let act = hub.terminal(&["restore", text_of(&dir)], &["n"]);
+    // After the question its refusal shares the prompt's stderr line, as
+    // `disable`'s does (AC4): the answer's echo ends the line on a terminal.
+    act.code(1);
+    assert!(act.asked, "{}", act.show());
+    assert!(
+        act.stderr
+            .contains("hub-admin: not restored: the answer was not y; nothing changed"),
+        "{}",
+        act.show()
+    );
+    assert!(hub.calls().is_empty(), "answered n: nothing called");
+    assert_eq!(hub.files(), before, "answered n: nothing written");
+
+    let hub = Hub::new("op14-yes");
+    empty_door(&hub);
+    let dir = restore_dir(&hub, false);
+    let act = hub.terminal(&["restore", text_of(&dir)], &["yes"]);
+    act.code(0);
+    assert!(
+        hub.calls().is_empty(),
+        "no exports in DIR, no CLI call: {}",
+        act.show()
+    );
+    assert_eq!(bytes(&hub.users()), bytes(&dir.join("users.yml")));
+    let last = hub.log_lines().last().cloned().expect("a restore line");
+    assert_logged(&last, "restore", "-", "users mcp");
+}
+
+/// A filled door's path and how a test fills it.
+type Fill<'a> = (&'a str, &'a dyn Fn(&Hub));
+
+/// docs/features/hub-ops.md "Acceptance criteria" OP15, and "`hub-admin`:
+/// `dump` and `restore`": `restore` exits 2 for stdin a pipe or
+/// `/dev/null`, no `DIR`, an extra argument, a `DIR` that is no folder, and a
+/// missing or empty `DIR/users.yml`; exit 1 before the question, nothing
+/// called or written, naming the path, for a non-empty users file, MCP users
+/// file or act log, and an existing `db.sqlite3`; exit 1 for a `DIR/users.yml`
+/// in no known layout; a failing step is exit 1, both users files untouched,
+/// the database named. M: the database check dropped; a non-empty users file
+/// accepted.
+#[test]
+fn op15_restore_goes_into_an_empty_door_alone() {
+    let hub = Hub::new("op15");
+    empty_door(&hub);
+    let dir = restore_dir(&hub, true);
+    let dir_text = text_of(&dir).to_owned();
+    let before = hub.files();
+    for act in [
+        hub.piped(&["restore", &dir_text], b"y\n"),
+        hub.null(&["restore", &dir_text]),
+    ] {
+        act.refused(2);
+        assert!(
+            hub.calls().is_empty() && hub.files() == before,
+            "{}",
+            act.label
+        );
+    }
+    let no_users = hub.scratch.dir("no-users");
+    fs::write(no_users.join("mcp-users"), mcp_line("mira", 'R')).expect("mcp-users");
+    let empty_users = hub.scratch.dir("empty-users");
+    fs::write(empty_users.join("users.yml"), "").expect("an empty users.yml");
+    let not_a_folder = dir.join("users.yml");
+    let bad: [&[&str]; 5] = [
+        &["restore"],
+        &["restore", &dir_text, "extra"],
+        &["restore", text_of(&not_a_folder)],
+        &["restore", text_of(&no_users)],
+        &["restore", text_of(&empty_users)],
+    ];
+    for args in bad {
+        let act = hub.terminal(args, &["y"]);
+        act.refused(2);
+        assert!(!act.asked, "{}", act.show());
+        assert!(
+            hub.calls().is_empty() && hub.files() == before,
+            "{}",
+            act.label
+        );
+    }
+
+    let filled: [Fill; 4] = [
+        ("users.yml", &|hub: &Hub| {
+            hub.put(
+                &hub.users(),
+                &users_file(&[&entry("zed", "Zed", "zed@example.org", false)]),
+            );
+        }),
+        ("mcp-users/users", &|hub: &Hub| {
+            hub.put(&hub.mcp(), &mcp_line("zed", 'Z'))
+        }),
+        ("acts.log", &|hub: &Hub| {
+            hub.put(&hub.log(), "2026-11-04T08:00:00Z\tadd\tzed\t-\n");
+        }),
+        ("db.sqlite3", &|hub: &Hub| hub.put(&hub.db(), "")),
+    ];
+    let message = Regex::new(
+        r"^the door is not empty: (.+) exists; a restore goes into a new host's empty door; nothing changed$",
+    )
+    .expect("a pattern");
+    for (path, fill) in filled {
+        let hub = Hub::new("op15-filled");
+        empty_door(&hub);
+        fill(&hub);
+        let dir = restore_dir(&hub, true);
+        let before = hub.files();
+        let act = hub.terminal(&["restore", text_of(&dir)], &["y"]);
+        act.refused(1);
+        assert!(
+            !act.asked,
+            "{path}: refused before the question: {}",
+            act.show()
+        );
+        let named = act
+            .stderr
+            .lines()
+            .filter_map(|line| message.captures(line.strip_prefix(REFUSAL).unwrap_or(line)))
+            .map(|found| found[1].to_owned())
+            .next()
+            .unwrap_or_else(|| panic!("{path}: the door is not empty: {}", act.show()));
+        assert!(named.ends_with(path), "{path}: names {named}");
+        assert!(hub.calls().is_empty(), "{path}: nothing called");
+        assert_eq!(hub.files(), before, "{path}: nothing written");
+    }
+
+    let hub = Hub::new("op15-layout");
+    empty_door(&hub);
+    let dir = restore_dir(&hub, true);
+    fs::write(
+        dir.join("users.yml"),
+        "users:\n  mira:\n\tdisplayname: \"Mira K\"\n",
+    )
+    .expect("a users.yml in no known layout");
+    let before = hub.files();
+    let act = hub.terminal(&["restore", text_of(&dir)], &["y"]);
+    act.refused(1);
+    assert!(!act.asked, "{}", act.show());
+    assert!(
+        hub.calls().is_empty() && hub.files() == before,
+        "{}",
+        act.show()
+    );
+
+    for call in 1..=3 {
+        let hub = Hub::new("op15-step");
+        empty_door(&hub);
+        let dir = restore_dir(&hub, true);
+        let users = (bytes(&hub.users()), inode(&hub.users()));
+        hub.control("fail-at", &[call]);
+        let act = hub.terminal(&["restore", text_of(&dir)], &["y"]);
+        act.code(1);
+        assert!(act.asked, "step {call}: after the question: {}", act.show());
+        let line = act
+            .stderr
+            .lines()
+            .find(|line| line.contains("failed: "))
+            .unwrap_or_else(|| panic!("step {call}: a failed line: {}", act.show()));
+        for part in [
+            "the door's ",
+            &format!("Error: the stub fails call {call}"),
+            "the users files are as they were",
+            "db.sqlite3",
+        ] {
+            assert!(line.contains(part), "step {call}: {part}: {line}");
+        }
+        assert_eq!(
+            hub.calls().len(),
+            call,
+            "step {call}: nothing after the failure"
+        );
+        assert_eq!(
+            (bytes(&hub.users()), inode(&hub.users())),
+            users,
+            "step {call}"
+        );
+        assert!(!hub.mcp().exists(), "step {call}: no MCP users file");
+        assert!(!hub.stamp().exists(), "step {call}: no stamp");
+        assert!(!hub.lock().exists(), "step {call}: the lock released");
+    }
+}
+
+/// docs/features/hub-ops.md "Data", "`hub-admin`: `dump` and `restore`": the
+/// usage gains `dump <empty folder>` and `restore <folder>`.
+#[test]
+fn data_the_usage_names_dump_and_restore() {
+    let hub = Hub::new("usage");
+    let act = hub.null(&[]);
+    act.refused(2);
+    for line in ["dump <empty folder>", "restore <folder>"] {
+        assert!(
+            act.stderr.contains(line),
+            "the usage: {line}: {}",
+            act.show()
+        );
+    }
+}
+
 // ------------------------------------------------------------- AC13-AC14: the host
 
 fn compose() -> Value {
@@ -3148,8 +4410,11 @@ exit 0
 
 /// AC18: the C3 step ("Authelia accepts its configuration") takes one image
 /// line: run as a runner runs it (`bash -e`), its stub `docker`'s `config
-/// --images` printing `authelia`'s image twice (two services on it), the image
-/// it hands `docker run` is that image, one line.
+/// --images` printing `authelia`'s image once per service on it, the image it
+/// hands `docker run` is that image, one line. Rewritten beside
+/// docs/features/hub-ops.md "Acceptance criteria" OP23 (which omits it): the
+/// services on the door's image are `admin`, `authelia` and `dump-door`, three
+/// lines where 11c-1 had two.
 #[test]
 fn ac18_the_c3_step_takes_one_image_line() {
     let compose = compose();
@@ -3170,10 +4435,22 @@ fn ac18_the_c3_step_takes_one_image_line() {
             .expect("an image"),
         "authelia's image",
     );
+    let on_door: BTreeSet<&str> = object(compose.get("services").expect("services"), "services")
+        .iter()
+        .filter(|(_, service)| {
+            service.get("image").and_then(Value::as_str) == Some(authelia.as_str())
+        })
+        .map(|(name, _)| name.as_str())
+        .collect();
+    assert_eq!(
+        on_door,
+        BTreeSet::from(["admin", "authelia", "dump-door"]),
+        "the services on authelia's image: {images:?}"
+    );
     assert_eq!(
         images.iter().filter(|image| **image == authelia).count(),
-        2,
-        "two services on authelia's image: {images:?}"
+        3,
+        "three image lines of authelia's: {images:?}"
     );
 
     let runs = check_runs(&workflow());

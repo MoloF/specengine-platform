@@ -78,7 +78,7 @@ Neither command writes a spec file, commits, runs apply or completion, or runs g
 
 ## Known limits
 
-None blocks a local daemon (ADR-0058); a hub rests on RM-0074's dumps.
+None blocks a local daemon (ADR-0058); a hub rests on its dumps, and a `--push` restore raises the floor above the remote's first (`hub-ops.md` "Restore").
 
 - **Stale backup** (R1): a dump older than the queue loses what came after, whose IDs are issued again; one whose old `Proposal:` commit is on a branch blocks reject. A DB lost before its first export is lost; deleting the data directory deletes `backups/` (copy dumps out).
 - One TEXT value that is no UTF-8 text (written elsewhere) fails every export until fixed.

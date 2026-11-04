@@ -10,6 +10,11 @@
 # door's output is caught under the container's own /tmp (R4). Passwords and
 # secrets reach the door's CLI on stdin alone and are printed once, never
 # logged. It never writes [team]: `add` prints a row for a reviewed commit.
+# `dump` and `restore` (docs/features/hub-ops.md "`hub-admin`: `dump` and
+# `restore`") carry the door off a host and back: `dump`, run by dump-door's
+# loop with no terminal, copies the files and runs the door's passkey and
+# TOTP exports under the same lock, writing nothing of the door's; `restore`
+# installs a dump into a new host's empty door.
 # Every path sits under HUB_ADMIN_ROOT, empty in the container (S7).
 # POSIX sh and awk: busybox in the image, macOS's sh, dash; bytes are checked
 # under LC_ALL=C.
@@ -34,6 +39,7 @@ stamp_file=$stamp_dir/mcp-stamp.yml
 stamp_tmp=$stamp_dir/.mcp-stamp.tmp
 log_dir=$root/var/lib/hub-admin
 log_file=$log_dir/acts.log
+log_tmp=$log_dir/.acts.log.$$.tmp
 lock_dir=$log_dir/lock
 # Scratch, in no host mount (R4): a SIGKILL leaves nothing of it on the host.
 tmp_dir=$root/tmp
@@ -46,6 +52,13 @@ notice_file=$door_dir/notification.txt
 # The lowest cost the pinned CLI accepts (VF1): the 256-bit secret is what
 # protects the digest, and every MCP request pays the cost.
 BCRYPT_COST=10
+# The bound on each of a dump's two exports, in seconds, under the door
+# image's `timeout`. An export reads a few rows a person from the door's
+# SQLite file, under a second even for a large door, so 300 s leaves room for
+# a slow disk and the CLI's own wait on a busy database. Two exports under it
+# still end inside one 15-minute slot, and an export that hangs can never
+# hold the act lock for longer.
+DUMP_BOUND=300
 
 # ------------------------------------------------------------------ messages
 
@@ -73,6 +86,7 @@ usage: docker compose run --rm admin <act> [<argument>...]
   mcp rotate <login>       mcp revoke <login>      code
   list                     log
   check                    (spec team's lines on stdin)
+  dump <empty folder>      restore <folder>
 EOF
 }
 
@@ -105,8 +119,22 @@ reset_detail() {
 }
 
 # A run that fails or is stopped after it changed something: its log line and
-# what is left to do. A stage before the first change logs nothing.
+# what is left to do. A stage before the first change logs nothing. A `dump`
+# never writes the act log, and a `restore` writes it last, since a log
+# fills the door it restores into: a refused restore names what it left
+# (restore_refuse), and one stopped by a signal says it here.
 stopped_log() {
+    case $act in
+        dump) return 0 ;;
+        restore)
+            case $status in
+                129 | 130 | 143)
+                    if [ -n "${left:-}" ]; then say "stopped: remove $left before restore runs again"; fi
+                    ;;
+            esac
+            return 0
+            ;;
+    esac
     case $act/$stage in
         reset/passkeys)
             passkeys_left=1
@@ -151,7 +179,7 @@ cleanup() {
     if [ -n "$lock_held" ]; then
         if [ "$status" -ne 0 ]; then stopped_log; fi
         rm -f "$users_tmp" "$users_prev_tmp" "$mcp_tmp" "$mcp_prev_tmp" "$stamp_tmp" \
-            "$door_out" "$door_err" "$lock_dir/taken" 2>/dev/null
+            "$log_tmp" "$door_out" "$door_err" "$lock_dir/taken" 2>/dev/null
         rmdir "$lock_dir" 2>/dev/null
         lock_held=
     fi
@@ -167,6 +195,14 @@ trap 'exit 143' TERM
 need_terminal() {
     [ -t 0 ] ||
         bad_call "$1 needs a terminal: run it as \`docker compose run --rm admin $1 ...\`, never piped"
+}
+
+# `$1` is a folder that holds nothing, no dot file either; one that cannot
+# be listed is not.
+is_empty_dir() {
+    [ -d "$1" ] || return 1
+    entries=$(ls -A -- "$1" 2>/dev/null) || return 1
+    [ -z "$entries" ]
 }
 
 # Q5, R2: a new login is a lower-case letter, then lower case, digits, `.`,
@@ -623,20 +659,22 @@ present() {
 }
 
 # R1, R8, R12: the users file `$1` holds no byte the door's parser rejects;
-# else says `users.yml:<line>: <problem>` and fails. A missing or empty file
+# else says `<name>:<line>: <problem>` and fails, the name `$2`, `users.yml`
+# when not given (a restore's folder names its own). A missing or empty file
 # has no byte to scan (an empty `users:`); a scan that failed (R9) fails too,
 # naming it.
 users_scan() {
+    scanned=${2:-users.yml}
     [ -s "$1" ] || return 0
     [ -r "$1" ] || {
-        say "users.yml: cannot be read"
+        say "$scanned: cannot be read"
         return 1
     }
     problem=$(utf8_scan file 2>/dev/null < "$1")
     case $? in
         0) return 0 ;;
-        1) say "users.yml:$problem" ;;
-        *) say "users.yml: ${problem:-the byte scan failed}" ;;
+        1) say "$scanned:$problem" ;;
+        *) say "$scanned: ${problem:-the byte scan failed}" ;;
     esac
     return 1
 }
@@ -702,7 +740,7 @@ take_lock() {
         return 0
     fi
     taken=$(cat "$lock_dir/taken" 2>/dev/null)
-    refuse "another act holds admin-log/lock (taken ${taken:-at an unknown time}); if none runs, remove it"
+    refuse "another act or a dump holds admin-log/lock (taken ${taken:-at an unknown time}); if none runs, remove it"
 }
 
 # One act log line, under the lock: UTC time, act, login, detail. No password,
@@ -722,6 +760,8 @@ need_dir() {
 # ------------------------------------------------------------------ the door's CLI
 
 door_cli=
+# A bound in seconds for the next door calls (`timeout`); empty: none.
+door_bound=
 find_door_cli() {
     door_cli=$(command -v authelia 2>/dev/null) || door_cli=
     if [ -z "$door_cli" ] && [ -x "$root/app/authelia" ]; then
@@ -737,12 +777,17 @@ find_door_cli() {
 door_run() {
     door_input=$1
     shift
+    if [ -n "$door_bound" ]; then
+        set -- timeout "$door_bound" "$door_cli" "$@"
+    else
+        set -- "$door_cli" "$@"
+    fi
     [ -d "$tmp_dir" ] || mkdir -p "$tmp_dir" ||
         refuse "cannot make $tmp_dir for the door's output; nothing changed"
     if [ -n "$door_input" ]; then
-        printf '%s\n' "$door_input" | "$door_cli" "$@" > "$door_out" 2> "$door_err" &
+        printf '%s\n' "$door_input" | "$@" > "$door_out" 2> "$door_err" &
     else
-        "$door_cli" "$@" < /dev/null > "$door_out" 2> "$door_err" &
+        "$@" < /dev/null > "$door_out" 2> "$door_err" &
     fi
     door_pid=$!
     wait "$door_pid"
@@ -1199,6 +1244,220 @@ act_log() {
     fi
 }
 
+# ------------------------------------------------------------------ dump and restore
+
+# The door's file `$1`, when present, copied by `cat` (umask 077: mode 600)
+# into the dump as `$2`; `$3` is its name on the host.
+dump_copy() {
+    [ -e "$1" ] || return 0
+    cat "$1" > "$into/$2" || refuse "cannot copy $3 into the dump"
+    dumped="$dumped $2"
+}
+
+# A dump's export `$1` that failed: timed out past DUMP_BOUND (`timeout`
+# answers 124, or the CLI dies of its signal), or refused by the door.
+# hub-ops reads "the dump timed out" and does not try again.
+dump_failed() {
+    case $door_status in
+        124 | 137 | 143)
+            refuse "the dump timed out: the door's $1 export ran past $DUMP_BOUND s; nothing dumped"
+            ;;
+    esac
+    refuse "the door's $1 export failed: $(door_said)"
+}
+
+# hub-ops' door round runs it with no terminal (S3). It never waits for the
+# lock nor breaks it (R8), and never writes the act log (stopped_log); the
+# door's database is read by the door's own exports alone, each bounded by
+# DUMP_BOUND, never copied. A door with no users file is no door to dump.
+act_dump() {
+    [ "$#" -ge 1 ] || usage "dump takes an empty folder"
+    [ "$#" -eq 1 ] || usage "dump takes one empty folder"
+    into=$1
+    case $into in
+        -*) bad_call "dump: $into starts with -: give the folder as a path" ;;
+    esac
+    [ -d "$into" ] || bad_call "dump: $into is not a folder: dump takes an existing empty folder"
+    is_empty_dir "$into" || bad_call "dump: $into is not empty: dump takes an existing empty folder"
+
+    take_lock
+    [ -s "$users_file" ] ||
+        refuse "the door has no users file: authelia/users/users.yml is absent or empty; nothing dumped"
+    dumped=
+    dump_copy "$users_file" users.yml authelia/users/users.yml
+    dump_copy "$mcp_file" mcp-users traefik/mcp-users/users
+    dump_copy "$log_file" acts.log admin-log/acts.log
+    if [ -e "$door_db" ]; then
+        find_door_cli
+        command -v timeout > /dev/null 2>&1 ||
+            refuse "the door's image has no timeout to bound its exports; nothing dumped"
+        stage=export
+        door_bound=$DUMP_BOUND
+        door_run "" storage user webauthn export --file "$into/webauthn.yml" --sqlite.path "$door_db" ||
+            dump_failed passkey
+        door_run "" storage user totp export --file "$into/totp.yml" --sqlite.path "$door_db" ||
+            dump_failed TOTP
+        door_bound=
+        rm -f "$door_out" "$door_err"
+        for name in webauthn.yml totp.yml; do
+            [ -e "$into/$name" ] || continue
+            chmod 600 "$into/$name" || refuse "cannot make the door's $name mode 600"
+            dumped="$dumped $name"
+        done
+    fi
+    stage=done
+    printf 'dumped%s\n' "${dumped:- nothing}"
+}
+
+# R9: a restore goes into an empty door alone: no users file, MCP users file
+# or act log with a byte, and no database. Else exit 1, nothing changed.
+door_empty() {
+    for path in "$users_file" "$mcp_file" "$log_file"; do
+        [ ! -s "$path" ] ||
+            refuse "the door is not empty: $path exists; a restore goes into a new host's empty door; nothing changed"
+    done
+    if [ -e "$door_db" ] || [ -L "$door_db" ]; then
+        refuse "the door is not empty: $door_db exists; a restore goes into a new host's empty door; nothing changed"
+    fi
+}
+
+# The users file `$1` read as `list` reads the door's, its accounts counted
+# as accounts; a file in an unknown layout is refused, named `$2`, with what
+# the restore left (restore_refuse).
+count_accounts() {
+    users_scan "$1" "$2" || restore_refuse "$2 holds a byte the door's parser rejects"
+    listed=$(HA_MODE=list HA_USERS=$1 HA_MCP= awk "$readers")
+    case $? in
+        0) ;;
+        3) restore_refuse "$2${listed#users.yml}" ;;
+        *) restore_refuse "$2 could not be read" ;;
+    esac
+    accounts=$(printf '%s\n' "$listed" | awk 'NF { n++ } END { print n + 0 }')
+}
+
+# The MCP users file `$1` in a layout the proxy reads, else refused, named `$2`.
+mcp_layout() {
+    checked=$(HA_MODE=mcp HA_MCP=$1 HA_LOGIN= awk "$readers")
+    case $? in
+        0) ;;
+        3) restore_refuse "$2${checked#traefik/mcp-users/users}" ;;
+        *) restore_refuse "$2 could not be read" ;;
+    esac
+}
+
+# What a refused restore leaves to remove, as left; the message `$1` gains it.
+restore_refuse() {
+    refuse "$1${left:+; remove $left before restore runs again}"
+}
+
+# S8: a dump's door folder into a new host's empty door, before the door
+# first starts. The imports go first, so a failed one leaves the users files
+# as they were; the act log, DIR's own lines and one `restore` line, last.
+act_restore() {
+    need_terminal restore
+    [ "$#" -ge 1 ] || usage "restore takes the door folder of a dump"
+    [ "$#" -eq 1 ] || usage "restore takes one folder"
+    from=$1
+    left=
+    [ -d "$from" ] || bad_call "restore: $from is not a folder: give the door folder of a dump"
+    [ -s "$from/users.yml" ] ||
+        bad_call "restore: $from/users.yml is absent or empty: give the door folder of a dump (docker compose run --rm backup restore)"
+
+    door_empty
+    count_accounts "$from/users.yml" "$from/users.yml"
+    have_mcp=
+    if [ -e "$from/mcp-users" ]; then
+        mcp_layout "$from/mcp-users" "$from/mcp-users"
+        have_mcp=1
+    fi
+    have_passkeys=
+    if [ -e "$from/webauthn.yml" ]; then have_passkeys=1; fi
+    have_totp=
+    if [ -e "$from/totp.yml" ]; then have_totp=1; fi
+    if [ -n "$have_passkeys$have_totp" ]; then find_door_cli; fi
+    with=
+    if [ -n "$have_passkeys" ] && [ -n "$have_totp" ]; then
+        with=', with passkeys and TOTP'
+    elif [ -n "$have_passkeys" ]; then
+        with=', with passkeys'
+    elif [ -n "$have_totp" ]; then
+        with=', with TOTP'
+    fi
+    printf 'restore %s account(s) from %s%s? [y/N] ' "$accounts" "$from" "$with" >&2
+    answer=
+    read -r answer || answer=
+    case $answer in
+        y | yes) ;;
+        *) refuse "not restored: the answer was not y; nothing changed" ;;
+    esac
+
+    take_lock
+    # Again under the lock: an act may have filled the door meanwhile.
+    door_empty
+    need_dir "$users_dir" ./authelia/users
+    if [ -n "$have_mcp" ]; then need_dir "$mcp_dir" ./traefik/mcp-users; fi
+    need_dir "$stamp_dir" ./traefik/dynamic
+    stamp_read || exit 1
+    detail=users
+    if [ -n "$have_mcp" ]; then detail="$detail mcp"; fi
+    if [ -n "$have_passkeys$have_totp" ]; then
+        # From the first door call on, the database may exist.
+        left="the door volume's db.sqlite3"
+        stage=migrate
+        door_run "" storage migrate up --sqlite.path "$door_db" ||
+            restore_refuse "the door's migration failed: $(door_said); the users files are as they were"
+        if [ -n "$have_passkeys" ]; then
+            stage=passkeys
+            door_run "" storage user webauthn import --sqlite.path "$door_db" -- "$from/webauthn.yml" ||
+                restore_refuse "the door's passkey import failed: $(door_said); the users files are as they were"
+            detail="$detail passkeys"
+        fi
+        if [ -n "$have_totp" ]; then
+            stage=totp
+            door_run "" storage user totp import --sqlite.path "$door_db" -- "$from/totp.yml" ||
+                restore_refuse "the door's TOTP import failed: $(door_said); the users files are as they were"
+            detail="$detail totp"
+        fi
+        rm -f "$door_out" "$door_err"
+    fi
+
+    # The users file, then the MCP users file, as `add` installs them:
+    # staged, read back, renamed, mode 600.
+    stage=users
+    cat "$from/users.yml" > "$users_tmp" ||
+        restore_refuse "cannot stage the users file; authelia/users/users.yml is as it was"
+    restored=$accounts
+    count_accounts "$users_tmp" "the staged users file"
+    [ "$accounts" = "$restored" ] ||
+        restore_refuse "the users file as staged does not read back; authelia/users/users.yml is as it was"
+    install_file "$users_tmp" "$users_file" "$users_prev_tmp" ||
+        restore_refuse "cannot replace authelia/users/users.yml; it is as it was"
+    left="authelia/users/users.yml${left:+ and $left}"
+    if [ -n "$have_mcp" ]; then
+        stage=mcp
+        cat "$from/mcp-users" > "$mcp_tmp" ||
+            restore_refuse "cannot stage the MCP users file; traefik/mcp-users/users is as it was"
+        mcp_layout "$mcp_tmp" "the staged MCP users file"
+        install_file "$mcp_tmp" "$mcp_file" "$mcp_prev_tmp" ||
+            restore_refuse "cannot replace traefik/mcp-users/users; it is as it was"
+        left="traefik/mcp-users/users, $left"
+    fi
+    stamped=1
+    write_stamp || stamped=
+    stage=log
+    line=$(printf '%s\trestore\t-\t%s' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$detail")
+    {
+        appended "$from/acts.log" "$line" > "$log_tmp" && chmod 600 "$log_tmp" &&
+            mv -f "$log_tmp" "$log_file"
+    } || say "warning: the act log admin-log/acts.log was not written"
+    # The door holds the whole dump now: nothing is left to remove.
+    left=
+    stage=done
+    printf 'restored %s account(s) from %s\n' "$restored" "$from"
+    printf 'next: docker compose up -d traefik authelia specengine\n'
+    [ -n "$stamped" ] || refuse "$stamp_failed"
+}
+
 [ "$#" -ge 1 ] || usage "give an act"
 act=$1
 shift
@@ -1229,6 +1488,8 @@ case $act in
     list) act_list "$@" ;;
     check) act_check "$@" ;;
     log) act_log "$@" ;;
+    dump) act_dump "$@" ;;
+    restore) act_restore "$@" ;;
     *) usage "an unknown act: $act" ;;
 esac
 exit 0

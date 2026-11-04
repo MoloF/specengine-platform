@@ -262,6 +262,8 @@ fn export_index_recreates_this_repository_s_index() {
         "## Canon",
         // docs/features/review-form.md: the `proposal-*` queue canons.
         "## Canon",
+        // docs/features/hub-ops.md "Canon at ship": the `hub*` hub canons.
+        "## Canon",
         "## Canon",
         "## Decisions",
         "## Canon",

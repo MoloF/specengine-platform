@@ -1,6 +1,6 @@
 # The build context of scripts/deploy/Dockerfile, the repository root: the
 # manifests, Cargo.lock, crates/, ui/ without its installed packages or build,
-# and the two scripts the image runs. Everything else stays out.
+# and the three scripts the image runs. Everything else stays out.
 *
 !Cargo.toml
 !Cargo.lock
@@ -8,6 +8,7 @@
 !ui/
 !scripts/deploy/entrypoint.sh
 !scripts/deploy/clone.sh
+!scripts/deploy/health.sh
 
 # Out again, at the top and at any depth inside what came back.
 target

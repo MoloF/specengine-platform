@@ -22,7 +22,7 @@ In order, the first refusal exit 2; nothing is written before step 5.
 
 ## Known limits
 
-None blocks a local daemon (ADR-0058); a hub rests on RM-0074's dumps; the backup's own: `queue-backup.md` "Known limits".
+None blocks a local daemon (ADR-0058); a hub rests on its dumps (`hub-ops.md`); the backup's own: `queue-backup.md` "Known limits".
 
 - Bounds: git seeing no repository from the root leaves the root as the only bound; another name for a directory inside a worktree (a bind mount) is not recognised (firmlinks are); the common dir's parent counts only when the common dir is named `.git`, so `--separate-git-dir` run from a linked worktree leaves the main checkout unprotected; a submodule root's superproject is not a bound; the data directory is judged against the root by path only.
 - Placement: a crash between the link and the partial's removal leaves `<D>` whole beside its partial; without hard links, a file appearing between the check and the rename is replaced.

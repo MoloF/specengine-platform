@@ -3,7 +3,8 @@
 #   docker build -f scripts/deploy/Dockerfile .
 # from the repository root, with Dockerfile.dockerignore beside this file.
 # Three stages: the web UI, the two binaries with that UI compiled in, and a
-# Debian slim runtime holding `spec`, `specengine-http`, git and ssh alone.
+# Debian slim runtime holding `spec`, `specengine-http`, git, ssh and the
+# three scripts alone.
 # Every base is an exact tag and its multi-arch index digest, pending the
 # owner (Q7).
 
@@ -45,6 +46,10 @@ RUN groupadd --gid 10001 specengine \
 COPY --from=build /src/target/release/spec /src/target/release/specengine-http /usr/local/bin/
 COPY --chmod=0755 scripts/deploy/entrypoint.sh /usr/local/bin/specengine-entrypoint
 COPY --chmod=0755 scripts/deploy/clone.sh /usr/local/bin/specengine-clone
+# The daemon's probe (docs/features/hub-ops.md "`specengine-health`"): bash's
+# /dev/tcp, Debian's bash being Essential, so no package and no HTTP client.
+# Compose holds the probe's timing; the image declares none.
+COPY --chmod=0755 scripts/deploy/health.sh /usr/local/bin/specengine-health
 # The data directory lies outside every root.
 ENV XDG_DATA_HOME=/data HOME=/var/lib/specengine/home
 USER 10001:10001

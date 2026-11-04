@@ -1,9 +1,14 @@
-# A hub's whole host (docs/features/hub-deploy.md "The host"): four services and
-# nothing else. Traefik holds TLS, the routers and the door's forward-auth;
+# A hub's whole host (docs/features/hub-deploy.md "The host"): seven services
+# and nothing else. Traefik holds TLS, the routers and the door's forward-auth;
 # Authelia the accounts and sessions; the daemon runs inside Traefik's network
 # namespace on its loopback bind, its port never published (trust item 1);
 # `admin` is the one-shot account acts (docs/features/hub-accounts.md), which
-# `up -d` never starts.
+# `up -d` never starts. The three sidecars carry the hub's state off the host
+# (docs/features/hub-ops.md "Compose"): `dump-queue` and `dump-door`, each on
+# the image whose tool it runs and with no network, stage a generation every
+# 15 minutes on the tmpfs volume hub-dumps; `backup`, on restic's image, the
+# only one with a network, its own, sends them encrypted to the operator's
+# backend and mounts no live data.
 # Traefik's static configuration is its command list (S1); the dynamic one is
 # traefik/dynamic/hub.yml. Pins: exact versions and index digests, pending the
 # owner (Q7).
@@ -68,6 +73,15 @@ services:
     volumes:
       - ./projects:/projects
       - specengine-data:/data
+    # specengine-health (scripts/deploy/health.sh): a loopback GET / answered
+    # 403 by the fence, and websecure's port open in this namespace. Docker
+    # restarts no unhealthy container: `unhealthy` is the operator's signal.
+    healthcheck:
+      test: ["CMD", "specengine-health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
   admin:
     # The account acts (docs/canon/hub-deploy.md "Accounts"): one-shot, run as
     # `docker compose run --rm admin <act>` on the host's terminal; no network.
@@ -76,6 +90,8 @@ services:
     profiles: [admin]
     network_mode: none
     logging: {driver: none}         # no password, secret or code reaches a log driver (R6)
+    # The door image's own healthcheck probes a door server this service never runs.
+    healthcheck: {disable: true}
     entrypoint: ["/bin/sh", "/opt/hub-admin/hub-admin"]
     environment:
       HUB_HOST: "${HUB_HOST}"
@@ -88,10 +104,87 @@ services:
       - ./traefik/mcp-users:/mcp-users
       - ./traefik/dynamic:/traefik-dynamic
       - authelia-data:/var/lib/authelia
+  dump-queue:
+    # The hub's image byte for byte: `spec export state` of every served
+    # project. /data is read-write because a reader of a WAL database maps its
+    # -shm file; it writes nothing else there (R2).
+    image: ghcr.io/molof/specengine:${SPECENGINE_VERSION:?set SPECENGINE_VERSION in .env}
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    entrypoint: ["/bin/sh", "/opt/hub-ops/hub-ops"]
+    command: ["queue"]
+    volumes:
+      - ./ops:/opt/hub-ops:ro
+      - ./projects:/projects:ro
+      - specengine-data:/data
+      - hub-dumps:/dumps
+  dump-door:
+    # The authelia service's image byte for byte: `hub-admin dump` under the
+    # act lock, the door's passkey and TOTP exports through its CLI.
+    image: authelia/authelia:4.39.28@sha256:bd97cff4fcbf715b5ff1f9ae286afbe6033afce385302520b0368122d43a6f54
+    restart: unless-stopped
+    init: true
+    network_mode: none
+    entrypoint: ["/bin/sh", "/opt/hub-ops/hub-ops"]
+    command: ["door"]
+    # The door image's own healthcheck probes a door server this service never runs.
+    healthcheck: {disable: true}
+    environment:
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key
+    secrets: [authelia_storage_key]
+    volumes:
+      - ./ops:/opt/hub-ops:ro
+      - ./admin:/opt/hub-admin:ro
+      - ./admin-log:/var/lib/hub-admin
+      - ./authelia/users:/users:ro
+      - ./traefik/mcp-users:/mcp-users:ro
+      - authelia-data:/var/lib/authelia
+      - hub-dumps:/dumps
+  backup:
+    # restic 0.19.1, the multi-arch index (Docker Hub, 2026-11-04). It reads
+    # the dumps read-only and holds the only network of the three; its
+    # healthcheck is a whole upload round within 35 minutes.
+    image: restic/restic:0.19.1@sha256:136600b6ff6843d61d355f7f71f460a166429f35de6fd11b568fece3c9a4d510
+    restart: unless-stopped
+    init: true
+    hostname: hub-backup          # restic's lock host: a stale lock is its own after a restart
+    networks: [backup]
+    entrypoint: ["/bin/sh", "/opt/hub-ops/hub-ops"]
+    command: ["upload"]
+    environment:
+      HUB_HOST: "${HUB_HOST}"
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+      RESTIC_CACHE_DIR: /cache
+    secrets: [restic_password, restic_env]
+    tmpfs: [/snapshot, /state]
+    volumes:
+      - ./ops:/opt/hub-ops:ro
+      - hub-dumps:/dumps:ro
+      - restic-cache:/cache
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/opt/hub-ops/hub-ops", "fresh"]
+      interval: 5m
+      timeout: 10s
+      retries: 1
+      start_period: 20m
+networks:
+  # backup's alone: nothing else joins it (R7).
+  backup: {}
 secrets:
   deploy_key: {file: ./secrets/deploy_key}
   known_hosts: {file: ./secrets/known_hosts}
   authelia_session_secret: {file: ./secrets/authelia_session_secret}
   authelia_storage_key: {file: ./secrets/authelia_storage_key}
   authelia_jwt_secret: {file: ./secrets/authelia_jwt_secret}
-volumes: {specengine-data: {}, authelia-data: {}, traefik-acme: {}}
+  # backup's alone: the repository password, and the backend's location and
+  # keys, read line by line by hub-ops, never sourced.
+  restic_password: {file: ./secrets/restic_password}
+  restic_env: {file: ./secrets/restic_env}
+volumes:
+  specengine-data: {}
+  authelia-data: {}
+  traefik-acme: {}
+  # The dumps' staging: tmpfs, so no dump touches the host's disk (R4).
+  hub-dumps: {driver: local, driver_opts: {type: tmpfs, device: tmpfs, o: "size=256m,uid=10001,mode=0700"}}
+  restic-cache: {}

@@ -102,7 +102,7 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 
 - **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. The gate (step 11b-3) checks what the door answers to a JSON request.
 - **A stalled reader.** A client that stops reading keeps its socket past a stream's life, not its events: the end waits for it to read again.
-- **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0074).
+- **Health.** A hub answers a probe of `127.0.0.1` with a 403 (`hub-ops.md`).
 - **Scale.** Reads trust the index (`spec-read-freshness.md`); a team still waits in a project's turn.
 - **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy encodes it, `%23` (`hub-deploy.md`).
 - **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`), so a new one fails until decided.

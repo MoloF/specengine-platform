@@ -8,17 +8,17 @@ reviewed: 2026-11-04
 
 # Hub deploy: compose, Traefik, Authelia and the image
 
-ADR-0066, ADR-0067, ADR-0068, built by `hub-deploy` (RM-0064, step 11b-1) and `hub-accounts` (RM-0065, step 11c-1). Working answers of the orchestrator, 2026-11-03, the owner's review open. One compose file is a hub's whole host. It guarantees what the daemon cannot defend (`hub.md#trust` items 1-5, `hub-mcp.md#trust` item 6), each item a file a test pins. The operator's guide: `scripts/deploy/README.md`. Files: `scripts/deploy/` and `.github/workflows/image.yml`. Dumps, restore, upgrade, health and turning on `--push`: RM-0074.
+ADR-0066, ADR-0067, ADR-0068, built by `hub-deploy` (RM-0064, step 11b-1) and `hub-accounts` (RM-0065, step 11c-1). Working answers of the orchestrator, 2026-11-03, the owner's review open. One compose file is a hub's whole host. It guarantees what the daemon cannot defend (`hub.md#trust` items 1-5, `hub-mcp.md#trust` item 6), each item a file a test pins. The operator's guide: `scripts/deploy/README.md`. Files: `scripts/deploy/` and `.github/workflows/image.yml`. Dumps, restore, upgrade, health, `--push`: `hub-ops.md`.
 
 ## Host
 
-Three services, each `restart: unless-stopped`, and the one-shot `admin` (`#accounts`).
+Six services, each `restart: unless-stopped`: these three and the sidecars `dump-queue`, `dump-door`, `backup` (`hub-ops.md#dumps`); and the one-shot `admin` (`#accounts`).
 
 - **`traefik`** publishes 80 and 443 alone. Its static configuration is its `command:` list, since Traefik's static sources exclude each other; the dynamic one is `traefik/dynamic/hub.yml` on the file provider, watched. `web` only redirects to `websecure`. ACME by TLS-ALPN, the CA from `.env`, staging first. No API, dashboard, version check or usage report.
 - **`authelia`**, the login door at `DOOR_HOST`: the file users backend (`authelia/users/users.yml`, mounted read-only, a person re-read on every request: `refresh_interval: always`); SQLite storage and the filesystem notifier on the `authelia-data` volume; sessions in memory (a restart logs everyone out); passkeys and TOTP; password reset off. Its config is rendered by its template filter from the service's environment.
-- **`specengine`**, the image: `network_mode: "service:traefik"`, no port or network of its own; `init: true`, since the daemon installs no signal handler and git children a sync's deadline kills must be reaped; `depends_on` `traefik` with `restart: true`; `/projects` bind-mounted; `/data` the named volume `specengine-data` (`XDG_DATA_HOME`), so the data directory lies outside every root.
+- **`specengine`**, the image: `network_mode: "service:traefik"`, no port or network of its own; `init: true`, since the daemon installs no signal handler and git children a sync's deadline kills must be reaped; `depends_on` `traefik` with `restart: true`; healthcheck `specengine-health` (`hub-ops.md` "Health"); `/projects` bind-mounted; `/data` the named volume `specengine-data` (`XDG_DATA_HOME`), so the data directory lies outside every root.
 
-`.env` keys, each read, none secret: `HUB_DOMAIN` (the door's cookie domain: a domain for the hub alone), `HUB_HOST`, `DOOR_HOST`, `ACME_EMAIL`, `ACME_CA_SERVER`, `SPECENGINE_VERSION` (the plugin's version, the image tag; `:?` guarded, never `latest`), `SPECENGINE_PUSH` (`0` or `1`). Secrets are files under `secrets/`, as Docker secrets: `deploy_key` and `known_hosts` to `specengine` alone, named by `GIT_SSH_COMMAND` (git's: `hub-git.md` "Credentials"); `authelia_session_secret`, `authelia_jwt_secret` to `authelia` alone, `authelia_storage_key` to it and `admin`, as `*_FILE`. Directories are mounted, never single files. `.gitignore` keeps `.env`, `secrets/`, `projects/`, `authelia/users/`, `traefik/mcp-users/`, `admin-log/` and the stamp out of git.
+`.env` keys, each read, none secret: `HUB_DOMAIN` (the door's cookie domain: a domain for the hub alone), `HUB_HOST`, `DOOR_HOST`, `ACME_EMAIL`, `ACME_CA_SERVER`, `SPECENGINE_VERSION` (the plugin's version, the image tag; `:?` guarded, never `latest`), `SPECENGINE_PUSH` (`0` or `1`). Secrets are files under `secrets/`, as Docker secrets: `deploy_key` and `known_hosts` to `specengine` alone, named by `GIT_SSH_COMMAND` (git's: `hub-git.md` "Credentials"); `authelia_session_secret`, `authelia_jwt_secret` to `authelia` alone, `authelia_storage_key` to it, `admin` and `dump-door`, as `*_FILE`; `restic_password`, `restic_env` to `backup`. Directories are mounted, never single files. `.gitignore` keeps `.env`, `secrets/`, `projects/`, `authelia/users/`, `traefik/mcp-users/`, `admin-log/`, `restore/` and the stamp out of git.
 
 <a id="door"></a>
 ## Door
@@ -40,7 +40,7 @@ Every router to the daemon also carries `hardening` (`nosniff`, HSTS, COOP `same
 
 ## Image
 
-`ghcr.io/molof/specengine:<v>`, from `scripts/deploy/Dockerfile` (ADR-0066), its context the repository root through an allowlist, `Dockerfile.dockerignore`: the manifests, `Cargo.lock`, `crates/`, `ui/` without `node_modules` or `dist`, and the two scripts. Stages: Node 24 with pnpm through corepack builds `ui/dist`; Rust 1.90, the workspace `rust-version`, runs `cargo build --locked --release -p specengine-cli -p specengine-http`; Debian 13 slim holds `spec`, `specengine-http`, git (2.38 or later), `openssh-client`, `ca-certificates` and the base's `sh` (a sync's SIGTERM goes through `sh -c kill`). No git-lfs, Rust toolchain or `rust-analyzer`. User 10001 owns `/data`, `/projects` and its home `/var/lib/specengine/home`; the scripts are copied `--chmod=0755`; the label `org.opencontainers.image.source` links the GHCR package to the repository. No `# syntax=` line.
+`ghcr.io/molof/specengine:<v>`, from `scripts/deploy/Dockerfile` (ADR-0066), its context the repository root through an allowlist, `Dockerfile.dockerignore`: the manifests, `Cargo.lock`, `crates/`, `ui/` without `node_modules` or `dist`, and the three scripts. Stages: Node 24 with pnpm through corepack builds `ui/dist`; Rust 1.90, the workspace `rust-version`, runs `cargo build --locked --release -p specengine-cli -p specengine-http`; Debian 13 slim holds `spec`, `specengine-http`, git (2.38 or later), `openssh-client`, `ca-certificates` and the base's `sh` (a sync's SIGTERM goes through `sh -c kill`). No git-lfs, Rust toolchain or `rust-analyzer`. User 10001 owns `/data`, `/projects` and its home `/var/lib/specengine/home`; the scripts are copied `--chmod=0755`; the label `org.opencontainers.image.source` links the GHCR package to the repository. No `# syntax=` line.
 
 `.github/workflows/image.yml` runs on `v*` tags alone, `contents: read`. `check`: `tag-check.sh` (the tag is exactly `v` + the plugin's version, which `.env.example` holds too), the deploy tests, `compose config`, `docker build --check`, Authelia's `validate-config`. `build`, per architecture on native runners (`ubuntu-24.04`, `ubuntu-24.04-arm`): builds with `load`, smoke-tests (git 2.38 or later, no `git lfs`, `GET /` a 200 page), pushes `<v>-<arch>`. `merge` publishes the list `<v>`. Both pushing jobs take `packages: write`, run only for the owner's account, `MoloF`, log in, then fail when `<v>` is already published: one version, one build. Actions are pinned by commit SHA. The host only pulls.
 
@@ -54,17 +54,7 @@ Every router to the daemon also carries `hardening` (`nosniff`, HSTS, COOP `same
 
 ## Pins
 
-Exact, recorded 2026-11-03, each pending the owner; full digests and SHAs are in the files.
-
-| Pin | Value |
-|---|---|
-| Traefik | `v3.7.17@sha256:68ae5fe5...3748` |
-| Authelia | `4.39.28@sha256:bd97cff4...6f54` |
-| Debian | `trixie-20261027-slim@sha256:f6b08b09...3ec4` |
-| Node | `24.22.2-trixie-slim@sha256:54f84b4c...b446` |
-| Rust | `1.90.0-slim-trixie@sha256:7fa728f3...b39e` |
-| pnpm | 10.28.2, `ui/package.json` |
-| Actions | `actions/checkout` v7.0.1 `3d3c42e5`, `docker/login-action` v4.7.0 `81c6f93d`, `docker/setup-buildx-action` v4.4.1 `f87e5991`, `docker/build-push-action` v7.4.0 `c3c9e263` |
+`hub-ops.md` "Pins".
 
 <a id="accounts"></a>
 ## Accounts
@@ -75,11 +65,11 @@ It alone writes `users.yml`, the MCP users file and the stamp `traefik/dynamic/m
 
 ## Gate
 
-Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md`, G1-G10 of `hub-accounts.md`, SG1-SG2 of `stream-life.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here, with versions and dates; `--push` and real people wait for it.
+Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md`, HO1-HO17 of `docs/features/hub-ops.md`, G1-G10 of `hub-accounts.md`, SG1-SG2 of `stream-life.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here, with versions and dates; `--push` and real people wait for it.
 
 ## Known limits
 
-- A Traefik crash the engine restarts leaves `specengine` in a dead namespace until `docker compose up -d`.
+- A Traefik crash the engine restarts leaves `specengine` in a dead namespace, `unhealthy`, until `docker compose up -d`.
 - `readTimeout` 300 s may cut an HTTP/1.1 GET stream or a POST waiting in the turn (Go's `ReadTimeout`): the gate measures.
 - A re-run of `build` after a failed `merge` overwrites `<v>-<arch>` before the list `<v>` exists; hosts pin only the list.
 - D12's `LC_ALL=C` mutation survives under dash on CI.
@@ -94,4 +84,4 @@ Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of
 
 ## Tests
 
-http `tests/deploy_admin.rs` (`hub-accounts`: `hub-admin` under `sh` with a stub door, no Docker); `tests/deploy.rs` (D1-D15: the files read with `serde-saphyr` and `toml`, the canon's two fences read as `src/hub.rs`'s units do, the entrypoint run with a stub daemon; no network, no Docker); CLI `tests/deploy_clone.rs` (D16, `file://` bare repositories); store `tests/queue_state.rs` `a_restored_login_off_the_hubs_grammar_is_refused_when_read` (D17, `Author.login` checked on decode); eval `build_graph.rs` (`scripts/` holds the hook installer and `deploy/`). CI: `image.yml`'s checks, C1-C3.
+http `tests/deploy_admin.rs` (`hub-accounts`: `hub-admin` under `sh` with a stub door, no Docker); `tests/deploy_ops.rs` (`hub-ops`); `tests/deploy.rs` (D1-D15: the files read with `serde-saphyr` and `toml`, the canon's two fences read as `src/hub.rs`'s units do, the entrypoint run with a stub daemon; no network, no Docker); CLI `tests/deploy_clone.rs` (D16, `file://` bare repositories); store `tests/queue_state.rs` `a_restored_login_off_the_hubs_grammar_is_refused_when_read` (D17, `Author.login` checked on decode); eval `build_graph.rs` (`scripts/` holds the hook installer and `deploy/`). CI: `image.yml`'s checks, C1-C3.

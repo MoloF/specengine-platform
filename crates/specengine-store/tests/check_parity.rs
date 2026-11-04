@@ -762,14 +762,16 @@ fn the_core_render_is_the_committed_index() {
         (&set[2], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[0].1)),
         // docs/features/review-form.md: the `proposal-*` queue canons.
         (&set[3], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[1].1)),
+        // docs/features/hub-ops.md "Canon at ship": the `hub*` hub canons.
         (&set[4], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[2].1)),
+        (&set[5], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[3].1)),
         (
-            &set[5],
+            &set[6],
             "## Decisions",
-            format!("`{}`", INDEX_LIVE_SHARDS[3].1),
+            format!("`{}`", INDEX_LIVE_SHARDS[4].1),
         ),
-        (&set[6], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[4].1)),
-        (&set[7], "## Specs", format!("`{}`", INDEX_LIVE_SHARDS[5].1)),
+        (&set[7], "## Canon", format!("`{}`", INDEX_LIVE_SHARDS[5].1)),
+        (&set[8], "## Specs", format!("`{}`", INDEX_LIVE_SHARDS[6].1)),
     ] {
         let (path, text) = (output.path.as_str(), output.bytes.as_str());
         assert!(
@@ -1153,7 +1155,7 @@ fn seeded_tier3_cases_render_as_compact_archive_lines() {
     let (root, shard) = (set[0].bytes.as_str(), set[1].bytes.as_str());
     // Three Tier 3 seeds sit under the decisions shard's claim: Tier 3
     // places before the claims.
-    let [_, _, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
+    let [_, _, _, _, (_, decisions), _, _] = INDEX_LIVE_SHARDS;
     assert_eq!(
         COMPACTION_SEEDS
             .iter()
@@ -1366,6 +1368,7 @@ fn each_seed_blocks_exactly_its_target() {
     // archive, an output edited or deleted itself only.
     let [
         (canon_spec, _),
+        _,
         _,
         (canon, _),
         (decisions, _),
@@ -1952,7 +1955,7 @@ const SEEDS: &[Seed] = &[
     // `spec-*` one): the shard drifts, the root untouched.
     (
         "a new canon document, not rendered",
-        INDEX_LIVE_SHARDS[2].0,
+        INDEX_LIVE_SHARDS[3].0,
         "index-drift",
         |r| {
             write_new(
@@ -1966,7 +1969,7 @@ const SEEDS: &[Seed] = &[
     // leaves that shard for the archive, the root untouched.
     (
         "ADR-0010 superseded-by ADR-0001, not rendered",
-        INDEX_LIVE_SHARDS[3].0,
+        INDEX_LIVE_SHARDS[4].0,
         "index-drift",
         |r| {
             set_key(

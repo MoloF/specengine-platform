@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 36 open, 43 done; current mvp; to mvp 2-3 days; total 13-21 days, 16 unestimated
+roadmap: 35 open, 44 done; current mvp; to mvp 2-3 days; total 13-21 days, 15 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -25,9 +25,7 @@ roadmap: 36 open, 43 done; current mvp; to mvp 2-3 days; total 13-21 days, 16 un
 5. [RM-0018](../roadmap/RM-0018.md) | URL-mode elicitation onto UI cards | draft | could | 2-3
 6. [RM-0038](../roadmap/RM-0038.md) | task-stage: the owner's staging form approve_task | draft | could | 2-3
 
-## release v3 | 1 open, 27 done | 0 days, 1 unestimated
-
-1. [RM-0074](../roadmap/RM-0074.md) | hub-ops (Phase 7, step 11b-2): off-host dumps, restore, upgrade, health and turning on --push | draft | must | -
+## release v3 | 0 open, 28 done | 0 days
 
 ## release v4 | 14 open, 0 done | 0 days, 14 unestimated
 
