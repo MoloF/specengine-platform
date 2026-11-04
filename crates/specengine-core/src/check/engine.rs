@@ -24,6 +24,7 @@ use super::resolve::{Resolution, Resolver, declared_references, reference_line, 
 use super::text::{FileText, Written, front_matter_failed, is_calendar_date, is_date_shaped};
 use super::working_set::worst_w;
 use super::{generated, graph, links, rules};
+use crate::record::{HUB_ID_START, record_id};
 use crate::{Paths, is_under};
 
 /// The one table: how a parser diagnostic reaches the report. Every code
@@ -711,7 +712,8 @@ impl FileCheck<'_, '_> {
 
     /// `id-scope` on a feature-scoped definition that is a document `id:`
     /// or a `{#ID}` section outside a feature document (ADR-0026);
-    /// `id-width` on number-shape definitions; `file-name` under `records`,
+    /// `id-width` on number-shape definitions, but a hub's number
+    /// ([`hub_numbered`]); `file-name` under `records`,
     /// unless the document `id:` is already `id-scope`'s (one finding per
     /// defect).
     fn ids(&mut self, document: &Node) {
@@ -757,6 +759,7 @@ impl FileCheck<'_, '_> {
             }
             if let Some(width) = spec.width
                 && body.chars().count() != width as usize
+                && !hub_numbered(id, prefix, body, width)
             {
                 self.push(
                     "id-width",
@@ -988,4 +991,16 @@ pub(super) fn has_anchor(parsed: &ParsedFile, sections: &BTreeSet<String>, ancho
 
 fn file_name(path: &str) -> &str {
     path.rsplit('/').next().unwrap_or(path)
+}
+
+/// `id` (`prefix`-`body`) is a hub's number as [`record_id`] writes it
+/// under `width`: `body` ASCII digits of a number from [`HUB_ID_START`],
+/// no zero past the padding (the `spec-ids` spec, "`id-width`"); `id-width`
+/// passes it on either side.
+fn hub_numbered(id: &str, prefix: &str, body: &str, width: u32) -> bool {
+    if body.is_empty() || !body.bytes().all(|byte| byte.is_ascii_digit()) {
+        return false;
+    }
+    body.parse::<u64>()
+        .is_ok_and(|number| number >= HUB_ID_START && record_id(prefix, width, number) == id)
 }

@@ -24,10 +24,14 @@
 //!   makes those; `spec propose decision` raises one), an
 //!   ID twice in the text, an ID defined or aliased in the index this call
 //!   refreshed or held by a live create (exit 1 naming the holder and, for
-//!   a number, the next free ID: one more than the highest of its prefix,
+//!   a number, the next free ID: the next after the highest of its prefix,
 //!   or its `aliases_from`, in the index, the live creates and the text, in
-//!   the same scope). The queue's insert checks the live creates again
-//!   under its write lock ([`QueueError::Reserved`]).
+//!   the same scope, on the data directory's side). Last, at propose only,
+//!   a number on the other side (the `spec-ids` spec: a hub's from core
+//!   `HUB_ID_START`, a terminal's below; exit 1 naming the next free ID;
+//!   [`NewIds::off_side`], never part of [`NewIds::checked`], so no apply
+//!   meets it). The queue's insert checks the live creates again under its
+//!   write lock ([`QueueError::Reserved`]).
 //! - What `spec check` judges is a finding, stored, never a refusal:
 //!   nothing is blocked by a discrepancy. A `ref-dangling` on an ID a live
 //!   create or amendment holds is left out, a note naming the holder
@@ -74,14 +78,14 @@ use specengine_core::intake::{
 use specengine_core::proposal::{
     Author, COMMIT_SUBJECT, CommitFacts, PROPOSAL_TRAILER, commit_message,
 };
-use specengine_core::record::{record_form, record_id, record_number};
+use specengine_core::record::{HUB_ID_START, IdSide, record_form, record_id, record_number};
 use specengine_core::{Paths, is_clean_relative, is_under};
 use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape, grammar};
 use specengine_store::{
     CreateFileError, Decision, GitEnv, KindFamily, NamedBytes, NewProposal, Proposal,
     ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation, SpecIndex as _,
-    WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings, load_check,
-    load_config, patch_hash,
+    WorkingTree, WorktreeGit, create_file, default_baseline, id_side, introduced_findings,
+    load_check, load_config, patch_hash,
 };
 
 use crate::amend::{Amended, amended_step, text_problem};
@@ -341,11 +345,16 @@ fn run_create(
             .as_ref()
             .map(|table| table.prefix.as_str()),
         slug: checked.slug.as_deref(),
+        side: Some(id_side(&context.data_dir).map_err(store_error)?),
     };
     let new_ids = match named.checked(&checked.sites, &corpus, &reserved)? {
         Ok(new_ids) => new_ids,
         Err(reason) => return refuse(reason, messages),
     };
+    // The last check, at propose only: a new ID on the other side.
+    if let Some(reason) = named.off_side(&checked.sites, &new_ids, &corpus, &reserved) {
+        return refuse(reason, messages);
+    }
 
     // 5. Validation: never a refusal.
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
@@ -902,12 +911,16 @@ impl Corpus {
     }
 }
 
-/// Step 4's rules: the scheme, the `[decision_records]` prefix and the
-/// file's feature slug.
+/// Step 4's rules: the scheme, the `[decision_records]` prefix, the file's
+/// feature slug and the data directory's side, which the next free ID is
+/// counted on (the `spec-ids` spec).
 pub(crate) struct NewIds<'a> {
     pub scheme: &'a IdScheme,
     pub decision_prefix: Option<&'a str>,
     pub slug: Option<&'a str>,
+    /// `None` only at apply, its floor file unreadable: the hint counts
+    /// every number, as before the range, and no side is judged.
+    pub side: Option<IdSide>,
 }
 
 impl NewIds<'_> {
@@ -997,10 +1010,73 @@ impl NewIds<'_> {
         canonical_in(self.scheme, self.slug, id)
     }
 
-    /// For a number-shape `id` (canonical): one more than the highest
-    /// number of its prefix, or its `aliases_from`, in the same scope among
-    /// the index's IDs, the live creates' and `text`'s, as core
-    /// `record_id` writes it.
+    /// Propose step 4's last check (the `spec-ids` spec, "Created IDs"),
+    /// run after [`Self::checked`] passed `ids` (the canonical new IDs of
+    /// `sites`, in text order) and never inside it, so no apply meets it
+    /// (nothing is blocked): the refusal of the first new ID of a
+    /// number-shape prefix whose number is on the other side, naming the
+    /// next free ID on this side when there is one; `None` when every one
+    /// is on this side, or no side was read. Name-shape IDs are never
+    /// judged.
+    pub(crate) fn off_side(
+        &self,
+        sites: &[(IdSite, WrittenId)],
+        ids: &[String],
+        corpus: &Corpus,
+        reserved: &[Reservation],
+    ) -> Option<String> {
+        let side = self.side?;
+        for (site, form) in sites {
+            let WrittenId::Id(id) = form else {
+                continue;
+            };
+            let Some((prefix, digits)) = id.split_once('-') else {
+                continue;
+            };
+            let Some(spec) = self.scheme.prefix(prefix) else {
+                continue;
+            };
+            if spec.shape != Shape::Number {
+                continue;
+            }
+            let held = match record_number(id, spec) {
+                Some(number) => side.holds(number),
+                // All digits past `u64`: above every terminal number, so a
+                // hub's.
+                None if !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()) => {
+                    side == IdSide::Hub
+                }
+                None => continue,
+            };
+            if held {
+                continue;
+            }
+            let canonical = self.canonical(id);
+            let mut reason = match side {
+                IdSide::Terminal => format!(
+                    "`{canonical}` (line {}): numbers from {HUB_ID_START} are a hub's",
+                    site.line
+                ),
+                IdSide::Hub => format!(
+                    "`{canonical}` (line {}): a hub numbers from {HUB_ID_START}",
+                    site.line
+                ),
+            };
+            if let Some(next) = self.next_free(&canonical, corpus, reserved, ids) {
+                reason.push_str(&format!("; the next free here is `{next}`"));
+            }
+            reason.push_str("; nothing stored");
+            return Some(reason);
+        }
+        None
+    }
+
+    /// For a number-shape `id` (canonical): the next number on the data
+    /// directory's side ([`IdSide::next`]) after the highest on that side
+    /// of its prefix, or its `aliases_from`, in the same scope among the
+    /// index's IDs, the live creates' and `text`'s, as core `record_id`
+    /// writes it; `None` past a terminal's last number. With no side read,
+    /// one more than the highest of every number, as before the range.
     fn next_free(
         &self,
         id: &str,
@@ -1023,11 +1099,16 @@ impl NewIds<'_> {
             if their_scope != scope {
                 continue;
             }
-            if let Some(number) = record_number(their_bare, spec) {
+            if let Some(number) = record_number(their_bare, spec)
+                && self.side.is_none_or(|side| side.holds(number))
+            {
                 highest = highest.max(number);
             }
         }
-        let next = highest.checked_add(1)?;
+        let next = match self.side {
+            Some(side) => side.next(highest)?,
+            None => highest.checked_add(1)?,
+        };
         let free = record_id(&spec.prefix, spec.width.unwrap_or(1), next);
         Some(match (scope, spec.scope) {
             (Some(slug), IdScope::Feature) => format!("{slug}/{free}"),
@@ -1196,6 +1277,11 @@ pub(crate) fn prepare_file(
             format!("{problem}; nothing changed"),
         ));
     }
+    // The side names a next free ID in a refusal's text only: the apply
+    // never judges one (nothing is blocked; `NewIds::off_side` is propose's
+    // alone), and an unreadable floor file never stops it: the hint then
+    // counts every number.
+    let side = id_side(&context.data_dir).ok();
     let named = NewIds {
         scheme,
         decision_prefix: recorded
@@ -1204,6 +1290,7 @@ pub(crate) fn prepare_file(
             .as_ref()
             .map(|table| table.prefix.as_str()),
         slug: feature_stem(&paths.features, path),
+        side,
     };
     let sites = classified(id_sites(&proposal.new_text, scheme), scheme);
     let ids = match named.checked(&sites, &corpus, &[]) {

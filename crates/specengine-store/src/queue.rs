@@ -37,8 +37,9 @@
 //! - **Records** (`docs/canon/decision-record.md` "Queue and documents"): a deciding kind is
 //!   approved only with its decision record ([`DecisionRecord`], the five
 //!   columns step 3 adds), by [`ProposalQueue::approve_record_from`], which
-//!   issues the record's ID under the write lock ([`RecordSeries`]: one
-//!   more than the highest of the corpus and of every ID the queue issued;
+//!   issues the record's ID under the write lock ([`RecordSeries`]: the
+//!   next after the highest of the corpus and of every ID the queue issued,
+//!   on the data directory's side alone ([`id_side`], the `spec-ids` spec);
 //!   a proposal keeps its own across a reopen); [`ProposalQueue::approve`],
 //!   [`ProposalQueue::approve_from`] refuse it, [`ProposalQueue::applied`]
 //!   and [`ProposalQueue::applied_with`] refuse one without its record. The
@@ -141,11 +142,11 @@ use specengine_core::proposal::{
     Author, author_field_problem, is_utc_timestamp, patch_hash_input, proposal_id, proposal_number,
 };
 pub use specengine_core::record::Choice;
-use specengine_core::record::record_id;
+use specengine_core::record::{HUB_ID_START, IdSide, record_id};
 use specengine_model::Severity;
 
 use crate::error::{Db, StoreError};
-use crate::floor::read_floor;
+use crate::floor::{PROPOSAL_FLOOR_FILE, id_side, read_floor};
 use crate::worktree::is_oid;
 use crate::{b3_hash, schema};
 
@@ -778,7 +779,8 @@ pub struct RecordSeries {
     pub prefix: String,
     /// Its `[ids]` width.
     pub width: u32,
-    /// The highest number of the prefix (or its aliases) in the corpus.
+    /// The highest number of the prefix (or its aliases) in the corpus, on
+    /// the data directory's side (core `highest_record_number`).
     pub corpus_max: u64,
 }
 
@@ -1264,10 +1266,12 @@ pub trait ProposalQueue {
         decision: &Decision,
         now: &str,
     ) -> Result<Proposal, QueueError>;
-    /// The next record ID of `series`, read only: one more than the
-    /// greater of `series.corpus_max` and the highest number of the
+    /// The next record ID of `series`, read only: the next on the data
+    /// directory's side ([`crate::id_side`]) after the greater of
+    /// `series.corpus_max` and the highest number on that side of the
     /// project's stored `record_id`s of its prefix, zero-padded to its
-    /// width.
+    /// width. An invalid `proposal-floor` is its error; a terminal past its
+    /// last number [`QueueError::Invalid`].
     fn next_record(&self, series: &RecordSeries) -> Result<String, QueueError>;
     /// Apply step 7 of a kind that decides: [`Self::approve_from`]'s
     /// compare-and-set on `seen`, and its record set (replacing an earlier
@@ -1918,6 +1922,7 @@ impl SqliteQueue {
     ) -> Result<Proposal, QueueError> {
         check_time(now)?;
         let project = self.project.clone();
+        let dir = self.dir.clone();
         let tx = self.write()?;
         let current = existing(&tx, &project, id)?;
         if current.kind.family() != KindFamily::Decides {
@@ -1948,12 +1953,14 @@ impl SqliteQueue {
         if let Some(problem) = choice_problem(&approval.choice, current.kind, &current) {
             return Err(QueueError::Invalid(format!("`{id}`: {problem}")));
         }
+        // A kept record ID is written as kept, whatever its side; a new one
+        // is issued on the side read again under the write lock.
         let next = match &current.record {
             Some(record) => record.id.clone(),
             None => record_id(
                 &approval.series.prefix,
                 approval.series.width,
-                next_number(&tx, &project, &approval.series)?,
+                next_number(&tx, &project, &approval.series, id_side(&dir)?)?,
             ),
         };
         if next != approval.preview {
@@ -2756,9 +2763,28 @@ fn confirms(current: &Proposal, decision: &Decision) -> Result<(), QueueError> {
     )))
 }
 
-/// The highest number `<prefix>-<digits>` of the project's stored
-/// `record_id`s and `series.corpus_max`, plus one.
-fn next_number(conn: &Connection, project: &str, series: &RecordSeries) -> Result<u64, QueueError> {
+/// The number after the greater of `series.corpus_max` and the highest
+/// number `<prefix>-<digits>` on `side` of the project's stored
+/// `record_id`s ([`IdSide::next`]; the `spec-ids` spec, "Records"): the
+/// other side's issued IDs are ignored. The caller passes the side's
+/// corpus maximum (core `highest_record_number` on `side`); it is not
+/// filtered again here, but a nonzero one off `side` (the floor file came
+/// or went between the caller's read of the side and this one) is
+/// [`QueueError::Invalid`], run again, nothing written. A terminal past its
+/// last number, or an overflow: [`QueueError::Invalid`].
+fn next_number(
+    conn: &Connection,
+    project: &str,
+    series: &RecordSeries,
+    side: IdSide,
+) -> Result<u64, QueueError> {
+    if series.corpus_max > 0 && !side.holds(series.corpus_max) {
+        return Err(QueueError::Invalid(format!(
+            "`{}`'s highest number {} is not on this data directory's side: its \
+             `{PROPOSAL_FLOOR_FILE}` came or went during the run; run it again",
+            series.prefix, series.corpus_max
+        )));
+    }
     let mut statement = conn
         .prepare(
             "SELECT record_id FROM main.proposals WHERE project = ?1 AND record_id IS NOT NULL",
@@ -2776,15 +2802,25 @@ fn next_number(conn: &Connection, project: &str, series: &RecordSeries) -> Resul
             .and_then(|rest| rest.strip_prefix('-'))
             .filter(|digits| !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit()))
             .and_then(|digits| digits.parse::<u64>().ok());
-        if let Some(number) = number {
+        if let Some(number) = number
+            && side.holds(number)
+        {
             highest = highest.max(number);
         }
     }
-    highest.checked_add(1).ok_or_else(|| {
-        QueueError::Invalid(format!(
-            "`{}` numbers reach {highest}: no record ID follows",
-            series.prefix
-        ))
+    side.next(highest).ok_or_else(|| {
+        QueueError::Invalid(match side {
+            IdSide::Terminal => format!(
+                "`{}` numbers reach {}, the last below a hub's {HUB_ID_START}: no record ID \
+                 follows",
+                series.prefix,
+                HUB_ID_START - 1
+            ),
+            IdSide::Hub => format!(
+                "`{}` numbers reach {highest}: no record ID follows",
+                series.prefix
+            ),
+        })
     })
 }
 
@@ -3955,8 +3991,9 @@ impl ProposalQueue for SqliteQueue {
     }
 
     fn next_record(&self, series: &RecordSeries) -> Result<String, QueueError> {
+        let side = id_side(&self.dir)?;
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
-        let number = next_number(&tx, &self.project, series)?;
+        let number = next_number(&tx, &self.project, series, side)?;
         tx.commit().db()?;
         Ok(record_id(&series.prefix, series.width, number))
     }

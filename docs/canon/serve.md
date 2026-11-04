@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # Daemon: spec serve
@@ -46,7 +46,7 @@ Beside `<slug>.db`, never under a root (ADR-0003). `daemon.lock`: empty, its `fl
 
 `pid` `std::process::id()`; `port` the bound one (`--port 0`: the chosen); `url` the `listening` line's; `projects` in `--root` order, `root` canonical (as `/api/projects`); `started` `utc_now()`. No token, key, secret, version or build (ADR-0034). Readers take the five keys and ignore others; one missing or mistyped: unreadable.
 
-`proposal-floor`, a hub's alone: its `PR-` floor, written once at its start (`queue-backup.md` "ID floor").
+`proposal-floor`, a hub's alone: its `PR-` floor and its spec-ID side, written once at its start (`queue-backup.md` "ID floor").
 
 ## Lines
 

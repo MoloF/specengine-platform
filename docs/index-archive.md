@@ -124,6 +124,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/spec-cli-staged.md](features/spec-cli-staged.md) shipped
 - [docs/features/spec-cli-switch.md](features/spec-cli-switch.md) shipped
 - [docs/features/spec-cli.md](features/spec-cli.md) shipped
+- [docs/features/spec-ids.md](features/spec-ids.md) shipped
 - [docs/features/spec-index.md](features/spec-index.md) shipped
 - [docs/features/spec-lock.md](features/spec-lock.md) shipped
 - [docs/features/spec-parser.md](features/spec-parser.md) shipped
@@ -194,6 +195,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0069.md](roadmap/RM-0069.md) shipped
 - [docs/roadmap/RM-0071.md](roadmap/RM-0071.md) shipped
 - [docs/roadmap/RM-0072.md](roadmap/RM-0072.md) shipped
+- [docs/roadmap/RM-0073.md](roadmap/RM-0073.md) shipped
 - [docs/roadmap/RM-0075.md](roadmap/RM-0075.md) shipped
 - [docs/roadmap/RM-0076.md](roadmap/RM-0076.md) shipped
 - [docs/roadmap/RM-0077.md](roadmap/RM-0077.md) shipped

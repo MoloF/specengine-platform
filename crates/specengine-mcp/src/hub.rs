@@ -41,9 +41,9 @@ use rmcp::{ErrorData, RoleServer, tool, tool_router};
 use specengine_cli::{
     ANSWER_MAX, AUTHOR_FIELD_MAX, CRITERIA_MAX, CRITERION_MAX, CliError, DISTINCT_MAX,
     EVIDENCE_ENTRIES_MAX, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, EVIDENCE_VALUE_MAX, Env, GOAL_MAX,
-    Globals, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX, LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX,
-    NODES_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, RATIONALE_MAX,
-    SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, TITLE_MAX,
+    Globals, HUB_ID_START, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX, LABEL_MAX, LOCATION_MAX,
+    NODE_IDS_MAX, NODES_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS,
+    RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, TITLE_MAX,
 };
 
 use crate::cards::{CreateCardArgs, EditCardArgs, MoveCardArgs};
@@ -454,12 +454,13 @@ findings, the rest counted; the text cut at 40000 characters).
 
 kind: update: replace the node's span (a section and its subsections, or a whole file). \
 create: new ID sections below the node (text: its span with them), or a new file at a free \
-.md path (base null, text the whole file); you name each new ID; a taken one is refused \
-naming the next free one. interpretation: an update carrying an accepted decision. \
+.md path (base null, text the whole file); you name each new ID, from 100001 on this hub; a \
+taken or lower one is refused naming the next free ID. interpretation: an update carrying an \
+accepted decision. \
 amendment: a new spec or decision file (base null) declaring links: {amends: [ID]} to live \
 nodes, which stay unwritten.
 target: the node's ID or slug/ID (not an alias, ID#SECTION or ID@rev), or a root-relative \
-.md path (its document, the whole file).
+.md path (the whole file).
 base: get_node's span_hash of the target; a stale one is refused naming the current hash; \
 null only for a new file.
 decision, how, why: an interpretation's decision ID, how it was applied, why interpretation \
@@ -710,6 +711,14 @@ const _: () = assert!(holds_number(
     "at most ",
     INTERPRETATION_TEXT_MAX,
     " bytes each"
+));
+// The spec-ID range a hub names (the `spec-ids` spec): a hub's from core's
+// start.
+const _: () = assert!(holds_number(
+    HUB_CHANGE_DESCRIPTION,
+    "from ",
+    HUB_ID_START as usize,
+    " on this hub"
 ));
 const _: () = assert!(holds_number(
     HUB_QUESTION_DESCRIPTION,

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-11-04
 ---
 
 # Queue backup and restore
@@ -55,10 +55,10 @@ ADR-0063, built by `apply-outputs` (RM-0072). A queue restored from a dump goes 
 
 - **The file**: `<data dir>/proposal-floor`, beside `<slug>.db` (`serve.md` "Files"), a regular file holding the decimal floor, no sign or leading zero, then LF (core `parse_floor`, `floor_text`, `FLOOR_PROBLEM`). No queue row holds it, no dump carries it, so `import-state`'s step 3 never sees it.
 - **Written** once, by `specengine-http --public-origin` under `daemon.lock`, before listening (CLI `store_hub_floor`, store `store_floor`), holding core `HUB_PROPOSAL_FLOOR`, 100001: a dot-named sibling `.proposal-floor.specengine-<pid>-<n>.tmp` written, synced, hard-linked to `proposal-floor` (`link` never replaces: an existing floor is read instead, its bytes and mtime kept), the sibling removed, the directory synced; no reader or crash sees it empty or partial, and a sibling a crash leaves is never read. An invalid file: exit 2 before listening, ``specengine-http: <data dir>/proposal-floor: not a proposal floor (a decimal number from 1, then LF)``. A local daemon and `spec serve` neither write nor read it.
-- **Read** by every mint in that data directory (store `read_floor` in `next_id`: `max(highest + 1, floor)`, the floor 1 with no file), a hub's departing accept, the host's `spec propose` and MCP alike; readers use the stored number. An invalid file: the mint stores nothing, exit 2, the same text.
+- **Read** by every mint in that data directory (store `read_floor` in `next_id`: `max(highest + 1, floor)`, the floor 1 with no file), a hub's departing accept, the host's `spec propose` and MCP alike; readers use the stored number. An invalid file: the mint stores nothing, exit 2, the same text. Its presence alone is also the spec-ID side (`spec-ids.md` "The range").
 - **Unchanged**: `proposal_id` writes more than four digits, so the trailer, its lookup, the UI and older binaries read `PR-100001` as `PR-0001`.
 
-Limits: two developers' queues still share `PR-` numbers; a mint in a data directory before its hub's first start is below the floor; a hub's dump restored on a terminal mints in the hub's range; an older `spec` on the host ignores the floor. Spec IDs are no proposal IDs and take no floor: records (`decision-record.md` "ID") and created nodes (`proposal-kinds.md` "Reservation") are numbered per queue, so a hub and a terminal can issue one; an add/add conflict or `id-taken` after a merge shows it, and a person renumbers (the cure waits for RM-0053).
+Limits: two developers' queues still share `PR-` numbers; a mint in a data directory before its hub's first start is below the floor; a hub's dump restored on a terminal mints in the hub's range; an older `spec` on the host ignores the floor. Spec IDs: `spec-ids.md`.
 
 ## One door
 

@@ -11,7 +11,8 @@
 //! 3. the text: a create's file-form rules, then [`text_problem`]: it
 //!    declares `amends`, is `class: spec` or `class: decision`, not Tier 3
 //!    by status;
-//! 4. its new IDs, as a create's;
+//! 4. its new IDs, as a create's, the other side's last (the `spec-ids`
+//!    spec; never at apply);
 //! 5. the amended nodes ([`amended_nodes`]), over the index this call
 //!    refreshed: each canonical, live, not defined by the text, named once;
 //! 6. validation (findings never refuse: nothing is blocked); 7. `--task`; 8. the
@@ -39,7 +40,7 @@ use specengine_core::record::ACCEPTED;
 use specengine_model::{AMENDS, IdScheme, ParsedFile, Reference};
 use specengine_store::{
     GitEnv, NewProposal, Proposal, ProposalKind, ProposalQueue as _, QueueError, WorkingTree,
-    patch_hash,
+    id_side, patch_hash,
 };
 
 use crate::corpus::indexed;
@@ -209,11 +210,16 @@ fn run_amend(
             .as_ref()
             .map(|table| table.prefix.as_str()),
         slug: checked.slug.as_deref(),
+        side: Some(id_side(&context.data_dir).map_err(store_error)?),
     };
     let new_ids = match named.checked(&checked.sites, &corpus, &reserved)? {
         Ok(new_ids) => new_ids,
         Err(reason) => return refuse(reason, messages),
     };
+    // The last check, at propose only: a new ID on the other side.
+    if let Some(reason) = named.off_side(&checked.sites, &new_ids, &corpus, &reserved) {
+        return refuse(reason, messages);
+    }
 
     // 5. The amended nodes.
     if let Err(reason) = amended_nodes(

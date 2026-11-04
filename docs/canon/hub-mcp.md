@@ -70,7 +70,7 @@ None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. 
 
 Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub).
 
-**Texts.** `HUB_INSTRUCTIONS`, and twelve hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the three card writes. The instructions and reads' tails say a read answers from the hub's index, which confirms and merges keep, checked when 5 minutes old, a printed file now. The other five are stdio's. Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
+**Texts.** `HUB_INSTRUCTIONS`, and twelve hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the three card writes. Reads' tails: `spec-read-freshness.md` "Routes and tools". `propose_change` names `from 100001 on this hub`, asserted against `HUB_ID_START` (`spec-ids.md`). The other five are stdio's. Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
 
 ## Identity
 

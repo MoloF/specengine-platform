@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-core, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-11-04
 ---
 
 # Decision records: a deciding item approved
@@ -39,7 +39,7 @@ Then the trailer lookup ("Completion"); then in the recorded worktree, each refu
 
 ## ID
 
-`<prefix>-<n>` padded to the prefix's `width` (core `record_id`), `n` one more than the greater of the highest number of the prefix or its `aliases_from` in the recorded root's index (defined or in `aliases:`) and the highest `record_id` of the prefix the queue issued (`next_record`). Previewed at step 4 for the prompt; **issued only after consent**, at step 7, in the `Immediate` transaction where `approve_record_from` recomputes it under the write lock (not the preview -> `Issued`). A proposal keeps its ID across a reopen, never another's; a declined or refused run issues none; gaps are allowed.
+`<prefix>-<n>` padded to the prefix's `width` (core `record_id`), `n` the data directory's side's next (core `IdSide::next`: a hub's from 100001, a terminal's below; `spec-ids.md` "Records") after the greater of the highest number on that side of the prefix or its `aliases_from` in the recorded root's index (defined or in `aliases:`; `highest_record_number`) and the highest `record_id` on that side of the prefix the queue issued (`next_record`). Previewed at step 4 for the prompt; **issued only after consent**, at step 7, in the `Immediate` transaction where `approve_record_from` recomputes it under the write lock (not the preview -> `Issued`). A proposal keeps its ID across a reopen, never another's; a declined or refused run issues none; gaps are allowed.
 
 ## Completion
 
@@ -66,7 +66,7 @@ Queue step 2 -> 3 (`QUEUE_SCHEMA_VERSION` 3): `ADD COLUMN ... TEXT` `record_id`,
 
 Accepted at shipping (2026-10-06); none blocks.
 
-- A record hand-written under the issued ID elsewhere: `id-taken` at merge. IDs take no floor: a hub's queue and a terminal's can issue one ID, which a merge shows, and a person renumbers (`queue-backup.md` "ID floor"). A foreign file taking a kept ID's `<dir>/<ID>.md` (a merge) refuses every approve `exists` for good: only reject.
+- A record hand-written under the issued ID elsewhere: `id-taken` at merge. A hub's and a terminal's IDs never meet; two terminals, or an older `spec`, still can (`spec-ids.md` "Known limits"). A foreign file taking a kept ID's `<dir>/<ID>.md` (a merge) refuses every approve `exists` for good: only reject.
 - A queue restored from before step 7 while the record's commit is in a readable history: neither approve nor reject takes it.
 - Free text with a refused character is only rejected; a path target meets its record in corpus dedup only if `canon:` lands on it.
 - The killed-run hint with the project root below its worktree's top is tried by hand only; the no-title exit 2, unreachable past the intake caps, untested.

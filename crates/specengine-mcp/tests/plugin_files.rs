@@ -162,6 +162,11 @@
 //!   `PINS` entry 0.29.0, the tree with the version set back 0.28.0's; a
 //!   `SCHEMA_PINS` entry 0.29.0, 0.28.0's schemas today's with each author in
 //!   its one shape of four keys ([`as_of_0_28_0`]).
+//! - docs/features/spec-ids.md "Data", "The plugin": 0.29.0 -> 0.29.1, PATCH:
+//!   a skill's text alone, `propose-spec-change`'s five edits. A `PINS` entry
+//!   0.29.1, the tree with the five edits and the version set back 0.29.0's
+//!   ([`SPEC_IDS_EDITS`]); no `SCHEMA_PINS` entry, the last still 0.29.0
+//!   (AC-8 (c)).
 //!
 //! The repository is only read.
 
@@ -458,7 +463,49 @@ const PINS: &[(&str, &str)] = &[
         "0.29.0",
         "626c7a101f3e573167da1dcb9644a295c97ca28db435ab02de1d4f26af0b2815",
     ),
+    // docs/features/spec-ids.md "Data", "The plugin" (0.29.0 -> 0.29.1,
+    // PATCH: a skill's text): `propose-spec-change`'s five edits and
+    // plugin.json's version; the tree with both set back hashes as 0.29.0's
+    // pin.
+    (
+        "0.29.1",
+        "28a0c6b734a6d73aeb9061d4195b3e58544a2c137f4b29fcd3f286eb7e2b18e3",
+    ),
 ];
+
+/// docs/features/spec-ids.md "Data", "The plugin": `propose-spec-change`'s
+/// five edits, `(0.29.0's words, 0.29.1's)`, the first edit's two changes
+/// apart.
+const SPEC_IDS_EDITS: [(&str, &str); 6] = [
+    (
+        "numbered as the project writes its IDs; look it up",
+        "numbered as the project writes its IDs, a hub's range above a terminal's; look it up",
+    ),
+    (
+        "A taken one is refused naming its holder and,",
+        "A taken or other-range one is refused naming its holder or range and,",
+    ),
+    (
+        "- Your new IDs are held while the proposal is open, in the spec only once approved; the \
+         reply",
+        "- Your new IDs are held while the proposal is open; the reply",
+    ),
+    (
+        "ask the owner to reject it, and resend once",
+        "ask the owner to reject it, resend once",
+    ),
+    (
+        "a mistake is fixed by a corrected text (below)",
+        "fix a mistake with a corrected text (below)",
+    ),
+    (
+        "never edit it or apply your text yourself",
+        "never edit it yourself",
+    ),
+];
+
+/// The `propose-spec-change` skill.
+const PROPOSE_SKILL: &str = "specengine/skills/propose-spec-change/SKILL.md";
 
 /// docs/features/card-trace.md: `read-spec`'s line of 0.24.0, whole with its
 /// line feed (140 bytes).
@@ -1691,8 +1738,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 
 /// docs/features/flow-authoring.md AC-05: seven skills, every body within
 /// 4 096 B, the descriptions at the budget's whole, plugin.json 0.29.0 since
-/// docs/features/hub-confirm.md. No room is left, so the next byte is over. M: a
-/// 31-byte description.
+/// docs/features/hub-confirm.md, 0.29.1 since docs/features/spec-ids.md. No
+/// room is left, so the next byte is over. M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     let tree = committed();
@@ -1713,7 +1760,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.29.0")
+        json!("0.29.1")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -1864,10 +1911,36 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/spec-ids.md "Data", "The plugin" (0.29.0 -> 0.29.1,
+    // PATCH): `propose-spec-change`'s five edits and plugin.json's version;
+    // both set back, the tree is 0.29.0's pinned content. M: the version
+    // kept; another file changed; an edit not as "Data" words it.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.29.1"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.29.1"),
+        "plugin.json's version"
+    );
+    let mut at_0_29_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.29.1\"",
+        "\"version\": \"0.29.0\"",
+    );
+    for (old, new) in SPEC_IDS_EDITS {
+        at_0_29_0 = edited(&at_0_29_0, PROPOSE_SKILL, new, old);
+    }
+    assert_eq!(
+        content_hash(&at_0_29_0),
+        PINS[PINS.len() - 2].1,
+        "0.29.1 changes plugin.json's version and the five edits only"
+    );
+    let tree = at_0_29_0;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/hub-confirm.md (0.28.0 -> 0.29.0): plugin.json's version
     // alone; set back, the tree is 0.28.0's pinned content. M: the version
     // kept; another file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.29.0"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.29.0"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.29.0"),
@@ -1881,11 +1954,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_28_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.29.0 changes plugin.json's version only"
     );
     let tree = at_0_28_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/flow-authoring.md (0.27.0 -> 0.28.0): `write-flow` and
     // plugin.json's version; the one out and the other set back, the tree is
     // 0.27.0's pinned content, so no other skill moved. M: the version kept;

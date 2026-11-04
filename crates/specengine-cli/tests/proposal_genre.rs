@@ -893,3 +893,105 @@ fn kind_amendment_ac_t2_no_kind_compared_with_create_or_amendment() {
         assert!(variant_comparisons(line, &variants).is_empty(), "{line}");
     }
 }
+
+/// docs/features/spec-ids.md's sources ("Rules and edge cases" I8, AC-9):
+/// the side's constant and type, the `id-width` exemption, the floor's side,
+/// the queue's mint, the records' preview and the propose step of the two
+/// propose paths.
+const SIDE_SOURCES: [&str; 7] = [
+    "crates/specengine-core/src/record.rs",
+    "crates/specengine-core/src/check/engine.rs",
+    "crates/specengine-store/src/floor.rs",
+    "crates/specengine-store/src/queue.rs",
+    "crates/specengine-cli/src/decide.rs",
+    "crates/specengine-cli/src/create.rs",
+    "crates/specengine-cli/src/amend.rs",
+];
+
+/// The numbers of docs/features/spec-ids.md "Data" that come from
+/// `HUB_ID_START` alone (I8): the start, the terminal's last, the one
+/// before it.
+const SIDE_NUMBERS: [&str; 6] = ["100001", "100_001", "100000", "100_000", "99999", "99_999"];
+
+/// [`record_words`] with the print shop's and the smithing game's configs
+/// too: the fixtures the slice's tests run on (card-press's `STY`).
+fn side_words() -> (BTreeSet<String>, BTreeSet<String>) {
+    let (mut prefixes, mut kinds) = record_words();
+    for name in ["card-press", "apply-outputs/forge"] {
+        let config = ProjectConfig::from_toml(&read_text(&fixture(name), "specengine.toml"))
+            .expect("the fixture's config");
+        for spec in config.scheme.prefixes() {
+            prefixes.insert(spec.prefix.clone());
+            prefixes.extend(spec.aliases_from.iter().cloned());
+            if !CLASS_NAMES.contains(&spec.kind.as_str()) {
+                kinds.insert(spec.kind.clone());
+            }
+        }
+    }
+    (prefixes, kinds)
+}
+
+/// `file:line: code` for every code line of `text` before its first
+/// `#[cfg(test)]` (a unit test may name the numbers) that holds one of
+/// [`SIDE_NUMBERS`] as a token: a line comment, whole or trailing, is no
+/// code.
+fn side_numbers(source: &str, text: &str) -> Vec<String> {
+    let code = text.split("#[cfg(test)]").next().unwrap_or_default();
+    let mut found = Vec::new();
+    for (number, line) in code.lines().enumerate() {
+        let line = line.split(" //").next().unwrap_or_default();
+        if line.trim_start().starts_with("//") {
+            continue;
+        }
+        let tokens = line.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'));
+        if tokens
+            .into_iter()
+            .any(|token| SIDE_NUMBERS.contains(&token))
+        {
+            found.push(format!("{source}:{}: {}", number + 1, line.trim()));
+        }
+    }
+    found
+}
+
+/// docs/features/spec-ids.md "Acceptance criteria" AC-9 and "Rules and edge
+/// cases" I8: the side's sources, `crates/specengine-cli/src/amend.rs` and
+/// `crates/specengine-store/src/floor.rs` among them, hold no literal naming
+/// an `[ids]` prefix of the fixtures (card-press's `STY` too) or of this
+/// repository, none equal to a kind of theirs, none holding `Cost`, `docs/`
+/// or `records/`; and none writes 100001 or 100000 in its code: they come
+/// from core `HUB_ID_START`. M14: a fixture prefix literal (`DEC` in
+/// `decide.rs`, `STY` in `amend.rs`'s new step) fails the scan.
+#[test]
+fn spec_ids_ac9_the_side_sources_name_no_prefix_kind_or_number() {
+    let (prefixes, kinds) = side_words();
+    assert!(
+        prefixes.contains("STY") && prefixes.contains("DEC") && kinds.contains("style-ruling"),
+        "{prefixes:?} {kinds:?}"
+    );
+    let mut found = Vec::new();
+    for source in SIDE_SOURCES {
+        let text = fs::read_to_string(repository_root().join(source))
+            .unwrap_or_else(|error| panic!("{source}: {error}"));
+        assert!(text.len() > 1000, "{source} is read whole");
+        found.extend(record_offenders(source, &text, &prefixes, &kinds));
+        found.extend(side_numbers(source, &text));
+    }
+    assert!(
+        found.is_empty(),
+        "project words or the side's numbers in the side's sources:\n{}",
+        found.join("\n")
+    );
+    // The scan sees what it must refuse: M14's two literals and a number.
+    let sample = "let p = \"DEC\";\nlet q = format!(\"`STY-{n}`\");\n\
+                  let n = 100_001;\nlet m = HUB_ID_START - 1; // 100000\n\
+                  /// 100001 in a doc comment\n";
+    let seen = record_offenders("sample.rs", sample, &prefixes, &kinds);
+    assert_eq!(seen.len(), 2, "{seen:?}");
+    assert_eq!(
+        side_numbers("sample.rs", sample),
+        ["sample.rs:3: let n = 100_001;"]
+    );
+    let tested = "fn a() {}\n#[cfg(test)]\nmod tests {\n    const N: u64 = 100_001;\n}\n";
+    assert!(side_numbers("sample.rs", tested).is_empty());
+}

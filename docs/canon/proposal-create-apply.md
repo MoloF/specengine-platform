@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-store, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-09
+reviewed: 2026-11-04
 ---
 
 # Proposal kinds: applying a create
@@ -18,7 +18,7 @@ How `spec approve` applies a `create` (`proposal-kinds.md`) and an amendment, a 
 
 - **2** Place (exit 2). **3** The recorded root's config; the path's propose-2 rules (exit 1).
 - **4** The index refreshed; the path free as at propose (`exists`, or "Killed run"'s two ways out); the new IDs free in that index (its own reservation aside).
-- **5** The text parsed, not generated. **6** Propose 4 again, no queue read, giving exactly the stored new IDs, else ``the text of `<path>` defines A under the recorded root's `[ids]` now, the proposal B``. The identity.
+- **5** The text parsed, not generated. **6** Propose 4 again, no queue read, no side judged (`spec-ids.md` "Created IDs"), giving exactly the stored new IDs, else ``the text of `<path>` defines A under the recorded root's `[ids]` now, the proposal B``. The identity.
 - **1** Consent: `apply PR-0001 to <path> on <branch> in <worktree> (new file)? [y/N]`.
 - **7** `approve_from`. **8** The place and step 4 re-checked; store `create_file` (a hard link: never replaces an entry).
 - **9** Intent-to-add, `git commit --only` of the path and the index's outputs (`proposal-outputs.md` "Steps"); failed: entry, file, new directories removed, `` the commit of `<path>` failed, the file removed: <git's error> ``.
@@ -34,4 +34,4 @@ How `spec approve` applies a `create` (`proposal-kinds.md`) and an amendment, a 
 
 - Git's index lookup is case-sensitive (`:(literal)`): on a case-insensitive file system an index-only `R-15.md` does not stop a create at `r-15.md`; the apply fails at step 9, cleaned up, exit 1, nothing lost. Decision records alike.
 - Between step 8's re-check and the write only the hard link guards; untested (no product hook).
-- Created IDs take no floor: a live create reserves its IDs across one queue (`proposal-kinds.md` "Reservation"), so a hub's queue and a terminal's can create one ID; a merge shows it (add/add, `id-taken`) and a person renumbers (`queue-backup.md` "ID floor").
+- A live create reserves its IDs across one queue (`proposal-kinds.md` "Reservation"). A hub's and a terminal's created IDs never meet; two terminals', an older `spec`'s, or one raised before the upgrade still can: a merge shows it (add/add, `id-taken`) and a person renumbers (`spec-ids.md` "Known limits").

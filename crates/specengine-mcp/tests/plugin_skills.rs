@@ -1219,8 +1219,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/trace-truth.md; 0.27.0 since
     // docs/features/proposal-rehearsal.md; 0.28.0 since
     // docs/features/flow-authoring.md; 0.29.0 since
-    // docs/features/hub-confirm.md.
-    assert_eq!(manifest["version"], "0.29.0");
+    // docs/features/hub-confirm.md; 0.29.1 since
+    // docs/features/spec-ids.md.
+    assert_eq!(manifest["version"], "0.29.1");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1318,8 +1319,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/trace-truth.md; 0.27.0 since
     // docs/features/proposal-rehearsal.md; 0.28.0 since
     // docs/features/flow-authoring.md; 0.29.0 since
-    // docs/features/hub-confirm.md.
-    assert_eq!(manifest["version"], "0.29.0");
+    // docs/features/hub-confirm.md; 0.29.1 since
+    // docs/features/spec-ids.md.
+    assert_eq!(manifest["version"], "0.29.1");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1422,13 +1424,14 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.29.0",
+        manifest["version"], "0.29.1",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
          bundle-bindings: 0.14.0; impact: 0.15.0; impact-since: 0.16.0; tested-evidence: 0.17.0; \
          tested-reads: 0.18.0; review-form: 0.19.0; layer-c-reads: 0.20.0; flow-read: 0.21.0; \
-         flow-canvas: 0.22.0; card-store: 0.23.0; flow-authoring: 0.28.0; hub-confirm: 0.29.0"
+         flow-canvas: 0.22.0; card-store: 0.23.0; flow-authoring: 0.28.0; hub-confirm: 0.29.0; \
+         spec-ids: 0.29.1"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2427,4 +2430,75 @@ fn flow_authoring_write_flow_states_its_path_and_grammar() {
         "the backticked `links`",
         "a backticked `links`",
     );
+}
+
+/// docs/features/spec-ids.md "Data", "The plugin" and "Acceptance criteria"
+/// AC-8 (b): `propose-spec-change` holds the five edits, each once, the words
+/// they replace gone; the "You name" bullet of "A new section or file" names
+/// the two ranges and the other-range refusal; the body at 4 092 B or less,
+/// no digit in the new words; the plugin at 0.29.1 (a PATCH: a skill's text
+/// alone). M13's skill half: an edit dropped.
+#[test]
+fn spec_ids_propose_spec_change_names_the_other_range() {
+    let skills = committed();
+    let skill = &skills["propose-spec-change"];
+    let edits = [
+        (
+            "numbered as the project writes its IDs; look it up",
+            "numbered as the project writes its IDs, a hub's range above a terminal's; look it up",
+        ),
+        (
+            "A taken one is refused naming its holder and,",
+            "A taken or other-range one is refused naming its holder or range and,",
+        ),
+        (
+            "- Your new IDs are held while the proposal is open, in the spec only once approved; \
+             the reply",
+            "- Your new IDs are held while the proposal is open; the reply",
+        ),
+        (
+            "ask the owner to reject it, and resend once",
+            "ask the owner to reject it, resend once",
+        ),
+        (
+            "a mistake is fixed by a corrected text (below)",
+            "fix a mistake with a corrected text (below)",
+        ),
+        (
+            "never edit it or apply your text yourself",
+            "never edit it yourself",
+        ),
+    ];
+    for (old, new) in edits {
+        assert_eq!(skill.matches(new).count(), 1, "{new:?} once");
+        assert!(!skill.contains(old), "{old:?} gone");
+        assert!(!new.bytes().any(|b| b.is_ascii_digit()), "{new:?}");
+    }
+    let section = skill
+        .split("\n## A new section or file\n")
+        .nth(1)
+        .and_then(|rest| rest.split("\n## ").next())
+        .expect("the section \"A new section or file\"");
+    let bullet = bullets(section)
+        .into_iter()
+        .find(|bullet| bullet.starts_with("- You name each new ID"))
+        .unwrap_or_else(|| panic!("no \"You name\" bullet: {section}"));
+    for phrase in [
+        "a hub's range above a terminal's",
+        "A taken or other-range one is refused naming its holder or range",
+    ] {
+        assert!(bullet.contains(phrase), "{phrase:?} in {bullet:?}");
+    }
+    let body = skill
+        .splitn(3, "---\n")
+        .nth(2)
+        .expect("a front-matter and a body");
+    assert!(body.len() <= 4092, "the body is {} bytes", body.len());
+    assert!(!body.contains("100001"), "no number in the skill");
+    let manifest: Value = serde_json::from_str(
+        &fs::read_to_string(plugin_dir().join("specengine/.claude-plugin/plugin.json"))
+            .expect("plugin.json"),
+    )
+    .expect("JSON");
+    assert_eq!(manifest["version"], "0.29.1");
 }

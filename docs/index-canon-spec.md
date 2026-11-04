@@ -25,6 +25,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-flow-layout.md](canon/spec-flow-layout.md) The Flow screen: layout and forms · ui · tier 2
 - [docs/canon/spec-flow-screen.md](canon/spec-flow-screen.md) The Flow screen · ui · tier 2
 - [docs/canon/spec-flow.md](canon/spec-flow.md) spec flow: the walk, typed edges, lifted edges and gap rows · crates/specengine-model, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
+- [docs/canon/spec-ids.md](canon/spec-ids.md) Spec IDs: a hub mints from 100001, a terminal below it · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · tier 2
 - [docs/canon/spec-impact.md](canon/spec-impact.md) spec impact: what a change to a node, a code symbol or the code since a revision reaches · crates/specengine-cli, crates/specengine-mcp, crates/specengine-store, crates/specengine-core, plugin · tier 2
 - [docs/canon/spec-index-edges.md](canon/spec-index-edges.md) spec index: core's resolved edges, kept incrementally · crates/specengine-store, crates/specengine-core, crates/specengine-model · tier 2
 - [docs/canon/spec-lock-accept.md](canon/spec-lock-accept.md) spec lock accept: the owner's lock commit · crates/specengine-cli, crates/specengine-store · tier 2

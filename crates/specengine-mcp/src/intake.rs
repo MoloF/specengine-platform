@@ -32,12 +32,12 @@ use serde_json::Value;
 use specengine_cli::{
     AMENDMENT_KIND, ANSWER_MAX, AUTHOR_FIELD_MAX, AmendmentRequest, CREATE_KIND, CreateRequest,
     DISTINCT_MAX, DecisionInput, DecisionRequest, DiscrepancyInput, DiscrepancyRequest,
-    DriftRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, INTAKE_MATCHES_MAX,
-    INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX, IntakeOption,
-    IntakeSeverity, InterpretRequest, LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX, OPTION_TEXT_MAX,
-    OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome, ProposeRequest, ProposedPatch,
-    ProposedText, QuestionRequest, RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES, SUMMARY_MAX,
-    TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now, with_article,
+    DriftRequest, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, Evidence, GapType, HUB_ID_START,
+    INTAKE_MATCHES_MAX, INTERPRETATION_FIELDS, INTERPRETATION_KIND, INTERPRETATION_TEXT_MAX,
+    IntakeOption, IntakeSeverity, InterpretRequest, LABEL_MAX, LOCATION_MAX, NODE_IDS_MAX,
+    OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS, Outcome, ProposeRequest,
+    ProposedPatch, ProposedText, QuestionRequest, RATIONALE_MAX, ReviewRequest, SHOW_TAIL_NAMES,
+    SUMMARY_MAX, TEXT_MAX_BYTES, UPDATE_KIND, process_git, utc_now, with_article,
 };
 
 use crate::mirror::{
@@ -66,12 +66,13 @@ findings, the rest counted; the text cut at 40000 characters).
 
 kind: update: replace the node's span (a section and its subsections, or a whole file). \
 create: new ID sections below the node (text: its span with them), or a new file at a free \
-.md path (base null, text the whole file); you name each new ID; a taken one is refused \
-naming the next free one. interpretation: an update carrying an accepted decision. \
+.md path (base null, text the whole file); you name each new ID, below 100001 unless on a \
+hub; a taken one is refused naming the next free ID. interpretation: an update carrying an \
+accepted decision. \
 amendment: a new spec or decision file (base null) declaring links: {amends: [ID]} to live \
 nodes, which stay unwritten.
 target: the node's ID or slug/ID (not an alias, ID#SECTION or ID@rev), or a root-relative \
-.md path (its document, the whole file).
+.md path (the whole file).
 base: get_node's span_hash of the target; a stale one is refused naming the current hash; \
 null only for a new file.
 decision, how, why: an interpretation's decision ID, how it was applied, why interpretation \
@@ -272,6 +273,14 @@ const _: () = assert!(holds_number(
     "at most ",
     INTERPRETATION_TEXT_MAX,
     " bytes each"
+));
+// The spec-ID range a terminal names (the `spec-ids` spec): below core's
+// hub start.
+const _: () = assert!(holds_number(
+    CHANGE_DESCRIPTION,
+    "below ",
+    HUB_ID_START as usize,
+    " unless on a hub"
 ));
 const _: () = assert!(holds_number(
     QUESTION_DESCRIPTION,

@@ -16,9 +16,9 @@ use std::fs;
 use common::{corpus_scheme, fixture, walked_md_files};
 use serde_json::json;
 use specengine_core::record::{
-    Choice, DecisionRecords, RecordDefect, Slot, SlotValues, TEMPLATE_MAX_BYTES, TITLE_MAX_BYTES,
-    Template, canon_text, highest_record_number, is_escaped, record_defect, record_id,
-    record_number, record_title, refused_char,
+    Choice, DecisionRecords, IdSide, RecordDefect, Slot, SlotValues, TEMPLATE_MAX_BYTES,
+    TITLE_MAX_BYTES, Template, canon_text, highest_record_number, is_escaped, record_defect,
+    record_id, record_number, record_title, refused_char,
 };
 use specengine_core::{Paths, ProjectConfig};
 use specengine_model::{IdScheme, ParsedFile};
@@ -359,7 +359,9 @@ fn the_title_is_normalised_and_cut_at_a_character() {
 /// "Data", ID: `<prefix>-<n>` padded to `width`, more digits past it; the
 /// corpus's highest number of the prefix or its aliases (defined or in
 /// `aliases:`): spec-a's `DEC` 23 (`DEC-0007`, `DEC-0023`), spec-b's `ADR`
-/// 2, spec-a's `Q` 32 (`QST` its alias).
+/// 2, spec-a's `Q` 32 (`QST` its alias). The terminal's side since
+/// docs/features/spec-ids.md "Data", "Records": no fixture number reaches
+/// 100001, so the side changes none of them.
 #[test]
 fn ids_are_padded_and_numbered_from_the_corpus() {
     assert_eq!(record_id("DEC", 4, 24), "DEC-0024");
@@ -378,7 +380,7 @@ fn ids_are_padded_and_numbered_from_the_corpus() {
             .map(|(path, bytes)| specengine_core::parse(path, bytes, &scheme))
             .collect();
         assert_eq!(
-            highest_record_number(&parsed, &spec),
+            highest_record_number(&parsed, &spec, IdSide::Terminal),
             highest,
             "{name} {prefix}"
         );

@@ -25,7 +25,8 @@
 //!   its path, regular, tracked, clean, UTF-8, at most 64 KiB, no
 //!   character a record never carries, its slots known and placed,
 //!   `{{canon}}` in its front-matter); 4 the index refreshed, the ID
-//!   previewed (the one the proposal kept, else the queue's next), the
+//!   previewed (the one the proposal kept, else the queue's next on the
+//!   data directory's side, the `spec-ids` spec), the
 //!   path `<dir>/<ID>.md` in the walk, nothing there nor in git's index
 //!   (what a killed run left, the held record intent-to-add: the two ways
 //!   out named), no symlink or non-directory on its way; the committer
@@ -64,7 +65,8 @@ use specengine_model::{ParsedFile, grammar};
 use specengine_store::{
     CreateFileError, Decision, GitEnv, Intake, NamedBytes, Proposal, ProposalFinding,
     ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries, SpecIndex as _,
-    WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings, load_check,
+    WorkingTree, WorktreeGit, create_file, default_baseline, id_side, introduced_findings,
+    load_check,
 };
 
 use crate::apply::{
@@ -326,11 +328,25 @@ pub(crate) fn approve_record(
                     return before(context, StepFailure::cannot(4, error.to_string()), messages);
                 }
             };
+            // The data directory's side: its numbers alone count (the
+            // `spec-ids` spec); an invalid floor file stores nothing. A
+            // kept ID is written as kept, whatever its side: none is read.
             let parsed = input.files.iter().filter_map(|file| file.parsed.as_ref());
+            let corpus_max = if proposal.record.is_some() {
+                0
+            } else {
+                match id_side(&context.data_dir) {
+                    Ok(side) => highest_record_number(parsed, spec, side),
+                    Err(error) => {
+                        let failure = StepFailure::cannot(4, error.to_string());
+                        return before(context, failure, messages);
+                    }
+                }
+            };
             let series = RecordSeries {
                 prefix: table.prefix.clone(),
                 width: spec.width.unwrap_or(1),
-                corpus_max: highest_record_number(parsed, spec),
+                corpus_max,
             };
             let preview = match &proposal.record {
                 Some(record) => record.id.clone(),

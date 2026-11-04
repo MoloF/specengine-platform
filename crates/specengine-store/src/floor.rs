@@ -5,7 +5,9 @@
 //! every mint in that
 //! data directory reads it ([`read_floor`]) and mints `PR-` no lower. A data
 //! directory where no hub ever started holds none: floor 1, the mint as
-//! before. No dump carries it and no queue row holds it.
+//! before. No dump carries it and no queue row holds it. Its presence is
+//! also the data directory's spec-ID side ([`id_side`], the `spec-ids`
+//! spec): every number-shape spec ID minted there is a hub's.
 
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write as _};
@@ -14,6 +16,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use specengine_core::proposal::{FLOOR_PROBLEM, floor_text, parse_floor};
+use specengine_core::record::IdSide;
 
 use crate::error::StoreError;
 
@@ -27,15 +30,36 @@ static SIBLING_SEQ: AtomicU64 = AtomicU64::new(0);
 /// `proposal-floor`. An unreadable file, or one that is no floor, is an
 /// error naming the file ([`FLOOR_PROBLEM`]): a mint then stores nothing.
 pub fn read_floor(dir: &Path) -> Result<u64, StoreError> {
+    stored_floor(dir).map(|floor| floor.unwrap_or(1))
+}
+
+/// The side the data directory `dir` mints number-shape spec IDs on (the
+/// `spec-ids` spec, "The constant and the side"): [`IdSide::Hub`] when it
+/// holds a `proposal-floor` that reads as a floor, whatever number it
+/// holds; [`IdSide::Terminal`] when it holds none. The file alone decides,
+/// never a flag. An invalid file is [`read_floor`]'s error: the mint then
+/// stores nothing.
+pub fn id_side(dir: &Path) -> Result<IdSide, StoreError> {
+    Ok(match stored_floor(dir)? {
+        Some(_) => IdSide::Hub,
+        None => IdSide::Terminal,
+    })
+}
+
+/// The floor `dir`'s `proposal-floor` holds, `None` when there is none;
+/// the error of [`read_floor`].
+fn stored_floor(dir: &Path) -> Result<Option<u64>, StoreError> {
     let path = dir.join(PROPOSAL_FLOOR_FILE);
     match fs::symlink_metadata(&path) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(1),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(StoreError::io(path, error)),
         Ok(meta) if !meta.file_type().is_file() => return Err(not_a_floor(&path)),
         Ok(_) => {}
     }
     let bytes = fs::read(&path).map_err(|error| StoreError::io(&path, error))?;
-    parse_floor(&bytes).ok_or_else(|| not_a_floor(&path))
+    parse_floor(&bytes)
+        .map(Some)
+        .ok_or_else(|| not_a_floor(&path))
 }
 
 /// A hub's start: `<dir>/proposal-floor` written atomically holding `floor`

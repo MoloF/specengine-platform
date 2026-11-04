@@ -26,7 +26,7 @@ There is one sync per git common directory of the served roots. It runs in the f
 3. **Merge** (inside the turns). `still_ready` decides cleanliness and operations now, so a confirm mid-apply never makes a sync `stopped`; `HEAD` off the branch makes it `stopped`. `L` = `HEAD`, `R` = the tracking ref. `R` is `L` or behind it: nothing. `L` behind `R`: `merge --ff-only --no-autostash R`. No merge base: `held`. Else `merge-tree --write-tree -z --name-only L R` merges in memory: clean, or every conflict an output of a served root's `index = true` entry (by the merged, unconflicted config), it is a merge commit; any other conflict is `held`, paths named, nothing written. A moved `HEAD` then runs each served root's `update_paths` over `SyncGit::changed` (`ChangedPaths`; `spec-read-freshness.md`).
 4. **Push**, unless `L` = `R`: `push --porcelain --no-follow-tags --recurse-submodules=no <r> refs/heads/<b>:refs/heads/<m>`. Accepted: `ok`. Not a fast-forward: 2-4 again, three rounds, then `retrying`. `[remote rejected]`: `held`. Else (network, authentication, the deadline, `pre-push`): `retrying`.
 
-No `MERGE_HEAD` ever exists. "Pushed" is never the push's exit code, and never stored. A push that landed with its answer lost reads `ahead` > 0 until the next fetch finds `R` = `L`, and no merge commit follows.
+No `MERGE_HEAD` ever exists. "Pushed" is never the push's exit code, nor stored. A push that landed with its answer lost reads `ahead` > 0 until the next fetch finds `R` = `L`, and no merge commit follows.
 
 **When.** At start, once listening; on a signal from `confirm::write` after a 200 whose document is `applied` (never awaited); and every `--push-every` minutes. One sync at a time per repository; signals coalesce into one more run.
 
@@ -34,7 +34,7 @@ No `MERGE_HEAD` ever exists. "Pushed" is never the push's exit code, and never s
 
 **The deadline** bounds every git child of a sync, local ones too: a hanging `post-merge` hook, smudge filter or gpg wait would otherwise hold every turn. The exception is the render inside a merge, which reads local objects only. At the deadline the child gets SIGTERM (the shell's built-in `kill`, since the store links no libc), then SIGKILL after 2 s, so git removes its own locks. The next look finds anything left as `stopped`. A killed fetch or push is `retrying`.
 
-Every child but `fetch` and `push` sets `GIT_NO_LAZY_FETCH=1`, as every `WorktreeGit` child does, on a terminal too.
+Every child but `fetch` and `push` sets `GIT_NO_LAZY_FETCH=1`, as every `WorktreeGit` child does anywhere.
 
 ## Merge commit
 
@@ -87,12 +87,12 @@ Git's, set by the deployment; SpecEngine holds none (supplementing ADR-0034, ADR
 
 ## Known limits
 
-- A fast-forward stopped at the deadline leaves `R`'s files written or deleted, `HEAD` and the index unmoved: nothing lost, the next sync `stopped` naming the paths, every root's index dirty. Until the operator restores, reads show those bytes and a confirm whose target, `spec.lock` or root config is among them is refused. Recovery: `git restore --staged --worktree :/`, then remove the new untracked files named.
+- A fast-forward stopped at the deadline leaves `R`'s files written or deleted, `HEAD` and the index unmoved: nothing lost; the next sync is `stopped`, naming them, every root's index dirty. Until restored, reads show them and a confirm touching them (target, `spec.lock`, root config) is refused. Recovery: `git restore --staged --worktree :/`, then remove the named untracked files.
 - A `post-merge` killed after the ref moved reports "could not move"; SIGTERM reaches git alone, not its hooks or filters.
 - An own URL in non-scheme form glued to text stays visible; it never holds a credential.
 - A second worktree's `behind` is read against a ref the hub never fetches for it.
 - Git LFS: a smudge filter on the fast-forward can reach the network, past `GIT_NO_LAZY_FETCH`; the image ships no git-lfs, and LFS content in the cone is unsupported.
-- Merged-in history: a dump-imported orphan below the hub's floor can meet a developer's same-ID commit and block its reject; raise it again (`proposal-completion.md` "Known limits").
+- Merged-in history: a dump-imported orphan below the hub's floor can meet a developer's same-ID commit and block its reject; raise it again (`proposal-completion.md` "Known limits"). Spec IDs: `spec-ids.md` "Known limits".
 - A merged config this binary refuses: 503 until upgraded. A partial clone missing a blob: an apply fails instead of fetching.
 
 ## Tests

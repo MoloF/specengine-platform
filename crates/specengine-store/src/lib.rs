@@ -93,7 +93,8 @@
 //!   one span over core's pure half; a question's or a discrepancy's
 //!   decision record (`docs/canon/decision-record.md` "ID", "Steps"): its ID
 //!   issued under the queue's write lock ([`RecordSeries`],
-//!   [`RecordApproval`]), the new file [`create_file`] makes without ever
+//!   [`RecordApproval`]) on the data directory's side ([`id_side`], the
+//!   `spec-ids` spec), the new file [`create_file`] makes without ever
 //!   replacing one (a create's new file too); a create's new IDs held while
 //!   it is live ([`Reservation`], [`QueueError::Reserved`]);
 //! - a hub's sync (task spec `hub-git`): [`SyncGit`], the only `fetch` and
@@ -156,7 +157,7 @@ pub use code::{
 };
 pub use edges::{StoredEdge, StoredEdges, StoredParent};
 pub use error::StoreError;
-pub use floor::{PROPOSAL_FLOOR_FILE, read_floor, store_floor};
+pub use floor::{PROPOSAL_FLOOR_FILE, id_side, read_floor, store_floor};
 pub use git::{GitEnv, same_dir};
 pub use index::{DbSettings, SqliteIndex};
 pub use layer_c::{

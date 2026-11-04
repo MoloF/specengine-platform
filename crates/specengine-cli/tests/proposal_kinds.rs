@@ -9,7 +9,9 @@
 //! review's iteration-2 rules: a section create already in place is step
 //! 5's refusal before step 4's ID check (n1), a create lost in the race
 //! names the holder and its state (n2), the project's index and its shards
-//! refused at propose and at apply step 3 (n4).
+//! refused at propose and at apply step 3 (n4). docs/features/spec-ids.md
+//! "Acceptance criteria" AC-4 (c)'s insert race runs on n2's seam on either
+//! side of card-press (`n2_on_either_side_*`).
 //!
 //! Setup (the AC's): scratch git repositories of `fixtures/spec-a` and
 //! `fixtures/spec-b`, committed, a linked worktree on `t1`; a scratch
@@ -1790,6 +1792,121 @@ fn n2_a_create_lost_in_the_race_names_the_holder_and_its_state() {
             reservations(&pair),
             [("R-13".to_owned(), "PR-0001".to_owned(), status.to_owned())]
         );
+    }
+}
+
+/// A card-press style ruling whose `id:` (line 2) is `id`.
+fn ruling(id: &str) -> String {
+    format!(
+        "---\nid: {id}\nclass: decision\nstatus: accepted\ndate: 2026-10-01\n\
+         canon: docs/spec/sht-front.md#the-front-sheet\nlinks:\n  constrains: [SHT-FRONT]\n\
+         scope: [front-sheet]\n---\n\n# The masthead keeps one face\n\n\
+         The masthead runs in one typeface every week.\n"
+    )
+}
+
+/// docs/features/spec-ids.md "Acceptance criteria" AC-4 (c), the insert's
+/// race through n2's seam, on either side of card-press (`STY` width 4,
+/// `STY-0001` and `STY-100001` in the tree): the proposer names the next ID
+/// of its side, which a competing live create takes while the propose waits
+/// on the FIFO; that create also holds the other side's next number. The
+/// refusal names the holder (`PR-0001` on a terminal, `PR-100001` on a hub,
+/// whose data directory holds the floor `store_floor` writes) and the next
+/// free ID of the propose's side alone ("Data", "Next free"): `STY-0003` and
+/// `STY-100003`. M7: `next_free` ignores the side (the terminal's
+/// `STY-100003`).
+#[test]
+fn n2_on_either_side_the_race_names_the_next_free_id_of_its_side() {
+    for hub in [false, true] {
+        let pair = Pair::new(&format!("pk-n2-side-{hub}"), "card-press");
+        if hub {
+            let dir = common::data_dir(&pair.home);
+            fs::create_dir_all(&dir).expect("the data directory");
+            specengine_store::store_floor(&dir, specengine_core::proposal::HUB_PROPOSAL_FLOOR)
+                .expect("the floor");
+        }
+        write(
+            &pair.linked,
+            "docs/records/STY/STY-100001.md",
+            ruling("STY-100001"),
+        );
+        pair.commit_all(&pair.linked, "STY-100001 by hand");
+        let (mine, theirs, holder, next) = if hub {
+            ("STY-100002", "STY-0002", "PR-100001", "STY-100003")
+        } else {
+            ("STY-0002", "STY-100002", "PR-0001", "STY-0003")
+        };
+        let path = format!("docs/records/STY/{mine}.md");
+        let fifo: PathBuf = pair.linked.join(".spec-debt.toml");
+        mkfifo(&fifo);
+        let env = pair.env(&pair.linked);
+        let request = request(&pair, &pair.linked, &path, None, &ruling(mine));
+        let (done, finished) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = done.send(propose_create(&env, &Globals::default(), &request));
+        });
+        let (opened, at_step_5) = mpsc::channel();
+        let (go, release) = mpsc::channel::<()>();
+        let writer_path = fifo.clone();
+        let writer = std::thread::spawn(move || {
+            let file = fs::OpenOptions::new()
+                .write(true)
+                .open(&writer_path)
+                .expect("the FIFO opens for writing");
+            let _ = opened.send(());
+            let _ = release.recv();
+            drop(file);
+        });
+        if at_step_5.recv_timeout(RUN_TIMEOUT).is_err() {
+            let _ = fs::File::open(&fifo);
+            let _ = go.send(());
+            let _ = writer.join();
+            panic!("{hub}: the propose never opened the baseline (step 5)");
+        }
+        let text = ruling(mine);
+        let competing = NewProposal {
+            kind: ProposalKind::Create,
+            target_id: mine.to_owned(),
+            target_path: "docs/records/STY/held.md".to_owned(),
+            place: Place {
+                git_common_dir: pair.main.join(".git").display().to_string(),
+                worktree: pair.linked.display().to_string(),
+                root_rel: String::new(),
+                branch: "t1".to_owned(),
+                base_commit: pair.rev(&pair.linked, "HEAD"),
+            },
+            base_hash: None,
+            base_text: None,
+            patch_hash: patch_hash(mine, "", &text),
+            new_text: text,
+            rationale: "The other one.".to_owned(),
+            author: Author::human(),
+            diagnostics: Vec::new(),
+            new_ids: vec![mine.to_owned(), theirs.to_owned()],
+            interpretation: None,
+        };
+        let stored = pair
+            .queue()
+            .create(&competing, CLOCK)
+            .expect("the competing create");
+        assert_eq!(stored.id, holder, "{hub}");
+        go.send(()).expect("release the writer");
+        writer.join().expect("the writer");
+        let Ok(outcome) = finished.recv_timeout(RUN_TIMEOUT) else {
+            let unblock = fifo.clone();
+            std::thread::spawn(move || fs::OpenOptions::new().write(true).open(unblock));
+            panic!("{hub}: the propose did not finish (a second read of the baseline?)");
+        };
+        let reason = refused(&outcome, &format!("{hub}"));
+        assert_eq!(
+            reason,
+            format!(
+                "`{mine}` is reserved by `{holder}` (open), a live create; the next free is \
+                 `{next}`; nothing stored"
+            )
+        );
+        let ids: Vec<String> = pair.proposals().into_iter().map(|row| row.id).collect();
+        assert_eq!(ids, [holder], "{hub}: nothing of its own stored");
     }
 }
 

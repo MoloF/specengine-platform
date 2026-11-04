@@ -20,6 +20,9 @@
 //! - **Structure** ([`record_defect`]): one readable front-matter, the
 //!   decision class, `id:` the record's ID, `status: accepted`, no other
 //!   ID defined, `canon:` read back as its slot.
+//! - **Sides** (the `spec-ids` spec): a hub mints every number-shape spec
+//!   ID from [`HUB_ID_START`], a terminal below it ([`IdSide`]); a record's
+//!   number counts only its side's ([`highest_record_number`]).
 
 use std::fmt;
 use std::ops::Range;
@@ -32,6 +35,7 @@ use specengine_model::{CanonTarget, DiagnosticCode, IdScheme, ParsedFile, Prefix
 
 use crate::check::DocClass;
 use crate::front_matter;
+use crate::proposal::HUB_PROPOSAL_FLOOR;
 
 /// The most bytes of a template.
 pub const TEMPLATE_MAX_BYTES: usize = 64 * 1024;
@@ -402,6 +406,51 @@ pub fn record_id(prefix: &str, width: u32, number: u64) -> String {
     format!("{prefix}-{number:0width$}", width = width as usize)
 }
 
+/// The first number of a hub's range of spec IDs, records and created
+/// number-shape IDs alike (the `spec-ids` spec, "Data"): a hub mints from
+/// it, a terminal below it. The value of [`HUB_PROPOSAL_FLOOR`], with its
+/// own meaning: `PR-` readers use the stored floor's number, spec IDs this
+/// one, reading the floor file only for the side.
+pub const HUB_ID_START: u64 = HUB_PROPOSAL_FLOOR;
+
+/// Which range a data directory mints number-shape spec IDs in: a hub's
+/// (its `proposal-floor` file exists) or a terminal's (it does not).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IdSide {
+    /// Numbers below [`HUB_ID_START`].
+    Terminal,
+    /// Numbers from [`HUB_ID_START`].
+    Hub,
+}
+
+impl IdSide {
+    /// `number` is in the side's range: a hub's from [`HUB_ID_START`], a
+    /// terminal's below it (0 too, so a terminal's `X-0000` is judged as
+    /// before).
+    pub const fn holds(self, number: u64) -> bool {
+        match self {
+            Self::Terminal => number < HUB_ID_START,
+            Self::Hub => number >= HUB_ID_START,
+        }
+    }
+
+    /// The number after `highest`, the side's highest (0: none): a hub's
+    /// the greater of `highest + 1` and [`HUB_ID_START`]; a terminal's
+    /// `highest + 1` while below [`HUB_ID_START`], else `None`; `None` on
+    /// overflow.
+    pub const fn next(self, highest: u64) -> Option<u64> {
+        let Some(next) = highest.checked_add(1) else {
+            return None;
+        };
+        match self {
+            Self::Hub if next < HUB_ID_START => Some(HUB_ID_START),
+            Self::Hub => Some(next),
+            Self::Terminal if next < HUB_ID_START => Some(next),
+            Self::Terminal => None,
+        }
+    }
+}
+
 /// `id` as [`record_id`] writes its number, when `id` is an ID of `spec`'s
 /// `number`-shape prefix written otherwise (`R-7`, `R-007` of a width 2:
 /// `R-07`; more digits than the width, unpadded, are as written); `None`
@@ -430,12 +479,14 @@ pub fn record_number(id: &str, spec: &PrefixSpec) -> Option<u64> {
     digits.parse().ok()
 }
 
-/// The highest number of `spec`'s prefix or its aliases defined in `files`
-/// (a document's `id:`, a section's `{#ID}`) or listed in a document's
-/// `aliases:`; 0 when none.
+/// The highest number on `side` of `spec`'s prefix or its aliases defined
+/// in `files` (a document's `id:`, a section's `{#ID}`) or listed in a
+/// document's `aliases:`; 0 when none. The other side's numbers are
+/// ignored (the `spec-ids` spec, "Records").
 pub fn highest_record_number<'a>(
     files: impl IntoIterator<Item = &'a ParsedFile>,
     spec: &PrefixSpec,
+    side: IdSide,
 ) -> u64 {
     let mut highest = 0;
     for parsed in files {
@@ -448,7 +499,9 @@ pub fn highest_record_number<'a>(
                 .into_iter()
                 .flatten();
             for id in ids.chain(aliases) {
-                if let Some(number) = record_number(id, spec) {
+                if let Some(number) = record_number(id, spec)
+                    && side.holds(number)
+                {
                     highest = highest.max(number);
                 }
             }

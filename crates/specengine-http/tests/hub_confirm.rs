@@ -946,7 +946,9 @@ fn the_read_is_the_terminals_question_for_a_record_and_a_new_file() {
         );
         let text = read["question"].as_str().expect("a question");
         assert!(text.contains(MIRA), "{id}: the record's decider: {text}");
-        assert!(text.contains(" as DEC-0024 ("), "{id}: its ID: {text}");
+        // docs/features/spec-ids.md "Data", "Records": a hub's records from
+        // 100001.
+        assert!(text.contains(" as DEC-100001 ("), "{id}: its ID: {text}");
     }
     let read = desk.read_ok("ann", &created);
     assert_eq!(
@@ -1021,10 +1023,12 @@ fn b1_a_record_and_a_new_file_are_committed_under_the_login() {
     let document = desk.confirmed("mira", &question);
     let commit = desk.head();
     desk.assert_decided(&question, &commit, MIRA);
-    assert_eq!(document["record_id"], json!("DEC-0024"), "{document}");
-    assert_eq!(desk.paths(&commit), ["docs/records/DEC/DEC-0024.md"]);
+    // docs/features/spec-ids.md "Data", "Records": a hub's records from
+    // 100001.
+    assert_eq!(document["record_id"], json!("DEC-100001"), "{document}");
+    assert_eq!(desk.paths(&commit), ["docs/records/DEC/DEC-100001.md"]);
     assert!(
-        read_text(desk.root(), "docs/records/DEC/DEC-0024.md").contains(MIRA),
+        read_text(desk.root(), "docs/records/DEC/DEC-100001.md").contains(MIRA),
         "the record's decider"
     );
 
@@ -1036,7 +1040,7 @@ fn b1_a_record_and_a_new_file_are_committed_under_the_login() {
     desk.confirmed("kit", &gap);
     let commit = desk.head();
     desk.assert_decided(&gap, &commit, "kit <kit@example.org>");
-    assert_eq!(desk.paths(&commit), ["docs/records/DEC/DEC-0025.md"]);
+    assert_eq!(desk.paths(&commit), ["docs/records/DEC/DEC-100002.md"]);
 }
 
 /// B1, "The terminal keeps its identity, on the host too": a confirm leaves the
@@ -1604,9 +1608,10 @@ fn b4_a_target_file_renamed_after_the_read_is_a_409() {
     assert_eq!(desk.added(seen), ["proposal.apply_failed"], "one attempt");
 }
 
-/// B4, "another record ID": two records wait; the read of one names DEC-0024,
-/// the other takes that ID first. The old read is a 409, nothing written; a new
-/// read names DEC-0025 and lands. M: an always-yes closure.
+/// B4, "another record ID": two records wait; the read of one names DEC-100001
+/// (a hub's records from 100001 since docs/features/spec-ids.md "Data",
+/// "Records"), the other takes that ID first. The old read is a 409, nothing
+/// written; a new read names DEC-100002 and lands. M: an always-yes closure.
 #[test]
 fn b4_another_record_id_after_the_read_is_a_409() {
     let setup = keep("confirm-record-id");
@@ -1617,7 +1622,7 @@ fn b4_another_record_id_after_the_read_is_a_409() {
     desk.staged("ann", &second, &approved_choice());
     let read = desk.read_ok("ann", &first);
     let question = read["question"].as_str().expect("a question");
-    assert!(question.contains(" as DEC-0024 ("), "{question}");
+    assert!(question.contains(" as DEC-100001 ("), "{question}");
 
     desk.confirmed("ann", &second);
     let ids = [first.as_str(), second.as_str()];
@@ -1628,9 +1633,9 @@ fn b4_another_record_id_after_the_read_is_a_409() {
 
     let fresh = desk.read_ok("ann", &first);
     let text = fresh["question"].as_str().expect("a question");
-    assert!(text.contains(" as DEC-0025 ("), "{text}");
+    assert!(text.contains(" as DEC-100002 ("), "{text}");
     let document = desk.confirm("ann", &first, &fresh).status(200).json();
-    assert_eq!(document["record_id"], json!("DEC-0025"), "{document}");
+    assert_eq!(document["record_id"], json!("DEC-100002"), "{document}");
 }
 
 // ------------------------------------------------------------------------ B5
@@ -3082,7 +3087,7 @@ fn b3_a_staged_canon_is_judged_by_its_holder() {
     desk.read_ok("lena", &id);
     let document = desk.confirm("ann", &id, &read).status(200).json();
     assert_eq!(document["status"], json!("applied"), "{document}");
-    let record = read_text(desk.root(), "docs/records/DEC/DEC-0024.md");
+    let record = read_text(desk.root(), "docs/records/DEC/DEC-100001.md");
     assert!(record.contains("canon: RULE-STAM-REGEN\n"), "{record}");
 }
 
@@ -3324,7 +3329,7 @@ fn b12_format_characters_read_escaped_and_the_escaped_question_confirms() {
 
     let document = desk.confirm("mira", &id, &read).status(200).json();
     assert_eq!(document["status"], json!("applied"), "{document}");
-    let record = read_text(desk.root(), "docs/records/DEC/DEC-0024.md");
+    let record = read_text(desk.root(), "docs/records/DEC/DEC-100001.md");
     for (c, _) in FORMAT_FOUR {
         assert!(record.contains(c), "the record holds {c:?} raw");
     }

@@ -19,7 +19,7 @@ The operator's guide: from a clean Linux VPS with Docker to a running hub. How t
 ## Install
 
 ```sh
-git clone --branch v0.29.0 https://github.com/MoloF/specengine-platform
+git clone --branch v0.29.1 https://github.com/MoloF/specengine-platform
 cd specengine-platform/scripts/deploy
 cp .env.example .env            # set the three names and ACME_EMAIL; keep the staging CA
 install -d -m 700 secrets authelia/users traefik/mcp-users admin-log
@@ -126,6 +126,7 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 ## Limits
 
 - **Hand changes.** The hub reads its index, which its confirms and merges keep current. After changing a project's files on the host by hand (a `git pull`, an edit, a restore after a stopped sync), run `docker compose exec specengine spec index --root /projects/<name>`; otherwise the hub shows the change within 5 minutes of reads (`docs/canon/spec-read-freshness.md`).
+- **Developers' `spec`.** Before the hub records a decision or creates a node, everyone who commits to its repositories runs this release or later (`docs/canon/spec-ids.md`).
 - **Never run `spec serve` here.** In the container it attaches to the hub: `already running` and a loopback URL that answers 403; another root is told to stop the hub.
 - **A Traefik crash** that the engine restarts leaves the daemon offline: run `docker compose up -d`. `docker compose restart traefik` restarts both.
 - **Sessions live in memory**: restarting `authelia` logs everyone out.

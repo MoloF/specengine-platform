@@ -77,3 +77,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0067](decisions/ADR-0067.md) A hub's compose file is its whole host, and only the proxy sets Remote-User: the door's session, or on /mcp a per-person secret · architecture · accepted
 - [ADR-0068](decisions/ADR-0068.md) A hub's accounts are the deployment's script, run from the host's shell in a one-shot container with no network · architecture · accepted
 - [ADR-0069](decisions/ADR-0069.md) A read trusts a file's stat key outside a 2 s racy window, and a hub's reads alone trust the index its writers keep · architecture · accepted
+- [ADR-0070](decisions/ADR-0070.md) A hub mints spec IDs from 100001 and a terminal below it; propose refuses the other side, apply never · architecture · accepted

@@ -440,6 +440,9 @@ pub use specengine_core::intake::{
 };
 /// The most bytes of an author's `role`, `model` or `run`.
 pub use specengine_core::proposal::AUTHOR_FIELD_MAX;
+/// The first number of a hub's spec IDs (core's; the `spec-ids` spec), for
+/// the bridges' texts.
+pub use specengine_core::record::HUB_ID_START;
 /// A drift item's follow-up kind (`spec reject PR --follow-up code|spec`;
 /// core's).
 pub use specengine_core::task::FollowUp;
