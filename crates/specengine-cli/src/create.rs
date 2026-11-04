@@ -78,10 +78,10 @@ use specengine_core::record::{record_form, record_id, record_number};
 use specengine_core::{Paths, is_clean_relative, is_under};
 use specengine_model::{AMENDS, IdScheme, IdScope, ParsedFile, Shape, grammar};
 use specengine_store::{
-    CreateFileError, Decision, GitEnv, IndexWriter as _, KindFamily, NamedBytes, NewProposal,
-    Proposal, ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation,
-    SpecIndex as _, WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings,
-    load_check, load_config, patch_hash,
+    CreateFileError, Decision, GitEnv, KindFamily, NamedBytes, NewProposal, Proposal,
+    ProposalFinding, ProposalKind, ProposalQueue as _, QueueError, Reservation, SpecIndex as _,
+    WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings, load_check,
+    load_config, patch_hash,
 };
 
 use crate::amend::{Amended, amended_step, text_problem};
@@ -90,6 +90,7 @@ use crate::apply::{
 };
 use crate::corpus::indexed;
 use crate::decide::{exists, path_free};
+use crate::freshness::{After, post_commit_update};
 use crate::location::{OpenIndex, open_index};
 use crate::outputs::{Beside, Outputs, names, outputs_clause};
 use crate::preflight::{
@@ -1652,14 +1653,13 @@ pub(crate) fn approve_file(
     };
     let mut updated = vec![path];
     updated.extend(outputs.paths());
-    if let Err(error) = index
-        .index
-        .update_paths(&tree, &recorded.config.scheme, &updated)
-    {
-        messages.push(Message::Warning(format!(
-            "the index was not updated after the commit: {error}; the next command updates it"
-        )));
-    }
+    messages.extend(post_commit_update(
+        &mut index.index,
+        &tree,
+        &recorded.config.scheme,
+        &updated,
+        After::Commit,
+    ));
     messages.extend(outputs.note());
     let mut document = with_diff(&applied, &request.git, &context.data_dir);
     if context.hub {

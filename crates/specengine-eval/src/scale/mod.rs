@@ -4,14 +4,18 @@
 //! The refusals (the flags, `--out` against this repository, a symbolic
 //! link at `<out>/scale` or `<out>/scale/<label>`) run before anything is
 //! written. Then `<out>/scale/<label>/` is emptied and each `--nodes` size
-//! N gets `n<N>/`: the tree [`generate`] builds, written into `tree/`;
-//! its index built cold and its check run through the CLI library; the
-//! four reads MCP's `read.rs` makes (`show` without and with links,
+//! N gets `n<N>/`: the tree [`generate`] builds, written into `tree/` and
+//! left past the store's racy window ([`RACY_WAIT`]); its index built cold
+//! and its check run through the CLI library; the four reads MCP's
+//! `read.rs` makes (`show` without and with links,
 //! `search`, `bundle`), each warmed once and timed three times, the best
 //! kept; each step those reads take replayed alone through the public API
-//! it calls; W_after by `w`'s formula (`docs/canon/w-measurement.md`
-//! "W_after") over 20 targets; `size.json`. `--corpus-only` stops after
-//! the tree.
+//! it calls; the same four reads, and the hub's two, again inside the CLI's
+//! `trusted` scope of an `IndexTrust` the first of them walked, as a hub's
+//! daemon runs them (`docs/features/read-trust.md` "Eval"), each answer
+//! compared with the walking read's; W_after by `w`'s formula
+//! (`docs/canon/w-measurement.md` "W_after") over 20 targets; `size.json`.
+//! `--corpus-only` stops after the tree.
 //!
 //! The CLI library runs with an [`Env`] and a [`GitEnv`] of its own: the
 //! tree as its current directory, the `home` directory beside it as its
@@ -33,8 +37,8 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use specengine_cli::{
-    BundleRequest, CheckRequest, CheckedTree, Env, GitEnv, Globals, IndexRequest, Outcome,
-    ProjectRoot, SearchRequest, ShowRequest, render_text,
+    BundleRequest, CheckRequest, CheckedTree, Env, GitEnv, Globals, IndexRequest, IndexTrust,
+    Outcome, ProjectRoot, SearchRequest, ShowRequest, render_text, trusted,
 };
 use specengine_core::check::{CheckFile, CheckInput, Resolver, SpecGraph};
 use specengine_model::IdScheme;
@@ -64,6 +68,14 @@ const NODES_MAX: usize = 200_000;
 const DEFAULT_BUDGET: u32 = 10_000;
 /// The W targets timed by every read.
 const TIMED_TARGETS: usize = 3;
+/// How long a written tree waits before its cold build: past the store's
+/// racy window of 2 s, so the build stores keys a warm update trusts, as a
+/// long-lived tree's are (`docs/features/read-trust.md`,
+/// "The key and the racy rule").
+const RACY_WAIT: Duration = Duration::from_millis(2_100);
+/// The floor of a trusted read's median in `growth_trusted`, microseconds:
+/// a millisecond read's growth matters to no one.
+const TRUSTED_FLOOR_US: u64 = 10_000;
 /// Timed calls of a read or a step; the best is kept.
 const TIMED_CALLS: usize = 3;
 /// A size's tree, beside its home and `size.json`.
@@ -223,11 +235,18 @@ struct Measured {
     check: CheckOut,
     reads: Reads,
     growth: Growth,
+    /// The four reads inside a hub's trust.
+    reads_trusted: TrustedReads,
+    /// As `growth`, each median floored at [`TRUSTED_FLOOR_US`].
+    growth_trusted: Growth,
     steps: Steps,
     other_us: OtherUs,
     w_after: WAfter,
     hub: HubOut,
     nondeterministic: usize,
+    /// The (read, target) pairs whose trusted answers' BLAKE3 differ from
+    /// the walking answer's.
+    trusted_differs: usize,
 }
 
 #[derive(Serialize)]
@@ -259,6 +278,22 @@ struct Spread {
     max_us: u64,
 }
 
+/// The four reads inside a hub's trust, as [`Reads`] without the hits.
+#[derive(Clone, Copy, Serialize)]
+struct TrustedReads {
+    get_node: Spread,
+    get_node_links: Spread,
+    search: Spread,
+    get_context_bundle: Spread,
+}
+
+/// A size's medians, the next size's growth is over.
+#[derive(Clone, Copy)]
+struct Previous {
+    reads: Reads,
+    trusted: TrustedReads,
+}
+
 #[derive(Clone, Copy, Serialize)]
 struct SearchSpread {
     median_us: u64,
@@ -285,6 +320,8 @@ struct Steps {
     hash_us: u64,
     update_us: u64,
     update_parsed: usize,
+    /// The most files a warm update read: 0 when every key was trusted.
+    update_hashed: usize,
     decode_us: u64,
     reparse_us: u64,
     resolver_us: u64,
@@ -318,6 +355,14 @@ struct HubOut {
     get_node_links_us: u64,
     get_context_bundle_us: u64,
     w_after: usize,
+    /// The hub's two reads inside a hub's trust.
+    trusted: HubTrusted,
+}
+
+#[derive(Serialize)]
+struct HubTrusted {
+    get_node_links_us: u64,
+    get_context_bundle_us: u64,
 }
 
 /// `size.json`: the size's entry, then what names the corpus.
@@ -359,12 +404,15 @@ pub fn run(setup: Setup) -> Result<ScaleResult, String> {
     let dir = setup.out.join(MEASUREMENT).join(&setup.label);
     layout::clear(&dir).map_err(|error| format!("cannot clear {}: {error}", dir.display()))?;
     let mut sizes: Vec<SizeEntry> = Vec::with_capacity(setup.sizes.len());
-    let mut previous: Option<Reads> = None;
+    let mut previous: Option<Previous> = None;
     for &nodes in &setup.sizes {
         let size_dir = dir.join(format!("n{nodes}"));
         let entry = measure_size(&setup, nodes, &size_dir, previous.as_ref())?;
         summarize(&entry);
-        previous = entry.measured.as_ref().map(|measured| measured.reads);
+        previous = entry.measured.as_ref().map(|measured| Previous {
+            reads: measured.reads,
+            trusted: measured.reads_trusted,
+        });
         sizes.push(entry);
     }
     Ok(ScaleResult {
@@ -383,11 +431,12 @@ fn measure_size(
     setup: &Setup,
     nodes: usize,
     dir: &Path,
-    previous: Option<&Reads>,
+    previous: Option<&Previous>,
 ) -> Result<SizeEntry, String> {
     let synthetic = generate::generate(setup.seed, nodes);
     let tree = dir.join(TREE);
     generate::write(&synthetic, &tree)?;
+    let written = Instant::now();
     if setup.corpus_only {
         let entry = SizeEntry {
             nodes,
@@ -403,6 +452,7 @@ fn measure_size(
     let home = dir.join(HOME);
     fs::create_dir_all(&home)
         .map_err(|error| format!("cannot create {}: {error}", home.display()))?;
+    std::thread::sleep(RACY_WAIT.saturating_sub(written.elapsed()));
     let session = Session::new(&tree, &home);
     let mut measuring = Measuring::new(&session, setup, nodes, &synthetic);
     let entry = SizeEntry {
@@ -454,6 +504,7 @@ fn summarize(entry: &SizeEntry) {
     };
     let ms = |us: u64| format!("{:.1} ms", Duration::from_micros(us).as_secs_f64() * 1000.0);
     let reads = &measured.reads;
+    let trusted = &measured.reads_trusted;
     let parsed = match measured.steps.update_parsed {
         0 => String::new(),
         parsed => format!("; the warm update parsed {parsed} files"),
@@ -461,7 +512,8 @@ fn summarize(entry: &SizeEntry) {
     eprintln!(
         "{MEASUREMENT}: {} part nodes: {} files, {} nodes; index {}, check {} ({} errors, {} warnings); \
          medians get_node {}, get_node_links {}, search {}, get_context_bundle {}; \
-         W_after median {} bytes; {} nondeterministic{parsed}",
+         trusted medians get_node {}, get_node_links {}, search {}, get_context_bundle {}; \
+         W_after median {} bytes; {} nondeterministic, {} trusted differ{parsed}",
         entry.nodes,
         corpus.files,
         corpus.nodes,
@@ -473,8 +525,13 @@ fn summarize(entry: &SizeEntry) {
         ms(reads.get_node_links.median_us),
         ms(reads.search.median_us),
         ms(reads.get_context_bundle.median_us),
+        ms(trusted.get_node.median_us),
+        ms(trusted.get_node_links.median_us),
+        ms(trusted.search.median_us),
+        ms(trusted.get_context_bundle.median_us),
         measured.w_after.median,
         measured.nondeterministic,
+        measured.trusted_differs,
     );
 }
 
@@ -623,6 +680,9 @@ struct Measuring<'a> {
     calls: BTreeMap<&'static str, BTreeMap<String, Call>>,
     w_after_bytes: BTreeMap<String, WBytes>,
     nondeterministic: usize,
+    /// The reads now run inside a trust: compared, not recorded.
+    in_trust: bool,
+    trusted_differs: usize,
 }
 
 impl<'a> Measuring<'a> {
@@ -635,14 +695,17 @@ impl<'a> Measuring<'a> {
             calls: BTreeMap::new(),
             w_after_bytes: BTreeMap::new(),
             nondeterministic: 0,
+            in_trust: false,
+            trusted_differs: 0,
         }
     }
 
     /// Index, check, reads, steps, W_after and the hub, in that order.
-    fn all(&mut self, previous: Option<&Reads>) -> Result<Measured, String> {
+    fn all(&mut self, previous: Option<&Previous>) -> Result<Measured, String> {
         let index = self.index()?;
         let check = self.check()?;
         let (reads, hub_reads) = self.reads()?;
+        let (reads_trusted, hub_trusted) = self.trusted_reads()?;
         let steps = self.steps()?;
         let (w_after, hub_w_after) = self.w_after()?;
         let other_us = other_us(&reads, &steps);
@@ -650,8 +713,13 @@ impl<'a> Measuring<'a> {
         Ok(Measured {
             index,
             check,
-            growth: growth(&reads, previous),
+            growth: growth(&reads, previous.map(|previous| &previous.reads)),
+            growth_trusted: growth_trusted(
+                &reads_trusted,
+                previous.map(|previous| &previous.trusted),
+            ),
             reads,
+            reads_trusted,
             steps,
             other_us,
             w_after,
@@ -661,9 +729,40 @@ impl<'a> Measuring<'a> {
                 get_node_links_us: hub_reads.get_node_links_us,
                 get_context_bundle_us: hub_reads.get_context_bundle_us,
                 w_after: hub_w_after,
+                trusted: HubTrusted {
+                    get_node_links_us: hub_trusted.get_node_links_us,
+                    get_context_bundle_us: hub_trusted.get_context_bundle_us,
+                },
             },
             nondeterministic: self.nondeterministic,
+            trusted_differs: self.trusted_differs,
         })
+    }
+
+    /// [`Self::reads`] again inside the CLI's `trusted` scope of a new
+    /// `IndexTrust` of the tree, as a hub's daemon runs them: the first
+    /// warm call walks, the others trust. Each answer is compared with the
+    /// walking read's, never recorded.
+    fn trusted_reads(&mut self) -> Result<(TrustedReads, HubReads), String> {
+        let project = self.project()?;
+        let trust = IndexTrust::new(project.root.clone());
+        self.in_trust = true;
+        let read = trusted(&[&trust], || self.reads());
+        self.in_trust = false;
+        let (reads, hub) = read?;
+        let search = reads.search;
+        Ok((
+            TrustedReads {
+                get_node: reads.get_node,
+                get_node_links: reads.get_node_links,
+                search: Spread {
+                    median_us: search.median_us,
+                    max_us: search.max_us,
+                },
+                get_context_bundle: reads.get_context_bundle,
+            },
+            hub,
+        ))
     }
 
     /// The cold build through `specengine_cli::index`, timed; the stored
@@ -813,6 +912,17 @@ impl<'a> Measuring<'a> {
     }
 
     fn record(&mut self, read: &'static str, target: &str, timed: Timed) {
+        if self.in_trust {
+            let walking = self
+                .calls
+                .get(read)
+                .and_then(|calls| calls.get(target))
+                .and_then(|call| call.answers.first());
+            if timed.answers.iter().any(|answer| Some(answer) != walking) {
+                self.trusted_differs += 1;
+            }
+            return;
+        }
         if !timed.deterministic() {
             self.nondeterministic += 1;
         }
@@ -867,6 +977,7 @@ impl<'a> Measuring<'a> {
         .map_err(fail)?;
 
         let mut update_parsed = 0;
+        let mut update_hashed = 0;
         let update_us = best(|| {
             let tree = WorkingTree::new(&project.root, paths).map_err(|error| error.to_string())?;
             let report = open
@@ -874,6 +985,7 @@ impl<'a> Measuring<'a> {
                 .update(&tree, scheme)
                 .map_err(|error| error.to_string())?;
             update_parsed = update_parsed.max(report.parsed);
+            update_hashed = update_hashed.max(report.hashed);
             Ok(report)
         })
         .map_err(fail)?;
@@ -926,6 +1038,7 @@ impl<'a> Measuring<'a> {
             hash_us,
             update_us,
             update_parsed,
+            update_hashed,
             decode_us,
             reparse_us,
             resolver_us,
@@ -1087,6 +1200,32 @@ fn other_us(reads: &Reads, steps: &Steps) -> OtherUs {
 fn growth(reads: &Reads, previous: Option<&Reads>) -> Growth {
     let ratio = |now: u64, before: Option<u64>| -> Option<f64> {
         let before = before.filter(|&before| before > 0)?;
+        Some((now as f64 / before as f64 * 100.0).round() / 100.0)
+    };
+    Growth {
+        get_node: ratio(
+            reads.get_node.median_us,
+            previous.map(|p| p.get_node.median_us),
+        ),
+        get_node_links: ratio(
+            reads.get_node_links.median_us,
+            previous.map(|p| p.get_node_links.median_us),
+        ),
+        search: ratio(reads.search.median_us, previous.map(|p| p.search.median_us)),
+        get_context_bundle: ratio(
+            reads.get_context_bundle.median_us,
+            previous.map(|p| p.get_context_bundle.median_us),
+        ),
+    }
+}
+
+/// `growth_trusted`: each median and its previous size's floored at
+/// [`TRUSTED_FLOOR_US`], their ratio to two decimals; `null` at the first
+/// size.
+fn growth_trusted(reads: &TrustedReads, previous: Option<&TrustedReads>) -> Growth {
+    let ratio = |now: u64, before: Option<u64>| -> Option<f64> {
+        let before = before?.max(TRUSTED_FLOOR_US);
+        let now = now.max(TRUSTED_FLOOR_US);
         Some((now as f64 / before as f64 * 100.0).round() / 100.0)
     };
     Growth {

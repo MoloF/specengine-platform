@@ -6,6 +6,11 @@
 //! — and `MAX_MCP_OUTPUT_TOKENS` does not raise it; a call longer than 120 s
 //! goes to the background.
 //! Both are read-only and deterministic; neither is part of the product surface.
+//!
+//! A hub's server alone also routes `probe_panic` (the `read-trust` spec,
+//! D9): a call that panics inside the project's turn, on demand, so a test
+//! can see the daemon doubt the project's index. Stdio's tool list is
+//! unchanged.
 
 use std::time::Duration;
 
@@ -114,6 +119,46 @@ Deterministic; no LLM inside.",
             "probe_sleep: slept {} s.",
             args.seconds
         ))]))
+    }
+}
+
+/// What `probe_panic` panics with, inside the turn.
+const PANIC_MESSAGE: &str = "probe_panic: a panic inside the project's turn, on demand";
+
+#[tool_router(router = hub_probe_tools, vis = "pub(crate)")]
+impl SpecEngineServer {
+    /// Panic probe, a hub's alone.
+    #[tool(
+        description = "Measurement probe (tests only): on a hub, run a call that panics inside \
+the project's turn, which answers as an internal error. Reads nothing, writes nothing. \
+Deterministic; no LLM inside.",
+        annotations(
+            title = "Probe: a panicking call",
+            read_only_hint = true,
+            destructive_hint = false,
+            idempotent_hint = true,
+            open_world_hint = false
+        )
+    )]
+    async fn probe_panic(&self) -> Result<CallToolResult, ErrorData> {
+        let Some(seam) = self.seam() else {
+            return Ok(CallToolResult::error(vec![ContentBlock::text(
+                "probe_panic: a hub's probe; this server takes no turn",
+            )]));
+        };
+        let ran = crate::hub::turned(
+            seam,
+            |_env, _globals| -> Option<String> { panic!("{PANIC_MESSAGE}") },
+            |error| Some(error.message),
+        )
+        .await;
+        match ran {
+            Some(Some(cannot)) => Ok(CallToolResult::error(vec![ContentBlock::text(cannot)])),
+            Some(None) | None => Err(ErrorData::internal_error(
+                "internal error: the call failed",
+                None,
+            )),
+        }
     }
 }
 

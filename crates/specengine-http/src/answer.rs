@@ -27,6 +27,23 @@
 //! `application/json; charset=utf-8`, compact: the CLI's bytes without the
 //! final line end. The error body is `{"status":<code>,"message":"…"}`,
 //! exactly two keys. The store and `rusqlite` are never touched here.
+//!
+//! On a hub the call runs in a CLI scope of the project's `IndexTrust`,
+//! holding the turn (the `read-trust` spec, "The daemon"): [`run_read`],
+//! a read route's, trusts the index; [`run`], every other route's (a write,
+//! an authorization, or a route not classified), walks, so nothing is
+//! judged from an index that has not seen a hand edit. A call that panics
+//! or cannot run (exit 2) doubts the trust, before the turn is released.
+//!
+//! The read routes, the one list (`crate::app`): `tree`, `nodes`, `search`,
+//! `bundle`, `graph`, `flow` without `trace`, `check`, `health`,
+//! `lock-diff`, `roadmap`, `inbox`, `proposals/<id>`, `tasks`, `tasks/<id>`,
+//! `cards` (GET) without `marks`, and `cards/<id>` (no marks). Not on it,
+//! so walking: trace data wherever it is shown (`trace`, `flow?trace=true`,
+//! `cards?marks=true`: the rollups and marks a person accepts a card on,
+//! judged on the files as they are now); the round's sheet (it writes a
+//! round), the stage, the round's answers, every card write, the trace's
+//! clear and a confirm's read and write.
 
 use std::sync::Arc;
 
@@ -35,8 +52,8 @@ use axum::http::{HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
 use specengine_cli::{
-    CardCause, CliError, ConfirmCause, Env, Exit, Globals, Outcome, ProjectRoot, StageCause,
-    discover, render_json,
+    CardCause, CliError, ConfirmCause, Env, Exit, Globals, IndexTrust, Outcome, ProjectRoot,
+    StageCause, discover, render_json, trusted, walking,
 };
 
 use crate::start::Project;
@@ -202,8 +219,42 @@ fn caused(outcome: &Outcome, status: Option<StatusCode>) -> Answered {
 }
 
 /// Runs `command` once for `project` (see the module documentation) and
-/// answers with its document.
+/// answers with its document; on a hub its freshness steps walk.
 pub(crate) async fn run<F>(project: Arc<Project>, command: F) -> Response
+where
+    F: FnOnce(&Env, &Globals) -> Result<Outcome, CliError> + Send + 'static,
+{
+    turned(project, Freshness::Walk, command).await
+}
+
+/// [`run`] of a read route: on a hub its freshness step may trust the
+/// index.
+pub(crate) async fn run_read<F>(project: Arc<Project>, command: F) -> Response
+where
+    F: FnOnce(&Env, &Globals) -> Result<Outcome, CliError> + Send + 'static,
+{
+    turned(project, Freshness::Trust, command).await
+}
+
+/// [`run`] or [`run_read`] as `freshness` says: a read route whose request
+/// decides it (trace data walks).
+pub(crate) async fn run_as<F>(project: Arc<Project>, freshness: Freshness, command: F) -> Response
+where
+    F: FnOnce(&Env, &Globals) -> Result<Outcome, CliError> + Send + 'static,
+{
+    turned(project, freshness, command).await
+}
+
+/// What a hub's call does in its freshness steps.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Freshness {
+    /// A read: the CLI's `trusted` scope.
+    Trust,
+    /// Anything else: the CLI's `walking` scope.
+    Walk,
+}
+
+async fn turned<F>(project: Arc<Project>, freshness: Freshness, command: F) -> Response
 where
     F: FnOnce(&Env, &Globals) -> Result<Outcome, CliError> + Send + 'static,
 {
@@ -211,15 +262,22 @@ where
     let turn = Arc::clone(&project.turn).lock_owned().await;
     let joined = tokio::task::spawn_blocking(move || {
         let _turn = turn;
+        let trust = project.trust.clone();
+        // Dropped before the turn: a panic doubts while it is held.
+        let _doubt = DoubtOnPanic(trust.as_deref());
         let called = Env::from_process().and_then(|env| {
             let globals = project.globals();
             found(&env, &globals, &project)?;
-            command(&env, &globals)
+            in_scope(trust.as_deref(), freshness, || command(&env, &globals))
         });
-        match called {
+        let answer = match called {
             Ok(outcome) => answered(&outcome),
             Err(error) => Answered::CannotRun(error.message),
+        };
+        if let (Answered::CannotRun(_), Some(trust)) = (&answer, &trust) {
+            trust.doubt();
         }
+        answer
     })
     .await;
     match joined {
@@ -227,6 +285,33 @@ where
         Ok(Answered::Refused { status, message }) => error(status, &message),
         Ok(Answered::CannotRun(message)) => error(StatusCode::SERVICE_UNAVAILABLE, &message),
         Err(_) => internal(),
+    }
+}
+
+/// `call` in the CLI's scope of `trust` as `freshness` asks, when there is
+/// one.
+pub(crate) fn in_scope<T>(
+    trust: Option<&IndexTrust>,
+    freshness: Freshness,
+    call: impl FnOnce() -> T,
+) -> T {
+    match (trust, freshness) {
+        (Some(trust), Freshness::Trust) => trusted(&[trust], call),
+        (Some(trust), Freshness::Walk) => walking(&[trust], call),
+        (None, _) => call(),
+    }
+}
+
+/// Doubts its trust when dropped by a panic's unwind.
+pub(crate) struct DoubtOnPanic<'t>(pub Option<&'t IndexTrust>);
+
+impl Drop for DoubtOnPanic<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking()
+            && let Some(trust) = self.0
+        {
+            trust.doubt();
+        }
     }
 }
 

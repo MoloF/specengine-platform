@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -71,7 +71,7 @@ Types and polls: `serve.md` "Live tail".
 
 ## Concurrency
 
-One request per project at a time, projects in parallel: `serve.md` "Concurrency".
+One request per project at a time, projects in parallel: `serve.md` "Concurrency". On a hub each call runs in its project's `IndexTrust` scope (`Project.trust`): read routes trust (`run_read`, `run_as`), the rest walk; a panic or exit 2 doubts (`spec-read-freshness.md`).
 
 ## Known limits
 
@@ -79,8 +79,7 @@ One request per project at a time, projects in parallel: `serve.md` "Concurrency
 - U+0002 to U+0004 in the corpus can fake a snippet's hit or cut, capped too.
 - One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's connections.
 - A database replaced under a live stream: its events up to the stream's cursor are never sent.
-- In the project's turn, other reads wait (`serve.md` "Concurrency").
 
 ## Tests
 
-`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).
+`tests/common/mod.rs`: git byte copies of `fixtures/spec-a`, `-b`, a scratch `HOME`, a `--port 0` daemon per test, raw HTTP/1.1, SSE, stdio MCP clients, a stale binary refused (build `--workspace --bins`). Files: byte parity with `spec ... --json` (`parity.rs`, `graph.rs`, `flow.rs`, `check.rs`, `health.rs`, `tasks.rs`, `roadmap.rs`, state S: `task_state/`), source scans with positive controls (`door.rs`, `no_domain.rs`), `daemon_keys.rs` (asserts `fixtures/daemon-keys.json`, the UI's key sets; `SPECENGINE_WRITE_DAEMON_KEYS=1` rewrites it), a file per surface (a hub's `hub{,_team,_confirm,_ids,_git,_mcp,_trust}.rs`, `common/mcp_http.rs`; its deployment's files, `deploy{,_admin}.rs`, `hub-deploy.md`), `serve.rs` (`serve.md`), `ui.rs` and the `src/ui.rs` units (`serve-ui.md`).

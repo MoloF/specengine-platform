@@ -64,14 +64,14 @@ use specengine_cli::{
     BundleRequest, CardAcceptBody, CardAcceptRequest, CardAssignBody, CardCancelBody,
     CardClearBody, CardClearGroupBody, CardClearGroupRequest, CardEditBody, CardListRequest,
     CardMoveBody, CardNewBody, CardOutcome, CardShowRequest, CheckRequest, CliError, FlowRequest,
-    GraphRequest, HealthRequest, InboxRequest, LockDiffRequest, Outcome, ReviewRequest,
+    GraphRequest, HealthRequest, InboxRequest, IndexTrust, LockDiffRequest, Outcome, ReviewRequest,
     RoadmapRequest, RoundAnswersBody, RoundAnswersRequest, RoundNewRequest, SearchRequest,
     ShowRequest, StageBody, StageRequest, TaskListRequest, TaskShowRequest, TeamRow, TraceRequest,
     TreeRequest, UnstageRequest, View, process_git, project_entry, roadmap_flags, round_limit,
     team_read, utc_now,
 };
 
-use crate::answer::{self, NO_STORE, Refusal, error, json, run};
+use crate::answer::{self, Freshness, NO_STORE, Refusal, error, json, run, run_as, run_read};
 use crate::args::{Args, percent_decode, project_path};
 use crate::hub::{Hub, Login};
 use crate::mcp::{self, Mounts};
@@ -108,7 +108,17 @@ impl App {
         hub: Option<Hub>,
         push: Option<Push>,
     ) -> Self {
-        let projects: Vec<Arc<Project>> = projects.into_iter().map(Arc::new).collect();
+        // A hub's reads trust the index its writers keep; a local
+        // daemon's walk (the `read-trust` spec, D6): `hub` is the switch.
+        let projects: Vec<Arc<Project>> = projects
+            .into_iter()
+            .map(|mut project| {
+                project.trust = hub
+                    .as_ref()
+                    .map(|_| Arc::new(IndexTrust::new(project.root.clone())));
+                Arc::new(project)
+            })
+            .collect();
         let syncs = push.map(|push| Syncs::new(&projects, push));
         // `--public-origin` is the whole switch (S5): no flag of its own.
         let mcp = hub.as_ref().map(|hub| Mounts::new(&projects, hub));
@@ -530,7 +540,7 @@ async fn tree(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
         })
     })()
     .map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         specengine_cli::tree_with_view(env, globals, &request, View::Browser).map(Outcome::Tree)
     })
     .await)
@@ -548,7 +558,7 @@ async fn nodes(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
     let ((links, bindings), archive) =
         (|| Ok::<_, String>((args.with()?, args.boolean("archive")?.unwrap_or(false))))()
             .map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = ShowRequest {
             reference,
             links,
@@ -575,7 +585,7 @@ async fn search(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
         })
     })()
     .map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         specengine_cli::search_with_view(env, globals, &request, View::Browser).map(Outcome::Search)
     })
     .await)
@@ -588,7 +598,7 @@ async fn bundle(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal
     let (references, budget) =
         (|| Ok::<_, String>((args.required_texts("node_ids")?, args.integer("budget")?)))()
             .map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = BundleRequest {
             references,
             budget,
@@ -619,7 +629,7 @@ async fn graph(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
         })
     })()
     .map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         specengine_cli::graph_with_view(env, globals, &request, View::Browser).map(Outcome::Graph)
     })
     .await)
@@ -640,7 +650,13 @@ async fn flow(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
         })
     })()
     .map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    // `trace` shows the drift a person accepts a card on: it walks.
+    let freshness = if request.trace {
+        Freshness::Walk
+    } else {
+        Freshness::Trust
+    };
+    Ok(run_as(project, freshness, move |env, globals| {
         specengine_cli::flow_with_view(env, globals, &request, View::Browser)
             .map(|outcome| Outcome::Flow(Box::new(outcome)))
     })
@@ -653,7 +669,7 @@ async fn flow(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
 async fn check(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     args("check", &[], &uri)?;
-    Ok(run(project, |env, globals| {
+    Ok(run_read(project, |env, globals| {
         specengine_cli::check(env, globals, &CheckRequest::default()).map(Outcome::Check)
     })
     .await)
@@ -671,7 +687,7 @@ async fn check(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 async fn health(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     args("health", &[], &uri)?;
-    Ok(run(project, |env, globals| {
+    Ok(run_read(project, |env, globals| {
         specengine_cli::health(
             env,
             globals,
@@ -694,7 +710,7 @@ async fn lock_diff(State(app): State<Shared>, uri: Uri) -> Result<Response, Refu
     let (project, _) = app.project_of(&uri)?;
     let args = args("lock-diff", &["ref"], &uri)?;
     let reference = args.required_text("ref").map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = LockDiffRequest {
             reference,
             git: process_git(env),
@@ -720,7 +736,7 @@ async fn roadmap(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusa
         .map_err(Refusal::bad_request)?
         .unwrap_or(false);
     roadmap_flags(release.as_deref(), pool).map_err(|error| Refusal::bad_request(error.message))?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = RoadmapRequest {
             release,
             pool,
@@ -737,7 +753,7 @@ async fn roadmap(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusa
 async fn inbox(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     args("inbox", &[], &uri)?;
-    Ok(run(project, |env, globals| {
+    Ok(run_read(project, |env, globals| {
         let request = InboxRequest {
             all: false,
             git: process_git(env),
@@ -756,7 +772,7 @@ async fn proposal(State(app): State<Shared>, uri: Uri) -> Result<Response, Refus
         .ok_or_else(|| unknown_route_of(&uri))?;
     let id = percent_decode(raw).map_err(Refusal::bad_request)?;
     args("proposals", &[], &uri)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = ReviewRequest {
             id,
             git: process_git(env),
@@ -774,7 +790,7 @@ async fn tasks(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
     let (project, _) = app.project_of(&uri)?;
     let args = args("tasks", &["status"], &uri)?;
     let statuses = args.statuses("status").map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = TaskListRequest {
             statuses,
             git: process_git(env),
@@ -794,7 +810,7 @@ async fn task(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
         .ok_or_else(|| unknown_route_of(&uri))?;
     let id = percent_decode(raw).map_err(Refusal::bad_request)?;
     args("tasks/:id", &[], &uri)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = TaskShowRequest {
             id: Some(id),
             next: false,
@@ -1006,7 +1022,13 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
         })
     })()
     .map_err(Refusal::bad_request)?;
-    Ok(run(project, move |env, globals| {
+    // `marks` show the drift a person accepts a card on: it walks.
+    let freshness = if request.marks {
+        Freshness::Walk
+    } else {
+        Freshness::Trust
+    };
+    Ok(run_as(project, freshness, move |env, globals| {
         specengine_cli::card_list(env, globals, &request)
             .map(|outcome| Outcome::CardList(Box::new(outcome.in_view(View::Browser))))
     })
@@ -1022,7 +1044,7 @@ async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
         .ok_or_else(|| unknown_route_of(&uri))?;
     let id = percent_decode(raw).map_err(Refusal::bad_request)?;
     args("cards/:id", &[], &uri)?;
-    Ok(run(project, move |env, globals| {
+    Ok(run_read(project, move |env, globals| {
         let request = CardShowRequest {
             id,
             history: true,

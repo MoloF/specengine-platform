@@ -3,14 +3,14 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # Hub git: a `--push` hub fetches, merges and pushes, never rebasing
 
-ADR-0064, built by `hub-git` (RM-0051). A hub started with `--push` (`hub.md`) carries its checkout's branch to its upstream and back. Nothing else touches the network: a local daemon, `spec serve`, the CLI, MCP and hooks stay offline; a hub without `--push` is as it was. A confirm still commits and answers on its own (`hub-confirm.md`); its commit travels with the next sync.
+ADR-0064, built by `hub-git` (RM-0051). A hub started with `--push` (`hub.md`) carries its checkout's branch to its upstream and back. Nothing else touches the network: a local daemon, `spec serve`, the CLI, MCP and hooks stay offline. A confirm commits and answers on its own (`hub-confirm.md`); the next sync carries it.
 
-Code: store `sync.rs` `SyncGit` (the only `fetch` and `push`), `sparse.rs`, `worktree.rs` (the deadline's grace, `STDERR_MAX`); CLI `sync.rs` `sync_once`, `hub_sync`, `sparse.rs`, `outputs.rs` `render_tree`; http `sync.rs` `Syncs`, `main.rs` `push_of`, `app.rs`, `confirm.rs`; UI `src/app/SyncLine.tsx`, `api/queries.ts` `useSync`, `inbox/ConfirmDialog.tsx`.
+Code: store `sync.rs` `SyncGit` (the only `fetch` and `push`), `sparse.rs`, `worktree.rs`; CLI `sync.rs` `sync_once`, `hub_sync`, `sparse.rs`, `outputs.rs` `render_tree`; http `sync.rs` `Syncs`, `main.rs` `push_of`, `app.rs`, `confirm.rs`; UI `src/app/SyncLine.tsx`, `api/queries.ts` `useSync`, `inbox/ConfirmDialog.tsx`.
 
 ## Flags
 
@@ -23,8 +23,9 @@ There is one sync per git common directory of the served roots. It runs in the f
 
 1. **Look**, read-only, outside the turns: `HEAD` on a branch with a commit, an upstream on a named remote, a clone neither shallow nor partial (`extensions.partialClone`, a promisor), `<r>`'s fetch and push URLs after `insteadOf` free of a secret ("Credentials"), every sparse-set path of the synced roots that `HEAD` holds present; else `stopped`, nothing touched. An operation in progress or an unclean `git status --porcelain=v1 -z --untracked-files=all` is provisional: the sync still fetches.
 2. **Fetch.** `fetch --no-tags --no-recurse-submodules --no-auto-maintenance <r> +refs/heads/<m>:refs/remotes/<r>/<m>`, forced, so a remote force push shows.
-3. **Merge** (inside the turns). `still_ready` decides cleanliness and operations now, so a confirm mid-apply never makes a sync `stopped`; `HEAD` off the branch makes it `stopped`. `L` = `HEAD`, `R` = the tracking ref. `R` is `L` or behind it: nothing. `L` behind `R`: `merge --ff-only --no-autostash R`. No merge base: `held`. Else `merge-tree --write-tree -z --name-only L R` merges in memory: clean, or every conflict an output of a served root's `index = true` entry (by the merged, unconflicted config), it is a merge commit; any other conflict is `held`, paths named, nothing written.
-4. **Push**, unless `L` = `R`: \1. Accepted: `ok`. Not a fast-forward: 2-4 again, three rounds, then `retrying`. `[remote rejected]`: `held`. Else (network, authentication, the deadline, `pre-push`): `retrying`.\n
+3. **Merge** (inside the turns). `still_ready` decides cleanliness and operations now, so a confirm mid-apply never makes a sync `stopped`; `HEAD` off the branch makes it `stopped`. `L` = `HEAD`, `R` = the tracking ref. `R` is `L` or behind it: nothing. `L` behind `R`: `merge --ff-only --no-autostash R`. No merge base: `held`. Else `merge-tree --write-tree -z --name-only L R` merges in memory: clean, or every conflict an output of a served root's `index = true` entry (by the merged, unconflicted config), it is a merge commit; any other conflict is `held`, paths named, nothing written. A moved `HEAD` then runs each served root's `update_paths` over `SyncGit::changed` (`ChangedPaths`; `spec-read-freshness.md`).
+4. **Push**, unless `L` = `R`: `push --porcelain --no-follow-tags --recurse-submodules=no <r> refs/heads/<b>:refs/heads/<m>`. Accepted: `ok`. Not a fast-forward: 2-4 again, three rounds, then `retrying`. `[remote rejected]`: `held`. Else (network, authentication, the deadline, `pre-push`): `retrying`.
+
 No `MERGE_HEAD` ever exists. "Pushed" is never the push's exit code, and never stored. A push that landed with its answer lost reads `ahead` > 0 until the next fetch finds `R` = `L`, and no merge commit follows.
 
 **When.** At start, once listening; on a signal from `confirm::write` after a 200 whose document is `applied` (never awaited); and every `--push-every` minutes. One sync at a time per repository; signals coalesce into one more run.
@@ -49,7 +50,8 @@ The sync brings in others' commits through git, spec files and `spec.lock` among
 {"ahead":2,"behind":0,"state":"held","error":"the remote refused `main`: pre-receive hook declined; remote: frozen","at":"2026-11-04T09:00:00Z"}
 ```
 
-`ahead`, `behind`: \1 `state`, `error`, `at`: \2 Stderr: \3\n
+`ahead`, `behind`: `rev-list --left-right --count` against the tracking ref per request, null without one; `state`, `error`, `at` (the last end, UTC): daemon memory, `none`, null, null at start; a change prints `specengine-http: sync <worktree>: <state>[: <error>]`.
+
 | `state` | The last sync | Next |
 |---|---|---|
 | `none` | none ended | |
@@ -62,15 +64,7 @@ The sync brings in others' commits through git, spec files and `spec.lock` among
 
 **Redaction** goes token by token and never cuts inside one. A token holding the remote's own URL reads as the remote's name; any other token holding `://` reads as `<url>`.
 
-```text
-`main` has no upstream on a remote: set one with git branch --set-upstream-to
-the remote `origin` has a URL holding a user name or password: refused before any connection
-<n> paths are not clean in <top>: <first 10>[ and <k> more]
-merging `origin/main` conflicts in <path>, ...: resolve it on the host's terminal in <top>
-the remote refused `main`: <reason>; <stderr>
-```
-
-The rest name their cause (no branch, shallow or partial, an operation, outside the sparse checkout, an identity, unrelated histories, an outputs gap, fetch or push failed, three rounds, a deadline): CLI `sync.rs`, store `sync.rs`.
+Messages name their cause (no upstream, a URL with a user or password, unclean paths, a conflict, a remote refusal, no branch, shallow or partial, an operation, outside the sparse checkout, an identity, unrelated histories, an outputs gap, fetch or push failed, three rounds, a deadline): CLI `sync.rs`, store `sync.rs`.
 
 ## Credentials
 
@@ -82,7 +76,7 @@ Git's, set by the deployment; SpecEngine holds none (supplementing ADR-0034, ADR
 
 ## Screen
 
-`SyncLine` sits in the shell beside a project's view, with no control. It reads once a login is known (`useHubLogin`), then on window focus and every 30 s: `1 commit not pushed` or `<N> commits not pushed` when `ahead` > 0, `Sync: <error>` as text, escaped as `shownConfirmText`; nothing for `ahead` 0 with no error, a 404, a failed read or a local page. Project routes now read `GET /api/identity` once per page for that check, on a local page too. The dialog: `hub-confirm.md` "Screen".
+`SyncLine` sits in the shell beside a project's view, with no control. It reads once a login is known (`useHubLogin`), then on window focus and every 30 s: `1 commit not pushed` or `<N> commits not pushed` when `ahead` > 0, `Sync: <error>` as text, escaped as `shownConfirmText`; nothing for `ahead` 0 with no error, a 404, a failed read or a local page. Project routes read `GET /api/identity` once per page for it, a local page too. The dialog: `hub-confirm.md` "Screen".
 
 ## Rules
 
@@ -93,7 +87,7 @@ Git's, set by the deployment; SpecEngine holds none (supplementing ADR-0034, ADR
 
 ## Known limits
 
-- A fast-forward stopped at the deadline leaves `R`'s files written or deleted, `HEAD` and the index unmoved: nothing lost, the next sync `stopped` naming the paths. Until the operator restores, reads show those bytes and a confirm whose target, `spec.lock` or root config is among them is refused. Recovery: `git restore --staged --worktree :/`, then remove the new untracked files named.
+- A fast-forward stopped at the deadline leaves `R`'s files written or deleted, `HEAD` and the index unmoved: nothing lost, the next sync `stopped` naming the paths, every root's index dirty. Until the operator restores, reads show those bytes and a confirm whose target, `spec.lock` or root config is among them is refused. Recovery: `git restore --staged --worktree :/`, then remove the new untracked files named.
 - A `post-merge` killed after the ref moved reports "could not move"; SIGTERM reaches git alone, not its hooks or filters.
 - An own URL in non-scheme form glued to text stays visible; it never holds a credential.
 - A second worktree's `behind` is read against a ref the hub never fetches for it.
@@ -103,4 +97,4 @@ Git's, set by the deployment; SpecEngine holds none (supplementing ADR-0034, ADR
 
 ## Tests
 
-http `tests/hub_git.rs` (bare remotes in the scratch directory, `GIT_ALLOW_PROTOCOL=file` for product processes, logging `uploadpack`/`receivepack` wrappers, a PATH wrapper pinning git verbs and push flags), `tests/hub.rs`, `tests/daemon_keys.rs`, `tests/hub_confirm.rs`; store `tests/sync_urls.rs`, `sync::tests`; CLI `tests/sparse_set.rs`; UI `src/app/SyncLine.test.tsx`, `src/api/sync.http.test.ts`, `src/inbox/ConfirmDialog.test.tsx`. Not covered: backoff doubling, signal coalescing, turn order, a held sync staying idle, a lost push answer, the older-binary 503.
+http `tests/hub_git.rs` (bare remotes, `GIT_ALLOW_PROTOCOL=file`, logging `uploadpack`/`receivepack` wrappers, a PATH wrapper pinning git verbs and push flags), `tests/hub.rs`, `tests/daemon_keys.rs`, `tests/hub_confirm.rs`; store `tests/sync_urls.rs`, `sync::tests`; CLI `tests/sparse_set.rs`; UI `src/app/SyncLine.test.tsx`, `src/api/sync.http.test.ts`, `src/inbox/ConfirmDialog.test.tsx`. Not covered: backoff doubling, signal coalescing, turn order, a held sync staying idle, a lost push answer, the older-binary 503.

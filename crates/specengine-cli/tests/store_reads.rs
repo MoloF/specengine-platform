@@ -1103,7 +1103,7 @@ fn sr2_a_stale_stamp_over_emptied_edge_tables_answers_the_golden() {
             });
             assert_eq!(
                 sql(&db, "SELECT value FROM index_meta WHERE key = 'format';"),
-                "16\n",
+                format!("{}\n", specengine_store::INDEX_FORMAT),
                 "{name} {:?}: the freshness step restamped the index",
                 want.args
             );

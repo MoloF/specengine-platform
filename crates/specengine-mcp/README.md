@@ -3,12 +3,12 @@ class: canon
 tier: 1
 scope: [crates/specengine-mcp]
 owner: owner
-reviewed: 2026-10-22
+reviewed: 2026-11-04
 ---
 
 # specengine-mcp — the MCP server over stdio, and a hub's
 
-One process serves one client over stdin/stdout on `rmcp =3.5.0` (features `server`, `macros`, `transport-io`; not `request-state`, unused since the unsealed `requestState`; not `elicitation`, which pulls `url` / ICU: wire messages go through `send_cancellable_request`). The crate names no HTTP crate, in its manifest or its own graph (`cargo tree -p`); a workspace build unifies rmcp's features, so the binary built beside the daemon compiles rmcp's HTTP transport too, unused. A hub's daemon serves its hub mode at `/mcp/<slug>` (`docs/canon/hub-mcp.md`). The default build serves the read, code, queue and task tools, the owner's form `review_proposal` and the resources, each one call into the CLI library (the sets: `docs/canon/mcp-read.md` "Binary"). Contracts: reads (parity, schemas, size, latency) `docs/canon/mcp-read.md`; code `docs/canon/mcp-code.md`; queue `docs/canon/agent-intake.md`; tasks `docs/canon/task-package.md` "MCP"; the form `docs/canon/review-form.md`; a `target` or `node_ids` item may be a root-relative `.md` path (`docs/canon/proposal-queue.md` "Creation" 1). Reads refresh the project's index in SpecEngine's data directory as the CLI's do, the queue and task tools and the form write only its queue there; no tool writes under the project root (ADR-0004, ADR-0005). Design rules for the full tool set: 07 §1.1-1.2.
+One process serves one client over stdin/stdout on `rmcp =3.5.0` (features `server`, `macros`, `transport-io`; not `request-state`, unused since the unsealed `requestState`; not `elicitation`, which pulls `url` / ICU: wire messages go through `send_cancellable_request`). The crate names no HTTP crate, in its manifest or its own graph (`cargo tree -p`); a workspace build unifies rmcp's features, so the binary built beside the daemon compiles rmcp's HTTP transport too, unused. A hub's daemon serves its hub mode at `/mcp/<slug>` (`hub-mcp.md`). The default build serves the read, code, queue and task tools, the owner's form `review_proposal` and the resources, each one call into the CLI library (the sets: `mcp-read.md` "Binary"). Contracts: reads (parity, schemas, size, latency) `mcp-read.md`; code `mcp-code.md`; queue `agent-intake.md`; tasks `task-package.md` "MCP"; the form `review-form.md`; a `target` or `node_ids` item may be a root-relative `.md` path (`proposal-queue.md` "Creation" 1). Reads refresh the project's index in SpecEngine's data directory as the CLI's do (a hub's may trust it), the queue and task tools and the form write only its queue there; no tool writes under the project root (ADR-0004, ADR-0005). Design rules for the full tool set: 07 §1.1-1.2.
 
 Dependencies: `specengine-cli` (never the store or `rusqlite` directly; the reverse edge is forbidden), `rmcp`, `tokio`, `serde`, `serde_json`, `clap`; pinned by eval `build_graph.rs`.
 
@@ -40,16 +40,16 @@ Verified on v2.1.283 by script and by hand (Phase 0); the read-tool items checke
 
 ## Feature `probes`
 
-The measurement build, never default: `probe_output {tokens}` -> `tokens` × 4 bytes of filler (max 200 000) and `probe_sleep {seconds}` (max 900, ends early on cancellation), both `readOnlyHint: true`.
+The measurement build, never default: `probe_output {tokens}` -> `tokens` × 4 bytes of filler (max 200 000) and `probe_sleep {seconds}` (max 900, ends early on cancellation), both `readOnlyHint: true`. A hub's server also routes `probe_panic`, a panic in the turn (`HUB_PROBES`).
 
 ## Modules
 
 | Module | What it does |
 |---|---|
-| `lib.rs` | crate doc; re-exports `Lifecycle`, `SpecEngineServer`, `serve_stdio`, `ServeError`, `INSTRUCTIONS`, `MAX_RESULT_CHARS`; the hub's `HubSeam`, `Command`, `TurnFuture`, `HUB_TOOLS`, `HUB_INSTRUCTIONS` |
-| `hub.rs` | the hub mode: `SpecEngineServer::hub(Arc<dyn HubSeam>)`; `HubSeam` (`login`, `turn(Command) -> TurnFuture`, the daemon's); `turned`, the turn raced with the request's cancellation; `HUB_TOOLS` (17), `HUB_ROUTER` (a `static`), `HUB_INSTRUCTIONS` and eight descriptions, their asserts; hub argument types without `task_id`; the login into requests and card actors |
+| `lib.rs` | crate doc; re-exports `Lifecycle`, `SpecEngineServer`, `serve_stdio`, `ServeError`, `INSTRUCTIONS`, `MAX_RESULT_CHARS`; the hub's `HubSeam`, `Command`, `TurnFuture`, `HUB_TOOLS`, `HUB_READ_TOOLS`, `HUB_PROBES`, `HUB_INSTRUCTIONS` |
+| `hub.rs` | the hub mode: `SpecEngineServer::hub(Arc<dyn HubSeam>)`; `HubSeam` (`login`, `turn(Command) -> TurnFuture`, the daemon's); `turned`, the turn raced with the request's cancellation; `HUB_TOOLS` (17), `HUB_READ_TOOLS`, `reads_trust` (`spec-read-freshness.md`), `HUB_ROUTER` (a `static`), `HUB_INSTRUCTIONS` and eight descriptions, their asserts; hub argument types without `task_id`; the login into requests and card actors |
 | `server.rs` | `SpecEngineServer` (`ServerHandler`, no project state): `INSTRUCTIONS` (bytes: `mcp-read.md` **Texts**) and their asserts, the tool routers (`read_tools`, `code_tools`, `intake_tools`, `task_tools`, `card_tools`, `review_tools`), `get_info` (tools, resources), `Lifecycle` -> `supported_protocol_versions`, `list_resource{s,_templates}`, `read_resource` (blocking pool, 2026-07-28 cache hints); `serve_stdio` (clean exit on closed stdin, `ServeError`) |
-| `read.rs` | the read tools (`read_tools` router; `get_impact`: `spec-impact.md`; `get_trace`: `spec-trace.md`): argument types (bindings: `code-reads.md`), descriptions and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `answer_of`, `Answer` -> the tool result; text helpers shared with `intake.rs` |
+| `read.rs` | the read tools (`read_tools` router; `get_impact`: `spec-impact.md`; `get_trace`: `spec-trace.md`): argument types (bindings: `code-reads.md`), descriptions (a hub's four too) and their asserts, `MAX_RESULT_CHARS`, `call` (`spawn_blocking`), `answer_of`, `Answer` -> the tool result; text helpers shared with `intake.rs` |
 | `code.rs` | the code tools (`code_tools`): arguments, the form checks before any call, descriptions, asserts; `read.rs`' `call` |
 | `intake.rs` | the queue tools (`intake_tools` router): argument types (one level of closed inline objects; `ChangeKind`: `proposal-kinds.md`), descriptions (the path form, `spec approve` too) and their asserts (each cap, `INTAKE_MATCHES_MAX`, `DISTINCT_MAX`), one CLI library call each with `author_role` always passed, `utc_now`, `process_git` |
 | `tasks.rs` | the task tools (`task_tools`): arguments, descriptions, asserts |
@@ -57,7 +57,7 @@ The measurement build, never default: `probe_output {tokens}` -> `tokens` × 4 b
 | `resources.rs` | `list` (200 per page), the node template, `parse`, `read`, `percent_encode`, `percent_decode`, the error codes |
 | `mirror.rs` | `input_schema`, `output_schema` (`rmcp::schemars`, inlined, every key required); the mirror types of the CLI's `--json` documents (review, intake, drift, code documents, a record's keys, a one-key `Choice`, `BundleRowShape` (`BindingRowShape` + `tokens_est`), `ImpactDocument`, `TraceDocument`, layer C's `SymbolsLayerC`, `SymbolsTier`, `SnapshotState`, `SnapshotFreshness`; `kind` free), schema only |
 | `review.rs` | the owner's form (`review_tools`, its description and asserts): `review` (`stage_form` first, the form-capability check, the era; legacy `send_cancellable_request`, stateless `input_required` with the unsealed `requestState`), `resume` (round 2), `answered` (the answer -> `StageBody`), `after` (`stage`, the read after it, the outcome lines); `form_of` (by family), `value` (one line, escaped, cut) |
-| `probes.rs` | `probes` only: `probe_output`, `probe_sleep` |
+| `probes.rs` | `probes` only: `probe_output`, `probe_sleep`, a hub's `probe_panic` |
 | `main.rs` | clap CLI, the quiet panic hook, current-thread tokio runtime, exit codes |
 
 ## Open minors
@@ -67,4 +67,4 @@ The measurement build, never default: `probe_output {tokens}` -> `tokens` × 4 b
 
 ## Tests
 
-`tests/common/mod.rs`: a spawned-binary JSON-RPC client, each spawn with a cleared environment, its own cwd and a fresh scratch `HOME`; `common/read.rs` the CLI-side expectations, `common/blake3.rs` a BLAKE3 written from the specification. The read files: `docs/canon/mcp-read.md` "Tests"; `mcp_code.rs`, `mcp_code_pilot.rs`: the code tools; `mcp_layer_c.rs`, `common/layer_c.rs`: a stored layer C snapshot (`docs/canon/layer-c-reads.md`); `mcp_intake.rs`: the queue tools (`mcp_door`, `mcp_genre` too); `mcp_decision.rs`, `mcp_create.rs`, `mcp_tasks.rs`, `mcp_drift.rs`: a decided item, a create, the task tools, a drift; `mcp_hub.rs`: the hub mode's 17 tools and texts; `plugin_files.rs`, `plugin_skills.rs`: the plugin; `mcp_review_form.rs` (both eras), `mcp_stage.rs` (no tool input carries a choice): the form. `tests/mcp_stdio.rs` (`probes`: both eras, a 104 000-byte output, cancellation, startup, `mcp.json`). Run: `cargo nextest run -p specengine-mcp --test <file>`, `--features probes` for `mcp_stdio`.
+`tests/common/mod.rs`: a spawned-binary JSON-RPC client, each spawn with a cleared environment, its own cwd and a fresh scratch `HOME`; `common/read.rs` the CLI-side expectations, `common/blake3.rs` a BLAKE3 written from the specification. The read files: `docs/canon/mcp-read.md` "Tests"; `mcp_code.rs`, `mcp_code_pilot.rs`: the code tools; `mcp_layer_c.rs`, `common/layer_c.rs`: a stored layer C snapshot (`docs/canon/layer-c-reads.md`); `mcp_intake.rs`: the queue tools (`mcp_door`, `mcp_genre` too); `mcp_decision.rs`, `mcp_create.rs`, `mcp_tasks.rs`, `mcp_drift.rs`: a decided item, a create, the task tools, a drift; `mcp_hub.rs`, `mcp_hub_trust.rs`: the hub mode's 17 tools and texts; `plugin_files.rs`, `plugin_skills.rs`: the plugin; `mcp_review_form.rs` (both eras), `mcp_stage.rs` (no tool input carries a choice): the form. `tests/mcp_stdio.rs` (`probes`: both eras, a 104 000-byte output, cancellation, startup, `mcp.json`). Run: `cargo nextest run -p specengine-mcp --test <file>`, `--features probes` for `mcp_stdio`.

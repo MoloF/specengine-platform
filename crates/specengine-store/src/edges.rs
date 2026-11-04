@@ -92,7 +92,10 @@ pub(crate) const INCOMING: &str = concat!(
 
 /// The documents whose resolved `parent:` lands on a node (`?1` worktree,
 /// `?2` path, `?3` position), by `edge_parents_by_end`.
-#[allow(dead_code)] // RM-0079's reads; the lookup tests plan it now.
+// No read uses it yet: the `store-reads` subset reads none of it, and a
+// subset `tree` or `flow` would. It is kept with its index, which a later
+// format would otherwise have to bring back; the lookup tests plan it.
+#[allow(dead_code)]
 pub(crate) const PARENTED: &str =
     "SELECT f.path AS path, p.n AS n, p.state, p.reason, p.end_path, p.end_ord
      FROM edge_parents p CROSS JOIN files f ON f.file_id = p.file_id

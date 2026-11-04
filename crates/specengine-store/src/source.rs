@@ -16,7 +16,9 @@
 //!
 //! [`Source::probe_paths`] probes a batch of named paths: [`WorkingTree`]
 //! reads each directory's listing at most once per call
-//! (`docs/features/edge-table.md` "Data").
+//! (`docs/features/edge-table.md` "Data"). [`Source::stat`] gives a file's
+//! [`StatKey`], which an update compares before it reads (the `read-trust`
+//! spec, "The key and the racy rule").
 //!
 //! [`GitIndex`] walks the git index by the same rules
 //! (docs/canon/spec-check-git.md, "The staged check"): the stage-0 regular
@@ -51,6 +53,19 @@ pub struct Listing {
     pub unreadable_dirs: Vec<String>,
 }
 
+/// A file's stat key (the `read-trust` spec, "The key and the racy
+/// rule"): size, mtime and ctime in nanoseconds from the Unix epoch
+/// (negative before it), inode and device, from one `lstat`. Inode and
+/// device are compared for equality only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StatKey {
+    pub size: u64,
+    pub mtime_ns: i64,
+    pub ctime_ns: i64,
+    pub ino: u64,
+    pub dev: u64,
+}
+
 /// What [`Source::probe_paths`] made of one named path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Probed {
@@ -79,6 +94,13 @@ pub trait Source {
     fn probe(&self, path: &str) -> bool;
     /// The bytes of a listed file.
     fn read(&self, path: &str) -> io::Result<Vec<u8>>;
+    /// The stat key of a listed file, taken before it is read; `None` when
+    /// the source has none (the default) or cannot tell, and the file is
+    /// then always read.
+    fn stat(&self, path: &str) -> Option<StatKey> {
+        let _ = path;
+        None
+    }
     /// Whether `path` (root-relative, `/`) is now a directory the walk could
     /// reach files through; `update_paths` then walks everything. The default
     /// answers "not a directory", for a source without directories.
@@ -269,6 +291,15 @@ impl Source for WorkingTree {
 
     fn read(&self, path: &str) -> io::Result<Vec<u8>> {
         self.read_file(path)
+    }
+
+    /// `lstat` of the path: `None` for an unclean path, an error, a symlink
+    /// or anything but a regular file.
+    fn stat(&self, path: &str) -> Option<StatKey> {
+        if !is_clean_relative(path) {
+            return None;
+        }
+        stat_key(&self.root.join(path))
     }
 
     fn is_dir(&self, path: &str) -> bool {
@@ -717,6 +748,36 @@ pub(crate) fn walk_index(
     }
     listing.paths = listed.keys().cloned().collect();
     (listing, listed)
+}
+
+/// The stat key of the regular file at `path`, by `lstat`; `None` for an
+/// error, a symlink, any other kind of file, or a time whose nanoseconds
+/// overflow an `i64`.
+#[cfg(unix)]
+fn stat_key(path: &Path) -> Option<StatKey> {
+    use std::os::unix::fs::MetadataExt as _;
+    let meta = fs::symlink_metadata(path).ok()?;
+    if !meta.file_type().is_file() {
+        return None;
+    }
+    let ns = |seconds: i64, nanos: i64| {
+        seconds
+            .checked_mul(1_000_000_000)
+            .and_then(|whole| whole.checked_add(nanos))
+    };
+    Some(StatKey {
+        size: meta.size(),
+        mtime_ns: ns(meta.mtime(), meta.mtime_nsec())?,
+        ctime_ns: ns(meta.ctime(), meta.ctime_nsec())?,
+        ino: meta.ino(),
+        dev: meta.dev(),
+    })
+}
+
+/// No stat key off Unix: every file is read.
+#[cfg(not(unix))]
+fn stat_key(_: &Path) -> Option<StatKey> {
+    None
 }
 
 /// The type of the entry of `dir` named exactly `name` (no normalisation,

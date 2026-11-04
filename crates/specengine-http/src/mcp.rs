@@ -63,7 +63,7 @@ use rmcp::transport::streamable_http_server::{
 use serde::Deserialize;
 use serde_json::Value;
 use specengine_cli::Env;
-use specengine_mcp::{Command, HUB_TOOLS, HubSeam, SpecEngineServer, TurnFuture};
+use specengine_mcp::{Command, HUB_PROBES, HUB_TOOLS, HubSeam, SpecEngineServer, TurnFuture};
 use tokio::sync::{Mutex, oneshot};
 
 use crate::answer::{self, error};
@@ -123,14 +123,28 @@ impl HubSeam for Seam {
             // answers it as an internal error.
             let _ = tokio::task::spawn_blocking(move || {
                 let _turn = turn;
+                // As `answer::run`: the call in the trust's `walking`
+                // scope (a read tool opts into trust in the MCP crate); a
+                // panic or a call that cannot run doubts it, the turn held.
+                let trust = project.trust.clone();
+                let _doubt = answer::DoubtOnPanic(trust.as_deref());
                 let ready = Env::from_process().and_then(|env| {
                     let globals = project.globals();
                     answer::found(&env, &globals, &project)?;
                     Ok((env, globals))
                 });
                 match ready {
-                    Ok((env, globals)) => command.run(&env, &globals),
-                    Err(cannot) => command.cannot_run(cannot),
+                    Ok((env, globals)) => {
+                        answer::in_scope(trust.as_deref(), answer::Freshness::Walk, || {
+                            command.run(&env, &globals);
+                        });
+                    }
+                    Err(cannot) => {
+                        if let Some(trust) = &trust {
+                            trust.doubt();
+                        }
+                        command.cannot_run(cannot);
+                    }
                 }
             })
             .await;
@@ -571,7 +585,9 @@ fn sent(read: &[u8]) -> Sent {
         }
     };
     match (method.as_deref(), name) {
-        (Some("tools/call"), Some(name)) if !HUB_TOOLS.contains(&name.as_str()) => {
+        (Some("tools/call"), Some(name))
+            if !HUB_TOOLS.contains(&name.as_str()) && !HUB_PROBES.contains(&name.as_str()) =>
+        {
             Sent::UnknownTool(id)
         }
         (Some("initialize"), _) if initialize(read) => Sent::Initialize,
@@ -783,6 +799,7 @@ mod tests {
             slug: SLUG.to_owned(),
             root: std::env::temp_dir(),
             turn: Arc::new(Mutex::new(())),
+            trust: None,
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         let mounts = Mounts::with_idle(&[project], &hub, Some(IDLE));
@@ -889,6 +906,7 @@ mod tests {
             slug: SLUG.to_owned(),
             root: std::env::temp_dir(),
             turn: Arc::new(Mutex::new(())),
+            trust: None,
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         let mounts = Mounts::with_ends(&[project], &hub, None, LIFE);
@@ -974,6 +992,7 @@ mod tests {
             slug: SLUG.to_owned(),
             root: std::env::temp_dir(),
             turn: Arc::new(Mutex::new(())),
+            trust: None,
         });
         let hub = Hub::parse("https://hub.example.test").expect("an origin");
         Mounts::with_idle(&[project], &hub, None)

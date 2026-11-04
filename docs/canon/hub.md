@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # Hub mode: a public origin and one trusted login
@@ -103,7 +103,7 @@ With a resolved login, "Acting as" is read-only and shows it, writes send it as 
 - **Session expiry.** A `fetch` following the login door's redirect fails as status 0, "no response from the daemon", and `EventSource` backs off. The gate (step 11b-3) checks what the door answers to a JSON request.
 - **A stalled reader.** A client that stops reading keeps its socket past a stream's life, not its events: the end waits for it to read again.
 - **Health.** A hub answers a probe of `127.0.0.1` with a 403 (RM-0074).
-- **Scale.** Until `scale-reads` (RM-0054) a team waits behind O(n) reads.
+- **Scale.** Reads trust the index (`spec-read-freshness.md`); a team still waits in a project's turn.
 - **A raw `#`.** `http::Uri` drops a fragment before the fence, so `.../accept#x` on a raw socket reaches a handler: the proxy encodes it, `%23` (`hub-deploy.md`).
 - **GET has no list.** Default deny covers every method but GET; `tests/hub.rs` pins the GET route set (`the_get_routes_are_pinned`), so a new one fails until decided.
 - **Before the login resolves.** While the identity loads or after a failed read the box is as today, so a typed name can reach the key, and a stored name sent then gets the daemon's 403.

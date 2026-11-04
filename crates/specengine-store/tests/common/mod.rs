@@ -23,7 +23,7 @@ use std::time::{Duration, SystemTime};
 use specengine_core::{IdSchemeToml, Paths};
 use specengine_model::IdScheme;
 use specengine_store::{
-    IndexWriter, Listing, Source, SpecIndex, SqliteIndex, UpdateReport, WorkingTree,
+    IndexWriter, Listing, Source, SpecIndex, SqliteIndex, StatKey, UpdateReport, WorkingTree,
 };
 
 /// The project every test handle is bound to, unless a test needs another.
@@ -483,6 +483,12 @@ impl Source for Reversed<'_> {
 
     fn read(&self, path: &str) -> io::Result<Vec<u8>> {
         self.0.read(path)
+    }
+
+    /// The inner source's stat key: every wrapper forwards `stat`
+    /// (docs/features/read-trust.md "Store API").
+    fn stat(&self, path: &str) -> Option<StatKey> {
+        self.0.stat(path)
     }
 
     /// The inner source's `[paths]`, which `update` resolves links by

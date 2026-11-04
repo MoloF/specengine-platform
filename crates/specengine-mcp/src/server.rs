@@ -261,8 +261,9 @@ impl ServerHandler for SpecEngineServer {
             return self.tool_router.call(tcc).await;
         }
         let scoped = context.clone();
+        let reads = hub::reads_trust(&request.name, request.arguments.as_ref());
         let tcc = ToolCallContext::new(self, request, context);
-        hub::in_request(scoped, self.tool_router.call(tcc)).await
+        hub::in_request(scoped, reads, self.tool_router.call(tcc)).await
     }
 
     async fn list_resources(
@@ -277,6 +278,7 @@ impl ServerHandler for SpecEngineServer {
             // -32603 with its line, as a read's exit 2.
             hub::in_request(
                 context.clone(),
+                true,
                 hub::turned(
                     seam,
                     move |env, globals| resources::list(env, globals, cursor.as_deref()),
@@ -330,6 +332,7 @@ impl ServerHandler for SpecEngineServer {
             // A hub: in the project's turn, as `resources/list`.
             hub::in_request(
                 context.clone(),
+                true,
                 hub::turned(
                     seam,
                     move |env, globals| resources::read(env, globals, &uri, &parsed),

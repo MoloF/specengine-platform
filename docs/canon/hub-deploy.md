@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [scripts/deploy, .github/workflows]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # Hub deploy: compose, Traefik, Authelia and the image
@@ -15,7 +15,7 @@ ADR-0066, ADR-0067, ADR-0068, built by `hub-deploy` (RM-0064, step 11b-1) and `h
 Three services, each `restart: unless-stopped`, and the one-shot `admin` (`#accounts`).
 
 - **`traefik`** publishes 80 and 443 alone. Its static configuration is its `command:` list, since Traefik's static sources exclude each other; the dynamic one is `traefik/dynamic/hub.yml` on the file provider, watched. `web` only redirects to `websecure`. ACME by TLS-ALPN, the CA from `.env`, staging first. No API, dashboard, version check or usage report.
-- **`authelia`**, the login door at `DOOR_HOST`: the file users backend (`authelia/users/users.yml`, mounted read-only, a person re-read on every request: `refresh_interval: always`); SQLite storage and the filesystem notifier on the `authelia-data` volume; sessions in memory; passkeys and TOTP; password reset off. Its config is rendered by its template filter from the service's environment.
+- **`authelia`**, the login door at `DOOR_HOST`: the file users backend (`authelia/users/users.yml`, mounted read-only, a person re-read on every request: `refresh_interval: always`); SQLite storage and the filesystem notifier on the `authelia-data` volume; sessions in memory (a restart logs everyone out); passkeys and TOTP; password reset off. Its config is rendered by its template filter from the service's environment.
 - **`specengine`**, the image: `network_mode: "service:traefik"`, no port or network of its own; `init: true`, since the daemon installs no signal handler and git children a sync's deadline kills must be reaped; `depends_on` `traefik` with `restart: true`; `/projects` bind-mounted; `/data` the named volume `specengine-data` (`XDG_DATA_HOME`), so the data directory lies outside every root.
 
 `.env` keys, each read, none secret: `HUB_DOMAIN` (the door's cookie domain: a domain for the hub alone), `HUB_HOST`, `DOOR_HOST`, `ACME_EMAIL`, `ACME_CA_SERVER`, `SPECENGINE_VERSION` (the plugin's version, the image tag; `:?` guarded, never `latest`), `SPECENGINE_PUSH` (`0` or `1`). Secrets are files under `secrets/`, as Docker secrets: `deploy_key` and `known_hosts` to `specengine` alone, named by `GIT_SSH_COMMAND` (git's: `hub-git.md` "Credentials"); `authelia_session_secret`, `authelia_jwt_secret` to `authelia` alone, `authelia_storage_key` to it and `admin`, as `*_FILE`. Directories are mounted, never single files. `.gitignore` keeps `.env`, `secrets/`, `projects/`, `authelia/users/`, `traefik/mcp-users/`, `admin-log/` and the stamp out of git.
@@ -79,18 +79,18 @@ Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of
 
 ## Known limits
 
-- A Traefik crash restarted by the engine, not by compose, leaves `specengine` in a dead namespace until `docker compose up -d`.
-- `readTimeout` 300 s may cut an HTTP/1.1 GET stream or a POST waiting in the turn (Go's `ReadTimeout`). The gate measures; a drop becomes a limit here or a higher value.
+- A Traefik crash the engine restarts leaves `specengine` in a dead namespace until `docker compose up -d`.
+- `readTimeout` 300 s may cut an HTTP/1.1 GET stream or a POST waiting in the turn (Go's `ReadTimeout`): the gate measures.
 - A re-run of `build` after a failed `merge` overwrites `<v>-<arch>` before the list `<v>` exists; hosts pin only the list.
 - D12's `LC_ALL=C` mutation survives under dash on CI.
-- Authelia's own entrypoint runs `chown -R 0:0 /config` on the read-only mount: errors at start, not fatal.
+- Authelia's entrypoint `chown -R 0:0 /config` on the read-only mount errors at start, harmless.
 - AI on a hub means Claude Code until the claude.ai check; writers without it use the web UI.
-- Sessions live in memory: an Authelia restart logs everyone out.
 - A `specengine.toml` below its repository's top is not served.
 - The MCP users file is read when its middleware is built (from memory), hence the stamp; VF2 open.
-- `hub-admin` until VF1-VF3 (`docs/features/hub-accounts.md`): the door's CLI flags and "nothing to delete" answers are from memory, busybox `od` and `awk` untested, the NUL case proven on macOS awk alone. Its smaller limits: the guide.
+- `hub-admin` until VF1-VF3 (`docs/features/hub-accounts.md`): the door's CLI flags and "nothing to delete" answers from memory, busybox `od`, `awk` untested, the NUL case proven on macOS awk alone; smaller limits: the guide.
 - A private GHCR package needs a pull credential on the host.
-- Unverified until the gate (from memory): that Traefik keeps the client's `Host` and drops a client's copy of a listed header also when the door returns none; that the door on a sibling subdomain makes the landing a `same-site` navigation (from the Fetch Metadata rules, tried in no browser).
+- A hand change on the host (`git pull`, an edit, a restore) reaches trusting reads after `spec index` or a reconcile (`spec-read-freshness.md`).
+- Unverified until the gate (from memory): that Traefik keeps the client's `Host` and drops a client's copy of a listed header also when the door returns none; that the door on a sibling subdomain makes the landing a `same-site` navigation (tried in no browser).
 
 ## Tests
 

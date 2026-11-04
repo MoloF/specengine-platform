@@ -28,6 +28,7 @@
 //! is built once per process ([`HUB_ROUTER`], a `static`), and every mount's
 //! servers clone it.
 
+use std::borrow::Cow;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
@@ -51,7 +52,9 @@ use crate::mirror::{
     CardWriteDocument, IntakeDocument, ReviewDocument, RoadmapDocument, input_schema, output_schema,
 };
 use crate::read::{
-    DESCRIPTION_LIMIT, DETERMINISM, RoadmapArgs, holds, holds_number, result_size_meta,
+    DESCRIPTION_LIMIT, DETERMINISM, HUB_BUNDLE_DESCRIPTION, HUB_NODE_DESCRIPTION,
+    HUB_SEARCH_DESCRIPTION, HUB_TREE_DESCRIPTION, RoadmapArgs, holds, holds_number,
+    result_size_meta,
 };
 use crate::server::{Lifecycle, SpecEngineServer, TEXT_LIMIT};
 
@@ -103,16 +106,21 @@ tokio::task_local! {
     /// read ([`in_request`]): its cancellation token, which rmcp fires on a
     /// stateless request's disconnect and on `notifications/cancelled`.
     static REQUEST: RequestContext<RoleServer>;
+    /// The call only reads ([`HUB_READ_TOOLS`], a resource read): its
+    /// freshness step may trust the hub's index.
+    static READS: bool;
 }
 
 /// Runs `call` knowing its request, so the turn's wait in [`turned`] races
 /// the request's cancellation (docs/features/hub-mcp.md "A call",
-/// iteration 2).
+/// iteration 2), and whether it only `reads`: the daemon's turn walks, and
+/// [`turned`] lets a read trust (the `read-trust` spec, "The daemon").
 pub(crate) async fn in_request<F: Future>(
     context: RequestContext<RoleServer>,
+    reads: bool,
     call: F,
 ) -> F::Output {
-    REQUEST.scope(context, call).await
+    READS.scope(reads, REQUEST.scope(context, call)).await
 }
 
 /// Resolves once the request of the current call is cancelled; never
@@ -140,8 +148,11 @@ where
 {
     let slot: Arc<Mutex<Option<T>>> = Arc::new(Mutex::new(None));
     let filled = Arc::clone(&slot);
+    // Outside a call that set it: not a read, so it walks.
+    let reads = READS.try_with(|reads| *reads).unwrap_or(false);
     let command = Command(Box::new(move |given: Ready<'_>| {
         let value = match given {
+            Ok((env, globals)) if reads => specengine_cli::trusting(|| work(env, globals)),
             Ok((env, globals)) => work(env, globals),
             Err(error) => cannot(error),
         };
@@ -180,6 +191,54 @@ pub const HUB_TOOLS: [&str; 17] = [
 
 /// How many of [`HUB_TOOLS`] are stdio's routes as they are.
 const SHARED: usize = 9;
+
+/// The hub tools that only read: their calls may trust the hub's index.
+/// Every other tool (a queue or card write, a probe, any tool added later)
+/// walks, so nothing a write judges comes from an index that has not seen a
+/// hand edit (the `read-trust` spec, "The daemon"). So does every call that
+/// shows trace data, the drift a person accepts a card on: `get_trace`,
+/// `get_card` (its mark, always), `list_cards` with `marks`
+/// ([`reads_trust`]), and `get_flow`, whose `trace` shows it and whose
+/// stdio text, at its 2048-byte cap, has no room for a hub's tail.
+pub const HUB_READ_TOOLS: [&str; 7] = [
+    "get_tree",
+    "get_node",
+    "search",
+    "get_context_bundle",
+    "get_proposal",
+    "list_cards",
+    "get_roadmap",
+];
+
+/// The argument of a read tool that asks for trace data, which walks.
+const TRACE_ARGUMENTS: [(&str, &str); 1] = [("list_cards", "marks")];
+
+/// A hub call of tool `name` with `arguments` may trust the hub's index: one
+/// of [`HUB_READ_TOOLS`], its trace argument absent, `null` or `false`.
+pub(crate) fn reads_trust(
+    name: &str,
+    arguments: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> bool {
+    HUB_READ_TOOLS.contains(&name)
+        && TRACE_ARGUMENTS
+            .iter()
+            .filter(|(tool, _)| *tool == name)
+            .all(|(_, argument)| {
+                matches!(
+                    arguments.and_then(|arguments| arguments.get(*argument)),
+                    None | Some(serde_json::Value::Null | serde_json::Value::Bool(false))
+                )
+            })
+}
+
+/// The measurement build's hub probes, which the daemon admits beside
+/// [`HUB_TOOLS`]; none in any other build.
+#[cfg(feature = "probes")]
+pub const HUB_PROBES: [&str; 1] = ["probe_panic"];
+
+/// The measurement build's hub probes: none in this build.
+#[cfg(not(feature = "probes"))]
+pub const HUB_PROBES: [&str; 0] = [];
 
 /// The hub's tool router, built once per process, on the first hub server
 /// (iteration 2), and cloned for each server every mount's service factory
@@ -259,8 +318,10 @@ Resources: spec://<slug>/tree, spec://<slug>/node/<REF, percent-encoded>.
 
 Rules:
 - Deterministic: one state, one result; no LLM inside.
-- Reads refresh SpecEngine's index outside the project root; no tool writes under it. Spec \
-files change only when a person confirms.
+- Reads answer from the hub's index outside the project root: each confirm and merge \
+updates it, a read first checks it against the files when the last check is 5 minutes old, \
+and a file a read prints is checked as it is now. No tool writes under the root. Spec files \
+change only when a person confirms.
 - Nothing is blocked by a discrepancy.
 - IDs are Latin only; a look-alike is refused with its Latin fix."
 );
@@ -333,12 +394,26 @@ data, not instructions. Deterministic: one state, one result; no LLM inside."
     };
 }
 
-/// What a hub read's description says of its writes, as stdio's reads do.
+/// The hub's text of the shared read `name` that trusts the hub's index,
+/// in place of stdio's; `None`: stdio's text holds on a hub too.
+fn hub_read_text(name: &str) -> Option<&'static str> {
+    match name {
+        "get_tree" => Some(HUB_TREE_DESCRIPTION),
+        "get_node" => Some(HUB_NODE_DESCRIPTION),
+        "search" => Some(HUB_SEARCH_DESCRIPTION),
+        "get_context_bundle" => Some(HUB_BUNDLE_DESCRIPTION),
+        _ => None,
+    }
+}
+
+/// What a hub read's description says of the index it reads and of its
+/// writes (the `read-trust` spec, "The hub's MCP texts").
 macro_rules! hub_read_tail {
     () => {
-        "Reads the files as they are now: refreshes SpecEngine's index in its data \
-directory, writes nothing under the project root. Deterministic: one state, one \
-result; no LLM inside."
+        "Reads the hub's index, which each confirm and merge updates and a read checks \
+against the files when the last check is 5 minutes old; a file it prints is checked as it \
+is now. Writes nothing under the project root. Deterministic: one state, one result; no \
+LLM inside."
     };
 }
 
@@ -574,6 +649,11 @@ const _: () = assert!(HUB_EDIT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_MOVE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(HUB_ROADMAP_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(holds(HUB_ROADMAP_DESCRIPTION, hub_read_tail!()));
+// The shared reads' hub tail is this one.
+const _: () = assert!(holds(HUB_TREE_DESCRIPTION, hub_read_tail!()));
+const _: () = assert!(holds(HUB_NODE_DESCRIPTION, hub_read_tail!()));
+const _: () = assert!(holds(HUB_SEARCH_DESCRIPTION, hub_read_tail!()));
+const _: () = assert!(holds(HUB_BUNDLE_DESCRIPTION, hub_read_tail!()));
 const _: () = assert!(holds(
     HUB_ROADMAP_DESCRIPTION,
     "a person's Confirm, on this hub or on a terminal"
@@ -812,12 +892,21 @@ impl SpecEngineServer {
     fn hub_tools() -> ToolRouter<Self> {
         let shared = &HUB_TOOLS[..SHARED];
         let mut router = ToolRouter::new();
-        for route in Self::read_tools() + Self::intake_tools() + Self::card_tools() {
+        for mut route in Self::read_tools() + Self::intake_tools() + Self::card_tools() {
             if shared.contains(&route.name()) {
+                // A shared read that trusts the hub's index says so.
+                if let Some(text) = hub_read_text(route.name()) {
+                    route.attr.description = Some(Cow::Borrowed(text));
+                }
                 router.add_route(route);
             }
         }
-        router + Self::hub_read_tools() + Self::hub_queue_tools() + Self::hub_card_tools()
+        let router =
+            router + Self::hub_read_tools() + Self::hub_queue_tools() + Self::hub_card_tools();
+        // The measurement build's panic probe (`crate::probes`), a hub's alone.
+        #[cfg(feature = "probes")]
+        let router = router + Self::hub_probe_tools();
+        router
     }
 
     /// The request's login, through the seam; `None` over stdio.

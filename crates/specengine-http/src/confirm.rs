@@ -144,9 +144,19 @@ pub(crate) async fn write(
     // A `--push` hub's sync, signalled once the confirm committed, never
     // awaited (docs/features/hub-git.md "The sync").
     let sync = app.sync_of(&project);
+    // A hub's trust: a confirm the library refused may have written the
+    // tree before it refused (a refusal after the commit, a restore that
+    // failed), with no post-commit update; the next read walks (the
+    // `read-trust` spec, D9).
+    let trust = project.trust.clone();
     Ok(run(project, move |env, globals| {
         judged(env, globals, &login, id, |request| {
             let outcome = specengine_cli::confirm_staged(env, globals, request, &sent)?;
+            if outcome.cause.is_some()
+                && let Some(trust) = &trust
+            {
+                trust.doubt();
+            }
             if outcome.committed()
                 && let Some(sync) = &sync
             {

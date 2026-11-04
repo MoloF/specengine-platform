@@ -5,8 +5,9 @@ use std::collections::BTreeMap;
 
 use rusqlite::types::Value;
 use rusqlite::{OptionalExtension, Statement, Transaction, TransactionBehavior, params_from_iter};
+use specengine_core::Paths;
 use specengine_core::check::{CheckFile, CheckInput};
-use specengine_model::Node;
+use specengine_model::{IdScheme, Node};
 
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
@@ -14,7 +15,7 @@ use crate::rows::{from_json, rebuild_parsed};
 use crate::search::fts_query;
 use crate::{
     IdHit, IndexedFile, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SearchHit, SearchQuery, SearchResults,
-    Snippet, schema,
+    Snippet, WalkNotes, schema, write,
 };
 
 /// One node's `norm_hash` as the index stores it.
@@ -53,6 +54,88 @@ impl SqliteIndex {
                 .db()
         })
     }
+}
+
+impl SqliteIndex {
+    /// The last walk's notes, when the index can be trusted to answer as
+    /// that walk left it (the `read-trust` spec, "Store API"): one deferred
+    /// transaction, never a write. `Some` when the stamp is this build's,
+    /// the handle's worktree has a row whose `[ids]` and `[paths]`
+    /// fingerprints are `scheme`'s and `paths`', and its `walk_notes` row
+    /// exists (and reads); else `None`.
+    pub fn trusted_notes(
+        &self,
+        scheme: &IdScheme,
+        paths: &Paths,
+    ) -> Result<Option<WalkNotes>, StoreError> {
+        let scheme_fp = write::fingerprint(scheme)?;
+        let paths_fp = write::paths_fingerprint(paths);
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let notes = if schema::format_is_current(&tx)? {
+            let stored = tx
+                .query_row(
+                    "SELECT wt, scheme_fp, paths_fp FROM worktrees
+                     WHERE project = ?1 AND root = ?2",
+                    [self.project.as_str(), self.root_text.as_str()],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                        ))
+                    },
+                )
+                .optional()
+                .db()?;
+            match stored {
+                Some((wt, scheme, paths)) if scheme == scheme_fp && paths == paths_fp => {
+                    walk_notes(&tx, wt)?
+                }
+                _ => None,
+            }
+        } else {
+            None
+        };
+        tx.commit().db()?;
+        Ok(notes)
+    }
+}
+
+/// The worktree's `walk_notes` row; `None` when absent, or when it does not
+/// read back (a walk then writes it again).
+pub(crate) fn walk_notes(tx: &Transaction<'_>, wt: i64) -> Result<Option<WalkNotes>, StoreError> {
+    let row = tx
+        .query_row(
+            "SELECT missing_roots, unreadable_dirs, skipped_names FROM walk_notes WHERE wt = ?1",
+            [wt],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            },
+        )
+        .optional()
+        .db()?;
+    let Some((missing_roots, unreadable_dirs, skipped_names)) = row else {
+        return Ok(None);
+    };
+    let list = |text: &str| serde_json::from_str::<Vec<String>>(text).ok();
+    Ok(
+        match (
+            list(&missing_roots),
+            list(&unreadable_dirs),
+            usize::try_from(skipped_names).ok(),
+        ) {
+            (Some(missing_roots), Some(unreadable_dirs), Some(skipped_names)) => Some(WalkNotes {
+                missing_roots,
+                skipped_names,
+                unreadable_dirs,
+            }),
+            _ => None,
+        },
+    )
 }
 
 /// Runs `read` over the handle's worktree in one read transaction;

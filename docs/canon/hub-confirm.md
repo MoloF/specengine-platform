@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, crates/specengine-mcp, ui]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # Hub confirm: one click, one staged choice, one commit
@@ -55,6 +55,7 @@ Past the fence, nothing read or stored on a refusal: the slug; for the POST a sa
 - **A forged `Remote-User`** is a commit as anyone, and raises proposals as anyone (`hub-mcp.md`): `hub.md` "Trust" items 1-4 guard spec files; no real use before the gate, step 11b-3. Agent text renders beside Confirm, so CSP `default-src 'self'` and no raw HTML in `ui/src` stay pinned.
 - **Step 10's blob compare** (`proposal-outputs.md` "Steps") warns on the daemon's stderr only, never in the POST's answer; 10b's UI line may surface it.
 - **No `T-` flow** runs on a hub before phase two: task-bound proposals stay a terminal's.
+- **A failed post-commit update**, or a confirm refused after it may have written, marks the project's index dirty: the next read walks (`spec-read-freshness.md` "A hub's trusted index").
 
 ## Screen
 

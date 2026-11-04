@@ -97,6 +97,33 @@
 //! U1 is the UI's (`ui/src/app/SyncLine.test.tsx`,
 //! `ui/src/inbox/ConfirmDialog.test.tsx`).
 //!
+//! docs/features/read-trust.md (RM-0054) AC-6 (a)-(e), the hub's half, over
+//! the same worlds: a hub's reads trust the index its writers keep, so after
+//! each event the next `search`, made after a read that walked, shows the
+//! disk. `rt6a_*` a confirm; `rt6b_*` a fast-forward (a developer's commit
+//! built on the confirm's, pushed by the checkout's `post-commit` hook, so
+//! the confirm's own sync fast-forwards); `rt6c_*` a merge commit;
+//! `rt6d_*` a merge that adds a `[paths]` root holding a file; `rt6e_*` a
+//! hub restarted over an index made stale while it was down. M: the merge's
+//! `update_paths` dropped; the update run with the config as read before
+//! the merge; a trust that starts walked.
+//!
+//! read-trust R11 and R12, through `specengine_cli::sync_once` itself over
+//! the same worlds (no daemon), its merge run inside `walking` of each
+//! served root's trust, as the daemon's sync runs it, and the dirty mark
+//! read back (`IndexTrust::is_dirty`): `rt11_*` a fast-forward updates the
+//! index and doubts nothing; a failed `git diff` doubts every root; a
+//! merged config that does not parse doubts its own root alone; `rt12_*` a
+//! failed fast-forward doubts every root. The failures come from the
+//! wrapper on `PATH`, failing that one git verb. M: each doubt dropped.
+//! Review iteration 2: a diff naming a non-UTF-8 path (the wrapper writes
+//! one) doubts every root; a served root outside the checkout's top is
+//! doubted; a merge that gives a missing `[paths]` root its first file, or
+//! takes a root's last, leaves the trusted read's warnings the walk's; a
+//! confirm that step 10 refuses after its commit (a `pre-commit` hook adds
+//! another file to it) doubts the project, so the next read shows that
+//! file.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -121,7 +148,9 @@ use common::{
 use serde::de::{Deserialize, Deserializer, IgnoredAny, MapAccess, Visitor};
 use serde_json::{Value, json};
 use specengine_cli::{
-    ApproveRequest, Env, Exit, GitEnv, Globals, RejectRequest, approve, reject, utc_now,
+    ApproveRequest, Env, Exit, GitEnv, Globals, IndexRequest, IndexTrust, RejectRequest,
+    SearchRequest, SyncOutcome, SyncRepository, approve, reject, sync_once, trusted, utc_now,
+    walking,
 };
 
 /// The print shop's project and the game's.
@@ -2998,4 +3027,728 @@ fn p27_a_confirm_in_mid_apply_never_stops_the_sync() {
     );
     world.assert_tidy("P27");
     assert_pins(&world.children(), "P27");
+}
+
+// ------------------------------------------------------------- read-trust AC-6
+
+/// The node a developer adds, its file and the word only it holds.
+const ZETA_ID: &str = "SHT-ZETA";
+const ZETA_WORD: &str = "qorvexa";
+
+fn zeta_file() -> String {
+    format!(
+        "---\nid: {ZETA_ID}\nclass: canon\ntitle: The zeta sheet\nparent: PRN-WEEKLY\n\
+         owner: owner\nreviewed: 2026-10-01\n---\n\n# The zeta sheet\n\n\
+         The zeta sheet carries the {ZETA_WORD} notices.\n"
+    )
+}
+
+impl World {
+    /// `GET <base>/search?query=<word>` by `ann`: a 200, its body.
+    fn search(&self, word: &str) -> String {
+        let reply = self.get(&format!("{}/search?query={word}", self.base));
+        assert_eq!(reply.status, 200, "search {word}: {}", reply.text());
+        reply.text().to_owned()
+    }
+
+    /// A first read, which walks: the trust is fresh and not dirty after it.
+    fn walked(&self) {
+        let _ = self.search("notices");
+    }
+}
+
+/// AC-6 (a): after a confirm, a trusted `search` finds the new text.
+#[test]
+fn rt6a_a_confirm_is_found_by_the_next_trusted_search() {
+    let mut world = World::press("trust-confirm");
+    let id = world.raise("SHT-BACK", "the tide table", "the zavoqui table");
+    assert_state(&world.start_push(), "ok", "the start");
+    world.walked();
+    assert!(
+        !world.search("zavoqui").contains("SHT-BACK"),
+        "premise: not found before the confirm"
+    );
+    world.confirm(&id);
+    let found = world.search("zavoqui");
+    assert!(
+        found.contains("SHT-BACK"),
+        "the confirm's commit updated the index: {found}"
+    );
+}
+
+/// AC-6 (b): a fast-forward from the remote. The checkout's `post-commit`
+/// hook has the developer pull the confirm's commit from the checkout,
+/// build a commit adding a node on it and push it, all before the confirm
+/// returns; the confirm's sync then fast-forwards to it. A trusted
+/// `search` finds the node. M: the merge's `update_paths` dropped.
+#[test]
+fn rt6b_a_fast_forward_is_found_by_the_next_trusted_search() {
+    let mut world = World::press("trust-fast-forward");
+    let id = world.raise("SHT-BACK", "the tide table", "the zavoqui table");
+    let body = zeta_file();
+    world.checkout_hook(
+        "post-commit",
+        &format!(
+            "unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR\n\
+             cd '{dev}' || exit 0\n\
+             git pull -q --ff-only '{hub}' main || exit 0\n\
+             cat > docs/spec/sht-zeta.md <<'ZETA'\n{body}ZETA\n\
+             git add -A && git commit -q -m 'a developer builds on the hub' && \
+             git push -q origin main\n\
+             rm -f '{hook}'\n",
+            dev = text(&world.dev),
+            hub = text(world.root()),
+            hook = text(&world.root().join(".git/hooks/post-commit")),
+        ),
+    );
+    assert_state(&world.start_push(), "ok", "the start");
+    world.walked();
+    assert!(
+        !world.search(ZETA_WORD).contains(ZETA_ID),
+        "premise: not found before"
+    );
+    let (document, status) = world.synced(|| world.confirm(&id));
+    assert_state(&status, "ok", "the sync after the confirm");
+    let applied = document["applied_commit"]
+        .as_str()
+        .expect("applied_commit")
+        .to_owned();
+    let theirs = world.rev(&world.dev, "HEAD");
+    assert_ne!(theirs, applied, "premise: the hook built a commit");
+    assert_eq!(
+        world.parents(&world.dev, &theirs),
+        [applied],
+        "premise: the developer's commit is built on the confirm's"
+    );
+    assert_eq!(world.head(), theirs, "premise: the sync fast-forwarded");
+    let found = world.search(ZETA_WORD);
+    assert!(
+        found.contains(ZETA_ID),
+        "the fast-forward updated the index: {found}"
+    );
+}
+
+/// AC-6 (c): a merge commit from the remote: a developer's commit adding a
+/// node, pushed before a confirm whose sync merges it. A trusted `search`
+/// finds the node. M: the merge's `update_paths` dropped.
+#[test]
+fn rt6c_a_merge_commit_is_found_by_the_next_trusted_search() {
+    let mut world = World::press("trust-merge");
+    let id = world.raise("SHT-BACK", "the tide table", "the zavoqui table");
+    assert_state(&world.start_push(), "ok", "the start");
+    world.walked();
+    let theirs = world.developer("docs/spec/sht-zeta.md", &zeta_file(), true);
+    assert!(
+        !world.search(ZETA_WORD).contains(ZETA_ID),
+        "premise: not found before the merge"
+    );
+    let (document, status) = world.synced(|| world.confirm(&id));
+    assert_state(&status, "ok", "the merge pushed");
+    let applied = document["applied_commit"].as_str().expect("applied_commit");
+    assert_eq!(
+        world.parents(world.root(), &world.head()),
+        [applied, theirs.as_str()],
+        "premise: a merge commit"
+    );
+    let found = world.search(ZETA_WORD);
+    assert!(
+        found.contains(ZETA_ID),
+        "the merge updated the index: {found}"
+    );
+    assert!(
+        world.search("zavoqui").contains("SHT-BACK"),
+        "the confirm's own text too"
+    );
+}
+
+/// AC-6 (d): a merge whose `specengine.toml` adds a `[paths]` root holding a
+/// file: that file's node is found. M: the update run with the config as
+/// read before the merge.
+#[test]
+fn rt6d_a_merge_adding_a_root_is_found_by_the_next_trusted_search() {
+    let mut world = World::press("trust-roots");
+    let id = world.raise("SHT-BACK", "the tide table", "the zavoqui table");
+    assert_state(&world.start_push(), "ok", "the start");
+    world.walked();
+    let git = world.git();
+    git.run(&world.dev, &["pull", "-q", "--ff-only", "origin", "main"]);
+    append(
+        &world.dev,
+        "\n[paths]\nroots = [\"docs/spec\", \"docs/records\", \"notes\"]\n",
+    );
+    write(&world.dev, "notes/sht-zeta.md", zeta_file());
+    commit_all(&git, &world.dev, "a developer adds a root");
+    git.run(&world.dev, &["push", "-q", "origin", "main"]);
+    assert!(
+        !world.search(ZETA_WORD).contains(ZETA_ID),
+        "premise: not found before the merge"
+    );
+    let (_, status) = world.synced(|| world.confirm(&id));
+    assert_state(&status, "ok", "the merge pushed");
+    assert!(
+        read_text(world.root(), "specengine.toml").contains("\"notes\"]"),
+        "premise: the merge brought the new root"
+    );
+    let found = world.search(ZETA_WORD);
+    assert!(
+        found.contains(ZETA_ID),
+        "the merge's update read the merged config: {found}"
+    );
+}
+
+/// AC-6 (e): a hub restarted over an index made stale while it was down
+/// (a hand edit on the host): its first `search` finds the edit. M: a
+/// trust that starts walked.
+#[test]
+fn rt6e_a_restarted_hub_walks_first() {
+    let mut world = World::press("trust-restart");
+    world.launch(&[]);
+    world.walked();
+    assert!(
+        !world.search("zavoqui").contains("SHT-BACK"),
+        "premise: not found before the edit"
+    );
+    world.stop();
+    replace(world.root(), BACK_MD, "the tide table", "the zavoqui table");
+    world.launch(&[]);
+    let found = world.search("zavoqui");
+    assert!(
+        found.contains("SHT-BACK"),
+        "a restarted hub's first read walks: {found}"
+    );
+}
+
+// ------------------------------------------------------------ read-trust R11, R12
+
+/// The second project of a two-root repository: its directory, its slug,
+/// its node and the word only that node holds.
+const SECOND_DIR: &str = "second";
+const SECOND_SLUG: &str = "second-press";
+const SECOND_ID: &str = "SHT-SECOND";
+const SECOND_WORD: &str = "pelvanu";
+
+/// The print shop with a second project under [`SECOND_DIR`], committed
+/// before the hub's clone: one repository serving two roots.
+fn two_roots(name: &str) -> World {
+    World::press_with(name, |root| {
+        write(
+            root,
+            &format!("{SECOND_DIR}/specengine.toml"),
+            format!(
+                "[project]\nslug = \"{SECOND_SLUG}\"\n\n[ids]\n\
+                 SHT = {{ kind = \"broadsheet\", shape = \"name\" }}\n"
+            ),
+        );
+        write(
+            root,
+            &format!("{SECOND_DIR}/docs/spec/sht-second.md"),
+            format!(
+                "---\nid: {SECOND_ID}\nclass: canon\ntitle: The second sheet\n\
+                 owner: owner\nreviewed: 2026-10-01\n---\n\n# The second sheet\n\n\
+                 The second sheet carries the {SECOND_WORD} notices.\n"
+            ),
+        );
+    })
+}
+
+/// What the library calls of the hub's host take: its `HOME`, its working
+/// directory, git's environment with the wrapper first on `PATH`.
+struct Host {
+    env: Env,
+    git: GitEnv,
+}
+
+impl Host {
+    fn of(world: &World) -> Self {
+        Self {
+            env: Env {
+                cwd: world.setup.cwd.clone(),
+                home: Some(world.setup.home.as_os_str().to_owned()),
+                xdg_data_home: None,
+            },
+            git: GitEnv::new(world.setup.cwd.clone(), world.env()),
+        }
+    }
+
+    fn globals(root: &Path) -> Globals {
+        Globals {
+            root: Some(root.to_path_buf()),
+            config: None,
+        }
+    }
+
+    /// `spec index` of `root`.
+    fn index(&self, root: &Path) {
+        specengine_cli::index(
+            &self.env,
+            &Self::globals(root),
+            &IndexRequest { full: false },
+        )
+        .unwrap_or_else(|error| panic!("spec index of {}: {error}", root.display()));
+    }
+
+    /// `search word` over `root`: whether its text names `id`.
+    fn finds(&self, root: &Path, word: &str, id: &str) -> bool {
+        let outcome = specengine_cli::search(
+            &self.env,
+            &Self::globals(root),
+            &SearchRequest {
+                terms: vec![word.to_owned()],
+                kinds: Vec::new(),
+                limit: None,
+                archive: false,
+            },
+        )
+        .unwrap_or_else(|error| panic!("search {word}: {error}"));
+        specengine_cli::render_text(&specengine_cli::Outcome::Search(outcome)).contains(id)
+    }
+
+    /// One sync of `world`'s repository serving `roots`, its merge inside
+    /// `walking` of `trusts`, as the daemon's sync runs it (a write: nothing
+    /// in it trusts the index; its doubts reach the trusts).
+    fn sync(&self, world: &World, roots: &[PathBuf], trusts: &[&IndexTrust]) -> SyncOutcome {
+        let repository = SyncRepository {
+            top: world.root().to_path_buf(),
+            roots: roots.to_vec(),
+        };
+        sync_once(
+            &repository,
+            &self.env,
+            &self.git,
+            Duration::from_secs(30),
+            &SyncOutcome::default(),
+            &mut |merge| walking(trusts, merge),
+        )
+    }
+}
+
+/// Every root indexed and its trust walked once, clean.
+fn walked_trusts(host: &Host, roots: &[PathBuf]) -> Vec<IndexTrust> {
+    roots
+        .iter()
+        .map(|root| {
+            host.index(root);
+            let trust = IndexTrust::new(root.clone());
+            trusted(&[&trust], || host.finds(root, "notices", "-"));
+            assert_eq!(trust.walks(), 1, "{}: the first read walks", root.display());
+            assert!(!trust.is_dirty(), "{}: premise, clean", root.display());
+            trust
+        })
+        .collect()
+}
+
+/// The wrapper on `PATH` made to fail git's `verb` when its arguments hold
+/// `flag`, writing `marker` when it does; every other child runs as before.
+fn fail_git(world: &World, verb: &str, flag: &str, marker: &Path) {
+    script(
+        &world.wrap.join("git"),
+        &format!(
+            "case \" $* \" in\n  *\" {verb} \"*\"{flag}\"*) printf 'failed\\n' > '{}'; \
+             echo 'injected failure' >&2; exit 1 ;;\nesac\nexec '{}' \"$@\"",
+            marker.display(),
+            real_git().display()
+        ),
+    );
+}
+
+/// R11: a fast-forward over two served roots updates each index inside
+/// the turns and doubts nothing; a trusted read finds the merged node
+/// without a walk (AC-6 (b) through the library).
+#[test]
+fn rt11_a_fast_forward_updates_each_root_and_doubts_nothing() {
+    let world = two_roots("trust-r11-ff");
+    let host = Host::of(&world);
+    let roots = [world.root().to_path_buf(), world.root().join(SECOND_DIR)];
+    let trusts = walked_trusts(&host, &roots);
+    let theirs = world.developer("docs/spec/sht-zeta.md", &zeta_file(), true);
+    let outcome = host.sync(&world, &roots, &trusts.iter().collect::<Vec<_>>());
+    assert_eq!(world.head(), theirs, "premise: fast-forwarded: {outcome:?}");
+    for (root, trust) in roots.iter().zip(&trusts) {
+        assert!(!trust.is_dirty(), "{}: nothing doubted", root.display());
+    }
+    assert!(
+        trusted(&[&trusts[0]], || host.finds(&roots[0], ZETA_WORD, ZETA_ID)),
+        "the merge's update indexed the developer's node"
+    );
+    assert_eq!(trusts[0].walks(), 1, "the trusted read did not walk");
+}
+
+/// R11: a fast-forward whose `git diff` fails doubts every served root.
+#[test]
+fn rt11_a_failed_diff_doubts_every_root() {
+    let world = two_roots("trust-r11-diff");
+    let host = Host::of(&world);
+    let roots = [world.root().to_path_buf(), world.root().join(SECOND_DIR)];
+    let trusts = walked_trusts(&host, &roots);
+    let theirs = world.developer("docs/spec/sht-zeta.md", &zeta_file(), true);
+    let marker = world.setup.scratch.join("diff-failed");
+    fail_git(&world, "diff", "--no-renames", &marker);
+    let outcome = host.sync(&world, &roots, &trusts.iter().collect::<Vec<_>>());
+    assert!(
+        marker.is_file(),
+        "premise: the merge's diff ran and failed: {outcome:?}"
+    );
+    assert_eq!(world.head(), theirs, "premise: fast-forwarded: {outcome:?}");
+    for (root, trust) in roots.iter().zip(&trusts) {
+        assert!(
+            trust.is_dirty(),
+            "{}: a failed diff doubts it",
+            root.display()
+        );
+    }
+    assert!(
+        trusted(&[&trusts[0]], || host.finds(&roots[0], ZETA_WORD, ZETA_ID)),
+        "the doubted root's next read walks and finds the merged node"
+    );
+    assert_eq!(trusts[0].walks(), 2, "that read walked");
+}
+
+/// R11: a fast-forward bringing a `specengine.toml` that does not parse:
+/// that root's discovery fails, and it alone is doubted.
+#[test]
+fn rt11_a_failed_discovery_doubts_its_own_root() {
+    let world = two_roots("trust-r11-config");
+    let host = Host::of(&world);
+    let roots = [world.root().to_path_buf(), world.root().join(SECOND_DIR)];
+    let trusts = walked_trusts(&host, &roots);
+    let mut broken = read_text(&world.dev, "specengine.toml");
+    broken.push_str("\n[ids\n");
+    let theirs = world.developer("specengine.toml", &broken, true);
+    let outcome = host.sync(&world, &roots, &trusts.iter().collect::<Vec<_>>());
+    assert_eq!(world.head(), theirs, "premise: fast-forwarded: {outcome:?}");
+    assert!(
+        trusts[0].is_dirty(),
+        "the root whose merged config does not parse is doubted"
+    );
+    assert!(
+        !trusts[1].is_dirty(),
+        "a root the merge did not touch is not doubted"
+    );
+}
+
+/// R12: a fast-forward that fails (the wrapper refuses `merge --ff-only`)
+/// stops the sync and doubts every served root: their files may be half
+/// moved.
+#[test]
+fn rt12_a_failed_fast_forward_doubts_every_root() {
+    let world = two_roots("trust-r12");
+    let host = Host::of(&world);
+    let roots = [world.root().to_path_buf(), world.root().join(SECOND_DIR)];
+    let trusts = walked_trusts(&host, &roots);
+    let before = world.head();
+    world.developer("docs/spec/sht-zeta.md", &zeta_file(), true);
+    let marker = world.setup.scratch.join("merge-failed");
+    fail_git(&world, "merge", "--ff-only", &marker);
+    let outcome = host.sync(&world, &roots, &trusts.iter().collect::<Vec<_>>());
+    assert!(
+        marker.is_file(),
+        "premise: the fast-forward ran and failed: {outcome:?}"
+    );
+    assert_eq!(world.head(), before, "premise: nothing moved");
+    assert_eq!(
+        outcome.state,
+        specengine_cli::SyncState::Stopped,
+        "the sync stops: {outcome:?}"
+    );
+    for (root, trust) in roots.iter().zip(&trusts) {
+        assert!(
+            trust.is_dirty(),
+            "{}: a failed fast-forward doubts it",
+            root.display()
+        );
+    }
+}
+
+// ------------------------------------------------- read-trust, review iteration 2
+
+/// The wrapper on `PATH` made to add a non-UTF-8 name to the merge's
+/// `git diff --name-only -z` (APFS cannot hold one), writing `marker`.
+fn fake_diff_name(world: &World, marker: &Path) {
+    script(
+        &world.wrap.join("git"),
+        &format!(
+            "case \" $* \" in\n  *\" diff \"*\"--no-renames\"*) printf 'faked\\n' > '{}'; \
+             printf 'docs/spec/bad-\\377.md\\000'; exec '{git}' \"$@\" ;;\nesac\n\
+             exec '{git}' \"$@\"",
+            marker.display(),
+            git = real_git().display()
+        ),
+    );
+}
+
+/// A merge diff naming a path that is not UTF-8: its skipped name doubts
+/// every served root, as the walk would skip it.
+#[test]
+fn rt11_a_skipped_name_in_the_diff_doubts_every_root() {
+    let world = two_roots("trust-r11-skipped");
+    let host = Host::of(&world);
+    let roots = [world.root().to_path_buf(), world.root().join(SECOND_DIR)];
+    let trusts = walked_trusts(&host, &roots);
+    let theirs = world.developer("docs/spec/sht-zeta.md", &zeta_file(), true);
+    let marker = world.setup.scratch.join("diff-faked");
+    fake_diff_name(&world, &marker);
+    let outcome = host.sync(&world, &roots, &trusts.iter().collect::<Vec<_>>());
+    assert!(
+        marker.is_file(),
+        "premise: the merge's diff ran: {outcome:?}"
+    );
+    assert_eq!(world.head(), theirs, "premise: fast-forwarded: {outcome:?}");
+    for (root, trust) in roots.iter().zip(&trusts) {
+        assert!(
+            trust.is_dirty(),
+            "{}: a skipped name in the diff doubts it",
+            root.display()
+        );
+    }
+}
+
+/// A served root that does not lie below the checkout's top (a repository
+/// of its own: no path from the top): the merge cannot say which of its
+/// paths moved, so it is doubted; the top's root is updated and not
+/// doubted.
+#[test]
+fn rt11_a_root_outside_the_top_is_doubted() {
+    let world = World::press("trust-r11-outside");
+    let host = Host::of(&world);
+    let top = world.root().to_path_buf();
+    let outside = fs::canonicalize(world.setup.scratch.dir("outside")).expect("canonical");
+    world.git().run(&outside, &["init", "-q"]);
+    let trusts = walked_trusts(&host, std::slice::from_ref(&top));
+    let elsewhere = IndexTrust::new(outside.clone());
+    let theirs = world.developer("docs/spec/sht-zeta.md", &zeta_file(), true);
+    let roots = [top.clone(), outside];
+    let outcome = host.sync(&world, &roots, &[&trusts[0], &elsewhere]);
+    assert_eq!(world.head(), theirs, "premise: fast-forwarded: {outcome:?}");
+    assert!(elsewhere.is_dirty(), "a root outside the top is doubted");
+    assert!(
+        !trusts[0].is_dirty(),
+        "the top's root is updated, not doubted"
+    );
+    assert!(
+        trusted(&[&trusts[0]], || host.finds(&top, ZETA_WORD, ZETA_ID)),
+        "the top's index holds the merged node"
+    );
+}
+
+/// The print shop's `[paths]` written: its spec and records roots, and a
+/// `notes` root.
+const NOTES_ROOTS: &str = "\n[paths]\nroots = [\"docs/spec\", \"docs/records\", \"notes\"]\n";
+const NOTES_FILE: &str = "notes/sht-zeta.md";
+
+impl Host {
+    /// `search word` over `root`: its stderr lines.
+    fn search_lines(&self, root: &Path, word: &str) -> Vec<String> {
+        specengine_cli::search(
+            &self.env,
+            &Self::globals(root),
+            &SearchRequest {
+                terms: vec![word.to_owned()],
+                kinds: Vec::new(),
+                limit: None,
+                archive: false,
+            },
+        )
+        .map(|outcome| specengine_cli::Outcome::Search(outcome).stderr_lines())
+        .unwrap_or_else(|error| panic!("search {word}: {error}"))
+    }
+}
+
+/// The warnings of a trusted `search` (no walk) and of a walking one, over
+/// `root` whose trust is `trust`.
+fn warnings_both_ways(host: &Host, root: &Path, trust: &IndexTrust) -> (Vec<String>, Vec<String>) {
+    let walks = trust.walks();
+    let trusted_lines = trusted(&[trust], || host.search_lines(root, "notices"));
+    assert_eq!(
+        trust.walks(),
+        walks,
+        "premise: the trusted read did not walk"
+    );
+    let walking_lines = host.search_lines(root, "notices");
+    (trusted_lines, walking_lines)
+}
+
+fn names_notes(lines: &[String]) -> bool {
+    lines.iter().any(|line| line.contains("`notes`"))
+}
+
+/// A merge giving the missing `notes` root its first file: the trusted
+/// read's warnings are the walk's, the missing root no longer named.
+#[test]
+fn rt11_a_merge_giving_a_missing_root_its_first_file_moves_the_warnings() {
+    let world = World::press_with("trust-r11-first", |root| append(root, NOTES_ROOTS));
+    let host = Host::of(&world);
+    let root = world.root().to_path_buf();
+    let trusts = walked_trusts(&host, std::slice::from_ref(&root));
+    let (before, _) = warnings_both_ways(&host, &root, &trusts[0]);
+    assert!(
+        names_notes(&before),
+        "premise: `notes` is missing: {before:?}"
+    );
+    world.developer(NOTES_FILE, &zeta_file(), true);
+    let outcome = host.sync(&world, std::slice::from_ref(&root), &[&trusts[0]]);
+    assert!(
+        root.join(NOTES_FILE).is_file(),
+        "premise: fast-forwarded: {outcome:?}"
+    );
+    assert!(!trusts[0].is_dirty(), "premise: nothing doubted");
+    let (trusted_lines, walking_lines) = warnings_both_ways(&host, &root, &trusts[0]);
+    assert_eq!(
+        trusted_lines, walking_lines,
+        "the trusted read's warnings are the walk's"
+    );
+    assert!(
+        !names_notes(&trusted_lines),
+        "`notes` is no longer missing: {trusted_lines:?}"
+    );
+}
+
+/// A merge taking the `notes` root's last file: the trusted read's warnings
+/// are the walk's, the root named missing again.
+#[test]
+fn rt11_a_merge_taking_a_roots_last_file_moves_the_warnings() {
+    let world = World::press_with("trust-r11-last", |root| {
+        append(root, NOTES_ROOTS);
+        write(root, NOTES_FILE, zeta_file());
+    });
+    let host = Host::of(&world);
+    let root = world.root().to_path_buf();
+    let trusts = walked_trusts(&host, std::slice::from_ref(&root));
+    let (before, _) = warnings_both_ways(&host, &root, &trusts[0]);
+    assert!(
+        !names_notes(&before),
+        "premise: `notes` holds a file: {before:?}"
+    );
+    let git = world.git();
+    git.run(&world.dev, &["pull", "-q", "--ff-only", "origin", "main"]);
+    git.run(&world.dev, &["rm", "-q", NOTES_FILE]);
+    git.run(
+        &world.dev,
+        &["commit", "-q", "-m", "a developer empties notes"],
+    );
+    git.run(&world.dev, &["push", "-q", "origin", "main"]);
+    let outcome = host.sync(&world, std::slice::from_ref(&root), &[&trusts[0]]);
+    assert!(
+        !root.join(NOTES_FILE).exists(),
+        "premise: fast-forwarded: {outcome:?}"
+    );
+    let (trusted_lines, walking_lines) = warnings_both_ways(&host, &root, &trusts[0]);
+    assert_eq!(
+        trusted_lines, walking_lines,
+        "the trusted read's warnings are the walk's"
+    );
+    assert!(
+        names_notes(&trusted_lines),
+        "`notes` is missing again: {trusted_lines:?}"
+    );
+}
+
+impl World {
+    /// `id` staged by `ann` and confirmed, the confirm's reply as it comes.
+    fn confirm_reply(&self, id: &str) -> Reply {
+        let stage = self.post(
+            &format!("proposals/{id}/decision"),
+            &json!({"decision": "approve", "updated_at": self.review(id)["updated_at"]}),
+        );
+        assert_eq!(stage.status, 200, "ann stages {id}: {}", stage.text());
+        let route = format!("{}/proposals/{id}/confirm", self.base);
+        let read = self.get(&route);
+        assert_eq!(read.status, 200, "ann reads {id}: {}", read.text());
+        let read = read.json();
+        let body = json!({"question": read["question"], "updated_at": read["updated_at"]});
+        through(
+            self.server(),
+            "POST",
+            &route,
+            &Proxied::write("ann"),
+            body.to_string().as_bytes(),
+        )
+    }
+}
+
+/// A confirm whose commit step 10 refuses (the checkout's `pre-commit` hook
+/// adds another file's change to it): the files are written, no
+/// post-commit update runs, and the refusal doubts the project, so the
+/// next trusted read walks and shows the other file. M: the refused
+/// confirm's doubt dropped.
+#[test]
+fn rt9_a_confirm_refused_after_its_commit_doubts_the_project() {
+    let mut world = World::press("trust-refused-confirm");
+    let id = world.raise("SHT-BACK", "the tide table", "the zavoqui table");
+    world.checkout_hook(
+        "pre-commit",
+        &format!(
+            "perl -pi -e 's/the long reads/the vexotra reads/' {INNER_MD} && \
+             git add {INNER_MD}\nrm -f \"$0\""
+        ),
+    );
+    world.launch(&[]);
+    world.walked();
+    assert!(
+        !world.search("vexotra").contains("SHT-INNER"),
+        "premise: not found before"
+    );
+    let before = world.head();
+    let reply = world.confirm_reply(&id);
+    let status = serde_json::from_slice::<Value>(&reply.body)
+        .ok()
+        .map(|document| document["status"].clone());
+    assert_ne!(
+        status,
+        Some(json!("applied")),
+        "premise: step 10 refuses the commit: {} {}",
+        reply.status,
+        reply.text()
+    );
+    let head = world.head();
+    assert_ne!(
+        head,
+        before,
+        "premise: the commit was made: {}",
+        reply.text()
+    );
+    let changed = world.run(world.root(), &["show", "--name-only", "--format=", &head]);
+    assert!(
+        changed.lines().any(|line| line == INNER_MD),
+        "premise: the hook's file is in the commit: {changed}"
+    );
+    let found = world.search("vexotra");
+    assert!(
+        found.contains("SHT-INNER"),
+        "the refused confirm doubted the project: the next read walked: {found}"
+    );
+}
+
+/// R11: a merge whose `specengine.toml` changes `[paths]` is indexed under
+/// the merged config: the stored fingerprint moves with it, so the next
+/// trusted read trusts (no walk) and finds the new root's file. M: the
+/// update run with the config as read before the merge (the read's
+/// fingerprint check would then walk).
+#[test]
+fn rt11_a_merge_changing_paths_is_indexed_under_the_merged_config() {
+    let world = World::press("trust-r11-paths");
+    let host = Host::of(&world);
+    let root = world.root().to_path_buf();
+    let trusts = walked_trusts(&host, std::slice::from_ref(&root));
+    let git = world.git();
+    git.run(&world.dev, &["pull", "-q", "--ff-only", "origin", "main"]);
+    append(&world.dev, NOTES_ROOTS);
+    write(&world.dev, NOTES_FILE, zeta_file());
+    commit_all(&git, &world.dev, "a developer adds the notes root");
+    git.run(&world.dev, &["push", "-q", "origin", "main"]);
+    let outcome = host.sync(&world, std::slice::from_ref(&root), &[&trusts[0]]);
+    assert!(
+        root.join(NOTES_FILE).is_file(),
+        "premise: fast-forwarded: {outcome:?}"
+    );
+    assert!(!trusts[0].is_dirty(), "nothing doubted");
+    let walks = trusts[0].walks();
+    assert!(
+        trusted(&[&trusts[0]], || host.finds(&root, ZETA_WORD, ZETA_ID)),
+        "the merged root's file is indexed"
+    );
+    assert_eq!(
+        trusts[0].walks(),
+        walks,
+        "the index already holds the merged config: the read trusts it"
+    );
 }

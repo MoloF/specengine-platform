@@ -62,16 +62,16 @@ use specengine_core::record::{
 };
 use specengine_model::{ParsedFile, grammar};
 use specengine_store::{
-    CreateFileError, Decision, GitEnv, IndexWriter as _, Intake, NamedBytes, Proposal,
-    ProposalFinding, ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries,
-    SpecIndex as _, WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings,
-    load_check,
+    CreateFileError, Decision, GitEnv, Intake, NamedBytes, Proposal, ProposalFinding,
+    ProposalQueue as _, ProposalStatus, QueueError, RecordApproval, RecordSeries, SpecIndex as _,
+    WorkingTree, WorktreeGit, create_file, default_baseline, introduced_findings, load_check,
 };
 
 use crate::apply::{
     ApproveFlags, ApproveRequest, Consent, Made, complete, failed, made_anyway, noted,
     recorded_already, verify,
 };
+use crate::freshness::{After, post_commit_update};
 use crate::interpret::canon_target;
 use crate::location::open_index;
 use crate::outputs::{Beside, Outputs, names, outputs_clause};
@@ -735,14 +735,13 @@ pub(crate) fn approve_record(
     };
     let mut updated = vec![path.as_str()];
     updated.extend(outputs.paths());
-    if let Err(error) = index
-        .index
-        .update_paths(&tree, &recorded.config.scheme, &updated)
-    {
-        messages.push(Message::Warning(format!(
-            "the index was not updated after the commit: {error}; the next command updates it"
-        )));
-    }
+    messages.extend(post_commit_update(
+        &mut index.index,
+        &tree,
+        &recorded.config.scheme,
+        &updated,
+        After::Commit,
+    ));
     messages.extend(outputs.note());
     let canon = canon_text(&parsed).unwrap_or_else(|| "no section".to_owned());
     match &proposal.linked {

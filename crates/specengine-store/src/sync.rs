@@ -201,6 +201,15 @@ pub enum Relation {
     Diverged,
 }
 
+/// What [`SyncGit::changed`] found between two commits.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ChangedPaths {
+    /// Top-relative, in git's order.
+    pub paths: Vec<String>,
+    /// Names left out because they are not UTF-8.
+    pub skipped_names: usize,
+}
+
 /// `merge-tree --write-tree`'s answer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MergedTree {
@@ -842,6 +851,41 @@ impl SyncGit {
         const COMMAND: &str = "merge";
         let output = self.output(&["merge", "--ff-only", "--no-autostash", commit], false)?;
         success(COMMAND, output).map(|_| ())
+    }
+
+    /// `diff --name-only -z --no-renames <left> <right> --` (no colour, no
+    /// external diff), under the deadline: the top-relative paths that
+    /// differ between two commits, in git's order, and how many names it
+    /// left out because they are not UTF-8 (no walk lists one, but the
+    /// caller cannot tell what they moved). The `read-trust` spec, "Rules
+    /// and edge cases" R11: the merge's update of each root's index.
+    pub fn changed(&self, left: &str, right: &str) -> Result<ChangedPaths, GitError> {
+        const COMMAND: &str = "diff";
+        let output = self.read(
+            COMMAND,
+            &[
+                "diff",
+                "--no-color",
+                "--no-ext-diff",
+                "--name-only",
+                "-z",
+                "--no-renames",
+                left,
+                right,
+                "--",
+            ],
+        )?;
+        let mut changed = ChangedPaths::default();
+        for name in output.split(|&byte| byte == 0) {
+            if name.is_empty() {
+                continue;
+            }
+            match std::str::from_utf8(name) {
+                Ok(path) => changed.paths.push(path.to_owned()),
+                Err(_) => changed.skipped_names += 1,
+            }
+        }
+        Ok(changed)
     }
 
     /// `push --porcelain --no-follow-tags --recurse-submodules=no <r>

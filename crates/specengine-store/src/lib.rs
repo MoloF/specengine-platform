@@ -187,12 +187,12 @@ pub use queue::{
 };
 pub use read::{Decoded, IndexSnapshot, NodeNorm};
 pub use roles::{RoleCandidate, StoredRole};
-pub use source::{GitIndex, Listing, Probed, Source, WorkingTree};
+pub use source::{GitIndex, Listing, Probed, Source, StatKey, WorkingTree};
 pub use sparse::{SparseError, SparseSet, sparse_set};
 pub use symbols::{SymbolHit, SymbolTier};
 pub use sync::{
-    CommitFailure, Looked, MergedTree, NetFailure, Pushed, Relation, Replacement, SyncGit,
-    TreeEntry, Upstream, ahead_behind, file_mode, holds_secret, named, sync_place,
+    ChangedPaths, CommitFailure, Looked, MergedTree, NetFailure, Pushed, Relation, Replacement,
+    SyncGit, TreeEntry, Upstream, ahead_behind, file_mode, holds_secret, named, sync_place,
 };
 pub use update::{UpdateError, introduced_findings, span_hash, update_file};
 pub use verify_git::{
@@ -281,7 +281,10 @@ pub use worktree::{
 /// `edge_names_by_key`), `worktrees.paths_fp`, `ParentRef`'s `alias_of`,
 /// `project`, `scope`, `section` and `written_id`, and
 /// `Reference.written_id` (`docs/features/edge-table.md`, "Data").
-pub const INDEX_FORMAT: u32 = 16;
+///
+/// 17: `file_stats` and `walk_notes`, the freshness step's tables, outside
+/// the dump (`docs/features/read-trust.md` "Data").
+pub const INDEX_FORMAT: u32 = 17;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.
@@ -355,6 +358,39 @@ pub struct UpdateReport {
     /// itself), that could not be listed, root-relative (their files are
     /// treated as absent).
     pub unreadable_dirs: Vec<String>,
+    /// Files the update read (and hashed): a file whose stat key is trusted
+    /// is not read (the `read-trust` spec, "The key and the racy rule").
+    /// Not in the report's JSON.
+    #[serde(skip)]
+    pub hashed: usize,
+    /// A write transaction committed: an update that changes nothing opens
+    /// none. Not in the report's JSON.
+    #[serde(skip)]
+    pub committed: bool,
+}
+
+/// A walk's listing as the freshness step's warnings need it, kept in
+/// `walk_notes` by the update that listed it: what the file system said
+/// (the `read-trust` spec, "Data").
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WalkNotes {
+    /// Configured roots that name no directory and no `.md` file, in the
+    /// listing's order.
+    pub missing_roots: Vec<String>,
+    /// Directory and `.md` names skipped because they are not UTF-8.
+    pub skipped_names: usize,
+    /// Directories that could not be listed, sorted (`""`: the root).
+    pub unreadable_dirs: Vec<String>,
+}
+
+impl From<&UpdateReport> for WalkNotes {
+    fn from(report: &UpdateReport) -> Self {
+        Self {
+            missing_roots: report.missing_roots.clone(),
+            skipped_names: report.skipped_names,
+            unreadable_dirs: report.unreadable_dirs.clone(),
+        }
+    }
 }
 
 /// One stored file.

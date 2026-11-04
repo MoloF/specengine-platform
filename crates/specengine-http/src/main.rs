@@ -50,6 +50,8 @@ mod confirm;
 mod daemon;
 mod hub;
 mod mcp;
+#[cfg(test)]
+mod read_trust_tests;
 mod start;
 mod sync;
 mod tail;

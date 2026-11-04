@@ -2,8 +2,8 @@
 //! (the `store-reads` spec): the rows of the files around
 //! the asked nodes and those files' bytes, never the whole corpus.
 //!
-//! 1. The freshness step, unchanged (`refresh` -> `update`); its warnings
-//!    print once.
+//! 1. The freshness step (`crate::freshness::step`: the stat-keyed walk,
+//!    or a hub's trusted index); its warnings print once.
 //! 2. An attempt: one index snapshot (T3) computes the subset ("Data": a
 //!    REF's closure, the edges of the shown nodes, a bundle's candidate
 //!    edges and parent chains) and decodes each of its files once with its
@@ -16,7 +16,9 @@
 //!    those paths (its report dropped), then one more attempt. A second
 //!    mismatch, a snapshot that is not indexed or any store error is the
 //!    walk: the caller's whole read, rerun from the freshness step with
-//!    only the messages of its classification.
+//!    only the messages of its classification. A mismatch, rows that do
+//!    not cover the subset, or a store error in an attempt doubts the
+//!    project's index (the `read-trust` spec, R13).
 //!
 //! Nothing here prints: an attempt's answer is built only once it matched,
 //! so a dropped attempt leaves no message.
@@ -32,14 +34,14 @@ use specengine_core::check::{
 };
 use specengine_model::{IdScheme, Reference};
 use specengine_store::{
-    IndexSnapshot, IndexWriter as _, Listing, Probed, Source, SqliteIndex, StoreError, StoredEdge,
-    StoredParent, WorkingTree,
+    IndexSnapshot, IndexWriter as _, Listing, Probed, Source, SqliteIndex, StatKey, StoreError,
+    StoredEdge, StoredParent, WorkingTree,
 };
 
 use crate::corpus::{locate, row_matches};
+use crate::freshness::{self, step};
 use crate::location::{OpenIndex, open_index};
 use crate::project::ProjectRoot;
-use crate::refresh::refresh_in;
 use crate::show::{Target, pick};
 use crate::{CliError, Env, Message, store_error};
 
@@ -96,13 +98,14 @@ pub(crate) fn read(
     }
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let mut open = open_index(env, project)?;
-    let (_, warnings) = refresh_in(&mut open.index, project, &tree, false)?;
+    let warnings = step(&mut open.index, project, &tree)?;
     seams::fresh();
     for attempt in 1..=2 {
         seams::note(Event::Attempt);
         // A store error, or rows that do not cover the subset (a
         // corrupted row): the walk.
         let Ok(Some(planned)) = plan(&open.index, project, &wanted) else {
+            freshness::doubt(&project.root);
             break;
         };
         let paths: Vec<String> = planned
@@ -137,6 +140,7 @@ pub(crate) fn read(
                 open, planned, reads, warnings,
             ))));
         }
+        freshness::doubt(&project.root);
         if attempt == 2 {
             break;
         }
@@ -525,7 +529,8 @@ fn within_of(graph: &SpecGraph<'_>, nodes: &[NodeAt]) -> Vec<(String, usize, Vec
 }
 
 /// A `WorkingTree` as the store reads it, counting its listings for the
-/// tests (`counted`: not a read's first freshness step).
+/// tests (`counted`: not a read's first freshness step), and every read
+/// and stat it gives the store.
 pub(crate) struct Listed<'t> {
     pub tree: &'t WorkingTree,
     pub counted: bool,
@@ -552,7 +557,13 @@ impl Source for Listed<'_> {
     }
 
     fn read(&self, path: &str) -> io::Result<Vec<u8>> {
+        seams::note(Event::StoreRead(path));
         self.tree.read(path)
+    }
+
+    fn stat(&self, path: &str) -> Option<StatKey> {
+        seams::note(Event::Stat);
+        self.tree.stat(path)
     }
 
     fn is_dir(&self, path: &str) -> bool {
@@ -593,6 +604,11 @@ pub(crate) mod seams {
         Walk,
         /// A file `read_bytes` parsed again.
         Parse(&'e str),
+        /// A file `Listed` read for the store (a freshness step's update,
+        /// or a subset read's `update_paths`).
+        StoreRead(&'e str),
+        /// A `Listed::stat`.
+        Stat,
     }
 
     /// Where the stage hook is called.
@@ -629,6 +645,10 @@ pub(crate) mod seams {
         /// Fallback walks only.
         pub walks: usize,
         pub parses: Vec<String>,
+        /// The files `Listed` read for the store, in order.
+        pub store_reads: Vec<String>,
+        /// `Listed::stat` calls.
+        pub stats: usize,
     }
 
     /// The stage hook, if any.
@@ -714,6 +734,8 @@ pub(crate) mod seams {
             Event::Attempt => counts.attempts += 1,
             Event::Walk => counts.walks += 1,
             Event::Parse(path) => counts.parses.push(path.to_owned()),
+            Event::StoreRead(path) => counts.store_reads.push(path.to_owned()),
+            Event::Stat => counts.stats += 1,
         });
     }
 

@@ -81,8 +81,22 @@ result; no LLM inside."
     };
 }
 
-const TREE_DESCRIPTION: &str = concat!(
-    "The containment tree of the project's spec (`parent:` links and sections \
+/// A hub's twin of [`common_tail`], for the shared reads that trust the
+/// hub's index (the `read-trust` spec, "The hub's MCP texts"); the same
+/// text as `hub_read_tail!` in `crate::hub`, which asserts it.
+macro_rules! hub_common_tail {
+    () => {
+        "Reads the hub's index, which each confirm and merge updates and a read checks \
+against the files when the last check is 5 minutes old; a file it prints is checked as it \
+is now. Writes nothing under the project root. Deterministic: one state, one result; no \
+LLM inside."
+    };
+}
+
+macro_rules! tree_body {
+    () => {
+        concat!(
+            "The containment tree of the project's spec (`parent:` links and sections \
 inside documents), without node bodies: one line per node, indented by depth, with \
 its ID (else its path), kind, title, path:line and status, then a count line. The \
 same as `spec tree [ROOT] [--depth N] [--kind K]... [--archive]`: content is the \
@@ -99,11 +113,16 @@ archive: include Tier 3 (archived) documents.
 An answer above 40000 characters is cut, with a tail saying how to narrow it (it \
 names the command's flags: ROOT is root, --kind is kinds). A root naming nothing: \
 an error result with the reason, and the document. A call that cannot run (no \
-project, bad argument value): an error result with its one line. ",
-    common_tail!()
-);
+project, bad argument value): an error result with its one line. "
+        )
+    };
+}
 
-const NODE_DESCRIPTION: &str = concat!(
+const TREE_DESCRIPTION: &str = concat!(tree_body!(), common_tail!());
+
+macro_rules! node_body {
+    () => {
+        concat!(
     "A node's current text: a document's whole file or an ID section's span, read \
 from disk now, with a header line (ID, kind, title, path:lines, status, rev, \
 estimated tokens) per node. The same as `spec show REF [--links] [--bindings] \
@@ -125,12 +144,17 @@ An answer above 40000 characters is cut, with a tail naming the lines not shown 
 the first 20 sections and holders not shown, the rest counted (read a section by its \
 ID). A REF naming nothing: an error result with the reason, and the document. A look-alike or mixed-script ID (refused with its \
 Latin fix), a `project:` REF or another call that cannot run: an error result with \
-its one line. ",
-    common_tail!()
-);
+its one line. "
+        )
+    };
+}
 
-const SEARCH_DESCRIPTION: &str = concat!(
-    "Full-text search over the spec's nodes: best first, one line per hit with its \
+const NODE_DESCRIPTION: &str = concat!(node_body!(), common_tail!());
+
+macro_rules! search_body {
+    () => {
+        concat!(
+            "Full-text search over the spec's nodes: best first, one line per hit with its \
 ID (else its path), kind, title, path:line and a snippet. Use it instead of listing \
 everything. The same as `spec search QUERY [--kind K]... [--limit N] [--archive]`: \
 content is the command's output (its note lines first), structuredContent its \
@@ -146,12 +170,17 @@ shown.
 
 An answer above 40000 characters is cut, with a tail saying how to narrow it (it \
 names the command's flags: --limit is limit). Zero hits is a result, not an error. \
-A call that cannot run: an error result with its one line. ",
-    common_tail!()
-);
+A call that cannot run: an error result with its one line. "
+        )
+    };
+}
 
-const BUNDLE_DESCRIPTION: &str = concat!(
-    "The context of the named nodes within a budget of estimated tokens, as one \
+const SEARCH_DESCRIPTION: &str = concat!(search_body!(), common_tail!());
+
+macro_rules! bundle_body {
+    () => {
+        concat!(
+            "The context of the named nodes within a budget of estimated tokens, as one \
 Markdown body: the targets, their open questions, ancestors, criteria, code bindings \
 (each with its sync: the state spec verify --node gives), decisions, neighbours, terms \
 and the tests bound to them or their criteria, in that order; what did not fit is \
@@ -170,9 +199,20 @@ owner's test evidence, as plain spec verify judges it now) need a [code] table; 
 that cannot be read gives a note, never an error.
 
 A REF naming nothing: an error result with the reason, and the document. A call \
-that cannot run: an error result with its one line. ",
-    common_tail!()
-);
+that cannot run: an error result with its one line. "
+        )
+    };
+}
+
+const BUNDLE_DESCRIPTION: &str = concat!(bundle_body!(), common_tail!());
+
+/// The hub's texts of the shared reads that trust its index: stdio's, the
+/// tail the hub's ([`hub_common_tail`]). `get_flow` and `get_trace` walk on
+/// a hub and keep stdio's texts, which hold there.
+pub(crate) const HUB_TREE_DESCRIPTION: &str = concat!(tree_body!(), hub_common_tail!());
+pub(crate) const HUB_NODE_DESCRIPTION: &str = concat!(node_body!(), hub_common_tail!());
+pub(crate) const HUB_SEARCH_DESCRIPTION: &str = concat!(search_body!(), hub_common_tail!());
+pub(crate) const HUB_BUNDLE_DESCRIPTION: &str = concat!(bundle_body!(), hub_common_tail!());
 
 const ROADMAP_DESCRIPTION: &str = concat!(
     "The plan of the project's roadmap items (the item documents its config's `[roadmap]` \
@@ -365,6 +405,10 @@ const _: () = assert!(ROADMAP_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(IMPACT_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(FLOW_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(TRACE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(HUB_TREE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(HUB_NODE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(HUB_SEARCH_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
+const _: () = assert!(HUB_BUNDLE_DESCRIPTION.len() <= DESCRIPTION_LIMIT);
 const _: () = assert!(TREE_DESCRIPTION.is_ascii());
 const _: () = assert!(NODE_DESCRIPTION.is_ascii());
 const _: () = assert!(SEARCH_DESCRIPTION.is_ascii());
@@ -993,7 +1037,23 @@ impl SpecEngineServer {
         if let Some(seam) = self.seam() {
             return crate::hub::turned(
                 seam,
-                move |env, globals| answer_of(command(env, globals)),
+                move |env, globals| {
+                    let answer = answer_of(command(env, globals));
+                    // A call that could not run doubts the hub's index, as
+                    // the daemon's own exit 2 does (the `read-trust` spec,
+                    // D9); the turn's scope holds the project's trust.
+                    if matches!(
+                        answer,
+                        Answer::CannotRun(_)
+                            | Answer::Rendered {
+                                exit: Exit::CannotRun,
+                                ..
+                            }
+                    ) {
+                        specengine_cli::doubt_in_scope();
+                    }
+                    answer
+                },
                 Answer::CannotRun,
             )
             .await

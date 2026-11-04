@@ -19,13 +19,13 @@
 use serde::Serialize;
 use specengine_store::{
     MIN_TERM_CHARS, SEARCH_LIMIT_DEFAULT, SEARCH_LIMIT_MAX, SEARCH_LIMIT_MIN, SearchHit,
-    SearchQuery, Snippet, SpecIndex,
+    SearchQuery, Snippet, SpecIndex, WorkingTree,
 };
 
 use crate::cap::{OUTPUT_CAP_CHARS, View};
+use crate::freshness::step;
 use crate::location::open_index;
 use crate::project::discover;
-use crate::refresh::refresh;
 use crate::{CliError, Env, Globals, Message, one_line, store_error};
 
 /// `spec search` options.
@@ -134,8 +134,8 @@ pub fn search_with_view(
 
     let project = discover(env, globals)?;
     let mut open = open_index(env, &project)?;
-    let (_, warnings) = refresh(&mut open.index, &project, false)?;
-    messages.extend(warnings);
+    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
+    messages.extend(step(&mut open.index, &project, &tree)?);
     let results = open
         .index
         .search(&SearchQuery {

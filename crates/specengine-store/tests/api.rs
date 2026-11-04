@@ -2,9 +2,12 @@
 //! no `pub` item of the store's `src` names `rusqlite` — neither the crate
 //! path nor a name imported from it — and the tests need nothing but the
 //! public API: they write through `IndexWriter` and read through
-//! `SpecIndex`. The only test naming `rusqlite` is `format.rs`, which
+//! `SpecIndex`. The only tests naming `rusqlite` are `format.rs`, which
 //! rewrites the stored stamp as a build of another format would have left
-//! it (not expressible through the store's API).
+//! it (not expressible through the store's API), and `stat_key.rs`
+//! (docs/features/read-trust.md AC-8 (e), (f), (g)): a second connection's
+//! write lock and `data_version`, the `file_stats` and `walk_notes` rows the
+//! dump leaves out, and a stale stamp.
 
 #![cfg(unix)]
 
@@ -171,9 +174,10 @@ fn the_tests_use_only_the_public_traits() {
     let mut offenders = Vec::new();
     for file in rust_files(&tests) {
         let name = file.file_name().unwrap().to_string_lossy().into_owned();
-        // `format.rs`: the stamp rewrite (see the module docs); this file:
-        // the scanner, whose strings name the crate.
-        if name == "format.rs" || name == "api.rs" {
+        // `format.rs`: the stamp rewrite; `stat_key.rs`: what a no-op
+        // leaves unwritten and the tables outside the dump (see the module
+        // docs); this file: the scanner, whose strings name the crate.
+        if name == "format.rs" || name == "stat_key.rs" || name == "api.rs" {
             continue;
         }
         let text = fs::read_to_string(&file).expect("UTF-8 test source");

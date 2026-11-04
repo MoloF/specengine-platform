@@ -44,6 +44,21 @@ CREATE TABLE files (
   tier3 INTEGER NOT NULL,
   UNIQUE (wt, path)
 ) STRICT;
+CREATE TABLE file_stats (
+  file_id INTEGER PRIMARY KEY REFERENCES files ON DELETE CASCADE,
+  size INTEGER NOT NULL,
+  mtime_ns INTEGER NOT NULL,
+  ctime_ns INTEGER NOT NULL,
+  ino INTEGER NOT NULL,
+  dev INTEGER NOT NULL,
+  taken_ns INTEGER NOT NULL
+) STRICT;
+CREATE TABLE walk_notes (
+  wt INTEGER PRIMARY KEY REFERENCES worktrees ON DELETE CASCADE,
+  missing_roots TEXT NOT NULL,
+  unreadable_dirs TEXT NOT NULL,
+  skipped_names INTEGER NOT NULL
+) STRICT;
 CREATE TABLE nodes (
   node_id INTEGER PRIMARY KEY,
   file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
@@ -314,7 +329,8 @@ const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "node
 /// `code_files`, which it references; format 11's layer C snapshot
 /// (`code_monikers`, `code_resolve_files`, then `code_resolve`) before
 /// `code_worktrees`, which `code_resolve` references; format 16's edge
-/// tables before `files`, which they reference.
+/// tables before `files`, which they reference; format 17's `file_stats`
+/// before `files` and `walk_notes` before `worktrees`.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",
     "aliases",
@@ -326,6 +342,7 @@ const FORMAT_TABLES: &[&str] = &[
     "edge_parents",
     "edge_deps",
     "edge_names",
+    "file_stats",
     "files",
     "symbol_suffixes",
     "symbols",
@@ -339,6 +356,7 @@ const FORMAT_TABLES: &[&str] = &[
     "code_resolve_files",
     "code_resolve",
     "code_worktrees",
+    "walk_notes",
     "worktrees",
 ];
 

@@ -132,11 +132,12 @@ use specengine_core::proposal::{
 use specengine_core::task::FollowUp;
 use specengine_model::IdScheme;
 use specengine_store::{
-    ApplyFailure, CardRefresh, Decision, GitEnv, IndexWriter as _, KindFamily, NewTask, Proposal,
-    ProposalKind, ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _,
-    Stage, TaskRefresh, WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
+    ApplyFailure, CardRefresh, Decision, GitEnv, KindFamily, NewTask, Proposal, ProposalKind,
+    ProposalQueue as _, ProposalStatus, QueueError, RefreshEntry, Seen, Source as _, Stage,
+    TaskRefresh, WorkingTree, WorktreeGit, replace_file, same_repository, span_hash,
 };
 
+use crate::freshness::{After, post_commit_failed, post_commit_update};
 use crate::inbox::repository_proposals;
 use crate::location::open_index;
 use crate::outputs::{self, Beside, Outputs};
@@ -1136,15 +1137,13 @@ pub(crate) fn run_approve(
             } = prepared;
             let mut updated = vec![path];
             updated.extend(outputs.paths());
-            if let Err(error) = index
-                .index
-                .update_paths(&tree, &recorded.config.scheme, &updated)
-            {
-                messages.push(Message::Warning(format!(
-                    "the index was not updated after the commit: {error}; the next command \
-                     updates it"
-                )));
-            }
+            messages.extend(post_commit_update(
+                &mut index.index,
+                &tree,
+                &recorded.config.scheme,
+                &updated,
+                After::Commit,
+            ));
             messages.extend(outputs.note());
             let mut document = with_diff(&applied, &request.git, &context.data_dir);
             if context.hub {
@@ -1818,20 +1817,22 @@ fn reindex(env: &Env, context: &QueueContext, proposal: &Proposal, messages: &mu
         .record
         .as_ref()
         .map_or(proposal.target_path.as_str(), |record| record.path.as_str());
-    let updated = recorded_project(&recorded_root(proposal), &context.slug).and_then(|recorded| {
+    let root = recorded_root(proposal);
+    let updated = recorded_project(&root, &context.slug).and_then(|recorded| {
         let mut open = open_index(env, &recorded).map_err(|error| error.message)?;
         let tree = WorkingTree::new(&recorded.root, &recorded.config.paths)
             .map_err(|error| error.to_string())?;
-        open.index
-            .update_paths(&tree, &recorded.config.scheme, &[path])
-            .map(|_| ())
-            .map_err(|error| error.to_string())
+        Ok(post_commit_update(
+            &mut open.index,
+            &tree,
+            &recorded.config.scheme,
+            &[path],
+            After::Completion,
+        ))
     });
-    if let Err(error) = updated {
-        messages.push(Message::Warning(format!(
-            "the index was not updated after the completion: {error}; the next command \
-             updates it"
-        )));
+    match updated {
+        Ok(warning) => messages.extend(warning),
+        Err(error) => messages.push(post_commit_failed(&root, After::Completion, &error)),
     }
 }
 

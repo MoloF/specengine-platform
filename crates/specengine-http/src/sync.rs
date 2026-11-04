@@ -3,7 +3,10 @@
 //! one checkout share one sync. The CLI library runs each sync
 //! ([`specengine_cli::sync_once`]) on the blocking pool; its merge phase alone
 //! takes turns, those of every project served in the repository, in
-//! `--root` order, so a slow remote never delays a read or a confirm.
+//! `--root` order, so a slow remote never delays a read or a confirm; it
+//! runs in the CLI's `walking` scope of their trusts (a write: nothing in
+//! it trusts the index), so its failures' doubts reach them (the
+//! `read-trust` spec, "The daemon").
 //!
 //! - **When**: once at start, after `listening`; after a confirm that
 //!   committed ([`RepoSync::signal`], never awaited); every `--push-every`.
@@ -25,8 +28,8 @@ use std::sync::{Arc, Mutex as Held};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use specengine_cli::{
-    Env, GitEnv, HubSync, SyncOutcome, SyncRepository, SyncState, hub_sync, process_git, sync_key,
-    sync_line, sync_once, utc_now,
+    Env, GitEnv, HubSync, IndexTrust, SyncOutcome, SyncRepository, SyncState, hub_sync,
+    process_git, sync_key, sync_line, sync_once, utc_now, walking,
 };
 use tokio::sync::{Mutex, Notify};
 
@@ -61,6 +64,9 @@ pub(crate) struct RepoSync {
     repository: Result<SyncRepository, String>,
     /// The turns of its projects, in `--root` order.
     turns: Vec<Arc<Mutex<()>>>,
+    /// Their trusts (a hub's), which the merge runs in: its update keeps
+    /// the indexes, its failures doubt them.
+    trusts: Vec<Arc<IndexTrust>>,
     signal: Notify,
     memory: Held<Memory>,
 }
@@ -102,19 +108,21 @@ impl RepoSync {
                 Ok(repository) => repository,
                 Err(why) => return stopped(why.clone()),
             };
-            let git = match Env::from_process() {
-                Ok(env) => process_git(&env),
+            let env = match Env::from_process() {
+                Ok(env) => env,
                 Err(error) => return stopped(error.message),
             };
+            let git = process_git(&env);
             let turns = &sync.turns;
+            let trusts: Vec<&IndexTrust> = sync.trusts.iter().map(Arc::as_ref).collect();
             let mut in_turns = |merge: &mut dyn FnMut()| {
                 // In `--root` order; a request holding one is awaited, a
                 // request waiting for one waits for the merge.
                 let held: Vec<_> = turns.iter().map(|turn| turn.blocking_lock()).collect();
-                merge();
+                walking(&trusts, &mut *merge);
                 drop(held);
             };
-            sync_once(repository, &git, deadline, &last, &mut in_turns)
+            sync_once(repository, &env, &git, deadline, &last, &mut in_turns)
         })
         .await;
         joined.unwrap_or_else(|_| stopped("internal error: the sync failed".to_owned()))
@@ -168,6 +176,7 @@ struct Group {
     top: PathBuf,
     repository: Result<SyncRepository, String>,
     turns: Vec<Arc<Mutex<()>>>,
+    trusts: Vec<Arc<IndexTrust>>,
 }
 
 /// Every repository's sync, and which serves each project.
@@ -197,6 +206,7 @@ impl Syncs {
                 Err(error) => Err(error.message.clone()),
             };
             let turn = Arc::clone(&project.turn);
+            let trust = project.trust.clone();
             let slot = match place {
                 Ok((top, common)) => {
                     let key = Some((common.clone(), top.clone()));
@@ -206,6 +216,7 @@ impl Syncs {
                             repository.roots.push(project.root.clone());
                         }
                         group.turns.push(turn);
+                        group.trusts.extend(trust);
                         slot
                     } else {
                         // The repository's sync, if one runs in another
@@ -232,6 +243,7 @@ impl Syncs {
                             top,
                             repository,
                             turns: vec![turn],
+                            trusts: trust.into_iter().collect(),
                         });
                         groups.len() - 1
                     }
@@ -242,6 +254,7 @@ impl Syncs {
                         top: project.root.clone(),
                         repository: Err(format!("{}: {why}", project.root.display())),
                         turns: vec![turn],
+                        trusts: trust.into_iter().collect(),
                     });
                     groups.len() - 1
                 }
@@ -255,6 +268,7 @@ impl Syncs {
                     top: group.top,
                     repository: group.repository,
                     turns: group.turns,
+                    trusts: group.trusts,
                     signal: Notify::new(),
                     memory: Held::new(Memory::default()),
                 })

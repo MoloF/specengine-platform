@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use specengine_cli::{
-    CliError, Env, Globals, ProjectRoot, checked_data_dir, discover, prepared_data_dir,
+    CliError, Env, Globals, IndexTrust, ProjectRoot, checked_data_dir, discover, prepared_data_dir,
 };
 use tokio::sync::Mutex;
 
@@ -21,6 +21,10 @@ pub(crate) struct Project {
     /// Canonical.
     pub root: PathBuf,
     pub turn: Arc<Mutex<()>>,
+    /// A hub's trust in the project's index, for the process's life
+    /// (the `read-trust` spec, "The daemon"): set by [`crate::app::App::new`]
+    /// on a hub, entered at the three turn sites; `None` locally.
+    pub trust: Option<Arc<IndexTrust>>,
 }
 
 impl Project {
@@ -75,6 +79,7 @@ pub(crate) fn served(env: &Env, roots: &[PathBuf]) -> Result<Served, String> {
                 slug,
                 root: found.root.clone(),
                 turn: Arc::new(Mutex::new(())),
+                trust: None,
             },
         ));
         roots_found.push((given.clone(), found));

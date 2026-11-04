@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [scripts/deploy]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # scripts/deploy -- a hub on one host
@@ -69,7 +69,7 @@ Keep the printed password, then bring a project over: its step 3 is the first `u
 
 A login is the person: recorded verbatim, compared exactly (`docs/canon/hub.md` "Identity"). A new one is lower case, digits, `.`, `_` or `-`, a letter first, at most 64 bytes; a name may be any script.
 
-- **A new person.** `add`; relay the password privately. At their first step-up the door asks for a one-time code: `code` shows it, so enrol one person at a time. Leads and the owner also need the printed `[team]` row in the project's `specengine.toml` (`docs/canon/hub-team.md` "Team"), a reviewed commit. Until `--push`, bring it in by hand: `docker compose exec specengine git -C /projects/<name> pull --no-rebase`. Then `docker compose exec -T specengine spec team --root /projects/<name> | docker compose run --rm -T admin check` names a `[team]` login with no account, a disabled one, or a `:`.
+- **A new person.** `add`; relay the password privately. At their first step-up the door asks for a one-time code: `code` shows it, so enrol one person at a time. Leads and the owner also need the printed `[team]` row in the project's `specengine.toml` (`docs/canon/hub-team.md` "Team"), a reviewed commit. Until `--push`, bring it in by hand: `docker compose exec specengine git -C /projects/<name> pull --no-rebase`, then `docker compose exec specengine spec index --root /projects/<name>`. Then `docker compose exec -T specengine spec team --root /projects/<name> | docker compose run --rm -T admin check` names a `[team]` login with no account, a disabled one, or a `:`.
 - **A lost passkey or password.** `reset`, relay the password; the person enrols again.
 - **Someone leaves.** `disable`: the door refuses them at their next request, and their AI's next call fails.
 - **A compromised account.** `disable`; `docker compose restart authelia` (sessions live in memory: everyone logs in again); `reset`; `enable` only when `reset` ended without `passkeys-left`. A passkey left signs in alone: reset again.
@@ -125,6 +125,7 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 
 ## Limits
 
+- **Hand changes.** The hub reads its index, which its confirms and merges keep current. After changing a project's files on the host by hand (a `git pull`, an edit, a restore after a stopped sync), run `docker compose exec specengine spec index --root /projects/<name>`; otherwise the hub shows the change within 5 minutes of reads (`docs/canon/spec-read-freshness.md`).
 - **Never run `spec serve` here.** In the container it attaches to the hub: `already running` and a loopback URL that answers 403; another root is told to stop the hub.
 - **A Traefik crash** that the engine restarts leaves the daemon offline: run `docker compose up -d`. `docker compose restart traefik` restarts both.
 - **Sessions live in memory**: restarting `authelia` logs everyone out.

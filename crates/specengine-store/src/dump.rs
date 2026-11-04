@@ -6,6 +6,11 @@
 //! already (`docs/features/edge-table.md` "Data").
 //! Two DBs with equal dumps hold the same index; storage order and rowids
 //! never show.
+//!
+//! `file_stats` and `walk_notes` are left out (the `read-trust` spec,
+//! "Data"): they record what the file system said, not what the bytes are,
+//! so two copies of one tree dump equal and an incremental index still
+//! equals a rebuild, row for row.
 
 use rusqlite::types::ValueRef;
 use rusqlite::{Transaction, TransactionBehavior};

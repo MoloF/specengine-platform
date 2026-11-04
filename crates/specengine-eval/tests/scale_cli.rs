@@ -23,8 +23,14 @@
 //!   `[code]`), so `process_git` leaves no trace a run can show.
 //! - SE-6 `se6_*`: the refusals, the accepted bounds and `--timeout 0`.
 //! - SE-9 `scale_baseline`: `#[ignore]`, the release baseline.
+//! - docs/features/read-trust.md "Eval": every measured size's leaves gain
+//!   `reads_trusted`, `growth_trusted`, `trusted_differs` (0),
+//!   `steps.update_hashed` (0) and `hub.trusted`; `growth_trusted` is
+//!   checked as "Eval" defines it. AC-13's bars are `scale_baseline`'s last
+//!   check, [`assert_read_trust_bars`].
 //!
-//! No test asserts a time (S9). Nothing here names a pilot.
+//! No test asserts a time (S9) but AC-13's bars, in the release baseline
+//! alone. Nothing here names a pilot.
 
 mod import_support;
 
@@ -66,6 +72,10 @@ const QUERIES: usize = 3;
 const GROUP_FILES: usize = 100;
 /// The nodes beside the parts: Tier 0 and the 16 Tier 1 READMEs.
 const README_NODES: u64 = 17;
+
+/// A trusted median below this counts as this in `growth_trusted`, in
+/// microseconds (docs/features/read-trust.md "Eval", D13).
+const TRUSTED_FLOOR_US: u64 = 10_000;
 
 /// `--budget`'s default and `--nodes`'s.
 const DEFAULT_BUDGET: u64 = 10_000;
@@ -145,15 +155,29 @@ const SIZE_LEAVES: &[&str] = &[
     "reads/search/hits_max",
     "reads/get_context_bundle/median_us",
     "reads/get_context_bundle/max_us",
+    "reads_trusted/get_node/median_us",
+    "reads_trusted/get_node/max_us",
+    "reads_trusted/get_node_links/median_us",
+    "reads_trusted/get_node_links/max_us",
+    "reads_trusted/search/median_us",
+    "reads_trusted/search/max_us",
+    "reads_trusted/get_context_bundle/median_us",
+    "reads_trusted/get_context_bundle/max_us",
     "growth/get_node",
     "growth/get_node_links",
     "growth/search",
     "growth/get_context_bundle",
+    "growth_trusted/get_node",
+    "growth_trusted/get_node_links",
+    "growth_trusted/search",
+    "growth_trusted/get_context_bundle",
+    "trusted_differs",
     "steps/open_us",
     "steps/walk_us",
     "steps/hash_us",
     "steps/update_us",
     "steps/update_parsed",
+    "steps/update_hashed",
     "steps/decode_us",
     "steps/reparse_us",
     "steps/resolver_us",
@@ -172,6 +196,8 @@ const SIZE_LEAVES: &[&str] = &[
     "hub/links_shown",
     "hub/get_node_links_us",
     "hub/get_context_bundle_us",
+    "hub/trusted/get_node_links_us",
+    "hub/trusted/get_context_bundle_us",
     "hub/w_after",
     "nondeterministic",
 ];
@@ -1185,6 +1211,18 @@ fn assert_size(run: &ScaleRun, entry: &Value, nodes: u64, previous: Option<&Valu
         0,
         "{at}: `nondeterministic`"
     );
+    // docs/features/read-trust.md "Eval" (AC-13): the warm stat walk reads
+    // no file, and a trusted read answers as the walking one.
+    assert_eq!(
+        whole(entry, "steps/update_hashed"),
+        0,
+        "{at}: the warm `update` reads no file"
+    );
+    assert_eq!(
+        whole(entry, "trusted_differs"),
+        0,
+        "{at}: `trusted_differs`"
+    );
     let (hits_min, hits_max) = (
         whole(entry, "reads/search/hits_min"),
         whole(entry, "reads/search/hits_max"),
@@ -1222,6 +1260,31 @@ fn assert_size(run: &ScaleRun, entry: &Value, nodes: u64, previous: Option<&Valu
                         "{at}: `growth.{read}` {printed}, {now} / {before} is {ratio:.4}"
                     );
                 }
+            }
+        }
+    }
+    // Trusted growth: `null` at the first size; else the ratio of the
+    // medians, each counted as at least 10 ms (read-trust "Eval").
+    for (read, _) in READ_STEPS {
+        let growth = &entry["growth_trusted"][read];
+        match previous {
+            None => assert!(
+                growth.is_null(),
+                "{at}: `growth_trusted.{read}` at the first size: {growth}"
+            ),
+            Some(before) => {
+                let floor = |value: u64| value.max(TRUSTED_FLOOR_US) as f64;
+                let before = whole(before, &format!("reads_trusted/{read}/median_us"));
+                let now = whole(entry, &format!("reads_trusted/{read}/median_us"));
+                let ratio = floor(now) / floor(before);
+                let printed = growth
+                    .as_f64()
+                    .unwrap_or_else(|| panic!("{at}: `growth_trusted.{read}` is {growth}"));
+                assert!(
+                    (printed - ratio).abs() <= 0.0051,
+                    "{at}: `growth_trusted.{read}` {printed}, max({now}, 10000) / \
+                     max({before}, 10000) is {ratio:.4}"
+                );
             }
         }
     }
@@ -2091,4 +2154,63 @@ fn scale_baseline() {
     for nodes in DEFAULT_SIZES {
         assert_shape(&Tree::read(&run.tree(nodes)), nodes as usize);
     }
+    assert_read_trust_bars(&run);
+}
+
+/// docs/features/read-trust.md AC-13, the bars (D13), over the baseline's
+/// three sizes: each trusted read's median under 1 s at 100k and its
+/// `growth_trusted` under 2 there; the warm update read no file at any
+/// size, its time reported; W_after's median at 10k within 10 % of 1k's.
+/// M: the trusted step calling `refresh_in` (about 11x growth).
+fn assert_read_trust_bars(run: &ScaleRun) {
+    let envelope = run.envelope();
+    let sizes = envelope["result"]["sizes"]
+        .as_array()
+        .expect("result.sizes")
+        .clone();
+    let at = |nodes: u64| {
+        sizes
+            .iter()
+            .find(|entry| entry["nodes"] == nodes)
+            .unwrap_or_else(|| panic!("no size {nodes}"))
+    };
+    let mut misses: Vec<String> = Vec::new();
+    for nodes in DEFAULT_SIZES {
+        let entry = at(nodes);
+        if whole(entry, "steps/update_hashed") != 0 {
+            misses.push(format!("n{nodes}: `steps.update_hashed` is not 0"));
+        }
+        let _ = whole(entry, "steps/update_us");
+    }
+    let largest = at(100_000);
+    for (read, _) in READ_STEPS {
+        let median = whole(largest, &format!("reads_trusted/{read}/median_us"));
+        if median >= 1_000_000 {
+            misses.push(format!(
+                "n100000: trusted {read} median {median} us, not under 1 s"
+            ));
+        }
+        let growth = largest["growth_trusted"][read]
+            .as_f64()
+            .unwrap_or_else(|| panic!("n100000: `growth_trusted.{read}`"));
+        if growth >= 2.0 {
+            misses.push(format!(
+                "n100000: `growth_trusted.{read}` {growth}, not under 2"
+            ));
+        }
+    }
+    let (small, middle) = (
+        whole(at(1_000), "w_after/median") as f64,
+        whole(at(10_000), "w_after/median") as f64,
+    );
+    if (middle - small).abs() > small * 0.10 {
+        misses.push(format!(
+            "W_after's median {middle} at 10k is not within 10 % of 1k's {small}"
+        ));
+    }
+    assert!(
+        misses.is_empty(),
+        "read-trust's bars:\n{}",
+        misses.join("\n")
+    );
 }

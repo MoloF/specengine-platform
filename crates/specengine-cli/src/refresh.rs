@@ -1,8 +1,11 @@
-//! `spec index [--full]`, and the freshness step every read command runs
-//! first: the store's incremental `update` over the working tree
-//! (`--full`: `rebuild`). A missing root is worth a warning only when
-//! `[paths]` is written; unreadable directories and skipped names always
-//! are. Nothing the walk meets is fatal.
+//! `spec index [--full]`, and the walk of the freshness step every read
+//! command runs first ([`crate::freshness::step`]): the store's incremental,
+//! stat-keyed `update` over the working tree (`--full`: `rebuild`). A
+//! missing root is worth a warning only when `[paths]` is written;
+//! unreadable directories and skipped names always are, from the walk or,
+//! on a hub's trusted read, from its notes ([`walk_warnings`]). Nothing the
+//! walk meets is fatal. Inside a scope whose trust is the project's, every
+//! walk keeps that trust's books (the `read-trust` spec, R9).
 //!
 //! `spec index` then refreshes the code index, a call of its own
 //! ([`crate::code_index::refresh_code`]; canon `symbol-index`,
@@ -21,9 +24,12 @@
 
 use serde::Serialize;
 use specengine_core::CodeConfig;
-use specengine_store::{CodeReport, IndexWriter, SqliteIndex, UpdateReport, WorkingTree};
+use specengine_store::{
+    CodeReport, IndexWriter, SqliteIndex, UpdateReport, WalkNotes, WorkingTree,
+};
 
 use crate::code_index::{known_frameworks, refresh_code};
+use crate::freshness::Walk;
 use crate::location::open_index;
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::roles::{RoleCounts, render_line, role_counts};
@@ -138,33 +144,44 @@ pub(crate) fn refresh_in(
         tree,
         counted: seams::in_walk(),
     };
+    let walk = Walk::begin(&project.root);
     let report = if full {
         index.rebuild(&source, scheme)
     } else {
         index.update(&source, scheme)
+    };
+    if let Some(walk) = walk {
+        walk.end(report.is_ok());
     }
-    .map_err(store_error)?;
+    let report = report.map_err(store_error)?;
+    let messages = walk_warnings(project, &WalkNotes::from(&report));
+    Ok((report, messages))
+}
+
+/// The warnings of a walk's listing, from the walk or from the notes it
+/// stored: one rendering for both, in one order.
+pub(crate) fn walk_warnings(project: &ProjectRoot, notes: &WalkNotes) -> Vec<Message> {
     let mut messages = Vec::new();
     if project.config.paths_written {
-        for root in &report.missing_roots {
+        for root in &notes.missing_roots {
             messages.push(Message::Warning(format!(
                 "`[paths]` root `{root}` names no directory and no `.md` file"
             )));
         }
     }
-    for dir in &report.unreadable_dirs {
+    for dir in &notes.unreadable_dirs {
         let dir = if dir.is_empty() { "." } else { dir.as_str() };
         messages.push(Message::Warning(format!(
             "cannot list `{dir}`: its files are left out of the index"
         )));
     }
-    if report.skipped_names > 0 {
+    if notes.skipped_names > 0 {
         messages.push(Message::Warning(format!(
             "{} directory or `.md` names skipped: not UTF-8",
-            report.skipped_names
+            notes.skipped_names
         )));
     }
-    Ok((report, messages))
+    messages
 }
 
 pub(crate) fn render_text(outcome: &IndexOutcome) -> String {

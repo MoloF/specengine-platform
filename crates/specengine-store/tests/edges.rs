@@ -315,21 +315,42 @@ const DUMPED: [&str; 6] = [
 /// The four tables of "Data", in the dump's naming.
 const EDGE_TABLES: [&str; 4] = ["edges", "edge_parents", "edge_deps", "edge_names"];
 
+/// The edge tables made `INDEX_FORMAT` 16; a later format keeps them
+/// (docs/features/read-trust.md made it 17 with no edge change), and the
+/// history keeps edge-table's `16` line verbatim, before the current one.
 #[test]
-fn ac3_the_format_is_16_and_the_history_ends_with_it() {
-    assert_eq!(
-        INDEX_FORMAT, 16,
-        "docs/features/edge-table.md \"Acceptance criteria\" AC-3"
-    );
+fn ac3_the_edge_tables_made_format_16_and_the_history_keeps_it() {
+    const {
+        assert!(
+            INDEX_FORMAT >= 16,
+            "edge-table AC-3: the edge tables are format 16 or later"
+        );
+    }
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt");
     let history = fs::read_to_string(&path).expect("tests/format_history.txt");
-    let last = history
+    let lines: Vec<&str> = history
         .lines()
-        .rfind(|line| !line.trim().is_empty() && !line.starts_with('#'))
-        .expect("a history line");
+        .filter(|line| !line.trim().is_empty() && !line.starts_with('#'))
+        .collect();
+    let sixteen: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.starts_with("16 "))
+        .map(|(at, _)| at)
+        .collect();
+    assert_eq!(
+        sixteen.len(),
+        1,
+        "format_history.txt holds one `16 <hash>` line:\n{history}"
+    );
+    assert_eq!(
+        lines[sixteen[0]], "16 dc7833af98bdb2c4f5e4a83f1b040235b045e2c2367f3eeba3d9140bacc43c72",
+        "edge-table's line, verbatim"
+    );
+    let last = lines.last().expect("a history line");
     assert!(
-        last.starts_with("16 "),
-        "format_history.txt ends with `16 <hash>`: {last}"
+        last.starts_with(&format!("{INDEX_FORMAT} ")),
+        "format_history.txt ends with the current format: {last}"
     );
 }
 

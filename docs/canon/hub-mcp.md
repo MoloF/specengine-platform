@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-mcp, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # Hub MCP: `/mcp/<slug>` under each request's login
 
-ADR-0065, built by `hub-mcp` (RM-0053, step 11). Working answers of the orchestrator, 2026-11-03, the owner's review open. A hub (`hub.md`) serves `specengine-mcp`'s server over rmcp's Streamable HTTP, inside each project's turn. Its tool set reads, raises proposals and writes cards under the request's `Remote-User`, and decides nothing. A local daemon serves no `/mcp`. Code: http `mcp.rs` (`Mounts`, `serve`, the session table), `hub.rs` `class`, `app.rs`; mcp `hub.rs` (`HubSeam`, `Command`, `HUB_TOOLS`, `HUB_ROUTER`, `HUB_INSTRUCTIONS`); CLI the propose requests' `login`; UI `src/inbox/ProposalCard.tsx`.
+ADR-0065, built by `hub-mcp` (RM-0053, step 11). Working answers of the orchestrator, 2026-11-03, the owner's review open. A hub (`hub.md`) serves `specengine-mcp`'s server over rmcp's Streamable HTTP, inside each project's turn. Its tool set reads, raises proposals and writes cards under the request's `Remote-User`, and decides nothing. A local daemon serves no `/mcp`. Code: http `mcp.rs` (`Mounts`, `serve`, the session table), `hub.rs` `class`, `app.rs`; mcp `hub.rs`; CLI the propose requests' `login`; UI `src/inbox/ProposalCard.tsx`.
 
 ## Route
 
@@ -51,13 +51,11 @@ These run in the project's turn, as `answer::run` runs its calls:
 - each call that reads the corpus or the queue, or writes the queue;
 - each resource read.
 
-That is the mutex, `spawn_blocking`, `project.globals()`, the slug found again. `initialize`, notifications, `ping`, `tools/list`, `resources/templates/list` and `server/discover` take no turn.
+That is the mutex, `spawn_blocking`, `project.globals()`, the slug found again, in a `walking` scope that read tools leave (`spec-read-freshness.md` "Routes and tools"). `initialize`, notifications, `ping`, `tools/list`, `resources/templates/list` and `server/discover` take no turn.
 
-The wait for the turn races the request's cancellation, as the board's `answer::run` does: an HTTP disconnect on a stateless call, or `notifications/cancelled` on a session. A call cancelled while it waits never runs and stores nothing. A call that has started runs to its end. The hub router is built once per process, a `static`, and cloned, never per mount or per request. Reads keep MCP's `View::Capped`, byte for byte the stdio answer (`mcp-read.md` "Tools", **Parity**), never the daemon's `View::Browser`.
+The wait for the turn races the request's cancellation, as the board's `answer::run` does: an HTTP disconnect on a stateless call, or `notifications/cancelled` on a session. A call cancelled while it waits never runs and stores nothing. A call that has started runs to its end. Reads keep MCP's `View::Capped`, byte for byte the stdio answer (`mcp-read.md` "Tools", **Parity**), never the daemon's `View::Browser`.
 
-`specengine-mcp` names no HTTP crate. The daemon implements its `HubSeam`:
-- `login`, read from `Parts.extensions`' `Login`;
-- `turn(Command) -> TurnFuture`, the executor: a future of `()`, done once the command has run or never to run, the command carrying its own answer, which the daemon never sees; it judges the slug with `answer.rs` `found`.
+`specengine-mcp` names no HTTP crate. The daemon implements its `HubSeam`: `login`, from `Parts.extensions`' `Login`; `turn(Command) -> TurnFuture`, a future of `()` done once the command ran or never will, the command carrying its own answer; the slug judged by `answer.rs` `found`.
 
 The transport stays in `specengine-http`: `App::new` builds one service per project (`Mounts::new`), each with its own `LocalSessionManager`.
 
@@ -68,15 +66,11 @@ Seventeen tools and both resources, each its stdio twin's CLI call:
 - **queue**, without `task_id`: `propose_change` (four kinds, `dry_run`), `ask_question`, `report_discrepancy`, `report_decision`;
 - **cards:** `list_cards`, `get_card`, `create_card`, `edit_card`, `move_card`.
 
-None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 17 never reaches rmcp, judged on the raw JSON as rmcp reads it, never only on a typed `CallToolRequest`. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would otherwise grow on invented names.
+None decides: a person confirms on the hub (`hub-confirm.md`) or on a terminal. Any login raises proposals, since `/mcp` never reads `[team]` (ADR-0012). Any message whose `method` is `tools/call` and whose `params.name` is not one of the 17 (`probes` builds: or `HUB_PROBES`) never reaches rmcp, judged on the raw JSON as rmcp reads it, never only on a typed `CallToolRequest`. A request, one whose malformed `arguments` parse as a custom request included, gets rmcp's unknown-tool answer, JSON-RPC `-32602` `tool not found` with its id. A notification gets a 202. Nothing is cached: rmcp's per-name schema cache would otherwise grow on invented names.
 
-Left out:
-- `get_impact`, `find_symbols`, `refs`, `unmapped` and `check_binding`: a hub holds no code;
-- `report_drift`: drift stays a terminal's;
-- `review_proposal`: its forms are local;
-- the five task tools: no `T-` flow runs on a hub.
+Left out: `get_impact`, `find_symbols`, `refs`, `unmapped`, `check_binding` (a hub holds no code); `report_drift` (a terminal's); `review_proposal` (local forms); the five task tools (no `T-` flow on a hub).
 
-**Texts.** `HUB_INSTRUCTIONS`, and eight hub descriptions: `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the three card writes. The other nine are stdio's. Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out. The stdio texts are unchanged.
+**Texts.** `HUB_INSTRUCTIONS`, and twelve hub descriptions: `get_tree`, `get_node`, `search`, `get_context_bundle` (stdio's, a hub tail), `get_roadmap` (with no `get_task` and no "the owner's decision on a terminal"), the four queue tools and the three card writes. The instructions and reads' tails say a read answers from the hub's index, which confirms and merges keep, checked when 5 minutes old, a printed file now. The other five are stdio's. Each hub text is ASCII and at most 2 048 bytes, compile-time asserted, holds the determinism sentence, and names no tool left out.
 
 ## Identity
 
@@ -121,7 +115,7 @@ A unit test of http `src/hub.rs` reads this rule from this page, as `the_step_up
 
 ## Known limits
 
-- Until RM-0054, AI reads wait in the turn beside the page's, and no limit bounds the calls waiting for a project's turn.
+- AI reads wait in the turn beside the page's, and no limit bounds the calls waiting for it.
 - A login's AI reads others' proposals and cards: they are data, never a decision.
 - A bearer `Remote-User` that is an email or a UUID would split a person in two; the deployment's Basic user is the door login.
 - Answers carry the corpus to the client's model provider.
@@ -140,4 +134,4 @@ By hand at the gate, not yet run; findings land in `hub-deploy.md` "Gate" with t
 
 ## Tests
 
-http `tests/hub_mcp.rs` (H1-H11, H13-H20 of `docs/features/hub-mcp.md`), its client `tests/common/mcp_http.rs` (both eras, `Mcp-Session-Id`, SSE frames); `tests/hub.rs` (`GET_ROUTES` with `/mcp/{p}`, the fence order with `Authorization`); `tests/door.rs` (`specengine_mcp` named in `src/mcp.rs` alone); units in `src/hub.rs` (item 6's rule) and `src/mcp.rs` (idle, life, the bound count, the `handle` counter: H17's idle and H19 are proven there alone). mcp `tests/mcp_hub.rs` (the 17, the texts' budget), `mcp_genre.rs`; eval `build_graph.rs` (the daemon's ten dependencies, rmcp's feature, the seven crates' versions). UI `src/inbox/ProposalCard.test.tsx`.
+http `tests/hub_mcp.rs` (H1-H11, H13-H20 of `docs/features/hub-mcp.md`), its client `tests/common/mcp_http.rs`; `tests/hub.rs` (`GET_ROUTES` with `/mcp/{p}`, the fence order with `Authorization`); `tests/door.rs` (`specengine_mcp` named in `src/mcp.rs` alone); units in `src/hub.rs` (item 6's rule) and `src/mcp.rs` (idle, life, the bound count, the `handle` counter). mcp `tests/mcp_hub.rs` (the 17, the texts' budget), `mcp_hub_trust.rs`, `mcp_genre.rs`; http `tests/hub_trust.rs`; eval `build_graph.rs` (the daemon's ten dependencies, rmcp's feature, the seven crates' versions). UI `src/inbox/ProposalCard.test.tsx`.

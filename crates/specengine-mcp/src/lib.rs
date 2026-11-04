@@ -62,6 +62,8 @@ mod review;
 mod server;
 mod tasks;
 
-pub use hub::{Command, HUB_INSTRUCTIONS, HUB_TOOLS, HubSeam, TurnFuture};
+pub use hub::{
+    Command, HUB_INSTRUCTIONS, HUB_PROBES, HUB_READ_TOOLS, HUB_TOOLS, HubSeam, TurnFuture,
+};
 pub use read::MAX_RESULT_CHARS;
 pub use server::{INSTRUCTIONS, Lifecycle, ServeError, SpecEngineServer, serve_stdio};

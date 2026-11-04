@@ -231,6 +231,7 @@ mod events;
 mod export;
 mod flow;
 mod follow_up;
+mod freshness;
 mod gate;
 mod graph;
 #[cfg(unix)]
@@ -261,6 +262,8 @@ mod preflight;
 mod project;
 mod proposals;
 mod propose;
+#[cfg(test)]
+mod read_trust_tests;
 mod refresh;
 mod refs;
 mod review;
@@ -339,6 +342,7 @@ pub use drift::{
 pub use events::{EVENTS_PAGE_MAX, EventLine, EventsPage, EventsTail, events_after};
 pub use export::{ExportIndexRequest, ExportOutcome, ShardOutcome, export_index};
 pub use flow::{FlowOutcome, FlowRequest, GAP_ITEMS_SHOWN, flow, flow_with_view};
+pub use freshness::{IndexTrust, RECONCILE_EVERY, doubt_in_scope, trusted, trusting, walking};
 pub use gate::{
     GATE_DEADLINE, GATE_TASKS_MAX, GateInput, GateOutcome, GateProgress, GateReason, GateRequest,
     GateStage, GateTaskEntry, GateVerdict, HookInput, LINK_HOPS, gate, gate_session,

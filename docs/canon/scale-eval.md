@@ -17,7 +17,7 @@ reviewed: 2026-11-04
 
 It measures and never judges. The bars are RM-0054's:
 - warm reads under 1 s at 100 000 nodes;
-- under 2x growth from 10 000;
+- under 2x growth from 10 000, a median under 10 ms counted as 10 ms (`growth_trusted`);
 - W_after's median at 10 000 within 10 % of 1 000.
 
 No test asserts a time (ADR-0012). A synthetic corpus proves load, not usefulness.
@@ -103,7 +103,7 @@ P = { kind = "node", width = 6 }
 
 ## Reads and steps
 
-Each read is called once to warm up, then timed three times, and the best is kept. A call includes `render_text`.
+Each read is called once to warm up, then timed three times, and the best is kept. A call includes `render_text`. The tree waits 2.1 s after it is written (`RACY_WAIT`), so its build stores keys a warm update trusts (`spec-read-freshness.md`). The four reads and the hub's two run again in a `trusted` scope whose `IndexTrust` the warm-up walked.
 
 | Key | Call | Its steps |
 |---|---|---|
@@ -121,7 +121,7 @@ The steps, each the best of three on the warm index:
 | `open_us` | `discover` + `open_index` |
 | `walk_us` | `WorkingTree::new` + `Source::list` |
 | `hash_us` | `Source::read` + `b3_hash` of every listed file |
-| `update_us` | `IndexWriter::update`; it holds walk and hash. `update_parsed` is its max `parsed`, 0 when warm |
+| `update_us` | `IndexWriter::update`, the stat walk; `update_parsed`, `update_hashed` its max `parsed`, `hashed`, 0 when warm |
 | `decode_us` | `SpecIndex::indexed_input` |
 | `reparse_us` | the CLI's private `read_bytes` replayed: `Source::read`, core `parse`, `CheckFile::parsed` |
 | `resolver_us` | `Resolver::new` |
@@ -139,13 +139,14 @@ stdout is the envelope `{measurement: "scale", label, versions, wall_ms, result}
 - `check {errors, warnings, us}`;
 - `reads.<read> {median_us, max_us}`, with `search` adding `hits_min` and `hits_max`;
 - `growth.<read>`: the median over the previous size's, to two decimals, `null` first;
+- `reads_trusted.<read> {median_us, max_us}` and `growth_trusted.<read>` (each median at least 10 000 us), the trusted reads'; `trusted_differs`: (read, target) pairs whose trusted answer's BLAKE3 is not the walking one's;
 - `steps`;
 - `other_us`;
 - `w_after {median, p90, max, tier0, tier1_max}`, by nearest rank;
-- `hub {degree, links_shown, get_node_links_us, get_context_bundle_us, w_after}`;
+- `hub {degree, links_shown, get_node_links_us, get_context_bundle_us, w_after, trusted {get_node_links_us, get_context_bundle_us}}`;
 - `nondeterministic`: (read, target) pairs whose four answers differ.
 
-With `--corpus-only`, a size holds `nodes` and `corpus` only. stdout holds numbers only, never an ID, word or path. stderr holds one summary line per size.
+With `--corpus-only`, a size holds `nodes` and `corpus` only. stdout holds numbers only, never an ID, word or path. stderr holds one summary line per size, the trusted medians too.
 
 The detail goes under `<out>/scale/<label>/`, emptied first. Each size gets a `n<N>/` directory with `tree/`, `home/` (the data directory, so the database lives there) and `size.json`. `size.json` is written when the size ends and holds:
 - the size's entry;
@@ -187,25 +188,9 @@ The numbers before 12c-12e: 2026-11-04, the owner's laptop, release, seed 1, bud
 | fts | 0.44 | 1.03 | 6.08 |
 | other: node, links, search, bundle | 0.38, 0.51, 0.11, 0.54 | 3.28, 4.36, 0.50, 4.81 | 13.4, 20.3, 0, 17.6 |
 
-What the 100k run shows:
-- **Reads are linear,** about 11x from 10k.
-- **Three steps dominate a bundle.** Reparse is 49 % of it, update (hashing) 26 % and decode 15 %; graph is 8 %.
-- **The corpus at 100k:** 20 015 files, 22.9 MB and 101 746 links. 3 973 files are Tier 3. The maximum in-degree is 15.
-- **Index and check:** the build 9.43 s, the check 0.92 s, 0 findings.
-- **Search hits:** 5 to 8 per query.
-- **W_after:** the median is 2 210, 2 182 and 2 239 B at 1k, 10k and 100k, already within 10 %. At 100k the p90 is 2 695 and the max 2 936. Tier 0 is 1 021 B, and the largest Tier 1 is 700 B.
-- **The hub at 100k:** in-degree 533, 441 links shown, `get_node_links` 1.64 s, bundle 1.62 s, W_after 2 646 B.
+At 100k: reads linear, about 11x from 10k; a bundle's reparse 49 %, update (hashing) 26 %, decode 15 %, graph 8 %; 20 015 files, 22.9 MB, 101 746 links, 3 973 Tier 3, in-degree at most 15; build 9.43 s, check 0.92 s, 0 findings; 5 to 8 hits per query. W_after's median is 2 210, 2 182 and 2 239 B at 1k, 10k and 100k, within 10 % already; at 100k the p90 2 695, the max 2 936, Tier 0 1 021 B, the largest Tier 1 700 B. The hub at 100k: in-degree 533, 441 links shown, `get_node_links` 1.64 s, bundle 1.62 s, W_after 2 646 B.
 
-**After 12d** (`store-reads`), release, seed 1, base `2220d05` and head in one session:
-
-| Median ms, base->head | 1k | 10k | 100k |
-|---|---|---|---|
-| `get_node` | 6.55 -> 4.21 | 59.1 -> 32.1 | 665 -> 372 |
-| `get_node_links` | 14.6 -> 4.37 | 140 -> 32.5 | 1 557 -> 373 |
-| `get_context_bundle` | 14.2 -> 4.54 | 137 -> 32.7 | 1 534 -> 376 |
-| `update_us` | 3.80 -> 3.62 | 32.1 -> 31.7 | 376 -> 376 |
-
-At 100k: hub links 1 567 -> 398, hub bundle 1 542 -> 494, `search` 382 -> 380, build 10.21 -> 9.96 s; `other_us` 0 for `get_node` and links, 0.34 for bundle. Answers equal at every size, `nondeterministic` 0. A read now costs about `update_us` (hashing 349): 12e's.
+12d's before and after: `docs/features/store-reads.md` SR-4. **After 12e** (`read-trust`; base `7c0ca35`, 12d's head, and head in one session), 100k, trusted: `get_node` 0.55, links 0.85, `search` 6.5, bundle 2.4 ms, hub 23.7 and 124; walking 43-50; `update_us` 41.9, none hashed; growth 1.00 (`read-trust` AC-13).
 
 ## Tests
 
@@ -225,7 +210,7 @@ The tests are in `tests/scale_cli.rs`:
 
 - **`links_shown` counts the hub's links before the 40 000-character cap.** It overstates what is printed above about 180 000 nodes.
 - **The steps run low and `other_us` high.** The steps share one warm connection and one `WorkingTree`, while a read opens its own. The bias points the honest way: the residual never hides time.
-- **Timing noise on a busy laptop can push `other_us` to 0.** At 100k, `search`'s steps summed past the read, so its `other_us` came out 0. When every residual is 0, SE-8 says it cannot tell a dropped step apart.
+- **Timing noise can push `other_us` to 0,** as `search`'s at 100k; when every residual is 0, SE-8 says it cannot tell a dropped step apart.
 - **A failure's stderr quotes the engine's reason,** which may hold a synthetic ID.
 - **The reused refusal (`layout::check_out`) calls the repository "the corpus".**
 - **The in-degree cap never binds at seed 1.** Uncapped, the maximum is 6, 12 and 15 at 1k, 10k and 100k, so the cap is an unexercised guard and dropping it survives the tests.

@@ -22,6 +22,13 @@
 //! - **`held`** keeps its `(L, R)`: a later sync fetches, and merges or
 //!   pushes only once a tip moved.
 //!
+//! - **The index**: a fast-forward that moved `HEAD`, inside the turns,
+//!   updates each served root's index over the paths `git diff` names
+//!   between the old `HEAD` and the new, by the merged config (a moved
+//!   `[paths]` or `[ids]` walks); a failed diff doubts every root, a failed
+//!   discovery or update its own, and a failed fast-forward every root (the
+//!   `read-trust` spec, R11 and R12; [`crate::freshness`]).
+//!
 //! The sync authors no text and is no apply: its merge commit's only
 //! SpecEngine bytes are the rendered outputs. Nothing here blocks, and no
 //! status, check or gate reads it: a discrepancy blocks nothing.
@@ -33,12 +40,16 @@ use std::time::Duration;
 use serde::Serialize;
 use specengine_core::card::is_format_character;
 use specengine_store::{
-    CONFIG_FILE, CommitFailure, GitEnv, GitError, Looked, NamedBytes, NetFailure, Pushed, Relation,
-    Replacement, STDERR_MAX, SyncGit, Upstream, ahead_behind, file_mode, load_config, named,
-    sync_place,
+    CONFIG_FILE, CommitFailure, GitEnv, GitError, IndexWriter as _, Looked, NamedBytes, NetFailure,
+    Pushed, Relation, Replacement, STDERR_MAX, SyncGit, Upstream, WorkingTree, ahead_behind,
+    file_mode, load_config, named, sync_place,
 };
 
+use crate::freshness;
+use crate::location::open_index;
 use crate::outputs::{TreeRender, index_outputs, render_tree};
+use crate::project::discover;
+use crate::{Env, Globals};
 
 /// Phases 2-4 at most this many times when the remote moves meanwhile.
 const ROUNDS: usize = 3;
@@ -225,9 +236,11 @@ fn escaped(text: &str, line_feed_too: bool) -> String {
 /// `git`'s variables, each child killed past `deadline`. `last` is the
 /// daemon's last outcome: a `held` one is kept while neither tip moved.
 /// `in_turns` runs the merge it is given inside the turns of every project
-/// served in the repository, in `--root` order.
+/// served in the repository, in `--root` order; `env` finds each root's
+/// project and index for the merge's update.
 pub fn sync_once(
     repository: &SyncRepository,
+    env: &Env,
     git: &GitEnv,
     deadline: Duration,
     last: &SyncOutcome,
@@ -278,7 +291,7 @@ pub fn sync_once(
         }
         let mut merged = None;
         in_turns(&mut || {
-            merged = Some(merge(&sync, repository, &upstream));
+            merged = Some(merge(env, &sync, repository, &upstream));
         });
         provisional = false;
         match merged {
@@ -373,8 +386,9 @@ enum Merged {
 
 /// The merge phase, inside the turns: the worktree judged again, `L` read
 /// again, then nothing, a fast-forward or a merge commit; else `held` or
-/// `stopped`, nothing touched.
-fn merge(sync: &SyncGit, repository: &SyncRepository, upstream: &Upstream) -> Merged {
+/// `stopped`, nothing touched. A fast-forward updates the served roots'
+/// indexes ([`reindex`]); one that fails doubts them all.
+fn merge(env: &Env, sync: &SyncGit, repository: &SyncRepository, upstream: &Upstream) -> Merged {
     let top = repository.top.display();
     let stopped = |why: String| Merged::Ended(SyncOutcome::ended(SyncState::Stopped, why));
     match sync.still_ready(upstream) {
@@ -410,14 +424,91 @@ fn merge(sync: &SyncGit, repository: &SyncRepository, upstream: &Upstream) -> Me
         },
     };
     match sync.fast_forward(&target) {
-        Ok(()) => Merged::Done,
-        Err(error) => stopped(format!(
-            "the merge of `{}` could not move `{}` in {top}: {}",
-            upstream.shown(),
-            upstream.branch,
-            local_failure(&error, sync)
-        )),
+        Ok(()) => {
+            reindex(env, sync, repository, &left, &target);
+            Merged::Done
+        }
+        Err(error) => {
+            // Its files may be half moved.
+            for root in &repository.roots {
+                freshness::doubt(root);
+            }
+            stopped(format!(
+                "the merge of `{}` could not move `{}` in {top}: {}",
+                upstream.shown(),
+                upstream.branch,
+                local_failure(&error, sync)
+            ))
+        }
     }
+}
+
+/// After the fast-forward from `left` to `target`, inside the turns: each
+/// served root's index updated over the paths the diff names under the
+/// root's path from the top (that prefix stripped), through a
+/// `WorkingTree` of the merged `[paths]` with the merged scheme, the
+/// project discovered again. A failed diff, or one that left out a name it
+/// could not read as UTF-8, doubts every root; a root whose path from the
+/// top cannot be told, or whose discovery, open or update fails, is
+/// doubted on its own.
+fn reindex(env: &Env, sync: &SyncGit, repository: &SyncRepository, left: &str, target: &str) {
+    let changed = match sync.changed(left, target) {
+        Ok(changed) if changed.skipped_names == 0 => changed.paths,
+        Ok(changed) => {
+            for root in &repository.roots {
+                freshness::doubt(root);
+            }
+            changed.paths
+        }
+        Err(_) => {
+            for root in &repository.roots {
+                freshness::doubt(root);
+            }
+            return;
+        }
+    };
+    for root in &repository.roots {
+        let Some(prefix) = top_prefix(&repository.top, root) else {
+            freshness::doubt(root);
+            continue;
+        };
+        let paths: Vec<&str> = changed
+            .iter()
+            .filter_map(|path| path.strip_prefix(prefix.as_str()))
+            .collect();
+        if paths.is_empty() {
+            continue;
+        }
+        let globals = Globals {
+            root: Some(root.clone()),
+            config: None,
+        };
+        let updated = discover(env, &globals).ok().and_then(|project| {
+            let mut open = open_index(env, &project).ok()?;
+            let tree = WorkingTree::new(&project.root, &project.config.paths).ok()?;
+            open.index
+                .update_paths(&tree, &project.config.scheme, &paths)
+                .ok()
+        });
+        if updated.is_none() {
+            freshness::doubt(root);
+        }
+    }
+}
+
+/// The path of `root` from `top`: `""`, or its components each followed by
+/// `/`, as [`MergedRoot::prefix`]; `None` when it does not lie below `top`.
+fn top_prefix(top: &Path, root: &Path) -> Option<String> {
+    let relative = root.strip_prefix(top).ok()?;
+    let mut prefix = String::new();
+    for component in relative.components() {
+        let Component::Normal(name) = component else {
+            return None;
+        };
+        prefix.push_str(name.to_str()?);
+        prefix.push('/');
+    }
+    Some(prefix)
 }
 
 /// A served root in the merged tree: its path from the top (`""` or
@@ -546,15 +637,7 @@ fn merge_commit(
 /// that config is absent, unreadable or invalid: the sync never judges it).
 /// `None` when the root does not lie below `top`.
 fn merged_root(sync: &SyncGit, top: &Path, root: &Path, tree: &str) -> Option<MergedRoot> {
-    let relative = root.strip_prefix(top).ok()?;
-    let mut prefix = String::new();
-    for component in relative.components() {
-        let Component::Normal(name) = component else {
-            return None;
-        };
-        prefix.push_str(name.to_str()?);
-        prefix.push('/');
-    }
+    let prefix = top_prefix(top, root)?;
     let config = format!("{prefix}{CONFIG_FILE}");
     let outputs = match sync.blob(tree, &config) {
         Ok(Some(bytes)) => {

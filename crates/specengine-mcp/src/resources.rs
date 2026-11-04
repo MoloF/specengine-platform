@@ -218,8 +218,11 @@ fn not_found(uri: &str, message: String) -> ErrorData {
     ErrorData::resource_not_found(message, Some(serde_json::json!({ "uri": uri })))
 }
 
-/// Exit 2: -32603 with the error line(s).
+/// Exit 2: -32603 with the error line(s). On a hub it doubts the hub's
+/// index, as a tool call that cannot run does (the `read-trust` spec, D9);
+/// elsewhere the doubt does nothing.
 fn cannot_run(error: CliError) -> ErrorData {
+    specengine_cli::doubt_in_scope();
     ErrorData::internal_error(error.message, None)
 }
 

@@ -14,9 +14,9 @@ use serde::Serialize;
 use specengine_core::check::{CheckFile, CheckInput, Endpoint, NodeAt, SpecGraph, Standing};
 use specengine_store::{Decoded, Source as _, SpecIndex as _, SqliteIndex, WorkingTree, b3_hash};
 
+use crate::freshness::{self, step};
 use crate::location::open_index;
 use crate::project::ProjectRoot;
-use crate::refresh::refresh_in;
 use crate::show::{Target, project_qualified};
 use crate::subset::seams::{self, Event};
 use crate::{CliError, Env, Message, store_error};
@@ -46,8 +46,7 @@ pub(crate) fn indexed_in(
         return Ok(indexed_read(index, project, messages)?.0);
     }
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
-    let (_, warnings) = refresh_in(index, project, &tree, false)?;
-    messages.extend(warnings);
+    messages.extend(step(index, project, &tree)?);
     seams::fresh();
     seams::note(Event::WholeDecode);
     index.indexed_input().map_err(store_error)
@@ -62,8 +61,7 @@ pub(crate) fn indexed_read(
     messages: &mut Vec<Message>,
 ) -> Result<(CheckInput, BTreeSet<String>), CliError> {
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
-    let (_, warnings) = refresh_in(index, project, &tree, false)?;
-    messages.extend(warnings);
+    messages.extend(step(index, project, &tree)?);
     seams::fresh();
     let Decoded { mut input, blake3 } = decoded_whole(index)?;
     let read = read_bytes(&mut input, &blake3, &tree, project, messages);
@@ -79,8 +77,7 @@ pub(crate) fn indexed_decoded(
 ) -> Result<Decoded, CliError> {
     let mut open = open_index(env, project)?;
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
-    let (_, warnings) = refresh_in(&mut open.index, project, &tree, false)?;
-    messages.extend(warnings);
+    messages.extend(step(&mut open.index, project, &tree)?);
     seams::fresh();
     decoded_whole(&open.index)
 }
@@ -119,7 +116,9 @@ pub(crate) fn row_matches(stored: Option<&str>, bytes: &[u8]) -> bool {
 /// keeps its decoded parse, which is the parse of those bytes (the store's
 /// projection contract; the `store-reads` spec, Q7); any other is
 /// parsed again as it is now. A file that cannot be read or parsed keeps
-/// its indexed parse, its lines shown as 1. The paths given their bytes.
+/// its indexed parse, its lines shown as 1. The paths given their bytes. A
+/// file that does not match its row doubts the project's index (the
+/// `read-trust` spec, R13).
 fn read_bytes(
     input: &mut CheckInput,
     blake3: &BTreeMap<String, Option<String>>,
@@ -129,6 +128,14 @@ fn read_bytes(
 ) -> BTreeSet<String> {
     let scheme = &project.config.scheme;
     let mut read = BTreeSet::new();
+    // Once per read: each doubt canonicalises the root.
+    let mut doubted = false;
+    let mut doubt = || {
+        if !doubted {
+            doubted = true;
+            freshness::doubt(&project.root);
+        }
+    };
     for file in &mut input.files {
         if file.parsed.is_none() {
             continue;
@@ -136,6 +143,7 @@ fn read_bytes(
         let bytes = match tree.read(&file.path) {
             Ok(bytes) => bytes,
             Err(error) => {
+                doubt();
                 messages.push(Message::Warning(format!(
                     "cannot read `{}`: {error}; its lines show as 1",
                     file.path
@@ -152,6 +160,7 @@ fn read_bytes(
             *file = CheckFile::parsed(path, bytes, parsed);
             continue;
         }
+        doubt();
         seams::note(Event::Parse(&file.path));
         let path = file.path.clone();
         let parsed = panic::catch_unwind(AssertUnwindSafe(|| {

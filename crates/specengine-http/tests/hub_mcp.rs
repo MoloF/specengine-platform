@@ -126,6 +126,19 @@ const HUB_TOOLS: [&str; 17] = [
     "search",
 ];
 
+/// What a hub's `tools/list` names, sorted: [`HUB_TOOLS`], and in the
+/// measurement build its probes (`specengine_mcp::HUB_PROBES`, empty in
+/// every other build; docs/features/read-trust.md D9).
+fn hub_listed() -> Vec<&'static str> {
+    let mut names: Vec<&'static str> = HUB_TOOLS
+        .iter()
+        .chain(specengine_mcp::HUB_PROBES.iter())
+        .copied()
+        .collect();
+    names.sort_unstable();
+    names
+}
+
 /// The twelve stdio tools a hub leaves out, sorted.
 const LEFT_OUT: [&str; 12] = [
     "check_binding",
@@ -142,7 +155,8 @@ const LEFT_OUT: [&str; 12] = [
     "unmapped",
 ];
 
-/// The ten tools whose description is the stdio twin's.
+/// The nine tools whose schemas are the stdio twin's, and whose description
+/// is too but for [`HUB_READ_TEXTED`]'s read tail.
 const SHARED: [&str; 9] = [
     "get_card",
     "get_context_bundle",
@@ -154,6 +168,21 @@ const SHARED: [&str; 9] = [
     "list_cards",
     "search",
 ];
+
+/// The shared reads whose hub text is the stdio twin's with its read tail
+/// replaced (docs/features/read-trust.md, review iteration 3): they trust
+/// the hub's index.
+const HUB_READ_TEXTED: [&str; 4] = ["get_context_bundle", "get_node", "get_tree", "search"];
+
+/// Stdio's read tail and the hub's in its place.
+const STDIO_READ_TAIL: &str = "Reads the files as they are now: refreshes SpecEngine's index in \
+                               its data directory, writes nothing under the project root. \
+                               Deterministic: one state, one result; no LLM inside.";
+const HUB_READ_TAIL: &str = "Reads the hub's index, which each confirm and merge updates and a \
+                             read checks against the files when the last check is 5 minutes \
+                             old; a file it prints is checked as it is now. Writes nothing \
+                             under the project root. Deterministic: one state, one result; no \
+                             LLM inside.";
 
 /// The eight whose descriptions are the hub's variants (docs/features/hub-mcp.md
 /// "Data", iteration 2): `get_roadmap`, the four queue writes and the three card
@@ -787,7 +816,7 @@ fn h2_a_legacy_session_opens_streams_lists_and_ends() {
     );
 
     let names = tool_names(&session.tools());
-    assert_eq!(names, HUB_TOOLS, "the hub's tools/list");
+    assert_eq!(names, hub_listed(), "the hub's tools/list");
 
     let deleted = session.delete_as("mira");
     assert_eq!(deleted.status(), 202, "DELETE: {}", deleted.text());
@@ -1451,6 +1480,7 @@ fn h8_one_door_every_tool_in_both_eras_writes_under_home_alone() {
         let missed: Vec<&String> = listed
             .iter()
             .filter(|name| !called.contains(*name))
+            .filter(|name| !specengine_mcp::HUB_PROBES.contains(&name.as_str()))
             .collect();
         assert!(
             missed.is_empty(),
@@ -1495,7 +1525,7 @@ fn h9_nothing_on_a_hub_decides() {
     for era in ERAS {
         let mut client = Client::open(era, world.port(), KEEP, "mira");
         let names = tool_names(&client.tools());
-        assert_eq!(names, HUB_TOOLS, "{era:?}");
+        assert_eq!(names, hub_listed(), "{era:?}");
         for name in &names {
             for word in DECIDING {
                 assert!(!name.contains(word), "{era:?}: {name} holds {word}");
@@ -1503,7 +1533,12 @@ fn h9_nothing_on_a_hub_decides() {
         }
     }
     let stdio = stdio_tools(&world.home, &world.keep);
-    let stdio_names = tool_names(&stdio);
+    let mut stdio_names = tool_names(&stdio);
+    // The measurement build (its hub probes are listed) runs a stdio server
+    // of that build too, whose own probes are not product tools.
+    if !specengine_mcp::HUB_PROBES.is_empty() {
+        stdio_names.retain(|name| !name.starts_with("probe_"));
+    }
     assert_eq!(stdio_names.len(), 29, "{stdio_names:?}");
     let mut union: Vec<&str> = HUB_TOOLS.iter().chain(LEFT_OUT.iter()).copied().collect();
     union.sort_unstable();
@@ -1762,11 +1797,28 @@ fn h11_the_hub_texts_hold_their_budget_and_their_words() {
         assert!(description.contains(DETERMINISM), "{name}: {description}");
     }
     for name in SHARED {
-        assert_eq!(
-            tool(&hub, name)["description"],
-            tool(&stdio, name)["description"],
-            "{name}: the stdio twin's description"
-        );
+        let twin = tool(&stdio, name)["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("stdio {name}: no description"));
+        if HUB_READ_TEXTED.contains(&name) {
+            // docs/features/read-trust.md (review iteration 3): stdio's text
+            // with its read tail become the hub's, byte for byte.
+            assert!(
+                twin.ends_with(STDIO_READ_TAIL),
+                "premise: stdio {name} ends with its read tail: {twin}"
+            );
+            assert_eq!(
+                tool(&hub, name)["description"],
+                json!(twin.replace(STDIO_READ_TAIL, HUB_READ_TAIL)),
+                "{name}: the stdio twin's description, the hub's read tail"
+            );
+        } else {
+            assert_eq!(
+                tool(&hub, name)["description"],
+                tool(&stdio, name)["description"],
+                "{name}: the stdio twin's description"
+            );
+        }
         assert_eq!(
             tool(&hub, name)["inputSchema"],
             tool(&stdio, name)["inputSchema"],
