@@ -390,12 +390,12 @@ Free bytes are as of this spec.
 
 ### Draft ADR
 
-This is a working answer, awaiting the owner. It takes the next free number and its date at ship. It is 1 464 B with its front-matter:
+This is a working answer, awaiting the owner. ADR\-0070 went to `spec-ids` (RM-0073, `v3`). This ADR claims no number until this slice resumes in `v4`: then it takes the next free number in place of `NNNN`, and its date, at ship. With four digits there, it is 1 464 B with its front-matter:
 
 ```markdown
 ---
 class: decision
-id: ADR-0070
+id: ADR-NNNN
 title: Canon under the index entry's unlisted globs takes no index line, and canon retires by status
 status: accepted
 date: 2026-11-DD
@@ -404,7 +404,7 @@ canon: docs/canon/spec-check-index.md#unlisted-globs
 ref: zone-index (RM-0055, step 13); the orchestrator's Z1-Z7, the owner's review open
 ---
 
-# ADR-0070
+# ADR-NNNN
 
 **Decision.** Accepted by the orchestrator in the owner's absence, awaiting the owner's review. Amends ADR-0022 and ADR-0030. A canon document matching a glob of the index entry's `unlisted` (the `exclude` grammar), Tier 0 and 1 aside, has no index line, Tier 3 too; the root names each glob once, no count, and a read there is the root, one capped `spec tree` or `spec search` answer, then at most three documents. Placement: unlisted, archive, first claim, root; no glob: byte for byte. `status: retired` makes canon off tier 0 and 1 Tier 3. ADR-0022's "in full" excepts s9's line per document under such a glob; caps are never raised.
 
