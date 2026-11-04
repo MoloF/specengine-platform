@@ -28,7 +28,7 @@ use specengine_model::{EdgeLabel, IdScheme, LinkOrigin};
 
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
-use crate::read::{decode_files, with_worktree};
+use crate::read::{IndexSnapshot, decode_files, with_worktree};
 use crate::rows::{from_json, to_json};
 
 /// The columns of an edge row a lookup gives, `f` its citing file and `e`
@@ -48,7 +48,6 @@ macro_rules! edge_columns {
 /// `edges_by_holder` (named: the primary key would serve the order and
 /// read the whole file). Core's `held`, one row per end: grouped by
 /// `(path, ord)`.
-#[allow(dead_code)] // RM-0079's reads; the lookup tests plan it now.
 pub(crate) const HELD: &str = concat!(
     "SELECT ",
     edge_columns!(),
@@ -62,7 +61,6 @@ pub(crate) const HELD: &str = concat!(
 /// whose written end, naming their source, lands there. Core's `from`
 /// (`Edge::written_end`); the held part gives one row per end, grouped by
 /// `(path, ord)`.
-#[allow(dead_code)] // RM-0079's reads; the lookup tests plan it now.
 pub(crate) const OUTGOING: &str = concat!(
     "SELECT ",
     edge_columns!(),
@@ -80,7 +78,6 @@ pub(crate) const OUTGOING: &str = concat!(
 /// there, then those held there naming their source. Core's `into`
 /// (`index_edges`); the held part gives one row per end, grouped by
 /// `(path, ord)`.
-#[allow(dead_code)] // RM-0079's reads; the lookup tests plan it now.
 pub(crate) const INCOMING: &str = concat!(
     "SELECT ",
     edge_columns!(),
@@ -116,6 +113,23 @@ pub(crate) const HOLDERS: &str = "SELECT f.path AS path
      WHERE k.key = ?2 AND f.wt = ?1
      ORDER BY path";
 
+/// One edge whole, every row (end) of it: the worktree `?1`, the citing
+/// file `?2` by its `(wt, path)` key, the edge's position `?3` by the
+/// primary key (`docs/features/store-reads.md` "Data"). A row found by its
+/// end holds that end alone; this completes it.
+pub(crate) const EDGE: &str = concat!(
+    "SELECT ",
+    edge_columns!(),
+    " FROM files f CROSS JOIN edges e ON e.file_id = f.file_id
+     WHERE f.wt = ?1 AND f.path = ?2 AND e.ord = ?3 ORDER BY n"
+);
+
+/// A document's stored `parent:`: the worktree `?1`, its file `?2` by its
+/// `(wt, path)` key, its rows by the primary key, in `n` order.
+pub(crate) const PARENT: &str = "SELECT p.n, p.state, p.reason, p.end_path, p.end_ord
+     FROM files f CROSS JOIN edge_parents p ON p.file_id = f.file_id
+     WHERE f.wt = ?1 AND f.path = ?2 ORDER BY p.n";
+
 /// The edge tables of the handle's worktree ([`SqliteIndex::stored_edges`]).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct StoredEdges {
@@ -125,46 +139,15 @@ pub struct StoredEdges {
     pub parents: Vec<StoredParent>,
 }
 
-/// One stored edge: core's `Edge` without what the citing file's bytes
-/// give (its written form, its line).
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredEdge {
-    /// The citing file.
-    pub path: String,
-    /// Its position among the file's edges, core's order.
-    pub ord: usize,
-    /// `Edge.holder.ord`, in the citing file.
-    pub holder: usize,
-    pub link_type: String,
-    pub origin: LinkOrigin,
-    /// `status: superseded-by X`: the written end is the source.
-    pub names_source: bool,
-    /// How the written end fared.
-    pub state: LinkState,
-    /// `Edge::reason`: why it dangles, else its note.
-    pub reason: Option<String>,
-    pub label: Option<EdgeLabel>,
-    /// `Edge.offset`.
-    pub at: usize,
-    /// The written end's nodes as `(path, position)`, in core's order;
-    /// empty unless resolved.
-    pub ends: Vec<(String, usize)>,
-}
+/// One stored edge: core's [`EdgeRow`](specengine_core::check::EdgeRow),
+/// an `Edge` without what the citing file's bytes give (its written form,
+/// its line); core owns the type, so a read builds its `GraphRows` from
+/// the rows as read (`docs/features/store-reads.md` "Data").
+pub use specengine_core::check::EdgeRow as StoredEdge;
 
-/// One document's stored `parent:`, before cycle breaking; none for no
-/// `parent:`, a failed front-matter or no parse.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct StoredParent {
-    /// The document's file.
-    pub path: String,
-    /// `resolved`, `dangling` or `skipped`.
-    pub state: LinkState,
-    /// Why it dangles.
-    pub reason: Option<String>,
-    /// The node it is listed under, then the further holders; empty unless
-    /// resolved.
-    pub ends: Vec<(String, usize)>,
-}
+/// One document's stored `parent:`, before cycle breaking: core's
+/// [`ParentRow`](specengine_core::check::ParentRow).
+pub use specengine_core::check::ParentRow as StoredParent;
 
 impl SqliteIndex {
     /// The worktree's edge tables in one snapshot
@@ -178,6 +161,73 @@ impl SqliteIndex {
                 parents: read_parents(tx, wt)?,
             })
         })
+    }
+}
+
+/// The keyed lookups of a subset read (`docs/features/store-reads.md`
+/// "Data"), each a `SEARCH`, every row from the snapshot.
+impl IndexSnapshot<'_> {
+    /// The files giving `key` (`EdgeKey::text()`), by path ([`HOLDERS`]).
+    pub fn holders(&self, key: &str) -> Result<Vec<String>, StoreError> {
+        let mut statement = self.tx.prepare(HOLDERS).db()?;
+        paths_by_key(&mut statement, self.wt, key)
+    }
+
+    /// The edges the node `(path, ord)` holds, each whole, by (path, `ord`),
+    /// ends in `n` order ([`HELD`]).
+    pub fn held(&self, path: &str, ord: usize) -> Result<Vec<StoredEdge>, StoreError> {
+        let mut statement = self.tx.prepare(HELD).db()?;
+        let mut rows = statement.query((self.wt, path, count(ord))).db()?;
+        edges_of(&mut rows)
+    }
+
+    /// The edges with a row whose end is the node `(path, ord)`, either
+    /// `names_source`: the by-end halves of [`OUTGOING`] and [`INCOMING`],
+    /// each edge completed with all its rows by [`EDGE`]; by (path, `ord`).
+    pub fn ending(&self, path: &str, ord: usize) -> Result<Vec<StoredEdge>, StoreError> {
+        let at = count(ord);
+        let mut found: BTreeSet<(String, i64)> = BTreeSet::new();
+        for sql in [OUTGOING, INCOMING] {
+            let mut statement = self.tx.prepare(sql).db()?;
+            let mut rows = statement.query((self.wt, path, at)).db()?;
+            while let Some(row) = rows.next().db()? {
+                let end_path: Option<String> = row.get(11).db()?;
+                let end_ord: Option<i64> = row.get(12).db()?;
+                if end_path.as_deref() == Some(path) && end_ord == Some(at) {
+                    found.insert((row.get(0).db()?, row.get(1).db()?));
+                }
+            }
+        }
+        let mut statement = self.tx.prepare(EDGE).db()?;
+        let mut edges = Vec::with_capacity(found.len());
+        for (citing, edge) in found {
+            let mut rows = statement.query((self.wt, citing.as_str(), edge)).db()?;
+            edges.extend(edges_of(&mut rows)?);
+        }
+        Ok(edges)
+    }
+
+    /// The stored `parent:` of the document at `path` ([`PARENT`]); `None`
+    /// without a row.
+    pub fn parent(&self, path: &str) -> Result<Option<StoredParent>, StoreError> {
+        let mut statement = self.tx.prepare(PARENT).db()?;
+        let mut rows = statement.query((self.wt, path)).db()?;
+        let mut parent: Option<StoredParent> = None;
+        while let Some(row) = rows.next().db()? {
+            let end = end_of(row.get(3).db()?, row.get(4).db()?);
+            match &mut parent {
+                Some(parent) => parent.ends.extend(end),
+                None => {
+                    parent = Some(StoredParent {
+                        path: path.to_owned(),
+                        state: state_of(&row.get::<_, String>(1).db()?)?,
+                        reason: row.get(2).db()?,
+                        ends: end.into_iter().collect(),
+                    });
+                }
+            }
+        }
+        Ok(parent)
     }
 }
 
@@ -480,17 +530,26 @@ fn read_edges(tx: &Transaction<'_>, wt: i64) -> Result<Vec<StoredEdge>, StoreErr
         )
         .db()?;
     let mut rows = statement.query([wt]).db()?;
+    edges_of(&mut rows)
+}
+
+/// The end a row's `end_path` and `end_ord` give; none unless resolved.
+fn end_of(end_path: Option<String>, end_ord: Option<i64>) -> Option<(String, usize)> {
+    match (end_path, end_ord) {
+        (Some(end_path), Some(end_ord)) => Some((end_path, index_of(end_ord))),
+        _ => None,
+    }
+}
+
+/// The edges of rows in `edge_columns!`' order, sorted by (path, `ord`,
+/// `n`): consecutive rows of one `(path, ord)` are one edge, its ends in
+/// row order.
+fn edges_of(rows: &mut rusqlite::Rows<'_>) -> Result<Vec<StoredEdge>, StoreError> {
     let mut edges: Vec<StoredEdge> = Vec::new();
     while let Some(row) = rows.next().db()? {
         let path: String = row.get(0).db()?;
         let ord = index_of(row.get(1).db()?);
-        let end = match (
-            row.get::<_, Option<String>>(11).db()?,
-            row.get::<_, Option<i64>>(12).db()?,
-        ) {
-            (Some(end_path), Some(end_ord)) => Some((end_path, index_of(end_ord))),
-            _ => None,
-        };
+        let end = end_of(row.get(11).db()?, row.get(12).db()?);
         if let Some(last) = edges.last_mut()
             && last.path == path
             && last.ord == ord
@@ -1058,5 +1117,121 @@ mod tests {
         }
         eprintln!("{nodes} nodes; rows held, outgoing, incoming: {answered:?}");
         assert!(answered.iter().all(|&count| count > 0), "{answered:?}");
+    }
+
+    // ------------------------------------------------------- store-reads (RM-0079)
+    //
+    // docs/features/store-reads.md AC-12, the
+    // store's read half. `EDGE`, `PARENT` and the keyed decode's
+    // `FILE_BY_PATH` plan as a `SEARCH` with no table `SCAN`, beside the
+    // six above; on the SQL-filled rows at 10 000
+    // and 100 000 edges, `EDGE`, `PARENT` and the snapshot lookups a subset
+    // is built by (`holders`, `held`, `ending`, `parent`, the keyed
+    // `decode` with its BLAKE3) each cost at most 3x more at 100 000, best
+    // of three, 2 ms floor. M: `EDGE` without `f.path = ?2` (about 10x);
+    // the keyed decode served by `decode_all`.
+
+    /// The statements of the subset read, by name: one edge's rows, one
+    /// document's `parent:` row, the keyed decode's file row.
+    const READ_STATEMENTS: [(&str, &str); 3] = [
+        ("EDGE statement", super::EDGE),
+        ("PARENT statement", super::PARENT),
+        ("FILE_BY_PATH statement", crate::read::FILE_BY_PATH),
+    ];
+
+    #[test]
+    fn edge_and_parent_search_an_index() {
+        let scratch = Scratch::new("plan-reads");
+        let index = scratch.open("plan");
+        for (name, sql) in READ_STATEMENTS {
+            let details = plan(&index, sql);
+            assert!(
+                details.iter().any(|detail| detail.starts_with("SEARCH")),
+                "{name}: no search: {details:?}"
+            );
+            assert!(
+                !details
+                    .iter()
+                    .any(|detail| detail.starts_with("SCAN") && !detail.contains("CONSTANT ROW")),
+                "{name}: a scan: {details:?}"
+            );
+        }
+    }
+
+    /// The best of three runs of 20 rounds of `lookup` over eight probes;
+    /// the answers of one round.
+    fn cost_of(mut lookup: impl FnMut(usize) -> usize) -> (Duration, usize) {
+        let mut found = 0;
+        let best = (0..3)
+            .map(|_| {
+                let started = Instant::now();
+                for _ in 0..20 {
+                    found = (0..8).map(&mut lookup).sum();
+                }
+                started.elapsed()
+            })
+            .min()
+            .expect("three runs");
+        (best, found)
+    }
+
+    /// One snapshot lookup's cost at one size, over the probes `cost` uses.
+    fn snapshot_cost(index: &SqliteIndex, name: &str) -> (Duration, usize) {
+        let snapshot = index.snapshot().expect("a snapshot of the filled rows");
+        let path = |k: usize| format!("p/f{}.md", 3 + k);
+        match name {
+            "holders" => cost_of(|k| {
+                snapshot
+                    .holders(&format!("name:K{}", 3 + k * 11))
+                    .expect("holders")
+                    .len()
+            }),
+            "held" => cost_of(|k| snapshot.held(&path(k), k % 10).expect("held").len()),
+            "ending" => cost_of(|k| snapshot.ending(&path(k), k % 10).expect("ending").len()),
+            "parent" => cost_of(|k| {
+                snapshot
+                    .parent(&path(k))
+                    .expect("parent")
+                    .map_or(0, |parent| parent.ends.len())
+            }),
+            "decode" => cost_of(|k| {
+                let decoded = snapshot.decode(&[path(k).as_str()]).expect("decode");
+                decoded.input.files.len() + decoded.blake3.len()
+            }),
+            other => panic!("no lookup {other}"),
+        }
+    }
+
+    #[test]
+    fn the_subset_lookups_cost_sublinearly() {
+        let scratch = Scratch::new("cost-reads");
+        let (small, small_wt) = populated(&scratch, "10k", 10_000);
+        let (large, large_wt) = populated(&scratch, "100k", 100_000);
+        let mut timed: Vec<(String, Duration, usize, Duration, usize)> = Vec::new();
+        for (name, sql) in READ_STATEMENTS {
+            let (at_10k, small_rows) = cost(&small, small_wt, name, sql);
+            let (at_100k, large_rows) = cost(&large, large_wt, name, sql);
+            timed.push((name.to_owned(), at_10k, small_rows, at_100k, large_rows));
+        }
+        for name in ["holders", "held", "ending", "parent", "decode"] {
+            let (at_10k, small_rows) = snapshot_cost(&small, name);
+            let (at_100k, large_rows) = snapshot_cost(&large, name);
+            timed.push((name.to_owned(), at_10k, small_rows, at_100k, large_rows));
+        }
+        for (name, at_10k, small_rows, at_100k, large_rows) in timed {
+            eprintln!(
+                "{name}, best of three: 10k {at_10k:?} ({small_rows} rows), \
+                 100k {at_100k:?} ({large_rows} rows)"
+            );
+            assert!(
+                small_rows > 0 && small_rows == large_rows,
+                "{name}: the probes find the same rows at both sizes"
+            );
+            let floor = Duration::from_millis(2).max(at_10k);
+            assert!(
+                at_100k <= floor * 3,
+                "{name}: 10x the rows cost {at_100k:?} against {at_10k:?}: a scan"
+            );
+        }
     }
 }

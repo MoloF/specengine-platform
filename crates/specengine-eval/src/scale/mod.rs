@@ -1069,25 +1069,18 @@ fn spread(values: &[u64]) -> Spread {
 
 /// `other_us` (`docs/features/scale-eval.md` "Acceptance criteria",
 /// SE-8): each read's median less the steps it takes today, never below
-/// 0. `get_node`: open, update, decode, resolver; `get_node_links`: those,
-/// the re-parse and the graph; `search`: open, update, the full-text
-/// query; `get_context_bundle`: open, update, decode, re-parse, graph.
+/// 0. `get_node`, `get_node_links` and `get_context_bundle` read a subset
+/// of the index since RM-0079 (`docs/features/store-reads.md` "Eval"):
+/// open and update alone; `search`: open, update, the full-text query. The
+/// other steps are still replayed and reported: what the whole reads cost.
 /// `update_us` covers `walk_us` and `hash_us`, never added again.
 fn other_us(reads: &Reads, steps: &Steps) -> OtherUs {
     let opened = steps.open_us + steps.update_us;
     OtherUs {
-        get_node: reads
-            .get_node
-            .median_us
-            .saturating_sub(opened + steps.decode_us + steps.resolver_us),
-        get_node_links: reads.get_node_links.median_us.saturating_sub(
-            opened + steps.decode_us + steps.reparse_us + steps.resolver_us + steps.graph_us,
-        ),
+        get_node: reads.get_node.median_us.saturating_sub(opened),
+        get_node_links: reads.get_node_links.median_us.saturating_sub(opened),
         search: reads.search.median_us.saturating_sub(opened + steps.fts_us),
-        get_context_bundle: reads
-            .get_context_bundle
-            .median_us
-            .saturating_sub(opened + steps.decode_us + steps.reparse_us + steps.graph_us),
+        get_context_bundle: reads.get_context_bundle.median_us.saturating_sub(opened),
     }
 }
 

@@ -103,35 +103,15 @@ const KEYWORDS: &[&str] = &[
     "depends_on",
 ];
 
-/// The four reads and the steps each takes today ("Description", the
-/// first table's third column; `update_us` covers `walk_us` and `hash_us`).
+/// The four reads and the steps `other_us` subtracts from each: `get_node`,
+/// `get_node_links` and `get_context_bundle` read a subset of the index
+/// since store-reads (its "Eval": open and update alone); `search` keeps
+/// its full-text query. `update_us` covers `walk_us` and `hash_us`.
 const READ_STEPS: [(&str, &[&str]); 4] = [
-    (
-        "get_node",
-        &["open_us", "update_us", "decode_us", "resolver_us"],
-    ),
-    (
-        "get_node_links",
-        &[
-            "open_us",
-            "update_us",
-            "decode_us",
-            "reparse_us",
-            "resolver_us",
-            "graph_us",
-        ],
-    ),
+    ("get_node", &["open_us", "update_us"]),
+    ("get_node_links", &["open_us", "update_us"]),
     ("search", &["open_us", "update_us", "fts_us"]),
-    (
-        "get_context_bundle",
-        &[
-            "open_us",
-            "update_us",
-            "decode_us",
-            "reparse_us",
-            "graph_us",
-        ],
-    ),
+    ("get_context_bundle", &["open_us", "update_us"]),
 ];
 
 /// The leaves of `result` beside `sizes` ("Data", "stdout").

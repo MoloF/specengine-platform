@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-cli]
 owner: owner
-reviewed: 2026-11-03
+reviewed: 2026-11-04
 ---
 
 # specengine-cli -- the spec binary
@@ -35,6 +35,7 @@ The CLI: the agent read loop (search, read by ID) over an index refreshed on eve
 
 - Writes: `index`, `resolve`, the reads (`search`, `show`, `tree`, `graph`, `impact`, `bundle`, `refs`, `symbols`, `unmapped`, `verify`, `health`, `roadmap`, `flow`, `trace`, `lock diff`) and the queue (`import-state`, `task`, `card`, `stage`, `gate`) only the data directory, `approve`, `round answer`, a hub's confirm also its target or a new file (`--editorial`: `spec.lock` too; a drift item: `spec.lock` alone) and the index's changed outputs (`outputs.rs`, `proposal-outputs.md`: rendered from the committed tree, staged in a step of their own before step 9's commit, an index entry this run made dropped only while still intent-to-add, each committed blob compared at step 10, a mismatch a warning) and commit in the proposal's worktree, `lock accept`, `lock rebase`, `verify --tests` `spec.lock` and a commit, `regen` the file; `init` only its file; `export index` only the index, its shards and its roadmap view; `export state` only its dump, outside the repository; `check`, `bump`, `verify --staged`, `serve` nothing; nothing else under the root (`architecture.md#storage`) but what the project's command `verify --tests` runs writes.
 - Freshness: the reads run `update` first, never changing the exit code: broken or unreadable files indexed with diagnostics; a missing root -> a `warning:` if `[paths]` is written, else silent. `index`, `refs`, `symbols`, `unmapped`, `health`, `resolve` (with `[code]`: `show --bindings`, `bundle`, `task show`, `impact`) then refresh the code index; a code-walk gap: `index` warns, `health`'s rows 4-6 `cannot`, bindings reads note it, the rest refuse.
+- Subset: `show`, `--links`, `bundle` read their REFs' rows and files, BLAKE3-checked, or walk (`subset.rs`; tests' walk: `#[doc(hidden)]` `show_walk`, `bundle_walk`): `spec-read-subset.md`.
 - Resolution: `spec-cli-read.md` "Resolution".
 - Tier 3: `search` drops it in the query, before the limit, unless `--archive`; `show` reaches it, marked ` | archived`.
 - Determinism: one DB state (`check`: one tree, one date), byte-identical stdout; nothing rests on rowid, insertion, time or the absolute root.

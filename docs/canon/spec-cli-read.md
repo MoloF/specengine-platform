@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-19
+reviewed: 2026-11-04
 ---
 
 # spec search and spec show: output and the cap
@@ -25,7 +25,7 @@ What the agent read loop's two commands print, as text and JSON, and how the out
 
 ## Resolution
 
-How every read and queue command takes a REF (moved from the CLI README). Resolution is the check's: a `*.md` argument (queue targets too) is a path, a walked name exactly (not `is_clean_relative` -> exit 2; none -> exit 1 `is no indexed document`); else `grammar::parse_reference` (none -> exit 1 listing the prefixes; look-alike or mixed-script -> exit 2 naming the Latin fix; `project:` -> exit 2), then `Resolver::resolve_detached` over `SpecIndex::indexed_input`. Per holder, the nodes whose `id` is the ID, else its `aliases_from` target, else (an `aliases:` entry) the document; `#SECTION`: that section. Spans come from a parse of the very bytes printed, read once, never the index (non-UTF-8 -> U+FFFD, `utf8: false`); a holder whose fresh parse lost the ID is skipped. Several: all by `(path, ord)`, one `warning:`.
+How every read and queue command takes a REF (moved from the CLI README). Resolution is the check's: a `*.md` argument (queue targets too) is a path, a walked name exactly (not `is_clean_relative` -> exit 2; none -> exit 1 `is no indexed document`); else `grammar::parse_reference` (none -> exit 1 listing the prefixes; look-alike or mixed-script -> exit 2 naming the Latin fix; `project:` -> exit 2), then `Resolver::resolve_detached` over the stored files: for `show` and `bundle` the REF's closure from the index (`spec-read-subset.md`), else (their walk, the other commands) `SpecIndex::indexed_input`. Per holder, the nodes whose `id` is the ID, else its `aliases_from` target, else (an `aliases:` entry) the document; `#SECTION`: that section. Spans come from a parse of the very bytes printed, read once, never the index (non-UTF-8 -> U+FFFD, `utf8: false`); a holder whose fresh parse lost the ID is skipped. Several: all by `(path, ord)`, one `warning:`.
 
 ## Search index
 

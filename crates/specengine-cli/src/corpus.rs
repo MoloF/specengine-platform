@@ -1,22 +1,24 @@
-//! What `spec tree`, `spec graph` and `spec show --links` read: the index,
-//! updated first (freshness, the file list), as the check's input; then
-//! every parsed file read again from the working tree and parsed again by
-//! the check's parser, the source of lines and written forms (a file that
-//! cannot be read or parsed keeps its indexed parse, its lines 1, with a
-//! warning). The live rule, the count of what it left out, and a `REF` or
-//! `ROOT` located in the graph.
+//! What the whole reads (`spec tree`, `spec graph`, the walk of `spec show
+//! --links` and `spec bundle`) read: the index, updated first (freshness,
+//! the file list), as the check's input; then every parsed file read again
+//! from the working tree, the source of lines and written forms: a file
+//! whose bytes hash to its row keeps its decoded parse, any other is parsed
+//! again by the check's parser (a file that cannot be read or parsed keeps
+//! its indexed parse, its lines 1, with a warning). The live rule, the
+//! count of what it left out, and a `REF` or `ROOT` located in the graph.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::panic::{self, AssertUnwindSafe};
 
 use serde::Serialize;
 use specengine_core::check::{CheckFile, CheckInput, Endpoint, NodeAt, SpecGraph, Standing};
-use specengine_store::{Source as _, SpecIndex as _, SqliteIndex, WorkingTree};
+use specengine_store::{Decoded, Source as _, SpecIndex as _, SqliteIndex, WorkingTree, b3_hash};
 
 use crate::location::open_index;
 use crate::project::ProjectRoot;
-use crate::refresh::refresh;
+use crate::refresh::refresh_in;
 use crate::show::{Target, project_qualified};
+use crate::subset::seams::{self, Event};
 use crate::{CliError, Env, Message, store_error};
 
 /// The index after its update, as the check's input; `with_bytes`: each
@@ -40,39 +42,93 @@ pub(crate) fn indexed_in(
     messages: &mut Vec<Message>,
     with_bytes: bool,
 ) -> Result<CheckInput, CliError> {
-    let (_, warnings) = refresh(index, project, false)?;
-    messages.extend(warnings);
-    let mut input = index.indexed_input().map_err(store_error)?;
     if with_bytes {
-        add_bytes(&mut input, project, messages)?;
+        return Ok(indexed_read(index, project, messages)?.0);
     }
-    Ok(input)
+    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
+    let (_, warnings) = refresh_in(index, project, &tree, false)?;
+    messages.extend(warnings);
+    seams::fresh();
+    seams::note(Event::WholeDecode);
+    index.indexed_input().map_err(store_error)
 }
 
-/// What `with_bytes` adds to an input [`indexed`] gave without it: each
-/// parsed file read and parsed again as it is now, so the two reads give
-/// one input (the package's plan is `spec roadmap`'s).
+/// [`indexed_in`] with bytes, and the paths whose bytes it attached: each
+/// read once, so a reader that prints a file of the input takes its bytes
+/// from there and prints what the graph was built from.
+pub(crate) fn indexed_read(
+    index: &mut SqliteIndex,
+    project: &ProjectRoot,
+    messages: &mut Vec<Message>,
+) -> Result<(CheckInput, BTreeSet<String>), CliError> {
+    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
+    let (_, warnings) = refresh_in(index, project, &tree, false)?;
+    messages.extend(warnings);
+    seams::fresh();
+    let Decoded { mut input, blake3 } = decoded_whole(index)?;
+    let read = read_bytes(&mut input, &blake3, &tree, project, messages);
+    Ok((input, read))
+}
+
+/// [`indexed`] without bytes, with each file's stored hash from the same
+/// snapshot: what [`add_bytes`] needs later (`spec task`'s package).
+pub(crate) fn indexed_decoded(
+    env: &Env,
+    project: &ProjectRoot,
+    messages: &mut Vec<Message>,
+) -> Result<Decoded, CliError> {
+    let mut open = open_index(env, project)?;
+    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
+    let (_, warnings) = refresh_in(&mut open.index, project, &tree, false)?;
+    messages.extend(warnings);
+    seams::fresh();
+    decoded_whole(&open.index)
+}
+
+/// Every stored file with its hash, from one snapshot.
+fn decoded_whole(index: &SqliteIndex) -> Result<Decoded, CliError> {
+    let snapshot = index.snapshot().map_err(store_error)?;
+    seams::note(Event::WholeDecode);
+    snapshot.decode_all().map_err(store_error)
+}
+
+/// What `with_bytes` adds to an input [`indexed_decoded`] gave without it,
+/// `blake3` its hashes: each parsed file read and parsed again as it is
+/// now, unless its bytes match its row (Q7), so the two reads give one
+/// input (the package's plan is `spec roadmap`'s).
 pub(crate) fn add_bytes(
     input: &mut CheckInput,
+    blake3: &BTreeMap<String, Option<String>>,
     project: &ProjectRoot,
     messages: &mut Vec<Message>,
 ) -> Result<(), CliError> {
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
-    read_bytes(input, &tree, project, messages);
+    read_bytes(input, blake3, &tree, project, messages);
     Ok(())
 }
 
-/// Reads every parsed file again and parses it as it is now, whatever its
-/// size: the parse, size and bytes then agree, so no edit made after the
-/// update leaves a stale span. A file that cannot be read or parsed keeps
-/// its indexed parse, its lines shown as 1.
+/// The bytes read now hash to the row's BLAKE3 (`stored`, lower-case hex;
+/// `None`: the row has none): the row's parse is the parse of `bytes`.
+pub(crate) fn row_matches(stored: Option<&str>, bytes: &[u8]) -> bool {
+    stored.is_some_and(|stored| b3_hash(bytes).strip_prefix("b3:") == Some(stored))
+}
+
+/// Reads every parsed file again, whatever its size, so the parse, size and
+/// bytes agree and no edit made after the update leaves a stale span: a
+/// file whose bytes hash to its row (`blake3`, the input's own snapshot)
+/// keeps its decoded parse, which is the parse of those bytes (the store's
+/// projection contract; the `store-reads` spec, Q7); any other is
+/// parsed again as it is now. A file that cannot be read or parsed keeps
+/// its indexed parse, its lines shown as 1. The paths given their bytes.
 fn read_bytes(
     input: &mut CheckInput,
+    blake3: &BTreeMap<String, Option<String>>,
     tree: &WorkingTree,
     project: &ProjectRoot,
     messages: &mut Vec<Message>,
-) {
+) -> BTreeSet<String> {
     let scheme = &project.config.scheme;
+    let mut read = BTreeSet::new();
     for file in &mut input.files {
         if file.parsed.is_none() {
             continue;
@@ -87,17 +143,31 @@ fn read_bytes(
                 continue;
             }
         };
+        let stored = blake3.get(&file.path).and_then(Option::as_deref);
+        if row_matches(stored, &bytes)
+            && let Some(parsed) = file.parsed.take()
+        {
+            let path = std::mem::take(&mut file.path);
+            read.insert(path.clone());
+            *file = CheckFile::parsed(path, bytes, parsed);
+            continue;
+        }
+        seams::note(Event::Parse(&file.path));
         let path = file.path.clone();
         let parsed = panic::catch_unwind(AssertUnwindSafe(|| {
             specengine_core::parse(&path, &bytes, scheme)
         }));
         match parsed {
-            Ok(parsed) => *file = CheckFile::parsed(path, bytes, parsed),
+            Ok(parsed) => {
+                read.insert(path.clone());
+                *file = CheckFile::parsed(path, bytes, parsed);
+            }
             Err(_) => messages.push(Message::Warning(format!(
                 "the spec parser failed on `{path}`; its lines show as 1"
             ))),
         }
     }
+    read
 }
 
 /// What the live rule left out: generated and Tier 3 files' nodes or

@@ -28,11 +28,17 @@
 //!
 //! Lines and written forms come from each file's bytes; without them every
 //! line is 1 and a written form is rebuilt from the parse. It reads no file.
+//!
+//! [`SpecGraph::from_rows`] builds the graph of a subset whose edges and
+//! parents are given (the index's rows, `docs/features/store-reads.md`
+//! "Data"), never resolved: ends, states and reasons from the rows, written
+//! forms and lines from the citing file's bytes through the same per-file
+//! routine [`SpecGraph::new`] resolves by.
 
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use specengine_model::{
-    CanonTarget, Direction, EdgeLabel, IdScheme, LinkOrigin, LinkTarget, MENTIONS, Node,
+    CanonTarget, Direction, EdgeLabel, IdScheme, Link, LinkOrigin, LinkTarget, MENTIONS, Node,
     ParsedFile, PathTarget, Reference,
 };
 
@@ -41,7 +47,7 @@ use super::input::{CheckFile, CheckInput};
 use super::links::{self, percent_decode, resolve_link_path, was_read};
 use super::render::{is_tier3, readable_fields};
 use super::resolve::{
-    EdgeKey, Reads, Resolution, Resolver, Won, declared_references, parent_reference,
+    DeclaredRef, EdgeKey, Reads, Resolution, Resolver, Won, declared_references, parent_reference,
     reference_line, written,
 };
 use super::text::{FileText, front_matter_failed};
@@ -267,6 +273,88 @@ pub struct ResolvedFiles<'a> {
     pub files: Vec<FileEdges>,
 }
 
+/// One stored edge (`docs/canon/spec-index-edges.md` "Tables"; the store's
+/// `StoredEdge`): an [`Edge`] without what the citing file's bytes give
+/// (its written form, its line).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EdgeRow {
+    /// The citing file.
+    pub path: String,
+    /// Its position among the file's edges, core's order.
+    pub ord: usize,
+    /// `Edge.holder.ord`, in the citing file.
+    pub holder: usize,
+    pub link_type: String,
+    pub origin: LinkOrigin,
+    /// `status: superseded-by X`: the written end is the source.
+    pub names_source: bool,
+    /// How the written end fared.
+    pub state: LinkState,
+    /// `Edge::reason`: why it dangles, else its note.
+    pub reason: Option<String>,
+    pub label: Option<EdgeLabel>,
+    /// `Edge.offset`.
+    pub at: usize,
+    /// The written end's nodes as `(path, position)`, in core's order;
+    /// empty unless resolved.
+    pub ends: Vec<(String, usize)>,
+}
+
+/// One document's stored `parent:`, before cycle breaking (the store's
+/// `StoredParent`); none for no `parent:`, a failed front-matter or no
+/// parse.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParentRow {
+    /// The document's file.
+    pub path: String,
+    /// `resolved`, `dangling` or `skipped`.
+    pub state: LinkState,
+    /// Why it dangles.
+    pub reason: Option<String>,
+    /// The node it is listed under, then the further holders; empty unless
+    /// resolved.
+    pub ends: Vec<(String, usize)>,
+}
+
+/// The rows [`SpecGraph::from_rows`] builds a subset's graph from.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GraphRows {
+    /// Any order; one per `(path, ord)`.
+    pub edges: Vec<EdgeRow>,
+    /// One per document.
+    pub parents: Vec<ParentRow>,
+}
+
+/// One link as its citing file writes it, in [`SpecGraph::file_links`]'
+/// order, before any lookup: what it is, its written form, its line, its
+/// offset. `file_links` resolves it; [`SpecGraph::from_rows`] takes its
+/// text alone.
+struct Site<'p> {
+    what: SiteKind<'p>,
+    written: String,
+    line: usize,
+    offset: usize,
+}
+
+// Short-lived, one file's at a time: the reference stays unboxed (no
+// allocation per link on the whole graph's hot path).
+#[allow(clippy::large_enum_variant)]
+enum SiteKind<'p> {
+    /// A front-matter reference, `parent:` aside.
+    Declared(DeclaredRef),
+    /// A path-form `canon:`.
+    Canon(&'p PathTarget),
+    /// An inline mention or Markdown file link.
+    Inline(&'p Link),
+}
+
+/// One file's link sites, and its `parent:` reference with its written
+/// form (`None` without one or with a failed front-matter).
+struct Sites<'p> {
+    parent: Option<(Reference, String)>,
+    links: Vec<Site<'p>>,
+}
+
 /// The per-file routine of [`SpecGraph::new`] over `input`, for the files
 /// `only` names (`None`: every file), each with the keys it read
 /// (`docs/features/edge-table.md` "Data"). A file's resolution over a
@@ -362,6 +450,146 @@ impl<'a> SpecGraph<'a> {
         graph.link_children();
         graph.index_edges();
         graph
+    }
+
+    /// The graph of a subset whose edges and parents are given, never
+    /// resolved (`docs/features/store-reads.md` "Data", Core API): edges by
+    /// (citing path, `ord`), core's order; each end mapped by path onto
+    /// `input`'s files, path order, so [`NodeAt`] order agrees with the
+    /// whole graph's; `state` gives the written end, the other end is
+    /// `Nodes([holder])` and `names_source` swaps the two; `reason` is a
+    /// resolved or unchecked edge's note; written forms and lines from the
+    /// citing file's bytes ([`SpecGraph::file_links`]' routine, no lookup);
+    /// then cycles, children and the edge indexes as [`SpecGraph::new`].
+    ///
+    /// It answers for the nodes its rows cover (`links`, `ancestors`,
+    /// `within`, `node`, `name`, `line`, `standing`, `document`, `file_of`;
+    /// `locate` when `input` holds the REF's closure). A row naming no file
+    /// of `input` (a corrupted row) is left out: an edge whose citing file
+    /// is absent, an end outside `input` (a resolved edge with none left is
+    /// unchecked), a parent with no end left.
+    pub fn from_rows(
+        input: &'a CheckInput,
+        scheme: &'a IdScheme,
+        paths: &'a Paths,
+        rows: GraphRows,
+    ) -> Self {
+        let mut graph = Self::context(input, scheme, paths);
+        let GraphRows { mut edges, parents } = rows;
+        edges.sort_by(|a, b| (a.path.as_str(), a.ord).cmp(&(b.path.as_str(), b.ord)));
+        edges.dedup_by(|a, b| a.path == b.path && a.ord == b.ord);
+        // Each citing file's sites, computed once.
+        let mut sites: BTreeMap<usize, Option<Sites<'a>>> = BTreeMap::new();
+        let mut built = Vec::with_capacity(edges.len());
+        for row in edges {
+            let Some(file) = graph.file_of(&row.path) else {
+                continue;
+            };
+            let site = sites
+                .entry(file)
+                .or_insert_with(|| graph.sites(file))
+                .as_ref()
+                .and_then(|found| found.links.get(row.ord));
+            let (written, line) = site.map_or_else(
+                || (String::new(), 1),
+                |site| (site.written.clone(), site.line),
+            );
+            let holder = NodeAt {
+                file,
+                ord: row.holder,
+            };
+            let end = graph.row_end(row.state, row.reason.as_deref(), &row.ends);
+            let (source, target) = if row.names_source {
+                (end, Endpoint::Nodes(vec![holder]))
+            } else {
+                (Endpoint::Nodes(vec![holder]), end)
+            };
+            built.push(Edge {
+                link_type: row.link_type,
+                origin: row.origin,
+                file,
+                holder,
+                source,
+                target,
+                names_source: row.names_source,
+                written,
+                line,
+                offset: row.at,
+                note: (row.state != LinkState::Dangling)
+                    .then_some(row.reason)
+                    .flatten(),
+                edge: row.label,
+            });
+        }
+        graph.edges = built;
+        for row in parents {
+            let Some(file) = graph.file_of(&row.path) else {
+                continue;
+            };
+            let document = NodeAt { file, ord: 0 };
+            if graph.node(document).is_none() {
+                continue;
+            }
+            let written = sites
+                .entry(file)
+                .or_insert_with(|| graph.sites(file))
+                .as_ref()
+                .and_then(|found| found.parent.as_ref())
+                .map_or_else(String::new, |(_, written)| written.clone());
+            let parent = match row.state {
+                LinkState::Resolved => {
+                    let mut nodes = graph.row_nodes(&row.ends).into_iter();
+                    let Some(node) = nodes.next() else {
+                        continue;
+                    };
+                    Parent::Node {
+                        node,
+                        others: nodes.collect(),
+                    }
+                }
+                LinkState::Dangling => Parent::Dangling {
+                    written,
+                    reason: row.reason.unwrap_or_default(),
+                },
+                // A stored parent is never unchecked (`parent_at`).
+                LinkState::Skipped | LinkState::Unchecked => Parent::Skipped { written },
+            };
+            graph.parents.insert(document, parent);
+        }
+        graph.break_cycles();
+        graph.link_children();
+        graph.index_edges();
+        graph
+    }
+
+    /// A row's ends as nodes of this graph, in the row's order; an end
+    /// outside its files is left out.
+    fn row_nodes(&self, ends: &[(String, usize)]) -> Vec<NodeAt> {
+        ends.iter()
+            .filter_map(|(path, ord)| self.file_of(path).map(|file| NodeAt { file, ord: *ord }))
+            .collect()
+    }
+
+    /// The written end a stored row gives.
+    fn row_end(
+        &self,
+        state: LinkState,
+        reason: Option<&str>,
+        ends: &[(String, usize)],
+    ) -> Endpoint {
+        match state {
+            LinkState::Resolved => {
+                let nodes = self.row_nodes(ends);
+                if nodes.is_empty() {
+                    Endpoint::Unchecked
+                } else {
+                    Endpoint::Nodes(nodes)
+                }
+            }
+            LinkState::Dangling => Endpoint::Dangling(reason.unwrap_or_default().to_owned()),
+            LinkState::Skipped => Endpoint::Skipped,
+            LinkState::Unchecked => Endpoint::Unchecked,
+        }
     }
 
     /// The files of `input` in path order, indexed for resolution: no
@@ -778,51 +1006,131 @@ impl<'a> SpecGraph<'a> {
     /// `canon:`, then the body's inline links; every lookup goes to
     /// `reads`.
     fn file_links(&self, file: usize, reads: &mut Reads) -> (Option<Parent>, Vec<Edge>) {
-        let Some(parsed) = self.files[file].parsed.as_ref() else {
+        let Some(sites) = self.sites(file) else {
             return (None, Vec::new());
         };
-        let Some(document) = parsed.document() else {
-            return (None, Vec::new());
-        };
-        let text = &self.texts[file];
         let from = self.paths()[file];
         let at = NodeAt { file, ord: 0 };
-        let mut parent = Parent::None;
-        let mut edges = Vec::new();
+        let parent = match sites.parent {
+            Some((reference, written)) => {
+                let end = self.locate_from(Some(from), &reference, &written, false, reads);
+                parent_at(end, written)
+            }
+            None => Parent::None,
+        };
+        let mut edges = Vec::with_capacity(sites.links.len());
+        for Site {
+            what,
+            written,
+            line,
+            offset,
+        } in sites.links
+        {
+            edges.push(match what {
+                SiteKind::Declared(declared) => {
+                    let reference = &declared.reference;
+                    let end = self.locate_from(Some(from), reference, &written, false, reads);
+                    let names_source = declared.key == "status";
+                    let link_type = match declared.key {
+                        "status" => SUPERSEDES.to_owned(),
+                        "adrs" | "refs" => MENTIONS.to_owned(),
+                        "links" => declared.link_type.clone().unwrap_or_default(),
+                        key => key.to_owned(),
+                    };
+                    let (source, target) = if names_source {
+                        (end, Endpoint::Nodes(vec![at]))
+                    } else {
+                        (Endpoint::Nodes(vec![at]), end)
+                    };
+                    Edge {
+                        link_type,
+                        origin: LinkOrigin::Frontmatter,
+                        file,
+                        holder: at,
+                        source,
+                        target,
+                        names_source,
+                        line,
+                        offset,
+                        written,
+                        note: None,
+                        edge: reference.edge.clone(),
+                    }
+                }
+                SiteKind::Canon(target) => {
+                    let (end, note) = self.canon_path(target, reads);
+                    Edge {
+                        link_type: CANON_LINK.to_owned(),
+                        origin: LinkOrigin::Frontmatter,
+                        file,
+                        holder: at,
+                        source: Endpoint::Nodes(vec![at]),
+                        target: end,
+                        names_source: false,
+                        written,
+                        line,
+                        offset,
+                        note,
+                        edge: None,
+                    }
+                }
+                SiteKind::Inline(link) => {
+                    let (end, note) = match &link.dst {
+                        LinkTarget::Reference(reference) => (
+                            self.locate_from(Some(from), reference, &written, true, reads),
+                            None,
+                        ),
+                        LinkTarget::Path(target) => self.file_link(file, target, reads),
+                    };
+                    let holder = NodeAt {
+                        file,
+                        ord: self.holder_at(file, offset),
+                    };
+                    Edge {
+                        link_type: link.link_type.clone(),
+                        origin: LinkOrigin::Inline,
+                        file,
+                        holder,
+                        source: Endpoint::Nodes(vec![holder]),
+                        target: end,
+                        names_source: false,
+                        written,
+                        line,
+                        offset,
+                        note,
+                        edge: None,
+                    }
+                }
+            });
+        }
+        (Some(parent), edges)
+    }
+
+    /// One file's links as its text writes them, in [`SpecGraph::file_links`]'
+    /// order (front-matter references, `parent:` aside; a path-form
+    /// `canon:`; the body's inline links), each with its written form, line
+    /// and offset, and its `parent:` reference: the text alone, no lookup
+    /// (`file_links` and [`SpecGraph::from_rows`] share it). `None` without
+    /// a parse or a document.
+    fn sites(&self, file: usize) -> Option<Sites<'a>> {
+        let checked: &'a CheckFile = self.files.get(file).copied()?;
+        let parsed = checked.parsed.as_ref()?;
+        let document = parsed.document()?;
+        let text = &self.texts[file];
+        let mut parent = None;
+        let mut found = Vec::new();
         if !front_matter_failed(parsed) {
             for declared in declared_references(document, self.scheme) {
-                let reference = &declared.reference;
-                let written = written(text, reference);
-                let end = self.locate_from(Some(from), reference, &written, false, reads);
+                let written = written(text, &declared.reference);
                 if declared.key == "parent" {
-                    parent = parent_at(end, written);
+                    parent = Some((declared.reference, written));
                     continue;
                 }
-                let names_source = declared.key == "status";
-                let link_type = match declared.key {
-                    "status" => SUPERSEDES.to_owned(),
-                    "adrs" | "refs" => MENTIONS.to_owned(),
-                    "links" => declared.link_type.clone().unwrap_or_default(),
-                    key => key.to_owned(),
-                };
-                let (source, target) = if names_source {
-                    (end, Endpoint::Nodes(vec![at]))
-                } else {
-                    (Endpoint::Nodes(vec![at]), end)
-                };
-                edges.push(Edge {
-                    link_type,
-                    origin: LinkOrigin::Frontmatter,
-                    file,
-                    holder: at,
-                    source,
-                    target,
-                    names_source,
-                    line: reference_line(text, reference, declared.key),
-                    offset: reference.span.map_or(0, |span| span.start),
+                found.push(Site {
+                    line: reference_line(text, &declared.reference, declared.key),
+                    offset: declared.reference.span.map_or(0, |span| span.start),
                     written,
-                    note: None,
-                    edge: reference.edge.clone(),
+                    what: SiteKind::Declared(declared),
                 });
             }
             if let Some(CanonTarget::Path(target)) = document
@@ -830,23 +1138,14 @@ impl<'a> SpecGraph<'a> {
                 .as_ref()
                 .and_then(|fields| fields.canon.as_ref())
             {
-                let (end, note) = self.canon_path(target, reads);
-                edges.push(Edge {
-                    link_type: CANON_LINK.to_owned(),
-                    origin: LinkOrigin::Frontmatter,
-                    file,
-                    holder: at,
-                    source: Endpoint::Nodes(vec![at]),
-                    target: end,
-                    names_source: false,
+                found.push(Site {
+                    what: SiteKind::Canon(target),
                     written: canon_written(text, target),
                     line: target.span.filter(|_| !text.is_empty()).map_or_else(
                         || text.key_line("canon").unwrap_or(1),
                         |span| text.line(span.start),
                     ),
                     offset: target.span.map_or(0, |span| span.start),
-                    note,
-                    edge: None,
                 });
             }
         }
@@ -855,49 +1154,32 @@ impl<'a> SpecGraph<'a> {
             .iter()
             .filter(|link| link.origin == LinkOrigin::Inline)
         {
-            let (written, line, offset, end, note) = match &link.dst {
-                LinkTarget::Reference(reference) => {
-                    let written = written(text, reference);
-                    let end = self.locate_from(Some(from), reference, &written, true, reads);
-                    let line = reference
+            let (written, line, offset) = match &link.dst {
+                LinkTarget::Reference(reference) => (
+                    written(text, reference),
+                    reference
                         .span
                         .filter(|_| !text.is_empty())
-                        .map_or(1, |span| text.line(span.start));
-                    let offset = reference.span.map_or(0, |span| span.start);
-                    (written, line, offset, end, None)
-                }
-                LinkTarget::Path(target) => {
-                    let (end, note) = self.file_link(file, target, reads);
-                    let offset = target.span.map_or(0, |span| span.start);
-                    (
-                        links::written(text, target),
-                        links::line(text, target),
-                        offset,
-                        end,
-                        note,
-                    )
-                }
+                        .map_or(1, |span| text.line(span.start)),
+                    reference.span.map_or(0, |span| span.start),
+                ),
+                LinkTarget::Path(target) => (
+                    links::written(text, target),
+                    links::line(text, target),
+                    target.span.map_or(0, |span| span.start),
+                ),
             };
-            let holder = NodeAt {
-                file,
-                ord: self.holder_at(file, offset),
-            };
-            edges.push(Edge {
-                link_type: link.link_type.clone(),
-                origin: LinkOrigin::Inline,
-                file,
-                holder,
-                source: Endpoint::Nodes(vec![holder]),
-                target: end,
-                names_source: false,
+            found.push(Site {
+                what: SiteKind::Inline(link),
                 written,
                 line,
                 offset,
-                note,
-                edge: None,
             });
         }
-        (Some(parent), edges)
+        Some(Sites {
+            parent,
+            links: found,
+        })
     }
 
     /// A path-form `canon:`, by the check's rules: without `#anchor` it

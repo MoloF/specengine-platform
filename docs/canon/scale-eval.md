@@ -107,10 +107,12 @@ Each read is called once to warm up, then timed three times, and the best is kep
 
 | Key | Call | Its steps |
 |---|---|---|
-| `get_node` | `show`, no links | open, update, decode, resolver |
-| `get_node_links` | `show`, `links: true` | open, update, decode, reparse, resolver, graph |
+| `get_node` | `show`, no links | open, update |
+| `get_node_links` | `show`, `links: true` | open, update |
 | `search` | `search`, one word, limit 20 | open, update, fts |
-| `get_context_bundle` | `bundle`, one ID, `--budget` | open, update, decode, reparse, graph, then fitting |
+| `get_context_bundle` | `bundle`, one ID, `--budget` | open, update, then fitting |
+
+Since 12d `show` and `bundle` read a subset after the update (`spec-read-subset.md`); the other steps, still replayed, are the whole reads' cost (`reparse_us` without Q7).
 
 The steps, each the best of three on the warm index:
 
@@ -163,9 +165,7 @@ It never calls `Env::from_process` or `process_git`, so nothing is read or writt
 
 ## Baseline
 
-Today's numbers, which 12c-12e must beat. Taken 2026-11-04 on the owner's laptop: release, seed 1, budget 10 000, at `c2847ca` plus the slice, `wall_ms` 130 786.
-
-They are a reference only: a later slice re-runs `scale` at its base and its result on one machine.
+The numbers before 12c-12e: 2026-11-04, the owner's laptop, release, seed 1, budget 10 000, `c2847ca` plus the slice, `wall_ms` 130 786. A later slice compares re-runs at its base and head on one machine.
 
 | Read, median ms (max) | 1k | 10k | 100k | growth 10k to 100k |
 |---|---|---|---|---|
@@ -191,10 +191,21 @@ What the 100k run shows:
 - **Reads are linear,** about 11x from 10k.
 - **Three steps dominate a bundle.** Reparse is 49 % of it, update (hashing) 26 % and decode 15 %; graph is 8 %.
 - **The corpus at 100k:** 20 015 files, 22.9 MB and 101 746 links. 3 973 files are Tier 3. The maximum in-degree is 15.
-- **Index and check:** the build takes 9.43 s, the check 0.92 s, with 0 findings.
+- **Index and check:** the build 9.43 s, the check 0.92 s, 0 findings.
 - **Search hits:** 5 to 8 per query.
 - **W_after:** the median is 2 210, 2 182 and 2 239 B at 1k, 10k and 100k, already within 10 %. At 100k the p90 is 2 695 and the max 2 936. Tier 0 is 1 021 B, and the largest Tier 1 is 700 B.
 - **The hub at 100k:** in-degree 533, 441 links shown, `get_node_links` 1.64 s, bundle 1.62 s, W_after 2 646 B.
+
+**After 12d** (`store-reads`), release, seed 1, base `2220d05` and head in one session:
+
+| Median ms, base->head | 1k | 10k | 100k |
+|---|---|---|---|
+| `get_node` | 6.55 -> 4.21 | 59.1 -> 32.1 | 665 -> 372 |
+| `get_node_links` | 14.6 -> 4.37 | 140 -> 32.5 | 1 557 -> 373 |
+| `get_context_bundle` | 14.2 -> 4.54 | 137 -> 32.7 | 1 534 -> 376 |
+| `update_us` | 3.80 -> 3.62 | 32.1 -> 31.7 | 376 -> 376 |
+
+At 100k: hub links 1 567 -> 398, hub bundle 1 542 -> 494, `search` 382 -> 380, build 10.21 -> 9.96 s; `other_us` 0 for `get_node` and links, 0.34 for bundle. Answers equal at every size, `nondeterministic` 0. A read now costs about `update_us` (hashing 349): 12e's.
 
 ## Tests
 

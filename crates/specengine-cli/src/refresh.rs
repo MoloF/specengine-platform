@@ -27,6 +27,7 @@ use crate::code_index::{known_frameworks, refresh_code};
 use crate::location::open_index;
 use crate::project::{ProjectRoot, config_error, discover_with_text};
 use crate::roles::{RoleCounts, render_line, role_counts};
+use crate::subset::{Listed, seams};
 use crate::{CliError, Env, Globals, Message, store_error};
 
 /// `spec index` options.
@@ -119,11 +120,28 @@ pub(crate) fn refresh(
     full: bool,
 ) -> Result<(UpdateReport, Vec<Message>), CliError> {
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
+    refresh_in(index, project, &tree, full)
+}
+
+/// [`refresh`] through `tree`, which the read then reads its files with
+/// (the `store-reads` spec: the freshness step's `WorkingTree`).
+pub(crate) fn refresh_in(
+    index: &mut SqliteIndex,
+    project: &ProjectRoot,
+    tree: &WorkingTree,
+    full: bool,
+) -> Result<(UpdateReport, Vec<Message>), CliError> {
     let scheme = &project.config.scheme;
+    // A read's first freshness step lists uncounted; a subset read's walk
+    // lists after it.
+    let source = Listed {
+        tree,
+        counted: seams::in_walk(),
+    };
     let report = if full {
-        index.rebuild(&tree, scheme)
+        index.rebuild(&source, scheme)
     } else {
-        index.update(&tree, scheme)
+        index.update(&source, scheme)
     }
     .map_err(store_error)?;
     let mut messages = Vec::new();

@@ -62,7 +62,7 @@
 
 use std::borrow::Borrow;
 use std::cell::OnceCell;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::panic::{self, AssertUnwindSafe};
 use std::path::Path;
 
@@ -80,7 +80,7 @@ use specengine_model::{
     TaskAuthor, TaskAuthorType, TaskCriterion, TaskPackage, TaskRoadmap, TaskRun,
 };
 use specengine_store::{
-    GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
+    Decoded, GitEnv, Proposal, ProposalFilter, ProposalQueue as _, ProposalStatus, SnapshotEntry,
     Source as _, Task, WorkingTree, WorktreeGit, same_repository, span_hash,
 };
 
@@ -88,7 +88,7 @@ use crate::amend::amended_ids;
 use crate::bindings::row_binding;
 use crate::bundle::{Beside, BesideRows, BundleRequest, beside_rows, bundle_with};
 use crate::cap::{OUTPUT_CAP_CHARS, row_lines};
-use crate::corpus::{add_bytes, indexed};
+use crate::corpus::{add_bytes, indexed_decoded};
 use crate::preflight::recorded_project;
 use crate::project::{CONFIG_FILE, ProjectRoot};
 use crate::proposals::{QueueContext, queue_cannot};
@@ -210,6 +210,9 @@ pub(crate) struct Roots {
 struct Indexed {
     project: ProjectRoot,
     input: CheckInput,
+    /// Each file's stored hash, from the decode `input` came from: what
+    /// its bytes are checked against when read ([`add_bytes`]).
+    blake3: BTreeMap<String, Option<String>>,
     /// The refresh's warnings not yet given: a root indexed only for the
     /// plan gives them when a task is first read there.
     held: Vec<Message>,
@@ -239,10 +242,11 @@ impl Roots {
             return Ok(at);
         }
         let mut held = Vec::new();
-        let input = indexed(env, &project, &mut held, false)?;
+        let Decoded { input, blake3 } = indexed_decoded(env, &project, &mut held)?;
         self.indexed.push(Indexed {
             project,
             input,
+            blake3,
             held,
         });
         Ok(self.indexed.len() - 1)
@@ -339,7 +343,8 @@ fn read_plan(env: &Env, context: &QueueContext, roots: &mut Roots) -> ReadingPla
     };
     let mut input = roots.at(at).1.clone();
     // `spec roadmap`'s read: its warnings are that command's, not carried.
-    if let Err(error) = add_bytes(&mut input, project, &mut Vec::new()) {
+    let blake3 = &roots.indexed[at].blake3;
+    if let Err(error) = add_bytes(&mut input, blake3, project, &mut Vec::new()) {
         return unread(error);
     }
     ReadingPlan::Read(Box::new(plan(&input, &config)))

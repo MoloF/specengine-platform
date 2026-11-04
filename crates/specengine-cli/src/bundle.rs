@@ -103,7 +103,9 @@ use crate::node_set::named_set;
 use crate::project::{ProjectRoot, discover_with_text};
 use crate::refs::{Corpus, NodeKey};
 use crate::search::notes;
-use crate::show::{ShownNode, classify, shown};
+use crate::show::{ShownNode, Target, classify, shown};
+use crate::subset::seams::{self, Event};
+use crate::subset::{self, Subset, SubsetRead, Wanted};
 use crate::tested::tested_line;
 use crate::verify::unprefixed;
 use crate::{CliError, Env, Globals, Message, one_line};
@@ -327,12 +329,37 @@ pub fn bundle(
     bundle_with(env, globals, request, None)
 }
 
+/// Test-only: [`bundle`] by the walk alone, the whole read the subset
+/// read falls back to (the `store-reads` spec, D5), the same
+/// function: the differential's oracle.
+#[doc(hidden)]
+pub fn bundle_walk(
+    env: &Env,
+    globals: &Globals,
+    request: &BundleRequest,
+) -> Result<BundleOutcome, CliError> {
+    run_bundle(env, globals, request, None, true)
+}
+
 /// [`bundle`], with `beside`'s rows read by its code read too.
 pub(crate) fn bundle_with(
     env: &Env,
     globals: &Globals,
     request: &BundleRequest,
     beside: Option<&mut Beside<'_>>,
+) -> Result<BundleOutcome, CliError> {
+    run_bundle(env, globals, request, beside, false)
+}
+
+/// Step 1 (every `REF` classified, the budget), then the subset read
+/// (the `store-reads` spec), else the walk: `walk_only`, a code
+/// layer read (D7), or a subset read that could not vouch for its files.
+fn run_bundle(
+    env: &Env,
+    globals: &Globals,
+    request: &BundleRequest,
+    beside: Option<&mut Beside<'_>>,
+    walk_only: bool,
 ) -> Result<BundleOutcome, CliError> {
     let flag = budget_of(request.budget)?;
     if request.references.is_empty() {
@@ -366,7 +393,7 @@ pub(crate) fn bundle_with(
 
     let scheme = &project.config.scheme;
     let mut messages = Vec::new();
-    let mut outcome = BundleOutcome {
+    let outcome = BundleOutcome {
         references: request.references.clone(),
         reason: None,
         messages: Vec::new(),
@@ -393,27 +420,104 @@ pub(crate) fn bundle_with(
         return Ok(not_found(outcome, reason, messages));
     }
 
-    // One handle for the spec index and the code index (as `spec show
-    // --bindings`).
-    let mut open = open_index(env, &project)?;
-    let input = indexed_in(&mut open.index, &project, &mut messages, true)?;
-    let graph = SpecGraph::new(&input, scheme, &project.config.paths);
+    let asked_for = Asked {
+        project: &project,
+        text: &text,
+        request,
+        asked: &asked,
+        budget,
+        source: &source,
+    };
+    // A code layer (a `[code]` that is present or does not read, D7) keeps
+    // the whole read.
+    if walk_only || !matches!(CodeConfig::from_toml(&text), Ok(None)) {
+        return walk(env, &asked_for, outcome, messages, beside);
+    }
+    match subset::read(env, &project, Wanted::Bundle { asked: &asked })? {
+        Subset::Read(subset) => {
+            let SubsetRead {
+                mut open,
+                input,
+                rows,
+                warnings,
+                ..
+            } = *subset;
+            messages.extend(warnings);
+            let graph = SpecGraph::from_rows(&input, scheme, &project.config.paths, rows);
+            answer(
+                &asked_for,
+                &graph,
+                &input,
+                &mut open.index,
+                outcome,
+                messages,
+                beside,
+            )
+        }
+        Subset::Walk { fallback } => subset::walk(fallback, || {
+            walk(env, &asked_for, outcome, messages, beside)
+        }),
+    }
+}
+
+/// What one `spec bundle` call asked for beside its graph.
+struct Asked<'a> {
+    project: &'a ProjectRoot,
+    text: &'a str,
+    request: &'a BundleRequest,
+    /// Every `REF` as written, classified, in order.
+    asked: &'a [(&'a str, Target)],
+    budget: u32,
+    source: &'a BudgetSource,
+}
+
+/// The walk (D5): today's whole read. One handle for the spec index and
+/// the code index (as `spec show --bindings`).
+fn walk(
+    env: &Env,
+    asked: &Asked<'_>,
+    outcome: BundleOutcome,
+    mut messages: Vec<Message>,
+    beside: Option<&mut Beside<'_>>,
+) -> Result<BundleOutcome, CliError> {
+    let project = asked.project;
+    let mut open = open_index(env, project)?;
+    let input = indexed_in(&mut open.index, project, &mut messages, true)?;
+    seams::note(Event::WholeGraph);
+    let graph = SpecGraph::new(&input, &project.config.scheme, &project.config.paths);
+    answer(
+        asked,
+        &graph,
+        &input,
+        &mut open.index,
+        outcome,
+        messages,
+        beside,
+    )
+}
+
+/// The bundle over `graph`: every `REF` located, the layers, the code
+/// rows, the fit; the walk's graph or a subset read's alike.
+fn answer(
+    asked: &Asked<'_>,
+    graph: &SpecGraph<'_>,
+    input: &CheckInput,
+    index: &mut SqliteIndex,
+    mut outcome: BundleOutcome,
+    mut messages: Vec<Message>,
+    beside: Option<&mut Beside<'_>>,
+) -> Result<BundleOutcome, CliError> {
     let mut targets = Vec::new();
-    for (written, target) in &asked {
-        match locate(&graph, target, written)? {
+    for (written, target) in asked.asked {
+        match locate(graph, target, written)? {
             Ok(nodes) => {
-                messages.extend(holders_warning(
-                    &graph,
-                    written,
-                    &nodes,
-                    "all in the bundle",
-                ));
+                messages.extend(holders_warning(graph, written, &nodes, "all in the bundle"));
                 targets.extend(nodes);
             }
             Err(why) => return Ok(not_found(outcome, why, messages)),
         }
     }
-    let layers = bundle_layers(&graph, &targets);
+    let layers = bundle_layers(graph, &targets);
     for &(inner, outer) in &layers.merged {
         messages.push(Message::Note(format!(
             "`{}` is within `{}`: bundled as part of it",
@@ -423,14 +527,14 @@ pub(crate) fn bundle_with(
     }
     // Layers 5 and 9, the read's note after the bundle's own messages.
     let read = CodeRead {
-        project: &project,
-        text: &text,
-        git: &request.git,
-        input: &input,
+        project: asked.project,
+        text: asked.text,
+        git: &asked.request.git,
+        input,
     };
-    let code = code_rows(&read, &mut open.index, &graph, &layers, beside);
+    let code = code_rows(&read, index, graph, &layers, beside);
     messages.extend(code.note.clone().map(Message::Note));
-    outcome.bundle = Some(assemble(&graph, &layers, &code, budget, &source)?);
+    outcome.bundle = Some(assemble(graph, &layers, &code, asked.budget, asked.source)?);
     outcome.messages = messages;
     Ok(outcome)
 }

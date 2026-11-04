@@ -385,6 +385,7 @@ pub(crate) struct Corpus<'a> {
 
 impl<'a> Corpus<'a> {
     pub(crate) fn new(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths) -> Self {
+        crate::subset::seams::note(crate::subset::seams::Event::WholeResolver);
         let resolver = Resolver::new(input, scheme, paths);
         // The first file of a path, as the resolver keeps it.
         let mut by_path: BTreeMap<&str, &CheckFile> = BTreeMap::new();
@@ -431,7 +432,7 @@ impl<'a> Corpus<'a> {
             Target::Reference(reference) => {
                 match self.resolver.resolve_detached(reference, written) {
                     Resolution::Resolved(holders) => {
-                        let (nodes, _) = self.picked(&holders, reference, written);
+                        let (nodes, _) = self.picked(&holders, reference);
                         Ok(if nodes.is_empty() {
                             Err(format!(
                                 "`{written}`: its files changed while being read; run it again"
@@ -450,19 +451,14 @@ impl<'a> Corpus<'a> {
     /// Per holder file, the nodes the reference names (`spec show`'s
     /// pick), and whether one of them was reached through an alias (an
     /// `aliases_from` prefix, or a file not defining the ID itself).
-    fn picked(
-        &self,
-        holders: &[usize],
-        reference: &Reference,
-        written: &str,
-    ) -> (Vec<NodeKey>, bool) {
+    fn picked(&self, holders: &[usize], reference: &Reference) -> (Vec<NodeKey>, bool) {
         let mut nodes = Vec::new();
         let mut alias = false;
         for &file in holders {
             let Some(parsed) = self.files.get(file).and_then(|file| file.parsed.as_ref()) else {
                 continue;
             };
-            let ords = pick_reference(parsed, reference, written);
+            let ords = pick_reference(parsed, reference);
             if ords.is_empty() {
                 continue;
             }
@@ -517,7 +513,7 @@ impl<'a> Corpus<'a> {
         }
         match self.resolver.resolve_detached(reference, written) {
             Resolution::Resolved(holders) => {
-                let (nodes, alias) = self.picked(&holders, reference, written);
+                let (nodes, alias) = self.picked(&holders, reference);
                 let state = match nodes.len() {
                     0 => return none(self.unnamed(written)),
                     1 if alias => IdState::Alias,
@@ -549,7 +545,7 @@ impl<'a> Corpus<'a> {
             return Vec::new();
         }
         match self.resolver.resolve_detached(reference, fix) {
-            Resolution::Resolved(holders) => self.picked(&holders, reference, fix).0,
+            Resolution::Resolved(holders) => self.picked(&holders, reference).0,
             Resolution::Dangling(_) | Resolution::Skipped => Vec::new(),
         }
     }

@@ -185,7 +185,7 @@ pub use queue::{
     claimed_elsewhere, open_for_gate, patch_hash, proposal_columns, record_gate_observed,
     task_event,
 };
-pub use read::NodeNorm;
+pub use read::{Decoded, IndexSnapshot, NodeNorm};
 pub use roles::{RoleCandidate, StoredRole};
 pub use source::{GitIndex, Listing, Probed, Source, WorkingTree};
 pub use sparse::{SparseError, SparseSet, sparse_set};

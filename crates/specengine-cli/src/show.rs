@@ -44,7 +44,7 @@ use std::panic::{self, AssertUnwindSafe};
 
 use std::collections::BTreeSet;
 
-use specengine_core::check::{NodeAt, Resolution, Resolver, SpecGraph, is_tier3_file};
+use specengine_core::check::{CheckInput, NodeAt, Resolution, Resolver, SpecGraph, is_tier3_file};
 use specengine_core::{CodeConfig, DOCUMENT_EXTENSION, is_clean_relative, tokens_est};
 use specengine_model::script::normalize_char;
 use specengine_model::{BindingRow, IdScheme, IdScript, ParsedFile, Reference, TestedRow, grammar};
@@ -52,12 +52,14 @@ use specengine_store::{GitEnv, Source as _, WorkingTree, b3_hash, span_hash};
 
 use crate::bindings::{SetRow, no_code_note, set_bindings};
 use crate::cap::View;
-use crate::corpus::{Admission, indexed, indexed_in};
+use crate::corpus::{Admission, indexed, indexed_read};
 use crate::links::{ShownLinks, node_links};
 use crate::location::open_index;
 use crate::node_set::contained;
-use crate::project::discover_with_text;
+use crate::project::{ProjectRoot, discover_with_text};
 use crate::refs::{Corpus, NodeKey};
+use crate::subset::seams::{self, Event};
+use crate::subset::{self, Subset, SubsetRead, Wanted};
 use crate::{CliError, Env, Globals, Message, one_line, store_error};
 
 /// `spec show` options.
@@ -186,10 +188,31 @@ pub fn show_with_view(
     request: &ShowRequest,
     view: View,
 ) -> Result<ShowOutcome, CliError> {
-    run_show(env, globals, request).map(|outcome| ShowOutcome { view, ..outcome })
+    run_show(env, globals, request, false).map(|outcome| ShowOutcome { view, ..outcome })
 }
 
-fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowOutcome, CliError> {
+/// Test-only: [`show`] by the walk alone, the whole read the subset read
+/// falls back to (the `store-reads` spec, D5), the same function:
+/// the differential's oracle.
+#[doc(hidden)]
+pub fn show_walk(
+    env: &Env,
+    globals: &Globals,
+    request: &ShowRequest,
+) -> Result<ShowOutcome, CliError> {
+    run_show(env, globals, request, true)
+}
+
+/// Step 1 (`REF` classified), then the subset read
+/// (the `store-reads` spec), else the walk: `walk_only`, a code
+/// layer read (`--bindings` with a `[code]` that is present or does not
+/// read, D7), or a subset read that could not vouch for its files.
+fn run_show(
+    env: &Env,
+    globals: &Globals,
+    request: &ShowRequest,
+    walk_only: bool,
+) -> Result<ShowOutcome, CliError> {
     if request.archive && !request.links {
         return Err(CliError::spec(
             "--archive applies to --links only: add --links, or drop --archive",
@@ -204,50 +227,223 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         Ok(target) => target,
         Err(reason) => return Ok(not_found(request, reason, messages)),
     };
+    let read = Read {
+        project: &project,
+        text: &text,
+        request,
+        target: &target,
+        written,
+    };
+    let code_layer = request.bindings && !matches!(CodeConfig::from_toml(&text), Ok(None));
+    if walk_only || code_layer {
+        return walk(env, &read, messages);
+    }
+    let wanted = Wanted::Show {
+        target: &target,
+        links: request.links,
+    };
+    match subset::read(env, &project, wanted)? {
+        Subset::Read(subset) => subset_answer(&read, *subset, messages),
+        Subset::Walk { fallback } => subset::walk(fallback, || walk(env, &read, messages)),
+    }
+}
 
-    // `--bindings` with `[code]`: one handle for the spec index and the
-    // code index, the spec corpus read again whole (the judge's spec side).
-    // Without `[code]` (cause (2)) the read is `spec show REF`'s and a note.
-    let no_code = request.bindings && matches!(CodeConfig::from_toml(&text), Ok(None));
+/// What one `spec show` call reads beside its input.
+struct Read<'a> {
+    project: &'a ProjectRoot,
+    text: &'a str,
+    request: &'a ShowRequest,
+    target: &'a Target,
+    /// `REF` as written, trimmed.
+    written: &'a str,
+}
+
+/// The answer over a subset read's files: the holders resolved over them,
+/// `--links` from their rows, each holder printed from the bytes the
+/// attempt read.
+fn subset_answer(
+    read: &Read<'_>,
+    subset: SubsetRead,
+    mut messages: Vec<Message>,
+) -> Result<ShowOutcome, CliError> {
+    let SubsetRead {
+        input,
+        rows,
+        mut reads,
+        warnings,
+        ..
+    } = subset;
+    messages.extend(warnings);
+    let project = read.project;
+    let paths = &project.config.paths;
+    let resolver = Resolver::new(&input, &project.config.scheme, paths);
+    let holders = match holders_of(read, &input, &resolver)? {
+        Ok(holders) => holders,
+        Err(reason) => return Ok(not_found(read.request, reason, messages)),
+    };
+    let graph = read
+        .request
+        .links
+        .then(|| SpecGraph::from_rows(&input, &project.config.scheme, paths, rows));
+    // A holder is a subset file: its read is in `reads`, else (a parsed
+    // file) its bytes moved into `input`.
+    let mut bytes_of = |path: &str| match reads.remove(path) {
+        Some(read) => read,
+        None => match input
+            .files
+            .binary_search_by(|file| file.path.as_str().cmp(path))
+        {
+            Ok(at) => Ok(input.files[at].bytes.clone()),
+            // Not reached: the holders are resolved over `input` itself.
+            Err(_) => {
+                debug_assert!(false, "the holder `{path}` is no subset file");
+                Err(std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "not among the files this read checked",
+                ))
+            }
+        },
+    };
+    let shown = match read_holders(
+        read,
+        &holders,
+        &resolver,
+        graph.as_ref(),
+        &mut bytes_of,
+        &mut messages,
+    ) {
+        Ok(shown) => shown,
+        Err(reason) => return Ok(not_found(read.request, reason, messages)),
+    };
+    // `--bindings` without `[code]` (cause (2)): the note alone.
+    let note = read.request.bindings.then(|| no_code_note(project));
+    Ok(finish(read.request, shown, note, messages))
+}
+
+/// The walk (D5): today's whole read, from the freshness step on. With
+/// `--bindings` and `[code]`: one handle for the spec index and the code
+/// index, the spec corpus read again whole (the judge's spec side).
+/// Without `[code]` (cause (2)) the read is `spec show REF`'s and a note.
+fn walk(env: &Env, read: &Read<'_>, mut messages: Vec<Message>) -> Result<ShowOutcome, CliError> {
+    let (project, request) = (read.project, read.request);
+    let scheme = &project.config.scheme;
+    let no_code = request.bindings && matches!(CodeConfig::from_toml(read.text), Ok(None));
     let mut open = match request.bindings && !no_code {
-        true => Some(open_index(env, &project)?),
+        true => Some(open_index(env, project)?),
         false => None,
     };
-    let input = match open.as_mut() {
-        Some(open) => indexed_in(&mut open.index, &project, &mut messages, true)?,
-        None => indexed(env, &project, &mut messages, request.links)?,
-    };
-    let resolver = Resolver::new(&input, scheme, &project.config.paths);
-    let holders: Vec<String> = match &target {
-        Target::Path(path) => {
-            if input.files.iter().any(|file| file.path == *path) {
-                vec![path.clone()]
-            } else {
-                return Ok(not_found(request, not_indexed(path), messages));
-            }
+    // With bytes, the paths given them: a holder among them is printed from
+    // the bytes the graph and the judge were built from, read once.
+    let (input, read_once) = match open.as_mut() {
+        Some(open) => indexed_read(&mut open.index, project, &mut messages)?,
+        None if request.links => {
+            let mut open = open_index(env, project)?;
+            indexed_read(&mut open.index, project, &mut messages)?
         }
-        Target::Reference(reference) => match resolver.resolve_detached(reference, written) {
-            Resolution::Resolved(files) => files
-                .iter()
-                .map(|&file| resolver.paths()[file].to_owned())
-                .collect(),
-            Resolution::Dangling(reason) => {
-                return Ok(not_found(
-                    request,
-                    format!("`{written}` {reason}"),
-                    messages,
-                ));
-            }
-            Resolution::Skipped => return Err(project_qualified(written)),
-        },
+        None => (
+            indexed(env, project, &mut messages, false)?,
+            BTreeSet::new(),
+        ),
+    };
+    seams::note(Event::WholeResolver);
+    let resolver = Resolver::new(&input, scheme, &project.config.paths);
+    let holders = match holders_of(read, &input, &resolver)? {
+        Ok(holders) => holders,
+        Err(reason) => return Ok(not_found(request, reason, messages)),
     };
 
     // `--links`: the graph over the same input; the holders' files are
     // asked for, so their own links always count.
-    let graph = request
-        .links
-        .then(|| SpecGraph::new(&input, scheme, &project.config.paths));
-    let admission = graph.as_ref().map(|graph| {
+    let graph = request.links.then(|| {
+        seams::note(Event::WholeGraph);
+        SpecGraph::new(&input, scheme, &project.config.paths)
+    });
+    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
+    let mut bytes_of = |path: &str| match read_once.contains(path) {
+        true => input
+            .files
+            .binary_search_by(|file| file.path.as_str().cmp(path))
+            .map(|at| input.files[at].bytes.clone())
+            .or_else(|_| tree.read(path)),
+        false => tree.read(path),
+    };
+    let mut shown = match read_holders(
+        read,
+        &holders,
+        &resolver,
+        graph.as_ref(),
+        &mut bytes_of,
+        &mut messages,
+    ) {
+        Ok(shown) => shown,
+        Err(reason) => return Ok(not_found(request, reason, messages)),
+    };
+    // `--bindings`, once REF named a node: the code layer, its note after
+    // `show`'s own messages.
+    let note = match open.as_mut() {
+        Some(open) => {
+            let read = BindingsRead {
+                project,
+                text: read.text,
+                git: &request.git,
+                input: &input,
+            };
+            add_bindings(&read, &mut open.index, &mut shown.nodes, &shown.places)
+        }
+        None => no_code.then(|| no_code_note(project)),
+    };
+    Ok(finish(request, shown, note, messages))
+}
+
+/// The files holding `REF` in `input`: a path's own when indexed; else the
+/// resolver's holders. `Ok(Err)`: none, with the reason (exit 1).
+fn holders_of(
+    read: &Read<'_>,
+    input: &CheckInput,
+    resolver: &Resolver<'_>,
+) -> Result<Result<Vec<String>, String>, CliError> {
+    let written = read.written;
+    Ok(match read.target {
+        Target::Path(path) => {
+            if input.files.iter().any(|file| file.path == *path) {
+                Ok(vec![path.clone()])
+            } else {
+                Err(not_indexed(path))
+            }
+        }
+        Target::Reference(reference) => match resolver.resolve_detached(reference, written) {
+            Resolution::Resolved(files) => Ok(files
+                .iter()
+                .map(|&file| resolver.paths()[file].to_owned())
+                .collect()),
+            Resolution::Dangling(reason) => Err(format!("`{written}` {reason}")),
+            Resolution::Skipped => return Err(project_qualified(written)),
+        },
+    })
+}
+
+/// The shown nodes of one read, each with its place in its fresh parse
+/// (`None` for a whole file) and its citation.
+struct Shown {
+    nodes: Vec<ShownNode>,
+    places: Vec<Option<usize>>,
+    citations: Vec<String>,
+}
+
+/// Each holder read through `bytes_of` once, parsed fresh and shown: the
+/// nodes `REF` names in it, `--links` from `graph`. `Err`: no node, with
+/// the reason (exit 1).
+fn read_holders(
+    read: &Read<'_>,
+    holders: &[String],
+    resolver: &Resolver<'_>,
+    graph: Option<&SpecGraph<'_>>,
+    bytes_of: &mut dyn FnMut(&str) -> std::io::Result<Vec<u8>>,
+    messages: &mut Vec<Message>,
+) -> Result<Shown, String> {
+    let (request, target, written) = (read.request, read.target, read.written);
+    let scheme = &read.project.config.scheme;
+    let admission = graph.map(|graph| {
         Admission::new(
             graph,
             request.archive,
@@ -255,7 +451,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         )
     });
     let links_of = |path: &str, ord: usize, id: Option<&str>| -> Option<ShownLinks> {
-        let (graph, admission) = (graph.as_ref()?, admission.as_ref()?);
+        let (graph, admission) = (graph?, admission.as_ref()?);
         Some(
             node_in_graph(graph, path, ord, id)
                 .map(|at| node_links(graph, at, admission))
@@ -263,20 +459,18 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         )
     };
 
-    let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let mut nodes = Vec::new();
     // Each node's place in its fresh parse: `None` for a whole file.
     let mut places: Vec<Option<usize>> = Vec::new();
     let mut citations = Vec::new();
     // Holders left out because they could not be read or parsed.
     let mut unread = 0;
-    for path in &holders {
-        let bytes = match tree.read(path) {
+    for path in holders {
+        let bytes = match bytes_of(path) {
             Ok(bytes) => bytes,
             Err(error) => {
                 if let Target::Path(_) = target {
-                    let reason = format!("`{path}` cannot be read: {error}");
-                    return Ok(not_found(request, reason, messages));
+                    return Err(format!("`{path}` cannot be read: {error}"));
                 }
                 messages.push(Message::Warning(format!(
                     "cannot read `{path}`: {error}; left out"
@@ -308,7 +502,7 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
             }
             continue;
         }
-        for ord in pick(&parsed, &target, written) {
+        for ord in pick(&parsed, target) {
             let mut node = shown(path, &bytes, &parsed, ord, archived, utf8);
             node.norm_hash = norm_hash(&parsed, &bytes, ord);
             node.links = links_of(path, ord, node.id.as_deref());
@@ -321,48 +515,48 @@ fn run_show(env: &Env, globals: &Globals, request: &ShowRequest) -> Result<ShowO
         }
     }
     if nodes.is_empty() {
-        let reason = if unread == holders.len() {
+        return Err(if unread == holders.len() {
             format!("`{written}`: none of its files could be read")
         } else {
             format!("`{written}`: its files changed while being read; run it again")
-        };
-        return Ok(not_found(request, reason, messages));
+        });
     }
-    // `--bindings`, once REF named a node: the code layer, its note after
-    // `show`'s own messages.
-    let note = match open.as_mut() {
-        Some(open) => {
-            let read = BindingsRead {
-                project: &project,
-                text: &text,
-                git: &request.git,
-                input: &input,
-            };
-            add_bindings(&read, &mut open.index, &mut nodes, &places)
-        }
-        None => no_code.then(|| no_code_note(&project)),
-    };
-    if nodes.len() > 1 {
+    Ok(Shown {
+        nodes,
+        places,
+        citations,
+    })
+}
+
+/// The outcome: the holders' warning, then the code layer's note.
+fn finish(
+    request: &ShowRequest,
+    shown: Shown,
+    note: Option<String>,
+    mut messages: Vec<Message>,
+) -> ShowOutcome {
+    if shown.nodes.len() > 1 {
         messages.push(Message::Warning(format!(
-            "`{written}` has {} holders, all shown: {}",
-            nodes.len(),
-            citations.join(", ")
+            "`{}` has {} holders, all shown: {}",
+            request.reference.trim(),
+            shown.nodes.len(),
+            shown.citations.join(", ")
         )));
     }
     messages.extend(note.map(Message::Note));
-    Ok(ShowOutcome {
+    ShowOutcome {
         reference: request.reference.clone(),
         reason: None,
         messages,
-        nodes,
+        nodes: shown.nodes,
         view: View::Capped,
-    })
+    }
 }
 
 /// What `--bindings` reads beside the shown nodes: the project, its
 /// config's text, git's environment, the spec corpus read again.
 struct BindingsRead<'a> {
-    project: &'a crate::project::ProjectRoot,
+    project: &'a ProjectRoot,
     text: &'a str,
     git: &'a GitEnv,
     input: &'a specengine_core::check::CheckInput,
@@ -601,20 +795,16 @@ pub(crate) fn project_qualified(written: &str) -> CliError {
 /// the ID's, else its `aliases_from` target's, else the document when its
 /// `aliases:` still declare the reference; none when the fresh parse no
 /// longer holds it.
-fn pick(parsed: &ParsedFile, target: &Target, written: &str) -> Vec<usize> {
+pub(crate) fn pick(parsed: &ParsedFile, target: &Target) -> Vec<usize> {
     match target {
-        Target::Reference(reference) => pick_reference(parsed, reference, written),
+        Target::Reference(reference) => pick_reference(parsed, reference),
         Target::Path(_) => vec![0],
     }
 }
 
 /// [`pick`] for a reference of the grammar (also `spec refs`' marker and
 /// mention IDs, canon `code-bindings`, "ID state").
-pub(crate) fn pick_reference(
-    parsed: &ParsedFile,
-    reference: &Reference,
-    written: &str,
-) -> Vec<usize> {
+pub(crate) fn pick_reference(parsed: &ParsedFile, reference: &Reference) -> Vec<usize> {
     let with_id = |id: &str, from: usize| -> Vec<usize> {
         parsed
             .nodes
@@ -642,7 +832,6 @@ pub(crate) fn pick_reference(
     // declare it (the ID or the bare text, as the resolver looks it up),
     // else the file changed since the update and holds nothing.
     // As the resolver's, the lookup reads the parse alone.
-    let _ = written;
     if found.is_empty() {
         let bare = bare_text(reference);
         let declared = parsed
@@ -785,7 +974,7 @@ mod pick_tests {
         let reference = grammar::parse_reference(written, 0, &scheme)
             .unwrap_or_else(|| panic!("{written} is a reference"))
             .reference;
-        pick(&parsed, &Target::Reference(reference), written)
+        pick(&parsed, &Target::Reference(reference))
     }
 
     const WORD: &str = "---\nid: WORD-tired\nclass: canon\naliases: [WORD-weary]\n---\n\n# Tired\n";

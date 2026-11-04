@@ -239,3 +239,121 @@ fn non_finite_floats_repeated_keys_and_aliases_read_back_as_parsed() {
     corpus.update(&mut index);
     assert_projection(&corpus, &index, "spec-a + odd values");
 }
+
+// ------------------------------------------------------------------ SR-3
+
+/// The configured fixtures: every `fixtures/*/specengine.toml`, sorted.
+fn configured_fixtures() -> Vec<String> {
+    let mut out: Vec<String> = std::fs::read_dir(common::repository_root().join("fixtures"))
+        .expect("fixtures/")
+        .filter_map(Result::ok)
+        .filter(|entry| entry.path().join("specengine.toml").is_file())
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    out.sort();
+    out
+}
+
+/// One snapshot's `decode_all` holds every walked file in path order, each
+/// with the parser's output on its bytes, its size, no bytes and no read
+/// error, and its BLAKE3 keyed by its path; the keyed `decode` of each
+/// path alone, and of all of them in reverse, gives the same files and
+/// hashes, in path order (docs/features/store-reads.md "Data").
+fn assert_decoded(corpus: &Corpus, index: &specengine_store::SqliteIndex, context: &str) {
+    let listing = corpus.listing();
+    let snapshot = index
+        .snapshot()
+        .unwrap_or_else(|error| panic!("{context}: snapshot: {error}"));
+    let all = snapshot
+        .decode_all()
+        .unwrap_or_else(|error| panic!("{context}: decode_all: {error}"));
+    let paths: Vec<&str> = all
+        .input
+        .files
+        .iter()
+        .map(|file| file.path.as_str())
+        .collect();
+    assert_eq!(
+        paths, listing.paths,
+        "{context}: decode_all is the walk, in path order"
+    );
+    assert_eq!(
+        all.blake3.keys().map(String::as_str).collect::<Vec<_>>(),
+        paths,
+        "{context}: one hash per decoded path"
+    );
+    for file in &all.input.files {
+        let bytes = corpus.bytes(&file.path);
+        let parsed = specengine_core::parse(&file.path, &bytes, &corpus.scheme);
+        assert!(
+            file.parsed.as_ref() == Some(&parsed),
+            "{context}: {}: the decoded parse differs from parse()\ndecoded:  {:?}\nexpected: {parsed:?}",
+            file.path,
+            file.parsed
+        );
+        assert_eq!(
+            file.size,
+            bytes.len() as u64,
+            "{context}: {}: size",
+            file.path
+        );
+        assert!(file.bytes.is_empty(), "{context}: {}: no bytes", file.path);
+        assert_eq!(
+            file.read_error, None,
+            "{context}: {}: read error",
+            file.path
+        );
+        assert_eq!(
+            all.blake3[&file.path],
+            Some(blake3_hex(&bytes)),
+            "{context}: {}: the row's BLAKE3 is its bytes'",
+            file.path
+        );
+        let one = snapshot
+            .decode(&[file.path.as_str()])
+            .unwrap_or_else(|error| panic!("{context}: decode {}: {error}", file.path));
+        assert!(
+            one.input.files.len() == 1 && one.input.files[0] == *file,
+            "{context}: {}: the keyed decode is decode_all's file: {:?}",
+            file.path,
+            one.input.files
+        );
+        assert_eq!(
+            one.blake3.get(&file.path),
+            Some(&all.blake3[&file.path]),
+            "{context}: {}: the keyed decode's hash",
+            file.path
+        );
+    }
+    let reversed: Vec<&str> = paths.iter().rev().copied().collect();
+    let again = snapshot
+        .decode(&reversed)
+        .unwrap_or_else(|error| panic!("{context}: decode of every path: {error}"));
+    assert!(
+        again.input.files == all.input.files && again.blake3 == all.blake3,
+        "{context}: the keyed decode of every path, reversed, is decode_all's, in path order"
+    );
+}
+
+/// SR-3 (docs/features/store-reads.md, Q7's contract): the projection
+/// widened to every configured fixture. Each stored file's decoded parse,
+/// through `file(path)` and through one snapshot's `decode_all` and keyed
+/// `decode`, equals `parse(path, bytes, scheme)`, with its BLAKE3. The 1k
+/// tree's half is eval's `tests/store_reads_scale.rs`. M: `rebuild_parsed`
+/// dropping `summary`; hashes matched by position, not path.
+#[test]
+fn sr3_every_configured_fixture_reads_back_as_parsed() {
+    let scratch = Scratch::new("projection-all");
+    let fixtures = configured_fixtures();
+    assert_eq!(fixtures.len(), 19, "premise: the configured fixtures");
+    let mut files = 0;
+    for name in &fixtures {
+        let corpus = Corpus::copy_of(name, &scratch, name);
+        let mut index = corpus.open(&scratch.db(name));
+        corpus.update(&mut index);
+        assert_projection(&corpus, &index, name);
+        assert_decoded(&corpus, &index, name);
+        files += corpus.listing().paths.len();
+    }
+    assert!(files > 150, "premise: the fixtures' files ({files})");
+}

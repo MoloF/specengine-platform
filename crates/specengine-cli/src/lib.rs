@@ -275,6 +275,9 @@ mod sparse;
 mod stage;
 mod state;
 mod state_file;
+#[cfg(test)]
+mod store_reads_tests;
+mod subset;
 mod symbols;
 mod sync;
 mod task;
@@ -300,6 +303,10 @@ pub use apply::{
     approve_editorial, approve_open, approve_with, reject, reject_follow_up,
 };
 pub use bump::{BumpOutcome, BumpRequest, bump};
+/// Test-only: `spec bundle` by the walk alone (the `store-reads` spec,
+/// D5), the differential's oracle.
+#[doc(hidden)]
+pub use bundle::bundle_walk;
 pub use bundle::{
     BUNDLE_TAIL_LINES, Bundle, BundleItem, BundleOutcome, BundleRequest, BundleRow,
     DEFAULT_BUNDLE_BUDGET, ItemForm, TailEntry, WorkingAnswer, bundle, layer_heading, layer_key,
@@ -404,6 +411,10 @@ pub use serve::{
     DaemonFile, DaemonProject, Serve, ServeRequest, daemon_text, read_daemon_file, serve,
     unpublished_daemon,
 };
+/// Test-only: `spec show` by the walk alone (the `store-reads` spec,
+/// D5), the differential's oracle.
+#[doc(hidden)]
+pub use show::show_walk;
 pub use show::{
     NestedSection, ShowOutcome, ShowRequest, ShownBindings, ShownNode, show, show_with_view,
 };

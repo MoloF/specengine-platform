@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-04
 ---
 
 # spec bundle and bundle_hash
@@ -16,7 +16,7 @@ CLI pass 4 (`docs/features/spec-cli-bundle.md`, 05 §6): one call returns the co
 
 - **REF**: `spec show`'s forms and resolution. Every REF is classified first (a refused one → exit 2 whatever the others), then located in order. Several holders → all, one `warning:`; REFs naming one node count once. A target within another merges into the outermost, one ``note: `X` is within `Y`: bundled as part of it``: X shares Y's form, so it is in the body only when Y prints its text; Y outlined or header-only, the not-included list names X (a direct child ID section of Y) or the child section holding it.
 - **Budget**, in `tokens_est` (core, calibrated on `claude-opus-5-5`): `--budget N` (1..=`u32::MAX`), else `[budgets] bundle_node`, else `DEFAULT_BUNDLE_BUDGET` 2 000. With `--budget` the key is not read. Without, core's `bundle_node_from_toml` reads that key alone from the config's text: a broken `[classes]`, `[check]` or other `[budgets]` key never stops a bundle (`spec check` judges them); a value that is no whole number in 1..=4294967295 → exit 2 at its line, the bound `spec check` applies too (`docs/canon/spec-check.md` "Configuration").
-- **Input**: pass 3's (`docs/canon/spec-cli-graph.md` "Input", "Live sources"): `update`, every used file re-read and re-parsed, one `SpecGraph` per call, so an edit shows in the next bundle without `spec index`. Candidates come from live files only; a named target is always admitted (` | archived`) and the links written in its own file are followed.
+- **Input**: a subset (`spec-read-subset.md`), else pass 3's (`spec-cli-graph.md` "Input", "Live sources"): `update`, every used file re-read, one `SpecGraph` per call, so an edit shows in the next bundle without `spec index`. Candidates come from live files only; a named target is always admitted (` | archived`) and the links written in its own file are followed.
 
 ## Layers
 

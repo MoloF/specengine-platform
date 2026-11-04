@@ -86,7 +86,9 @@ mod working_set;
 
 pub use base::{Base, judge};
 pub use baseline::{Baseline, BaselineError, DebtEntry, baseline_from_toml};
-pub use bundle::{BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers};
+pub use bundle::{
+    BUNDLE_LINK_TYPES, BundleCandidate, BundleLayer, BundleLayers, bundle_layers, bundle_linked,
+};
 pub use config::{
     Budgets, BundleNode, BundleTask, CheckConfig, CheckRule, ClassContract, Classes, ConfigError,
     DEFAULT_GATE, DocClass, Generator, Mode, RoadmapView, Shard, ShardKind, bundle_node_from_toml,
@@ -106,8 +108,8 @@ pub use resolve::{
     EdgeKey, Resolution, Resolver, canonical_id, feature_scoped, given_keys, given_keys_of,
 };
 pub use spec_graph::{
-    CANON_LINK, Edge, Endpoint, FileEdges, LinkState, NodeAt, NodeLinks, Parent, ResolvedFiles,
-    SpecGraph, Standing, Walk, nodes_within, resolve_files,
+    CANON_LINK, Edge, EdgeRow, Endpoint, FileEdges, GraphRows, LinkState, NodeAt, NodeLinks,
+    Parent, ParentRow, ResolvedFiles, SpecGraph, Standing, Walk, nodes_within, resolve_files,
 };
 /// A file's bytes for a reference's written form (`crate::roadmap`'s
 /// `depends_on`, resolved as the check resolves it).

@@ -15,7 +15,7 @@ Since `INDEX_FORMAT` 16 (`docs/features/edge-table.md`, RM-0078) the index store
 - **E3.** No statement orders by rowid: `ord` and `n` are core's orders, decoded subsets are sorted by path.
 - **E4.** Nothing a read computes is stored: written text, lines, cycle breaks, children order, ancestors, walks, admission, `left_out`, bundle layers.
 
-**No read uses them yet.** `show`, `--links`, `bundle`, `tree`, `graph`, `impact`, `flow` and `refs` resolve per call over the whole input (`spec-cli-graph.md` "Input"); `spec index` prints as before. RM-0079 moves `show`, `--links` and `bundle` onto the tables.
+**Reads.** `show`, `--links` and `bundle` read a subset of them (`spec-read-subset.md`); `tree`, `graph`, `impact`, `flow` and `refs` still resolve per call over the whole input (`spec-cli-graph.md` "Input"); `spec index` prints as before.
 
 ## Tables
 
@@ -70,8 +70,8 @@ Resolution reads the parse alone; bytes give only the text a finding quotes. `Pa
 ## API
 
 - Core `check`: `resolve_files<'a>(&'a CheckInput, &'a IdScheme, &'a Paths, only: Option<&BTreeSet<&str>>) -> ResolvedFiles {paths, files: [FileEdges {file, parent: Option<Parent>, edges, reads}]}`, in path order, `None` every file; `SpecGraph::build` runs the same per-file `file_links`, recording off.
-- Store: `UpdateReport.resolved`, `resolved_all`, `#[serde(skip)]`; `SqliteIndex::stored_edges() -> StoredEdges {edges, parents}`, one snapshot, for tests and RM-0079: `StoredEdge` (the columns, `origin: LinkOrigin`, `state: LinkState`, `label: Option<EdgeLabel>`, `ends: [(path, ord)]`) by `(path, ord)`, `StoredParent {path, state, reason, ends}` by path.
-- `edges.rs`'s `pub(crate)` lookups for RM-0079, by `files.wt`, ordered `(path, ord, n)`, each a `SEARCH`: `HELD` (core's `held`: worktree, path, position, `INDEXED BY edges_by_holder`), `OUTGOING` (`from`: held with `names_source` 0, UNION ALL ending with 1), `INCOMING` (`into`: ending with 0, UNION ALL held with 1), each one row per end, grouped by `(path, ord)` by the reader; `PARENTED`; `DEPENDENTS` and `HOLDERS`, one key per statement (a `json_each` or `carray` list plans as a `SCAN` or needs a rusqlite feature).
+- Store: `UpdateReport.resolved`, `resolved_all`, `#[serde(skip)]`; `SqliteIndex::stored_edges() -> StoredEdges {edges, parents}`, one snapshot, for tests: `StoredEdge` (core's `EdgeRow`: the columns, `origin: LinkOrigin`, `state: LinkState`, `label: Option<EdgeLabel>`, `ends: [(path, ord)]`) by `(path, ord)`, `StoredParent {path, state, reason, ends}` (`ParentRow`) by path.
+- `edges.rs`'s `pub(crate)` lookups, `IndexSnapshot`'s but `PARENTED` and `DEPENDENTS` (`spec-read-subset.md` "API"), by `files.wt`, ordered `(path, ord, n)`, each a `SEARCH`: `HELD` (core's `held`: worktree, path, position, `INDEXED BY edges_by_holder`), `OUTGOING` (`from`: held with `names_source` 0, UNION ALL ending with 1), `INCOMING` (`into`: ending with 0, UNION ALL held with 1), each one row per end, grouped by `(path, ord)` by the reader; `PARENTED`; `DEPENDENTS` and `HOLDERS`, one key per statement (a `json_each` or `carray` list plans as a `SCAN` or needs a rusqlite feature).
 
 ## Example
 
@@ -115,4 +115,4 @@ Deleting `stamina.md`: N is `name:AC-01` and its path, A is `docs/b.md` (`resolv
 - **Hub fan-out.** A file citing every document, such as a generated `index*.md`, depends on every `path:` key: any edit puts it in A and its fan-out in S, about 0.25-0.4 s per update at 100 000 nodes (the reviewer's estimate; RM-0054 measures).
 - The full pass holds the write lock while it resolves, about 0.4 s at 100 000 nodes (decode 249 ms, graph 128 ms, `scale-eval.md` "Baseline") plus the inserts; the release before/after `scale` run was not made.
 - The `probe_paths` memo is keyed by spelling: on case-insensitive APFS a directory may be listed once per spelling, the answers unchanged.
-- `project:` stays `Skipped`. Core's `resolve*`, `holders_of` and CLI `show`'s `pick` keep a `written` parameter deciding nothing (RM-0079).
+- `project:` stays `Skipped`. Core's `resolve*` and `holders_of` keep a `written` parameter deciding nothing.

@@ -112,40 +112,42 @@ pub struct BundleLayers {
     pub candidates: Vec<BundleCandidate>,
 }
 
+/// The targets [`bundle_layers`] keeps (each node once, none within another,
+/// by (path, position)) and the nodes linked to them that may be
+/// candidates (live, within no kept target), by (path, position): what a
+/// bundle read over a subset of the corpus fetches the rows of before its
+/// layers (`docs/features/store-reads.md` "Data").
+pub fn bundle_linked(graph: &SpecGraph<'_>, targets: &[NodeAt]) -> (Vec<NodeAt>, Vec<NodeAt>) {
+    let (kept, _) = kept_targets(graph, targets);
+    let linked = linked_to(graph, &kept).into_keys().collect();
+    (kept, linked)
+}
+
 /// The layers around `targets` (see the module documentation).
 pub fn bundle_layers(graph: &SpecGraph<'_>, targets: &[NodeAt]) -> BundleLayers {
-    let mut named: Vec<NodeAt> = targets
-        .iter()
-        .copied()
-        .filter(|&at| graph.node(at).is_some())
-        .collect();
-    named.sort_unstable();
-    named.dedup();
-    let mut kept = Vec::new();
-    let mut merged = Vec::new();
-    for &at in &named {
-        // The first enclosing target in (path, position) order: the
-        // outermost one.
-        let outer = named
-            .iter()
-            .copied()
-            .find(|&other| other != at && graph.within(other).contains(&at));
-        match outer {
-            Some(outer) => merged.push((at, outer)),
-            None => kept.push(at),
-        }
-    }
+    let (kept, merged) = kept_targets(graph, targets);
+    let inside: BTreeSet<NodeAt> = kept.iter().flat_map(|&at| graph.within(at)).collect();
+    let candidate = |at: NodeAt| graph.standing(at.file) == Standing::Live && !inside.contains(&at);
+    let edges = graph.edges();
+    let linked = linked_to(graph, &kept);
+    layers_of(graph, kept, merged, linked, &candidate, edges)
+}
 
+/// Every node linked to a kept target that may be a candidate, with the
+/// (type, direction) pairs.
+fn linked_to(
+    graph: &SpecGraph<'_>,
+    kept: &[NodeAt],
+) -> BTreeMap<NodeAt, BTreeSet<(String, Direction)>> {
     let inside: BTreeSet<NodeAt> = kept.iter().flat_map(|&at| graph.within(at)).collect();
     let target_files: BTreeSet<usize> = kept.iter().map(|at| at.file).collect();
     let admits =
         |file: usize| graph.standing(file) == Standing::Live || target_files.contains(&file);
     let candidate = |at: NodeAt| graph.standing(at.file) == Standing::Live && !inside.contains(&at);
 
-    // Every node linked to a target, with the (type, direction) pairs.
     let edges = graph.edges();
     let mut linked: BTreeMap<NodeAt, BTreeSet<(String, Direction)>> = BTreeMap::new();
-    for &target in &kept {
+    for &target in kept {
         let links = graph.links(target, admits);
         for &(index, _) in &links.outgoing {
             let edge = &edges[index];
@@ -176,7 +178,46 @@ pub fn bundle_layers(graph: &SpecGraph<'_>, targets: &[NodeAt]) -> BundleLayers 
             }
         }
     }
+    linked
+}
 
+/// The named nodes, each once, by (path, position), split into those kept
+/// and those within another named node: (merged, into), the outermost.
+fn kept_targets(graph: &SpecGraph<'_>, targets: &[NodeAt]) -> (Vec<NodeAt>, Vec<(NodeAt, NodeAt)>) {
+    let mut named: Vec<NodeAt> = targets
+        .iter()
+        .copied()
+        .filter(|&at| graph.node(at).is_some())
+        .collect();
+    named.sort_unstable();
+    named.dedup();
+    let mut kept = Vec::new();
+    let mut merged = Vec::new();
+    for &at in &named {
+        // The first enclosing target in (path, position) order: the
+        // outermost one.
+        let outer = named
+            .iter()
+            .copied()
+            .find(|&other| other != at && graph.within(other).contains(&at));
+        match outer {
+            Some(outer) => merged.push((at, outer)),
+            None => kept.push(at),
+        }
+    }
+    (kept, merged)
+}
+
+/// The layers of [`bundle_layers`], its kept targets, merged ones and
+/// linked nodes given.
+fn layers_of(
+    graph: &SpecGraph<'_>,
+    kept: Vec<NodeAt>,
+    merged: Vec<(NodeAt, NodeAt)>,
+    linked: BTreeMap<NodeAt, BTreeSet<(String, Direction)>>,
+    candidate: &dyn Fn(NodeAt) -> bool,
+    edges: &[super::spec_graph::Edge],
+) -> BundleLayers {
     // Declared working answers (the first per node) and the nodes a live,
     // resolved `answers` lands on.
     let mut working_answers: BTreeMap<NodeAt, usize> = BTreeMap::new();

@@ -303,6 +303,17 @@ impl<'a> Resolver<'a> {
         .0
     }
 
+    /// [`Resolver::resolve_detached`], and every key its lookups read, hit
+    /// or miss, sorted and unique, as [`super::resolve_files`] records them
+    /// (`docs/features/store-reads.md` "Data": a REF's closure grows by the
+    /// holders of these keys until none joins).
+    pub fn resolve_detached_reading(&self, reference: &Reference) -> (Resolution, Vec<EdgeKey>) {
+        let mut reads = Reads::on();
+        let place = self.detached_place(reference, &mut reads);
+        let (resolution, _) = self.resolve_found(place, reference, false, &mut reads);
+        (resolution, reads.into_keys())
+    }
+
     /// Where a reference with no citing file may resolve; `None` for
     /// `project:` (skipped).
     fn detached_place<'r>(&self, reference: &'r Reference, reads: &mut Reads) -> Option<Place<'r>> {
