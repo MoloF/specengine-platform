@@ -325,7 +325,7 @@ Tests run on scratch copies under `std::env::temp_dir()`, with non-ASCII written
 
 ## Implementation
 
-To be filled in after implementation. The plan and the ship's canon follow.
+Deferred on 2026-11-04 to the next release, `v4`, with RM-0055 (08 s2 Phase 7, "Release scope"): this draft stays as committed, and a partial implementation exists outside the tree. To be filled in after implementation. The plan and the ship's canon follow.
 
 ### Files in scope
 
