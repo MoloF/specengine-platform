@@ -163,6 +163,9 @@ pub struct NestedSection {
 pub(crate) const SHOW_REV_IGNORED: &str = "`spec show` prints the current text";
 
 /// What `REF` names.
+// One per command: the reference variant, grown by `Reference.written_id`,
+// stays unboxed.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum Target {
     /// A root-relative `.md` path.
     Path(String),
@@ -638,8 +641,10 @@ pub(crate) fn pick_reference(
     // An `aliases:` entry names the document; the fresh document must still
     // declare it (the ID or the bare text, as the resolver looks it up),
     // else the file changed since the update and holds nothing.
+    // As the resolver's, the lookup reads the parse alone.
+    let _ = written;
     if found.is_empty() {
-        let bare = bare_text(reference, written);
+        let bare = bare_text(reference);
         let declared = parsed
             .document()
             .and_then(|document| document.fields.as_ref())
@@ -656,15 +661,10 @@ pub(crate) fn pick_reference(
     found
 }
 
-/// The written text before its section or revision, its `slug/` qualifier
-/// dropped: the resolver's lookup key of an `aliases:` entry.
-fn bare_text<'w>(reference: &Reference, written: &'w str) -> &'w str {
-    let text = written.split(['#', '@']).next().unwrap_or(written);
-    reference
-        .scope
-        .as_deref()
-        .and_then(|slug| text.strip_prefix(slug)?.strip_prefix('/'))
-        .unwrap_or(text)
+/// The ID as written, else the ID: the resolver's lookup key of an
+/// `aliases:` entry (core's `bare`).
+fn bare_text(reference: &Reference) -> &str {
+    reference.written_id.as_deref().unwrap_or(&reference.id)
 }
 
 /// The `norm_hash` of node `ord` of `parsed`, the parse of `bytes`: the

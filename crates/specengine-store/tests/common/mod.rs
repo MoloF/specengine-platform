@@ -2,12 +2,15 @@
 //! (docs/features/spec-index.md): scratch copies of `fixtures/spec-a` and
 //! `fixtures/spec-b` in temp directories (the fixtures are only read), the
 //! corpus's scheme and walk read through its own `specengine.toml`, fresh
-//! indexes to compare against, the AC-07 edit script, and a source that
-//! walks in reverse.
+//! indexes to compare against, the AC-07 edit script, a source that walks
+//! in reverse, and the seeded tree generator of
+//! docs/features/edge-table.md "Acceptance criteria" AC-1 (`edge_tree`).
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![allow(dead_code)]
+
+pub mod edge_tree;
 
 use std::fs;
 use std::io;
@@ -480,6 +483,12 @@ impl Source for Reversed<'_> {
 
     fn read(&self, path: &str) -> io::Result<Vec<u8>> {
         self.0.read(path)
+    }
+
+    /// The inner source's `[paths]`, which `update` resolves links by
+    /// (docs/features/edge-table.md "Acceptance criteria" AC-1).
+    fn paths(&self) -> &Paths {
+        self.0.paths()
     }
 }
 

@@ -73,11 +73,27 @@ pub struct Node {
 }
 
 /// The node's parent: an ID, with the span of `parent:`'s value for a document.
+///
+/// A document's `parent:` keeps the qualifiers of the reference its parser
+/// read (escaped values included), so resolution needs no bytes
+/// (`docs/features/edge-table.md` "Data"); a section's containment parent
+/// has none. Each is the [`Reference`](crate::reference::Reference) field
+/// of that name.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ParentRef {
     pub id: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub span: Option<Span>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alias_of: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scope: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written_id: Option<String>,
 }
 
 /// One untyped front-matter key with its value as written.

@@ -11,19 +11,26 @@
 //! between the snapshot and the transaction (another writer) is decided
 //! again inside it, parsing in place when needed; a file edited after it was
 //! read is caught by the next update.
+//!
+//! The edge tables follow the file rows in the same transaction
+//! (`crate::edges`): a full pass when the stamp was recreated, the
+//! worktree is new, the `[ids]` or the `[paths]` fingerprint moved, or on
+//! a rebuild; else an incremental pass over what the file rows changed. A
+//! `[paths]` move alone re-parses nothing.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::panic::{self, AssertUnwindSafe};
 
 use rusqlite::{Statement, Transaction, TransactionBehavior};
-use specengine_core::is_clean_relative;
+use specengine_core::{Paths, is_clean_relative};
 use specengine_model::IdScheme;
 
+use crate::edges::{self, Changes};
 use crate::error::{Db, StoreError};
 use crate::index::SqliteIndex;
 use crate::read::worktree_id;
 use crate::rows::{FileRows, hash_bytes, size_of};
-use crate::source::Source;
+use crate::source::{Probed, Source};
 use crate::{UpdateReport, schema};
 
 /// Which update.
@@ -40,18 +47,42 @@ pub(crate) enum Mode<'a> {
 /// The stored state the plan is made against.
 struct Snapshot {
     format_current: bool,
-    /// `(wt, scheme_fp)` of the worktree.
-    worktree: Option<(i64, String)>,
+    worktree: Option<StoredWorktree>,
     /// path → BLAKE3 (`None`: stored without one).
     files: BTreeMap<String, Option<String>>,
+}
+
+/// A worktree's row.
+struct StoredWorktree {
+    wt: i64,
+    scheme_fp: String,
+    paths_fp: String,
+}
+
+/// The two fingerprints of one update: `[ids]` and the `[paths]` keys
+/// resolution reads.
+struct Fingerprints {
+    scheme: String,
+    paths: String,
+}
+
+impl StoredWorktree {
+    fn scheme_moved(&self, fingerprints: &Fingerprints) -> bool {
+        self.scheme_fp != fingerprints.scheme
+    }
+
+    fn paths_moved(&self, fingerprints: &Fingerprints) -> bool {
+        self.paths_fp != fingerprints.paths
+    }
 }
 
 /// What to do with one listed file.
 enum Plan {
     /// The stored row had this hash and so did the bytes.
     Unchanged(String),
-    /// Rows to write (parsed, or unreadable).
-    Write(FileRows),
+    /// Rows to write (parsed, or unreadable); boxed, as most plans of a
+    /// walk are unchanged.
+    Write(Box<FileRows>),
 }
 
 /// What the walk or the probes decided.
@@ -71,23 +102,29 @@ pub(crate) fn run(
     mode: Mode<'_>,
 ) -> Result<UpdateReport, StoreError> {
     index.check_root(source)?;
-    let fingerprint = fingerprint(scheme)?;
-    // A named path that is no clean root-relative path, or a directory (new
-    // or stored: a rename), cannot be probed file by file: walk.
-    let mode = match mode {
-        Mode::Paths(paths)
-            if paths
-                .iter()
-                .any(|path| !is_clean_relative(path) || source.is_dir(path)) =>
-        {
-            Mode::Walk
-        }
-        other => other,
+    let fingerprints = Fingerprints {
+        scheme: fingerprint(scheme)?,
+        paths: paths_fingerprint(source.paths()),
     };
-    match attempt(index, source, scheme, &fingerprint, mode)? {
+    // The named paths are probed in one batch. One that is no clean
+    // root-relative path, or a directory (new or stored: a rename), cannot
+    // be probed file by file: walk.
+    let probed = match mode {
+        Mode::Paths(paths) if paths.iter().all(|path| is_clean_relative(path)) => {
+            let probed = source.probe_paths(paths);
+            (!probed.contains(&Probed::Dir)).then_some(probed)
+        }
+        _ => None,
+    };
+    let mode = match (mode, &probed) {
+        (Mode::Paths(_), None) => Mode::Walk,
+        (other, _) => other,
+    };
+    let probed = probed.as_deref();
+    match attempt(index, source, scheme, &fingerprints, mode, probed)? {
         Some(report) => Ok(report),
-        // The stamp or the fingerprint moved under `update_paths`: walk.
-        None => attempt(index, source, scheme, &fingerprint, Mode::Walk)?
+        // The stamp or a fingerprint moved under `update_paths`: walk.
+        None => attempt(index, source, scheme, &fingerprints, Mode::Walk, None)?
             .ok_or_else(|| StoreError::Sqlite("a full walk was asked to escalate".to_owned())),
     }
 }
@@ -101,29 +138,44 @@ pub(crate) fn fingerprint(scheme: &IdScheme) -> Result<String, StoreError> {
     Ok(hash_bytes(&json))
 }
 
+/// BLAKE3 of core's `Paths::resolution_json`: the `[paths]` keys
+/// resolution reads (`features`, `link_base`, `roots`, `exclude`). When it
+/// moves every edge is recomputed and nothing is re-parsed.
+pub(crate) fn paths_fingerprint(paths: &Paths) -> String {
+    hash_bytes(paths.resolution_json().as_bytes())
+}
+
 /// One update; `None` when `update_paths` must escalate to a walk.
+/// `probed`: the named paths' probes, for [`Mode::Paths`].
 fn attempt(
     index: &mut SqliteIndex,
     source: &dyn Source,
     scheme: &IdScheme,
-    fingerprint: &str,
+    fingerprints: &Fingerprints,
     mode: Mode<'_>,
+    probed: Option<&[Probed]>,
 ) -> Result<Option<UpdateReport>, StoreError> {
     let snapshot = snapshot(index)?;
     let stale = !snapshot.format_current
         || snapshot
             .worktree
             .as_ref()
-            .is_some_and(|(_, stored)| stored != fingerprint);
+            .is_some_and(|stored| stored.scheme_moved(fingerprints));
+    let paths_moved = snapshot
+        .worktree
+        .as_ref()
+        .is_some_and(|stored| stored.paths_moved(fingerprints));
     let rebuild = matches!(mode, Mode::Rebuild);
     let reparse_all = stale || rebuild;
 
     let mut report = UpdateReport::default();
-    let targets = match mode {
-        Mode::Paths(paths) if !stale && snapshot.worktree.is_some() => {
-            probe_targets(source, paths, &snapshot)
+    let targets = match (mode, probed) {
+        (Mode::Paths(paths), Some(probed))
+            if !stale && !paths_moved && snapshot.worktree.is_some() =>
+        {
+            probe_targets(source, paths, probed, &snapshot)
         }
-        Mode::Paths(_) | Mode::Walk | Mode::Rebuild => {
+        (Mode::Paths(_) | Mode::Walk | Mode::Rebuild, _) => {
             let listing = source
                 .list()
                 .map_err(|error| StoreError::io(source.root(), error))?;
@@ -161,32 +213,46 @@ fn attempt(
     let current = worktree_row(&tx, index)?;
     let fingerprint_moved = current
         .as_ref()
-        .is_some_and(|(_, stored)| stored != fingerprint);
-    if !targets.walked_everything && (recreated || current.is_none() || fingerprint_moved) {
+        .is_some_and(|stored| stored.scheme_moved(fingerprints));
+    let paths_moved = current
+        .as_ref()
+        .is_some_and(|stored| stored.paths_moved(fingerprints));
+    if !targets.walked_everything
+        && (recreated || current.is_none() || fingerprint_moved || paths_moved)
+    {
         drop(tx);
         return Ok(None);
     }
     let reparse_all = reparse_all || recreated || fingerprint_moved;
     report.reparsed_all = reparse_all;
+    // Every edge is recomputed: the stamp was recreated, the worktree is
+    // new, a fingerprint moved, or a rebuild (which re-parses everything).
+    let resolve_all = reparse_all || paths_moved || current.is_none();
 
     let wt = match current {
-        Some((wt, stored)) => {
-            if stored != fingerprint {
+        Some(stored) => {
+            if stored.scheme_moved(fingerprints) || stored.paths_moved(fingerprints) {
                 tx.execute(
-                    "UPDATE worktrees SET scheme_fp = ?1 WHERE wt = ?2",
-                    (fingerprint, wt),
+                    "UPDATE worktrees SET scheme_fp = ?1, paths_fp = ?2 WHERE wt = ?3",
+                    (
+                        fingerprints.scheme.as_str(),
+                        fingerprints.paths.as_str(),
+                        stored.wt,
+                    ),
                 )
                 .db()?;
             }
-            wt
+            stored.wt
         }
         None => {
             tx.execute(
-                "INSERT INTO worktrees (project, root, scheme_fp) VALUES (?1, ?2, ?3)",
+                "INSERT INTO worktrees (project, root, scheme_fp, paths_fp)
+                 VALUES (?1, ?2, ?3, ?4)",
                 (
                     index.project.as_str(),
                     index.root_text.as_str(),
-                    fingerprint,
+                    fingerprints.scheme.as_str(),
+                    fingerprints.paths.as_str(),
                 ),
             )
             .db()?;
@@ -194,7 +260,7 @@ fn attempt(
         }
     };
     let stored = stored_files(&tx, wt)?;
-    let mut writer = Writer::new(&tx)?;
+    let mut writer = Writer::new(&tx, !resolve_all)?;
 
     let listed: BTreeSet<&str> = targets.listed.iter().map(String::as_str).collect();
     let mut gone: Vec<(&str, i64)> = Vec::new();
@@ -211,8 +277,9 @@ fn attempt(
             }
         }
     }
-    for (_, file_id) in &gone {
+    for (path, file_id) in &gone {
         writer.delete(*file_id)?;
+        writer.deleted(path);
     }
     report.removed = gone.len();
     if rebuild {
@@ -257,7 +324,14 @@ fn attempt(
             report.parsed += 1;
         }
     }
-    drop(writer);
+    let changes = writer.into_changes();
+    let paths = source.paths();
+    if resolve_all {
+        report.resolved = edges::full_pass(&tx, wt, scheme, paths)?;
+        report.resolved_all = true;
+    } else {
+        report.resolved = edges::incremental_pass(&tx, wt, scheme, paths, &changes)?;
+    }
     tx.commit().db()?;
     Ok(Some(report))
 }
@@ -271,7 +345,7 @@ fn snapshot(index: &SqliteIndex) -> Result<Snapshot, StoreError> {
         None
     };
     let files = match &worktree {
-        Some((wt, _)) => stored_files(&tx, *wt)?
+        Some(stored) => stored_files(&tx, stored.wt)?
             .into_iter()
             .map(|(path, (_, hash))| (path, hash))
             .collect(),
@@ -288,18 +362,22 @@ fn snapshot(index: &SqliteIndex) -> Result<Snapshot, StoreError> {
 fn worktree_row(
     tx: &Transaction<'_>,
     index: &SqliteIndex,
-) -> Result<Option<(i64, String)>, StoreError> {
+) -> Result<Option<StoredWorktree>, StoreError> {
     let Some(wt) = worktree_id(tx, index)? else {
         return Ok(None);
     };
-    let fingerprint = tx
+    let (scheme_fp, paths_fp) = tx
         .query_row(
-            "SELECT scheme_fp FROM worktrees WHERE wt = ?1",
+            "SELECT scheme_fp, paths_fp FROM worktrees WHERE wt = ?1",
             [wt],
-            |row| row.get::<_, String>(0),
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
         )
         .db()?;
-    Ok(Some((wt, fingerprint)))
+    Ok(Some(StoredWorktree {
+        wt,
+        scheme_fp,
+        paths_fp,
+    }))
 }
 
 /// path → (file_id, BLAKE3) of the worktree's stored files.
@@ -323,15 +401,24 @@ fn stored_files(
     Ok(rows)
 }
 
-/// The named paths, deduplicated and sorted, split by the walk rules; a
-/// named path that was a stored directory (gone from disk: an existing one
-/// escalates to a walk) brings the stored files under it.
-fn probe_targets(source: &dyn Source, paths: &[&str], snapshot: &Snapshot) -> Targets {
-    let mut named: BTreeSet<String> = BTreeSet::new();
-    for path in paths {
-        named.insert((*path).to_owned());
+/// The named paths, deduplicated and sorted, split by their probes
+/// (`probed`, in `paths`' order, none a directory); a named path that was
+/// a stored directory (gone from disk: an existing one escalates to a
+/// walk) brings the stored files under it, probed in a second batch.
+fn probe_targets(
+    source: &dyn Source,
+    paths: &[&str],
+    probed: &[Probed],
+    snapshot: &Snapshot,
+) -> Targets {
+    let mut named: BTreeMap<String, bool> = BTreeMap::new();
+    let mut below: BTreeSet<String> = BTreeSet::new();
+    for (path, probe) in paths.iter().zip(probed) {
+        named
+            .entry((*path).to_owned())
+            .or_insert(*probe == Probed::Listed);
         let prefix = format!("{path}/");
-        named.extend(
+        below.extend(
             snapshot
                 .files
                 .range(prefix.clone()..)
@@ -339,7 +426,29 @@ fn probe_targets(source: &dyn Source, paths: &[&str], snapshot: &Snapshot) -> Ta
                 .map(|(stored, _)| stored.clone()),
         );
     }
-    let (listed, unlisted) = named.into_iter().partition(|path| source.probe(path));
+    let below: Vec<&str> = below
+        .iter()
+        .map(String::as_str)
+        .filter(|path| !named.contains_key(*path))
+        .collect();
+    // A stored file is listed only as a file: a directory in its place is
+    // unlisted, as `Source::probe` has it.
+    let below_probed = source.probe_paths(&below);
+    let below: Vec<(String, bool)> = below
+        .into_iter()
+        .zip(below_probed)
+        .map(|(path, probe)| (path.to_owned(), probe == Probed::Listed))
+        .collect();
+    named.extend(below);
+    let mut listed = Vec::new();
+    let mut unlisted = Vec::new();
+    for (path, is_listed) in named {
+        if is_listed {
+            listed.push(path);
+        } else {
+            unlisted.push(path);
+        }
+    }
     Targets {
         listed,
         unlisted,
@@ -357,11 +466,11 @@ fn plan_file(
     let bytes = match source.read(path) {
         Ok(bytes) => bytes,
         Err(error) => {
-            return Ok(Plan::Write(FileRows::unreadable(
+            return Ok(Plan::Write(Box::new(FileRows::unreadable(
                 path,
                 0,
                 error.to_string(),
-            )));
+            ))));
         }
     };
     let hash = hash_bytes(&bytes);
@@ -372,18 +481,22 @@ fn plan_file(
         specengine_core::parse(path, &bytes, scheme)
     }));
     match parsed {
-        Ok(parsed) => Ok(Plan::Write(FileRows::parsed(&bytes, &parsed)?)),
-        Err(_) => Ok(Plan::Write(FileRows::unreadable(
+        Ok(parsed) => Ok(Plan::Write(Box::new(FileRows::parsed(&bytes, &parsed)?))),
+        Err(_) => Ok(Plan::Write(Box::new(FileRows::unreadable(
             path,
             size_of(&bytes),
             "the spec parser panicked on this file".to_owned(),
-        ))),
+        )))),
     }
 }
 
-/// The prepared statements of one write transaction.
+/// The prepared statements of one write transaction, and what its file
+/// rows changed (for the incremental edge pass; `None` before a full one).
 struct Writer<'t> {
     insert_file: Statement<'t>,
+    insert_name: Statement<'t>,
+    select_names: Statement<'t>,
+    changes: Option<Changes>,
     insert_node: Statement<'t>,
     insert_alias: Statement<'t>,
     insert_link: Statement<'t>,
@@ -394,8 +507,16 @@ struct Writer<'t> {
 }
 
 impl<'t> Writer<'t> {
-    fn new(tx: &'t Transaction<'_>) -> Result<Self, StoreError> {
+    /// `track`: gather the [`Changes`] an incremental edge pass needs.
+    fn new(tx: &'t Transaction<'_>, track: bool) -> Result<Self, StoreError> {
         Ok(Self {
+            insert_name: tx
+                .prepare("INSERT INTO edge_names (file_id, key) VALUES (?1, ?2)")
+                .db()?,
+            select_names: tx
+                .prepare("SELECT key FROM edge_names WHERE file_id = ?1")
+                .db()?,
+            changes: track.then(Changes::default),
             insert_file: tx
                 .prepare(
                     "INSERT INTO files (wt, path, blake3, size, read_error, shell, tier3)
@@ -435,10 +556,32 @@ impl<'t> Writer<'t> {
         })
     }
 
+    /// A file's rows go; its names are read first, when tracked.
     fn delete(&mut self, file_id: i64) -> Result<(), StoreError> {
+        if let Some(changes) = &mut self.changes {
+            let names = self
+                .select_names
+                .query_map([file_id], |row| row.get::<_, String>(0))
+                .db()?;
+            for name in names {
+                changes.names.insert(name.db()?);
+            }
+        }
         self.delete_nodes.execute([file_id]).db()?;
         self.delete_file.execute([file_id]).db()?;
         Ok(())
+    }
+
+    /// The deleted file at `path` is not written again.
+    fn deleted(&mut self, path: &str) {
+        if let Some(changes) = &mut self.changes {
+            changes.deleted.insert(path.to_owned());
+        }
+    }
+
+    /// What the file rows changed; nothing when untracked.
+    fn into_changes(self) -> Changes {
+        self.changes.unwrap_or_default()
     }
 
     fn insert(&mut self, wt: i64, rows: &FileRows) -> Result<(), StoreError> {
@@ -508,6 +651,13 @@ impl<'t> Writer<'t> {
                     diagnostic.diagnostic.as_str(),
                 ))
                 .db()?;
+        }
+        for name in &rows.names {
+            self.insert_name.execute((file_id, name.as_str())).db()?;
+        }
+        if let Some(changes) = &mut self.changes {
+            changes.written.insert(rows.path.clone());
+            changes.names.extend(rows.names.iter().cloned());
         }
         Ok(())
     }

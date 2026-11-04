@@ -29,6 +29,7 @@ use specengine_model::{DiagnosticCode, LinkOrigin, LinkTarget, MENTIONS, ParsedF
 use super::engine::{Corpus, has_anchor};
 use super::graph::{live_sources, warning};
 use super::report::Finding;
+use super::resolve::Reads;
 use super::text::FileText;
 use crate::{DOCUMENT_EXTENSION, Paths, WalkScope};
 
@@ -132,24 +133,32 @@ impl Links<'_, '_> {
     /// The walked file a checked, non-empty `path` (percent-decoded) names,
     /// else the candidates tried, in order (`None`: one leaving the root).
     fn resolve(&self, from: &str, path: &str) -> Result<usize, Vec<Option<String>>> {
-        resolve_link_path(&self.corpus.by_path, self.link_base, from, path)
+        resolve_link_path(
+            &self.corpus.by_path,
+            self.link_base,
+            from,
+            path,
+            &mut Reads::off(),
+        )
     }
 }
 
 /// The file a checked, non-empty `path` (percent-decoded) of a Markdown
 /// file link written in `from` names among the walked files `by_path`,
 /// else the candidates tried, in order (`None`: one leaving the root).
-/// Also the spec graph's.
+/// Also the spec graph's; each candidate looked up goes to `reads`.
 pub(crate) fn resolve_link_path(
     by_path: &BTreeMap<&str, usize>,
     link_base: Option<&str>,
     from: &str,
     path: &str,
+    reads: &mut Reads,
 ) -> Result<usize, Vec<Option<String>>> {
-    let walked = |candidate: &Option<String>| {
-        candidate
-            .as_deref()
-            .and_then(|candidate| by_path.get(candidate).copied())
+    let mut walked = |candidate: &Option<String>| {
+        candidate.as_deref().and_then(|candidate| {
+            reads.path(candidate);
+            by_path.get(candidate).copied()
+        })
     };
     let mut tried = Vec::with_capacity(2);
     if let Some(from_root) = path.strip_prefix('/') {

@@ -174,9 +174,7 @@ fn ref_superseded(corpus: &Corpus<'_>, scheme: &IdScheme, findings: &mut Vec<Fin
         // (line, as written, resolution) per reference.
         let mut cited: Vec<(usize, String, Resolution)> = Vec::new();
         let declared = match parsed.document() {
-            Some(document) if !front_matter_failed(parsed) => {
-                declared_references(document, scheme, text)
-            }
+            Some(document) if !front_matter_failed(parsed) => declared_references(document, scheme),
             _ => Vec::new(),
         };
         for item in &declared {

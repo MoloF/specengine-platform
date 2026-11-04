@@ -41,7 +41,8 @@ use super::input::{CheckFile, CheckInput};
 use super::links::{self, percent_decode, resolve_link_path, was_read};
 use super::render::{is_tier3, readable_fields};
 use super::resolve::{
-    Resolution, Resolver, Won, declared_references, parent_reference, reference_line, written,
+    EdgeKey, Reads, Resolution, Resolver, Won, declared_references, parent_reference,
+    reference_line, written,
 };
 use super::text::{FileText, front_matter_failed};
 use crate::{DOCUMENT_EXTENSION, Paths, WalkScope};
@@ -240,6 +241,64 @@ pub fn nodes_within(nodes: &[Node], at: usize) -> Vec<usize> {
     within
 }
 
+/// One file's resolution ([`resolve_files`]): what [`SpecGraph::new`]
+/// resolves for it, and the keys its lookups read.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileEdges {
+    /// An index into [`ResolvedFiles::paths`].
+    pub file: usize,
+    /// Its document's resolved `parent:` before cycle breaking:
+    /// [`Parent::None`] without one or with a failed front-matter; `None`
+    /// without a parse or a document.
+    pub parent: Option<Parent>,
+    /// Its links, in written order, as [`SpecGraph::edges`] holds them.
+    pub edges: Vec<Edge>,
+    /// Every lookup its resolution made, hit or miss, sorted and unique.
+    pub reads: Vec<EdgeKey>,
+}
+
+/// The resolution of some files of a corpus ([`resolve_files`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResolvedFiles<'a> {
+    /// Every file of the input, in path order: what [`FileEdges::file`] and
+    /// every [`NodeAt::file`] index.
+    pub paths: Vec<&'a str>,
+    /// The files resolved, in path order.
+    pub files: Vec<FileEdges>,
+}
+
+/// The per-file routine of [`SpecGraph::new`] over `input`, for the files
+/// `only` names (`None`: every file), each with the keys it read
+/// (`docs/features/edge-table.md` "Data"). A file's resolution over a
+/// subset of a corpus equals its resolution over the whole when every key
+/// it read has every holder ([`super::given_keys`]) in the subset.
+pub fn resolve_files<'a>(
+    input: &'a CheckInput,
+    scheme: &'a IdScheme,
+    paths: &'a Paths,
+    only: Option<&BTreeSet<&str>>,
+) -> ResolvedFiles<'a> {
+    let graph = SpecGraph::context(input, scheme, paths);
+    let mut files = Vec::new();
+    for file in 0..graph.files.len() {
+        if only.is_some_and(|only| !only.contains(graph.paths()[file])) {
+            continue;
+        }
+        let mut reads = Reads::on();
+        let (parent, edges) = graph.file_links(file, &mut reads);
+        files.push(FileEdges {
+            file,
+            parent,
+            edges,
+            reads: reads.into_keys(),
+        });
+    }
+    ResolvedFiles {
+        paths: graph.paths().to_vec(),
+        files,
+    }
+}
+
 /// The containment tree and the resolved links of one corpus.
 pub struct SpecGraph<'a> {
     resolver: Resolver<'a>,
@@ -287,13 +346,34 @@ impl<'a> SpecGraph<'a> {
 
     /// `links`: resolve every link too, else only each document's `parent:`.
     fn build(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths, links: bool) -> Self {
+        let mut graph = Self::context(input, scheme, paths);
+        for file in 0..graph.files.len() {
+            let (parent, edges) = if links {
+                graph.file_links(file, &mut Reads::off())
+            } else {
+                (graph.file_parent(file), Vec::new())
+            };
+            if let Some(parent) = parent {
+                graph.parents.insert(NodeAt { file, ord: 0 }, parent);
+            }
+            graph.edges.extend(edges);
+        }
+        graph.break_cycles();
+        graph.link_children();
+        graph.index_edges();
+        graph
+    }
+
+    /// The files of `input` in path order, indexed for resolution: no
+    /// parent, child or link yet.
+    fn context(input: &'a CheckInput, scheme: &'a IdScheme, paths: &'a Paths) -> Self {
         let mut files: Vec<&CheckFile> = input.files.iter().collect();
         files.sort_by(|a, b| a.path.cmp(&b.path));
         let mut by_path = BTreeMap::new();
         for (index, file) in files.iter().enumerate() {
             by_path.entry(file.path.as_str()).or_insert(index);
         }
-        let mut graph = SpecGraph {
+        SpecGraph {
             resolver: Resolver::of_sorted(&files, scheme, &paths.features),
             scheme,
             link_base: paths.link_base.as_deref(),
@@ -319,22 +399,7 @@ impl<'a> SpecGraph<'a> {
             from: BTreeMap::new(),
             into: BTreeMap::new(),
             held: BTreeMap::new(),
-        };
-        for file in 0..graph.files.len() {
-            let (parent, edges) = if links {
-                graph.file_links(file)
-            } else {
-                (graph.file_parent(file), Vec::new())
-            };
-            if let Some(parent) = parent {
-                graph.parents.insert(NodeAt { file, ord: 0 }, parent);
-            }
-            graph.edges.extend(edges);
         }
-        graph.break_cycles();
-        graph.link_children();
-        graph.index_edges();
-        graph
     }
 
     /// The files, in path order: what [`NodeAt::file`] indexes.
@@ -409,7 +474,7 @@ impl<'a> SpecGraph<'a> {
     /// the ID, its `aliases_from` target, the section, or the document for
     /// an `aliases:` entry.
     pub fn locate(&self, reference: &Reference, written: &str) -> Endpoint {
-        self.locate_from(None, reference, written, false)
+        self.locate_from(None, reference, written, false, &mut Reads::off())
     }
 
     /// Where `at` hangs; `None` for no node.
@@ -616,17 +681,19 @@ impl<'a> SpecGraph<'a> {
     }
 
     /// The nodes a reference names, cited from `from` (`None`: no citing
-    /// file); `mention`: an inline mention, with the name fallback.
+    /// file); `mention`: an inline mention, with the name fallback; every
+    /// lookup goes to `reads`.
     fn locate_from(
         &self,
         from: Option<&str>,
         reference: &Reference,
         written: &str,
         mention: bool,
+        reads: &mut Reads,
     ) -> Endpoint {
         let (resolution, won) = self
             .resolver
-            .resolve_named(from, reference, written, mention);
+            .resolve_named(from, reference, written, mention, reads);
         match resolution {
             Resolution::Resolved(holders) => Endpoint::Nodes(
                 holders
@@ -694,16 +761,23 @@ impl<'a> SpecGraph<'a> {
             return Some(Parent::None);
         };
         let text = &self.texts[file];
-        let reference = parent_reference(declared, self.scheme, text);
+        let reference = parent_reference(declared);
         let written = written(text, &reference);
-        let end = self.locate_from(Some(self.paths()[file]), &reference, &written, false);
+        let end = self.locate_from(
+            Some(self.paths()[file]),
+            &reference,
+            &written,
+            false,
+            &mut Reads::off(),
+        );
         Some(parent_at(end, written))
     }
 
     /// One file's `parent:` (documents with a readable front-matter) and
     /// its links, in written order: front-matter references, a path-form
-    /// `canon:`, then the body's inline links.
-    fn file_links(&self, file: usize) -> (Option<Parent>, Vec<Edge>) {
+    /// `canon:`, then the body's inline links; every lookup goes to
+    /// `reads`.
+    fn file_links(&self, file: usize, reads: &mut Reads) -> (Option<Parent>, Vec<Edge>) {
         let Some(parsed) = self.files[file].parsed.as_ref() else {
             return (None, Vec::new());
         };
@@ -716,10 +790,10 @@ impl<'a> SpecGraph<'a> {
         let mut parent = Parent::None;
         let mut edges = Vec::new();
         if !front_matter_failed(parsed) {
-            for declared in declared_references(document, self.scheme, text) {
+            for declared in declared_references(document, self.scheme) {
                 let reference = &declared.reference;
                 let written = written(text, reference);
-                let end = self.locate_from(Some(from), reference, &written, false);
+                let end = self.locate_from(Some(from), reference, &written, false, reads);
                 if declared.key == "parent" {
                     parent = parent_at(end, written);
                     continue;
@@ -756,7 +830,7 @@ impl<'a> SpecGraph<'a> {
                 .as_ref()
                 .and_then(|fields| fields.canon.as_ref())
             {
-                let (end, note) = self.canon_path(target);
+                let (end, note) = self.canon_path(target, reads);
                 edges.push(Edge {
                     link_type: CANON_LINK.to_owned(),
                     origin: LinkOrigin::Frontmatter,
@@ -784,7 +858,7 @@ impl<'a> SpecGraph<'a> {
             let (written, line, offset, end, note) = match &link.dst {
                 LinkTarget::Reference(reference) => {
                     let written = written(text, reference);
-                    let end = self.locate_from(Some(from), reference, &written, true);
+                    let end = self.locate_from(Some(from), reference, &written, true, reads);
                     let line = reference
                         .span
                         .filter(|_| !text.is_empty())
@@ -793,7 +867,7 @@ impl<'a> SpecGraph<'a> {
                     (written, line, offset, end, None)
                 }
                 LinkTarget::Path(target) => {
-                    let (end, note) = self.file_link(file, target);
+                    let (end, note) = self.file_link(file, target, reads);
                     let offset = target.span.map_or(0, |span| span.start);
                     (
                         links::written(text, target),
@@ -831,8 +905,9 @@ impl<'a> SpecGraph<'a> {
     /// `canon-form`); a file that is not walked, not read or not
     /// canon dangles (`canon-file`); an anchor naming nothing lands on the
     /// document (`canon-anchor`).
-    fn canon_path(&self, target: &PathTarget) -> (Endpoint, Option<String>) {
+    fn canon_path(&self, target: &PathTarget, reads: &mut Reads) -> (Endpoint, Option<String>) {
         let path = target.path.as_str();
+        reads.path(path);
         let Some(anchor) = target.anchor.as_deref() else {
             return match self.file_of(path).and_then(|file| self.document(file)) {
                 Some(document) => (
@@ -875,7 +950,12 @@ impl<'a> SpecGraph<'a> {
     /// else dangles when a candidate lies in the walk scope
     /// (`link-dangling`); anything else is never checked. An anchor of a
     /// read target lands on its section, or names nothing (`link-anchor`).
-    fn file_link(&self, file: usize, target: &PathTarget) -> (Endpoint, Option<String>) {
+    fn file_link(
+        &self,
+        file: usize,
+        target: &PathTarget,
+        reads: &mut Reads,
+    ) -> (Endpoint, Option<String>) {
         let from = self.paths()[file];
         let path = percent_decode(&target.path);
         let resolved = if path.is_empty() {
@@ -884,7 +964,7 @@ impl<'a> SpecGraph<'a> {
             }
             file
         } else if path.ends_with(DOCUMENT_EXTENSION) {
-            match resolve_link_path(&self.by_path, self.link_base, from, &path) {
+            match resolve_link_path(&self.by_path, self.link_base, from, &path, reads) {
                 Ok(found) => found,
                 Err(tried) => {
                     let tried: Vec<&str> = tried.iter().flatten().map(String::as_str).collect();

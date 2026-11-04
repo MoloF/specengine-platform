@@ -870,7 +870,7 @@ impl FileCheck<'_, '_> {
     /// `aliases:` entry, or through `aliases_from`; `#Y` names a section of
     /// the ID's file.
     fn references(&mut self, document: &Node) {
-        for declared in declared_references(document, self.scheme, self.text) {
+        for declared in declared_references(document, self.scheme) {
             let reference = &declared.reference;
             let written = written(self.text, reference);
             let reason = match self

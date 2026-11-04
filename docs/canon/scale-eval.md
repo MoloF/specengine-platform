@@ -206,6 +206,8 @@ The tests are in `tests/scale_cli.rs`:
 - **SE-5, SE-7, SE-8:** one debug run at 1k. SE-7 also scans the sources statically.
 - **SE-6:** the refusals, the bounds themselves accepted, and `--timeout 0`.
 
+`tests/scale_edges.rs` checks the index's edge tables (`spec-index-edges.md`) on the `--corpus-only` 1k tree: they equal core's resolution before and after 20 seeded edits, and the worktree dumps as a fresh index's.
+
 `scale_baseline` is `#[ignore]` and runs the baseline: `cargo nextest run -p specengine-eval --release --test scale_cli --run-ignored ignored-only scale_baseline --no-capture`. Release runs grow `target.noindex`.
 
 ## Known limits

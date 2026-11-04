@@ -87,6 +87,9 @@ fn line_at(text: &str, at: usize) -> Option<(&str, usize)> {
 }
 
 /// A declared link before the document's ID is known.
+// Transient, one per declared link of one parse: the reference variant,
+// grown by `Reference.written_id`, stays unboxed.
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum PendingLink {
     /// From the document.
     Declared { link_type: String, dst: LinkTarget },
@@ -243,10 +246,18 @@ impl Reader<'_> {
             "aliases" => self.out.fields.aliases = self.string_list(&name, &value, line),
             "parent" => {
                 if let Some(found) = self.reference(&name, &value, line) {
+                    // The qualifiers stay with the parse, escaped values
+                    // too: resolution reads no bytes
+                    // (docs/features/edge-table.md "Data").
                     let reference = found.reference;
                     self.out.parent = Some(ParentRef {
                         id: reference.id,
                         span: reference.span,
+                        alias_of: reference.alias_of,
+                        project: reference.project,
+                        scope: reference.scope,
+                        section: reference.section,
+                        written_id: reference.written_id,
                     });
                 }
             }

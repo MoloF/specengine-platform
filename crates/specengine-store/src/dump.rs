@@ -2,7 +2,8 @@
 //! index table in column order (every column, read from the schema) with
 //! its surrogate keys (`wt`, `file_id`, `node_id`, a code row's `file`)
 //! replaced by `(project, root)`, `path`, `(path, ord)`, rows sorted, plus
-//! the FTS5 vocabulary.
+//! the FTS5 vocabulary. The edge tables name their ends by `(path, ord)`
+//! already (`docs/features/edge-table.md` "Data").
 //! Two DBs with equal dumps hold the same index; storage order and rowids
 //! never show.
 
@@ -93,6 +94,34 @@ const TABLES: &[TableDump] = &[
     },
     TableDump {
         table: "diagnostics",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+    TableDump {
+        table: "edges",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+    TableDump {
+        table: "edge_parents",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+    TableDump {
+        table: "edge_deps",
+        owner: "w.project, w.root, f.path",
+        joins: FILE_OWNER,
+        filter: "WHERE ?1 IS NULL OR f.wt = ?1",
+        skip: &["file_id"],
+    },
+    TableDump {
+        table: "edge_names",
         owner: "w.project, w.root, f.path",
         joins: FILE_OWNER,
         filter: "WHERE ?1 IS NULL OR f.wt = ?1",

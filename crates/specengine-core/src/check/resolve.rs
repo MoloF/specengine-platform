@@ -24,12 +24,110 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use specengine_model::grammar;
 use specengine_model::{
-    CanonTarget, Fields, IdScheme, IdScope, IdScript, Node, ParentRef, Reference, Shape,
+    CanonTarget, Fields, IdScheme, IdScope, IdScript, Node, ParentRef, ParsedFile, Reference, Shape,
 };
 
 use super::input::{CheckFile, CheckInput};
 use super::text::FileText;
 use crate::{DOCUMENT_EXTENSION, Paths};
+
+/// One key of resolution's index (`docs/features/edge-table.md` "Data",
+/// Keys): a name a file gives ([`given_keys`]: its document `id:`, a
+/// `{#ID}` section, an `aliases:` entry) or a path. A lookup a resolution
+/// makes reads one, hit or miss; its answer can change only when a file
+/// giving that key changes. Ordered as [`EdgeKey::text`] orders.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum EdgeKey {
+    /// `name:<text>`: an ID or an `aliases:` entry, one namespace.
+    Name(String),
+    /// `path:<root-relative path>`.
+    Path(String),
+}
+
+impl EdgeKey {
+    /// `name:<text>` or `path:<path>`.
+    pub fn text(&self) -> String {
+        match self {
+            Self::Name(name) => format!("name:{name}"),
+            Self::Path(path) => format!("path:{path}"),
+        }
+    }
+
+    /// The inverse of [`EdgeKey::text`]; `None` for any other text.
+    pub fn parse(text: &str) -> Option<Self> {
+        if let Some(name) = text.strip_prefix("name:") {
+            return Some(Self::Name(name.to_owned()));
+        }
+        text.strip_prefix("path:")
+            .map(|path| Self::Path(path.to_owned()))
+    }
+}
+
+/// What [`Resolver`] indexes `file` by, sorted and unique: its path, its
+/// document `id:` and `{#ID}` sections, its `aliases:` entries.
+pub fn given_keys(file: &CheckFile) -> Vec<EdgeKey> {
+    given_keys_of(&file.path, file.parsed.as_ref())
+}
+
+/// [`given_keys`] of a file at `path` with the parse `parsed` (`None`: no
+/// parse, the path alone).
+pub fn given_keys_of(path: &str, parsed: Option<&ParsedFile>) -> Vec<EdgeKey> {
+    let mut keys = BTreeSet::from([EdgeKey::Path(path.to_owned())]);
+    if let Some(parsed) = parsed {
+        if let Some(document) = parsed.document() {
+            if let Some(id) = &document.id {
+                keys.insert(EdgeKey::Name(id.clone()));
+            }
+            if let Some(aliases) = document.fields.as_ref().and_then(|f| f.aliases.as_ref()) {
+                keys.extend(aliases.iter().map(|alias| EdgeKey::Name(alias.clone())));
+            }
+        }
+        for section in parsed.sections() {
+            if let Some(id) = &section.id {
+                keys.insert(EdgeKey::Name(id.clone()));
+            }
+        }
+    }
+    keys.into_iter().collect()
+}
+
+/// The keys one file's resolution reads, when recorded (the edge table's
+/// `resolve_files`); off for the check and every read, where a lookup
+/// costs one branch more.
+#[derive(Debug, Default)]
+pub(crate) struct Reads(Option<BTreeSet<EdgeKey>>);
+
+impl Reads {
+    /// Records nothing.
+    pub(crate) fn off() -> Self {
+        Self(None)
+    }
+
+    /// Records every lookup.
+    pub(crate) fn on() -> Self {
+        Self(Some(BTreeSet::new()))
+    }
+
+    /// A lookup of `text` as an ID or an `aliases:` entry.
+    pub(crate) fn name(&mut self, text: &str) {
+        if let Some(keys) = &mut self.0 {
+            keys.insert(EdgeKey::Name(text.to_owned()));
+        }
+    }
+
+    /// A lookup of the file at `path`.
+    pub(crate) fn path(&mut self, path: &str) {
+        if let Some(keys) = &mut self.0 {
+            keys.insert(EdgeKey::Path(path.to_owned()));
+        }
+    }
+
+    /// The keys recorded, sorted; none when off.
+    pub(crate) fn into_keys(self) -> Vec<EdgeKey> {
+        self.0
+            .map_or_else(Vec::new, |keys| keys.into_iter().collect())
+    }
+}
 
 /// The resolution index of one corpus: every file in path order.
 #[derive(Debug, Clone)]
@@ -170,9 +268,12 @@ impl<'a> Resolver<'a> {
 
     /// A declared (front-matter) reference cited from the file `from`:
     /// `written` is its text as written (qualifiers, section and revision
-    /// included).
+    /// included), which no lookup reads: the parse alone decides, its
+    /// `written_id` the text looked up as an `aliases:` entry
+    /// (docs/features/edge-table.md "Data").
     pub fn resolve(&self, from: &str, reference: &Reference, written: &str) -> Resolution {
-        self.resolve_in(from, reference, written, false)
+        let _ = written;
+        self.resolve_in(from, reference, false)
     }
 
     /// An inline mention cited from the file `from`: [`Resolver::resolve`],
@@ -180,7 +281,8 @@ impl<'a> Resolver<'a> {
     /// dropped, while the prefix and one segment remain, in the same place;
     /// the first resolving ID wins, its section checked there.
     pub fn resolve_mention(&self, from: &str, reference: &Reference, written: &str) -> Resolution {
-        self.resolve_in(from, reference, written, true)
+        let _ = written;
+        self.resolve_in(from, reference, true)
     }
 
     /// A reference with no citing file (`spec show`, a reader asking by
@@ -190,37 +292,54 @@ impl<'a> Resolver<'a> {
     /// feature document). `slug/ID` resolves in its feature document,
     /// `project:` is skipped, no name fallback.
     pub fn resolve_detached(&self, reference: &Reference, written: &str) -> Resolution {
-        self.resolve_at(self.detached_place(reference), reference, written, false)
+        let _ = written;
+        let reads = &mut Reads::off();
+        self.resolve_found(
+            self.detached_place(reference, reads),
+            reference,
+            false,
+            reads,
+        )
+        .0
     }
 
     /// Where a reference with no citing file may resolve; `None` for
     /// `project:` (skipped).
-    fn detached_place<'r>(&self, reference: &'r Reference) -> Option<Place<'r>> {
+    fn detached_place<'r>(&self, reference: &'r Reference, reads: &mut Reads) -> Option<Place<'r>> {
         if reference.project.is_some() {
             None
         } else if let Some(slug) = reference.scope.as_deref() {
-            Some(Place::Feature(slug, self.by_slug.get(slug).copied()))
+            Some(self.feature_place(slug, reads))
         } else {
             Some(Place::Anywhere)
         }
     }
 
+    /// `slug/ID`'s place: the feature document `<features>/<slug>.md`, a
+    /// lookup by path.
+    fn feature_place<'r>(&self, slug: &'r str, reads: &mut Reads) -> Place<'r> {
+        reads.path(&format!("{}/{slug}{DOCUMENT_EXTENSION}", self.features));
+        Place::Feature(slug, self.by_slug.get(slug).copied())
+    }
+
     /// [`Resolver::resolve`] (`mention`: [`Resolver::resolve_mention`]) from
     /// the file `from`, or [`Resolver::resolve_detached`] without one, and
     /// the ID that won: the reference's own or a name-fallback candidate
-    /// (`None` unless resolved).
+    /// (`None` unless resolved); every lookup goes to `reads`.
     pub(crate) fn resolve_named(
         &self,
         from: Option<&str>,
         reference: &Reference,
         written: &str,
         mention: bool,
+        reads: &mut Reads,
     ) -> (Resolution, Option<Won>) {
+        let _ = written;
         let place = match from {
-            Some(from) => self.place(from, reference),
-            None => self.detached_place(reference),
+            Some(from) => self.place(from, reference, reads),
+            None => self.detached_place(reference, reads),
         };
-        self.resolve_found(place, reference, written, mention && from.is_some())
+        self.resolve_found(place, reference, mention && from.is_some(), reads)
     }
 
     /// The files holding the reference's ID as cited from the file `from`,
@@ -232,48 +351,45 @@ impl<'a> Resolver<'a> {
         reference: &Reference,
         written: &str,
     ) -> Option<Vec<usize>> {
-        let place = self.place(from, reference)?;
-        let bare = bare(reference, written);
-        self.holders_in(place, &reference.id, reference.alias_of.as_deref(), bare)
+        let _ = written;
+        let reads = &mut Reads::off();
+        let place = self.place(from, reference, reads)?;
+        self.holders_in(
+            place,
+            &reference.id,
+            reference.alias_of.as_deref(),
+            bare(reference),
+            reads,
+        )
     }
 
-    fn resolve_in(
-        &self,
-        from: &str,
-        reference: &Reference,
-        written: &str,
-        fallback: bool,
-    ) -> Resolution {
-        self.resolve_at(self.place(from, reference), reference, written, fallback)
+    fn resolve_in(&self, from: &str, reference: &Reference, fallback: bool) -> Resolution {
+        let reads = &mut Reads::off();
+        self.resolve_found(
+            self.place(from, reference, reads),
+            reference,
+            fallback,
+            reads,
+        )
+        .0
     }
 
-    /// Resolution in `place` (`None`: `project:`, skipped).
-    fn resolve_at(
-        &self,
-        place: Option<Place<'_>>,
-        reference: &Reference,
-        written: &str,
-        fallback: bool,
-    ) -> Resolution {
-        self.resolve_found(place, reference, written, fallback).0
-    }
-
-    /// [`Resolver::resolve_at`] and the ID that won (`None` unless
-    /// resolved).
+    /// Resolution in `place` (`None`: `project:`, skipped) and the ID that
+    /// won (`None` unless resolved).
     fn resolve_found(
         &self,
         place: Option<Place<'_>>,
         reference: &Reference,
-        written: &str,
         fallback: bool,
+        reads: &mut Reads,
     ) -> (Resolution, Option<Won>) {
         let Some(place) = place else {
             return (Resolution::Skipped, None);
         };
         let alias_of = reference.alias_of.as_deref();
         let section = reference.section.as_deref();
-        let bare = bare(reference, written);
-        if let Some(holders) = self.holders_in(place, &reference.id, alias_of, bare) {
+        let bare = bare(reference);
+        if let Some(holders) = self.holders_in(place, &reference.id, alias_of, bare, reads) {
             return self.won(place, holders, section, &reference.id, bare);
         }
         if fallback
@@ -283,13 +399,15 @@ impl<'a> Resolver<'a> {
             while let Some((shorter, _)) = body.rsplit_once('-') {
                 body = shorter;
                 let candidate = format!("{prefix}-{body}");
-                if let Some(holders) = self.holders_in(place, &candidate, alias_of, &candidate) {
+                if let Some(holders) =
+                    self.holders_in(place, &candidate, alias_of, &candidate, reads)
+                {
                     return self.won(place, holders, section, &candidate, &candidate);
                 }
             }
         }
         (
-            Resolution::Dangling(self.unresolved(place, reference, bare)),
+            Resolution::Dangling(self.unresolved(place, reference, bare, reads)),
             None,
         )
     }
@@ -313,12 +431,17 @@ impl<'a> Resolver<'a> {
     }
 
     /// Where the reference may resolve; `None` for `project:` (skipped).
-    fn place<'r>(&self, from: &str, reference: &'r Reference) -> Option<Place<'r>> {
+    fn place<'r>(
+        &self,
+        from: &str,
+        reference: &'r Reference,
+        reads: &mut Reads,
+    ) -> Option<Place<'r>> {
         if reference.project.is_some() {
             return None;
         }
         if let Some(slug) = reference.scope.as_deref() {
-            return Some(Place::Feature(slug, self.by_slug.get(slug).copied()));
+            return Some(self.feature_place(slug, reads));
         }
         if self.feature_scoped(reference) {
             let own = self
@@ -335,19 +458,25 @@ impl<'a> Resolver<'a> {
     /// defined ID, the `aliases:` entry and the `aliases_from` target that
     /// has holders; in one file, that file when it holds any of them. Each
     /// list is looked up only when the ones before it did not decide.
+    /// Anywhere, each lookup is a read. In one file, already named by a key
+    /// (the citing file, a slug's document), a lookup is that file's own,
+    /// but one: whether the bare written text is tried as an `aliases:`
+    /// entry depends on whether any file declares the ID itself as one, so
+    /// the ID is a read whenever the two differ.
     fn holders_in(
         &self,
         place: Place<'_>,
         id: &str,
         alias_of: Option<&str>,
         bare: &str,
+        reads: &mut Reads,
     ) -> Option<Vec<usize>> {
         let file = match place {
             Place::Anywhere => {
                 return self
-                    .defined_holders(id, alias_of)
-                    .or_else(|| self.alias_holders(id, bare))
-                    .or_else(|| self.target_holders(id, alias_of))
+                    .defined_holders(id, alias_of, reads)
+                    .or_else(|| self.alias_holders(id, bare, reads))
+                    .or_else(|| self.target_holders(id, alias_of, reads))
                     .cloned();
             }
             Place::Feature(_, file) | Place::Own(file) => file?,
@@ -355,31 +484,54 @@ impl<'a> Resolver<'a> {
         let holds = |holders: Option<&Vec<usize>>| {
             holders.is_some_and(|holders| holders.binary_search(&file).is_ok())
         };
-        let held = holds(self.defined_holders(id, alias_of))
-            || holds(self.alias_holders(id, bare))
-            || holds(self.target_holders(id, alias_of));
+        if bare != id {
+            reads.name(id);
+        }
+        let off = &mut Reads::off();
+        let held = holds(self.defined_holders(id, alias_of, off))
+            || holds(self.alias_holders(id, bare, off))
+            || holds(self.target_holders(id, alias_of, off));
         held.then(|| vec![file])
     }
 
     /// The files defining `id` itself; never for an alias.
-    fn defined_holders(&self, id: &str, alias_of: Option<&str>) -> Option<&Vec<usize>> {
+    fn defined_holders(
+        &self,
+        id: &str,
+        alias_of: Option<&str>,
+        reads: &mut Reads,
+    ) -> Option<&Vec<usize>> {
         match alias_of {
-            None => self.defined.get(id),
+            None => {
+                reads.name(id);
+                self.defined.get(id)
+            }
             Some(_) => None,
         }
     }
 
     /// The files whose `aliases:` hold the ID, else the bare written text.
-    fn alias_holders(&self, id: &str, bare: &str) -> Option<&Vec<usize>> {
-        self.aliases.get(id).or_else(|| self.aliases.get(bare))
+    fn alias_holders(&self, id: &str, bare: &str, reads: &mut Reads) -> Option<&Vec<usize>> {
+        reads.name(id);
+        self.aliases.get(id).or_else(|| {
+            reads.name(bare);
+            self.aliases.get(bare)
+        })
     }
 
     /// The files defining the `aliases_from` target: the configured prefix
     /// + the body as written.
-    fn target_holders(&self, id: &str, alias_of: Option<&str>) -> Option<&Vec<usize>> {
+    fn target_holders(
+        &self,
+        id: &str,
+        alias_of: Option<&str>,
+        reads: &mut Reads,
+    ) -> Option<&Vec<usize>> {
         let prefix = alias_of?;
         let (_, body) = id.split_once('-')?;
-        self.defined.get(&format!("{prefix}-{body}"))
+        let target = format!("{prefix}-{body}");
+        reads.name(&target);
+        self.defined.get(&target)
     }
 
     fn in_section(
@@ -405,7 +557,13 @@ impl<'a> Resolver<'a> {
 
     /// Why the reference, as written (not a fallback candidate), resolves
     /// to nothing in `place`.
-    fn unresolved(&self, place: Place<'_>, reference: &Reference, bare: &str) -> String {
+    fn unresolved(
+        &self,
+        place: Place<'_>,
+        reference: &Reference,
+        bare: &str,
+        reads: &mut Reads,
+    ) -> String {
         match place {
             Place::Anywhere => "resolves to no ID and no alias".to_owned(),
             Place::Feature(slug, None) => format!(
@@ -419,9 +577,9 @@ impl<'a> Resolver<'a> {
                 let id = &reference.id;
                 let alias_of = reference.alias_of.as_deref();
                 let defining: BTreeSet<usize> = [
-                    self.defined_holders(id, alias_of),
-                    self.alias_holders(id, bare),
-                    self.target_holders(id, alias_of),
+                    self.defined_holders(id, alias_of, reads),
+                    self.alias_holders(id, bare, reads),
+                    self.target_holders(id, alias_of, reads),
                 ]
                 .into_iter()
                 .flatten()
@@ -513,15 +671,11 @@ pub fn feature_stem<'p>(features: &str, path: &'p str) -> Option<&'p str> {
     grammar::is_slug(stem).then_some(stem)
 }
 
-/// The written text before its section or revision, its `slug/` qualifier
-/// dropped.
-fn bare<'w>(reference: &Reference, written: &'w str) -> &'w str {
-    let text = written.split(['#', '@']).next().unwrap_or(written);
-    reference
-        .scope
-        .as_deref()
-        .and_then(|slug| text.strip_prefix(slug)?.strip_prefix('/'))
-        .unwrap_or(text)
+/// The ID as written, the text looked up as an `aliases:` entry: the
+/// parse's `written_id`, else `id`; no bytes are read
+/// (docs/features/edge-table.md "Data").
+fn bare(reference: &Reference) -> &str {
+    reference.written_id.as_deref().unwrap_or(&reference.id)
 }
 
 fn push_unique(holders: &mut Vec<usize>, index: usize) {
@@ -541,14 +695,9 @@ pub(crate) struct DeclaredRef {
 }
 
 /// Every reference a document declares: `supersedes`, `adrs`, `refs`, the
-/// target of `status: superseded-by`, `working_answer`, `parent` (re-read
-/// through the scheme from `text`, the document's bytes), `links.*`, a
-/// reference-form `canon:`.
-pub(crate) fn declared_references(
-    document: &Node,
-    scheme: &IdScheme,
-    text: &FileText<'_>,
-) -> Vec<DeclaredRef> {
+/// target of `status: superseded-by`, `working_answer`, `parent` (from its
+/// parsed qualifiers), `links.*`, a reference-form `canon:`.
+pub(crate) fn declared_references(document: &Node, scheme: &IdScheme) -> Vec<DeclaredRef> {
     let mut references = Vec::new();
     let mut push = |key: &'static str, link_type: Option<&str>, reference: Reference| {
         references.push(DeclaredRef {
@@ -574,13 +723,16 @@ pub(crate) fn declared_references(
     {
         let mut reference = found.reference;
         reference.span = None;
+        // Looked up by its ID alone, as when the bytes decided: the ID as
+        // written stays out of the `aliases:` lookup here.
+        reference.written_id = None;
         push("status", None, reference);
     }
     if let Some(reference) = &fields.working_answer {
         push("working_answer", None, reference.clone());
     }
     if let Some(parent) = &document.parent {
-        push("parent", None, parent_reference(parent, scheme, text));
+        push("parent", None, parent_reference(parent));
     }
     if let Some(links) = &fields.links {
         for (link_type, list) in links.iter() {
@@ -595,46 +747,23 @@ pub(crate) fn declared_references(
     references
 }
 
-/// `ParentRef` keeps only the ID and the span: the reference is read again,
-/// from the text under its span when the bytes give back the same ID (the
-/// `project:` and `slug/` qualifiers, the section and `alias_of` kept),
-/// else from the ID alone (a value not written verbatim, no bytes).
-pub(crate) fn parent_reference(
-    parent: &ParentRef,
-    scheme: &IdScheme,
-    text: &FileText<'_>,
-) -> Reference {
-    let verbatim = parent
-        .span
-        .filter(|_| !text.is_empty())
-        .and_then(|span| grammar::parse_reference(&text.text(span), span.start, scheme))
-        .map(|found| found.reference)
-        .filter(|reference| reference.id == parent.id);
-    if let Some(reference) = verbatim {
-        return Reference {
-            span: parent.span,
-            ..reference
-        };
-    }
-    let reference = grammar::parse_reference(&parent.id, 0, scheme).map_or_else(
-        || Reference {
-            id: parent.id.clone(),
-            alias_of: None,
-            script: IdScript::of(&parent.id),
-            project: None,
-            scope: None,
-            section: None,
-            rev: None,
-            form: Default::default(),
-            label: None,
-            span: None,
-            edge: None,
-        },
-        |found| found.reference,
-    );
+/// The reference a document's `parent:` was parsed as: its ID, span and
+/// qualifiers, kept by the parser, so no bytes are read (the revision, the
+/// form and a wiki label resolve nothing and are not kept).
+pub(crate) fn parent_reference(parent: &ParentRef) -> Reference {
     Reference {
+        id: parent.id.clone(),
+        alias_of: parent.alias_of.clone(),
+        written_id: parent.written_id.clone(),
+        script: IdScript::of(parent.written_id.as_deref().unwrap_or(&parent.id)),
+        project: parent.project.clone(),
+        scope: parent.scope.clone(),
+        section: parent.section.clone(),
+        rev: None,
+        form: Default::default(),
+        label: None,
         span: parent.span,
-        ..reference
+        edge: None,
     }
 }
 

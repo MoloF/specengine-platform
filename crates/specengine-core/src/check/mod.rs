@@ -102,10 +102,12 @@ pub use render::{IndexOutput, is_live, is_tier3, is_tier3_file, render_index, re
 /// (`crate::roadmap`'s view, written as an index output is).
 pub(crate) use render::{header as generated_header, relative_link};
 pub use report::{Cause, Counts, Debt, Finding, Fix, NewDebt, Report, Verdict};
-pub use resolve::{Resolution, Resolver, canonical_id, feature_scoped};
+pub use resolve::{
+    EdgeKey, Resolution, Resolver, canonical_id, feature_scoped, given_keys, given_keys_of,
+};
 pub use spec_graph::{
-    CANON_LINK, Edge, Endpoint, LinkState, NodeAt, NodeLinks, Parent, SpecGraph, Standing, Walk,
-    nodes_within,
+    CANON_LINK, Edge, Endpoint, FileEdges, LinkState, NodeAt, NodeLinks, Parent, ResolvedFiles,
+    SpecGraph, Standing, Walk, nodes_within, resolve_files,
 };
 /// A file's bytes for a reference's written form (`crate::roadmap`'s
 /// `depends_on`, resolved as the check resolves it).

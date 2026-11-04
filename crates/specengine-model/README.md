@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-model]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-04
 ---
 
 # specengine-model — the corpus model and the reference grammar
@@ -50,6 +50,8 @@ Examples: `R-12@3`, `slug/AC-07`, `shared:PAT-PROBES@3`, `MEC-STAMINA#RULE-STAM-
 Recognition: (1) candidate: a maximal letter-digit run followed by `-`, not preceded by `_` or `-` (`FOO-R-12` cites no `R-12`); (2) the run matches `aliases_from` verbatim first (→ `alias_of`, no `homoglyph` even for a look-alike body digit; `id` = the written prefix + the normalised body), else run and body match after look-alike normalisation, any normalised char giving `homoglyph` with the Latin `fix`; (3) `#` and `@` join only before an ID or 1–9 digits (`ADR-0026#layout` → `ADR-0026`); (4) right boundary: end, or a char that is no letter, digit, `_`, nor `-` before one (`R-12abc`, `R-12-3` cite nothing); (5) qualifiers by look-back, `slug/` then `slug:`, kept only if the char before the slug is none of letter, digit, `_ - . / :`, else dropped (`https://h.io/R-12` → `R-12`); (6) `script` of the ID as written: `latin`, `mixed` (ASCII letters plus a foreign letter or digit), `non-latin`. `@` + digits that cannot be a revision → `bad-rev`, the reference kept without one; `@0` is legal. A node's own `rev` (`Node.rev`: a document's front-matter `rev:`, a section's `rev=N` attribute, never inherited) is 1 to 999 999 999 given once: `0`, not 1–9 digits or a repeat → `bad-rev` and `None`, as is none written; core's `revision` tells them apart (ADR-0040, `docs/canon/node-revision.md`).
 
 Definitions (`id:`, `{#…}`) are a bare ID of a configured prefix, never an alias. A reference-carrying front-matter scalar is exactly one reference; `canon:` tries a reference, else `path[#anchor]`. Nothing is resolved here (existence, aliases, `slug/`, `project:`, anchors): that is `spec check` (`docs/canon/spec-check.md`).
+
+`Reference.written_id`: the ID as written (prefix and body), only when it differs from `id` (a look-alike, or an alias's body, normalised), tried as an `aliases:` entry. A document's `ParentRef {id, span?, alias_of?, project?, scope?, section?, written_id?}` keeps its reference's qualifiers, escaped values too (a section's containment parent: none), so resolution reads no bytes (`docs/canon/spec-index-edges.md`).
 
 ## Links
 

@@ -280,6 +280,7 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
                         dst: LinkTarget::Reference(Reference {
                             id: this.id.clone(),
                             alias_of: None,
+                            written_id: None,
                             script: this.script,
                             project: None,
                             scope: None,
@@ -355,7 +356,15 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
             .parent
             .and_then(|parent| section_ids.get(&parent).cloned())
             .or_else(|| document_id.clone())
-            .map(|id| ParentRef { id, span: None });
+            .map(|id| ParentRef {
+                id,
+                span: None,
+                alias_of: None,
+                project: None,
+                scope: None,
+                section: None,
+                written_id: None,
+            });
         section_ids.insert(index, definition.id.clone());
         // The body starts on the line after the heading.
         let body_start = heading.raw_end.clamp(heading.span.end, extent.end);
@@ -479,6 +488,9 @@ pub fn parse(path: &str, bytes: &[u8], scheme: &IdScheme) -> ParsedFile {
 }
 
 /// A body link before its `src` is known.
+// Transient, one per body link of one parse: the mention variant, grown by
+// `Reference.written_id`, stays unboxed.
+#[allow(clippy::large_enum_variant)]
 enum InlineLink {
     /// An ID reference in the text.
     Mention(grammar::Found),

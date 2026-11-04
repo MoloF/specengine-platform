@@ -1,0 +1,17 @@
+# Fixture corpus parent-ref: an invented sea-bird watch, sightings on its
+# cliffs. It sets the fields a `parent:` and a reference keep in the index
+# since INDEX_FORMAT 16 (`crates/specengine-store/tests/format.rs` dumps it):
+# a scoped and sectioned parent (AUK-01), an alias's parent through
+# `aliases_from` (AUK-03), and a parent with a `project:` qualifier, a scope,
+# a section and a look-alike ID (AUK-04); AUK-01 also cites a look-alike ID.
+# Every byte is ASCII: the look-alike `A` (U+0410) is a YAML escape.
+
+[project]
+slug = "parent-ref"
+
+[paths]
+roots = ["docs"]
+
+[ids]
+AUK  = { kind = "sighting",     width = 2, aliases_from = ["TERN"] }
+NEST = { kind = "nesting-site", width = 2, scope = "feature" }

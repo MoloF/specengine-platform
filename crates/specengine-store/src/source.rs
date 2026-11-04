@@ -14,6 +14,10 @@
 //! root-relative with `/`, built from the names as the OS lists them (a
 //! root's own components included), and byte-sorted.
 //!
+//! [`Source::probe_paths`] probes a batch of named paths: [`WorkingTree`]
+//! reads each directory's listing at most once per call
+//! (`docs/features/edge-table.md` "Data").
+//!
 //! [`GitIndex`] walks the git index by the same rules
 //! (docs/canon/spec-check-git.md, "The staged check"): the stage-0 regular
 //! entries (`100644`, `100755`) as the files, symlinks (`120000`) and
@@ -21,8 +25,8 @@
 //! under it; a root is a directory only when a regular entry lies under it.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::ffi::OsStr;
-use std::fs::{self, FileType};
+use std::ffi::{OsStr, OsString};
+use std::fs::{self, DirEntry, FileType};
 use std::io;
 use std::path::{Path, PathBuf};
 
@@ -47,6 +51,17 @@ pub struct Listing {
     pub unreadable_dirs: Vec<String>,
 }
 
+/// What [`Source::probe_paths`] made of one named path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Probed {
+    /// Not a directory, and listed by the walk rules now ([`Source::probe`]).
+    Listed,
+    /// Neither a directory nor listed.
+    Unlisted,
+    /// A directory the walk could reach files through ([`Source::is_dir`]).
+    Dir,
+}
+
 /// A worktree's spec files: listing, probing and reading. Implementations
 /// must agree with themselves: a path is [`Source::probe`]d `true` exactly
 /// when [`Source::list`] would list it at that moment.
@@ -54,6 +69,9 @@ pub trait Source {
     /// The worktree root this source reads; compared with the index handle's
     /// (canonical) root.
     fn root(&self) -> &Path;
+    /// The `[paths]` it walks by; the index resolves links by the same
+    /// (`features`, `link_base`) and fingerprints them.
+    fn paths(&self) -> &Paths;
     /// Every indexable file. An error only when the worktree root itself
     /// cannot be listed.
     fn list(&self) -> io::Result<Listing>;
@@ -68,12 +86,32 @@ pub trait Source {
         let _ = path;
         false
     }
+    /// Each named path, in order: [`Probed::Dir`] by [`Source::is_dir`],
+    /// else [`Probed::Listed`] by [`Source::probe`], else
+    /// [`Probed::Unlisted`]. The default goes path by path; a source may
+    /// share work across the batch, with the same answers.
+    fn probe_paths(&self, paths: &[&str]) -> Vec<Probed> {
+        paths
+            .iter()
+            .map(|path| {
+                if self.is_dir(path) {
+                    Probed::Dir
+                } else if self.probe(path) {
+                    Probed::Listed
+                } else {
+                    Probed::Unlisted
+                }
+            })
+            .collect()
+    }
 }
 
 /// The working tree under `root`, walked by `[paths]`.
 #[derive(Debug, Clone)]
 pub struct WorkingTree {
     root: PathBuf,
+    /// The `[paths]` it was made with.
+    paths: Paths,
     /// The roots and the exclude globs, compiled once: core's
     /// [`WalkScope`], the matcher `spec check` judges link targets by.
     scope: WalkScope,
@@ -87,6 +125,7 @@ impl WorkingTree {
         let root = fs::canonicalize(requested).map_err(|error| StoreError::io(requested, error))?;
         Ok(Self {
             root,
+            paths: paths.clone(),
             scope: paths.walk_scope(),
         })
     }
@@ -100,20 +139,22 @@ impl WorkingTree {
     /// component: `None` when a component is missing, a symlink, or a
     /// non-directory before the end, or a directory on the way cannot be
     /// read.
-    fn root_kind(&self, root: &str) -> Option<FileType> {
-        self.resolve(root).ok().flatten()
+    fn root_kind(&self, root: &str, listings: &mut Listings) -> Option<FileType> {
+        self.resolve(root, listings).ok().flatten()
     }
 
     /// [`WorkingTree::root_kind`], telling "not there" (`Ok(None)`) from
     /// "cannot tell": `Err` names the directory on the way (root-relative,
     /// `""` for the root itself) that could not be listed, or whose entry's
     /// type could not be read.
-    fn resolve(&self, root: &str) -> Result<Option<FileType>, String> {
+    fn resolve(&self, root: &str, listings: &mut Listings) -> Result<Option<FileType>, String> {
         let mut dir = self.root.clone();
         let mut read = Vec::new();
         let mut components = root.split('/').peekable();
         while let Some(component) = components.next() {
-            let Some(kind) = entry_kind(&dir, OsStr::new(component)).map_err(|_| read.join("/"))?
+            let Some(kind) = listings
+                .entry_kind(&dir, OsStr::new(component))
+                .map_err(|_| read.join("/"))?
             else {
                 return Ok(None);
             };
@@ -140,6 +181,7 @@ impl WorkingTree {
         found: &mut BTreeSet<String>,
         listing: &mut Listing,
     ) {
+        note_listing(absolute);
         let Ok(entries) = fs::read_dir(absolute) else {
             listing.unreadable_dirs.push(relative.to_owned());
             return;
@@ -189,12 +231,18 @@ impl Source for WorkingTree {
         &self.root
     }
 
+    fn paths(&self) -> &Paths {
+        &self.paths
+    }
+
     fn list(&self) -> io::Result<Listing> {
+        note_listing(&self.root);
         fs::read_dir(&self.root)?;
         let mut listing = Listing::default();
         let mut found = BTreeSet::new();
+        let listings = &mut Listings::direct();
         for root in self.scope.roots() {
-            match self.resolve(root) {
+            match self.resolve(root, listings) {
                 Ok(Some(kind)) if kind.is_dir() => {
                     self.walk(&self.root.join(root), root, &mut found, &mut listing);
                 }
@@ -216,6 +264,39 @@ impl Source for WorkingTree {
     }
 
     fn probe(&self, path: &str) -> bool {
+        self.probe_in(path, &mut Listings::direct())
+    }
+
+    fn read(&self, path: &str) -> io::Result<Vec<u8>> {
+        self.read_file(path)
+    }
+
+    fn is_dir(&self, path: &str) -> bool {
+        self.is_dir_in(path, &mut Listings::direct())
+    }
+
+    /// One listing memo for the whole batch: each directory is read at most
+    /// once per call.
+    fn probe_paths(&self, paths: &[&str]) -> Vec<Probed> {
+        let listings = &mut Listings::memo();
+        paths
+            .iter()
+            .map(|path| {
+                if self.is_dir_in(path, listings) {
+                    Probed::Dir
+                } else if self.probe_in(path, listings) {
+                    Probed::Listed
+                } else {
+                    Probed::Unlisted
+                }
+            })
+            .collect()
+    }
+}
+
+impl WorkingTree {
+    /// [`Source::probe`] through `listings`.
+    fn probe_in(&self, path: &str, listings: &mut Listings) -> bool {
         // A clean `.md` path some root admits (it lies in, or is, the root;
         // the components below the root follow the walk's dot-name rule, the
         // root's own components do not), matching no exclude glob.
@@ -225,7 +306,7 @@ impl Source for WorkingTree {
         let mut dir = self.root.clone();
         let components: Vec<&str> = path.split('/').collect();
         for (index, component) in components.iter().enumerate() {
-            let Ok(Some(kind)) = entry_kind(&dir, OsStr::new(component)) else {
+            let Ok(Some(kind)) = listings.entry_kind(&dir, OsStr::new(component)) else {
                 return false;
             };
             if kind.is_symlink() {
@@ -243,7 +324,8 @@ impl Source for WorkingTree {
         false
     }
 
-    fn read(&self, path: &str) -> io::Result<Vec<u8>> {
+    /// [`Source::read`].
+    fn read_file(&self, path: &str) -> io::Result<Vec<u8>> {
         if !is_clean_relative(path) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -280,15 +362,82 @@ impl Source for WorkingTree {
         fs::read(&absolute)
     }
 
-    fn is_dir(&self, path: &str) -> bool {
+    /// [`Source::is_dir`] through `listings`.
+    fn is_dir_in(&self, path: &str, listings: &mut Listings) -> bool {
         if !is_clean_relative(path) {
             return false;
         }
         // A root, a directory under one (no dot-name below the root, as the
         // walk skips them), or a directory containing one.
         related_to_a_root(&self.scope, path)
-            && self.root_kind(path).is_some_and(|kind| kind.is_dir())
+            && self
+                .root_kind(path, listings)
+                .is_some_and(|kind| kind.is_dir())
     }
+}
+
+/// How [`WorkingTree`] reads a directory's listing for one lookup: afresh
+/// every time, or once per directory for one [`Source::probe_paths`] call.
+struct Listings {
+    /// Directory → its entries by name (`None`: it could not be listed);
+    /// `None`: no memo.
+    memo: Option<BTreeMap<PathBuf, Option<Listed>>>,
+}
+
+/// One directory's listing.
+struct Listed {
+    /// The first entry of each name.
+    entries: BTreeMap<OsString, DirEntry>,
+    /// Some entry could not be read.
+    unread: bool,
+}
+
+impl Listings {
+    fn direct() -> Self {
+        Self { memo: None }
+    }
+
+    fn memo() -> Self {
+        Self {
+            memo: Some(BTreeMap::new()),
+        }
+    }
+
+    /// [`entry_kind`], the listing read once per directory with a memo.
+    fn entry_kind(&mut self, dir: &Path, name: &OsStr) -> io::Result<Option<FileType>> {
+        let Some(memo) = &mut self.memo else {
+            return entry_kind(dir, name);
+        };
+        let listed = memo
+            .entry(dir.to_path_buf())
+            .or_insert_with(|| list_dir(dir));
+        let Some(listed) = listed else {
+            return Err(io::Error::other("the directory cannot be listed"));
+        };
+        match listed.entries.get(name) {
+            Some(entry) => entry.file_type().map(Some),
+            None if listed.unread => Err(io::Error::other("an entry could not be read")),
+            None => Ok(None),
+        }
+    }
+}
+
+/// The entries of `dir` by name; `None` when it cannot be listed.
+fn list_dir(dir: &Path) -> Option<Listed> {
+    note_listing(dir);
+    let mut listed = Listed {
+        entries: BTreeMap::new(),
+        unread: false,
+    };
+    for entry in fs::read_dir(dir).ok()? {
+        match entry {
+            Ok(entry) => {
+                listed.entries.entry(entry.file_name()).or_insert(entry);
+            }
+            Err(_) => listed.unread = true,
+        }
+    }
+    Some(listed)
 }
 
 /// `path` is a root, lies under one, or contains one with no dot-name
@@ -320,6 +469,8 @@ fn related_to_a_root(scope: &WalkScope, path: &str) -> bool {
 pub struct GitIndex {
     /// Canonical.
     root: PathBuf,
+    /// The `[paths]` it was walked by.
+    paths: Paths,
     scope: WalkScope,
     listing: Listing,
     /// Every listed path and its blob's OID.
@@ -362,6 +513,7 @@ impl GitIndex {
             .collect();
         Self {
             root: staged.root,
+            paths: walk.paths,
             scope: walk.scope,
             listing: walk.listing,
             listed: walk.listed,
@@ -391,6 +543,7 @@ impl GitIndex {
 /// The index's listing by `[paths]`, before any blob is read.
 #[derive(Debug, Clone)]
 pub(crate) struct IndexWalk {
+    pub(crate) paths: Paths,
     pub(crate) scope: WalkScope,
     pub(crate) listing: Listing,
     /// Every listed path and its blob's OID.
@@ -403,6 +556,7 @@ impl IndexWalk {
         let scope = paths.walk_scope();
         let (listing, listed) = walk_index(entries, &scope);
         Self {
+            paths: paths.clone(),
             scope,
             listing,
             listed,
@@ -422,6 +576,10 @@ impl IndexWalk {
 impl Source for GitIndex {
     fn root(&self) -> &Path {
         &self.root
+    }
+
+    fn paths(&self) -> &Paths {
+        &self.paths
     }
 
     fn list(&self) -> io::Result<Listing> {
@@ -567,6 +725,7 @@ pub(crate) fn walk_index(
 /// the entry's type cannot be read, or an entry could not be read and the
 /// name was not among the others.
 fn entry_kind(dir: &Path, name: &OsStr) -> io::Result<Option<FileType>> {
+    note_listing(dir);
     let mut unread = None;
     for entry in fs::read_dir(dir)? {
         match entry {
@@ -578,5 +737,156 @@ fn entry_kind(dir: &Path, name: &OsStr) -> io::Result<Option<FileType>> {
     match unread {
         Some(error) => Err(error),
         None => Ok(None),
+    }
+}
+
+/// Counts a listing of `dir` for the batched-probe test
+/// (`docs/features/edge-table.md` "Acceptance criteria" ET-4): per
+/// thread, every directory a [`WorkingTree`] reads.
+#[cfg(test)]
+fn note_listing(dir: &Path) {
+    LISTINGS.with_borrow_mut(|counts| *counts.entry(dir.to_path_buf()).or_default() += 1);
+}
+
+#[cfg(not(test))]
+fn note_listing(_: &Path) {}
+
+#[cfg(test)]
+thread_local! {
+    /// Directory → how often this thread listed it.
+    static LISTINGS: std::cell::RefCell<BTreeMap<PathBuf, usize>> =
+        const { std::cell::RefCell::new(BTreeMap::new()) };
+}
+
+/// The listings this thread made since the last call, by directory
+/// (absolute), and a fresh count.
+#[cfg(test)]
+#[allow(dead_code)] // The ET-4 test reads it.
+pub(crate) fn take_listings() -> BTreeMap<PathBuf, usize> {
+    LISTINGS.with_borrow_mut(std::mem::take)
+}
+
+#[cfg(test)]
+mod tests {
+    //! docs/features/edge-table.md "Acceptance criteria" ET-4: batched
+    //! probes. The listing counter (`take_listings`) shows that an
+    //! `update_paths` naming 2 000 files in one directory of 2 000, plus 50
+    //! in a nested one, lists each directory at most twice, and the dump
+    //! equals a walk's. M: `WorkingTree` without the `probe_paths` override
+    //! (path-by-path `entry_kind`: 2 000 listings of the large directory).
+
+    use std::fs;
+    use std::path::PathBuf;
+
+    use specengine_core::{IdSchemeToml, Paths};
+    use specengine_model::IdScheme;
+
+    use super::{Probed, Source, WorkingTree, take_listings};
+    use crate::{IndexWriter, SqliteIndex};
+
+    const CONFIG: &str =
+        "[paths]\nroots = [\"docs\"]\n\n[ids]\nZQ = { kind = \"probe\", width = 2 }\n";
+    const LARGE: usize = 2_000;
+    const NESTED: usize = 50;
+
+    /// A scratch directory, removed on drop.
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(name: &str) -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "specengine-store-probes-{name}-{}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&path);
+            fs::create_dir_all(path.join("wt/docs/large/nested")).expect("scratch");
+            fs::create_dir_all(path.join("data")).expect("scratch");
+            Self(fs::canonicalize(path).expect("canonical"))
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    /// The 2 050 named files, root-relative.
+    fn named() -> Vec<String> {
+        (0..LARGE)
+            .map(|i| format!("docs/large/f{i:04}.md"))
+            .chain((0..NESTED).map(|i| format!("docs/large/nested/n{i:02}.md")))
+            .collect()
+    }
+
+    #[test]
+    fn update_paths_lists_each_directory_at_most_twice() {
+        let scratch = Scratch::new("batch");
+        let root = scratch.0.join("wt");
+        fs::write(root.join("specengine.toml"), CONFIG).expect("config");
+        let paths_named = named();
+        for (i, path) in paths_named.iter().enumerate() {
+            fs::write(
+                root.join(path),
+                format!("# F{i}\n\nSee ZQ-{:02}.\n", i % 90),
+            )
+            .expect("file");
+        }
+        let scheme = IdScheme::from_toml(CONFIG).expect("scheme");
+        let paths = Paths::from_toml(CONFIG).expect("paths");
+        let tree = WorkingTree::new(&root, &paths).expect("working tree");
+        let mut index =
+            SqliteIndex::open(scratch.0.join("data/index.db"), "demo", &root).expect("open");
+        index.update(&tree, &scheme).expect("the first index");
+
+        // Every named file changes, so the update reads each of them.
+        for path in &paths_named {
+            let mut bytes = fs::read(root.join(path)).expect("read");
+            bytes.extend_from_slice(b"\nMore.\n");
+            fs::write(root.join(path), bytes).expect("write");
+        }
+        let names: Vec<&str> = paths_named.iter().map(String::as_str).collect();
+        let _ = take_listings();
+        let report = index
+            .update_paths(&tree, &scheme, &names)
+            .expect("update_paths");
+        let listings = take_listings();
+        assert_eq!(report.walked, LARGE + NESTED, "{report:?}");
+        assert_eq!(report.parsed, LARGE + NESTED, "{report:?}");
+        let large = root.join("docs/large");
+        eprintln!(
+            "listings in one update_paths: {:?}",
+            listings
+                .iter()
+                .map(|(dir, count)| (dir.strip_prefix(&root).unwrap_or(dir), count))
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            listings.contains_key(&large),
+            "the counter sees the large directory: {listings:?}"
+        );
+        for (dir, count) in &listings {
+            assert!(
+                *count <= 2,
+                "{} listed {count} times in one update_paths",
+                dir.display()
+            );
+        }
+
+        // The batch answers as path by path.
+        let probed = tree.probe_paths(&names);
+        assert!(
+            probed.iter().all(|probe| *probe == Probed::Listed),
+            "{probed:?}"
+        );
+
+        // The dump equals a walk's.
+        let mut walked =
+            SqliteIndex::open(scratch.0.join("data/walk.db"), "demo", &root).expect("open");
+        walked.update(&tree, &scheme).expect("a walk");
+        assert!(
+            index.dump_worktree().expect("dump") == walked.dump_worktree().expect("dump"),
+            "update_paths of 2 050 files differs from a walk"
+        );
     }
 }

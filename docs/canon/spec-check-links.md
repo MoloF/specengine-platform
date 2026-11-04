@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-10-02
+reviewed: 2026-11-04
 ---
 
 # spec check: feature scopes and links
@@ -72,7 +72,7 @@ A reference without a span gets `<written>` rebuilt as `project:slug/ID#Y` (mess
 
 **Graph rules.** A `depends_on` item resolves from its own file: a scoped item gives an edge to its feature document, a bare feature-scoped one only inside its own feature. `ref-superseded` is unchanged, with scoped resolution. Findings, cycle subjects and reasons do not depend on input order.
 
-**`parent:`.** The model's `ParentRef` keeps only the ID and a span; the check re-parses the verbatim bytes under the span, so `parent:` keeps its `project:`, `slug/` and `#section` like any front-matter reference: its `#Y` is checked, `parent: other:X` is `Skipped`. Limit: an escaped (non-verbatim) value has no span, so its qualifiers and section are lost — `parent: "feat\/AC-01"` outside a feature gives a false `ref-dangling` (open question below).
+**`parent:`.** `ParentRef` keeps the parsed `project:`, `slug/`, `#section` and alias, escaped values too, and no byte is re-read (`spec-index-edges.md` "Parse-time capture"), so `parent:` resolves like any front-matter reference: its `#Y` is checked, `parent: other:X` is `Skipped`.
 
 ## API
 
@@ -89,7 +89,7 @@ The parity config has only `ADR`, project-scoped, and no `link_base`: `docs/feat
 
 **Recorded** by the parser: each inline link and reference definition (used or not; a repeated label: the first) with a local destination — non-empty, not `//`-led, no scheme `[A-Za-z][A-Za-z0-9+.-]*:` — as one `mentions` link, origin `inline`, `dst` a path, `src` as an ID mention's. `path` = before the first `#`, cut at the first `?` (`""` for `#h`); `anchor` = after it, absent when empty; both as pulldown-cmark gives them, never percent-decoded; no path, no anchor → nothing. `span` = the destination's bytes (`<…>`, title excluded; `?query`, `#anchor` included), re-scanned after the `](` or `]:`: blanks include VT, FF; a bare destination ends at a byte ≤ 0x20 (DEL included); unlocatable → not recorded. Never: images and links inside them, autolinks, HTML, reference uses, wiki links, code, front-matter. Order: declared links, then the body's mentions and file links by span start. The store keeps `dst` as written (`dst_path`).
 
-**Config.** `[paths] link_base` (optional): a root-relative directory under the roots' path rules (`"/docs"`, `"../x"`, `"a/./b"`, `""`, a non-string → `specengine.toml:<line>: message`, cannot check). The check's only: outside the index fingerprint; existence unchecked; no default (ADR-0008).
+**Config.** `[paths] link_base` (optional): a root-relative directory under the roots' path rules (`"/docs"`, `"../x"`, `"a/./b"`, `""`, a non-string → `specengine.toml:<line>: message`, cannot check). Read by resolution, so in the index's `paths_fp` (`spec-index-edges.md`); existence unchecked; no default (ADR-0008).
 
 **Resolution.** Checked: a path ending exactly in `.md` after percent-decoding (a malformed `%` stays; a non-UTF-8 result → as written), or an empty path with an anchor (the linking file). Candidates, normalised (`..` pops; popping above the root leaves it): `/`-led → one, from the root; else C1 = the linking file's directory + path, then, only if C1 names no walked document, C2 = `link_base` + path (Q-G). The first naming a walked document (any class, tier, status) resolves. Else, if a candidate lies in the walk scope (`WalkScope::in_walk_scope`; a symlinked `.md` there is not walked: a warning, accepted) → `link-dangling`; else nothing. From `docs/records/REQ/REQ-001.md`, `link_base = "docs"`:
 
@@ -126,4 +126,3 @@ Working answer (the code) → what the other answer triggers.
 - Q-F `id-scope` is an error → a warning: the severity where the engine pushes it (`CHECK_CODES` has no severity column); the `id-scope` test of `check_scopes.rs` flips.
 - Q-G `link_base` is a fallback after file-relative resolution → exclusive: pass B's resolution order only.
 - Q-I criteria lose their front-matter for now, `links.verifies` becoming an inline mention in the section body → heading attributes now: a parser change beyond ADR-0040's `rev=N`.
-- An escaped `parent:` loses its qualifiers and section → `ParentRef` carries `scope` and `project`: a model and `INDEX_FORMAT` change.

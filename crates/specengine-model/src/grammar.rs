@@ -64,6 +64,9 @@ pub struct Definition {
 }
 
 /// The value of `canon:`.
+// A parse result read once per document and never stored: the reference
+// variant, grown by `Reference.written_id`, stays unboxed.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Canon {
     Reference(Found),
@@ -293,7 +296,9 @@ fn match_at(
         }
     }
 
+    let written = &text[run_start..head.end];
     let reference = Reference {
+        written_id: (written != head.id).then(|| written.to_owned()),
         id: head.id,
         alias_of: head.alias_of,
         script: head.script,

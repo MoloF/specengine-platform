@@ -5,12 +5,17 @@
 //! row.**
 //!
 //! The index is derived data (ADR-0001, ADR-0003): it lives outside the
-//! repository, is keyed by exactly the inputs of `parse` (path, BLAKE3 of the
-//! bytes, the `[ids]` fingerprint, the [`INDEX_FORMAT`] stamp) and resolves
-//! nothing, so ID-less documents, duplicate and scoped IDs and broken files
-//! are stored as parsed. A broken file never fails an update (ADR-0012).
+//! repository, and a file's rows are keyed by exactly the inputs of `parse`
+//! (path, BLAKE3 of the bytes, the `[ids]` fingerprint, the
+//! [`INDEX_FORMAT`] stamp), so ID-less documents, duplicate and scoped IDs
+//! and broken files are stored as parsed. Beside them, core's resolution
+//! of every file's links is stored and kept current incrementally, by the
+//! `[paths]` fingerprint and the keys each resolution read
+//! (docs/features/edge-table.md; [`SqliteIndex::stored_edges`]). A broken
+//! file never fails an update (ADR-0012).
 //!
-//! - [`Source`] lists, probes and reads a worktree's spec files;
+//! - [`Source`] lists, probes ([`Source::probe_paths`], [`Probed`]) and
+//!   reads a worktree's spec files and gives the `[paths]` it walks by;
 //!   [`WorkingTree`] walks the working tree by `[paths]`
 //!   ([`specengine_core::Paths`]), [`GitIndex`] the git index by the same
 //!   rules (checks only), its git run with an explicit [`GitEnv`];
@@ -110,6 +115,7 @@ mod base;
 mod check;
 mod code;
 mod dump;
+mod edges;
 mod error;
 mod floor;
 mod git;
@@ -148,6 +154,7 @@ pub use code::{
     ListedCodeFile, ROLE_SHARED, ROLE_UNROOTED, SelectedFile, SnapshotSymbols, StoredBinding,
     StoredMarker, StoredMention, StoredName, StoredNames, StoredSymbol,
 };
+pub use edges::{StoredEdge, StoredEdges, StoredParent};
 pub use error::StoreError;
 pub use floor::{PROPOSAL_FLOOR_FILE, read_floor, store_floor};
 pub use git::{GitEnv, same_dir};
@@ -180,7 +187,7 @@ pub use queue::{
 };
 pub use read::NodeNorm;
 pub use roles::{RoleCandidate, StoredRole};
-pub use source::{GitIndex, Listing, Source, WorkingTree};
+pub use source::{GitIndex, Listing, Probed, Source, WorkingTree};
 pub use sparse::{SparseError, SparseSet, sparse_set};
 pub use symbols::{SymbolHit, SymbolTier};
 pub use sync::{
@@ -267,7 +274,14 @@ pub use worktree::{
 /// shared types, and `id-not-in-scheme`, which gives the `[ids]` line; no
 /// column. An unchanged file is re-parsed only on a new stamp
 /// (`docs/features/flow-authoring.md`, "Formats").
-pub const INDEX_FORMAT: u32 = 15;
+///
+/// 16: core's resolved edges, the tables `edges`, `edge_parents`,
+/// `edge_deps`, `edge_names` (and the indexes `edges_by_holder`,
+/// `edges_by_end`, `edge_parents_by_end`, `edge_deps_by_key`,
+/// `edge_names_by_key`), `worktrees.paths_fp`, `ParentRef`'s `alias_of`,
+/// `project`, `scope`, `section` and `written_id`, and
+/// `Reference.written_id` (`docs/features/edge-table.md`, "Data").
+pub const INDEX_FORMAT: u32 = 16;
 
 /// `b3:` and the lower-case hex BLAKE3 of `bytes` (64 digits): the
 /// `spec.lock` form of a content hash (05 §3.5). Nothing is stored.
@@ -322,6 +336,17 @@ pub struct UpdateReport {
     /// Every file was re-parsed: the format stamp or the `[ids]`
     /// fingerprint changed, or this was a rebuild.
     pub reparsed_all: bool,
+    /// Files whose edges were resolved again
+    /// (`docs/features/edge-table.md` "Data"): every file on a full pass,
+    /// else the files a change can reach; 0 when no file's rows moved. Not
+    /// in the report's JSON.
+    #[serde(skip)]
+    pub resolved: usize,
+    /// Every edge was recomputed: the stamp was recreated, the worktree is
+    /// new, the `[ids]` or `[paths]` fingerprint moved, or a rebuild. Not
+    /// in the report's JSON.
+    #[serde(skip)]
+    pub resolved_all: bool,
     /// Configured roots that name no directory and no `.md` file.
     pub missing_roots: Vec<String>,
     /// Directory and `.md` names skipped because they are not UTF-8.
@@ -571,8 +596,9 @@ pub trait IndexWriter {
     /// when the worktree is not indexed yet, the stamp or the fingerprint
     /// changed, or a named path is not clean root-relative (`""`, `docs/`,
     /// `./x.md`, absolute) or is a directory by [`Source::is_dir`] (new or
-    /// stored: a rename). A `[paths]` change needs [`Self::update`]: the
+    /// stored: a rename), or when the `[paths]` fingerprint moved: the
     /// named paths alone cannot show what the new walk admits or drops.
+    /// The named paths are probed in one [`Source::probe_paths`] call.
     fn update_paths(
         &mut self,
         source: &dyn Source,

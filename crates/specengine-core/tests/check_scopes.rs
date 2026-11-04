@@ -618,10 +618,10 @@ fn a_legacy_prefix_of_a_feature_scoped_prefix_is_scoped_too() {
 
 // ------------------------------------------------------------ parent:
 // Iteration 2 of docs/features/spec-check-scopes.md: `parent:` keeps its
-// `project:` and `slug/` qualifiers and its `#section` (the verbatim bytes
-// under `ParentRef.span` re-read, used only when they give back the same
-// ID), so it resolves by scope and its section is checked. A value not
-// written verbatim (an escape) has no span: it falls back to the bare ID.
+// `project:` and `slug/` qualifiers and its `#section`, so it resolves by
+// scope and its section is checked. Since docs/features/edge-table.md
+// ("Data") the parser keeps them on `ParentRef` and no byte is re-read: a
+// value not written verbatim (an escape) keeps them too.
 
 /// The scheme of this file plus `Q` with its legacy prefix `QST`.
 fn parent_config() -> Config {
@@ -733,53 +733,76 @@ fn a_parent_resolves_with_its_qualifiers_and_section() {
     }
 }
 
-/// Known limit: a value written with an escape is not verbatim, keeps no
-/// span, and is judged as its bare ID (`slug/` and `#Y` lost).
+/// docs/features/edge-table.md "Data", "Acceptance criteria" ET-3: a value
+/// written with an escape keeps no span, but `ParentRef` keeps the
+/// qualifiers the parser read, so it is judged as written: its `slug/` and
+/// its `#Y` count (the known limit of falling back to the bare ID is gone).
 #[test]
-fn an_escaped_parent_falls_back_to_its_bare_id() {
+fn an_escaped_parent_keeps_its_qualifiers() {
+    let none: Vec<(usize, String, String)> = Vec::new();
+    assert_eq!(parent_findings(r#""feat\/AC-01""#), none);
+    assert_eq!(parent_findings(r#""feat\/AC-01#AC-02""#), none);
     assert_eq!(
-        parent_findings(r#""feat\/AC-01""#),
-        dangles("AC-01", "is feature-scoped: cite it as `feat/AC-01`")
+        parent_findings(r#""feat\/AC-01#AC-09""#),
+        dangles(
+            "feat/AC-01#AC-09",
+            "has no section `#AC-09` in `docs/features/feat.md`",
+        )
     );
-    // `\u0023` is `#`: the section is lost with the span, nothing to check.
-    assert_eq!(parent_findings(r#""R-01\u0023R-09""#), []);
+    // `\u0023` is `#`: the section is kept, and checked.
+    assert_eq!(parent_findings(r#""R-01\u0023R-05""#), none);
+    assert_eq!(
+        parent_findings(r#""R-01\u0023R-09""#),
+        dangles("R-01#R-09", "has no section `#R-09` in its file")
+    );
 }
 
-/// The verbatim bytes are used only when they give back the parser's ID:
-/// a `ParentRef` whose ID differs from its span's text (crafted: the
-/// parser never produces one) is judged by its ID.
+/// docs/features/edge-table.md "Data": resolution reads only the parse, never
+/// the bytes under the span. A `ParentRef` whose ID differs from its span's
+/// text (crafted: the parser never produces one) is judged by its fields;
+/// the bytes give only the text a finding quotes.
 #[test]
-fn a_parent_whose_span_names_another_id_is_judged_by_its_id() {
+fn a_parent_is_judged_by_its_fields_not_its_span_text() {
     let config = parent_config();
     let mut files = parent_corpus();
     files.push(("docs/spec/x.md", with_parent("feat/AC-01")));
     let borrowed: Vec<(&str, &str)> = files.iter().map(|(p, t)| (*p, t.as_str())).collect();
-    let mut input = config.input(&borrowed);
-    let x = input
-        .files
-        .iter_mut()
-        .find(|f| f.path == "docs/spec/x.md")
-        .unwrap();
-    let parent = x.parsed.as_mut().unwrap().nodes[0]
-        .parent
-        .as_mut()
-        .expect("a parent");
-    assert_eq!(parent.id, "AC-01");
-    assert!(parent.span.is_some(), "a verbatim value keeps its span");
-    parent.id = "AC-02".to_owned();
-    let report = config.run(&input);
-    let found: Vec<(&str, &str)> = with_code(&report, "ref-dangling")
-        .into_iter()
-        .map(|f| (f.path.as_str(), f.message.as_str()))
-        .collect();
+    let crafted = |scope: Option<&str>| {
+        let mut input = config.input(&borrowed);
+        let x = input
+            .files
+            .iter_mut()
+            .find(|f| f.path == "docs/spec/x.md")
+            .unwrap();
+        let parent = x.parsed.as_mut().unwrap().nodes[0]
+            .parent
+            .as_mut()
+            .expect("a parent");
+        assert_eq!(parent.id, "AC-01");
+        assert_eq!(parent.scope.as_deref(), Some("feat"));
+        assert!(parent.span.is_some(), "a verbatim value keeps its span");
+        parent.id = "AC-02".to_owned();
+        parent.scope = scope.map(str::to_owned);
+        let report = config.run(&input);
+        let found: Vec<(String, String)> = with_code(&report, "ref-dangling")
+            .into_iter()
+            .map(|f| (f.path.clone(), f.message.clone()))
+            .collect();
+        (found, show(&report))
+    };
+    // `feat/AC-02` by its fields: defined in `feat.md`, whatever the span says.
+    let (found, shown) = crafted(Some("feat"));
+    assert!(found.is_empty(), "{shown}");
+    // Its scope dropped: the bare feature-scoped `AC-02`, the span's text
+    // quoted.
+    let (found, shown) = crafted(None);
     assert_eq!(
         found,
         [(
-            "docs/spec/x.md",
-            "`parent`: `feat/AC-01` is feature-scoped: cite it as `feat/AC-02`"
+            "docs/spec/x.md".to_owned(),
+            "`parent`: `feat/AC-01` is feature-scoped: cite it as `feat/AC-02`".to_owned()
         )],
-        "{}",
-        show(&report)
+        "{shown}"
     );
 }
 

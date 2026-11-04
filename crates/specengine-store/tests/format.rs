@@ -23,7 +23,10 @@
 //! `fixtures/flow-relay`, the corpus that sets them;
 //! docs/features/trace-views.md ("The key `stage:`") makes it `INDEX_FORMAT`
 //! 14 for the typed `stage` (`fields`, no longer `extra`), and the dump reads
-//! `fixtures/trace-almanac`, the corpus that sets it.
+//! `fixtures/trace-almanac`, the corpus that sets it;
+//! docs/features/edge-table.md "Data" makes it `INDEX_FORMAT` 16 for the edge
+//! tables and for `ParentRef`'s qualifiers and `written_id` (a reference's
+//! too), and the dump reads `fixtures/parent-ref`, the corpus that sets them.
 //!
 //! The stamp is rewritten through a raw connection to the DB file: an older
 //! format cannot be produced through the store's own API (the only test that
@@ -148,13 +151,15 @@ fn other_worktrees_read_not_indexed_until_they_are_updated() {
 
 /// The corpora of the format dump: spec-a, spec-b, since `INDEX_FORMAT` 12
 /// roadmap-a (the typed plan keys), since 13 flow-relay (the label of a
-/// `follows` item) and since 14 trace-almanac (`stage`).
-const DUMPED: [&str; 5] = [
+/// `follows` item), since 14 trace-almanac (`stage`) and since 16 parent-ref
+/// (`ParentRef`'s qualifiers, `written_id`).
+const DUMPED: [&str; 6] = [
     "spec-a",
     "spec-b",
     "roadmap-a",
     "flow-relay",
     "trace-almanac",
+    "parent-ref",
 ];
 
 /// The dump of [`DUMPED`], each in a fresh DB of its own with the stub
@@ -272,6 +277,11 @@ const SERIALISED: &[&str] = &[
     "nodes[].rev",
     "nodes[].parent.id",
     "nodes[].parent.span",
+    "nodes[].parent.alias_of",
+    "nodes[].parent.project",
+    "nodes[].parent.scope",
+    "nodes[].parent.section",
+    "nodes[].parent.written_id",
     "nodes[].span",
     "nodes[].tokens_est",
     "nodes[].extra[].key",
@@ -314,6 +324,7 @@ const SERIALISED: &[&str] = &[
     "links[].origin",
     "links[].dst.id",
     "links[].dst.alias_of",
+    "links[].dst.written_id",
     "links[].dst.script",
     "links[].dst.project",
     "links[].dst.scope",
@@ -454,14 +465,15 @@ fn the_fixture_dumps_exercise_every_serialised_field() {
     );
 }
 
-/// docs/features/flow-authoring.md "Formats": the stored parser messages make
-/// `INDEX_FORMAT` 15, and the history is the fourteen earlier lines, verbatim
-/// (trace-views' `14` among them), followed by exactly one `15 <hash>` line
-/// (no earlier `15`). Replaces trace-views' format-14 pin, whose line stays
-/// verbatim. M: `INDEX_FORMAT` kept at 14; an earlier line edited.
+/// docs/features/edge-table.md "Acceptance criteria" AC-3: the edge tables
+/// make `INDEX_FORMAT` 16, and the history is the fifteen earlier lines, verbatim
+/// (flow-authoring's `15` among them), followed by exactly one `16 <hash>`
+/// line (no earlier `16`). Replaces flow-authoring's format-15 pin
+/// (docs/features/flow-authoring.md "Formats"), whose line stays verbatim.
+/// M: `INDEX_FORMAT` kept at 15; an earlier line edited.
 #[test]
-fn flow_authoring_pins_format_15_with_one_new_history_line() {
-    assert_eq!(INDEX_FORMAT, 15);
+fn edge_table_pins_format_16_with_one_new_history_line() {
+    assert_eq!(INDEX_FORMAT, 16);
     let history = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/format_history.txt"),
     )
@@ -485,11 +497,12 @@ fn flow_authoring_pins_format_15_with_one_new_history_line() {
         "12 e574d6ba1be0cf469ce377f2312a120f53d38e77b1ed5184ba75d5ce0c190834",
         "13 852a6f00f30fc19cd73f5bb63e34b332ea5959e53e66e2b04bc6bd230a5ea28b",
         "14 f4ce2bdef1ce75632e1347967df4cf91671ec7abef451aa03876597bb2b0b28a",
+        "15 ce09e78513dbcf7ee55173fb3ab2bb78cc6d42b2ea87b04c845d75fe40b6d3b2",
     ];
     assert_eq!(
         lines.len(),
         earlier.len() + 1,
-        "trace-views' history plus exactly one new line:\n{history}"
+        "flow-authoring's history plus exactly one new line:\n{history}"
     );
     assert_eq!(
         &lines[..earlier.len()],
@@ -498,15 +511,15 @@ fn flow_authoring_pins_format_15_with_one_new_history_line() {
     );
     let last = lines[earlier.len()];
     let (format, hash) = last.split_once(' ').expect("`<format> <hash>`");
-    assert_eq!(format, "15", "the new line is format 15: {last}");
+    assert_eq!(format, "16", "the new line is format 16: {last}");
     assert!(
         hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit()),
         "a BLAKE3 hex: {last}"
     );
     assert_eq!(
-        lines.iter().filter(|line| line.starts_with("15 ")).count(),
+        lines.iter().filter(|line| line.starts_with("16 ")).count(),
         1,
-        "no earlier `15` line"
+        "no earlier `16` line"
     );
 }
 

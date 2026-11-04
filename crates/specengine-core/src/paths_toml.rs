@@ -71,8 +71,9 @@ pub struct Paths {
     pub index: Option<String>,
     /// The directory a relative Markdown file link is retried from when it
     /// names no walked document from the linking file's directory; absent:
-    /// no retry. Read by the check only (outside the index fingerprint);
-    /// its existence is never checked.
+    /// no retry. Read by resolution only, so it enters the index's `[paths]`
+    /// fingerprint ([`Paths::resolution_json`]), not the walk; its
+    /// existence is never checked.
     pub link_base: Option<String>,
 }
 
@@ -98,6 +99,30 @@ impl Paths {
     /// many paths (the walker, the check).
     pub fn walk_scope(&self) -> WalkScope {
         WalkScope::new(self)
+    }
+
+    /// The keys resolution reads, as JSON in this key order:
+    /// `{"features":…,"link_base":…,"roots":[…],"exclude":[…]}`
+    /// (`link_base` `null` when absent): the input of the index's `[paths]`
+    /// fingerprint (`docs/features/edge-table.md` "Data"). `spec`,
+    /// `records`, `archive` and `generated` count only through `roots`;
+    /// `tier0`, `tier1_name` and `index` do not count.
+    pub fn resolution_json(&self) -> String {
+        #[derive(serde::Serialize)]
+        struct Resolution<'p> {
+            features: &'p str,
+            link_base: Option<&'p str>,
+            roots: &'p [String],
+            exclude: &'p [String],
+        }
+        let keys = Resolution {
+            features: &self.features,
+            link_base: self.link_base.as_deref(),
+            roots: &self.roots,
+            exclude: &self.exclude,
+        };
+        // Strings and string lists always encode.
+        serde_json::to_string(&keys).unwrap_or_default()
     }
 
     /// [`WalkScope::is_excluded`] for one path (compiles the globs).

@@ -36,6 +36,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/decision-staging.md](features/decision-staging.md) shipped
 - [docs/features/drift-follow-up.md](features/drift-follow-up.md) shipped
 - [docs/features/drift-queue.md](features/drift-queue.md) shipped
+- [docs/features/edge-table.md](features/edge-table.md) shipped
 - [docs/features/flow-authoring.md](features/flow-authoring.md) shipped
 - [docs/features/flow-canvas.md](features/flow-canvas.md) shipped
 - [docs/features/flow-linear.md](features/flow-linear.md) shipped
@@ -193,4 +194,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0075.md](roadmap/RM-0075.md) shipped
 - [docs/roadmap/RM-0076.md](roadmap/RM-0076.md) shipped
 - [docs/roadmap/RM-0077.md](roadmap/RM-0077.md) shipped
+- [docs/roadmap/RM-0078.md](roadmap/RM-0078.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use rusqlite::types::Value;
-use rusqlite::{OptionalExtension, Transaction, TransactionBehavior, params_from_iter};
+use rusqlite::{OptionalExtension, Statement, Transaction, TransactionBehavior, params_from_iter};
 use specengine_core::check::{CheckFile, CheckInput};
 use specengine_model::Node;
 
@@ -269,77 +269,186 @@ pub(crate) fn search(
 }
 
 pub(crate) fn indexed_input(index: &SqliteIndex) -> Result<CheckInput, StoreError> {
-    with_worktree(index, |tx, wt| {
-        // file_id → its rows' JSON in `ord` order, for one of the row tables.
-        let rows_of =
-            |table: &str, column: &str| -> Result<BTreeMap<i64, Vec<String>>, StoreError> {
-                let mut statement = tx
-                    .prepare(&format!(
-                        "SELECT x.file_id, x.{column} FROM {table} x
+    with_worktree(index, |tx, wt| Ok(decode_files(tx, wt, None)?.0))
+}
+
+/// The stored files of the worktree `wt` as the check's input, in path
+/// order, and each one's `file_id`: every file (`None`), else the stored
+/// ones among `only`. [`indexed_input`]'s decode, shared by the edge
+/// passes inside their write transaction
+/// (`docs/features/edge-table.md` "Data").
+pub(crate) fn decode_files(
+    tx: &Transaction<'_>,
+    wt: i64,
+    only: Option<&[&str]>,
+) -> Result<(CheckInput, BTreeMap<String, i64>), StoreError> {
+    match only {
+        None => decode_all(tx, wt),
+        Some(paths) => decode_some(tx, wt, paths),
+    }
+}
+
+/// Every file of the worktree, each row table read once.
+fn decode_all(
+    tx: &Transaction<'_>,
+    wt: i64,
+) -> Result<(CheckInput, BTreeMap<String, i64>), StoreError> {
+    // file_id → its rows' JSON in `ord` order, for one of the row tables.
+    let rows_of = |table: &str, column: &str| -> Result<BTreeMap<i64, Vec<String>>, StoreError> {
+        let mut statement = tx
+            .prepare(&format!(
+                "SELECT x.file_id, x.{column} FROM {table} x
                      JOIN files f ON f.file_id = x.file_id
                      WHERE f.wt = ?1
                      ORDER BY x.file_id, x.ord"
-                    ))
-                    .db()?;
-                let mut grouped: BTreeMap<i64, Vec<String>> = BTreeMap::new();
-                let rows = statement
-                    .query_map([wt], |row| {
-                        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
-                    })
-                    .db()?;
-                for row in rows {
-                    let (file_id, value) = row.db()?;
-                    grouped.entry(file_id).or_default().push(value);
-                }
-                Ok(grouped)
-            };
-        let mut nodes = rows_of("nodes", "node")?;
-        let mut links = rows_of("links", "link")?;
-        let mut anchors = rows_of("anchors", "anchor")?;
-        let mut diagnostics = rows_of("diagnostics", "diagnostic")?;
-
-        let mut statement = tx
-            .prepare(
-                "SELECT file_id, path, size, read_error, shell FROM files
-                 WHERE wt = ?1 ORDER BY path",
-            )
+            ))
             .db()?;
-        let files = statement
+        let mut grouped: BTreeMap<i64, Vec<String>> = BTreeMap::new();
+        let rows = statement
             .query_map([wt], |row| {
-                Ok((
-                    row.get::<_, i64>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, i64>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                ))
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
             })
-            .db()?
-            .collect::<Result<Vec<_>, _>>()
             .db()?;
-        let mut input = CheckInput::default();
-        for (file_id, path, size, read_error, shell) in files {
-            let parsed = match shell {
-                None => None,
-                Some(shell) => Some(rebuild_parsed(
-                    &path,
-                    &shell,
-                    &nodes.remove(&file_id).unwrap_or_default(),
-                    &links.remove(&file_id).unwrap_or_default(),
-                    &anchors.remove(&file_id).unwrap_or_default(),
-                    &diagnostics.remove(&file_id).unwrap_or_default(),
-                )?),
-            };
-            input.files.push(CheckFile {
-                path,
-                size: u64::try_from(size).unwrap_or(0),
-                parsed,
-                read_error,
-                bytes: Vec::new(),
-            });
+        for row in rows {
+            let (file_id, value) = row.db()?;
+            grouped.entry(file_id).or_default().push(value);
         }
-        Ok(input)
+        Ok(grouped)
+    };
+    let mut nodes = rows_of("nodes", "node")?;
+    let mut links = rows_of("links", "link")?;
+    let mut anchors = rows_of("anchors", "anchor")?;
+    let mut diagnostics = rows_of("diagnostics", "diagnostic")?;
+
+    let mut statement = tx
+        .prepare(
+            "SELECT file_id, path, size, read_error, shell FROM files
+                 WHERE wt = ?1 ORDER BY path",
+        )
+        .db()?;
+    let files = statement
+        .query_map([wt], file_row)
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()?;
+    let mut input = CheckInput::default();
+    let mut ids = BTreeMap::new();
+    for file in files {
+        let parts = FileParts {
+            nodes: nodes.remove(&file.file_id).unwrap_or_default(),
+            links: links.remove(&file.file_id).unwrap_or_default(),
+            anchors: anchors.remove(&file.file_id).unwrap_or_default(),
+            diagnostics: diagnostics.remove(&file.file_id).unwrap_or_default(),
+        };
+        ids.insert(file.path.clone(), file.file_id);
+        input.files.push(file.check_file(&parts)?);
+    }
+    Ok((input, ids))
+}
+
+/// The stored files among `paths`, in path order, each by its
+/// `(wt, path)` key and its rows by `(file_id, ord)`.
+fn decode_some(
+    tx: &Transaction<'_>,
+    wt: i64,
+    paths: &[&str],
+) -> Result<(CheckInput, BTreeMap<String, i64>), StoreError> {
+    let mut sorted: Vec<&str> = paths.to_vec();
+    sorted.sort_unstable();
+    sorted.dedup();
+    let mut file = tx
+        .prepare(
+            "SELECT file_id, path, size, read_error, shell FROM files
+             WHERE wt = ?1 AND path = ?2",
+        )
+        .db()?;
+    let statement_of = |table: &str, column: &str| {
+        tx.prepare(&format!(
+            "SELECT {column} FROM {table} WHERE file_id = ?1 ORDER BY ord"
+        ))
+        .db()
+    };
+    let mut nodes = statement_of("nodes", "node")?;
+    let mut links = statement_of("links", "link")?;
+    let mut anchors = statement_of("anchors", "anchor")?;
+    let mut diagnostics = statement_of("diagnostics", "diagnostic")?;
+    let mut input = CheckInput::default();
+    let mut ids = BTreeMap::new();
+    for path in sorted {
+        let Some(found) = file.query_row((wt, path), file_row).optional().db()? else {
+            continue;
+        };
+        let parts = FileParts {
+            nodes: texts_of(&mut nodes, found.file_id)?,
+            links: texts_of(&mut links, found.file_id)?,
+            anchors: texts_of(&mut anchors, found.file_id)?,
+            diagnostics: texts_of(&mut diagnostics, found.file_id)?,
+        };
+        ids.insert(found.path.clone(), found.file_id);
+        input.files.push(found.check_file(&parts)?);
+    }
+    Ok((input, ids))
+}
+
+/// The one text column `statement` gives for `file_id`, in its order.
+fn texts_of(statement: &mut Statement<'_>, file_id: i64) -> Result<Vec<String>, StoreError> {
+    statement
+        .query_map([file_id], |row| row.get::<_, String>(0))
+        .db()?
+        .collect::<Result<Vec<_>, _>>()
+        .db()
+}
+
+/// A `files` row as the decode reads it.
+struct FileRow {
+    file_id: i64,
+    path: String,
+    size: i64,
+    read_error: Option<String>,
+    shell: Option<String>,
+}
+
+/// One file's row JSON, each table in `ord` order.
+struct FileParts {
+    nodes: Vec<String>,
+    links: Vec<String>,
+    anchors: Vec<String>,
+    diagnostics: Vec<String>,
+}
+
+fn file_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FileRow> {
+    Ok(FileRow {
+        file_id: row.get(0)?,
+        path: row.get(1)?,
+        size: row.get(2)?,
+        read_error: row.get(3)?,
+        shell: row.get(4)?,
     })
+}
+
+impl FileRow {
+    /// The check's file: the parse rebuilt from `parts` (none without a
+    /// shell), no bytes.
+    fn check_file(self, parts: &FileParts) -> Result<CheckFile, StoreError> {
+        let parsed = match &self.shell {
+            None => None,
+            Some(shell) => Some(rebuild_parsed(
+                &self.path,
+                shell,
+                &parts.nodes,
+                &parts.links,
+                &parts.anchors,
+                &parts.diagnostics,
+            )?),
+        };
+        Ok(CheckFile {
+            path: self.path,
+            size: u64::try_from(self.size).unwrap_or(0),
+            parsed,
+            read_error: self.read_error,
+            bytes: Vec::new(),
+        })
+    }
 }
 
 fn ord_of(ord: i64) -> usize {

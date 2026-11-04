@@ -30,6 +30,7 @@ CREATE TABLE worktrees (
   project TEXT NOT NULL,
   root TEXT NOT NULL,
   scheme_fp TEXT NOT NULL,
+  paths_fp TEXT NOT NULL,
   UNIQUE (project, root)
 ) STRICT;
 CREATE TABLE files (
@@ -86,6 +87,41 @@ CREATE TABLE diagnostics (
   code TEXT NOT NULL,
   diagnostic TEXT NOT NULL,
   PRIMARY KEY (file_id, ord)
+) STRICT;
+CREATE TABLE edges (
+  file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
+  ord INTEGER NOT NULL,
+  n INTEGER NOT NULL,
+  holder INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  origin TEXT NOT NULL,
+  names_source INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  reason TEXT,
+  label TEXT,
+  at INTEGER NOT NULL,
+  end_path TEXT,
+  end_ord INTEGER,
+  PRIMARY KEY (file_id, ord, n)
+) STRICT;
+CREATE TABLE edge_parents (
+  file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
+  n INTEGER NOT NULL,
+  state TEXT NOT NULL,
+  reason TEXT,
+  end_path TEXT,
+  end_ord INTEGER,
+  PRIMARY KEY (file_id, n)
+) STRICT;
+CREATE TABLE edge_deps (
+  file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  PRIMARY KEY (file_id, key)
+) STRICT;
+CREATE TABLE edge_names (
+  file_id INTEGER NOT NULL REFERENCES files ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  PRIMARY KEY (file_id, key)
 ) STRICT;
 CREATE TABLE code_worktrees (
   wt INTEGER PRIMARY KEY REFERENCES worktrees ON DELETE CASCADE,
@@ -233,6 +269,11 @@ CREATE INDEX nodes_by_id ON nodes (id);
 CREATE INDEX links_by_dst_id ON links (dst_id);
 CREATE INDEX aliases_by_alias ON aliases (alias);
 CREATE INDEX anchors_by_name ON anchors (name);
+CREATE INDEX edges_by_holder ON edges (file_id, holder);
+CREATE INDEX edges_by_end ON edges (end_path, end_ord);
+CREATE INDEX edge_parents_by_end ON edge_parents (end_path, end_ord);
+CREATE INDEX edge_deps_by_key ON edge_deps (key);
+CREATE INDEX edge_names_by_key ON edge_names (key);
 CREATE INDEX symbols_by_qpath ON symbols (qpath);
 CREATE INDEX symbols_by_name ON symbols (name);
 CREATE INDEX symbol_suffixes_by_suffix ON symbol_suffixes (suffix);
@@ -272,7 +313,8 @@ const FORMAT_TRIGGERS: &[&str] = &["nodes_fts_insert", "nodes_fts_delete", "node
 /// `code_worktrees` references; format 10's `code_roles` before
 /// `code_files`, which it references; format 11's layer C snapshot
 /// (`code_monikers`, `code_resolve_files`, then `code_resolve`) before
-/// `code_worktrees`, which `code_resolve` references.
+/// `code_worktrees`, which `code_resolve` references; format 16's edge
+/// tables before `files`, which they reference.
 const FORMAT_TABLES: &[&str] = &[
     "nodes_fts",
     "aliases",
@@ -280,6 +322,10 @@ const FORMAT_TABLES: &[&str] = &[
     "anchors",
     "diagnostics",
     "nodes",
+    "edges",
+    "edge_parents",
+    "edge_deps",
+    "edge_names",
     "files",
     "symbol_suffixes",
     "symbols",

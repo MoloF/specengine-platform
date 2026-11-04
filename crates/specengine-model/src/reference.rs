@@ -75,6 +75,12 @@ pub struct Reference {
     /// The configured prefix whose `aliases_from` matched the written prefix.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub alias_of: Option<String>,
+    /// The ID as written (prefix and body; no qualifier, section, revision
+    /// or wiki brackets), only when it differs from `id`: a look-alike
+    /// normalised, or an alias's body normalised. Resolution looks it up as
+    /// an `aliases:` entry (`docs/features/edge-table.md` "Data").
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub written_id: Option<String>,
     /// Script class of the ID as written.
     pub script: IdScript,
     #[serde(default, skip_serializing_if = "Option::is_none")]

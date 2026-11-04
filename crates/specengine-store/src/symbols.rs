@@ -389,7 +389,7 @@ mod tests {
         index
             .conn
             .execute(
-                "INSERT INTO worktrees (project, root, scheme_fp) VALUES (?1, ?2, 'x')",
+                "INSERT INTO worktrees (project, root, scheme_fp, paths_fp) VALUES (?1, ?2, 'x', 'x')",
                 rusqlite::params![index.project, index.root_text],
             )
             .expect("a worktree");

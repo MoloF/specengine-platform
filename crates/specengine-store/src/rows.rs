@@ -1,6 +1,8 @@
 //! The projection of one `ParsedFile` onto rows, and back. Nothing is
 //! resolved: `dst`, `parent`, aliases and anchors are stored as written, so
-//! a row depends on its own file's bytes and the scheme only.
+//! a row depends on its own file's bytes and the scheme only; so do the
+//! file's `edge_names`, core's `given_keys`
+//! (`docs/features/edge-table.md` "Data").
 //!
 //! Each row carries its query columns plus the model value as JSON (`node`,
 //! `link`, `anchor`, `diagnostic`, the file's `shell`), and `ord` is the
@@ -11,6 +13,7 @@ use std::borrow::Cow;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use specengine_core::check::{EdgeKey, given_keys_of};
 use specengine_model::{Anchor, Diagnostic, Link, LinkTarget, Node, ParsedFile, Span};
 
 use crate::error::StoreError;
@@ -32,6 +35,9 @@ pub(crate) struct FileRows {
     pub links: Vec<LinkRow>,
     pub anchors: Vec<AnchorRow>,
     pub diagnostics: Vec<DiagnosticRow>,
+    /// What the file gives resolution: core's `given_keys` as key text,
+    /// sorted and unique (`edge_names`).
+    pub names: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -174,6 +180,7 @@ impl FileRows {
             links,
             anchors,
             diagnostics,
+            names: names_of(&parsed.path, Some(parsed)),
         })
     }
 
@@ -191,8 +198,17 @@ impl FileRows {
             links: Vec::new(),
             anchors: Vec::new(),
             diagnostics: Vec::new(),
+            names: names_of(path, None),
         }
     }
+}
+
+/// [`given_keys_of`] as key text.
+fn names_of(path: &str, parsed: Option<&ParsedFile>) -> Vec<String> {
+    given_keys_of(path, parsed)
+        .iter()
+        .map(EdgeKey::text)
+        .collect()
 }
 
 pub(crate) fn size_of(bytes: &[u8]) -> i64 {
