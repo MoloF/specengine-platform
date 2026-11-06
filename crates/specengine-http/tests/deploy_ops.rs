@@ -2178,12 +2178,23 @@ fn op07_the_probe_is_alive_on_a_loopback_403_and_a_listening_proxy() {
     }
 }
 
+/// The two answers a local daemon gives the probe's loopback `GET /`
+/// (`docs/canon/hub.md` "Routes"): 200, the page, when this build embeds a
+/// web UI; 503, the not-built line, when `ui/dist` held no `index.html` as it
+/// was compiled (`src/build.rs`). A hub's 403 is neither.
+const LOCAL_ANSWERS: [u16; 2] = [200, 503];
+
 /// Beside docs/features/hub-ops.md "Acceptance criteria" OP7: C4's twin on
 /// the laptop, with this build's `specengine-http` and no image. A hub
 /// (`--public-origin`) answers the probe's loopback `GET /` 403, so the probe
-/// is alive; a local daemon answers it 200, so it is not ("Decisions" S7,
-/// `docs/canon/hub.md` "Fence" step 1). HO12's twin: the probes leave the
-/// hub no event and no stderr line.
+/// is alive; a local daemon answers it one of `LOCAL_ANSWERS`, so it is not
+/// ("Decisions" S7, `docs/canon/hub.md` "Fence" step 1). Which one is the
+/// build's, not the tree's (a `ui/dist` put back with old mtimes reruns no
+/// build script): 200 with a web UI (the image builds one: C4's 200), the
+/// not-built 503 without (CI's `check` job builds no UI). So both are
+/// accepted, each only as the daemon's own `GET /` answers it, the 503 only
+/// as the not-built page, and no other status, a hub's 403 above all. HO12's
+/// twin: the probes leave the hub no event and no stderr line.
 #[test]
 fn c4_twin_the_probe_tells_a_hub_from_a_local_daemon() {
     let bash = "/bin/bash";
@@ -2214,12 +2225,47 @@ fn c4_twin_the_probe_tells_a_hub_from_a_local_daemon() {
     let local = common::Server::serve(&home, &cwd, &[root.as_path()]);
     let ran = probe(bash, local.port, proxy_port);
     ran.code(1);
+    let answers: Vec<String> = LOCAL_ANSWERS.iter().map(u16::to_string).collect();
     let shape = Regex::new(&format!(
-        r"^not alive: 127\.0\.0\.1:{} answered HTTP/1\.1 200 [^\n]*: a hub answers a loopback probe 403\n$",
-        local.port
+        r"^not alive: 127\.0\.0\.1:{} answered HTTP/1\.1 ({}) [^\n]*: a hub answers a loopback probe 403\n$",
+        local.port,
+        answers.join("|")
     ))
     .expect("a pattern");
-    assert!(shape.is_match(&ran.stdout), "{}", ran.show());
+    let status: u16 = shape
+        .captures(&ran.stdout)
+        .unwrap_or_else(|| panic!("{}", ran.show()))[1]
+        .parse()
+        .expect("a status");
+    // The pattern admits the two answers and no other, a hub's 403 above all.
+    for other in [200, 403, 404, 500, 502, 503] {
+        let line = format!(
+            "not alive: 127.0.0.1:{} answered HTTP/1.1 {other} Reason: a hub answers a loopback probe 403\n",
+            local.port
+        );
+        assert_eq!(
+            shape.is_match(&line),
+            matches!(other, 200 | 503),
+            "the pattern on a {other}: a local daemon answers 200 or 503, a hub 403"
+        );
+    }
+    // The probe saw what the daemon's own `GET /` answers: the page, or the
+    // not-built line, not some other refusal.
+    let page = local.get("/");
+    page.status(status);
+    if status == 503 {
+        let message = page.error_message();
+        assert!(
+            message.starts_with("this specengine-http holds no web UI"),
+            "the not-built page: {message}"
+        );
+    } else {
+        assert_eq!(
+            page.header("content-type"),
+            Some("text/html; charset=utf-8"),
+            "the page"
+        );
+    }
     drop(proxy);
 }
 
