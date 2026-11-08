@@ -79,3 +79,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0069](decisions/ADR-0069.md) A read trusts a file's stat key outside a 2 s racy window, and a hub's reads alone trust the index its writers keep · architecture · accepted
 - [ADR-0070](decisions/ADR-0070.md) A hub mints spec IDs from 100001 and a terminal below it; propose refuses the other side, apply never · architecture · accepted
 - [ADR-0071](decisions/ADR-0071.md) A hub's state leaves the host every 15 minutes, restic-encrypted, by the deployment's sidecars; no key and no SpecEngine code · scripts/deploy · accepted
+- [ADR-0073](decisions/ADR-0073.md) A workspace is a trade's lens from project config, never an entitlement, a control point or a hidden route · architecture · accepted
