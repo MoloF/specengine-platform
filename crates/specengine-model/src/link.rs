@@ -92,12 +92,12 @@ pub const IMPACT_LINK_TYPES: [(&str, Direction); 7] = [
 /// The link types `spec flow` reads, each with the way it runs: `from` and
 /// `to` give the reading direction, so a screen draws an arrow with no
 /// branch on a type. `In` runs target to source: `B follows A` is the link
-/// B -> A, read A then B.
-pub const FLOW_LINK_TYPES: [(&str, Direction); 4] = [
+/// B -> A, read A then B. ADR-0055's three: `depends_on` orders a plan,
+/// never a flow (docs/features/flow-scope.md D1).
+pub const FLOW_LINK_TYPES: [(&str, Direction); 3] = [
     (FOLLOWS, Direction::In),
     (USES, Direction::Out),
     (SUPPLIES, Direction::Out),
-    ("depends_on", Direction::Out),
 ];
 
 /// `mentions` is the one weak link type; every declared type, an unknown

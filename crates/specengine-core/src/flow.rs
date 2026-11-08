@@ -28,6 +28,12 @@
 //!   counts the documents this read's rows name among what it holds, itself
 //!   included, each once: rows before any fold or cap, so a depth never
 //!   moves the sum over a read's nodes.
+//! - **Stage** ([`FlowStage`], task spec `flow-scope`) cuts the shown nodes
+//!   after the fold and changes nothing else: it keeps those whose own
+//!   `stage:` is S, byte for byte, or, for none, the shown steps with no
+//!   `stage:`, and the edges whose two ends are kept. Each kept node and
+//!   edge is the read's own object, its `group` and `distance` included;
+//!   the scope, the walk, the gap rows and `left_out` never see the cut.
 //! - **Gaps.** All ten, always in [`GapCode::ALL`]'s order, computed before
 //!   any fold, so a depth never changes one. A `follows` edge crossing the
 //!   scope is an entry or a way out, so a sub-flow is not called broken;
@@ -208,11 +214,34 @@ pub struct FlowAsk<'r> {
     /// `ROOT`'s holders; `None`: every flow document.
     pub roots: Option<&'r [NodeAt]>,
     pub depth: Option<usize>,
+    /// `--stage`: which shown nodes are kept; `None`: all of them.
+    pub stage: Option<FlowStage<'r>>,
     pub config: &'r FlowConfig,
     /// How a cause names the config.
     pub config_label: &'r str,
     /// How `no-start` names the scope.
     pub scope_name: &'r str,
+}
+
+/// What `--stage` keeps of the shown nodes, after the fold
+/// (docs/features/flow-scope.md D2): each kept node and edge as the read
+/// without it shows it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FlowStage<'r> {
+    /// The nodes whose own `stage:` is this, byte for byte.
+    Named(&'r str),
+    /// The flow steps with no `stage:` of their own.
+    Unstaged,
+}
+
+impl FlowStage<'_> {
+    /// Whether `node`, shown, is kept; `steps`: the walk's steps.
+    fn keeps(self, node: &FlowNode, steps: &BTreeSet<usize>) -> bool {
+        match self {
+            Self::Named(stage) => node.stage.as_deref() == Some(stage),
+            Self::Unstaged => node.stage.is_none() && steps.contains(&node.file),
+        }
+    }
 }
 
 /// What a flow read found.
@@ -222,10 +251,15 @@ pub struct FlowRead {
     pub left_out: Vec<usize>,
     /// All ten, in [`GapCode::ALL`]'s order.
     pub gaps: Vec<FlowGap>,
-    /// By (distance, unreached last; path).
+    /// By (distance, unreached last; path); with a stage, the kept ones.
     pub nodes: Vec<FlowNode>,
-    /// By (`from`, `to`, type, kind).
+    /// By (`from`, `to`, type, kind); with a stage, those whose two ends
+    /// are kept.
     pub edges: Vec<FlowEdge>,
+    /// The file of every shown node before a stage kept some, in the
+    /// order of the read without it: what a join over the shown nodes
+    /// reads, so a stage moves none of its notes (`spec flow --trace`).
+    pub shown: Vec<usize>,
 }
 
 /// What a walk found, by file.
@@ -239,6 +273,9 @@ pub struct FlowWalk {
 
 /// Successors, or predecessors, of a file.
 type Adjacency = BTreeMap<usize, BTreeSet<usize>>;
+
+/// A shown edge with the files of its shown ends (`from`, `to`).
+type EndedEdge = ((usize, usize), FlowEdge);
 
 /// One flow link between admitted documents.
 struct Link<'a> {
@@ -339,12 +376,28 @@ pub fn flow_read(graph: &SpecGraph<'_>, ask: &FlowAsk<'_>) -> FlowRead {
     let gaps = gaps_of(graph, ask, &scope.members, &links, &steps, &selected);
     let named: BTreeSet<usize> = gaps.iter().flat_map(|gap| gap.files.clone()).collect();
     let tree = tree_of(&parents, &scope);
-    let (nodes, edges) = shown(graph, ask.depth, &scope, &tree, &links, &steps, &named);
+    let (mut nodes, edges) = shown(graph, ask.depth, &scope, &tree, &links, &steps, &named);
+    let shown_files: Vec<usize> = nodes.iter().map(|node| node.file).collect();
+    // The cut comes after the fold: each kept node and edge is the read's
+    // own object, and the rows above never see it.
+    let edges = match ask.stage {
+        None => edges.into_iter().map(|(_, edge)| edge).collect(),
+        Some(stage) => {
+            nodes.retain(|node| stage.keeps(node, &steps.steps));
+            let kept: BTreeSet<usize> = nodes.iter().map(|node| node.file).collect();
+            edges
+                .into_iter()
+                .filter(|((from, to), _)| kept.contains(from) && kept.contains(to))
+                .map(|(_, edge)| edge)
+                .collect()
+        }
+    };
     FlowRead {
         left_out: scope.left_out.into_iter().collect(),
         gaps,
         nodes,
         edges,
+        shown: shown_files,
     }
 }
 
@@ -1054,7 +1107,8 @@ fn unfed(members: &BTreeSet<usize>, links: &[Link<'_>]) -> Vec<Vec<usize>> {
         .collect()
 }
 
-/// The shown nodes and edges at `depth`.
+/// The shown nodes and edges at `depth`, each edge with the files of its
+/// shown ends (`from`, `to`).
 fn shown(
     graph: &SpecGraph<'_>,
     depth: Option<usize>,
@@ -1063,7 +1117,7 @@ fn shown(
     links: &[Link<'_>],
     steps: &Steps,
     named: &BTreeSet<usize>,
-) -> (Vec<FlowNode>, Vec<FlowEdge>) {
+) -> (Vec<FlowNode>, Vec<EndedEdge>) {
     let fold = folded(tree, depth);
     let shown_as = |file: usize| -> usize { fold.get(&file).copied().unwrap_or(file) };
     let mut holds: BTreeMap<usize, usize> = BTreeMap::new();
@@ -1167,15 +1221,19 @@ fn shown(
     });
     let edges = merged
         .into_iter()
-        .map(|(key, edge)| FlowEdge {
-            from: key.from_name,
-            to: key.to_name,
-            link_type: key.link_type,
-            kind: key.kind,
-            when: edge.when.filter(|_| edge.count == 1).map(str::to_owned),
-            count: edge.count,
-            path: graph.paths()[edge.file].to_owned(),
-            line: edge.line,
+        .map(|(key, edge)| {
+            let ends = (key.from, key.to);
+            let edge = FlowEdge {
+                from: key.from_name,
+                to: key.to_name,
+                link_type: key.link_type,
+                kind: key.kind,
+                when: edge.when.filter(|_| edge.count == 1).map(str::to_owned),
+                count: edge.count,
+                path: graph.paths()[edge.file].to_owned(),
+                line: edge.line,
+            };
+            (ends, edge)
         })
         .collect();
     (nodes, edges)

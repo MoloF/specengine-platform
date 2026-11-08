@@ -873,9 +873,54 @@ fn without_this_slice(stdout: &str) -> String {
         .replace(",\"counts\":null", "")
 }
 
+/// docs/features/flow-scope.md FS-2 (a): `before` less what read
+/// `depends_on`, which no flow reads since that slice: in a text, each such
+/// edge line, the header's `edges` lowered by as many; in a JSON document,
+/// each object of that type with one comma. Bytes holding none are returned
+/// as they are.
+fn without_depends_on(before: &str) -> String {
+    if before.starts_with('{') {
+        let mut out = before.to_owned();
+        while let Some(at) = out.find("\"type\":\"depends_on\"") {
+            let start = out[..at]
+                .rfind('{')
+                .expect("an object opens before its type");
+            let end = at + out[at..].find('}').expect("the object closes") + 1;
+            if out[end..].starts_with(',') {
+                out.replace_range(start..=end, "");
+            } else if out[..start].ends_with(',') {
+                out.replace_range(start - 1..end, "");
+            } else {
+                out.replace_range(start..end, "");
+            }
+        }
+        return out;
+    }
+    let edge = |line: &str| line.contains(" -> ") && line.contains(" | depends_on | ");
+    let removed = before.lines().filter(|line| edge(line)).count();
+    let mut out = String::new();
+    for (at, line) in before.split_inclusive('\n').enumerate() {
+        if edge(line) {
+            continue;
+        }
+        if at == 0 && removed > 0 {
+            let (head, rest) = line.split_once(", edges ").expect("a header");
+            let (count, tail) = rest.split_once(", depth ").expect("its depth");
+            let count: usize = count.parse().expect("an edge count");
+            out.push_str(&format!("{head}, edges {}, depth {tail}", count - removed));
+        } else {
+            out.push_str(line);
+        }
+    }
+    out
+}
+
 /// AC-03: no `--trace`: the text is the bytes of the binary before this
 /// slice, and the JSON too but `stage`, `rollup` and `counts` `null`, each
-/// present. M: `rollup` filled without the flag.
+/// present. M: `rollup` filled without the flag. docs/features/flow-scope.md
+/// FS-2 (a): the bytes before less their `depends_on` edge
+/// ([`without_depends_on`]); the golden keeps what trace-views' parent
+/// printed.
 #[test]
 fn ac03_no_flag_keeps_the_bytes_but_three_nulls() {
     let rows = before_rows();
@@ -887,7 +932,7 @@ fn ac03_no_flag_keeps_the_bytes_but_three_nulls() {
             .collect();
         assert_eq!(
             copy.ok(&args),
-            row.text,
+            without_depends_on(&row.text),
             "{} {:?}: the text",
             row.fixture,
             row.args
@@ -898,7 +943,7 @@ fn ac03_no_flag_keeps_the_bytes_but_three_nulls() {
         done.code(0);
         assert_eq!(
             without_this_slice(&done.stdout),
-            row.json,
+            without_depends_on(&row.json),
             "{} {:?}: the JSON",
             row.fixture,
             row.args

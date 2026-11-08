@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-09
 ---
 
 # Daemon: the web UI it serves
@@ -39,7 +39,7 @@ A UI 200 carries `Cache-Control: no-store` (as every response, assets too) and `
 - No SPA fallback (the UI's routes are hash routes): another path, `/index.html`, `/assets`, `/assets/`, a dist-root file but `index.html` -> the unknown-route 404, its list ending `; the web UI: / and /assets/<file>`.
 - The query is ignored (`/?scenario=normal` is `/`; the page then loads the mock); the API's parser is not applied.
 - Path safety: `<file>` is the raw path after `/assets/` (`uri.path()`, never decoded); empty, holding `/`, `\` or `%`, or starting with `.`: the 404, no lookup; else one exact-key lookup of `assets/<file>` (a case-sensitive binary search).
-- Inside the fence (`crates/specengine-http/README.md` "Fence"): a foreign `Host`, `Origin` or `Sec-Fetch-Site` is a 403 first. The address bar, a bookmark, a terminal link send `Sec-Fetch-Site: none`, the page's loads `same-origin`; a link from another site is refused (ADR-0034), but a hub admits that landing on `/` alone (`hub.md` "Fence").
+- Inside the fence (`crates/specengine-http/README.md` "Fence"): a foreign `Host` or `Origin` is a 403 first, then `Sec-Fetch-Site`. The address bar, a bookmark, a terminal link send `Sec-Fetch-Site: none`, the page's loads `same-origin`. **The landing**, a local daemon's as a hub's (`hub.md` "Fence"): `GET /` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` passes that step whatever it says, so a link from a chat or another site opens the page, not a JSON 403. Static bytes, `frame-ancestors 'none'`, and every request the page makes is same-origin and takes the whole fence; `/assets/<file>`, every `/api` route, a frame, a fetch and any other method of `/` still refuse it.
 - No CLI call, config read, project turn or write: `/` answers alike while a root's config is broken (`/api/projects` 503).
 - Literals in `src` (the build script and `cfg(test)` too) pass `door.rs` and `no_domain.rs` (README "Answers and statuses").
 - The page stays CSP-clean: `ui/index.html` holds no inline script, `<style>`, `style=` or `on*=` attribute (eval `ui_policy.rs`).

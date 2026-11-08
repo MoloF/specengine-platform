@@ -23,6 +23,12 @@
 //! `null` with a note on a newer queue, a 200. M: `rollup` filled without the
 //! flag.
 //!
+//! docs/features/flow-scope.md (RM-0083) FS-6, the route: `stage=` on
+//! `fixtures/trace-almanac` served as its own slug is `spec flow --stage S
+//! --json`'s bytes, `-` included and beside the other parameters; a
+//! repeated `stage` is a 400 with the spec's line. M8: the route parsing
+//! `stage` but not passing it on (the whole read answered).
+//!
 //! Key sets are `daemon_keys.rs`; the route's list, `methods.rs` and
 //! `projects.rs`.
 
@@ -477,5 +483,78 @@ fn the_query_of_the_route() {
     let before = beyond_daemon(&fresh);
     assert_eq!(server.get("/api/projects/nope/flow").status, 404);
     assert_eq!(server.get(&format!("{P}/flow?depth=x")).status, 400);
+    assert_eq!(beyond_daemon(&fresh), before, "no database opened");
+}
+
+/// docs/features/flow-scope.md FS-6, the route: every form of `stage` is the
+/// CLI's document byte for byte; the kept nodes are the stage's; a repeated
+/// `stage` is the 400 "Data" writes, a fresh `HOME` still empty after. M8:
+/// the route parsing `stage` but not passing it on.
+#[test]
+fn fs6_the_stage_is_the_clis_document_byte_for_byte() {
+    let scratch = Scratch::new("flow-stage");
+    let root = scratch.repo("trace-almanac", "almanac", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let forms: [(&str, &[&str]); 7] = [
+        ("?stage=gather", &["--stage", "gather"]),
+        ("?stage=-", &["--stage", "-"]),
+        ("?stage=print", &["--stage", "print"]),
+        ("?stage=bind", &["--stage", "bind"]),
+        (
+            "?stage=gather&trace=true",
+            &["--stage", "gather", "--trace"],
+        ),
+        (
+            "?root=PART-PRINT&depth=1&stage=gather",
+            &["PART-PRINT", "--depth", "1", "--stage", "gather"],
+        ),
+        (
+            "?root=NOPE-404&stage=gather",
+            &["NOPE-404", "--stage", "gather"],
+        ),
+    ];
+    for (query, flags) in forms {
+        let mut args = vec!["flow"];
+        args.extend_from_slice(flags);
+        same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{ALMANAC}/flow{query}"),
+            &args,
+        );
+    }
+    let ids = |query: &str| -> Vec<String> {
+        let document: Value = server.get(&format!("{ALMANAC}/flow{query}")).json();
+        document["nodes"]
+            .as_array()
+            .expect("nodes")
+            .iter()
+            .map(|node| node["id"].as_str().expect("an id").to_owned())
+            .collect()
+    };
+    assert_eq!(ids("?stage=gather"), ["STEP-CALL", "STEP-SORT"]);
+    assert_eq!(ids("?stage=-"), ["STEP-READ"]);
+    assert_eq!(ids("?stage=print"), ["STEP-SET", "STEP-BIND"]);
+    assert!(ids("?stage=bind").is_empty());
+    let whole: Value = server.get(&format!("{ALMANAC}/flow")).json();
+    let gather: Value = server.get(&format!("{ALMANAC}/flow?stage=gather")).json();
+    assert_eq!(gather["gaps"], whole["gaps"], "the rows stand");
+
+    let path = format!("{ALMANAC}/flow?stage=gather&stage=print");
+    let reply = server.get(&path);
+    assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+    assert_eq!(
+        reply.error_message(),
+        "`stage` is given 2 times: it takes one value",
+        "{path}"
+    );
+    let fresh = scratch.home("fresh");
+    let server = Server::serve(&fresh, &cwd, &[&root]);
+    let before = beyond_daemon(&fresh);
+    assert_eq!(server.get(&path).status, 400);
     assert_eq!(beyond_daemon(&fresh), before, "no database opened");
 }

@@ -23,6 +23,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/spec-cli-read.md](canon/spec-cli-read.md) spec search and spec show: output and the cap · crates/specengine-cli, crates/specengine-store · tier 2
 - [docs/canon/spec-cli-refs.md](canon/spec-cli-refs.md) spec refs output: rows, JSON, exits · crates/specengine-cli · tier 2
 - [docs/canon/spec-flow-layout.md](canon/spec-flow-layout.md) The Flow screen: layout and forms · ui · tier 2
+- [docs/canon/spec-flow-readings.md](canon/spec-flow-readings.md) spec flow: readings of the walk, the edges and the rows · crates/specengine-core, crates/specengine-cli · tier 2
 - [docs/canon/spec-flow-screen.md](canon/spec-flow-screen.md) The Flow screen · ui · tier 2
 - [docs/canon/spec-flow.md](canon/spec-flow.md) spec flow: the walk, typed edges, lifted edges and gap rows · crates/specengine-model, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http · tier 2
 - [docs/canon/spec-ids.md](canon/spec-ids.md) Spec IDs: a hub mints from 100001, a terminal below it · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · tier 2

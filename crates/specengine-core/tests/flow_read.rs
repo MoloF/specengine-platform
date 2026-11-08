@@ -93,6 +93,7 @@ fn read_input(
             config: &flow,
             config_label: LABEL,
             scope_name: root.unwrap_or("the-whole"),
+            stage: None,
         },
     )
 }
@@ -230,6 +231,9 @@ fn a_fold_marks_a_start_and_an_end_by_what_it_holds() {
 
 /// "Data": the table, verbatim, each direction reading the link; every type
 /// a member of `LINK_TYPES`, so the read invents none.
+/// docs/features/flow-scope.md FS-1 (F1): ADR-0055's three, in this order;
+/// `depends_on` orders a plan, never a flow. M1: `("depends_on",
+/// Direction::Out)` restored.
 #[test]
 fn the_flow_link_types_are_the_specs() {
     assert_eq!(
@@ -238,8 +242,13 @@ fn the_flow_link_types_are_the_specs() {
             (FOLLOWS, Direction::In),
             ("uses", Direction::Out),
             ("supplies", Direction::Out),
-            ("depends_on", Direction::Out),
         ]
+    );
+    assert!(
+        FLOW_LINK_TYPES
+            .iter()
+            .all(|(link_type, _)| *link_type != "depends_on"),
+        "FS-1: no flow reads `depends_on`"
     );
     for (link_type, _) in FLOW_LINK_TYPES {
         assert!(LINK_TYPES.contains(&link_type), "{link_type}");
@@ -1153,6 +1162,7 @@ fn read_time(graph: &SpecGraph<'_>, flow: &FlowConfig, depth: Option<usize>) -> 
             config: flow,
             config_label: LABEL,
             scope_name: "the-whole",
+            stage: None,
         },
     );
     let elapsed = started.elapsed();
@@ -1189,6 +1199,7 @@ fn a_chain_four_times_as_deep_reads_in_at_most_eight_times_the_time() {
                 config: flow,
                 config_label: LABEL,
                 scope_name: "the-whole",
+                stage: None,
             },
         );
         assert_eq!(

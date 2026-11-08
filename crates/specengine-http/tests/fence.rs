@@ -19,6 +19,17 @@
 //!
 //! docs/features/card-trace.md: the trace read and the two clears stand
 //! behind the same fence (`trace.rs`, AC-10).
+//!
+//! docs/features/local-landing.md "Acceptance criteria" (RM-0080): the
+//! landing, the hub's exception given to the local fence through one
+//! predicate. `GET /` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest:
+//! document` passes the `Sec-Fetch-Site` step whatever it says (LL-1, M1);
+//! one header changed is the 403 (LL-2, M2, M3); any other method or path
+//! is the 403, a path a decoder or a trimmer would read as `/` included
+//! (LL-3, M4, M5); `Host` and `Origin` are judged first, and a header sent
+//! twice is refused (LL-4, M6, M7). LL-5 is this file's tests above the
+//! `ll` ones, `hub.rs`, `serve.rs` and `ui.rs`, unchanged; M8 turns either
+//! `hub.rs`'s AC-03 or the `ll` tests red.
 
 mod common;
 
@@ -300,4 +311,301 @@ fn ac01_no_response_carries_an_access_control_header() {
         reply.error_message();
         assert_plain(&reply, method);
     }
+}
+
+// ------------------------------------------------------------ local-landing
+
+/// The `Sec-Fetch-Site` step's refusal, byte for byte ("Data").
+const SITE_LINE: &str = "refused: Sec-Fetch-Site, when sent, must be `same-origin` or `none`";
+
+/// The page's policy ("Data"; `ui.rs`' `PAGE_POLICY`).
+const PAGE_POLICY: &str = "default-src 'self'; img-src 'self' data:; object-src 'none'; \
+                           base-uri 'none'; frame-ancestors 'none'";
+
+/// The landing's headers from another site: `Host` the daemon's own, then
+/// `site`, `navigate` and `document`, in that order.
+fn landing_from(port: u16, site: &'static str) -> Vec<(String, String)> {
+    vec![
+        ("Host".to_owned(), format!("127.0.0.1:{port}")),
+        ("Sec-Fetch-Site".to_owned(), site.to_owned()),
+        ("Sec-Fetch-Mode".to_owned(), "navigate".to_owned()),
+        ("Sec-Fetch-Dest".to_owned(), "document".to_owned()),
+    ]
+}
+
+/// `headers` with `name` set to `value` (the first of that name replaced).
+fn set(headers: &[(String, String)], name: &str, value: &str) -> Vec<(String, String)> {
+    let mut out = headers.to_vec();
+    let at = out
+        .iter()
+        .position(|(key, _)| key == name)
+        .unwrap_or_else(|| panic!("no {name} in {headers:?}"));
+    out[at].1 = value.to_owned();
+    out
+}
+
+/// `headers` without `name`.
+fn without(headers: &[(String, String)], name: &str) -> Vec<(String, String)> {
+    headers
+        .iter()
+        .filter(|(key, _)| key != name)
+        .cloned()
+        .collect()
+}
+
+/// `headers` with `name: value` added once more, at the end.
+fn plus(headers: &[(String, String)], name: &str, value: &str) -> Vec<(String, String)> {
+    let mut out = headers.to_vec();
+    out.push((name.to_owned(), value.to_owned()));
+    out
+}
+
+/// `method path` with exactly `headers`, as written.
+fn send(server: &Server, method: &str, path: &str, headers: &[(String, String)]) -> Reply {
+    let borrowed: Vec<(&str, &str)> = headers
+        .iter()
+        .map(|(name, value)| (name.as_str(), value.as_str()))
+        .collect();
+    server.raw(&common::request_bytes(method, path, &borrowed))
+}
+
+/// The fence's 403 with exactly `line` (a `HEAD` carries no body to read a
+/// line from), `no-store`, no `Allow`, no `Access-Control-*`.
+fn assert_refused_with(reply: &Reply, method: &str, line: &str, context: &str) {
+    assert_eq!(
+        reply.status,
+        403,
+        "{context}: {}",
+        String::from_utf8_lossy(&reply.body)
+    );
+    assert_plain(reply, context);
+    assert_eq!(
+        reply.header("allow"),
+        None,
+        "{context}: {:?}",
+        reply.headers
+    );
+    if method == "HEAD" {
+        assert!(
+            reply.body.is_empty(),
+            "{context}: a HEAD answer has no body"
+        );
+    } else {
+        assert_eq!(reply.error_message(), line, "{context}");
+    }
+}
+
+/// LL-1: a top-level navigation to `/` from another site, `cross-site` or
+/// `same-site`, a query included, answers what a same-origin `GET /`
+/// answers: the page with its headers at 200, the not-built body at 503.
+/// M1: the exception removed (403).
+#[test]
+fn ll1_a_top_level_navigation_from_any_site_opens_the_page() {
+    let scratch = Scratch::new("fence-landing");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    let own = server.request("GET", "/", &[("Sec-Fetch-Site", "same-origin")]);
+    assert_eq!(own.status, page_status(), "the same-origin page");
+    for site in ["cross-site", "same-site"] {
+        for path in ["/", "/?scenario=normal"] {
+            let context = format!("GET {path} from {site}");
+            let reply = send(&server, "GET", path, &landing_from(server.port, site));
+            assert_eq!(
+                reply.status,
+                page_status(),
+                "{context}: {}",
+                String::from_utf8_lossy(&reply.body)
+            );
+            assert_plain(&reply, &context);
+            assert_eq!(
+                reply.body, own.body,
+                "{context}: the same-origin page's bytes"
+            );
+            if reply.status == 200 {
+                assert_eq!(
+                    reply.header("x-content-type-options"),
+                    Some("nosniff"),
+                    "{context}"
+                );
+                assert_eq!(
+                    reply.header("content-security-policy"),
+                    Some(PAGE_POLICY),
+                    "{context}: the page's policy, `frame-ancestors 'none'` in it"
+                );
+            } else {
+                let message = reply.error_message();
+                assert!(
+                    message.starts_with("this specengine-http holds no web UI"),
+                    "{context}: the not-built body: {message}"
+                );
+            }
+        }
+    }
+}
+
+/// LL-2: the LL-1 request with one header changed is no top-level document
+/// any more: a frame, a fetch, or either header missing is the 403 of the
+/// `Sec-Fetch-Site` step. M2: `Sec-Fetch-Mode` judged alone (`iframe`
+/// passes). M3: `Sec-Fetch-Dest` judged alone (`no-cors` passes).
+#[test]
+fn ll2_only_a_top_level_document_is_the_landing() {
+    let scratch = Scratch::new("fence-landing-document");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    for site in ["cross-site", "same-site"] {
+        let landing = landing_from(server.port, site);
+        let changed = [
+            (
+                "Sec-Fetch-Dest iframe",
+                set(&landing, "Sec-Fetch-Dest", "iframe"),
+            ),
+            (
+                "Sec-Fetch-Dest frame",
+                set(&landing, "Sec-Fetch-Dest", "frame"),
+            ),
+            (
+                "Sec-Fetch-Mode no-cors",
+                set(&landing, "Sec-Fetch-Mode", "no-cors"),
+            ),
+            (
+                "Sec-Fetch-Mode cors",
+                set(&landing, "Sec-Fetch-Mode", "cors"),
+            ),
+            ("no Sec-Fetch-Mode", without(&landing, "Sec-Fetch-Mode")),
+            ("no Sec-Fetch-Dest", without(&landing, "Sec-Fetch-Dest")),
+        ];
+        for (change, headers) in &changed {
+            let reply = send(&server, "GET", "/", headers);
+            assert_refused_with(
+                &reply,
+                "GET",
+                SITE_LINE,
+                &format!("GET / from {site}, {change}"),
+            );
+        }
+    }
+    assert!(
+        beyond_daemon(&home).is_empty(),
+        "a refused request read nothing: {:?}",
+        beyond_daemon(&home)
+    );
+}
+
+/// LL-3: the LL-1 headers on any other path or method are the 403 of the
+/// `Sec-Fetch-Site` step. M4: the exception keyed on the headers and not on
+/// `GET /` (an asset, a route, `HEAD` or `POST` pass). M5: the path compared
+/// after decoding or trimming (`//`, `/%2F`, `/%20`, `/.` and `/./` pass,
+/// then answer the router's 404).
+#[test]
+fn ll3_only_get_slash_is_the_landing() {
+    let scratch = Scratch::new("fence-landing-route");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    let landing = landing_from(server.port, "cross-site");
+    let others = [
+        ("GET", "/assets/x.js"),
+        ("GET", "/index.html"),
+        ("GET", "/api/projects"),
+        ("GET", "/api/projects/lantern-keep/tree"),
+        ("HEAD", "/"),
+        ("POST", "/"),
+        // M5: what a decoder or a trimmer reads as `/`.
+        ("GET", "//"),
+        ("GET", "/%2F"),
+        ("GET", "/%20"),
+        ("GET", "/."),
+        ("GET", "/./"),
+    ];
+    for (method, path) in others {
+        let reply = send(&server, method, path, &landing);
+        assert_refused_with(
+            &reply,
+            method,
+            SITE_LINE,
+            &format!("{method} {path} cross-site"),
+        );
+    }
+    assert!(
+        beyond_daemon(&home).is_empty(),
+        "a refused request read nothing: {:?}",
+        beyond_daemon(&home)
+    );
+}
+
+/// LL-4: `Host`, then `Origin`, then the `Sec-Fetch-Site` step: the landing
+/// passes neither of the first two, and a `Sec-Fetch-*` header sent twice is
+/// refused by its step. M6: the exception judged before step 1. M7: before
+/// step 2.
+#[test]
+fn ll4_host_and_origin_are_judged_before_the_landing() {
+    let scratch = Scratch::new("fence-landing-order");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[&a]);
+    let port = server.port;
+    let host_line = format!(
+        "refused: the Host header must be 127.0.0.1:{port} or localhost:{port}: this server \
+         serves its own origin only"
+    );
+    let origin_line = format!(
+        "refused: the Origin header, when sent, must be http://127.0.0.1:{port} or \
+         http://localhost:{port}"
+    );
+    for site in ["cross-site", "same-site"] {
+        let landing = landing_from(port, site);
+        let cases = [
+            (
+                "a foreign Host",
+                set(&landing, "Host", &format!("evil.example:{port}")),
+                host_line.clone(),
+            ),
+            (
+                "a foreign Origin",
+                plus(&landing, "Origin", "http://evil.example"),
+                origin_line.clone(),
+            ),
+            (
+                "Sec-Fetch-Mode twice",
+                plus(&landing, "Sec-Fetch-Mode", "navigate"),
+                "refused: the Sec-Fetch-Mode header is sent more than once".to_owned(),
+            ),
+            // L3: the predicate's `single`, as the hub's.
+            (
+                "Sec-Fetch-Dest twice",
+                plus(&landing, "Sec-Fetch-Dest", "document"),
+                "refused: the Sec-Fetch-Dest header is sent more than once".to_owned(),
+            ),
+            // "Edge cases": the duplicate is refused before the predicate.
+            (
+                "Sec-Fetch-Site twice",
+                plus(&landing, "Sec-Fetch-Site", site),
+                "refused: the Sec-Fetch-Site header is sent more than once".to_owned(),
+            ),
+        ];
+        for (case, headers, line) in &cases {
+            let reply = send(&server, "GET", "/", headers);
+            assert_refused_with(
+                &reply,
+                "GET",
+                line,
+                &format!("the landing from {site}, {case}"),
+            );
+        }
+    }
+    // The other host name is the own origin: the landing passes there too.
+    let localhost = set(
+        &landing_from(port, "cross-site"),
+        "Host",
+        &format!("localhost:{port}"),
+    );
+    let reply = send(&server, "GET", "/", &localhost);
+    assert_eq!(
+        reply.status,
+        page_status(),
+        "the landing on localhost:{port}"
+    );
+    assert_plain(&reply, "the landing on localhost");
 }

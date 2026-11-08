@@ -183,9 +183,8 @@ impl Place {
             &self.env,
             &self.globals,
             &FlowRequest {
-                root: None,
-                depth: None,
                 trace,
+                ..FlowRequest::default()
             },
         )
         .map(|flow| Outcome::Flow(Box::new(flow)))

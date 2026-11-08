@@ -163,9 +163,10 @@
 //!   note, never an exit); a `--release` naming no release is an outcome
 //!   with its reason, exit 1; [`roadmap_flags`] its usage check, for the
 //!   daemon;
-//! - [`flow()`]: `spec flow [ROOT] [--depth N]` (task spec `flow-read`), the
-//!   typed edges, lifted edges and gap rows core's `flow_read` computes,
-//!   `[flow]` read here alone; a gap changes no exit;
+//! - [`flow()`]: `spec flow [ROOT] [--depth N] [--stage S] [--trace]` (task
+//!   specs `flow-read`, `trace-views`, `flow-scope`), the typed edges,
+//!   lifted edges and gap rows core's `flow_read` computes, `[flow]` read
+//!   here alone; a gap changes no exit;
 //! - [`card_new`], [`card_list`], [`card_show`], [`card_move`], [`card_edit`],
 //!   [`card_assign`], [`card_cancel`], [`card_accept`]: `spec card …` (task
 //!   spec `card-store`), the lighter record of any trade's work, a queue row

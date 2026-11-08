@@ -153,8 +153,8 @@ pub use card_toml::{
 };
 pub use code_toml::{CodeConfig, code_from_toml};
 pub use flow::{
-    FlowAsk, FlowEdge, FlowGap, FlowInner, FlowNeed, FlowNode, FlowRead, FlowWalk, GapCause,
-    GapCode, GapState, flow_read, flow_walk, stage_of,
+    FlowAsk, FlowEdge, FlowGap, FlowInner, FlowNeed, FlowNode, FlowRead, FlowStage, FlowWalk,
+    GapCause, GapCode, GapState, flow_read, flow_walk, stage_of,
 };
 pub use flow_toml::{FlowConfig, FlowRule, FlowTable, flow_from_toml};
 pub use front_matter::{KeyType, TYPED_KEYS};

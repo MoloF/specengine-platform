@@ -31,12 +31,24 @@
 //!   just fits taken with the budget one below it. M: round per part (a
 //!   part that just fits is refused at its boundary).
 //!
-//! The golden is never recorded again: a second recording with the binary
-//! after the slice would prove nothing. The cases it must hold are the
-//! constants below; `the_golden_holds_every_case_of_the_spec` checks them
-//! on the file alone, and the bundle replays check what needs the bytes
-//! (the `tokens`, the boundaries) once the digests have proved them the
-//! bytes before.
+//! The golden is never recorded again but as below: a second recording with
+//! the binary after the slice would prove nothing on its own. The cases it
+//! must hold are the constants below; `the_golden_holds_every_case_of_the_spec`
+//! checks them on the file alone, and the bundle replays check what needs
+//! the bytes (the `tokens`, the boundaries) once the digests have proved
+//! them the bytes before.
+//!
+//! docs/features/flow-scope.md (RM-0083) FS-8: the golden is re-recorded at
+//! that slice's head (`fs8_record_the_golden`, `#[ignore]`, by hand), and
+//! the re-record is judged against the rows `e863186` printed, git's blob
+//! [`BEFORE_FLOW_SCOPE`] (the file at `baac762`):
+//! `fs8_the_re_record_moves_only_depends_on`. A `flow` row that read no
+//! `depends_on` keeps its bytes; one that did keeps its gap rows byte for
+//! byte, each kept node's `distance`, `start`, `end` and `stage` (and every
+//! other key but `inner`), every `follows`, `uses` and `supplies` edge of an
+//! uncut row, and loses only `depends_on` edges and `inner` entries, or a
+//! node only such edges admitted; every `trace` and `bundle` row is
+//! byte-equal. M13: a re-record that also drops a `follows` edge.
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
@@ -46,10 +58,12 @@ mod common;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use common::graph::spec30;
-use common::{Run, Scratch, one_json_document};
+use common::{Run, Scratch, one_json_document, repository_root};
+use serde::Serialize as _;
 use serde_json::Value;
 use specengine_store::b3_hash;
 
@@ -720,4 +734,448 @@ fn ac11_every_bundle_row_of_spec_a_is_the_bytes_before() {
 #[test]
 fn ac11_every_bundle_row_of_spec_b_is_the_bytes_before() {
     replay_bundles("spec-b", 7 * 25);
+}
+
+// ------------------------------------------------------------------ FS-8
+
+/// Git's blob of `flow_linear_before.json` at `baac762`, the commit before
+/// docs/features/flow-scope.md's re-record: the rows `e863186` printed.
+const BEFORE_FLOW_SCOPE: &str = "5dfc22d94c5f9ad78a6946cb9ba1cbaef0a14733";
+
+/// The link type no flow reads since flow-scope (F1).
+const DEPENDS_ON: &str = "depends_on";
+
+/// The three a flow reads.
+const FLOW_TYPES: [&str; 3] = ["follows", "uses", "supplies"];
+
+/// The rows before flow-scope's re-record, from git's object store.
+fn golden_before_flow_scope() -> Vec<Row> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repository_root())
+        .args(["cat-file", "blob", BEFORE_FLOW_SCOPE])
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .output()
+        .expect("git runs");
+    assert!(
+        output.status.success(),
+        "the golden before flow-scope, blob {BEFORE_FLOW_SCOPE} (baac762:crates/specengine-cli/\
+         tests/{GOLDEN}), is not in this clone: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    serde_json::from_slice(&output.stdout)
+        .unwrap_or_else(|error| panic!("{BEFORE_FLOW_SCOPE} is no list of rows: {error}"))
+}
+
+/// The field of a text line up to its first ` | `.
+fn head(line: &str) -> &str {
+    line.split(" | ").next().unwrap_or(line)
+}
+
+/// The ID of a node line (`<distance or -> <ID> | ...`), if it is one.
+fn node_line_id(line: &str) -> Option<&str> {
+    let (distance, id) = head(line).split_once(' ')?;
+    (!id.contains(' ') && (distance == "-" || distance.parse::<usize>().is_ok())).then_some(id)
+}
+
+/// Whether `part` is a subsequence of `whole`.
+fn in_order<T: PartialEq>(part: &[T], whole: &[T]) -> bool {
+    let mut rest = whole.iter();
+    part.iter().all(|item| rest.any(|other| other == item))
+}
+
+fn array<'a>(document: &'a Value, key: &str) -> &'a [Value] {
+    document[key].as_array().map_or(&[], Vec::as_slice)
+}
+
+/// The type of an edge or an `inner` entry.
+fn type_of(item: &Value) -> &str {
+    item["type"].as_str().unwrap_or_default()
+}
+
+/// A node of the old read only `depends_on` admitted: every edge it is an
+/// end of and every `inner` entry it holds is `depends_on`, and one is.
+fn admitted_by_depends_on_alone(old: &Value, node: &Value) -> bool {
+    let id = &node["id"];
+    let touching: Vec<&Value> = array(old, "edges")
+        .iter()
+        .filter(|edge| edge["from"] == *id || edge["to"] == *id)
+        .collect();
+    let inner = array(node, "inner");
+    let all_depends = touching.iter().all(|edge| type_of(edge) == DEPENDS_ON)
+        && inner.iter().all(|entry| type_of(entry) == DEPENDS_ON);
+    all_depends && (!touching.is_empty() || !inner.is_empty())
+}
+
+/// What a `flow` row's re-record moved that FS-8 does not allow; empty when
+/// every move is a `depends_on` one.
+fn flow_moves(old: &Row, new: &Row) -> Vec<String> {
+    let mut problems = Vec::new();
+    if old.code != new.code {
+        problems.push(format!("exit {:?} now, {:?} before", new.code, old.code));
+        return problems;
+    }
+    let (old_text, new_text) = (
+        old.text.as_deref().unwrap_or_default(),
+        new.text.as_deref().unwrap_or_default(),
+    );
+    let (old_json, new_json) = (
+        old.json.as_deref().unwrap_or_default(),
+        new.json.as_deref().unwrap_or_default(),
+    );
+    // A row that read no `depends_on` keeps its bytes.
+    if !old_json.contains("\"depends_on\"") {
+        if old_text != new_text {
+            problems.push(format!(
+                "the text moved, and the row read no depends_on: {}",
+                first_difference(new_text, old_text)
+            ));
+        }
+        if old_json != new_json {
+            problems.push("the JSON moved, and the row read no depends_on".to_owned());
+        }
+        return problems;
+    }
+    let mut parse = |text: &str, when: &str| -> Option<Value> {
+        let parsed = serde_json::from_str(text).ok();
+        if parsed.is_none() {
+            problems.push(format!("the JSON {when} is no document"));
+        }
+        parsed
+    };
+    let (Some(before), Some(now)) = (parse(old_json, "before"), parse(new_json, "now")) else {
+        return problems;
+    };
+
+    // The gap rows, and what stands beside them, byte for byte.
+    let gaps = |text: &str| -> Vec<String> {
+        text.lines()
+            .filter(|line| line.starts_with("gap "))
+            .map(str::to_owned)
+            .collect()
+    };
+    if gaps(old_text) != gaps(new_text) {
+        problems.push("the text's gap lines moved".to_owned());
+    }
+    for key in ["gaps", "root", "reason", "depth", "notes", "left_out"] {
+        if before[key] != now[key] {
+            problems.push(format!("`{key}` moved"));
+        }
+    }
+
+    // Nothing reads `depends_on` now.
+    for edge in array(&now, "edges") {
+        if type_of(edge) == DEPENDS_ON {
+            problems.push(format!("a depends_on edge is read now: {edge}"));
+        }
+    }
+    for node in array(&now, "nodes") {
+        for entry in array(node, "inner") {
+            if type_of(entry) == DEPENDS_ON {
+                problems.push(format!("{}: a depends_on inner entry now", node["id"]));
+            }
+        }
+    }
+
+    // Nodes: the kept ones in their order, each the same but for `inner`,
+    // whose removed entries are `depends_on` ones; a removed one admitted by
+    // `depends_on` alone.
+    let (old_nodes, new_nodes) = (array(&before, "nodes"), array(&now, "nodes"));
+    let old_ids: Vec<&Value> = old_nodes.iter().map(|node| &node["id"]).collect();
+    let new_ids: Vec<&Value> = new_nodes.iter().map(|node| &node["id"]).collect();
+    if !in_order(&new_ids, &old_ids) {
+        problems.push("the nodes now are no subsequence of the nodes before".to_owned());
+    }
+    let mut removed: BTreeSet<String> = BTreeSet::new();
+    for node in old_nodes {
+        let Some(kept) = new_nodes.iter().find(|other| other["id"] == node["id"]) else {
+            if !admitted_by_depends_on_alone(&before, node) {
+                problems.push(format!(
+                    "node {} removed, and not depends_on's alone",
+                    node["id"]
+                ));
+            }
+            removed.insert(node["id"].as_str().unwrap_or_default().to_owned());
+            continue;
+        };
+        for key in ["distance", "start", "end", "stage"] {
+            if node[key] != kept[key] {
+                problems.push(format!("{}: `{key}` moved", node["id"]));
+            }
+        }
+        let keys: BTreeSet<&String> = node
+            .as_object()
+            .into_iter()
+            .chain(kept.as_object())
+            .flat_map(|object| object.keys())
+            .collect();
+        for key in keys {
+            if key != "inner" && node[key] != kept[key] {
+                problems.push(format!("{}: `{key}` moved", node["id"]));
+            }
+        }
+        let (old_inner, new_inner) = (array(node, "inner"), array(kept, "inner"));
+        if !in_order(new_inner, old_inner) {
+            problems.push(format!(
+                "{}: `inner` gained or reordered an entry",
+                node["id"]
+            ));
+        }
+        for entry in old_inner {
+            if !new_inner.contains(entry) && type_of(entry) != DEPENDS_ON {
+                problems.push(format!("{}: inner entry {entry} removed", node["id"]));
+            }
+        }
+    }
+
+    // Edges: the kept ones in their order; of an uncut row, every removed
+    // one `depends_on`, so every `follows`, `uses` and `supplies` stays.
+    let (old_edges, new_edges) = (array(&before, "edges"), array(&now, "edges"));
+    if !in_order(new_edges, old_edges) {
+        problems.push("the edges now are no subsequence of the edges before".to_owned());
+    }
+    let uncut = before["truncated"] == Value::Bool(false);
+    if uncut {
+        for edge in old_edges {
+            if !new_edges.contains(edge) {
+                if FLOW_TYPES.contains(&type_of(edge)) {
+                    problems.push(format!("a {} edge removed: {edge}", type_of(edge)));
+                } else if type_of(edge) != DEPENDS_ON {
+                    problems.push(format!("an edge of another type removed: {edge}"));
+                }
+            }
+        }
+        for key in ["truncated", "omitted_nodes", "omitted_edges"] {
+            if before[key] != now[key] {
+                problems.push(format!("`{key}` moved on an uncut row"));
+            }
+        }
+    }
+
+    // The text: its header counts what the JSON holds; every other line one
+    // of the lines before, in order; a line gone a `depends_on` edge's or a
+    // removed node's.
+    let mut old_lines = old_text.lines();
+    let mut new_lines = new_text.lines();
+    let (old_header, new_header) = (old_lines.next(), new_lines.next());
+    if let (Some(old_header), Some(new_header)) = (old_header, new_header) {
+        let count = |key: &str, omitted: &str| {
+            array(&now, key).len() as u64 + now[omitted].as_u64().unwrap_or(0)
+        };
+        let rebuilt = old_header
+            .split_once(" | nodes ")
+            .and_then(|(scope, rest)| {
+                let (_, tail) = rest.split_once(", depth ")?;
+                Some(format!(
+                    "{scope} | nodes {}, edges {}, depth {tail}",
+                    count("nodes", "omitted_nodes"),
+                    count("edges", "omitted_edges")
+                ))
+            });
+        if rebuilt.as_deref() != Some(new_header) {
+            problems.push(format!(
+                "the header {new_header:?}, not {old_header:?} with the counts kept"
+            ));
+        }
+    } else if old_header != new_header {
+        problems.push("one text has no header".to_owned());
+    }
+    // The lines before, less each `depends_on` edge's and each removed
+    // node's, a kept node's `inner <n>` lowered by its `depends_on` entries'
+    // counts (the sum a folded line prints): the lines now, exactly, of an
+    // uncut row; of a cut one, in order.
+    let old_body: Vec<&str> = old_lines.filter(|line| !line.starts_with("gap ")).collect();
+    let new_body: Vec<String> = new_lines
+        .filter(|line| !line.starts_with("gap "))
+        .map(str::to_owned)
+        .collect();
+    let mut expected: Vec<String> = Vec::new();
+    for line in &old_body {
+        if head(line).contains(" -> ") && line.contains(" | depends_on | ") {
+            continue;
+        }
+        let Some(id) = node_line_id(line) else {
+            expected.push((*line).to_owned());
+            continue;
+        };
+        if removed.contains(id) {
+            continue;
+        }
+        let dropped: u64 = old_nodes
+            .iter()
+            .find(|node| node["id"] == id)
+            .map(|node| {
+                array(node, "inner")
+                    .iter()
+                    .filter(|entry| type_of(entry) == DEPENDS_ON)
+                    .filter_map(|entry| entry["count"].as_u64())
+                    .sum()
+            })
+            .unwrap_or(0);
+        expected.push(lowered_inner(line, dropped));
+    }
+    let exact = uncut && !old_body.iter().any(|line| line.starts_with("[truncated: "));
+    if exact && new_body != expected {
+        problems.push(format!(
+            "the text's lines now are not the lines before less depends_on's: {}",
+            first_difference(&new_body.join("\n"), &expected.join("\n"))
+        ));
+    } else if !exact && !in_order(&new_body, &expected) {
+        problems.push("the text's lines now are no subsequence of the lines before".to_owned());
+    }
+    problems
+}
+
+/// A node line with its `inner <n>` lowered by `by` (unchanged at 0, or with
+/// no `inner` field).
+fn lowered_inner(line: &str, by: u64) -> String {
+    const FIELD: &str = ", inner ";
+    let Some(at) = line.find(FIELD).filter(|_| by > 0) else {
+        return line.to_owned();
+    };
+    let start = at + FIELD.len();
+    let digits = line[start..].bytes().take_while(u8::is_ascii_digit).count();
+    let Ok(count) = line[start..start + digits].parse::<u64>() else {
+        return line.to_owned();
+    };
+    format!(
+        "{}{}{}",
+        &line[..start],
+        count.saturating_sub(by),
+        &line[start + digits..]
+    )
+}
+
+/// FS-8: the re-recorded golden holds the same rows, in the same order, as
+/// the one before flow-scope; every `trace` and `bundle` row byte-equal,
+/// every `flow` row moved by `depends_on` alone ([`flow_moves`]); and some
+/// `flow` row did move, or the golden was not re-recorded. M13: a re-record
+/// that also drops a `follows` edge.
+#[test]
+fn fs8_the_re_record_moves_only_depends_on() {
+    let before = golden_before_flow_scope();
+    let now = golden();
+    let keys = |rows: &[Row]| -> Vec<(String, Vec<String>)> {
+        rows.iter()
+            .map(|row| (row.fixture.clone(), row.args.clone()))
+            .collect()
+    };
+    assert_eq!(
+        keys(&now),
+        keys(&before),
+        "the same rows, in the same order"
+    );
+    let mut problems: Vec<String> = Vec::new();
+    let mut moved = Vec::new();
+    for (old, new) in before.iter().zip(&now) {
+        let context = format!("{} {:?}", old.fixture, old.args);
+        if command(old) == "flow" {
+            if old.text != new.text || old.json != new.json {
+                moved.push(context.clone());
+            }
+            problems.extend(
+                flow_moves(old, new)
+                    .into_iter()
+                    .map(|problem| format!("{context}: {problem}")),
+            );
+        } else if (&old.code, &old.text, &old.json, &old.b3)
+            != (&new.code, &new.text, &new.json, &new.b3)
+        {
+            problems.push(format!("{context}: a {} row moved", command(old)));
+        }
+    }
+    assert!(
+        problems.is_empty(),
+        "{} moves FS-8 does not allow:\n{}",
+        problems.len(),
+        problems.join("\n")
+    );
+    assert!(
+        !moved.is_empty(),
+        "no flow row moved: {GOLDEN} is still the golden before flow-scope"
+    );
+    eprintln!(
+        "FS-8: {} flow rows moved by depends_on:\n{}",
+        moved.len(),
+        moved.join("\n")
+    );
+}
+
+/// `value` with every object's keys in byte order, as the golden is written.
+fn canonical(value: &Value) -> Value {
+    match value {
+        Value::Object(object) => {
+            let sorted: BTreeMap<&String, Value> = object
+                .iter()
+                .map(|(key, item)| (key, canonical(item)))
+                .collect();
+            Value::Object(
+                sorted
+                    .into_iter()
+                    .map(|(key, item)| (key.clone(), item))
+                    .collect(),
+            )
+        }
+        Value::Array(items) => Value::Array(items.iter().map(canonical).collect()),
+        other => other.clone(),
+    }
+}
+
+/// FS-8's re-record, by hand: every row of the golden replayed as the
+/// replays run it, its bytes (`flow`, `trace`) or digests (`bundle`) kept,
+/// written in the golden's format (keys in order, one-space indent, a final
+/// line end) to the absolute path `SPECENGINE_FLOW_LINEAR_RECORD` names,
+/// outside the repository. `fs8_the_re_record_moves_only_depends_on` judges
+/// the file once it replaces the golden.
+#[test]
+#[ignore = "manual: FS-8's re-record of the golden (docs/features/flow-scope.md)"]
+fn fs8_record_the_golden() {
+    let out = std::env::var_os("SPECENGINE_FLOW_LINEAR_RECORD")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .expect("SPECENGINE_FLOW_LINEAR_RECORD names the file to write");
+    assert!(out.is_absolute(), "{}: not absolute", out.display());
+    assert!(
+        !out.starts_with(repository_root()),
+        "{}: write outside the repository, then copy",
+        out.display()
+    );
+    let rows: Vec<Row> = golden()
+        .into_iter()
+        .map(|row| {
+            let (text, json) = replay(&row.fixture, &row.args);
+            if command(&row) == "bundle" {
+                Row {
+                    code: None,
+                    text: None,
+                    json: None,
+                    b3: Some(Digests::of(&text, &json)),
+                    ..row
+                }
+            } else {
+                assert_eq!(
+                    text.code, json.code,
+                    "{} {:?}: one exit code",
+                    row.fixture, row.args
+                );
+                Row {
+                    code: Some(text.code),
+                    text: Some(text.stdout),
+                    json: Some(json.stdout),
+                    b3: None,
+                    ..row
+                }
+            }
+        })
+        .collect();
+    let value = canonical(&serde_json::to_value(&rows).expect("rows to JSON"));
+    let mut bytes = Vec::new();
+    let mut serializer = serde_json::Serializer::with_formatter(
+        &mut bytes,
+        serde_json::ser::PrettyFormatter::with_indent(b" "),
+    );
+    value.serialize(&mut serializer).expect("rows written");
+    bytes.push(b'\n');
+    fs::write(&out, bytes).unwrap_or_else(|error| panic!("{}: {error}", out.display()));
 }

@@ -79,8 +79,9 @@ const ALL: &str = "all";
 /// What a tail may take beside the name of the node it cuts.
 const TAIL_ROOM: usize = 160;
 
-/// How a line and `--stage` name the steps with no stage.
-const NO_STAGE: &str = "-";
+/// How a line and `--stage` name the steps with no stage (`spec flow --stage`
+/// too).
+pub(crate) const NO_STAGE: &str = "-";
 
 /// `spec trace` options.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

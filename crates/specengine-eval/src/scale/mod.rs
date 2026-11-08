@@ -9,7 +9,12 @@
 //! and its check run through the CLI library; the four reads MCP's
 //! `read.rs` makes (`show` without and with links,
 //! `search`, `bundle`), each warmed once and timed three times, the best
-//! kept; each step those reads take replayed alone through the public API
+//! kept; the five whole reads
+//! (`docs/features/flow-scope.md` "The timed reads": `flow` at Top, of the
+//! first directory's head at depth 1 and of the first stage, `trace
+//! --summary`, `tree` at depth 1), timed alike, with no step replay, no
+//! trusted twin and no bar, since on a hub the flow and the trace walk;
+//! each step the four reads take replayed alone through the public API
 //! it calls; the same four reads, and the hub's two, again inside the CLI's
 //! `trusted` scope of an `IndexTrust` the first of them walked, as a hub's
 //! daemon runs them (`docs/features/read-trust.md` "Eval"), each answer
@@ -37,8 +42,9 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use specengine_cli::{
-    BundleRequest, CheckRequest, CheckedTree, Env, GitEnv, Globals, IndexRequest, IndexTrust,
-    Outcome, ProjectRoot, SearchRequest, ShowRequest, render_text, trusted,
+    BundleRequest, CheckRequest, CheckedTree, Env, FlowRequest, GitEnv, Globals, IndexRequest,
+    IndexTrust, Outcome, ProjectRoot, SearchRequest, ShowRequest, TraceRequest, TreeRequest,
+    render_text, trusted,
 };
 use specengine_core::check::{CheckFile, CheckInput, Resolver, SpecGraph};
 use specengine_model::IdScheme;
@@ -90,6 +96,15 @@ const GET_NODE: &str = "get_node";
 const GET_NODE_LINKS: &str = "get_node_links";
 const SEARCH: &str = "search";
 const GET_CONTEXT_BUNDLE: &str = "get_context_bundle";
+const GET_FLOW_TOP: &str = "get_flow_top";
+const GET_FLOW_ROOT: &str = "get_flow_root";
+const GET_FLOW_STAGE: &str = "get_flow_stage";
+const GET_TRACE_SUMMARY: &str = "get_trace_summary";
+const GET_TREE: &str = "get_tree";
+
+/// How `calls` names the target of a whole read with no `ROOT`, as
+/// `spec flow`'s header names it.
+const WHOLE: &str = "all";
 
 // ---------------------------------------------------------------------------
 // The flags and the guards.
@@ -233,8 +248,8 @@ struct SizeEntry {
 struct Measured {
     index: IndexOut,
     check: CheckOut,
-    reads: Reads,
-    growth: Growth,
+    reads: ReadsOut,
+    growth: GrowthOut,
     /// The four reads inside a hub's trust.
     reads_trusted: TrustedReads,
     /// As `growth`, each median floored at [`TRUSTED_FLOOR_US`].
@@ -263,12 +278,33 @@ struct CheckOut {
     us: u64,
 }
 
+/// `reads`: the four reads of targets, then the five whole reads.
+#[derive(Clone, Copy, Serialize)]
+struct ReadsOut {
+    #[serde(flatten)]
+    targeted: Reads,
+    #[serde(flatten)]
+    whole: WholeReads,
+}
+
+/// The four reads of the timed targets and the queries.
 #[derive(Clone, Copy, Serialize)]
 struct Reads {
     get_node: Spread,
     get_node_links: Spread,
     search: SearchSpread,
     get_context_bundle: Spread,
+}
+
+/// The five whole reads (`docs/features/flow-scope.md` "The timed reads"),
+/// each of one target: both figures are its best.
+#[derive(Clone, Copy, Serialize)]
+struct WholeReads {
+    get_flow_top: Spread,
+    get_flow_root: Spread,
+    get_flow_stage: Spread,
+    get_trace_summary: Spread,
+    get_tree: Spread,
 }
 
 /// Over the timed targets (or the queries), each at its best of three.
@@ -290,7 +326,7 @@ struct TrustedReads {
 /// A size's medians, the next size's growth is over.
 #[derive(Clone, Copy)]
 struct Previous {
-    reads: Reads,
+    reads: ReadsOut,
     trusted: TrustedReads,
 }
 
@@ -302,6 +338,15 @@ struct SearchSpread {
     hits_max: usize,
 }
 
+/// `growth`: [`Growth`] of the four reads, then of the five whole reads.
+#[derive(Serialize)]
+struct GrowthOut {
+    #[serde(flatten)]
+    targeted: Growth,
+    #[serde(flatten)]
+    whole: WholeGrowth,
+}
+
 /// `median_us` over the previous size's, two decimals; `null` at the first
 /// size or over a 0.
 #[derive(Serialize)]
@@ -310,6 +355,16 @@ struct Growth {
     get_node_links: Option<f64>,
     search: Option<f64>,
     get_context_bundle: Option<f64>,
+}
+
+/// As [`Growth`], of the five whole reads.
+#[derive(Serialize)]
+struct WholeGrowth {
+    get_flow_top: Option<f64>,
+    get_flow_root: Option<f64>,
+    get_flow_stage: Option<f64>,
+    get_trace_summary: Option<f64>,
+    get_tree: Option<f64>,
 }
 
 /// Each step of the reads replayed alone, at its best of three.
@@ -503,7 +558,7 @@ fn summarize(entry: &SizeEntry) {
         return;
     };
     let ms = |us: u64| format!("{:.1} ms", Duration::from_micros(us).as_secs_f64() * 1000.0);
-    let reads = &measured.reads;
+    let reads = &measured.reads.targeted;
     let trusted = &measured.reads_trusted;
     let parsed = match measured.steps.update_parsed {
         0 => String::new(),
@@ -615,6 +670,64 @@ impl Session {
         Ok((render_text(&Outcome::Show(outcome)), links))
     }
 
+    /// `get_flow` as `read.rs` asks it, `trace` true: the CLI's capped
+    /// read.
+    fn flow_request(root: Option<&str>, depth: Option<i64>, stage: Option<&str>) -> FlowRequest {
+        FlowRequest {
+            root: root.map(str::to_owned),
+            depth,
+            stage: stage.map(str::to_owned),
+            trace: true,
+        }
+    }
+
+    /// The answer rendered, and its nodes (`Timed::extra`, which no output
+    /// reads); an error or a `reason` is the failure.
+    fn flow(&self, request: &FlowRequest) -> Result<(String, usize), String> {
+        let outcome = specengine_cli::flow(&self.env, &self.globals, request)
+            .map_err(|error| error.message)?;
+        if let Some(reason) = &outcome.reason {
+            return Err(reason.clone());
+        }
+        let nodes = outcome.nodes.len();
+        Ok((render_text(&Outcome::Flow(Box::new(outcome))), nodes))
+    }
+
+    /// `get_trace {summary: true}`: the counts and the lanes, no node row.
+    /// The answer rendered, and the nodes it lists (`Timed::extra`, unread).
+    fn trace_summary(&self) -> Result<(String, usize), String> {
+        let request = TraceRequest {
+            reference: None,
+            stage: None,
+            summary: true,
+        };
+        let outcome = specengine_cli::trace(&self.env, &self.globals, &request)
+            .map_err(|error| error.message)?;
+        if let Some(reason) = &outcome.reason {
+            return Err(reason.clone());
+        }
+        let listed = outcome.listed;
+        Ok((render_text(&Outcome::Trace(Box::new(outcome))), listed))
+    }
+
+    /// `get_tree {depth: 1}`, no kinds, no archive. The answer rendered,
+    /// and its lines (`Timed::extra`, unread).
+    fn tree(&self) -> Result<(String, usize), String> {
+        let request = TreeRequest {
+            root: None,
+            depth: Some(1),
+            kinds: Vec::new(),
+            archive: false,
+        };
+        let outcome = specengine_cli::tree(&self.env, &self.globals, &request)
+            .map_err(|error| error.message)?;
+        if let Some(reason) = &outcome.reason {
+            return Err(reason.clone());
+        }
+        let lines = outcome.nodes.len();
+        Ok((render_text(&Outcome::Tree(outcome)), lines))
+    }
+
     /// The answer rendered, and its hits.
     fn search(&self, request: &SearchRequest) -> Result<(String, usize), String> {
         let outcome = specengine_cli::search(&self.env, &self.globals, request)
@@ -700,20 +813,27 @@ impl<'a> Measuring<'a> {
         }
     }
 
-    /// Index, check, reads, steps, W_after and the hub, in that order.
+    /// Index, check, reads, the whole reads, steps, W_after and the hub, in
+    /// that order.
     fn all(&mut self, previous: Option<&Previous>) -> Result<Measured, String> {
         let index = self.index()?;
         let check = self.check()?;
-        let (reads, hub_reads) = self.reads()?;
+        let (targeted, hub_reads) = self.reads()?;
+        let whole = self.whole_reads()?;
+        let reads = ReadsOut { targeted, whole };
         let (reads_trusted, hub_trusted) = self.trusted_reads()?;
         let steps = self.steps()?;
         let (w_after, hub_w_after) = self.w_after()?;
-        let other_us = other_us(&reads, &steps);
+        let other_us = other_us(&reads.targeted, &steps);
         let samples = &self.synthetic.samples;
+        let before = previous.map(|previous| &previous.reads);
         Ok(Measured {
             index,
             check,
-            growth: growth(&reads, previous.map(|previous| &previous.reads)),
+            growth: GrowthOut {
+                targeted: growth(&reads.targeted, before.map(|before| &before.targeted)),
+                whole: whole_growth(&reads.whole, before.map(|before| &before.whole)),
+            },
             growth_trusted: growth_trusted(
                 &reads_trusted,
                 previous.map(|previous| &previous.trusted),
@@ -893,6 +1013,35 @@ impl<'a> Measuring<'a> {
                 get_context_bundle_us: hub_bundle_us,
             },
         ))
+    }
+
+    /// The five whole reads, as MCP calls them (`Capped`), each warmed once
+    /// and timed three times like the four, recorded in `calls` (by the
+    /// head's ID, the stage word, else [`WHOLE`]). Never inside a trust.
+    fn whole_reads(&mut self) -> Result<WholeReads, String> {
+        let session = self.session;
+        let samples = &self.synthetic.samples;
+        let top = Session::flow_request(None, Some(0), None);
+        let flow_top = self.timed(GET_FLOW_TOP, WHOLE, "the whole flow", || session.flow(&top))?;
+        let root = Session::flow_request(Some(&samples.flow_root), Some(1), None);
+        let flow_root = self.timed(GET_FLOW_ROOT, &samples.flow_root, "the head", || {
+            session.flow(&root)
+        })?;
+        let stage = Session::flow_request(None, None, Some(&samples.stage));
+        let flow_stage = self.timed(GET_FLOW_STAGE, &samples.stage, "the stage", || {
+            session.flow(&stage)
+        })?;
+        let trace_summary = self.timed(GET_TRACE_SUMMARY, WHOLE, "the summary", || {
+            session.trace_summary()
+        })?;
+        let tree = self.timed(GET_TREE, WHOLE, "depth 1", || session.tree())?;
+        Ok(WholeReads {
+            get_flow_top: spread(&[flow_top]),
+            get_flow_root: spread(&[flow_root]),
+            get_flow_stage: spread(&[flow_stage]),
+            get_trace_summary: spread(&[trace_summary]),
+            get_tree: spread(&[tree]),
+        })
     }
 
     /// [`Timed::run`] of `read` on `target` (named `what` on failure),
@@ -1197,11 +1346,13 @@ fn other_us(reads: &Reads, steps: &Steps) -> OtherUs {
     }
 }
 
+/// `now` over `before`, two decimals; `None` with no `before` or a 0.
+fn ratio(now: u64, before: Option<u64>) -> Option<f64> {
+    let before = before.filter(|&before| before > 0)?;
+    Some((now as f64 / before as f64 * 100.0).round() / 100.0)
+}
+
 fn growth(reads: &Reads, previous: Option<&Reads>) -> Growth {
-    let ratio = |now: u64, before: Option<u64>| -> Option<f64> {
-        let before = before.filter(|&before| before > 0)?;
-        Some((now as f64 / before as f64 * 100.0).round() / 100.0)
-    };
     Growth {
         get_node: ratio(
             reads.get_node.median_us,
@@ -1215,6 +1366,32 @@ fn growth(reads: &Reads, previous: Option<&Reads>) -> Growth {
         get_context_bundle: ratio(
             reads.get_context_bundle.median_us,
             previous.map(|p| p.get_context_bundle.median_us),
+        ),
+    }
+}
+
+/// [`growth`] of the five whole reads.
+fn whole_growth(reads: &WholeReads, previous: Option<&WholeReads>) -> WholeGrowth {
+    WholeGrowth {
+        get_flow_top: ratio(
+            reads.get_flow_top.median_us,
+            previous.map(|p| p.get_flow_top.median_us),
+        ),
+        get_flow_root: ratio(
+            reads.get_flow_root.median_us,
+            previous.map(|p| p.get_flow_root.median_us),
+        ),
+        get_flow_stage: ratio(
+            reads.get_flow_stage.median_us,
+            previous.map(|p| p.get_flow_stage.median_us),
+        ),
+        get_trace_summary: ratio(
+            reads.get_trace_summary.median_us,
+            previous.map(|p| p.get_trace_summary.median_us),
+        ),
+        get_tree: ratio(
+            reads.get_tree.median_us,
+            previous.map(|p| p.get_tree.median_us),
         ),
     }
 }

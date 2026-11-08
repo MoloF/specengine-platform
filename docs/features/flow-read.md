@@ -11,7 +11,7 @@ adrs: [ADR-0047, ADR-0055]
 
 ## Why
 
-`spec graph` walks from one REF and knows no groups or gaps. One flowchart is not enough either: sequence, reuse, supply and requirement mean different things, so the read returns typed edges and a screen picks what it draws. Gaps are computed rows; they stop nothing (ADR-0012, ADR-0047).
+`spec graph` walks from one REF and knows no groups or gaps. One flowchart is not enough either: sequence, reuse and supply mean different things, so the read returns typed edges and a screen picks what it draws. Gaps are computed rows; they stop nothing (ADR-0012, ADR-0047).
 
 ## Summary
 
@@ -27,14 +27,14 @@ Gap rows first, all ten in table order, then nodes and edges. JSON, every key pr
 
 ### Steps
 
-Steps: `[[flow.step]]`'s, every document holding or receiving `follows`, the starts and ends. A live document's `follows` that does not resolve (dangling, another project's) gives no edge and keeps the document a step; an unresolved `uses`, `supplies` or `depends_on` does not. A step whose only `follows` is unresolved, with no marked start, is a derived start with distance 0.
+Steps: `[[flow.step]]`'s, every document holding or receiving `follows`, the starts and ends. A live document's `follows` that does not resolve (dangling, another project's) gives no edge and keeps the document a step; an unresolved `uses` or `supplies` does not. A step whose only `follows` is unresolved, with no marked start, is a derived start with distance 0.
 
 `unjoined-parallel` walks only splits of two or more branches, breadth-first, one step per branch in turn, stopping at the first step all branches reached; a one-branch split is listed with no walk; a split with no join still walks each branch to its end.
 
 ## Acceptance criteria
 
 - [x] AC-01 — The walk. `spec flow --root fixtures/flow-relay`: exit 0, first line `flow all | nodes 8, edges 10, depth -`; LEG-START, LEG-DRAW, LEG-RUN, LEG-FALL, LEG-SCORE, LEG-END at distance 0 to 4, then KIT-OIL, KIT-TORCH at `-`; seven rows `not_configured`, three `measured` at 0; identical bytes from copies in opposite file orders. M1: without the sort nodes fall back to path order, so the copies still match and the order pins go red.
-- [x] AC-02 — Typed edges. `--json` on flow-gaps holds all four types; a `follows` edge has `from` its target, any other `from` its source. M2: `from` always the link's source turns `LEG-START -> LEG-DRAW` red.
+- [x] AC-02 — Typed edges. `--json` on flow-gaps holds the three types, `follows`, `uses` and `supplies` (four, with `depends_on`, until `flow-scope`, RM-0083, returned to ADR-0055's three); a `follows` edge has `from` its target, any other `from` its source. M2: `from` always the link's source turns `LEG-START -> LEG-DRAW` red.
 - [x] AC-03 — Planted gaps. `spec flow WING-BROKEN --root fixtures/flow-gaps`: exit 0, rows in order at `0, 1, 1, 2, 1, 1, 1, 3, 1, 1`: `two-starts` LND-A + LND-B; `unreachable` LND-STRAY; `no-way-to-end` LND-DEAD, LND-STRAY; `trap-cycle` LND-TRAP-A + LND-TRAP-B; `unjoined-parallel` LND-B; `cycle-no-repeat` LND-SPIN-A + LND-SPIN-B; `definition-unused` PLT-FEED-A, PLT-FEED-B, PLT-UNUSED; `definition-once` PLT-ONCE; `supply-unfed` PLT-FEED-A + PLT-FEED-B. `spec flow WING-HEADLESS`: `no-start` names it, `unreachable` `cannot`.
 - [x] AC-04 — Loops are not gaps. `spec flow WING-LEND`: ten rows `measured` at 0, LND-OPEN `end` with its `repeat` edge listed; flow-relay with a scratch `[flow]` by `paths`: the same. M3: keeping `repeat` edges in `cycle-no-repeat` turns both red. M4: calling every cycle a trap turns WING-LEND red.
 - [x] AC-05 — Lifted edges. `spec flow WING-LIBRARY --depth 1`: `nodes 4`, one edge `WING-LEND -> WING-BROKEN | follows | x2`. At depths 0, 1, 2 and unbounded, per type the edges' `count` plus the nodes' `inner` is equal, and the gap rows are byte-equal. M5: counting a merged pair once gives `x1`.

@@ -11,7 +11,7 @@ adrs: []
 
 ## Why
 
-Every read parses the whole corpus and resolves every link to answer for one node: at 100 000 nodes, reparse, decode, graph and resolver take 1.2 s of a 1.6 s bundle (`docs/canon/scale-eval.md` "Baseline"). RM-0079 can read a subset from the index only if the edges are already there. This slice stores core's resolution in the index, kept equal to a rebuild row for row, with `INDEX_FORMAT` 16. Reads do not change.
+Every read parses the whole corpus and resolves every link to answer for one node: at 100 000 nodes, reparse, decode, graph and resolver take 1.2 s of a 1.6 s bundle (`docs/features/scale-eval.md` "Baseline"). RM-0079 can read a subset from the index only if the edges are already there. This slice stores core's resolution in the index, kept equal to a rebuild row for row, with `INDEX_FORMAT` 16. Reads do not change.
 
 Decided here, each awaiting the owner's review:
 - **D1:** core resolves (`check::resolve_files`, `SpecGraph::build`'s per-file routine), and the store only stores.

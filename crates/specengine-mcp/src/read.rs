@@ -5,8 +5,9 @@
 //! --symbol QPATH | --since REV [--depth N]`, exactly one of `id`, `symbol`
 //! and `since` told at run time before any discovery, as `find_symbols`'
 //! forms), `get_trace` (task spec `card-trace`: `spec trace [REF]`) and
-//! `get_flow` (task specs `flow-read`, `trace-views`: `spec flow [ROOT]
-//! [--depth N] [--trace]`), each one call into the CLI library.
+//! `get_flow` (task specs `flow-read`, `trace-views`, `flow-scope`: `spec
+//! flow [ROOT] [--depth N] [--stage S] [--trace]`), each one call into the
+//! CLI library.
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
@@ -269,8 +270,9 @@ writes nothing under the project root. Deterministic: one state, one result; no 
 
 const FLOW_DESCRIPTION: &str = concat!(
     "What a flow diagram draws over the project's spec: ten gap rows, the documents in reading \
-order, and the typed edges between them. The same as `spec flow [ROOT] [--depth N] [--trace]`: \
-content is the command's output (its note lines first), structuredContent its --json document.
+order, and the typed edges between them. The same as \
+`spec flow [ROOT] [--depth N] [--stage S] [--trace]`: content is the command's output (its note \
+lines first), structuredContent its --json document.
 
 root: read this REF's documents and every document within them by `parent:`; any REF get_node \
 takes, a section landing on its document. Absent: every live document holding or receiving a \
@@ -281,7 +283,7 @@ count. Absent: unbounded.
 trace: true: each node's `rollup` and `counts`, get_trace's; `null` without it. A queue that \
 cannot be read leaves them `null` with a note, never an error.
 
-An edge is a link of follows, uses, supplies or depends_on with both ends in scope; `from` and \
+An edge is a link of follows, uses or supplies with both ends in scope; `from` and \
 `to` give the reading direction, so a screen picks by `type` what it shows. `distance` counts \
 follows links from the starts, the least of what a node holds, null where none is reached; \
 `group` is the node's parent, `stage` its own `stage:` key; `start` and `end` are true when it or \
@@ -696,6 +698,8 @@ pub(crate) struct FlowArgs {
     pub root: Option<String>,
     /// Levels below the roots at most; 0 = the roots only. Absent: unbounded.
     pub depth: Option<i64>,
+    /// Keep the nodes of this stage; `-`: the flow steps with none. The gap rows stay whole.
+    pub stage: Option<String>,
     /// Each node's `rollup` and `counts`, as `get_trace` reads them.
     pub trace: Option<bool>,
 }
@@ -854,6 +858,7 @@ impl SpecEngineServer {
         let request = FlowRequest {
             root: args.root,
             depth: args.depth,
+            stage: args.stage,
             trace: args.trace.unwrap_or(false),
         };
         Ok(self

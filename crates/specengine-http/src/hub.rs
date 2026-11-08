@@ -40,7 +40,7 @@ use futures_util::{Stream, StreamExt as _};
 use specengine_cli::{TeamConfig, TeamEntry, hub_login_problem, team_read};
 
 use crate::answer::{self, Refusal};
-use crate::app::single;
+use crate::app::{SEC_FETCH_SITE, landing, single};
 use crate::start::Project;
 
 /// The proxy's one login header: a constant, so no flag can name a header
@@ -65,10 +65,6 @@ pub(crate) fn lived<S: Stream>(stream: S, life: Option<Duration>) -> impl Stream
         None => Either::Right(stream),
     }
 }
-
-const SEC_FETCH_SITE: HeaderName = HeaderName::from_static("sec-fetch-site");
-const SEC_FETCH_MODE: HeaderName = HeaderName::from_static("sec-fetch-mode");
-const SEC_FETCH_DEST: HeaderName = HeaderName::from_static("sec-fetch-dest");
 
 /// The last segment of a card's plain writes.
 const WRITES: [&str; 4] = ["move", "edit", "assign", "cancel"];
@@ -290,17 +286,6 @@ fn loopback(host: &str) -> bool {
         || host
             .parse::<Ipv4Addr>()
             .is_ok_and(|address| address.is_loopback() || address.is_unspecified())
-}
-
-/// The one exception to `Sec-Fetch-Site`: a top-level navigation to `/`, as
-/// the login door and a chat link arrive. Static bytes, and `/` still takes
-/// the rest of the fence; an asset, a frame, any API route or method never
-/// qualifies.
-fn landing(method: &Method, path: &str, headers: &HeaderMap) -> Result<bool, String> {
-    Ok(method == Method::GET
-        && path == "/"
-        && single(headers, &SEC_FETCH_MODE, "Sec-Fetch-Mode")? == Some(b"navigate".as_slice())
-        && single(headers, &SEC_FETCH_DEST, "Sec-Fetch-Dest")? == Some(b"document".as_slice()))
 }
 
 /// The one `Remote-User`, judged: UTF-8, then the library's

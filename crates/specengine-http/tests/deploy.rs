@@ -2979,36 +2979,43 @@ fn d15_tag_check_takes_v_and_the_plugins_version_exactly() {
 }
 
 /// docs/features/hub-ops.md "Acceptance criteria" OP6, and "Decisions" S11:
-/// no version moves. `.env.example`'s `SPECENGINE_VERSION` and
-/// `plugin.json`'s version are both 0.29.1; `tag-check.sh` accepts `v0.29.1`
-/// and refuses `v0.29.2`; `image.yml`'s check job runs it as its first step,
-/// before any cargo line. M: `.env.example` at 0.29.2; `plugin.json` alone
-/// bumped; the `tag-check.sh` step moved after the tests.
+/// no version moves without the plugin. `.env.example`'s
+/// `SPECENGINE_VERSION` is `plugin.json`'s version; `tag-check.sh` accepts
+/// exactly `v<that version>` and refuses its neighbours, the next patch and
+/// `v0.29.1`, hub-ops' own (S11 held 0.29.1 for that slice; since
+/// docs/features/flow-scope.md FS-6 the plugin is 0.30.0, the orchestrator's
+/// MINOR of 2026-11-08); `image.yml`'s check job runs it as its first step,
+/// before any cargo line. M: `.env.example` moved alone; `plugin.json`
+/// alone bumped; the `tag-check.sh` step moved after the tests.
 #[test]
 fn op06_no_version_moves() {
-    assert_eq!(
-        plugin_version(),
-        "0.29.1",
-        "plugin.json stays at 0.29.1 (S11)"
-    );
+    let version = plugin_version();
     let versions: Vec<String> = env_example()
         .into_iter()
         .filter(|(key, _)| key == "SPECENGINE_VERSION")
         .map(|(_, value)| value)
         .collect();
-    assert_eq!(versions, ["0.29.1"], ".env.example stays at 0.29.1 (S11)");
+    assert_eq!(
+        versions,
+        std::slice::from_ref(&version),
+        ".env.example moves with plugin.json (S11)"
+    );
 
     let script = deploy().join("tag-check.sh");
     let scratch = Scratch::new("op06");
     let elsewhere = scratch.dir("elsewhere");
-    let ran = tag_check(&script, "v0.29.1", &elsewhere);
+    let ran = tag_check(&script, &format!("v{version}"), &elsewhere);
     assert_eq!(ran.code, 0, "{}", ran.show());
-    assert_eq!(ran.stdout, "0.29.1\n");
-    refused_tag(
-        &tag_check(&script, "v0.29.2", &elsewhere),
-        "v0.29.2",
-        "0.29.1",
-    );
+    assert_eq!(ran.stdout, format!("{version}\n"));
+    let parts: Vec<u64> = version
+        .split('.')
+        .map(|part| part.parse().expect("N.N.N"))
+        .collect();
+    let next = format!("v{}.{}.{}", parts[0], parts[1], parts[2] + 1);
+    for tag in [next.as_str(), "v0.29.1"] {
+        assert_ne!(tag, format!("v{version}"), "a neighbour, not the version");
+        refused_tag(&tag_check(&script, tag, &elsewhere), tag, &version);
+    }
 
     let workflow = workflow();
     let runs: Vec<&str> = steps(at(&workflow, &["jobs", "check"]))

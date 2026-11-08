@@ -1,9 +1,14 @@
-//! `spec flow [ROOT] [--depth N] [--trace]` (task specs `flow-read`,
-//! `trace-views`): what a flow diagram draws, over the index-fed spec graph
-//! and `[flow]`, read here alone. Core's [`flow_read`] finds the scope, the
-//! typed edges, the walk and the ten gap rows; this file resolves `ROOT`,
-//! bounds and prints. `--trace` joins `spec trace`'s `rollup` and `counts`
-//! to each shown node here: core's read stays pure and reads no queue.
+//! `spec flow [ROOT] [--depth N] [--stage S] [--trace]` (task specs
+//! `flow-read`, `trace-views`, `flow-scope`): what a flow diagram draws,
+//! over the index-fed spec graph and `[flow]`, read here alone. Core's
+//! [`flow_read`] finds the scope, the typed edges, the walk and the ten gap
+//! rows, and cuts the shown nodes to `--stage`'s after the fold; this file
+//! resolves `ROOT`, maps `-` to the steps with no stage, bounds and prints.
+//! `--trace` joins `spec trace`'s `rollup` and `counts` to each shown node
+//! here, over every node the read without `--stage` shows, so a stage moves
+//! no note: core's read stays pure and reads no queue. A stage echoes
+//! nothing: the header and the JSON keys are the read's, counting what is
+//! kept.
 //!
 //! ```text
 //! flow <ROOT or all> | nodes <n>, edges <e>, depth <N or ->[; left out: …]
@@ -25,13 +30,14 @@
 //! outside `[flow]`, no `HOME`, a store error. A bad `[flow]` table is a
 //! row's cause, never an exit; a queue `--trace` cannot read, a note.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Serialize;
 use specengine_core::check::{NodeAt, SpecGraph};
 use specengine_core::trace::{Rollup, RollupCounts};
 use specengine_core::{
-    FlowAsk, FlowConfig, FlowEdge, FlowGap, FlowNeed, FlowNode, GapCause, GapCode, flow_read,
+    FlowAsk, FlowConfig, FlowEdge, FlowGap, FlowNeed, FlowNode, FlowStage, GapCause, GapCode,
+    flow_read,
 };
 
 use crate::cap::{View, lines_within};
@@ -40,7 +46,7 @@ use crate::location::open_index;
 use crate::project::discover_with_text;
 use crate::search::notes;
 use crate::show::classify;
-use crate::trace::{TraceBadge, flow_badges};
+use crate::trace::{NO_STAGE, TraceBadge, flow_badges};
 use crate::{CliError, Env, Globals, Message, one_line};
 
 /// The most items a gap row prints, and its JSON lists, when capped.
@@ -56,8 +62,21 @@ pub struct FlowRequest {
     pub root: Option<String>,
     /// `--depth N`; `None`: unbounded.
     pub depth: Option<i64>,
+    /// `--stage S`: keep the shown nodes of this stage, byte for byte, `-`
+    /// the flow steps with none; `None`: every shown node.
+    pub stage: Option<String>,
     /// `--trace`: each shown node's `rollup` and `counts`.
     pub trace: bool,
+}
+
+impl FlowRequest {
+    /// `--stage` as core's cut.
+    fn stage(&self) -> Option<FlowStage<'_>> {
+        self.stage.as_deref().map(|stage| match stage {
+            NO_STAGE => FlowStage::Unstaged,
+            named => FlowStage::Named(named),
+        })
+    }
 }
 
 /// What `spec flow` read, or why `ROOT` names nothing (exit 1).
@@ -168,6 +187,7 @@ pub fn flow_with_view(
         &FlowAsk {
             roots: roots.as_deref(),
             depth,
+            stage: request.stage(),
             config: &config,
             config_label: &project.config_label,
             scope_name: outcome.root.as_deref().unwrap_or(ALL),
@@ -177,16 +197,21 @@ pub fn flow_with_view(
         outcome.left_out.add(graph.standing(file));
     }
     if request.trace {
-        let files: Vec<usize> = read.nodes.iter().map(|node| node.file).collect();
+        // Over every node the read without `--stage` shows: a rooted read's
+        // notes name the cards of what they hold, and a stage moves none.
         outcome.badges = flow_badges(
             env,
             &open.slug,
             &open.index,
             &graph,
-            &files,
+            &read.shown,
             roots.is_none(),
             &mut messages,
         );
+        if request.stage.is_some() {
+            let kept: BTreeSet<usize> = read.nodes.iter().map(|node| node.file).collect();
+            outcome.badges.retain(|file, _| kept.contains(file));
+        }
     }
     outcome.gaps = read.gaps;
     outcome.nodes = read.nodes;

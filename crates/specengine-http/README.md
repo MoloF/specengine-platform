@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-09
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -18,7 +18,7 @@ Dependencies: `specengine-cli` (never the store or `rusqlite`; no reverse edge),
 
 ## Fence
 
-Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`; any of them sent twice -> 403. No authentication (ADR-0034). No `Access-Control-*` header on any response, `OPTIONS` included; `Cache-Control: no-store` on every one. A hub, `--public-origin`, has its own: `hub.md`.
+Around the whole router (`app.rs` `fence`), failing -> 403 without `Allow`, nothing read: `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin` absent or `http://` + one of them; `Sec-Fetch-Site` absent, `same-origin` or `none`, but for the landing (`serve-ui.md` "Rules"); any sent twice -> 403. No authentication (ADR-0034). No `Access-Control-*` header, `OPTIONS` included; `Cache-Control: no-store` always. A hub's, `--public-origin`: `hub.md`.
 
 Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 405 `Allow: GET`; the decision route POST and DELETE, else 405 `Allow: POST, DELETE`, `round/answers` POST, else `Allow: POST`, both ending ``confirmed on a terminal``; the card routes `board-ui.md`'s; an unknown path -> 404 listing the routes (the web UI's last), whatever the method.
 
@@ -35,7 +35,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
 | GET `.../bundle` | `node_ids`, `budget` | `spec bundle --json` |
 | GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json`, browser view |
-| GET `.../flow` | `root`, `depth`, `trace` | `spec flow --json`, browser view |
+| GET `.../flow` | `root`, `depth`, `stage`, `trace` | `spec flow --json`, browser view |
 | GET `.../check` | -- | `spec check --json`, the plain run |
 | GET `.../health` | -- | `spec health --json` (`health*.md`) |
 | GET `.../roadmap` | `release`, `pool` | `spec roadmap --json`, browser view |
@@ -65,9 +65,7 @@ One CLI library call per request (`answer.rs`: the process's `Env`, `Globals {ro
 
 ## Live tail
 
-`GET .../events` (`tail.rs`): the project slug's queue `events` only. A stream opens with one poll (a newer build's queue or a changed slug: 503), then `id: <start>` and a blank line, so one dropped before its first event resumes there. `<start>`: the highest `seq` now (0 without a database), or `Last-Event-ID` when not above it (above: a new database, the highest). Per event `id: <seq>`, `event: <type>`, `data: <payload>` (the stored JSON, one line), a blank line; a `:` comment every 15 s. No `Last-Event-ID`: no replay; `Last-Event-ID: n`: exactly `seq > n`, at once; not a non-negative decimal integer, or sent twice -> 400. On a hub it ends after 300 s (`serve.md` "Live tail").
-
-Types and polls: `serve.md` "Live tail".
+`GET .../events` (`tail.rs`): the project slug's queue `events` only. A stream opens with one poll (a newer build's queue or a changed slug: 503), then `id: <start>` and a blank line, so one dropped before its first event resumes there. `<start>`: the highest `seq` now (0 without a database), or `Last-Event-ID` when not above it (above: a new database, the highest). Per event `id: <seq>`, `event: <type>`, `data: <payload>` (the stored JSON, one line), a blank line; a `:` comment every 15 s. No `Last-Event-ID`: no replay; `Last-Event-ID: n`: exactly `seq > n`, at once; not a non-negative decimal integer, or sent twice -> 400. On a hub it ends after 300 s; types and polls: `serve.md` "Live tail".
 
 ## Concurrency
 

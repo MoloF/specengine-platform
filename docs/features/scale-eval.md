@@ -58,7 +58,7 @@ M names the mutations that must turn each red. Every named mutation turned red b
 - [x] SE-7 [default, eval] The child's empty `HOME` stays empty, and the database lies under the size's `home` directory.
   - M: `Env::from_process` (killed at run time); `process_git` (killed by the static scan of the sources only).
 - [x] SE-8 [default, eval] Each `other_us` is recomputed from the printed numbers. M: a step dropped from a read's sum; `walk_us` added on top of `update_us`.
-- [x] SE-9 [manual, release] `scale_baseline` (`#[ignore]`) ran once: the three sizes, `--timeout 3600`, 131 s. It made SE-5's structural checks at each size and asserted no time. The figures are in the canon page's "Baseline".
+- [x] SE-9 [manual, release] `scale_baseline` (`#[ignore]`) ran once: the three sizes, `--timeout 3600`, 131 s. It made SE-5's structural checks at each size and asserted no time. The figures: "Baseline" below.
 - [x] F1 — form.
   - Clippy and fmt are clean, and 4 924 of 4 924 workspace tests pass. `build_graph.rs` and `doc_pointers.rs` pass.
   - No `docs/`, fixture or `Cargo.toml` change.
@@ -97,3 +97,31 @@ At 100 000 nodes the reads take 705, 1 638, 424 and 1 613 ms (`get_node`, with l
 | eval `src/harness.rs` | `repository_dir`, which `fixture_dir` now uses, and `repository_root`, canonicalised; `is_single_component` becomes `pub(crate)` |
 | eval `src/w.rs` | `nearest_rank` becomes `pub(crate)` |
 | eval `tests/scale_cli.rs` | SE-1 to SE-8 in 15 tests; `scale_baseline` `#[ignore]` (SE-9) |
+
+### Baseline
+
+The numbers before 12c-12e, on the corpus with no flow shape (moved here from the canon page by `flow-scope`, whose run replaced them there): 2026-11-04, the owner's laptop, release, seed 1, budget 10 000, `c2847ca` plus the slice, `wall_ms` 130 786.
+
+| Read, median ms (max) | 1k | 10k | 100k | growth 10k to 100k |
+|---|---|---|---|---|
+| `get_node` | 7.06 (7.07) | 64.2 (64.5) | 705 (708) | 10.99 |
+| `get_node_links` | 15.7 (15.7) | 150 (150) | 1 638 (1 649) | 10.93 |
+| `search` | 5.23 (5.35) | 38.6 (38.8) | 424 (426) | 10.98 |
+| `get_context_bundle` | 15.6 (15.7) | 149 (149) | 1 613 (1 615) | 10.83 |
+
+| Step, ms | 1k | 10k | 100k |
+|---|---|---|---|
+| open | 0.36 | 0.37 | 0.38 |
+| walk | 0.56 | 1.60 | 12.4 |
+| hash | 3.54 | 34.1 | 393 |
+| update | 4.32 | 36.7 | 421 |
+| decode | 1.88 | 22.4 | 249 |
+| reparse | 7.80 | 75.6 | 798 |
+| resolver | 0.11 | 1.42 | 22.0 |
+| graph | 0.71 | 9.02 | 128 |
+| fts | 0.44 | 1.03 | 6.08 |
+| other: node, links, search, bundle | 0.38, 0.51, 0.11, 0.54 | 3.28, 4.36, 0.50, 4.81 | 13.4, 20.3, 0, 17.6 |
+
+At 100k: reads linear, about 11x from 10k; a bundle's reparse 49 %, update (hashing) 26 %, decode 15 %, graph 8 %; 20 015 files, 22.9 MB, 101 746 links, 3 973 Tier 3, in-degree at most 15; build 9.43 s, check 0.92 s, 0 findings; 5 to 8 hits per query. W_after's median is 2 210, 2 182 and 2 239 B at 1k, 10k and 100k, within 10 % already; at 100k the p90 2 695, the max 2 936, Tier 0 1 021 B, the largest Tier 1 700 B. The hub at 100k: in-degree 533, 441 links shown, `get_node_links` 1.64 s, bundle 1.62 s, W_after 2 646 B.
+
+12d's before and after: `docs/features/store-reads.md` SR-4. **After 12e** (`read-trust`; base `7c0ca35`, 12d's head, and head in one session), 100k, trusted: `get_node` 0.55, links 0.85, `search` 6.5, bundle 2.4 ms, hub 23.7 and 124; walking 43-50; `update_us` 41.9, none hashed; growth 1.00 (`read-trust` AC-13).

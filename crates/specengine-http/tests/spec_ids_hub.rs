@@ -25,7 +25,8 @@
 //! - AC-8 (a), the wire `ac8a_*`: `tools/list` over stdio and over a hub's
 //!   `/mcp` shows "The MCP texts", ASCII, at 2044 and 2040 bytes. (d)
 //!   `ac8d_*`: `tag-check.sh v0.29.1` exits 0 printing `0.29.1`, and
-//!   `.env.example` names the version.
+//!   `.env.example` names the version; since docs/features/flow-scope.md
+//!   (FS-6, the plugin's MINOR to 0.30.0) the tag is `v0.30.0`.
 //!
 //! Every expected value is worked out from docs/features/spec-ids.md, never
 //! read back from a run.
@@ -863,9 +864,12 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
 
 /// docs/features/spec-ids.md "Acceptance criteria" AC-8 (d) and
 /// "Data", "The plugin": `sh scripts/deploy/tag-check.sh v0.29.1` exits 0 and prints
-/// `0.29.1`; `.env.example` sets `SPECENGINE_VERSION=0.29.1`.
+/// `0.29.1`; `.env.example` sets `SPECENGINE_VERSION=0.29.1`. Since
+/// docs/features/flow-scope.md FS-6 (`get_flow`'s `stage`, the
+/// orchestrator's MINOR of 2026-11-08) the plugin, the tag and the example
+/// are 0.30.0.
 #[test]
-fn ac8d_the_release_tag_is_v0_29_1() {
+fn ac8d_the_release_tag_is_the_plugin_version() {
     let scratch = common::Scratch::new("si-tag");
     let elsewhere = scratch.dir("elsewhere");
     let script = repository_root().join("scripts/deploy/tag-check.sh");
@@ -875,7 +879,7 @@ fn ac8d_the_release_tag_is_v0_29_1() {
     ];
     let output = alarmed(
         Path::new("/bin/sh"),
-        &[script.as_os_str(), OsStr::new("v0.29.1")],
+        &[script.as_os_str(), OsStr::new("v0.30.0")],
         &env,
     )
     .current_dir(&elsewhere)
@@ -887,13 +891,13 @@ fn ac8d_the_release_tag_is_v0_29_1() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.29.1\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.30.0\n");
     let example = read_text(&repository_root(), "scripts/deploy/.env.example");
     assert_eq!(
         example
             .lines()
             .filter(|line| line.starts_with("SPECENGINE_VERSION="))
             .collect::<Vec<_>>(),
-        ["SPECENGINE_VERSION=0.29.1"]
+        ["SPECENGINE_VERSION=0.30.0"]
     );
 }

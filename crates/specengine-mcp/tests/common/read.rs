@@ -809,7 +809,8 @@ pub fn code_library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> E
 /// CLI's usage error, exit 2); `get_impact` = `spec impact [REF] [--symbol
 /// QPATH] [--since REV] [--depth N]` with the server's git environment,
 /// not exactly one non-null of `id`, `symbol` and `since` the tool's
-/// [`GET_IMPACT_ONE_FORM`]; `get_flow` = `spec flow [ROOT] [--depth N]`;
+/// [`GET_IMPACT_ONE_FORM`]; `get_flow` = `spec flow [ROOT] [--depth N]
+/// [--stage S] [--trace]`;
 /// `get_trace` = `spec trace [REF]`.
 pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expected {
     if CODE_TOOLS.contains(&tool) {
@@ -948,6 +949,8 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
             &FlowRequest {
                 root: text("root"),
                 depth: number("depth"),
+                // docs/features/flow-scope.md FS-6: `stage` as given.
+                stage: text("stage"),
                 trace: args["trace"] == json!(true),
             },
         )

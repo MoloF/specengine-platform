@@ -19,6 +19,12 @@
 //! CLI's bytes within the schema either way, `null` with no flag, a node's
 //! values `get_trace`'s, folded or not; a queue of another schema a note.
 //!
+//! docs/features/flow-scope.md (RM-0083) FS-6, the tool: `get_flow
+//! {stage}` is the CLI library's `spec flow --stage S` within the schema,
+//! `-` its flow steps with none, on a scratch copy of
+//! `fixtures/trace-almanac`; the input schema gains `stage` with its spec
+//! text, and a wrong type is a bad argument. M9: `FlowArgs.stage` dropped.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -463,6 +469,8 @@ fn get_flow_answers_on_every_project() {
 /// The tool is a read: listed with a reader's hints, flat in `root` and
 /// `depth`, both optional; a wrong type or an unknown field is the bad
 /// arguments result; a call writes nothing under the project.
+/// docs/features/flow-scope.md FS-6: the schema gains `stage`, optional,
+/// with its spec text; a stage of another type is a bad argument.
 #[test]
 fn the_tool_is_a_flat_read_that_writes_nothing() {
     let project = Project::new("flow-gaps");
@@ -483,7 +491,19 @@ fn the_tool_is_a_flat_read_that_writes_nothing() {
             .keys()
             .collect();
         names.sort();
-        assert_eq!(names, ["depth", "root", "trace"], "{era:?}: {input}");
+        assert_eq!(
+            names,
+            ["depth", "root", "stage", "trace"],
+            "{era:?}: {input}"
+        );
+        assert_eq!(
+            input["properties"]["stage"]["description"],
+            json!(
+                "Keep the nodes of this stage; `-`: the flow steps with none. The gap rows stay \
+                 whole."
+            ),
+            "{era:?}: FS-6, the spec's text: {input}"
+        );
         assert_eq!(
             input
                 .get("required")
@@ -509,6 +529,8 @@ fn the_tool_is_a_flat_read_that_writes_nothing() {
         for args in [
             json!({"root": 7}),
             json!({"depth": "1"}),
+            json!({"stage": 7}),
+            json!({"stage": ["gather"]}),
             json!({"type": "follows"}),
             json!({"archive": true}),
             json!({"bogus": 1}),
@@ -541,4 +563,84 @@ fn the_instructions_name_get_flow_within_their_limit() {
     );
     assert!(instructions.len() <= 2048, "{}", instructions.len());
     assert!(instructions.is_ascii());
+}
+
+// ------------------------------------------------------------------ FS-6
+
+/// The node IDs of a document, in its order.
+fn ids(document: &Value) -> Vec<&str> {
+    document["nodes"]
+        .as_array()
+        .expect("nodes")
+        .iter()
+        .map(|node| node["id"].as_str().expect("an id"))
+        .collect()
+}
+
+/// docs/features/flow-scope.md FS-6, the tool: `{stage: "gather"}` is `spec
+/// flow --stage gather` (the library's text and document, both eras, within
+/// the schema): STEP-CALL and STEP-SORT and their one edge, the ten rows of
+/// the whole read; `-` is STEP-READ alone; a stage nothing carries is no
+/// error; `null` is the whole read. M9: `FlowArgs.stage` dropped (a bad
+/// argument, or the whole read answered).
+#[test]
+fn fs6_get_flow_takes_a_stage() {
+    let project = Project::new("trace-almanac");
+    let results = parity(
+        &project,
+        &[
+            json!({}),
+            json!({"stage": "gather"}),
+            json!({"stage": "-"}),
+            json!({"stage": "bind"}),
+            json!({"stage": null}),
+            json!({"stage": "gather", "trace": true}),
+            json!({"root": "PART-PRINT", "depth": 1, "stage": "gather"}),
+        ],
+    );
+    for result in &results {
+        assert_eq!(result["isError"], json!(false), "{result}");
+    }
+    let whole = &results[0]["structuredContent"];
+    let gather = &results[1]["structuredContent"];
+    assert_eq!(ids(gather), ["STEP-CALL", "STEP-SORT"], "{gather}");
+    assert_eq!(
+        gather["edges"],
+        json!([{"from": "STEP-CALL", "to": "STEP-SORT", "type": "follows", "kind": null,
+            "when": null, "count": 1, "path": "docs/spec/step-sort.md", "line": 10}]),
+        "{gather}"
+    );
+    assert_eq!(node_of(gather, "STEP-CALL")["group"], "PART-GATHER");
+    assert_eq!(node_of(gather, "STEP-SORT")["group"], "PART-PRINT");
+    assert!(
+        content_text(&results[1]).starts_with("flow all | nodes 2, edges 1, depth -\n"),
+        "{}",
+        content_text(&results[1])
+    );
+    for (at, result) in results.iter().enumerate().take(4).skip(1) {
+        let document = &result["structuredContent"];
+        for key in ["gaps", "left_out", "notes", "root", "reason", "depth"] {
+            assert_eq!(document[key], whole[key], "call {at}: `{key}` stands");
+        }
+    }
+    let unstaged = &results[2]["structuredContent"];
+    assert_eq!(ids(unstaged), ["STEP-READ"], "{unstaged}");
+    assert_eq!(unstaged["edges"], json!([]), "{unstaged}");
+    let unused = &results[3]["structuredContent"];
+    assert_eq!(unused["nodes"], json!([]), "{unused}");
+    assert_eq!(unused["edges"], json!([]), "{unused}");
+    assert_eq!(unused["gaps"].as_array().map(Vec::len), Some(10));
+    assert_eq!(
+        results[4]["structuredContent"], *whole,
+        "`stage: null` is the whole read"
+    );
+    let traced = &results[5]["structuredContent"];
+    assert_eq!(ids(traced), ["STEP-CALL", "STEP-SORT"], "{traced}");
+    assert_eq!(
+        node_of(traced, "STEP-CALL")["rollup"],
+        "no card",
+        "{traced}"
+    );
+    let folded = &results[6]["structuredContent"];
+    assert_eq!(ids(folded), ["STEP-SORT"], "the fold first: {folded}");
 }

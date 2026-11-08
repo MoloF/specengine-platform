@@ -32,7 +32,7 @@ No file format, table, JSON key, flag, config key, route or fixture changes; `IN
 
 The decision, worked (budget 2): body `abc` is 3 characters and 1 050 thousandths, part ` d` is 2 and 500. Together they make 1 550, which is 2 tokens and fits. Rounded per part they would make 2 + 1 = 3 and be refused. Characters are counted, not bytes: `\u{0434}` is 1 character and 2 bytes.
 
-The golden `crates/specengine-cli/tests/flow_linear_before.json` (661 KB) was recorded with `e863186`. It holds 89 `flow` and `trace` rows as bytes and 476 `bundle` rows as BLAKE3 digests of text, JSON, stderr and exit codes.
+The golden `crates/specengine-cli/tests/flow_linear_before.json` (661 KB) was recorded with `e863186`, and re-recorded by `flow-scope` (RM-0083, FS-8) at 659 KB: 14 flow-gaps rows lost only their `depends_on` edge, its header count and `inner` count. It holds 89 `flow` and `trace` rows as bytes and 476 `bundle` rows as BLAKE3 digests of text, JSON, stderr and exit codes.
 
 ## Rules and edge cases
 

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-09
 ---
 
 # Hub mode: a public origin and one trusted login
@@ -40,7 +40,7 @@ refused: Remote-User: <why>
 refused: this hub does not serve this route
 ```
 
-**The landing.** One exception, for the hub alone: `GET /` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` passes step 3 whatever `Sec-Fetch-Site` says. The login door's page, on a sibling subdomain, navigates back as `same-site`, a chat link arrives as `cross-site`, and refusing them lands a person on a JSON 403. The page is static bytes and `frame-ancestors 'none'` stands (`serve-ui.md`). Every other route, `/assets/<file>` included, refuses both, and `/` takes the rest of the fence.
+**The landing.** One exception: `GET /` with `Sec-Fetch-Mode: navigate` and `Sec-Fetch-Dest: document` passes step 3 whatever `Sec-Fetch-Site` says. The login door's page, on a sibling subdomain, navigates back as `same-site`, a chat link arrives as `cross-site`, and refusing them lands a person on a JSON 403. The page is static bytes and `frame-ancestors 'none'` stands (`serve-ui.md`). Every other route, `/assets/<file>` included, refuses both, and `/` takes the rest of the fence.
 
 ## Identity
 

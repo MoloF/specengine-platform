@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-09
 ---
 
 # spec index: core's resolved edges, kept incrementally
@@ -113,6 +113,6 @@ Deleting `stamina.md`: N is `name:AC-01` and its path, A is `docs/b.md` (`resolv
 
 - `resolve_files` runs without `catch_unwind`: a core panic on stored input would fail every update, where it failed one read. Resolution is trusted not to panic, as `spec check` is (awaiting the owner).
 - **Hub fan-out.** A file citing every document, such as a generated `index*.md`, depends on every `path:` key: any edit puts it in A and its fan-out in S. At 100 000 nodes `update_paths` of one edited leaf took 409 ms beside such a file and 519 ms of that file, against 7.0 ms without one (`read-trust` AC-14, release, best of 3): under 1 s, no plan item.
-- The full pass holds the write lock while it resolves, about 0.4 s at 100 000 nodes (decode 249 ms, graph 128 ms, `scale-eval.md` "Baseline") plus the inserts.
+- The full pass holds the write lock while it resolves, about 0.45 s at 100 000 nodes (decode 288 ms, graph 156 ms, `scale-eval.md` "Baseline") plus the inserts.
 - The `probe_paths` memo is keyed by spelling: on case-insensitive APFS a directory may be listed once per spelling, the answers unchanged.
 - `project:` stays `Skipped`.

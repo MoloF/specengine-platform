@@ -1811,6 +1811,7 @@ fn whole_read(place: &Place, command: &str, reference: &str) -> String {
             &FlowRequest {
                 root: None,
                 depth: None,
+                stage: None,
                 trace: false,
             },
         )

@@ -167,6 +167,11 @@
 //!   0.29.1, the tree with the five edits and the version set back 0.29.0's
 //!   ([`SPEC_IDS_EDITS`]); no `SCHEMA_PINS` entry, the last still 0.29.0
 //!   (AC-8 (c)).
+//! - docs/features/flow-scope.md FS-6: 0.29.1 -> 0.30.0, MINOR (the
+//!   orchestrator's decision of 2026-11-08, as `dry_run`'s precedent): a key
+//!   a tool takes, `get_flow`'s `stage`. A `PINS` entry 0.30.0, the tree
+//!   with the version set back 0.29.1's; a `SCHEMA_PINS` entry 0.30.0,
+//!   0.29.0's schemas today's without it ([`as_of_0_29_0`]).
 //!
 //! The repository is only read.
 
@@ -471,6 +476,13 @@ const PINS: &[(&str, &str)] = &[
         "0.29.1",
         "28a0c6b734a6d73aeb9061d4195b3e58544a2c137f4b29fcd3f286eb7e2b18e3",
     ),
+    // docs/features/flow-scope.md FS-6 (0.29.1 -> 0.30.0, MINOR: a key a
+    // tool takes, `get_flow`'s `stage`): plugin.json's version alone; the
+    // tree with the version set back hashes as 0.29.1's pin.
+    (
+        "0.30.0",
+        "8e6f8b6d38f8352cacf7939de0bfc746a4a67503a5f6c4e5d54eba9b8dfdd437",
+    ),
 ];
 
 /// docs/features/spec-ids.md "Data", "The plugin": `propose-spec-change`'s
@@ -733,6 +745,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.29.0",
         "691111eeee31c9296a9f41aae20c10b71f980cba033668019f259618f7084972",
+    ),
+    // docs/features/flow-scope.md FS-6: `get_flow`'s `stage`
+    // ([`as_of_0_29_0`] takes it out; no other tool's schema changed).
+    (
+        "0.30.0",
+        "d8eedb0210f5a4e512ecd47cd2fd1dbcfff0814640ad0eb9dba14fd30a325155",
     ),
 ];
 
@@ -1738,8 +1756,9 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 
 /// docs/features/flow-authoring.md AC-05: seven skills, every body within
 /// 4 096 B, the descriptions at the budget's whole, plugin.json 0.29.0 since
-/// docs/features/hub-confirm.md, 0.29.1 since docs/features/spec-ids.md. No
-/// room is left, so the next byte is over. M: a 31-byte description.
+/// docs/features/hub-confirm.md, 0.29.1 since docs/features/spec-ids.md,
+/// 0.30.0 since docs/features/flow-scope.md (FS-6). No room is left, so the
+/// next byte is over. M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     let tree = committed();
@@ -1760,7 +1779,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.29.1")
+        json!("0.30.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -1911,11 +1930,34 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // docs/features/flow-scope.md FS-6 (0.29.1 -> 0.30.0, MINOR, the
+    // orchestrator's version decision of 2026-11-08): plugin.json's version
+    // alone; set back, the tree is 0.29.1's pinned content. M: the version
+    // kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.30.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.30.0"),
+        "plugin.json's version"
+    );
+    let at_0_29_1 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.30.0\"",
+        "\"version\": \"0.29.1\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_29_1),
+        PINS[PINS.len() - 2].1,
+        "0.30.0 changes plugin.json's version only"
+    );
+    let tree = at_0_29_1;
+    let pins = &PINS[..PINS.len() - 1];
     // docs/features/spec-ids.md "Data", "The plugin" (0.29.0 -> 0.29.1,
     // PATCH): `propose-spec-change`'s five edits and plugin.json's version;
     // both set back, the tree is 0.29.0's pinned content. M: the version
     // kept; another file changed; an edit not as "Data" words it.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.29.1"));
+    assert_eq!(pins.last().map(|(version, _)| *version), Some("0.29.1"));
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.29.1"),
@@ -1932,11 +1974,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     }
     assert_eq!(
         content_hash(&at_0_29_0),
-        PINS[PINS.len() - 2].1,
+        pins[pins.len() - 2].1,
         "0.29.1 changes plugin.json's version and the five edits only"
     );
     let tree = at_0_29_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins[..pins.len() - 1];
     // docs/features/hub-confirm.md (0.28.0 -> 0.29.0): plugin.json's version
     // alone; set back, the tree is 0.28.0's pinned content. M: the version
     // kept; another file changed.
@@ -2770,6 +2812,13 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// docs/features/flow-scope.md FS-6: `schemas` as 0.29.0 (and 0.29.1, a
+/// PATCH of a skill's text) listed them: `get_flow` without `stage`. No
+/// other tool's schema changed.
+fn as_of_0_29_0(schemas: &mut Value) {
+    without_key(&mut schemas["get_flow"]["inputSchema"], "stage");
+}
+
 /// docs/features/hub-confirm.md "Data": `schemas` as 0.28.0 listed them: each
 /// `ProposalAuthor`, `get_proposal`'s, `propose_change`'s, `review_proposal`'s
 /// and `get_task`'s, in its one shape of four keys under the struct's doc, "Who
@@ -3164,7 +3213,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[18].0, "0.27.0", "an entry for 0.27.0");
     assert_eq!(SCHEMA_PINS[19].0, "0.28.0", "an entry for 0.28.0");
     assert_eq!(SCHEMA_PINS[20].0, "0.29.0", "an entry for 0.29.0");
-    assert_eq!(SCHEMA_PINS.len(), 21, "0.29.0 the last entry");
+    assert_eq!(SCHEMA_PINS[21].0, "0.30.0", "an entry for 0.30.0");
+    assert_eq!(SCHEMA_PINS.len(), 22, "0.30.0 the last entry");
+    // docs/features/flow-scope.md FS-6: 0.29.0's schemas are today's
+    // without `get_flow`'s `stage`.
+    let mut at_0_29_0 = schemas.clone();
+    as_of_0_29_0(&mut at_0_29_0);
+    let at_0_29_0_hash = schema_hash(&at_0_29_0);
+    assert_eq!(
+        at_0_29_0_hash, SCHEMA_PINS[20].1,
+        "0.29.0's schemas are today's without get_flow's stage"
+    );
+    assert_ne!(at_0_29_0_hash, current, "flow-scope changed the schemas");
+    let (schemas, current) = (at_0_29_0, at_0_29_0_hash);
     // docs/features/hub-confirm.md "Data": 0.28.0's schemas are today's with
     // each author in its one shape of four keys.
     let mut at_0_28_0 = schemas.clone();

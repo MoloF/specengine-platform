@@ -29,6 +29,18 @@
 //!   checked as "Eval" defines it. AC-13's bars are `scale_baseline`'s last
 //!   check, [`assert_read_trust_bars`].
 //!
+//! - docs/features/flow-scope.md (RM-0083) FS-7: SE-2's shape gains the
+//!   flow shape (each directory's head, `parent:`, `follows` of the file
+//!   before, `stage:` word `floor(k / 16) mod 8` of eight two-syllable
+//!   words, the same at every size, a stage across directories); SE-4's
+//!   vocabulary the three keys; SE-5's run the five whole reads in `reads`,
+//!   `growth` and `calls`, each of one target, and `get_flow_top`'s and
+//!   `get_flow_stage`'s answers each hold a node (the library's read of the
+//!   tree, its text the answer `calls` hashed); `scale_baseline` prints them
+//!   at every size through [`assert_measured`]. M10: one key missing from
+//!   the table. M11: the generator writing no `follows` (Top answers no
+//!   node). M12: `stage` chosen per directory (one directory per stage).
+//!
 //! No test asserts a time (S9) but AC-13's bars, in the release baseline
 //! alone. Nothing here names a pilot.
 
@@ -42,7 +54,7 @@ use std::process::Output;
 
 use import_support::{Scratch, eval, read_json, repository_root, snapshot, stderr};
 use serde_json::Value;
-use specengine_cli::{CheckRequest, Env, Globals};
+use specengine_cli::{CheckRequest, Env, FlowRequest, Globals, Outcome, render_json, render_text};
 
 /// `--label`'s default.
 const LABEL: &str = "synthetic";
@@ -111,6 +123,10 @@ const KEYWORDS: &[&str] = &[
     "shipped",
     "links",
     "depends_on",
+    // docs/features/flow-scope.md "Data", its synthetic corpus: front-matter keys.
+    "parent",
+    "follows",
+    "stage",
 ];
 
 /// The four reads and the steps `other_us` subtracts from each: `get_node`,
@@ -123,6 +139,21 @@ const READ_STEPS: [(&str, &[&str]); 4] = [
     ("search", &["open_us", "update_us", "fts_us"]),
     ("get_context_bundle", &["open_us", "update_us"]),
 ];
+
+/// docs/features/flow-scope.md "The timed reads": the five whole reads,
+/// each of one target, with no step replay, `other_us`, trusted twin or bar.
+const WHOLE_READS: [&str; 5] = [
+    "get_flow_top",
+    "get_flow_root",
+    "get_flow_stage",
+    "get_trace_summary",
+    "get_tree",
+];
+
+/// The stage words of a tree, and each word's syllables
+/// (docs/features/flow-scope.md "Data", its synthetic corpus).
+const STAGES: usize = 8;
+const STAGE_SYLLABLES: usize = 2;
 
 /// The leaves of `result` beside `sizes` ("Data", "stdout").
 const TOP_LEAVES: [&str; 4] = ["budget/source", "budget/tokens", "corpus_only", "seed"];
@@ -155,6 +186,17 @@ const SIZE_LEAVES: &[&str] = &[
     "reads/search/hits_max",
     "reads/get_context_bundle/median_us",
     "reads/get_context_bundle/max_us",
+    // docs/features/flow-scope.md FS-7, the five whole reads.
+    "reads/get_flow_top/median_us",
+    "reads/get_flow_top/max_us",
+    "reads/get_flow_root/median_us",
+    "reads/get_flow_root/max_us",
+    "reads/get_flow_stage/median_us",
+    "reads/get_flow_stage/max_us",
+    "reads/get_trace_summary/median_us",
+    "reads/get_trace_summary/max_us",
+    "reads/get_tree/median_us",
+    "reads/get_tree/max_us",
     "reads_trusted/get_node/median_us",
     "reads_trusted/get_node/max_us",
     "reads_trusted/get_node_links/median_us",
@@ -167,6 +209,11 @@ const SIZE_LEAVES: &[&str] = &[
     "growth/get_node_links",
     "growth/search",
     "growth/get_context_bundle",
+    "growth/get_flow_top",
+    "growth/get_flow_root",
+    "growth/get_flow_stage",
+    "growth/get_trace_summary",
+    "growth/get_tree",
     "growth_trusted/get_node",
     "growth_trusted/get_node_links",
     "growth_trusted/search",
@@ -503,6 +550,11 @@ struct Part {
     shipped: Option<String>,
     scope: String,
     depends_on: Vec<u32>,
+    /// docs/features/flow-scope.md "Data", its synthetic corpus: `parent:`,
+    /// `links.follows` and `stage:`.
+    parent: Option<u32>,
+    follows: Vec<u32>,
+    stage: Option<String>,
     title: String,
     text: String,
     sections: Vec<Section>,
@@ -536,11 +588,11 @@ fn id_of(rel: &str, line: usize, text: &str) -> u32 {
     text[2..].parse().expect("six digits")
 }
 
-fn flow_list(rel: &str, line: usize, value: &str) -> Vec<u32> {
+fn flow_list(rel: &str, line: usize, key: &str, value: &str) -> Vec<u32> {
     let inner = value
         .strip_prefix('[')
         .and_then(|rest| rest.strip_suffix(']'))
-        .unwrap_or_else(|| panic!("{rel}:{line}: `depends_on` is not a `[...]` list: {value}"));
+        .unwrap_or_else(|| panic!("{rel}:{line}: `{key}` is not a `[...]` list: {value}"));
     inner
         .split(',')
         .map(str::trim)
@@ -558,7 +610,9 @@ fn parse_part(rel: &str, area: &str, text: &str) -> Part {
     );
     let mut fields = BTreeMap::new();
     let mut depends_on = Vec::new();
-    let mut in_depends = false;
+    let mut follows = Vec::new();
+    // The list a `- ` item belongs to: `depends_on` or `follows`.
+    let mut in_list: Option<&str> = None;
     let mut closed = false;
     for (at, line) in lines.by_ref() {
         if line == "---" {
@@ -566,25 +620,45 @@ fn parse_part(rel: &str, area: &str, text: &str) -> Part {
             break;
         }
         let trimmed = line.trim_start();
-        if in_depends && let Some(item) = trimmed.strip_prefix("- ") {
-            depends_on.push(id_of(rel, at, item.trim()));
+        if let Some(list) = in_list
+            && let Some(item) = trimmed.strip_prefix("- ")
+        {
+            let id = id_of(rel, at, item.trim());
+            if list == "follows" {
+                follows.push(id);
+            } else {
+                depends_on.push(id);
+            }
             continue;
         }
-        in_depends = false;
+        in_list = None;
         let (key, value) = trimmed
             .split_once(':')
             .unwrap_or_else(|| panic!("{rel}:{at}: not `key: value`: {line}"));
         let value = value.trim();
-        if key == "depends_on" {
-            if value.is_empty() {
-                in_depends = true;
+        if key == "depends_on" || key == "follows" {
+            assert!(
+                line.starts_with("  "),
+                "{rel}:{at}: `{key}` outside `links`: {line}"
+            );
+            let into = if key == "follows" {
+                &mut follows
             } else {
-                depends_on.extend(flow_list(rel, at, value));
+                &mut depends_on
+            };
+            if value.is_empty() {
+                in_list = Some(if key == "follows" {
+                    "follows"
+                } else {
+                    "depends_on"
+                });
+            } else {
+                into.extend(flow_list(rel, at, key, value));
             }
         } else {
             assert!(
                 !line.starts_with(' '),
-                "{rel}:{at}: a nested key other than `depends_on`: {line}"
+                "{rel}:{at}: a nested key other than `depends_on` and `follows`: {line}"
             );
             fields.insert(key.to_owned(), value.to_owned());
         }
@@ -636,6 +710,9 @@ fn parse_part(rel: &str, area: &str, text: &str) -> Part {
         shipped: fields.get("shipped").cloned(),
         scope: field("scope"),
         depends_on,
+        parent: fields.get("parent").map(|parent| id_of(rel, 1, parent)),
+        follows,
+        stage: fields.get("stage").cloned(),
         title: title.unwrap_or_else(|| panic!("{rel}: no H1 title")),
         text: paragraph,
         sections,
@@ -966,6 +1043,8 @@ fn assert_shape(tree: &Tree, nodes: usize) {
         );
     }
 
+    assert_flow_shape(tree);
+
     // Words: titles 2 to 4 words, the first capitalised; common words 1
     // to 3 syllables; a rare word only in sections, one per section, the
     // same for each run of 8 sections in ID order.
@@ -1077,6 +1156,118 @@ fn assert_shape(tree: &Tree, nodes: usize) {
     }
     for rel in &readmes {
         assert!(ids_in(tree.text(rel)).is_empty(), "{rel} holds an ID");
+    }
+}
+
+/// The `areas/aNN/gMMMM` directory of a part file.
+fn directory(part: &Part) -> &str {
+    part.rel.rsplit_once('/').expect("a group directory").0
+}
+
+/// Each `floor(k / 16) mod 8` and the stage word its part files carry.
+fn stage_words(tree: &Tree) -> BTreeMap<usize, String> {
+    let mut words = BTreeMap::new();
+    for (k, part) in tree.parts.iter().enumerate() {
+        let stage = part
+            .stage
+            .clone()
+            .unwrap_or_else(|| panic!("{}: no `stage:`", part.rel));
+        let word = words
+            .entry(k / AREAS % STAGES)
+            .or_insert_with(|| stage.clone());
+        assert_eq!(
+            *word,
+            stage,
+            "{}: part file {k} holds stage `{stage}`, word {} is `{word}`",
+            part.rel,
+            k / AREAS % STAGES
+        );
+    }
+    words
+}
+
+/// docs/features/flow-scope.md FS-7, its synthetic corpus: in each
+/// directory the part file with the least k is the head, with no `parent:`
+/// and no `follows`; every other names the head's document as `parent:` and
+/// follows the document of the file before it there, one chain per
+/// directory; every part document's `stage:` is word `floor(k / 16) mod 8`
+/// of eight distinct two-syllable words, and each stage holds documents of
+/// at least two directories. M11: no `follows`. M12: a stage per directory.
+fn assert_flow_shape(tree: &Tree) {
+    let mut chains: BTreeMap<&str, Vec<&Part>> = BTreeMap::new();
+    for part in &tree.parts {
+        chains.entry(directory(part)).or_default().push(part);
+    }
+    for (dir, parts) in &chains {
+        let head = parts[0];
+        assert_eq!(
+            head.parent, None,
+            "{}: the head of {dir} has a `parent:`",
+            head.rel
+        );
+        assert!(
+            head.follows.is_empty(),
+            "{}: the head of {dir} follows {:?}",
+            head.rel,
+            head.follows
+        );
+        for pair in parts.windows(2) {
+            let (before, part) = (pair[0], pair[1]);
+            assert_eq!(
+                part.parent,
+                Some(head.id),
+                "{}: `parent:` is its directory's head {}",
+                part.rel,
+                id_name(head.id)
+            );
+            assert_eq!(
+                part.follows,
+                [before.id],
+                "{}: follows the file before it in {dir}, {}",
+                part.rel,
+                id_name(before.id)
+            );
+        }
+    }
+    let follows: usize = tree.parts.iter().map(|part| part.follows.len()).sum();
+    assert_eq!(
+        follows,
+        tree.parts.len() - chains.len(),
+        "one `follows` per part file but each directory's head"
+    );
+
+    let words = stage_words(tree);
+    let distinct: BTreeSet<&String> = words.values().collect();
+    assert_eq!(
+        distinct.len(),
+        words.len(),
+        "the stage words are distinct: {words:?}"
+    );
+    assert_eq!(
+        words.len(),
+        STAGES.min(tree.parts.len().div_ceil(AREAS)),
+        "eight stage words: {words:?}"
+    );
+    for word in words.values() {
+        assert_eq!(
+            syllables(word),
+            Some(STAGE_SYLLABLES),
+            "stage `{word}` is no two-syllable word"
+        );
+    }
+    let mut spread: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
+    for part in &tree.parts {
+        spread
+            .entry(part.stage.as_deref().expect("a stage"))
+            .or_default()
+            .insert(directory(part));
+    }
+    for (stage, dirs) in &spread {
+        assert!(
+            dirs.len() >= 2_usize.min(chains.len()),
+            "stage `{stage}` holds documents of {} directory: {dirs:?}",
+            dirs.len()
+        );
     }
 }
 
@@ -1288,6 +1479,33 @@ fn assert_size(run: &ScaleRun, entry: &Value, nodes: u64, previous: Option<&Valu
             }
         }
     }
+    // docs/features/flow-scope.md FS-7: the five whole reads' growth, as
+    // the four's.
+    for read in WHOLE_READS {
+        let growth = &entry["growth"][read];
+        match previous {
+            None => assert!(
+                growth.is_null(),
+                "{at}: `growth.{read}` at the first size: {growth}"
+            ),
+            Some(before) => {
+                let before = whole(before, &format!("reads/{read}/median_us"));
+                let now = whole(entry, &format!("reads/{read}/median_us"));
+                if before == 0 {
+                    assert!(growth.is_null(), "{at}: `growth.{read}` over a 0: {growth}");
+                } else {
+                    let ratio = now as f64 / before as f64;
+                    let printed = growth
+                        .as_f64()
+                        .unwrap_or_else(|| panic!("{at}: `growth.{read}` is {growth}"));
+                    assert!(
+                        (printed - ratio).abs() <= 0.0051,
+                        "{at}: `growth.{read}` {printed}, {now} / {before} is {ratio:.4}"
+                    );
+                }
+            }
+        }
+    }
     assert_split(entry, &at);
 
     // size.json: 20 targets, 3 queries, 4 hubs, and W_after from the files.
@@ -1436,6 +1654,27 @@ fn assert_size(run: &ScaleRun, entry: &Value, nodes: u64, previous: Option<&Valu
             .unwrap_or_else(|| panic!("{at}: size.json `calls` is {calls}"));
         for (read, _) in READ_STEPS {
             assert!(reads.contains_key(read), "{at}: `calls` has no `{read}`");
+        }
+        // FS-7: each whole read is one target, its best both figures.
+        for read in WHOLE_READS {
+            let by_target = reads
+                .get(read)
+                .and_then(Value::as_object)
+                .unwrap_or_else(|| panic!("{at}: `calls` has no `{read}`"));
+            assert_eq!(by_target.len(), 1, "{at}: `calls.{read}`: one target");
+            let (_, call) = by_target.iter().next().unwrap();
+            let best = call["us"]
+                .as_array()
+                .and_then(|us| us.iter().filter_map(Value::as_u64).min())
+                .unwrap_or_else(|| panic!("{at}: `calls.{read}` has no timings"));
+            assert_eq!(
+                (
+                    whole(entry, &format!("reads/{read}/median_us")),
+                    whole(entry, &format!("reads/{read}/max_us")),
+                ),
+                (best, best),
+                "{at}: `reads.{read}` is its one target's best of three"
+            );
         }
         let mut differing = 0;
         for (read, by_target) in reads {
@@ -1716,7 +1955,17 @@ fn se1_corpus_only_writes_the_trees_and_prints_nodes_and_corpus() {
 fn se2_the_n1000_tree_has_the_documented_shape() {
     let scratch = Scratch::new("scale-se2");
     let run = corpus_run(&scratch, "out", "7");
-    assert_shape(&Tree::read(&run.tree(1_000)), 1_000);
+    let small = Tree::read(&run.tree(1_000));
+    assert_shape(&small, 1_000);
+    // docs/features/flow-scope.md "Data", its synthetic corpus: the stage words
+    // come from the seed alone, equal at every size.
+    let large = Tree::read(&run.tree(2_000));
+    assert_flow_shape(&large);
+    assert_eq!(
+        stage_words(&small),
+        stage_words(&large),
+        "the stage words of n1000 and n2000"
+    );
 }
 
 // ---------------------------------------------------------------------- SE-3
@@ -1904,7 +2153,71 @@ fn se5_se7_se8_one_debug_run_at_1k() {
             let envelope = run.envelope();
             assert_split(&envelope["result"]["sizes"][0], "n1000");
         }),
+        criterion("FS-7", || assert_flow_reads_hold_nodes(&scratch, &run)),
     ]);
+}
+
+/// docs/features/flow-scope.md FS-7: `get_flow_top`'s and
+/// `get_flow_stage`'s answers each hold at least one node: the CLI
+/// library's read of the n1000 tree as "The timed reads" asks it, in a
+/// scratch `HOME`, holds a node, and its text is the answer `calls` hashed.
+/// M11: the generator writing no `follows` (Top answers no node).
+fn assert_flow_reads_hold_nodes(scratch: &Scratch, run: &ScaleRun) {
+    let tree = run.tree(1_000);
+    let stage = Tree::read(&tree).parts[0]
+        .stage
+        .clone()
+        .expect("the first part file's stage: the first word");
+    let home = scratch.join("flow-home");
+    fs::create_dir_all(&home).expect("scratch HOME");
+    let env = Env {
+        cwd: tree.clone(),
+        home: Some(home.into_os_string()),
+        xdg_data_home: None,
+    };
+    let globals = Globals {
+        root: Some(tree),
+        config: None,
+    };
+    let calls = run.size_json(1_000)["calls"].clone();
+    for (read, request) in [
+        (
+            "get_flow_top",
+            FlowRequest {
+                depth: Some(0),
+                trace: true,
+                ..FlowRequest::default()
+            },
+        ),
+        (
+            "get_flow_stage",
+            FlowRequest {
+                stage: Some(stage.clone()),
+                trace: true,
+                ..FlowRequest::default()
+            },
+        ),
+    ] {
+        let outcome = specengine_cli::flow(&env, &globals, &request)
+            .unwrap_or_else(|error| panic!("{read}: {error}"));
+        let outcome = Outcome::Flow(Box::new(outcome));
+        let document: Value =
+            serde_json::from_str(&render_json(&outcome)).expect("the flow's document");
+        let nodes = document["nodes"].as_array().map_or(0, Vec::len);
+        assert!(nodes >= 1, "{read}: the answer holds no node: {document}");
+        let answer = specengine_store::b3_hash(render_text(&outcome).as_bytes());
+        let hashed: Vec<&str> = calls[read]
+            .as_object()
+            .into_iter()
+            .flat_map(|by_target| by_target.values())
+            .flat_map(|call| call["answers"].as_array().into_iter().flatten())
+            .filter_map(Value::as_str)
+            .collect();
+        assert!(
+            hashed.contains(&answer.as_str()),
+            "{read}: the measured answers {hashed:?} are not this read's {answer}"
+        );
+    }
 }
 
 /// SE-7, static half: the `scale` sources take neither `Env::from_process`

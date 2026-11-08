@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-09
 ---
 
 # MCP read tools and resources
@@ -12,7 +12,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 ## Binary
 
-`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow {root?, depth?, trace?}` (`spec-flow.md`), `get_trace {ref?, stage?, summary?}` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"; `list_cards` `marks?`), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. A hub serves 17 of these at `/mcp/<slug>` (`hub-mcp.md`).
+`specengine-mcp [--lifecycle auto|legacy] [--root DIR] [--config FILE]`: `--root`, `--config` are the CLI globals (`Globals`) of every read; nothing is discovered at startup. The default build serves the read tools, `get_roadmap` (`spec-roadmap.md` "Surfaces"), `get_flow {root?, depth?, stage?, trace?}` (`spec-flow.md`), `get_trace {ref?, stage?, summary?}` (`spec-trace.md`), `get_impact` (`spec-impact.md`), the code tools (`mcp-code.md`), the queue tools (`agent-intake.md`), the task tools (`task-package.md` "MCP"), the card tools (`cards.md` "MCP"; `list_cards` `marks?`), the owner's form (`review-form.md`) and the resources; feature `probes` (never default) adds `probe_output`, `probe_sleep`. A hub serves 17 of these at `/mcp/<slug>` (`hub-mcp.md`).
 
 ## Tools
 
@@ -29,7 +29,7 @@ The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the 
 
 **Schemas.** Input from the argument types (`rmcp::schemars`, 2020-12, subschemas inlined, root title and description dropped): flat objects of strings, integers, booleans, string arrays (the queue tools: one level of closed inline objects); optionals nullable `[T, "null"]`; `additionalProperties: false` (unknown arguments refused); no root `anyOf`/`oneOf`/`allOf`, no `$ref`; `kinds` free strings, never an `enum`; `with` the enum `["links", "bindings"]`. Output from mirror types of the CLI's `--json` documents (`mirror.rs`; the CLI must not depend on rmcp or schemars), schema only, never built: every key `required`, absent = `null`; closed CLI enums mirrored (`origin`, `state`, `direction`, `form`, `mark`, `group`, layer keys), kinds and link types free; bundle `task` `{"type": "null"}`. A test-local walker checks every `structuredContent` against its schema with exact key sets: a CLI key added without its mirror turns it red.
 
-**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts at 2 048 characters and defers tools behind tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, tasks, cards, REF, the cut, resources, rules (`server.rs`), 2 048 B in every build, 1 940 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): none left: `get_trace`'s `stage?`, `summary?` stay in its schema. Each description <= 2 048 (`get_node` 1 670, `get_context_bundle` 1 433), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
+**Texts.** `INSTRUCTIONS` (ASCII, <= 2 048 B: Claude Code cuts there and defers tools behind tool search) name every tool by its `spec` twin, reads on one line, code tools on the next, then the queue with `review_proposal`, tasks, cards, REF, the cut, resources, rules (`server.rs`), 2 048 B in every build, 1 940 less the tasks line (BLAKE3 pins: `mcp_decision.rs`, `mcp_path.rs`): none left: `get_trace`'s `stage?`, `summary?` stay in its schema, `get_flow`'s `stage?` in its schema alone. Each description <= 2 048 (`get_node` 1 670), ASCII, holds "Deterministic: one state, one result; no LLM inside." Compile-time asserts tie each number a text states to its CLI constant (`OUTPUT_CAP_CHARS` 40 000, `SHOW_TAIL_NAMES` 20, `MIN_TERM_CHARS` 3, `SEARCH_LIMIT_MIN`/`MAX`/`DEFAULT` 1/200/20, `DEFAULT_BUNDLE_BUDGET` 2 000): a CLI change breaks the build, not the text.
 
 ## Resources
 

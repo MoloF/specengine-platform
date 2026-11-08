@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-eval]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-09
 ---
 
 # Scale eval: read cost on a seeded synthetic corpus
@@ -11,14 +11,11 @@ reviewed: 2026-11-04
 `specengine-eval scale` (eval `src/scale/`) works through each `--nodes` size in turn. For each it:
 - generates a corpus;
 - indexes it cold and checks it;
-- times today's warm reads through the CLI library, as MCP's `get_node`, `search` and `get_context_bundle` call it (`crates/specengine-mcp/src/read.rs`);
-- replays each step of those reads alone;
+- times today's warm reads through the CLI library, as MCP's `get_node`, `search` and `get_context_bundle` call it (`crates/specengine-mcp/src/read.rs`), and five whole reads, of `get_flow`, `get_trace` and `get_tree`;
+- replays each step of the first four alone;
 - computes W_after by `w`'s formula (`docs/canon/w-measurement.md` "W_after").
 
-It measures and never judges. The bars are RM-0054's:
-- warm reads under 1 s at 100 000 nodes;
-- under 2x growth from 10 000, a median under 10 ms counted as 10 ms (`growth_trusted`);
-- W_after's median at 10 000 within 10 % of 1 000.
+It measures and never judges. RM-0054's bars, for the first four: warm reads under 1 s at 100 000 nodes; under 2x growth from 10 000, a median under 10 ms counted as 10 ms (`growth_trusted`); W_after's median at 10 000 within 10 % of 1 000.
 
 No test asserts a time (ADR-0012). A synthetic corpus proves load, not usefulness.
 
@@ -41,17 +38,12 @@ The corpus is generated, never read, so there is no `--pilot`, `--config` or `--
 
 Exit codes:
 - **0** measured. An overrun prints `"timeout"`, and finished sizes keep their `size.json`.
-- **2** refused, with nothing written:
-  - a flag out of range;
-  - `--nodes` empty, unsorted or repeated;
-  - `--out` and this repository nested either way. The repository is `CARGO_MANIFEST_DIR/../..`, canonicalised; when it is absent, only the link checks run;
-  - a symbolic link at `<out>/scale` or at `<out>/scale/<label>`;
-  - clap's usage errors.
+- **2** refused, nothing written: a flag out of range; `--nodes` empty, unsorted or repeated; `--out` and this repository (`CARGO_MANIFEST_DIR/../..`, canonicalised; absent: only the link checks) nested either way; a symbolic link at `<out>/scale` or `<out>/scale/<label>`; clap's usage errors.
 - **1** an I/O error, or a read answering an error or a `reason`. stderr names the step and the size.
 
 ## Corpus
 
-`generate(seed, nodes)` builds every file in memory, and `write` writes them. It uses two xorshift64\* streams seeded through splitmix64, so seed 0 works. The READMEs come from the seed alone, so they are byte-equal at every size. The part files and the samples come from the seed and the size. Nothing else goes in: no clock, no hash-map order, no environment.
+`generate(seed, nodes)` builds every file in memory, and `write` writes them. It uses two xorshift64\* streams seeded through splitmix64, so seed 0 works. The READMEs, then the stage words, come from the seed alone, so they are byte-equal at every size. The part files and the samples come from the seed and the size. Nothing else goes in: no clock, no hash-map order, no environment.
 
 `n<N>/tree/` holds `specengine.toml`, `README.md` (Tier 0), `areas/a00/README.md` to `areas/a15/README.md` (Tier 1) and the part files `areas/aNN/gMMMM/P-XXXXXX.md`. The config:
 
@@ -71,24 +63,20 @@ P = { kind = "node", width = 6 }
 **Layout:**
 - Part file k lies in area `k mod 16` and group `floor(k / 16) / 100`, so a group holds at most 100 files.
 - Each file is one `class: spec` document with 2..=6 `{#P-...}` sections, about five nodes per file.
-- IDs run from `P-000001` in file order. The last file takes what remains, so there are N part nodes and N + 17 nodes in all.
+- IDs run from `P-000001` in file order; the last file takes what remains: N part nodes, N + 17 in all.
 
 **Tier 3:** one part document in five is `shipped`, with `shipped: 2026-01-01`.
 
-**Hubs:**
-- The first four part files are the hubs. Part files 5 to 8 name one hub each.
-- After that, one file in ten names a random hub.
-- Hub in-degree is uncapped, about files / 40.
+**Flow:** a directory `areas/aNN/gMMMM/` is one chain: its file of least k the head, every other part document naming it as `parent:` and following file k - 16. A part document's `stage:` is word `floor(k / 16) mod 8` of eight two-syllable words, distinct, redrawn on a repeat; a stage crosses every directory. Tier 3 heads and steps, left out of a flow read, break chains: Top at 1k is 27 nodes, 11 edges.
 
-**Links:**
-- A document's `depends_on` holds 0..=2 earlier non-hub documents, so there is no cycle.
-- Each section holds 0..=2 inline mentions.
-- A non-hub node takes at most 16 incoming links. A draw on a full node is redrawn 8 times, then dropped.
+**Hubs:** the first four part files. Files 5 to 8 name one each, then one file in ten a random one; a hub's in-degree is uncapped, about files / 40.
+
+**Links**, drawn: a document's `depends_on` holds 0..=2 earlier non-hub documents, so no cycle; a section 0..=2 inline mentions. A non-hub node takes at most 16 of them, a draw on a full node redrawn 8 times, then dropped. `corpus.links` and `degree_max` count these and the hub names, never `follows` or `parent:`.
 
 **Text:**
 - A syllable is one of `j k q v x z` followed by one of `a e i o u y`. Common words are 1 to 3 syllables.
-- Titles are 2 to 4 words; paragraphs are 20 to 60 words for a document and 15 to 50 for a section; sentences run 6 to 14 words.
-- Section j holds the 5-syllable rare word `floor(j / 8)`, in base 36. A rare word is therefore in at most 8 sections at any size.
+- Titles 2 to 4 words; paragraphs 20 to 60 words for a document, 15 to 50 for a section; sentences 6 to 14.
+- Section j holds the 5-syllable rare word `floor(j / 8)`, in base 36, so a rare word is in at most 8 sections at any size.
 - The READMEs hold one paragraph each (Tier 0 also lists the 16 areas). They have no ID and nothing that grows with N.
 
 **Vocabulary:** a token is a run of `[A-Za-z0-9_-]` with its edge `-` stripped. Every token is one of:
@@ -99,7 +87,7 @@ P = { kind = "node", width = 6 }
 **Samples:**
 - 20 W targets: live, non-hub part nodes. The first 3 are timed.
 - 3 queries: rare words held by a live section.
-- The hub: `P-000001`.
+- The hub: `P-000001`. The flow root: `areas/a00/g0000/`'s head. The stage: the first word.
 
 ## Reads and steps
 
@@ -112,7 +100,7 @@ Each read is called once to warm up, then timed three times, and the best is kep
 | `search` | `search`, one word, limit 20 | open, update, fts |
 | `get_context_bundle` | `bundle`, one ID, `--budget` | open, update, then fitting |
 
-Since 12d `show` and `bundle` read a subset after the update (`spec-read-subset.md`); the other steps, still replayed, are the whole reads' cost (`reparse_us` without Q7).
+Since 12d `show` and `bundle` read a subset after the update (`spec-read-subset.md`); the other steps, still replayed, are what a whole read costs (`reparse_us` without Q7).
 
 The steps, each the best of three on the warm index:
 
@@ -130,77 +118,55 @@ The steps, each the best of three on the warm index:
 
 `other_us.<read>` is `max(0, median_us - the sum of its steps)`. It holds locating, assembly and fitting, rendering, and noise.
 
+The whole reads, timed alike, have no steps, `other_us`, trusted twin or bar (a hub's flow and trace walk): `get_flow_top`, `flow` with no ROOT, `depth: 0`; `get_flow_root`, of the flow root, `depth: 1`; `get_flow_stage`, of the stage; each `trace: true`; `get_trace_summary`, `summary: true`; `get_tree`, no ROOT, `depth: 1`.
+
 ## Output
 
 stdout is the envelope `{measurement: "scale", label, versions, wall_ms, result}`. `result` holds `seed`, `budget {tokens, source}`, `corpus_only` and `sizes[]`. Each size holds:
-- `nodes`;
-- `corpus {files, nodes, bytes, links, tier3_files, degree_max, hubs, hub_degree {min, max}}`;
-- `index {files, nodes, build_us}`;
-- `check {errors, warnings, us}`;
-- `reads.<read> {median_us, max_us}`, with `search` adding `hits_min` and `hits_max`;
+- `nodes`, `corpus {files, nodes, bytes, links, tier3_files, degree_max, hubs, hub_degree {min, max}}`, `index {files, nodes, build_us}`, `check {errors, warnings, us}`;
+- `reads.<read> {median_us, max_us}`, `search` adding `hits_min`, `hits_max`, a whole read's of one target;
 - `growth.<read>`: the median over the previous size's, to two decimals, `null` first;
 - `reads_trusted.<read> {median_us, max_us}` and `growth_trusted.<read>` (each median at least 10 000 us), the trusted reads'; `trusted_differs`: (read, target) pairs whose trusted answer's BLAKE3 is not the walking one's;
-- `steps`;
-- `other_us`;
-- `w_after {median, p90, max, tier0, tier1_max}`, by nearest rank;
+- `steps`, `other_us`, `w_after {median, p90, max, tier0, tier1_max}` by nearest rank;
 - `hub {degree, links_shown, get_node_links_us, get_context_bundle_us, w_after, trusted {get_node_links_us, get_context_bundle_us}}`;
 - `nondeterministic`: (read, target) pairs whose four answers differ.
 
 With `--corpus-only`, a size holds `nodes` and `corpus` only. stdout holds numbers only, never an ID, word or path. stderr holds one summary line per size, the trusted medians too.
 
-The detail goes under `<out>/scale/<label>/`, emptied first. Each size gets a `n<N>/` directory with `tree/`, `home/` (the data directory, so the database lives there) and `size.json`. `size.json` is written when the size ends and holds:
+The detail goes under `<out>/scale/<label>/`, emptied first. Each size gets a `n<N>/` directory with `tree/`, `home/` (the data directory) and `size.json`. `size.json` is written when the size ends and holds:
 - the size's entry;
 - `digest`: `b3:` over each file's path, NUL, bytes, NUL, in path order;
 - `targets`, `queries` and `hubs`;
-- `calls`: per read and target, the timings and the answers' BLAKE3;
+- `calls`: per read and target, the timings and the answers' BLAKE3; a whole read's target is `all`, the head's ID (`get_flow_root`) or the stage word (`get_flow_stage`);
 - `w_after_bytes {tier1, bundle, total}`.
 
 ## Isolation
 
-Every call takes:
-- `Globals {root: tree}`;
-- an `Env` whose `cwd` is the tree and whose home is the size's `home` directory, with `xdg_data_home` `None`;
-- `GitEnv::new(tree, [PATH, HOME])`, `HOME` being that same `home` directory.
+Every call takes `Globals {root: tree}`, an `Env` whose `cwd` is the tree and home the size's `home` directory (`xdg_data_home` `None`), and `GitEnv::new(tree, [PATH, HOME])`, `HOME` that same directory.
 
 It never calls `Env::from_process` or `process_git`, so nothing is read or written under the process's `HOME` or the repository. The run deletes nothing outside `<out>/scale/<label>/`.
 
 ## Baseline
 
-The numbers before 12c-12e: 2026-11-04, the owner's laptop, release, seed 1, budget 10 000, `c2847ca` plus the slice, `wall_ms` 130 786. A later slice compares re-runs at its base and head on one machine.
+2026-11-08, `flow-scope`'s head, a quiet machine, release, seed 1, budget 10 000, `wall_ms` 54 679. A later slice re-runs its base and head on one machine. 12b's run, before 12c-12e and the flow shape: `docs/features/scale-eval.md` "Baseline".
 
-| Read, median ms (max) | 1k | 10k | 100k | growth 10k to 100k |
-|---|---|---|---|---|
-| `get_node` | 7.06 (7.07) | 64.2 (64.5) | 705 (708) | 10.99 |
-| `get_node_links` | 15.7 (15.7) | 150 (150) | 1 638 (1 649) | 10.93 |
-| `search` | 5.23 (5.35) | 38.6 (38.8) | 424 (426) | 10.98 |
-| `get_context_bundle` | 15.6 (15.7) | 149 (149) | 1 613 (1 615) | 10.83 |
-
-| Step, ms | 1k | 10k | 100k |
+| Read, median ms | 1k | 10k | 100k |
 |---|---|---|---|
-| open | 0.36 | 0.37 | 0.38 |
-| walk | 0.56 | 1.60 | 12.4 |
-| hash | 3.54 | 34.1 | 393 |
-| update | 4.32 | 36.7 | 421 |
-| decode | 1.88 | 22.4 | 249 |
-| reparse | 7.80 | 75.6 | 798 |
-| resolver | 0.11 | 1.42 | 22.0 |
-| graph | 0.71 | 9.02 | 128 |
-| fts | 0.44 | 1.03 | 6.08 |
-| other: node, links, search, bundle | 0.38, 0.51, 0.11, 0.54 | 3.28, 4.36, 0.50, 4.81 | 13.4, 20.3, 0, 17.6 |
+| `get_node` | 1.56 | 5.06 | 54.4 |
+| `get_node_links` | 1.82 | 5.23 | 55.7 |
+| `search` | 1.93 | 6.17 | 52.5 |
+| `get_context_bundle` | 1.98 | 5.40 | 57.5 |
+| `get_flow_top` | 9.27 | 90.3 | 1 016 |
+| `get_flow_root` | 9.00 | 86.9 | 980 |
+| `get_flow_stage` | 9.82 | 92.0 | 1 041 |
+| `get_trace_summary` | 5.33 | 46.9 | 544 |
+| `get_tree` | 8.49 | 82.6 | 956 |
 
-At 100k: reads linear, about 11x from 10k; a bundle's reparse 49 %, update (hashing) 26 %, decode 15 %, graph 8 %; 20 015 files, 22.9 MB, 101 746 links, 3 973 Tier 3, in-degree at most 15; build 9.43 s, check 0.92 s, 0 findings; 5 to 8 hits per query. W_after's median is 2 210, 2 182 and 2 239 B at 1k, 10k and 100k, within 10 % already; at 100k the p90 2 695, the max 2 936, Tier 0 1 021 B, the largest Tier 1 700 B. The hub at 100k: in-degree 533, 441 links shown, `get_node_links` 1.64 s, bundle 1.62 s, W_after 2 646 B.
-
-12d's before and after: `docs/features/store-reads.md` SR-4. **After 12e** (`read-trust`; base `7c0ca35`, 12d's head, and head in one session), 100k, trusted: `get_node` 0.55, links 0.85, `search` 6.5, bundle 2.4 ms, hub 23.7 and 124; walking 43-50; `update_us` 41.9, none hashed; growth 1.00 (`read-trust` AC-13).
+At 100k: 20 015 files, 23.9 MB, 101 746 drawn links, 3 973 Tier 3; build 11.3 s, check 1.16 s, 0 findings; 8.5-11.6x from 10k; reparse 918 ms, decode 288, graph 156, update 44.9. RM-0054's bars hold: trusted 0.61-6.31 ms, `growth_trusted` 1.00, W_after's median 2 555, 2 391, 2 552 B; 0 nondeterministic, 0 trusted differ.
 
 ## Tests
 
-The tests are in `tests/scale_cli.rs`:
-- **SE-1:** one seed gives one tree. The digest is the documented hash, and the generator reads no clock, pid or environment.
-- **SE-2:** the shape.
-- **SE-3:** a clean check.
-- **SE-4:** the closed vocabulary and no pilot name.
-- **SE-5, SE-7, SE-8:** one debug run at 1k. SE-7 also scans the sources statically.
-- **SE-6:** the refusals, the bounds themselves accepted, and `--timeout 0`.
+`tests/scale_cli.rs`: **SE-1** one seed, one tree, the digest the documented hash, no clock, pid or environment read; **SE-2** the shape, the flow's too; **SE-3** a clean check; **SE-4** the closed vocabulary, no pilot name; **SE-5, SE-7, SE-8** one debug run at 1k, SE-7 also a static scan of the sources; **SE-6** the refusals, the bounds themselves accepted, `--timeout 0`.
 
 `tests/scale_edges.rs` checks the index's edge tables (`spec-index-edges.md`) on the `--corpus-only` 1k tree: they equal core's resolution before and after 20 seeded edits, and the worktree dumps as a fresh index's.
 
@@ -209,11 +175,12 @@ The tests are in `tests/scale_cli.rs`:
 ## Known limits
 
 - **`links_shown` counts the hub's links before the 40 000-character cap.** It overstates what is printed above about 180 000 nodes.
-- **The steps run low and `other_us` high.** The steps share one warm connection and one `WorkingTree`, while a read opens its own. The bias points the honest way: the residual never hides time.
-- **Timing noise can push `other_us` to 0,** as `search`'s at 100k; when every residual is 0, SE-8 says it cannot tell a dropped step apart.
+- **The steps run low and `other_us` high:** they share one warm connection and one `WorkingTree`, a read opens its own; the residual never hides time.
+- **Timing noise can push `other_us` to 0;** when every residual is 0, SE-8 says it cannot tell a dropped step apart.
 - **A failure's stderr quotes the engine's reason,** which may hold a synthetic ID.
 - **The reused refusal (`layout::check_out`) calls the repository "the corpus".**
-- **The in-degree cap never binds at seed 1.** Uncapped, the maximum is 6, 12 and 15 at 1k, 10k and 100k, so the cap is an unexercised guard and dropping it survives the tests.
+- **The in-degree cap never binds at seed 1:** `degree_max` is 6, 12 and 15 at 1k, 10k and 100k, so dropping it survives the tests.
 - **`process_git` in place of the scratch `GitEnv` is caught only by SE-7's static scan.**
 - **The `read_bytes` mirror drops the CLI's warnings.** A file that cannot be read keeps its decoded parse.
-- **Not timed:** code reads, `--bindings`, flow, tree, graph and impact; cold reads after a start; concurrent readers; the JSON that MCP renders.
+- **Flow, trace and tree stay whole O(N) reads,** about 1 s at 100k, `--stage` bounding only the payload: a screen asking one per scope change pays it (RM-0084).
+- **Not timed:** code reads, `--bindings`, graph and impact; cold reads after a start; concurrent readers; the JSON that MCP renders.

@@ -8,7 +8,10 @@
 //!   same bytes from copies written in opposite file orders. M1 turns
 //!   `ac01_the_relay_walks_from_its_start` red; the copies stay alike under
 //!   it, `SpecGraph` having sorted the files by path before any walk.
-//! - AC-02: the four types, `from` and `to` the reading direction. M2.
+//! - AC-02: the types, `from` and `to` the reading direction. M2. Since
+//!   docs/features/flow-scope.md (RM-0083) FS-2 (a), ADR-0055's three:
+//!   flow-gaps' `depends_on` is no edge and no `inner` entry, its counts
+//!   below are less that one (`expected.json` keeps the link written).
 //! - AC-03: the planted gaps, the rows of `expected.json`.
 //! - AC-04: loops are no gaps, on both projects. M3, M4.
 //! - AC-05: lifted edges; a count conserved at every depth. M5.
@@ -588,8 +591,11 @@ fn ac01_opposite_file_orders_give_the_same_bytes() {
 
 // ------------------------------------------------------------------- AC-02
 
-/// AC-02: all four types in flow-gaps; `from` and `to` the reading
+/// AC-02: the three types in flow-gaps; `from` and `to` the reading
 /// direction, read against the document each edge is written in. M2.
+/// docs/features/flow-scope.md FS-2 (a): `depends_on` no longer, so
+/// `expected.json`'s one written `depends_on` link reads as no edge, and
+/// `LND-HAND -> PLT-MARK | depends_on` is gone.
 #[test]
 fn ac02_every_type_reads_in_its_own_direction() {
     let flow = Flow::new("flow-types");
@@ -602,7 +608,7 @@ fn ac02_every_type_reads_in_its_own_direction() {
         .collect();
     assert_eq!(
         types,
-        BTreeSet::from(["depends_on", "follows", "supplies", "uses"]),
+        BTreeSet::from(["follows", "supplies", "uses"]),
         "{document}"
     );
     for edge in edges {
@@ -616,15 +622,23 @@ fn ac02_every_type_reads_in_its_own_direction() {
         assert_eq!(edge["count"], json!(1), "{edge}");
     }
     for (kind, count) in want["edges"].as_object().expect("the counts") {
+        // FS-2 (a): the link is written, and no flow reads it.
+        let read = if kind == "depends_on" {
+            0
+        } else {
+            count.as_u64().expect("a count")
+        };
         assert_eq!(
             edges.iter().filter(|edge| edge["type"] == *kind).count() as u64,
-            count.as_u64().expect("a count"),
+            read,
             "{kind}: {document}"
         );
     }
-    assert_eq!(
-        edge(&document, "LND-HAND", "PLT-MARK", "depends_on")["path"],
-        "docs/spec/lnd-hand.md"
+    assert!(
+        !edges
+            .iter()
+            .any(|edge| edge["from"] == "LND-HAND" && edge["to"] == "PLT-MARK"),
+        "FS-2 (a): LND-HAND -> PLT-MARK | depends_on is gone: {document}"
     );
     assert_eq!(
         edge(&document, "PLT-FEED-A", "PLT-FEED-B", "supplies")["path"],
@@ -825,14 +839,10 @@ fn the_whole_corpus_reads_alike_with_and_without_a_root() {
     assert_eq!(all["nodes"], top["nodes"]);
     assert_eq!(all["edges"], top["edges"]);
     assert_eq!(all["nodes"].as_array().expect("nodes").len(), 29, "{all}");
+    // docs/features/flow-scope.md FS-2 (a): no `depends_on`.
     assert_eq!(
         counted(&all),
-        typed(&[
-            ("follows", 25),
-            ("uses", 3),
-            ("supplies", 2),
-            ("depends_on", 1),
-        ])
+        typed(&[("follows", 25), ("uses", 3), ("supplies", 2)])
     );
     for id in ["LND-ASK", "LND-A", "LND-B"] {
         assert_eq!(node(&all, id)["distance"], json!(0), "{id}");
@@ -978,11 +988,9 @@ fn ac05_the_wings_show_one_lifted_edge() {
     );
     let lend = node(&document, "WING-LEND");
     assert_eq!(lend["holds"], json!(7), "{lend}");
-    assert_eq!(
-        inner(lend),
-        typed(&[("follows", 8), ("uses", 2), ("depends_on", 1)]),
-        "{lend}"
-    );
+    // docs/features/flow-scope.md FS-2 (a): no `inner` entry names
+    // `depends_on`.
+    assert_eq!(inner(lend), typed(&[("follows", 8), ("uses", 2)]), "{lend}");
     let broken = node(&document, "WING-BROKEN");
     assert_eq!(broken["holds"], json!(16), "{broken}");
     assert_eq!(
@@ -1001,12 +1009,8 @@ fn ac05_the_wings_show_one_lifted_edge() {
 fn ac05_a_depth_conserves_counts_and_keeps_the_rows() {
     let flow = Flow::new("flow-depths");
     let root = fixture(GAPS);
-    let want = typed(&[
-        ("follows", 25),
-        ("uses", 3),
-        ("supplies", 2),
-        ("depends_on", 1),
-    ]);
+    // docs/features/flow-scope.md FS-2 (a): no `depends_on`.
+    let want = typed(&[("follows", 25), ("uses", 3), ("supplies", 2)]);
     let whole = flow.text(&root, &["WING-LIBRARY"]);
     let rows = gap_lines(&whole.stdout);
     let mut shown = Vec::new();
@@ -1151,7 +1155,8 @@ fn ac06_the_same_binary_answers_on_four_projects() {
     for (name, first) in [
         (RELAY, "flow all | nodes 8, edges 10, depth -"),
         (HIRE, "flow all | nodes 8, edges 9, depth -"),
-        (GAPS, "flow all | nodes 29, edges 31, depth -"),
+        // docs/features/flow-scope.md FS-2 (a): `depends_on` no edge.
+        (GAPS, "flow all | nodes 29, edges 30, depth -"),
         ("spec-c", "flow all | nodes 0, edges 0, depth -"),
     ] {
         let root = fixture(name);
@@ -1174,7 +1179,8 @@ fn ac06_the_same_binary_answers_on_four_projects() {
         "{}",
         run.show()
     );
-    // The two game-design and tooling corpora hold `depends_on`.
+    // The two game-design and tooling corpora hold `depends_on`, which no
+    // flow reads since docs/features/flow-scope.md FS-2: they still answer.
     for name in ["spec-a", "spec-b"] {
         let root = fixture(name);
         let run = flow.run(&root, &[]);
@@ -2174,9 +2180,10 @@ fn a_self_edge_is_an_edge_while_shown_and_inner_when_folded() {
     }
     let folded = flow.json(&root, &["WING-LEND", "--depth", "0"]);
     assert_eq!(folded["edges"], json!([]), "{folded}");
+    // docs/features/flow-scope.md FS-2 (a): no `depends_on` entry.
     assert_eq!(
         inner(node(&folded, "WING-LEND")),
-        typed(&[("follows", 8), ("uses", 2), ("depends_on", 1)]),
+        typed(&[("follows", 8), ("uses", 2)]),
         "its self-edge among the eight: {folded}"
     );
 }
@@ -2825,7 +2832,8 @@ fn ac14_the_no_start_scope_counts_as_no_document() {
 
 /// AC-14: a text node line ends ` | gaps <g>` above 0 and holds no such
 /// field at 0: the depth-1 read whole, then every line of every depth
-/// against its document.
+/// against its document. docs/features/flow-scope.md FS-2 (a): WING-LEND's
+/// `inner` holds no `depends_on` entry, 10 where it held 11.
 #[test]
 fn ac14_a_text_line_ends_gaps_above_zero() {
     let flow = Flow::new("flow-text");
@@ -2837,7 +2845,7 @@ fn ac14_a_text_line_ends_gaps_above_zero() {
             "0 WING-BROKEN | wing | The closed wing | docs/spec/wing-broken.md:1 | start | end \
              | group WING-LIBRARY | holds 16, inner 17 | gaps 12",
             "0 WING-LEND | wing | The lending wing | docs/spec/wing-lend.md:1 | start | end \
-             | group WING-LIBRARY | holds 7, inner 11 | gaps 1",
+             | group WING-LIBRARY | holds 7, inner 10 | gaps 1",
             "- WING-HEADLESS | wing | The back room | docs/spec/wing-headless.md:1 | group \
              WING-LIBRARY | holds 2, inner 1 | gaps 2",
             "- WING-LIBRARY | wing | The public library | docs/spec/wing-library.md:1",

@@ -3,20 +3,21 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-09
 ---
 
 # `spec flow`: the walk, typed edges, lifted edges and gap rows
 
-A read of the flow links (`flow-links.md`): `spec flow [ROOT] [--depth N] [--trace] [--json]`, MCP `get_flow {root?, depth?, trace?}`, daemon `GET .../flow?root=&depth=&trace=`. It writes only the data directory, as `spec tree`. Gap rows and rollups are computed per read; they change no exit, finding, status or gate (ADR-0012, ADR-0047).
+A read of the flow links (`flow-links.md`): `spec flow [ROOT] [--depth N] [--stage S] [--trace] [--json]`, MCP `get_flow {root?, depth?, stage?, trace?}`, daemon `GET .../flow?root=&depth=&stage=&trace=`. It writes only the data directory, as `spec tree`. Gap rows and rollups are computed per read; they change no exit, finding, status or gate (ADR-0012, ADR-0047).
 
 ## The read
 
 - **Scope.** ROOT's holders and every document within them by `parent:`, flow links or not. No ROOT: every live document holding or receiving a flow link or selected by a `[flow]` rule, with its `parent:` ancestors. So a rooted read can hold a document the whole read lacks: `AREA-HIRE` in `spec-c`, whose whole read has no node. Documents only: a link to `ID#SECTION` lands on its document. Tier 3 and generated stay out (`left_out`).
-- **Typed edges.** Every resolved link of `FLOW_LINK_TYPES` with both ends in scope; containment is `group`. `from` and `to` give the reading direction, so a screen draws an arrow with no branch on a type and picks by `type` what it shows.
+- **Typed edges.** Every resolved link of `FLOW_LINK_TYPES`, ADR-0055's three (`follows`, `uses`, `supplies`), with both ends in scope; `depends_on` orders a plan, never a flow. Containment is `group`. `from` and `to` give the reading direction, so a screen draws an arrow with no branch on a type and picks by `type` what it shows.
 - **Walk.** `distance`: breadth-first over `follows` from the starts (marked, else steps no `follows` edge enters), null where unreached. It is the scope's walk: under a ROOT it restarts at that scope's starts. Nodes by (distance, unreached last, path), edges by (`from`, `to`, type, kind).
 - **Depth** counts from the roots (0), as `spec tree`; default unbounded. A document deeper than N shows as its ancestor at N. A shown node's `distance` is the least of what it holds, itself included, null only when nothing it holds is reached; `start` and `end` are true when it or anything it holds is one, folded over the same members, so the overview marks where a flow begins and ends. An edge with both ends in one shown node joins its `inner`; any other is lifted, merged by (`from`, `to`, `type`, `kind`) with `count`; `when` only at count 1; `path`, `line` the first written. `--depth` never changes a gap row. A node's `gaps` counts the documents this read's measured rows name among what it holds, itself included; the set is taken before any fold or cap, so a depth moves no document's count, and `no-start`'s scope is no document (`FlowGap.files` carries each row's files, not printed).
 - **`stage`.** A document's front-matter `stage:`, typed `Text`, in any script: project vocabulary nothing resolves or branches on. Counted by no hash (`node-revision.md` "Never counted"), so re-cutting stages raises no revision and marks no card, and it cuts across groups, which `parent:` cannot. A shown node's is its own: a fold takes nothing from what it holds.
+- **`--stage S`** (`-` for none) cuts the shown nodes after the fold and moves nothing else: the scope, the walk, the ten rows, `left_out`, `notes`, `root`, `reason` and `depth` are the read's without it. It keeps a shown node whose own `stage` is S, byte for byte as `spec trace --stage` compares; `-` a shown flow step with no `stage:`, never a group or a definition; then the edges whose two ends are kept. Each kept node and edge is byte-equal to its object without `--stage`, `group` naming the holder whether kept or not. The header's counts, the cap, `truncated` and `omitted_*` count what is kept; nothing is echoed. A stage nothing carries: 0 nodes, exit 0. A literal `stage: "-"` cannot be asked (`spec-trace.md` "Known limits"). The read's work does not shrink, only its payload.
 - **`--trace`** adds each shown node's `rollup` and `counts`, `spec trace`'s (`spec-trace.md` "The read"); without it both are `null` and no queue is read. The CLI joins them by file after core's read, so core reads no queue. `rollup` covers the node's own cards, `counts` it and what it holds by `parent:`. It never fails a flow: a queue that cannot be read, a newer one included, leaves both `null` with a note `rollups not shown: <why>`, never `no card`; one below this build's is read as it stands and named. Notes on marks: every card's with no ROOT, as `spec trace`; under a ROOT, what the shown nodes hold.
 
 **Reuse is not here:** `pack:` and overrides are RM-0058's.
@@ -75,22 +76,14 @@ A cycle is Tarjan's component of two or more nodes or with a self-edge. Items so
 
 ## Readings
 
-- **A self-edge** stays an edge while its document is shown and joins `inner` when folded.
-- **`start`** means the walk's source, derived starts included, so `no-start 1` and a node marked `start` can stand together; neither it nor `end` stays a shown node's own: both fold.
-- **Only an unresolved `follows` keeps its document** a step; an unresolved `uses`, `supplies` or `depends_on` does not. A step whose only `follows` is unresolved, with no marked start, is a derived start with distance 0.
-- **Several holders of an ID:** a link uses its first admitted holder; under a ROOT, a first holder outside makes it a crossing edge.
-- **A left-out source:** a live document receiving `follows` from a left-out document is neither step nor member.
-- **Crossing edges.** Under a ROOT, a `follows` edge crossing the scope is an entry or a way out, so a sub-flow is not called broken. It is no edge of that read.
-- **`unjoined-parallel`** walks only splits of two or more branches, breadth-first, one step per branch in turn, stopping at the first step all branches reached; a one-branch split is listed with no walk; a split with no join still walks each branch to its end. The walk covers every admitted document, beyond the scope too, so a sub-flow is not called broken.
-- **`gaps`.** A row can name a document outside the read, which no node counts; two holders of one ID count as two.
-- **`definition-*` and `supply-unfed`** list what is in scope and read links over every live document: domain-free, by links alone.
+Self-edges, `start`, unresolved links, several holders, left-out sources, crossings, `gaps`: `spec-flow-readings.md`.
 
 ## Code
 
 - Model: `FLOW_LINK_TYPES`, with `USES` and `SUPPLIES` consts; the `Direction` reads the link, `In` running target to source.
 - Core `flow_toml.rs` reads `[flow]` table by table and never fails: a table's first error stays on it. Selectors share `health_toml.rs`' reader and `check/health.rs`' judge (`documents_selected`).
-- Core `flow.rs` `flow_read` takes resolved links from `SpecGraph::edges`, builds the scope and steps, computes the ten rows before any fold, then folds by depth; one parent map and one fold per read keep it linear in `parent:` depth. Tarjan is iterative. `flow_walk` -> `FlowWalk {steps, distance}` is that walk with no row computed, for `spec trace`'s lanes; `stage_of` reads a file's `stage:`; `FlowNode.file` is what a read joins by.
-- CLI `flow.rs` resolves ROOT, caps and renders, owns the causes' wording (`cause_text`, `remedy`), and joins `TraceBadge` by file (`trace.rs` `flow_badges`). MCP `get_flow` with the closed `FlowDocument` mirror. Daemon route `View::Browser`.
+- Core `flow.rs` `flow_read` takes resolved links from `SpecGraph::edges`, builds the scope and steps, computes the ten rows before any fold, then folds by depth, then cuts to `FlowAsk.stage` (`FlowStage::{Named, Unstaged}`), `FlowRead.shown` keeping every shown node's file from before the cut; one parent map and one fold per read keep it linear in `parent:` depth. Tarjan is iterative. `flow_walk` -> `FlowWalk {steps, distance}` is that walk with no row computed, for `spec trace`'s lanes; `stage_of` reads a file's `stage:`; `FlowNode.file` is what a read joins by.
+- CLI `flow.rs` resolves ROOT, caps and renders, owns the causes' wording (`cause_text`, `remedy`), maps `-` (`trace.rs` `NO_STAGE`) to `Unstaged`, and joins `TraceBadge` and the notes by file over `FlowRead.shown` (`trace.rs` `flow_badges`), so a stage moves no note. MCP `get_flow` with the closed `FlowDocument` mirror. Daemon route `View::Browser`.
 
 ## Known limits
 
@@ -100,4 +93,4 @@ A cycle is Tarjan's component of two or more nodes or with a self-edge. Items so
 
 ## Tests
 
-Fixtures `fixtures/flow-gaps` (a library's lending, no game word), `flow-relay`, `flow-hire`, `trace-almanac`, `spec-c`. Core and CLI `tests/flow_read.rs`, CLI `trace_views.rs`, `flow_linear.rs`, MCP `tests/mcp_flow.rs`, http `tests/flow.rs`; the lines: CLI `flow_authoring.rs`, MCP `mcp_flow_authoring.rs`; `check_genre.rs`, `no_domain.rs` and the CLI and MCP genre scans cover the sources. Unpinned: three or more `parallel` branches.
+Fixtures `fixtures/flow-gaps` (a library's lending, no game word), `flow-relay`, `flow-hire`, `trace-almanac`, `spec-c`. Core and CLI `tests/flow_read.rs`, CLI `trace_views.rs`, `flow_linear.rs`, `flow_scope.rs` (with `roadmap-a`: `depends_on` alone is no flow), MCP `tests/mcp_flow.rs`, http `tests/flow.rs`; the lines: CLI `flow_authoring.rs`, MCP `mcp_flow_authoring.rs`; `check_genre.rs`, `no_domain.rs` and the CLI and MCP genre scans cover the sources. Unpinned: three or more `parallel` branches.

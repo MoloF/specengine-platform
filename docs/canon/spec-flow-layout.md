@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-09
 ---
 
 # The Flow screen: layout and forms
@@ -25,5 +25,5 @@ How a flow read is placed and how its edges are drawn; `flow-canvas`, code `ui/s
 `labels.ts` alone tells gap states, codes, rollups and `edge.kind` apart; an unknown rollup is a neutral badge. `FlowEdge` needs no type word: `from` and `to` are in reading direction, and layers and arcs ask no type.
 
 - **Type.** Colour `--flow-edge-0` to `-3` and plain dash go by place in the sorted types of Top's `edges` and `inner`, which hold every edge, so folding moves no dash.
-- **Kind.** `FLOW_DASHES`, seven distinct: four by type, three by `kind`; `repeat` alone is dotted, in every project, and heavier. An unknown value shows raw, with its type's dash.
+- **Kind.** `FLOW_DASHES`, seven distinct: four by a type's place, of which a read fills three, three by `kind`; `repeat` alone is dotted, in every project, and heavier. An unknown value shows raw, with its type's dash.
 - **Label.** `kind`, `when` (clipped at 24 characters, whole in the List), `x<count>` above 1. `FlowLegend` prints each sample, words raw, and the arc, "runs against the walk".

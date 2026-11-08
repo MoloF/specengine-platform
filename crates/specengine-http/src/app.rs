@@ -293,9 +293,10 @@ where
 /// The fence, before routing (failing: 403, no `Allow`, nothing read):
 /// `Host` exactly `127.0.0.1:<port>` or `localhost:<port>`; `Origin`
 /// absent or `http://` and one of them; `Sec-Fetch-Site` absent,
-/// `same-origin` or `none`. A hub judges [`Hub::fenced`] instead and hands
-/// the handlers its [`Login`]; a local daemon reads no login header. Every
-/// response gets `Cache-Control: no-store`.
+/// `same-origin` or `none`, but for the [`landing`]
+/// (docs/features/local-landing.md). A hub judges [`Hub::fenced`] instead
+/// and hands the handlers its [`Login`]; a local daemon reads no login
+/// header. Every response gets `Cache-Control: no-store`.
 async fn fence(State(app): State<Shared>, mut request: Request, next: Next) -> Response {
     let passed = match &app.hub {
         Some(hub) => {
@@ -305,7 +306,12 @@ async fn fence(State(app): State<Shared>, mut request: Request, next: Next) -> R
                     request.extensions_mut().insert(login);
                 })
         }
-        None => fenced(app.port, request.headers()),
+        None => fenced(
+            app.port,
+            request.method(),
+            request.uri().path(),
+            request.headers(),
+        ),
     };
     let mut response = if let Err(reason) = passed {
         error(StatusCode::FORBIDDEN, &reason)
@@ -316,8 +322,10 @@ async fn fence(State(app): State<Shared>, mut request: Request, next: Next) -> R
     response
 }
 
-/// Why the request is refused, if it is.
-fn fenced(port: u16, headers: &HeaderMap) -> Result<(), String> {
+/// Why the request is refused, if it is: `Host`, then `Origin`, then
+/// `Sec-Fetch-Site` with the [`landing`]. `path` is the URI's, never
+/// decoded or normalised.
+fn fenced(port: u16, method: &Method, path: &str, headers: &HeaderMap) -> Result<(), String> {
     let own = [format!("127.0.0.1:{port}"), format!("localhost:{port}")];
     let host = single(headers, &HOST, "Host")?;
     if !host.is_some_and(|host| own.iter().any(|own| own.as_bytes() == host)) {
@@ -336,16 +344,33 @@ fn fenced(port: u16, headers: &HeaderMap) -> Result<(), String> {
             own[0], own[1]
         ));
     }
-    let site = HeaderName::from_static("sec-fetch-site");
-    if let Some(site) = single(headers, &site, "Sec-Fetch-Site")?
+    if let Some(site) = single(headers, &SEC_FETCH_SITE, "Sec-Fetch-Site")?
         && site != b"same-origin"
         && site != b"none"
+        && !landing(method, path, headers)?
     {
         return Err(
             "refused: Sec-Fetch-Site, when sent, must be `same-origin` or `none`".to_owned(),
         );
     }
     Ok(())
+}
+
+pub(crate) const SEC_FETCH_SITE: HeaderName = HeaderName::from_static("sec-fetch-site");
+const SEC_FETCH_MODE: HeaderName = HeaderName::from_static("sec-fetch-mode");
+const SEC_FETCH_DEST: HeaderName = HeaderName::from_static("sec-fetch-dest");
+
+/// The one exception to `Sec-Fetch-Site`, a local daemon's as a hub's: a
+/// top-level navigation to `/`, as the login door and a link from a chat or
+/// another site arrive. Static bytes, never framed, and `/` still takes the
+/// rest of the fence; an asset, a frame, any API route or method never
+/// qualifies. Both fences call this one predicate, so they cannot drift
+/// (docs/features/local-landing.md D1).
+pub(crate) fn landing(method: &Method, path: &str, headers: &HeaderMap) -> Result<bool, String> {
+    Ok(method == Method::GET
+        && path == "/"
+        && single(headers, &SEC_FETCH_MODE, "Sec-Fetch-Mode")? == Some(b"navigate".as_slice())
+        && single(headers, &SEC_FETCH_DEST, "Sec-Fetch-Dest")? == Some(b"document".as_slice()))
 }
 
 /// The one value of a header, if sent; sent twice is refused.
@@ -637,15 +662,17 @@ async fn graph(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 
 /// `GET …/flow`: `spec flow --json`, the browser view (every node, edge
 /// and gap item, nothing cut); `root` naming nothing: the exit-1 document,
-/// a 404. A gap row changes no status. `trace=true` is `--trace`: a queue
-/// that cannot be read is a note, never a failed flow.
+/// a 404. A gap row changes no status. `stage` is `--stage` (`-`: the
+/// steps with none), once. `trace=true` is `--trace`: a queue that cannot
+/// be read is a note, never a failed flow.
 async fn flow(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
-    let args = args("flow", &["root", "depth", "trace"], &uri)?;
+    let args = args("flow", &["root", "depth", "stage", "trace"], &uri)?;
     let request = (|| {
         Ok::<_, String>(FlowRequest {
             root: args.text("root")?,
             depth: args.integer("depth")?,
+            stage: args.text("stage")?,
             trace: args.boolean("trace")?.unwrap_or(false),
         })
     })()
@@ -1310,10 +1337,12 @@ mod tests {
 
     #[test]
     fn the_fence_takes_only_its_own_origin() {
-        assert!(fenced(7, &headers(&[("host", "127.0.0.1:7")])).is_ok());
+        assert!(fenced(7, &Method::GET, "/", &headers(&[("host", "127.0.0.1:7")])).is_ok());
         assert!(
             fenced(
                 7,
+                &Method::GET,
+                "/",
                 &headers(&[("host", "localhost:7"), ("origin", "http://localhost:7")])
             )
             .is_ok()
@@ -1321,16 +1350,28 @@ mod tests {
         assert!(
             fenced(
                 7,
+                &Method::GET,
+                "/",
                 &headers(&[("host", "127.0.0.1:7"), ("sec-fetch-site", "none")])
             )
             .is_ok()
         );
-        assert!(fenced(7, &headers(&[])).is_err());
-        assert!(fenced(7, &headers(&[("host", "evil.example:7")])).is_err());
-        assert!(fenced(7, &headers(&[("host", "127.0.0.1:8")])).is_err());
+        assert!(fenced(7, &Method::GET, "/", &headers(&[])).is_err());
         assert!(
             fenced(
                 7,
+                &Method::GET,
+                "/",
+                &headers(&[("host", "evil.example:7")])
+            )
+            .is_err()
+        );
+        assert!(fenced(7, &Method::GET, "/", &headers(&[("host", "127.0.0.1:8")])).is_err());
+        assert!(
+            fenced(
+                7,
+                &Method::GET,
+                "/",
                 &headers(&[("host", "127.0.0.1:7"), ("origin", "http://evil.example")])
             )
             .is_err()
@@ -1338,6 +1379,8 @@ mod tests {
         assert!(
             fenced(
                 7,
+                &Method::GET,
+                "/",
                 &headers(&[("host", "127.0.0.1:7"), ("sec-fetch-site", "cross-site")])
             )
             .is_err()
@@ -1345,6 +1388,8 @@ mod tests {
         assert!(
             fenced(
                 7,
+                &Method::GET,
+                "/",
                 &headers(&[("host", "127.0.0.1:7"), ("sec-fetch-site", "same-site")])
             )
             .is_err()
@@ -1352,6 +1397,8 @@ mod tests {
         assert!(
             fenced(
                 7,
+                &Method::GET,
+                "/",
                 &headers(&[("host", "127.0.0.1:7"), ("host", "127.0.0.1:7")])
             )
             .is_err()

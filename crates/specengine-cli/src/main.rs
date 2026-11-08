@@ -140,6 +140,9 @@ enum Command {
         /// Levels below the roots at most (0: the roots only); deeper documents show as their ancestor there.
         #[arg(long, value_name = "N", allow_negative_numbers = true)]
         depth: Option<i64>,
+        /// Keep the nodes of this stage, `-` the flow steps with none; the gap rows stay whole.
+        #[arg(long, value_name = "S")]
+        stage: Option<String>,
         /// Each shown node's state and counts from `spec trace` too.
         #[arg(long)]
         trace: bool,
@@ -1151,6 +1154,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
         Command::Flow {
             start,
             depth,
+            stage,
             trace,
         } => Outcome::Flow(Box::new(specengine_cli::flow(
             env,
@@ -1158,6 +1162,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             &FlowRequest {
                 root: start,
                 depth,
+                stage,
                 trace,
             },
         )?)),

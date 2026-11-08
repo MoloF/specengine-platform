@@ -9,6 +9,12 @@
 //! no hash-map order and no environment enter it: one seed and one size
 //! give one byte sequence. [`write`] puts the files under a directory.
 //!
+//! Each part directory is one flow (`docs/features/flow-scope.md` "Data"):
+//! its first file the head, every other naming it as `parent:` and
+//! following the file before it; every part document carries one of eight
+//! stage words, the seed's alone, by its position in its directory, so a
+//! stage crosses every directory and area.
+//!
 //! The text is a closed vocabulary: syllable words (one of `j k q v x z`,
 //! then one of `a e i o u y`), `P-` IDs, area and group names, one date,
 //! digit runs and the config's and the front-matter's keys. It names no
@@ -92,6 +98,10 @@ const DATE: &str = "2026-01-01";
 const W_TARGETS: usize = 20;
 /// The search queries of a size.
 const QUERIES: usize = 3;
+/// The stage words of every tree (docs/features/flow-scope.md "Data").
+const STAGES: usize = 8;
+/// The syllables of a stage word.
+const STAGE_SYLLABLES: usize = 2;
 
 /// One size's tree, in memory.
 pub struct Synthetic {
@@ -140,6 +150,11 @@ pub struct Samples {
     pub hubs: Vec<Target>,
     /// Each hub's incoming links, in the order of [`Self::hubs`].
     pub hub_degrees: Vec<u32>,
+    /// The head of the first directory (`areas/a00/g0000/`): a group's
+    /// flow read.
+    pub flow_root: String,
+    /// The first stage word: the widest stage read.
+    pub stage: String,
 }
 
 /// A node read by ID, and the area whose Tier 1 its W_after counts.
@@ -185,7 +200,11 @@ pub fn write(synthetic: &Synthetic, tree: &Path) -> Result<(), String> {
 
 /// The tree of `nodes` part nodes for `seed`, with its samples.
 pub fn generate(seed: u64, nodes: usize) -> Synthetic {
-    let readmes = Readmes::draw(&mut Rng::seeded(&[seed]));
+    // The seed's own stream: the READMEs, then the stage words, so both are
+    // byte-equal at every size.
+    let mut own = Rng::seeded(&[seed]);
+    let readmes = Readmes::draw(&mut own);
+    let stages = stage_words(&mut own);
     let mut rng = Rng::seeded(&[seed, nodes as u64]);
     let plan = Plan::lay_out(&mut rng, nodes);
     let links = Links::draw(&mut rng, &plan);
@@ -201,10 +220,18 @@ pub fn generate(seed: u64, nodes: usize) -> Synthetic {
     let mut sections = 0;
     let mut rare_live: Vec<usize> = Vec::new();
     for (k, file) in plan.files.iter().enumerate() {
-        let text = part_file(&mut rng, &plan, &links, k, &mut sections, &mut rare_live);
+        let text = part_file(
+            &mut rng,
+            &plan,
+            &links,
+            &stages,
+            k,
+            &mut sections,
+            &mut rare_live,
+        );
         files.push((part_path(k, file.first), text.into_bytes()));
     }
-    let samples = Samples::draw(&mut rng, &plan, &links, &rare_live);
+    let samples = Samples::draw(&mut rng, &plan, &links, &rare_live, &stages);
     files.sort_by(|a, b| a.0.cmp(&b.0));
 
     let non_hub = (0..nodes).filter(|&node| !plan.is_hub(node));
@@ -453,7 +480,13 @@ fn draw_capped(
 // The samples.
 
 impl Samples {
-    fn draw(rng: &mut Rng, plan: &Plan, links: &Links, rare_live: &[usize]) -> Self {
+    fn draw(
+        rng: &mut Rng,
+        plan: &Plan,
+        links: &Links,
+        rare_live: &[usize],
+        stages: &[String; STAGES],
+    ) -> Self {
         let nodes = plan.file_of.len();
         let live_non_hub: Vec<usize> = (0..nodes)
             .filter(|&node| !plan.is_hub(node) && plan.is_live(node))
@@ -472,6 +505,9 @@ impl Samples {
             queries,
             hubs: hub_nodes.iter().map(|&node| target(plan, node)).collect(),
             hub_degrees: hub_nodes.iter().map(|&node| links.incoming[node]).collect(),
+            // Part file 0 lies in the first directory, and no file before it.
+            flow_root: id_of(plan.files[head_of(0)].first),
+            stage: stages[0].clone(),
         }
     }
 }
@@ -514,6 +550,42 @@ fn part_path(k: usize, first: usize) -> String {
     format!("{AREAS_DIR}/a{area:02}/g{group:04}/{}.md", id_of(first))
 }
 
+// The flow shape (docs/features/flow-scope.md "Data"): part file `k`'s
+// directory holds the files `area + 16 j` of its group's 100 `j`, so the
+// file before `k` in it is `k - 16`, and its head the first `j`.
+
+/// The head of part file `k`'s directory: the file there with the least k.
+fn head_of(k: usize) -> usize {
+    let group = k / AREAS / GROUP_FILES;
+    k % AREAS + AREAS * GROUP_FILES * group
+}
+
+/// The part file before `k` in its directory; `None` for the head.
+fn before(k: usize) -> Option<usize> {
+    (k != head_of(k)).then(|| k - AREAS)
+}
+
+/// Part file `k`'s stage: word `floor(k / 16) mod 8`, so one directory
+/// holds every stage and one stage every directory.
+fn stage_of(stages: &[String; STAGES], k: usize) -> &str {
+    &stages[k / AREAS % STAGES]
+}
+
+/// Eight distinct two-syllable words, drawn again on a repeat.
+fn stage_words(rng: &mut Rng) -> [String; STAGES] {
+    let mut words: Vec<String> = Vec::with_capacity(STAGES);
+    while words.len() < STAGES {
+        let mut word = String::with_capacity(2 * STAGE_SYLLABLES);
+        for _ in 0..STAGE_SYLLABLES {
+            syllable(rng, &mut word);
+        }
+        if !words.contains(&word) {
+            words.push(word);
+        }
+    }
+    std::array::from_fn(|at| words[at].clone())
+}
+
 /// The READMEs, drawn from the seed's own stream.
 struct Readmes {
     tier0: String,
@@ -545,14 +617,17 @@ impl Readmes {
     }
 }
 
-/// Part file `k`: its front-matter, its document's H1 and paragraph (the
-/// hub it names), then each section's heading and paragraph (its mentions
-/// and its rare word). `sections` counts the sections written so far, in
-/// ID order; `rare_live` gathers each rare word a live section holds.
+/// Part file `k`: its front-matter (its head as `parent:`, its stage, its
+/// `depends_on` and its `follows` of the file before it), its document's
+/// H1 and paragraph (the hub it names), then each section's heading and
+/// paragraph (its mentions and its rare word). `sections` counts the
+/// sections written so far, in ID order; `rare_live` gathers each rare word
+/// a live section holds.
 fn part_file(
     rng: &mut Rng,
     plan: &Plan,
     links: &Links,
+    stages: &[String; STAGES],
     k: usize,
     sections: &mut usize,
     rare_live: &mut Vec<usize>,
@@ -565,9 +640,22 @@ fn part_file(
         text.push_str("status: draft\n");
     }
     text.push_str(&format!("scope: [a{:02}]\n", k % AREAS));
+    let before = before(k);
+    if before.is_some() {
+        let head = plan.files[head_of(k)].first;
+        text.push_str(&format!("parent: {}\n", id_of(head)));
+    }
+    text.push_str(&format!("stage: {}\n", stage_of(stages, k)));
+    if !links.depends[k].is_empty() || before.is_some() {
+        text.push_str("links:\n");
+    }
     if !links.depends[k].is_empty() {
         let ids: Vec<String> = links.depends[k].iter().map(|&node| id_of(node)).collect();
-        text.push_str(&format!("links:\n  depends_on: [{}]\n", ids.join(", ")));
+        text.push_str(&format!("  depends_on: [{}]\n", ids.join(", ")));
+    }
+    if let Some(before) = before {
+        let before = plan.files[before].first;
+        text.push_str(&format!("  follows: [{}]\n", id_of(before)));
     }
     let heading = title(rng);
     let hub: Vec<String> = links.hub_named[k]

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-http]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-09
 ---
 
 # Daemon: spec serve
@@ -84,7 +84,7 @@ Exit 2, one stderr line; `spec serve: ` or `specengine-http: ` first:
 <a id="trust"></a>
 ## Trust
 
-No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distribution`). The daemon's `127.0.0.1` bind, its Host, Origin and Sec-Fetch-Site fence (`crates/specengine-http/README.md`) and absent CORS stop other sites' pages; they identify no one. Threat model: any local process of any account can read everything served, stage a decision, and move, cancel, accept or clear a card under any name (loopback is not per-user; ADR-0057, `board-ui.md`), a departing accept storing one discrepancy; none confirms a decision from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve` today. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy in front), never in-app; a hub's answer to all of this is `hub.md#trust`.
+No authentication inside SpecEngine (ADR-0034, `docs/canon/architecture.md#distribution`). The daemon's `127.0.0.1` bind, its Host, Origin and Sec-Fetch-Site fence (`crates/specengine-http/README.md`) and absent CORS stop other sites' pages; they identify no one. A link from another site still opens `/`: static bytes in the person's tab, never framed, whose requests take the whole fence (`serve-ui.md` "Rules"). Threat model: any local process of any account can read everything served, stage a decision, and move, cancel, accept or clear a card under any name (loopback is not per-user; ADR-0057, `board-ui.md`), a departing accept storing one discrepancy; none confirms a decision from an ordinary shell; one faking a terminal (`script`) can, as with `spec approve` today. Hosting or a shared machine needs infrastructure first, per service (a WebAuthn proxy in front), never in-app; a hub's answer to all of this is `hub.md#trust`.
 
 ## Concurrency
 
