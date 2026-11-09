@@ -144,7 +144,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 
 ### Web UI — screens
 
-UI in **English** (ADR-0014); spec content as is (the project's language), fonts and search handle non-Latin scripts. Data: `specengine-http` by default, the mock with `?scenario=` (`ui/README.md` "Contract seam"). The nav is Overview, then the chosen workspace's sections (`docs/canon/workspaces.md`).
+Chrome in **English or Russian**, each viewer's choice, Russian from step 1b (ADR-0072, `docs/canon/ui-languages.md`); spec content and the daemon's, CLI's and MCP's text as is, fonts and search handle non-Latin scripts. Data: `specengine-http` by default, the mock with `?scenario=` (`ui/README.md` "Contract seam"). The nav is Overview, then the chosen workspace's sections (`docs/canon/workspaces.md`).
 
 | Screen | Content |
 |---|---|

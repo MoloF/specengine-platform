@@ -65,5 +65,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/symbol-reads.md](canon/symbol-reads.md) Symbol reads: lookup tiers, spec symbols, spec unmapped · crates/specengine-cli, crates/specengine-store, crates/specengine-code · tier 2
 - [docs/canon/task-package.md](canon/task-package.md) Task package: what an agent is given · crates/specengine-cli, crates/specengine-mcp, crates/specengine-model · tier 2
 - [docs/canon/tasks.md](canon/tasks.md) Tasks: commands, transitions, place, store · crates/specengine-store, crates/specengine-cli, crates/specengine-core · tier 2
+- [docs/canon/ui-languages.md](canon/ui-languages.md) UI languages: the chrome in English and Russian · ui · tier 2
 - [docs/canon/w-measurement.md](canon/w-measurement.md) W measurement: every task, before and after · crates/specengine-eval · tier 2
 - [docs/canon/workspaces.md](canon/workspaces.md) Workspaces: a trade's lens on a project · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · tier 2

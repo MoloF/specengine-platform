@@ -21,7 +21,7 @@ On 2026-11-08 the owner could not work on Flow. The causes, found in the code an
 
 His layout: a left pane by stage with the scope's sub-groups, bound to the URL (reload, Back and Forward keep the place); a canvas of the current scope only; a right pane always visible, with detail, description and actions, nothing jumping; few canvas actions; the legend a thin bottom bar expanding over the content; a one-line header; one screen, no page scroll.
 
-This slice rebuilds Flow in place, over 2a's stage read (RM-0083) and 1a's module (RM-0081). It goes ahead of 1b (RM-0082), which waits on the owner's Q1 and Q2: the new strings sit in one module for 1b to convert. The studio trial follows (08 s2 Phase 7).
+This slice rebuilds Flow in place, over 2a's stage read (RM-0083) and 1a's module (RM-0081). It follows 1b (RM-0082): its strings are keys of 1b's catalog and its letter keys go through 1b's `letterOf`. The sweep (RM-0090) and the studio trial follow (08 s2 Phase 7).
 
 ### Decisions
 
@@ -36,8 +36,8 @@ This slice rebuilds Flow in place, over 2a's stage read (RM-0083) and 1a's modul
 - **D9 The canvas holds still.** The wheel pans; a pinch or xyflow's zoom key zooms. A picture fits once, when its read lands; then only the owner, `c` and a gap activation move it. No `onlyRenderVisibleElements`: a read holds at most 200 boxes, which the 200-box trial draws, and it would unmount boxes the arrow keys reach.
 - **D10 The List is an outline** (cut 2c): every node and edge of the drawing read, each row a link that selects it, `path:line` in the panel only (Q10).
 - **D11 A gap goes to the AI as a card** (cut 2c). "Hand to your AI" is New card with the item's members as targets and its `cause` as goal. It never makes a `T-` task (Q9, an owner stop).
-- **D12 Keys still match `event.key`.** 1b's physical-key rule covers every screen and waits on the owner, so it is not pulled forward. No new letter key: Space, which opened a group, now enters it.
-- **D13 Strings in one module.** Every chrome string of a `src/flow/` view is a `FLOW_TEXT` member (`ui/src/flow/text.ts`) or a `labels.ts` word, one around data a function of it, as 1a's `WORKSPACE_TEXT`.
+- **D12 Keys by 1b's rule.** A letter key compares `letterOf(event)` (`ui/src/ui/keys.ts`), so `c` acts under a Russian layout. No new letter key: Space, which opened a group, now enters it.
+- **D13 Strings in the catalog.** Every chrome string of a `src/flow/` view is a `flow.` key of 1b's catalog (`ui/src/i18n/en.ts`, its Russian in `ru.ts`) or a `labels.ts` word, data a placeholder; `src/flow/` joins 1b's scan (`ui-languages.md` LG-10).
 - **D14 Graph and the Roadmap Chain are untouched**, `.graph-details` and its clamp included.
 
 ### Assumptions
@@ -134,9 +134,9 @@ Drawing keys: `staleTime: Infinity`, `refetchOnMount: "always"`: a place read be
 - **Classes.** `.flow-studio`, `-head`, `-places`, `-centre`, `-canvas`, `-bar`, `-legend` and `-panel`; no `graph-details` class in Flow's DOM.
 - **Dashes.** `FLOW_DASHES` and `--flow-edge-*` stay (a read fills three type places); a test pinning a fourth served type pins the constant.
 
-### Strings (`ui/src/flow/text.ts`)
+### Strings (`flow.` in `ui/src/i18n/en.ts`)
 
-At least these; the views' strings move in, and `labels.ts` keeps its meanings.
+At least these, each with its Russian in `ru.ts`; the views' strings move in. `f(a)` is a key with `{{a}}`; a count is `{{count}}`, making it plural.
 
 - `placesLabel` `Flow places`, `placesToggle` `Places`, `up(name)` `Up: <name>`, `topTitle` `The whole project`
 - `stagesHeading` `Stages`, `allStages` `All stages`, `stagesAtTop` `Stages show inside a group: open one.`, `laneCounts(c, n)` `<c> of <n> confirmed`, `stagesFailed` `Stages could not be read.`
@@ -196,7 +196,7 @@ The tests run on the mocks, the looks on the built UI. Each named mutation must 
   - (g) `module=berths` issues no `{depth: 0}`.
 
   Throughout: every `getFlow` is one of D2's forms, no `getTrace` is `{}` or has `stage`, and `getTree` appears in (f) alone. M26 a `getTree` drawing the places pane. M27 a stage read with no root. M28 an unrooted summary under a scope, or one summary per stage change.
-- [ ] **ST-14 Strings in one module.** A `policy.test.ts` scan of `src/flow/*.tsx`, tests excepted, finds no JSX text starting with a letter and no string-literal `aria-label`, `title` or `placeholder`. M29 a literal `Open` in a view.
+- [ ] **ST-14 Strings in the catalog.** 1b's scan (`ui-languages.md` LG-10) covers `src/flow/`: no JSX text with a letter, no string-literal text attribute; LG-1 holds for every `flow.` key. M29 a literal `Open` in a view.
 - [ ] **ST-form.**
   - `pnpm lint`, `pnpm build` and `pnpm test` pass, as do `cargo nextest run -p specengine-eval --test ui_policy --test anonymity --test doc_pointers` and `spec check` (0 errors, 0 warnings).
   - `GraphCanvas.tsx`, `RoadmapChain.tsx`, `src/graph/` and the `.graph-details*` and `.roadmap-*` rules are byte-equal to the base.
@@ -215,7 +215,7 @@ The tests run on the mocks, the looks on the built UI. Each named mutation must 
 
 ## Out of scope
 
-Canvas editing; a `T-` task; a card's discipline from the workspace (RM-0085); Graph and the Chain; any daemon, CLI or MCP change; translation, `event.code` keys (1b); a parent chain beyond Up; exit steps; a lifted edge's members; journeys; module filters on the Board and Roadmap; `[[flow.exclude]]`; RM-0070.
+Canvas editing; a `T-` task; a card's discipline from the workspace (RM-0085); Graph and the Chain; any daemon, CLI or MCP change; the other screens' strings (RM-0090); a parent chain beyond Up; exit steps; a lifted edge's members; journeys; module filters on the Board and Roadmap; `[[flow.exclude]]`; RM-0070.
 
 ### Risks
 
@@ -237,7 +237,7 @@ On each file touched, `reviewed:` moves to the ship date. Byte counts are today'
   - "Stacking and view": "The canvas takes the height of the fitted picture and its controls, within the Graph's measure;" becomes "The canvas fills the studio's centre pane; the wheel pans it, a pinch or the zoom key zooms it, and a selection moves nothing;" (+31 B).
   - "Layout": "a lane per read, nested." becomes "one read, one lane." if the nesting code goes.
 - **`docs/canon/spec-flow-readings.md`**: no change (0 B): it reads the CLI's cases; the studio adds no read.
-- **`ui/README.md`**: net 0 B, 8 189 B after. Any further word goes to the Flow canon.
+- **`ui/README.md`**: net 0 B over 1b's. Any further word goes to the Flow canon.
   - "Canvas": "the wheel scrolls the page;" becomes "the wheel scrolls the page, Flow's pans it;" (+16).
   - "Shell": "(bare: its home)" becomes "(bare: its home; Flow's place: `spec-flow-place.md`)" (+36).
   - "Shell": "(Questions: `round-ui.md`; `FlowState` with `stage`, `lanes`)" becomes "(Questions: `round-ui.md`)" (−35).

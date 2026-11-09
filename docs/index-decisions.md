@@ -23,7 +23,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0011](decisions/ADR-0011.md) UI is React 19 + Vite + @xyflow/react · ui · accepted
 - [ADR-0012](decisions/ADR-0012.md) Discrepancies block nothing; control is task approval · process · accepted
 - [ADR-0013](decisions/ADR-0013.md) Project generators stay in the project; docs checks move to spec check · docs · accepted
-- [ADR-0014](decisions/ADR-0014.md) The interface is in English · ui · accepted
 - [ADR-0015](decisions/ADR-0015.md) Distribution: cargo install + Claude Code plugin · architecture · accepted
 - [ADR-0016](decisions/ADR-0016.md) Legacy ID citations in code become weak mentions links · code · accepted
 - [ADR-0018](decisions/ADR-0018.md) Hybrid: revision in the marker + spec.lock for AST · code · accepted
@@ -79,4 +78,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0069](decisions/ADR-0069.md) A read trusts a file's stat key outside a 2 s racy window, and a hub's reads alone trust the index its writers keep · architecture · accepted
 - [ADR-0070](decisions/ADR-0070.md) A hub mints spec IDs from 100001 and a terminal below it; propose refuses the other side, apply never · architecture · accepted
 - [ADR-0071](decisions/ADR-0071.md) A hub's state leaves the host every 15 minutes, restic-encrypted, by the deployment's sidecars; no key and no SpecEngine code · scripts/deploy · accepted
+- [ADR-0072](decisions/ADR-0072.md) The UI's chrome is English or Russian, each viewer's choice, from one catalog, the only home of Russian text · ui, docs · accepted
 - [ADR-0073](decisions/ADR-0073.md) A workspace is a trade's lens from project config, never an entitlement, a control point or a hidden route · architecture · accepted

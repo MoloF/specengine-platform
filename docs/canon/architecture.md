@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [architecture]
 owner: owner
-reviewed: 2026-11-02
+reviewed: 2026-11-09
 ---
 
 # SpecEngine architecture rules
@@ -40,14 +40,14 @@ A `generated` document is no spec file: only its registered generator writes it 
 
 - Discrepancies, questions and proposals block nothing: a node may have several open proposals, rebased on `base_hash` when applied; an agent keeps working on a working answer, marked `// @assumes PR-…`, and a decision unlike it makes a follow-up task. ADR-0012.
 - The only control point is the owner approving a task on a terminal (`spec task approve`, no MCP tool; `claim_task` takes only `ready`). The `PreToolUse` hook passes a gated write only for an `in_progress` task claimed in its worktree and branch, never consulting the daemon (`docs/canon/gate.md`). ADR-0012, ADR-0039.
-- `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; a binding it cannot verify is never `ok`. How: `docs/canon/architecture-code.md#verify`. ADR-0042, ADR-0045, ADR-0050.
-- Reads of nodes (bundle, `show --bindings`, tree, task package, impact) show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it. How: `docs/canon/architecture-code.md#sync-in-reads`. ADR-0046.
-- `spec health` lists, read-only, suspect markers, unbound nodes and drift. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them. How: `docs/canon/architecture-code.md#health`. ADR-0047, ADR-0051.
+- `spec verify` shows drift between `spec.lock` and the tree and stops nothing unless a project's own `[verify] mode` says so; a binding it cannot verify is never `ok`. How: `architecture-code.md#verify`. ADR-0042, ADR-0045, ADR-0050.
+- Reads of nodes (bundle, `show --bindings`, tree, task package, impact) show each binding's `sync`, verify's plain state computed per read, never stored, nothing depending on it. How: `architecture-code.md#sync-in-reads`. ADR-0046.
+- `spec health` lists, read-only, suspect markers, unbound nodes and drift. A row it cannot measure shows its causes, never 0; no exit 1, check finding, status, claim, approval, task or gate depends on them. How: `architecture-code.md#health`. ADR-0047, ADR-0051.
 
 <a id="tasks"></a>
 ## Tasks and stack skills
 
-Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`docs/canon/tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`docs/canon/task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`docs/canon/architecture-code.md#tests`). ADR-0044.
+Tasks live per project, in its queue and dump (`#storage`), never in SpecEngine's repository (`docs/canon/tasks.md`). A task goes out as a stack-neutral, versioned package, the core never branching on a `profile` (`docs/canon/task-package.md` "Genre"); the code layer stays Rust-first. Rendering and execution belong to the project's `.claude/` or a stack-profile plugin outside SpecEngine's repository, the project's layer first, adding no control point; a tracker ticket is rendered one way, storing nothing back. ADR-0027. A project's tests run only through its own command on the owner's terminal, `verified` never from an agent's report (`architecture-code.md#tests`). ADR-0044.
 
 Any trade's work is a card, `C-NNNN`, a queue row beside `T-`, never read by the gate (`docs/canon/cards.md`); a lead's move to `ready` is a convention until the hub; the requesting side accepts it. ADR-0056.
 
@@ -59,7 +59,7 @@ EARS ("WHEN … the system SHALL …") is a suggested template for rules, not a 
 <a id="universal"></a>
 ## Universality
 
-The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `docs/canon/architecture-code.md#health`), what starts and ends a flow (`[flow]`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
+The core knows no subject domain. Node kinds are each project's vocabulary, declared per prefix in `[ids]`, never validated in a document; link types are the model's shared table. Domains, prefixes, kinds, zones, budgets, process rules (`[[check.rules]]`: `docs/canon/spec-check-process.md`), which nodes must be bound (`[[health.bound]]`: `architecture-code.md#health`), what starts and ends a flow (`[flow]`) and the plan's releases, priority scale and unit (`[roadmap]`) live in each project's `specengine.toml` and importer. From Phase 1 the core is exercised on at least two pilot projects of different nature; the structure of one is never carried into another. ADR-0008, ADR-0031, ADR-0047, ADR-0052.
 
 Flow takes three shared types, `follows` (cycles allowed), `uses`, `supplies`; `depends_on` keeps its meaning and cycle warning (`docs/canon/flow-links.md`). ADR-0055.
 
@@ -71,21 +71,21 @@ All IDs are Latin; mixing scripts inside an ID is forbidden. Legacy IDs of an im
 <a id="markers"></a>
 ## Code markers
 
-Code is linked to the spec by a comment `// @implements ID@rev [tiers]` (also `@verifies`, `@configures`, `@assumes`) in `.rs` and `.ron`; `spec.lock` keeps the AST hashes of the verified state. ADR-0010, ADR-0018. Existing ID citations in code become weak `mentions`, never mass-converted. ADR-0016. How: `docs/canon/architecture-code.md#markers`.
+Code is linked to the spec by a comment `// @implements ID@rev [tiers]` (also `@verifies`, `@configures`, `@assumes`) in `.rs` and `.ron`; `spec.lock` keeps the AST hashes of the verified state. ADR-0010, ADR-0018. Existing ID citations in code become weak `mentions`, never mass-converted. ADR-0016. How: `architecture-code.md#markers`.
 
 <a id="code-identity"></a>
 ## Symbol identity and digest
 
-The marker is a link's identity; the digest is a normalized tree-sitter AST. MVP: tree-sitter and markers; rust-analyzer as a library is a Phase 3 precision layer. Layers: `docs/canon/architecture-code.md#code-identity`. ADR-0020, ADR-0021.
+The marker is a link's identity; the digest is a normalized tree-sitter AST. MVP: tree-sitter and markers; rust-analyzer as a library is a Phase 3 precision layer. Layers: `architecture-code.md#code-identity`. ADR-0020, ADR-0021.
 
-A layer B fact, one only a build or run of the project knows, is a file the project writes and names in `[code]`; SpecEngine never builds or runs the project for it. Its facts annotate symbols, never bind, lock, judge or block; on what is registered where they outrank the syntactic detector, both shown. How: `docs/canon/architecture-code.md#code-identity`. ADR-0048.
+A layer B fact, one only a build or run of the project knows, is a file the project writes and names in `[code]`; SpecEngine never builds or runs the project for it. Its facts annotate symbols, never bind, lock, judge or block; on what is registered where they outrank the syntactic detector, both shown. How: `architecture-code.md#code-identity`. ADR-0048.
 
-Layer C, rust-analyzer, is linked only into the separate executable `specengine-ra`, spawned only by `spec resolve`, never by a read, MCP, the daemon, a hook, `check` or `verify`; it runs no project build script or proc macro. Its per-item moniker is advisory index data in the data directory, stale after any change: never a binding, `spec.lock` key, verdict or finding. How: `docs/canon/architecture-code.md#code-identity`. ADR-0049.
+Layer C, rust-analyzer, is linked only into the separate executable `specengine-ra`, spawned only by `spec resolve`, never by a read, MCP, the daemon, a hook, `check` or `verify`; it runs no project build script or proc macro. Its per-item moniker is advisory index data in the data directory, stale after any change: never a binding, `spec.lock` key, verdict or finding. How: `architecture-code.md#code-identity`. ADR-0049.
 
 <a id="ui"></a>
 ## Interface
 
-Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. The interface is in English; spec content is shown in the project's language, so search and token estimates must handle non-Latin scripts. ADR-0011, ADR-0014.
+Web UI: React 19 + Vite + TanStack Query + `@xyflow/react` on strict TypeScript, in `ui/`, a standalone pnpm project. Its chrome is English or Russian per viewer and spec content as written (`ui-languages.md`), so search and token estimates handle any script. ADR-0011, ADR-0072.
 
 The UI reads, stages or confirms decisions (`#apply`) and writes cards only through one client interface, the daemon's HTTP client or a typed mock flagged "Mock data"; a card write takes a typed name or, on a hub, the proxy's login. It computes no core logic and renders what the daemon returns; types generated from Rust replace its provisional ones; dependencies are the owner's allowlist at exact versions; spec prose renders as markdown only through `ui/src/markdown/`. How: `ui/README.md`. ADR-0033, ADR-0036, ADR-0057, ADR-0059.
 
@@ -102,7 +102,7 @@ The convention `docs/canon/documentation-system.md` is a built-in part of SpecEn
 <a id="language"></a>
 ## Repository language
 
-All content of this repository — documentation, decisions, role prompts, code comments, messages — is in English. ADR-0024.
+All content of this repository — documentation, decisions, role prompts, code comments, messages — is in English but the UI's Russian catalog. ADR-0024, ADR-0072.
 
 <a id="distribution"></a>
 ## Distribution and mode
