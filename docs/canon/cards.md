@@ -109,4 +109,4 @@ Each exit 1, nothing changed; core's, pure, asked twice.
 - **Accept**: the card in `accept.from`; `--as` its `reviewer` (none set: naming `spec card assign`), never its `assignee`.
 - **Dropped from config**: a column no longer listed is served last in its flow with a note, `allowed` the flow's first column, anyone's. A flow no longer listed: a note, `allowed` empty, `edit` and `assign` still work.
 
-No lock or task is read, and a proposal only for a departure's state, so a rejected brief stops no card (ADR-0012).
+No rule reads a lock or a task, a linked one included (`card-tasks.md` "The rule", ADR-0075), and a proposal only for a departure's state, so a rejected brief stops no card (ADR-0012).
