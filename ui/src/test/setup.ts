@@ -2,9 +2,13 @@ import { cleanup } from "@testing-library/react";
 import { afterEach, beforeEach, vi } from "vitest";
 import { recordConsole, takeConsoleCalls } from "./console";
 
-beforeEach(() => {
+beforeEach(async () => {
   // The viewer's choices kept in storage (the tree's Show drift, docs/features/ui-tree-drift.md) start each test cleared.
   window.localStorage.clear();
+  // Each test starts in English, `<html lang>` with it (docs/features/ui-languages.md "Data"). Read
+  // here, not imported above: a test file mocking the catalog loads it first.
+  const { switchLanguage } = await import("../i18n");
+  switchLanguage("en");
   takeConsoleCalls();
   vi.spyOn(console, "error").mockImplementation((...values: unknown[]) => {
     recordConsole("error", values);

@@ -3,7 +3,8 @@ import type { AssumesCounts, AssumesRow, HealthCode } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { CodePart, CodeRowList, counted, oneLine, RowNotMeasured } from "./codeRows";
-import { assumedLook, codeRowLook } from "./labels";
+import { assumedLook, isMeasuredState } from "./labels";
+import { useTranslate } from "../i18n";
 
 /**
  * The tail `spec health` prints after a row 4 line's relation (docs/canon/health-code.md "Text"):
@@ -51,7 +52,8 @@ function tailOf(row: AssumesRow, record: boolean, under: boolean): string | null
  * then the CLI's tail. Paths plain.
  */
 function AssumesLine({ project, row }: { project: string; row: AssumesRow }) {
-  const { look, record, under } = assumedLook(row.state);
+  const t = useTranslate();
+  const { look, record, under } = assumedLook(row.state, t);
   const id = <bdi className="mono">{oneLine(row.id)}</bdi>;
   let named;
   if (row.node !== null) {
@@ -133,7 +135,7 @@ export function AssumesPart({ project, health, failure, busy }: { project: strin
     <CodePart health={health} failure={failure} busy={busy} row="assumes" title="Code assuming a decision" what="code assuming a decision">
       {(report, retry) => {
         const row = report.assumes;
-        if (codeRowLook(row.state).measured && row.counts !== null && row.rows !== null) {
+        if (isMeasuredState(row.state) && row.counts !== null && row.rows !== null) {
           return <Assumes project={project} counts={row.counts} rows={row.rows} code={report.code} />;
         }
         return <RowNotMeasured row={row} retrying={health.isFetching} onRetry={retry} />;

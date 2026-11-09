@@ -1,5 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { hasModifier, isTextField } from "../ui/keys";
 import { InboxRegion } from "./InboxRegion";
 import { TasksRegion } from "./TasksRegion";
@@ -10,6 +12,7 @@ import { TasksRegion } from "./TasksRegion";
  * ADR-0012), then the queue. Each region reads, fails and retries on its own; nothing here acts.
  */
 export function HomeView({ project }: { project: string }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -26,11 +29,9 @@ export function HomeView({ project }: { project: string }) {
     <section className="view home-view" aria-labelledby="home-title" onKeyDown={onKeyDown}>
       <header className="view-head">
         <h1 id="home-title" tabIndex={-1}>
-          Overview
+          {t("home.title")}
         </h1>
-        <p className="view-about">
-          What waits for you in <span className="mono">{project}</span>.
-        </p>
+        <p className="view-about">{fill(t("home.about", { project: slot("project") }), { project: <span className="mono">{project}</span> })}</p>
       </header>
       <div className="home-regions">
         <TasksRegion project={project} />

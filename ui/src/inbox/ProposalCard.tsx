@@ -22,6 +22,7 @@ import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
 import { summaryOf } from "./summary";
 import { targetsOf } from "./targets";
+import { useTranslate } from "../i18n";
 
 /**
  * The staged choice arrives in a chunk of its own, loaded only for a proposal with one staged
@@ -169,7 +170,8 @@ function ReviewBody({
   now: number;
   onSelect: (id: string) => void;
 }) {
-  const preview = previewLabel(review.preview);
+  const t = useTranslate();
+  const preview = previewLabel(review.preview, t);
   const author = review.author;
   // A hub's alone, the request's login of who raised it; absent: no row (`docs/features/hub-mcp.md` "Identity").
   const login = author?.login;
@@ -326,7 +328,7 @@ function ReviewBody({
               <dt>Raised</dt>
               <dd>
                 <time dateTime={review.created_at}>
-                  {formatAge(review.created_at, now)} ({formatUtc(review.created_at)})
+                  {formatAge(review.created_at, now, t)} ({formatUtc(review.created_at, t)})
                 </time>
               </dd>
             </>
@@ -383,7 +385,7 @@ function ReviewBody({
                 >
                   {other.id}
                 </button>
-                <Badge name="Status" look={statusLook(other.status)} />
+                <Badge name="Status" look={statusLook(other.status, t)} />
                 <span>{summaryOf(other)}</span>
               </li>
             ))}
@@ -496,6 +498,7 @@ export function ProposalCard({
   onConfirm: (() => void) | undefined;
   onSelect: (id: string) => void;
 }) {
+  const t = useTranslate();
   const failure = useRetainedFailure(review.error, review.isFetching);
   const body = useRef<HTMLDivElement>(null);
   const retried = useRetryFocus(review.data, () => body.current);
@@ -559,13 +562,13 @@ export function ProposalCard({
           {reviewed !== undefined && (
             <div className="fact">
               <dt>Gap type</dt>
-              <dd>{gapLabel(reviewed.gap_type) ?? "None"}</dd>
+              <dd>{gapLabel(reviewed.gap_type, t) ?? "None"}</dd>
             </div>
           )}
           <div className="fact">
             <dt>Severity</dt>
             <dd>
-              <Badge look={severityLook(reviewed === undefined ? entry.severity : reviewed.severity)} />
+              <Badge look={severityLook(reviewed === undefined ? entry.severity : reviewed.severity, t)} />
             </dd>
           </div>
           {/* Only the review document names the task (an inbox entry has no `task_id`): absent until it is read. */}
@@ -580,7 +583,7 @@ export function ProposalCard({
           <div className="fact">
             <dt>Status</dt>
             <dd>
-              <Badge look={statusLook(reviewed?.status ?? entry.status)} />
+              <Badge look={statusLook(reviewed?.status ?? entry.status, t)} />
             </dd>
           </div>
         </dl>

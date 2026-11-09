@@ -17,6 +17,7 @@ import {
   visibleRows,
   worstRank,
 } from "./findings";
+import { enT } from "../test/text";
 
 // docs/features/ui-health.md AC-06 (groups), AC-07 (which paths link), AC-08 (debt order,
 // budgets), AC-05 (severity counts sum to the queue): arranged, never judged.
@@ -49,7 +50,7 @@ describe("groups (AC-06)", () => {
 
   it("chips count over the whole report: severities errors first, an unknown one raw and last; codes in the groups' order", () => {
     const rows = rowsOf(FINDINGS);
-    expect(severityChipsOf(rows).map((chip) => [chip.label, chip.count])).toEqual([
+    expect(severityChipsOf(rows, enT).map((chip) => [chip.label, chip.count])).toEqual([
       ["Error", 3],
       ["Warning", 3],
       ["triage", 1],

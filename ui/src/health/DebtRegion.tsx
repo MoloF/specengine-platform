@@ -8,6 +8,7 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { budgetRowsOf, debtRowsOf, rowsOf } from "./findings";
 import { findingSeverityLook, isCannotCheck } from "./labels";
 import { DebtNote, FindingMessage, FindingPlace, FindingSubject, HealthRegion } from "./parts";
+import { useTranslate } from "../i18n";
 
 /**
  * A baseline entry that matched nothing, by its line in `.spec-debt.toml` (never a line of its
@@ -23,6 +24,7 @@ function StaleLine({ entry }: { entry: DebtEntry }) {
 }
 
 function DebtAndBudgets({ project, report }: { project: string; report: CheckReport }) {
+  const t = useTranslate();
   // A check that could not vouch for the corpus may not have read the baseline or every file:
   // an empty list then says only that nothing was reported.
   const cannot = isCannotCheck(report.verdict);
@@ -48,7 +50,7 @@ function DebtAndBudgets({ project, report }: { project: string; report: CheckRep
             {debt.map(({ key, finding }) => (
               <li key={key} className="debt-row" data-debt={key}>
                 <span className="finding-head">
-                  <Badge name="Severity" look={findingSeverityLook(finding.severity)} />
+                  <Badge name="Severity" look={findingSeverityLook(finding.severity, t)} />
                   <code className="debt-code">{finding.code}</code>
                   <FindingPlace project={project} finding={finding} linked={false} />
                   <FindingSubject subject={finding.subject} />

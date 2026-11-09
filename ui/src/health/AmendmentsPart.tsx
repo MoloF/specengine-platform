@@ -12,6 +12,7 @@ import { ReadFailure, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { SHOWN_OPEN } from "./findings";
+import { useTranslate } from "../i18n";
 
 /** How many unapplied amendments are rendered until "Show all": as many as a Findings group shows open. */
 export const AMENDMENTS_SHOWN = SHOWN_OPEN;
@@ -27,6 +28,7 @@ function counted(count: number, one: string, many: string): string {
  * written, and the reason verbatim. Nothing here reads the link's type or state but to show them.
  */
 function AmendedLink({ project, link, here }: { project: string; link: ShownLink; here: string }) {
+  const t = useTranslate();
   const asWritten = writtenAs(link, link.at ?? here);
   return (
     <li className="health-amendment-link">
@@ -39,7 +41,7 @@ function AmendedLink({ project, link, here }: { project: string; link: ShownLink
             {link.name}
           </a>
         )}
-        <Badge name="State" look={linkStateLook(link.state)} />
+        <Badge name="State" look={linkStateLook(link.state, t)} />
       </p>
       <p className="link-row-meta">
         <span className="mono">

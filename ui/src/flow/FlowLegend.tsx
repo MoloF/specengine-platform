@@ -1,6 +1,7 @@
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { FLOW_KINDS, ROLLUP_MEANINGS, dashOf, typeColour, typeDash } from "./labels";
+import { useTranslate } from "../i18n";
+import { FLOW_KINDS, rollupMeanings, dashOf, typeColour, typeDash } from "./labels";
 
 /** A stroke as the canvas draws it. */
 function Sample({ dash, colour }: { dash: string; colour: string }) {
@@ -20,6 +21,7 @@ const kindDashOf = (kind: string) => dashOf({ from: "", to: "", type: "", kind, 
  * served any, so a flow drawn bare names no state; the drawing library's credit.
  */
 export function FlowLegend({ types, states }: { types: readonly string[]; states: boolean }) {
+  const t = useTranslate();
   return (
     <section className="graph-legend flow-legend" aria-label="Legend">
       <h2 className="card-section-title">Legend</h2>
@@ -76,8 +78,8 @@ export function FlowLegend({ types, states }: { types: readonly string[]; states
       </ul>
       {states && (
         <ul className="graph-legend-list">
-          {ROLLUP_MEANINGS.map(({ look, meaning }) => (
-            <li key={look.label} className="graph-legend-item">
+          {rollupMeanings(t).map(({ word, look, meaning }) => (
+            <li key={word} className="graph-legend-item">
               <Badge look={look} />
               <span>{meaning}</span>
             </li>

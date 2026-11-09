@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { apiErrorOf, isNotServed } from "../api/client";
+import { useTranslate } from "../i18n";
 import { Icon } from "./Icon";
 
 /** A loading placeholder: grey bars, aria-busy, a label for screen readers. */
@@ -37,6 +38,7 @@ export function ErrorPanel({
   attempt?: number;
   announce?: boolean;
 }) {
+  const t = useTranslate();
   return (
     <div className="error-panel">
       <div key={attempt} className="error-text" role={announce ? "alert" : undefined}>
@@ -44,7 +46,9 @@ export function ErrorPanel({
           <Icon name="alert" />
           <span>{title}</span>
         </p>
-        <p className="error-message">{message}</p>
+        <p className="error-message" lang="en">
+          {message}
+        </p>
       </div>
       <button
         type="button"
@@ -57,7 +61,7 @@ export function ErrorPanel({
         }}
       >
         <Icon name="retry" />
-        <span>{retrying ? "Retrying" : "Retry"}</span>
+        <span>{retrying ? t("ui.retrying") : t("ui.retry")}</span>
       </button>
     </div>
   );
@@ -84,15 +88,18 @@ export function ReadFailure({
   attempt?: number;
   announce?: boolean;
 }) {
+  const t = useTranslate();
   const { message } = apiErrorOf(failure);
   if (isNotServed(failure)) {
     return (
       <div className="notice notice-not-served" role={announce ? "status" : undefined}>
         <p className="notice-title">
           <Icon name="info" />
-          <span>Not built yet: the daemon has no endpoint for this read</span>
+          <span>{t("ui.notBuilt")}</span>
         </p>
-        <p className="error-message">{message}</p>
+        <p className="error-message" lang="en">
+          {message}
+        </p>
       </div>
     );
   }

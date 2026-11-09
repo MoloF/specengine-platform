@@ -5,7 +5,7 @@ import type { FlowNode, FlowView as FlowAnswer, TreeNode } from "../api/types";
 import { pushHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
-import { SECTIONS } from "../app/sections";
+import { aboutOf } from "../app/sections";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { nodeName } from "../graph/layout";
 import { leftOutText } from "../tree/LinksPanel";
@@ -22,7 +22,8 @@ import { FlowDetails } from "./FlowDetails";
 import { FlowGaps, GapsClear, recallGapsHidden, rememberGapsHidden } from "./FlowGaps";
 import { FlowLegend } from "./FlowLegend";
 import { FlowList } from "./FlowList";
-import { allClear, namedByRows, notDrawnLine, readCount, STATES_HIDDEN_WORDS, typesOf } from "./labels";
+import { useTranslate } from "../i18n";
+import { allClear, namedByRows, notDrawnLine, readCount, statesHiddenWords, typesOf } from "./labels";
 import { boxId, isGroup, layoutFlow, readsOf, type FlowBox, type FlowInput } from "./layout";
 import { TimelineView } from "./TimelineView";
 import { ALL_STAGES, stageInForce, stageOptions, withoutStates, type StageOption } from "./timeline";
@@ -30,7 +31,6 @@ import { ALL_STAGES, stageInForce, stageOptions, withoutStates, type StageOption
 /** The canvas and its drawing library load with the first answer drawn, not with the app. */
 const FlowCanvas = lazy(() => import("./FlowCanvas").then((module) => ({ default: module.FlowCanvas })));
 
-const ABOUT = SECTIONS.find((section) => section.id === "flow")?.about ?? "";
 
 export type FlowTab = "canvas" | "list" | "timeline";
 
@@ -267,6 +267,7 @@ export function FlowView({
   /** False while the workspaces are read: the Top read waits for its root (docs/features/workspaces.md WS-9). */
   moduleKnown?: boolean;
 }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
   const titleId = useId();
@@ -438,7 +439,7 @@ export function FlowView({
     for (const read of reads) {
       if (read.group !== null && !spoken.current.has(read.group)) {
         spoken.current.add(read.group);
-        announce(`${read.group} opened: ${readCount({ nodes: read.boxes, edges: read.view.edges })}`);
+        announce(`${read.group} opened: ${readCount({ nodes: read.boxes, edges: read.view.edges }, t)}`);
       }
     }
     for (const name of spoken.current) {
@@ -446,7 +447,7 @@ export function FlowView({
         spoken.current.delete(name);
       }
     }
-  }, [reads, opened, announce]);
+  }, [reads, opened, announce, t]);
 
   const toggle = useCallback(
     (name: string) => {
@@ -461,13 +462,13 @@ export function FlowView({
         setChosenOpen([...open, name]);
       } else if (layout !== null && answers.has(name) && layout.notDrawn > 0) {
         // Read and asked open, yet not drawn: the cap left it no room.
-        announce(notDrawnLine(layout.notDrawn, layout.total));
+        announce(notDrawnLine(layout.notDrawn, layout.total, t));
       } else if (!answers.has(name) && !opening.has(name)) {
         // Asked open and its read failed: the control says Open, so the press reads again.
         void groups.find((group) => group.name === name)?.retry({ cancelRefetch: false });
       }
     },
-    [announce, answers, drawnOpen, groups, layout, open, opened, opening],
+    [announce, answers, drawnOpen, groups, layout, open, opened, opening, t],
   );
 
   /** A group's Retry worked and took its button away: focus goes to the group's head, or the results. */
@@ -602,7 +603,7 @@ export function FlowView({
                   {tab !== "timeline" && (
                     <>
                       <br />
-                      {STATES_HIDDEN_WORDS}
+                      {statesHiddenWords(t)}
                     </>
                   )}
                 </span>
@@ -699,7 +700,7 @@ export function FlowView({
                     { id: "timeline", label: "Timeline" },
                   ]}
                 />
-                {tab !== "timeline" && <StageFilter value={stageShown} options={stageOptions(stages)} onChange={setChosenStage} />}
+                {tab !== "timeline" && <StageFilter value={stageShown} options={stageOptions(stages, t)} onChange={setChosenStage} />}
                 {clear ? (
                   <GapsClear />
                 ) : (
@@ -724,7 +725,7 @@ export function FlowView({
                       <p className="notice cut-notice flow-limit" role="note">
                         <span className="notice-title">
                           <Icon name="info" />
-                          <span>{notDrawnLine(layout.notDrawn, layout.total)}</span>
+                          <span>{notDrawnLine(layout.notDrawn, layout.total, t)}</span>
                         </span>
                       </p>
                     )}
@@ -790,7 +791,7 @@ export function FlowView({
         <h1 id={titleId} tabIndex={-1}>
           Flow
         </h1>
-        <p className="view-about">{ABOUT} The spec is read only here.</p>
+        <p className="view-about">{aboutOf("flow", t)} The spec is read only here.</p>
       </header>
       <div ref={results} tabIndex={-1} className="flow-results" aria-busy={topRead.isFetching || opening.size > 0 || !moduleKnown}>
         <RegionBoundary name="flow">{body}</RegionBoundary>

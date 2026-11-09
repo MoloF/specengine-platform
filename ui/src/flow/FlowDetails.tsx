@@ -12,6 +12,7 @@ import type { LineTarget } from "../tree/TextView";
 import { Icon } from "../ui/Icon";
 import { hasModifier } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
+import { useTranslate } from "../i18n";
 import { boxWords, holdsText, stageWords, startWord, withGapsText } from "./labels";
 import { isGroup } from "./layout";
 
@@ -41,6 +42,7 @@ export function FlowDetails({
   onToggle: (name: string) => void;
   onClose: () => void;
 }) {
+  const t = useTranslate();
   const titleId = useId();
   const name = nodeName(node);
   const read = useNode(project, name, { with: ["links"] });
@@ -81,7 +83,7 @@ export function FlowDetails({
         </div>
         <div className="fact">
           <dt>Stage</dt>
-          <dd>{stageWords(node.stage)}</dd>
+          <dd>{stageWords(node.stage, t)}</dd>
         </div>
         <div className="fact fact-wide">
           <dt>Where</dt>
@@ -95,7 +97,7 @@ export function FlowDetails({
           {node.start && (
             <span className="flow-mark flow-mark-start">
               <Icon name="flowStart" />
-              {startWord(inLane)}
+              {startWord(inLane, t)}
             </span>
           )}
           {node.end && (
@@ -110,8 +112,8 @@ export function FlowDetails({
         <section className="graph-details-section" aria-label="Group">
           <h3 className="card-section-title">Group</h3>
           <p>
-            {holdsText(node.holds)}
-            {node.gaps > 0 && `, ${withGapsText(node.gaps)}`}
+            {holdsText(node.holds, t)}
+            {node.gaps > 0 && `, ${withGapsText(node.gaps, t)}`}
           </p>
           {node.inner.length > 0 && (
             <ul className="graph-edge-lines">

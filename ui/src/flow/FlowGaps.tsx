@@ -2,7 +2,8 @@ import { useState } from "react";
 import type { FlowGap } from "../api/types";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { GAP_NOT_READ, gapLook, gapMeaning, gapsInOrder, namesDocuments, needsRulesLine } from "./labels";
+import { useTranslate } from "../i18n";
+import { gapLook, gapMeaning, gapNotRead, gapsInOrder, namesDocuments, needsRulesLine } from "./labels";
 
 /** Items a row shows before "Show all". */
 export const GAP_ITEMS_SHOWN = 8;
@@ -62,14 +63,15 @@ function GapItem({ item, buttons, marked, onActivate }: { item: readonly string[
 }
 
 function GapRow({ gap, unread, marked, onActivate }: { gap: FlowGap; unread: boolean; marked: ReadonlySet<string>; onActivate: (item: readonly string[]) => void }) {
+  const t = useTranslate();
   const [all, setAll] = useState(false);
-  const meaning = gapMeaning(gap.code);
+  const meaning = gapMeaning(gap.code, t);
   const items = unread ? [] : all ? gap.items : gap.items.slice(0, GAP_ITEMS_SHOWN);
   return (
     <li className="flow-gap">
       <p className="flow-gap-head">
         <span className="mono flow-gap-code">{gap.code}</span>
-        <Badge name="State" look={unread ? GAP_NOT_READ : gapLook(gap)} />
+        <Badge name="State" look={unread ? gapNotRead(t) : gapLook(gap, t)} />
       </p>
       {meaning !== null && <p className="flow-gap-meaning">{meaning}</p>}
       {!unread && gap.cause !== null && <p className="verbatim flow-gap-cause">{gap.cause}</p>}
@@ -116,7 +118,8 @@ export function GapsClear() {
  * no row says a state, an item or a cause: a None from the last read is no None now.
  */
 export function FlowGaps({ gaps, unread, marked, onActivate }: { gaps: readonly FlowGap[]; unread: boolean; marked: ReadonlySet<string>; onActivate: (item: readonly string[]) => void }) {
-  const rules = unread ? null : needsRulesLine(gaps);
+  const t = useTranslate();
+  const rules = unread ? null : needsRulesLine(gaps, t);
   return (
     <section className="flow-gaps" aria-label="Gaps">
       <h2 className="card-section-title">Gaps</h2>

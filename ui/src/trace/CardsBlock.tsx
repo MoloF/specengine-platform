@@ -8,7 +8,8 @@ import { ActOff } from "../board/ActOff";
 import { ClearCardDialog, ClearGroupDialog, NewCardDialog } from "../board/CardDialogs";
 import { isCard } from "../board/CardPanel";
 import { canClear, cardStateLook, isMarked } from "../board/labels";
-import { countsText, LAST_READ_WORDS, rollupLook } from "../flow/labels";
+import { countsText, lastReadWords, rollupLook } from "../flow/labels";
+import { useTranslate } from "../i18n";
 import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
@@ -62,12 +63,13 @@ function OwnKeys({ children }: { children: ReactNode }) {
 
 /** One card: its title, a link to the Board, the word for where it stands, where it is, Clear on a suspect one, idle as a hub's `allowed` says. */
 function CardLine({ project, card, clears, onClear }: { project: string; card: TraceCard; clears: boolean; onClear: (card: TraceCard, trigger: HTMLElement) => void }) {
+  const t = useTranslate();
   return (
     <li className="cards-line">
       <a className="cards-line-title" href={sectionHash(project, "board", card.id)}>
         <span className="mono cards-line-id">{card.id}</span> <bdi>{shownSlot(card.title)}</bdi>
       </a>
-      <Badge look={cardStateLook(card)} />
+      <Badge look={cardStateLook(card, t)} />
       <span className="muted cards-line-place">
         <bdi>{shownSlot(`${card.flow}/${card.column}`)}</bdi>
       </span>
@@ -121,6 +123,7 @@ function ClearCard({ project, clearing, onClose, onDone }: { project: string; cl
  * Clear and Clear all stand idle where `allowed` omits them (`docs/features/hub-team.md`).
  */
 export function CardsBlock({ project, nodeRef, section, heading: Heading }: { project: string; nodeRef: string; section: "flow" | "tree"; heading: "h2" | "h3" }) {
+  const t = useTranslate();
   const read = useTrace(project, { ref: nodeRef });
   const failure = useRetainedFailure(read.error, read.isFetching);
   const allows = useAllowed(project);
@@ -184,7 +187,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
           (row === undefined ? (
             <p className="cards-state muted">This read holds no row for {nodeRef}: its state is not known.</p>
           ) : (
-            <p className="cards-state">{group ? countsText(row.counts) : <Badge look={rollupLook(row.rollup)} />}</p>
+            <p className="cards-state">{group ? countsText(row.counts, t) : <Badge look={rollupLook(row.rollup, t)} />}</p>
           ))}
         {trace.notes.length > 0 && (
           <ul className="note-list" aria-label={`Notes from the daemon on the cards of ${nodeRef}`}>
@@ -200,7 +203,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
               <span>
                 The cards of {nodeRef} could not be read again: {apiErrorOf(read.error).message}
                 <br />
-                {LAST_READ_WORDS}
+                {lastReadWords(t)}
               </span>
             </p>
             <button type="button" className="button" aria-disabled={read.isFetching} onClick={read.isFetching ? undefined : retry}>
@@ -236,7 +239,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
                   <a className="mono cards-line-title" href={sectionHash(project, section, use.id)}>
                     <bdi>{shownSlot(use.id)}</bdi>
                   </a>
-                  <Badge look={rollupLook(use.rollup)} />
+                  <Badge look={rollupLook(use.rollup, t)} />
                   <span className="muted cards-line-place">{use.cards === 1 ? "1 card" : `${String(use.cards)} cards`}</span>
                 </li>
               ))}

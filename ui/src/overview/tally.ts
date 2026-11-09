@@ -61,8 +61,3 @@ export function kindCountsOf(proposals: readonly Pick<InboxEntry, "kind">[]): Ki
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || collator.compare(a.name, b.name));
 }
-
-/** The noun after a count: "1 proposal", "7 proposals". */
-export function proposalNoun(count: number): string {
-  return count === 1 ? "proposal" : "proposals";
-}

@@ -7,16 +7,16 @@ import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { aboutOf } from "../app/sections";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { useTranslate } from "../i18n";
 import { useAnnounce } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { WORKSPACE_TEXT } from "../workspace/text";
 import { actingName, isActingLine, useActing, useAllowed, useHubLogin } from "./acting";
 import { BoardCard, type CardActions } from "./BoardCard";
 import { BoardColumn } from "./BoardColumn";
@@ -40,10 +40,9 @@ import {
   type BoardFilters,
   type BoardLane,
 } from "./filter";
-import { columnTitle, movesFrom, needsLine, NO_CARDS, noteNames, rowMark } from "./labels";
+import { columnTitle, movesFrom, needsLine, noCards, noteNames, rowMark } from "./labels";
 import { MoveMenu, type MoveChoice } from "./MoveMenu";
 
-const ABOUT = aboutOf("board");
 
 /** What the Shell keeps per project for this page's life; `flow` null: nothing chosen yet. */
 export interface BoardState {
@@ -173,6 +172,7 @@ export function BoardView({
   /** The chosen workspace's name, held only to tell a change: a new workspace shows its own flows again. */
   lens?: string | null;
 }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
@@ -264,8 +264,8 @@ export function BoardView({
   const shownMark = panelRow === undefined ? null : rowMark(panelRow);
   const tab = tabs.find((candidate) => candidate.name === chosenFlow) ?? tabs[0];
   const flow = tab?.flow;
-  const lanes = useMemo(() => (tab === undefined ? [] : lanesOf(tab, visible)), [tab, visible]);
-  const wholeLanes = useMemo(() => (tab === undefined ? [] : lanesOf(tab, all)), [tab, all]);
+  const lanes = useMemo(() => (tab === undefined ? [] : lanesOf(tab, visible, t)), [tab, visible, t]);
+  const wholeLanes = useMemo(() => (tab === undefined ? [] : lanesOf(tab, all, t)), [tab, all, t]);
   const shownLanes = useMemo(
     () => lanes.map((lane) => ({ ...lane, rows: expanded.has(lane.key) ? lane.rows : lane.rows.slice(0, COLUMN_SHOWN) })),
     [lanes, expanded],
@@ -274,7 +274,7 @@ export function BoardView({
   const rovingId = order.find((row) => row.id === roving)?.id ?? order.find((row) => row.id === cardId)?.id ?? order[0]?.id ?? null;
   const { discipline: chosenDiscipline, assignee: chosenAssignee } = filters;
   const disciplines = useMemo(() => disciplineChoices(all, chosenDiscipline), [all, chosenDiscipline]);
-  const assignees = useMemo(() => assigneeChoices(all, chosenAssignee), [all, chosenAssignee]);
+  const assignees = useMemo(() => assigneeChoices(all, chosenAssignee, t), [all, chosenAssignee, t]);
   const menuRow = menu === null ? undefined : all.find((row) => row.id === menu.id);
   // A card a column of the flow no longer holds: the flow lists no move from there, its read does.
   const menuOutside = menuRow !== undefined && !(flow?.columns.some((column) => column.id === menuRow.column) ?? false);
@@ -422,7 +422,7 @@ export function BoardView({
     const choices: BoardChoice[] = moves.map(({ to, by }) => ({
       key: `to:${to}`,
       label: columnTitle(flow, to),
-      detail: needsLine(by),
+      detail: needsLine(by, t),
       icon: "arrowRight",
       asked: { to },
       spoken: null,
@@ -501,7 +501,7 @@ export function BoardView({
     if (element === null || row === undefined) {
       return;
     }
-    switch (event.key) {
+    switch (hotkeyOf(event)) {
       case "ArrowDown":
       case "ArrowUp":
       case "ArrowLeft":
@@ -540,7 +540,7 @@ export function BoardView({
     if (event.key === "?") {
       event.preventDefault();
       openShortcuts();
-    } else if (event.key === "n") {
+    } else if (letterOf(event) === "n") {
       event.preventDefault();
       openNew(document.activeElement instanceof HTMLElement ? document.activeElement : null);
     } else if (event.key === "Escape" && cardId !== null) {
@@ -822,7 +822,7 @@ export function BoardView({
             <>
               {list.cards.length === 0 && (
                 <div className="empty-state">
-                  <p>{NO_CARDS}</p>
+                  <p>{noCards(t)}</p>
                 </div>
               )}
               {all.length > 0 && visible.length === 0 && (
@@ -840,7 +840,7 @@ export function BoardView({
                   {!allFlows && (
                     <p className="note">
                       <Icon name="info" />
-                      <span>{WORKSPACE_TEXT.flowsShown(lensTabs.length, everyTab.length)}</span>
+                      <span>{t("workspace.flowsShown", { shown: lensTabs.length, count: everyTab.length })}</span>
                     </p>
                   )}
                   <button
@@ -850,7 +850,7 @@ export function BoardView({
                       setAllFlows(!allFlows);
                     }}
                   >
-                    {allFlows ? WORKSPACE_TEXT.showWorkspaceFlows : WORKSPACE_TEXT.showAllFlows}
+                    {allFlows ? t("workspace.showWorkspaceFlows") : t("workspace.showAllFlows")}
                   </button>
                 </div>
               )}
@@ -973,7 +973,7 @@ export function BoardView({
         <h1 id={titleId} tabIndex={-1}>
           Board
         </h1>
-        <p className="view-about">{ABOUT}</p>
+        <p className="view-about">{aboutOf("board", t)}</p>
       </header>
       {tools}
       <div ref={results} tabIndex={-1} className="board-results" aria-busy={cards.isFetching}>

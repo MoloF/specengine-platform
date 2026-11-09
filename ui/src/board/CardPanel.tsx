@@ -14,7 +14,8 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useAllowed } from "./acting";
 import { ActOff } from "./ActOff";
 import { isOverdue } from "./due";
-import { ACCEPTED, BY_HAND, canClear, CANCELLED, columnTitle, eventWords, markLine, markLook, OVERDUE, UNASSIGNED, type CardMark } from "./labels";
+import { useTranslate } from "../i18n";
+import { acceptedLook, byHand, canClear, cancelledLook, columnTitle, eventWords, markLine, markLook, overdueLook, unassigned, type CardMark } from "./labels";
 
 /** The panel's five writes, each a dialog. */
 export type CardAction = "edit" | "assign" | "cancel" | "accept" | "clear";
@@ -40,7 +41,8 @@ function Value({ text }: { text: string | null }) {
 
 /** A stored UTC time, as stored to the minute. */
 function At({ at }: { at: string }) {
-  return <time dateTime={at}>{formatUtc(at)}</time>;
+  const t = useTranslate();
+  return <time dateTime={at}>{formatUtc(at, t)}</time>;
 }
 
 /** A link to another card; the ID as stored. */
@@ -86,13 +88,14 @@ function eventDetail(payload: unknown, flow: CardFlow | undefined): string {
 
 /** One event by `seq`: time, its words, who, from and to; an unknown type raw. */
 function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undefined }) {
+  const t = useTranslate();
   const by = payloadWord(event.payload, "as");
   const detail = eventDetail(event.payload, flow);
   return (
     <li className="board-history-line">
       <At at={event.at} />
       <span>
-        <strong>{eventWords(event.type)}</strong>
+        <strong>{eventWords(event.type, t)}</strong>
         {by !== null && (
           <>
             {" "}
@@ -153,7 +156,8 @@ function Closure({ card }: { card: Card }) {
  * an accepted card's too; idle, as a hub's `allowed` says, it stays where it is and does nothing.
  */
 function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; clears: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
-  const look = markLook(mark);
+  const t = useTranslate();
+  const look = markLook(mark, t);
   if (look === null) {
     return null;
   }
@@ -162,7 +166,7 @@ function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; 
       <p className="board-panel-state">
         <Badge look={look} />
         <span>
-          <bdi>{shownSlot(markLine(mark))}</bdi>
+          <bdi>{shownSlot(markLine(mark, t))}</bdi>
         </span>
       </p>
       {canClear(mark) && (
@@ -188,7 +192,8 @@ function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; 
 
 /** A target's word, when the trace read holds it; a target gone has none. */
 function TargetState({ rollup }: { rollup: string | undefined }) {
-  return rollup === undefined ? null : <Badge look={rollupLook(rollup)} />;
+  const t = useTranslate();
+  return rollup === undefined ? null : <Badge look={rollupLook(rollup, t)} />;
 }
 
 function Actions({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | undefined; accepts: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
@@ -242,6 +247,7 @@ function Details({
   stateFailure: string | null;
   onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
 }) {
+  const t = useTranslate();
   const allows = useAllowed(project);
   const accepted = card.acceptance !== null;
   const cancelled = card.cancellation !== null;
@@ -252,9 +258,9 @@ function Details({
         <span>
           In <bdi>{columnTitle(flow, card.column)}</bdi>
         </span>
-        {accepted && <Badge look={ACCEPTED} />}
-        {cancelled && <Badge look={CANCELLED} />}
-        {isOverdue({ due: card.due, accepted, cancelled }, today) && <Badge look={OVERDUE} />}
+        {accepted && <Badge look={acceptedLook(t)} />}
+        {cancelled && <Badge look={cancelledLook(t)} />}
+        {isOverdue({ due: card.due, accepted, cancelled }, today) && <Badge look={overdueLook(t)} />}
       </p>
       {card.notes.length > 0 && (
         <ul className="note-list" aria-label="Notes from the daemon on the card">
@@ -296,7 +302,7 @@ function Details({
       )}
       <Part title="Source">
         {card.targets.length === 0 ? (
-          <p className="muted">{BY_HAND}</p>
+          <p className="muted">{byHand(t)}</p>
         ) : (
           <ul className="board-panel-list">
             {card.targets.map((target) => (
@@ -321,7 +327,7 @@ function Details({
           <Fact term="Due">
             <Value text={card.due} />
           </Fact>
-          <Fact term="Assignee">{card.assignee === null ? UNASSIGNED : <Value text={card.assignee} />}</Fact>
+          <Fact term="Assignee">{card.assignee === null ? unassigned(t) : <Value text={card.assignee} />}</Fact>
           <Fact term="Reviewer">
             <Value text={card.reviewer} />
           </Fact>

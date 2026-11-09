@@ -4,11 +4,13 @@ import { Prose } from "../markdown/Prose";
 import { Icon } from "../ui/Icon";
 import { runOutcomeLook } from "./labels";
 import { Part, When } from "./parts";
+import { useTranslate } from "../i18n";
 
 /** Lists up to this long show open; longer ones open on demand. */
 const SHOWN_OPEN = 10;
 
 function RunItem({ project, run }: { project: string; run: TaskRun }) {
+  const t = useTranslate();
   return (
     <li className="task-run">
       <h3 className="task-run-title">
@@ -21,7 +23,7 @@ function RunItem({ project, run }: { project: string; run: TaskRun }) {
         ) : run.outcome === null ? (
           <span className="plain-tag">No outcome reported</span>
         ) : (
-          <Badge name="Outcome" look={runOutcomeLook(run.outcome)} />
+          <Badge name="Outcome" look={runOutcomeLook(run.outcome, t)} />
         )}
       </h3>
       <dl className="pairs">

@@ -4,7 +4,8 @@ import { useRoadmap } from "../api/queries";
 import { pushHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
-import { SECTIONS } from "../app/sections";
+import { aboutOf } from "../app/sections";
+import { useTranslate } from "../i18n";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
@@ -18,7 +19,6 @@ import { emptyPlanText, headerLine, NO_PLAN_LINE, unlistedText } from "./text";
 /** The canvas and its drawing library load when the Chain tab is first shown, not with the app. */
 const RoadmapChain = lazy(() => import("./RoadmapChain").then((module) => ({ default: module.RoadmapChain })));
 
-const ABOUT = SECTIONS.find((section) => section.id === "roadmap")?.about ?? "";
 
 /** The Roadmap's two tabs: Lanes, the text twin and the keyboard's path, and Chain, the canvas. */
 export type RoadmapTab = "lanes" | "chain";
@@ -43,6 +43,7 @@ export const NO_ROADMAP_MEMORY: RoadmapMemory = {
  * "Read again" reads the plan once more (a hand edit raises no event).
  */
 export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { project: string; itemId: string | null; memory?: RoadmapMemory }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const roadmap = useRoadmap(project);
   const failure = useRetainedFailure(roadmap.error, roadmap.isFetching);
@@ -197,7 +198,7 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
         <h1 id={titleId} tabIndex={-1}>
           Roadmap
         </h1>
-        <p className="view-about">{ABOUT} Read only.</p>
+        <p className="view-about">{aboutOf("roadmap", t)} Read only.</p>
       </header>
       <div ref={results} tabIndex={-1} className="roadmap-results" aria-busy={roadmap.isFetching}>
         <RegionBoundary name="plan">{body}</RegionBoundary>

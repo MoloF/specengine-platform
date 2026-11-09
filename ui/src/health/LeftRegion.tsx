@@ -19,12 +19,14 @@ import { DriftPart } from "./DriftPart";
 import { severityCountsOf } from "./findings";
 import { HealthRegion } from "./parts";
 import { UnboundPart } from "./UnboundPart";
+import { useTranslate } from "../i18n";
 
 /** How many proposals of the queue are listed, in the Inbox's order. */
 export const LEFT_ROWS = 5;
 
 /** Rows 1 and 2: the queue by severity, then its first five as the Inbox lists them. */
 function Queue({ project, answer }: { project: string; answer: Inbox }) {
+  const t = useTranslate();
   const ordered = queueOrder(answer.proposals);
   const notes = <Notes notes={answer.notes} label="Notes from the daemon on the queue" />;
   if (ordered.length === 0) {
@@ -44,7 +46,7 @@ function Queue({ project, answer }: { project: string; answer: Inbox }) {
       <ul className="health-tally" aria-label="Open proposals by severity">
         {severityCountsOf(ordered).map(({ severity, count }) => (
           <li key={severity ?? ""}>
-            <Badge look={severityLook(severity)} />
+            <Badge look={severityLook(severity, t)} />
             <span className="sr-only">:</span> <span className="health-tally-count">{count}</span>
           </li>
         ))}
@@ -57,7 +59,7 @@ function Queue({ project, answer }: { project: string; answer: Inbox }) {
               <span className="mono">{proposal.id}</span>: <span>{summaryOf(proposal)}</span>
             </a>
             <span className="health-left-meta">
-              <Badge name="Severity" look={severityLook(proposal.severity)} />
+              <Badge name="Severity" look={severityLook(proposal.severity, t)} />
               <Stored label="Created" at={proposal.created_at} />
             </span>
           </li>

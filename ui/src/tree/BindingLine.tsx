@@ -2,6 +2,7 @@ import type { BindingPlace, BindingRow } from "../api/types";
 import { oneLine } from "../health/codeRows";
 import { Badge } from "../ui/Badge";
 import { syncLook } from "./labels";
+import { useTranslate } from "../i18n";
 
 // One code binding row as lines (`docs/canon/code-reads.md` "The binding row"), shared by the
 // Bundle tab's layers 5 and 9 (docs/features/bundle-bindings.md "UI and daemon keys") and the
@@ -30,6 +31,7 @@ export function bindingOf(place: Pick<BindingPlace, "kind" | "symbol" | "item_ki
  * `noId` names a bare marker's `""` node. `focusable`: the line takes focus from "Show all".
  */
 export function BindingLine({ row, tokens = null, noId, focusable = false }: { row: BindingRow; tokens?: number | null; noId: string; focusable?: boolean }) {
+  const t = useTranslate();
   const judgement = [row.category, row.detail].filter((word) => word !== null).join(" ");
   const key = row.kind !== null && row.symbol !== null ? bindingOf({ kind: row.kind, symbol: row.symbol, item_kind: row.item_kind }) : null;
   const from = row.anchor?.from ?? null;
@@ -47,7 +49,7 @@ export function BindingLine({ row, tokens = null, noId, focusable = false }: { r
         {tokens !== null && <span>{tokens} tokens</span>}
       </p>
       <p className="bundle-item-meta">
-        <Badge name="Sync" look={syncLook(row.sync)} />
+        <Badge name="Sync" look={syncLook(row.sync, t)} />
         {judgement !== "" && <span className="mono">{oneLine(judgement)}</span>}
       </p>
       {row.signature !== null && (

@@ -618,6 +618,26 @@ describe("the keyboard", () => {
     });
   });
 
+  it("n opens New card and m a card's Move menu under a Russian layout; ? still lists the keys (LG-7 of ui-languages)", async () => {
+    await ready();
+    card("C-0001").focus();
+    fireEvent.keyDown(card("C-0001"), { key: "\u0442", code: "KeyN" });
+    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    press("Escape", dialog.querySelector("input"));
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(document.activeElement).toBe(card("C-0001"));
+    fireEvent.keyDown(card("C-0001"), { key: "\u044c", code: "KeyM" });
+    expect(await screen.findByRole("menu", { name: "Move C-0001" })).toBeTruthy();
+    press("Escape");
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+    fireEvent.keyDown(card("C-0001"), { key: "?", code: "Digit7", shiftKey: true });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  });
+
   it("n opens New card, Esc closes it, focus back where it was; a letter in a text field types", async () => {
     await ready();
     card("C-0001").focus();

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { formatAge, formatUtc } from "../ui/time";
 import { useNow } from "../ui/useNow";
+import { useTranslate } from "../i18n";
 
 /** A part of a task's tab under its own h2 (the task's ID and title are the h1). */
 export function Part({ title, children, count }: { title: string; children: ReactNode; count?: number }) {
@@ -17,10 +18,11 @@ export function Part({ title, children, count }: { title: string; children: Reac
 
 /** A stored UTC time as the Inbox shows times: the age, the exact UTC beside it. */
 export function When({ at }: { at: string }) {
+  const t = useTranslate();
   const now = useNow();
   return (
-    <time dateTime={at} title={formatUtc(at)}>
-      {formatAge(at, now)} <span className="muted">({formatUtc(at)})</span>
+    <time dateTime={at} title={formatUtc(at, t)}>
+      {formatAge(at, now, t)} <span className="muted">({formatUtc(at, t)})</span>
     </time>
   );
 }

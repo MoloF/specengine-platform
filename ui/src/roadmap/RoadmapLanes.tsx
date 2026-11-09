@@ -23,6 +23,7 @@ import {
   unplacedReleaseText,
   WAITS_ON,
 } from "./text";
+import { useTranslate } from "../i18n";
 
 // The Lanes tab (docs/features/roadmap-screen.md): the canvas's text twin and the keyboard's path.
 // Every group in the served order, each open item a card, the pool's tasks after its items, the
@@ -55,6 +56,7 @@ function ItemCard({
   unit: string | null;
   selected: boolean;
 }) {
+  const t = useTranslate();
   const headingId = useId();
   return (
     <article
@@ -104,7 +106,7 @@ function ItemCard({
               <a href={sectionHash(project, "tasks", task.id)} className="mono">
                 {task.id}
               </a>
-              <Badge name="State" look={taskStatusLook(task.status)} />
+              <Badge name="State" look={taskStatusLook(task.status, t)} />
             </li>
           ))}
         </ul>
@@ -116,6 +118,7 @@ function ItemCard({
 
 /** The pool's tasks: open tasks executing no open item, after the pool's items. */
 function PoolTasks({ project, tasks }: { project: string; tasks: RoadmapPoolTask[] }) {
+  const t = useTranslate();
   const headingId = useId();
   return (
     <section className="roadmap-pool-tasks" aria-labelledby={headingId}>
@@ -128,7 +131,7 @@ function PoolTasks({ project, tasks }: { project: string; tasks: RoadmapPoolTask
             <a href={sectionHash(project, "tasks", task.id)} className="mono">
               {task.id}
             </a>
-            <Badge name="State" look={taskStatusLook(task.status)} />
+            <Badge name="State" look={taskStatusLook(task.status, t)} />
             <span className="roadmap-pool-task-title">{task.title === null ? "-" : oneLine(task.title)}</span>
             <span className="roadmap-pool-task-targets mono">{task.targets.length === 0 ? "-" : task.targets.join(", ")}</span>
           </li>

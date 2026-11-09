@@ -2,6 +2,7 @@ import type { FollowedType } from "../api/types";
 import { Icon } from "../ui/Icon";
 import { patternAt } from "./layout";
 import { directionIcon, followedLabel } from "./lines";
+import { useTranslate } from "../i18n";
 
 /** A type's stroke pattern, drawn as the canvas draws it. */
 export function PatternSwatch({ position }: { position: number }) {
@@ -19,6 +20,7 @@ export function PatternSwatch({ position }: { position: number }) {
  * library's credit.
  */
 export function GraphLegend({ types, order }: { types: readonly FollowedType[]; order: readonly string[] }) {
+  const t = useTranslate();
   return (
     <section className="graph-legend" aria-label="Legend">
       <h2 className="card-section-title">Legend</h2>
@@ -28,7 +30,7 @@ export function GraphLegend({ types, order }: { types: readonly FollowedType[]; 
           <li key={followed.type} className="graph-legend-item">
             <PatternSwatch position={order.indexOf(followed.type)} />
             <Icon name={directionIcon(followed.direction)} />
-            <span className="mono">{followedLabel(followed.type, followed.direction)}</span>
+            <span className="mono">{followedLabel(followed.type, followed.direction, t)}</span>
           </li>
         ))}
       </ul>

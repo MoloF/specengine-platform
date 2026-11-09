@@ -1,11 +1,12 @@
 import { apiErrorOf } from "../api/client";
 import type { HealthQuery } from "../api/queries";
 import { sectionHash } from "../app/routes";
-import { codeRowLook, MEASURED_WITHOUT_COUNTS } from "../health/labels";
+import { codeRowLook, measuredWithoutCounts } from "../health/labels";
 import { oneLine } from "../health/oneLine";
 import { Icon } from "../ui/Icon";
 import { ReadFailure } from "../ui/states";
 import { driftOf, driftWords, measuredRows, type TreeDrift } from "./drift";
+import { useTranslate } from "../i18n";
 
 /** "<n> drift row(s) name(s)": the count and its verb. */
 function rowsNaming(count: number): string {
@@ -35,6 +36,7 @@ export function DriftStatus({
   /** The tree's lines are drawn: the summary of rows naming none of them is meaningful. */
   treeShown: boolean;
 }) {
+  const t = useTranslate();
   const report = health.data;
   if (report === undefined) {
     if (failure !== null) {
@@ -65,12 +67,12 @@ export function DriftStatus({
   let body = null;
   if (lines === null) {
     const { state, causes } = driftWords(row);
-    const look = state === null ? null : codeRowLook(state);
+    const look = state === null ? null : codeRowLook(state, t);
     body = (
       <p className="note tree-drift-line" data-drift-state="not-measured">
         <Icon name={look?.retry === true ? "cannotCheck" : "info"} />
         <span>
-          No drift badges: {look === null || look.measured ? MEASURED_WITHOUT_COUNTS : oneLine(look.label)}
+          No drift badges: {look === null || look.measured ? measuredWithoutCounts(t) : oneLine(look.label)}
           {causes.length > 0 && (
             <>
               :{" "}

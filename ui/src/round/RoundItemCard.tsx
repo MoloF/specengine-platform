@@ -9,6 +9,7 @@ import { shownSlot, shownText } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { capOf, draftOf, offers, stateOf, textOf, type Draft, type DraftPick } from "./drafts";
 import { utf8Bytes } from "./text";
+import { useTranslate } from "../i18n";
 
 /**
  * Agent text of several lines as the sheet prints it: verbatim, never markdown, its controls
@@ -149,6 +150,7 @@ export const RoundItemCard = memo(function RoundItemCard({
   onUnstage: (item: RoundItem) => void;
   onConfirm: (item: RoundItem) => void;
 }) {
+  const t = useTranslate();
   const headingId = useId();
   const choices = useRef<HTMLFieldSetElement>(null);
   const focusLater = useFocusLater();
@@ -205,7 +207,7 @@ export const RoundItemCard = memo(function RoundItemCard({
           <span className="kind-tag">
             <Slot text={item.kind} />
           </span>
-          {item.severity !== null && <Badge name="Severity" look={severityLook(item.severity)} />}
+          {item.severity !== null && <Badge name="Severity" look={severityLook(item.severity, t)} />}
           {item.staged_at !== null && (
             <span className="staged-mark" title={`Staged ${item.staged_at}`}>
               <Icon name="terminal" />

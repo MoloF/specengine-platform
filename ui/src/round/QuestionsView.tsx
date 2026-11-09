@@ -1,6 +1,7 @@
 import { lazy, Suspense, type KeyboardEvent } from "react";
 import { useRound } from "../api/queries";
-import { SECTIONS } from "../app/sections";
+import { aboutOf } from "../app/sections";
+import { useTranslate } from "../i18n";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { hasModifier, isTextField } from "../ui/keys";
 import { Skeleton } from "../ui/states";
@@ -9,7 +10,6 @@ import { useRoundEntry, type RoundMemory } from "./memory";
 /** The sheet, its drafts and their POST arrive in a chunk of their own; the heading stays put meanwhile. */
 const RoundScreen = lazy(() => import("./RoundScreen").then((module) => ({ default: module.RoundScreen })));
 
-const ABOUT = SECTIONS.find((section) => section.id === "questions")?.about ?? "";
 
 /**
  * Questions (`#/<project>/questions`, `docs/features/ui-round.md`): the open questions and
@@ -19,6 +19,7 @@ const ABOUT = SECTIONS.find((section) => section.id === "questions")?.about ?? "
  * answers or stages (W-18): `?` lists the keys, as on every screen.
  */
 export function QuestionsView({ project, memory }: { project: string; memory: RoundMemory }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const { limit } = useRoundEntry(memory, project);
   const round = useRound(project, limit);
@@ -45,7 +46,7 @@ export function QuestionsView({ project, memory }: { project: string; memory: Ro
           Questions
         </h1>
         <p className="view-about">
-          {ABOUT} Pick an answer per item and stage them at once; each is asked again on a terminal, one at a time.
+          {aboutOf("questions", t)} Pick an answer per item and stage them at once; each is asked again on a terminal, one at a time.
           Nothing waits on them: agents work on with their working answer.
         </p>
       </header>

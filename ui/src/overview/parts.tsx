@@ -45,7 +45,7 @@ export function Notes({ notes, label }: { notes: readonly string[]; label: strin
   return (
     <ul className="note-list" aria-label={label}>
       {notes.map((note, index) => (
-        <li key={`${String(index)}-${note}`} className="verbatim-note">
+        <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
           {note}
         </li>
       ))}

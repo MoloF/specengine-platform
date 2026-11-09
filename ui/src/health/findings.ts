@@ -1,6 +1,7 @@
 import type { CheckFinding, FindingSeverity, InboxEntry, Severity } from "../api/types";
 import { severityRank } from "../inbox/labels";
 import { folded } from "../tasks/filter";
+import type { Translate } from "../i18n";
 import { findingSeverityLook, findingSeverityRank } from "./labels";
 
 // What Health shows of one report, arranged and never judged (ADR-0012): findings grouped by their
@@ -98,10 +99,10 @@ function counted(rows: readonly FindingRow[], keyOf: (row: FindingRow) => string
 }
 
 /** A chip per severity present (errors first, unknown ones raw and last), counted over the whole report. */
-export function severityChipsOf(rows: readonly FindingRow[]): Chip[] {
+export function severityChipsOf(rows: readonly FindingRow[], t: Translate): Chip[] {
   return [...counted(rows, (row) => row.finding.severity)]
     .sort(([a], [b]) => findingSeverityRank(a) - findingSeverityRank(b) || collator.compare(a, b))
-    .map(([severity, count]) => ({ key: severityChip(severity), label: findingSeverityLook(severity).label, count }));
+    .map(([severity, count]) => ({ key: severityChip(severity), label: findingSeverityLook(severity, t).label, count }));
 }
 
 /** A chip per code present, in the groups' order, counted over the whole report. */

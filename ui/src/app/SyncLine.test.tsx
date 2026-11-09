@@ -6,6 +6,7 @@ import type { HubSync } from "../api/types";
 import { renderApp } from "../test/render";
 import { argsOf, stubClient, type StubClient } from "../test/stubClient";
 import { notPushedLine } from "./SyncLine";
+import { enT } from "../test/text";
 
 // U1 of docs/features/hub-git.md on a stub client ("Status and the screen"): a hub with `--push`
 // shows a line beside the project's view while `ahead` > 0, and the last sync's `error` beneath as
@@ -61,7 +62,7 @@ describe("the line on a hub with `--push`", () => {
   it("says one commit in the singular", async () => {
     renderApp(hubClient(aSync({ ahead: 1, state: "ok" })), "#/alpha/inbox");
     expect(await screen.findByText("1 commit not pushed")).toBeTruthy();
-    expect([1, 2, 12].map(notPushedLine)).toEqual(["1 commit not pushed", "2 commits not pushed", "12 commits not pushed"]);
+    expect([1, 2, 12].map((ahead) => notPushedLine(ahead, enT))).toEqual(["1 commit not pushed", "2 commits not pushed", "12 commits not pushed"]);
   });
 
   it("shows an error as `Sync: ` and the daemon's words as text, escaped, no element made of them", async () => {

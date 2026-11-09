@@ -2,6 +2,7 @@
 // The seam (docs/features/ui-shell.md "Data"): only src/main.tsx picks the mock, only src/api/ reads
 // the provisional types; app code imports domain types from src/api/types.ts. Markdown
 // (docs/features/ui-markdown.md, ADR-0036): only src/markdown/ imports react-markdown or remark-gfm.
+// Languages (docs/features/ui-languages.md D3, ADR-0072): only src/i18n/ imports i18next or react-i18next.
 import reactHooks from "eslint-plugin-react-hooks";
 import { defineConfig, globalIgnores } from "eslint/config";
 import tseslint from "typescript-eslint";
@@ -18,6 +19,11 @@ const MARKDOWN = {
   // The packages and any of their subpaths: react-markdown, remark-gfm, remark-gfm/lib/....
   regex: "^(react-markdown|remark-gfm)(/|$)",
   message: "Only src/markdown/ renders markdown (ADR-0036): import its Prose, never the packages.",
+};
+const I18N = {
+  // The packages and any of their subpaths: i18next, react-i18next, i18next/...; never i18next-foo.
+  regex: "^(i18next|react-i18next)(/|$)",
+  message: "Only src/i18n/ imports i18next (ADR-0072): read `t` from its useTranslate(), or take a Translate argument.",
 };
 const PROVISIONAL = {
   // With or without an extension: ./provisional, ../api/provisional.js, ./provisional.ts.
@@ -38,19 +44,23 @@ export default defineConfig([
       "no-restricted-globals": ["error", "alert", "confirm", "prompt"],
       "@typescript-eslint/no-explicit-any": "error",
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
-      "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN] }],
+      "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN, I18N] }],
     },
   },
   {
     files: ["src/main.tsx", "src/mocks/**"],
-    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [PROVISIONAL, MARKDOWN] }] },
+    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [PROVISIONAL, MARKDOWN, I18N] }] },
   },
   {
     files: ["src/api/**"],
-    rules: { "no-restricted-imports": ["error", { patterns: [MOCKS, MARKDOWN] }] },
+    rules: { "no-restricted-imports": ["error", { patterns: [MOCKS, MARKDOWN, I18N] }] },
   },
   {
     files: ["src/markdown/**"],
-    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL] }] },
+    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, I18N] }] },
+  },
+  {
+    files: ["src/i18n/**"],
+    rules: { "no-restricted-imports": ["error", { paths: [QUERY], patterns: [MOCKS, PROVISIONAL, MARKDOWN] }] },
   },
 ]);

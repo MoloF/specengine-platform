@@ -2,31 +2,41 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
 import { SECTIONS } from "../app/sections";
+import { en } from "../i18n/en";
+import type * as EnModule from "../i18n/en";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 import { HARBOR_NOTES, workspacesOf } from "./workspaces";
 
-// WS-15 of docs/features/workspaces.md (D12): with src/workspace/text.ts replaced by sentinels, the
-// switcher, the module bar, the config notes, the nav's wait and the Board's line render nothing
-// but sentinels, served titles, notes and numbers: no word of the slice is spelled in a component,
-// so ui-languages (RM-0082) turns the one module into a catalog. Section labels stay in sections.ts.
+// WS-15 of docs/features/workspaces.md (D12), on the catalog of docs/features/ui-languages.md: with
+// the English catalog's `workspace` group replaced by sentinels, the switcher, the module bar, the
+// config notes, the nav's wait and the Board's line render nothing but sentinels, served titles,
+// notes and numbers: no word of the slice is spelled in a component. Section labels are the
+// catalog's `app.sections`.
 
-vi.mock("../workspace/text", () => ({
-  WORKSPACE_TEXT: {
-    workspaceLabel: "[workspaceLabel]",
-    workspaceHint: "[workspaceHint]",
-    modulesLabel: "[modulesLabel]",
-    allModules: "[allModules]",
-    notesTitle: "[notesTitle]",
-    notesButton: (count: number) => `[notesButton ${String(count)}]`,
-    readFailed: "[readFailed]",
-    readFailedKept: "[readFailedKept]",
-    navPending: "[navPending]",
-    flowsShown: (shown: number, all: number) => `[flowsShown ${String(shown)} ${String(all)}]`,
-    showAllFlows: "[showAllFlows]",
-    showWorkspaceFlows: "[showWorkspaceFlows]",
-  },
-}));
+vi.mock("../i18n/en", async (importOriginal) => {
+  const actual = await importOriginal<typeof EnModule>();
+  return {
+    en: {
+      ...actual.en,
+      workspace: {
+        workspaceLabel: "[workspaceLabel]",
+        workspaceHint: "[workspaceHint]",
+        modulesLabel: "[modulesLabel]",
+        allModules: "[allModules]",
+        notesTitle: "[notesTitle]",
+        notesButton: "[notesButton {{n}}]",
+        readFailed: "[readFailed]",
+        readFailedKept: "[readFailedKept]",
+        navPending: "[navPending]",
+        flowsShown_one: "[flowsShown {{shown}} {{count}}]",
+        flowsShown_other: "[flowsShown {{shown}} {{count}}]",
+        showAllFlows: "[showAllFlows]",
+        showWorkspaceFlows: "[showWorkspaceFlows]",
+      },
+    },
+  };
+});
 
 function renderMock(scenario: Scenario, hash: string, prepare: (client: MockClient) => void = () => undefined) {
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
@@ -100,7 +110,7 @@ describe("one place for the strings (WS-15)", () => {
     });
   });
 
-  it("leaves every section label in sections.ts", () => {
-    expect(SECTIONS.map((section) => section.label)).toEqual(["Inbox", "Tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+  it("keeps every section label in the catalog's app.sections", () => {
+    expect(SECTIONS.map((section) => en.app.sections[section.id].label)).toEqual(["Inbox", "Tasks", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
   });
 });

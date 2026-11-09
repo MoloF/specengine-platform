@@ -5,7 +5,7 @@ import { pushHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { ReadFailure, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -29,6 +29,7 @@ import {
 } from "./findings";
 import { findingSeverityLook, isCannotCheck } from "./labels";
 import { Counted, DebtNote, FindingMessage, FindingPlace, FindingSubject, HealthRegion } from "./parts";
+import { useTranslate } from "../i18n";
 
 function Chips({ label, chips, filters, onToggle }: { label: string; chips: Chip[]; filters: FindingFilters; onToggle: (key: string) => void }) {
   return (
@@ -74,6 +75,7 @@ const FindingItem = memo(function FindingItem({
   tabbable: boolean;
   onFocus: (key: number) => void;
 }) {
+  const t = useTranslate();
   const { finding } = row;
   return (
     <li
@@ -87,7 +89,7 @@ const FindingItem = memo(function FindingItem({
       }}
     >
       <span className="finding-head">
-        <Badge name="Severity" look={findingSeverityLook(finding.severity)} />
+        <Badge name="Severity" look={findingSeverityLook(finding.severity, t)} />
         <FindingPlace project={project} finding={finding} linked />
         <FindingSubject subject={finding.subject} />
       </span>
@@ -110,6 +112,7 @@ const FindingItem = memo(function FindingItem({
  * document opens that node in the tree (one history entry).
  */
 function FindingList({ project, report }: { project: string; report: CheckReport }) {
+  const t = useTranslate();
   const baseId = useId();
   const focusLater = useFocusLater();
   const groupsArea = useRef<HTMLDivElement>(null);
@@ -120,7 +123,7 @@ function FindingList({ project, report }: { project: string; report: CheckReport
   const [active, setActive] = useState<number | null>(null);
 
   const rows = useMemo(() => searchableRows(rowsOf(report.findings)), [report.findings]);
-  const severityChips = useMemo(() => severityChipsOf(rows), [rows]);
+  const severityChips = useMemo(() => severityChipsOf(rows, t), [rows, t]);
   const codeChips = useMemo(() => codeChipsOf(rows), [rows]);
   const groups = useMemo(() => groupsOf(visibleRows(rows, filters)), [rows, filters]);
 
@@ -167,7 +170,7 @@ function FindingList({ project, report }: { project: string; report: CheckReport
     if (here === undefined) {
       return;
     }
-    switch (event.key) {
+    switch (hotkeyOf(event)) {
       case "ArrowDown":
       case "j":
         moveTo(order[at + 1]);

@@ -8,7 +8,8 @@ import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
 import { actingName, isActingLine, useActing, useHubLogin, useTeamRow } from "./acting";
 import { assigneeChoices, disciplineChoices } from "./filter";
-import { EVIDENCE_KINDS, GAP_TYPES, NAME_IS_LOGIN, NAME_IS_TYPED } from "./labels";
+import { useTranslate } from "../i18n";
+import { evidenceKinds, gapTypes, nameIsLogin, nameIsTyped } from "./labels";
 
 /** How `spec card edit` and `assign` write a cleared value (`docs/canon/cards.md` "Commands"). */
 const CLEAR = "-";
@@ -187,8 +188,9 @@ function ActingField({
 
 /** What a dialog says of the name it goes out under: typed locally, the login on a hub. */
 function ActingNote() {
+  const t = useTranslate();
   const login = useHubLogin();
-  return <p className="dialog-text dialog-effect">{login === null ? NAME_IS_TYPED : NAME_IS_LOGIN}</p>;
+  return <p className="dialog-text dialog-effect">{login === null ? nameIsTyped(t) : nameIsLogin(t)}</p>;
 }
 
 /**
@@ -377,6 +379,7 @@ export interface NewCardForm {
  * no key: the daemon picks the flow by discipline, the first column.
  */
 export function NewCardDialog({ project, target, ...handlers }: { project: string; target?: string } & WriteHandlers) {
+  const t = useTranslate();
   const disciplinesId = useId();
   const namesId = useId();
   const { onClose } = handlers;
@@ -408,7 +411,7 @@ export function NewCardDialog({ project, target, ...handlers }: { project: strin
     const read = disciplineChoices(known?.cards ?? [], "").map((choice) => choice.label);
     return [...new Set([...served, ...read])];
   }, [known]);
-  const names = useMemo(() => assigneeChoices(known?.cards ?? [], "").slice(0, -1), [known]);
+  const names = useMemo(() => assigneeChoices(known?.cards ?? [], "", t).slice(0, -1), [known, t]);
 
   return (
     <WriteDialog
@@ -520,15 +523,17 @@ export function editChanges(form: EditForm, opened: EditForm, evidence: string |
 
 /** Edit: New card's fields less discipline and assignee, changed fields only; Add evidence appends one. */
 export function EditCardDialog({ project, card, ...handlers }: { project: string; card: Card } & WriteHandlers) {
+  const t = useTranslate();
+  const kinds = evidenceKinds(t);
   const kindId = useId();
   const { onClose } = handlers;
   const send = useSend(project, handlers);
   const [acting] = useActing();
   const [opened] = useState<EditForm>(() => editFormOf(card));
   const [form, setForm] = useState<EditForm>(opened);
-  const [evidenceKind, setEvidenceKind] = useState(EVIDENCE_KINDS[0]?.word ?? "");
+  const [evidenceKind, setEvidenceKind] = useState(kinds[0]?.word ?? "");
   const [value, setValue] = useState("");
-  const valueHint = EVIDENCE_KINDS.find((entry) => entry.word === evidenceKind)?.hint;
+  const valueHint = kinds.find((entry) => entry.word === evidenceKind)?.hint;
 
   function field(key: keyof EditForm) {
     return (typed: string) => {
@@ -586,7 +591,7 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
                 setEvidenceKind(event.target.value);
               }}
             >
-              {EVIDENCE_KINDS.map((entry) => (
+              {kinds.map((entry) => (
                 <option key={entry.word} value={entry.word}>
                   {entry.label}
                 </option>
@@ -671,6 +676,8 @@ export function CancelCardDialog({ project, card, ...handlers }: { project: stri
  * stays in its header too; it stands last, so a refusal of it is said right under it.
  */
 export function AcceptCardDialog({ project, card, ...handlers }: { project: string; card: Pick<CardRow, "id" | "title" | "revision" | "assignee" | "reviewer"> & Partial<Pick<CardRow, "targets">> } & WriteHandlers) {
+  const t = useTranslate();
+  const gaps = gapTypes(t);
   const { onClose } = handlers;
   const targets = card.targets ?? [];
   const send = useSend(project, handlers);
@@ -683,7 +690,7 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
   const [summary, setSummary] = useState("");
   const [observed, setObserved] = useState("");
   const [documented, setDocumented] = useState("");
-  const [gapType, setGapType] = useState(GAP_TYPES[0]?.word ?? "");
+  const [gapType, setGapType] = useState(gaps[0]?.word ?? "");
   const name = actingName(acting);
   const departing = verdict === "departs";
   const departed = linesOf(departs);
@@ -766,7 +773,7 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
                 setGapType(event.target.value);
               }}
             >
-              {GAP_TYPES.map((entry) => (
+              {gaps.map((entry) => (
                 <option key={entry.word} value={entry.word}>
                   {entry.label}
                 </option>

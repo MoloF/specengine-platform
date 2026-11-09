@@ -4,6 +4,7 @@ import { sectionHash } from "../app/routes";
 import { nodeName } from "../graph/layout";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
+import { useTranslate } from "../i18n";
 import { countsText, edgeLine, gapMark, holdsText, readCount, rollupLook, startWord } from "./labels";
 import { isGroup, type DrawnRead } from "./layout";
 import { keptInList } from "./timeline";
@@ -28,8 +29,9 @@ function BoxRow({
   marked: boolean;
   onToggle: (name: string) => void;
 }) {
+  const t = useTranslate();
   const name = nodeName(node);
-  const gap = gapMark(node, open, named);
+  const gap = gapMark(node, open, named, t);
   const group = isGroup(node);
   return (
     <li className="graph-list-node flow-list-box" data-flow-row={name} aria-current={selected ? "true" : undefined}>
@@ -42,9 +44,9 @@ function BoxRow({
           {node.kind ?? "-"}
         </span>
         {node.title !== null && <span>{node.title}</span>}
-        {!group && node.rollup !== null && <Badge look={rollupLook(node.rollup)} />}
+        {!group && node.rollup !== null && <Badge look={rollupLook(node.rollup, t)} />}
       </p>
-      {group && node.counts !== null && <p className="flow-list-counts">{countsText(node.counts)}</p>}
+      {group && node.counts !== null && <p className="flow-list-counts">{countsText(node.counts, t)}</p>}
       <p className="graph-list-node-meta">
         <span className="mono">
           {node.path}:{node.line}
@@ -59,7 +61,7 @@ function BoxRow({
         {node.start && (
           <span className="flow-mark flow-mark-start">
             <Icon name="flowStart" />
-            {startWord(inLane)}
+            {startWord(inLane, t)}
           </span>
         )}
         {node.end && (
@@ -68,7 +70,7 @@ function BoxRow({
             End
           </span>
         )}
-        {group && <span>{holdsText(node.holds)}</span>}
+        {group && <span>{holdsText(node.holds, t)}</span>}
         {gap !== null && (
           <span className="flow-mark flow-mark-gap">
             <Icon name="flowGap" />
@@ -124,6 +126,7 @@ function ReadSection({
   stage: string;
   onToggle: (name: string) => void;
 }) {
+  const t = useTranslate();
   const headingId = useId();
   const boxes = useMemo(() => read.boxes.filter((node) => keptInList(node, stage)), [read.boxes, stage]);
   const edges = useMemo(() => {
@@ -133,7 +136,7 @@ function ReadSection({
   return (
     <section className="graph-list-group" aria-labelledby={headingId}>
       <h2 id={headingId} className="graph-list-heading">
-        {read.group === null ? "Top" : read.group} ({readCount({ nodes: boxes, edges })})
+        {read.group === null ? "Top" : read.group} ({readCount({ nodes: boxes, edges }, t)})
       </h2>
       <ul className="graph-list-nodes">
         {boxes.map((node) => (

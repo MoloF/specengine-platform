@@ -1,13 +1,13 @@
 import { lazy, Suspense, type KeyboardEvent } from "react";
 import { useCheck, useHealth } from "../api/queries";
-import { SECTIONS } from "../app/sections";
+import { aboutOf } from "../app/sections";
+import { useTranslate } from "../i18n";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { hasModifier, isTextField } from "../ui/keys";
 import { Skeleton } from "../ui/states";
 
 const HealthRegions = lazy(() => import("./HealthRegions").then((module) => ({ default: module.HealthRegions })));
 
-const ABOUT = SECTIONS.find((section) => section.id === "health")?.about ?? "";
 
 /**
  * Health (`#/<project>/health`, docs/features/ui-health.md): `spec check`'s answer and what is left
@@ -19,6 +19,7 @@ const ABOUT = SECTIONS.find((section) => section.id === "health")?.about ?? "";
  * chunk loads, so focus on it is never lost.
  */
 export function HealthView({ project }: { project: string }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const check = useCheck(project);
   const health = useHealth(project);
@@ -40,7 +41,7 @@ export function HealthView({ project }: { project: string }) {
           Health
         </h1>
         <p className="view-about">
-          {ABOUT} The check of <span className="mono">{project}</span>, as <code>spec check</code> reports it.
+          {aboutOf("health", t)} The check of <span className="mono">{project}</span>, as <code>spec check</code> reports it.
         </p>
       </header>
       <Suspense fallback={<Skeleton label={`Loading the Health of ${project}`} lines={6} />}>

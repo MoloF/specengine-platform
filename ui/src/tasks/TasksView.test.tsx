@@ -609,6 +609,15 @@ describe("states (AC-11)", () => {
 });
 
 describe("keyboard (AC-12)", () => {
+  it("moves down with j under a Russian layout; ? still lists the keys (LG-7 of ui-languages)", async () => {
+    await openList();
+    row("T-0002").focus();
+    fireEvent.keyDown(row("T-0002"), { key: "\u043e", code: "KeyJ" });
+    await focused(row("T-0003"));
+    fireEvent.keyDown(row("T-0003"), { key: "?", code: "Digit7", shiftKey: true });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  });
+
   it("gives the list one Tab stop and moves it with the arrows, j and k, Home and End; nothing opens", async () => {
     const client = await openList();
     expect(rows().filter((item) => item.tabIndex === 0).map((item) => item.dataset.task)).toEqual(["T-0002"]);

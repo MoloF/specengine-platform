@@ -12,6 +12,7 @@ import { useNow } from "../ui/useNow";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { proposalsFor } from "./matching";
+import { useTranslate } from "../i18n";
 
 /**
  * The Proposals tab: the inbox items targeting this node, by ID, `slug/ID` or, ID-less, path, with
@@ -27,6 +28,7 @@ export function ProposalsPanel({
   holders: readonly ShownNode[];
   inbox: InboxQuery;
 }) {
+  const t = useTranslate();
   const now = useNow();
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
   const region = useRef<HTMLDivElement>(null);
@@ -70,10 +72,10 @@ export function ProposalsPanel({
                   {proposal.id}
                 </a>
                 <span className="kind-tag">{proposal.kind}</span>
-                <Badge name="Status" look={statusLook(proposal.status)} />
-                <Badge name="Severity" look={severityLook(proposal.severity)} />
-                <time className="muted" dateTime={proposal.created_at} title={formatUtc(proposal.created_at)}>
-                  {formatAge(proposal.created_at, now)}
+                <Badge name="Status" look={statusLook(proposal.status, t)} />
+                <Badge name="Severity" look={severityLook(proposal.severity, t)} />
+                <time className="muted" dateTime={proposal.created_at} title={formatUtc(proposal.created_at, t)}>
+                  {formatAge(proposal.created_at, now, t)}
                 </time>
               </p>
               <p>{summaryOf(proposal)}</p>

@@ -6,7 +6,8 @@ import { Icon } from "../ui/Icon";
 import { hasModifier } from "../ui/keys";
 import { shownSlot } from "../ui/text";
 import { isOverdue } from "./due";
-import { ACCEPTED, BY_HAND, CANCELLED, markLook, markNames, OVERDUE, rowMark, UNASSIGNED } from "./labels";
+import { useTranslate } from "../i18n";
+import { acceptedLook, byHand, cancelledLook, markLook, markNames, overdueLook, rowMark, unassigned } from "./labels";
 
 /** What a card asks of its board. */
 export interface CardActions {
@@ -23,9 +24,10 @@ export interface CardActions {
  * by hand.
  */
 function Source({ project, targets }: { project: string; targets: readonly string[] }) {
+  const t = useTranslate();
   const first = targets[0];
   if (first === undefined) {
-    return <span className="board-card-source muted">{BY_HAND}</span>;
+    return <span className="board-card-source muted">{byHand(t)}</span>;
   }
   return (
     <span className="board-card-source">
@@ -68,9 +70,10 @@ export const BoardCard = memo(function BoardCard({
   dropAbove: boolean;
   actions: CardActions;
 }) {
+  const t = useTranslate();
   const closed = row.accepted || row.cancelled;
   const mark = rowMark(row);
-  const markShown = mark === null ? null : markLook(mark);
+  const markShown = mark === null ? null : markLook(mark, t);
   const named = mark === null ? null : markNames(mark);
 
   function onClick(event: MouseEvent<HTMLElement>) {
@@ -123,9 +126,9 @@ export const BoardCard = memo(function BoardCard({
         )}
         <div className="board-card-top">
           <span className="mono board-card-id">{row.id}</span>
-          {row.accepted && markShown === null && <Badge look={ACCEPTED} />}
-          {row.cancelled && <Badge look={CANCELLED} />}
-          {isOverdue(row, today) && <Badge look={OVERDUE} />}
+          {row.accepted && markShown === null && <Badge look={acceptedLook(t)} />}
+          {row.cancelled && <Badge look={cancelledLook(t)} />}
+          {isOverdue(row, today) && <Badge look={overdueLook(t)} />}
         </div>
         <h3 className="board-card-title">
           <a href={sectionHash(project, "board", row.id)} tabIndex={-1} draggable={false} onClick={onTitleClick}>
@@ -134,7 +137,7 @@ export const BoardCard = memo(function BoardCard({
         </h3>
         <p className={row.assignee === null ? "board-card-who muted" : "board-card-who"}>
           <span className="sr-only">Assignee: </span>
-          <bdi>{row.assignee === null ? UNASSIGNED : shownSlot(row.assignee)}</bdi>
+          <bdi>{row.assignee === null ? unassigned(t) : shownSlot(row.assignee)}</bdi>
         </p>
         {(row.due !== null || row.estimate !== null) && (
           <p className="board-card-when">

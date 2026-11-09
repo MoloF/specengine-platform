@@ -3,6 +3,7 @@ import type { InboxEntry, Project, SearchHit, TaskListEntry } from "../api/types
 import { anEntry, aSearchHit, aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
 import { groupLabel, paletteGroups, type Held, type PaletteInput, type PaletteOption } from "./options";
+import { enT } from "../test/text";
 
 // docs/features/ui-home.md "Implementation" (Palette): groups in order, at most ten options each,
 // NFC-folded substring matching on the trimmed text, an exact ID's group first (AC-13).
@@ -29,7 +30,7 @@ function input(text: string, fields: Partial<PaletteInput> = {}): PaletteInput {
 }
 
 function shape(text: string, fields: Partial<PaletteInput> = {}): [string, string[]][] {
-  return paletteGroups(input(text, fields)).map((group) => [groupLabel(group), group.options.map((option) => option.key)]);
+  return paletteGroups(input(text, fields), enT).map((group) => [groupLabel(group, enT), group.options.map((option) => option.key)]);
 }
 
 function hashOf(option: PaletteOption | undefined): string | null {
@@ -47,7 +48,7 @@ describe("the palette's groups", () => {
     ];
     expect(shape("")).toEqual(expected);
     expect(shape("   ")).toEqual(expected);
-    const sections = paletteGroups(input(""))[0]?.options ?? [];
+    const sections = paletteGroups(input(""), enT)[0]?.options ?? [];
     expect(sections.map(hashOf)).toEqual([
       "#/alpha",
       "#/alpha/inbox",
@@ -106,9 +107,9 @@ describe("the palette's groups", () => {
 
   it("shows ten options of a larger group and says how many matched", () => {
     const many = Array.from({ length: 23 }, (_, index) => aTaskEntry({ id: `T-${String(100 + index)}`, status: "draft" }));
-    const tasks = paletteGroups(input("T-1", { tasks: ready(many) })).find((group) => group.name === "Tasks");
+    const tasks = paletteGroups(input("T-1", { tasks: ready(many) }), enT).find((group) => group.name === "Tasks");
     expect(tasks?.options).toHaveLength(10);
-    expect(tasks === undefined ? "" : groupLabel(tasks)).toBe("Tasks, 10 of 23");
+    expect(tasks === undefined ? "" : groupLabel(tasks, enT)).toBe("Tasks, 10 of 23");
   });
 
   it("labels a group whose read is on its way and leaves out a failed one", () => {
@@ -120,7 +121,7 @@ describe("the palette's groups", () => {
   });
 
   it("offers a search with the text as typed and the REF trimmed, unchecked", () => {
-    const groups = paletteGroups(input("  MEC-TIDES#RULE-TIDE-WINDOW "));
+    const groups = paletteGroups(input("  MEC-TIDES#RULE-TIDE-WINDOW "), enT);
     const tree = groups.find((group) => group.name === "Spec tree");
     const [search, ref] = tree?.options ?? [];
     expect(search).toEqual({ type: "search", key: "search", query: "  MEC-TIDES#RULE-TIDE-WINDOW " });
@@ -129,17 +130,17 @@ describe("the palette's groups", () => {
 
   it("lists the search's hits after the two, each to its ID, else its path", () => {
     const hits: SearchHit[] = [aSearchHit({ id: "R-1" }), aSearchHit({ id: null, path: "docs/spec/a b.md" })];
-    const tree = paletteGroups(input("text", { search: ready(hits) })).find((group) => group.name === "Spec tree");
+    const tree = paletteGroups(input("text", { search: ready(hits) }), enT).find((group) => group.name === "Spec tree");
     expect(tree?.options.map(hashOf)).toEqual([null, "#/alpha/tree/text", "#/alpha/tree/R-1", "#/alpha/tree/docs%2Fspec%2Fa%20b.md"]);
-    const busy = paletteGroups(input("text", { search: { state: "loading" } })).find((group) => group.name === "Spec tree");
-    expect(busy === undefined ? "" : groupLabel(busy)).toBe("Spec tree, loading");
+    const busy = paletteGroups(input("text", { search: { state: "loading" } }), enT).find((group) => group.name === "Spec tree");
+    expect(busy === undefined ? "" : groupLabel(busy, enT)).toBe("Spec tree, loading");
   });
 
   it("keys a hit by its place in the spec, not its rank: the same hit keeps its key in another answer", () => {
     const first = aSearchHit({ id: "R-1", path: "docs/spec/a.md", line: 3 });
     const second = aSearchHit({ id: "R-2", path: "docs/spec/a.md", line: 9 });
     const keys = (hits: SearchHit[]) =>
-      paletteGroups(input("text", { search: ready(hits) }))
+      paletteGroups(input("text", { search: ready(hits) }), enT)
         .find((group) => group.name === "Spec tree")
         ?.options.filter((option) => option.type === "hit")
         .map((option) => option.key);
@@ -150,10 +151,10 @@ describe("the palette's groups", () => {
   });
 
   it("jumps tasks, proposals and projects to their screens", () => {
-    const groups = paletteGroups(input("T-0003"));
+    const groups = paletteGroups(input("T-0003"), enT);
     expect(hashOf(groups[0]?.options[0])).toBe("#/alpha/tasks/T-0003");
-    expect(hashOf(paletteGroups(input("PR-1"))[0]?.options[0])).toBe("#/alpha/inbox/PR-1");
-    expect(hashOf(paletteGroups(input("beta")).find((group) => group.name === "Projects")?.options[0])).toBe("#/beta");
+    expect(hashOf(paletteGroups(input("PR-1"), enT)[0]?.options[0])).toBe("#/alpha/inbox/PR-1");
+    expect(hashOf(paletteGroups(input("beta"), enT).find((group) => group.name === "Projects")?.options[0])).toBe("#/beta");
   });
 
   it("has only Projects with no project, and nothing to list before the projects are read", () => {

@@ -1,5 +1,6 @@
 import type { TaskListEntry, TaskStatus } from "../api/types";
 import { byNumber, chipRank, isClosed } from "./groups";
+import type { Translate } from "../i18n";
 import { taskStatusLook } from "./labels";
 
 // The list's filters, over the one answer already read: a chip per state present (`done` and
@@ -67,7 +68,7 @@ export interface Chip {
 }
 
 /** One chip per state present, in the groups' order; unknown states raw, after the known ones. */
-export function chipsOf(entries: readonly TaskListEntry[]): Chip[] {
+export function chipsOf(entries: readonly TaskListEntry[], t: Translate): Chip[] {
   const chips = new Map<string, { chip: Chip; rank: number; raw: string }>();
   for (const entry of entries) {
     const key = chipKeyOf(entry.status);
@@ -76,7 +77,7 @@ export function chipsOf(entries: readonly TaskListEntry[]): Chip[] {
       known.chip.count += 1;
       continue;
     }
-    const label = isClosed(entry.status) ? "Closed" : taskStatusLook(entry.status).label;
+    const label = isClosed(entry.status) ? t("tasks.group.closed") : taskStatusLook(entry.status, t).label;
     chips.set(key, { chip: { key, label, count: 1 }, rank: chipRank(entry.status), raw: entry.status });
   }
   return [...chips.values()].sort((a, b) => a.rank - b.rank || byNumber(a.raw, b.raw)).map(({ chip }) => chip);

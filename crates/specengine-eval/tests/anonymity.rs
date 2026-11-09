@@ -19,6 +19,17 @@
 //! `presets_are_scanned_so_a_planted_name_is_found` pins that on a scratch tree
 //! and the repository walk reads `scripts/presets/gamedev.toml` (mutation M17:
 //! `scripts/presets` out of `AREAS`, so a planted pilot name passes).
+//! docs/features/ui-languages.md (RM-0082, ADR-0072) "Acceptance criteria",
+//! LG-8: raw Cyrillic stands only in `fixtures/spec-b`,
+//! `fixtures/token-calibration` and the one file `ui/src/i18n/ru.ts`, whole
+//! paths; each of the three holds it, and the catalog's siblings, a `ru/`
+//! directory, the tests and the test helpers stay scanned.
+//! `cyrillic_exemption_is_exactly_the_two_fixture_directories_and_the_catalog`
+//! pins the rule on paths and on this repository;
+//! `cyrillic_in_the_ui_is_found_everywhere_but_the_russian_catalog` is the
+//! positive control on a scratch tree (M21 a letter in `src/app/Shell.tsx`,
+//! M22 the exemption widened to `ui/src/i18n/` with a letter in `index.ts`,
+//! M23 a letter in a test).
 //! The ID prefixes of a runtime census config (08 §4.3;
 //! `crates/specengine-import/README.md`) are not grepped here: such a
 //! config may name single letters or prefixes this repository uses itself,
@@ -127,14 +138,19 @@ fn walk(root: &Path, dir: &Path, out: &mut Vec<(PathBuf, String)>) {
     }
 }
 
-fn offending_lines(pattern: &str, needle: impl Fn(&str) -> bool) -> Vec<String> {
-    offending_lines_outside(&[], pattern, needle)
+/// No file is exempt.
+fn nothing_exempt(_: &Path) -> bool {
+    false
 }
 
-/// Like [`offending_lines`], skipping files under the `exempt` directories
-/// (repository-relative, matched by whole path components).
+fn offending_lines(pattern: &str, needle: impl Fn(&str) -> bool) -> Vec<String> {
+    offending_lines_outside(&nothing_exempt, pattern, needle)
+}
+
+/// Like [`offending_lines`], skipping the files `exempt` accepts (given the
+/// repository-relative path).
 fn offending_lines_outside(
-    exempt: &[&str],
+    exempt: &dyn Fn(&Path) -> bool,
     pattern: &str,
     needle: impl Fn(&str) -> bool,
 ) -> Vec<String> {
@@ -143,18 +159,19 @@ fn offending_lines_outside(
 }
 
 /// `path:line: pattern` for every line of `files` (under `root`) that
-/// `needle` accepts, files under `exempt` skipped.
+/// `needle` accepts, the files `exempt` accepts (by their path relative to
+/// `root`) skipped.
 fn lines_matching(
     root: &Path,
     files: Vec<(PathBuf, String)>,
-    exempt: &[&str],
+    exempt: &dyn Fn(&Path) -> bool,
     pattern: &str,
     needle: impl Fn(&str) -> bool,
 ) -> Vec<String> {
     let mut hits = Vec::new();
     for (path, text) in files {
         let relative = path.strip_prefix(root).unwrap_or(&path);
-        if exempt.iter().any(|dir| relative.starts_with(dir)) {
+        if exempt(relative) {
             continue;
         }
         for (index, line) in text.lines().enumerate() {
@@ -212,13 +229,28 @@ fn no_pilot_names_in_docs_crates_or_fixtures() {
     }
 }
 
-/// The only places allowed to hold raw Cyrillic: self-written Russian test
-/// text. Working answer to Q5 of `crates/specengine-core/README.md` ("Open
-/// owner questions"): these two fixture directories are exempt from the
-/// ADR-0024 check, everything else (including `docs/`) stays scanned.
-/// If the owner answers "no", this list becomes empty and that text turns
-/// into escapes generated at test time.
+/// Two of the three places allowed to hold raw Cyrillic: self-written
+/// Russian test text. Working answer to Q5 of
+/// `crates/specengine-core/README.md` ("Open owner questions"): these two
+/// fixture directories are exempt from the ADR-0024 check, everything else
+/// (including `docs/`) stays scanned. If the owner answers "no", this list
+/// becomes empty and that text turns into escapes generated at test time.
 const RUSSIAN_TEST_TEXT: [&str; 2] = ["fixtures/spec-b", "fixtures/token-calibration"];
+
+/// The third: the UI's Russian catalog, the repository's one file of Russian
+/// chrome (ADR-0072; docs/features/ui-languages.md "Acceptance criteria",
+/// LG-8). Exempt as this whole path and nothing under or beside it.
+const RUSSIAN_CATALOG: &str = "ui/src/i18n/ru.ts";
+
+/// Whether the file at `relative` (repository-relative) may hold raw
+/// Cyrillic: it is under one of [`RUSSIAN_TEST_TEXT`] (whole path
+/// components) or it is [`RUSSIAN_CATALOG`] itself.
+fn cyrillic_exempt(relative: &Path) -> bool {
+    RUSSIAN_TEST_TEXT
+        .iter()
+        .any(|dir| relative.starts_with(dir))
+        || relative == Path::new(RUSSIAN_CATALOG)
+}
 
 fn has_cyrillic(line: &str) -> bool {
     line.chars().any(|c| ('\u{0400}'..='\u{04FF}').contains(&c))
@@ -227,29 +259,39 @@ fn has_cyrillic(line: &str) -> bool {
 #[test]
 fn all_text_is_english_no_cyrillic_letters() {
     // Mixed-script test data elsewhere is explicit escapes, never raw letters.
-    let hits = offending_lines_outside(&RUSSIAN_TEST_TEXT, "cyrillic", has_cyrillic);
+    let hits = offending_lines_outside(&cyrillic_exempt, "cyrillic", has_cyrillic);
     assert!(
         hits.is_empty(),
-        "non-English text (ADR-0024):\n{}",
+        "non-English text (ADR-0024, ADR-0072: Cyrillic only in {RUSSIAN_CATALOG}):\n{}",
         hits.join("\n")
     );
 }
 
-/// The exemption is exactly the two directories: a sibling whose name only
-/// starts with an exempt one is still scanned, and so is everything else.
+/// LG-8 of docs/features/ui-languages.md "Acceptance criteria": the
+/// exemption is exactly the two directories and the catalog file, whole
+/// paths. A sibling whose name only starts with an exempt one is still
+/// scanned; so are the catalog's own other files (`index.ts`, `en.ts`), a
+/// sibling `ru.tsx`, a `ru/` directory, anything under a `ru.ts/`, a test,
+/// the test helpers and a path that only ends in the catalog's. Each of the
+/// three holds Russian text, so the catalog exists once the slice ships. M22.
 #[test]
-fn cyrillic_exemption_is_exactly_the_two_russian_fixture_directories() {
+fn cyrillic_exemption_is_exactly_the_two_fixture_directories_and_the_catalog() {
     let root = repository_root();
     for dir in RUSSIAN_TEST_TEXT {
         assert!(root.join(dir).is_dir(), "{dir} exists");
     }
-    let exempt = |relative: &str| {
-        RUSSIAN_TEST_TEXT
-            .iter()
-            .any(|dir| Path::new(relative).starts_with(dir))
-    };
-    assert!(exempt("fixtures/spec-b/specengine.toml"));
-    assert!(exempt("fixtures/token-calibration/samples/a.md"));
+    assert!(
+        root.join(RUSSIAN_CATALOG).is_file(),
+        "{RUSSIAN_CATALOG} exists (ui-languages D2, LG-8)"
+    );
+    let exempt = |relative: &str| cyrillic_exempt(Path::new(relative));
+    for exempted in [
+        "fixtures/spec-b/specengine.toml",
+        "fixtures/token-calibration/samples/a.md",
+        "ui/src/i18n/ru.ts",
+    ] {
+        assert!(exempt(exempted), "{exempted} is exempt");
+    }
     for scanned in [
         "fixtures/spec-b2/x.md",
         "fixtures/spec-a/x.md",
@@ -257,17 +299,41 @@ fn cyrillic_exemption_is_exactly_the_two_russian_fixture_directories() {
         "fixtures/x/fixtures/spec-b/x.md",
         "docs/features/spec-parser.md",
         "crates/specengine-core/tests/references.rs",
+        "ui/src/i18n/index.ts",
+        "ui/src/i18n/ru/x.ts",
+        "ui/src/i18n/ru.tsx",
+        "ui/src/i18n/en.ts",
+        "ui/src/i18n/catalog.ts",
+        "ui/src/i18n/catalog.test.ts",
+        "ui/src/i18n/ru.test.ts",
+        "ui/src/i18n/ru.ts.orig",
+        "ui/src/i18n/ru.ts/x.ts",
+        "ui/src/ru.ts",
+        "ui/src/app/Shell.tsx",
+        "ui/src/app/language.test.tsx",
+        "ui/src/test/text.ts",
+        "docs/ui/src/i18n/ru.ts",
     ] {
         assert!(!exempt(scanned), "{scanned} is scanned");
     }
-    // The exempt directories really are where the Russian text is: without
-    // the exemption the check finds lines, and only in them.
+    // The exempt places really are where the Russian text is: without the
+    // exemption the check finds lines in each of the three.
     let unexempted = offending_lines("cyrillic", has_cyrillic);
+    for dir in RUSSIAN_TEST_TEXT {
+        assert!(
+            unexempted
+                .iter()
+                .any(|hit| hit.starts_with(&format!("{dir}/"))),
+            "{dir} holds Russian text ({} unexempted hits)",
+            unexempted.len()
+        );
+    }
     assert!(
-        RUSSIAN_TEST_TEXT.iter().all(|dir| unexempted
+        unexempted
             .iter()
-            .any(|hit| hit.starts_with(&format!("{dir}/")))),
-        "each exempt directory holds Russian text: {unexempted:?}"
+            .any(|hit| hit.starts_with(&format!("{RUSSIAN_CATALOG}:"))),
+        "{RUSSIAN_CATALOG} holds Russian text ({} unexempted hits)",
+        unexempted.len()
     );
 }
 
@@ -325,7 +391,7 @@ fn ui_tree_is_scanned_but_its_build_output_and_packages_are_not() {
     let hits = lines_matching(
         &tree.0,
         text_files_under(&tree.0),
-        &RUSSIAN_TEST_TEXT,
+        &cyrillic_exempt,
         "cyrillic",
         has_cyrillic,
     );
@@ -337,6 +403,91 @@ fn ui_tree_is_scanned_but_its_build_output_and_packages_are_not() {
             "ui/index.html:1: cyrillic",
             "ui/src/dist/x.ts:1: cyrillic",
             "ui/src/mocks/harbor-sim/fixtures.ts:1: cyrillic",
+        ]
+    );
+}
+
+/// LG-8 of docs/features/ui-languages.md "Acceptance criteria" on a scratch
+/// tree: raw Cyrillic passes on every line of `ui/src/i18n/ru.ts` and in the
+/// two fixture directories; the same letter is found anywhere else: the
+/// shell (M21), the catalog's index and English files (M22, the exemption
+/// widened to `ui/src/i18n/`), a sibling `ru.tsx`, a `ru/` directory, a test
+/// and the test helpers (M23), a path that only ends in the catalog's. A
+/// test's `\u` escape (D13) is no Cyrillic. The letters are assembled at
+/// run time.
+#[test]
+fn cyrillic_in_the_ui_is_found_everywhere_but_the_russian_catalog() {
+    let letter = char::from_u32(0x0416).expect("a Cyrillic letter");
+    let other = char::from_u32(0x044F).expect("a Cyrillic letter");
+    let line = format!("export const label = \"{letter}\";\n");
+    let tree = Scratch::new("ui-languages");
+    tree.write(
+        "ui/src/i18n/ru.ts",
+        &format!(
+            "// The Russian values, typed against en.ts.\n\
+             export const ru: Catalog = {{\n  \
+             language: {{ label: \"{letter}{other}\", self: \"{other}\" }},\n  \
+             workspace: {{ flowsShown_few: \"{letter} {{{{shown}}}} {other} {{{{count}}}}\" }},\n\
+             }};\n"
+        ),
+    );
+    tree.write("fixtures/spec-b/specs/x.md", &line);
+    tree.write("fixtures/token-calibration/samples/a.md", &line);
+    let flagged = [
+        "ui/src/app/Shell.tsx",
+        "ui/src/i18n/index.ts",
+        "ui/src/i18n/en.ts",
+        "ui/src/i18n/catalog.ts",
+        "ui/src/i18n/ru.tsx",
+        "ui/src/i18n/ru/x.ts",
+        "ui/src/i18n/catalog.test.ts",
+        "ui/src/app/language.test.tsx",
+        "ui/src/test/text.ts",
+        "ui/src/mocks/scenario.ts",
+        "docs/ui/src/i18n/ru.ts",
+        "crates/x/tests/ui/src/i18n/ru.ts",
+    ];
+    for relative in flagged {
+        tree.write(relative, &line);
+    }
+    tree.write(
+        "ui/src/app/Plain.tsx",
+        "export const label = \"Language\";\n",
+    );
+    tree.write(
+        "ui/src/ui/keys.test.ts",
+        "letterOf({ key: \"\\u043e\", code: \"KeyJ\", shiftKey: false });\n",
+    );
+    let hits = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &cyrillic_exempt,
+        "cyrillic",
+        has_cyrillic,
+    );
+    let mut want: Vec<String> = flagged
+        .iter()
+        .map(|path| format!("{path}:1: cyrillic"))
+        .collect();
+    want.sort();
+    assert_eq!(hits, want);
+    // Unexempted, the catalog's two Russian lines are found too: the
+    // exemption, not the needle, lets them pass.
+    let catalog: Vec<String> = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &nothing_exempt,
+        "cyrillic",
+        has_cyrillic,
+    )
+    .into_iter()
+    .filter(|hit| hit.starts_with(&format!("{RUSSIAN_CATALOG}:")))
+    .collect();
+    assert_eq!(
+        catalog,
+        [
+            "ui/src/i18n/ru.ts:3: cyrillic",
+            "ui/src/i18n/ru.ts:4: cyrillic",
         ]
     );
 }
@@ -399,7 +550,7 @@ fn plugin_tree_is_scanned_with_its_manifests() {
     let hits = lines_matching(
         &tree.0,
         text_files_under(&tree.0),
-        &RUSSIAN_TEST_TEXT,
+        &cyrillic_exempt,
         "cyrillic",
         has_cyrillic,
     );
@@ -446,7 +597,7 @@ fn presets_are_scanned_so_a_planted_name_is_found() {
     let names = lines_matching(
         &tree.0,
         text_files_under(&tree.0),
-        &[],
+        &nothing_exempt,
         "<planted>",
         |line| line.contains(&planted),
     );
@@ -454,7 +605,7 @@ fn presets_are_scanned_so_a_planted_name_is_found() {
     let letters = lines_matching(
         &tree.0,
         text_files_under(&tree.0),
-        &RUSSIAN_TEST_TEXT,
+        &cyrillic_exempt,
         "cyrillic",
         has_cyrillic,
     );

@@ -1631,6 +1631,20 @@ describe("reads and states (AC-09)", () => {
 });
 
 describe("keyboard (AC-10)", () => {
+  it("moves down the findings with j under a Russian layout; ? still lists the keys (LG-7 of ui-languages)", async () => {
+    await openHealth();
+    const order = rows();
+    const first = order[0];
+    if (first === undefined) {
+      throw new Error("no rows");
+    }
+    first.focus();
+    fireEvent.keyDown(first, { key: "\u043e", code: "KeyJ" });
+    await focused(order[1] as HTMLElement);
+    fireEvent.keyDown(order[1] as HTMLElement, { key: "?", code: "Digit7", shiftKey: true });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  });
+
   it("gives the findings one Tab stop and moves it with the arrows, j and k, Home and End; nothing opens", async () => {
     await openHealth();
     expect(rows().filter((item) => item.tabIndex === 0)).toHaveLength(1);

@@ -241,6 +241,17 @@ describe("the tree's keys (AC-04)", () => {
     expect(rows().filter((item) => item.tabIndex === 0).map(nameOf)).toEqual(["DOC-A"]);
   });
 
+  it("moves down with j under a Russian layout, the physical key acting; ? still lists the keys (LG-7 of ui-languages)", async () => {
+    await openTree(treeClient());
+    row("DOC-A").focus();
+    fireEvent.keyDown(row("DOC-A"), { key: "\u043e", code: "KeyJ" });
+    await focused(row("SEC-A1"));
+    fireEvent.keyDown(row("SEC-A1"), { key: "\u043b", code: "KeyK" });
+    await focused(row("DOC-A"));
+    fireEvent.keyDown(row("DOC-A"), { key: "?", code: "Digit7", shiftKey: true });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  });
+
   it("moves with Down, Up, j, k, Home and End, pushing no history entry", async () => {
     await openTree(treeClient());
     const before = window.history.length;

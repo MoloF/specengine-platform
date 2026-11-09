@@ -13,31 +13,35 @@ import {
   type TestedState,
   type UnboundReason,
 } from "../api/types";
+import type { Translate } from "../i18n";
 import { syncLook } from "../tree/labels";
 import type { Look } from "../ui/Badge";
 import { oneLine } from "./oneLine";
 
 // The check's closed tables (`docs/canon/spec-check.md` "Findings, debt, verdict"): a known value
-// gets a label, a colour role and an icon; any other string is shown raw in a neutral badge and
-// sorted last. A verdict is labelled through KNOWN_CHECK_VERDICTS, never spelled here
-// (docs/features/ui-health.md "Rules and edge cases"); nothing here judges a report.
+// gets a label from the catalog's `health` group, a colour role and an icon; any other string is
+// shown raw in a neutral badge and sorted last. A verdict is labelled through KNOWN_CHECK_VERDICTS,
+// never spelled here (docs/features/ui-health.md "Rules and edge cases"); nothing here judges a report.
+
+type Mark = Omit<Look, "label">;
 
 const [CLEAN, OBSERVED, FAILS, CANNOT_CHECK] = KNOWN_CHECK_VERDICTS;
 
-const VERDICT: Record<KnownCheckVerdict, Look> = {
-  [CLEAN]: { label: "Clean", tone: "check-clean", icon: "checkClean" },
-  [OBSERVED]: { label: "Passes with findings", tone: "check-observed", icon: "checkObserved" },
-  [FAILS]: { label: "Fails the check", tone: "check-fails", icon: "checkFails" },
-  [CANNOT_CHECK]: { label: "Could not check", tone: "check-cannot-check", icon: "cannotCheck" },
+const VERDICT: Record<KnownCheckVerdict, Mark & { key: "clean" | "observed" | "fails" | "cannotCheck" }> = {
+  [CLEAN]: { key: "clean", tone: "check-clean", icon: "checkClean" },
+  [OBSERVED]: { key: "observed", tone: "check-observed", icon: "checkObserved" },
+  [FAILS]: { key: "fails", tone: "check-fails", icon: "checkFails" },
+  [CANNOT_CHECK]: { key: "cannotCheck", tone: "check-cannot-check", icon: "cannotCheck" },
 };
 
-function lookup<K extends string>(table: Record<K, Look>, value: string): Look | null {
+function lookup<K extends string, V>(table: Record<K, V>, value: string): V | null {
   return Object.hasOwn(table, value) ? table[value as K] : null;
 }
 
 /** A verdict's label and look; an unknown one raw, neutral. */
-export function verdictLook(value: CheckVerdict): Look {
-  return lookup(VERDICT, value) ?? { label: value, tone: "check-unknown", icon: "unknown" };
+export function verdictLook(value: CheckVerdict, t: Translate): Look {
+  const known = lookup(VERDICT, value);
+  return known === null ? { label: value, tone: "check-unknown", icon: "unknown" } : { label: t(`health.verdict.${known.key}`), tone: known.tone, icon: known.icon };
 }
 
 /** The report says the corpus is clean (its own verdict, read, never derived). */
@@ -50,16 +54,17 @@ export function isCannotCheck(value: CheckVerdict): boolean {
   return value === CANNOT_CHECK;
 }
 
-const SEVERITY: Record<KnownFindingSeverity, Look> = {
-  error: { label: "Error", tone: "finding-error", icon: "findingError" },
-  warning: { label: "Warning", tone: "finding-warning", icon: "findingWarning" },
+const SEVERITY: Record<KnownFindingSeverity, Mark> = {
+  error: { tone: "finding-error", icon: "findingError" },
+  warning: { tone: "finding-warning", icon: "findingWarning" },
 };
 
 const SEVERITY_ORDER: readonly string[] = Object.keys(SEVERITY);
 
 /** A finding's severity: label and icon; an unknown one raw, neutral. */
-export function findingSeverityLook(value: FindingSeverity): Look {
-  return lookup(SEVERITY, value) ?? { label: value, tone: "finding-unknown", icon: "unknown" };
+export function findingSeverityLook(value: FindingSeverity, t: Translate): Look {
+  const mark = lookup(SEVERITY, value);
+  return mark === null ? { label: value, tone: "finding-unknown", icon: "unknown" } : { label: t(`health.severity.${value as KnownFindingSeverity}`), ...mark };
 }
 
 /** Errors first, then warnings, then any unknown severity. */
@@ -96,15 +101,27 @@ export interface CodeRowLook {
 }
 
 const CODE_ROW = {
-  measured: { label: "Measured", measured: true, retry: false },
-  off: { label: "Code layer off", measured: false, retry: false },
-  not_configured: { label: "Not configured", measured: false, retry: false },
-  cannot: { label: "Could not be measured", measured: false, retry: true },
-} satisfies Record<string, CodeRowLook>;
+  measured: { measured: true, retry: false },
+  off: { measured: false, retry: false },
+  not_configured: { measured: false, retry: false },
+  cannot: { measured: false, retry: true },
+} satisfies Record<string, Omit<CodeRowLook, "label">>;
+
+/** The four code row states, in the canon's order. */
+export const CODE_ROW_STATES = Object.keys(CODE_ROW) as readonly (keyof typeof CODE_ROW)[];
+
+/** Whether a code row's state says measured: the one state drawn with counts and rows. */
+export function isMeasuredState(value: HealthRowState): boolean {
+  return Object.hasOwn(CODE_ROW, value) && CODE_ROW[value as keyof typeof CODE_ROW].measured;
+}
 
 /** A code row's state: measured, not measured (off, not configured) or could not be measured; any other word raw, not measured. */
-export function codeRowLook(value: HealthRowState): CodeRowLook {
-  return Object.hasOwn(CODE_ROW, value) ? CODE_ROW[value as keyof typeof CODE_ROW] : { label: value, measured: false, retry: false };
+export function codeRowLook(value: HealthRowState, t: Translate): CodeRowLook {
+  if (!Object.hasOwn(CODE_ROW, value)) {
+    return { label: value, measured: false, retry: false };
+  }
+  const state = value as keyof typeof CODE_ROW;
+  return { label: t(`health.codeRow.${state}`), ...CODE_ROW[state] };
 }
 
 /**
@@ -112,7 +129,9 @@ export function codeRowLook(value: HealthRowState): CodeRowLook {
  * the contract, `docs/canon/health.md` "UI"): drawn as not measured, after "Not measured: ", with
  * no digit and no Retry, never as "Measured".
  */
-export const MEASURED_WITHOUT_COUNTS = "the answer holds no counts";
+export function measuredWithoutCounts(t: Translate): string {
+  return t("health.measuredWithoutCounts");
+}
 
 /** How a row 4 line is drawn: its state's badge and which part of the CLI's tail it carries. */
 export interface AssumedLook {
@@ -124,70 +143,65 @@ export interface AssumedLook {
 }
 
 const ASSUMED = {
-  pending: { look: { label: "Pending", tone: "assumed-pending", icon: "open" }, record: false, under: false },
-  as_assumed: { look: { label: "Decided as assumed", tone: "assumed-as-assumed", icon: "approved" }, record: true, under: false },
-  otherwise: { look: { label: "Decided otherwise", tone: "assumed-otherwise", icon: "changes" }, record: true, under: false },
-  applied: { look: { label: "Applied", tone: "assumed-applied", icon: "applied" }, record: false, under: false },
-  rejected: { look: { label: "Rejected", tone: "assumed-rejected", icon: "rejected" }, record: false, under: false },
-  unknown: { look: { label: "No such item", tone: "assumed-missing", icon: "linkDangling" }, record: false, under: false },
-  archived: { look: { label: "Archived", tone: "assumed-archived", icon: "archived" }, record: false, under: false },
-  in_question: { look: { label: "In question", tone: "assumed-in-question", icon: "waiting" }, record: false, under: true },
-} satisfies Record<string, AssumedLook>;
+  pending: { mark: { tone: "assumed-pending", icon: "open" }, record: false, under: false },
+  as_assumed: { mark: { tone: "assumed-as-assumed", icon: "approved" }, record: true, under: false },
+  otherwise: { mark: { tone: "assumed-otherwise", icon: "changes" }, record: true, under: false },
+  applied: { mark: { tone: "assumed-applied", icon: "applied" }, record: false, under: false },
+  rejected: { mark: { tone: "assumed-rejected", icon: "rejected" }, record: false, under: false },
+  unknown: { mark: { tone: "assumed-missing", icon: "linkDangling" }, record: false, under: false },
+  archived: { mark: { tone: "assumed-archived", icon: "archived" }, record: false, under: false },
+  in_question: { mark: { tone: "assumed-in-question", icon: "waiting" }, record: false, under: true },
+} satisfies Record<string, { mark: Mark; record: boolean; under: boolean }>;
 
 /** Row 4's eight states (a marker on a queue item, an `@assumes` on an archived node or one in question), in the canon's order. */
 export const ASSUMED_STATES: readonly string[] = Object.keys(ASSUMED);
 
 /** A row 4 line's state: label, colour role, icon, the tail it carries; any other word raw, neutral, no record, no list. */
-export function assumedLook(value: AssumedState): AssumedLook {
-  return Object.hasOwn(ASSUMED, value)
-    ? ASSUMED[value as keyof typeof ASSUMED]
-    : { look: { label: value, tone: "assumed-unknown", icon: "unknown" }, record: false, under: false };
+export function assumedLook(value: AssumedState, t: Translate): AssumedLook {
+  if (!Object.hasOwn(ASSUMED, value)) {
+    return { look: { label: value, tone: "assumed-unknown", icon: "unknown" }, record: false, under: false };
+  }
+  const state = value as keyof typeof ASSUMED;
+  const { mark, record, under } = ASSUMED[state];
+  return { look: { label: t(`health.assumed.${state}`), ...mark }, record, under };
 }
 
 const UNBOUND_REASON = {
-  homoglyph: { label: "Look-alike ID", tone: "unbound-homoglyph", icon: "findingWarning" },
-  unanchored: { label: "Unanchored", tone: "unbound-unanchored", icon: "linkSkipped" },
-  cannot_verify: { label: "Cannot verify", tone: "unbound-cannot-verify", icon: "cannotCheck" },
-  relation: { label: "Another relation", tone: "unbound-relation", icon: "superseded" },
-} satisfies Record<string, Look>;
+  homoglyph: { tone: "unbound-homoglyph", icon: "findingWarning" },
+  unanchored: { tone: "unbound-unanchored", icon: "linkSkipped" },
+  cannot_verify: { tone: "unbound-cannot-verify", icon: "cannotCheck" },
+  relation: { tone: "unbound-relation", icon: "superseded" },
+} satisfies Record<string, Mark>;
 
 /** Row 5's four reasons a marker naming a node binds it not, in the canon's order. */
 export const UNBOUND_REASONS: readonly string[] = Object.keys(UNBOUND_REASON);
 
 /** Why a marker naming an unbound node binds it not; cannot_verify in cannot-verify's role, never ok's; any other word raw, neutral. */
-export function unboundReasonLook(value: UnboundReason): Look {
-  return lookup(UNBOUND_REASON, value) ?? { label: value, tone: "unbound-unknown", icon: "unknown" };
+export function unboundReasonLook(value: UnboundReason, t: Translate): Look {
+  const mark = lookup(UNBOUND_REASON, value);
+  return mark === null ? { label: value, tone: "unbound-unknown", icon: "unknown" } : { label: t(`health.unbound.${value as keyof typeof UNBOUND_REASON}`), ...mark };
 }
 
-/** A marker's ID state as `spec refs` words it (docs/canon/code-bindings.md "ID state"). */
-const ID_STATE: Record<string, string> = {
-  resolved: "Resolved",
-  alias: "Alias",
-  ambiguous: "Ambiguous",
-  homoglyph: "Look-alike",
-  other_project: "Other project",
-  queue: "Queue item",
-  dangling: "Dangling",
-};
+/** A marker's ID states as `spec refs` words them (docs/canon/code-bindings.md "ID state"). */
+const ID_STATE = { resolved: true, alias: true, ambiguous: true, homoglyph: true, other_project: true, queue: true, dangling: true };
 
-/** A marker's binding word as `spec refs` gives it (docs/canon/spec-cli-refs.md "Rows"). */
-const BINDING: Record<string, string> = {
-  item: "Item",
-  module: "Module",
-  ron: "RON field",
-  file: "File",
-  unanchored: "Unanchored",
-  cannot_verify: "Cannot verify",
-};
+/** The seven ID states, in the table's order. */
+export const ID_STATES = Object.keys(ID_STATE) as readonly (keyof typeof ID_STATE)[];
+
+/** A marker's binding words as `spec refs` gives them (docs/canon/spec-cli-refs.md "Rows"). */
+const BINDING = { item: true, module: true, ron: true, file: true, unanchored: true, cannot_verify: true };
+
+/** The six binding words, in the table's order. */
+export const BINDINGS = Object.keys(BINDING) as readonly (keyof typeof BINDING)[];
 
 /** The ID state's words; any other raw. */
-export function idStateLabel(value: string): string {
-  return Object.hasOwn(ID_STATE, value) ? (ID_STATE[value] ?? value) : value;
+export function idStateLabel(value: string, t: Translate): string {
+  return Object.hasOwn(ID_STATE, value) ? t(`health.idState.${value as keyof typeof ID_STATE}`) : value;
 }
 
 /** The binding's words; any other raw. */
-export function bindingLabel(value: string): string {
-  return Object.hasOwn(BINDING, value) ? (BINDING[value] ?? value) : value;
+export function bindingLabel(value: string, t: Translate): string {
+  return Object.hasOwn(BINDING, value) ? t(`health.binding.${value as keyof typeof BINDING}`) : value;
 }
 
 // Row 6 of What is left, drift (docs/features/health-drift-ui.md "Data"; the body:
@@ -197,10 +211,15 @@ export function bindingLabel(value: string): string {
 // not listed is shown raw and neutral, never fails the part.
 
 const DRIFT_CLASS = {
-  fix: { label: "Fix", tone: "finding-error", icon: "findingError" },
-  check: { label: "Check", tone: "finding-warning", icon: "findingWarning" },
-  cannot: { label: "Cannot verify", tone: "sync-cannot-verify", icon: "cannotCheck" },
-} satisfies Record<string, Look>;
+  fix: { tone: "finding-error", icon: "findingError" },
+  check: { tone: "finding-warning", icon: "findingWarning" },
+  cannot: { tone: "sync-cannot-verify", icon: "cannotCheck" },
+} satisfies Record<string, Mark>;
+
+/** A class's look: its catalog label, its class's colour role and icon. */
+function classLook(value: keyof typeof DRIFT_CLASS, t: Translate): Look {
+  return { label: t(`health.driftClass.${value}`), ...DRIFT_CLASS[value] };
+}
 
 /** verify's three classes, in its summary's order (`docs/canon/spec-verify-output.md` "Text"). */
 export const DRIFT_CLASSES: readonly string[] = Object.keys(DRIFT_CLASS);
@@ -211,11 +230,11 @@ function rawClass(label: string): Look {
 }
 
 /** A row 6 line's class: Fix, Check, or Cannot verify in cannot-verify's role, never ok's; any other word raw, neutral. */
-export function driftClassLook(value: string | null): Look {
+export function driftClassLook(value: string | null, t: Translate): Look {
   if (value === null) {
-    return rawClass("No class");
+    return rawClass(t("health.noClass"));
   }
-  return lookup(DRIFT_CLASS, value) ?? rawClass(value);
+  return Object.hasOwn(DRIFT_CLASS, value) ? classLook(value as keyof typeof DRIFT_CLASS, t) : rawClass(value);
 }
 
 /** verify's three classes, as the tree's badges count a node's own row 6 rows (docs/features/ui-tree-drift.md). */
@@ -239,19 +258,21 @@ export interface DriftClassCounts {
 }
 
 /** The tree's badge for rows of a class row 6 does not list (none today; the word shows raw on Health's row 6): neutral, never ok's. */
-const UNLISTED_CLASS: Look = { label: "Another class", tone: "sync-unknown", icon: "unknown" };
+function unlistedClass(t: Translate): Look {
+  return { label: t("health.anotherClass"), tone: "sync-unknown", icon: "unknown" };
+}
 
 /**
  * A tree line's drift badges (docs/features/ui-tree-drift.md "Badges"): Fix, Check, Cannot verify
  * in verify's order, then Another class, each only when its count is above 0 (never a 0), its
  * class's look with the label `<label> <count>`.
  */
-export function driftBadgeLooks(counts: Readonly<DriftClassCounts>): Look[] {
+export function driftBadgeLooks(counts: Readonly<DriftClassCounts>, t: Translate): Look[] {
   const each: [Look, number][] = [
-    [DRIFT_CLASS.fix, counts.fix],
-    [DRIFT_CLASS.check, counts.check],
-    [DRIFT_CLASS.cannot, counts.cannot],
-    [UNLISTED_CLASS, counts.unlisted],
+    [classLook("fix", t), counts.fix],
+    [classLook("check", t), counts.check],
+    [classLook("cannot", t), counts.cannot],
+    [unlistedClass(t), counts.unlisted],
   ];
   return each.filter(([, count]) => count > 0).map(([look, count]) => ({ ...look, label: `${look.label} ${String(count)}` }));
 }
@@ -268,28 +289,29 @@ export interface DriftTally {
  * check, <k> cannot, <o> ok`): one per class in its order, each in its class's look, then `ok` in
  * the tree's "In sync" look; read from the counts, never counted here.
  */
-export function driftTally(counts: DriftCounts): DriftTally[] {
+export function driftTally(counts: DriftCounts, t: Translate): DriftTally[] {
   return [
-    { key: "fix", look: DRIFT_CLASS.fix, count: counts.fix },
-    { key: "check", look: DRIFT_CLASS.check, count: counts.check },
-    { key: "cannot", look: DRIFT_CLASS.cannot, count: counts.cannot },
-    { key: "ok", look: syncLook("ok"), count: counts.ok },
+    { key: "fix", look: classLook("fix", t), count: counts.fix },
+    { key: "check", look: classLook("check", t), count: counts.check },
+    { key: "cannot", look: classLook("cannot", t), count: counts.cannot },
+    { key: "ok", look: syncLook("ok", t), count: counts.ok },
   ];
 }
 
 const TESTED = {
-  verified: { label: "Verified", tone: "sync-ok", icon: "checkClean" },
-  stale: { label: "Stale", tone: "stale-changed", icon: "deferred" },
-  unverifiable: { label: "Unverifiable", tone: "sync-cannot-verify", icon: "cannotCheck" },
-  node_gone: { label: "Node gone", tone: "sync-broken-binding", icon: "linkDangling" },
-} satisfies Record<string, Look>;
+  verified: { tone: "sync-ok", icon: "checkClean" },
+  stale: { tone: "stale-changed", icon: "deferred" },
+  unverifiable: { tone: "sync-cannot-verify", icon: "cannotCheck" },
+  node_gone: { tone: "sync-broken-binding", icon: "linkDangling" },
+} satisfies Record<string, Mark>;
 
 /** A `[[tested]]` entry's four states, in the canon's order (`docs/canon/spec-lock-tested.md` "The state"). */
 export const TESTED_STATES: readonly string[] = Object.keys(TESTED);
 
 /** A `[[tested]]` entry's state: its label, colour role and icon; unverifiable in cannot-verify's role, never verified's; any other word raw, neutral. */
-export function testedLook(value: TestedState): Look {
-  return lookup(TESTED, value) ?? { label: value, tone: "sync-unknown", icon: "unknown" };
+export function testedLook(value: TestedState, t: Translate): Look {
+  const mark = lookup(TESTED, value);
+  return mark === null ? { label: value, tone: "sync-unknown", icon: "unknown" } : { label: t(`health.tested.${value as keyof typeof TESTED}`), ...mark };
 }
 
 /**

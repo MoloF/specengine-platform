@@ -3,13 +3,15 @@ import type { UnboundCounts, UnboundMarker, UnboundRow } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { CodePart, CodeRowList, counted, oneLine, RowNotMeasured } from "./codeRows";
-import { bindingLabel, codeRowLook, idStateLabel, unboundReasonLook } from "./labels";
+import { bindingLabel, idStateLabel, isMeasuredState, unboundReasonLook } from "./labels";
+import { useTranslate } from "../i18n";
 
 /**
  * A marker that names an unbound node yet binds it not: where it is, its relation raw, its ID
  * state's and binding's words, and why it does not bind (cannot_verify in cannot-verify's role).
  */
 function MarkerLine({ marker }: { marker: UnboundMarker }) {
+  const t = useTranslate();
   return (
     <li className="health-code-marker">
       <span className="mono health-code-place">
@@ -17,12 +19,12 @@ function MarkerLine({ marker }: { marker: UnboundMarker }) {
       </span>
       <span className="kind-tag">{oneLine(marker.relation)}</span>
       <span className="health-code-fact">
-        ID <span className="health-code-word">{oneLine(idStateLabel(marker.id_state))}</span>
+        ID <span className="health-code-word">{oneLine(idStateLabel(marker.id_state, t))}</span>
       </span>
       <span className="health-code-fact">
-        Binding <span className="health-code-word">{oneLine(bindingLabel(marker.binding))}</span>
+        Binding <span className="health-code-word">{oneLine(bindingLabel(marker.binding, t))}</span>
       </span>
-      <Badge name="Binds it not" look={unboundReasonLook(marker.reason)} />
+      <Badge name="Binds it not" look={unboundReasonLook(marker.reason, t)} />
     </li>
   );
 }
@@ -101,7 +103,7 @@ export function UnboundPart({ project, health, failure, busy }: { project: strin
     <CodePart health={health} failure={failure} busy={busy} row="unbound" title="Unbound nodes" what="unbound nodes">
       {(report, retry) => {
         const row = report.unbound;
-        if (codeRowLook(row.state).measured && row.counts !== null && row.rows !== null) {
+        if (isMeasuredState(row.state) && row.counts !== null && row.rows !== null) {
           return <Unbound project={project} counts={row.counts} rows={row.rows} />;
         }
         return <RowNotMeasured row={row} retrying={health.isFetching} onRetry={retry} />;

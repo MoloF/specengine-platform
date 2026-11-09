@@ -12,7 +12,13 @@ import { flowClient } from "../test/flowStub";
 import { renderApp } from "../test/render";
 import { STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
 import { ACTING_KEY, useActing, useHubLogin } from "./acting";
-import { ACT_OFF, NAME_IS_LOGIN, NAME_IS_TYPED } from "./labels";
+import { enT } from "../test/text";
+import { actOff, nameIsLogin, nameIsTyped } from "./labels";
+
+// The page's words, through the English catalog.
+const ACT_OFF = { stage: actOff("stage", enT), accept: actOff("accept", enT), clear: actOff("clear", enT), group_clear: actOff("group_clear", enT) };
+const NAME_IS_TYPED = nameIsTyped(enT);
+const NAME_IS_LOGIN = nameIsLogin(enT);
 
 // AC-12 of docs/features/hub-identity.md (docs/canon/hub.md "Screen"): a resolved login is the acting
 // name, read-only, sent on every write, and `specengine.board.as` is not written. Null, loading or a

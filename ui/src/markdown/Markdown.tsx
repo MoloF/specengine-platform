@@ -9,6 +9,7 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { numberProperty, remarkSpec, stringProperty, type HastElement } from "./plugin";
 import { splitFrontMatter } from "./source";
+import { useTranslate } from "../i18n";
 
 // The renderer (docs/features/ui-markdown.md; ADR-0036), loaded on demand like the graph canvas:
 // the only module importing react-markdown and remark-gfm. React elements only, never an HTML
@@ -69,6 +70,7 @@ function resolvedName(entries: readonly ShownLink[]): string | null {
 }
 
 function Anchor({ node, children }: Props<"a">) {
+  const t = useTranslate();
   const scope = use(LinkScopeContext);
   const kind = stringProperty(node, "dataKind");
   if (kind === "external") {
@@ -96,7 +98,7 @@ function Anchor({ node, children }: Props<"a">) {
   }
   return (
     <span className="md-link md-link-unresolved">
-      {children} <Badge name="Link" look={linkStateLook(unresolved.state)} />
+      {children} <Badge name="Link" look={linkStateLook(unresolved.state, t)} />
     </span>
   );
 }

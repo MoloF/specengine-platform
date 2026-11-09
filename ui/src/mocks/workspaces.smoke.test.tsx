@@ -3,9 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { WorkspaceDocument } from "../api/types";
 import { App } from "../app/App";
-import { SECTIONS } from "../app/sections";
+import { SECTIONS, sectionLabel } from "../app/sections";
 import { argsOf } from "../test/stubClient";
-import { WORKSPACE_TEXT } from "../workspace/text";
+import { en } from "../i18n/en";
+import { enT } from "../test/text";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
 import { HARBOR_NOTES, LEDGER_NOTE, workspacesOf } from "./workspaces";
@@ -61,11 +62,11 @@ function current(): string[] {
 }
 
 function switcher(): HTMLSelectElement {
-  return screen.getByRole<HTMLSelectElement>("combobox", { name: WORKSPACE_TEXT.workspaceLabel });
+  return screen.getByRole<HTMLSelectElement>("combobox", { name: en.workspace.workspaceLabel });
 }
 
 function bar(): HTMLElement | null {
-  return screen.queryByRole("group", { name: WORKSPACE_TEXT.modulesLabel });
+  return screen.queryByRole("group", { name: en.workspace.modulesLabel });
 }
 
 function pressed(): string[] {
@@ -99,13 +100,13 @@ async function go(hash: string) {
 const GALLEY_NAV = ["Overview", "Board", "Flow", "Spec tree", "Inbox"];
 const FOUNDRY_NAV = ["Overview", "Board", "Health", "Graph", "Spec tree"];
 const IMPLICIT_NAV = ["Overview", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"];
-const EVERY_NAV = ["Overview", ...SECTIONS.map((section) => section.label)];
+const EVERY_NAV = ["Overview", ...SECTIONS.map((section) => sectionLabel(section.id, enT))];
 
 describe("the implicit workspace on the screen (WS-1)", () => {
   it("ledger-api: Overview, then every section but Tasks; no Workspace control, no module bar on Tree or Flow", async () => {
     renderMock("normal", "#/ledger-api/tree");
     await navIs(IMPLICIT_NAV);
-    expect(screen.queryByRole("combobox", { name: WORKSPACE_TEXT.workspaceLabel })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: en.workspace.workspaceLabel })).toBeNull();
     await screen.findByRole("tree", { name: "Spec tree" });
     expect(bar()).toBeNull();
     await go("#/ledger-api/flow");
@@ -167,8 +168,8 @@ describe("choosing a workspace (WS-3)", () => {
     expect(switcher().value).toBe("galley");
     expect(within(switcher()).getAllByRole("option").map((option) => option.textContent)).toEqual(["Galley", "Foundry"]);
     // Named Workspace, its hint the description: a lens, no right (D6).
-    expect(document.getElementById(switcher().getAttribute("aria-describedby") ?? "")?.textContent).toBe(WORKSPACE_TEXT.workspaceHint);
-    expect(switcher().title).toBe(WORKSPACE_TEXT.workspaceHint);
+    expect(document.getElementById(switcher().getAttribute("aria-describedby") ?? "")?.textContent).toBe(en.workspace.workspaceHint);
+    expect(switcher().title).toBe(en.workspace.workspaceHint);
     const before = window.history.length;
     fireEvent.change(switcher(), { target: { value: "foundry" } });
     expect(window.localStorage.getItem("specengine.workspace.harbor-sim")).toBe("foundry");
@@ -308,7 +309,7 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
 
   it("shows no bar on the Board, the Inbox or Health, and the Board's read takes no module", async () => {
     const { spies } = renderMock("normal", "#/harbor-sim/board");
-    await screen.findByText(WORKSPACE_TEXT.flowsShown(1, 2));
+    await screen.findByText(enT("workspace.flowsShown", { shown: 1, count: 2 }));
     expect(bar()).toBeNull();
     expect(argsOf(spies.getCards)).toEqual([["harbor-sim", { marks: true }]]);
     await go("#/harbor-sim/inbox");
@@ -365,13 +366,13 @@ describe("the landing (WS-11)", () => {
 describe("notes and failures on the screen (WS-13)", () => {
   it("config-notes: Config notes (2) beside the switcher lists both notes verbatim, in served order; Esc closes it, focus back", async () => {
     renderMock("config-notes", "#/harbor-sim/board");
-    const button = await screen.findByRole("button", { name: WORKSPACE_TEXT.notesButton(2) });
+    const button = await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "2" }) });
     expect(switcher().value).toBe("galley");
     expect(button.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByText(HARBOR_NOTES[0] ?? "")).toBeNull();
     fireEvent.click(button);
     expect(button.getAttribute("aria-expanded")).toBe("true");
-    const list = screen.getByRole("list", { name: WORKSPACE_TEXT.notesTitle });
+    const list = screen.getByRole("list", { name: en.workspace.notesTitle });
     expect(within(list).getAllByRole("listitem").map((item) => item.textContent)).toEqual([...HARBOR_NOTES]);
     expect(document.getElementById(button.getAttribute("aria-controls") ?? "")?.contains(list)).toBe(true);
     fireEvent.keyDown(list, { key: "Escape" });
@@ -384,19 +385,19 @@ describe("notes and failures on the screen (WS-13)", () => {
 
   it("config-notes: ledger-api's one workspace, the note in the switcher's place", async () => {
     renderMock("config-notes", "#/ledger-api/inbox");
-    fireEvent.click(await screen.findByRole("button", { name: WORKSPACE_TEXT.notesButton(1) }));
-    expect(within(screen.getByRole("list", { name: WORKSPACE_TEXT.notesTitle })).getByRole("listitem").textContent).toBe(LEDGER_NOTE);
-    expect(screen.queryByRole("combobox", { name: WORKSPACE_TEXT.workspaceLabel })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) }));
+    expect(within(screen.getByRole("list", { name: en.workspace.notesTitle })).getByRole("listitem").textContent).toBe(LEDGER_NOTE);
+    expect(screen.queryByRole("combobox", { name: en.workspace.workspaceLabel })).toBeNull();
     await navIs(IMPLICIT_NAV);
   });
 
   it("error: the nine sections, the daemon's message verbatim and Retry in the disclosure; Retry reads again", async () => {
     const { spies } = renderMock("error", "#/harbor-sim/inbox");
     await navIs(EVERY_NAV);
-    fireEvent.click(await screen.findByRole("button", { name: WORKSPACE_TEXT.notesButton(1) }));
-    const panel = document.getElementById(screen.getByRole("button", { name: WORKSPACE_TEXT.notesButton(1) }).getAttribute("aria-controls") ?? "");
+    fireEvent.click(await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) }));
+    const panel = document.getElementById(screen.getByRole("button", { name: enT("workspace.notesButton", { n: "1" }) }).getAttribute("aria-controls") ?? "");
     expect(panel).not.toBeNull();
-    expect(within(panel as HTMLElement).getByText(WORKSPACE_TEXT.readFailed)).toBeTruthy();
+    expect(within(panel as HTMLElement).getByText(en.workspace.readFailed)).toBeTruthy();
     expect(within(panel as HTMLElement).getByText("spec index unavailable: the database is locked by another process (mock scenario: error)")).toBeTruthy();
     // Not spoken: the nav already shows every section.
     expect(within(panel as HTMLElement).queryByRole("alert")).toBeNull();
@@ -405,7 +406,7 @@ describe("notes and failures on the screen (WS-13)", () => {
     await waitFor(() => {
       expect(spies.getWorkspaces).toHaveBeenCalledTimes(2);
     });
-    expect(screen.queryByRole("group", { name: WORKSPACE_TEXT.modulesLabel })).toBeNull();
+    expect(screen.queryByRole("group", { name: en.workspace.modulesLabel })).toBeNull();
   });
 
   it("pending: the nav is a skeleton, aria-busy, never empty and never the nine", async () => {
@@ -414,7 +415,7 @@ describe("notes and failures on the screen (WS-13)", () => {
     });
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
     expect(nav().getAttribute("aria-busy")).toBe("true");
-    expect(within(nav()).getByRole("status", { name: WORKSPACE_TEXT.navPending })).toBeTruthy();
+    expect(within(nav()).getByRole("status", { name: en.workspace.navPending })).toBeTruthy();
     expect(navTexts()).toEqual([]);
   });
 

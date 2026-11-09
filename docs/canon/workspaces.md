@@ -63,7 +63,7 @@ UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edi
 - **Notes**: `Config notes (n)` beside the switcher or alone: the notes verbatim, in order, or a failed read's message and Retry; else none.
 - **Module bar** (`ModuleBar.tsx`): Tree and Flow, when `modules` is not empty, never from the tree; group "Modules", All modules then titles, `aria-pressed`, wrapping at 320 px. Tree's root starts at the module's, reset on a change; Flow's Top read takes `root` (`FlowState.root`, no `memory.remember` until known). Board, Tree, Flow draw once the read answers. A root naming nothing: the read's `reason`, the bar kept.
 - **Board**: a tab per workspace flow the cards read serves, in its order; `null` or none served: all. Hidden ones: `Showing <k> of <n> card flows.` and Show all flows (then "Show this workspace's flows") for the visit, reset on a switch; a routed card in a hidden flow turns Show all flows on, once the cards are read.
-- **Strings**: every chrome string is a `WORKSPACE_TEXT` member (`text.ts`): `workspaceLabel`, `workspaceHint`, `modulesLabel`, `allModules`, `notesTitle`, `notesButton(n)`, `readFailed`, `readFailedKept`, `navPending`, `flowsShown(shown, all)`, `showAllFlows`, `showWorkspaceFlows`; one around data is a function of it. Section labels: `sections.ts`.
+- **Strings**: every chrome string is a key of the catalog's `workspace` group, named as `WORKSPACE_TEXT`'s members were (`ui-languages.md`); section labels: `app.sections`.
 
 ## Preset
 

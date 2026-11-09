@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { IMPLICIT_SECTIONS } from "../test/builders";
 import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash } from "./routes";
-import { isSectionId, SECTIONS } from "./sections";
+import { ru } from "../i18n/ru";
+import { enT, ruT } from "../test/text";
+import { aboutOf, isSectionId, sectionLabel, SECTIONS } from "./sections";
 
 describe("hash routes", () => {
   it.each([
@@ -33,7 +35,7 @@ describe("hash routes", () => {
   });
 
   it("lists the nav over every section: Overview to the home, then the nine, Board third, Roadmap fourth, Flow fifth (the palette's list, and the nav when no workspace was read)", () => {
-    expect(navOf("a b", ALL_SECTIONS).map(({ label, hash }) => [label, hash])).toEqual([
+    expect(navOf("a b", ALL_SECTIONS, enT).map(({ label, hash }) => [label, hash])).toEqual([
       ["Overview", "#/a%20b"],
       ["Inbox", "#/a%20b/inbox"],
       ["Tasks", "#/a%20b/tasks"],
@@ -50,8 +52,8 @@ describe("hash routes", () => {
 
   // WS-1 of docs/features/workspaces.md: the implicit workspace's nav, Tasks off it (M2: the nav drawn from SECTIONS).
   it("lists Overview, then a workspace's sections in its order: the implicit eight leave Tasks out", () => {
-    expect(navOf("ledger-api", IMPLICIT_SECTIONS).map(({ label }) => label)).toEqual(["Overview", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
-    expect(navOf("p", ["health", "board", "tree"]).map(({ key, hash }) => [key, hash])).toEqual([
+    expect(navOf("ledger-api", IMPLICIT_SECTIONS, enT).map(({ label }) => label)).toEqual(["Overview", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+    expect(navOf("p", ["health", "board", "tree"], enT).map(({ key, hash }) => [key, hash])).toEqual([
       ["overview", "#/p"],
       ["health", "#/p/health"],
       ["board", "#/p/board"],
@@ -60,9 +62,9 @@ describe("hash routes", () => {
   });
 
   it("draws a served ID only if it is one of the nine, and once; a list of none is Overview alone (A4 and the edge cases of workspaces)", () => {
-    expect(navOf("p", ["board", "stage", "board", "overview", "Tree", "tasks"]).map(({ key }) => key)).toEqual(["overview", "board", "tasks"]);
-    expect(navOf("p", []).map(({ key }) => key)).toEqual(["overview"]);
-    expect(navOf("p", ["stage"]).map(({ key }) => key)).toEqual(["overview"]);
+    expect(navOf("p", ["board", "stage", "board", "overview", "Tree", "tasks"], enT).map(({ key }) => key)).toEqual(["overview", "board", "tasks"]);
+    expect(navOf("p", [], enT).map(({ key }) => key)).toEqual(["overview"]);
+    expect(navOf("p", ["stage"], enT).map(({ key }) => key)).toEqual(["overview"]);
   });
 
   // WS-2: Tasks leaves the nav by data, never the routes (M3: tasks dropped from isSectionId).
@@ -109,5 +111,16 @@ describe("the tree's REF in the hash", () => {
 
   it("refuses an unencoded slash as an extra segment", () => {
     expect(parseHash("#/p/tree/docs/spec/a.md")).toEqual({ type: "not_found" });
+  });
+});
+
+// LG-3 of docs/features/ui-languages.md: each of the nine sections' label and about is ru.ts's under `ruT`.
+describe("the sections in Russian (LG-3)", () => {
+  it("label and describe each section from ru.ts", () => {
+    expect(SECTIONS).toHaveLength(9);
+    for (const { id } of SECTIONS) {
+      expect([id, sectionLabel(id, ruT), aboutOf(id, ruT)]).toEqual([id, ru.app.sections[id].label, ru.app.sections[id].about]);
+    }
+    expect(navOf("p", ["inbox"], ruT).map(({ label }) => label)).toEqual([ru.app.overview, ru.app.sections.inbox.label]);
   });
 });

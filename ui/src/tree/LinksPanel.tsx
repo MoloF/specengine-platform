@@ -10,6 +10,7 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { linkStateLook, WEAK_LINK_TYPE } from "./labels";
 import { placeKey, rowName } from "./rows";
+import { useTranslate } from "../i18n";
 
 /** What the live rule left out, zero parts omitted; null when nothing was. */
 export function leftOutText(leftOut: { generated: number; tier3: number }): string | null {
@@ -55,6 +56,7 @@ function LinkRow({
   onShowInText: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   const shown = link.name ?? link.written;
   const asWritten = writtenAs(link, link.at ?? rowName(holder));
   const inText = outgoing && link.path === holder.path && link.line >= holder.line && link.line <= holder.end_line;
@@ -70,7 +72,7 @@ function LinkRow({
         ) : (
           <span className="mono link-name">{shown}</span>
         )}
-        <Badge name="State" look={linkStateLook(link.state)} />
+        <Badge name="State" look={linkStateLook(link.state, t)} />
       </p>
       <p className="link-row-meta">
         <span className="mono">

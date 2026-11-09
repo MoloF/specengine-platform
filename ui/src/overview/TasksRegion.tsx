@@ -3,8 +3,10 @@ import { apiErrorOf } from "../api/client";
 import { useTasks } from "../api/queries";
 import type { TaskList } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { groupsOf } from "../tasks/groups";
-import { SPEC_CHANGED, taskStatusLook } from "../tasks/labels";
+import { specChanged, taskStatusLook } from "../tasks/labels";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { ReadFailure, Skeleton } from "../ui/states";
@@ -13,23 +15,25 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { Count, Notes, Region, Stored } from "./parts";
 import { HOME_ROWS, otherOpenOf, waitingOf } from "./tally";
 
+/** The command a first task starts with: code, never a catalog value. */
+const NEW_TASK_COMMAND = "spec task new --nodes REF...";
+
 /** One answer of `spec task list`: what waits for the owner first, then the other open groups' sizes. */
 function TasksSummary({ project, answer }: { project: string; answer: TaskList }) {
-  const notes = <Notes notes={answer.notes} label="Notes from the daemon on the task list" />;
+  const t = useTranslate();
+  const notes = <Notes notes={answer.notes} label={t("home.tasks.notes")} />;
   if (answer.tasks.length === 0) {
     return (
       <>
         {notes}
         <div className="home-empty">
-          <p>No tasks yet.</p>
-          <p>
-            Create one on a terminal: <code>spec task new --nodes REF...</code>
-          </p>
+          <p>{t("home.tasks.none")}</p>
+          <p>{fill(t("home.tasks.create", { command: slot("command") }), { command: <code>{NEW_TASK_COMMAND}</code> })}</p>
         </div>
       </>
     );
   }
-  const groups = groupsOf(answer.tasks);
+  const groups = groupsOf(answer.tasks, t);
   const waiting = waitingOf(groups);
   const shown = waiting.slice(0, HOME_ROWS);
   const others = otherOpenOf(groups);
@@ -40,37 +44,35 @@ function TasksSummary({ project, answer }: { project: string; answer: TaskList }
       <div className={waiting.length > 0 ? "home-block home-block-waiting" : "home-block"}>
         <h3 className="home-block-title">
           <Icon name="waiting" />
-          <span>Waiting for you</span>
+          <span>{t("home.tasks.waiting")}</span>
           <Count value={waiting.length} />
         </h3>
         {waiting.length === 0 ? (
-          <p className="muted">Nothing waits for you: no plan to review, no approved spec changed.</p>
+          <p className="muted">{t("home.tasks.nothingWaits")}</p>
         ) : (
           <ul className="home-list">
             {shown.map((entry) => (
               <li key={entry.id} className="home-row">
                 <a className="home-row-link" href={sectionHash(project, "tasks", entry.id)}>
-                  <span className="mono">{entry.id}</span>: <span className={entry.title === null ? "muted" : undefined}>{entry.title ?? "Untitled"}</span>
+                  <span className="mono">{entry.id}</span>: <span className={entry.title === null ? "muted" : undefined}>{entry.title ?? t("home.tasks.untitled")}</span>
                 </a>
                 <span className="home-row-meta">
-                  <Badge name="State" look={taskStatusLook(entry.status)} />
-                  {entry.stale === true && <Badge look={SPEC_CHANGED} />}
-                  <Stored label="Updated" at={entry.updated_at} />
+                  <Badge name={t("home.tasks.state")} look={taskStatusLook(entry.status, t)} />
+                  {entry.stale === true && <Badge look={specChanged(t)} />}
+                  <Stored label={t("home.tasks.updated")} at={entry.updated_at} />
                 </span>
               </li>
             ))}
           </ul>
         )}
         {waiting.length > shown.length && (
-          <p className="home-more muted">
-            {shown.length} of {waiting.length} shown
-          </p>
+          <p className="home-more muted">{t("home.tasks.moreShown", { shown: shown.length, count: waiting.length })}</p>
         )}
       </div>
       <div className="home-block">
-        <h3 className="home-block-title">Other open tasks</h3>
+        <h3 className="home-block-title">{t("home.tasks.others")}</h3>
         {others.length === 0 ? (
-          <p className="muted">No other open task.</p>
+          <p className="muted">{t("home.tasks.noOthers")}</p>
         ) : (
           <ul className="home-tally">
             {others.map((group) => (
@@ -91,6 +93,7 @@ function TasksSummary({ project, answer }: { project: string; answer: TaskList }
  * Retry that reads the tasks again and nothing else.
  */
 export function TasksRegion({ project }: { project: string }) {
+  const t = useTranslate();
   const tasks = useTasks(project);
   const failure = useRetainedFailure(tasks.error, tasks.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -100,10 +103,10 @@ export function TasksRegion({ project }: { project: string }) {
   if (tasks.data === undefined) {
     body =
       failure === null ? (
-        <Skeleton label={`Loading the tasks of ${project}`} lines={4} />
+        <Skeleton label={t("home.tasks.loading", { project })} lines={4} />
       ) : (
         <ReadFailure
-          title="The tasks could not be loaded"
+          title={t("home.tasks.failed")}
           failure={failure}
           retrying={tasks.isFetching}
           attempt={tasks.errorUpdateCount}
@@ -119,7 +122,7 @@ export function TasksRegion({ project }: { project: string }) {
         <TasksSummary project={project} answer={tasks.data} />
         {tasks.error !== null && (
           <p className="note" role="alert">
-            The tasks could not be read again: {apiErrorOf(tasks.error).message}
+            {fill(t("home.tasks.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(tasks.error).message}</span> })}
           </p>
         )}
       </>
@@ -128,13 +131,13 @@ export function TasksRegion({ project }: { project: string }) {
 
   return (
     <Region
-      title="Tasks"
-      boundary="tasks overview"
+      title={t("home.tasks.title")}
+      boundary={t("home.tasks.boundary")}
       headingRef={heading}
       busy={tasks.data === undefined && failure === null}
       link={
         <a className="home-open" href={sectionHash(project, "tasks")}>
-          Open Tasks
+          {t("home.tasks.open")}
           <Icon name="arrowRight" />
         </a>
       }

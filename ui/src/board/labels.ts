@@ -1,116 +1,153 @@
 import type { CardAllowed, CardFlow, CardMove, CardRow, KnownTeamAct, TraceCard } from "../api/types";
+import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
 
-// The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"): columns, flows
-// and disciplines are project vocabulary, shown as stored; an event's type is told apart here alone.
+// The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"), each from the
+// catalog's `board` group: columns, flows and disciplines are project vocabulary, shown as stored; an
+// event's type is told apart here alone.
 
-export const ACCEPTED: Look = { label: "Accepted", tone: "card-accepted", icon: "taskAccepted" };
-export const CANCELLED: Look = { label: "Cancelled", tone: "card-cancelled", icon: "taskCancelled" };
-export const OVERDUE: Look = { label: "Overdue", tone: "card-overdue", icon: "cardOverdue" };
-export const OPEN: Look = { label: "Open", tone: "card-open", icon: "open" };
+export function acceptedLook(t: Translate): Look {
+  return { label: t("board.accepted"), tone: "card-accepted", icon: "taskAccepted" };
+}
 
-export const UNASSIGNED = "Unassigned";
-export const BY_HAND = "By hand";
-export const NOT_IN_THE_FLOW = "Not in the flow";
+export function cancelledLook(t: Translate): Look {
+  return { label: t("board.cancelled"), tone: "card-cancelled", icon: "taskCancelled" };
+}
+
+export function overdueLook(t: Translate): Look {
+  return { label: t("board.overdue"), tone: "card-overdue", icon: "cardOverdue" };
+}
+
+export function openLook(t: Translate): Look {
+  return { label: t("board.open"), tone: "card-open", icon: "open" };
+}
+
+export function unassigned(t: Translate): string {
+  return t("board.unassigned");
+}
+
+export function byHand(t: Translate): string {
+  return t("board.byHand");
+}
+
+export function notInTheFlow(t: Translate): string {
+  return t("board.notInTheFlow");
+}
 
 /** The empty board's meaning and next step. */
-export const NO_CARDS = "No cards yet. Next: press New card, press New card on a node in the Spec tree, or have your AI call create_card.";
+export function noCards(t: Translate): string {
+  return t("board.noCards");
+}
 
-/** How the daemon's line names the acting name: the flag `as` stands for. */
+/** How the daemon's line names the acting name: the flag `as` stands for (the daemon's words, never translated). */
 export const ACTING_FLAG = "--as: ";
 
 /** Said wherever a name is typed for an accept (ADR-0034). */
-export const NAME_IS_TYPED = "This is a convention until a named login: the name is typed and nothing verifies it.";
+export function nameIsTyped(t: Translate): string {
+  return t("board.nameIsTyped");
+}
 
 /** Said in its place on a hub: the name is the request's login, which a person cannot type over (`docs/features/hub-team.md` "Description and interactions"). */
-export const NAME_IS_LOGIN = "This is recorded under your login.";
+export function nameIsLogin(t: Translate): string {
+  return t("board.nameIsLogin");
+}
+
+/** The four acts a login may lack, in the table's order. */
+export const TEAM_ACTS: readonly KnownTeamAct[] = ["stage", "accept", "clear", "group_clear"];
 
 /** Said beside a control `allowed` omits. The page's words: a refusal stays the daemon's. */
-export const ACT_OFF: Readonly<Record<KnownTeamAct, string>> = {
-  stage: "Your login does not stage on this project; each item stays open for someone who does.",
-  accept: "Your login does not accept cards on this project.",
-  clear: "Your login does not clear marks on this project.",
-  group_clear: "Your login does not clear a whole group on this project.",
-};
+export function actOff(act: KnownTeamAct, t: Translate): string {
+  return t(`board.actOff.${act}`);
+}
 
-/** The words of a card's events, by their stored type (`docs/canon/cards.md` "Documents and events"). */
-const EVENT_WORDS: ReadonlyMap<string, string> = new Map([
-  ["card.created", "Created"],
-  ["card.moved", "Moved"],
-  ["card.accepted", "Accepted"],
-  ["card.edited", "Edited"],
-  ["card.assigned", "Assigned"],
-  ["card.cancelled", "Cancelled"],
-  ["card.cleared", "Cleared"],
-  ["card.reestimated", "Re-estimated"],
-  ["card.refreshed", "Refreshed"],
-]);
+/** A card's events (`docs/canon/cards.md` "Documents and events"): each stored type is `card.` and its word here, the catalog's key. */
+const EVENT_WORDS = { created: true, moved: true, accepted: true, edited: true, assigned: true, cancelled: true, cleared: true, reestimated: true, refreshed: true };
+
+type EventWord = keyof typeof EVENT_WORDS;
+
+const EVENT_PREFIX = "card.";
+
+/** The nine event types, as stored. */
+export const EVENT_TYPES: readonly string[] = Object.keys(EVENT_WORDS).map((word) => `${EVENT_PREFIX}${word}`);
 
 /** An event's words; an unknown type raw. */
-export function eventWords(type: string): string {
-  return EVENT_WORDS.get(type) ?? type;
+export function eventWords(type: string, t: Translate): string {
+  const word = type.startsWith(EVENT_PREFIX) ? type.slice(EVENT_PREFIX.length) : null;
+  return word !== null && Object.hasOwn(EVENT_WORDS, word) ? t(`board.event.${word as EventWord}`) : type;
 }
 
 /** A mark as a read tells it, `spec trace`'s row and the card list's alike. */
 export type CardMark = Pick<TraceCard, "mark" | "on" | "discrepancy" | "correction">;
 
+type MarkWord = "suspect" | "departed" | "correcting";
+
 /** Each mark that says something: how it looks, its sentence, and which of its keys a tile names (`docs/features/card-trace.md` "Rollup"). */
-const MARKS: ReadonlyMap<string, { look: Look; line: (mark: CardMark) => string; names: "on" | "discrepancy" | "correction" }> = new Map([
-  [
-    "suspect",
-    {
-      look: { label: "Suspect", tone: "card-suspect", icon: "specChanged" },
-      line: ({ on }: CardMark) => (on === null ? "The brief changed after this card last read it." : `The brief changed at ${on} after this card last read it.`),
-      names: "on",
+const MARKS: Readonly<Record<MarkWord, { tone: string; icon: Look["icon"]; line: (mark: CardMark, t: Translate) => string; names: "on" | "discrepancy" | "correction" }>> = {
+  suspect: {
+    tone: "card-suspect",
+    icon: "specChanged",
+    line: ({ on }, t) => (on === null ? t("board.markLine.suspect") : t("board.markLine.suspectAt", { on })),
+    names: "on",
+  },
+  departed: {
+    tone: "card-departed",
+    icon: "cardDeparted",
+    line: ({ on, discrepancy }, t) =>
+      t("board.markLine.departed", { on: on ?? t("board.markLine.itsBrief"), discrepancy: discrepancy ?? t("board.markLine.itsDiscrepancy") }),
+    names: "discrepancy",
+  },
+  correcting: {
+    tone: "card-correcting",
+    icon: "taskDraft",
+    line: ({ on, correction }, t) => {
+      const by = correction ?? t("board.markLine.aCorrection");
+      return on === null ? t("board.markLine.correcting", { correction: by }) : t("board.markLine.correctingAt", { on, correction: by });
     },
-  ],
-  [
-    "departed",
-    {
-      look: { label: "Departed", tone: "card-departed", icon: "cardDeparted" },
-      line: ({ on, discrepancy }: CardMark) => `Accepted as departing from ${on ?? "its brief"}; ${discrepancy ?? "its discrepancy"} is not settled yet.`,
-      names: "discrepancy",
-    },
-  ],
-  [
-    "correcting",
-    {
-      look: { label: "Correcting", tone: "card-correcting", icon: "taskDraft" },
-      line: ({ on, correction }: CardMark) => `The brief changed${on === null ? "" : ` at ${on}`}; ${correction ?? "a correction"} is putting it right.`,
-      names: "correction",
-    },
-  ],
-] satisfies [string, { look: Look; line: (mark: CardMark) => string; names: "on" | "discrepancy" | "correction" }][]);
+    names: "correction",
+  },
+};
+
+/** The three marks that say something, as stored. */
+export const MARK_WORDS = Object.keys(MARKS) as readonly MarkWord[];
+
+function markOf(word: string): (typeof MARKS)[MarkWord] | undefined {
+  return Object.hasOwn(MARKS, word) ? MARKS[word as MarkWord] : undefined;
+}
 
 /** The two marks that are plain states, by their word. */
-const PLAIN_MARKS: ReadonlyMap<string, Look> = new Map(Object.entries({ open: OPEN, accepted: ACCEPTED }));
+const PLAIN_MARKS = { open: openLook, accepted: acceptedLook };
+
+function plainLook(word: string, t: Translate): Look | null {
+  return Object.hasOwn(PLAIN_MARKS, word) ? PLAIN_MARKS[word as keyof typeof PLAIN_MARKS](t) : null;
+}
 
 /** Whether a mark says anything against the brief: all but the two plain states, a word this build does not know among them. */
 export function isMarked({ mark }: Pick<TraceCard, "mark">): boolean {
-  return !PLAIN_MARKS.has(mark);
+  return !Object.hasOwn(PLAIN_MARKS, mark);
 }
 
 /** How a mark looks; one this build does not know raw and neutral; null for one that says nothing. */
-export function markLook(card: CardMark): Look | null {
+export function markLook(card: CardMark, t: Translate): Look | null {
   if (!isMarked(card)) {
     return null;
   }
-  return MARKS.get(card.mark)?.look ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" };
+  const known = markOf(card.mark);
+  return known === undefined ? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" } : { label: t(`board.mark.${card.mark as MarkWord}`), tone: known.tone, icon: known.icon };
 }
 
 /** A card's word in a node's block: its mark, or the plain state its word names. */
-export function cardStateLook(card: CardMark): Look {
-  return markLook(card) ?? PLAIN_MARKS.get(card.mark) ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" };
+export function cardStateLook(card: CardMark, t: Translate): Look {
+  return markLook(card, t) ?? plainLook(card.mark, t) ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" };
 }
 
 /** A mark in a sentence; one this build does not know, its target, else its word. */
-export function markLine(card: CardMark): string {
-  return MARKS.get(card.mark)?.line(card) ?? card.on ?? card.mark;
+export function markLine(card: CardMark, t: Translate): string {
+  return markOf(card.mark)?.line(card, t) ?? card.on ?? card.mark;
 }
 
 /** What a tile names beside the mark: the target, the discrepancy or the correction; one this build does not know, its target. */
 export function markNames(card: CardMark): string | null {
-  const key = MARKS.get(card.mark)?.names ?? "on";
+  const key = markOf(card.mark)?.names ?? "on";
   return card[key];
 }
 
@@ -125,20 +162,20 @@ export function rowMark({ mark, on, discrepancy, correction }: Pick<CardRow, "ma
 }
 
 /** The gaps a departing accept can name; the first is the daemon's default. */
-export const GAP_TYPES: readonly { word: string; label: string }[] = [
-  { word: "contradicts", label: "Contradicts the brief" },
-  { word: "partial", label: "Part of the brief" },
-  { word: "missing", label: "Missing from the result" },
-  { word: "unrequested", label: "Not in the brief" },
-];
+const GAP_WORDS = ["contradicts", "partial", "missing", "unrequested"] as const;
 
-/** The evidence kinds `spec card edit --evidence` takes, each with what to write. */
-export const EVIDENCE_KINDS: readonly { word: string; label: string; hint: string }[] = [
-  { word: "url", label: "Link", hint: "http:// or https://; nothing is fetched" },
-  { word: "path", label: "File", hint: "a relative path, @ and its blob hash" },
-  { word: "build", label: "Build", hint: "a build's name" },
-  { word: "note", label: "Note", hint: "one line" },
-];
+/** The gaps a departing accept can name, with their labels; the first is the daemon's default. */
+export function gapTypes(t: Translate): readonly { word: string; label: string }[] {
+  return GAP_WORDS.map((word) => ({ word, label: t(`board.gapType.${word}`) }));
+}
+
+/** The evidence kinds `spec card edit --evidence` takes. */
+const EVIDENCE_WORDS = ["url", "path", "build", "note"] as const;
+
+/** The evidence kinds, each with what to write. */
+export function evidenceKinds(t: Translate): readonly { word: string; label: string; hint: string }[] {
+  return EVIDENCE_WORDS.map((word) => ({ word, label: t(`board.evidence.${word}.label`), hint: t(`board.evidence.${word}.hint`) }));
+}
 
 /** Whether a note of the list names this place: `<n> card(s) in <flow>/<column>, from <first ID>: ...`. */
 export function noteNames(note: string, flow: string, column: string): boolean {
@@ -146,8 +183,8 @@ export function noteNames(note: string, flow: string, column: string): boolean {
 }
 
 /** A move's `by`: "needs <names>", any of them; null when anyone may. */
-export function needsLine(by: readonly string[]): string | null {
-  return by.length === 0 ? null : `needs ${by.join(" or ")}`;
+export function needsLine(by: readonly string[], t: Translate): string | null {
+  return by.length === 0 ? null : t("board.needs", { names: by.join(t("board.or")) });
 }
 
 /** A column's title in its flow; a column the flow no longer lists raw. */

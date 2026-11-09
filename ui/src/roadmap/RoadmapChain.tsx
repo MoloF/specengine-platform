@@ -26,6 +26,7 @@ import { taskStatusLook } from "../tasks/labels";
 import { Icon } from "../ui/Icon";
 import { chainOf, LANE_HEAD, type ChainBox, type ChainEdge, type ChainLane, type ChainLayout } from "./chain";
 import { CANVAS_DESCRIPTION, countsText, CURRENT, cutRuleText, IN_A_CYCLE, laneName, MVP_CUT, notDrawnText, oneLine } from "./text";
+import { useTranslate, type Translate } from "../i18n";
 
 // The chain canvas (docs/features/roadmap-screen.md; ui/README.md "Screen rules", Canvas): the
 // plan's listed items as boxes in their lanes and an edge per `waits_on` pair, read only. The
@@ -73,6 +74,7 @@ function Handles() {
 
 /** An item: its ID, title (clipped; whole in Lanes), "In a cycle" and its task cells, each as text and icon. */
 const ItemBox = memo(function ItemBox({ data }: NodeProps<Node<ItemData, "item">>) {
+  const t = useTranslate();
   const item = data.box.item;
   return (
     <div className={`graph-box chain-box${data.selected ? " is-selected" : ""}`} aria-hidden="true">
@@ -96,7 +98,7 @@ const ItemBox = memo(function ItemBox({ data }: NodeProps<Node<ItemData, "item">
       {item.tasks.length > 0 && (
         <p className="graph-box-meta chain-box-tasks">
           {item.tasks.map((task) => {
-            const look = taskStatusLook(task.status);
+            const look = taskStatusLook(task.status, t);
             return (
               <span key={task.id} className="graph-box-flag" data-task={task.id}>
                 <Icon name={look.icon} />
@@ -164,7 +166,7 @@ const EDGE_TYPES = { wait: WaitView };
 const ARROW: EdgeMarker = { type: MarkerType.ArrowClosed, width: 14, height: 14 };
 
 /** A box's accessible name: its ID, title, cycle mark, waits and task cells. */
-export function itemBoxName(box: ChainBox): string {
+export function itemBoxName(box: ChainBox, t: Translate): string {
   const item = box.item;
   const parts = [item.id, item.title === null ? "no title" : oneLine(item.title)];
   if (item.cycle) {
@@ -174,12 +176,12 @@ export function itemBoxName(box: ChainBox): string {
     parts.push(`waits on ${item.waits_on.join(", ")}`);
   }
   for (const task of item.tasks) {
-    parts.push(`task ${task.id} ${taskStatusLook(task.status).label}`);
+    parts.push(`task ${task.id} ${taskStatusLook(task.status, t).label}`);
   }
   return parts.join(", ");
 }
 
-function itemNode(box: ChainBox): ChainNode {
+function itemNode(box: ChainBox, t: Translate): ChainNode {
   return {
     id: box.id,
     type: "item",
@@ -196,7 +198,7 @@ function itemNode(box: ChainBox): ChainNode {
       height: HANDLE_SIZE,
     })),
     data: { box, selected: false },
-    ariaLabel: itemBoxName(box),
+    ariaLabel: itemBoxName(box, t),
     ariaRole: "group",
     draggable: false,
     selectable: false,
@@ -288,6 +290,7 @@ export interface RoadmapChainProps {
 }
 
 function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { layout: ChainLayout }) {
+  const t = useTranslate();
   const hintId = useId();
   const fit = useReadableFit(layout);
   const cutText = cutRuleText(plan);
@@ -310,11 +313,11 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
       });
     }
     for (const box of layout.boxes) {
-      const node = itemNode(box);
+      const node = itemNode(box, t);
       placed.push(box.item.id === selectedId && node.type === "item" ? { ...node, data: { ...node.data, selected: true } } : node);
     }
     return placed;
-  }, [layout, selectedId, cutText]);
+  }, [layout, selectedId, cutText, t]);
   const edges = useMemo(() => layout.edges.map(waitEdge), [layout]);
 
   return (

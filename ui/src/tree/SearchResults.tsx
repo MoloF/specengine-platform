@@ -1,7 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit, SearchResults as Results, Snippet } from "../api/types";
 import { Icon } from "../ui/Icon";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { useFocusLater } from "../ui/useFocusLater";
 import { rowName } from "./rows";
 
@@ -90,7 +90,7 @@ export function SearchResultsList({
     if (hasModifier(event) || !(event.target instanceof Element) || event.target.closest('[role="option"]') === null) {
       return;
     }
-    switch (event.key) {
+    switch (hotkeyOf(event)) {
       case "ArrowDown":
       case "j":
         move(at + 1);

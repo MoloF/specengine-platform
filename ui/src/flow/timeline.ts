@@ -1,5 +1,6 @@
 import type { FlowNode, FlowView, TraceCounts, TraceNode, TraceStage } from "../api/types";
 import { compareText } from "../graph/layout";
+import type { Translate } from "../i18n";
 import { stageWords } from "./labels";
 
 // The Timeline and the stage filter's arrangement of what the daemon served
@@ -32,13 +33,13 @@ export interface StageOption {
 }
 
 /** All, then each lane served, in the served order, its "No stage" with it. */
-export function stageOptions(stages: readonly TraceStage[]): StageOption[] {
-  return [{ value: ALL_STAGES, label: "All stages" }, ...stages.map(({ stage }) => ({ value: stageKey(stage), label: stageWords(stage) }))];
+export function stageOptions(stages: readonly TraceStage[], t: Translate): StageOption[] {
+  return [{ value: ALL_STAGES, label: "All stages" }, ...stages.map(({ stage }) => ({ value: stageKey(stage), label: stageWords(stage, t) }))];
 }
 
 /** The filter in force: a stage no lane serves any more shows everything, and so does a summary not read yet. */
 export function stageInForce(chosen: string, stages: readonly TraceStage[]): string {
-  return stageOptions(stages).some((option) => option.value === chosen) ? chosen : ALL_STAGES;
+  return chosen === ALL_STAGES || stages.some(({ stage }) => stageKey(stage) === chosen) ? chosen : ALL_STAGES;
 }
 
 /** Whether a box stands in the filter: it compares nothing but the served value. */

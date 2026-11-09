@@ -1,8 +1,8 @@
 import { useId, useRef, useState, type KeyboardEvent } from "react";
 import type { Workspace } from "../api/types";
+import { useTranslate } from "../i18n";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel } from "../ui/states";
-import { WORKSPACE_TEXT } from "./text";
 
 /**
  * The Workspace select in the shell's header (docs/features/workspaces.md "The UI", D6): named
@@ -18,19 +18,20 @@ export function WorkspaceSwitcher({
   chosen: Workspace;
   onChoose: (name: string) => void;
 }) {
+  const t = useTranslate();
   const id = useId();
   if (workspaces.length < 2) {
     return null;
   }
   return (
     <div className="workspace-switcher">
-      <label htmlFor={id}>{WORKSPACE_TEXT.workspaceLabel}</label>
+      <label htmlFor={id}>{t("workspace.workspaceLabel")}</label>
       <select
         id={id}
         className="field"
         value={chosen.name}
         // Seen on hover too; read aloud once, as the description (aria-describedby wins over title).
-        title={WORKSPACE_TEXT.workspaceHint}
+        title={t("workspace.workspaceHint")}
         aria-describedby={`${id}-hint`}
         onChange={(event) => {
           onChoose(event.target.value);
@@ -43,7 +44,7 @@ export function WorkspaceSwitcher({
         ))}
       </select>
       <span id={`${id}-hint`} className="sr-only">
-        {WORKSPACE_TEXT.workspaceHint}
+        {t("workspace.workspaceHint")}
       </span>
     </div>
   );
@@ -74,6 +75,7 @@ export function ConfigNotes({
   attempt: number;
   onRetry: () => void;
 }) {
+  const t = useTranslate();
   const panelId = useId();
   const button = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -103,16 +105,16 @@ export function ConfigNotes({
         }}
       >
         <Icon name={failure === null ? "info" : "alert"} />
-        <span>{WORKSPACE_TEXT.notesButton(count)}</span>
+        <span>{t("workspace.notesButton", { n: String(count) })}</span>
       </button>
       {/* Drawn only open: closed, its words are nowhere on the page, so nothing else's text repeats unseen. */}
       {open && (
         <div id={panelId} className="config-notes-panel">
-          {failure !== null && <ErrorPanel title={kept ? WORKSPACE_TEXT.readFailedKept : WORKSPACE_TEXT.readFailed} message={failure} retrying={retrying} attempt={attempt} announce={false} onRetry={onRetry} />}
+          {failure !== null && <ErrorPanel title={kept ? t("workspace.readFailedKept") : t("workspace.readFailed")} message={failure} retrying={retrying} attempt={attempt} announce={false} onRetry={onRetry} />}
           {notes.length > 0 && (
-            <ul className="note-list config-notes-list" aria-label={WORKSPACE_TEXT.notesTitle}>
+            <ul className="note-list config-notes-list" aria-label={t("workspace.notesTitle")}>
               {notes.map((note, index) => (
-                <li key={`${String(index)}-${note}`} className="verbatim-note">
+                <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
                   {note}
                 </li>
               ))}

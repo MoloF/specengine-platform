@@ -11,6 +11,7 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { HealthRegion } from "./parts";
 import { isCannotCheck, isClean, isKnownMode, unknownModeLook, verdictLook } from "./labels";
+import { useTranslate } from "../i18n";
 
 /** The counts in the report's order, each with its label; one the report omits is not shown (W-1). */
 const COUNTS: readonly (readonly [keyof Omit<CheckCounts, "worst_w_bytes">, string])[] = [
@@ -30,8 +31,9 @@ function causeText(path: string, message: string): string {
 }
 
 function CheckAnswer({ project, report }: { project: string; report: CheckReport }) {
+  const t = useTranslate();
   const cannot = isCannotCheck(report.verdict);
-  const verdict = verdictLook(report.verdict);
+  const verdict = verdictLook(report.verdict, t);
   const counts = COUNTS.flatMap(([key, label]) => {
     const value = report.counts[key];
     return value === undefined ? [] : [{ key, label, value }];
@@ -102,6 +104,7 @@ function CheckAnswer({ project, report }: { project: string; report: CheckReport
  * is not shown, W is "Not measured" when the check could not vouch.
  */
 export function CheckRegion({ project, check, health }: { project: string; check: CheckQuery; health: HealthQuery }) {
+  const t = useTranslate();
   const failure = useRetainedFailure(check.error, check.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(check.data, () => heading.current);
@@ -114,7 +117,7 @@ export function CheckRegion({ project, check, health }: { project: string; check
     void health.refetch({ cancelRefetch: false });
     void check.refetch({ cancelRefetch: false }).then((result) => {
       if (result.data !== undefined && result.error === null) {
-        announce(`Checked again: ${verdictLook(result.data.verdict).label}.`);
+        announce(`Checked again: ${verdictLook(result.data.verdict, t).label}.`);
       }
     });
   }

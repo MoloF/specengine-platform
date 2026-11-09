@@ -5,6 +5,7 @@ import { SOME_TASKS } from "../test/taskStub";
 import type * as OrderModule from "../inbox/order";
 import type * as GroupsModule from "../tasks/groups";
 import { paletteGroups, type PaletteInput } from "./options";
+import { enT } from "../test/text";
 
 // docs/features/ui-home.md "Implementation" (Palette): typing only filters. The Tasks screen's
 // grouping and the Inbox's queue order are wrapped to count how often the palette asks for them;
@@ -16,9 +17,9 @@ vi.mock("../tasks/groups", async (importOriginal) => {
   const actual = await importOriginal<typeof GroupsModule>();
   return {
     ...actual,
-    groupsOf: (entries: readonly TaskListEntry[]) => {
+    groupsOf: (entries: readonly TaskListEntry[], t: Parameters<typeof actual.groupsOf>[1]) => {
       ordered.groups += 1;
-      return actual.groupsOf(entries);
+      return actual.groupsOf(entries, t);
     },
   };
 });
@@ -48,7 +49,7 @@ function input(text: string, tasks: readonly TaskListEntry[], proposals: readonl
 }
 
 function keysOf(text: string, tasks: readonly TaskListEntry[], proposals: readonly InboxEntry[]): string[] {
-  return paletteGroups(input(text, tasks, proposals)).flatMap((group) => group.options.map((option) => option.key));
+  return paletteGroups(input(text, tasks, proposals), enT).flatMap((group) => group.options.map((option) => option.key));
 }
 
 describe("the palette's orders, once per answer", () => {

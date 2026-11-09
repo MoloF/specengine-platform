@@ -1,4 +1,5 @@
 import type { KnownTaskStatus, TaskListEntry, TaskStatus } from "../api/types";
+import type { Translate } from "../i18n";
 import { isKnownTaskStatus, taskStatusLook } from "./labels";
 
 // The list's groups (docs/features/ui-tasks.md "Implementation", List), taken from `status` and
@@ -55,21 +56,21 @@ export interface TaskGroup {
   entries: TaskListEntry[];
 }
 
-function titleOf(rank: number, entry: TaskListEntry): string {
+function titleOf(rank: number, entry: TaskListEntry, t: Translate): string {
   if (rank === WAITING_RANK) {
-    return "Waiting for you";
+    return t("tasks.group.waiting");
   }
   if (rank === CLOSED_RANK) {
-    return "Closed";
+    return t("tasks.group.closed");
   }
   if (rank === UNKNOWN_RANK) {
-    return "Other states";
+    return t("tasks.group.other");
   }
-  return taskStatusLook(entry.status).label;
+  return taskStatusLook(entry.status, t).label;
 }
 
-/** The entries in their groups, groups in order, entries by number within each. */
-export function groupsOf(entries: readonly TaskListEntry[]): TaskGroup[] {
+/** The entries in their groups, groups in order, entries by number within each; titles in the catalog's words. */
+export function groupsOf(entries: readonly TaskListEntry[], t: Translate): TaskGroup[] {
   const ranked = new Map<number, TaskListEntry[]>();
   for (const entry of entries) {
     const rank = rankOf(entry);
@@ -84,7 +85,7 @@ export function groupsOf(entries: readonly TaskListEntry[]): TaskGroup[] {
       const first = sorted[0];
       return {
         key: `group-${String(rank)}`,
-        title: first === undefined ? "" : titleOf(rank, first),
+        title: first === undefined ? "" : titleOf(rank, first, t),
         waiting: rank === WAITING_RANK,
         entries: sorted,
       };

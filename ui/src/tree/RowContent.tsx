@@ -5,6 +5,7 @@ import { Icon } from "../ui/Icon";
 import type { NodeDrift } from "./drift";
 import { markLook } from "./labels";
 import { rowName } from "./rows";
+import { useTranslate } from "../i18n";
 
 /**
  * One tree line's content: its name, title, kind, status, rev, archived, mark, the inbox count,
@@ -13,6 +14,7 @@ import { rowName } from "./rows";
  * tree memoises it (SpecTree.tsx): an answer renders again only the lines whose values changed.
  */
 export function RowContent({ node, count, drift }: { node: TreeNode; count: number | null; drift: NodeDrift | null }) {
+  const t = useTranslate();
   return (
     <span className="tree-row-content">
       <span className="tree-row-name mono">{rowName(node)}</span>
@@ -35,7 +37,7 @@ export function RowContent({ node, count, drift }: { node: TreeNode; count: numb
             archived
           </span>
         )}
-        {node.mark !== null && <Badge look={markLook(node.mark)} />}
+        {node.mark !== null && <Badge look={markLook(node.mark, t)} />}
         {count !== null && count > 0 && (
           <span className="count-tag">
             <Icon name="inbox" />
@@ -43,7 +45,7 @@ export function RowContent({ node, count, drift }: { node: TreeNode; count: numb
           </span>
         )}
         {drift !== null &&
-          driftBadgeLooks(drift).map((look) => (
+          driftBadgeLooks(drift, t).map((look) => (
             <span key={look.tone} className="tree-drift-badge">
               <Badge name="Drift" look={look} />
             </span>

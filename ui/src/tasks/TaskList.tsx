@@ -6,7 +6,7 @@ import { pushHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { ReadFailure, Skeleton } from "../ui/states";
 import { formatAge, formatUtc } from "../ui/time";
 import { useFocusLater } from "../ui/useFocusLater";
@@ -15,7 +15,8 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { chipsOf, DEFAULT_FILTERS, isFiltered, isPressed, matchesFilters, toggleChip, type TaskFilters } from "./filter";
 import { groupsOf, waitsForYou } from "./groups";
-import { SPEC_CHANGED, taskStatusLook } from "./labels";
+import { specChanged, taskStatusLook } from "./labels";
+import { useTranslate } from "../i18n";
 
 /** How many targets a row names before "+k". */
 const ROW_TARGETS = 3;
@@ -44,6 +45,7 @@ function TaskRow({
   onOpen: (entry: TaskListEntry) => void;
   onFocus: (entry: TaskListEntry) => void;
 }) {
+  const t = useTranslate();
   return (
     <div
       role="option"
@@ -60,11 +62,11 @@ function TaskRow({
     >
       <span className="task-row-top">
         <span className="mono task-row-id">{entry.id}</span>
-        <Badge name="State" look={taskStatusLook(entry.status)} />
-        {entry.stale === true && <Badge look={SPEC_CHANGED} />}
-        <time className="task-row-age" dateTime={entry.updated_at} title={formatUtc(entry.updated_at)}>
+        <Badge name="State" look={taskStatusLook(entry.status, t)} />
+        {entry.stale === true && <Badge look={specChanged(t)} />}
+        <time className="task-row-age" dateTime={entry.updated_at} title={formatUtc(entry.updated_at, t)}>
           <span className="sr-only">Updated </span>
-          {formatAge(entry.updated_at, now)}
+          {formatAge(entry.updated_at, now, t)}
         </time>
       </span>
       <span className={entry.title === null ? "task-row-title muted" : "task-row-title"}>{entry.title ?? "Untitled"}</span>
@@ -95,6 +97,7 @@ export function TaskList({
   /** Enter or a click on its row opened this task. */
   onOpened: (id: string) => void;
 }) {
+  const t = useTranslate();
   const now = useNow();
   const failure = useRetainedFailure(tasks.error, tasks.isFetching);
   const focusLater = useFocusLater();
@@ -172,11 +175,11 @@ export function TaskList({
     );
   }
 
-  const chips = chipsOf(answer.tasks);
+  const chips = chipsOf(answer.tasks, t);
   const changedCount = answer.tasks.filter((entry) => entry.stale === true).length;
   const waiting = answer.tasks.filter(waitsForYou).length;
   const visible = answer.tasks.filter((entry) => matchesFilters(entry, filters));
-  const groups = groupsOf(visible);
+  const groups = groupsOf(visible, t);
   const order = groups.flatMap((group) => group.entries);
   const roving = order.find((entry) => entry.id === active) ?? order.find((entry) => entry.id === taskId) ?? order[0];
 
@@ -205,7 +208,7 @@ export function TaskList({
     if (here === undefined) {
       return;
     }
-    switch (event.key) {
+    switch (hotkeyOf(event)) {
       case "ArrowDown":
       case "j":
         moveTo(order[at + 1]);

@@ -1,6 +1,7 @@
 import type { CardFlow, CardList, CardRow } from "../api/types";
 import { folded } from "../tasks/filter";
-import { NOT_IN_THE_FLOW, UNASSIGNED } from "./labels";
+import type { Translate } from "../i18n";
+import { notInTheFlow, unassigned } from "./labels";
 
 // The Board's arrangement of the one answer already read: the filters, the tabs, the columns, where
 // Up, Down and a drop put a card. Rows keep the daemon's order; no word of a project is read here.
@@ -57,13 +58,13 @@ export function disciplineChoices(rows: readonly CardRow[], kept: string): Choic
 }
 
 /** The names read, then "Unassigned". */
-export function assigneeChoices(rows: readonly CardRow[], kept: string): Choice[] {
+export function assigneeChoices(rows: readonly CardRow[], kept: string, t: Translate): Choice[] {
   return [
     ...choicesOf(
       rows.map((row) => row.assignee),
       kept,
     ),
-    { key: NOBODY, label: UNASSIGNED },
+    { key: NOBODY, label: unassigned(t) },
   ];
 }
 
@@ -123,7 +124,7 @@ function laneOf(key: string, column: string | null, title: string, rows: CardRow
 }
 
 /** A board's columns in served order, empty ones too, then a last lane for the rows outside them. */
-export function lanesOf({ name, flow }: BoardTab, rows: readonly CardRow[]): BoardLane[] {
+export function lanesOf({ name, flow }: BoardTab, rows: readonly CardRow[], t: Translate): BoardLane[] {
   const own = rows.filter((row) => row.flow === name);
   const columns = flow?.columns ?? [];
   const lanes = columns.map((column) =>
@@ -135,7 +136,7 @@ export function lanesOf({ name, flow }: BoardTab, rows: readonly CardRow[]): Boa
     ),
   );
   const outside = own.filter((row) => !columns.some((column) => column.id === row.column));
-  return outside.length === 0 ? lanes : [...lanes, laneOf(`${name}/outside`, null, NOT_IN_THE_FLOW, outside)];
+  return outside.length === 0 ? lanes : [...lanes, laneOf(`${name}/outside`, null, notInTheFlow(t), outside)];
 }
 
 /** Where Up and Down put a card; `before` null: last in the column. */

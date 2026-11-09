@@ -5,6 +5,7 @@ import { formatAge, formatUtc } from "../ui/time";
 import { severityLook, statusLook } from "./labels";
 import { summaryOf } from "./summary";
 import { targetsOf } from "./targets";
+import { useTranslate } from "../i18n";
 
 /**
  * The queue as one Tab stop: a listbox whose selected option alone is tabbable. Moving with the
@@ -22,11 +23,12 @@ export function ProposalList({
   now: number;
   onSelect: (id: string) => void;
 }) {
+  const t = useTranslate();
   return (
     <div role="listbox" aria-label="Proposals by severity, then age" className="queue-list">
       {proposals.map((proposal) => {
         const selected = proposal.id === selectedId;
-        const status = statusLook(proposal.status);
+        const status = statusLook(proposal.status, t);
         const targets = targetsOf(proposal);
         return (
           <div
@@ -41,10 +43,10 @@ export function ProposalList({
             }}
           >
             <span className="queue-item-top">
-              <Badge name="Severity" look={severityLook(proposal.severity)} />
+              <Badge name="Severity" look={severityLook(proposal.severity, t)} />
               <span className="mono queue-item-id">{proposal.id}</span>
-              <time className="queue-item-age" dateTime={proposal.created_at} title={formatUtc(proposal.created_at)}>
-                {formatAge(proposal.created_at, now)}
+              <time className="queue-item-age" dateTime={proposal.created_at} title={formatUtc(proposal.created_at, t)}>
+                {formatAge(proposal.created_at, now, t)}
               </time>
             </span>
             <span className="queue-item-summary">{summaryOf(proposal)}</span>

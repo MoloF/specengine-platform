@@ -8,6 +8,7 @@ import { renderApp } from "../test/render";
 import { stubClient } from "../test/stubClient";
 import { syncLook } from "../tree/labels";
 import { driftCommands, driftRowsText, driftRowText, storedRowOf } from "./drift";
+import { enT } from "../test/text";
 
 // UI-1 of docs/features/drift-queue.md on a stub client ("Review, inbox, round, stage"; Q-A): a
 // drift item is listed in the inbox and read in its review, and never offers a stage. Its card
@@ -525,7 +526,7 @@ describe("a drift item's rows on its card (UI-2, UI-3, UI-4 of ui-drift-evidence
     expect(list.textContent).not.toContain(RLO);
     expect(list.textContent).not.toContain(LF);
     // The two look functions themselves.
-    expect([syncLook(`a${LF}b${RLO}`).label, driftClassLook(`c${ESC}d`).label, syncLook("conflict").label, driftClassLook(null).label]).toEqual([
+    expect([syncLook(`a${LF}b${RLO}`, enT).label, driftClassLook(`c${ESC}d`, enT).label, syncLook("conflict", enT).label, driftClassLook(null, enT).label]).toEqual([
       "a b\\u{202e}",
       "c\\u{1b}d",
       "Conflict",

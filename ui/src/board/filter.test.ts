@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { aCardFlow, aCardList, aCardRow } from "../test/builders";
 import { assigneeChoices, disciplineChoices, dropMove, lanesOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf, workspaceTabs } from "./filter";
 import { canClear, markLine, markLook, markNames, rowMark } from "./labels";
+import { enT } from "../test/text";
 
 // The Board's arrangement of one answer (docs/features/board-ui.md "Board", "Rules and edge cases").
 
@@ -31,7 +32,7 @@ describe("the filters", () => {
       { key: "copy", label: "Copy" },
       { key: "plates", label: "plates" },
     ]);
-    expect(assigneeChoices(rows, "")).toEqual([
+    expect(assigneeChoices(rows, "", enT)).toEqual([
       { key: "ann", label: "Ann" },
       { key: NOBODY, label: "Unassigned" },
     ]);
@@ -60,19 +61,19 @@ describe("a row's mark", () => {
   });
 
   it("says each mark in a whole sentence, a gone target by its name as any other", () => {
-    expect(markLine({ ...plain, mark: "suspect", on: "R-1" })).toBe("The brief changed at R-1 after this card last read it.");
-    expect(markLine({ ...plain, mark: "departed", on: "R-1", discrepancy: "PR-1" })).toBe("Accepted as departing from R-1; PR-1 is not settled yet.");
-    expect(markLine({ ...plain, mark: "correcting", on: "R-1", correction: "C-2" })).toBe("The brief changed at R-1; C-2 is putting it right.");
+    expect(markLine({ ...plain, mark: "suspect", on: "R-1" }, enT)).toBe("The brief changed at R-1 after this card last read it.");
+    expect(markLine({ ...plain, mark: "departed", on: "R-1", discrepancy: "PR-1" }, enT)).toBe("Accepted as departing from R-1; PR-1 is not settled yet.");
+    expect(markLine({ ...plain, mark: "correcting", on: "R-1", correction: "C-2" }, enT)).toBe("The brief changed at R-1; C-2 is putting it right.");
   });
 
   it("shows a word this build does not know raw and neutral, never as nothing", () => {
     const mark = rowMark({ ...plain, mark: "pondering", on: "R-1" });
-    expect(mark === null ? null : [markLook(mark)?.label, markLook(mark)?.tone, markNames(mark)]).toEqual(["pondering", "card-mark-unknown", "R-1"]);
+    expect(mark === null ? null : [markLook(mark, enT)?.label, markLook(mark, enT)?.tone, markNames(mark)]).toEqual(["pondering", "card-mark-unknown", "R-1"]);
   });
 
   it("shows it so on no target too: a word it cannot place is no plain state, and no tile reads clean for it", () => {
     const mark = rowMark({ ...plain, mark: "pondering" });
-    expect(mark === null ? null : [markLook(mark)?.label, markLook(mark)?.tone, markLine(mark)]).toEqual(["pondering", "card-mark-unknown", "pondering"]);
+    expect(mark === null ? null : [markLook(mark, enT)?.label, markLook(mark, enT)?.tone, markLine(mark, enT)]).toEqual(["pondering", "card-mark-unknown", "pondering"]);
   });
 });
 
@@ -101,7 +102,7 @@ describe("the tabs and the columns", () => {
 
   it("keeps empty columns, the daemon's order, and counts what stands in a column: a cancelled card has left it", () => {
     const rows = [aCardRow({ id: "C-2", column: "doing" }), aCardRow({ id: "C-1", column: "doing" }), aCardRow({ id: "C-3", column: "doing", cancelled: true })];
-    const lanes = lanesOf({ name: "work", flow: aCardFlow() }, rows);
+    const lanes = lanesOf({ name: "work", flow: aCardFlow() }, rows, enT);
     expect(lanes.map((lane) => [lane.title, lane.count])).toEqual([
       ["To do", 0],
       ["Doing", 2],
@@ -113,18 +114,18 @@ describe("the tabs and the columns", () => {
 
   it("puts a row outside `columns[]` in a last lane, which is no column; a gone flow's rows all there", () => {
     const stranded = aCardRow({ id: "C-1", column: "parked" });
-    const lanes = lanesOf({ name: "work", flow: aCardFlow() }, [stranded]);
+    const lanes = lanesOf({ name: "work", flow: aCardFlow() }, [stranded], enT);
     expect(lanes.at(-1)).toEqual({ key: "work/outside", column: null, title: "Not in the flow", count: 1, rows: [stranded] });
-    expect(lanesOf({ name: "work", flow: undefined }, [stranded]).map((lane) => lane.column)).toEqual([null]);
+    expect(lanesOf({ name: "work", flow: undefined }, [stranded], enT).map((lane) => lane.column)).toEqual([null]);
   });
 
   it("keeps two flows' columns of one name apart: a lane's key holds its flow", () => {
-    const key = (name: string) => lanesOf({ name, flow: aCardFlow({ name }) }, [])[0]?.key;
+    const key = (name: string) => lanesOf({ name, flow: aCardFlow({ name }) }, [], enT)[0]?.key;
     expect(key("copy")).not.toBe(key("plates"));
   });
 
   it("leaves another flow's rows out", () => {
-    expect(lanesOf({ name: "work", flow: aCardFlow() }, [aCardRow({ id: "C-1", flow: "other" })]).flatMap((lane) => lane.rows)).toEqual([]);
+    expect(lanesOf({ name: "work", flow: aCardFlow() }, [aCardRow({ id: "C-1", flow: "other" })], enT).flatMap((lane) => lane.rows)).toEqual([]);
   });
 });
 

@@ -150,6 +150,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/ui-graph.md](features/ui-graph.md) shipped
 - [docs/features/ui-health.md](features/ui-health.md) shipped
 - [docs/features/ui-home.md](features/ui-home.md) shipped
+- [docs/features/ui-languages.md](features/ui-languages.md) shipped
 - [docs/features/ui-live-tasks.md](features/ui-live-tasks.md) shipped
 - [docs/features/ui-live.md](features/ui-live.md) shipped
 - [docs/features/ui-markdown.md](features/ui-markdown.md) shipped
@@ -209,5 +210,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0079.md](roadmap/RM-0079.md) shipped
 - [docs/roadmap/RM-0080.md](roadmap/RM-0080.md) shipped
 - [docs/roadmap/RM-0081.md](roadmap/RM-0081.md) shipped
+- [docs/roadmap/RM-0082.md](roadmap/RM-0082.md) shipped
 - [docs/roadmap/RM-0083.md](roadmap/RM-0083.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

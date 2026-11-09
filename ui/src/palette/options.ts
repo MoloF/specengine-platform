@@ -1,5 +1,6 @@
 import type { InboxEntry, Project, SearchHit, TaskListEntry } from "../api/types";
 import { ALL_SECTIONS, homeHash, navOf, sectionHash } from "../app/routes";
+import type { Translate } from "../i18n";
 import { fold } from "../inbox/filter";
 import { queueOrder } from "../inbox/order";
 import { summaryOf } from "../inbox/summary";
@@ -7,7 +8,7 @@ import { groupsOf } from "../tasks/groups";
 
 // The palette's options (docs/features/ui-home.md "Implementation", Palette): built from what the
 // client holds and the text typed, nothing read here. A match is a substring of the NFC, lower-case
-// text.
+// text; a section matches on its label in the language shown.
 
 /** Options shown per group; the label says "<name>, 10 of <n>" over it. */
 export const GROUP_LIMIT = 10;
@@ -21,7 +22,24 @@ export type PaletteOption =
   | { type: "ref"; key: string; ref: string; hash: string }
   | { type: "hit"; key: string; hit: SearchHit; hash: string };
 
+/** A group's own name, fixed in every language: its key, and the ID of its label. */
 export type GroupName = "Sections" | "Tasks" | "Inbox" | "Projects" | "Spec tree";
+
+/** A group's name as the viewer reads it. */
+export function groupWords(name: GroupName, t: Translate): string {
+  switch (name) {
+    case "Sections":
+      return t("palette.groups.sections");
+    case "Tasks":
+      return t("palette.groups.tasks");
+    case "Inbox":
+      return t("palette.groups.inbox");
+    case "Projects":
+      return t("palette.groups.projects");
+    case "Spec tree":
+      return t("palette.groups.specTree");
+  }
+}
 
 export interface PaletteGroup {
   name: GroupName;
@@ -92,12 +110,12 @@ function indexedOnce<T>(
 const TASKS_IN_ORDER = new WeakMap<readonly TaskListEntry[], readonly Indexed<TaskListEntry>[]>();
 const QUEUE_IN_ORDER = new WeakMap<readonly InboxEntry[], readonly Indexed<InboxEntry>[]>();
 
-/** The tasks in the Tasks screen's order (`groupsOf`), matched on ID and title. */
-function tasksInOrder(tasks: readonly TaskListEntry[]): readonly Indexed<TaskListEntry>[] {
+/** The tasks in the Tasks screen's order (`groupsOf`, whose titles it leaves), matched on ID and title. */
+function tasksInOrder(tasks: readonly TaskListEntry[], t: Translate): readonly Indexed<TaskListEntry>[] {
   return indexedOnce(
     TASKS_IN_ORDER,
     tasks,
-    (entries) => groupsOf(entries).flatMap((group) => group.entries),
+    (entries) => groupsOf(entries, t).flatMap((group) => group.entries),
     (entry) => [entry.id, entry.title],
     (entry) => entry.id,
   );
@@ -136,14 +154,14 @@ function loadingGroup(name: GroupName): Built {
  * The groups in order (Sections, Tasks, Inbox, Projects, Spec tree), a group with an exact ID first;
  * an empty group left out unless its read is on its way. Empty text: Sections and Projects only.
  */
-export function paletteGroups(input: PaletteInput): PaletteGroup[] {
+export function paletteGroups(input: PaletteInput, t: Translate): PaletteGroup[] {
   const needle = needleOf(input.text);
   const project = input.project;
   const built: Built[] = [];
 
   if (project !== null) {
     // Every section, whatever the nav lists: a workspace hides no route (docs/features/workspaces.md "The UI").
-    const sections = navOf(project, ALL_SECTIONS)
+    const sections = navOf(project, ALL_SECTIONS, t)
       .filter((entry) => holds(needle, [entry.label]))
       .map((entry): PaletteOption => ({ type: "section", key: `section:${entry.key}`, label: entry.label, hash: entry.hash }));
     built.push(build("Sections", sections));
@@ -154,7 +172,7 @@ export function paletteGroups(input: PaletteInput): PaletteGroup[] {
     if (tasks.state === "loading") {
       built.push(loadingGroup("Tasks"));
     } else if (tasks.state === "ready") {
-      const entries = matching(tasksInOrder(tasks.value), needle);
+      const entries = matching(tasksInOrder(tasks.value, t), needle);
       const exact = entries.find(({ id }) => id === needle);
       built.push(
         build(
@@ -225,9 +243,10 @@ export function paletteGroups(input: PaletteInput): PaletteGroup[] {
 }
 
 /** A group's label: its name, "<name>, loading", or "<name>, 10 of <n>". */
-export function groupLabel(group: PaletteGroup): string {
+export function groupLabel(group: PaletteGroup, t: Translate): string {
+  const name = groupWords(group.name, t);
   if (group.loading) {
-    return `${group.name}, loading`;
+    return t("palette.groupLoading", { name });
   }
-  return group.total > group.options.length ? `${group.name}, ${String(group.options.length)} of ${String(group.total)}` : group.name;
+  return group.total > group.options.length ? t("palette.groupCut", { name, shown: group.options.length, count: group.total }) : name;
 }

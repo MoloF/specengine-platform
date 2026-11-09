@@ -3,6 +3,7 @@ import type { TraceCounts, TraceStage } from "../api/types";
 import { aFlowNode, aFlowView, aTraceNode } from "../test/builders";
 import { confirmedLine, countParts, countsText, isNoCard, rollupLook, stageWords, stepWords } from "./labels";
 import { ALL_STAGES, inStage, keptInList, laneTotal, noCardAnywhere, noStageAnywhere, outsideStage, stageAsked, stageInForce, stageKey, stageOptions, stepsInOrder, withoutStates } from "./timeline";
+import { enT } from "../test/text";
 
 // docs/features/trace-views.md "Timeline", "Stage filter", "Flow badges": what is arranged of the
 // served values, and nothing counted but what the lane's own bar is told.
@@ -15,14 +16,14 @@ function lane(stage: string | null, counts: Partial<TraceCounts> = {}, distance:
 
 describe("a rollup's word", () => {
   it("gives each state a label and an icon of its own, never by colour alone", () => {
-    const looks = ["confirmed", "in work", "suspect", "departed", "no card"].map(rollupLook);
+    const looks = ["confirmed", "in work", "suspect", "departed", "no card"].map((rollup) => rollupLook(rollup, enT));
     expect(looks.map((look) => look.label)).toEqual(["Confirmed", "In work", "Suspect", "Departed", "No card"]);
     expect(new Set(looks.map((look) => look.icon)).size).toBe(5);
     expect(new Set(looks.map((look) => look.tone)).size).toBe(5);
   });
 
   it("shows a word this build does not know raw and neutral", () => {
-    expect(rollupLook("pondering")).toEqual({ label: "pondering", tone: "trace-unknown", icon: "unknown" });
+    expect(rollupLook("pondering", enT)).toEqual({ label: "pondering", tone: "trace-unknown", icon: "unknown" });
   });
 
   it("knows a step with no card, and nothing else, as hollow", () => {
@@ -32,13 +33,13 @@ describe("a rollup's word", () => {
 
 describe("served counts", () => {
   it("say a closed group's line, zero parts left out, from what is done to what is missing", () => {
-    expect(countsText({ ...NONE, confirmed: 3, suspect: 1, no_card: 2 })).toBe("3 confirmed, 1 suspect, 2 no card");
-    expect(countsText({ ...NONE, confirmed: 7 })).toBe("7 confirmed");
-    expect(countsText(NONE)).toBe("");
+    expect(countsText({ ...NONE, confirmed: 3, suspect: 1, no_card: 2 }, enT)).toBe("3 confirmed, 1 suspect, 2 no card");
+    expect(countsText({ ...NONE, confirmed: 7 }, enT)).toBe("7 confirmed");
+    expect(countsText(NONE, enT)).toBe("");
   });
 
   it("mark the no-card part alone as hollow", () => {
-    expect(countParts({ ...NONE, confirmed: 1, no_card: 1 }).map((part) => [part.key, part.hollow])).toEqual([
+    expect(countParts({ ...NONE, confirmed: 1, no_card: 1 }, enT).map((part) => [part.key, part.hollow])).toEqual([
       ["confirmed", false],
       ["no_card", true],
     ]);
@@ -46,7 +47,7 @@ describe("served counts", () => {
 
   it("score a lane out of all its parts", () => {
     const counts = { ...NONE, confirmed: 2, in_work: 1, no_card: 3 };
-    expect(confirmedLine(counts.confirmed, laneTotal(counts))).toBe("2 of 6 confirmed");
+    expect(confirmedLine(counts.confirmed, laneTotal(counts), enT)).toBe("2 of 6 confirmed");
   });
 
   it("tell when no card holds anything: no_card alone may hold steps", () => {
@@ -59,7 +60,7 @@ describe("the lanes", () => {
   it("ask a stage as served, in any script, and `-` for none", () => {
     expect(stageAsked("\u043f\u0435\u0447\u0430\u0442\u044c")).toBe("\u043f\u0435\u0447\u0430\u0442\u044c");
     expect(stageAsked(null)).toBe("-");
-    expect(stageWords(null)).toBe("No stage");
+    expect(stageWords(null, enT)).toBe("No stage");
   });
 
   it("tell no `stage:` anywhere: no lane, or only the lane of none", () => {
@@ -70,7 +71,7 @@ describe("the lanes", () => {
   });
 
   it("say where a step stands counted from one, never its distance", () => {
-    expect([0, 3, null].map(stepWords)).toEqual(["Step 1", "Step 4", "Step unknown"]);
+    expect([0, 3, null].map((distance) => stepWords(distance, enT))).toEqual(["Step 1", "Step 4", "Step unknown"]);
   });
 
   it("order a lane's steps by distance, those off the walk last, the same whatever order they came in", () => {
@@ -85,7 +86,7 @@ describe("the stage filter", () => {
   const stages = [lane("gather"), lane("print"), lane(null, {}, null)];
 
   it("offers All, then the lanes as served, No stage among them", () => {
-    expect(stageOptions(stages).map((option) => option.label)).toEqual(["All stages", "gather", "print", "No stage"]);
+    expect(stageOptions(stages, enT).map((option) => option.label)).toEqual(["All stages", "gather", "print", "No stage"]);
   });
 
   it("compares nothing but the served value, and all stands for everything", () => {

@@ -1,3 +1,4 @@
+import * as ts from "typescript";
 import { describe, expect, it } from "vitest";
 import type { WorkspaceDocument } from "./api/types";
 import packageJson from "../package.json?raw";
@@ -98,6 +99,150 @@ const ROW_SOURCES: readonly string[] = [...BINDINGS_TAB, ...DRIFT_CARD, ...TREE_
 
 /** The provisional types' module, with or without an extension (as in eslint.config.js). */
 const PROVISIONAL = /(^|\/)provisional(\.[jt]sx?)?$/;
+
+/** The one file of Russian text in ui/ (ADR-0072; docs/features/ui-languages.md D2). */
+const RUSSIAN_CATALOG = "/src/i18n/ru.ts";
+
+/**
+ * The directories whose chrome is all in the catalog (docs/features/ui-languages.md LG-10): their
+ * `.tsx` files hold no word of their own. 2b adds `/src/flow/`, RM-0090 the rest.
+ */
+const CONVERTED: readonly string[] = ["/src/app/", "/src/palette/", "/src/overview/", "/src/ui/", "/src/workspace/"];
+
+/** The attributes whose value is read or shown: never a literal word in a converted directory. */
+const SHOWN_ATTRIBUTES: readonly string[] = ["aria-label", "aria-description", "aria-roledescription", "aria-valuetext", "title", "placeholder", "alt"];
+
+/** Shared components' text props, by component: a new one joins the list. */
+const TEXT_PROPS: Readonly<Record<string, readonly string[]>> = {
+  Skeleton: ["label"],
+  Notes: ["label"],
+  Stored: ["label"],
+  ErrorPanel: ["title", "message"],
+  ReadFailure: ["title"],
+  Badge: ["name"],
+  Dialog: ["title"],
+  Region: ["title", "boundary"],
+  RegionBoundary: ["name"],
+  CopyButton: ["label", "failed"],
+  DiffView: ["label"],
+  Tabs: ["label"],
+  NotFound: ["reason"],
+};
+
+function isTestPath(path: string): boolean {
+  return /\.test\.tsx?$/.test(path);
+}
+
+function parsed(path: string, text: string): ts.SourceFile {
+  return ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, path.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+}
+
+/**
+ * The literals an expression shows as it is: itself, a template's text, either branch of a
+ * conditional, the value after `&&`, either side of `||` and `??`. A call's arguments (a key to
+ * `t`) and a condition's operands (a value compared) are not shown.
+ */
+function shownLiterals(node: ts.Expression): string[] {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return [node.text];
+  }
+  if (ts.isTemplateExpression(node)) {
+    return [node.head.text, ...node.templateSpans.flatMap((span) => [span.literal.text, ...shownLiterals(span.expression)])];
+  }
+  if (ts.isParenthesizedExpression(node)) {
+    return shownLiterals(node.expression);
+  }
+  if (ts.isConditionalExpression(node)) {
+    return [...shownLiterals(node.whenTrue), ...shownLiterals(node.whenFalse)];
+  }
+  if (ts.isBinaryExpression(node)) {
+    const operator = node.operatorToken.kind;
+    if (operator === ts.SyntaxKind.AmpersandAmpersandToken) {
+      return shownLiterals(node.right);
+    }
+    if (operator === ts.SyntaxKind.BarBarToken || operator === ts.SyntaxKind.QuestionQuestionToken) {
+      return [...shownLiterals(node.left), ...shownLiterals(node.right)];
+    }
+  }
+  return [];
+}
+
+const ASCII_WORD = /[A-Za-z]/;
+
+/** Each word a `.tsx` text spells itself: JSX text, a literal child, a literal shown or text-prop value. */
+function literalWords(path: string, text: string): string[] {
+  const found: string[] = [];
+  const file = parsed(path, text);
+  const at = (node: ts.Node) => `${path}:${String(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1)}`;
+  function attributeOwner(attribute: ts.JsxAttribute): string {
+    const element = attribute.parent.parent;
+    return element.tagName.getText(file);
+  }
+  function walk(node: ts.Node): void {
+    if (ts.isJsxText(node) && ASCII_WORD.test(node.text)) {
+      found.push(`${at(node)}: text ${JSON.stringify(node.text.trim())}`);
+    }
+    if (ts.isJsxExpression(node) && node.expression !== undefined && (ts.isJsxElement(node.parent) || ts.isJsxFragment(node.parent))) {
+      for (const literal of shownLiterals(node.expression).filter((value) => ASCII_WORD.test(value))) {
+        found.push(`${at(node)}: child ${JSON.stringify(literal)}`);
+      }
+    }
+    if (ts.isJsxAttribute(node) && node.initializer !== undefined) {
+      const name = node.name.getText(file);
+      const owner = attributeOwner(node);
+      if (SHOWN_ATTRIBUTES.includes(name) || (TEXT_PROPS[owner] ?? []).includes(name)) {
+        const initializer = node.initializer;
+        const values = ts.isStringLiteral(initializer) ? [initializer.text] : ts.isJsxExpression(initializer) && initializer.expression !== undefined ? shownLiterals(initializer.expression) : [];
+        for (const literal of values.filter((value) => ASCII_WORD.test(value))) {
+          found.push(`${at(node)}: <${owner} ${name}> ${JSON.stringify(literal)}`);
+        }
+      }
+    }
+    ts.forEachChild(node, walk);
+  }
+  walk(file);
+  return found;
+}
+
+function isKeyRead(node: ts.Node): boolean {
+  return ts.isPropertyAccessExpression(node) && node.name.text === "key";
+}
+
+function isOneLetter(node: ts.Node): boolean {
+  return (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) && /^[A-Za-z]$/.test(node.text);
+}
+
+/** Each letter hotkey read from `.key` alone (docs/features/ui-languages.md LG-7): a comparison, a `switch` case, a list it is looked up in. */
+function letterKeyReads(path: string, text: string): string[] {
+  const found: string[] = [];
+  const file = parsed(path, text);
+  const at = (node: ts.Node) => `${path}:${String(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1)}: ${node.getText(file).split("\n")[0] ?? ""}`;
+  const equality = [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken];
+  function walk(node: ts.Node): void {
+    if (ts.isBinaryExpression(node) && equality.includes(node.operatorToken.kind)) {
+      if ((isKeyRead(node.left) && isOneLetter(node.right)) || (isOneLetter(node.left) && isKeyRead(node.right))) {
+        found.push(at(node));
+      }
+    }
+    if (ts.isSwitchStatement(node) && isKeyRead(node.expression)) {
+      for (const clause of node.caseBlock.clauses) {
+        if (ts.isCaseClause(clause) && isOneLetter(clause.expression)) {
+          found.push(at(clause));
+        }
+      }
+    }
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) && node.expression.name.text === "includes") {
+      const list = node.expression.expression;
+      const [argument] = node.arguments;
+      if (argument !== undefined && isKeyRead(argument) && ts.isArrayLiteralExpression(list) && list.elements.some(isOneLetter)) {
+        found.push(at(node));
+      }
+    }
+    ts.forEachChild(node, walk);
+  }
+  walk(file);
+  return found;
+}
 
 function record(value: unknown): Record<string, unknown> {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -666,9 +811,12 @@ describe("source policy", () => {
     }
   });
 
-  it("holds no raw Cyrillic letter: non-Latin test text is escaped (ADR-0024)", () => {
+  it("holds no raw Cyrillic letter but in the Russian catalog: non-Latin test text is escaped (ADR-0024, ADR-0072; LG-8 of ui-languages)", () => {
     const cyrillic = new RegExp(`[${String.fromCodePoint(0x400)}-${String.fromCodePoint(0x4ff)}]`);
-    expect(offending(cyrillic)).toEqual([]);
+    expect(offending(cyrillic, (path) => path === RUSSIAN_CATALOG)).toEqual([]);
+    // The exemption is the one file, whole: it holds Russian, and its neighbours are scanned.
+    expect(cyrillic.test(sources[RUSSIAN_CATALOG] ?? "")).toBe(true);
+    expect(Object.keys(sources)).toEqual(expect.arrayContaining(["/src/i18n/index.ts", "/src/i18n/en.ts", "/src/i18n/catalog.ts"]));
   });
 
   it("cites the task canon, never the task-package feature spec, whose blocks go at shipping (AC-13 of ui-live-tasks, WA-9)", () => {
@@ -707,14 +855,98 @@ describe("toolchain policy", () => {
         // ADR-0036 amends ADR-0033's allowlist: 15 + 2.
         "react-markdown",
         "remark-gfm",
+        // ADR-0072 amends it again: 17 + 2 (docs/features/ui-languages.md LG-11).
+        "i18next",
+        "react-i18next",
       ].sort(),
     );
     expect([pinned["react-markdown"], pinned["remark-gfm"]]).toEqual(["10.1.0", "4.0.1"]);
+    // Both in `dependencies`: they ship in the main chunk (D4).
+    const runtime = record(pkg.dependencies);
+    expect([runtime.i18next, runtime["react-i18next"]]).toEqual(["26.5.11", "17.1.9"]);
     for (const version of Object.values(pinned)) {
       expect(version).toMatch(/^\d+\.\d+\.\d+$/);
     }
     expect(pkg.packageManager).toMatch(/^pnpm@\d+\.\d+\.\d+$/);
     const scripts = Object.keys(record(pkg.scripts));
     expect(scripts.filter((name) => /install|prepare/.test(name))).toEqual([]);
+  });
+});
+
+describe("languages policy (docs/features/ui-languages.md)", () => {
+  it("imports i18next and react-i18next only in src/i18n, and src/i18n imports both (LG-11, D3)", () => {
+    const i18nPackage = /^(i18next|react-i18next)(\/|$)/;
+    const wrong: string[] = [];
+    const inside = new Set<string>();
+    for (const [path, text] of Object.entries(sources)) {
+      for (const specifier of importsOf(text)) {
+        if (!i18nPackage.test(specifier)) {
+          continue;
+        }
+        if (path.startsWith("/src/i18n/")) {
+          inside.add(specifier);
+        } else {
+          wrong.push(`${path} imports ${specifier}`);
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
+    expect([...inside].sort()).toEqual(expect.arrayContaining(["i18next", "react-i18next"]));
+    // The lint rule says the same: the packages restricted, src/i18n/ exempt.
+    expect(eslintConfig).toContain(JSON.stringify(i18nPackage.source.replaceAll("\\/", "/")));
+    expect(eslintConfig).toMatch(/files:\s*\["src\/i18n\/\*\*"\]/);
+    // The detector itself: a subpath and a type import are caught, a look-alike name is not.
+    expect(["i18next", "react-i18next", "i18next/typescript", "react-i18next/x"].every((name) => i18nPackage.test(name))).toBe(true);
+    expect(["i18next-http-backend", "my-i18next", "./i18n"].some((name) => i18nPackage.test(name))).toBe(false);
+  });
+
+  it("holds no word of their own in the converted directories' .tsx files (LG-10)", () => {
+    const found: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      if (path.endsWith(".tsx") && !isTestPath(path) && CONVERTED.some((directory) => path.startsWith(directory))) {
+        found.push(...literalWords(path, text));
+      }
+    }
+    expect(found).toEqual([]);
+  });
+
+  it("sees each literal form LG-10 forbids and passes keys, data and code (the detector)", () => {
+    const words = (text: string) => literalWords("/src/app/Probe.tsx", text).map((hit) => hit.replace(/^[^ ]+ /, ""));
+    // M25: the literal restored in DataSource.tsx.
+    expect(words('export const A = () => <span>Mock data</span>;')).toEqual(['text "Mock data"']);
+    expect(words('export const A = ({ on }: { on: boolean }) => <p>{on ? "Retrying" : t("ui.retry")}</p>;')).toEqual(['child "Retrying"']);
+    expect(words('export const A = () => <p>{n > 0 && " or "}</p>;')).toEqual(['child " or "']);
+    expect(words('export const A = () => <input placeholder="Section, task" aria-label={`Jump ${x}`} />;')).toEqual(['<input placeholder> "Section, task"', '<input aria-label> "Jump "']);
+    expect(words('export const A = () => <Skeleton label="Opening the first project" lines={3} />;')).toEqual(['<Skeleton label> "Opening the first project"']);
+    expect(words('export const A = () => <Badge name="State" look={look} />;')).toEqual(['<Badge name> "State"']);
+    expect(words('export const A = () => <ErrorPanel title={kept ? "Kept" : "Not kept"} message={m} onRetry={r} />;')).toEqual(['<ErrorPanel title> "Kept"', '<ErrorPanel title> "Not kept"']);
+    // Keys to `t`, data, a comparison's operand, a class or an ID are not words shown.
+    expect(
+      words(
+        'export const A = () => <div className="mono" id={`${id}-hint`} title={t("workspace.workspaceHint")}>{t("app.brand")} {project.name ?? project.slug} {x.type === "section" ? <b>{t("app.overview")}</b> : null} : </div>;',
+      ),
+    ).toEqual([]);
+  });
+
+  it("reads no letter hotkey from .key alone: a comparison, a switch case, a lookup list (LG-7)", () => {
+    const found: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      if (/\.tsx?$/.test(path) && !isTestPath(path)) {
+        found.push(...letterKeyReads(path, text));
+      }
+    }
+    expect(found).toEqual([]);
+  });
+
+  it("sees each letter read LG-7 forbids and passes the keys that stay on .key (the detector)", () => {
+    const reads = (text: string) => letterKeyReads("/src/x.tsx", text).length;
+    // M18: `event.key === "c"` kept in FlowCanvas.tsx.
+    expect(reads('if (event.key === "c") { centre(); }')).toBe(1);
+    expect(reads('if ("n" !== event.key) { return; }')).toBe(1);
+    // M20: a new `case "x":` under `switch (event.key)`.
+    expect(reads('switch (event.key) { case "ArrowDown": case "x": move(); }')).toBe(1);
+    expect(reads('if (["ArrowDown", "j"].includes(event.key)) { move(); }')).toBe(1);
+    expect(reads('if (event.key === "?" || event.key === "Escape" || event.key === "Enter") { open(); }')).toBe(0);
+    expect(reads('switch (hotkeyOf(event)) { case "j": move(); } if (letterOf(event) === "n") { open(); }')).toBe(0);
   });
 });

@@ -3,8 +3,8 @@
 //! `ui/README.md` "Dependencies", "Gates", "Laptop rules"), read as text from
 //! `ui/` without running pnpm: the gates themselves stay commands.
 //!
-//! - AC-01: `package.json` names exactly the owner's allowlist (17,
-//!   ADR-0036), each at an exact `x.y.z`, equal to the README table once it
+//! - AC-01: `package.json` names exactly the owner's allowlist (19,
+//!   ADR-0036, ADR-0072), each at an exact `x.y.z`, equal to the README table once it
 //!   holds versions ("pinned at install" is the placeholder until then);
 //!   `react` = `react-dom`, 19.x;
 //!   `packageManager` an exact pnpm; the lockfile present and its importer
@@ -66,6 +66,17 @@
 //!   half: core's `workspace_toml::SECTIONS` is `ui/src/app/sections.ts`'s
 //!   section IDs in its order, read as text. M: a section added to one side
 //!   alone.
+//!
+//! - docs/features/ui-languages.md (RM-0082, ADR-0072) "Acceptance
+//!   criteria", LG-11, its eval half: the allowlist is the 19, `i18next` and
+//!   `react-i18next` among them in `dependencies` at an exact `x.y.z`, the
+//!   README table naming them (written in its "Canon at ship" pass, so the
+//!   table test is red until then); no override and no peer rule in
+//!   `package.json`, `pnpm-workspace.yaml` or the lockfile; only
+//!   `ui/src/i18n/` imports either package (as `src/markdown/` for ADR-0036),
+//!   and something there imports each. Positive controls in memory and on a
+//!   scratch `ui/`, never by editing `ui/`: M26 `react-i18next` imported in
+//!   `src/app/Shell.tsx`, M27 a `^` on a pin, M28 a 20th package.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -90,8 +101,10 @@ fn read(path: &Path) -> String {
 }
 
 /// The owner's allowlist of 2026-10-05, amended by ADR-0036 (2026-10-06)
-/// with the last two (`ui/README.md` "Dependencies").
-const ALLOWLIST: [&str; 17] = [
+/// with `react-markdown` and `remark-gfm` and by ADR-0072 (2026-11-09) with
+/// the last two (`ui/README.md` "Dependencies"; docs/features/ui-languages.md
+/// "Acceptance criteria", LG-11).
+const ALLOWLIST: [&str; 19] = [
     "react",
     "react-dom",
     "@tanstack/react-query",
@@ -109,7 +122,13 @@ const ALLOWLIST: [&str; 17] = [
     "jsdom",
     "react-markdown",
     "remark-gfm",
+    "i18next",
+    "react-i18next",
 ];
+
+/// The two packages ADR-0072 adds, both runtime code: `dependencies`
+/// (docs/features/ui-languages.md "Data", "Dependencies").
+const I18N_PACKAGES: [&str; 2] = ["i18next", "react-i18next"];
 
 /// The README's version cell before `spec-writer` records the pins.
 const PLACEHOLDER: &str = "pinned at install";
@@ -228,19 +247,48 @@ fn lockfile_specifiers(text: &str) -> BTreeMap<String, String> {
     out
 }
 
+/// AC-01's and LG-11's findings on a `package.json`: a name off the
+/// [`ALLOWLIST`] or missing from it, a version that is not an exact
+/// `x.y.z`, an [`I18N_PACKAGES`] member outside `dependencies`. Empty when
+/// the file holds.
+fn allowlist_findings(package: &Value) -> Vec<String> {
+    let declared = declared_dependencies(package);
+    let names: BTreeSet<&str> = declared.keys().map(String::as_str).collect();
+    let allowed: BTreeSet<&str> = ALLOWLIST.into_iter().collect();
+    let mut out = Vec::new();
+    for name in names.difference(&allowed) {
+        out.push(format!("{name}: not on the allowlist"));
+    }
+    for name in allowed.difference(&names) {
+        out.push(format!("{name}: on the allowlist, not in package.json"));
+    }
+    for (name, version) in &declared {
+        if !is_exact_version(version) {
+            out.push(format!("{name}: {version:?} is not an exact x.y.z"));
+        }
+    }
+    for name in I18N_PACKAGES {
+        if package
+            .get("dependencies")
+            .and_then(|table| table.get(name))
+            .is_none()
+        {
+            out.push(format!("{name}: not in dependencies"));
+        }
+    }
+    out
+}
+
 #[test]
 fn package_json_pins_exactly_the_allowlist_at_exact_versions() {
     let package = package_json();
     let declared = declared_dependencies(&package);
-    let names: BTreeSet<&str> = declared.keys().map(String::as_str).collect();
-    let allowed: BTreeSet<&str> = ALLOWLIST.into_iter().collect();
-    assert_eq!(names, allowed, "package.json names against the allowlist");
-    let inexact: Vec<String> = declared
-        .iter()
-        .filter(|(_, version)| !is_exact_version(version))
-        .map(|(name, version)| format!("{name}: {version:?}"))
-        .collect();
-    assert!(inexact.is_empty(), "not an exact x.y.z: {inexact:?}");
+    let findings = allowlist_findings(&package);
+    assert!(
+        findings.is_empty(),
+        "package.json against the allowlist (ui-shell AC-01, ui-languages LG-11):\n{}",
+        findings.join("\n")
+    );
     for field in [
         "peerDependencies",
         "optionalDependencies",
@@ -261,6 +309,184 @@ fn package_json_pins_exactly_the_allowlist_at_exact_versions() {
         "package.json private"
     );
     assert_eq!(package["type"], Value::from("module"), "package.json type");
+}
+
+/// A `package.json` that holds: the [`ALLOWLIST`] at `1.2.3`, React's three
+/// and the runtime packages in `dependencies` (the [`I18N_PACKAGES`] there),
+/// the rest in `devDependencies`.
+fn allowlisted_package() -> Value {
+    const RUNTIME: [&str; 6] = [
+        "react",
+        "react-dom",
+        "@tanstack/react-query",
+        "@xyflow/react",
+        "react-markdown",
+        "remark-gfm",
+    ];
+    let mut package = serde_json::json!({ "dependencies": {}, "devDependencies": {} });
+    for name in ALLOWLIST {
+        let field = if RUNTIME.contains(&name) || I18N_PACKAGES.contains(&name) {
+            "dependencies"
+        } else {
+            "devDependencies"
+        };
+        package[field][name] = Value::from("1.2.3");
+    }
+    package
+}
+
+/// LG-11's positive control on [`allowlist_findings`], in memory (never by
+/// editing `ui/package.json`): a holding file has no finding; M27 a `^` on
+/// the `i18next` pin, M28 a 20th package (an i18next plugin), a missing
+/// one, and `react-i18next` moved to `devDependencies` each have theirs.
+#[test]
+fn ui_languages_lg11_the_allowlist_check_sees_a_range_a_twentieth_package_and_the_wrong_list() {
+    let holding = allowlisted_package();
+    assert_eq!(ALLOWLIST.len(), 19, "the owner's 19");
+    assert_eq!(allowlist_findings(&holding), Vec::<String>::new());
+
+    let mut caret = holding.clone();
+    caret["dependencies"]["i18next"] = Value::from("^1.2.3");
+    assert_eq!(
+        allowlist_findings(&caret),
+        ["i18next: \"^1.2.3\" is not an exact x.y.z"],
+        "M27"
+    );
+
+    let mut twentieth = holding.clone();
+    twentieth["dependencies"]["i18next-browser-languagedetector"] = Value::from("8.2.0");
+    assert_eq!(
+        allowlist_findings(&twentieth),
+        ["i18next-browser-languagedetector: not on the allowlist"],
+        "M28"
+    );
+
+    let mut missing = holding.clone();
+    missing["dependencies"]
+        .as_object_mut()
+        .expect("dependencies")
+        .remove("react-i18next");
+    assert_eq!(
+        allowlist_findings(&missing),
+        [
+            "react-i18next: on the allowlist, not in package.json",
+            "react-i18next: not in dependencies",
+        ]
+    );
+
+    let mut dev = missing.clone();
+    dev["devDependencies"]["react-i18next"] = Value::from("1.2.3");
+    assert_eq!(
+        allowlist_findings(&dev),
+        ["react-i18next: not in dependencies"]
+    );
+}
+
+/// The override keys of `package.json`'s top level: npm's, and Yarn's
+/// `resolutions`, which pnpm also reads (docs/features/ui-languages.md
+/// "Acceptance criteria", LG-11).
+const PACKAGE_OVERRIDES: [&str; 2] = ["overrides", "resolutions"];
+
+/// pnpm's override and peer-rule keys: in `package.json`'s `pnpm` field, at
+/// the top level of `pnpm-workspace.yaml`, and as the lockfile's top-level
+/// record of them.
+const PNPM_OVERRIDES: [&str; 3] = ["overrides", "peerDependencyRules", "packageExtensions"];
+
+/// LG-11's "no override, no `peerDependencyRules`" on the three files' text:
+/// `package.json`'s top level and its `pnpm` field, the top-level keys of
+/// `pnpm-workspace.yaml`, the top-level keys of the lockfile.
+fn override_findings(package: &Value, workspace: &str, lockfile: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for key in PACKAGE_OVERRIDES {
+        if package.get(key).is_some() {
+            out.push(format!("package.json {key}"));
+        }
+    }
+    for key in PNPM_OVERRIDES {
+        if package.get("pnpm").and_then(|pnpm| pnpm.get(key)).is_some() {
+            out.push(format!("package.json pnpm.{key}"));
+        }
+    }
+    let top_level = |text: &str, key: &str| {
+        text.lines().any(|line| {
+            line.strip_prefix(key)
+                .is_some_and(|rest| rest.starts_with(':'))
+        })
+    };
+    for key in PNPM_OVERRIDES {
+        if top_level(workspace, key) {
+            out.push(format!("pnpm-workspace.yaml {key}"));
+        }
+    }
+    for key in PNPM_OVERRIDES {
+        if top_level(lockfile, key) {
+            out.push(format!("pnpm-lock.yaml {key}"));
+        }
+    }
+    out
+}
+
+/// LG-11: the install passes with `strict-peer-dependencies=true` on its
+/// own, with no override and no peer rule in any of the three files.
+#[test]
+fn ui_languages_lg11_no_override_and_no_peer_rule() {
+    let ui = ui_dir();
+    let workspace = ui.join("pnpm-workspace.yaml");
+    let workspace = if workspace.is_file() {
+        read(&workspace)
+    } else {
+        String::new()
+    };
+    let lockfile = read(&ui.join("pnpm-lock.yaml"));
+    assert!(
+        lockfile.starts_with("lockfileVersion:"),
+        "pnpm-lock.yaml read"
+    );
+    let findings = override_findings(&package_json(), &workspace, &lockfile);
+    assert!(findings.is_empty(), "overrides or peer rules: {findings:?}");
+}
+
+/// The control for [`override_findings`]: each key in each file is seen; a
+/// nested key, a package named like a key and a comment are not.
+#[test]
+fn ui_languages_lg11_the_override_check_sees_each_key() {
+    let clean = allowlisted_package();
+    let workspace = "# overrides: none\nminimumReleaseAge: 10080\n";
+    let lockfile = "lockfileVersion: '9.0'\n\nimporters:\n\n  .:\n    dependencies:\n      overrides:\n        specifier: 1.0.0\n";
+    assert_eq!(
+        override_findings(&clean, workspace, lockfile),
+        Vec::<String>::new()
+    );
+    let mut package = clean.clone();
+    package["overrides"] = serde_json::json!({ "typescript": "6.0.3" });
+    package["resolutions"] = serde_json::json!({ "typescript": "6.0.3" });
+    package["pnpm"] = serde_json::json!({
+        "overrides": {},
+        "peerDependencyRules": { "allowedVersions": { "typescript": "6" } },
+        "packageExtensions": {},
+    });
+    let workspace = format!(
+        "{workspace}overrides:\n  typescript: 6.0.3\npeerDependencyRules:\n  ignoreMissing: []\npackageExtensions: {{}}\n"
+    );
+    let lockfile = lockfile.replacen(
+        "\nimporters:",
+        "\noverrides:\n  typescript: 6.0.3\n\nimporters:",
+        1,
+    );
+    assert_eq!(
+        override_findings(&package, &workspace, &lockfile),
+        [
+            "package.json overrides",
+            "package.json resolutions",
+            "package.json pnpm.overrides",
+            "package.json pnpm.peerDependencyRules",
+            "package.json pnpm.packageExtensions",
+            "pnpm-workspace.yaml overrides",
+            "pnpm-workspace.yaml peerDependencyRules",
+            "pnpm-workspace.yaml packageExtensions",
+            "pnpm-lock.yaml overrides",
+        ]
+    );
 }
 
 #[test]
@@ -1406,6 +1632,144 @@ fn only_src_markdown_imports_react_markdown_and_remark_gfm() {
         missing.is_empty(),
         "nothing under ui/{MARKDOWN_DIR} imports {missing:?}: the renderer is gone or the import reader is blind"
     );
+}
+
+/// The only folder that may import the [`I18N_PACKAGES`], relative to `ui/`
+/// (docs/features/ui-languages.md D3, LG-11).
+const I18N_DIR: &str = "src/i18n/";
+
+/// The ADR-0072 package a module specifier names, as the ESLint rule reads
+/// it: `^(i18next|react-i18next)(/|$)`.
+fn i18n_package(specifier: &str) -> Option<&'static str> {
+    I18N_PACKAGES.into_iter().find(|name| {
+        specifier
+            .strip_prefix(name)
+            .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+    })
+}
+
+/// The loads of an [`I18N_PACKAGES`] member in `files` (paths relative to
+/// `ui/`): those outside [`I18N_DIR`] as `ui/<path>:<line>: <specifier>`,
+/// tests and mocks included, and the packages loaded inside it.
+fn i18n_imports(files: &[(String, String)]) -> (Vec<String>, BTreeSet<&'static str>) {
+    let mut wrong = Vec::new();
+    let mut inside = BTreeSet::new();
+    for (path, text) in files {
+        for (index, line) in text.lines().enumerate() {
+            for specifier in module_specifiers(line) {
+                let Some(package) = i18n_package(specifier) else {
+                    continue;
+                };
+                if path.starts_with(I18N_DIR) {
+                    inside.insert(package);
+                } else {
+                    wrong.push(format!("ui/{path}:{}: {specifier}", index + 1));
+                }
+            }
+        }
+    }
+    (wrong, inside)
+}
+
+#[test]
+fn ui_languages_lg11_the_i18n_reader_takes_the_two_and_their_subpaths_only() {
+    for (specifier, package) in [
+        ("i18next", Some("i18next")),
+        ("react-i18next", Some("react-i18next")),
+        ("i18next/typescript/t", Some("i18next")),
+        ("react-i18next/icu.macro", Some("react-i18next")),
+        ("i18next-browser-languagedetector", None),
+        ("i18next-http-backend", None),
+        ("react-i18nextra", None),
+        ("next-i18next", None),
+        ("@types/i18next", None),
+        ("i18n", None),
+        ("./i18n", None),
+        ("../i18n/index", None),
+        ("react", None),
+    ] {
+        assert_eq!(i18n_package(specifier), package, "{specifier}");
+    }
+}
+
+/// LG-11 (D3, ADR-0072): no file of `ui/src` outside `src/i18n/` loads
+/// `i18next` or `react-i18next`, tests and mocks included, and each is
+/// loaded there (so the reader is not blind). M26.
+#[test]
+fn ui_languages_lg11_only_src_i18n_imports_i18next_and_react_i18next() {
+    let (wrong, inside) = i18n_imports(&ui_sources());
+    assert!(
+        wrong.is_empty(),
+        "i18next or react-i18next imported outside ui/{I18N_DIR} (ui-languages LG-11, ADR-0072):\n{}",
+        wrong.join("\n")
+    );
+    let missing: Vec<&str> = I18N_PACKAGES
+        .into_iter()
+        .filter(|package| !inside.contains(package))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "nothing under ui/{I18N_DIR} imports {missing:?}: the catalog's instance is gone or the import reader is blind"
+    );
+}
+
+/// LG-11's positive control on a scratch `ui/` (never by editing `ui/src`):
+/// the catalog's imports pass; M26 `useTranslation` from `react-i18next` in
+/// `src/app/Shell.tsx` is flagged, and so are a test's mock, a test
+/// helper's import, a sibling directory whose name only starts with
+/// `i18n` and an `i18n/` elsewhere; a plain string, a relative `../i18n`
+/// import and a `declare module` augmentation are no load.
+#[test]
+fn ui_languages_lg11_the_i18n_scan_flags_an_import_outside_src_i18n() {
+    let scratch = ScratchUi::new(
+        "i18n-imports",
+        &[
+            (
+                "src/i18n/index.ts",
+                "import i18next from \"i18next\";\nimport { initReactI18next, useTranslation } from \"react-i18next\";\n",
+            ),
+            (
+                "src/i18n/i18next.d.ts",
+                "import \"i18next\";\ndeclare module \"i18next\" {}\n",
+            ),
+            (
+                "src/app/Shell.tsx",
+                "import { useTranslate } from \"../i18n\";\nimport { useTranslation } from \"react-i18next\";\n",
+            ),
+            (
+                "src/app/Shell.test.tsx",
+                "vi.mock('react-i18next', () => ({}));\n",
+            ),
+            (
+                "src/test/text.ts",
+                "import type { TFunction } from \"i18next\";\n",
+            ),
+            (
+                "src/i18n-extra/x.ts",
+                "export { default } from \"i18next\";\n",
+            ),
+            (
+                "src/app/i18n/x.ts",
+                "const m = await import(`react-i18next/x`);\n",
+            ),
+            (
+                "src/app/Plain.tsx",
+                "const name = \"react-i18next\";\ndeclare module \"i18next\" {}\n",
+            ),
+        ],
+    );
+    let (wrong, inside) = i18n_imports(&ui_sources_in(&scratch.0));
+    assert_eq!(
+        wrong,
+        [
+            "ui/src/app/Shell.test.tsx:1: react-i18next",
+            "ui/src/app/Shell.tsx:2: react-i18next",
+            "ui/src/app/i18n/x.ts:1: react-i18next/x",
+            "ui/src/i18n-extra/x.ts:1: i18next",
+            "ui/src/test/text.ts:1: i18next",
+        ]
+    );
+    assert_eq!(inside, BTreeSet::from(I18N_PACKAGES));
 }
 
 /// The packages' raw-HTML switches (ADR-0036: raw HTML stays text).

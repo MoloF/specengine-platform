@@ -949,6 +949,32 @@ describe("the canvas's width changing", () => {
     expect(viewport()).toEqual(before);
   });
 
+  it("centres the view on the box with c under a Russian layout; ? still lists the keys (LG-7 of ui-languages)", async () => {
+    canvasWidth(1200);
+    renderApp(flowClient(line), "#/alpha/flow");
+    await drawn("F");
+    await waitFor(() => {
+      expect(viewport().zoom).toBe(0.6);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+    await waitFor(() => {
+      expect(viewport().zoom).toBeGreaterThan(0.6);
+    });
+    // F takes focus, and bringing it into sight centres the view on it; c on A centres on A.
+    box("F").focus();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+    const onF = viewport();
+    fireEvent.keyDown(box("A"), { key: "\u0441", code: "KeyC" });
+    await waitFor(() => {
+      expect(viewport().x).toBeGreaterThan(onF.x);
+    });
+    expect(viewport().zoom).toBe(onF.zoom);
+    fireEvent.keyDown(box("F"), { key: "?", code: "Digit7", shiftKey: true });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  });
+
   it("brings the selected box back into sight when the panel's column narrows the canvas", async () => {
     window.localStorage.setItem("specengine.flow.gaps-hidden", "on");
     const resize = canvasWidth(2000);

@@ -20,11 +20,12 @@ import {
 } from "@xyflow/react";
 import { memo, useCallback, useEffect, useId, useMemo, useRef, type CSSProperties, type FocusEvent, type KeyboardEvent, type MouseEvent } from "react";
 import { HANDLE_SIZE } from "../graph/layout";
+import { useTranslate, type Translate } from "../i18n";
 import { TraceBar } from "../trace/TraceBar";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { focusIsLost } from "../ui/focus";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
 import { durationOf, fitOf, fittedCanvasHeight, inView, type Rect } from "./geometry";
 import { boxWords, countsText, dashOf, edgeName, edgeWords, gapMark, holdsText, isNoCard, isRepeat, rollupLook, startWord, typeColour, type GapMark } from "./labels";
 import { boxAfterKey, enclosingHead, HEAD_HEIGHT, LANE_PAD, type FlowBox, type FlowLane, type FlowLayout, type LaidEdge } from "./layout";
@@ -94,12 +95,13 @@ function Caret({ open }: { open: boolean }) {
 
 /** Start or Entry, End. */
 function WalkMarks({ box }: { box: FlowBox }) {
+  const t = useTranslate();
   return (
     <>
       {box.node.start && (
         <span className="flow-mark flow-mark-start">
           <Icon name="flowStart" />
-          {startWord(box.group !== null)}
+          {startWord(box.group !== null, t)}
         </span>
       )}
       {box.node.end && (
@@ -156,12 +158,13 @@ function boxClasses(base: string, box: FlowBox, data: BoxMarks): string {
  * they make. No read of them, no line: a box never shows a state nobody served.
  */
 function WorkState({ box }: { box: FlowBox }) {
+  const t = useTranslate();
   const { node } = box;
   if (box.form === "closed") {
     if (node.counts === null) {
       return null;
     }
-    const words = countsText(node.counts);
+    const words = countsText(node.counts, t);
     return (
       <>
         <p className="flow-box-state" title={words}>
@@ -174,7 +177,7 @@ function WorkState({ box }: { box: FlowBox }) {
   return (
     node.rollup !== null && (
       <p className="flow-box-state">
-        <Badge look={rollupLook(node.rollup)} />
+        <Badge look={rollupLook(node.rollup, t)} />
       </p>
     )
   );
@@ -182,6 +185,7 @@ function WorkState({ box }: { box: FlowBox }) {
 
 /** A step or a closed group: its words, name, kind, what marks it, then its work. A step with no card is hollow. */
 function StepBox({ data }: { data: BoxData }) {
+  const t = useTranslate();
   const { box } = data;
   const { node } = box;
   const closed = box.form === "closed";
@@ -208,7 +212,7 @@ function StepBox({ data }: { data: BoxData }) {
             </span>
           )}
           <WalkMarks box={box} />
-          {closed && <span className="flow-mark">{holdsText(node.holds)}</span>}
+          {closed && <span className="flow-mark">{holdsText(node.holds, t)}</span>}
         </p>
       )}
       <WorkState box={box} />
@@ -218,6 +222,7 @@ function StepBox({ data }: { data: BoxData }) {
 
 /** An open group: its head over the frame its lane sits in. */
 function FrameBox({ data }: { data: BoxData }) {
+  const t = useTranslate();
   const { box } = data;
   const { node } = box;
   return (
@@ -230,7 +235,7 @@ function FrameBox({ data }: { data: BoxData }) {
         <span className="mono flow-box-id">{box.name}</span>
         {node.kind !== null && <span className="mono flow-box-kind">{node.kind}</span>}
         <WalkMarks box={box} />
-        <span className="flow-mark">{holdsText(node.holds)}</span>
+        <span className="flow-mark">{holdsText(node.holds, t)}</span>
         {data.gap !== null && (
           <span className="flow-mark flow-mark-gap">
             <Icon name="flowGap" />
@@ -288,7 +293,7 @@ const NODE_TYPES = { box: FlowNodeView, band: BandCaption };
 const EDGE_TYPES = { link: LinkView };
 
 /** A box's accessible name: its words, marks and gaps. */
-export function boxName(box: FlowBox, marks: BoxMarks): string {
+export function boxName(box: FlowBox, marks: BoxMarks, t: Translate): string {
   const { node } = box;
   const parts = [box.name];
   if (node.title !== null) {
@@ -298,20 +303,20 @@ export function boxName(box: FlowBox, marks: BoxMarks): string {
     parts.push(node.kind);
   }
   if (node.start) {
-    parts.push(startWord(box.group !== null));
+    parts.push(startWord(box.group !== null, t));
   }
   if (node.end) {
     parts.push("End");
   }
   if (box.form === "open") {
-    parts.push(`open group, ${holdsText(node.holds)}`);
+    parts.push(`open group, ${holdsText(node.holds, t)}`);
   } else if (box.form === "closed") {
-    parts.push(`closed group, ${holdsText(node.holds)}`);
+    parts.push(`closed group, ${holdsText(node.holds, t)}`);
     if (node.counts !== null) {
-      parts.push(countsText(node.counts));
+      parts.push(countsText(node.counts, t));
     }
   } else if (node.rollup !== null) {
-    parts.push(rollupLook(node.rollup).label);
+    parts.push(rollupLook(node.rollup, t).label);
   }
   if (marks.gap !== null) {
     parts.push(marks.gap.said);
@@ -339,7 +344,7 @@ function handlesOf(box: FlowBox) {
   ];
 }
 
-function nodeOf(box: FlowBox, marks: BoxMarks, tabStop: boolean): BoxNode {
+function nodeOf(box: FlowBox, marks: BoxMarks, tabStop: boolean, t: Translate): BoxNode {
   return {
     id: box.id,
     type: "box",
@@ -349,7 +354,7 @@ function nodeOf(box: FlowBox, marks: BoxMarks, tabStop: boolean): BoxNode {
     height: box.height,
     handles: handlesOf(box),
     data: { box, ...marks },
-    ariaLabel: boxName(box, marks),
+    ariaLabel: boxName(box, marks, t),
     domAttributes: { tabIndex: tabStop ? 0 : -1 },
     zIndex: box.nesting * 2 + 2,
     draggable: false,
@@ -493,6 +498,7 @@ function KeepInView({ layout, fit, held, touched }: { layout: FlowLayout; fit: (
 }
 
 function Canvas({ layout, types, rovingId, selected, marked, opening, named, stage, centring, onRove, onCommand, focusRef }: FlowCanvasProps) {
+  const t = useTranslate();
   const wrapper = useRef<HTMLDivElement>(null);
   const store = useStoreApi();
   const { setCenter } = useReactFlow();
@@ -513,15 +519,16 @@ function Canvas({ layout, types, rovingId, selected, marked, opening, named, sta
           selected: box.name === selected,
           marked: marked.has(box.name),
           opening: opening.has(box.name),
-          gap: gapMark(box.node, box.form === "open", named),
+          gap: gapMark(box.node, box.form === "open", named, t),
           dimmed: outsideStage(box.node, stage),
         },
         box.id === rovingId,
+        t,
       ),
     );
     const bands = layout.lanes.flatMap((lane) => (lane.bandY === null ? [] : [bandNode(lane, lane.bandY)]));
     return [...boxes, ...bands];
-  }, [layout, selected, marked, opening, named, stage, rovingId]);
+  }, [layout, selected, marked, opening, named, stage, rovingId, t]);
   const edges = useMemo(
     () => layout.edges.map((laid) => edgeOf(laid, types, selectedId !== null && (laid.source === selectedId || laid.target === selectedId))),
     [layout, types, selectedId],
@@ -650,13 +657,14 @@ function Canvas({ layout, types, rovingId, selected, marked, opening, named, sta
     if (id === undefined || box === undefined) {
       return;
     }
-    if (event.key === "c") {
+    const key = hotkeyOf(event);
+    if (letterOf(event) === "c") {
       event.preventDefault();
       touched.current = true;
       centreOn(box);
       return;
     }
-    const command = Object.hasOwn(COMMANDS, event.key) ? COMMANDS[event.key] : undefined;
+    const command = Object.hasOwn(COMMANDS, key) ? COMMANDS[key] : undefined;
     if (command !== undefined) {
       event.preventDefault();
       touched.current = touched.current || command === "toggle";

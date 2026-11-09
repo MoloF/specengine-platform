@@ -2,12 +2,15 @@
 // mocks (ui/README.md "Contract seam"). The daemon by default
 // (`docs/features/daemon-read.md` "Data"); `?scenario=<name>` before the `#` serves the mock
 // instead, "Mock data" shown on every route. The mock client and its invented projects load in a
-// chunk of their own, only under `?scenario=`: the daemon's page never fetches them.
+// chunk of their own, only under `?scenario=`: the daemon's page never fetches them. The catalog's
+// instance starts with the first import, before anything renders (docs/features/ui-languages.md D4).
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import type { SpecEngineClient } from "./api/client";
 import { HttpClient } from "./api/http";
 import { App } from "./app/App";
+import { useTranslate } from "./i18n";
+import { fill, slot } from "./i18n/fill";
 import { scenarioFromSearch } from "./mocks/scenario";
 // React Flow's structural styles only (base.css, never style.css); its colours come from tokens.css.
 import "@xyflow/react/dist/base.css";
@@ -34,23 +37,30 @@ function start(client: SpecEngineClient) {
 }
 
 /** Why the mock could not start, its chunk or its client failing: said in the page, never a blank one. */
-function showFailure(error: unknown) {
-  root.render(
-    <p role="alert">
-      The mock data could not be loaded: {error instanceof Error ? error.message : String(error)}. Reload the page to try again.
-    </p>,
+function MockFailure({ error }: { error: unknown }) {
+  const t = useTranslate();
+  const said = error instanceof Error ? error.message : String(error);
+  return <p role="alert">{fill(t("app.mock.failed", { error: slot("error") }), { error: <span lang="en">{said}</span> })}</p>;
+}
+
+function MockLoading() {
+  const t = useTranslate();
+  return (
+    <p role="status" aria-busy="true">
+      {t("app.mock.loading")}
+    </p>
   );
+}
+
+function showFailure(error: unknown) {
+  root.render(<MockFailure error={error} />);
 }
 
 // A plain dynamic import, never an await: awaited at the top, it would make the bundler pull
 // every module the mock shares with the app out of the entry chunk (the entry may not be imported
 // back while it waits), splitting the daemon's page into a score of small chunks.
 if (mocked) {
-  root.render(
-    <p role="status" aria-busy="true">
-      Loading the mock data
-    </p>,
-  );
+  root.render(<MockLoading />);
   import("./mocks/MockClient")
     .then(({ MockClient }) => {
       start(new MockClient(scenario));

@@ -16,6 +16,7 @@ import { createRoundMemory } from "../round/memory";
 import { RoadmapView, type RoadmapMemory, type RoadmapTab } from "../roadmap/RoadmapView";
 import { QuestionsView } from "../round/QuestionsView";
 import { TasksView } from "../tasks/TasksView";
+import { useTranslate } from "../i18n";
 import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
@@ -25,19 +26,19 @@ import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { landingHash, useWorkspaceChoice } from "../workspace/choice";
 import { ModuleBar } from "../workspace/ModuleBar";
-import { WORKSPACE_TEXT } from "../workspace/text";
 import { ConfigNotes, WorkspaceSwitcher } from "../workspace/WorkspaceControls";
 import { isJumpChord, JUMP_KEYSHORTCUTS } from "./chord";
 import { DataSource } from "./DataSource";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { LanguageSwitcher } from "./LanguageSwitcher";
 import { pushHash, replaceHash, useHash } from "./location";
 import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { SyncLine } from "./SyncLine";
 import { NotFound, ViewFailure } from "./views";
 
-/** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl. */
-const CHORD_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "\u2318K" : "Ctrl K";
+/** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl; the cap is the catalog's. */
+const CHORD_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "app.chordApple" : "app.chordOther";
 
 /** One key per view: per section of a project, per project's home; `#/` is "home". */
 function viewKeyOf(route: Route): string {
@@ -71,6 +72,7 @@ function ProjectSwitcher({
   retrying: boolean;
   onRetry: () => void;
 }) {
+  const t = useTranslate();
   const select = useRef<HTMLSelectElement>(null);
   const retried = useRef(false);
   const current = projectOf(route) ?? "";
@@ -92,9 +94,11 @@ function ProjectSwitcher({
       <div className="project-switcher project-switcher-failed">
         <span className="project-switcher-error">
           <Icon name="alert" />
-          <span>Projects could not be loaded:</span>
+          <span>{t("app.project.failed")}</span>
         </span>
-        <span className="verbatim">{failure}</span>
+        <span className="verbatim" lang="en">
+          {failure}
+        </span>
         {/* The accessible name starts with the visible label (WCAG 2.5.3); the rest is for screen readers. */}
         <button
           type="button"
@@ -109,7 +113,7 @@ function ProjectSwitcher({
         >
           <Icon name="retry" />
           <span>
-            {retrying ? "Retrying" : "Retry"} <span className="sr-only">loading the projects</span>
+            {retrying ? t("ui.retrying") : t("ui.retry")} <span className="sr-only">{t("app.project.retryWhat")}</span>
           </span>
         </button>
       </div>
@@ -118,7 +122,7 @@ function ProjectSwitcher({
 
   return (
     <div className="project-switcher">
-      <label htmlFor="project-switcher">Project</label>
+      <label htmlFor="project-switcher">{t("app.project.label")}</label>
       <select
         id="project-switcher"
         ref={select}
@@ -133,7 +137,7 @@ function ProjectSwitcher({
       >
         {!listed && (
           <option value={current} disabled>
-            {projects === undefined ? "Loading projects" : current === "" ? "Choose a project" : current}
+            {projects === undefined ? t("app.project.loading") : current === "" ? t("app.project.choose") : current}
           </option>
         )}
         {known.map((project) => (
@@ -152,6 +156,7 @@ function ProjectSwitcher({
  * at its hash, from the palette and from any link (docs/features/workspaces.md "The UI", W4).
  */
 export function Shell({ scenario }: { scenario: string | null }) {
+  const t = useTranslate();
   const hash = useHash();
   const route = parseHash(hash);
   const projects = useProjects();
@@ -396,18 +401,18 @@ export function Shell({ scenario }: { scenario: string | null }) {
 
   let view;
   if (route.type === "not_found") {
-    view = <NotFound reason={`Nothing lives at ${hash}.`} inboxHref={inboxHref} />;
+    view = <NotFound reason={t("app.notFound.nothingAt", { hash })} inboxHref={inboxHref} />;
   } else if (route.type === "home") {
     if (projects.data === undefined && projectsFailure !== null) {
       view = (
         <section className="view" aria-labelledby="view-title">
           <header className="view-head">
             <h1 id="view-title" tabIndex={-1}>
-              Projects
+              {t("app.start.projects")}
             </h1>
           </header>
           <ErrorPanel
-            title="The projects could not be loaded"
+            title={t("app.start.failed")}
             message={apiErrorOf(projectsFailure).message}
             retrying={projects.isFetching}
             attempt={projects.errorUpdateCount}
@@ -423,17 +428,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
         <section className="view" aria-labelledby="view-title">
           <header className="view-head">
             <h1 id="view-title" tabIndex={-1}>
-              No projects
+              {t("app.start.none")}
             </h1>
           </header>
-          <p>The daemon serves no project yet. Next: run spec init in a project and index it.</p>
+          <p>{t("app.start.noneNext")}</p>
         </section>
       );
     } else {
-      view = <Skeleton label="Opening the first project" lines={3} />;
+      view = <Skeleton label={t("app.start.opening")} lines={3} />;
     }
   } else if (projects.data !== undefined && !projects.data.some((project) => project.slug === route.project)) {
-    view = <NotFound reason={`There is no project ${route.project}.`} inboxHref={inboxHref} />;
+    view = <NotFound reason={t("app.notFound.noProject", { project: route.project })} inboxHref={inboxHref} />;
   } else if (route.type === "project") {
     view = <HomeView key={route.project} project={route.project} />;
   } else if (route.section === "inbox") {
@@ -487,10 +492,10 @@ export function Shell({ scenario }: { scenario: string | null }) {
             main.current?.focus();
           }}
         >
-          Skip to content
+          {t("app.skipToContent")}
         </a>
         <header className="app-header">
-          <p className="brand">SpecEngine</p>
+          <p className="brand">{t("app.brand")}</p>
           <ProjectSwitcher
             route={route}
             projects={projects.data}
@@ -512,6 +517,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
               onRetry={retryWorkspaces}
             />
           )}
+          <LanguageSwitcher />
           <DataSource dataSource={dataSource} scenario={scenario} />
           <button
             type="button"
@@ -523,23 +529,23 @@ export function Shell({ scenario }: { scenario: string | null }) {
             }}
           >
             <Icon name="search" />
-            <span>Jump to</span>
+            <span>{t("app.jumpTo")}</span>
             <kbd className="jump-hint" aria-hidden="true">
-              {CHORD_HINT}
+              {t(CHORD_HINT)}
             </kbd>
           </button>
           <button type="button" className="button button-quiet" onClick={openShortcuts}>
             <Icon name="keyboard" />
-            <span>Keyboard shortcuts</span>
+            <span>{t("app.shortcutsButton")}</span>
           </button>
         </header>
         <div className="app-body">
-          <nav ref={navRef} className="app-nav" aria-label="Sections" aria-busy={navPending ? true : undefined}>
+          <nav ref={navRef} className="app-nav" aria-label={t("app.navLabel")} aria-busy={navPending ? true : undefined}>
             {navPending ? (
-              <Skeleton label={WORKSPACE_TEXT.navPending} lines={6} />
+              <Skeleton label={t("workspace.navPending")} lines={6} />
             ) : (
               <ul>
-                {navOf(navProject ?? "", navSections).map((entry) => {
+                {navOf(navProject ?? "", navSections, t).map((entry) => {
                   // A section the nav does not list still renders at its hash; then no item is current.
                   const active = entry.key === "overview" ? route.type === "project" : route.type === "section" && route.section === entry.key;
                   return (

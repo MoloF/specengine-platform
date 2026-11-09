@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import { aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
 import { byNumber, groupsOf, waitsForYou } from "./groups";
+import { enT } from "../test/text";
 
 // AC-03 and AC-04 of docs/features/ui-tasks.md: groups from `status` and `stale` alone, what waits
 // for the owner first, by number within; reserved states labelled; an unknown state last.
 
 function shape(entries = SOME_TASKS) {
-  return groupsOf(entries).map((group) => [group.title, group.entries.map((entry) => entry.id)]);
+  return groupsOf(entries, enT).map((group) => [group.title, group.entries.map((entry) => entry.id)]);
 }
 
 describe("groups (AC-04)", () => {

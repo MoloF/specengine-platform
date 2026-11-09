@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { useTranslate } from "../i18n";
 import { useAnnounce } from "./announcer";
 import { Icon } from "./Icon";
 
@@ -22,15 +23,17 @@ const COPIED_MS = 4000;
  */
 export function CopyButton({
   text,
-  label = "Copy",
+  label,
   context,
   failed,
 }: {
   text: string;
+  /** The button's word; "Copy" in the viewer's language when not given. */
   label?: string;
   context: ReactNode;
   failed: string;
 }) {
+  const t = useTranslate();
   const announce = useAnnounce();
   const [state, setState] = useState<{ result: "idle" | "copied" | "failed"; count: number }>({ result: "idle", count: 0 });
 
@@ -49,7 +52,7 @@ export function CopyButton({
   async function copy() {
     const copied = await copyText(text);
     setState((current) => ({ result: copied ? "copied" : "failed", count: current.count + 1 }));
-    announce(copied ? "Copied" : failed);
+    announce(copied ? t("ui.copied") : failed);
   }
 
   return (
@@ -63,13 +66,13 @@ export function CopyButton({
       >
         <Icon name="copy" />
         <span>
-          {label} <span className="sr-only">{context}</span>
+          {label ?? t("ui.copy")} <span className="sr-only">{context}</span>
         </span>
       </button>
       {state.result === "copied" && (
         <span className="copy-status" data-copy="copied">
           <Icon name="approved" />
-          Copied
+          {t("ui.copied")}
         </span>
       )}
       {state.result === "failed" && (

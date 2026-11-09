@@ -5,6 +5,7 @@ import { aDriftIn, aDriftOff, aDriftRow, aHealthReport, aTreeNode, measuredDrift
 import { TREE } from "../test/treeStub";
 import { driftOf, driftWords, measuredRows, recallShowDrift, rememberShowDrift, treeDrift, type NodeDrift } from "./drift";
 import { buildRows, type TreeRow } from "./rows";
+import { enT } from "../test/text";
 
 // UI-1 of docs/features/ui-tree-drift.md: Health's row 6 rows grouped by `node` as sent, matched to
 // the tree's lines by `namesOf` (`<ID>`, `<stem>/<ID>`, an ID-less document's path) as the inbox
@@ -187,14 +188,14 @@ describe("row 6 over the tree's lines (UI-1)", () => {
 
 describe("a line's drift badges (UI-6)", () => {
   it("one per class with rows, in verify's order, then Another class; each its look and icon, the label with the count; none at 0", () => {
-    expect(driftBadgeLooks(counts({ unlisted: 1, cannot: 3, check: 2, fix: 1 }))).toEqual([
+    expect(driftBadgeLooks(counts({ unlisted: 1, cannot: 3, check: 2, fix: 1 }), enT)).toEqual([
       { label: "Fix 1", tone: "finding-error", icon: "findingError" },
       { label: "Check 2", tone: "finding-warning", icon: "findingWarning" },
       { label: "Cannot verify 3", tone: "sync-cannot-verify", icon: "cannotCheck" },
       { label: "Another class 1", tone: "sync-unknown", icon: "unknown" },
     ]);
-    expect(driftBadgeLooks(counts({ check: 4 }))).toEqual([{ label: "Check 4", tone: "finding-warning", icon: "findingWarning" }]);
-    expect(driftBadgeLooks(counts({}))).toEqual([]);
+    expect(driftBadgeLooks(counts({ check: 4 }), enT)).toEqual([{ label: "Check 4", tone: "finding-warning", icon: "findingWarning" }]);
+    expect(driftBadgeLooks(counts({}), enT)).toEqual([]);
   });
 });
 

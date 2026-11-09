@@ -23,11 +23,12 @@ import {
 import { memo, useCallback, useEffect, useId, useMemo, useRef, type FocusEvent, type KeyboardEvent } from "react";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { linkStateLook } from "../tree/labels";
 import { arcOver, readableViewport } from "./geometry";
 import { BOX_HANDLES, BOX_HEIGHT, BOX_WIDTH, HANDLE_SIZE, patternAt, type Layout, type LayoutBox, type LayoutEdge } from "./layout";
 import { boxLabel, edgeLabel, isArchived, moreLabel } from "./lines";
+import { useTranslate, type Translate } from "../i18n";
 
 // The read-only canvas (ui/README.md "Screen rules", Canvas): React Flow draws the layout's
 // boxes and edges; nothing drags, connects, selects or deletes. Every key prop is null (each
@@ -122,6 +123,7 @@ const SpecBox = memo(function SpecBox({ data }: NodeProps<BoxNode>) {
 
 /** An end the walk did not reach: a section named by itself, or an unresolved end with its state. */
 const StubBox = memo(function StubBox({ data }: NodeProps<BoxNode>) {
+  const t = useTranslate();
   const content = data.box.content;
   if (content.type !== "stub") {
     return null;
@@ -139,7 +141,7 @@ const StubBox = memo(function StubBox({ data }: NodeProps<BoxNode>) {
           <Icon name="stub" />
           Not walked
         </span>
-        {stub.type === "section" ? <span className="graph-box-flag">a section</span> : <Badge look={linkStateLook(stub.edge.state)} />}
+        {stub.type === "section" ? <span className="graph-box-flag">a section</span> : <Badge look={linkStateLook(stub.edge.state, t)} />}
       </p>
     </div>
   );
@@ -211,7 +213,7 @@ const ARROW: EdgeMarker = { type: MarkerType.ArrowClosed, width: 14, height: 14 
 const ARROW_EMPHASIS: EdgeMarker = { ...ARROW, color: "currentColor" };
 
 /** A box's accessible name. */
-export function boxName(box: LayoutBox): string {
+export function boxName(box: LayoutBox, t: Translate): string {
   const content = box.content;
   if (content.type === "walked") {
     return boxLabel(content.walked);
@@ -223,10 +225,10 @@ export function boxName(box: LayoutBox): string {
   if (stub.type === "section") {
     return `${stub.name}, not walked: a section`;
   }
-  return `${stub.edge.written}, not walked: ${linkStateLook(stub.edge.state).label}`;
+  return `${stub.edge.written}, not walked: ${linkStateLook(stub.edge.state, t).label}`;
 }
 
-function nodeOf(box: LayoutBox): BoxNode {
+function nodeOf(box: LayoutBox, t: Translate): BoxNode {
   return {
     id: box.id,
     type: box.content.type === "walked" ? "spec" : box.content.type,
@@ -243,7 +245,7 @@ function nodeOf(box: LayoutBox): BoxNode {
       height: HANDLE_SIZE,
     })),
     data: { box, selected: false },
-    ariaLabel: boxName(box),
+    ariaLabel: boxName(box, t),
     domAttributes: { tabIndex: -1 },
     draggable: false,
     selectable: false,
@@ -371,13 +373,14 @@ export interface GraphCanvasProps {
 }
 
 function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, focusRef }: GraphCanvasProps) {
+  const t = useTranslate();
   const wrapper = useRef<HTMLDivElement>(null);
   const store = useStoreApi();
   const { setCenter } = useReactFlow();
   const hintId = useId();
   const fit = useReadableFit(layout);
 
-  const baseNodes = useMemo(() => layout.boxes.map(nodeOf), [layout]);
+  const baseNodes = useMemo(() => layout.boxes.map((box) => nodeOf(box, t)), [layout, t]);
   const nodes = useMemo(
     () =>
       baseNodes.map((node) => {
@@ -441,15 +444,16 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
     if (id === undefined) {
       return;
     }
-    const command = Object.hasOwn(COMMANDS, event.key) ? COMMANDS[event.key] : undefined;
+    const key = hotkeyOf(event);
+    const command = Object.hasOwn(COMMANDS, key) ? COMMANDS[key] : undefined;
     if (command !== undefined) {
       event.preventDefault();
       onCommand(id, command);
       return;
     }
-    const next = boxAfterKey(layout, id, event.key);
+    const next = boxAfterKey(layout, id, key);
     if (next === null) {
-      if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "j", "k"].includes(event.key)) {
+      if (["ArrowDown", "ArrowUp", "ArrowLeft", "ArrowRight", "Home", "End", "j", "k"].includes(key)) {
         event.preventDefault();
       }
       return;

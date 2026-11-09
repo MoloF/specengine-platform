@@ -2,18 +2,19 @@ import { describe, expect, it } from "vitest";
 import { groupsOf } from "../tasks/groups";
 import { anEntry, aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
-import { kindCountsOf, otherOpenOf, proposalNoun, statusCountsOf, waitingOf } from "./tally";
+import { kindCountsOf, otherOpenOf, statusCountsOf, waitingOf } from "./tally";
+import { enT } from "../test/text";
 
 // docs/features/ui-home.md "Rules and edge cases", "Implementation" (Home): what the home counts and
 // groups, nothing else (AC-03, AC-04).
 
 describe("the Tasks region's counts (AC-03)", () => {
   it("takes what waits for you in the Tasks list's order", () => {
-    expect(waitingOf(groupsOf(SOME_TASKS)).map((entry) => entry.id)).toEqual(["T-0002", "T-0003"]);
+    expect(waitingOf(groupsOf(SOME_TASKS, enT)).map((entry) => entry.id)).toEqual(["T-0002", "T-0003"]);
   });
 
   it("counts every other open group in its order, never Closed", () => {
-    expect(otherOpenOf(groupsOf(SOME_TASKS)).map(({ title, count }) => `${title}: ${String(count)}`)).toEqual([
+    expect(otherOpenOf(groupsOf(SOME_TASKS, enT)).map(({ title, count }) => `${title}: ${String(count)}`)).toEqual([
       "Draft: 1",
       "Changes requested: 1",
       "Ready: 1",
@@ -23,12 +24,12 @@ describe("the Tasks region's counts (AC-03)", () => {
   });
 
   it("keeps a reserved state's group, which is not Closed", () => {
-    const groups = groupsOf([aTaskEntry({ id: "T-1", status: "accepted" }), aTaskEntry({ id: "T-2", status: "done" })]);
+    const groups = groupsOf([aTaskEntry({ id: "T-1", status: "accepted" }), aTaskEntry({ id: "T-2", status: "done" })], enT);
     expect(otherOpenOf(groups).map(({ title }) => title)).toEqual(["Accepted"]);
   });
 
   it("has nothing waiting when no plan is in review and no ready task changed", () => {
-    expect(waitingOf(groupsOf([aTaskEntry({ id: "T-1", status: "ready", stale: false })]))).toEqual([]);
+    expect(waitingOf(groupsOf([aTaskEntry({ id: "T-1", status: "ready", stale: false })], enT))).toEqual([]);
   });
 });
 
@@ -65,7 +66,7 @@ describe("the Inbox region's counts (AC-04)", () => {
     expect([sum(statusCountsOf(queue)), sum(kindCountsOf(queue))]).toEqual([queue.length, queue.length]);
   });
 
-  it("says one proposal, two proposals", () => {
-    expect([proposalNoun(1), proposalNoun(2), proposalNoun(0)]).toEqual(["proposal", "proposals", "proposals"]);
+  it("says one proposal, two proposals: the catalog's plural, proposalNoun's words", () => {
+    expect([1, 2, 0].map((count) => enT("home.inbox.total", { count }))).toEqual(["1 proposal in the queue", "2 proposals in the queue", "0 proposals in the queue"]);
   });
 });

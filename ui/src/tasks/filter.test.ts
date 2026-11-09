@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { aTaskEntry } from "../test/builders";
 import { SOME_TASKS } from "../test/taskStub";
 import { chipKeyOf, chipsOf, DEFAULT_FILTERS, folded, isPressed, matchesFilters, toggleChip } from "./filter";
+import { enT } from "../test/text";
 
 // AC-05 of docs/features/ui-tasks.md: a chip per state present (done and cancelled one Closed),
 // counts over the whole answer, all pressed but Closed; "Spec changed"; a text filter, NFC.
@@ -12,7 +13,7 @@ function visible(filters = DEFAULT_FILTERS, entries = SOME_TASKS): string[] {
 
 describe("chips (AC-05)", () => {
   it("one per state present in the groups' order, Closed for done and cancelled, the unknown raw, counts over the whole answer", () => {
-    expect(chipsOf(SOME_TASKS).map((chip) => [chip.label, chip.count])).toEqual([
+    expect(chipsOf(SOME_TASKS, enT).map((chip) => [chip.label, chip.count])).toEqual([
       ["Plan review", 1],
       ["Draft", 1],
       ["Changes requested", 1],
@@ -24,7 +25,7 @@ describe("chips (AC-05)", () => {
   });
 
   it("are all pressed but Closed by default", () => {
-    expect(chipsOf(SOME_TASKS).map((chip) => isPressed(DEFAULT_FILTERS, chip.key))).toEqual([true, true, true, true, true, false, true]);
+    expect(chipsOf(SOME_TASKS, enT).map((chip) => isPressed(DEFAULT_FILTERS, chip.key))).toEqual([true, true, true, true, true, false, true]);
     expect(visible()).toEqual(["T-0002", "T-0003", "T-0004", "T-0005", "T-0006", "T-0007", "T-0009"]);
   });
 

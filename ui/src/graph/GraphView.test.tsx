@@ -546,6 +546,18 @@ describe("keyboard (AC-08)", () => {
     }
   });
 
+  it("moves down a column with j under a Russian layout; ? still lists the keys (LG-7 of ui-languages)", async () => {
+    renderApp(graphClient(), "#/alpha/graph/R-0");
+    await drawn();
+    box("n:A1").focus();
+    fireEvent.keyDown(box("n:A1"), { key: "\u043e", code: "KeyJ" });
+    await waitFor(() => {
+      expect((document.activeElement as HTMLElement | null)?.dataset.id).toBe("n:A2");
+    });
+    fireEvent.keyDown(box("n:A2"), { key: "?", code: "Digit7", shiftKey: true });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  });
+
   it("opens the details with Enter, closes them with Esc and puts focus back on the box", async () => {
     renderApp(graphClient(), "#/alpha/graph/R-0");
     await drawn();

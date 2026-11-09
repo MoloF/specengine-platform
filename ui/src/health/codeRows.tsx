@@ -8,8 +8,9 @@ import { ReadFailure, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { SHOWN_OPEN } from "./findings";
-import { codeRowLook, MEASURED_WITHOUT_COUNTS } from "./labels";
+import { codeRowLook, measuredWithoutCounts } from "./labels";
 import { oneLine } from "./oneLine";
+import { useTranslate } from "../i18n";
 
 // What rows 4 to 6 of What is left share (docs/features/health-code-ui.md "Data";
 // docs/features/health-drift-ui.md "Description and interactions"): the part's frame and its four
@@ -34,7 +35,8 @@ export { oneLine };
  * measured: the causes and a Retry reading the health read alone; no value at all, never 0.
  */
 export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes | HealthUnbound | HealthDrift; retrying: boolean; onRetry: () => void }) {
-  const look = codeRowLook(row.state);
+  const t = useTranslate();
+  const look = codeRowLook(row.state, t);
   const causes =
     row.causes.length === 0 ? null : (
       <ul className={look.retry ? "check-causes health-code-causes" : "note-list health-code-causes"} aria-label="Causes, as the daemon gives them">
@@ -72,7 +74,7 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
   return (
     <>
       <p className="health-left-total health-code-off">
-        <span className="health-value">Not measured</span>: <span className="health-code-state">{oneLine(look.measured ? MEASURED_WITHOUT_COUNTS : look.label)}</span>
+        <span className="health-value">Not measured</span>: <span className="health-code-state">{oneLine(look.measured ? measuredWithoutCounts(t) : look.label)}</span>
       </p>
       {causes}
     </>

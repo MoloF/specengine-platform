@@ -29,14 +29,14 @@ Every slice keeps these (UI tests, `ui_policy.rs`).
 - **Status** never by colour alone: label and icon. An unknown value: a neutral badge, the raw text, sorted last; `kind`, `contour`, `role`, `profile`, spec statuses, link types (but `mentions`), workspace and module names stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests; but `edge.kind` in `src/flow/` (`spec-flow-screen.md`). Rollups, stages, marks: `labels.ts` alone, `src/trace/` (a node's cards) too.
 - **States**: loading: a skeleton, `aria-busy`; empty: the meaning, the next step; error: the daemon's message verbatim, Retry. Live regions (polite for results, assertive for a 409) sit outside any inert subtree.
 - **Dialogs** in-app (`role="dialog"`, `aria-modal`, focus trap, Esc but mid-IME, focus back to the trigger; a scrim click closes only the palette; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while pending no dialog closes or opens; a refusal keeps the dialog, the typed text and a `role="alert"`; a proposal revised meanwhile shows as changed, to submit again.
-- **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4); `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, no other on `document` or `window` for keys (`provider.tsx`'s `focusManager` is for focus). Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never on `body` nor under a sticky bar (scroll padding).
-- **Text**: data is text, no HTML sink, a proposal's login escaped (`ProposalCard`), each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), anything cut can be seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
+- **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4), letters by `letterOf`; `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, no other on `document` or `window` for keys (`provider.tsx`'s `focusManager` is for focus). Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never on `body` nor under a sticky bar (scroll padding).
+- **Text**: chrome from `src/i18n/` (`ui-languages.md`); data is text, no HTML sink, a proposal's login escaped (`ProposalCard`), each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`), anything cut can be seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
 - **Canvas** (`@xyflow/react`, lazy, a hand-written layout): read-only, key options `null`, the wheel scrolls the page; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text.
-- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`; `FlowState` with `stage`, `lanes`), but the Tree's Show drift, `specengine.{flow.gaps-hidden,board.as,workspace.<p>,module.<p>}` in `localStorage`; a root error boundary, one per view.
+- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: its home), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`; `FlowState` with `stage`, `lanes`), but the Tree's Show drift, `specengine.{flow.gaps-hidden,board.as,workspace.<p>,module.<p>,language}` in `localStorage`; a root error boundary, one per view.
 
 ## Dependencies
 
-The owner's allowlist: the 17 below (2026-10-05; the last two ADR-0036). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree.
+The owner's allowlist: the 19 below (2026-10-05; the last four ADR-0036, ADR-0072). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree.
 
 | Package | Version | Role |
 |---|---|---|
@@ -57,6 +57,8 @@ The owner's allowlist: the 17 below (2026-10-05; the last two ADR-0036). `packag
 | `jsdom` | 29.1.1 | test DOM |
 | `react-markdown` | 10.1.0 | markdown, `src/markdown/` only |
 | `remark-gfm` | 4.0.1 | GFM for it |
+| `i18next` | 26.5.11 | strings, `src/i18n/` only |
+| `react-i18next` | 17.1.9 | React for it |
 
 **Held back.** TypeScript 7 (outside `typescript-eslint`'s peers), jsdom 30 (Node >= 24.15, here 24.14).
 
@@ -84,7 +86,7 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 ## Owner's manual steps
 
 1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock, `?scenario=` before the `#` (`src/mocks/scenario.ts`): normal, empty, error (503s), slow, conflict, large, cannot-check, editorial, code-cannot, not-configured, no-gaps, config-notes; projects `harbor-sim` (`spec-roadmap-screen.md`), `ledger-api` (`proposal-drift.md`).
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock: `?scenario=<name>` before the `#`, names and projects in `src/mocks/scenario.ts`.
 
 ## Roles here
 

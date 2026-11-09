@@ -6,6 +6,7 @@ import { Icon } from "../ui/Icon";
 import { linkStateLook } from "../tree/labels";
 import { endsOf, nodeName, type StubEnd } from "./layout";
 import { edgeLine } from "./lines";
+import { useTranslate } from "../i18n";
 
 function NodeRow({ project, node }: { project: string; node: GraphNode }) {
   const name = nodeName(node);
@@ -46,6 +47,7 @@ function NodeRow({ project, node }: { project: string; node: GraphNode }) {
 }
 
 function StubRow({ stub }: { stub: StubEnd }) {
+  const t = useTranslate();
   const end = stub.stub;
   return (
     <li className="graph-list-node">
@@ -55,7 +57,7 @@ function StubRow({ stub }: { stub: StubEnd }) {
           <Icon name="stub" />
           {end.type === "section" ? "Not walked: a section" : "Not walked"}
         </span>
-        {end.type === "unresolved" && <Badge name="State" look={linkStateLook(end.edge.state)} />}
+        {end.type === "unresolved" && <Badge name="State" look={linkStateLook(end.edge.state, t)} />}
       </p>
       <ul className="graph-edge-lines">
         {stub.edges.map((edge, index) => (

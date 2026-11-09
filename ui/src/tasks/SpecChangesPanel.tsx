@@ -3,7 +3,8 @@ import { sectionHash } from "../app/routes";
 import { removesAll } from "../ui/diff";
 import { DiffView } from "../ui/DiffView";
 import { Icon } from "../ui/Icon";
-import { FROZEN_AT_APPROVAL } from "./labels";
+import { frozenAtApproval } from "./labels";
+import { useTranslate } from "../i18n";
 import { Part, When } from "./parts";
 
 /** The cut the core makes in a diff (`docs/canon/task-package.md` "Caps"). */
@@ -74,12 +75,13 @@ function EntryDiff({ entry }: { entry: SnapshotDiff }) {
  * compared here: the diffs and `stale` are the core's.
  */
 export function SpecChangesPanel({ project, task }: { project: string; task: TaskPackage }) {
+  const t = useTranslate();
   const snapshot = task.spec_snapshot;
   if (snapshot === null) {
     return (
       <div className="task-panel">
         <div className="empty-state">
-          <p>{FROZEN_AT_APPROVAL}</p>
+          <p>{frozenAtApproval(t)}</p>
           <p className="muted">This task has no approval yet, so there is nothing to compare.</p>
         </div>
       </div>

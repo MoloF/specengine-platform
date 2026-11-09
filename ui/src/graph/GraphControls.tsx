@@ -5,6 +5,7 @@ import { Icon } from "../ui/Icon";
 import { directionLabel } from "../tree/labels";
 import { directionIcon } from "./lines";
 import { DEPTHS, type Chip, type GraphSettings } from "./settings";
+import { useTranslate } from "../i18n";
 
 const ALL = "all";
 
@@ -36,6 +37,7 @@ export function GraphControls({
   onMode: (impact: boolean) => void;
   onChip: (type: string) => void;
 }) {
+  const t = useTranslate();
   const base = useId();
   const [typed, setTyped] = useState(nodeRef ?? "");
   const [shown, setShown] = useState(nodeRef);
@@ -187,7 +189,7 @@ export function GraphControls({
                       {" "}
                       <span className="graph-chip-direction">
                         <Icon name={directionIcon(chip.direction)} />
-                        {directionLabel(chip.direction)}
+                        {directionLabel(chip.direction, t)}
                       </span>
                     </>
                   )}

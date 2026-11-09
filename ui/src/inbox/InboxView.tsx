@@ -6,11 +6,12 @@ import { replaceHash } from "../app/location";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { useAllowed, useConfirmer } from "../board/acting";
-import { ACT_OFF } from "../board/labels";
+import { actOff } from "../board/labels";
+import { useTranslate } from "../i18n";
 import { useAnnounce } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, isTextField, letterOf } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useNow } from "../ui/useNow";
@@ -63,6 +64,7 @@ interface OpenDecision {
  * keys never reach the queue's.
  */
 export function InboxView({ project, selectedId }: { project: string; selectedId: string | null }) {
+  const t = useTranslate();
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
   const decide = useStageDecision(project);
@@ -169,7 +171,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
       return;
     }
     if (WORDING[kind].staged && !canStage) {
-      announce(ACT_OFF.stage);
+      announce(actOff("stage", t));
       return;
     }
     returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -302,12 +304,13 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
       return;
     }
     const inList = event.target instanceof Element && event.target.closest('[role="listbox"]') !== null;
-    const kind = LETTERS.get(event.key);
+    const letter = letterOf(event);
+    const kind = letter === null ? undefined : LETTERS.get(letter);
     if (kind !== undefined) {
       openDialog(kind);
-    } else if (event.key === "j" || (inList && event.key === "ArrowDown")) {
+    } else if (letter === "j" || (inList && event.key === "ArrowDown")) {
       move(1);
-    } else if (event.key === "k" || (inList && event.key === "ArrowUp")) {
+    } else if (letter === "k" || (inList && event.key === "ArrowUp")) {
       move(-1);
     } else if (inList && event.key === "Home") {
       move(0, "first");

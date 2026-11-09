@@ -3,8 +3,10 @@ import { sectionHash } from "../app/routes";
 import { statusLook } from "../inbox/labels";
 import { Badge } from "../ui/Badge";
 import { Part } from "./parts";
+import { useTranslate } from "../i18n";
 
 function ProposalItems({ project, proposals }: { project: string; proposals: readonly TaskProposal[] }) {
+  const t = useTranslate();
   if (proposals.length === 0) {
     return <p className="muted">None.</p>;
   }
@@ -17,7 +19,7 @@ function ProposalItems({ project, proposals }: { project: string; proposals: rea
               {proposal.id}
             </a>
             <span className="kind-tag">{proposal.kind}</span>
-            <Badge name="Status" look={statusLook(proposal.status)} />
+            <Badge name="Status" look={statusLook(proposal.status, t)} />
             <span className="mono muted">
               <span className="sr-only">Targets: </span>
               {proposal.target_ids.join(", ")}

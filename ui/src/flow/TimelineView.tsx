@@ -10,13 +10,15 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { shownSlot } from "../ui/text";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { confirmedLine, countParts, isNoCard, LAST_READ_WORDS, NO_CARDS_YET, NO_STAGES_YET, rollupLook, stageWords, stepWords } from "./labels";
+import { useTranslate } from "../i18n";
+import { confirmedLine, countParts, isNoCard, lastReadWords, noCardsYet, noStagesYet, rollupLook, stageWords, stepWords } from "./labels";
 import { laneTotal, noCardAnywhere, noStageAnywhere, stageAsked, stageKey, stepsInOrder } from "./timeline";
 
 type LaneRead = ReturnType<typeof useTraceLanes>[number];
 
 /** A step of an open lane: its name, what it reads, how far it is along, its rollup. A step with no card keeps its place, hollow. */
 function Step({ project, step, selected }: { project: string; step: TraceNode; selected: boolean }) {
+  const t = useTranslate();
   const classes = ["timeline-step", isNoCard(step.rollup) && "is-hollow"].filter(Boolean).join(" ");
   return (
     <li className={classes} data-flow-row={step.id} aria-current={selected ? "true" : undefined}>
@@ -28,14 +30,15 @@ function Step({ project, step, selected }: { project: string; step: TraceNode; s
           <bdi>{shownSlot(step.title)}</bdi>
         </span>
       )}
-      <span className="muted timeline-step-place">{stepWords(step.distance)}</span>
-      <Badge look={rollupLook(step.rollup)} />
+      <span className="muted timeline-step-place">{stepWords(step.distance, t)}</span>
+      <Badge look={rollupLook(step.rollup, t)} />
     </li>
   );
 }
 
 /** A lane's steps by `distance`: a skeleton while they are read, a line and Retry when they fail, the picture kept. */
 function LaneSteps({ project, read, label, selected, afterRetry }: { project: string; read: LaneRead | undefined; label: string; selected: string | null; afterRetry: () => HTMLElement | null }) {
+  const t = useTranslate();
   const failure = useRetainedFailure(read?.error ?? null, read?.fetching ?? false);
   const steps = useMemo(() => stepsInOrder(read?.data?.nodes ?? []), [read?.data]);
   const retried = useRetryFocus(read === undefined || read.updatedAt === 0 ? undefined : read.updatedAt, afterRetry);
@@ -61,7 +64,7 @@ function LaneSteps({ project, read, label, selected, afterRetry }: { project: st
             <span>
               The steps of {label} could not be read again: {apiErrorOf(read.error).message}
               <br />
-              {LAST_READ_WORDS}
+              {lastReadWords(t)}
             </span>
           </p>
           <button type="button" className="button" aria-disabled={read.fetching} onClick={read.fetching ? undefined : retry}>
@@ -102,7 +105,8 @@ function Lane({
   afterRetry: () => HTMLElement | null;
   onToggle: (key: string) => void;
 }) {
-  const label = stageWords(lane.stage);
+  const t = useTranslate();
+  const label = stageWords(lane.stage, t);
   return (
     <li className="timeline-lane">
       <h2 className="timeline-lane-title">
@@ -117,12 +121,12 @@ function Lane({
           <Icon name={open ? "chevronDown" : "chevronRight"} />
           <bdi className="timeline-stage">{label}</bdi>
           <span className="sr-only">: </span>
-          <span className="timeline-score">{confirmedLine(lane.counts.confirmed, laneTotal(lane.counts))}</span>
+          <span className="timeline-score">{confirmedLine(lane.counts.confirmed, laneTotal(lane.counts), t)}</span>
         </button>
       </h2>
       <TraceBar counts={lane.counts} />
       <ul className="timeline-parts" aria-label={`What ${label} holds`}>
-        {countParts(lane.counts).map((part) => (
+        {countParts(lane.counts, t).map((part) => (
           <li key={part.key}>
             <Badge look={{ ...part.look, label: part.words }} />
           </li>
@@ -157,6 +161,7 @@ export function TimelineView({
   noted: readonly string[];
   onToggle: (key: string) => void;
 }) {
+  const t = useTranslate();
   // The open lanes read again as this mounts; the score beside their steps goes with them.
   const { refetch } = read;
   useEffect(() => {
@@ -202,7 +207,7 @@ export function TimelineView({
             <span>
               The stages could not be read again: {apiErrorOf(read.error).message}
               <br />
-              {LAST_READ_WORDS}
+              {lastReadWords(t)}
             </span>
           </p>
           <button type="button" className="button" aria-disabled={read.isFetching} onClick={read.isFetching ? undefined : retry}>
@@ -213,12 +218,12 @@ export function TimelineView({
       )}
       {noCardAnywhere(summary.counts) && (
         <div className="empty-state">
-          <p>{NO_CARDS_YET}</p>
+          <p>{noCardsYet(t)}</p>
         </div>
       )}
       {noStageAnywhere(stages) && (
         <div className="empty-state">
-          <p>{NO_STAGES_YET}</p>
+          <p>{noStagesYet(t)}</p>
         </div>
       )}
       <ol ref={laneList} tabIndex={-1} className="timeline-lanes">

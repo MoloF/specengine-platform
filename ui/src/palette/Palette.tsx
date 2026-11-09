@@ -2,6 +2,8 @@ import { useEffect, useId, useState, type KeyboardEvent, type Ref } from "react"
 import { apiErrorOf, isNotServed } from "../api/client";
 import { useCachedInbox, useCachedTasks, useSearchOnActivation } from "../api/queries";
 import type { Project } from "../api/types";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { statusLook } from "../inbox/labels";
 import { summaryOf } from "../inbox/summary";
 import { taskStatusLook } from "../tasks/labels";
@@ -9,10 +11,11 @@ import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
 import { Dialog } from "../ui/Dialog";
 import { Icon } from "../ui/Icon";
-import { groupLabel, needleOf, paletteGroups, type Held, type PaletteInput, type PaletteOption } from "./options";
+import { groupLabel, groupWords, needleOf, paletteGroups, type Held, type PaletteInput, type PaletteOption } from "./options";
 
 /** What an option says; the ID and the words the text is matched on. */
 function OptionText({ option }: { option: PaletteOption }) {
+  const t = useTranslate();
   switch (option.type) {
     case "section":
       return <span className="palette-option-main">{option.label}</span>;
@@ -21,9 +24,9 @@ function OptionText({ option }: { option: PaletteOption }) {
         <>
           <span className="palette-option-main">
             <span className="mono">{option.entry.id}</span>:{" "}
-            <span className={option.entry.title === null ? "muted" : undefined}>{option.entry.title ?? "Untitled"}</span>
+            <span className={option.entry.title === null ? "muted" : undefined}>{option.entry.title ?? t("palette.untitled")}</span>
           </span>
-          <Badge name="State" look={taskStatusLook(option.entry.status)} />
+          <Badge name={t("palette.state")} look={taskStatusLook(option.entry.status, t)} />
         </>
       );
     case "proposal":
@@ -32,7 +35,7 @@ function OptionText({ option }: { option: PaletteOption }) {
           <span className="palette-option-main">
             <span className="mono">{option.proposal.id}</span>: <span>{summaryOf(option.proposal)}</span>
           </span>
-          <Badge name="Status" look={statusLook(option.proposal.status)} />
+          <Badge name={t("palette.status")} look={statusLook(option.proposal.status, t)} />
         </>
       );
     case "project":
@@ -51,14 +54,14 @@ function OptionText({ option }: { option: PaletteOption }) {
       return (
         <span className="palette-option-main">
           <Icon name="search" />
-          <span>Search the spec for &apos;{option.query}&apos;</span>
+          <span>{t("palette.searchFor", { query: option.query })}</span>
         </span>
       );
     case "ref":
       return (
         <span className="palette-option-main">
           <Icon name="arrowRight" />
-          <span>Open &apos;{option.ref}&apos; in the spec tree</span>
+          <span>{t("palette.openRef", { ref: option.ref })}</span>
         </span>
       );
     case "hit":
@@ -112,6 +115,7 @@ export function Palette({
   const tasks = useCachedTasks(project ?? "", project !== null);
   const inbox = useCachedInbox(project ?? "", project !== null);
   const search = useSearchOnActivation(project ?? "");
+  const t = useTranslate();
   const announce = useAnnounce();
   const base = useId();
   const listboxId = `${base}-list`;
@@ -136,7 +140,7 @@ export function Palette({
     };
   }
 
-  const groups = paletteGroups(inputFor(text, true));
+  const groups = paletteGroups(inputFor(text, true), t);
   const options = groups.flatMap((group) => group.options);
   const current = options.find((option) => option.key === active) ?? options[0];
   // An option's element ID comes from its key, escaped (no space, any script), so the active
@@ -148,8 +152,8 @@ export function Palette({
 
   // Each change of the list is counted in the shell's polite live region, outside the inert page.
   useEffect(() => {
-    announce(`${String(count)} ${count === 1 ? "option" : "options"}`);
-  }, [signature, count, announce]);
+    announce(t("palette.options", { count }));
+  }, [signature, count, announce, t]);
 
   useEffect(() => {
     if (activeId !== undefined) {
@@ -171,7 +175,7 @@ export function Palette({
     if (!search.isIdle) {
       search.reset();
     }
-    const first = paletteGroups(inputFor(typed, false)).flatMap((group) => group.options)[0];
+    const first = paletteGroups(inputFor(typed, false), t).flatMap((group) => group.options)[0];
     setActive(first?.key ?? null);
   }
 
@@ -210,26 +214,27 @@ export function Palette({
   }
 
   const typed = needleOf(text) !== "";
-  // Each failed read: its name, the message verbatim, and whether the daemon does not serve it yet.
-  const failures: [string, string, boolean][] = [];
+  // Each failed read: its own key (the same in every language, so a switch remounts no line and
+  // speaks no alert again), its name, the message verbatim, and whether the daemon does not serve it yet.
+  const failures: [string, string, string, boolean][] = [];
   if (projects === undefined && projectsFailure !== null) {
-    failures.push(["Projects", projectsFailure, false]);
+    failures.push(["projects", groupWords("Projects", t), projectsFailure, false]);
   }
   if (typed && project !== null && tasks.data === undefined && tasks.error !== null) {
-    failures.push(["Tasks", apiErrorOf(tasks.error).message, isNotServed(tasks.error)]);
+    failures.push(["tasks", groupWords("Tasks", t), apiErrorOf(tasks.error).message, isNotServed(tasks.error)]);
   }
   if (typed && project !== null && inbox.data === undefined && inbox.error !== null) {
-    failures.push(["Inbox", apiErrorOf(inbox.error).message, isNotServed(inbox.error)]);
+    failures.push(["inbox", groupWords("Inbox", t), apiErrorOf(inbox.error).message, isNotServed(inbox.error)]);
   }
   if (search.error !== null) {
-    failures.push(["Search", apiErrorOf(search.error).message, isNotServed(search.error)]);
+    failures.push(["search", t("palette.search"), apiErrorOf(search.error).message, isNotServed(search.error)]);
   }
   const noHits = search.data !== undefined && search.variables === text && search.data.hits.length === 0;
 
   return (
-    <Dialog title="Jump to" onClose={onClose} className="palette" closeOnScrim>
+    <Dialog title={t("palette.title")} onClose={onClose} className="palette" closeOnScrim>
       <label className="sr-only" htmlFor={`${base}-input`}>
-        Jump to a section, task, proposal, node or project
+        {t("palette.inputLabel")}
       </label>
       <input
         id={`${base}-input`}
@@ -244,7 +249,7 @@ export function Palette({
         aria-activedescendant={activeId}
         autoComplete="off"
         spellCheck={false}
-        placeholder="Section, task, proposal, node or project"
+        placeholder={t("palette.placeholder")}
         value={text}
         onChange={(event) => {
           onChange(event.target.value);
@@ -254,7 +259,7 @@ export function Palette({
       <div
         id={listboxId}
         role="listbox"
-        aria-label="Places to jump to"
+        aria-label={t("palette.listLabel")}
         className="palette-list"
         onMouseDown={(event) => {
           // A click takes the option; focus stays in the field.
@@ -266,7 +271,7 @@ export function Palette({
           return (
             <div key={group.name} role="group" aria-labelledby={labelId} aria-busy={group.loading} className="palette-group">
               <div id={labelId} role="presentation" className="palette-group-label">
-                {groupLabel(group)}
+                {groupLabel(group, t)}
               </div>
               {group.options.map((option) => (
                 <div
@@ -286,32 +291,51 @@ export function Palette({
           );
         })}
       </div>
-      {project === null && projects !== undefined && <p className="muted">No project yet.</p>}
-      {noHits && <p className="muted">The spec search found no node for &apos;{text}&apos;.</p>}
-      {failures.map(([name, message, notServed]) =>
+      {project === null && projects !== undefined && <p className="muted">{t("palette.noProject")}</p>}
+      {noHits && <p className="muted">{t("palette.noHits", { text })}</p>}
+      {failures.map(([key, name, message, notServed]) =>
         notServed ? (
           // Not built yet, not broken: said once, politely.
-          <p key={name} className="palette-error palette-not-served" role="status">
+          <p key={key} className="palette-error palette-not-served" role="status">
             <Icon name="info" />
             <span>
-              {name}: <span className="verbatim">{message}</span>
+              {fill(t("palette.notServed", { name: slot("name"), message: slot("message") }), {
+                name,
+                message: (
+                  <span className="verbatim" lang="en">
+                    {message}
+                  </span>
+                ),
+              })}
             </span>
           </p>
         ) : (
-          <p key={name} className="palette-error" role="alert">
+          <p key={key} className="palette-error" role="alert">
             <Icon name="alert" />
             <span>
-              {name} could not be read: <span className="verbatim">{message}</span>
+              {fill(t("palette.failed", { name: slot("name"), message: slot("message") }), {
+                name,
+                message: (
+                  <span className="verbatim" lang="en">
+                    {message}
+                  </span>
+                ),
+              })}
             </span>
           </p>
         ),
       )}
       <div className="palette-foot">
         <p className="palette-hint muted">
-          <kbd>Up</kbd> and <kbd>Down</kbd> move, <kbd>Enter</kbd> opens, <kbd>Esc</kbd> closes.
+          {fill(t("palette.hint", { up: slot("up"), down: slot("down"), enter: slot("enter"), esc: slot("esc") }), {
+            up: <kbd>{t("palette.keys.up")}</kbd>,
+            down: <kbd>{t("palette.keys.down")}</kbd>,
+            enter: <kbd>{t("palette.keys.enter")}</kbd>,
+            esc: <kbd>{t("palette.keys.esc")}</kbd>,
+          })}
         </p>
         <button type="button" className="button button-quiet" onClick={onClose}>
-          Close
+          {t("palette.close")}
         </button>
       </div>
     </Dialog>

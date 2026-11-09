@@ -592,6 +592,17 @@ describe("keyboard (AC-13)", () => {
     expect(at(accept)).toBeGreaterThan(at(listStop));
   });
 
+  it("moves down with j under a Russian layout; ? still lists the keys (LG-7 of ui-languages)", async () => {
+    const { list } = await openInbox();
+    selectedOption(list).focus();
+    fireEvent.keyDown(selectedOption(list), { key: "\u043e", code: "KeyJ" });
+    await waitFor(() => {
+      expect(selectedOption(list).dataset.proposal).toBe("PR-2");
+    });
+    fireEvent.keyDown(selectedOption(list), { key: "?", code: "Digit7", shiftKey: true });
+    expect(await screen.findByRole("dialog", { name: "Keyboard shortcuts" })).toBeTruthy();
+  });
+
   it("moves with the arrows and with j and k", async () => {
     const { list } = await openInbox();
     selectedOption(list).focus();

@@ -1,5 +1,6 @@
 import type { Direction, GraphEdge, GraphView } from "../api/types";
 import type { IconName } from "../ui/Icon";
+import type { Translate } from "../i18n";
 import { directionLabel } from "../tree/labels";
 import type { Walked } from "./layout";
 
@@ -64,6 +65,6 @@ export function directionIcon(direction: Direction): IconName {
 }
 
 /** "<type> (outgoing|incoming)", another direction raw. */
-export function followedLabel(type: string, direction: Direction): string {
-  return `${type} (${directionLabel(direction)})`;
+export function followedLabel(type: string, direction: Direction, t: Translate): string {
+  return `${type} (${directionLabel(direction, t)})`;
 }

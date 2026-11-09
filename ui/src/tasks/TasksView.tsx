@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { useTasks } from "../api/queries";
 import { movesHere } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
-import { SECTIONS } from "../app/sections";
+import { aboutOf } from "../app/sections";
+import { useTranslate } from "../i18n";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
@@ -10,7 +11,6 @@ import { waitsForYou } from "./groups";
 import { TaskDetail, type TaskTab } from "./TaskDetail";
 import { TaskList } from "./TaskList";
 
-const ABOUT = SECTIONS.find((section) => section.id === "tasks")?.about ?? "";
 
 /** Where app.css stacks the task under the list (`.tasks-view`): narrow screens, 200 % zoom. */
 const STACKED = "(max-width: 48em)";
@@ -27,13 +27,14 @@ function bringIntoSight(column: HTMLElement | null) {
 
 /** The detail column with no task chosen: the view's h1 and what waits for the owner. */
 function NoTaskPane({ waiting }: { waiting: number | null }) {
+  const t = useTranslate();
   return (
     <section className="task-pane" aria-labelledby="tasks-title">
       <header className="task-head">
         <h1 id="tasks-title" tabIndex={-1}>
           Tasks
         </h1>
-        <p className="view-about">{ABOUT}</p>
+        <p className="view-about">{aboutOf("tasks", t)}</p>
       </header>
       <div className="empty-state">
         <h2>No task open</h2>

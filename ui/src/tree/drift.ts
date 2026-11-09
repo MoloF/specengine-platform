@@ -1,5 +1,5 @@
 import type { DriftRow, HealthDrift, HealthReport } from "../api/types";
-import { codeRowLook, driftClassOf, type DriftClassCounts } from "../health/labels";
+import { driftClassOf, isMeasuredState, type DriftClassCounts } from "../health/labels";
 import { namesOf } from "./matching";
 import type { TreeRow } from "./rows";
 
@@ -50,7 +50,7 @@ export function measuredRows(drift: HealthDrift | undefined): DriftRow[] | null 
   const state = fieldOf(drift, "state");
   const counts = fieldOf(drift, "counts");
   const rows = fieldOf(drift, "rows");
-  const measured = typeof state === "string" && codeRowLook(state).measured;
+  const measured = typeof state === "string" && isMeasuredState(state);
   return measured && typeof counts === "object" && counts !== null && Array.isArray(rows) ? (rows as DriftRow[]) : null;
 }
 

@@ -13,7 +13,7 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { isTaskNotFound, READ_SCHEMA_VERSION } from "./answer";
 import { waitsForYou } from "./groups";
-import { FROZEN_AT_APPROVAL, stalenessLook, taskStatusLook } from "./labels";
+import { frozenAtApproval, stalenessLook, taskStatusLook } from "./labels";
 import { OverviewPanel } from "./OverviewPanel";
 import { OwnerCommands } from "./OwnerCommands";
 import { PackagePanel } from "./PackagePanel";
@@ -21,6 +21,7 @@ import { When } from "./parts";
 import { RunsPanel } from "./RunsPanel";
 import { SpecChangesPanel } from "./SpecChangesPanel";
 import { TaskProposalsPanel } from "./TaskProposalsPanel";
+import { useTranslate } from "../i18n";
 
 export type TaskTab = "overview" | "plan" | "changes" | "proposals" | "runs" | "package";
 
@@ -54,13 +55,14 @@ function WaitingNote({ task }: { task: TaskPackage }) {
 
 /** The header facts of a package: state, staleness (four displays), times, the daemon's notes. */
 function Facts({ task }: { task: TaskPackage }) {
-  const staleness = stalenessLook(task.stale, task.spec_snapshot !== null);
+  const t = useTranslate();
+  const staleness = stalenessLook(task.stale, task.spec_snapshot !== null, t);
   return (
     <>
       <div className="task-badges">
-        <Badge name="State" look={taskStatusLook(task.status)} />
+        <Badge name="State" look={taskStatusLook(task.status, t)} />
         {staleness === null ? (
-          <span className="muted frozen-note">{FROZEN_AT_APPROVAL}</span>
+          <span className="muted frozen-note">{frozenAtApproval(t)}</span>
         ) : (
           <Badge name="Spec since approval" look={staleness} />
         )}

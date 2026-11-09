@@ -3,7 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { ClientError, type SpecEngineClient } from "../api/client";
 import { ApiProvider } from "../api/provider";
 import type { ConfirmRead, Proposal, QueueEvent, Stage, Team } from "../api/types";
-import { ACT_OFF } from "../board/labels";
+import { TEAM_ACTS } from "../board/labels";
+import { en } from "../i18n/en";
 import { aProposal, aRoundItem, aRoundSheet } from "../test/builders";
 import { renderApp } from "../test/render";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
@@ -895,8 +896,9 @@ describe("one click per item", () => {
     expect(client).toContain("confirmProposal(project: string, id: string, body: ConfirmBody): Promise<Proposal>;");
   });
 
-  it("keeps ACT_OFF to the acts with a control to stand off: confirm has none", () => {
-    expect(Object.keys(ACT_OFF)).not.toContain("confirm");
+  it("keeps actOff to the acts with a control to stand off: confirm has none", () => {
+    expect(Object.keys(en.board.actOff)).not.toContain("confirm");
+    expect(TEAM_ACTS).not.toContain("confirm");
   });
 });
 

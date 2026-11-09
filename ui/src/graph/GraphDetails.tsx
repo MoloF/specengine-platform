@@ -7,6 +7,7 @@ import { hasModifier } from "../ui/keys";
 import { linkStateLook } from "../tree/labels";
 import type { BoxContent, LayoutBox } from "./layout";
 import { edgeLine, moreLabel } from "./lines";
+import { useTranslate } from "../i18n";
 
 function EdgeLines({ edges }: { edges: readonly GraphEdge[] }) {
   if (edges.length === 0) {
@@ -43,6 +44,7 @@ export function GraphDetails({
   onClose: () => void;
   onShowInList: (more: Extract<BoxContent, { type: "more" }>) => void;
 }) {
+  const t = useTranslate();
   const titleId = useId();
   const content = box.content;
 
@@ -142,7 +144,7 @@ export function GraphDetails({
               <Icon name="stub" />
               Not walked
             </span>
-            <Badge name="State" look={linkStateLook(stub.edge.state)} />
+            <Badge name="State" look={linkStateLook(stub.edge.state, t)} />
           </p>
           <EdgeLines edges={[stub.edge]} />
           {stub.edge.reason !== null && <p className="verbatim">{stub.edge.reason}</p>}

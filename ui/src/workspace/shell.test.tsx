@@ -6,7 +6,8 @@ import { aModule, aWorkspace, aWorkspaces, anImplicitWorkspaces } from "../test/
 import { errorAnswer, jsonAnswer, stubEventSource, stubFetch, urlsOf } from "../test/daemonStub";
 import { renderApp } from "../test/render";
 import { stubClient } from "../test/stubClient";
-import { WORKSPACE_TEXT } from "./text";
+import { en } from "../i18n/en";
+import { enT } from "../test/text";
 
 // The shell's lens on a stub client (docs/features/workspaces.md "Rules and edge cases", "The UI"):
 // one workspace, a workspace whose every section is unknown, titles of any script, a project of its
@@ -37,7 +38,7 @@ describe("the edge cases of the screen", () => {
       expect(window.location.hash).toBe("#/alpha/graph");
     });
     await navIs(["Overview", "Graph", "Inbox"]);
-    expect(screen.queryByRole("combobox", { name: WORKSPACE_TEXT.workspaceLabel })).toBeNull();
+    expect(screen.queryByRole("combobox", { name: en.workspace.workspaceLabel })).toBeNull();
     expect(screen.queryByRole("button", { name: /^Config notes/ })).toBeNull();
   });
 
@@ -47,8 +48,8 @@ describe("the edge cases of the screen", () => {
     client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "w-bare", sections: [] })], [], { notes: [note] }));
     renderApp(client, "#/alpha/inbox");
     await navIs(["Overview"]);
-    fireEvent.click(await screen.findByRole("button", { name: WORKSPACE_TEXT.notesButton(1) }));
-    expect(screen.getByRole("list", { name: WORKSPACE_TEXT.notesTitle }).textContent).toBe(note);
+    fireEvent.click(await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) }));
+    expect(screen.getByRole("list", { name: en.workspace.notesTitle }).textContent).toBe(note);
     // The section still renders at its hash.
     expect(await screen.findByRole("heading", { level: 1, name: "Inbox" })).toBeTruthy();
   });
@@ -62,9 +63,9 @@ describe("the edge cases of the screen", () => {
       aWorkspaces([aWorkspace({ name: "w-a", title: writers, module: "m-a" }), aWorkspace({ name: "w-b", title: "Leads" })], [aModule({ name: "m-a", title: shore, root: "DOC-1" })]),
     );
     renderApp(client, "#/alpha/tree");
-    const select = await screen.findByRole<HTMLSelectElement>("combobox", { name: WORKSPACE_TEXT.workspaceLabel });
+    const select = await screen.findByRole<HTMLSelectElement>("combobox", { name: en.workspace.workspaceLabel });
     expect(within(select).getAllByRole("option").map((option) => option.textContent)).toEqual([writers, "Leads"]);
-    const bar = await screen.findByRole("group", { name: WORKSPACE_TEXT.modulesLabel });
+    const bar = await screen.findByRole("group", { name: en.workspace.modulesLabel });
     expect(within(bar).getByRole("button", { name: shore }).getAttribute("aria-pressed")).toBe("true");
     await waitFor(() => {
       expect(client.getTree.mock.calls[0]?.[1]).toEqual({ root: "DOC-1" });
@@ -92,7 +93,7 @@ describe("the edge cases of the screen", () => {
     client.getWorkspaces.mockRejectedValueOnce(new ClientError({ status: 503, message: "specengine.toml:2: `[project] slug`: `Alpha` is not a slug" }));
     renderApp(client, "#/alpha/inbox");
     await navIs(NINE);
-    fireEvent.click(await screen.findByRole("button", { name: WORKSPACE_TEXT.notesButton(1) }));
+    fireEvent.click(await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) }));
     const retry = screen.getByRole("button", { name: "Retry" });
     retry.focus();
     fireEvent.click(retry);
@@ -113,12 +114,12 @@ describe("the edge cases of the screen", () => {
       window.dispatchEvent(new Event("focus"));
       await Promise.resolve();
     });
-    const button = await screen.findByRole("button", { name: WORKSPACE_TEXT.notesButton(1) });
+    const button = await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) });
     await navIs(["Overview", "Graph", "Inbox"]);
     fireEvent.click(button);
     const panel = document.getElementById(button.getAttribute("aria-controls") ?? "") as HTMLElement;
-    expect(within(panel).getByText(WORKSPACE_TEXT.readFailedKept)).toBeTruthy();
-    expect(within(panel).queryByText(WORKSPACE_TEXT.readFailed)).toBeNull();
+    expect(within(panel).getByText(en.workspace.readFailedKept)).toBeTruthy();
+    expect(within(panel).queryByText(en.workspace.readFailed)).toBeNull();
     expect(within(panel).getByText(message)).toBeTruthy();
   });
 
@@ -176,7 +177,7 @@ describe("over the daemon (HttpClient)", () => {
     daemon(() => errorAnswer(404, "no route GET /api/projects/alpha/workspaces: try tree, nodes, search"));
     renderApp(new HttpClient(), "#/alpha/inbox");
     await navIs(NINE);
-    fireEvent.click(await screen.findByRole("button", { name: WORKSPACE_TEXT.notesButton(1) }));
+    fireEvent.click(await screen.findByRole("button", { name: enT("workspace.notesButton", { n: "1" }) }));
     expect(screen.getByText("no route GET /api/projects/alpha/workspaces: try tree, nodes, search")).toBeTruthy();
     expect(screen.queryByText(/Not built yet/)).toBeNull();
     expect(screen.queryAllByRole("alert").filter((alert) => alert.textContent.includes("workspaces"))).toEqual([]);

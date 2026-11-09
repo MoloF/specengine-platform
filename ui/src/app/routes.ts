@@ -1,4 +1,5 @@
-import { isSectionId, SECTIONS, type SectionId } from "./sections";
+import type { Translate } from "../i18n";
+import { isSectionId, sectionLabel, SECTIONS, type SectionId } from "./sections";
 
 /**
  * Where the hash points: `#/<project>` (its home), `#/<project>/<section>[/<id>]`, `#/` (replaced
@@ -51,9 +52,6 @@ export function sectionHash(project: string, section: SectionId, id: string | nu
   return id === null ? base : `${base}/${encodeURIComponent(id)}`;
 }
 
-/** The home's label in the nav and the palette. */
-export const OVERVIEW_LABEL = "Overview";
-
 /** One entry of the nav: the home, then a section. */
 export interface NavEntry {
   key: "overview" | SectionId;
@@ -69,7 +67,7 @@ export const ALL_SECTIONS: readonly SectionId[] = SECTIONS.map((section) => sect
  * drawn only if it is one of the nine and only once: a workspace's served list
  * (`docs/features/workspaces.md` "The UI"), or ALL_SECTIONS.
  */
-export function navOf(project: string, sections: readonly string[]): NavEntry[] {
+export function navOf(project: string, sections: readonly string[], t: Translate): NavEntry[] {
   const shown: SectionId[] = [];
   for (const id of sections) {
     if (isSectionId(id) && !shown.includes(id)) {
@@ -77,7 +75,7 @@ export function navOf(project: string, sections: readonly string[]): NavEntry[] 
     }
   }
   return [
-    { key: "overview", label: OVERVIEW_LABEL, hash: homeHash(project) },
-    ...shown.map((id) => ({ key: id, label: SECTIONS.find((section) => section.id === id)?.label ?? id, hash: sectionHash(project, id) })),
+    { key: "overview", label: t("app.overview"), hash: homeHash(project) },
+    ...shown.map((id) => ({ key: id, label: sectionLabel(id, t), hash: sectionHash(project, id) })),
   ];
 }

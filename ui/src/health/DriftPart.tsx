@@ -7,7 +7,8 @@ import { bindingOf } from "../tree/BindingLine";
 import { syncLook } from "../tree/labels";
 import { Badge } from "../ui/Badge";
 import { CodePart, CodeRowList, counted, oneLine, RowNotMeasured } from "./codeRows";
-import { codeRowLook, driftClassLook, driftTally, isEditorialRow, testedLook } from "./labels";
+import { driftClassLook, driftTally, isEditorialRow, isMeasuredState, testedLook } from "./labels";
+import { useTranslate } from "../i18n";
 
 /** Where a binding was or might be, as verify's sub-line gives it: `<file> | <binding>`. */
 function placeOf(place: BindingPlace): string {
@@ -103,6 +104,7 @@ export function DriftLine({
   onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void;
   children?: ReactNode;
 }) {
+  const t = useTranslate();
   const judgement = [row.category, row.detail].filter((word) => word !== null).join(" ");
   const levels = row.levels ?? null;
   const from = row.anchor?.from ?? null;
@@ -110,14 +112,14 @@ export function DriftLine({
   return (
     <li className="health-left-row health-code-row" data-drift={row.node} tabIndex={-1}>
       <p className="health-code-head">
-        <Badge name="Class" look={driftClassLook(row.class)} />
+        <Badge name="Class" look={driftClassLook(row.class, t)} />
         <NodeLink project={project} node={row.node} onFollow={onFollow} />
         <span className="kind-tag">{oneLine(row.relation)}</span>
         {row.pre_existing && <span className="plain-tag">Pre-existing</span>}
         {markEditorial && isEditorialRow(row) && <span className="plain-tag drift-editorial">Editorial</span>}
       </p>
       <p className="health-code-meta">
-        <Badge name="State" look={syncLook(row.state)} />
+        <Badge name="State" look={syncLook(row.state, t)} />
         {judgement !== "" && <span className="mono health-code-word">{oneLine(judgement)}</span>}
       </p>
       <p className="health-code-meta">
@@ -174,10 +176,11 @@ export function DriftLine({
  * `onFollow`.
  */
 export function TestedLine({ project, entry, onFollow }: { project: string; entry: TestedRow; onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useTranslate();
   return (
     <li className="health-left-row health-code-row" data-tested={entry.node} tabIndex={-1}>
       <p className="health-code-head">
-        <Badge name="Evidence" look={testedLook(entry.state)} />
+        <Badge name="Evidence" look={testedLook(entry.state, t)} />
         <NodeLink project={project} node={entry.node} onFollow={onFollow} />
         {entry.category !== null && <span className="mono health-code-word">{oneLine(entry.category)}</span>}
       </p>
@@ -236,6 +239,7 @@ function TestedPart({ project, tested }: { project: string; tested: TestedRow[] 
  * test evidence. None: said as such, then what was measured over, never a bare 0.
  */
 function Drift({ project, counts, rows, tested, notes }: { project: string; counts: DriftCounts; rows: DriftRow[]; tested: TestedRow[] | null; notes: string[] }) {
+  const t = useTranslate();
   const bindings = counted(counts.rows, "binding", "bindings");
   let measured;
   if (rows.length === 0) {
@@ -256,7 +260,7 @@ function Drift({ project, counts, rows, tested, notes }: { project: string; coun
           <strong className="health-value health-measured">{rows.length}</strong> of {bindings}, {counts.skipped} skipped
         </p>
         <ul className="health-tally" aria-label="Bindings by class, as spec verify counts them">
-          {driftTally(counts).map(({ key, look, count }) => (
+          {driftTally(counts, t).map(({ key, look, count }) => (
             <li key={key}>
               <Badge look={look} />
               <span className="sr-only">:</span> <span className="health-tally-count">{count}</span>
@@ -288,7 +292,7 @@ export function DriftPart({ project, health, failure, busy }: { project: string;
     <CodePart health={health} failure={failure} busy={busy} row="drift" title="Drift" what="drift">
       {(report, retry) => {
         const row = report.drift;
-        if (codeRowLook(row.state).measured && row.counts !== null && row.rows !== null) {
+        if (isMeasuredState(row.state) && row.counts !== null && row.rows !== null) {
           return <Drift project={project} counts={row.counts} rows={row.rows} tested={row.tested} notes={row.notes} />;
         }
         return <RowNotMeasured row={row} retrying={health.isFetching} onRetry={retry} />;

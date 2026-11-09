@@ -1,6 +1,6 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
 import { Icon } from "../ui/Icon";
-import { hasModifier, isTextField } from "../ui/keys";
+import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { useFocusLater } from "../ui/useFocusLater";
 import type { NodeDrift } from "./drift";
 import { RowContent } from "./RowContent";
@@ -129,7 +129,7 @@ export const SpecTree = memo(function SpecTree({
     const at = shown.indexOf(focusedRow);
     const isOpen = open?.has(focusedRow.key) === true;
     const parent = focusedRow.parent === null ? undefined : rows[focusedRow.parent];
-    switch (event.key) {
+    switch (hotkeyOf(event)) {
       case "ArrowDown":
       case "j":
         moveTo(shown[at + 1]);

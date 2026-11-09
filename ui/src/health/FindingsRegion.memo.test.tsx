@@ -16,9 +16,9 @@ vi.mock("./labels", async (importOriginal) => {
   const actual = await importOriginal<typeof LabelsModule>();
   return {
     ...actual,
-    findingSeverityLook: (value: FindingSeverity) => {
+    findingSeverityLook: (value: FindingSeverity, t: Parameters<typeof actual.findingSeverityLook>[1]) => {
       looks.asked += 1;
-      return actual.findingSeverityLook(value);
+      return actual.findingSeverityLook(value, t);
     },
   };
 });

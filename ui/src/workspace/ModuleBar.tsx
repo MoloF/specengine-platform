@@ -1,7 +1,7 @@
 import { useId } from "react";
 import type { WorkspaceModule } from "../api/types";
+import { useTranslate } from "../i18n";
 import { ALL_MODULES } from "./choice";
-import { WORKSPACE_TEXT } from "./text";
 
 /**
  * The module bar (docs/features/workspaces.md "The UI"): on the Spec tree and the Flow alone, and
@@ -20,6 +20,7 @@ export function ModuleBar({
   /** A module's name, ALL_MODULES for the whole project. */
   onChoose: (name: string) => void;
 }) {
+  const t = useTranslate();
   const labelId = useId();
   if (modules.length === 0) {
     return null;
@@ -27,7 +28,7 @@ export function ModuleBar({
   return (
     <div role="group" aria-labelledby={labelId} className="module-bar">
       <span id={labelId} className="module-bar-label">
-        {WORKSPACE_TEXT.modulesLabel}
+        {t("workspace.modulesLabel")}
       </span>
       <button
         type="button"
@@ -37,7 +38,7 @@ export function ModuleBar({
           onChoose(ALL_MODULES);
         }}
       >
-        {WORKSPACE_TEXT.allModules}
+        {t("workspace.allModules")}
       </button>
       {modules.map((module) => (
         <button

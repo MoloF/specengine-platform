@@ -8,13 +8,15 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { BindingLine } from "./BindingLine";
-import { directionLabel, formLabel, isCodeLayer, LAYER_HEADINGS, layerHeading, linkStateLook } from "./labels";
+import { directionLabel, formLabel, isCodeLayer, layerHeading, layerHeadings, linkStateLook } from "./labels";
+import { useTranslate } from "../i18n";
 
 const DIGITS = /^\d*$/;
 /** The largest budget the daemon takes (`u32::MAX`, `docs/canon/spec-cli-bundle.md` "Command"). */
 const MAX_BUDGET = 4294967295;
 
 function ItemRow({ project, item, onFollow }: { project: string; item: BundleItem; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useTranslate();
   const answer = item.working_answer;
   return (
     <li className="bundle-item">
@@ -29,7 +31,7 @@ function ItemRow({ project, item, onFollow }: { project: string; item: BundleIte
         <span className="mono">
           {item.path}:{item.line}
         </span>
-        <span>{formLabel(item.form)}</span>
+        <span>{formLabel(item.form, t)}</span>
         <span>{item.tokens_est} tokens</span>
         {item.status !== null && (
           <span className="status-tag">
@@ -45,7 +47,7 @@ function ItemRow({ project, item, onFollow }: { project: string; item: BundleIte
           {item.via.map((via, index) => (
             <span key={`${via.type}-${via.direction}`}>
               {index > 0 && ", "}
-              <span className="mono">{via.type}</span> {directionLabel(via.direction)}
+              <span className="mono">{via.type}</span> {directionLabel(via.direction, t)}
             </span>
           ))}
         </p>
@@ -57,7 +59,7 @@ function ItemRow({ project, item, onFollow }: { project: string; item: BundleIte
           <span className="mono">
             {answer.path}:{answer.line}
           </span>
-          <Badge name="State" look={linkStateLook(answer.state)} />
+          <Badge name="State" look={linkStateLook(answer.state, t)} />
         </p>
       )}
     </li>
@@ -108,12 +110,13 @@ function LayerList({
 
 /** A left-out entry: a node linked to the tree; a code row named, with its place, never linked. */
 function TailLine({ project, entry, onFollow }: { project: string; entry: TailEntry; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useTranslate();
   if (isCodeLayer(entry.layer)) {
     return (
       <li>
         <span className="mono">{entry.name}</span> <span>{entry.title ?? "-"}</span>{" "}
         <span className="muted">
-          | <span className="mono">{entry.path}:{entry.line}</span> | {entry.tokens_est} tokens | {layerHeading(entry.layer)}
+          | <span className="mono">{entry.path}:{entry.line}</span> | {entry.tokens_est} tokens | {layerHeading(entry.layer, t)}
         </span>
       </li>
     );
@@ -123,12 +126,13 @@ function TailLine({ project, entry, onFollow }: { project: string; entry: TailEn
       <a className="mono" href={sectionHash(project, "tree", entry.name)} onClick={onFollow}>
         {entry.name}
       </a>{" "}
-      <span>{entry.title ?? "-"}</span> <span className="muted">| {entry.tokens_est} tokens | {layerHeading(entry.layer)}</span>
+      <span>{entry.title ?? "-"}</span> <span className="muted">| {entry.tokens_est} tokens | {layerHeading(entry.layer, t)}</span>
     </li>
   );
 }
 
 function BundleBody({ project, bundle, onFollow }: { project: string; bundle: BundleView; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useTranslate();
   if (bundle.reason !== null) {
     return (
       <div className="empty-state">
@@ -159,7 +163,7 @@ function BundleBody({ project, bundle, onFollow }: { project: string; bundle: Bu
         </ul>
       )}
       {layers !== null &&
-        LAYER_HEADINGS.filter(([key]) => layers[key].length > 0).map(([key, heading]) => (
+        layerHeadings(t).filter(([key]) => layers[key].length > 0).map(([key, heading]) => (
           <section key={key} className="bundle-layer">
             <h2 className="card-section-title">{heading}</h2>
             <LayerList project={project} layers={layers} layer={key} onFollow={onFollow} />

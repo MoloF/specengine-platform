@@ -1,5 +1,6 @@
 import type { FlowEdge, FlowGap, FlowNode, FlowView, TraceCounts } from "../api/types";
 import { compareText, nodeName } from "../graph/layout";
+import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
 
 // The Flow's closed tables and words (docs/features/flow-canvas.md "Data", "Gap rows";
@@ -7,7 +8,8 @@ import type { Look } from "../ui/Badge";
 // a gap code, an edge's `kind` or a rollup apart: an edge's `kind` is the closed `FlowEdgeKind` of the
 // daemon's schema, no project vocabulary, and a repeat is always dotted. A link `type` is never
 // spelled: its colour and plain dash go by its place in the sorted types of the top read, which hold
-// every edge, so folding moves no dash. A stage is project vocabulary, shown as served.
+// every edge, so folding moves no dash. A stage is project vocabulary, shown as served. Every word is
+// the catalog's `flow` group; an edge's `kind`, `when` and `spec flow`'s line stay as served.
 
 /** The seven stroke patterns: four by a type's place, then the three kinds; `repeat` alone is dotted. */
 export const FLOW_DASHES = ["none", "14 6", "24 5 6 5", "6 5 6 14", "9 5", "18 4 3 4", "1 7"] as const;
@@ -99,22 +101,26 @@ export function edgeName(edge: FlowEdge): string {
   return [`${edge.from} ${edge.type} ${edge.to}`, ...edgeWords(edge)].join(", ");
 }
 
-const GAP_MEANINGS: Record<string, string> = {
-  "no-start": "Nothing starts the flow.",
-  "two-starts": "The flow starts in more than one place.",
-  unreachable: "Steps no path from a start reaches.",
-  "no-way-to-end": "Steps with no path to an end.",
-  "trap-cycle": "Loops with no way out to an end.",
-  "unjoined-parallel": "Parallel branches that never join.",
-  "cycle-no-repeat": "Loops not marked as a repeat.",
-  "definition-unused": "Definitions nothing uses.",
-  "definition-once": "Definitions used only once.",
-  "supply-unfed": "Supply loops nothing outside feeds.",
-};
+/** The gap codes the daemon writes, each with its catalog key. */
+const GAP_MEANINGS = {
+  "no-start": "noStart",
+  "two-starts": "twoStarts",
+  unreachable: "unreachable",
+  "no-way-to-end": "noWayToEnd",
+  "trap-cycle": "trapCycle",
+  "unjoined-parallel": "unjoinedParallel",
+  "cycle-no-repeat": "cycleNoRepeat",
+  "definition-unused": "definitionUnused",
+  "definition-once": "definitionOnce",
+  "supply-unfed": "supplyUnfed",
+} as const;
+
+/** The ten gap codes, as the daemon writes them. */
+export const GAP_CODES = Object.keys(GAP_MEANINGS) as readonly (keyof typeof GAP_MEANINGS)[];
 
 /** What a gap row looks for; another code, nothing to add. */
-export function gapMeaning(code: string): string | null {
-  return Object.hasOwn(GAP_MEANINGS, code) ? (GAP_MEANINGS[code] ?? null) : null;
+export function gapMeaning(code: string, t: Translate): string | null {
+  return Object.hasOwn(GAP_MEANINGS, code) ? t(`flow.gapMeaning.${GAP_MEANINGS[code as keyof typeof GAP_MEANINGS]}`) : null;
 }
 
 /** `no-start`'s item is the read's scope, no document: it stays text, never a button. */
@@ -140,17 +146,17 @@ export function needsRule(gap: FlowGap): boolean {
 }
 
 /** A row's state in words: never a number it was not given. */
-export function gapLook(gap: FlowGap): Look {
+export function gapLook(gap: FlowGap, t: Translate): Look {
   if (gap.state === "measured" && gap.count !== null) {
     return gap.count === 0
-      ? { label: "None", tone: "flow-gap-none", icon: "checkClean" }
-      : { label: `${String(gap.count)} found`, tone: "flow-gap-found", icon: "flowGap" };
+      ? { label: t("flow.gap.none"), tone: "flow-gap-none", icon: "checkClean" }
+      : { label: t("flow.gap.found", { count: gap.count }), tone: "flow-gap-found", icon: "flowGap" };
   }
   if (gap.state === "not_configured") {
-    return { label: "Not configured", tone: "flow-gap-not-configured", icon: "info" };
+    return { label: t("flow.gap.notConfigured"), tone: "flow-gap-not-configured", icon: "info" };
   }
   if (gap.state === "cannot") {
-    return { label: "Cannot measure", tone: "sync-cannot-verify", icon: "cannotCheck" };
+    return { label: t("flow.gap.cannotMeasure"), tone: "sync-cannot-verify", icon: "cannotCheck" };
   }
   return { label: gap.state, tone: "flow-gap-unknown", icon: "unknown" };
 }
@@ -166,22 +172,24 @@ export interface GapMark {
   said: string;
 }
 
-const ROW_NAMES_IT: GapMark = { shown: "Gap", said: "named by a gap row" };
+function rowNamesIt(t: Translate): GapMark {
+  return { shown: t("flow.gapMark.shown"), said: t("flow.gapMark.said") };
+}
 
 /**
  * A box's gap mark, the same on the canvas and in the List; null for none. A closed group counts what
  * it holds. An open group says only what names it: what it holds shows on its own boxes.
  */
-export function gapMark(node: FlowNode, drawnOpen: boolean, named: ReadonlySet<string>): GapMark | null {
+export function gapMark(node: FlowNode, drawnOpen: boolean, named: ReadonlySet<string>, t: Translate): GapMark | null {
   const namesIt = named.has(nodeName(node));
   if (drawnOpen) {
-    return namesIt ? ROW_NAMES_IT : null;
+    return namesIt ? rowNamesIt(t) : null;
   }
   if (node.holds > 0 && node.gaps > 0) {
-    const text = withGapsText(node.gaps);
+    const text = withGapsText(node.gaps, t);
     return { shown: text, said: text };
   }
-  return namesIt || node.gaps > 0 ? ROW_NAMES_IT : null;
+  return namesIt || node.gaps > 0 ? rowNamesIt(t) : null;
 }
 
 /** Every served row measured at 0: the rows have nothing to say. */
@@ -190,39 +198,37 @@ export function allClear(gaps: readonly FlowGap[]): boolean {
 }
 
 /** `<n> rows need [flow] rules in specengine.toml`; null when none does. */
-export function needsRulesLine(gaps: readonly FlowGap[]): string | null {
+export function needsRulesLine(gaps: readonly FlowGap[], t: Translate): string | null {
   const rows = gaps.filter(needsRule).length;
   if (rows === 0) {
     return null;
   }
-  return `${String(rows)} ${rows === 1 ? "row needs" : "rows need"} [flow] rules in specengine.toml`;
+  return t("flow.needsRules", { count: rows });
 }
 
 /** `<k> of <n> boxes not drawn: close a group, or read the List`. */
-export function notDrawnLine(notDrawn: number, total: number): string {
-  return `${String(notDrawn)} of ${String(total)} boxes not drawn: close a group, or read the List`;
+export function notDrawnLine(notDrawn: number, total: number, t: Translate): string {
+  return t("flow.notDrawn", { hidden: notDrawn, count: total });
 }
 
 /** `<n> document(s)` a closed group holds. */
-export function holdsText(holds: number): string {
-  return `${String(holds)} ${holds === 1 ? "document" : "documents"}`;
+export function holdsText(holds: number, t: Translate): string {
+  return t("flow.holds", { count: holds });
 }
 
 /** `<g> with gaps`, the daemon's count for a group. */
-export function withGapsText(gaps: number): string {
-  return `${String(gaps)} with gaps`;
+export function withGapsText(gaps: number, t: Translate): string {
+  return t("flow.withGaps", { count: gaps });
 }
 
 /** A start's word: at the top a flow starts, in a group's lane the flow enters. */
-export function startWord(inLane: boolean): string {
-  return inLane ? "Entry" : "Start";
+export function startWord(inLane: boolean, t: Translate): string {
+  return inLane ? t("flow.entry") : t("flow.start");
 }
 
 /** `<n> box(es), <e> edge(s)` of a read. */
-export function readCount(view: Pick<FlowView, "nodes" | "edges">): string {
-  const boxes = view.nodes.length;
-  const edges = view.edges.length;
-  return `${String(boxes)} ${boxes === 1 ? "box" : "boxes"}, ${String(edges)} ${edges === 1 ? "edge" : "edges"}`;
+export function readCount(view: Pick<FlowView, "nodes" | "edges">, t: Translate): string {
+  return `${t("flow.boxes", { count: view.nodes.length })}, ${t("flow.edges", { count: view.edges.length })}`;
 }
 
 /** A box's words as the panel, the canvas and the List say them. */
@@ -233,17 +239,24 @@ export function boxWords(node: FlowNode): string {
 /** The word of a node with no card: a gap in the plan, drawn hollow wherever a step stands. */
 const NO_CARD = "no card";
 
-const ROLLUPS: ReadonlyMap<string, Look> = new Map<string, Look>([
-  ["confirmed", { label: "Confirmed", tone: "trace-confirmed", icon: "taskAccepted" }],
-  ["in work", { label: "In work", tone: "trace-in-work", icon: "taskInProgress" }],
-  ["suspect", { label: "Suspect", tone: "trace-suspect", icon: "specChanged" }],
-  ["departed", { label: "Departed", tone: "trace-departed", icon: "cardDeparted" }],
-  [NO_CARD, { label: "No card", tone: "trace-no-card", icon: "open" }],
-]);
+type RollupKey = "confirmed" | "inWork" | "suspect" | "departed" | "noCard";
+
+/** The rollups as the daemon writes them, each with its catalog key, colour role and icon. */
+const ROLLUPS: ReadonlyMap<string, Omit<Look, "label"> & { key: RollupKey }> = new Map([
+  ["confirmed", { key: "confirmed", tone: "trace-confirmed", icon: "taskAccepted" }],
+  ["in work", { key: "inWork", tone: "trace-in-work", icon: "taskInProgress" }],
+  ["suspect", { key: "suspect", tone: "trace-suspect", icon: "specChanged" }],
+  ["departed", { key: "departed", tone: "trace-departed", icon: "cardDeparted" }],
+  [NO_CARD, { key: "noCard", tone: "trace-no-card", icon: "open" }],
+] satisfies [string, Omit<Look, "label"> & { key: RollupKey }][]);
+
+/** The five rollups, as the daemon writes them. */
+export const ROLLUP_WORDS: readonly string[] = [...ROLLUPS.keys()];
 
 /** How a rollup looks; one this build does not know raw and neutral (`docs/features/trace-views.md` "Flow badges"). */
-export function rollupLook(rollup: string): Look {
-  return ROLLUPS.get(rollup) ?? { label: rollup, tone: "trace-unknown", icon: "unknown" };
+export function rollupLook(rollup: string, t: Translate): Look {
+  const known = ROLLUPS.get(rollup);
+  return known === undefined ? { label: rollup, tone: "trace-unknown", icon: "unknown" } : { label: t(`flow.rollup.${known.key}`), tone: known.tone, icon: known.icon };
 }
 
 /** Whether a rollup is a step with no card: it stays in its place, hollow. */
@@ -251,22 +264,18 @@ export function isNoCard(rollup: string): boolean {
   return rollup === NO_CARD;
 }
 
-/** What each rollup says, for the legend: done, in work, in question, missing. */
-export const ROLLUP_MEANINGS: readonly { look: Look; meaning: string }[] = [
-  { look: rollupLook("confirmed"), meaning: "its work is accepted and stands against the brief" },
-  { look: rollupLook("in work"), meaning: "a card is open on it" },
-  { look: rollupLook("suspect"), meaning: "the brief changed after a card read it" },
-  { look: rollupLook("departed"), meaning: "accepted as departing from the brief, not settled yet" },
-  { look: rollupLook(NO_CARD), meaning: "no card holds it: the gap stays visible" },
-];
+/** What each rollup says, for the legend: done, in work, in question, missing; `word` as the daemon writes it. */
+export function rollupMeanings(t: Translate): readonly { word: string; look: Look; meaning: string }[] {
+  return [...ROLLUPS].map(([word, { key }]) => ({ word, look: rollupLook(word, t), meaning: t(`flow.rollupMeaning.${key}`) }));
+}
 
-/** The parts of `counts`, in the words of each state, from what is done to what is missing. */
-const COUNT_ORDER: readonly (readonly [keyof TraceCounts, string])[] = [
-  ["confirmed", "confirmed"],
-  ["in_work", "in work"],
-  ["suspect", "suspect"],
-  ["departed", "departed"],
-  ["no_card", NO_CARD],
+/** The parts of `counts`, by the rollup each state is, from what is done to what is missing. */
+const COUNT_ORDER: readonly (readonly [keyof TraceCounts, string, RollupKey])[] = [
+  ["confirmed", "confirmed", "confirmed"],
+  ["in_work", "in work", "inWork"],
+  ["suspect", "suspect", "suspect"],
+  ["departed", "departed", "departed"],
+  ["no_card", NO_CARD, "noCard"],
 ];
 
 /** One state of `counts` with something in it. */
@@ -280,46 +289,56 @@ export interface CountPart {
 }
 
 /** The served counts, zero parts left out: nothing here adds them up. */
-export function countParts(counts: TraceCounts): CountPart[] {
-  return COUNT_ORDER.flatMap(([key, word]) => {
+export function countParts(counts: TraceCounts, t: Translate): CountPart[] {
+  return COUNT_ORDER.flatMap(([key, word, words]) => {
     const count = counts[key];
-    return count > 0 ? [{ key, count, words: `${String(count)} ${word}`, look: rollupLook(word), hollow: isNoCard(word) }] : [];
+    return count > 0 ? [{ key, count, words: t(`flow.count.${words}`, { count }), look: rollupLook(word, t), hollow: isNoCard(word) }] : [];
   });
 }
 
 /** `3 confirmed, 1 suspect, 2 no card`, as a closed group says it. */
-export function countsText(counts: TraceCounts): string {
-  return countParts(counts)
+export function countsText(counts: TraceCounts, t: Translate): string {
+  return countParts(counts, t)
     .map((part) => part.words)
     .join(", ");
 }
 
 /** A lane's stage as a person reads it; none: the lane for what has no `stage:`. */
-export function stageWords(stage: string | null): string {
-  return stage ?? "No stage";
+export function stageWords(stage: string | null, t: Translate): string {
+  return stage ?? t("flow.noStage");
 }
 
 /** Where a step stands on the walk, counted from one; a distance the read did not give is not known, never a place. */
-export function stepWords(distance: number | null): string {
-  return distance === null ? "Step unknown" : `Step ${String(distance + 1)}`;
+export function stepWords(distance: number | null, t: Translate): string {
+  return distance === null ? t("flow.stepUnknown") : t("flow.step", { n: distance + 1 });
 }
 
 /** The lane's score: `<c> of <n> confirmed`. */
-export function confirmedLine(confirmed: number, total: number): string {
-  return `${String(confirmed)} of ${String(total)} confirmed`;
+export function confirmedLine(confirmed: number, total: number, t: Translate): string {
+  return t("flow.confirmed", { confirmed, count: total });
 }
 
 /** No step has a card: a card may still stand elsewhere, on a target gone, and a note then says so. */
-export const NO_CARDS_YET = "No step has a card yet. Next: open a step and press New card.";
+export function noCardsYet(t: Translate): string {
+  return t("flow.noCardsYet");
+}
 
 /** Beside a re-read that failed: what stands under it is the last read's, not the state now. */
-export const LAST_READ_WORDS = "What stands below is from the last read.";
+export function lastReadWords(t: Translate): string {
+  return t("flow.lastRead");
+}
 
 /** Beside the top read's failed re-read, on a tab drawing boxes: of those, only the top level's are that read's. */
-export const STATES_HIDDEN_WORDS = "Top-level boxes show no state until it reads.";
+export function statesHiddenWords(t: Translate): string {
+  return t("flow.statesHidden");
+}
 
 /** A gap row whose read failed: it says nothing, least of all None. */
-export const GAP_NOT_READ: Look = { label: "Not read", tone: "flow-gap-unknown", icon: "unknown" };
+export function gapNotRead(t: Translate): Look {
+  return { label: t("flow.gap.notRead"), tone: "flow-gap-unknown", icon: "unknown" };
+}
 
 /** No document has a stage: one lane, and what would give it others. */
-export const NO_STAGES_YET = "Next: give documents a `stage:` key";
+export function noStagesYet(t: Translate): string {
+  return t("flow.noStagesYet");
+}

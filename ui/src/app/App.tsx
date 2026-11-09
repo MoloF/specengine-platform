@@ -1,20 +1,22 @@
 import type { SpecEngineClient } from "../api/client";
 import { ApiProvider } from "../api/provider";
+import { useTranslate } from "../i18n";
 import { DataSource } from "./DataSource";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { Shell } from "./Shell";
 
 function RootFailure({ error, client, scenario }: { error: Error; client: SpecEngineClient; scenario: string | null }) {
+  const t = useTranslate();
   return (
     <>
       <header className="app-header">
-        <p className="brand">SpecEngine</p>
+        <p className="brand">{t("app.brand")}</p>
         <DataSource dataSource={client.dataSource} scenario={scenario} />
       </header>
       <main className="app-main">
-        <h1>SpecEngine stopped</h1>
+        <h1>{t("app.stopped.title")}</h1>
         <div className="error-panel">
-          <p className="error-message" role="alert">
+          <p className="error-message" role="alert" lang="en">
             {error.message}
           </p>
           <button
@@ -24,7 +26,7 @@ function RootFailure({ error, client, scenario }: { error: Error; client: SpecEn
               window.location.reload();
             }}
           >
-            Reload
+            {t("app.stopped.reload")}
           </button>
         </div>
       </main>
