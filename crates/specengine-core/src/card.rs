@@ -159,11 +159,14 @@ pub enum MoveRefusal {
     NoMove { allowed: Vec<String>, accepts: bool },
     /// The move is `by`'s, and the actor is not among them.
     NotBy { by: Vec<String> },
+    /// The move enters the flow's `return` column and says no why.
+    NoNote,
 }
 
 impl MoveRefusal {
     /// ``C-0001 is in <from>: no move to `<to>`; allowed: `<column>`, `spec
-    /// card accept`; nothing changed``, or the same naming `by`.
+    /// card accept`; nothing changed``, the same naming `by`, or that a
+    /// return column needs a note.
     pub fn message(&self, id: &str, from: &str, to: &str, actor: &str) -> String {
         match self {
             Self::NoMove { allowed, accepts } => {
@@ -182,6 +185,10 @@ impl MoveRefusal {
             Self::NotBy { by } => format!(
                 "{id} is in {from}: the move to `{to}` is {}'s, not `{actor}`'s; nothing changed",
                 names_text(by)
+            ),
+            Self::NoNote => format!(
+                "{id} enters `{to}`, its flow's return column: say why with `--note`; nothing \
+                 changed"
             ),
         }
     }
@@ -203,16 +210,28 @@ fn names_text(names: &[String]) -> String {
 }
 
 /// The pure decision of a move from `from` to `to` under `flow`, made by
-/// `actor`. A move within one column is a reorder, no rule. A column the
-/// flow lists no move to, `accept.to` among them, refuses with what is
-/// allowed; a listed move refuses an `actor` outside its `by`.
-pub fn card_move(flow: &CardFlow, from: &str, to: &str, actor: &str) -> Result<(), MoveRefusal> {
+/// `actor` with `note`. A move within one column is a reorder, no rule. A
+/// column the flow lists no move to, `accept.to` among them, refuses with
+/// what is allowed; a listed move refuses an `actor` outside its `by`; a
+/// move into the flow's `return` column refuses a `note` absent or blank
+/// (canon `card-flows`, "The rule"): a rule met in the same act, which
+/// blocks nothing. A move out of that column needs none.
+pub fn card_move(
+    flow: &CardFlow,
+    from: &str,
+    to: &str,
+    actor: &str,
+    note: Option<&str>,
+) -> Result<(), MoveRefusal> {
     if from == to {
         return Ok(());
     }
     let open = moves_from(flow, from);
     match open.iter().find(|allowed| allowed.to == to) {
         Some(allowed) if allowed.by.is_empty() || allowed.by.iter().any(|name| name == actor) => {
+            if flow.is_return(to) && note.is_none_or(|note| note.trim().is_empty()) {
+                return Err(MoveRefusal::NoNote);
+            }
             Ok(())
         }
         Some(allowed) => Err(MoveRefusal::NotBy {

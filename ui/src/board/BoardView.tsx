@@ -1,8 +1,8 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
-import { useCard, useCards, useCardWrite, useTrace } from "../api/queries";
-import type { Card, CardFlow, CardMoveBody, CardRow, CardWrite } from "../api/types";
-import { pushHash } from "../app/location";
+import { useCard, useCards, useCardWrite, useCardWriting, useTrace } from "../api/queries";
+import type { Card, CardAllowed, CardFlow, CardMoveBody, CardRow, CardWrite } from "../api/types";
+import { pushHash, replaceHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { aboutOf } from "../app/sections";
@@ -14,22 +14,26 @@ import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
+import { shownSlot } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
+import { useViewTop } from "../ui/useViewTop";
 import { actingName, isActingLine, useActing, useAllowed, useHubLogin } from "./acting";
 import { BoardCard, type CardActions } from "./BoardCard";
-import { BoardColumn } from "./BoardColumn";
-import { AcceptCardDialog, AssignDialog, CancelCardDialog, ClearCardDialog, EditCardDialog, NewCardDialog } from "./CardDialogs";
-import { CardPanel, isCard, type CardAction } from "./CardPanel";
+import { BoardColumn, BoardColumnHeader } from "./BoardColumn";
+import { CardActDialog, moveChoicesOf, type BoardChoice, type OpenDialog, type Said } from "./CardActs";
+import { CardModal } from "./CardModal";
+import { CardBody, isCard, titleOf, type CardAction, type CardLinks } from "./CardPanel";
 import { useToday } from "./due";
 import {
   ANY,
   assigneeChoices,
+  cellsOf,
+  columnHeadsOf,
   COLUMN_SHOWN,
   disciplineChoices,
   dropMove,
-  lanesOf,
   matchesFilters,
   NO_FILTERS,
   openRows,
@@ -37,18 +41,21 @@ import {
   standingBefore,
   tabsOf,
   workspaceTabs,
+  type BoardColumnCell,
   type BoardFilters,
-  type BoardLane,
 } from "./filter";
-import { columnTitle, movesFrom, needsLine, noCards, noteNames, rowMark } from "./labels";
-import { MoveMenu, type MoveChoice } from "./MoveMenu";
-
+import { movesFrom, noCards, noteNames, rowMark } from "./labels";
+import { MoveMenu } from "./MoveMenu";
+import { rollupsOf, type Rollup } from "./rollup";
+import { LANE_MODES, recallLaneMode, rememberLaneMode, swimlanesOf, type LaneMode, type Swimlane } from "./swimlanes";
 
 /** What the Shell keeps per project for this page's life; `flow` null: nothing chosen yet. */
 export interface BoardState {
   flow: string | null;
   filters: BoardFilters;
   withCancelled: boolean;
+  /** The lanes folded, by key: they stay folded through re-reads for the visit, never stored. */
+  collapsed: readonly string[];
 }
 
 export interface BoardMemory {
@@ -59,30 +66,22 @@ export interface BoardMemory {
 /** No memory: each Board opens as new. */
 export const NO_BOARD_MEMORY: BoardMemory = { recall: () => undefined, remember: () => undefined };
 
-/** The dialog open, each with what it works on and who gets focus back. */
-type OpenDialog =
-  | { action: "new"; trigger: HTMLElement | null }
-  | { action: "accept"; card: Pick<CardRow, "id" | "title" | "revision" | "assignee" | "reviewer">; trigger: HTMLElement | null }
-  | { action: Exclude<CardAction, "accept">; card: Card; trigger: HTMLElement | null };
+/** Where a Move menu was opened: a tile on the board, or the card's modal. */
+type MenuPlace = "board" | "modal";
 
-/** The Move menu open: the card's ID, where its button stands. */
+/** The Move menu open: the card's ID, where its button stands, who gets focus back. */
 interface OpenMenu {
   id: string;
   anchor: DOMRect;
+  trigger: HTMLElement | null;
+  place: MenuPlace;
 }
 
-/** A refused move: the daemon's reason; `count` a new alert for each. */
+/** A refused move: the daemon's reason; `count` a new alert for each; said where the move was made. */
 interface Refusal {
   message: string;
   count: number;
-}
-
-/** What a line of the Move menu does. */
-interface BoardChoice extends MoveChoice {
-  /** What it posts; null: Accept, which opens its dialog. */
-  asked: Omit<CardMoveBody, "revision" | "as"> | null;
-  /** What the live region says; null: the column the answer names. */
-  spoken: string | null;
+  place: MenuPlace;
 }
 
 /** A card written, its re-read settled: focus goes to it once the board shows it in that column. */
@@ -90,6 +89,9 @@ interface Followed {
   id: string;
   column: string;
 }
+
+/** No child: a tile counts nothing. */
+const NO_ROLLUP: Rollup = { children: [], returned: 0 };
 
 /** A filter's select; the two lists are the read's own values. */
 function FilterSelect({
@@ -145,14 +147,101 @@ function Notes({ notes, label }: { notes: readonly string[]; label: string }) {
   );
 }
 
+/** A notice's Dismiss: it goes, the grid stays where it is. */
+function Dismiss({ onDismiss }: { onDismiss: () => void }) {
+  const t = useTranslate();
+  return (
+    <button type="button" className="button button-quiet board-notice-dismiss" onClick={onDismiss}>
+      <Icon name="rejected" />
+      <span>{t("board.view.dismiss")}</span>
+    </button>
+  );
+}
+
+/** A plain click with the primary button; a modified one is the browser's. */
+function isPlainClick(event: MouseEvent<HTMLElement>): boolean {
+  return event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
+}
+
 /**
- * The Board (`#/<project>/board[/<C>]`, docs/features/board-ui.md): an ordinary kanban, one board per
- * flow. Columns, moves and who makes them come from the read, and the UI looks them up and never
- * judges: each move is posted, redrawn from the daemon's read, refused in its words. The route's ID
- * selects a card, opens its panel and its flow. One tab stop over the cards: arrows move it, Enter
- * opens, `m` moves, `n` adds; Esc closes and puts focus back on the card; nothing is optimistic.
- * The tabs are the chosen workspace's flows, in its order; Show all flows shows the rest for the
- * visit, and a card the route names in one of them shows them too (docs/features/workspaces.md "The UI").
+ * A swimlane's head, spanning the grid, its label kept in view as the board scrolls sideways: what
+ * the lane holds and a button folding it; a parent lane also names the parent, a link opening its
+ * card, and where it stands, whichever flow that is.
+ */
+function LaneHead({
+  project,
+  lane,
+  id,
+  collapsed,
+  onToggle,
+  onOpenCard,
+}: {
+  project: string;
+  lane: Swimlane;
+  id: string;
+  collapsed: boolean;
+  onToggle: () => void;
+  onOpenCard: (id: string) => void;
+}) {
+  const t = useTranslate();
+  const { head } = lane;
+  let label: ReactNode;
+  if (head.cut === "assignee") {
+    label = <bdi>{shownSlot(head.name)}</bdi>;
+  } else if (head.cut === "unassigned") {
+    label = t("board.lanes.unassigned");
+  } else if (head.cut === "parent") {
+    label = <bdi>{shownSlot(head.card?.title ?? head.id)}</bdi>;
+  } else {
+    label = t("board.lanes.everythingElse");
+  }
+  return (
+    <div className="board-lane-head">
+      <div className="board-lane-label">
+        <h2 id={id} className="board-lane-title">
+          <button type="button" className="board-lane-toggle" aria-expanded={!collapsed} onClick={onToggle}>
+            <Icon name={collapsed ? "laneClosed" : "laneOpen"} />
+            <span>{label}</span>
+          </button>
+        </h2>
+        {head.cut === "parent" && (
+          <>
+            <a
+              className="mono"
+              href={sectionHash(project, "board", head.id)}
+              onClick={(event) => {
+                if (isPlainClick(event)) {
+                  event.preventDefault();
+                  onOpenCard(head.id);
+                }
+              }}
+            >
+              {shownSlot(head.id)}
+            </a>
+            {head.card !== undefined && (
+              <span className="mono muted">
+                {shownSlot(head.card.flow)}/{shownSlot(head.card.column)}
+              </span>
+            )}
+          </>
+        )}
+        <span className="muted board-lane-count">{t("board.lanes.count", { count: lane.count })}</span>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Board (`#/<project>/board[/<C>]`, `ui/README.md` "Screen rules"): an ordinary kanban, one
+ * board per flow, that holds still. Columns, moves, accept and return come from the read, and the UI
+ * looks them up and never judges: each move is posted, redrawn from the daemon's read, refused in its
+ * words. One grid holds the sticky header row and every swimlane, so a cell stands under its head;
+ * notices lie over the board's bottom edge, never in its flow, so no column header moves on a write,
+ * a refusal, a filter, a lane or a re-read. The route's ID opens the card as a modal over the board,
+ * its flow chosen once; opening from inside never switches the tab beneath. One tab stop over the
+ * cards: arrows move it, Page Down and Page Up cross lanes, Enter opens, `m` moves, `h` hands off,
+ * `r` returns, `n` adds; nothing is optimistic. The tabs are the chosen workspace's flows, in its
+ * order; Show all flows shows the rest for the visit.
  */
 export function BoardView({
   project,
@@ -180,11 +269,15 @@ export function BoardView({
   const actingId = useId();
   const actingLineId = useId();
   const cancelledId = useId();
+  const lanesId = useId();
   const tabsBase = useId();
+  const headBase = useId();
   const [remembered] = useState(() => memory.recall(project));
   const [chosenFlow, setChosenFlow] = useState<string | null>(remembered?.flow ?? null);
   const [filters, setFilters] = useState<BoardFilters>(remembered?.filters ?? NO_FILTERS);
   const [withCancelled, setWithCancelled] = useState(remembered?.withCancelled ?? false);
+  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(remembered?.collapsed ?? []));
+  const [laneMode, setLaneMode] = useState<LaneMode>(() => recallLaneMode(project));
   /** Show all flows was pressed for this visit, under the workspace `shownFor` names. */
   const [allFlows, setAllFlows] = useState(false);
   const [shownFor, setShownFor] = useState(lens);
@@ -194,24 +287,57 @@ export function BoardView({
   }
   /** The route's ID whose flow has been opened: a new ID opens its flow once, then a tab is the owner's. */
   const [flowOpenedFor, setFlowOpenedFor] = useState<string | null>(null);
+  /** The ID last opened from inside the board (a tile, a lane's head, a link in the modal): its route switches no tab. */
+  const [openedInside, setOpenedInside] = useState<string | null>(null);
   const [roving, setRoving] = useState<string | null>(cardId);
   const [menu, setMenu] = useState<OpenMenu | null>(null);
   const [dialog, setDialog] = useState<OpenDialog | null>(null);
+  /** Where the open dialog was asked from: one over the modal goes with it. */
+  const [dialogPlace, setDialogPlace] = useState<MenuPlace>("board");
   const [refusal, setRefusal] = useState<Refusal | null>(null);
+  /** What a write made in the modal said, shown in it, the board being inert beneath: the daemon's line on the acting name, its notes. */
+  const [modalLine, setModalLine] = useState<string | null>(null);
+  const [modalNotes, setModalNotes] = useState<readonly string[]>([]);
   /** The daemon's line on the acting name, shown under its field until the name changes or a write goes through. */
   const [actingLine, setActingLine] = useState<string | null>(null);
   const [writeNotes, setWriteNotes] = useState<readonly string[]>([]);
+  /** The list's notes as last dismissed: they stay gone until the daemon says something else. */
+  const [notesDismissed, setNotesDismissed] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
   const [dragged, setDragged] = useState<CardRow | null>(null);
-  const [dropAt, setDropAt] = useState<{ lane: string; before: string | null } | null>(null);
+  const [dropAt, setDropAt] = useState<{ cell: string; before: string | null } | null>(null);
   const [acting, setActing] = useActing();
   const login = useHubLogin();
   const allows = useAllowed(project);
+  const writing = useCardWriting(project);
+  /** The card the modal shows: the route's, held while a write is out, so Back takes effect once it settles. */
+  const [shownId, setShownId] = useState<string | null>(cardId);
+  if (shownId !== cardId && !writing) {
+    setShownId(cardId);
+  }
+  /** The card the modal's own state belongs to: another card, or none, takes its refusal, lines, notes, menu and dialog away. */
+  const [modalStateFor, setModalStateFor] = useState(shownId);
+  if (modalStateFor !== shownId) {
+    setModalStateFor(shownId);
+    setModalLine(null);
+    setModalNotes([]);
+    if (refusal?.place === "modal") {
+      setRefusal(null);
+    }
+    if (menu?.place === "modal") {
+      setMenu(null);
+    }
+    if (dialog !== null && dialogPlace === "modal") {
+      setDialog(null);
+    }
+    if (shownId === null) {
+      setOpenedInside(null);
+    }
+  }
+  const view = useRef<HTMLElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
   const results = useRef<HTMLDivElement>(null);
   const board = useRef<HTMLDivElement>(null);
-  const panelHeading = useRef<HTMLHeadingElement>(null);
-  /** The ID whose panel takes focus once it shows. */
-  const headingFor = useRef<string | null>(null);
   const followed = useRef<Followed | null>(null);
   /** The board's handlers as of the last commit, behind `cardActions`, which never changes. */
   const latest = useRef<Pick<CardActions, "onOpen" | "onMove"> | null>(null);
@@ -219,19 +345,43 @@ export function BoardView({
   const menuWasOpen = useRef(false);
   const refusals = useRef(0);
   const failedBefore = useRef(false);
+  /** This board pushed the modal's history entry: closing goes back, else it replaces. */
+  const pushed = useRef(false);
+  /** The tile the modal was opened from: focus goes back to it, wherever it stands then. */
+  const openedFrom = useRef<string | null>(null);
+  const lastShown = useRef<string | null>(shownId);
+
+  useViewTop(view, "board-top");
 
   const cards = useCards(project, withCancelled ? { with_cancelled: true } : {});
-  const panel = useCard(project, cardId);
-  // The tiles' marks are the list's; only an open panel asks what its targets read, as the list on focus.
-  const trace = useTrace(project, {}, cardId !== null, true);
+  const panel = useCard(project, shownId);
+  // The tiles' marks are the list's; only an open card asks what its targets read, as the list on focus.
+  const trace = useTrace(project, {}, shownId !== null, true);
   const write = useCardWrite(project);
   const today = useToday();
   const failure = useRetainedFailure(cards.error, cards.isFetching);
   const retried = useRetryFocus(cards.dataUpdatedAt === 0 ? undefined : cards.dataUpdatedAt, () => results.current);
+  // The scroller keeps a focused tile out from under its sticky header row: its padding is the row's
+  // height, measured whenever a header row mounts (a new tab, a stage or a grid drawn again) and resizes.
+  const measureHead = useCallback((head: HTMLDivElement | null) => {
+    const scroller = head?.closest<HTMLElement>(".board-region");
+    if (head === null || scroller === null || scroller === undefined) {
+      return undefined;
+    }
+    const measure = () => {
+      scroller.style.setProperty("--board-head-height", `${String(Math.ceil(head.getBoundingClientRect().height))}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(head);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   useEffect(() => {
-    memory.remember(project, { flow: chosenFlow, filters, withCancelled });
-  }, [memory, project, chosenFlow, filters, withCancelled]);
+    memory.remember(project, { flow: chosenFlow, filters, withCancelled, collapsed: [...collapsed] });
+  }, [memory, project, chosenFlow, filters, withCancelled, collapsed]);
 
   const list = cards.data;
   // A read that failed again says no target's state: what it last said may no longer hold.
@@ -239,6 +389,7 @@ export function BoardView({
   /** The list could not be read: no tile, no mark, whatever the last read said. */
   const boardFailed = cards.error !== null;
   const all = useMemo(() => list?.cards ?? [], [list]);
+  const handOffs = useMemo(() => rollupsOf(all, list?.flows ?? []), [all, list]);
   const everyTab = useMemo(() => (list === undefined ? [] : tabsOf(list)), [list]);
   const lensTabs = useMemo(() => workspaceTabs(everyTab, flows), [everyTab, flows]);
   /** Some flows are left out of the tabs by the workspace. */
@@ -247,11 +398,12 @@ export function BoardView({
   const visible = useMemo(() => all.filter((row) => matchesFilters(row, filters)), [all, filters]);
 
   // A new ID in the route opens its flow, once its row or its card has said which.
-  const routed = panel.data !== undefined && isCard(panel.data) ? panel.data.flow : (all.find((row) => row.id === cardId)?.flow ?? null);
+  const routed = panel.data !== undefined && isCard(panel.data) && panel.data.id === cardId ? panel.data.flow : (all.find((row) => row.id === cardId)?.flow ?? null);
   // Judged once the list is read too: before it the workspace's tabs are none, and every flow would look hidden.
   if (flowsKnown && list !== undefined && cardId !== flowOpenedFor && (cardId === null || routed !== null)) {
     setFlowOpenedFor(cardId);
-    if (routed !== null) {
+    // Arriving by URL opens the card's flow; a card opened from inside leaves the tab beneath as it is.
+    if (routed !== null && cardId !== openedInside) {
       setChosenFlow(routed);
       // A card of a flow the workspace leaves out is never shown on a board that hides it.
       if (!lensTabs.some((candidate) => candidate.name === routed)) {
@@ -260,25 +412,33 @@ export function BoardView({
     }
   }
 
-  const panelRow = all.find((row) => row.id === cardId);
-  const shownMark = panelRow === undefined ? null : rowMark(panelRow);
+  const shownRow = all.find((row) => row.id === shownId);
+  const shownMark = shownRow === undefined ? null : rowMark(shownRow);
   const tab = tabs.find((candidate) => candidate.name === chosenFlow) ?? tabs[0];
   const flow = tab?.flow;
-  const lanes = useMemo(() => (tab === undefined ? [] : lanesOf(tab, visible, t)), [tab, visible, t]);
-  const wholeLanes = useMemo(() => (tab === undefined ? [] : lanesOf(tab, all, t)), [tab, all, t]);
+  // The heads come from every standing row of the flow, so no filter, lane or Show cancelled moves them; the lanes from the rows shown.
+  const heads = useMemo(() => (tab === undefined ? [] : columnHeadsOf(tab, openRows(all), t)), [tab, all, t]);
+  const headCells = useMemo(() => (tab === undefined ? [] : cellsOf(tab, heads, visible)), [tab, heads, visible]);
+  const wholeCells = useMemo(() => (tab === undefined ? [] : cellsOf(tab, heads, all)), [tab, heads, all]);
+  const lanes = useMemo(() => (tab === undefined ? [] : swimlanesOf(tab, heads, visible, laneMode, all)), [tab, heads, visible, laneMode, all]);
   const shownLanes = useMemo(
-    () => lanes.map((lane) => ({ ...lane, rows: expanded.has(lane.key) ? lane.rows : lane.rows.slice(0, COLUMN_SHOWN) })),
-    [lanes, expanded],
+    () =>
+      lanes.map((lane) => ({
+        ...lane,
+        cells: lane.cells.map((cell) => ({ ...cell, rows: collapsed.has(lane.key) ? [] : expanded.has(cell.key) ? cell.rows : cell.rows.slice(0, COLUMN_SHOWN) })),
+      })),
+    [lanes, expanded, collapsed],
   );
-  const order = useMemo(() => shownLanes.flatMap((lane) => lane.rows), [shownLanes]);
+  const order = useMemo(() => shownLanes.flatMap((lane) => lane.cells.flatMap((cell) => cell.rows)), [shownLanes]);
   const rovingId = order.find((row) => row.id === roving)?.id ?? order.find((row) => row.id === cardId)?.id ?? order[0]?.id ?? null;
   const { discipline: chosenDiscipline, assignee: chosenAssignee } = filters;
   const disciplines = useMemo(() => disciplineChoices(all, chosenDiscipline), [all, chosenDiscipline]);
   const assignees = useMemo(() => assigneeChoices(all, chosenAssignee, t), [all, chosenAssignee, t]);
   const menuRow = menu === null ? undefined : all.find((row) => row.id === menu.id);
+  const menuFlow = menuRow === undefined ? undefined : flowOf(menuRow.flow);
   // A card a column of the flow no longer holds: the flow lists no move from there, its read does.
-  const menuOutside = menuRow !== undefined && !(flow?.columns.some((column) => column.id === menuRow.column) ?? false);
-  const outsideRead = useCard(project, menuOutside ? menuRow.id : null);
+  const menuOutside = menuRow !== undefined && !(menuFlow?.columns.some((column) => column.id === menuRow.column) ?? false);
+  const outsideRead = useCard(project, menuOutside && menuRow.id !== shownId ? menuRow.id : null);
   // A card read away while its menu is open takes the menu with it; a board that failed takes the menu and a drag.
   if (menu !== null && (menuRow === undefined || boardFailed)) {
     setMenu(null);
@@ -288,9 +448,23 @@ export function BoardView({
     setDropAt(null);
   }
 
+  function flowOf(name: string): CardFlow | undefined {
+    return list?.flows.find((candidate) => candidate.name === name);
+  }
+
   function cardElement(id: string): HTMLElement | undefined {
     const found = board.current?.querySelectorAll<HTMLElement>("[data-card]") ?? [];
     return Array.from(found).find((element) => element.dataset.card === id);
+  }
+
+  /** The modal's heading, when it is open. */
+  function modalHeading(): HTMLElement | null {
+    return document.querySelector<HTMLElement>(".card-modal .dialog-title");
+  }
+
+  /** A column's standing rows across every lane, shown or not: where a drop or a reorder places a card. */
+  function standingIn(column: string): CardRow[] {
+    return openRows(wholeCells.find((cell) => cell.column === column)?.rows ?? []);
   }
 
   /** Where a written card landed, for focus; a 200 always names it. Called once its re-read has settled. */
@@ -302,7 +476,7 @@ export function BoardView({
 
   /**
    * Ends a follow, so it never waits to steal focus later: the card shown there takes it; with the
-   * board's reads settled, a card past a column's cap reveals its column and takes it on the next
+   * board's reads settled, a card past a cell's cap reveals its cell and takes it on the next
    * commit, and one not on this board (a filter hides it, another flow holds it, it is gone) lets go,
    * a shown card taking focus only if focus fell to the body.
    */
@@ -320,7 +494,7 @@ export function BoardView({
     if (cards.isFetching) {
       return;
     }
-    const cutOff = element === undefined ? lanes.find((lane) => lane.rows.some((row) => row.id === wanted.id)) : undefined;
+    const cutOff = element === undefined ? lanes.flatMap((lane) => (collapsed.has(lane.key) ? [] : lane.cells)).find((cell) => cell.rows.some((row) => row.id === wanted.id)) : undefined;
     if (cutOff !== undefined && !expanded.has(cutOff.key)) {
       setExpanded((keys) => new Set(keys).add(cutOff.key));
       return;
@@ -331,16 +505,28 @@ export function BoardView({
     }
   }
 
-  // The panel asked for by Enter or a click takes focus once it shows; a written card once it landed;
-  // a menu gone with its card leaves focus on a shown card.
+  // A closed modal gives focus back to the tile it was opened from, in its column now, else to the
+  // board's heading; a written card takes it once it landed; a menu gone with its card leaves focus
+  // on a shown card.
   useEffect(() => {
-    if (headingFor.current !== null && headingFor.current === cardId && panelHeading.current !== null) {
-      headingFor.current = null;
-      panelHeading.current.focus();
+    const was = lastShown.current;
+    lastShown.current = shownId;
+    if (was !== null && shownId === null) {
+      const back = openedFrom.current ?? was;
+      openedFrom.current = null;
+      pushed.current = false;
+      // A tile taking focus takes the roving tab stop too.
+      (cardElement(back) ?? heading.current)?.focus();
+    } else if (shownId !== was && shownId !== null && shownId !== openedInside) {
+      // Another card named from outside the board (a link, Forward): its entry is not this board's to go back from.
+      pushed.current = false;
+      openedFrom.current = null;
     }
-    takeFollowed();
+    if (shownId === null) {
+      takeFollowed();
+    }
     if (menuWasOpen.current && menu === null && focusIsLost()) {
-      (cardElement(rovingId ?? "") ?? results.current)?.focus();
+      (modalHeading() ?? cardElement(rovingId ?? "") ?? results.current)?.focus();
     }
     menuWasOpen.current = menu !== null;
     // The tile that had focus went with the board.
@@ -350,47 +536,72 @@ export function BoardView({
     failedBefore.current = boardFailed;
   });
 
-  function openPanel(id: string) {
-    if (id === cardId) {
-      panelHeading.current?.focus();
+  /** A card opened from the board: one history entry, its tab kept. */
+  function openCard(id: string) {
+    if (writing) {
       return;
     }
-    headingFor.current = id;
+    if (id === shownId) {
+      modalHeading()?.focus();
+      return;
+    }
+    openedFrom.current ??= id;
+    setOpenedInside(id);
+    pushed.current = true;
     pushHash(sectionHash(project, "board", id));
   }
 
-  function closePanel() {
-    const back = cardId;
-    pushHash(sectionHash(project, "board"));
-    const element = back === null ? undefined : cardElement(back);
-    (element ?? cardElement(rovingId ?? "") ?? results.current)?.focus();
+  /** A card link inside the modal: the entry replaced, the tab beneath kept. */
+  function followCard(id: string) {
+    if (writing) {
+      return;
+    }
+    setOpenedInside(id);
+    replaceHash(sectionHash(project, "board", id));
   }
+
+  /** Esc, Close and the scrim: back when this board pushed the entry, else the board's own hash in its place. */
+  function closeCard() {
+    if (writing) {
+      return;
+    }
+    if (pushed.current) {
+      pushed.current = false;
+      window.history.back();
+    } else {
+      replaceHash(sectionHash(project, "board"));
+    }
+  }
+
+  const modalLinks: CardLinks = { project, page: false, onFollow: followCard };
 
   function focusCard(id: string) {
     setRoving(id);
     focusLater(() => cardElement(id));
   }
 
-  function openMenu(row: CardRow, button: HTMLElement | null) {
-    if (moving.current || row.accepted || row.cancelled) {
+  function openMenu(row: CardRow, button: HTMLElement | null, place: MenuPlace) {
+    if (moving.current || writing || row.accepted || row.cancelled) {
       return;
     }
     const element = cardElement(row.id);
     const anchor = button ?? element?.querySelector<HTMLElement>("[data-card-move]") ?? element;
     if (anchor !== undefined) {
-      setMenu({ id: row.id, anchor: anchor.getBoundingClientRect() });
+      setMenu({ id: row.id, anchor: anchor.getBoundingClientRect(), trigger: button ?? element ?? null, place });
     }
   }
 
+  /** The menu closes: focus back on its tile on the board, on its button in the modal. */
   function closeMenu() {
     if (menu !== null) {
-      cardElement(menu.id)?.focus();
+      const back = menu.place === "modal" && menu.trigger?.isConnected === true ? menu.trigger : cardElement(menu.id);
+      back?.focus();
     }
     setMenu(null);
   }
 
-  /** The one way a card moves: from the menu, from a drop. The answer says where it landed; the board reads again. */
-  async function move(row: CardRow, asked: Omit<CardMoveBody, "revision" | "as">, spoken: string | null) {
+  /** The one way a card moves: from a menu, from a drop. The answer says where it landed; the board reads again. */
+  async function move(row: CardRow, asked: Omit<CardMoveBody, "revision" | "as">, spoken: string | null, place: MenuPlace) {
     if (moving.current) {
       return;
     }
@@ -398,90 +609,108 @@ export function BoardView({
     setRefusal(null);
     try {
       const answer = await write.mutateAsync({ write: "move", id: row.id, body: { ...asked, revision: row.revision, as: actingName(acting) } });
-      setWriteNotes(answer.notes);
       setActingLine(null);
-      follow(answer);
-      announce(spoken ?? t("board.said.moved", { id: row.id, column: columnTitle(flow, answer.column ?? row.column) }));
+      setModalLine(null);
+      if (place === "board") {
+        setWriteNotes(answer.notes);
+        follow(answer);
+      } else {
+        setModalNotes(answer.notes);
+      }
+      announce(spoken ?? t("board.said.moved", { id: row.id, column: columnTitleOf(flowOf(answer.flow ?? row.flow), answer.column ?? row.column) }));
     } catch (error) {
       const answer = apiErrorOf(error);
       if (isActingLine(answer)) {
-        setActingLine(answer.message);
+        (place === "modal" ? setModalLine : setActingLine)(answer.message);
       } else {
         refusals.current += 1;
-        setRefusal({ message: answer.message, count: refusals.current });
+        setRefusal({ message: answer.message, count: refusals.current, place });
       }
     } finally {
       moving.current = false;
     }
   }
 
-  /** The menu's lines: the column's moves in served order, then Up, Down, then Accept in the accept column, unless a hub's `allowed` omits it. */
-  function choicesFor(row: CardRow): BoardChoice[] {
-    const read = outsideRead.data;
-    const moves = menuOutside ? (read !== undefined && isCard(read) ? read.allowed : []) : movesFrom(flow, row.column);
-    const choices: BoardChoice[] = moves.map(({ to, by }) => ({
-      key: `to:${to}`,
-      label: columnTitle(flow, to),
-      detail: needsLine(by, t),
-      icon: "arrowRight",
-      asked: { to },
-      spoken: null,
-    }));
-    const lane = lanes.find((candidate) => candidate.rows.some((other) => other.id === row.id));
-    const whole = wholeLanes.find((candidate) => candidate.key === lane?.key);
-    if (lane !== undefined && whole !== undefined && lane.column !== null) {
-      const { up, down } = reorderOf(row.id, openRows(lane.rows), openRows(whole.rows));
-      if (up !== null) {
-        choices.push({ key: "up", label: t("board.menu.up"), detail: null, icon: "cardUp", asked: { before: up.before }, spoken: t("board.said.movedUp", { id: row.id, lane: lane.title }) });
-      }
-      if (down !== null) {
-        choices.push({
-          key: "down",
-          label: t("board.menu.down"),
-          detail: null,
-          icon: "cardDown",
-          asked: down.before === null ? { to: lane.column } : { before: down.before },
-          spoken: t("board.said.movedDown", { id: row.id, lane: lane.title }),
-        });
-      }
-    }
-    if (row.column === flow?.accept.from && allows("accept")) {
-      choices.push({ key: "accept", label: t("board.menu.accept"), detail: null, icon: "taskAccepted", asked: null, spoken: null });
-    }
-    return choices;
+  /** A column's title in the flow that holds it; one the flow no longer lists raw. */
+  function columnTitleOf(holder: CardFlow | undefined, column: string): string {
+    return holder?.columns.find((candidate) => candidate.id === column)?.title ?? column;
   }
 
-  /** A line of the menu taken: the menu closes, focus on the card, then the move goes out or Accept's dialog opens. */
-  function takeChoice(row: CardRow, choice: BoardChoice) {
+  /** The cell a card is drawn in on this board, if it is. */
+  function cellOf(id: string): BoardColumnCell | undefined {
+    return shownLanes.flatMap((lane) => lane.cells).find((cell) => cell.rows.some((row) => row.id === id));
+  }
+
+  /** The menu's lines for a row: its flow's moves (a card a column left behind, its read's), Return…, Up and Down where it is drawn, Accept. */
+  function choicesFor(row: CardRow): BoardChoice[] {
+    const read = row.id === shownId ? panel.data : outsideRead.data;
+    const moves: readonly CardAllowed[] = menuOutside ? (read !== undefined && isCard(read) ? read.allowed : []) : movesFrom(menuFlow, row.column);
+    const cell = cellOf(row.id);
+    const reorder =
+      cell === undefined || cell.column === null
+        ? null
+        : { ...reorderOf(row.id, openRows(cell.rows), standingIn(cell.column)), column: cell.column };
+    return moveChoicesOf({ row, flow: menuFlow, moves, reorder, lane: cell?.title ?? "", accepts: allows("accept"), t });
+  }
+
+  /** A line of the menu taken: the menu closes, focus on its trigger, then the move goes out or Accept's or Return's dialog opens. */
+  function takeChoice(row: CardRow, choice: BoardChoice, opened: OpenMenu) {
     closeMenu();
-    if (choice.asked === null) {
-      setDialog({ action: "accept", card: row, trigger: cardElement(row.id) ?? null });
+    const trigger = opened.trigger?.isConnected === true ? opened.trigger : (cardElement(row.id) ?? null);
+    if (choice.act === "accept") {
+      openDialog({ action: "accept", card: row, trigger }, opened.place);
+    } else if (choice.act === "return") {
+      openDialog({ action: "return", card: row, to: choice.asked.to ?? row.column, before: null, trigger }, opened.place);
     } else {
-      void move(row, choice.asked, choice.spoken);
+      void move(row, choice.asked, choice.spoken, opened.place);
     }
+  }
+
+  /** Whether `r` on a tile returns it: its flow names a return column it is not in, and the flow lists the move there. */
+  function returnOf(row: CardRow): string | null {
+    const back = flowOf(row.flow)?.return ?? null;
+    if (back === null || row.column === back || row.accepted || row.cancelled) {
+      return null;
+    }
+    return movesFrom(flowOf(row.flow), row.column).some((candidate) => candidate.to === back) ? back : null;
   }
 
   function keyTarget(key: string, id: string): CardRow | undefined {
-    const laneAt = shownLanes.findIndex((lane) => lane.rows.some((row) => row.id === id));
+    const laneAt = shownLanes.findIndex((lane) => lane.cells.some((cell) => cell.rows.some((row) => row.id === id)));
     const lane = shownLanes[laneAt];
-    if (lane === undefined) {
+    const cellAt = lane?.cells.findIndex((cell) => cell.rows.some((row) => row.id === id)) ?? -1;
+    const cell = lane?.cells[cellAt];
+    if (lane === undefined || cell === undefined) {
       return undefined;
     }
-    const at = lane.rows.findIndex((row) => row.id === id);
+    const at = cell.rows.findIndex((row) => row.id === id);
+    const filled = lane.cells.filter((candidate) => candidate.rows.length > 0);
     switch (key) {
       case "ArrowDown":
-        return lane.rows[at + 1];
+        return cell.rows[at + 1];
       case "ArrowUp":
-        return lane.rows[at - 1];
+        return cell.rows[at - 1];
       case "Home":
-        return lane.rows[0];
+        return filled[0]?.rows[0];
       case "End":
-        return lane.rows.at(-1);
-      default: {
-        // Across: the nearest column holding a card, at the same height or its last.
-        const step = key === "ArrowRight" ? 1 : -1;
+        return filled.at(-1)?.rows.at(-1);
+      case "PageDown":
+      case "PageUp": {
+        // The same column in the next or previous lane drawing a card there; none: focus stays.
+        const step = key === "PageDown" ? 1 : -1;
         for (let next = laneAt + step; next >= 0 && next < shownLanes.length; next += step) {
-          const rows = shownLanes[next]?.rows ?? [];
+          const rows = shownLanes[next]?.cells[cellAt]?.rows ?? [];
+          if (rows.length > 0) {
+            return rows[Math.min(at, rows.length - 1)];
+          }
+        }
+        return undefined;
+      }
+      default: {
+        // Across, in the lane: the nearest column holding a card, at the same height or its last.
+        const step = key === "ArrowRight" ? 1 : -1;
+        for (let next = cellAt + step; next >= 0 && next < lane.cells.length; next += step) {
+          const rows = lane.cells[next]?.rows ?? [];
           if (rows.length > 0) {
             return rows[Math.min(at, rows.length - 1)];
           }
@@ -501,14 +730,17 @@ export function BoardView({
     if (element === null || row === undefined) {
       return;
     }
-    switch (hotkeyOf(event)) {
+    const key = hotkeyOf(event);
+    switch (key) {
       case "ArrowDown":
       case "ArrowUp":
       case "ArrowLeft":
       case "ArrowRight":
       case "Home":
-      case "End": {
-        const target = keyTarget(event.key, row.id);
+      case "End":
+      case "PageDown":
+      case "PageUp": {
+        const target = keyTarget(key, row.id);
         if (target !== undefined) {
           focusCard(target.id);
         }
@@ -518,19 +750,39 @@ export function BoardView({
         if (event.target !== element) {
           return;
         }
-        openPanel(row.id);
+        openCard(row.id);
         break;
       case "m":
-        openMenu(row, null);
+        openMenu(row, null, "board");
         break;
+      case "h":
+        if (row.accepted || row.cancelled) {
+          return;
+        }
+        openDialog({ action: "handoff", card: row, trigger: element }, "board");
+        break;
+      case "r": {
+        const back = returnOf(row);
+        if (back === null) {
+          return;
+        }
+        openDialog({ action: "return", card: row, to: back, before: null, trigger: element }, "board");
+        break;
+      }
       default:
         return;
     }
     event.preventDefault();
   }
 
+  /** A dialog opens, over the board or over the modal. */
+  function openDialog(next: OpenDialog, place: MenuPlace) {
+    setDialog(next);
+    setDialogPlace(place);
+  }
+
   function openNew(trigger: HTMLElement | null) {
-    setDialog({ action: "new", trigger });
+    openDialog({ action: "new", trigger }, "board");
   }
 
   function onViewKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -540,44 +792,52 @@ export function BoardView({
     if (event.key === "?") {
       event.preventDefault();
       openShortcuts();
-    } else if (letterOf(event) === "n") {
+    } else if (letterOf(event) === "n" && shownId === null) {
       event.preventDefault();
       openNew(document.activeElement instanceof HTMLElement ? document.activeElement : null);
-    } else if (event.key === "Escape" && cardId !== null) {
-      event.preventDefault();
-      closePanel();
     }
   }
 
-  function onDragOver(lane: BoardLane, before: string | null) {
-    const place = standingBefore(before, openRows(wholeLanes.find((candidate) => candidate.key === lane.key)?.rows ?? []));
-    if (dropAt?.lane !== lane.key || dropAt.before !== place) {
-      setDropAt({ lane: lane.key, before: place });
+  function onDragOver(cell: BoardColumnCell, before: string | null) {
+    const place = standingBefore(before, cell.column === null ? [] : standingIn(cell.column));
+    if (dropAt?.cell !== cell.key || dropAt.before !== place) {
+      setDropAt({ cell: cell.key, before: place });
     }
   }
 
-  function onDragLeave(lane: BoardLane) {
-    if (dropAt?.lane === lane.key) {
+  function onDragLeave(cell: BoardColumnCell) {
+    if (dropAt?.cell === cell.key) {
       setDropAt(null);
     }
   }
 
-  function onDrop(lane: BoardLane, before: string | null) {
+  /** A drop sends its cell's column and nothing else: a lane neither assigns nor re-parents. Into the return column from another, the Return dialog asks why first. */
+  function onDrop(cell: BoardColumnCell, before: string | null) {
     const row = dragged;
     setDragged(null);
     setDropAt(null);
-    const whole = wholeLanes.find((candidate) => candidate.key === lane.key);
-    if (row === null || lane.column === null || whole === undefined) {
+    if (row === null || cell.column === null) {
       return;
     }
-    const asked = dropMove(row, lane.column, before, openRows(whole.rows));
-    if (asked !== null) {
-      void move(row, asked, null);
+    const asked = dropMove(row, cell.column, before, standingIn(cell.column));
+    if (asked === null) {
+      return;
     }
+    const back = flowOf(row.flow)?.return ?? null;
+    if (cell.column === back && row.column !== back) {
+      openDialog({ action: "return", card: row, to: cell.column, before: asked.before ?? null, trigger: cardElement(row.id) ?? null }, "board");
+      return;
+    }
+    void move(row, asked, null, "board");
   }
 
   useEffect(() => {
-    latest.current = { onOpen: openPanel, onMove: openMenu };
+    latest.current = {
+      onOpen: openCard,
+      onMove: (row, button) => {
+        openMenu(row, button, "board");
+      },
+    };
   });
   // One object for the board's life, so a memoised card redraws only when its own row or marks do.
   const cardActions = useMemo<CardActions>(
@@ -601,35 +861,70 @@ export function BoardView({
     [],
   );
 
-  function showAll(lane: BoardLane) {
-    setExpanded((keys) => new Set(keys).add(lane.key));
-    const next = lane.rows[COLUMN_SHOWN];
+  function showAll(cell: BoardColumnCell) {
+    setExpanded((keys) => new Set(keys).add(cell.key));
+    const next = cell.rows[COLUMN_SHOWN];
     if (next !== undefined) {
       focusCard(next.id);
     }
   }
 
+  function toggleLane(key: string) {
+    setCollapsed((keys) => {
+      const next = new Set(keys);
+      if (!next.delete(key)) {
+        next.add(key);
+      }
+      return next;
+    });
+  }
+
+  function chooseLanes(mode: LaneMode) {
+    setLaneMode(mode);
+    rememberLaneMode(project, mode);
+  }
+
   function closeDialog() {
     const back = dialog?.trigger;
     setDialog(null);
-    focusLater(() => (back?.isConnected === true ? back : (panelHeading.current ?? results.current)));
+    focusLater(() => (back?.isConnected === true ? back : (modalHeading() ?? results.current)));
   }
 
   /** A dialog's write went through: the board has read again. `toCard`: focus goes to the card, else back to the dialog's trigger. */
-  /** `said` words the write's outcome around the card's ID, "The card" when the answer names none. */
-  function written(answer: CardWrite, said: (id: string) => string, toCard: boolean) {
+  function written(answer: CardWrite, said: Said, toCard: boolean) {
     setRefusal(null);
     setActingLine(null);
-    setWriteNotes(answer.notes);
-    if (toCard) {
+    setModalLine(null);
+    if (dialogPlace === "modal") {
+      setModalNotes(answer.notes);
+    } else {
+      setWriteNotes(answer.notes);
+    }
+    if (toCard && shownId === null) {
       follow(answer);
     }
     closeDialog();
     announce(said(answer.id ?? t("board.said.theCard")));
   }
 
+  /** An act of the card's modal: the Move menu at its button, or the act's dialog. */
   function onAct(action: CardAction, card: Card, trigger: HTMLElement) {
-    setDialog({ action, card, trigger });
+    if (writing) {
+      return;
+    }
+    if (action === "move") {
+      const row = all.find((candidate) => candidate.id === card.id);
+      if (row !== undefined) {
+        openMenu(row, trigger, "modal");
+      }
+    } else if (action === "return") {
+      const back = flowOf(card.flow)?.return ?? null;
+      if (back !== null) {
+        openDialog({ action: "return", card, to: back, before: null, trigger }, "modal");
+      }
+    } else {
+      openDialog({ action, card, trigger }, "modal");
+    }
   }
 
   /** The card a dialog works on, as read now: its revision is what a submit goes on; what is sent stays what the person changed. */
@@ -638,10 +933,6 @@ export function BoardView({
       return panel.data;
     }
     return card;
-  }
-
-  function flowOf(name: string): CardFlow | undefined {
-    return list?.flows.find((candidate) => candidate.name === name);
   }
 
   function retry() {
@@ -654,84 +945,21 @@ export function BoardView({
     focusLater(() => cardElement(rovingId ?? "") ?? results.current);
   }
 
-  let dialogShown: ReactNode = null;
-  if (dialog !== null) {
-    if (dialog.action === "new") {
-      dialogShown = (
-        <NewCardDialog
-          project={project}
-          onClose={closeDialog}
-          onActingLine={setActingLine}
-          onDone={(answer) => {
-            written(answer, (id) => t("board.said.created", { id, column: columnTitle(flowOf(answer.flow ?? ""), answer.column ?? "") }), true);
-          }}
-        />
-      );
-    } else if (dialog.action === "accept") {
-      const row = all.find((candidate) => candidate.id === dialog.card.id);
-      dialogShown = (
-        <AcceptCardDialog
-          project={project}
-          card={row ?? dialog.card}
-          onClose={closeDialog}
-          onActingLine={setActingLine}
-          onDone={(answer) => {
-            // From the Move menu the trigger is the card, which has moved; from the panel, its Accept, gone with the write.
-            written(answer, (id) => t("board.said.accepted", { id }), dialog.trigger?.dataset.card !== undefined);
-          }}
-        />
-      );
-    } else if (dialog.action === "edit") {
-      dialogShown = (
-        <EditCardDialog
-          project={project}
-          card={currentCard(dialog.card)}
-          onClose={closeDialog}
-          onActingLine={setActingLine}
-          onDone={(answer) => {
-            written(answer, (id) => t("board.said.saved", { id }), false);
-          }}
-        />
-      );
-    } else if (dialog.action === "clear") {
-      dialogShown = (
-        <ClearCardDialog
-          project={project}
-          card={currentCard(dialog.card)}
-          on={shownMark?.on ?? null}
-          onClose={closeDialog}
-          onActingLine={setActingLine}
-          onDone={(answer) => {
-            written(answer, (id) => t("board.said.cleared", { id }), false);
-          }}
-        />
-      );
-    } else if (dialog.action === "assign") {
-      dialogShown = (
-        <AssignDialog
-          project={project}
-          card={currentCard(dialog.card)}
-          onClose={closeDialog}
-          onActingLine={setActingLine}
-          onDone={(answer) => {
-            written(answer, (id) => t("board.said.assigned", { id }), false);
-          }}
-        />
-      );
-    } else {
-      dialogShown = (
-        <CancelCardDialog
-          project={project}
-          card={currentCard(dialog.card)}
-          onClose={closeDialog}
-          onActingLine={setActingLine}
-          onDone={(answer) => {
-            written(answer, (id) => t("board.said.cancelled", { id }), false);
-          }}
-        />
-      );
-    }
-  }
+  const dialogShown =
+    dialog === null ? null : (
+      <CardActDialog
+        project={project}
+        dialog={dialog}
+        flowOf={flowOf}
+        flows={list?.flows ?? []}
+        current={{ row: (id) => all.find((candidate) => candidate.id === id), card: currentCard }}
+        clearOn={shownMark?.on ?? null}
+        t={t}
+        onClose={closeDialog}
+        onActingLine={dialogPlace === "modal" ? setModalLine : setActingLine}
+        onWritten={written}
+      />
+    );
 
   let body;
   if (list === undefined || tab === undefined || !flowsKnown) {
@@ -751,64 +979,128 @@ export function BoardView({
       );
   } else {
     const filtered = filters.discipline !== ANY || filters.assignee !== ANY;
-    // A lane takes the notes that name it; the rest stand over the board.
-    const laneNotes = (lane: BoardLane) =>
-      lane.column !== null ? [] : list.notes.filter((note) => lane.rows.some((row) => noteNames(note, row.flow, row.column)));
-    const placedNotes = new Set(lanes.flatMap(laneNotes));
-    const boardBody = (
+    // A cell outside the flow takes the notes that name its cards; the rest lie over the board.
+    const cellNotes = (cell: BoardColumnCell) => (cell.column !== null ? [] : list.notes.filter((note) => cell.rows.some((row) => noteNames(note, row.flow, row.column))));
+    const placedNotes = new Set(lanes.flatMap((lane) => lane.cells.flatMap(cellNotes)));
+    const listNotes = boardFailed ? [] : list.notes.filter((note) => !placedNotes.has(note));
+    const listNotesKey = listNotes.join("\n");
+    const grid = (
       <div
         ref={board}
-        className="board-columns"
+        className={lanes.length === 1 && lanes[0]?.head.cut === "all" ? "board-grid board-grid-single" : "board-grid"}
         role="group"
         aria-label={tabs.length > 1 ? t("board.view.boardOf", { name: tab.name }) : t("board.view.title")}
+        style={{ "--board-columns": String(heads.length) } as CSSProperties}
         onKeyDown={onBoardKeyDown}
       >
-        {shownLanes.map((lane, index) => {
-          const notes = laneNotes(lanes[index] ?? lane);
+        <div ref={measureHead} className="board-head">
+          {heads.map((head, index) => (
+            <BoardColumnHeader key={head.key} head={head} id={`${headBase}-head-${String(index)}`} count={headCells[index]?.count ?? 0} />
+          ))}
+        </div>
+        {shownLanes.map((lane, laneIndex) => {
+          const laneId = `${headBase}-lane-${String(laneIndex)}`;
+          const folded = collapsed.has(lane.key);
+          const whole = lanes[laneIndex] ?? lane;
           return (
-            <BoardColumn
-              key={lane.key}
-              lane={lanes[index] ?? lane}
-              expanded={expanded.has(lane.key)}
-              dropping={dragged !== null}
-              dropAtEnd={dropAt?.lane === lane.key && dropAt.before === null}
-              note={<Notes notes={notes} label={t("board.view.laneNotes")} />}
-              onShowAll={showAll}
-              onDragOver={onDragOver}
-              onDragLeave={onDragLeave}
-              onDrop={onDrop}
-            >
-              {lane.rows.map((row) => (
-                <BoardCard
-                  key={row.id}
+            <Fragment key={lane.key}>
+              {lane.head.cut !== "all" && (
+                <LaneHead
                   project={project}
-                  row={row}
-                  today={today}
-                  tabbable={row.id === rovingId}
-                  selected={row.id === cardId}
-                  menuOpen={menu?.id === row.id}
-                  dropAbove={dropAt?.lane === lane.key && dropAt.before === row.id}
-                  actions={cardActions}
+                  lane={lane}
+                  id={laneId}
+                  collapsed={folded}
+                  onToggle={() => {
+                    toggleLane(lane.key);
+                  }}
+                  onOpenCard={openCard}
                 />
+              )}
+              {lane.cells.map((cell, index) => (
+                <BoardColumn
+                  key={cell.key}
+                  cell={whole.cells[index] ?? cell}
+                  labelledBy={lane.head.cut === "all" ? `${headBase}-head-${String(index)}` : `${headBase}-head-${String(index)} ${laneId}`}
+                  collapsed={folded}
+                  expanded={expanded.has(cell.key)}
+                  dropping={dragged !== null}
+                  dropAtEnd={dropAt?.cell === cell.key && dropAt.before === null}
+                  note={<Notes notes={cellNotes(whole.cells[index] ?? cell)} label={t("board.view.laneNotes")} />}
+                  onShowAll={showAll}
+                  onDragOver={onDragOver}
+                  onDragLeave={onDragLeave}
+                  onDrop={onDrop}
+                >
+                  {cell.rows.map((row) => {
+                    const rollup = handOffs.get(row.id) ?? NO_ROLLUP;
+                    return (
+                      <BoardCard
+                        key={row.id}
+                        project={project}
+                        row={row}
+                        today={today}
+                        tabbable={row.id === rovingId}
+                        selected={row.id === shownId}
+                        menuOpen={menu?.id === row.id && menu.place === "board"}
+                        dropAbove={dropAt?.cell === cell.key && dropAt.before === row.id}
+                        returned={flow !== undefined && flow.return !== null && row.column === flow.return}
+                        handOffs={rollup.children.length}
+                        returnedChildren={rollup.returned}
+                        actions={cardActions}
+                      />
+                    );
+                  })}
+                </BoardColumn>
               ))}
-            </BoardColumn>
+            </Fragment>
           );
         })}
       </div>
     );
-    body = (
-      <div className={cardId === null ? "board-stage" : "board-stage board-stage-panel"}>
-        <div className="board-main">
-          {!boardFailed && <Notes notes={list.notes.filter((note) => !placedNotes.has(note))} label={t("board.view.notes")} />}
-          <Notes notes={writeNotes} label={t("board.view.writeNotes")} />
+    const stage = (
+      <div className="board-stage">
+        <div className="board-region">
+          {cards.error !== null ? (
+            // No tile drawn on the last read: a card may be suspect now, and a clean tile would say it is not.
+            <ErrorPanel title={t("board.view.failed")} message={apiErrorOf(cards.error).message} retrying={cards.isFetching} attempt={cards.errorUpdateCount} onRetry={retry} />
+          ) : (
+            grid
+          )}
+        </div>
+        <div className="board-notices">
+          {listNotes.length > 0 && notesDismissed !== listNotesKey && (
+            <div className="board-notice">
+              <Notes notes={listNotes} label={t("board.view.notes")} />
+              <Dismiss
+                onDismiss={() => {
+                  setNotesDismissed(listNotesKey);
+                }}
+              />
+            </div>
+          )}
           {!boardFailed && list.truncated && (
-            <p className="note">
+            <p className="note board-notice">
               <Icon name="info" />
               <span>{t("board.view.omitted", { count: list.omitted ?? 0 })}</span>
             </p>
           )}
-          {refusal !== null && (
-            <div key={refusal.count} className="refusal" role="alert">
+          {!boardFailed && list.cards.length === 0 && (
+            <div className="empty-state board-notice">
+              <p>{noCards(t)}</p>
+            </div>
+          )}
+          {!boardFailed && all.length > 0 && visible.length === 0 && (
+            <div className="empty-filter board-notice">
+              <p>{t("board.view.noMatch")}</p>
+              {filtered && (
+                <button type="button" className="button" onClick={clearFilters}>
+                  {t("board.view.clearFilters")}
+                </button>
+              )}
+            </div>
+          )}
+          {refusal !== null && refusal.place === "board" && (
+            <div key={refusal.count} className="refusal board-notice" role="alert">
               <p className="refusal-title">
                 <Icon name="alert" />
                 <span>{t("board.view.refused")}</span>
@@ -816,86 +1108,66 @@ export function BoardView({
               <p className="verbatim" lang="en">
                 {refusal.message}
               </p>
+              <Dismiss
+                onDismiss={() => {
+                  setRefusal(null);
+                }}
+              />
             </div>
           )}
-          {cards.error !== null ? (
-            // No tile drawn on the last read: a card may be suspect now, and a clean tile would say it is not.
-            <ErrorPanel title={t("board.view.failed")} message={apiErrorOf(cards.error).message} retrying={cards.isFetching} attempt={cards.errorUpdateCount} onRetry={retry} />
-          ) : (
-            <>
-              {list.cards.length === 0 && (
-                <div className="empty-state">
-                  <p>{noCards(t)}</p>
-                </div>
-              )}
-              {all.length > 0 && visible.length === 0 && (
-                <div className="empty-filter">
-                  <p>{t("board.view.noMatch")}</p>
-                  {filtered && (
-                    <button type="button" className="button" onClick={clearFilters}>
-                      {t("board.view.clearFilters")}
-                    </button>
-                  )}
-                </div>
-              )}
-              {flowsHidden && (
-                <div className="board-flows-line">
-                  {!allFlows && (
-                    <p className="note">
-                      <Icon name="info" />
-                      <span>{t("workspace.flowsShown", { shown: lensTabs.length, count: everyTab.length })}</span>
-                    </p>
-                  )}
-                  <button
-                    type="button"
-                    className="button button-quiet"
-                    onClick={() => {
-                      setAllFlows(!allFlows);
-                    }}
-                  >
-                    {allFlows ? t("workspace.showWorkspaceFlows") : t("workspace.showAllFlows")}
-                  </button>
-                </div>
-              )}
-              {tabs.length > 1 ? (
-                <>
-                  <Tabs
-                    label={t("board.view.boards")}
-                    base={tabsBase}
-                    selected={tab.name}
-                    onSelect={setChosenFlow}
-                    tabs={tabs.map((candidate) => ({ id: candidate.name, label: <bdi>{candidate.name}</bdi> }))}
-                  />
-                  {tabs.map((candidate) => (
-                    <TabPanel key={candidate.name} base={tabsBase} id={candidate.name} selected={candidate.name === tab.name}>
-                      {candidate.name === tab.name && boardBody}
-                    </TabPanel>
-                  ))}
-                </>
-              ) : (
-                boardBody
-              )}
-              <p className="muted board-hint">{t("board.view.hint")}</p>
-            </>
-          )}
+          <div role="status">
+            {writeNotes.length > 0 && (
+              <div className="board-notice">
+                <Notes notes={writeNotes} label={t("board.view.writeNotes")} />
+                <Dismiss
+                  onDismiss={() => {
+                    setWriteNotes([]);
+                  }}
+                />
+              </div>
+            )}
+          </div>
         </div>
-        {cardId !== null && (
-          <RegionBoundary key={cardId} name={t("board.view.boundaryCard")} heading={cardId}>
-            <CardPanel
-              project={project}
-              id={cardId}
-              query={panel}
-              flowOf={flowOf}
-              today={today}
-              mark={boardFailed ? null : shownMark}
-              rollups={rollups}
-              markFailure={cards.error === null ? null : apiErrorOf(cards.error).message}
-              stateFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
-              headingRef={panelHeading}
-              onAct={onAct}
-              onClose={closePanel}
+      </div>
+    );
+    body = (
+      <div className="board-frame">
+        {flowsHidden && (
+          <div className="board-flows-line">
+            {!allFlows && (
+              <p className="note">
+                <Icon name="info" />
+                <span>{t("workspace.flowsShown", { shown: lensTabs.length, count: everyTab.length })}</span>
+              </p>
+            )}
+            <button
+              type="button"
+              className="button button-quiet"
+              onClick={() => {
+                setAllFlows(!allFlows);
+              }}
+            >
+              {allFlows ? t("workspace.showWorkspaceFlows") : t("workspace.showAllFlows")}
+            </button>
+          </div>
+        )}
+        {tabs.length > 1 ? (
+          <>
+            <Tabs
+              label={t("board.view.boards")}
+              base={tabsBase}
+              selected={tab.name}
+              onSelect={setChosenFlow}
+              tabs={tabs.map((candidate) => ({ id: candidate.name, label: <bdi>{candidate.name}</bdi> }))}
             />
-          </RegionBoundary>
+            {tabs.map((candidate) => (
+              <TabPanel key={candidate.name} base={tabsBase} id={candidate.name} selected={candidate.name === tab.name}>
+                {candidate.name === tab.name && stage}
+              </TabPanel>
+            ))}
+          </>
+        ) : (
+          stage
         )}
       </div>
     );
@@ -931,6 +1203,28 @@ export function BoardView({
           setFilters((current) => ({ ...current, assignee }));
         }}
       />
+      <div className="board-tool">
+        <label className="field-label" htmlFor={lanesId}>
+          {t("board.lanes.label")}
+        </label>
+        <select
+          id={lanesId}
+          className="field"
+          value={laneMode}
+          onChange={(event) => {
+            const chosen = LANE_MODES.find((mode) => mode === event.target.value);
+            if (chosen !== undefined) {
+              chooseLanes(chosen);
+            }
+          }}
+        >
+          {LANE_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {t(`board.lanes.${mode}`)}
+            </option>
+          ))}
+        </select>
+      </div>
       <div className="board-tool board-tool-check">
         <input
           id={cancelledId}
@@ -970,29 +1264,74 @@ export function BoardView({
     </div>
   );
 
+  const menuShown = (place: MenuPlace) =>
+    menu !== null &&
+    menu.place === place &&
+    menuRow !== undefined && (
+      <MoveMenu
+        label={t("board.menu.label", { id: menuRow.id })}
+        anchor={menu.anchor}
+        choices={choicesFor(menuRow)}
+        empty={t("board.menu.empty")}
+        onChoose={(choice) => {
+          takeChoice(menuRow, choice, menu);
+        }}
+        onClose={closeMenu}
+      />
+    );
+
   return (
-    <section className="view board-view" aria-labelledby={titleId} onKeyDown={onViewKeyDown}>
+    <section ref={view} className="view board-view" aria-labelledby={titleId} onKeyDown={onViewKeyDown}>
       <header className="view-head">
-        <h1 id={titleId} tabIndex={-1}>
+        <h1 ref={heading} id={titleId} tabIndex={-1}>
           {t("board.view.title")}
         </h1>
         <p className="view-about">{aboutOf("board", t)}</p>
+        <p className="muted board-hint">{t("board.view.hint")}</p>
       </header>
       {tools}
       <div ref={results} tabIndex={-1} className="board-results" aria-busy={cards.isFetching}>
         <RegionBoundary name={t("board.view.boundaryBoard")}>{body}</RegionBoundary>
       </div>
-      {menu !== null && menuRow !== undefined && (
-        <MoveMenu
-          label={t("board.menu.label", { id: menuRow.id })}
-          anchor={menu.anchor}
-          choices={choicesFor(menuRow)}
-          empty={t("board.menu.empty")}
-          onChoose={(choice) => {
-            takeChoice(menuRow, choice);
-          }}
-          onClose={closeMenu}
-        />
+      {menuShown("board")}
+      {shownId !== null && (
+        <CardModal key={shownId} project={project} id={shownId} title={titleOf(panel)} pending={writing} onClose={closeCard}>
+          {refusal !== null && refusal.place === "modal" && (
+            <div key={refusal.count} className="refusal" role="alert">
+              <p className="refusal-title">
+                <Icon name="alert" />
+                <span>{t("board.view.refused")}</span>
+              </p>
+              <p className="verbatim" lang="en">
+                {refusal.message}
+              </p>
+            </div>
+          )}
+          {modalLine !== null && (
+            // The acting name's field is on the board, inert beneath: its line is said here.
+            <p className="field-error" role="alert" lang="en">
+              {modalLine}
+            </p>
+          )}
+          <div role="status">{modalNotes.length > 0 && <Notes notes={modalNotes} label={t("board.view.writeNotes")} />}</div>
+          <RegionBoundary name={t("board.view.boundaryCard")}>
+            <CardBody
+              project={project}
+              id={shownId}
+              query={panel}
+              flowOf={flowOf}
+              today={today}
+              mark={boardFailed ? null : shownMark}
+              rollups={rollups}
+              handOffs={handOffs.get(shownId) ?? NO_ROLLUP}
+              markFailure={cards.error === null ? null : apiErrorOf(cards.error).message}
+              stateFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
+              links={modalLinks}
+              onAct={onAct}
+            />
+          </RegionBoundary>
+          {menuShown("modal")}
+        </CardModal>
       )}
       {dialogShown}
     </section>

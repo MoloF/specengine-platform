@@ -100,7 +100,7 @@ const ROADMAP = ["current", "cut", "cycle", "waits", "unestimated", "status", "b
 // docs/features/flow-canvas.md: an edge's colour by its type's place, the gap rows' states, the walk's marks.
 const FLOW_EDGE = ["0", "1", "2", "3"];
 const FLOW_GAP = ["none", "found", "not-configured", "unknown"];
-const CARD = ["accepted", "cancelled", "overdue", "drop", "suspect", "departed", "correcting", "mark-unknown", "open"];
+const CARD = ["accepted", "cancelled", "overdue", "drop", "suspect", "departed", "correcting", "mark-unknown", "open", "returned", "handed-off", "taken"];
 // docs/features/trace-views.md: a node's states against its cards.
 const TRACE = ["confirmed", "in-work", "suspect", "departed", "no-card", "unknown"];
 const STATUS = [

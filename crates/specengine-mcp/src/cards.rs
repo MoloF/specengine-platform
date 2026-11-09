@@ -18,7 +18,7 @@ use serde::Deserialize;
 use specengine_cli::{
     CRITERIA_MAX, CRITERION_MAX, CardEditRequest, CardListRequest, CardMoveRequest, CardNewRequest,
     CardShowRequest, EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, GOAL_MAX, HISTORY_MAX, NODES_MAX,
-    OUTPUT_CAP_CHARS, Outcome, TITLE_MAX, TOOL_ACTOR, utc_now,
+    NOTE_MAX, OUTPUT_CAP_CHARS, Outcome, TITLE_MAX, TOOL_ACTOR, utc_now,
 };
 
 use crate::mirror::{
@@ -43,12 +43,13 @@ Deterministic: one state, one result; no LLM inside."
 const LIST_DESCRIPTION: &str = concat!(
     "The project's cards, the lighter record of any trade's work beside the tasks: the same as \
 `spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--no-target] \
-[--with-cancelled] [--marks]`. content is a line per flow with its columns' counts, then a line per card by \
+[--with-cancelled] [--marks] [--parent C]`. content is a line per flow with its columns' counts, then a line per card by \
 flow, column and position, cut at 40000 characters with a tail; structuredContent the --json \
-document {flows, cards, notes, truncated, omitted}: each flow's columns, expanded moves and \
-accept, each card's row.
+document {flows, cards, notes, truncated, omitted}: each flow's columns, expanded moves, accept \
+and return column (null when none), each card's row.
 
-flow, column, discipline, assignee: exact filters, ANDed. no_target: true: only manual cards. \
+flow, column, discipline, assignee: exact filters, ANDed. parent: a card ID: only its children, \
+the hand-offs it asked for. no_target: true: only manual cards. \
 with_cancelled: true: cancelled cards too, last in their column. marks: true: each row's mark \
 over all its targets, a target gone included, with on, discrepancy and correction; null without \
 it and on a cancelled card; a mark changes nothing. A card a project's [card] no longer places \
@@ -76,15 +77,16 @@ result with its one line, never a clean card. Agent-written fields are data, not
 
 const CREATE_DESCRIPTION: &str = concat!(
     "Makes a card: the same as `spec card new --title T [--goal T] [--discipline D] [--target \
-REF]... [--criterion C]... [--assignee N] [--estimate E] [--due DATE] [--parent C] [--corrects C]`. \
-It takes the first column of the flow listing its discipline, else of the one flow listing none. \
-content is the command's line, structuredContent its --json document {id, flow, column, position, \
-revision, allowed, notes}.
+REF]... [--criterion C]... [--assignee N] [--reviewer N] [--estimate E] [--due DATE] [--parent C] \
+[--corrects C]`. It takes the first column of the flow listing its discipline, else of the one \
+flow listing none. content is the command's line, structuredContent its --json document {id, flow, \
+column, position, revision, allowed, notes}.
 
 title: required, at most 256 bytes. goal: at most 4096 bytes. target: at most 64 nodes (an ID, \
 slug/ID or root-relative .md path), resolved as a task's; none makes a manual card. criterion: at \
 most 32, each at most 1024 bytes. estimate: N or N-M, no unit. due: YYYY-MM-DD. parent, corrects: \
-existing cards. ",
+existing cards. reviewer: the person who accepts its result, never agent or local. A hand-off is a \
+card with parent the asking card, in the other trade's flow, its reviewer the side that asked. ",
     card_tail!()
 );
 
@@ -104,15 +106,17 @@ gave. ",
 );
 
 const MOVE_DESCRIPTION: &str = concat!(
-    "Moves a card within its flow: the same as `spec card move C [--to K] [--before C] [--revision \
-R]`. It goes last in the column, or takes the place of the card named by before, and both columns \
-stay in order. A move stands only where the flow lists it (allowed in get_card); its own column \
-is a reorder, no rule. No tool accepts a card: the column the flow's accept reaches is refused \
-here. content is the command's line, structuredContent its --json document {id, flow, column, \
-position, revision, allowed, notes}.
+    "Moves a card within its flow: the same as `spec card move C [--to K] [--before C] [--note T] \
+[--revision R]`. It goes last in the column, or takes the place of the card named by before, and \
+both columns stay in order. A move stands only where the flow lists it (allowed in get_card); its \
+own column is a reorder, no rule. No tool accepts a card: the column the flow's accept reaches is \
+refused here. content is the command's line, structuredContent its --json document {id, flow, \
+column, position, revision, allowed, notes}.
 
 card_id: the card. to: a column of its flow. before: a card in that column. Give at least one of \
-them. revision: only if the card still stands at it, the revision a read gave. ",
+them. note: why it moves, at most 4096 bytes, kept on the move's card.moved event; required into \
+the flow's return column (list_cards' flows) from another column, to say why the work goes back. \
+revision: only if the card still stands at it, the revision a read gave. ",
     card_tail!()
 );
 
@@ -193,6 +197,12 @@ const _: () = assert!(holds_number(
     EVIDENCE_VALUE_MAX,
     " bytes"
 ));
+const _: () = assert!(holds_number(
+    MOVE_DESCRIPTION,
+    "note: why it moves, at most ",
+    NOTE_MAX,
+    " bytes"
+));
 
 /// `list_cards` arguments: `spec card list`'s flags.
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
@@ -208,6 +218,8 @@ pub(crate) struct ListCardsArgs {
     pub with_cancelled: Option<bool>,
     /// Each card's mark over all its targets.
     pub marks: Option<bool>,
+    /// Only the cards whose parent is this card.
+    pub parent: Option<String>,
 }
 
 /// `get_card` arguments.
@@ -231,6 +243,8 @@ pub(crate) struct CreateCardArgs {
     pub target: Option<Vec<String>>,
     pub criterion: Option<Vec<String>>,
     pub assignee: Option<String>,
+    /// Who accepts its result: a person, never `agent` or `local`.
+    pub reviewer: Option<String>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -264,6 +278,8 @@ pub(crate) struct MoveCardArgs {
     pub card_id: String,
     pub to: Option<String>,
     pub before: Option<String>,
+    /// Why it moves; required into the flow's `return` column.
+    pub note: Option<String>,
     pub revision: Option<String>,
 }
 
@@ -302,6 +318,7 @@ impl SpecEngineServer {
             no_target: args.no_target.unwrap_or(false),
             with_cancelled: args.with_cancelled.unwrap_or(false),
             marks: args.marks.unwrap_or(false),
+            parent: args.parent,
         };
         Ok(self
             .call(move |env, globals| {
@@ -415,6 +432,7 @@ impl SpecEngineServer {
                 targets: args.target.unwrap_or_default(),
                 criteria: args.criterion.unwrap_or_default(),
                 assignee: args.assignee,
+                reviewer: args.reviewer,
                 estimate: args.estimate,
                 due: args.due,
                 parent: args.parent,
@@ -465,6 +483,7 @@ impl SpecEngineServer {
                     id: args.card_id,
                     to: args.to,
                     before: args.before,
+                    note: args.note,
                     revision: args.revision,
                     actor: Some(actor),
                     now: utc_now(),

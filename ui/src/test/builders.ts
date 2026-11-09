@@ -843,6 +843,7 @@ export function aCardFlow(fields: Partial<CardFlow> & { name?: string } = {}): C
       { from: "check", to: "doing", by: [] },
     ],
     accept: { from: "check", to: "closed" },
+    return: null,
     ...fields,
   };
 }

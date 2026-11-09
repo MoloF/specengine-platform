@@ -42,7 +42,7 @@ use specengine_cli::{
     ANSWER_MAX, AUTHOR_FIELD_MAX, CRITERIA_MAX, CRITERION_MAX, CliError, DISTINCT_MAX,
     EVIDENCE_ENTRIES_MAX, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, EVIDENCE_VALUE_MAX, Env, GOAL_MAX,
     Globals, HUB_ID_START, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX, LABEL_MAX, LOCATION_MAX,
-    NODE_IDS_MAX, NODES_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS,
+    NODE_IDS_MAX, NODES_MAX, NOTE_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS,
     RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, TITLE_MAX,
 };
 
@@ -558,15 +558,17 @@ it with a reason that settles it. A refusal names the field. ",
 
 const HUB_CREATE_DESCRIPTION: &str = concat!(
     "Makes a card: the same as `spec card new --title T [--goal T] [--discipline D] [--target \
-REF]... [--criterion C]... [--assignee N] [--estimate E] [--due DATE] [--parent C] [--corrects C]`. \
-It takes the first column of the flow listing its discipline, else of the one flow listing none. \
-content is the command's line, structuredContent its --json document {id, flow, column, position, \
-revision, allowed, notes}.
+REF]... [--criterion C]... [--assignee N] [--reviewer N] [--estimate E] [--due DATE] [--parent C] \
+[--corrects C]`. It takes the first column of the flow listing its discipline, else of the one \
+flow listing none. content is the command's line, structuredContent its --json document {id, flow, \
+column, position, revision, allowed, notes}.
 
 title: required, at most 256 bytes. goal: at most 4096 bytes. target: at most 64 nodes (an ID, \
 slug/ID or root-relative .md path), resolved as a task's; none makes a manual card. criterion: at \
 most 32, each at most 1024 bytes. estimate: N or N-M, no unit. due: YYYY-MM-DD. parent, corrects: \
-existing cards. ",
+existing cards. reviewer: the login that accepts its result, never agent or local; on a hub only \
+a [team] login accepts. A hand-off is a card with parent the asking card, in the other trade's \
+flow, its reviewer the side that asked. ",
     hub_card_tail!()
 );
 
@@ -586,15 +588,17 @@ gave. ",
 );
 
 const HUB_MOVE_DESCRIPTION: &str = concat!(
-    "Moves a card within its flow: the same as `spec card move C [--to K] [--before C] [--revision \
-R]`. It goes last in the column, or takes the place of the card named by before, and both columns \
-stay in order. A move stands only where the flow lists it (allowed in get_card); its own column \
-is a reorder, no rule. No tool accepts a card: the column the flow's accept reaches is refused \
-here. content is the command's line, structuredContent its --json document {id, flow, column, \
-position, revision, allowed, notes}.
+    "Moves a card within its flow: the same as `spec card move C [--to K] [--before C] [--note T] \
+[--revision R]`. It goes last in the column, or takes the place of the card named by before, and \
+both columns stay in order. A move stands only where the flow lists it (allowed in get_card); its \
+own column is a reorder, no rule. No tool accepts a card: the column the flow's accept reaches is \
+refused here. content is the command's line, structuredContent its --json document {id, flow, \
+column, position, revision, allowed, notes}.
 
 card_id: the card. to: a column of its flow. before: a card in that column. Give at least one of \
-them. revision: only if the card still stands at it, the revision a read gave. ",
+them. note: why it moves, at most 4096 bytes, kept on the move's card.moved event; required into \
+the flow's return column (list_cards' flows) from another column, to say why the work goes back. \
+revision: only if the card still stands at it, the revision a read gave. ",
     hub_card_tail!()
 );
 
@@ -874,6 +878,12 @@ const _: () = assert!(holds_number(
     HUB_EDIT_DESCRIPTION,
     "one line, at most ",
     EVIDENCE_VALUE_MAX,
+    " bytes"
+));
+const _: () = assert!(holds_number(
+    HUB_MOVE_DESCRIPTION,
+    "note: why it moves, at most ",
+    NOTE_MAX,
     " bytes"
 ));
 

@@ -31,6 +31,11 @@
 //! `tests/team_config.rs`; A9 the UI's. The raw table of `accept` stays in
 //! `tests/hub.rs`.
 //!
+//! docs/features/board-handoff.md (RM-0085) BH-20 on `fixtures/studio-lamp`:
+//! a hand-off and a return are plain writes for a login outside `[team]`,
+//! under that login; accepting the child passes for its reviewer only as a
+//! `[team]` login.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 mod common;
@@ -2313,4 +2318,199 @@ fn a8_an_accepted_card_refuses_edit_and_cancel() {
         assert_eq!(hub.board(), before, "{path} {body}: nothing changed");
     }
     assert_eq!(rollup(&hub, "SHT-FRONT"), "suspect", "the mark stands");
+}
+
+// ------------------------------------------- board-handoff (RM-0085), BH-20
+
+/// The game's project on a hub (`fixtures/studio-lamp`).
+const LAMP: &str = "/api/projects/studio-lamp";
+
+/// The game's team: `ann` a member, `olga` the owner. `eve` stands outside it.
+const LAMP_TEAM: &str = r#"
+[team.ann]
+name = "Ann W"
+role = "member"
+email = "ann@example.org"
+
+[team.olga]
+name = "Olga R"
+role = "owner"
+email = "olga@example.org"
+"#;
+
+/// `POST <LAMP>/path` with `body` by `login`, as a page sends it.
+fn lamp_post(hub: &Hub, login: &str, path: &str, body: &Value) -> Reply {
+    through(
+        &hub.server,
+        "POST",
+        &format!("{LAMP}/{path}"),
+        &Proxied::write(login),
+        body.to_string().as_bytes(),
+    )
+}
+
+/// As [`lamp_post`], a 200: its document.
+fn lamp_done(hub: &Hub, login: &str, path: &str, body: &Value) -> Value {
+    let reply = lamp_post(hub, login, path, body);
+    assert_eq!(reply.status, 200, "{login} {path} {body}: {}", reply.text());
+    reply.json()
+}
+
+/// The game card's `revision`, read by `ann`.
+fn lamp_revision(hub: &Hub, id: &str) -> String {
+    hub.get("ann", &format!("{LAMP}/cards/{id}"))
+        .status(200)
+        .json()["revision"]
+        .as_str()
+        .expect("a revision")
+        .to_owned()
+}
+
+/// The events and the game's board as a page reads them.
+fn lamp_board(hub: &Hub) -> (Vec<(String, Value)>, String) {
+    let board = hub
+        .get("ann", &format!("{LAMP}/cards?with_cancelled=true"))
+        .status(200)
+        .text()
+        .to_owned();
+    (hub.events(), board)
+}
+
+/// docs/features/board-handoff.md BH-20, a hub (`hub-team.md` "Acts"): a
+/// hand-off and a return are plain writes, so a login outside `[team]` makes
+/// both and each event's `as` is that login (a body's other `as` refused);
+/// accepting the child is the confirm class: its reviewer passes only as a
+/// `[team]` login, a reviewer outside it is refused with nothing stored, and a
+/// `[team]` login that is not its reviewer is the reviewer rule's 409.
+#[test]
+fn board_handoff_bh20_a_hub_hands_off_and_returns_for_any_login() {
+    let setup = Setup::new("team-handoff", "studio-lamp");
+    append_config(&setup.root, LAMP_TEAM);
+    setup
+        .scratch
+        .git()
+        .run(&setup.root, &["commit", "-qam", "the team"]);
+    let hub = setup.start();
+
+    // Outside `[team]`: the asking card, two hand-offs, a take and a return.
+    lamp_done(
+        &hub,
+        "eve",
+        "cards",
+        &json!({"title": "Lamp room scene", "discipline": "narrative"}),
+    );
+    for reviewer in ["eve", "ann"] {
+        lamp_done(
+            &hub,
+            "eve",
+            "cards",
+            &json!({"title": format!("Dialogue for {reviewer}"), "discipline": "development",
+                    "parent": "C-0001", "reviewer": reviewer}),
+        );
+        let (kind, payload) = last_event(&hub);
+        assert_eq!(kind, "card.created");
+        assert_eq!(payload["as"], json!("eve"), "{payload}");
+        assert_eq!(payload["reviewer"], json!(reviewer), "{payload}");
+    }
+    assert_eq!(
+        lamp_post(
+            &hub,
+            "eve",
+            "cards",
+            &json!({"title": "T", "discipline": "art", "parent": "C-0001", "as": "ann"}),
+        )
+        .status,
+        403,
+        "another name than the login"
+    );
+    lamp_done(
+        &hub,
+        "eve",
+        "cards/C-0002/move",
+        &json!({"to": "in-progress"}),
+    );
+    let before = lamp_board(&hub);
+    let refused = lamp_post(
+        &hub,
+        "eve",
+        "cards/C-0002/move",
+        &json!({"to": "sent-back"}),
+    );
+    assert_eq!(refused.status, 409, "{}", refused.text());
+    assert_eq!(lamp_board(&hub), before, "no note: nothing stored");
+    lamp_done(
+        &hub,
+        "eve",
+        "cards/C-0002/move",
+        &json!({"to": "sent-back", "note": "Two endings contradict"}),
+    );
+    assert_eq!(
+        last_event(&hub),
+        (
+            "card.moved".to_owned(),
+            json!({"id": "C-0002", "from": "in-progress", "to": "sent-back", "position": 1,
+                   "as": "eve", "note": "Two endings contradict"})
+        )
+    );
+    // Every login reads every reason (ADR-0065 "Cost").
+    let shown = hub
+        .get("ann", &format!("{LAMP}/cards/C-0002"))
+        .status(200)
+        .json();
+    assert_eq!(
+        shown["history"]
+            .as_array()
+            .and_then(|history| history.last())
+            .map(|entry| entry["payload"]["note"].clone()),
+        Some(json!("Two endings contradict")),
+        "{shown}"
+    );
+
+    // Accepting: the reviewer outside `[team]` is refused; inside, it passes.
+    for id in ["C-0002", "C-0003"] {
+        lamp_done(
+            &hub,
+            "eve",
+            &format!("cards/{id}/move"),
+            &json!({"to": "verify"}),
+        );
+    }
+    let before = lamp_board(&hub);
+    let outside = lamp_post(
+        &hub,
+        "eve",
+        "cards/C-0002/accept",
+        &json!({"briefed": true, "revision": lamp_revision(&hub, "C-0002")}),
+    );
+    assert_refused(&outside, &outside_line("eve"), "eve, the reviewer outside");
+    assert_eq!(lamp_board(&hub), before, "nothing stored");
+    let other = lamp_post(
+        &hub,
+        "olga",
+        "cards/C-0003/accept",
+        &json!({"briefed": true, "revision": lamp_revision(&hub, "C-0003")}),
+    );
+    assert_eq!(other.status, 409, "{}", other.text());
+    assert_eq!(
+        other.json()["notes"]
+            .as_array()
+            .and_then(|notes| notes.last()),
+        Some(&json!(
+            "C-0003: its reviewer is `ann`, and `--as` says `olga`; nothing changed"
+        ))
+    );
+    assert_eq!(lamp_board(&hub), before, "nothing stored");
+    let accepted = lamp_done(
+        &hub,
+        "ann",
+        "cards/C-0003/accept",
+        &json!({"briefed": true, "revision": lamp_revision(&hub, "C-0003")}),
+    );
+    assert_eq!(accepted["column"], json!("done"), "{accepted}");
+    assert_eq!(
+        hub.get("ann", &format!("{LAMP}/cards/C-0003"))
+            .status(200)
+            .json()["acceptance"]["by"],
+        json!("ann")
+    );
 }

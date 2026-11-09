@@ -197,6 +197,11 @@
   --card-mark-unknown: var(--severity-unknown);
   --card-open: var(--task-in-progress);
   --card-drop: var(--accent);
+  /* A hand-off's words (docs/canon/card-flows.md "The rule"), each a label and an icon too: sent
+     back is the task's changes-requested, never an alarm; handed off waits as ready; taken is in work. */
+  --card-returned: var(--task-changes-requested);
+  --card-handed-off: var(--task-ready);
+  --card-taken: var(--task-in-progress);
 
   /* A node against its cards (docs/features/trace-views.md): each state a label and an icon, never
      colour alone, none of them a hold on work. Confirmed is no sync colour, so it never reads as a

@@ -86,7 +86,7 @@
   "FlowEdge": ["from", "to", "type", "kind", "when", "count", "path", "line"],
   "FlowInner": ["type", "count"],
   "CardList": ["flows", "cards", "notes", "truncated", "omitted"],
-  "CardFlow": ["name", "disciplines", "columns", "moves", "accept"],
+  "CardFlow": ["name", "disciplines", "columns", "moves", "accept", "return"],
   "CardColumn": ["id", "title"],
   "CardMove": ["from", "to", "by"],
   "CardRow": ["id", "flow", "column", "position", "title", "discipline", "targets", "assignee", "reviewer", "estimate", "due", "parent", "corrects", "updated_at", "revision", "accepted", "cancelled", "mark", "on", "discrepancy", "correction"],

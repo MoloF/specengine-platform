@@ -3,22 +3,22 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-09
 ---
 
-# Cards: commands, flows, store
+# Cards: commands, record, store
 
-ADR-0056, built by `card-store`: a card is the lighter record of any trade's work, a queue row, never a file or a commit. `T-` stays the code-work task; `spec task approve` takes no `C-`. The project's `[card]` gives each discipline its columns, moves and who makes them; no code reads a column's name. Marks, clearing, verdicts: `spec-trace.md`. Code: model `card.rs`; core `card.rs`, `card_toml.rs`; store `queue/cards.rs`; CLI `card.rs`; MCP `cards.rs`.
+ADR-0056, built by `card-store`: a card is the lighter record of any trade's work, a queue row, never a file or a commit. `T-` stays the code-work task; `spec task approve` takes no `C-`. The project's `[card]` gives each discipline its columns, moves and who makes them, and a hand-off is a child card (`card-flows.md`); no code reads a column's name. Marks, clearing, verdicts: `spec-trace.md`. Code: model `card.rs`; core `card.rs`, `card_toml.rs`; store `queue/cards.rs`; CLI `card.rs`; MCP `cards.rs`.
 
 ## Commands
 
 ```text
 spec card new --title T [--goal T] [--discipline D] [--target REF]... [--criterion C]...
-  [--assignee N] [--estimate E] [--due DATE] [--parent C] [--corrects C] [--as N]
-spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--no-target]
-  [--with-cancelled] [--marks]
+  [--assignee N] [--reviewer N] [--estimate E] [--due DATE] [--parent C] [--corrects C] [--as N]
+spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--parent C]
+  [--no-target] [--with-cancelled] [--marks]
 spec card show C [--history] [--marks]
-spec card move C [--to K] [--before C] [--revision R] [--as N]
+spec card move C [--to K] [--before C] [--note T] [--revision R] [--as N]
 spec card edit C [new's flags but --discipline, --assignee] [--evidence KIND=VALUE]...
   [--reason T] [--revision R]
 spec card assign C [--assignee N] [--reviewer N] [--revision R] [--as N]
@@ -27,7 +27,7 @@ spec card accept C --as N (--briefed | --departs REF...) [--note T] [--revision 
 spec card clear (C | --group REF) ... --reason T --as N
 ```
 
-Globals as the queue's. In `edit`, `assign` a value `-` clears, and on `new` it is no assignee; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`); the daemon's `Card*Body`, `in_view`: `board-ui.md`.
+Globals as the queue's. In `edit`, `assign` a value `-` clears; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children". `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`); the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
 `open_cards`, never `open_context`: no git runs, so any root works; `accept --departs` alone reads git.
 
@@ -45,7 +45,7 @@ flow <name> | <column> <n> | ...
 - **`cancel`** takes the card out of its column (`position` 0, the column closes up), `reason` required. Only `--with-cancelled` lists it.
 - **`accept`**, **`clear`**, a person's acts (ADR-0057): `spec-trace.md`.
 
-**Exits** as the queue's. 1 refused: no such card, a move outside its flow, a closed card, a cap, a declined prompt, a stale `--revision`. 2 cannot run: `C` in `[ids]`, a look-alike ID (its Latin form named), a bad `[card]`, `--as` or `--revision` off their grammar, no terminal, a corrupt row, a newer schema, nothing asked.
+**Exits** as the queue's. 1 refused: no such card, a move outside its flow, a closed card, a cap, a declined prompt, a stale `--revision`, a return with no note. 2 cannot run: `C` in `[ids]`, a look-alike ID (its Latin form named), `list --parent` off the ID grammar, a bad `[card]`, `--as` or `--revision` off their grammar, no terminal, a corrupt row, a newer schema, nothing asked.
 
 ## Who acts
 
@@ -59,25 +59,7 @@ Five tools, as `mcp-read.md`, acting as `agent`, on a hub as the login (`hub-mcp
 
 ## Config
 
-Core `CardConfig::from_toml` (`flow_toml.rs`' family), the first error by line; `ProjectConfig` only name-checks `card`. A bad `[card]` exits 2 `<config>:<line>: <message>` for `spec card` alone and fails no other command, finding or gate.
-
-```toml
-[[card.flow]]
-name = "copy"
-disciplines = ["copy"]
-columns = ["draft", "edit", "proof", "filed"]
-accept = { from = "proof", to = "filed" }
-moves = [
-  { from = "draft", to = "edit", by = ["desk"] },
-  { from = "edit", to = "proof" },
-]
-```
-
-- `[card]` holds `flow` alone, at most 32. Names (`name`, `columns`, `disciplines`) `[a-z0-9_-]`, 1-64 bytes, each once in its list; 2-32 columns. `titles` any script, at most 64 bytes, default the ID.
-- `accept` required, two columns; `to` is reached only by an accept, `spec card accept` or `POST .../accept`, so it may not be the first column, and a move at it, either end, is a config error.
-- `moves` `{from, to, by?}` of two columns, each pair once. No `by`, or `by: []` as served: anyone. No `moves`: every ordered pair of the other columns, expanded by the reader, so moves are looked up, never judged.
-- **A new card** takes the first column of the first flow listing its discipline, else of the one flow listing none, else exit 1 naming why.
-- **Default**, no `[[card.flow]]`: `PLAIN_FLOW`, TOML through this same reader, so pasting it changes nothing: `plain`, columns `backlog`, `ready`, `in-progress`, `review`, `done`, titled in words, `accept` `review` to `done`, no `moves`, `--discipline` free.
+`[card]`, each flow's columns, `titles`, `accept`, `moves` with `by`, and its `return` column, and where a new card starts: `card-flows.md` "Config".
 
 ## Store
 
@@ -107,9 +89,9 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 - `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card, or one whose flow is gone: empty. `accept` is never in it: the board finds it through `accept.from`.
 - `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`; a payload that does not parse is passed over.
 
-`list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` when nothing is cut. `flows` `[{name, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}}]`, `moves` expanded, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction}`, 21 keys; the last four `--marks`' (`spec-trace.md` "The read"), else `null`.
+`list`: `{flows, cards, notes, truncated, omitted}`; `omitted` `null` when nothing is cut. `flows` `[{name, disciplines, columns: [{id, title}], moves: [{from, to, by}], accept: {from, to}, return}]`, `moves` expanded, `return` a column or `null`, for empty columns. A row `{id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction}`, 21 keys; the last four `--marks`' (`spec-trace.md` "The read"), else `null`.
 
-Events, the `as` the acting name: `card.created {id, flow, column, position, assignee, as}`; `card.moved {id, from, to, position, as}`, a reorder `from` = `to`; `card.accepted` the same and `verdict`, `discrepancy`; `card.edited {id, fields, as}`, the changed keys; `card.assigned {id, assignee, reviewer, as}`; `card.cancelled {id, column, as}`; `card.cleared`, `card.reestimated`, `card.refreshed`: `spec-trace-record.md` "Events".
+Events, the `as` the acting name: `card.created {id, flow, column, position, assignee, reviewer, as}`; `card.moved {id, from, to, position, as, note}`, a reorder `from` = `to`, `reviewer` and `note` `null` when none; `card.accepted` the same and `verdict`, `discrepancy`; `card.edited {id, fields, as}`, the changed keys; `card.assigned {id, assignee, reviewer, as}`; `card.cancelled {id, column, as}`; `card.cleared`, `card.reestimated`, `card.refreshed`: `spec-trace-record.md` "Events".
 
 ## Backup
 
@@ -123,6 +105,7 @@ Each exit 1, nothing changed; core's, pure, asked twice.
 - **`as` outside `by`**: ``C-0001 is in ready: the move to `review` is `lead` or `owner`'s, not `local`'s; nothing changed``.
 - **Closed**: ``C-0001 is accepted: it takes no write; a correction is a new card, `spec card new --corrects C-0001`; nothing changed``, `cancelled` likewise; `accept` too. `clear` still reaches an accepted card.
 - **Stale**: `` `C-0001` changed since this run read it: it is in <column> since <updated_at>; nothing changed ``, whether `--revision` or the run's own read lost.
+- **Return**: into the flow's `return` column from another column, no `--note`: ``C-0007 enters `sent-back`, its flow's return column: say why with `--note`; nothing changed`` (`card-flows.md` "Return").
 - **Accept**: the card in `accept.from`; `--as` its `reviewer` (none set: naming `spec card assign`), never its `assignee`.
 - **Dropped from config**: a column no longer listed is served last in its flow with a note, `allowed` the flow's first column, anyone's. A flow no longer listed: a note, `allowed` empty, `edit` and `assign` still work.
 

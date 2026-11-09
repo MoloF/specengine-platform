@@ -1,14 +1,13 @@
 import { memo, type DragEvent, type MouseEvent } from "react";
 import type { CardRow } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { cardPageHash, sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { hasModifier } from "../ui/keys";
 import { shownSlot } from "../ui/text";
 import { isOverdue } from "./due";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
-import { acceptedLook, byHand, cancelledLook, markLook, markNames, overdueLook, rowMark, unassigned } from "./labels";
+import { acceptedLook, byHand, cancelledLook, markLook, markNames, overdueLook, returnedCountLook, returnedLook, rowMark, unassigned } from "./labels";
 
 /** What a card asks of its board. */
 export interface CardActions {
@@ -18,6 +17,11 @@ export interface CardActions {
   onFocus: (id: string) => void;
   onDragStart: (row: CardRow) => void;
   onDragEnd: () => void;
+}
+
+/** A plain click with the primary button; a modified one, a middle click, the context menu are the browser's. */
+function isPlainClick(event: MouseEvent<HTMLElement>): boolean {
+  return event.button === 0 && !event.altKey && !event.ctrlKey && !event.metaKey && !event.shiftKey;
 }
 
 /**
@@ -42,14 +46,16 @@ function Source({ project, targets }: { project: string; targets: readonly strin
 }
 
 /**
- * One card (docs/features/board-ui.md "Board"): title, assignee, due, estimate, its source. A mark
- * stands first and names what it is on, the list's own, so a card on a gone target has it too; an
- * accepted card's word yields to it (docs/features/trace-views.md "The board tile"). The board holds
- * one tab stop: every card but the roving one, and the controls inside each, are out of
- * the Tab order, and keys or a click reach them; `m` is the Move button, Enter the title's link, the
- * panel the source. A click anywhere on it but a control opens the panel. A closed card neither
- * moves nor drags: accepted and cancelled take no write, and say so. Memoised: an arrow key or a drag
- * changes two cards' props, and the rest of a full board stays as drawn, `actions` being stable.
+ * One card (`ui/README.md` "Screen rules"): title, assignee, due, estimate, its source. A mark stands
+ * first and names what it is on, the list's own, so a card on a gone target has it too; an accepted
+ * card's word yields to it. A card standing in its flow's return column says Returned; a parent
+ * counts its hand-offs and its returned ones (`docs/canon/card-flows.md` "The rule"). The title is
+ * the tile's one link, to the card's page, stretched over the tile: a plain click opens the card's
+ * modal instead, and a Meta, Ctrl or Shift click, a middle click or the context menu is left to the
+ * browser, which opens the page. The board holds one tab stop: every card but the roving one, and
+ * the controls inside each, are out of the Tab order; `m` is the Move button, Enter the modal. A
+ * closed card neither moves nor drags. Memoised: an arrow key or a drag changes two cards' props,
+ * and the rest of a full board stays as drawn, `actions` being stable.
  */
 export const BoardCard = memo(function BoardCard({
   project,
@@ -59,6 +65,9 @@ export const BoardCard = memo(function BoardCard({
   selected,
   menuOpen,
   dropAbove,
+  returned,
+  handOffs,
+  returnedChildren,
   actions,
 }: {
   project: string;
@@ -69,6 +78,12 @@ export const BoardCard = memo(function BoardCard({
   menuOpen: boolean;
   /** A drag would put the card it carries right above this one. */
   dropAbove: boolean;
+  /** It stands in its flow's return column. */
+  returned: boolean;
+  /** Its children standing, a cancelled one left out. */
+  handOffs: number;
+  /** Of those, the ones in their flow's return column. */
+  returnedChildren: number;
   actions: CardActions;
 }) {
   const t = useTranslate();
@@ -76,16 +91,17 @@ export const BoardCard = memo(function BoardCard({
   const mark = rowMark(row);
   const markShown = mark === null ? null : markLook(mark, t);
   const named = mark === null ? null : markNames(mark);
+  const returnedShown = returned && !closed ? returnedLook(t) : null;
 
   function onClick(event: MouseEvent<HTMLElement>) {
-    if (!(event.target instanceof Element) || event.target.closest("a, button") === null) {
+    if (isPlainClick(event) && (!(event.target instanceof Element) || event.target.closest("a, button") === null)) {
       actions.onOpen(row.id);
     }
   }
 
   function onTitleClick(event: MouseEvent<HTMLAnchorElement>) {
-    // Cmd-, Ctrl-, Shift- or Alt-click opens it elsewhere, as the browser does.
-    if (event.button === 0 && !hasModifier(event) && !event.shiftKey) {
+    // A modified click opens the page elsewhere, as the browser does; a plain one, the modal here.
+    if (isPlainClick(event)) {
       event.preventDefault();
       actions.onOpen(row.id);
     }
@@ -101,6 +117,7 @@ export const BoardCard = memo(function BoardCard({
     actions.onDragStart(row);
   }
 
+  const said = [markShown?.label, returnedShown?.label].filter((label) => label !== undefined).join(", ");
   const classes = ["board-card", selected && "board-card-selected", closed && "board-card-closed"].filter(Boolean).join(" ");
   return (
     <li className={dropAbove ? "board-slot board-slot-drop" : "board-slot"}>
@@ -110,7 +127,7 @@ export const BoardCard = memo(function BoardCard({
         data-column={row.column}
         tabIndex={tabbable ? 0 : -1}
         aria-current={selected ? "true" : undefined}
-        aria-label={`${row.id}: ${shownSlot(row.title)}${markShown === null ? "" : `, ${markShown.label}`}`}
+        aria-label={`${row.id}: ${shownSlot(row.title)}${said === "" ? "" : `, ${said}`}`}
         draggable={!closed}
         onClick={onClick}
         onFocus={() => {
@@ -127,12 +144,13 @@ export const BoardCard = memo(function BoardCard({
         )}
         <div className="board-card-top">
           <span className="mono board-card-id">{row.id}</span>
+          {returnedShown !== null && <Badge look={returnedShown} />}
           {row.accepted && markShown === null && <Badge look={acceptedLook(t)} />}
           {row.cancelled && <Badge look={cancelledLook(t)} />}
           {isOverdue(row, today) && <Badge look={overdueLook(t)} />}
         </div>
         <h3 className="board-card-title">
-          <a href={sectionHash(project, "board", row.id)} tabIndex={-1} draggable={false} onClick={onTitleClick}>
+          <a className="board-card-link" href={cardPageHash(project, row.id)} tabIndex={-1} draggable={false} onClick={onTitleClick}>
             <bdi>{shownSlot(row.title)}</bdi>
           </a>
         </h3>
@@ -144,6 +162,15 @@ export const BoardCard = memo(function BoardCard({
           <p className="board-card-when">
             {row.due !== null && <span>{t("board.card.due", { due: shownSlot(row.due) })}</span>}
             {row.estimate !== null && <span>{t("board.card.estimate", { estimate: shownSlot(row.estimate) })}</span>}
+          </p>
+        )}
+        {handOffs > 0 && (
+          <p className="board-card-handoffs">
+            <span className="plain-tag">
+              <Icon name="cardHandOff" />
+              <span>{t("board.rollup.handOffs", { count: handOffs })}</span>
+            </span>
+            {returnedChildren > 0 && <Badge look={returnedCountLook(returnedChildren, t)} />}
           </p>
         )}
         <div className="board-card-foot">

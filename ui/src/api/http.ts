@@ -545,14 +545,16 @@ export class HttpClient implements SpecEngineClient {
 
   /**
    * `spec card list [--with-cancelled] [--marks] --json` as the browser view
-   * (`docs/features/board-ui.md` "Routes"): `with_cancelled` and `marks` the two queries, each sent
-   * only as true; the screen filters the answer. A 503 (a bad `[card]`, an index that cannot be read
+   * (`docs/features/board-ui.md` "Routes"): `with_cancelled` and `marks`, each sent only as true, and
+   * `parent` when asked (the Board never asks: it finds children in the one list); the screen filters
+   * the answer. A 503 (a bad `[card]`, an index that cannot be read
    * for the marks) rejects in the daemon's words. Takes its query's AbortSignal.
    */
   async getCards(project: string, options: CardsOptions = {}, signal?: AbortSignal): Promise<CardList> {
     const query = queryOf([
       ["with_cancelled", options.with_cancelled === true ? true : undefined],
       ["marks", options.marks === true ? true : undefined],
+      ["parent", options.parent],
     ]);
     return (await request("GET", `${cardsPath(project)}${query}`, { signal })) as CardList;
   }

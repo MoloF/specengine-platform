@@ -1,7 +1,7 @@
 import { createContext, use, useEffect, useId, useMemo, useRef, useState, type ReactNode, type SubmitEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useCardClearGroup, useCards, useCardWrite, type CardWriteRequest } from "../api/queries";
-import type { Card, CardAcceptBody, CardClearBody, CardClearGroupWrite, CardCreateBody, CardEditBody, CardRow, CardVerdict, CardWrite } from "../api/types";
+import { useCard, useCardClearGroup, useCards, useCardWrite, type CardWriteRequest } from "../api/queries";
+import type { Card, CardAcceptBody, CardClearBody, CardClearGroupWrite, CardCreateBody, CardEditBody, CardFlow, CardMoveBody, CardRow, CardVerdict, CardWrite } from "../api/types";
 import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -10,6 +10,7 @@ import { actingName, isActingLine, useActing, useHubLogin, useTeamRow } from "./
 import { assigneeChoices, disciplineChoices } from "./filter";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
+import { isCard } from "./CardPanel";
 import { evidenceKinds, gapTypes, nameIsLogin, nameIsTyped } from "./labels";
 
 /** How `spec card edit` and `assign` write a cleared value (`docs/canon/cards.md` "Commands"). */
@@ -799,6 +800,174 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
       )}
       <TextArea label={t("board.field.note")} value={note} onChange={setNote} autoFocus={name !== null} />
       <ActingField project={project} label={t("board.field.acceptingAs")} value={acting} onChange={setActing} autoFocus={name === null} hint={t("board.hint.acceptingAs")} />
+    </WriteDialog>
+  );
+}
+
+/** What a hand-off is made from: the card as read, or a tile's row, whose goal is read before the form opens. */
+export type HandOffSource = Pick<Card, "id" | "title" | "targets"> & { goal?: string | null };
+
+/** The hand-off dialog's fields as typed. */
+interface HandOffForm {
+  discipline: string;
+  title: string;
+  goal: string;
+  targets: string;
+  reviewer: string;
+}
+
+/**
+ * Hand off (`docs/canon/card-flows.md` "The rule"): a child card in another trade's flow, which its
+ * discipline picks as for any new card; the dialog offers every served flow's disciplines, whatever
+ * the workspace shows, from the flows the caller's list read serves. Title, goal and targets come from the card, all editable; criteria, estimate,
+ * due date and evidence stay with it, and no assignee is named: the receiving trade takes the card
+ * with a move. The reviewer is the asking side, the acting name by default, required; on a hub the
+ * login, read-only. Submit is one `POST .../cards`, nothing else: no assign follows.
+ */
+export function HandOffDialog({ project, card, flows, ...handlers }: { project: string; card: HandOffSource; flows: readonly CardFlow[] } & WriteHandlers) {
+  const t = useTranslate();
+  const disciplinesId = useId();
+  const { onClose } = handlers;
+  const send = useSend(project, handlers);
+  const login = useHubLogin();
+  const [acting] = useActing();
+  // A tile's row holds no goal: the card is read, and its goal fills the field once, unless typed in first.
+  const read = useCard(project, card.goal === undefined ? card.id : null);
+  const readGoal = read.data !== undefined && isCard(read.data) ? read.data.goal : undefined;
+  const [form, setForm] = useState<HandOffForm>({ discipline: "", title: card.title, goal: card.goal ?? "", targets: card.targets.join("\n"), reviewer: acting });
+  const [goalFilled, setGoalFilled] = useState(card.goal !== undefined);
+  const [goalTyped, setGoalTyped] = useState(false);
+  const [checked, setChecked] = useState(false);
+  if (!goalFilled && readGoal !== undefined) {
+    setGoalFilled(true);
+    if (!goalTyped) {
+      setForm((current) => ({ ...current, goal: readGoal ?? "" }));
+    }
+  }
+  const reviewer = login ?? form.reviewer;
+
+  function field(key: keyof HandOffForm) {
+    return (value: string) => {
+      if (key === "goal") {
+        setGoalTyped(true);
+      }
+      setForm((current) => ({ ...current, [key]: value }));
+    };
+  }
+
+  const disciplines = useMemo(() => [...new Set(flows.flatMap((flow) => flow.disciplines))], [flows]);
+
+  function bodyOf(): CardCreateBody {
+    return {
+      title: form.title.trim(),
+      ...present("goal", form.goal),
+      discipline: form.discipline.trim(),
+      ...presentList("target", form.targets),
+      parent: card.id,
+      reviewer: reviewer.trim(),
+      as: actingName(acting),
+    };
+  }
+
+  return (
+    <WriteDialog
+      title={t("board.handoff.title", { id: card.id })}
+      action={t("board.handoff.submit")}
+      sending={t("board.handoff.sending")}
+      onClose={onClose}
+      check={() => {
+        setChecked(true);
+        if (form.discipline.trim() === "") {
+          return t("board.handoff.needsDiscipline");
+        }
+        if (form.title.trim() === "") {
+          return t("board.dialog.needsTitle");
+        }
+        return reviewer.trim() === "" ? t("board.handoff.reviewerNeeded") : null;
+      }}
+      onSubmit={() => send({ write: "create", body: bodyOf() })}
+    >
+      <p className="dialog-text dialog-effect">{t("board.handoff.effect")}</p>
+      <dl className="facts">
+        <div className="fact">
+          <dt>{t("board.field.parent")}</dt>
+          <dd className="mono">{card.id}</dd>
+        </div>
+      </dl>
+      <TextField
+        label={t("board.field.discipline")}
+        value={form.discipline}
+        onChange={field("discipline")}
+        list={disciplinesId}
+        required
+        autoFocus
+        invalid={checked && form.discipline.trim() === ""}
+        hint={t("board.handoff.disciplineHint")}
+      />
+      <datalist id={disciplinesId}>
+        {disciplines.map((name) => (
+          <option key={name} value={name} />
+        ))}
+      </datalist>
+      <TextField label={t("board.field.title")} value={form.title} onChange={field("title")} required invalid={checked && form.title.trim() === ""} />
+      <TextArea label={t("board.field.goal")} value={form.goal} onChange={field("goal")} />
+      <TextArea label={t("board.field.source")} value={form.targets} onChange={field("targets")} hint={t("board.hint.sourceNew")} />
+      {login === null ? (
+        <TextField label={t("board.field.reviewer")} value={form.reviewer} onChange={field("reviewer")} required invalid={checked && reviewer.trim() === ""} hint={t("board.handoff.reviewerHint")} />
+      ) : (
+        <TextField label={t("board.field.reviewer")} value={login} onChange={field("reviewer")} readOnly hint={t("board.handoff.reviewerHint")} />
+      )}
+    </WriteDialog>
+  );
+}
+
+/** What a return moves: the card as the list or its read has it now, so a submit goes on its current revision. */
+export type ReturnTarget = Pick<CardRow, "id" | "title" | "revision">;
+
+/**
+ * Return (`docs/canon/card-flows.md` "The rule"): a move into the flow's `return` column with a
+ * reason, which the move's event keeps. One required field; submit is one `POST .../move` with the
+ * column, the note and, from a drop between two cards, its place. Cancel moves nothing: the card
+ * stays where it stood. The daemon judges the move as any other and words a refusal.
+ */
+export function ReturnDialog({
+  project,
+  card,
+  to,
+  toTitle,
+  before = null,
+  ...handlers
+}: { project: string; card: ReturnTarget; to: string; toTitle: string; before?: string | null } & WriteHandlers) {
+  const t = useTranslate();
+  const { onClose } = handlers;
+  const send = useSend(project, handlers);
+  const [acting] = useActing();
+  const [reason, setReason] = useState("");
+  const [missing, setMissing] = useState(false);
+
+  function bodyOf(): CardMoveBody {
+    return { to, ...(before === null ? {} : { before }), note: reason.trim(), revision: card.revision, as: actingName(acting) };
+  }
+
+  return (
+    <WriteDialog
+      title={t("board.return.title", { id: card.id })}
+      action={t("board.return.submit")}
+      sending={t("board.return.sending")}
+      revision={card.revision}
+      onClose={onClose}
+      check={() => {
+        const empty = reason.trim() === "";
+        setMissing(empty);
+        return empty ? t("board.return.why") : null;
+      }}
+      onSubmit={() => send({ write: "move", id: card.id, body: bodyOf() })}
+    >
+      <p className="dialog-text">
+        <bdi>{shownSlot(card.title)}</bdi>
+      </p>
+      <p className="dialog-text dialog-effect">{fill(t("board.return.effect", { column: slot("column") }), { column: <bdi>{shownSlot(toTitle)}</bdi> })}</p>
+      <TextArea label={t("board.field.reason")} value={reason} onChange={setReason} required autoFocus invalid={missing && reason.trim() === ""} />
     </WriteDialog>
   );
 }

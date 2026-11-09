@@ -104,11 +104,15 @@ export function workspaceTabs(tabs: readonly BoardTab[], flows: readonly string[
   return kept.length === 0 ? [...tabs] : kept;
 }
 
-/** One column on a board: `column` null for the lane of cards outside `columns[]`; `key` holds the flow's name, so two flows' columns of one name stay apart. */
-export interface BoardLane {
+/** One column of a board as its header shows it: `column` null for the cards outside `columns[]`; `key` holds the flow's name, so two flows' columns of one name stay apart. */
+export interface BoardColumnHead {
   key: string;
   column: string | null;
   title: string;
+}
+
+/** One cell of the grid: a column within a swimlane, or within the whole board when there are none. */
+export interface BoardColumnCell extends BoardColumnHead {
   /** Standing in it, a cancelled card having left: as `spec card list` counts. */
   count: number;
   rows: CardRow[];
@@ -119,24 +123,41 @@ export function openRows(rows: readonly CardRow[]): CardRow[] {
   return rows.filter((row) => !row.cancelled);
 }
 
-function laneOf(key: string, column: string | null, title: string, rows: CardRow[]): BoardLane {
-  return { key, column, title, count: openRows(rows).length, rows };
+/** The rows of a board's flow that stand outside its served columns. */
+function outsideOf({ name, flow }: BoardTab, rows: readonly CardRow[]): CardRow[] {
+  const columns = flow?.columns ?? [];
+  return rows.filter((row) => row.flow === name && !columns.some((column) => column.id === row.column));
 }
 
-/** A board's columns in served order, empty ones too, then a last lane for the rows outside them. */
-export function lanesOf({ name, flow }: BoardTab, rows: readonly CardRow[], t: Translate): BoardLane[] {
-  const own = rows.filter((row) => row.flow === name);
-  const columns = flow?.columns ?? [];
-  const lanes = columns.map((column) =>
-    laneOf(
-      `${name}/column:${column.id}`,
-      column.id,
-      column.title,
-      own.filter((row) => row.column === column.id),
-    ),
-  );
-  const outside = own.filter((row) => !columns.some((column) => column.id === row.column));
-  return outside.length === 0 ? lanes : [...lanes, laneOf(`${name}/outside`, null, notInTheFlow(t), outside)];
+/**
+ * A board's columns in served order, empty ones too, then "Not in the flow" when any of `rows` of its
+ * flow stands outside them. The header row takes `rows` whole, so neither a filter nor a lane moves it.
+ */
+export function columnHeadsOf(tab: BoardTab, rows: readonly CardRow[], t: Translate): BoardColumnHead[] {
+  const heads = (tab.flow?.columns ?? []).map((column) => ({ key: `${tab.name}/column:${column.id}`, column: column.id, title: column.title }));
+  return outsideOf(tab, rows).length === 0 ? heads : [...heads, { key: `${tab.name}/outside`, column: null, title: notInTheFlow(t) }];
+}
+
+/** The cells of `heads` over `rows`, each its own rows in the daemon's order, grouped in one pass; `prefix` sets one lane's cells apart. */
+export function cellsOf(tab: BoardTab, heads: readonly BoardColumnHead[], rows: readonly CardRow[], prefix = ""): BoardColumnCell[] {
+  const columns = new Set((tab.flow?.columns ?? []).map((column) => column.id));
+  const byColumn = new Map<string | null, CardRow[]>();
+  for (const row of rows) {
+    if (row.flow !== tab.name) {
+      continue;
+    }
+    const at = columns.has(row.column) ? row.column : null;
+    const group = byColumn.get(at);
+    if (group === undefined) {
+      byColumn.set(at, [row]);
+    } else {
+      group.push(row);
+    }
+  }
+  return heads.map((head) => {
+    const own = byColumn.get(head.column) ?? [];
+    return { ...head, key: `${prefix}${head.key}`, count: openRows(own).length, rows: own };
+  });
 }
 
 /** Where Up and Down put a card; `before` null: last in the column. */

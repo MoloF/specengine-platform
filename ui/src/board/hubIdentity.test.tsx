@@ -97,9 +97,21 @@ async function move(id: string) {
   fireEvent.click(within(await screen.findByRole("menu", { name: `Move ${id}` })).getByRole("menuitem", { name: /^Doing/ }));
 }
 
+/** The write dialog a button opens: the newest dialog, over the card's modal where one is open. */
 async function dialogOf(button: string, scope: HTMLElement = document.body): Promise<HTMLElement> {
-  fireEvent.click(await within(scope).findByRole("button", { name: button }));
-  return screen.findByRole("dialog");
+  const found = await within(scope).findByRole("button", { name: button });
+  const before = screen.queryAllByRole("dialog").length;
+  fireEvent.click(found);
+  return waitFor(() => {
+    const all = screen.getAllByRole("dialog");
+    expect(all).toHaveLength(before + 1);
+    return all.at(-1) as HTMLElement;
+  });
+}
+
+/** The dialogs open over the page, the card's modal (board-handoff) aside. */
+function writeDialogs(): HTMLElement[] {
+  return screen.queryAllByRole("dialog").filter((dialog) => !dialog.classList.contains("card-modal"));
 }
 
 function type(dialog: HTMLElement, label: string, value: string) {
@@ -180,7 +192,7 @@ describe("a resolved login", () => {
       expect(client.createCard.mock.calls[0]?.[1].as).toBe("mira");
       expect(stored()).toBe("Ana");
       await waitFor(() => {
-        expect(screen.queryByRole("dialog")).toBeNull();
+        expect(writeDialogs()).toEqual([]);
       });
     });
 
@@ -258,7 +270,7 @@ describe("a resolved login", () => {
     await shows("mira");
     fireEvent.click(within(await dialogOf("Edit")).getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(writeDialogs()).toEqual([]);
     });
     await dialogOf("Assign");
     expect(client.getIdentity).toHaveBeenCalledTimes(1);
@@ -277,7 +289,7 @@ describe("on a hub a control `allowed` lists still ends in the daemon's answer",
     fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(FORBIDDEN);
     expect(client.acceptCard.mock.calls[0]?.[2].as).toBe("mira");
-    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(writeDialogs()).toEqual([dialog]);
   });
 
   it("Clear: the same", async () => {
@@ -292,7 +304,7 @@ describe("on a hub a control `allowed` lists still ends in the daemon's answer",
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(FORBIDDEN);
     expect(client.clearCard.mock.calls[0]?.[2].as).toBe("mira");
-    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(writeDialogs()).toEqual([dialog]);
   });
 
   it("a refused write says the daemon's line and leaves the box alone", async () => {
@@ -657,7 +669,7 @@ describe("a hub's dialogs (A9 of hub-team)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(line);
     expect(client.clearCardGroup.mock.calls).toEqual([["alpha", { group: "A", reason: "Numbering only", as: "mira", count: 2 }]]);
-    expect(screen.getByRole("dialog")).toBe(dialog);
+    expect(writeDialogs()).toEqual([dialog]);
   });
 
   it("counts as the daemon does and shows what it passed over: a departed row is left out, a card suspect on any row stays in, the 200's note kept in the block", async () => {
@@ -679,7 +691,7 @@ describe("a hub's dialogs (A9 of hub-team)", () => {
     type(dialog, "Reason", "Numbering only");
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear all" }));
     await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(writeDialogs()).toEqual([]);
     });
     expect(client.clearCardGroup.mock.calls[0]?.[1].count).toBe(2);
     expect(within(within(block).getByRole("list", { name: "Notes from the daemon on the last write" })).getByText(line)).toBeTruthy();
@@ -721,7 +733,7 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
     expect(says(ACT_OFF.clear)).toBe(false);
     expect(idle(within(block).getByRole("button", { name: "Clear C-0001" }))).toBe(false);
     fireEvent.click(all);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(writeDialogs()).toEqual([]);
     expect(document.activeElement === all || document.activeElement === document.body).toBe(true);
   });
 
@@ -737,7 +749,7 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
     fireEvent.click(clear);
     await tick();
     expect(client.getCard).not.toHaveBeenCalled();
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(writeDialogs()).toEqual([]);
   });
 
   it("branches on the word alone: `group_clear` with nothing else leaves Clear all on and Clear off", async () => {
@@ -749,7 +761,7 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
     expect(idle(within(block).getByRole("button", { name: "Clear all" }))).toBe(false);
   });
 
-  it("the panel's Accept off when `allowed` omits `accept`, the Move menu without it, Edit and the rest as ever", async () => {
+  it("the modal's Accept off when `allowed` omits `accept`, the Move menu without it, Edit and the rest as ever", async () => {
     const client = acceptClient(MEMBER_NO_ACCEPT);
     renderApp(client, "#/alpha/board/C-0001");
     await shows("mira");
@@ -760,14 +772,10 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
     });
     expect(says(ACT_OFF.accept)).toBe(true);
     fireEvent.click(accept);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(writeDialogs()).toEqual([]);
     expect(idle(within(actions).getByRole("button", { name: "Edit" }))).toBe(false);
-    const tile = document.querySelector<HTMLElement>('[data-card="C-0001"]');
-    if (tile === null) {
-      throw new Error("no tile");
-    }
-    tile.focus();
-    fireEvent.keyDown(tile, { key: "m" });
+    // The modal's Move opens the same menu as a tile's.
+    fireEvent.click(within(actions).getByRole("button", { name: "Move" }));
     const menu = await screen.findByRole("menu", { name: "Move C-0001" });
     expect(within(menu).queryByRole("menuitem", { name: /^Accept/ })).toBeNull();
     expect(within(menu).queryByRole("menuitem", { name: /^To do/ })).not.toBeNull();
@@ -790,7 +798,7 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
     expect(within(await screen.findByRole("menu", { name: "Move C-0001" })).queryByRole("menuitem", { name: /^Accept/ })).not.toBeNull();
   });
 
-  it("the panel's Clear off when `allowed` omits `clear`", async () => {
+  it("the modal's Clear off when `allowed` omits `clear`", async () => {
     const client = clearClient({ ...LEAD, allowed: ["stage", "accept"] });
     renderApp(client, "#/alpha/board/C-0001");
     await shows("mira");
@@ -800,7 +808,7 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
     });
     expect(says(ACT_OFF.clear)).toBe(true);
     fireEvent.click(clear);
-    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(writeDialogs()).toEqual([]);
   });
 
   it("a word this build does not know changes nothing: RM-0050's `confirm` beside the rest", async () => {
@@ -931,7 +939,7 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
       const list = await screen.findByRole("listbox");
       fireEvent.keyDown(within(list).getByRole("option"), { key: "a" });
       fireEvent.keyDown(within(list).getByRole("option"), { key: "r" });
-      expect(screen.queryByRole("dialog")).toBeNull();
+      expect(writeDialogs()).toEqual([]);
       await waitFor(() => {
         expect(document.querySelector('[aria-live="polite"]')?.textContent).toContain(ACT_OFF.stage);
       });

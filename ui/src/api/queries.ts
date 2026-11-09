@@ -106,13 +106,16 @@ export const queryKeys = {
   roadmap: (project: string) => ["roadmap", project] as const,
   /** What moved since each drifted binding's lock entry, `spec lock diff REF --json` (`docs/features/lock-diff-ui.md` "Description and interactions"). */
   lockDiff: (project: string, ref: string) => ["lock-diff", project, ref] as const,
-  /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does. */
-  cards: (project: string, options: CardsOptions = {}) => ["cards", project, { with_cancelled: options.with_cancelled ?? false }] as const,
+  /** The Board's read (`docs/features/board-ui.md` "Board"): the filters never read again, Show cancelled does; `parent` is never asked here. */
+  cards: (project: string, options: BoardCardsOptions = {}) => ["cards", project, { with_cancelled: options.with_cancelled ?? false }] as const,
   /** One card, its history with it. */
   card: (project: string, id: string) => ["card", project, id] as const,
   /** Marks and rollups, joined per read; `ref` null: the whole project (`docs/features/card-trace.md`); a lane's rows or the lanes alone (`docs/features/trace-views.md` "Timeline"). */
   trace: (project: string, options: TraceOptions = {}) => ["trace", project, options.ref ?? null, options.stage ?? null, options.summary ?? false] as const,
 };
+
+/** What the Board's one read asks: Show cancelled alone. It finds a card's children in that answer, never by `parent`. */
+export type BoardCardsOptions = Pick<CardsOptions, "with_cancelled">;
 
 /** Every round sheet of a project, whatever its limit. */
 function roundsOf(project: string) {
@@ -122,6 +125,11 @@ function roundsOf(project: string) {
 /** A project's round POSTs in the mutation cache: one key, whatever screen sent them. */
 function roundAnswersKey(project: string) {
   return ["round-answers", project] as const;
+}
+
+/** A project's card writes in the mutation cache: one key, whichever dialog, menu or drop sent them. */
+function cardWritesKey(project: string) {
+  return ["card-writes", project] as const;
 }
 
 /** Every read of a project's card list, whatever its options. */
@@ -1057,7 +1065,7 @@ export type RoadmapQuery = ReturnType<typeof useRoadmap>;
  * on entering the Board, after a write of this page and, while it shows, after a `card.*` event, an
  * apply, a decision on a proposal, a gap, and on window focus, for a hand edit, which raises no event.
  */
-export function useCards(project: string, options: CardsOptions = {}) {
+export function useCards(project: string, options: BoardCardsOptions = {}) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.cards(project, options),
@@ -1130,6 +1138,7 @@ export function useCardWrite(project: string) {
     ]);
   }
   return useMutation({
+    mutationKey: cardWritesKey(project),
     mutationFn: (request: CardWriteRequest): Promise<CardWrite> => {
       switch (request.write) {
         case "create":
@@ -1156,6 +1165,15 @@ export function useCardWrite(project: string) {
       }
     },
   });
+}
+
+/**
+ * Whether a card write of the project is out, its re-read included: while one is, the Board's card
+ * modal neither closes nor opens, Back included, which takes effect once it settles (`ui/README.md`
+ * "Screen rules", Dialogs).
+ */
+export function useCardWriting(project: string): boolean {
+  return useIsMutating({ mutationKey: cardWritesKey(project) }) > 0;
 }
 
 /**

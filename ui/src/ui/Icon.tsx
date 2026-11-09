@@ -79,6 +79,13 @@ const PATHS = {
   cardDown: "M8 3v10 M4.5 9.5 8 13l3.5-3.5",
   // Against the brief (docs/features/card-trace.md): the result went another way.
   cardDeparted: "M3 13 13 3 M7.5 3H13v5.5",
+  // A hand-off and a return (docs/canon/card-flows.md "The rule"): work passed to another trade, work sent back.
+  cardHandOff: "M2.5 3.5h5v9h-5Z M7.5 8h6 M11 5.5 13.5 8 11 10.5",
+  cardReturned: "M13 4.5v3a3 3 0 0 1-3 3H3.5 M6 8 3.5 10.5 6 13",
+  // A lane folded or open, and a card on a page of its own.
+  laneClosed: "M6 3.5 10.5 8 6 12.5",
+  laneOpen: "M3.5 6 8 10.5 12.5 6",
+  cardPage: "M9 2.5h4.5V7 M13.5 2.5 7.5 8.5 M11.5 9.5v4h-9v-9h4",
 } as const;
 
 export type IconName = keyof typeof PATHS;

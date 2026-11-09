@@ -21,6 +21,11 @@
 //! - The gate: `GateQueue::tasks` answers alike over a corrupt card row and
 //!   with no `cards` table at all, and `queue/gate.rs` names no card (M:
 //!   `GateQueue::tasks` reading `cards`).
+//! - board-handoff (RM-0085, docs/canon/cards.md "Documents and events"):
+//!   `card.created` carries `reviewer` and `card.moved` `note`, each `null`
+//!   when none; the reviewer and the return column's note asked again under
+//!   the lock, on `fixtures/studio-lamp`'s flows (each with `return =
+//!   "sent-back"`).
 
 #![cfg(unix)]
 
@@ -120,6 +125,7 @@ fn new_card(flow: &CardFlow, title: &str) -> NewCard {
         targets: Vec::new(),
         criteria: Vec::new(),
         assignee: None,
+        reviewer: None,
         estimate: None,
         due: None,
         parent: None,
@@ -133,6 +139,7 @@ fn to<'f>(flow: &'f CardFlow, column: &str) -> CardChange<'f> {
         flow: Some(flow),
         to: Some(column.to_owned()),
         before: None,
+        note: None,
     }
 }
 
@@ -141,6 +148,7 @@ fn before<'f>(flow: &'f CardFlow, column: Option<&str>, card: &str) -> CardChang
         flow: Some(flow),
         to: column.map(str::to_owned),
         before: Some(card.to_owned()),
+        note: None,
     }
 }
 
@@ -332,17 +340,17 @@ fn create_card_numbers_places_and_logs() {
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0001", "flow": "copy", "column": "draft", "position": 1,
-                       "assignee": "ana", "as": "writer"})
+                       "assignee": "ana", "reviewer": null, "as": "writer"})
             ),
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0002", "flow": "copy", "column": "draft", "position": 2,
-                       "assignee": null, "as": "local"})
+                       "assignee": null, "reviewer": null, "as": "local"})
             ),
             (
                 EVENT_CARD_CREATED.to_owned(),
                 json!({"id": "C-0003", "flow": "plates", "column": "queued", "position": 1,
-                       "assignee": null, "as": "local"})
+                       "assignee": null, "reviewer": null, "as": "local"})
             ),
         ]
     );
@@ -423,7 +431,8 @@ fn the_store_asks_the_move_rules_again_under_the_lock() {
         card_events(&queue).last(),
         Some(&(
             EVENT_CARD_MOVED.to_owned(),
-            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "desk"})
+            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "desk",
+                   "note": null})
         ))
     );
     let moved = queue
@@ -523,7 +532,7 @@ fn order_is_dense_and_a_neighbour_is_not_touched() {
         card_events(&queue).last().map(|event| event.1.clone()),
         Some(
             json!({"id": "C-0004", "from": "queued", "to": "queued", "position": 2,
-                    "as": "local"})
+                    "as": "local", "note": null})
         )
     );
     for id in ["C-0002", "C-0003"] {
@@ -996,6 +1005,342 @@ fn history_is_the_cards_own_last_events() {
         "created and five edits"
     );
     assert_eq!(queue.card_history("C-0099", 64).expect("history"), []);
+}
+
+// ------------------------------------------------- board-handoff (RM-0085)
+
+/// The flows of `fixtures/studio-lamp`, the gamedev preset's: each with the
+/// return column `sent-back` (board-handoff, `scripts/presets/gamedev.toml`).
+fn lamp() -> CardConfig {
+    let text = fs::read_to_string(fixture("studio-lamp").join("specengine.toml")).expect("config");
+    CardConfig::from_toml(&text).expect("the fixture's [card]")
+}
+
+/// A move of the card to `column` with `note`.
+fn noted<'f>(flow: &'f CardFlow, column: &str, note: Option<&str>) -> CardChange<'f> {
+    CardChange::Move {
+        flow: Some(flow),
+        to: Some(column.to_owned()),
+        before: None,
+        note: note.map(str::to_owned),
+    }
+}
+
+/// board-handoff BH-12 (docs/canon/cards.md "Documents and events"):
+/// `create_card` stores a
+/// reviewer named at creation and `card.created` carries it, `null` when
+/// none; the store asks core's reviewer rule again, so `agent` and `local`
+/// are refused with nothing stored. M14's store half.
+#[test]
+fn board_handoff_create_card_stores_the_reviewer_and_card_created_carries_it() {
+    let scratch = Scratch::new("qc-handoff-reviewer");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let config = lamp();
+    let narrative = config.flow("narrative").expect("narrative");
+    let development = config.flow("development").expect("development");
+    let parent = queue
+        .create_card(
+            &NewCard {
+                by: "Ann".to_owned(),
+                ..new_card(narrative, "Lamp room scene")
+            },
+            T0,
+        )
+        .expect("a card");
+    assert_eq!(parent.reviewer, None);
+    let child = queue
+        .create_card(
+            &NewCard {
+                parent: Some(parent.id.clone()),
+                reviewer: Some("Ann".to_owned()),
+                by: "Ann".to_owned(),
+                ..new_card(development, "Lamp room dialogue")
+            },
+            T0,
+        )
+        .expect("a hand-off");
+    assert_eq!(child.reviewer.as_deref(), Some("Ann"));
+    assert_eq!(child.parent.as_deref(), Some("C-0001"));
+    assert_eq!(child.column, "backlog");
+    assert_eq!(queue.get_card("C-0002").expect("get"), Some(child));
+    assert_eq!(
+        card_events(&queue),
+        [
+            (
+                EVENT_CARD_CREATED.to_owned(),
+                json!({"id": "C-0001", "flow": "narrative", "column": "backlog",
+                       "position": 1, "assignee": null, "reviewer": null, "as": "Ann"})
+            ),
+            (
+                EVENT_CARD_CREATED.to_owned(),
+                json!({"id": "C-0002", "flow": "development", "column": "backlog",
+                       "position": 1, "assignee": null, "reviewer": "Ann", "as": "Ann"})
+            ),
+        ]
+    );
+    assert_eq!(
+        sqlite3(
+            &db,
+            "SELECT reviewer, parent FROM cards WHERE id = 'C-0002';"
+        ),
+        "Ann|C-0001"
+    );
+    let dump = queue.dump().expect("dump");
+    for name in ["agent", "local"] {
+        let reason = refusal(queue.create_card(
+            &NewCard {
+                reviewer: Some(name.to_owned()),
+                ..new_card(development, "No one's")
+            },
+            T1,
+        ));
+        assert!(
+            reason.contains(&format!(
+                "`{name}` can be no reviewer: a person accepts a result"
+            )),
+            "{name}: {reason}"
+        );
+        assert_eq!(queue.dump().expect("dump"), dump, "{name}: nothing stored");
+    }
+}
+
+/// board-handoff BH-14, R3 (docs/canon/card-flows.md "The rule",
+/// docs/canon/cards.md "Rules"): the store asks
+/// core's note rule again under the lock: a move into the flow's `return`
+/// column from another column with no note, or a blank one, is refused with
+/// the line of docs/canon/card-flows.md "Return" and `dump()` unchanged; with a note it moves and
+/// `card.moved` holds it, `null` when none; a reorder inside the column and a
+/// move out of it need none. M16, M17's store half.
+#[test]
+fn board_handoff_the_store_asks_the_return_rule_again_under_the_lock() {
+    let scratch = Scratch::new("qc-handoff-return");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let config = lamp();
+    let flow = config.flow("development").expect("development");
+    assert_eq!(flow.return_column.as_deref(), Some("sent-back"));
+    queue
+        .create_card(&new_card(flow, "Lamp room dialogue"), T0)
+        .expect("a card");
+    queue
+        .create_card(&new_card(flow, "Lamp light shader"), T0)
+        .expect("a card");
+    queue
+        .change_card("C-0001", None, &noted(flow, "in-progress", None), "Rob", T1)
+        .expect("taken, no note");
+    assert_eq!(
+        card_events(&queue).last(),
+        Some(&(
+            EVENT_CARD_MOVED.to_owned(),
+            json!({"id": "C-0001", "from": "backlog", "to": "in-progress", "position": 1,
+                   "as": "Rob", "note": null})
+        ))
+    );
+    let dump = queue.dump().expect("dump");
+    let line = "C-0001 enters `sent-back`, its flow's return column: say why with `--note`; \
+                nothing changed";
+    for note in [None, Some(""), Some("  \n")] {
+        assert_eq!(
+            refusal(queue.change_card("C-0001", None, &noted(flow, "sent-back", note), "Rob", T2)),
+            line,
+            "{note:?}"
+        );
+        assert_eq!(
+            queue.dump().expect("dump"),
+            dump,
+            "{note:?}: nothing changed"
+        );
+    }
+    let moved = queue
+        .change_card(
+            "C-0001",
+            None,
+            &noted(flow, "sent-back", Some("Two endings contradict")),
+            "Rob",
+            T2,
+        )
+        .expect("returned with a reason");
+    assert_eq!(moved.column, "sent-back");
+    assert_eq!(moved.revision, 3);
+    assert_eq!(
+        card_events(&queue).last(),
+        Some(&(
+            EVENT_CARD_MOVED.to_owned(),
+            json!({"id": "C-0001", "from": "in-progress", "to": "sent-back", "position": 1,
+                   "as": "Rob", "note": "Two endings contradict"})
+        ))
+    );
+    let history = queue.card_history("C-0001", 64).expect("history");
+    assert_eq!(
+        history.last().map(|event| event.payload["note"].clone()),
+        Some(json!("Two endings contradict")),
+        "the move's own history entry is the note's home"
+    );
+    // The first column straight in: refused too, then sent with a note.
+    let dump = queue.dump().expect("dump");
+    assert_eq!(
+        refusal(queue.change_card("C-0002", None, &noted(flow, "sent-back", None), "Rob", T2)),
+        line.replace("C-0001", "C-0002")
+    );
+    assert_eq!(queue.dump().expect("dump"), dump);
+    queue
+        .change_card(
+            "C-0002",
+            None,
+            &noted(flow, "sent-back", Some("Too dark")),
+            "Rob",
+            T2,
+        )
+        .expect("returned");
+    // A reorder inside the return column: no note asked.
+    queue
+        .change_card(
+            "C-0002",
+            None,
+            &CardChange::Move {
+                flow: Some(flow),
+                to: None,
+                before: Some("C-0001".to_owned()),
+                note: None,
+            },
+            "local",
+            T2,
+        )
+        .expect("a reorder needs no note");
+    assert_eq!(
+        card_events(&queue).last(),
+        Some(&(
+            EVENT_CARD_MOVED.to_owned(),
+            json!({"id": "C-0002", "from": "sent-back", "to": "sent-back", "position": 1,
+                   "as": "local", "note": null})
+        ))
+    );
+    // Out of it: none asked; a note on any move is kept.
+    queue
+        .change_card("C-0001", None, &noted(flow, "ready", None), "Rob", T2)
+        .expect("leaving needs no note");
+    queue
+        .change_card(
+            "C-0002",
+            None,
+            &noted(flow, "in-review", Some("Lighter now")),
+            "Rob",
+            T2,
+        )
+        .expect("a note on any move");
+    assert_eq!(
+        card_events(&queue)
+            .iter()
+            .rev()
+            .take(2)
+            .map(|(_, payload)| payload["note"].clone())
+            .collect::<Vec<_>>(),
+        [json!("Lighter now"), Value::Null]
+    );
+    // card-press names no return column: its `blocked` is a word.
+    let press = press();
+    let plates = plates(&press);
+    assert_eq!(plates.return_column, None);
+    queue
+        .create_card(&new_card(plates, "Back page"), T2)
+        .expect("a card");
+    queue
+        .change_card("C-0003", None, &to(plates, "blocked"), "local", T2)
+        .expect("no return column, no note asked");
+}
+
+/// A flow no fixture holds: explicit `moves`, the move into its `return`
+/// column `lead`'s alone, a move out of it anyone's.
+const RELAY: &str = r#"
+[[card.flow]]
+name = "relay"
+disciplines = ["relay"]
+columns = ["open", "back", "work", "check", "shut"]
+accept = { from = "check", to = "shut" }
+return = "back"
+moves = [
+  { from = "open", to = "work" },
+  { from = "work", to = "back", by = ["lead"] },
+  { from = "back", to = "work" },
+  { from = "work", to = "check" },
+]
+"#;
+
+/// docs/canon/card-flows.md "Return" (its order of a move's checks): core's
+/// `card_move` judges the flow's move, then its `by`, then the return note.
+/// So a move into the return column by a name outside its `by` is refused
+/// with `by`'s line, note or none; one the flow does not list is refused
+/// naming what is allowed, never the note's line; only a listed move by its
+/// `by` asks for the note. The store asks it under its lock, `dump()`
+/// unchanged on each refusal. M: the note asked before `by`.
+#[test]
+fn board_handoff_by_and_the_flows_moves_come_before_the_return_note() {
+    let scratch = Scratch::new("qc-handoff-by");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let config = CardConfig::from_toml(RELAY).expect("the relay flow");
+    let flow = config.flow("relay").expect("relay");
+    assert_eq!(flow.return_column.as_deref(), Some("back"));
+    queue
+        .create_card(&new_card(flow, "Relay one"), T0)
+        .expect("a card");
+    queue
+        .create_card(&new_card(flow, "Relay two"), T0)
+        .expect("a card");
+    queue
+        .change_card("C-0001", None, &noted(flow, "work", None), "rob", T1)
+        .expect("anyone's move");
+    let dump = queue.dump().expect("dump");
+    let not_by = "C-0001 is in work: the move to `back` is `lead`'s, not `rob`'s; nothing changed";
+    for note in [None, Some(""), Some("Two endings contradict")] {
+        assert_eq!(
+            refusal(queue.change_card("C-0001", None, &noted(flow, "back", note), "rob", T2)),
+            not_by,
+            "{note:?}: `by` first"
+        );
+        assert_eq!(
+            queue.dump().expect("dump"),
+            dump,
+            "{note:?}: nothing changed"
+        );
+    }
+    // Not listed at all: the flow's own line, note or none.
+    for note in [None, Some("Why.")] {
+        assert_eq!(
+            refusal(queue.change_card("C-0002", None, &noted(flow, "back", note), "lead", T2)),
+            "C-0002 is in open: no move to `back`; allowed: `work`; nothing changed",
+            "{note:?}"
+        );
+        assert_eq!(queue.dump().expect("dump"), dump, "{note:?}");
+    }
+    // Its `by`, no note: now the note's line.
+    assert_eq!(
+        refusal(queue.change_card("C-0001", None, &noted(flow, "back", None), "lead", T2)),
+        "C-0001 enters `back`, its flow's return column: say why with `--note`; nothing changed"
+    );
+    assert_eq!(queue.dump().expect("dump"), dump);
+    let moved = queue
+        .change_card(
+            "C-0001",
+            None,
+            &noted(flow, "back", Some("Two endings contradict")),
+            "lead",
+            T2,
+        )
+        .expect("the lead's return");
+    assert_eq!(moved.column, "back");
+    assert_eq!(
+        card_events(&queue).last(),
+        Some(&(
+            EVENT_CARD_MOVED.to_owned(),
+            json!({"id": "C-0001", "from": "work", "to": "back", "position": 1,
+                   "as": "lead", "note": "Two endings contradict"})
+        ))
+    );
+    queue
+        .change_card("C-0001", None, &noted(flow, "work", None), "rob", T2)
+        .expect("out of it: anyone's, no note");
 }
 
 // --------------------------------------------------------- corrupt rows

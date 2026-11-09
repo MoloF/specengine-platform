@@ -575,6 +575,9 @@ enum CardCommand {
         /// Who works on it.
         #[arg(long, value_name = "N")]
         assignee: Option<String>,
+        /// Who accepts it, a person: a hand-off's asking side.
+        #[arg(long, value_name = "N")]
+        reviewer: Option<String>,
         /// `N` or `N-M`.
         #[arg(long, value_name = "E")]
         estimate: Option<String>,
@@ -614,6 +617,9 @@ enum CardCommand {
         /// Each card's mark over its targets too.
         #[arg(long)]
         marks: bool,
+        /// Only the cards whose parent is this card.
+        #[arg(long, value_name = "C")]
+        parent: Option<String>,
     },
     /// Print a card as `key: value` lines.
     Show {
@@ -636,6 +642,9 @@ enum CardCommand {
         /// The card whose place it takes.
         #[arg(long, value_name = "C")]
         before: Option<String>,
+        /// Why it moves, at most 4096 bytes; required into the flow's `return` column.
+        #[arg(long, value_name = "T")]
+        note: Option<String>,
         /// Only if the card still stands at this revision.
         #[arg(long, value_name = "R")]
         revision: Option<String>,
@@ -2281,6 +2290,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             targets,
             criteria,
             assignee,
+            reviewer,
             estimate,
             due,
             parent,
@@ -2296,6 +2306,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 targets,
                 criteria,
                 assignee,
+                reviewer,
                 estimate,
                 due,
                 parent,
@@ -2312,6 +2323,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             no_target,
             with_cancelled,
             marks,
+            parent,
         } => Ok(Outcome::CardList(Box::new(specengine_cli::card_list(
             env,
             globals,
@@ -2323,6 +2335,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 no_target,
                 with_cancelled,
                 marks,
+                parent,
             },
         )?))),
         CardCommand::Show { id, history, marks } => Ok(Outcome::CardShow(Box::new(
@@ -2332,6 +2345,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             id,
             to,
             before,
+            note,
             revision,
             actor,
         } => card(specengine_cli::card_move(
@@ -2341,6 +2355,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 id,
                 to,
                 before,
+                note,
                 revision,
                 actor,
                 now: now(),

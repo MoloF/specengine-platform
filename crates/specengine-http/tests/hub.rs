@@ -56,6 +56,10 @@
 //! the proxy with `Last-Event-ID` gets every later event once. M: the opening
 //! cursor ignoring `Last-Event-ID`; resuming at `seq >= n`.
 //!
+//! docs/features/board-handoff.md (RM-0085) BH-20: the router's card routes
+//! stay the eight of `docs/canon/board-ui.md` "Routes" (28 GET routes), a
+//! `POST .../cards/:id/return` off a hub's list and no local route. M23.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 mod common;
@@ -2163,5 +2167,126 @@ fn sl5_a_resume_through_the_proxy_gets_each_later_event_once() {
         rest.iter()
             .all(|frame| frame.id.is_none() && frame.event.is_none() && frame.data.is_none()),
         "nothing else within 1 s: {rest:?}"
+    );
+}
+
+// ------------------------------------------- board-handoff (RM-0085), BH-20
+
+/// Every literal path of a `.route(` call in `source` (any method), comment
+/// lines left out.
+fn every_route_in(source: &str) -> Vec<String> {
+    let code: String = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    code.match_indices(".route(")
+        .map(|(at, call)| {
+            let rest = code[at + call.len()..].trim_start();
+            rest.strip_prefix('"')
+                .and_then(|path| path.split_once('"'))
+                .map(|(path, _)| path.to_owned())
+                .unwrap_or_else(|| panic!("a route with no literal path: {rest}"))
+        })
+        .collect()
+}
+
+/// The card routes of docs/canon/board-ui.md "Routes", the two reads and the
+/// six writes: a hand-off is `POST .../cards`, a return `POST .../move`.
+const CARD_ROUTES: [&str; 8] = [
+    "/api/projects/{p}/cards",
+    "/api/projects/{p}/cards/{id}",
+    "/api/projects/{p}/cards/{id}/accept",
+    "/api/projects/{p}/cards/{id}/assign",
+    "/api/projects/{p}/cards/{id}/cancel",
+    "/api/projects/{p}/cards/{id}/clear",
+    "/api/projects/{p}/cards/{id}/edit",
+    "/api/projects/{p}/cards/{id}/move",
+];
+
+/// board-handoff BH-20: no route is added. The router's card routes, read
+/// from `app.rs` when the test runs, are the eight of docs/canon/board-ui.md
+/// "Routes" (the 28 GET routes are [`GET_ROUTES`]); on a hub `POST
+/// .../cards/:id/return` is off the list, refused by the fence before any
+/// handler, nothing stored; on a local daemon no route answers it. A hand-off
+/// and a return keep the plain class: a login outside `[team]` makes both
+/// (`tests/hub_team.rs`). M23: a new `POST .../cards/:id/return` route.
+#[test]
+fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
+    let source = read_text(&repository_root(), "crates/specengine-http/src/app.rs");
+    let mut cards: Vec<String> = every_route_in(&source)
+        .into_iter()
+        .filter(|path| path.starts_with("/api/projects/{p}/cards"))
+        .collect();
+    cards.sort();
+    assert_eq!(
+        cards, CARD_ROUTES,
+        "M23: the card routes as Routes lists them"
+    );
+    assert_eq!(GET_ROUTES.len(), 28);
+    // The pin's positive control: one more route is seen.
+    let anchor = "let routes = Router::new()\n";
+    let added = format!(
+        "{anchor}        .route(\"/api/projects/{{p}}/cards/{{id}}/return\", post(move_card))\n"
+    );
+    let mut mutated: Vec<String> = every_route_in(&source.replacen(anchor, &added, 1))
+        .into_iter()
+        .filter(|path| path.starts_with("/api/projects/{p}/cards"))
+        .collect();
+    mutated.sort();
+    assert_eq!(mutated.len(), CARD_ROUTES.len() + 1, "{mutated:?}");
+
+    // On a hub: off the list for any login, nothing stored.
+    let hub = Setup::new("hub-handoff-return", "card-press").start();
+    let made = through(
+        &hub.server,
+        "POST",
+        &format!("{P}/cards"),
+        &Proxied::write("eve"),
+        br#"{"title":"Back page","discipline":"plates"}"#,
+    );
+    assert_eq!(made.status, 200, "{}", made.text());
+    let stored = events_of(&hub.setup.home, &hub.setup.root);
+    for path in [
+        format!("{P}/cards/C-0001/return"),
+        format!("{P}/cards/C-0001/hand-off"),
+        format!("{P}/cards/C-0001/handoff"),
+    ] {
+        let reply = through(
+            &hub.server,
+            "POST",
+            &path,
+            &Proxied::write("eve"),
+            br#"{"note":"Why."}"#,
+        );
+        assert_refused(&reply, OFF_LIST_LINE, &format!("POST {path}"));
+    }
+    assert_eq!(
+        events_of(&hub.setup.home, &hub.setup.root),
+        stored,
+        "nothing stored"
+    );
+    drop(hub);
+
+    // On a local daemon: no route.
+    let scratch = Scratch::new("local-handoff-return");
+    let root = scratch.repo("card-press", "press", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let made = server.stage(
+        "/api/projects/card-press/cards",
+        r#"{"title":"Back page","discipline":"plates"}"#,
+    );
+    assert_eq!(made.status, 200, "{}", made.text());
+    let reply = server.stage(
+        "/api/projects/card-press/cards/C-0001/return",
+        r#"{"note":"Why."}"#,
+    );
+    assert_eq!(reply.status, 404, "{}", reply.text());
+    assert_eq!(
+        spec_json(&home, &cwd, &root, &["card", "show", "C-0001"]).json()["column"],
+        json!("queued"),
+        "nothing moved"
     );
 }

@@ -43,10 +43,34 @@ function type(scope: HTMLElement, label: string, value: string) {
   fireEvent.change(within(scope).getByLabelText(label), { target: { value } });
 }
 
+/** Every write dialog gone; the card's modal, if one is open, stays. */
 async function closed() {
+  await waitFor(() => {
+    expect(screen.queryAllByRole("dialog").filter((dialog) => !dialog.classList.contains("card-modal"))).toEqual([]);
+  });
+}
+
+/** The card's modal, by its title. */
+function modal(title: string): Promise<HTMLElement> {
+  return screen.findByRole("dialog", { name: title });
+}
+
+/** The modal closed by its Close button. */
+async function closeModal(dialog: HTMLElement) {
+  fireEvent.click(within(dialog).getByRole("button", { name: /^Close/ }));
   await waitFor(() => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
+}
+
+/** A column's cell in the one lane of None. */
+function cell(title: string): HTMLElement {
+  const key = screen.getByRole("heading", { level: 2, name: new RegExp(`^${title}\\b`) }).dataset.columnHead ?? "";
+  const found = Array.from(document.querySelectorAll<HTMLElement>("section.board-cell")).find((candidate) => candidate.dataset.lane?.endsWith(`|${key}`) === true);
+  if (found === undefined) {
+    throw new Error(`no cell ${title}`);
+  }
+  return found;
 }
 
 describe("the Board over the mock", () => {
@@ -78,13 +102,15 @@ describe("the Board over the mock", () => {
     });
 
     fireEvent.click(within(card("C-0106")).getByRole("link", { name: "Write the close checklist", hidden: true }));
-    fireEvent.click(await screen.findByRole("button", { name: "Assign" }));
+    const opened = await modal("Write the close checklist");
+    fireEvent.click(await within(opened).findByRole("button", { name: "Assign" }));
     const assign = await screen.findByRole("dialog", { name: "Assign C-0106" });
     type(assign, "Assignee", "Omar Lind");
     type(assign, "Reviewer", "Ana Weiss");
     fireEvent.click(within(assign).getByRole("button", { name: "Save" }));
     await closed();
     await within(await shows("C-0106")).findByText("Omar Lind");
+    await closeModal(opened);
 
     await choose("C-0106", /^Review/);
     await waitFor(() => {
@@ -100,9 +126,11 @@ describe("the Board over the mock", () => {
       expect(columnOf("C-0106")).toBe("done");
     });
     expect(within(card("C-0106")).getByText("Accepted")).toBeTruthy();
-    const part = await screen.findByRole("region", { name: "Acceptance" });
+    fireEvent.click(within(card("C-0106")).getByRole("link", { name: "Write the close checklist", hidden: true }));
+    const done = await modal("Write the close checklist");
+    const part = await within(done).findByRole("region", { name: "Acceptance" });
     expect(part.textContent).toContain("Ana Weiss");
-    expect(screen.queryByRole("group", { name: "Actions" })).toBeNull();
+    expect(within(done).queryByRole("group", { name: "Actions" })).toBeNull();
 
     first.view.unmount();
     expect(window.localStorage.getItem(ACTING_KEY)).toBe("Ana Weiss");
@@ -141,9 +169,9 @@ describe("the Board over the mock", () => {
   });
 
   it("ledger-api: one flow, no tabs; a card a column left behind in the last lane, its move out from its read", async () => {
-    renderMock("normal", "#/ledger-api/board/C-0105");
-    const lane = (await screen.findByRole("heading", { level: 2, name: /^Not in the flow/ })).closest("section");
-    expect(lane?.textContent).toContain("the column `parked` is no longer in the flow `plain`: served last");
+    renderMock("normal", "#/ledger-api/board");
+    await screen.findByRole("heading", { level: 2, name: /^Not in the flow/ });
+    expect(cell("Not in the flow").textContent).toContain("the column `parked` is no longer in the flow `plain`: served last");
     expect(screen.queryByRole("tablist")).toBeNull();
     const element = await shows("C-0105");
     element.focus();
@@ -156,13 +184,14 @@ describe("the Board over the mock", () => {
     expect(screen.queryByRole("heading", { level: 2, name: /^Not in the flow/ })).toBeNull();
   });
 
-  it("the panel: fields, evidence, history; a cancelled card is listed only when asked, with why (AC-09)", async () => {
+  it("the modal: fields, evidence, history; a cancelled card is listed only when asked, with why (AC-09)", async () => {
     renderMock("normal", "#/harbor-sim/board/C-0003");
-    const panel = await screen.findByRole("complementary", { name: "Night passage rules, plain words" });
+    const panel = await modal("Night passage rules, plain words");
     expect(within(panel).getByRole("link", { name: "MEC-NIGHT-PASSAGE" }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-NIGHT-PASSAGE");
     expect(within(within(panel).getByRole("region", { name: "Evidence" })).getByText("Second read done with the pilots' office")).toBeTruthy();
     expect(within(within(panel).getByRole("region", { name: "History" })).getByText("Created")).toBeTruthy();
     expect(document.querySelector('[data-card="C-0006"]')).toBeNull();
+    await closeModal(panel);
     fireEvent.click(screen.getByLabelText("Show cancelled"));
     await shows("C-0006");
     expect(within(card("C-0006")).getByText("Cancelled")).toBeTruthy();
@@ -186,10 +215,10 @@ describe("the Board over the mock", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
     await closed();
     const link = await screen.findByRole("link", { name: "Open it on the Board" });
-    expect(link.getAttribute("href")).toBe("#/harbor-sim/board/C-0013");
+    expect(link.getAttribute("href")).toBe("#/harbor-sim/board/C-0020");
     fireEvent.click(link);
-    window.location.hash = "#/harbor-sim/board/C-0013";
-    const source = await shows("C-0013");
+    window.location.hash = "#/harbor-sim/board/C-0020";
+    const source = await shows("C-0020");
     expect(within(source).getByRole("link", { name: "MEC-TIDES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDES");
   });
 
@@ -215,7 +244,8 @@ describe("the Board over the mock", () => {
 
   it("large: a column past the cap ends Show all", async () => {
     renderMock("large", "#/harbor-sim/board");
-    expect(await screen.findByRole("button", { name: "Show all 231" })).toBeTruthy();
+    // 230 cards and C-0003 and C-0019 in copy's edit.
+    expect(await screen.findByRole("button", { name: "Show all 232" })).toBeTruthy();
   });
 });
 
@@ -242,10 +272,10 @@ describe("the card against its brief, over the mock", () => {
     return screen.findByRole("dialog", { name: /^Clear / });
   }
 
-  it("marks the tile and the panel; No effect with a reason clears the mark, the typed name in the card's history (AC-10)", async () => {
+  it("marks the tile and the modal; No effect with a reason clears the mark, the typed name in the card's history (AC-10)", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
     renderMock("normal", "#/harbor-sim/board/C-0002");
-    const panel = await screen.findByRole("complementary", { name: "Caption the berth plans" });
+    const panel = await modal("Caption the berth plans");
     await waitFor(() => {
       expect(within(card("C-0002")).getByText("Suspect")).toBeTruthy();
     });
@@ -286,20 +316,20 @@ describe("the card against its brief, over the mock", () => {
     type(dialog, "Estimate", "2");
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
     await closed();
-    const made = await shows("C-0013");
+    const made = await shows("C-0020");
     expect(made.textContent).toContain("Correct Mooring fees table");
-    expect(columnOf("C-0013")).toBe("draft");
+    expect(columnOf("C-0020")).toBe("draft");
     await waitFor(() => {
       expect(within(card("C-0005")).getByText("Correcting")).toBeTruthy();
     });
     expect(within(card("C-0005")).queryByText("Accepted")).toBeNull();
-    expect(await screen.findByText("C-0013 corrects C-0005: copy/draft")).toBeTruthy();
+    expect(await screen.findByText("C-0020 corrects C-0005: copy/draft")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Clear" })).toBeNull();
   });
 
   it("a card departed shows it, its discrepancy named; it takes no Clear", async () => {
     renderMock("normal", "#/harbor-sim/board/C-0010");
-    const panel = await screen.findByRole("complementary", { name: "Deep-draft entry notice" });
+    const panel = await modal("Deep-draft entry notice");
     const part = await within(panel).findByRole("region", { name: "Against the brief" });
     expect(part.textContent).toContain("Departed");
     expect(part.textContent).toContain("PR-0041");
@@ -343,7 +373,7 @@ describe("the card against its brief, over the mock", () => {
   it("a card on a target gone shows its mark and takes its Clear on the page; cleared, a note stays and the mark goes (RM-0048)", async () => {
     window.localStorage.setItem(ACTING_KEY, "Ivo Brandt");
     renderMock("normal", "#/harbor-sim/board/C-0008");
-    const panel = await screen.findByRole("complementary", { name: "Crane reach diagram" });
+    const panel = await modal("Crane reach diagram");
     const tile = await shows("C-0008");
     expect(tile.querySelector(".board-card-mark")?.textContent).toBe("SuspectMEC-OLD-SLIPWAY");
     fireEvent.click(await within(panel).findByRole("button", { name: "Clear" }));
@@ -356,7 +386,7 @@ describe("the card against its brief, over the mock", () => {
     });
   });
 
-  it("marks every tile from the list: a whole trace is read only for a panel, so a board of tiles needs none", async () => {
+  it("marks every tile from the list: a whole trace is read only for an open card, so a board of tiles needs none", async () => {
     const { client } = renderMock("normal", "#/harbor-sim/board");
     const getTrace = vi.spyOn(client, "getTrace");
     await shows("C-0002");
@@ -375,5 +405,79 @@ describe("the card against its brief, over the mock", () => {
     await client.editCard("harbor-sim", "C-0007", { estimate: "5", reason: "The survey grew.", revision: "1", as: null });
     const shown = await client.getCard("harbor-sim", "C-0007");
     expect("history" in shown ? shown.history?.at(-1)?.type : null).toBe("card.reestimated");
+  });
+});
+
+// board-handoff (RM-0085) over the mock: the plates' `blocked` is its return column, a word of data;
+// cards hand work across copy and plates both ways; the daemon's rules in its words.
+describe("hand-offs and returns over the mock", () => {
+  it("a move into the return column with no note is refused in the daemon's words, nothing changed; with one it stands, the note on its event; a reorder there or a move out needs none", async () => {
+    const client = new MockClient("normal", { delayMs: 0 });
+    await expect(client.moveCard("harbor-sim", "C-0007", { to: "blocked", revision: "1", as: null })).rejects.toThrow("C-0007 enters `blocked`, its flow's return column: say why with `--note`; nothing changed");
+    expect((await client.getCards("harbor-sim")).cards.find((row) => row.id === "C-0007")?.column).toBe("queued");
+    await expect(client.moveCard("harbor-sim", "C-0007", { to: "blocked", note: "  ", revision: "1", as: null })).rejects.toThrow("note: blank; say why it moves");
+    const moved = await client.moveCard("harbor-sim", "C-0007", { to: "blocked", note: " The survey is late. ", revision: "1", as: "Ivo Brandt" });
+    expect(moved.column).toBe("blocked");
+    const shown = await client.getCard("harbor-sim", "C-0007");
+    // Stored as sent, as the core stores it.
+    expect("history" in shown ? shown.history?.at(-1)?.payload : null).toMatchObject({ from: "queued", to: "blocked", note: " The survey is late. ", as: "Ivo Brandt" });
+    await client.moveCard("harbor-sim", "C-0007", { to: "blocked", before: "C-0008", revision: "2", as: null });
+    await client.moveCard("harbor-sim", "C-0007", { to: "queued", revision: "3", as: null });
+    const other = await client.moveCard("harbor-sim", "C-0013", { to: "checked", revision: "1", as: null });
+    expect(other.column).toBe("checked");
+  });
+
+  it("serves `return` on each flow, the plates' `blocked`, null elsewhere; a hand-off is one create with its reviewer; `parent` lists the children", async () => {
+    const client = new MockClient("normal", { delayMs: 0 });
+    expect((await client.getCards("harbor-sim")).flows.map((flow) => [flow.name, flow.return])).toEqual([
+      ["copy", null],
+      ["plates", "blocked"],
+    ]);
+    expect((await client.getCards("ledger-api")).flows.map((flow) => flow.return)).toEqual([null]);
+    const made = await client.createCard("harbor-sim", { title: "Berth plate", discipline: "plates", parent: "C-0002", reviewer: "Ivo Brandt", as: "Ivo Brandt" });
+    expect([made.flow, made.column]).toEqual(["plates", "queued"]);
+    expect((await client.getCards("harbor-sim", { parent: "C-0002" })).cards.map((row) => [row.id, row.reviewer, row.parent])).toEqual([[made.id, "Ivo Brandt", "C-0002"]]);
+    expect((await client.getCards("harbor-sim", { parent: "C-0001" })).cards.map((row) => row.id)).toEqual(["C-0019", "C-0013", "C-0016"]);
+    await expect(client.createCard("harbor-sim", { title: "x", reviewer: "agent", as: null })).rejects.toThrow("reviewer: `agent` can be no reviewer: a person accepts a result");
+    await expect(client.createCard("harbor-sim", { title: "x", reviewer: "-", as: null })).rejects.toThrow("reviewer: `-` clears a name: a new card has none");
+    const created = await client.getCard("harbor-sim", made.id ?? "");
+    expect("history" in created ? created.history?.at(0)?.payload : null).toMatchObject({ reviewer: "Ivo Brandt" });
+  });
+
+  it("tiles: Returned on a card in the plates' return column; a parent's hand-offs counted, its returned ones with the badge", async () => {
+    renderMock("normal", "#/harbor-sim/board");
+    fireEvent.click(await screen.findByRole("button", { name: "Show all flows" }));
+    await shows("C-0001");
+    expect(card("C-0001").querySelector(".board-card-handoffs")?.textContent).toBe("3 hand-offs");
+    expect(card("C-0003").querySelector(".board-card-handoffs")?.textContent).toBe("1 hand-off1 returned");
+    expect(card("C-0002").querySelector(".board-card-handoffs")).toBeNull();
+    fireEvent.click(screen.getByRole("tab", { name: "plates" }));
+    await shows("C-0015");
+    expect(within(card("C-0015")).getByText("Returned")).toBeTruthy();
+    expect(within(card("C-0008")).getByText("Returned")).toBeTruthy();
+    expect(within(card("C-0013")).queryByText("Returned")).toBeNull();
+    expect(card("C-0009").querySelector(".board-card-handoffs")?.textContent).toBe("1 hand-off");
+  });
+
+  it("the modal: a parent's hand-offs with their words across both flows; a returned card's reason, or that its history keeps none", async () => {
+    renderMock("normal", "#/harbor-sim/board/C-0001");
+    const parent = await modal("Write the tide table foreword");
+    const handOffs = within(await within(parent).findByRole("region", { name: "Hand-offs" })).getAllByRole("listitem");
+    expect(handOffs.map((item) => item.textContent)).toEqual([
+      "C-0019Tide table glossarycopy/editTomas OakesTaken",
+      "C-0013Tide table plateplates/queuedUnassignedHanded off",
+      "C-0016Tide table coverplates/struckNoor AinsleyAccepted",
+    ]);
+    fireEvent.click(within(handOffs[1] as HTMLElement).getByRole("link", { name: "C-0013" }));
+    await modal("Tide table plate");
+    expect(window.location.hash).toBe("#/harbor-sim/board/C-0013");
+    window.location.hash = "#/harbor-sim/board/C-0015";
+    const back = await modal("Night passage chart");
+    const reason = await within(back).findByRole("region", { name: "Returned" });
+    expect(reason.textContent).toContain("Returned by Tomas Oakes");
+    expect(reason.textContent).toContain("The buoy numbers on the plate disagree with MEC-NIGHT-PASSAGE");
+    window.location.hash = "#/harbor-sim/board/C-0008";
+    const gone = await modal("Crane reach diagram");
+    expect((await within(gone).findByRole("region", { name: "Returned" })).textContent).toContain("is no longer in this card's history");
   });
 });

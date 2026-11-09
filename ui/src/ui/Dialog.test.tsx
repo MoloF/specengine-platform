@@ -103,6 +103,27 @@ describe("Dialog", () => {
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "First" }));
   });
 
+  it("with focusTitle, starts on the heading; Shift+Tab from it goes to the last stop, Tab to the first, never out of the page", () => {
+    render(
+      <Announcer>
+        <button type="button">Behind</button>
+        <Dialog title="A card" onClose={() => undefined} focusTitle>
+          <button type="button">First</button>
+          <button type="button">Last</button>
+        </Dialog>
+      </Announcer>,
+    );
+    const title = screen.getByRole("heading", { level: 2, name: "A card" });
+    expect(document.activeElement).toBe(title);
+    expect(title.tabIndex).toBe(-1);
+    const shift = fireEvent.keyDown(title, { key: "Tab", shiftKey: true });
+    expect(shift).toBe(false);
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Last" }));
+    title.focus();
+    fireEvent.keyDown(title, { key: "Tab" });
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "First" }));
+  });
+
   it("makes the page inert but never the live regions, and restores the page on close", () => {
     const { rerender } = renderDialog(() => undefined);
     const behind = screen.getByRole("button", { name: "Behind" });

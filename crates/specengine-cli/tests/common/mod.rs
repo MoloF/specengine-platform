@@ -465,6 +465,12 @@ pub const CARD_PRESS: (&str, &str) = ("card-press", "card-press");
 /// for the same reason.
 pub const TRACE_ALMANAC: (&str, &str) = ("trace-almanac", "trace-almanac");
 
+/// The fixture of docs/features/workspaces.md (an invented lighthouse game,
+/// the gamedev preset's bytes verbatim), with its slug: docs/features/
+/// board-handoff.md runs its hand-off and return on it; kept out of
+/// [`FIXTURES`] too, for the same reason.
+pub const STUDIO_LAMP: (&str, &str) = ("studio-lamp", "studio-lamp");
+
 /// A header line of `spec show`: the fields split on ` | `.
 pub fn header_fields(line: &str) -> Vec<&str> {
     line.split(" | ").collect()

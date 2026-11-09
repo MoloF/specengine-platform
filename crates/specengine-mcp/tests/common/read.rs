@@ -631,6 +631,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                         no_target: args["no_target"] == json!(true),
                         with_cancelled: args["with_cancelled"] == json!(true),
                         marks: args["marks"] == json!(true),
+                        parent: text("parent"),
                     },
                 )
                 .map(|outcome| Outcome::CardList(Box::new(outcome))),
@@ -664,6 +665,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                 targets: strings(&args["target"]),
                 criteria: strings(&args["criterion"]),
                 assignee: text("assignee"),
+                reviewer: text("reviewer"),
                 estimate: text("estimate"),
                 due: text("due"),
                 parent: text("parent"),
@@ -699,6 +701,7 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                 id,
                 to: text("to"),
                 before: text("before"),
+                note: text("note"),
                 revision: text("revision"),
                 actor,
                 now: now.to_owned(),

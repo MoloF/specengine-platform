@@ -96,7 +96,7 @@ No authentication inside SpecEngine (ADR-0034): the login door owns accounts, se
 
 ## Screen
 
-With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-ui.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. `useHubLogin` beside `useActing` (`acting.ts`) gives the box its `readOnly`. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen".
+With a resolved login, "Acting as" is read-only and shows it, writes send it as `as`, and `specengine.board.as` is not written. `null`, loading or a failed read: the box as `board-screen.md` "The acting name" says; the stored name stands until a resolved login replaces it, so a local write never records `local` by accident. `useHubLogin` beside `useActing` (`acting.ts`) gives the box its `readOnly`. The dialogs' names read alike, and controls an act's `allowed` omits stay on the page, idle: `hub-team.md` "Screen".
 
 ## Known limits
 

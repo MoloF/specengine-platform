@@ -28,8 +28,11 @@ function focusables(root: HTMLElement): HTMLElement[] {
  * the rest of the page inert except the live regions. Esc and Tab are handled on the whole host,
  * so they work wherever focus sits inside it; an Esc that ends an IME composition is the input
  * method's, not the dialog's. A press on the scrim leaves focus where it was; with `closeOnScrim`
- * (a dialog with nothing to lose, the palette) a click there closes it as Esc does. Esc calls
- * onClose, which may decline (a decision being sent). The caller returns focus on close.
+ * (a dialog with nothing to lose: the palette, the Board's card) a click there closes it as Esc does.
+ * Esc calls onClose, which may decline (a decision being sent). Focus starts on the first field
+ * marked `data-autofocus`, else the first stop; with `focusTitle`, on the heading itself (a dialog
+ * that is read first). Dialogs stack: each makes what lies under it inert, the one under too, and
+ * gives it back when it closes. The caller returns focus on close.
  */
 export function Dialog({
   title,
@@ -37,6 +40,7 @@ export function Dialog({
   children,
   className,
   closeOnScrim = false,
+  focusTitle = false,
 }: {
   title: ReactNode;
   onClose: () => void;
@@ -44,6 +48,8 @@ export function Dialog({
   className?: string;
   /** A click on the scrim calls onClose; off by default, so a misplaced click keeps typed text. */
   closeOnScrim?: boolean;
+  /** Focus starts on the heading, which then takes focus by script alone. */
+  focusTitle?: boolean;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -53,7 +59,7 @@ export function Dialog({
     if (root === null) {
       return;
     }
-    const preferred = root.querySelector<HTMLElement>("[data-autofocus]");
+    const preferred = focusTitle ? root.querySelector<HTMLElement>(".dialog-title") : root.querySelector<HTMLElement>("[data-autofocus]");
     (preferred ?? focusables(root)[0] ?? root).focus();
     const host = root.closest<HTMLElement>("[data-dialog-host]");
     const siblings = Array.from(document.body.children).filter(
@@ -71,7 +77,7 @@ export function Dialog({
         element.inert = false;
       }
     };
-  }, []);
+  }, [focusTitle]);
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === "Escape") {
@@ -97,7 +103,8 @@ export function Dialog({
     const active = document.activeElement;
     // The panel itself (focused by a click on its text) counts as outside: the browser's next stop
     // back from it lies before the dialog, so Tab goes to the first stop and Shift+Tab to the last.
-    const inside = active !== root && root.contains(active);
+    // So does a heading focused by script (`focusTitle`): it stands before the first stop.
+    const inside = active !== root && root.contains(active) && !(active instanceof HTMLElement && active.classList.contains("dialog-title"));
     if (event.shiftKey && (active === first || !inside)) {
       event.preventDefault();
       last.focus();
@@ -129,7 +136,7 @@ export function Dialog({
         tabIndex={-1}
         className={className === undefined ? "dialog" : `dialog ${className}`}
       >
-        <h2 id={titleId} className="dialog-title">
+        <h2 id={titleId} className="dialog-title" tabIndex={focusTitle ? -1 : undefined}>
           {title}
         </h2>
         {children}

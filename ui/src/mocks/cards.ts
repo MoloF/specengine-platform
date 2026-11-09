@@ -31,7 +31,12 @@ import type { Scenario } from "./scenario";
 // the same string (`docs/features/trace-truth.md` "Data"). In harbor-sim DOM-BERTHS and MEC-MOORING changed after their cards read them, so C-0002 (open) and
 // C-0005 (accepted) are suspect; C-0010 was accepted as departing, PR-0041 its open discrepancy;
 // C-0008 stands on MEC-OLD-SLIPWAY, a target gone, which no node of a trace read holds; C-0011 and
-// C-0012 are accepted and stand, so the Flow has something confirmed.
+// C-0012 are accepted and stand, so the Flow has something confirmed. The plates' `blocked` is its
+// return column (`docs/canon/card-flows.md` "The rule"), a word of data like any other: C-0008
+// stands in it with no move left in its history, C-0015 was returned with a reason. Hand-offs run
+// both ways and hold no target, so no trace read changes: C-0001 has a child handed off (C-0013),
+// one taken in its own flow (C-0019), one accepted (C-0016) and one cancelled (C-0017); C-0003's
+// was returned (C-0015), C-0004's taken (C-0014), and the plate C-0009 handed a caption to copy (C-0018).
 
 /** A stored card: the document less what a read adds. */
 export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "allowed" | "history" | "notes">;
@@ -69,6 +74,9 @@ const CLEAR = "-";
 /** At most this many bytes in a person's name, `CARD_PERSON_MAX`. */
 const NAME_MAX_BYTES = 128;
 
+/** At most this many bytes in a note or a reason, `NOTE_MAX`. */
+const NOTE_MAX_BYTES = 4096;
+
 /** harbor-sim's target gone: its document was deleted by hand. */
 const GONE_TARGET = "MEC-OLD-SLIPWAY";
 
@@ -95,6 +103,7 @@ const COPY: CardFlow = {
     { from: "edit", to: "proof", by: [] },
   ],
   accept: { from: "proof", to: "filed" },
+  return: null,
 };
 
 const PLATES: CardFlow = {
@@ -103,6 +112,7 @@ const PLATES: CardFlow = {
   columns: ["queued", "blocked", "checked", "struck"].map((id) => ({ id, title: id })),
   moves: everyMove(["queued", "blocked", "checked", "struck"], "struck"),
   accept: { from: "checked", to: "struck" },
+  return: "blocked",
 };
 
 const PLAIN: CardFlow = {
@@ -117,6 +127,7 @@ const PLAIN: CardFlow = {
   ],
   moves: everyMove(["backlog", "ready", "in-progress", "review", "done"], "done"),
   accept: { from: "review", to: "done" },
+  return: null,
 };
 
 /** A node's `norm_hash` as first read. */
@@ -342,6 +353,101 @@ function harborCards(at: number): StoredCard[] {
       acceptance: { by: "Ivo Brandt", at: stamp(at, 2 * MINUTE_DAY), note: null, verdict: "briefed", departs: [], discrepancy: null },
       revision: "5",
     }),
+    aCard(at, {
+      id: "C-0013",
+      flow: "plates",
+      column: "queued",
+      position: 2,
+      title: "Tide table plate",
+      goal: "The tables set as one plate, the datum line printed under them.",
+      discipline: "plates",
+      parent: "C-0001",
+      reviewer: "Mira Holt",
+    }),
+    aCard(at, {
+      id: "C-0014",
+      flow: "plates",
+      column: "checked",
+      position: 2,
+      title: "Lock hours plate",
+      discipline: "plates",
+      parent: "C-0004",
+      assignee: "Noor Ainsley",
+      reviewer: "Mira Holt",
+      revision: "3",
+    }),
+    aCard(at, {
+      id: "C-0015",
+      flow: "plates",
+      column: "blocked",
+      position: 2,
+      title: "Night passage chart",
+      discipline: "plates",
+      parent: "C-0003",
+      assignee: "Lena Fisk",
+      reviewer: "Tomas Oakes",
+      revision: "3",
+    }),
+    aCard(at, {
+      id: "C-0016",
+      flow: "plates",
+      column: "struck",
+      position: 1,
+      title: "Tide table cover",
+      discipline: "plates",
+      parent: "C-0001",
+      assignee: "Noor Ainsley",
+      reviewer: "Mira Holt",
+      acceptance: { by: "Mira Holt", at: stamp(at, MINUTE_DAY), note: null, verdict: "briefed", departs: [], discrepancy: null },
+      revision: "4",
+    }),
+    aCard(at, {
+      id: "C-0017",
+      flow: "plates",
+      column: "queued",
+      position: 0,
+      title: "Second tide plate",
+      discipline: "plates",
+      parent: "C-0001",
+      reviewer: "Mira Holt",
+      cancellation: { by: "Mira Holt", at: stamp(at, MINUTE_DAY), reason: "One plate holds both tables." },
+      revision: "2",
+    }),
+    aCard(at, {
+      id: "C-0018",
+      flow: "copy",
+      column: "draft",
+      position: 3,
+      title: "Caption the harbour overview",
+      discipline: "copy",
+      parent: "C-0009",
+      reviewer: "Noor Ainsley",
+    }),
+    aCard(at, {
+      id: "C-0019",
+      flow: "copy",
+      column: "edit",
+      position: 2,
+      title: "Tide table glossary",
+      discipline: "copy",
+      parent: "C-0001",
+      assignee: "Tomas Oakes",
+      reviewer: "Mira Holt",
+      revision: "2",
+    }),
+  ];
+}
+
+/** The moves harbor-sim's cards made before the page opened, each with its note: C-0015's return. */
+function harborMoves(at: number): { id: string; type: string; at: string; payload: Record<string, unknown> }[] {
+  return [
+    { id: "C-0015", type: "card.moved", at: stamp(at, 30 * 60), payload: { id: "C-0015", from: "queued", to: "checked", position: 2, as: "Lena Fisk", note: null } },
+    {
+      id: "C-0015",
+      type: "card.moved",
+      at: stamp(at, 6 * 60),
+      payload: { id: "C-0015", from: "checked", to: "blocked", position: 2, as: "Tomas Oakes", note: "The buoy numbers on the plate disagree with MEC-NIGHT-PASSAGE: the second light is green, not red." },
+    },
   ];
 }
 
@@ -424,13 +530,13 @@ export function mockBoard(slug: string, scenario: Scenario, at: number): MockBoa
     ...card,
     snapshot: card.targets.map((id) => frozenAt(id, hashOf(id))),
   }));
-  const events = cards.map((card, index): MockEvent => ({
+  const created = cards.map((card) => ({
     id: card.id,
-    seq: index + 1,
     type: "card.created",
     at: card.created_at,
-    payload: { id: card.id, flow: card.flow, column: card.column, position: card.position, assignee: card.assignee, as: card.created_by },
+    payload: { id: card.id, flow: card.flow, column: card.column, position: card.position, assignee: card.assignee, reviewer: card.reviewer, as: card.created_by },
   }));
+  const events = [...created, ...(harbor ? harborMoves(at) : [])].map((event, index): MockEvent => ({ ...event, seq: index + 1 }));
   return board(cards, events, new Map(harbor ? [["DOM-BERTHS", "b3:dom-berths-2"], ["MEC-MOORING", "b3:mec-mooring-2"]] : []));
 }
 
@@ -490,7 +596,9 @@ function byPlace(board: MockBoard) {
 
 /** `spec card list [--marks] --json`, the browser view. */
 export function cardListOf(board: MockBoard, options: CardsOptions, settled: Settled): CardList {
-  const listed = board.cards.filter((card) => options.with_cancelled === true || card.cancellation === null).sort(byPlace(board));
+  const listed = board.cards
+    .filter((card) => (options.with_cancelled === true || card.cancellation === null) && (options.parent === undefined || card.parent === options.parent))
+    .sort(byPlace(board));
   const stranded = new Map<string, StoredCard[]>();
   for (const card of listed) {
     const flow = flowOf(board, card.flow);
@@ -594,6 +702,16 @@ function nextId(board: MockBoard): string {
 export function createCardIn(board: MockBoard, body: CardCreateBody, at: string): CardWrite {
   checkName(body.as);
   checkPerson("assignee", body.assignee);
+  if (body.reviewer === CLEAR) {
+    throw refused(`reviewer: \`${CLEAR}\` clears a name: a new card has none`);
+  }
+  checkPerson("reviewer", body.reviewer);
+  if (body.reviewer === LOCAL || body.reviewer === AGENT) {
+    throw refused(`reviewer: \`${body.reviewer}\` can be no reviewer: a person accepts a result`);
+  }
+  if (body.parent !== undefined && !board.cards.some((card) => card.id === body.parent)) {
+    throw refused(`parent: no card ${body.parent}`);
+  }
   if (body.title.trim() === "") {
     throw refused("title: blank; a card has a title");
   }
@@ -619,7 +737,7 @@ export function createCardIn(board: MockBoard, body: CardCreateBody, at: string)
     snapshot: (body.target ?? []).map((target) => frozenNow(board, target)),
     criteria: body.criterion ?? [],
     assignee: body.assignee ?? null,
-    reviewer: null,
+    reviewer: body.reviewer ?? null,
     estimate: body.estimate ?? null,
     due: body.due ?? null,
     parent: body.parent ?? null,
@@ -634,7 +752,7 @@ export function createCardIn(board: MockBoard, body: CardCreateBody, at: string)
   };
   board.cards.push(card);
   board.seq += 1;
-  board.events.push({ id: card.id, seq: board.seq, type: "card.created", at, payload: { id: card.id, flow: card.flow, column, position: card.position, assignee: card.assignee, as } });
+  board.events.push({ id: card.id, seq: board.seq, type: "card.created", at, payload: { id: card.id, flow: card.flow, column, position: card.position, assignee: card.assignee, reviewer: card.reviewer, as } });
   return writeOf(board, card);
 }
 
@@ -656,7 +774,25 @@ function moveRefusal(board: MockBoard, card: StoredCard, to: string, as: string)
   return null;
 }
 
-/** `card_move`: leaves its column, closes it up, opens the target or goes last. */
+/** A move's note as `cancel --reason` takes one: not blank, at most NOTE_MAX bytes, stored as sent, as the core stores it; none is null. */
+function noteOf(note: string | undefined): string | null {
+  if (note === undefined) {
+    return null;
+  }
+  if (note.trim() === "") {
+    throw refused("note: blank; say why it moves");
+  }
+  const bytes = new TextEncoder().encode(note).length;
+  if (bytes > NOTE_MAX_BYTES) {
+    throw refused(`note: ${String(bytes)} bytes; at most ${String(NOTE_MAX_BYTES)}`);
+  }
+  return note;
+}
+
+/**
+ * `card_move`: leaves its column, closes it up, opens the target or goes last. A move entering its
+ * flow's `return` column from another one needs a note; a reorder inside it, or a move out, none.
+ */
 export function moveCardIn(board: MockBoard, id: string, body: CardMoveBody, at: string): CardWrite {
   checkName(body.as);
   const card = writable(board, id, body.revision);
@@ -665,6 +801,11 @@ export function moveCardIn(board: MockBoard, id: string, body: CardMoveBody, at:
   const reason = moveRefusal(board, card, to, as);
   if (reason !== null) {
     throw refused(reason);
+  }
+  const note = noteOf(body.note);
+  const back = flowOf(board, card.flow)?.return ?? null;
+  if (note === null && to === back && card.column !== back) {
+    throw refused(`${id} enters \`${to}\`, its flow's return column: say why with \`--note\`; nothing changed`);
   }
   const from = card.column;
   const left = standing(board, card.flow, from).filter((other) => other !== card);
@@ -676,7 +817,7 @@ export function moveCardIn(board: MockBoard, id: string, body: CardMoveBody, at:
   card.column = to;
   renumber(left);
   renumber([...target.slice(0, place), card, ...target.slice(place)]);
-  return changed(board, card, "card.moved", { from, to, position: card.position, as }, at);
+  return changed(board, card, "card.moved", { from, to, position: card.position, as, note }, at);
 }
 
 /** A value as `edit` and `assign` take it: absent keeps `stored`, `-` clears. */

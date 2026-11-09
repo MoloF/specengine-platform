@@ -11,6 +11,11 @@
 //! shows each form caught and each exemption left. M14: `"narrative"` in core
 //! as a default; M13's and M15's kind, `name === "newsroom"` in a component.
 //!
+//! docs/features/board-handoff.md (RM-0085) BH-13: the names gain each preset
+//! flow's `return` column (W11: `sent-back`, since `returned` is already a
+//! literal of `crates/specengine-cli/src/task.rs`); a fixture's `return` is
+//! its own word, as its flow names are.
+//!
 //! The daemon's word scan is `specengine-http`'s `tests/no_domain.rs` (WS-6
 //! (a)); the mock's names `ui/src/policy.test.ts`'s (WS-6 (c)).
 
@@ -72,6 +77,20 @@ fn table_names(table: &toml::Table, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The `return` column of each `[[card.flow]]` of `card` that names one.
+fn return_columns(card: Option<&toml::Table>) -> Vec<String> {
+    card.and_then(|card| card.get("flow"))
+        .and_then(toml::Value::as_array)
+        .map(|flows| {
+            flows
+                .iter()
+                .filter_map(|flow| flow.get("return").and_then(toml::Value::as_str))
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// The names of WS-6 (b) under `root`, and the files they came from. A config
 /// the TOML reader refuses (a fixture's deliberately broken one) holds none.
 fn names_under(root: &Path) -> (BTreeSet<String>, Vec<PathBuf>) {
@@ -92,12 +111,14 @@ fn names_under(root: &Path) -> (BTreeSet<String>, Vec<PathBuf>) {
         names.extend(table_names(&table, "workspace"));
         names.extend(table_names(&table, "module"));
         if preset_files.contains(file) {
-            let flows = table
-                .get("card")
-                .and_then(toml::Value::as_table)
+            let card = table.get("card").and_then(toml::Value::as_table);
+            let flows = card
                 .map(|card| table_names(card, "flow"))
                 .unwrap_or_default();
             names.extend(flows);
+            // docs/features/board-handoff.md BH-13: each preset flow's
+            // `return` column is a name too, so no code compares to it.
+            names.extend(return_columns(card));
         }
     }
     (names, files)
@@ -216,6 +237,8 @@ fn ws6b_no_workspace_module_or_preset_flow_name_is_a_literal() {
         "island",
         "narrative",
         "level-design",
+        // docs/features/board-handoff.md BH-13: the preset's return column.
+        "sent-back",
     ] {
         assert!(names.contains(name), "`{name}` is read: {names:?}");
     }
@@ -274,18 +297,25 @@ fn ws6b_the_scan_catches_each_form_and_leaves_each_exemption() {
     let tree = Scratch::new("probe");
     tree.write(
         "fixtures/press/specengine.toml",
-        "[project]\nslug = \"press\"\n\n[[card.flow]]\nname = \"copy\"\n\n[[workspace]]\nname = \
-         \"newsroom\"\n\n[[module]]\nname = \"shore\"\n",
+        "[project]\nslug = \"press\"\n\n[[card.flow]]\nname = \"copy\"\nreturn = \"blocked\"\n\n\
+         [[workspace]]\nname = \"newsroom\"\n\n[[module]]\nname = \"shore\"\n",
     );
     tree.write("fixtures/broken/specengine.toml", "[[[ broken\n");
     tree.write(
         "scripts/presets/trade.toml",
-        "[[card.flow]]\nname = \"narrative\"\n\n[[workspace]]\nname = \"writing\"\n",
+        "[[card.flow]]\nname = \"narrative\"\nreturn = \"sent-back\"\n\n[[workspace]]\nname = \
+         \"writing\"\n",
     );
     tree.write(
         "crates/core/src/lens.rs",
         "// \"writing\" in a comment\nconst DEFAULT: &str = \"narrative\";\nconst WIDER: &str = \
          \"rewriting\";\nconst LINE: &str = \"the newsroom tab\";\n",
+    );
+    // docs/features/board-handoff.md BH-13: a preset's return column in a
+    // crate's source is caught; a fixture's (`blocked`) is no name.
+    tree.write(
+        "crates/core/src/back.rs",
+        "const BACK: &str = \"sent-back\";\nconst SENT: &str = \"sent-back-later\";\n",
     );
     tree.write(
         "crates/core/tests/lens.rs",
@@ -300,7 +330,7 @@ fn ws6b_the_scan_catches_each_form_and_leaves_each_exemption() {
     tree.write("ui/src/test/lens.ts", "export const NAME = \"writing\";\n");
     tree.write("ui/src/app/Shell.test.tsx", "const name = `writing`;\n");
     let (names, _) = names_under(&tree.0);
-    let want: BTreeSet<String> = ["narrative", "newsroom", "shore", "writing"]
+    let want: BTreeSet<String> = ["narrative", "newsroom", "sent-back", "shore", "writing"]
         .into_iter()
         .map(str::to_owned)
         .collect();
@@ -309,6 +339,7 @@ fn ws6b_the_scan_catches_each_form_and_leaves_each_exemption() {
     assert_eq!(
         hits,
         [
+            "crates/core/src/back.rs:1: sent-back",
             "crates/core/src/lens.rs:2: narrative",
             "ui/src/app/Shell.tsx:1: newsroom",
             "ui/src/app/Shell.tsx:2: shore",

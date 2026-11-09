@@ -1,4 +1,4 @@
-import { act, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { sentence } from "../test/text";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
@@ -9,8 +9,9 @@ import { stubClient, type StubClient } from "../test/stubClient";
 import { ACTING_KEY } from "./acting";
 import { COLUMN_SHOWN } from "./filter";
 
-// The Board (docs/features/board-ui.md) over a stub: what is read, what is posted, what is shown.
-// The whole cycle over the mock's rules is src/mocks/board.smoke.test.tsx.
+// The Board (docs/features/board-ui.md, board-handoff's modal and lanes) over a stub: what is read,
+// what is posted, what is shown. A card opens as a modal dialog over a board that holds still; its
+// write dialogs open over it. The whole cycle over the mock's rules is src/mocks/board.smoke.test.tsx.
 
 function boardClient(list: CardList, cards: Record<string, Card> = {}): StubClient {
   const client = stubClient();
@@ -22,13 +23,40 @@ function boardClient(list: CardList, cards: Record<string, Card> = {}): StubClie
   return client;
 }
 
-function column(title: string): HTMLElement {
-  const heading = screen.getByRole("heading", { level: 2, name: new RegExp(`^${title}\\b`) });
-  const found = heading.closest("section");
-  if (found === null) {
+/** A column's head in the sticky header row. */
+function head(title: string): HTMLElement {
+  return screen.getByRole("heading", { level: 2, name: new RegExp(`^${title}\\b`) });
+}
+
+/** A column's cell in the one lane of None (or in the lane `lane` names), where its tiles stand and a drop lands. */
+function column(title: string, lane = 0): HTMLElement {
+  const key = head(title).dataset.columnHead ?? "";
+  const found = Array.from(document.querySelectorAll<HTMLElement>("section.board-cell")).filter((cell) => cell.dataset.lane?.endsWith(`|${key}`) === true)[lane];
+  if (found === undefined) {
     throw new Error(`no column ${title}`);
   }
   return found;
+}
+
+/** The card's modal, by its heading, the card's title. */
+function modal(title: string): Promise<HTMLElement> {
+  return screen.findByRole("dialog", { name: title });
+}
+
+/** The top dialog, once one more than the card's modal is open: a write dialog over it. */
+async function topDialog(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const all = screen.getAllByRole("dialog");
+    expect(all.length).toBeGreaterThan(1);
+    return all.at(-1) as HTMLElement;
+  });
+}
+
+/** Only the card's modal left open. */
+async function onlyModal() {
+  await waitFor(() => {
+    expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  });
 }
 
 function card(id: string): HTMLElement {
@@ -178,7 +206,7 @@ describe("the board", () => {
     expect(client.getCards).toHaveBeenCalledTimes(1);
   });
 
-  it("a card ID in the route opens its flow and its panel", async () => {
+  it("a card ID in the route opens its flow and its modal (BH-7)", async () => {
     const list = aCardList([aCardRow({ id: "C-0001", flow: "copy" }), aCardRow({ id: "C-0002", flow: "plates" })], { flows: TWO_FLOWS });
     await open(boardClient(list, { "C-0002": aCard({ id: "C-0002", flow: "plates", title: "A plate" }) }), "#/alpha/board/C-0002");
     await screen.findByRole("heading", { level: 2, name: "A plate" });
@@ -312,9 +340,10 @@ describe("the board", () => {
     const note = "1 card(s) in work/parked, from C-0002: the column `parked` is no longer in the flow `work`: served last";
     const client = boardClient(aCardList([aCardRow({ id: "C-0001" }), aCardRow({ id: "C-0002", column: "parked" }), aCardRow({ id: "C-0003", flow: "old" })], { notes: [note, "another note"] }));
     await open(client);
-    const lane = (await screen.findByRole("heading", { level: 2, name: /^Not in the flow/ })).closest("section");
-    expect(lane?.textContent).toContain(note);
-    expect(lane?.textContent).toContain("C-0002");
+    await screen.findByRole("heading", { level: 2, name: /^Not in the flow/ });
+    const lane = column("Not in the flow");
+    expect(lane.textContent).toContain(note);
+    expect(lane.textContent).toContain("C-0002");
     expect(within(screen.getByRole("list", { name: "Notes from the daemon" })).getByText("another note")).toBeTruthy();
     fireEvent.click(screen.getByRole("tab", { name: "old" }));
     await waitFor(() => {
@@ -577,19 +606,21 @@ describe("the keyboard", () => {
     return client;
   }
 
-  it("holds one tab stop, and arrows move it: Up and Down in a column, Left and Right across, skipping an empty one; Home and End", async () => {
+  it("holds one tab stop, and arrows move it: Up and Down in a cell, Left and Right across, skipping an empty one; Home and End the lane's first and last (BH-10)", async () => {
     await ready();
     const stops = () => shown().filter((id) => card(id).tabIndex === 0);
     expect(stops()).toEqual(["C-0001"]);
-    expect(document.querySelectorAll('.board-columns a[tabindex="0"], .board-columns button[tabindex="0"]')).toHaveLength(0);
+    expect(document.querySelectorAll('.board-grid a[tabindex="0"], .board-grid button[tabindex="0"]')).toHaveLength(0);
     card("C-0001").focus();
     const steps: [string, string][] = [
       ["ArrowDown", "C-0002"],
       ["ArrowRight", "C-0004"],
       ["ArrowLeft", "C-0001"],
-      ["End", "C-0003"],
-      ["ArrowUp", "C-0002"],
+      ["End", "C-0004"],
       ["Home", "C-0001"],
+      ["ArrowDown", "C-0002"],
+      ["ArrowDown", "C-0003"],
+      ["ArrowUp", "C-0002"],
     ];
     for (const [key, id] of steps) {
       press(key);
@@ -597,26 +628,27 @@ describe("the keyboard", () => {
         expect(document.activeElement).toBe(card(id));
       });
     }
-    expect(stops()).toEqual(["C-0001"]);
+    expect(stops()).toEqual(["C-0002"]);
   });
 
-  it("Enter opens the panel, focus on its heading; Esc closes it, focus back on the card", async () => {
+  it("Enter opens the modal, focus on its heading; Esc closes it, the hash back, focus back on the card (BH-10)", async () => {
     await ready();
     card("C-0002").focus();
     press("Enter");
-    const heading = await screen.findByRole("heading", { level: 2, name: "Card C-0002" });
+    const dialog = await modal("Card C-0002");
+    const heading = within(dialog).getByRole("heading", { level: 2, name: "Card C-0002" });
     await waitFor(() => {
       expect(document.activeElement).toBe(heading);
     });
     expect(window.location.hash).toBe("#/alpha/board/C-0002");
-    press("Escape");
+    press("Escape", heading);
     await waitFor(() => {
       expect(window.location.hash).toBe("#/alpha/board");
     });
-    expect(document.activeElement).toBe(card("C-0002"));
     await waitFor(() => {
-      expect(screen.queryByRole("complementary")).toBeNull();
+      expect(screen.queryByRole("dialog")).toBeNull();
     });
+    expect(document.activeElement).toBe(card("C-0002"));
   });
 
   it("n opens New card and m a card's Move menu under a Russian layout; ? still lists the keys (LG-7 of ui-languages)", async () => {
@@ -653,13 +685,18 @@ describe("the keyboard", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 
-  it("? lists the keys, m and n among them", async () => {
+  it("? lists the keys: m, n, h, r and the lanes' Page Down and Page Up among them (BH-10)", async () => {
     await ready();
     card("C-0001").focus();
     press("?");
     const dialog = await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
     expect(within(dialog).getByText("Cards: open the Move menu")).toBeTruthy();
     expect(within(dialog).getByText("New card")).toBeTruthy();
+    expect(within(dialog).getByText("Cards: hand the card off")).toBeTruthy();
+    expect(within(dialog).getByText("Cards: return the card")).toBeTruthy();
+    const lanes = within(dialog).getByText("Cards: the same column in the next or previous lane").closest(".shortcut");
+    expect(lanes?.textContent).toContain("Page Down");
+    expect(lanes?.textContent).toContain("Page Up");
   });
 
   it("a key with Cmd, Ctrl or Alt does nothing here", async () => {
@@ -672,7 +709,7 @@ describe("the keyboard", () => {
   });
 });
 
-describe("the panel", () => {
+describe("the card's modal", () => {
   const FULL = aCard({
     id: "C-0001",
     column: "check",
@@ -698,7 +735,7 @@ describe("the panel", () => {
 
   async function panelOf(document: Card) {
     await open(boardClient(aCardList([aCardRow({ id: document.id, column: document.column })]), { [document.id]: document }), `#/alpha/board/${document.id}`);
-    return screen.findByRole("complementary", { name: document.title });
+    return modal(document.title);
   }
 
   it("lists the fields as stored; targets link to the tree, parent and corrects to their cards (AC-09)", async () => {
@@ -732,14 +769,14 @@ describe("the panel", () => {
     ]);
   });
 
-  it("offers Edit, Assign, Cancel card, and Accept in accept.from alone", async () => {
+  it("offers Move, Hand off, Edit, Assign, Cancel card, and Accept in accept.from alone; no Return in a flow that names none", async () => {
     const panel = within(await panelOf(FULL));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Accept", "Edit", "Assign", "Cancel card"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move", "Hand off", "Edit", "Assign", "Cancel card", "Accept"]);
   });
 
   it("has no Accept outside accept.from", async () => {
     const panel = within(await panelOf({ ...FULL, column: "todo" }));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Edit", "Assign", "Cancel card"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move", "Hand off", "Edit", "Assign", "Cancel card"]);
   });
 
   it("an accepted card has no actions and shows who accepted it", async () => {
@@ -767,7 +804,7 @@ describe("the panel", () => {
     await open(client, "#/alpha/board/C-0001");
     expect(await screen.findByText("the row is corrupt: evidence")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Retry" }));
-    expect(await screen.findByRole("complementary", { name: "The card" })).toBeTruthy();
+    expect(await modal("The card")).toBeTruthy();
   });
 });
 
@@ -788,8 +825,8 @@ describe("the dialogs", () => {
   async function action(name: string, document: Card = CARD) {
     const client = boardClient(aCardList([aCardRow({ id: document.id, column: document.column, revision: document.revision })]), { [document.id]: document });
     await open(client, `#/alpha/board/${document.id}`);
-    fireEvent.click(await screen.findByRole("button", { name }));
-    return { client, dialog: await screen.findByRole("dialog") };
+    fireEvent.click(await within(await modal(document.title)).findByRole("button", { name }));
+    return { client, dialog: await topDialog() };
   }
 
   function type(dialog: HTMLElement, label: string, value: string) {
@@ -966,7 +1003,7 @@ describe("the dialogs", () => {
     });
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     type(dialog, "Note", "Good.");
     fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
     expect((await within(dialog).findByText(/changed since this run read it/)).closest('[role="alert"]')).not.toBeNull();
@@ -979,21 +1016,21 @@ describe("the dialogs", () => {
     expect(client.acceptCard.mock.calls[1]?.[2]).toEqual({ as: "Ivo Brandt", note: "Good.", revision: "5", briefed: true });
   });
 
-  it("a name off its grammar in a dialog: the line there and under the Acting as field", async () => {
+  it("a name off its grammar in a dialog over the modal: the line there, then in the modal, the board's field being inert beneath", async () => {
     const line = "spec: --as: 129 bytes; at most 128";
     const client = boardClient(aCardList([aCardRow({ id: "C-0001", revision: "4" })]), { "C-0001": CARD });
     client.editCard.mockRejectedValueOnce(new ClientError({ status: 400, message: line }));
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     type(dialog, "Estimate", "5");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(line);
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
-    expect(screen.getByRole("alert").closest(".board-acting")).not.toBeNull();
+    await onlyModal();
+    const said = within(await modal("The card")).getByRole("alert");
+    expect([said.textContent, said.getAttribute("lang")]).toEqual([line, "en"]);
+    expect(document.querySelector(".board-acting .field-error")).toBeNull();
   });
 
   it("another person's line stays in the dialog, away from the Acting as field", async () => {
@@ -1002,14 +1039,12 @@ describe("the dialogs", () => {
     client.assignCard.mockRejectedValueOnce(new ClientError({ status: 400, message: line }));
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Assign" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     type(dialog, "Reviewer", "Somebody");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain(line);
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
+    await onlyModal();
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
@@ -1049,7 +1084,7 @@ describe("a revision while a dialog is open", () => {
     const revise = liveTail(client);
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Assign" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     client.getCard.mockImplementation(() => Promise.resolve({ ...first, reviewer: "ben", revision: "5" }));
     revise("C-0001");
     await within(dialog).findByText("This card changed since you opened it");
@@ -1068,7 +1103,7 @@ describe("a revision while a dialog is open", () => {
     const revise = liveTail(client);
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Assign" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     client.getCard.mockImplementation(() => Promise.resolve({ ...first, reviewer: "ben", revision: "5" }));
     revise("C-0001");
     await within(dialog).findByText("This card changed since you opened it");
@@ -1083,7 +1118,7 @@ describe("a revision while a dialog is open", () => {
     const revise = liveTail(client);
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     client.getCard.mockImplementation(() => Promise.resolve({ ...first, title: "New title", due: "2999-01-01", targets: ["R-9"], revision: "5" }));
     revise("C-0001");
     await within(dialog).findByText("This card changed since you opened it");
@@ -1100,7 +1135,7 @@ describe("a revision while a dialog is open", () => {
     const client = boardClient(aCardList([aCardRow({ id: "C-0001", revision: "4" })]), { "C-0001": first });
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     typeIn(dialog, "Estimate", "5");
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => {
@@ -1244,12 +1279,10 @@ describe("focus after a write", () => {
     const trigger = await screen.findByRole("button", { name: action });
     trigger.focus();
     fireEvent.click(trigger);
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     typeIn(dialog, label, value);
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).toBeNull();
-    });
+    await onlyModal();
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("button", { name: action }));
     });
@@ -1265,7 +1298,7 @@ describe("focus after a write", () => {
     });
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Cancel card" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     typeIn(dialog, "Reason", "Dropped.");
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel card" }));
     await waitFor(() => {
@@ -1283,7 +1316,7 @@ describe("focus after a write", () => {
     });
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     fireEvent.click(within(dialog).getByRole("button", { name: "Accept card" }));
     await waitFor(() => {
       expect(document.activeElement).toBe(screen.getByRole("heading", { level: 2, name: "The card" }));
@@ -1350,9 +1383,10 @@ describe("the small edges", () => {
     const own = "1 card(s) in work/parked, from C-0001: the column `parked` is no longer in the flow `work`: served last";
     const other = "1 card(s) in work/parked-old, from C-0002: a card elsewhere";
     await open(boardClient(aCardList([aCardRow({ id: "C-0001", column: "parked" })], { notes: [own, other] })));
-    const lane = (await screen.findByRole("heading", { level: 2, name: /^Not in the flow/ })).closest("section");
-    expect(lane?.textContent).toContain(own);
-    expect(lane?.textContent).not.toContain(other);
+    await screen.findByRole("heading", { level: 2, name: /^Not in the flow/ });
+    const lane = column("Not in the flow");
+    expect(lane.textContent).toContain(own);
+    expect(lane.textContent).not.toContain(other);
     expect(within(screen.getByRole("list", { name: "Notes from the daemon" })).getByText(other)).toBeTruthy();
   });
 
@@ -1389,7 +1423,7 @@ describe("the card against its brief", () => {
     const client = suspectClient();
     client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the index is locked" }));
     await open(client, "#/alpha/board/C-0001");
-    const panel = await screen.findByRole("complementary", { name: "The card" });
+    const panel = await modal("The card");
     expect((await within(panel).findByText(sentence(/could not be read: the index is locked/))).textContent).toContain("The state of this card's targets");
     expect(within(panel).getByRole("button", { name: "Clear" })).toBeTruthy();
     expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
@@ -1443,7 +1477,7 @@ describe("the card against its brief", () => {
       },
       "#/alpha/board/C-0001",
     );
-    const panel = await screen.findByRole("complementary", { name: "The card" });
+    const panel = await modal("The card");
     await within(panel).findByRole("button", { name: "Clear" });
     client.getCards.mockRejectedValue(new ClientError({ status: 503, message: "the queue is locked" }));
     act(() => {
@@ -1511,7 +1545,7 @@ describe("the card against its brief", () => {
   it("a word this build does not know, on no target, is the neutral badge on the tile and in the panel, never a clean tile", async () => {
     const client = suspectClient(SUSPECT, { mark: "pondering", on: null });
     await open(client, "#/alpha/board/C-0001");
-    const panel = await screen.findByRole("complementary", { name: "The card" });
+    const panel = await modal("The card");
     const tile = await waitFor(() => card("C-0001"));
     expect(within(tile).getByText("pondering").closest(".badge")?.getAttribute("data-tone")).toBe("card-mark-unknown");
     expect(tile.getAttribute("aria-label")).toContain("pondering");
@@ -1573,7 +1607,7 @@ describe("the card against its brief", () => {
     const client = suspectClient(aCard({ ...SUSPECT, targets: ["GONE"] }), { on: "GONE" });
     client.getTrace.mockResolvedValue(aTrace([], { notes: ["C-0001: `GONE` no longer resolves"] }));
     await open(client, "#/alpha/board/C-0001");
-    const panel = await screen.findByRole("complementary", { name: "The card" });
+    const panel = await modal("The card");
     await screen.findAllByText("The card");
     const tile = await waitFor(() => card("C-0001"));
     expect(within(tile).getByText("Suspect").closest(".badge")?.getAttribute("data-tone")).toBe("card-suspect");
@@ -1660,7 +1694,7 @@ describe("the card against its brief", () => {
   it("Clear is disabled while the name is empty", async () => {
     await open(suspectClient(), "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     const submit = within(dialog).getByRole<HTMLButtonElement>("button", { name: "Clear card" });
     expect(submit.disabled).toBe(true);
     typeIn(dialog, "Clearing as", "Ivo Brandt");
@@ -1672,7 +1706,7 @@ describe("the card against its brief", () => {
     const client = suspectClient({ ...SUSPECT, column: "closed", acceptance: { by: "Ivo Brandt", at: "2026-10-30T10:00:00Z", note: null, verdict: "briefed", departs: [], discrepancy: null } });
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     fireEvent.click(within(dialog).getByRole("radio", { name: "Needs correction" }));
     typeIn(dialog, "Reason", "The rates moved.");
     typeIn(dialog, "Estimate", "2");
@@ -1689,7 +1723,7 @@ describe("the card against its brief", () => {
     client.clearCard.mockRejectedValueOnce(new ClientError({ status: 409, message: "C-0001 is not suspect: there is no mark to clear; nothing changed" }));
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Clear" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     typeIn(dialog, "Reason", "Kept");
     fireEvent.click(within(dialog).getByRole("button", { name: "Clear card" }));
     expect((await within(dialog).findByRole("alert")).textContent).toContain("C-0001 is not suspect");
@@ -1699,7 +1733,7 @@ describe("the card against its brief", () => {
   it("a mark this build does not know: raw, neutral, no Clear", async () => {
     const client = suspectClient(SUSPECT, { mark: "pondering" });
     await open(client, "#/alpha/board/C-0001");
-    const panel = await screen.findByRole("complementary", { name: "The card" });
+    const panel = await modal("The card");
     await waitFor(() => {
       expect(within(card("C-0001")).getByText("pondering").closest(".badge")?.getAttribute("data-tone")).toBe("card-mark-unknown");
     });
@@ -1736,7 +1770,7 @@ describe("the card against its brief", () => {
     const client = boardClient(aCardList([aCardRow({ id: "C-0001", revision: "4" })]), { "C-0001": aCard({ id: "C-0001", estimate: "3", revision: "4" }) });
     await open(client, "#/alpha/board/C-0001");
     fireEvent.click(await screen.findByRole("button", { name: "Edit" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await topDialog();
     expect(within(dialog).queryByLabelText("Why the estimate changes")).toBeNull();
     typeIn(dialog, "Estimate", "5");
     typeIn(dialog, "Why the estimate changes", "The survey grew.");
@@ -1758,7 +1792,297 @@ describe("the card against its brief", () => {
       ],
     });
     await open(boardClient(aCardList([aCardRow({ id: "C-0001" })]), { "C-0001": document_ }), "#/alpha/board/C-0001");
-    const panel = await screen.findByRole("complementary", { name: "The card" });
+    const panel = await modal("The card");
     expect(within(within(panel).getByRole("region", { name: "History" })).getAllByRole("listitem").map((line) => line.querySelector("strong")?.textContent)).toEqual(["Cleared", "Re-estimated", "Refreshed"]);
   });
+});
+
+// board-handoff (RM-0085): a board that holds still, swimlanes, a drop that only moves, the lanes by
+// keyboard, and a cap per cell.
+
+describe("a board that holds still (BH-1)", () => {
+  const ROWS = [aCardRow({ id: "C-0001", revision: "3" }), aCardRow({ id: "C-0002", position: 2 }), aCardRow({ id: "C-0003", column: "doing" })];
+
+  function grid(): HTMLElement {
+    const found = document.querySelector<HTMLElement>(".board-grid");
+    if (found === null) {
+      throw new Error("no grid");
+    }
+    return found;
+  }
+
+  function columnsNow(): Element[] {
+    return Array.from(document.querySelectorAll(".board-head > h2, section.board-cell"));
+  }
+
+  it("opening and closing the modal leaves every column head and cell, and their order, as they were", async () => {
+    await open(boardClient(aCardList(ROWS), { "C-0001": aCard({ id: "C-0001", title: "First" }) }));
+    await waitFor(() => {
+      expect(shown()).toHaveLength(3);
+    });
+    const before = columnsNow();
+    expect(before.map((element) => element.textContent.replace(/,.*$/, ""))).toEqual(["To do", "Doing", "Check", "Closed", "To do", "Doing", "Check", "Closed"]);
+    fireEvent.click(card("C-0001").querySelector("a.board-card-link") as Element);
+    const dialog = await modal("First");
+    expect(columnsNow()).toEqual(before);
+    expect(grid().contains(dialog)).toBe(false);
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    expect(columnsNow()).toEqual(before);
+  });
+
+  it("a 409 and a write's notes stand in .board-notices, after the grid and never before it (M2)", async () => {
+    const client = boardClient(aCardList(ROWS));
+    client.moveCard.mockRejectedValueOnce(new ClientError({ status: 409, message: "C-0001 is in todo: no move to `closed`; nothing changed" }));
+    client.moveCard.mockResolvedValueOnce(aCardWrite("C-0002", { column: "doing", notes: ["C-0002: a note on the write"] }));
+    await open(client);
+    await waitFor(() => {
+      expect(shown()).toHaveLength(3);
+    });
+    const before = columnsNow();
+    fireEvent.click(within(await openMenuOf("C-0001")).getByRole("menuitem", { name: /^Doing/ }));
+    const alert = await screen.findByRole("alert");
+    const notices = document.querySelector(".board-notices");
+    expect(notices?.contains(alert)).toBe(true);
+    expect(grid().compareDocumentPosition(alert) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(grid().contains(alert)).toBe(false);
+    expect(columnsNow()).toEqual(before);
+    fireEvent.click(within(alert).getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(within(await openMenuOf("C-0002")).getByRole("menuitem", { name: /^Doing/ }));
+    const notes = await screen.findByRole("list", { name: "Notes from the daemon on the last write" });
+    expect(notes.closest('[role="status"]')?.closest(".board-notices")).not.toBeNull();
+    expect(grid().contains(notes)).toBe(false);
+    expect(within(notes).getByText("C-0002: a note on the write").getAttribute("lang")).toBe("en");
+  });
+});
+
+describe("the acting name's line holds the board still (BH-1)", () => {
+  it("lies in .board-acting, laid over the board (styles.test.ts pins its rule): no column head or cell is drawn again or reordered", async () => {
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001" })]));
+    client.moveCard.mockRejectedValueOnce(new ClientError({ status: 400, message: "spec: --as: 129 bytes; at most 128" }));
+    await open(client);
+    await waitFor(() => card("C-0001"));
+    const before = Array.from(document.querySelectorAll(".board-head > h2, section.board-cell"));
+    const tools = document.querySelector(".board-tools")?.children.length;
+    fireEvent.click(within(await openMenuOf("C-0001")).getByRole("menuitem", { name: /^Doing/ }));
+    const line = await screen.findByRole("alert");
+    expect(line.parentElement?.classList.contains("board-acting")).toBe(true);
+    expect(line.classList.contains("field-error")).toBe(true);
+    expect(document.querySelector(".board-tools")?.children.length).toBe(tools);
+    expect(Array.from(document.querySelectorAll(".board-head > h2, section.board-cell"))).toEqual(before);
+  });
+});
+
+describe("swimlanes (BH-8)", () => {
+  const ROWS = [
+    aCardRow({ id: "C-0001", assignee: "Zoe" }),
+    aCardRow({ id: "C-0002", assignee: "anna", column: "doing" }),
+    aCardRow({ id: "C-0003", position: 2 }),
+    aCardRow({ id: "C-0004", assignee: "Anna", parent: "C-0090", column: "check" }),
+    aCardRow({ id: "C-0090", flow: "hidden", column: "draft", title: "A hidden flow's card" }),
+  ];
+
+  function laneHeads(): string[] {
+    return Array.from(document.querySelectorAll(".board-lane-head h2")).map((head) => head.textContent);
+  }
+
+  function lanesSelect(): HTMLSelectElement {
+    return screen.getByLabelText<HTMLSelectElement>("Lanes");
+  }
+
+  const LIST = aCardList(ROWS, { flows: [aCardFlow(), aCardFlow({ name: "hidden", columns: [{ id: "draft", title: "Draft" }, { id: "done", title: "Done" }], moves: [], accept: { from: "draft", to: "done" } })] });
+
+  it("None draws one lane with no head; Assignee one per name, folded, then Unassigned; the mode stored and kept through a remount", async () => {
+    const first = await (async () => {
+      renderApp(boardClient(LIST), "#/alpha/board");
+      await waitFor(() => card("C-0001"));
+      return true;
+    })();
+    expect(first).toBe(true);
+    expect(Array.from(lanesSelect().options).map((option) => [option.value, option.textContent])).toEqual([
+      ["none", "None"],
+      ["assignee", "Assignee"],
+      ["parent", "Parent"],
+    ]);
+    expect(laneHeads()).toEqual([]);
+    fireEvent.change(lanesSelect(), { target: { value: "assignee" } });
+    expect(laneHeads()).toEqual(["Anna", "anna", "Zoe", "Unassigned"]);
+    expect(window.localStorage.getItem("specengine.board.lanes.alpha")).toBe("assignee");
+    cleanup();
+    renderApp(boardClient(LIST), "#/alpha/board");
+    await waitFor(() => card("C-0001"));
+    expect(lanesSelect().value).toBe("assignee");
+    expect(laneHeads()).toEqual(["Anna", "anna", "Zoe", "Unassigned"]);
+  });
+
+  it("an unknown stored mode reads as None", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "rivers");
+    await open(boardClient(LIST));
+    await waitFor(() => card("C-0001"));
+    expect(lanesSelect().value).toBe("none");
+    expect(laneHeads()).toEqual([]);
+  });
+
+  it("Parent lanes: each head names its parent, a link opening its modal, and where it stands, a hidden flow's too; then Everything else", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "parent");
+    const client = boardClient(LIST, { "C-0090": aCard({ id: "C-0090", flow: "hidden", column: "draft", title: "A hidden flow's card" }) });
+    await open(client);
+    await waitFor(() => card("C-0004"));
+    expect(laneHeads()).toEqual(["A hidden flow's card", "Everything else"]);
+    const head = document.querySelector(".board-lane-head") as HTMLElement;
+    expect(head.textContent).toContain("hidden/draft");
+    const link = within(head).getByRole("link", { name: "C-0090" });
+    expect(link.getAttribute("href")).toBe("#/alpha/board/C-0090");
+    fireEvent.click(link);
+    expect(await modal("A hidden flow's card")).toBeTruthy();
+    expect(Array.from(document.querySelectorAll('[role="tab"]')).map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
+      ["work", "true"],
+      ["hidden", "false"],
+    ]);
+  });
+
+  it("a collapsed lane draws no tile and each column's count, and stays collapsed through a re-read; the heads never move", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "assignee");
+    const client = boardClient(LIST);
+    const revise = liveTail(client);
+    await open(client);
+    await waitFor(() => card("C-0001"));
+    const heads = Array.from(document.querySelectorAll(".board-head > h2"));
+    const toggle = screen.getByRole("button", { name: "Zoe" });
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[data-card="C-0001"]')).toBeNull();
+    const zoe = Array.from(document.querySelectorAll<HTMLElement>("section.board-cell")).filter((cell) => cell.dataset.lane?.includes("assignee:Zoe") === true);
+    expect(zoe.map((cell) => cell.querySelector(".board-cell-count")?.textContent)).toEqual(["1 card", "0 cards", "0 cards", "0 cards"]);
+    expect(zoe.every((cell) => cell.querySelector("[data-card]") === null)).toBe(true);
+    revise("C-0001");
+    await waitFor(() => {
+      expect(client.getCards).toHaveBeenCalledTimes(2);
+    });
+    expect(screen.getByRole("button", { name: "Zoe" }).getAttribute("aria-expanded")).toBe("false");
+    expect(document.querySelector('[data-card="C-0001"]')).toBeNull();
+    expect(Array.from(document.querySelectorAll(".board-head > h2"))).toEqual(heads);
+  });
+
+  it("every cell is labelled by its column's head and its lane, and keyed to its head", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "assignee");
+    await open(boardClient(LIST));
+    await waitFor(() => card("C-0001"));
+    const heads = Array.from(document.querySelectorAll<HTMLElement>(".board-head > h2"));
+    for (const cell of Array.from(document.querySelectorAll<HTMLElement>("section.board-cell"))) {
+      const [headId, laneId] = (cell.getAttribute("aria-labelledby") ?? "").split(" ");
+      const head = heads.find((candidate) => candidate.id === headId);
+      expect(cell.dataset.lane?.endsWith(`|${head?.dataset.columnHead ?? "?"}`)).toBe(true);
+      expect(document.getElementById(laneId ?? "")?.closest(".board-lane-head")).not.toBeNull();
+    }
+  });
+});
+
+describe("a drop is a move (BH-9)", () => {
+  it("a drop into another lane's cell of another column sends exactly one move with that column, and no assign (M11)", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "assignee");
+    const client = boardClient(aCardList([aCardRow({ id: "C-0001", assignee: "Ann" }), aCardRow({ id: "C-0002", assignee: "Bo", column: "check" })]));
+    await open(client);
+    await waitFor(() => card("C-0002"));
+    fireEvent.dragStart(card("C-0001"));
+    // Bo's lane, the Doing column: an empty cell of another lane and another column.
+    const target = Array.from(document.querySelectorAll<HTMLElement>("section.board-cell")).find((cell) => cell.dataset.lane?.includes("assignee:Bo") === true && cell.dataset.cellColumn === "doing");
+    expect(target).toBeDefined();
+    dragAt("dragOver", target as Element, 0);
+    dragAt("drop", target as Element, 0);
+    await waitFor(() => {
+      expect(client.moveCard).toHaveBeenCalledTimes(1);
+    });
+    expect(client.moveCard.mock.calls[0]).toEqual(["alpha", "C-0001", { to: "doing", revision: "1", as: null }]);
+    expect(client.assignCard).not.toHaveBeenCalled();
+    expect(client.editCard).not.toHaveBeenCalled();
+  });
+});
+
+describe("lanes by keyboard (BH-10)", () => {
+  it("Page Down and Page Up go to the same column in the next or previous lane holding a card there; none, focus stays; a collapsed lane is passed", async () => {
+    window.localStorage.setItem("specengine.board.lanes.alpha", "assignee");
+    const client = boardClient(
+      aCardList([
+        aCardRow({ id: "C-0001", assignee: "Ann", column: "doing" }),
+        aCardRow({ id: "C-0002", assignee: "Bo" }),
+        aCardRow({ id: "C-0003", assignee: "Cy", column: "doing" }),
+        aCardRow({ id: "C-0004", assignee: "Di", column: "doing" }),
+      ]),
+    );
+    await open(client);
+    await waitFor(() => card("C-0004"));
+    card("C-0001").focus();
+    press("PageDown");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(card("C-0003"));
+    });
+    press("PageUp");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(card("C-0001"));
+    });
+    press("PageUp");
+    expect(document.activeElement).toBe(card("C-0001"));
+    fireEvent.click(screen.getByRole("button", { name: "Cy" }));
+    card("C-0001").focus();
+    press("PageDown");
+    await waitFor(() => {
+      expect(document.activeElement).toBe(card("C-0004"));
+    });
+    expect(card("C-0004").tabIndex).toBe(0);
+  });
+
+  it("Enter opens the modal; m, n, h and r act through letterOf, a Russian layout's keys too (M12)", async () => {
+    await open(boardClient(aCardList([aCardRow({ id: "C-0001" })], { flows: [aCardFlow({ return: "doing" })] }), { "C-0001": aCard({ id: "C-0001" }) }));
+    const tile = await waitFor(() => card("C-0001"));
+    for (const [key, code, name] of [
+      ["\u0440", "KeyH", "Hand off C-0001"],
+      ["\u043a", "KeyR", "Return C-0001"],
+      ["\u0442", "KeyN", "New card"],
+    ] as const) {
+      tile.focus();
+      fireEvent.keyDown(tile, { key, code });
+      const dialog = await screen.findByRole("dialog", { name });
+      fireEvent.keyDown(dialog, { key: "Escape" });
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog")).toBeNull();
+      });
+    }
+    tile.focus();
+    fireEvent.keyDown(tile, { key: "\u044c", code: "KeyM" });
+    expect(await screen.findByRole("menu", { name: "Move C-0001" })).toBeTruthy();
+    press("Escape");
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).toBeNull();
+    });
+    tile.focus();
+    press("Enter", tile);
+    expect(await modal("Card C-0001")).toBeTruthy();
+  });
+});
+
+describe("scale (BH-22)", () => {
+  it("5 000 cards in one flow: every cell, Assignee lanes included, draws at most 200 and Show all; a collapsed lane draws none (M25)", async () => {
+    const rows = Array.from({ length: 5000 }, (_, index) => aCardRow({ id: `C-${String(index + 1).padStart(5, "0")}`, assignee: index % 2 === 0 ? "Ann" : "Bo", column: index < 4000 ? "todo" : "doing", position: index + 1 }));
+    await open(boardClient(aCardList(rows)));
+    await waitFor(() => {
+      expect(shown()).toHaveLength(COLUMN_SHOWN + 200);
+    });
+    expect(screen.getByRole("button", { name: "Show all 4000" })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Lanes"), { target: { value: "assignee" } });
+    // Each lane holds 2 000 in To do and 500 in Doing: four cells past the cap.
+    await waitFor(() => {
+      expect(screen.getAllByRole("button", { name: /^Show all/ }).map((button) => button.textContent)).toEqual(["Show all 2000", "Show all 500", "Show all 2000", "Show all 500"]);
+    });
+    for (const cell of Array.from(document.querySelectorAll<HTMLElement>("section.board-cell"))) {
+      expect(cell.querySelectorAll("[data-card]").length).toBeLessThanOrEqual(COLUMN_SHOWN);
+    }
+    expect(shown()).toHaveLength(4 * COLUMN_SHOWN);
+    fireEvent.click(screen.getByRole("button", { name: "Bo" }));
+    expect(shown()).toHaveLength(2 * COLUMN_SHOWN);
+  }, 30_000);
 });

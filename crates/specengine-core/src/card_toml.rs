@@ -17,6 +17,10 @@
 //!   anyone; `by` names as `--as` writes them. No `moves`: every ordered pair
 //!   of the columns but `accept.to`, expanded here, so a reader looks moves
 //!   up and never judges them.
+//! - **`return`** (canon `card-flows`, "The rule"), optional: one column a
+//!   move enters only with a note saying why. Never the first column,
+//!   `accept.from` or `accept.to`. Absent: no such column. Which column it is
+//!   stays data: no code reads its name.
 //! - **Another key**: the TOML reader's message.
 //!
 //! Every value is judged and the first error by line is returned
@@ -40,12 +44,13 @@ const TABLE: &str = "card";
 /// `[card]`'s keys.
 const CARD_KEYS: [&str; 1] = ["flow"];
 /// A flow's keys, in the order a message lists them.
-const FLOW_KEYS: [&str; 6] = [
+const FLOW_KEYS: [&str; 7] = [
     "name",
     "disciplines",
     "columns",
     "titles",
     "accept",
+    "return",
     "moves",
 ];
 /// `accept`'s keys.
@@ -107,6 +112,10 @@ pub struct CardFlow {
     /// Expanded, in the order written (else by column order).
     pub moves: Vec<CardMove>,
     pub accept: CardAccept,
+    /// `return`: the column a move enters only with a note; `None`: none.
+    /// Served as `return`, after `accept`.
+    #[serde(rename = "return")]
+    pub return_column: Option<String>,
 }
 
 impl CardFlow {
@@ -120,6 +129,11 @@ impl CardFlow {
         self.columns
             .first()
             .map_or(self.accept.from.as_str(), |column| column.id.as_str())
+    }
+
+    /// `column` is this flow's `return` column.
+    pub fn is_return(&self, column: &str) -> bool {
+        self.return_column.as_deref() == Some(column)
     }
 }
 
@@ -276,6 +290,7 @@ struct Written<'v, 'i> {
     columns: Option<&'v Spanned<DeValue<'i>>>,
     titles: Option<&'v Spanned<DeValue<'i>>>,
     accept: Option<&'v Spanned<DeValue<'i>>>,
+    return_column: Option<&'v Spanned<DeValue<'i>>>,
     moves: Option<&'v Spanned<DeValue<'i>>>,
 }
 
@@ -302,6 +317,7 @@ fn read_flow(span: Range<usize>, entry: &DeTable<'_>, errors: &mut Errors<'_>) -
             "columns" => written.columns = Some(value),
             "titles" => written.titles = Some(value),
             "accept" => written.accept = Some(value),
+            "return" => written.return_column = Some(value),
             "moves" => written.moves = Some(value),
             other => errors.push(key.span(), unknown_field(other, &FLOW_KEYS)),
         }
@@ -313,6 +329,7 @@ fn read_flow(span: Range<usize>, entry: &DeTable<'_>, errors: &mut Errors<'_>) -
     let columns = read_columns(&span, written.columns, errors);
     let accept = read_accept(&span, written.accept, &columns, errors);
     let titles = read_titles(written.titles, &columns, errors);
+    let return_column = read_return(written.return_column, &columns, accept.as_ref(), errors);
     let moves = read_moves(written.moves, &columns, accept.as_ref(), errors);
     if errors.len() != before {
         return None;
@@ -335,6 +352,7 @@ fn read_flow(span: Range<usize>, entry: &DeTable<'_>, errors: &mut Errors<'_>) -
         columns,
         moves,
         accept,
+        return_column,
     })
 }
 
@@ -501,6 +519,35 @@ fn read_accept(
         from: from.to_owned(),
         to: to.to_owned(),
     })
+}
+
+/// `return`, when written: one column of this flow, never the first, where
+/// a new card starts, nor `accept.from` or `accept.to` (`None` when `accept`
+/// itself holds an error, already pushed).
+fn read_return(
+    value: Option<&Spanned<DeValue<'_>>>,
+    columns: &[String],
+    accept: Option<&CardAccept>,
+    errors: &mut Errors<'_>,
+) -> Option<String> {
+    let value = value?;
+    let column = text("return", value, errors)?;
+    let problem = if !columns.iter().any(|known| known == column) {
+        Some("is no column of this flow")
+    } else if columns.first().is_some_and(|first| first == column) {
+        Some("is the first column, where a new card starts")
+    } else if accept.is_some_and(|accept| accept.from == column) {
+        Some("is `accept.from`, where a card waits for its accept")
+    } else if accept.is_some_and(|accept| accept.to == column) {
+        Some("is `accept.to`, reached only by an accept")
+    } else {
+        None
+    };
+    if let Some(problem) = problem {
+        errors.push(value.span(), format!("`return`: `{column}` {problem}"));
+        return None;
+    }
+    Some(column.to_owned())
 }
 
 fn read_titles(

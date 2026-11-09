@@ -552,7 +552,7 @@ describe("source policy", () => {
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
     // Flow's place is routes.ts's too (docs/features/writer-studio.md D4): `flowHash`.
-    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash)\()/;
+    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash|cardPageHash)\()/;
     expect(offending(rule, views)).toEqual([]);
     // The detector itself: a hash spelled by hand is caught, one from routes.ts is not.
     expect(rule.test("<a href={`#/${project}/tasks`}>")).toBe(true);
@@ -886,7 +886,23 @@ describe("source policy", () => {
   it("compares no column, flow, discipline or event word in the Board, labels.ts the one map; reads no clock but in due.ts, never a UTC date there (AC-06, AC-08 of board-ui)", () => {
     const boardSources = (path: string) => path.startsWith("/src/board/") && !/\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter(boardSources)).toEqual(
-      expect.arrayContaining(["/src/board/BoardView.tsx", "/src/board/BoardColumn.tsx", "/src/board/BoardCard.tsx", "/src/board/MoveMenu.tsx", "/src/board/CardPanel.tsx", "/src/board/CardDialogs.tsx", "/src/board/filter.ts", "/src/board/due.ts", "/src/board/labels.ts"]),
+      expect.arrayContaining([
+        "/src/board/BoardView.tsx",
+        "/src/board/BoardColumn.tsx",
+        "/src/board/BoardCard.tsx",
+        "/src/board/MoveMenu.tsx",
+        "/src/board/CardPanel.tsx",
+        "/src/board/CardDialogs.tsx",
+        "/src/board/filter.ts",
+        "/src/board/due.ts",
+        "/src/board/labels.ts",
+        // board-handoff (BH-15, R5): the modal, the page, the acts, the lanes and the rollup look the return column up in `flows[]`.
+        "/src/board/CardModal.tsx",
+        "/src/board/CardPage.tsx",
+        "/src/board/CardActs.tsx",
+        "/src/board/swimlanes.ts",
+        "/src/board/rollup.ts",
+      ]),
     );
     const field = "\\.(column|flow|discipline|type|from|to|name|id|title|key)\\b";
     const quote = "[\"'`]";
@@ -912,6 +928,13 @@ describe("source policy", () => {
     // An event's type is spelled in labels.ts alone.
     expect(offending(/["'\`]card\.[a-z]+["'\`]/, scanned)).toEqual([]);
     // The detector itself: a branch on a project's word is caught, the look-ups the Board makes are not.
+    // A return column spelled, the preset's or the mock's, is caught; the lookup the Board makes is not.
+    for (const line of ['if (row.column === "sent-back") {', 'const back = card.column === "blocked";', 'if (lane.column !== "sent-back") {']) {
+      expect([line, compared.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["if (row.column === flow.return) {", "const back = flowOf(row.flow)?.return ?? null;", "if (cell.column === back && row.column !== back) {"]) {
+      expect([line, compared.test(line)]).toEqual([line, false]);
+    }
     for (const line of ['if (row.column === "done") {', 'const late = "review" === card.column;', "switch (row.column) {", "const tone = TONES[row.column];", 'flow.name === "copy" && <p />', 'if (event.type === "card.moved") {', 'const hold = row.flow.includes("x");'.replace("row.flow.includes", "names.includes"), 'lane.title.startsWith("Done")', 'if (lane.column.id !== "review") {', 'if (lane.column.title !== "Done") {', 'const late = row.id === "C-0001";', 'const done = "Done" === column.title;', 'if (lane.key === "copy/column:done") {', 'const look = LOOKS[lane.key];']) {
       expect([line, compared.test(line)]).toEqual([line, true]);
     }

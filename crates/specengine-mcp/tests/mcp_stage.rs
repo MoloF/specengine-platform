@@ -388,6 +388,14 @@ fn ac15_get_proposal_shows_the_stage_and_no_tool_input_carries_a_choice() {
                     assert!(schema.get("enum").is_none(), "{schema}");
                     continue;
                 }
+                // docs/canon/card-flows.md "MCP and hub": `move_card`'s
+                // `note` says why a card moves, required into its flow's
+                // `return` column (free text or null), never a decision's.
+                if path == "move_card.note" {
+                    assert_eq!(schema["type"], json!(["string", "null"]), "{schema}");
+                    assert!(schema.get("enum").is_none(), "{schema}");
+                    continue;
+                }
                 panic!("{era:?}: {path}: a tool input carries a choice: {schema}");
             }
         }

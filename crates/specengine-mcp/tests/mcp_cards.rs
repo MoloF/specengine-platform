@@ -17,6 +17,11 @@
 //!   code (AC-10); no reply names a stack word.
 //! - The MCP sources hold no `card_accept`, `card_assign`, `card_cancel`,
 //!   `card_clear`.
+//! - board-handoff (RM-0085), docs/canon/card-flows.md "MCP and hub": on
+//!   `fixtures/studio-lamp`, `create_card {reviewer}`, `move_card {note}`,
+//!   `list_cards {parent}` each equal to their twin; `reviewer: "agent"` and a
+//!   move into `sent-back` without a note refused, nothing stored; the
+//!   descriptions name the keys.
 //!
 //! Every server has a cleared environment and a scratch `HOME`.
 
@@ -212,6 +217,8 @@ fn ac10_the_card_tools_and_their_schemas() {
                     "flow",
                     "marks",
                     "no_target",
+                    // docs/canon/card-flows.md "Children".
+                    "parent",
                     "with_cancelled",
                 ],
                 vec![],
@@ -228,6 +235,8 @@ fn ac10_the_card_tools_and_their_schemas() {
                     "estimate",
                     "goal",
                     "parent",
+                    // docs/canon/card-flows.md "Hand-off".
+                    "reviewer",
                     "target",
                     "title",
                 ],
@@ -253,7 +262,8 @@ fn ac10_the_card_tools_and_their_schemas() {
             ),
             (
                 "move_card",
-                vec!["before", "card_id", "revision", "to"],
+                // docs/canon/card-flows.md "Return": `note`.
+                vec!["before", "card_id", "note", "revision", "to"],
                 vec!["card_id"],
             ),
         ] {
@@ -587,7 +597,8 @@ fn ac03_a_tool_acts_as_agent_against_by() {
         events[1],
         (
             "card.moved".to_owned(),
-            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "agent"})
+            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "agent",
+                   "note": null})
         )
     );
 }
@@ -819,4 +830,239 @@ fn the_tools_need_no_git() {
     assert_eq!(result(&listed)["isError"], json!(false), "{listed}");
     drop(session.finish());
     assert!(!root.join(".git").exists());
+}
+
+// -------------------------------------------------- board-handoff (RM-0085)
+
+/// The refusal of a move into the return column with no note, as the
+/// tool's `content` gives it (docs/canon/card-flows.md "Return").
+fn needs_note(id: &str) -> String {
+    format!(
+        "spec: {id} enters `sent-back`, its flow's return column: say why with `--note`; nothing \
+         changed\n"
+    )
+}
+
+/// board-handoff BH-12, BH-14, BH-19 (docs/canon/card-flows.md "MCP and hub"), on
+/// `fixtures/studio-lamp`: `create_card {reviewer}`, `move_card {note}` and
+/// `list_cards {parent}` each equal to their `spec card` twin on a twin queue,
+/// the repository clean after each: a hand-off stores its reviewer and
+/// `card.created` carries it, the tool acting as `agent`; `reviewer: "agent"`
+/// is refused with nothing stored; a move into `sent-back` without a note is
+/// refused with the write document and no event, with one it moves and
+/// `card.moved` holds the note; `parent` lists exactly the children, none
+/// for a card with none, a look-alike exit 2's line with no document.
+#[test]
+fn board_handoff_the_card_tools_take_reviewer_note_and_parent() {
+    let repo = Repo::new("mc-handoff", "studio-lamp");
+    let mut session = repo.session(Era::Stateless);
+    let schemas = output_schemas(&session.tools());
+    let calls = [
+        (
+            "create_card",
+            json!({"title": "Lamp room scene", "discipline": "narrative"}),
+        ),
+        (
+            "create_card",
+            json!({"title": "Lamp room dialogue", "discipline": "development",
+                   "parent": "C-0001", "reviewer": "Ann"}),
+        ),
+        (
+            "create_card",
+            json!({"title": "Lamp glow", "discipline": "art", "parent": "C-0001",
+                   "reviewer": "Ann"}),
+        ),
+        (
+            "create_card",
+            json!({"title": "No one's", "discipline": "development", "reviewer": "agent"}),
+        ),
+        (
+            "create_card",
+            json!({"title": "No one's", "discipline": "development", "reviewer": " local "}),
+        ),
+        (
+            "create_card",
+            json!({"title": "No one's", "discipline": "development", "reviewer": "a\u{2028}b"}),
+        ),
+        (
+            "move_card",
+            json!({"card_id": "C-0002", "to": "in-progress"}),
+        ),
+        ("move_card", json!({"card_id": "C-0002", "to": "sent-back"})),
+        (
+            "move_card",
+            json!({"card_id": "C-0002", "to": "sent-back", "note": "   "}),
+        ),
+        (
+            "move_card",
+            json!({"card_id": "C-0002", "to": "sent-back", "note": "Two endings contradict SCN-LAMP-ROOM"}),
+        ),
+        (
+            "move_card",
+            json!({"card_id": "C-0003", "to": "sent-back", "note": "Too dark"}),
+        ),
+        // A reorder inside the return column (`to` its own column): no note.
+        ("move_card", json!({"card_id": "C-0003", "to": "sent-back"})),
+        (
+            "move_card",
+            json!({"card_id": "C-0002", "to": "ready", "note": "Fixed"}),
+        ),
+    ];
+    for (tool, args) in calls {
+        twin_call(&repo, &mut session, &schemas, tool, args);
+        assert_eq!(repo.status(), "", "{tool}");
+    }
+    let events = repo.events();
+    assert_eq!(
+        events,
+        [
+            (
+                "card.created".to_owned(),
+                json!({"id": "C-0001", "flow": "narrative", "column": "backlog", "position": 1,
+                       "assignee": null, "reviewer": null, "as": "agent"})
+            ),
+            (
+                "card.created".to_owned(),
+                json!({"id": "C-0002", "flow": "development", "column": "backlog",
+                       "position": 1, "assignee": null, "reviewer": "Ann", "as": "agent"})
+            ),
+            (
+                "card.created".to_owned(),
+                json!({"id": "C-0003", "flow": "art", "column": "waiting", "position": 1,
+                       "assignee": null, "reviewer": "Ann", "as": "agent"})
+            ),
+            (
+                "card.moved".to_owned(),
+                json!({"id": "C-0002", "from": "backlog", "to": "in-progress", "position": 1,
+                       "as": "agent", "note": null})
+            ),
+            (
+                "card.moved".to_owned(),
+                json!({"id": "C-0002", "from": "in-progress", "to": "sent-back",
+                       "position": 1, "as": "agent",
+                       "note": "Two endings contradict SCN-LAMP-ROOM"})
+            ),
+            (
+                "card.moved".to_owned(),
+                json!({"id": "C-0003", "from": "waiting", "to": "sent-back", "position": 1,
+                       "as": "agent", "note": "Too dark"})
+            ),
+            (
+                "card.moved".to_owned(),
+                json!({"id": "C-0003", "from": "sent-back", "to": "sent-back", "position": 1,
+                       "as": "agent", "note": null})
+            ),
+            (
+                "card.moved".to_owned(),
+                json!({"id": "C-0002", "from": "sent-back", "to": "ready", "position": 1,
+                       "as": "agent", "note": "Fixed"})
+            ),
+        ],
+        "the refused calls stored nothing"
+    );
+    // The refusals' own words, beyond parity with the twin.
+    let card = session.call("create_card", json!({"title": "T", "reviewer": "agent"}));
+    let card = result(&card);
+    assert_eq!(card["isError"], json!(true), "{card}");
+    assert_eq!(
+        content_text(card),
+        "spec: reviewer: `agent` can be no reviewer: a person accepts a result\n"
+    );
+    let back = session.call("move_card", json!({"card_id": "C-0002", "to": "sent-back"}));
+    let back = result(&back);
+    assert_eq!(back["isError"], json!(true), "{back}");
+    assert_eq!(content_text(back), needs_note("C-0002"));
+    assert_eq!(
+        back["structuredContent"]["column"],
+        json!("ready"),
+        "{back}"
+    );
+    assert_eq!(
+        back["structuredContent"]["notes"]
+            .as_array()
+            .and_then(|notes| notes.last()),
+        Some(&json!(
+            needs_note("C-0002")
+                .trim_start_matches("spec: ")
+                .trim_end_matches('\n')
+        )),
+        "{back}"
+    );
+    assert_eq!(repo.events().len(), events.len(), "no event");
+
+    // `parent`, on the server's own queue.
+    let env = cli_env(&repo.root, Some(&repo.home));
+    let globals = Globals::default();
+    for (tool, args) in [
+        ("list_cards", json!({"parent": "C-0001"})),
+        ("list_cards", json!({"parent": "C-0002"})),
+        ("list_cards", json!({"parent": "C-9999"})),
+        ("list_cards", json!({"parent": "C-0001", "flow": "art"})),
+        ("list_cards", json!({"parent": "\u{0421}-0001"})),
+        ("list_cards", json!({"parent": "C-1"})),
+    ] {
+        checked_call(&mut session, &schemas, tool, args, &env, &globals);
+    }
+    let children = session.call("list_cards", json!({"parent": "C-0001"}));
+    let ids: Vec<&str> = result(&children)["structuredContent"]["cards"]
+        .as_array()
+        .expect("cards")
+        .iter()
+        .map(|row| row["id"].as_str().expect("an ID"))
+        .collect();
+    assert_eq!(ids, ["C-0002", "C-0003"], "exactly its children");
+    assert_eq!(
+        result(&children)["structuredContent"]["flows"]
+            .as_array()
+            .map(Vec::len),
+        Some(5),
+        "every flow"
+    );
+    assert_eq!(
+        result(&children)["structuredContent"]["flows"][1]["return"],
+        json!("sent-back"),
+        "a flow's return column"
+    );
+    let none = session.call("list_cards", json!({"parent": "C-0002"}));
+    assert_eq!(result(&none)["isError"], json!(false), "{none}");
+    assert_eq!(result(&none)["structuredContent"]["cards"], json!([]));
+    let alike = session.call("list_cards", json!({"parent": "\u{0421}-0001"}));
+    let alike = result(&alike);
+    assert_eq!(alike["isError"], json!(true), "{alike}");
+    assert!(alike.get("structuredContent").is_none(), "{alike}");
+    assert_eq!(
+        content_text(alike),
+        "spec: `\u{0421}-0001` uses look-alike letters or digits; card IDs are Latin only: write \
+         `C-0001`\n"
+    );
+    drop(session.finish());
+    assert_eq!(repo.status(), "");
+}
+
+/// docs/canon/card-flows.md "MCP and hub": the stdio descriptions
+/// name the new keys: `create_card`'s `reviewer`, `move_card`'s `note`,
+/// `list_cards`' `parent` and a flow's `return`; `INSTRUCTIONS` stays at its
+/// 2 048 bytes (the cards line unchanged). The hub's texts, ASCII and within
+/// 2 048 B, are `specengine-http`'s `tests/hub_mcp.rs` (H11).
+#[test]
+fn board_handoff_the_descriptions_name_the_new_keys() {
+    let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
+    let list = session.tools();
+    for (name, words) in [
+        ("create_card", &["reviewer", "parent"][..]),
+        ("move_card", &["note", "return"][..]),
+        ("list_cards", &["parent", "return"][..]),
+    ] {
+        let description = tool(&list, name)["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name}: a description"));
+        for word in words {
+            assert!(
+                has_word(description, word),
+                "{name} names `{word}`: {description}"
+            );
+        }
+    }
+    assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
+    drop(session.finish());
 }

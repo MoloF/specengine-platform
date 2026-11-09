@@ -962,7 +962,17 @@ fn board_ac01_the_board_and_a_card_are_the_clis_byte_for_byte() {
         "expected.json",
     ))
     .expect("expected.json");
-    assert_eq!(empty.json()["flows"], expected["flows"], "the fixture's");
+    // docs/canon/cards.md "Documents and events": `return` after `accept`,
+    // `null` on card-press, whose fixture stays byte-equal (board-handoff).
+    let mut flows = expected["flows"].clone();
+    for flow in flows.as_array_mut().expect("flows") {
+        assert!(
+            flow.get("return").is_none(),
+            "the fixture predates `return`"
+        );
+        flow["return"] = Value::Null;
+    }
+    assert_eq!(empty.json()["flows"], flows, "the fixture's");
     assert_eq!(empty.json()["cards"], json!([]));
     assert_eq!(empty.json()["truncated"], json!(false));
     assert_eq!(empty.json()["omitted"], Value::Null);

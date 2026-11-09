@@ -2674,3 +2674,43 @@ fn h20_a_call_cancelled_while_it_waits_for_the_turn_stores_nothing() {
         .collect();
     assert_eq!(ids, [made_id.as_str()], "one card on the board");
 }
+
+/// docs/canon/card-flows.md "MCP and hub": on a hub too,
+/// `create_card`'s text names `reviewer`, `move_card`'s `note` and
+/// `list_cards`' `parent`, each takes its key, and the hub's tools stay the
+/// seventeen, ASCII and within 2 048 bytes (H11 judges every text).
+#[test]
+fn board_handoff_the_hub_card_texts_name_the_new_keys() {
+    let world = World::new("mcp-handoff");
+    let mut session = world.session(KEEP, "mira");
+    let hub = session.tools();
+    let names: Vec<&str> = hub["tools"]
+        .as_array()
+        .expect("tools")
+        .iter()
+        .map(|tool| tool["name"].as_str().expect("a name"))
+        .collect();
+    assert_eq!(names.len(), 17, "{names:?}");
+    for (name, key) in [
+        ("create_card", "reviewer"),
+        ("move_card", "note"),
+        ("list_cards", "parent"),
+    ] {
+        let description = tool(&hub, name)["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name}: no description"));
+        assert!(has_word(description, key), "{name}: {description}");
+        assert!(description.is_ascii(), "{name}");
+        assert!(
+            description.len() <= TEXT_LIMIT,
+            "{name}: {}",
+            description.len()
+        );
+        assert!(
+            tool(&hub, name)["inputSchema"]["properties"]
+                .as_object()
+                .is_some_and(|properties| properties.contains_key(key)),
+            "{name} takes {key}"
+        );
+    }
+}

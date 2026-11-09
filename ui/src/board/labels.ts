@@ -22,6 +22,56 @@ export function openLook(t: Translate): Look {
   return { label: t("board.open"), tone: "card-open", icon: "open" };
 }
 
+/** A card standing in its flow's `return` column: sent back, a label and an icon (`docs/canon/card-flows.md` "The rule"). */
+export function returnedLook(t: Translate): Look {
+  return { label: t("board.return.badge"), tone: "card-returned", icon: "cardReturned" };
+}
+
+/** A parent's returned children, counted: the same look, the count in its label. */
+export function returnedCountLook(count: number, t: Translate): Look {
+  return { label: t("board.rollup.returnedCount", { count }), tone: "card-returned", icon: "cardReturned" };
+}
+
+const HAND_OFF_LOOKS = {
+  accepted: acceptedLook,
+  returned: returnedLook,
+  handedOff: (t: Translate): Look => ({ label: t("board.rollup.handedOff"), tone: "card-handed-off", icon: "cardHandOff" }),
+  taken: (t: Translate): Look => ({ label: t("board.rollup.taken"), tone: "card-taken", icon: "taskInProgress" }),
+};
+
+/**
+ * A child's word in its parent's rollup (`docs/canon/card-flows.md` "The rule"), looked up and never
+ * judged: accepted, then, in a flow the read serves, returned in its `return` column, handed off in
+ * its first column, taken in any other. A flow not served has no word.
+ */
+export type HandOffWord = keyof typeof HAND_OFF_LOOKS;
+
+/** Each word by itself, so none is spelled twice. */
+const WORDS = Object.fromEntries(Object.keys(HAND_OFF_LOOKS).map((word) => [word, word])) as { readonly [K in HandOffWord]: K };
+
+/** A child's word, as `CardRow` and its flow say; null for a flow the read does not serve. */
+export function handOffWord(row: Pick<CardRow, "column"> & { accepted: boolean }, flow: CardFlow | undefined): HandOffWord | null {
+  if (row.accepted) {
+    return WORDS.accepted;
+  }
+  if (flow === undefined) {
+    return null;
+  }
+  if (row.column === flow.return) {
+    return WORDS.returned;
+  }
+  return row.column === flow.columns[0]?.id ? WORDS.handedOff : WORDS.taken;
+}
+
+export function handOffLook(word: HandOffWord, t: Translate): Look {
+  return HAND_OFF_LOOKS[word](t);
+}
+
+/** Whether a word is a return's: the parent's tile counts these. */
+export function isReturned(word: HandOffWord | null): boolean {
+  return word === WORDS.returned;
+}
+
 export function unassigned(t: Translate): string {
   return t("board.unassigned");
 }

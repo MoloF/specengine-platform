@@ -75,6 +75,10 @@
 //! closures, and the exempt `src/confirm.rs` holds no `use ... as`, which would
 //! rename a call past the scan. M: the CLI's `confirm.rs` answering `|_| true`;
 //! `use specengine_cli::confirm_staged as go;` in `src/confirm.rs`.
+//!
+//! docs/features/board-handoff.md (RM-0085) BH-20: on `fixtures/studio-lamp`
+//! a hand-off and a return each add one `card.*` event and leave git and an
+//! open question alone; `CARD_CALLS` stays ten.
 
 mod common;
 
@@ -1291,6 +1295,116 @@ fn card_writes_touch_only_the_queue() {
             stored,
             "{headers:?}: nothing changed"
         );
+    }
+}
+
+// ------------------------------------------- board-handoff (RM-0085), BH-20
+
+/// docs/features/board-handoff.md BH-20, the door: on `fixtures/studio-lamp`
+/// a hand-off (`POST .../cards` with `parent` and `reviewer`) and a return
+/// (`POST .../cards/:id/move` into `sent-back` with a `note`) each add exactly
+/// one `card.*` event and leave git, the refs, every file and an open
+/// question as they were; a return refused for want of a note adds none.
+/// The library's card calls stay the ten: a `card_return` or `card_hand_off`
+/// a handler named would be caught. M23's door half.
+#[test]
+fn board_handoff_bh20_a_hand_off_and_a_return_touch_only_the_queue() {
+    let scratch = Scratch::new("door-handoff");
+    let root = scratch.repo("studio-lamp", "lamp", "main");
+    let git = scratch.git();
+    git.run(&root, &["config", "user.name", "Owner"]);
+    git.run(&root, &["config", "user.email", "owner@example.invalid"]);
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let q = ask(
+        &home,
+        &root,
+        &["SCN-ARRIVAL"],
+        "Does the lamp room keep both endings?",
+    );
+    let ids = [q.as_str()];
+    let before = round_state(&scratch, &home, &cwd, &root, &ids);
+    assert_eq!(before.0[0], "", "the copy is committed");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let p = "/api/projects/studio-lamp";
+    let post = |path: &str, body: &serde_json::Value| {
+        server.stage(&format!("{p}/{path}"), &body.to_string())
+    };
+    let mut stored = before.2.clone();
+    for (path, body, kind) in [
+        (
+            "cards",
+            json!({"title": "Lamp room scene", "discipline": "narrative", "as": "Ann"}),
+            "card.created",
+        ),
+        (
+            "cards",
+            json!({"title": "Lamp room dialogue", "goal": "Two endings.", "discipline":
+                   "development", "target": ["SCN-ARRIVAL"], "parent": "C-0001",
+                   "reviewer": "Ann", "as": "Ann"}),
+            "card.created",
+        ),
+        (
+            "cards/C-0002/move",
+            json!({"to": "in-progress", "as": "Rob"}),
+            "card.moved",
+        ),
+        (
+            "cards/C-0002/move",
+            json!({"to": "sent-back", "note": "Two endings contradict SCN-LAMP-ROOM",
+                   "as": "Rob"}),
+            "card.moved",
+        ),
+    ] {
+        let reply = post(path, &body);
+        assert_eq!(reply.status, 200, "{path} {body}: {}", reply.text());
+        let after = round_state(&scratch, &home, &cwd, &root, &ids);
+        assert_eq!(after.0, before.0, "{path}: git, the refs, every file");
+        assert_eq!(after.1, before.1, "{path}: the question as it was");
+        assert_eq!(
+            after.2[..stored.len()],
+            stored[..],
+            "{path}: the earlier events kept"
+        );
+        let added: Vec<&str> = after.2[stored.len()..]
+            .iter()
+            .map(|(_, kind, _)| kind.as_str())
+            .collect();
+        assert_eq!(added, [kind], "{path}: one event");
+        stored = after.2;
+    }
+    let seen = round_state(&scratch, &home, &cwd, &root, &ids);
+    for (status, path, body) in [
+        (409, "cards/C-0001/move", json!({"to": "sent-back"})),
+        (
+            409,
+            "cards/C-0001/move",
+            json!({"to": "sent-back", "note": " "}),
+        ),
+        (
+            409,
+            "cards",
+            json!({"title": "T", "discipline": "art", "parent": "C-0001",
+                   "reviewer": "agent"}),
+        ),
+        (
+            400,
+            "cards",
+            json!({"title": "T", "discipline": "art", "reviewer": "a\u{2028}b"}),
+        ),
+    ] {
+        let reply = post(path, &body);
+        assert_eq!(reply.status, status, "{path} {body}: {}", reply.text());
+        assert_eq!(
+            round_state(&scratch, &home, &cwd, &root, &ids),
+            seen,
+            "{path} {body}: nothing changed"
+        );
+    }
+    assert_eq!(CARD_CALLS.len(), 10, "the ten card calls");
+    for name in ["card_return", "card_hand_off", "card_handoff"] {
+        let by_path = format!("fn f() {{ let _ = specengine_cli::{name}(&env, &globals, &r); }}");
+        assert_eq!(caught(&by_path), [name], "{by_path}");
     }
 }
 

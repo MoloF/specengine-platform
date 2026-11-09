@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { IMPLICIT_SECTIONS } from "../test/builders";
-import { ALL_SECTIONS, flowHash, homeHash, isBareFlow, navOf, parseFlowPlace, parseHash, sectionHash, type FlowPlace } from "./routes";
+import { ALL_SECTIONS, cardPageHash, flowHash, homeHash, isBareFlow, navOf, parseFlowPlace, parseHash, sectionHash, type FlowPlace } from "./routes";
 import { ru } from "../i18n/ru";
 import { enT, ruT } from "../test/text";
 import { aboutOf, isSectionId, sectionLabel, SECTIONS } from "./sections";
@@ -203,5 +203,31 @@ describe("Flow's place (ST-1 of writer-studio)", () => {
     expect(parseHash("#/p/flow/A?scope=B")).toEqual({ type: "section", project: "p", section: "flow", id: "A", query: "scope=B" });
     expect(parseHash("#/p/flow?scope=B?C")).toEqual({ type: "section", project: "p", section: "flow", id: null, query: "scope=B?C" });
     expect(parseHash("#/p/inbox/PR-1")).toEqual({ type: "section", project: "p", section: "inbox", id: "PR-1" });
+  });
+});
+
+// BH-6 of board-handoff: a card's page is a fourth segment after the card's ID, never a tenth section.
+describe("a card's page", () => {
+  it("parses exactly `board`, `<C>`, `page` as the board with the card's page; any other fourth segment is not found (M8)", () => {
+    expect(parseHash("#/alpha/board/C-0001/page")).toEqual({ type: "section", project: "alpha", section: "board", id: "C-0001", view: "page" });
+    expect(parseHash("#/alpha/board/C-0001")).toEqual({ type: "section", project: "alpha", section: "board", id: "C-0001" });
+    for (const hash of ["#/alpha/board/C-0001/pages", "#/alpha/board/C-0001/page/x", "#/alpha/board/C-0001/", "#/alpha/board//page", "#/alpha/tree/R-1/page", "#/alpha/tasks/T-1/page"]) {
+      expect([hash, parseHash(hash).type]).toEqual([hash, "not_found"]);
+    }
+  });
+
+  it("round-trips both forms for IDs and projects holding %, / and a space", () => {
+    for (const project of ["alpha", "a b", "50%", "x/y"]) {
+      for (const id of ["C-0001", "C 1", "C%2", "C/3"]) {
+        expect(parseHash(cardPageHash(project, id))).toEqual({ type: "section", project, section: "board", id, view: "page" });
+        expect(parseHash(sectionHash(project, "board", id))).toEqual({ type: "section", project, section: "board", id });
+      }
+    }
+    expect(cardPageHash("a b", "C/3")).toBe("#/a%20b/board/C%2F3/page");
+  });
+
+  it("is no section: the nine stay pinned", () => {
+    expect(ALL_SECTIONS).toHaveLength(9);
+    expect(isSectionId("page")).toBe(false);
   });
 });

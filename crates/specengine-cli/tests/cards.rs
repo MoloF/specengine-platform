@@ -332,7 +332,7 @@ fn ac01_seven_writes_leave_git_alone_and_write_one_event_each() {
             "created C-0001: copy/draft\n",
             "card.created",
             json!({"id": "C-0001", "flow": "copy", "column": "draft", "position": 1,
-                   "assignee": null, "as": "writer"}),
+                   "assignee": null, "reviewer": null, "as": "writer"}),
         ),
         (
             vec![
@@ -360,13 +360,15 @@ fn ac01_seven_writes_leave_git_alone_and_write_one_event_each() {
             vec!["card", "move", "C-0001", "--to", "edit", "--as", "desk"],
             "moved C-0001: copy/edit\n",
             "card.moved",
-            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "desk"}),
+            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "desk",
+                   "note": null}),
         ),
         (
             vec!["card", "move", "C-0001", "--to", "proof"],
             "moved C-0001: copy/proof\n",
             "card.moved",
-            json!({"id": "C-0001", "from": "edit", "to": "proof", "position": 1, "as": "local"}),
+            json!({"id": "C-0001", "from": "edit", "to": "proof", "position": 1, "as": "local",
+                   "note": null}),
         ),
         (
             vec![
@@ -1478,7 +1480,10 @@ fn ac05_the_default_flow_and_plain_flow_pasted() {
 }
 
 /// `fixtures/card-press/expected.json`: the board and the flows of "Data",
-/// worked out by hand; `by: []` reads anyone.
+/// worked out by hand; `by: []` reads anyone. Since board-handoff each flow
+/// also serves `return` (docs/canon/cards.md "Documents and events"), `null`
+/// on card-press, whose fixture stays byte-equal, so the key is added here,
+/// never there.
 #[test]
 fn the_press_board_is_its_expected_json() {
     let pair = Pair::new("cd-board", PRESS);
@@ -1487,7 +1492,15 @@ fn the_press_board_is_its_expected_json() {
     assert_eq!(expected["board"], PRESS_BOARD);
     assert_eq!(ok(&pair, &["card", "list"]), PRESS_BOARD);
     let flows = doc(&pair, &["card", "list"])["flows"].clone();
-    assert_eq!(flows, expected["flows"]);
+    let mut want = expected["flows"].clone();
+    for flow in want.as_array_mut().expect("flows") {
+        assert!(
+            flow.get("return").is_none(),
+            "the fixture predates `return`"
+        );
+        flow["return"] = Value::Null;
+    }
+    assert_eq!(flows, want);
 }
 
 /// One `[[card.flow]]` of columns `a`, `b`, `c`, accept `b` to `c`, with
@@ -1902,7 +1915,7 @@ fn order_stays_dense_and_a_shifted_neighbour_keeps_its_revision() {
         events(&pair).last().map(|event| event.1.clone()),
         Some(
             json!({"id": "C-0003", "from": "queued", "to": "queued", "position": 1,
-                    "as": "local"})
+                    "as": "local", "note": null})
         )
     );
     dense(&pair, &[("C-0003", 1), ("C-0001", 2), ("C-0002", 3)]);

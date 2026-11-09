@@ -67,7 +67,7 @@ UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edi
 
 ## Preset
 
-`scripts/presets/gamedev.toml`: five `[[card.flow]]`, `narrative`, `development`, `art`, `level-design`, `production`, each its own discipline, the role research's columns, `accept` its last two, no `moves`; no `[[module]]` (roots are a project's IDs). A project copies it, adds modules and each `module`, retitles. No name echoes `[team]`'s `lead`.
+`scripts/presets/gamedev.toml`: five `[[card.flow]]`, `narrative`, `development`, `art`, `level-design`, `production`, each its own discipline, the role research's columns, `accept` its last two, no `moves`, and the return column `sent-back`, titled "Returned", second in `columns`, `return = "sent-back"` (`card-flows.md` "Config"); its header says to add `return` only once every terminal, plugin and hub serving the project runs a build that reads it. No `[[module]]` (roots are a project's IDs). A project copies it, adds modules and each `module`, retitles. No name echoes `[team]`'s `lead`.
 
 | Workspace | Sections | Landing | Flows |
 |---|---|---|---|
@@ -78,7 +78,7 @@ UI `src/workspace/`; `useWorkspaces` is read again on window focus (a config edi
 
 ## Guards
 
-http `tests/no_domain.rs` takes each `[[workspace]]` and `[[module]]` name of the repository's `specengine.toml` files and `scripts/presets/*.toml` as words; eval `tests/workspace_names.rs` finds none, nor a preset flow, as a literal in `crates/*/src` or `ui/src` app code; `ui/src/policy.test.ts` none of the mock's. `ui_policy.rs` pins `SECTIONS` to `sections.ts`; `anonymity.rs` reads `scripts/presets`.
+http `tests/no_domain.rs` takes each `[[workspace]]` and `[[module]]` name of the repository's `specengine.toml` files and `scripts/presets/*.toml`, and each preset flow's `return` column, as words; eval `tests/workspace_names.rs` finds none, nor a preset flow or `return` column, as a literal in `crates/*/src` or `ui/src` app code; `ui/src/policy.test.ts` none of the mock's. `ui_policy.rs` pins `SECTIONS` to `sections.ts`; `anonymity.rs` reads `scripts/presets`.
 
 ## Known limits
 

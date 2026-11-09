@@ -1330,6 +1330,9 @@ pub(crate) struct CardFlowShape {
     /// Every move, expanded.
     pub moves: Vec<CardMoveShape>,
     pub accept: CardAcceptRule,
+    /// The column a move enters only with a note saying why; `null`: none.
+    #[schemars(rename = "return")]
+    pub return_column: Option<String>,
 }
 
 #[derive(JsonSchema)]

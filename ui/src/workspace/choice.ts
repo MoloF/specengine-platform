@@ -5,7 +5,7 @@ import { isSectionId } from "../app/sections";
 
 // A viewer's choice of workspace and module (docs/features/workspaces.md "The UI", D8): per viewer
 // and per project, in `localStorage`, as `specengine.board.as` is kept
-// (`docs/canon/board-ui.md` "The acting name"). Every name is the served document's: a stored one is
+// (`ui/README.md` "Screen rules", which lists the storage keys). Every name is the served document's: a stored one is
 // looked up among the served names, never compared with a word of the UI's (W5). Every storage
 // access may throw (a private window, a sandboxed frame, a policy): then the choice holds in the
 // shell's state until a reload, as the tree's Show drift does (`src/tree/drift.ts`).

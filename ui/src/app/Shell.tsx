@@ -4,6 +4,7 @@ import { useDataSource } from "../api/provider";
 import { useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
 import type { Project } from "../api/types";
 import { BoardView, type BoardMemory, type BoardState } from "../board/BoardView";
+import { CardPage } from "../board/CardPage";
 import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
 import { GraphView } from "../graph/GraphView";
 import { HealthView } from "../health/HealthView";
@@ -40,10 +41,10 @@ import { NotFound, ViewFailure } from "./views";
 /** The chord's hint on the "Jump to" button: Cmd on an Apple keyboard, else Ctrl; the cap is the catalog's. */
 const CHORD_HINT = /Mac|iPhone|iPad/.test(navigator.userAgent) ? "app.chordApple" : "app.chordOther";
 
-/** One key per view: per section of a project, per project's home; `#/` is "home". */
+/** One key per view: per section of a project, per card's page, per project's home; `#/` is "home". */
 function viewKeyOf(route: Route): string {
   if (route.type === "section") {
-    return `${route.project}/${route.section}`;
+    return route.view === undefined ? `${route.project}/${route.section}` : `${route.project}/${route.section}/${route.id ?? ""}/${route.view}`;
   }
   return route.type === "project" ? `project:${route.project}` : route.type;
 }
@@ -209,7 +210,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
     }),
     [],
   );
-  /** The Board's tab, filters and Show cancelled per project for this page's life; never in the hash (docs/features/board-ui.md "Board"). */
+  /** The Board's tab, filters, Show cancelled and folded lanes per project for this page's life; never in the hash (`ui/README.md` "Screen rules", Shell). */
   const boardStates = useRef(new Map<string, BoardState>());
   const boardMemory = useMemo<BoardMemory>(
     () => ({
@@ -310,7 +311,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
   }, []);
 
   // A new view focuses its heading. Leaving home does so only after a Retry there whose button has
-  // gone with focus on it; on first load focus stays at the top of the page.
+  // gone with focus on it; on first load focus stays at the top of the page. A dialog the new view
+  // opened (the Board's card) keeps the focus it took.
   useEffect(() => {
     const previous = shownKey.current;
     shownKey.current = viewKey;
@@ -321,7 +323,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
     if (previous === "home") {
       homeRetried.current = false;
     }
-    if (previous !== "home" || afterRetry) {
+    if ((previous !== "home" || afterRetry) && (document.activeElement?.closest('[role="dialog"]') ?? null) === null) {
       main.current?.querySelector<HTMLElement>("h1")?.focus();
     }
   }, [viewKey]);
@@ -445,6 +447,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {
     view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
+  } else if (route.section === "board" && route.view !== undefined && route.id !== null) {
+    view = <CardPage key={`${route.project}/${route.id}`} project={route.project} id={route.id} />;
   } else if (route.section === "board") {
     view = (
       <BoardView

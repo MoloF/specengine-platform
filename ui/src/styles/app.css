@@ -628,6 +628,9 @@ textarea.field {
 .tone-card-departed { --badge-color: var(--card-departed); }
 .tone-card-correcting { --badge-color: var(--card-correcting); }
 .tone-card-open { --badge-color: var(--card-open); }
+.tone-card-returned { --badge-color: var(--card-returned); }
+.tone-card-handed-off { --badge-color: var(--card-handed-off); }
+.tone-card-taken { --badge-color: var(--card-taken); }
 .tone-trace-confirmed { --badge-color: var(--trace-confirmed); }
 .tone-trace-in-work { --badge-color: var(--trace-in-work); }
 .tone-trace-suspect { --badge-color: var(--trace-suspect); }
@@ -5684,8 +5687,11 @@ mark {
   }
 }
 
-/* The Board (docs/features/board-ui.md): tools over the columns, the panel beside them from 64rem,
-   the columns scrolling sideways, one under the other on a phone. Long words of any script wrap. */
+/* The Board (`ui/README.md` "Screen rules"): tools over one grid that holds still. Above 36rem the
+   view fills the viewport below the shell, measured into --board-top as Flow's studio is, the page
+   never scrolls, and the board region scrolls both ways under a sticky header row; a card opens as a
+   modal over it, so no column moves. Under 36rem the columns stack and the page scrolls. Long words
+   of any script wrap. */
 .board-tools {
   display: flex;
   flex-wrap: wrap;
@@ -5709,30 +5715,46 @@ mark {
   min-height: max(var(--target-min), 2.25rem);
 }
 
+/* The daemon's line on the acting name lies under its field, over what follows: the toolbar keeps its
+   height, so no column header moves when the line comes or goes. */
 .board-acting {
+  position: relative;
   margin-left: auto;
 }
 
+.board-acting .field-error {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 4;
+  width: max-content;
+  max-width: min(28rem, 90vw);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-s);
+  background: var(--surface-overlay);
+  overflow-wrap: anywhere;
+}
+
 .board-results,
-.board-main {
+.board-frame {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   min-width: 0;
 }
 
+/* Notices lie over the board's bottom edge: they never enter the grid's flow. */
 .board-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-  align-items: start;
+  position: relative;
   min-width: 0;
 }
 
-@media (min-width: 64rem) {
-  .board-stage-panel {
-    grid-template-columns: minmax(0, 1fr) minmax(20rem, 26rem);
-  }
+/* Positioned, so the visually hidden labels of cells scrolled off stay inside the scroller. */
+.board-region {
+  position: relative;
+  min-width: 0;
+  scroll-padding-top: var(--board-head-height, 3rem);
 }
 
 /* The workspace's flows (docs/features/workspaces.md "The UI"): how many show, and the button for the rest. */
@@ -5743,34 +5765,29 @@ mark {
   gap: var(--space-1) var(--space-3);
 }
 
-/* Relative, so the visually hidden labels of columns scrolled off stay inside the scroller. */
-.board-columns {
-  position: relative;
+/* One grid: the header row, then each lane's head and its cells, so a cell stands under its column. */
+.board-grid {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(14rem, 1fr);
-  gap: var(--space-3);
-  align-items: stretch;
-  min-height: 60vh;
-  overflow-x: auto;
+  grid-template-columns: repeat(var(--board-columns, 1), minmax(14rem, 1fr));
+  gap: var(--space-2) var(--space-3);
+  align-content: start;
+  min-height: 100%;
   padding-bottom: var(--space-2);
 }
 
-/* Starts its rows at the top: else they share the column's stretch, and the title grows. */
-.board-column {
-  display: grid;
-  align-content: start;
-  gap: var(--space-2);
-  min-width: 0;
-  padding: var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
-  background: var(--surface-panel);
+/* With no lanes the one row of cells stands over the region's free height, so a drop anywhere in a column lands. */
+.board-grid-single {
+  grid-template-rows: auto 1fr;
 }
 
-.board-column-outside {
-  border-style: dashed;
-  border-color: var(--border-control);
+.board-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  background: var(--surface-canvas);
 }
 
 .board-column-title {
@@ -5778,16 +5795,103 @@ mark {
   align-items: baseline;
   justify-content: space-between;
   gap: var(--space-2);
-  padding: 0 var(--space-1);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
   font-size: var(--font-size-m);
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.board-column-title-outside {
+  border-style: dashed;
+  border-color: var(--border-control);
 }
 
 .board-column-count {
   color: var(--text-secondary);
   font-size: var(--font-size-s);
   font-weight: 500;
+}
+
+/* A lane's head spans the grid; its label stays in view as the board scrolls sideways. */
+.board-lane-head {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.board-lane-label {
+  position: sticky;
+  left: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  max-width: min(100%, 60rem);
+}
+
+.board-lane-title {
+  font-size: var(--font-size-m);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.board-lane-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: max(var(--target-min), 2.25rem);
+  padding: 0 var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.board-lane-toggle:hover {
+  border-color: var(--border-control);
+}
+
+.board-lane-count {
+  font-size: var(--font-size-s);
+}
+
+/* Starts its rows at the top: else they share the cell's stretch, and the list grows. */
+.board-cell {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+  min-height: 6rem;
+  padding: var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.board-cell-outside {
+  border-style: dashed;
+  border-color: var(--border-control);
+}
+
+.board-cell-collapsed {
+  min-height: 0;
+}
+
+/* The column's title in its cell, where the columns stack and the header row is not drawn. */
+.board-cell-title {
+  display: none;
+}
+
+.board-cell-count {
+  font-size: var(--font-size-s);
 }
 
 .board-list {
@@ -5812,7 +5916,40 @@ mark {
   border-top: 2px solid var(--card-drop);
 }
 
+/* Over the board's bottom edge, wrapping whole; each can be dismissed. */
+.board-notices {
+  position: absolute;
+  right: var(--space-3);
+  bottom: var(--space-3);
+  left: var(--space-3);
+  z-index: 3;
+  display: grid;
+  gap: var(--space-2);
+  max-height: 50%;
+  overflow: auto;
+  pointer-events: none;
+}
+
+.board-notice {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-3);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-overlay);
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+}
+
+.board-notice-dismiss {
+  min-height: var(--target-min);
+  font-size: var(--font-size-s);
+}
+
+/* The title's link is stretched over the tile: a click anywhere is the link's; buttons and links stand above it. */
 .board-card {
+  position: relative;
   display: grid;
   gap: var(--space-1);
   padding: var(--space-2) var(--space-3);
@@ -5821,6 +5958,26 @@ mark {
   background: var(--surface-raised);
   overflow-wrap: anywhere;
   cursor: pointer;
+}
+
+.board-card-link::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+}
+
+.board-card a:not(.board-card-link),
+.board-card button {
+  position: relative;
+  z-index: 1;
+}
+
+.board-card-handoffs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--font-size-s);
 }
 
 .board-card:hover {
@@ -5971,28 +6128,72 @@ mark {
   gap: var(--space-1) var(--space-2);
 }
 
-.board-panel {
-  display: grid;
-  gap: var(--space-4);
-  min-width: 0;
-  padding: var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
-  background: var(--surface-panel);
+/* The card over the board: as wide as a reading column, its body scrolling inside; the whole screen on a phone. */
+.card-modal {
+  width: min(48rem, 100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
   overflow-wrap: anywhere;
 }
 
-.board-panel-head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: var(--space-1) var(--space-2);
-}
-
-.board-panel-title {
-  grid-column: 1 / -1;
+.card-modal .dialog-title {
   font-size: var(--font-size-l);
   line-height: var(--line-height-tight);
+}
+
+.card-modal-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.card-modal-bar .button {
+  margin-left: auto;
+}
+
+.card-modal-page {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+}
+
+.card-modal-body,
+.card-page-body {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.card-modal-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.card-page {
+  max-width: 60rem;
+}
+
+.card-page-head a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.board-handoff {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+}
+
+.board-handoff-title {
+  min-width: 0;
+  font-weight: 500;
 }
 
 .board-panel-state {
@@ -6084,19 +6285,108 @@ mark {
   font-weight: 500;
 }
 
+/* Above 36rem the Board fills the viewport below the shell and only its region scrolls, both ways,
+   so its header row sticks. The shell's body sizes to its content here, as on Flow. */
+@media (min-width: 36.0625rem) {
+  .app-body:has(.board-view) {
+    min-height: 0;
+  }
+
+  .board-view {
+    display: flex;
+    flex-direction: column;
+    height: calc(100dvh - var(--board-top, 8rem) - var(--space-6));
+    overflow: hidden;
+  }
+
+  .board-results {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .board-frame {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .board-frame > .tab-panel:not([hidden]) {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .board-stage {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .board-region {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+}
+
 @media (max-width: 36rem) {
   .board-acting {
     margin-left: 0;
+  }
+
+  .board-acting .field-error {
+    right: auto;
+    left: 0;
   }
 
   .board-tool:not(.board-tool-check) {
     flex: 1 1 8rem;
   }
 
-  .board-columns {
-    grid-auto-flow: row;
-    grid-auto-columns: auto;
+  /* The columns stack, each cell titled in place; the header row is not drawn. */
+  .board-grid {
+    grid-template-columns: minmax(0, 1fr);
     min-height: 0;
-    overflow-x: visible;
+  }
+
+  .board-grid-single {
+    grid-template-rows: none;
+  }
+
+  .board-head {
+    display: none;
+  }
+
+  .board-cell-title {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space-2);
+    font-weight: 600;
+  }
+
+  .board-cell {
+    min-height: 0;
+  }
+
+  .board-notices {
+    position: static;
+    max-height: none;
+  }
+
+  .dialog-host:has(.card-modal) {
+    padding: 0;
+  }
+
+  .card-modal {
+    width: 100vw;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
   }
 }

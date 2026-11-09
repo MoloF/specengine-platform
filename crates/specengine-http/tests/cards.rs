@@ -28,6 +28,11 @@
 //!   and stands in `by`, compared exactly after trimming; off the grammar,
 //!   from the page, a 400 with the CLI's line; `agent` and `local` stay
 //!   refused as reviewers.
+//! - docs/features/board-handoff.md (RM-0085) BH-12, BH-14 on
+//!   `fixtures/studio-lamp`: `POST .../cards {reviewer}` stores the hand-off's
+//!   reviewer (`agent` a 409, off the grammar a 400); `POST .../move {note}`
+//!   into `sent-back` is a 409 without the note, a 200 with it, `card.moved`
+//!   holding it; each byte for byte the CLI's.
 //!
 //! The byte-for-byte reads (AC-01) are `parity.rs`; methods, query, fence and
 //! keys their own files. Every expected value below is worked out from
@@ -308,7 +313,7 @@ fn ac02_each_post_is_a_200_its_document_and_one_event() {
             write("C-0001", "copy", "draft", 1, 1, draft),
             "card.created",
             json!({"id": "C-0001", "flow": "copy", "column": "draft", "position": 1,
-                "assignee": null, "as": "desk"}),
+                "assignee": null, "reviewer": null, "as": "desk"}),
         ),
         (
             "cards/C-0001/assign",
@@ -336,14 +341,16 @@ fn ac02_each_post_is_a_200_its_document_and_one_event() {
                 "\"allowed\":[{\"to\":\"proof\",\"by\":[]}],\"notes\":[]}",
             ),
             "card.moved",
-            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "desk"}),
+            json!({"id": "C-0001", "from": "draft", "to": "edit", "position": 1, "as": "desk",
+                "note": null}),
         ),
         (
             "cards/C-0001/move",
             json!({"to": "proof", "revision": "4", "as": "ana"}),
             write("C-0001", "copy", "proof", 1, 5, none),
             "card.moved",
-            json!({"id": "C-0001", "from": "edit", "to": "proof", "position": 1, "as": "ana"}),
+            json!({"id": "C-0001", "from": "edit", "to": "proof", "position": 1, "as": "ana",
+                "note": null}),
         ),
         (
             "cards/C-0001/accept",
@@ -367,7 +374,7 @@ fn ac02_each_post_is_a_200_its_document_and_one_event() {
             ),
             "card.created",
             json!({"id": "C-0002", "flow": "plates", "column": "queued", "position": 1,
-                "assignee": null, "as": "local"}),
+                "assignee": null, "reviewer": null, "as": "local"}),
         ),
         (
             "cards/C-0002/cancel",
@@ -2364,4 +2371,359 @@ fn a_card_belongs_to_the_project_it_was_posted_to() {
     assert_eq!(title(other), json!("Refill"));
     let reply = server.get(&format!("{other}/cards/C-0002"));
     assert_eq!(reply.status, 404, "{}", reply.text());
+}
+
+// ------------------------------------------------ board-handoff (RM-0085)
+
+/// The game's project (`fixtures/studio-lamp`): the gamedev preset's flows,
+/// each with `return = "sent-back"`.
+const LAMP: &str = "/api/projects/studio-lamp";
+
+/// The refusal of a move into the return column with no note
+/// (docs/canon/card-flows.md "Return").
+fn needs_note(id: &str) -> String {
+    format!(
+        "{id} enters `sent-back`, its flow's return column: say why with `--note`; nothing \
+         changed"
+    )
+}
+
+impl Press {
+    /// A daemon over a repository of `fixtures/studio-lamp`.
+    fn lamp(name: &str) -> Self {
+        Self::of(name, "studio-lamp")
+    }
+
+    /// A same-origin page's `POST <LAMP>/path`.
+    fn lamp_post(&self, path: &str, body: &Value) -> Reply {
+        self.server
+            .stage(&format!("{LAMP}/{path}"), &body.to_string())
+    }
+
+    /// As [`Press::lamp_post`], the answer a 200.
+    fn lamp_done(&self, path: &str, body: &Value) -> Value {
+        let reply = self.lamp_post(path, body);
+        assert_eq!(reply.status, 200, "{path} {body}: {}", reply.text());
+        reply.json()
+    }
+
+    /// The events and the game's board, every row.
+    fn lamp_state(&self) -> (Vec<(String, Value)>, String) {
+        let board = self
+            .server
+            .get(&format!("{LAMP}/cards?with_cancelled=true"))
+            .status(200)
+            .json();
+        (self.events(), board.to_string())
+    }
+
+    /// `path` with `body` refused with `reason`: a 409, the write document
+    /// with the reason last of `notes`, nothing changed, and byte for byte
+    /// the CLI's exit-1 document of `args`.
+    fn lamp_refused(&self, path: &str, body: &Value, args: &[&str], reason: &str) {
+        let before = self.lamp_state();
+        let reply = self.lamp_post(path, body);
+        let context = format!("{path} {body}");
+        assert_eq!(reply.status, 409, "{context}: {}", reply.text());
+        let document = reply.json();
+        let mut keys: Vec<&String> = document.as_object().expect("an object").keys().collect();
+        keys.sort();
+        assert_eq!(keys, WRITE_KEYS, "{context}: {document}");
+        assert_eq!(
+            document["notes"].as_array().and_then(|notes| notes.last()),
+            Some(&json!(reason)),
+            "{context}: {document}"
+        );
+        assert_eq!(self.lamp_state(), before, "{context}: nothing changed");
+        let run = self.cli(args);
+        run.code(1);
+        assert_eq!(
+            reply.text(),
+            run.document(),
+            "{context}: the CLI's document"
+        );
+        assert_eq!(self.lamp_state(), before, "{context}: nothing changed");
+    }
+}
+
+/// docs/features/board-handoff.md BH-12, the daemon's half: `POST .../cards
+/// {…, reviewer, as}` is `spec card new --reviewer`: the hand-off stores its
+/// reviewer and `card.created` carries it (`null` without); `agent` and
+/// `local` are a 409 with the write document, as at `assign`; a reviewer off
+/// the person grammar a 400 with the CLI's line; nothing stored on either.
+/// The child at `verify` is accepted by its reviewer, refused to its
+/// assignee. M14.
+#[test]
+fn board_handoff_bh12_a_body_names_the_reviewer() {
+    let press = Press::lamp("cards-handoff-reviewer");
+    let git = press.git_side();
+    press.lamp_done(
+        "cards",
+        &json!({"title": "Lamp room scene", "discipline": "narrative", "as": "Ann"}),
+    );
+    assert_eq!(
+        press.events().last().map(|event| event.1.clone()),
+        Some(
+            json!({"id": "C-0001", "flow": "narrative", "column": "backlog", "position": 1,
+                    "assignee": null, "reviewer": null, "as": "Ann"})
+        )
+    );
+    let made = press.lamp_post(
+        "cards",
+        &json!({"title": "Lamp room dialogue", "goal": "Two endings.", "discipline":
+                "development", "target": ["SCN-ARRIVAL"], "parent": "C-0001", "reviewer":
+                "Ann", "assignee": "Rob", "as": "Ann"}),
+    );
+    assert_eq!(made.status, 200, "{}", made.text());
+    assert_eq!(made.json()["column"], json!("backlog"));
+    assert_eq!(made.json()["flow"], json!("development"));
+    assert_eq!(
+        press.events().last().cloned(),
+        Some((
+            "card.created".to_owned(),
+            json!({"id": "C-0002", "flow": "development", "column": "backlog",
+                   "position": 1, "assignee": "Rob", "reviewer": "Ann", "as": "Ann"})
+        ))
+    );
+    let card = press
+        .server
+        .get(&format!("{LAMP}/cards/C-0002"))
+        .status(200)
+        .json();
+    assert_eq!(card["reviewer"], json!("Ann"), "{card}");
+    assert_eq!(card["parent"], json!("C-0001"), "{card}");
+    assert_eq!(card["targets"], json!(["SCN-ARRIVAL"]), "{card}");
+    assert_eq!(press.git_side(), git, "git untouched");
+
+    for name in ["agent", "local", " agent "] {
+        let trimmed = name.trim();
+        press.lamp_refused(
+            "cards",
+            &json!({"title": "No one's", "discipline": "development", "reviewer": name}),
+            &[
+                "card",
+                "new",
+                "--title",
+                "No one's",
+                "--discipline",
+                "development",
+                "--reviewer",
+                name,
+            ],
+            &format!("reviewer: `{trimmed}` can be no reviewer: a person accepts a result"),
+        );
+    }
+    let before = press.lamp_state();
+    for name in off_the_grammar() {
+        let reply = press.lamp_post(
+            "cards",
+            &json!({"title": "Late", "discipline": "development", "reviewer": name}),
+        );
+        assert_eq!(reply.status, 400, "{name:?}: {}", reply.text());
+        let run = press.cli(&[
+            "card",
+            "new",
+            "--title",
+            "Late",
+            "--discipline",
+            "development",
+            "--reviewer",
+            &name,
+        ]);
+        run.code(1);
+        assert_eq!(
+            reply.error_message(),
+            run.stderr.trim_end_matches('\n'),
+            "{name:?}: the CLI's line"
+        );
+    }
+    assert_eq!(press.lamp_state(), before, "nothing stored");
+
+    // The child's result: its reviewer accepts it, its assignee never.
+    press.lamp_done("cards/C-0002/move", &json!({"to": "verify", "as": "Rob"}));
+    let accept = "cards/C-0002/accept";
+    let before = press.lamp_state();
+    let refused = press.lamp_post(accept, &json!({"briefed": true, "as": "Rob"}));
+    assert_eq!(refused.status, 409, "{}", refused.text());
+    assert_eq!(
+        refused.json()["notes"]
+            .as_array()
+            .and_then(|notes| notes.last()),
+        Some(&json!(
+            "C-0002: `Rob` is its assignee, who never accepts a result; nothing changed"
+        ))
+    );
+    assert_eq!(press.lamp_state(), before);
+    let accepted = press.lamp_done(accept, &json!({"briefed": true, "as": "Ann"}));
+    assert_eq!(accepted["column"], json!("done"), "{accepted}");
+    assert_eq!(press.git_side(), git, "git untouched");
+}
+
+/// docs/features/board-handoff.md BH-14, the daemon's half: `POST
+/// .../cards/:id/move {to, before, note, revision, as}` is `spec card move
+/// --note`: into `sent-back` from another column without a note a 409 with
+/// the write document, its reason last of `notes`, byte for byte the CLI's,
+/// no event; with the note a 200 and `card.moved` holds it; a blank or
+/// over-long note a 409 in `cancel --reason`'s words; a reorder inside the
+/// column and a move out of it need none. M16, M17.
+#[test]
+fn board_handoff_bh14_a_move_body_takes_the_note() {
+    let press = Press::lamp("cards-handoff-note");
+    let git = press.git_side();
+    press.lamp_done(
+        "cards",
+        &json!({"title": "Lamp room dialogue", "discipline": "development"}),
+    );
+    press.lamp_done(
+        "cards",
+        &json!({"title": "Lamp light shader", "discipline": "development"}),
+    );
+    let moved = press.lamp_done(
+        "cards/C-0001/move",
+        &json!({"to": "in-progress", "revision": "1", "as": "Rob"}),
+    );
+    assert_eq!(
+        moved["column"],
+        json!("in-progress"),
+        "taking needs no note"
+    );
+    assert_eq!(
+        press.events().last().map(|event| event.1.clone()),
+        Some(
+            json!({"id": "C-0001", "from": "backlog", "to": "in-progress", "position": 1,
+                    "as": "Rob", "note": null})
+        )
+    );
+    press.lamp_refused(
+        "cards/C-0001/move",
+        &json!({"to": "sent-back", "as": "Rob"}),
+        &["card", "move", "C-0001", "--to", "sent-back", "--as", "Rob"],
+        &needs_note("C-0001"),
+    );
+    press.lamp_refused(
+        "cards/C-0001/move",
+        &json!({"to": "sent-back", "note": null, "revision": "2"}),
+        &[
+            "card",
+            "move",
+            "C-0001",
+            "--to",
+            "sent-back",
+            "--revision",
+            "2",
+        ],
+        &needs_note("C-0001"),
+    );
+    let over = "n".repeat(4097);
+    for (note, reason) in [
+        ("  ", "note: blank; say why it moves"),
+        (over.as_str(), "note: 4097 bytes; at most 4096"),
+    ] {
+        press.lamp_refused(
+            "cards/C-0001/move",
+            &json!({"to": "sent-back", "note": note}),
+            &[
+                "card",
+                "move",
+                "C-0001",
+                "--to",
+                "sent-back",
+                "--note",
+                note,
+            ],
+            reason,
+        );
+    }
+    let seen = press.events().len();
+    let back = press.lamp_done(
+        "cards/C-0001/move",
+        &json!({"to": "sent-back", "note": "Two endings contradict SCN-LAMP-ROOM",
+                "revision": "2", "as": "Rob"}),
+    );
+    assert_eq!(back["column"], json!("sent-back"), "{back}");
+    assert_eq!(back["revision"], json!("3"), "{back}");
+    let events = press.events();
+    assert_eq!(events.len(), seen + 1, "one event");
+    assert_eq!(
+        events.last(),
+        Some(&(
+            "card.moved".to_owned(),
+            json!({"id": "C-0001", "from": "in-progress", "to": "sent-back", "position": 1,
+                   "as": "Rob", "note": "Two endings contradict SCN-LAMP-ROOM"})
+        ))
+    );
+    let shown = press
+        .server
+        .get(&format!("{LAMP}/cards/C-0001"))
+        .status(200)
+        .json();
+    let last = shown["history"]
+        .as_array()
+        .and_then(|history| history.last())
+        .expect("the panel's history")
+        .clone();
+    assert_eq!(
+        last["payload"]["note"],
+        json!("Two endings contradict SCN-LAMP-ROOM"),
+        "{last}"
+    );
+    // A second card sent back, then a reorder inside the column: no note.
+    press.lamp_done(
+        "cards/C-0002/move",
+        &json!({"to": "sent-back", "note": "Too dark"}),
+    );
+    press.lamp_done("cards/C-0002/move", &json!({"before": "C-0001"}));
+    assert_eq!(
+        press.events().last().map(|event| event.1.clone()),
+        Some(
+            json!({"id": "C-0002", "from": "sent-back", "to": "sent-back", "position": 1,
+                    "as": "local", "note": null})
+        )
+    );
+    // Out of it: none asked; a note on any move kept.
+    press.lamp_done("cards/C-0001/move", &json!({"to": "ready"}));
+    assert_eq!(
+        press.events().last().map(|event| event.1["note"].clone()),
+        Some(Value::Null)
+    );
+    press.lamp_done(
+        "cards/C-0002/move",
+        &json!({"to": "in-review", "note": "Lighter now"}),
+    );
+    assert_eq!(
+        press.events().last().map(|event| event.1["note"].clone()),
+        Some(json!("Lighter now"))
+    );
+    assert_eq!(press.git_side(), git, "git untouched");
+}
+
+/// docs/canon/board-ui.md "The door": an older body's keys still
+/// decode, and a key neither body takes is a 400 before any call: `note` is
+/// no key of `POST .../cards`, `reviewer` none of a move.
+#[test]
+fn board_handoff_each_body_takes_its_own_new_key_alone() {
+    let press = Press::lamp("cards-handoff-keys");
+    press.lamp_done(
+        "cards",
+        &json!({"title": "Lamp room dialogue", "discipline": "development"}),
+    );
+    let before = press.lamp_state();
+    for (path, body) in [
+        (
+            "cards",
+            json!({"title": "T", "discipline": "development", "note": "Why."}),
+        ),
+        (
+            "cards/C-0001/move",
+            json!({"to": "ready", "reviewer": "Ann"}),
+        ),
+        (
+            "cards/C-0001/move",
+            json!({"to": "sent-back", "reason": "Why."}),
+        ),
+    ] {
+        let reply = press.lamp_post(path, &body);
+        assert_eq!(reply.status, 400, "{path} {body}: {}", reply.text());
+        assert_eq!(press.lamp_state(), before, "{path} {body}: nothing changed");
+    }
 }

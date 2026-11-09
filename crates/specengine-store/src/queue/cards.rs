@@ -61,9 +61,11 @@ use crate::error::{Db, StoreError};
 use crate::floor::read_floor;
 use crate::schema;
 
-/// `card.created`, with `flow`, `column`, `position`, `assignee`, `as`.
+/// `card.created`, with `flow`, `column`, `position`, `assignee`,
+/// `reviewer`, `as`.
 pub const EVENT_CARD_CREATED: &str = "card.created";
-/// `card.moved`, with `from`, `to`, `position`, `as`.
+/// `card.moved`, with `from`, `to`, `position`, `as`, `note` (`null` when
+/// none): a move's own event is the one home of its note.
 pub const EVENT_CARD_MOVED: &str = "card.moved";
 /// `card.edited`, with `fields`, `as`.
 pub const EVENT_CARD_EDITED: &str = "card.edited";
@@ -110,6 +112,8 @@ pub struct NewCard {
     pub targets: Vec<String>,
     pub criteria: Vec<String>,
     pub assignee: Option<String>,
+    /// Who accepts its result, named at creation: a hand-off's asking side.
+    pub reviewer: Option<String>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -167,11 +171,13 @@ impl CardEdit {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CardChange<'f> {
     /// To the column `to` (`None`: its own), last, or before the card
-    /// `before`.
+    /// `before`; `note`, why it moves, kept on its `card.moved`, required
+    /// into the flow's `return` column.
     Move {
         flow: Option<&'f CardFlow>,
         to: Option<String>,
         before: Option<String>,
+        note: Option<String>,
     },
     Edit(Box<CardEdit>),
     /// `None` leaves a name, `Some(None)` clears it.
@@ -418,9 +424,12 @@ impl SqliteQueue {
         now: &str,
     ) -> Result<Card, QueueError> {
         let (card, ()) = self.written(id, seen, actor, now, |row| match change {
-            CardChange::Move { flow, to, before } => {
-                row.moved(*flow, to.as_deref(), before.as_deref())
-            }
+            CardChange::Move {
+                flow,
+                to,
+                before,
+                note,
+            } => row.moved(*flow, to.as_deref(), before.as_deref(), note.as_deref()),
             CardChange::Edit(edit) => row.edited(edit),
             CardChange::Assign { assignee, reviewer } => {
                 row.assigned(assignee.as_ref(), reviewer.as_ref())
@@ -880,6 +889,9 @@ fn insert_card(
     now: &str,
 ) -> Result<Card, QueueError> {
     let id = next_card_id(tx)?;
+    if let Some(problem) = card.reviewer.as_deref().and_then(reviewer_problem) {
+        return Err(refused(&id, format!("reviewer: {problem}")));
+    }
     check_links(
         tx,
         project,
@@ -891,7 +903,7 @@ fn insert_card(
     tx.execute(
         &format!(
             "INSERT INTO main.cards ({CARD_SELECT}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, \
-             ?9, ?10, ?11, ?12, NULL, ?13, ?14, ?15, ?16, '[]', NULL, NULL, ?17, ?18, ?18, \
+             ?9, ?10, ?11, ?12, ?19, ?13, ?14, ?15, ?16, '[]', NULL, NULL, ?17, ?18, ?18, \
              '1')"
         ),
         rusqlite::params![
@@ -913,6 +925,7 @@ fn insert_card(
             card.corrects,
             card.by,
             now,
+            card.reviewer,
         ],
     )
     .db()?;
@@ -926,6 +939,7 @@ fn insert_card(
             "column": card.column,
             "position": position,
             "assignee": card.assignee,
+            "reviewer": card.reviewer,
             "as": card.by,
         }),
         now,
@@ -1048,14 +1062,17 @@ impl Change<'_> {
         flow: Option<&CardFlow>,
         to: Option<&str>,
         before: Option<&str>,
+        note: Option<&str>,
     ) -> Result<(), QueueError> {
         let card = self.current;
         let id = self.id();
         let to = to.unwrap_or(&card.column);
         match flow {
-            Some(flow) => card_move(flow, &card.column, to, self.actor).map_err(|refusal| {
-                refused(id, refusal.message(id, &card.column, to, self.actor))
-            })?,
+            Some(flow) => {
+                card_move(flow, &card.column, to, self.actor, note).map_err(|refusal| {
+                    refused(id, refusal.message(id, &card.column, to, self.actor))
+                })?
+            }
             None if to != card.column => {
                 return Err(refused(
                     id,
@@ -1098,6 +1115,7 @@ impl Change<'_> {
                 "to": to,
                 "position": position,
                 "as": self.actor,
+                "note": note,
             }),
             self.now,
         )

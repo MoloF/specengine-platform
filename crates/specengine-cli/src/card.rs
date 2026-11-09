@@ -4,13 +4,17 @@
 //! each discipline its columns, its moves and who makes them; no code here
 //! reads a column's name.
 //!
-//! - `new --title T …` → `created C-0001: plain/backlog`; `list` → a line per
-//!   flow, then per card; `show C [--history] [--marks]` → `key: value`
-//!   lines.
-//! - `move C [--to K] [--before C]`, `edit C …`, `assign C …`, `cancel C
-//!   --reason T` → `<verb> C-0001: <flow>/<column>`; JSON `{id, flow, column,
-//!   position, revision, allowed, notes}`, a refusal too; no such card `{id,
-//!   reason}`. In `edit`, `assign` a value `-` clears.
+//! - `new --title T … [--reviewer N]` → `created C-0001: plain/backlog`;
+//!   `list [--parent C]` → a line per flow, then per card; `show C
+//!   [--history] [--marks]` → `key: value` lines.
+//! - `move C [--to K] [--before C] [--note T]`, `edit C …`, `assign C …`,
+//!   `cancel C --reason T` → `<verb> C-0001: <flow>/<column>`; JSON `{id,
+//!   flow, column, position, revision, allowed, notes}`, a refusal too; no
+//!   such card `{id, reason}`. In `edit`, `assign` a value `-` clears.
+//! - A hand-off is a child card (`--parent`) in another trade's flow, its
+//!   reviewer the asking side; a move into a flow's `return` column from
+//!   another one says why (`--note`), and no write touches another card
+//!   (canon `card-flows`, "The rule").
 //! - `accept C --as N (--briefed | --departs REF... --summary T --observed T
 //!   --documented T [--gap-type G])`, with a `Consent`: a person accepts, on
 //!   a terminal (`main` refuses a stdin that is no terminal before anything
@@ -110,6 +114,9 @@ pub struct CardNewRequest {
     pub targets: Vec<String>,
     pub criteria: Vec<String>,
     pub assignee: Option<String>,
+    /// `--reviewer N`: who accepts its result, as `assign` names one; a
+    /// hand-off's asking side (canon `card-flows`, "The rule").
+    pub reviewer: Option<String>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -132,6 +139,9 @@ pub struct CardListRequest {
     pub with_cancelled: bool,
     /// `--marks`: each card's mark over all its targets.
     pub marks: bool,
+    /// `--parent C`: only the cards whose `parent` is exactly `C`, a card
+    /// ID (a look-alike, or no ID at all, exits 2).
+    pub parent: Option<String>,
 }
 
 /// `spec card show C [--history] [--marks]`.
@@ -144,7 +154,7 @@ pub struct CardShowRequest {
     pub marks: bool,
 }
 
-/// `spec card move C [--to K] [--before C]`.
+/// `spec card move C [--to K] [--before C] [--note T]`.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct CardMoveRequest {
     pub id: String,
@@ -152,6 +162,9 @@ pub struct CardMoveRequest {
     pub to: Option<String>,
     /// The card whose place it takes; `None`: last.
     pub before: Option<String>,
+    /// `--note T`: why it moves, kept on its `card.moved`; required into
+    /// the flow's `return` column from another column.
+    pub note: Option<String>,
     /// `--revision R`: a compare-and-set on what the caller read.
     pub revision: Option<String>,
     /// `--as N`; `None`: `local`.
@@ -308,6 +321,8 @@ pub struct CardNewBody {
     pub target: Option<Vec<String>>,
     pub criterion: Option<Vec<String>>,
     pub assignee: Option<String>,
+    /// Who accepts its result.
+    pub reviewer: Option<String>,
     pub estimate: Option<String>,
     pub due: Option<String>,
     pub parent: Option<String>,
@@ -324,11 +339,14 @@ impl CardNewBody {
         let body: Self = decoded(
             bytes,
             "\"title\",\"goal\",\"discipline\",\"target\",\"criterion\",\"assignee\",\
-             \"estimate\",\"due\",\"parent\",\"corrects\",\"as\"",
+             \"reviewer\",\"estimate\",\"due\",\"parent\",\"corrects\",\"as\"",
         )?;
         persons_named(
             body.actor.as_deref(),
-            &[("assignee", body.assignee.as_deref())],
+            &[
+                ("assignee", body.assignee.as_deref()),
+                ("reviewer", body.reviewer.as_deref()),
+            ],
         )?;
         Ok(body)
     }
@@ -342,6 +360,7 @@ impl CardNewBody {
             targets: self.target.unwrap_or_default(),
             criteria: self.criterion.unwrap_or_default(),
             assignee: self.assignee,
+            reviewer: self.reviewer,
             estimate: self.estimate,
             due: self.due,
             parent: self.parent,
@@ -359,6 +378,8 @@ impl CardNewBody {
 pub struct CardMoveBody {
     pub to: Option<String>,
     pub before: Option<String>,
+    /// Why it moves; required into the flow's `return` column.
+    pub note: Option<String>,
     pub revision: Option<String>,
     /// The acting name; `null`: `local`.
     #[serde(rename = "as")]
@@ -369,7 +390,7 @@ impl CardMoveBody {
     /// `bytes` decoded; else exit 2 naming the defect, nothing read or
     /// changed.
     pub fn from_json(bytes: &[u8]) -> Result<Self, CliError> {
-        let body: Self = decoded(bytes, "\"to\",\"before\",\"revision\",\"as\"")?;
+        let body: Self = decoded(bytes, "\"to\",\"before\",\"note\",\"revision\",\"as\"")?;
         persons_named(body.actor.as_deref(), &[])?;
         Ok(body)
     }
@@ -380,6 +401,7 @@ impl CardMoveBody {
             id,
             to: self.to,
             before: self.before,
+            note: self.note,
             revision: self.revision,
             actor: self.actor,
             now,
@@ -1179,7 +1201,9 @@ fn no_card(id: &str) -> String {
     format!("no card {id}")
 }
 
-/// Exit 1 for what is no card ID.
+/// The line for what is no card ID: exit 1 where a command names its card
+/// or a linked one (`--parent`, `--corrects`, `--before`), exit 2 for `list
+/// --parent`.
 fn not_a_card(written: &str) -> String {
     format!(
         "no card `{}`: a card ID is `C-` and 4 or more digits, as `spec card list` lists it",
@@ -1387,6 +1411,7 @@ fn run_new(
         (Err(reason), _) | (_, Err(reason)) => return refuse(reason, Vec::new()),
     };
     let assignee = request.assignee.as_deref().map(card_person);
+    let reviewer = request.reviewer.as_deref().map(card_person);
     let problem = field_problem(
         Some(&request.title),
         request.goal.as_deref(),
@@ -1407,6 +1432,16 @@ fn run_new(
             (name == CLEAR)
                 .then(|| format!("assignee: `{CLEAR}` clears a name: a new card has none"))
                 .or_else(|| person_problem("assignee", name))
+        })
+    })
+    .or_else(|| {
+        // `assign`'s rule: a person, then core's, so `agent` and `local`
+        // are no reviewer.
+        reviewer.and_then(|name| {
+            (name == CLEAR)
+                .then(|| format!("reviewer: `{CLEAR}` clears a name: a new card has none"))
+                .or_else(|| person_problem("reviewer", name))
+                .or_else(|| reviewer_problem(name).map(|text| format!("reviewer: {text}")))
         })
     });
     if let Some(problem) = problem {
@@ -1432,6 +1467,7 @@ fn run_new(
         targets,
         criteria: request.criteria.clone(),
         assignee: assignee.map(str::to_owned),
+        reviewer: reviewer.map(str::to_owned),
         estimate: request.estimate.clone(),
         due: request.due.clone(),
         parent,
@@ -1632,6 +1668,13 @@ fn run_list(
     globals: &Globals,
     request: &CardListRequest,
 ) -> Result<CardListOutcome, CliError> {
+    let parent = match request.parent.as_deref() {
+        Some(written) => Some(
+            written_card(written)?
+                .ok_or_else(|| CliError::spec(format!("--parent: {}", not_a_card(written))))?,
+        ),
+        None => None,
+    };
     let context = open_cards(env, globals)?;
     let listed = context.queue.list_cards().map_err(queue_cannot)?;
     let mut notes: Vec<String> = listed
@@ -1661,6 +1704,7 @@ fn run_list(
                 && exact(&request.column, Some(&card.column))
                 && exact(&request.discipline, card.discipline.as_deref())
                 && exact(&request.assignee, card.assignee.as_deref())
+                && exact(&parent, card.parent.as_deref())
                 && (!request.no_target || card.targets.is_empty())
                 && (request.with_cancelled || card.cancellation.is_none())
         })
@@ -1813,8 +1857,10 @@ fn card_line(card: &Card, mark: Option<&CardMark>) -> String {
 
 // ------------------------------------------------------------- writes
 
-/// `spec card move C [--to K] [--before C]`: the flow's rule, a reorder
-/// within a column none; last, or at `--before`'s place.
+/// `spec card move C [--to K] [--before C] [--note T]`: the flow's rule, a
+/// reorder within a column none; last, or at `--before`'s place. A note
+/// rides on `card.moved`; into the flow's `return` column from another one
+/// it is required.
 pub fn card_move(
     env: &Env,
     globals: &Globals,
@@ -1861,7 +1907,12 @@ fn run_move(
         Ok(before) => before,
         Err(reason) => return refuse(&reason, &context),
     };
-    if let Some(reason) = move_refusal(&context, &card, seen, request.to.as_deref(), &actor) {
+    let asked = MoveAsked {
+        to: request.to.as_deref(),
+        note: request.note.as_deref(),
+        actor: &actor,
+    };
+    if let Some(reason) = move_refusal(&context, &card, seen, &asked) {
         return refuse(&reason, &context);
     }
     let config = context.config.clone();
@@ -1869,31 +1920,51 @@ fn run_move(
         flow: config.flow(&card.flow),
         to: request.to.clone(),
         before,
+        note: request.note.clone(),
     };
     changed(&mut context, ACTION, &card, seen, &change, &actor, now)
 }
 
+/// What a move asks: the column, why, and who.
+struct MoveAsked<'a> {
+    to: Option<&'a str>,
+    note: Option<&'a str>,
+    actor: &'a str,
+}
+
+/// Why `note` is no note a move records: `cancel --reason`'s grammar,
+/// blank or over [`NOTE_MAX`].
+fn note_problem(note: &str) -> Option<String> {
+    note.trim()
+        .is_empty()
+        .then(|| "note: blank; say why it moves".to_owned())
+        .or_else(|| over_bytes("note", note, NOTE_MAX))
+}
+
 /// What the flow says of this move before the store says it again under
 /// its lock, in the store's order: a closed card, a stale revision, core's
-/// decision.
+/// decision, a `return` column's note among it. The note's grammar, asked
+/// here alone, comes after the closed card, as `cancel`'s reason does.
 fn move_refusal(
     context: &CardContext,
     card: &Card,
     seen: Option<u64>,
-    to: Option<&str>,
-    actor: &str,
+    asked: &MoveAsked<'_>,
 ) -> Option<String> {
     if let Some(reason) = closed_refusal(card) {
         return Some(reason);
+    }
+    if let Some(problem) = asked.note.and_then(note_problem) {
+        return Some(problem);
     }
     if seen.is_some_and(|seen| seen != card.revision) {
         return Some(stale_refusal(card));
     }
     let flow = context.config.flow(&card.flow)?;
-    let to = to.unwrap_or(&card.column);
-    decide_move(flow, &card.column, to, actor)
+    let to = asked.to.unwrap_or(&card.column);
+    decide_move(flow, &card.column, to, asked.actor, asked.note)
         .err()
-        .map(|refusal| refusal.message(&card.id, &card.column, to, actor))
+        .map(|refusal| refusal.message(&card.id, &card.column, to, asked.actor))
 }
 
 /// `spec card edit C …`.
@@ -2561,6 +2632,7 @@ fn correction_card(
         targets: card.targets.clone(),
         criteria: Vec::new(),
         assignee: None,
+        reviewer: None,
         estimate: request.estimate.clone(),
         due: None,
         parent: None,

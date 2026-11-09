@@ -16,9 +16,10 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/canon/agent-intake.md](canon/agent-intake.md) Agent intake: queue tools, questions, discrepancies, decisions · crates/specengine-mcp, crates/specengine-cli, crates/specengine-store, crates/specengine-core · tier 2
 - [docs/canon/architecture-code.md](canon/architecture-code.md) SpecEngine architecture rules: the code layer · architecture, crates/specengine-code, crates/specengine-cli · tier 2
 - [docs/canon/architecture.md](canon/architecture.md) SpecEngine architecture rules · architecture · tier 2
-- [docs/canon/board-ui.md](canon/board-ui.md) Board: card routes and screen · crates/specengine-http, crates/specengine-cli, ui · tier 2
+- [docs/canon/board-screen.md](canon/board-screen.md) Board screen: a still grid, the card modal and page, lanes, hand-off and return · ui · tier 2
+- [docs/canon/board-ui.md](canon/board-ui.md) Board: card routes, door and fence · crates/specengine-http, crates/specengine-cli, ui · tier 2
 - [docs/canon/card-flows.md](canon/card-flows.md) Card flows: config, hand-off and return · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · tier 2
-- [docs/canon/cards.md](canon/cards.md) Cards: commands, flows, store · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · tier 2
+- [docs/canon/cards.md](canon/cards.md) Cards: commands, record, store · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp · tier 2
 - [docs/canon/code-bindings.md](canon/code-bindings.md) Code bindings: [code], markers bound to code, spec refs · crates/specengine-code, crates/specengine-cli, crates/specengine-core · tier 2
 - [docs/canon/code-constants.md](canon/code-constants.md) Code constants: string constants carrying record codes · crates/specengine-eval, crates/specengine-code · tier 2
 - [docs/canon/code-hash-eval.md](canon/code-hash-eval.md) Code hash eval: level, fingerprint and RON value figures · crates/specengine-eval · tier 2

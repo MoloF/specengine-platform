@@ -123,6 +123,8 @@ export type RoadmapOptions = { release: string; pool?: never } | { pool: true; r
 export interface CardsOptions {
   with_cancelled?: boolean;
   marks?: boolean;
+  /** `--parent C`: the cards whose `parent` is exactly C. The Board never sends it: it finds a card's children in the one list it reads. */
+  parent?: string;
 }
 
 /**

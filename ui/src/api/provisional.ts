@@ -1837,13 +1837,18 @@ export interface CardAcceptRule {
   to: string;
 }
 
-/** One board: a project's flow, every word of it project vocabulary (ADR-0056). Source: `docs/canon/cards.md` "Documents and events". */
+/**
+ * One board: a project's flow, every word of it project vocabulary (ADR-0056). `return` the one
+ * column whose entry needs a note, null when the flow names none (ADR-0074). Source:
+ * `docs/canon/cards.md` "Documents and events", `docs/canon/card-flows.md` "The rule".
+ */
 export interface CardFlow {
   name: string;
   disciplines: string[];
   columns: CardColumn[];
   moves: CardMove[];
   accept: CardAcceptRule;
+  return: string | null;
 }
 
 /** A row of `spec card list --json`, by flow, column, position; `revision` decimal text; `mark` core's over all its targets, told apart in `src/board/labels.ts` alone, with what it names: null without `--marks`, and on a cancelled card. Source: `docs/canon/cards.md` "Documents and events", `docs/features/trace-views.md` "The board tile". */
@@ -1997,13 +2002,20 @@ export interface CardCreateBody {
   due?: string;
   parent?: string;
   corrects?: string;
+  /** Who accepts the result, named at creation: a hand-off's asking side (`docs/canon/card-flows.md` "The rule"). */
+  reviewer?: string;
   as: string | null;
 }
 
-/** POST `.../cards/:id/move`: `move_card`'s keys and the acting name; `to` left out: its own column, with `before`. Source: `docs/features/board-ui.md` "Routes". */
+/**
+ * POST `.../cards/:id/move`: `move_card`'s keys and the acting name; `to` left out: its own column,
+ * with `before`; `note` why it moves, required into a flow's `return` column from another one.
+ * Source: `docs/features/board-ui.md` "Routes", `docs/canon/card-flows.md` "The rule".
+ */
 export interface CardMoveBody {
   to?: string;
   before?: string;
+  note?: string;
   revision: string;
   as: string | null;
 }

@@ -35,6 +35,11 @@
 //! name is a project's data, shown or sent, never compared (W5). A planted
 //! `"writing"` in a probe source is red. M12: a handler branching on
 //! `"writing"`.
+//!
+//! docs/features/board-handoff.md (RM-0085) BH-13: the words gain each preset
+//! flow's `return` column (`sent-back`), read from `scripts/presets/*.toml`
+//! when the test runs: the daemon looks a return column up, never names one.
+//! A planted `"sent-back"` in a probe source is red.
 
 mod common;
 
@@ -337,6 +342,41 @@ fn workspace_names() -> (BTreeSet<String>, Vec<PathBuf>) {
     (names, files)
 }
 
+/// docs/features/board-handoff.md (RM-0085) BH-13: the `return` column of
+/// every `[[card.flow]]` of every preset under `scripts/presets/`, lowercased:
+/// a return column is a project's data, looked up from `flows[]`, never
+/// compared (ADR-0074: the core knows a column whose entry needs a note,
+/// never its name). A fixture's `return` is its own word, as its flows are.
+fn preset_return_columns() -> BTreeSet<String> {
+    let mut columns = BTreeSet::new();
+    for file in toml_files(&repository_root().join("scripts/presets")) {
+        let text = fs::read_to_string(&file).expect("a preset");
+        let table: toml::Table = text
+            .parse()
+            .unwrap_or_else(|error| panic!("{}: {error}", file.display()));
+        let flows = table
+            .get("card")
+            .and_then(|card| card.get("flow"))
+            .and_then(toml::Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        for flow in flows {
+            if let Some(column) = flow.get("return").and_then(toml::Value::as_str) {
+                columns.insert(column.to_lowercase());
+            }
+        }
+    }
+    columns
+}
+
+/// The words of `literal` that are one of `columns`.
+fn return_words(literal: &str, columns: &BTreeSet<String>) -> Vec<String> {
+    words(literal)
+        .into_iter()
+        .filter(|word| columns.contains(word))
+        .collect()
+}
+
 /// `TaskStatus::ALL` as `crates/specengine-model/src/task.rs` defines it:
 /// the variants of the array, in order, each named by its `as_str` arm.
 fn task_states() -> Vec<String> {
@@ -490,6 +530,9 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
     ] {
         assert!(names.contains(name), "`{name}` is read: {names:?}");
     }
+    // docs/features/board-handoff.md BH-13: the preset's return column.
+    let returns = preset_return_columns();
+    assert!(returns.contains("sent-back"), "{returns:?}");
     let mut found = Vec::new();
     let mut exempt = Vec::new();
     let mut scanned = 0;
@@ -510,6 +553,12 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
             }
             if exempted {
                 exempt.push(format!("{relative}:{}: {:?}", literal.line, literal.text));
+            }
+            for word in return_words(&literal.text, &returns) {
+                found.push(format!(
+                    "{relative}:{}: {:?} holds `{word}`, a preset return column",
+                    literal.line, literal.text
+                ));
             }
         }
     }
@@ -704,5 +753,37 @@ fn lens(name: &str) -> u16 {
             (5, "newsroom".to_owned(), "a workspace or module name"),
             (8, "shore".to_owned(), "a workspace or module name"),
         ]
+    );
+}
+
+/// docs/features/board-handoff.md BH-13: with the presets' return columns, a
+/// probe source branching on `"sent-back"`, or wording it in a message, is
+/// red; a comment and a word that only holds it are not.
+#[test]
+fn board_handoff_bh13_the_scan_sees_a_preset_return_column_in_a_literal() {
+    let returns = preset_return_columns();
+    assert_eq!(
+        returns.iter().map(String::as_str).collect::<Vec<_>>(),
+        ["sent-back"],
+        "the gamedev preset's one return column"
+    );
+    let probe = r#"
+// A comment saying sent-back is no literal.
+fn back(column: &str) -> u16 {
+    if column == "sent-back" { return 1; }
+    let _ = "moved to Sent-Back: say why";
+    let _ = "resent-backlog; sent-backs";
+    0
+}
+"#;
+    let mut hits = Vec::new();
+    for literal in literals(probe) {
+        for word in return_words(&literal.text, &returns) {
+            hits.push((literal.line, word));
+        }
+    }
+    assert_eq!(
+        hits,
+        [(4, "sent-back".to_owned()), (5, "sent-back".to_owned())]
     );
 }

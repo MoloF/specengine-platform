@@ -17,6 +17,9 @@
 //! query (a bad `%`, bytes that are not UTF-8: a 400 naming the parameter; a
 //! `+` a space, a `%2B` a plus), a scalar once, a boolean `true` or `false`;
 //! `cards/:id` takes no query name. Each refusal runs no call.
+//!
+//! docs/features/board-handoff.md BH-19: `parent` joins the names, last; a
+//! second `parent` is a 400; `?parent=C` lists exactly C's children.
 
 mod common;
 
@@ -227,7 +230,8 @@ fn a_card_query_outside_its_names_or_values_is_a_400_before_any_call() {
     let a = scratch.repo("spec-a", "a", "main");
     let home = scratch.home("fresh");
     let server = Server::serve(&home, scratch.path(), &[&a]);
-    let names = "flow, column, discipline, assignee, no_target, with_cancelled, marks";
+    // docs/canon/card-flows.md "Children": `parent`, last.
+    let names = "flow, column, discipline, assignee, no_target, with_cancelled, marks, parent";
     let cases: Vec<(String, String)> = vec![
         (
             format!("{P}/cards?limit=1"),
@@ -453,4 +457,108 @@ fn nodes_with_bindings_equals_show_bindings() {
         "a refused query ran no call: the fresh HOME holds {:?}",
         beyond_daemon(&fresh)
     );
+}
+
+/// docs/features/board-handoff.md BH-19, the daemon's half: `GET
+/// .../cards?parent=C-0001` is `spec card list --parent C-0001`: exactly the
+/// card's children, every flow, the CLI's bytes; a card with no child lists
+/// none, a 200; filters AND; a second `parent` is a 400 before any call; a
+/// look-alike or a `C` off the card-ID grammar cannot run, a 503 with the
+/// CLI's line. M22: the filter ignored.
+#[test]
+fn board_handoff_bh19_parent_lists_its_children() {
+    let scratch = Scratch::new("query-cards-parent");
+    let root = scratch.repo("studio-lamp", "lamp", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let base = "/api/projects/studio-lamp";
+    for args in [
+        &["--title", "Lamp room scene", "--discipline", "narrative"][..],
+        &[
+            "--title",
+            "Lamp room dialogue",
+            "--discipline",
+            "development",
+            "--parent",
+            "C-0001",
+        ][..],
+        &[
+            "--title",
+            "Lamp glow",
+            "--discipline",
+            "art",
+            "--parent",
+            "C-0001",
+        ][..],
+        &[
+            "--title",
+            "Dialogue lines",
+            "--discipline",
+            "development",
+            "--parent",
+            "C-0002",
+        ][..],
+        &["--title", "Cove scene", "--discipline", "narrative"][..],
+    ] {
+        let mut all = vec!["card", "new"];
+        all.extend_from_slice(args);
+        spec_json(&home, &cwd, &root, &all).code(0);
+    }
+    let ids = |target: &str| -> Vec<String> {
+        let reply = server.get(&format!("{base}/{target}"));
+        assert_eq!(reply.status, 200, "{target}: {}", reply.text());
+        let document = reply.json();
+        assert_eq!(
+            document["flows"].as_array().map(Vec::len),
+            Some(5),
+            "{target}: every flow"
+        );
+        document["cards"]
+            .as_array()
+            .expect("cards")
+            .iter()
+            .map(|row| row["id"].as_str().expect("an ID").to_owned())
+            .collect()
+    };
+    assert_eq!(ids("cards?parent=C-0001"), ["C-0002", "C-0003"]);
+    assert_eq!(ids("cards?parent=C-0002"), ["C-0004"]);
+    assert_eq!(ids("cards?parent=C-0005"), Vec::<String>::new());
+    assert_eq!(ids("cards?parent=C-9999"), Vec::<String>::new());
+    assert_eq!(ids("cards?parent=C-0001&flow=art"), ["C-0003"]);
+    assert_eq!(ids("cards").len(), 5, "no parent: every card");
+    // The CLI's bytes.
+    let reply = server.get(&format!("{base}/cards?parent=C-0001"));
+    let run = spec_json(&home, &cwd, &root, &["card", "list", "--parent", "C-0001"]);
+    run.code(0);
+    assert_eq!(reply.text(), run.document(), "the CLI's document");
+
+    let twice = server.get(&format!("{base}/cards?parent=C-0001&parent=C-0002"));
+    assert_eq!(twice.status, 400, "{}", twice.text());
+    assert_eq!(
+        twice.error_message(),
+        "`parent` is given 2 times: it takes one value"
+    );
+    for (written, encoded) in [
+        ("\u{0421}-0001", "%D0%A1-0001"),
+        ("C-1", "C-1"),
+        ("T-0001", "T-0001"),
+    ] {
+        let reply = server.get(&format!("{base}/cards?parent={encoded}"));
+        assert_eq!(reply.status, 503, "{written:?}: {}", reply.text());
+        let root_text = root.to_str().expect("UTF-8 root");
+        let run = common::spec(
+            &home,
+            &cwd,
+            &[
+                "--root", root_text, "card", "list", "--parent", written, "--json",
+            ],
+        );
+        run.code(2);
+        assert_eq!(
+            reply.error_message(),
+            run.stderr.trim_end_matches('\n'),
+            "{written:?}: the CLI's line"
+        );
+    }
 }

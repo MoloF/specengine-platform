@@ -1041,8 +1041,9 @@ async fn trace(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 
 /// `GET …/cards`: `spec card list --json`, the browser view (every row, in
 /// the flows' order, nothing cut). Filters ANDed, exact; `with_cancelled`
-/// is the flag `--with-cancelled`, `marks` `--marks`, nothing here reading a
-/// card's state. No index to read marks from: a 503, never a clean row.
+/// is the flag `--with-cancelled`, `marks` `--marks`, `parent` `--parent`
+/// (a card's children, one value), nothing here reading a card's state. No
+/// index to read marks from: a 503, never a clean row.
 async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
     let args = args(
@@ -1055,6 +1056,7 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
             "no_target",
             "with_cancelled",
             "marks",
+            "parent",
         ],
         &uri,
     )?;
@@ -1067,6 +1069,7 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
             no_target: args.boolean("no_target")?.unwrap_or(false),
             with_cancelled: args.boolean("with_cancelled")?.unwrap_or(false),
             marks: args.boolean("marks")?.unwrap_or(false),
+            parent: args.text("parent")?,
         })
     })()
     .map_err(Refusal::bad_request)?;

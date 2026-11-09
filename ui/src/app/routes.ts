@@ -2,8 +2,8 @@ import type { Translate } from "../i18n";
 import { isSectionId, sectionLabel, SECTIONS, type SectionId } from "./sections";
 
 /**
- * Where the hash points: `#/<project>` (its home), `#/<project>/<section>[/<id>]`, `#/` (replaced
- * by the first project's home) or nowhere known.
+ * Where the hash points: `#/<project>` (its home), `#/<project>/<section>[/<id>]`, a card's page
+ * `#/<project>/board/<C>/page`, `#/` (replaced by the first project's home) or nowhere known.
  */
 export type Route =
   | { type: "home" }
@@ -15,8 +15,13 @@ export type Route =
       id: string | null;
       /** Flow's alone: what follows the first raw `?`, undecoded; absent with none (docs/features/writer-studio.md D4). */
       query?: string;
+      /** The Board's alone: a card's page, `board`, `<C>`, `page`, never a tenth section (`ui/README.md` "Screen rules", Shell). */
+      view?: "page";
     }
   | { type: "not_found" };
+
+/** The fourth segment of a card's page. */
+const PAGE = "page";
 
 function decode(segment: string): string | null {
   try {
@@ -55,8 +60,12 @@ function parsePath(path: string): Route {
   if (section === undefined || (section === "" && id === undefined)) {
     return { type: "project", project };
   }
-  if (section === null || !isSectionId(section) || id === null || rest.length > 0) {
+  if (section === null || !isSectionId(section) || id === null) {
     return { type: "not_found" };
+  }
+  if (rest.length > 0) {
+    // A card's page: exactly the three segments `board`, `<C>`, `page`; any other fourth names nothing.
+    return section === "board" && id !== undefined && id !== "" && rest.length === 1 && rest[0] === PAGE ? { type: "section", project, section, id, view: PAGE } : { type: "not_found" };
   }
   return { type: "section", project, section, id: id === undefined || id === "" ? null : id };
 }
@@ -69,6 +78,11 @@ export function homeHash(project: string): string {
 export function sectionHash(project: string, section: SectionId, id: string | null = null): string {
   const base = `${homeHash(project)}/${section}`;
   return id === null ? base : `${base}/${encodeURIComponent(id)}`;
+}
+
+/** A card's page, `#/<p>/board/<C>/page`: the card alone, its modal's body and actions, no columns. */
+export function cardPageHash(project: string, id: string): string {
+  return `${sectionHash(project, "board", id)}/${PAGE}`;
 }
 
 /** An arrow of a flow read by its served key: no fourth part, `kind` null. */

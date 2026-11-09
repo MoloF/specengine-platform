@@ -727,7 +727,8 @@ const KEYS = {
   FlowInner: { type: true, count: true } satisfies Record<keyof FlowInner, true>,
   // docs/canon/cards.md "Documents and events", "Commands" (the write document, no such card), "Store" (an evidence entry, the two closures).
   CardList: { flows: true, cards: true, notes: true, truncated: true, omitted: true } satisfies Record<keyof CardList, true>,
-  CardFlow: { name: true, disciplines: true, columns: true, moves: true, accept: true } satisfies Record<keyof CardFlow, true>,
+  // docs/canon/card-flows.md "The rule": a flow's `return` after `accept` (board-handoff, RM-0085).
+  CardFlow: { name: true, disciplines: true, columns: true, moves: true, accept: true, return: true } satisfies Record<keyof CardFlow, true>,
   CardColumn: { id: true, title: true } satisfies Record<keyof CardColumn, true>,
   CardMove: { from: true, to: true, by: true } satisfies Record<keyof CardMove, true>,
   CardRow: {
@@ -918,7 +919,7 @@ const CITED: Record<Named, string> = {
   FlowEdge: "from, to, type, kind, when, count, path, line",
   FlowInner: "type, count",
   CardList: "flows, cards, notes, truncated, omitted",
-  CardFlow: "name, disciplines, columns, moves, accept",
+  CardFlow: "name, disciplines, columns, moves, accept, return",
   CardColumn: "id, title",
   CardMove: "from, to, by",
   CardRow: "id, flow, column, position, title, discipline, targets, assignee, reviewer, estimate, due, parent, corrects, updated_at, revision, accepted, cancelled, mark, on, discrepancy, correction",
@@ -1165,7 +1166,8 @@ function served(name: Named): string[] {
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
  * workspaces' test wrote its three sets, the hundred-and-eleventh to the hundred-and-thirteenth and
- * last (docs/features/workspaces.md "Data").
+ * last (docs/features/workspaces.md "Data"), and empty again since board-handoff's wrote a flow's
+ * `return`.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1254,12 +1256,13 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since workspaces' test wrote sets 111 to 113 into the file (UI-1 of lock-diff, U1 of hub-git, docs/features/workspaces.md \"Data\")", () => {
+  it("lists ahead of the fixture only keys their types serve, none since board-handoff's test wrote a flow's `return` into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\")", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
+    expect(served("CardFlow")).toEqual(["name", "disciplines", "columns", "moves", "accept", "return"]);
   });
 
   it('types the workspaces read\'s three as the spec writes them: 4, 6 and 3 keys, every one present, `flows` and `module` nullable, a source kept whatever its word, each citing `docs/features/workspaces.md` "Data"', () => {
@@ -1829,12 +1832,14 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(CARD_TRACE.map((name) => declaredKeys(name))).toEqual(CARD_TRACE.map((name) => served(name)));
   });
 
-  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 5, 2, 3, 21, 30, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\")", () => {
+  it("names board-ui's twelve after FlowInner, before card-trace's seven: 5, 6, 2, 3, 21, 30, 4, 6, 3, 4, 7, 2 keys in the types' order, the ninety-eighth CardNotFound; an acceptance's three new keys after note (AC-09 of docs/features/board-ui.md, docs/features/card-trace.md \"Data\")", () => {
     expect(Object.keys(sets).slice(BEFORE_BOARD_UI.length, BEFORE_CARD_TRACE.length)).toEqual([...BOARD_UI]);
     expect(Object.keys(sets).indexOf("CardList")).toBe(86);
     expect(Object.keys(sets).at(BEFORE_CARD_TRACE.length - 1)).toBe("CardNotFound");
     expect(BOARD_UI.map((name) => sets[name])).toEqual(BOARD_UI.map((name) => served(name)));
-    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 5, 2, 3, 21, 30, 4, 6, 3, 4, 7, 2]);
+    // A flow's `return` after `accept` (board-handoff, docs/canon/card-flows.md "The rule").
+    expect(BOARD_UI.map((name) => sets[name]?.length)).toEqual([5, 6, 2, 3, 21, 30, 4, 6, 3, 4, 7, 2]);
+    expect(sets.CardFlow?.at(-1)).toBe("return");
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
 

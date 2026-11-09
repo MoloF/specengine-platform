@@ -5,7 +5,7 @@ import type { ShownLinks } from "../api/types";
 import type { Translate } from "../i18n";
 import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
-import { aCardList, aCardRow, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView } from "../test/builders";
+import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, STAGED_AT, type StubClient } from "../test/stubClient";
 import { enT, ruT } from "../test/text";
@@ -68,6 +68,32 @@ const SCREENS: SweptScreen[] = [
     },
     heading: (t) => t("board.view.title"),
     own: (t) => [t("board.view.showCancelled"), t("board.view.newCard")],
+  },
+  {
+    // BH-21 of board-handoff: the lanes, a card's modal over the board and its hand-offs.
+    name: "Board, its lanes and a card's modal",
+    hash: "#/alpha/board/C-1",
+    client: () => {
+      window.localStorage.setItem("specengine.board.lanes.alpha", "parent");
+      const client = stubClient();
+      client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-1" })]));
+      client.getCard.mockResolvedValue(aCard({ id: "C-1" }));
+      return client;
+    },
+    heading: (t) => t("board.view.title"),
+    own: (t) => [t("board.lanes.label"), t("board.lanes.everythingElse"), t("board.modal.openPage"), t("board.handoff.action"), t("board.modal.handOffs")],
+  },
+  {
+    name: "A card's page",
+    hash: "#/alpha/board/C-1/page",
+    client: () => {
+      const client = stubClient();
+      client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-1" })]));
+      client.getCard.mockResolvedValue(aCard({ id: "C-1" }));
+      return client;
+    },
+    heading: () => "Card C-1",
+    own: (t) => [t("board.page.openOnBoard"), t("board.handoff.action"), t("board.modal.handOffs")],
   },
   {
     name: "Roadmap",
@@ -209,6 +235,27 @@ describe("served text stays as served (LS-4)", () => {
     await settle();
     const notes = await screen.findByRole("list", { name: ru.board.view.notes });
     expect(servedIn(within(notes).getByRole("listitem"))).toEqual(["en", note]);
+  });
+
+  it("Board: a refusal in the Return dialog byte for byte under lang=en, the dialog's words Russian (BH-21)", async () => {
+    const message = "C-1 enters `doing`, its flow's return column: say why with `--note`; nothing changed";
+    const client = stubClient();
+    client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-1" })], { flows: [aCardFlow({ return: "doing" })] }));
+    client.moveCard.mockRejectedValueOnce(new ClientError({ status: 409, message }));
+    client.moveCard.mockResolvedValue(aCardWrite("C-1"));
+    renderApp(client, "#/alpha/board");
+    await screen.findByRole("heading", { level: 1, name: en.board.view.title });
+    fireEvent.change(languageSelect(en.language.label), { target: { value: "ru" } });
+    await settle();
+    const tile = document.querySelector<HTMLElement>('[data-card="C-1"]');
+    tile?.focus();
+    fireEvent.keyDown(tile ?? document.body, { key: "r" });
+    const dialog = await screen.findByRole("dialog", { name: ruT("board.return.title", { id: "C-1" }) });
+    fireEvent.change(within(dialog).getByLabelText(ru.board.field.reason), { target: { value: "\u041d\u0435 \u0442\u043e" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: ru.board.return.submit }));
+    const refusal = await within(dialog).findByText(message);
+    expect(servedIn(refusal)).toEqual(["en", message]);
+    expect(within(dialog).getByText(ru.board.view.refused)).toBeTruthy();
   });
 
   it("Roadmap: the plan's notes byte for byte under lang=en, the lanes' names translated around them", async () => {

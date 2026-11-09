@@ -95,13 +95,16 @@ const TASKS_KEYS: readonly Shortcut[] = [
   SHOW_LIST,
 ];
 
-/** The Board's keys (docs/features/board-ui.md "Moving"): the cards, one tab stop; the Move menu. */
+/** The Board's keys (`ui/README.md` "Screen rules", Keyboard): the cards, one tab stop, across lanes too; the Move menu; a hand-off, a return. */
 const BOARD_KEYS: readonly Shortcut[] = [
   [["down", "up"], (t) => t("app.shortcuts.board.move")],
   [["left", "right"], (t) => t("app.shortcuts.board.across")],
   [["home", "end"], (t) => t("app.shortcuts.board.ends")],
+  [["pageDown", "pageUp"], (t) => t("app.shortcuts.board.lanes")],
   [["enter"], (t) => t("app.shortcuts.board.enter")],
   [[typed("m")], (t) => t("app.shortcuts.board.menu")],
+  [[typed("h")], (t) => t("app.shortcuts.board.handOff")],
+  [[typed("r")], (t) => t("app.shortcuts.board.return")],
   [[typed("n")], (t) => t("app.shortcuts.board.new")],
   [["esc"], (t) => t("app.shortcuts.board.esc")],
   JUMP,

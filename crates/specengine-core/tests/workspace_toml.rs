@@ -1140,7 +1140,9 @@ const PRESET_ROWS: [&str; 4] = [
 ];
 
 /// The five flows of "The gamedev preset": name, disciplines, `(id, title)`
-/// columns, accept.
+/// columns, accept. Since board-handoff (docs/canon/workspaces.md "Preset"):
+/// each flow's return column `sent-back`, titled "Returned", second in
+/// `columns`.
 type PresetFlow = (
     &'static str,
     &'static [(&'static str, &'static str)],
@@ -1152,6 +1154,7 @@ const PRESET_FLOWS: [PresetFlow; 5] = [
         "narrative",
         &[
             ("backlog", "Backlog"),
+            ("sent-back", "Returned"),
             ("outline", "Outline"),
             ("draft", "Draft"),
             ("review", "Review"),
@@ -1165,6 +1168,7 @@ const PRESET_FLOWS: [PresetFlow; 5] = [
         "development",
         &[
             ("backlog", "Backlog"),
+            ("sent-back", "Returned"),
             ("ready", "Ready"),
             ("in-progress", "In progress"),
             ("in-review", "In review"),
@@ -1177,6 +1181,7 @@ const PRESET_FLOWS: [PresetFlow; 5] = [
         "art",
         &[
             ("waiting", "Waiting"),
+            ("sent-back", "Returned"),
             ("ready", "Ready"),
             ("in-progress", "In progress"),
             ("pending-review", "Pending review"),
@@ -1189,6 +1194,7 @@ const PRESET_FLOWS: [PresetFlow; 5] = [
         "level-design",
         &[
             ("layout", "Layout"),
+            ("sent-back", "Returned"),
             ("blockout", "Blockout"),
             ("playtest", "Playtest"),
             ("scripting", "Scripting"),
@@ -1202,6 +1208,7 @@ const PRESET_FLOWS: [PresetFlow; 5] = [
         "production",
         &[
             ("to-do", "To do"),
+            ("sent-back", "Returned"),
             ("in-progress", "In progress"),
             ("review", "Review"),
             ("done", "Done"),
@@ -1209,6 +1216,10 @@ const PRESET_FLOWS: [PresetFlow; 5] = [
         ("review", "done"),
     ),
 ];
+
+/// docs/canon/workspaces.md "Preset": the preset's return column, the same in
+/// every flow.
+const PRESET_RETURN: &str = "sent-back";
 
 /// WS-7: the preset appended to `[project]\nslug = "preset"\n` is a config
 /// `ProjectConfig` accepts; `WorkspaceConfig` reads `config`, the four
@@ -1249,6 +1260,9 @@ fn ws7_the_preset_reads_whole_with_no_note() {
             (from, to),
             "{name}"
         );
+        // docs/canon/card-flows.md "Config": `return = "sent-back"` on the
+        // line after `accept`, in every flow.
+        assert_eq!(flow.return_column.as_deref(), Some(PRESET_RETURN), "{name}");
         let open = columns.len() - 1;
         assert_eq!(
             flow.moves.len(),
@@ -1315,6 +1329,171 @@ fn ws7_studio_lamp_holds_the_preset_verbatim() {
     kinds.sort();
     assert_eq!(serde_json::json!(prefixes), expected["prefixes"]);
     assert_eq!(serde_json::json!(kinds), expected["kinds"]);
+}
+
+// ---------------------------------------------- board-handoff, `return`
+
+/// board-handoff BH-13 (docs/canon/workspaces.md "Preset"): the preset's text
+/// gives each of its five flows `"sent-back"` second in `columns`, `sent-back =
+/// "Returned"` second in `titles`, and `return = "sent-back"` on the line
+/// after `accept`; studio-lamp's copy holds the same (its verbatim test
+/// above).
+#[test]
+fn board_handoff_bh13_the_preset_gives_each_flow_its_return_line() {
+    let text = preset();
+    let lines: Vec<&str> = text.lines().collect();
+    let accepts: Vec<usize> = lines
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.starts_with("accept = "))
+        .map(|(index, _)| index)
+        .collect();
+    assert_eq!(accepts.len(), 5, "one `accept` per flow");
+    for at in accepts {
+        assert_eq!(
+            lines.get(at + 1).copied(),
+            Some("return = \"sent-back\""),
+            "the line after {:?}",
+            lines[at]
+        );
+    }
+    assert_eq!(text.matches("return = ").count(), 5, "five return lines");
+    let columns: Vec<&str> = lines
+        .iter()
+        .copied()
+        .filter(|line| line.starts_with("columns = ["))
+        .collect();
+    assert_eq!(columns.len(), 5);
+    for line in columns {
+        let second = line
+            .trim_start_matches("columns = [")
+            .split(", ")
+            .nth(1)
+            .unwrap_or_else(|| panic!("a second column: {line}"));
+        assert_eq!(second, "\"sent-back\"", "{line}");
+    }
+    let titles: Vec<&str> = lines
+        .iter()
+        .copied()
+        .filter(|line| line.starts_with("titles = {"))
+        .collect();
+    assert_eq!(titles.len(), 5);
+    for line in titles {
+        assert_eq!(
+            line.trim_start_matches("titles = { ").split(", ").nth(1),
+            Some("sent-back = \"Returned\""),
+            "{line}"
+        );
+    }
+}
+
+/// The preset under `[project]`, `development`'s `return` line replaced by
+/// `line`: the text, and the 1-based line it stands on.
+fn with_development_return(line: &str) -> (String, usize) {
+    let base = format!("[project]\nslug = \"preset\"\n{}", preset());
+    let at = nth_line_holding(&base, "return = \"sent-back\"", 2);
+    let mut lines: Vec<&str> = base.lines().collect();
+    assert_eq!(
+        lines[at - 3],
+        "titles = { backlog = \"Backlog\", sent-back = \"Returned\", ready = \"Ready\", \
+         in-progress = \"In progress\", in-review = \"In review\", verify = \"Verify\", done = \
+         \"Done\" }",
+        "the second flow is development"
+    );
+    lines[at - 1] = line;
+    let mut text = lines.join("\n");
+    text.push('\n');
+    (text, at)
+}
+
+/// board-handoff BH-13 (docs/canon/card-flows.md "Config"): each of the five
+/// errors of `return` stands at its line, `<config>:<line>: <message>`, word for word;
+/// `WorkspaceConfig` serves the flows unjudged with that error as its one note
+/// (`workspaces.md` "Config"), so only `spec card` stops on it. M15: the first
+/// column admitted as `return`.
+#[test]
+fn board_handoff_bh13_each_return_error_stands_at_its_line() {
+    let (sound, _) = with_development_return("return = \"sent-back\"");
+    let cards = card_from_toml(&sound).unwrap_or_else(|error| panic!("{}", error.at(CONFIG)));
+    assert_eq!(
+        cards.flows[1].return_column.as_deref(),
+        Some("sent-back"),
+        "the unchanged copy reads"
+    );
+    for (line, message) in [
+        ("return = 3", "`return` is a string, not an integer"),
+        ("return = true", "`return` is a string, not a boolean"),
+        (
+            "return = [\"sent-back\"]",
+            "`return` is a string, not an array",
+        ),
+        (
+            "return = { column = \"sent-back\" }",
+            "`return` is a string, not a table",
+        ),
+        (
+            "return = \"shelved\"",
+            "`return`: `shelved` is no column of this flow",
+        ),
+        (
+            "return = \"Sent-back\"",
+            "`return`: `Sent-back` is no column of this flow",
+        ),
+        (
+            "return = \"outline\"",
+            "`return`: `outline` is no column of this flow",
+        ),
+        (
+            "return = \"backlog\"",
+            "`return`: `backlog` is the first column, where a new card starts",
+        ),
+        (
+            "return = \"verify\"",
+            "`return`: `verify` is `accept.from`, where a card waits for its accept",
+        ),
+        (
+            "return = \"done\"",
+            "`return`: `done` is `accept.to`, reached only by an accept",
+        ),
+    ] {
+        let (text, at) = with_development_return(line);
+        let error = card_from_toml(&text).expect_err(line);
+        assert_eq!(error.line, Some(at), "{line}: {error:?}");
+        assert_eq!(error.at(CONFIG), note(at, message), "{line}");
+        // `spec workspace` serves its flows unjudged, the card's error its
+        // one note, and the workspaces of the preset as written.
+        let config = read(&text);
+        assert_eq!(config.source, WorkspaceSource::Config, "{line}");
+        assert_eq!(rows(&config), PRESET_ROWS, "{line}");
+        assert_eq!(
+            config.notes_at(CONFIG),
+            [format!(
+                "{}; the workspaces' flows are served unjudged",
+                error.at(CONFIG)
+            )],
+            "{line}"
+        );
+        ProjectConfig::from_toml(&text)
+            .unwrap_or_else(|error| panic!("{line}: `[card]` is only name-checked: {error:?}"));
+    }
+    // Any other open column of the flow is a return column; leaving the key
+    // out is none.
+    for column in ["ready", "in-progress", "in-review"] {
+        let (text, _) = with_development_return(&format!("return = \"{column}\""));
+        let cards = card_from_toml(&text).unwrap_or_else(|error| panic!("{}", error.at(CONFIG)));
+        assert_eq!(cards.flows[1].return_column.as_deref(), Some(column));
+    }
+    let (text, _) = with_development_return("");
+    let cards = card_from_toml(&text).unwrap_or_else(|error| panic!("{}", error.at(CONFIG)));
+    assert_eq!(
+        cards.flows[1].return_column, None,
+        "absent: no return column"
+    );
+    assert_eq!(
+        cards.flows[0].return_column.as_deref(),
+        Some("sent-back"),
+        "the other flows keep theirs"
+    );
 }
 
 // --------------------------------------------------------------- RawFile

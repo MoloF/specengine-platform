@@ -20,41 +20,48 @@ ISL = { kind = "island", shape = "name" }
 # project's specengine.toml, add the project's own [[module]] tables and a
 # workspace's `module`, and retitle anything in the project's language.
 # Every name is data: no SpecEngine code reads one (ADR-0008, ADR-0073).
+# Add `return` only after every terminal, plugin and hub serving the project
+# runs this build: an older one refuses the key.
 
 [[card.flow]]
 name = "narrative"
 disciplines = ["narrative"]
-columns = ["backlog", "outline", "draft", "review", "approved", "ready-for-dev", "in-game"]
-titles = { backlog = "Backlog", outline = "Outline", draft = "Draft", review = "Review", approved = "Approved", ready-for-dev = "Ready for dev", in-game = "In game" }
+columns = ["backlog", "sent-back", "outline", "draft", "review", "approved", "ready-for-dev", "in-game"]
+titles = { backlog = "Backlog", sent-back = "Returned", outline = "Outline", draft = "Draft", review = "Review", approved = "Approved", ready-for-dev = "Ready for dev", in-game = "In game" }
 accept = { from = "ready-for-dev", to = "in-game" }
+return = "sent-back"
 
 [[card.flow]]
 name = "development"
 disciplines = ["development"]
-columns = ["backlog", "ready", "in-progress", "in-review", "verify", "done"]
-titles = { backlog = "Backlog", ready = "Ready", in-progress = "In progress", in-review = "In review", verify = "Verify", done = "Done" }
+columns = ["backlog", "sent-back", "ready", "in-progress", "in-review", "verify", "done"]
+titles = { backlog = "Backlog", sent-back = "Returned", ready = "Ready", in-progress = "In progress", in-review = "In review", verify = "Verify", done = "Done" }
 accept = { from = "verify", to = "done" }
+return = "sent-back"
 
 [[card.flow]]
 name = "art"
 disciplines = ["art"]
-columns = ["waiting", "ready", "in-progress", "pending-review", "approved", "in-engine"]
-titles = { waiting = "Waiting", ready = "Ready", in-progress = "In progress", pending-review = "Pending review", approved = "Approved", in-engine = "In engine" }
+columns = ["waiting", "sent-back", "ready", "in-progress", "pending-review", "approved", "in-engine"]
+titles = { waiting = "Waiting", sent-back = "Returned", ready = "Ready", in-progress = "In progress", pending-review = "Pending review", approved = "Approved", in-engine = "In engine" }
 accept = { from = "approved", to = "in-engine" }
+return = "sent-back"
 
 [[card.flow]]
 name = "level-design"
 disciplines = ["level-design"]
-columns = ["layout", "blockout", "playtest", "scripting", "lighting", "art-pass", "final"]
-titles = { layout = "Layout", blockout = "Blockout", playtest = "Playtest", scripting = "Scripting", lighting = "Lighting", art-pass = "Art pass", final = "Final" }
+columns = ["layout", "sent-back", "blockout", "playtest", "scripting", "lighting", "art-pass", "final"]
+titles = { layout = "Layout", sent-back = "Returned", blockout = "Blockout", playtest = "Playtest", scripting = "Scripting", lighting = "Lighting", art-pass = "Art pass", final = "Final" }
 accept = { from = "art-pass", to = "final" }
+return = "sent-back"
 
 [[card.flow]]
 name = "production"
 disciplines = ["production"]
-columns = ["to-do", "in-progress", "review", "done"]
-titles = { to-do = "To do", in-progress = "In progress", review = "Review", done = "Done" }
+columns = ["to-do", "sent-back", "in-progress", "review", "done"]
+titles = { to-do = "To do", sent-back = "Returned", in-progress = "In progress", review = "Review", done = "Done" }
 accept = { from = "review", to = "done" }
+return = "sent-back"
 
 [[workspace]]
 name = "writing"

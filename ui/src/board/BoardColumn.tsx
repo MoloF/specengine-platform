@@ -1,7 +1,7 @@
-import { useId, type DragEvent, type ReactNode } from "react";
+import { type DragEvent, type ReactNode } from "react";
 import { useTranslate } from "../i18n";
 import { around } from "../i18n/fill";
-import { COLUMN_SHOWN, type BoardLane } from "./filter";
+import { COLUMN_SHOWN, type BoardColumnCell, type BoardColumnHead } from "./filter";
 
 /** Where a drag at height `y` would put its card: the first card whose middle lies below it; none: last. */
 function beforeAt(list: HTMLElement | null, y: number): string | null {
@@ -15,13 +15,43 @@ function beforeAt(list: HTMLElement | null, y: number): string | null {
   return null;
 }
 
+/** A count drawn, the words around it read out: `, 3 cards`. */
+function Count({ count }: { count: number }) {
+  const t = useTranslate();
+  const said = around(t("board.column.count", { count }), String(count));
+  return (
+    <span className="board-column-count">
+      <span className="sr-only">{said[0]}</span>
+      {count}
+      <span className="sr-only">{said[1]}</span>
+    </span>
+  );
+}
+
 /**
- * One column of a board: its title as stored and how many cards stand in it, the cards in the
- * daemon's order, "Show all <n>" past the cap. A column takes drops, the lane of cards outside the
- * flow none. A drop is the same `moveCard`: the daemon judges it, so any column takes one.
+ * A column's head in the board's sticky header row: its title as stored and how many cards stand in
+ * it across every lane. A filter or a lane never changes which heads stand, so none of them moves.
+ */
+export function BoardColumnHeader({ head, id, count }: { head: BoardColumnHead; id: string; count: number }) {
+  return (
+    <h2 id={id} className={head.column === null ? "board-column-title board-column-title-outside" : "board-column-title"} data-column-head={head.key}>
+      <bdi>{head.title}</bdi>
+      <Count count={count} />
+    </h2>
+  );
+}
+
+/**
+ * One cell of the grid: a column within a lane, the cards in the daemon's order, "Show all <n>" past
+ * the cap. It is labelled by its column's head and its lane's, and repeats the column's title where
+ * the columns stack (the header row is not drawn there). A collapsed lane's cell draws its count and
+ * no card. A cell takes drops, the cards outside the flow none; a drop is the same `moveCard`, its
+ * column alone sent, whichever lane it lands in: the daemon judges it, so any column takes one.
  */
 export function BoardColumn({
-  lane,
+  cell,
+  labelledBy,
+  collapsed,
   expanded,
   dropping,
   dropAtEnd,
@@ -32,77 +62,74 @@ export function BoardColumn({
   onDrop,
   children,
 }: {
-  lane: BoardLane;
+  cell: BoardColumnCell;
+  /** Its column head's ID, then its lane's, if any. */
+  labelledBy: string;
+  /** Its lane is collapsed: the count stands, no card. */
+  collapsed: boolean;
   expanded: boolean;
   /** A card is being dragged. */
   dropping: boolean;
   /** A drag would put its card last here. */
   dropAtEnd: boolean;
-  /** What the daemon says of this lane. */
+  /** What the daemon says of this cell's cards. */
   note: ReactNode;
-  onShowAll: (lane: BoardLane) => void;
-  onDragOver: (lane: BoardLane, before: string | null) => void;
-  onDragLeave: (lane: BoardLane) => void;
-  onDrop: (lane: BoardLane, before: string | null) => void;
+  onShowAll: (cell: BoardColumnCell) => void;
+  onDragOver: (cell: BoardColumnCell, before: string | null) => void;
+  onDragLeave: (cell: BoardColumnCell) => void;
+  onDrop: (cell: BoardColumnCell, before: string | null) => void;
   children: ReactNode;
 }) {
   const t = useTranslate();
-  // The count drawn, the words around it read out: `, 3 cards`.
-  const countSaid = around(t("board.column.count", { count: lane.count }), String(lane.count));
-  const titleId = useId();
-  const accepts = dropping && lane.column !== null;
+  const accepts = dropping && cell.column !== null && !collapsed;
 
   function over(event: DragEvent<HTMLElement>) {
     if (!accepts) {
       return;
     }
     event.preventDefault();
-    onDragOver(lane, beforeAt(event.currentTarget, event.clientY));
+    onDragOver(cell, beforeAt(event.currentTarget, event.clientY));
   }
 
   function left(event: DragEvent<HTMLElement>) {
     if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) {
-      onDragLeave(lane);
+      onDragLeave(cell);
     }
   }
 
   function dropped(event: DragEvent<HTMLElement>) {
     if (accepts) {
       event.preventDefault();
-      onDrop(lane, beforeAt(event.currentTarget, event.clientY));
+      onDrop(cell, beforeAt(event.currentTarget, event.clientY));
     }
   }
 
+  const classes = ["board-cell", cell.column === null && "board-cell-outside", collapsed && "board-cell-collapsed"].filter(Boolean).join(" ");
   return (
-    <section
-      className={lane.column === null ? "board-column board-column-outside" : "board-column"}
-      aria-labelledby={titleId}
-      data-lane={lane.key}
-      onDragOver={over}
-      onDragLeave={left}
-      onDrop={dropped}
-    >
-      <h2 id={titleId} className="board-column-title">
-        <bdi>{lane.title}</bdi>
-        <span className="board-column-count">
-          <span className="sr-only">{countSaid[0]}</span>
-          {lane.count}
-          <span className="sr-only">{countSaid[1]}</span>
-        </span>
-      </h2>
-      {note}
-      <ul className="board-list">{children}</ul>
-      {dropAtEnd && <div className="board-drop-end" />}
-      {!expanded && lane.rows.length > COLUMN_SHOWN && (
-        <button
-          type="button"
-          className="button button-quiet"
-          onClick={() => {
-            onShowAll(lane);
-          }}
-        >
-          {t("board.column.showAll", { count: lane.rows.length })}
-        </button>
+    <section className={classes} aria-labelledby={labelledBy} data-lane={cell.key} data-cell-column={cell.column ?? ""} onDragOver={over} onDragLeave={left} onDrop={dropped}>
+      <p className="board-cell-title" aria-hidden="true">
+        <bdi>{cell.title}</bdi>
+        <Count count={cell.count} />
+      </p>
+      {collapsed ? (
+        <p className="board-cell-count muted">{t("board.lanes.count", { count: cell.count })}</p>
+      ) : (
+        <>
+          {note}
+          <ul className="board-list">{children}</ul>
+          {dropAtEnd && <div className="board-drop-end" />}
+          {!expanded && cell.rows.length > COLUMN_SHOWN && (
+            <button
+              type="button"
+              className="button button-quiet"
+              onClick={() => {
+                onShowAll(cell);
+              }}
+            >
+              {t("board.column.showAll", { count: cell.rows.length })}
+            </button>
+          )}
+        </>
       )}
     </section>
   );

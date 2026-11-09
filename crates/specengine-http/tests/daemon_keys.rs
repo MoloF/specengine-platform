@@ -189,6 +189,11 @@
 //! entry have no set of their own: their keys are pinned where they are read.
 //! M: a `Card` key dropped from the fixture.
 //!
+//! board-handoff (RM-0085, BH-13), as docs/canon/cards.md
+//! "Documents and events" gives it: `CardFlow` gains `return` after `accept`
+//! (6 keys), the set count unchanged; card-press serves it `null` on both
+//! flows.
+//!
 //! docs/features/card-trace.md "Data": seven sets more, 105 in all, last,
 //! after `CardNotFound`: `TraceDocument` (7 keys), `TraceCounts` (5),
 //! `TraceNode` (7), `TraceCard` (8), `TraceUse` (3), `CardFrozen` (4) and
@@ -1243,6 +1248,17 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
         one_key_set("allowed", &items(&card_writes, "allowed"), keys_of),
         ["to", "by"]
     );
+    // docs/canon/cards.md "Documents and events": card-press names no
+    // `return` column, so both flows serve the key as `null`.
+    for flow in &card_flows {
+        let flow: serde_json::Value = serde_json::from_str(flow).expect("a flow");
+        assert_eq!(flow["return"], serde_json::Value::Null, "{flow}");
+        assert!(
+            flow.as_object()
+                .is_some_and(|keys| keys.contains_key("return")),
+            "{flow}"
+        );
+    }
     let trace_nodes = items(&traces, "nodes");
     let trace_cards = items(&trace_nodes, "cards");
     let trace_uses = items(&trace_nodes, "uses");
@@ -2533,7 +2549,16 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         ),
         (
             "CardFlow",
-            &["name", "disciplines", "columns", "moves", "accept"],
+            // docs/canon/cards.md "Documents and events": `return` after
+            // `accept`, `null` on card-press, whose flows name none.
+            &[
+                "name",
+                "disciplines",
+                "columns",
+                "moves",
+                "accept",
+                "return",
+            ],
         ),
         ("CardColumn", &["id", "title"]),
         ("CardMove", &["from", "to", "by"]),

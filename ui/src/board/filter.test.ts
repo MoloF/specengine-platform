@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { aCardFlow, aCardList, aCardRow } from "../test/builders";
-import { assigneeChoices, disciplineChoices, dropMove, lanesOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf, workspaceTabs } from "./filter";
+import type { CardRow } from "../api/types";
+import type { Translate } from "../i18n";
+import { assigneeChoices, cellsOf, columnHeadsOf, disciplineChoices, dropMove, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf, workspaceTabs, type BoardTab } from "./filter";
 import { canClear, markLine, markLook, markNames, rowMark } from "./labels";
 import { enT } from "../test/text";
 
 // The Board's arrangement of one answer (docs/features/board-ui.md "Board", "Rules and edge cases").
+
+/** A board's cells over `rows`, its heads from the same rows: the one lane of None. */
+function columnCellsOf(tab: BoardTab, rows: readonly CardRow[], t: Translate) {
+  return cellsOf(tab, columnHeadsOf(tab, rows, t), rows);
+}
 
 describe("the filters", () => {
   const row = aCardRow({ id: "C-0001", discipline: "Copy", assignee: "Mira Holt" });
@@ -102,7 +109,7 @@ describe("the tabs and the columns", () => {
 
   it("keeps empty columns, the daemon's order, and counts what stands in a column: a cancelled card has left it", () => {
     const rows = [aCardRow({ id: "C-2", column: "doing" }), aCardRow({ id: "C-1", column: "doing" }), aCardRow({ id: "C-3", column: "doing", cancelled: true })];
-    const lanes = lanesOf({ name: "work", flow: aCardFlow() }, rows, enT);
+    const lanes = columnCellsOf({ name: "work", flow: aCardFlow() }, rows, enT);
     expect(lanes.map((lane) => [lane.title, lane.count])).toEqual([
       ["To do", 0],
       ["Doing", 2],
@@ -114,18 +121,18 @@ describe("the tabs and the columns", () => {
 
   it("puts a row outside `columns[]` in a last lane, which is no column; a gone flow's rows all there", () => {
     const stranded = aCardRow({ id: "C-1", column: "parked" });
-    const lanes = lanesOf({ name: "work", flow: aCardFlow() }, [stranded], enT);
+    const lanes = columnCellsOf({ name: "work", flow: aCardFlow() }, [stranded], enT);
     expect(lanes.at(-1)).toEqual({ key: "work/outside", column: null, title: "Not in the flow", count: 1, rows: [stranded] });
-    expect(lanesOf({ name: "work", flow: undefined }, [stranded], enT).map((lane) => lane.column)).toEqual([null]);
+    expect(columnCellsOf({ name: "work", flow: undefined }, [stranded], enT).map((lane) => lane.column)).toEqual([null]);
   });
 
   it("keeps two flows' columns of one name apart: a lane's key holds its flow", () => {
-    const key = (name: string) => lanesOf({ name, flow: aCardFlow({ name }) }, [], enT)[0]?.key;
+    const key = (name: string) => columnCellsOf({ name, flow: aCardFlow({ name }) }, [], enT)[0]?.key;
     expect(key("copy")).not.toBe(key("plates"));
   });
 
   it("leaves another flow's rows out", () => {
-    expect(lanesOf({ name: "work", flow: aCardFlow() }, [aCardRow({ id: "C-1", flow: "other" })], enT).flatMap((lane) => lane.rows)).toEqual([]);
+    expect(columnCellsOf({ name: "work", flow: aCardFlow() }, [aCardRow({ id: "C-1", flow: "other" })], enT).flatMap((lane) => lane.rows)).toEqual([]);
   });
 });
 
