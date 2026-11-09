@@ -47,9 +47,10 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0062.md](roadmap/RM-0062.md) writer-skills (Phase 7, step 20): a profile plugin or MCP prompts · crates/specengine-mcp · draft
 - [docs/roadmap/RM-0063.md](roadmap/RM-0063.md) Load flakes: tests that fail under full parallel load · crates/specengine-cli, crates/specengine-store, crates/specengine-http · draft
 - [docs/roadmap/RM-0070.md](roadmap/RM-0070.md) trial-followups (Phase 7): what the second trial and earlier review left · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, plugin, ui · draft
-- [docs/roadmap/RM-0085.md](roadmap/RM-0085.md) board-handoff (Phase 7, v4 step 3): a static board, a card modal, hand-off and return, tasks inside cards · crates/specengine-cli, crates/specengine-http, ui · draft
+- [docs/roadmap/RM-0085.md](roadmap/RM-0085.md) board-handoff (Phase 7, v4 step 3a): a board that holds still, a card modal and page, swimlanes, hand-off and return · crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, scripts, fixtures · draft
 - [docs/roadmap/RM-0086.md](roadmap/RM-0086.md) role-dashboards (Phase 7, v4 step 4): Overview per workspace · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0087.md](roadmap/RM-0087.md) roadmap-states (Phase 7, v4 step 5): the owner's states, and views by state, release and timeline · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) plain-questions (Phase 7, v4 step 6): questions in plain language, collisions as pairs · crates/specengine-mcp, crates/specengine-cli, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-workspace (Phase 7, v4, later): a hub's per-login default workspace · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0091.md](roadmap/RM-0091.md) english-polish: the UI's English grammar slips, fixed with their tests · ui · draft
+- [docs/roadmap/RM-0092.md](roadmap/RM-0092.md) card-tasks (Phase 7, v4 step 3b): the T- tasks behind a card · crates/specengine-model, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · draft

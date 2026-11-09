@@ -80,3 +80,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0071](decisions/ADR-0071.md) A hub's state leaves the host every 15 minutes, restic-encrypted, by the deployment's sidecars; no key and no SpecEngine code · scripts/deploy · accepted
 - [ADR-0072](decisions/ADR-0072.md) The UI's chrome is English or Russian, each viewer's choice, from one catalog, the only home of Russian text · ui, docs · accepted
 - [ADR-0073](decisions/ADR-0073.md) A workspace is a trade's lens from project config, never an entitlement, a control point or a hidden route · architecture · accepted
+- [ADR-0074](decisions/ADR-0074.md) A hand-off is a child card the asking side reviews; a return is a move with a reason; no card's write touches another · architecture · accepted
