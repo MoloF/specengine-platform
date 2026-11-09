@@ -115,7 +115,7 @@ const SCHEMA_5_COLUMNS: usize = 43;
 const SCHEMA_6_COLUMNS: usize = 44;
 
 /// The `proposals` columns of queue schema `schema`, in table order: 1, 2,
-/// 3, 4, 5, 6, 7, 8 and 9 (this build's) are known, a dump of any restores;
+/// 3, 4, 5, 6, 7, 8, 9 and 10 (this build's) are known, a dump of any restores;
 /// `None` for any other.
 pub fn proposal_columns(schema: i64) -> Option<&'static [&'static str]> {
     match schema {
@@ -172,10 +172,11 @@ pub const RUN_COLUMNS: [&str; 11] = [
     "changed_files",
 ];
 
-/// Every column of `cards`, in table order (task spec `card-store`,
-/// "Store"): `position` `INTEGER`, the rest `TEXT` (`col` the documents' key
-/// `column`, `revision` a decimal counter from 1).
-pub const CARD_COLUMNS: [&str; 24] = [
+/// Every column of `cards`, in table order
+/// (`docs/canon/cards.md` "Store"): `position` `INTEGER`, the rest `TEXT`
+/// (`col` the documents' key `column`, `revision` a decimal counter from 1);
+/// `tasks`, the `T-` IDs a card links, step 9 → 10 appends.
+pub const CARD_COLUMNS: [&str; 25] = [
     "id",
     "project",
     "flow",
@@ -200,7 +201,27 @@ pub const CARD_COLUMNS: [&str; 24] = [
     "created_at",
     "updated_at",
     "revision",
+    "tasks",
 ];
+
+/// The columns of queue schema 9's `cards`: the first of
+/// [`CARD_COLUMNS`].
+const SCHEMA_9_CARD_COLUMNS: usize = 24;
+
+/// The first queue schema whose `cards` holds `tasks` (step 9 → 10).
+pub(super) const TASK_LINKS_SCHEMA: i64 = 10;
+
+/// The `cards` columns of queue schema `schema`, in table order
+/// (`docs/canon/queue-backup.md` "Format"): 9 and 10 (this build's) are
+/// known, a dump of either restores, a schema-9 row's `tasks` `NULL`;
+/// `None` for any other (before 9 there is no card).
+pub fn card_columns(schema: i64) -> Option<&'static [&'static str]> {
+    match schema {
+        CARDS_SCHEMA => Some(&CARD_COLUMNS[..SCHEMA_9_CARD_COLUMNS]),
+        TASK_LINKS_SCHEMA..=QUEUE_SCHEMA_VERSION => Some(&CARD_COLUMNS),
+        _ => None,
+    }
+}
 
 /// Every column of `events`, in table order: `seq` (`INTEGER`), then the
 /// `TEXT` ones.
@@ -402,7 +423,8 @@ impl SqliteQueue {
     /// holds no UTF-8 text fails, naming row and column. A DB still at queue
     /// schema 1, 2, 3, 4, 5, 6 or 7 (no step runs here) reads its 24, 35, 40,
     /// 41, 43 or 44 proposal columns, the later ones `None`, its tasks and
-    /// runs from schema 4 on (none before), and its cards from schema 9 on.
+    /// runs from schema 4 on (none before), and its cards from schema 9 on
+    /// (a schema-9 card's `tasks` `None`).
     pub fn stored_rows(&self) -> Result<StoredQueue, QueueError> {
         let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
         let mut state = StoredQueue::default();
@@ -459,16 +481,18 @@ impl SqliteQueue {
                 drop(rows);
                 drop(statement);
             }
-            if version >= CARDS_SCHEMA {
+            // A queue at schema 9 (no step runs here) reads its 24 columns,
+            // `tasks` `None`.
+            if let Some(card_columns) = card_columns(version) {
                 let mut statement = tx
                     .prepare(&format!(
                         "SELECT {} FROM main.cards {ID_ORDER}",
-                        CARD_COLUMNS.join(", ")
+                        card_columns.join(", ")
                     ))
                     .db()?;
                 let mut rows = statement.query([]).db()?;
                 while let Some(row) = rows.next().db()? {
-                    state.cards.push(stored_card(row)?);
+                    state.cards.push(stored_card(row, card_columns.len())?);
                 }
                 drop(rows);
                 drop(statement);
@@ -738,9 +762,10 @@ fn stored_run(row: &Row<'_>) -> Result<StoredRun, QueueError> {
     Ok(StoredRun { run, columns })
 }
 
-/// A `cards` row as stored: `position` an integer or `NULL`, the rest as
+/// A `cards` row as stored, its first `width` columns read (the rest
+/// `None`): `position` an integer or `NULL`, the rest as
 /// [`stored_proposal`].
-fn stored_card(row: &Row<'_>) -> Result<StoredCard, QueueError> {
+fn stored_card(row: &Row<'_>, width: usize) -> Result<StoredCard, QueueError> {
     let name = match row.get_ref(0).db()? {
         ValueRef::Text(bytes) => String::from_utf8_lossy(bytes).into_owned(),
         _ => "NULL".to_owned(),
@@ -758,6 +783,7 @@ fn stored_card(row: &Row<'_>) -> Result<StoredCard, QueueError> {
     let texts = CARD_COLUMNS
         .iter()
         .enumerate()
+        .take(width)
         .filter(|(index, _)| *index != cards::POSITION_COLUMN);
     for (slot, (index, column)) in columns.iter_mut().zip(texts) {
         *slot = stored_text(row, index)?.map_err(|why| {

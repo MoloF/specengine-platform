@@ -2727,3 +2727,231 @@ fn board_handoff_each_body_takes_its_own_new_key_alone() {
         assert_eq!(press.lamp_state(), before, "{path} {body}: nothing changed");
     }
 }
+
+// ---------------------------------------------------- card-tasks (RM-0092)
+
+/// The titles of the card-tasks example (CT-2).
+const NORTH: &str = "Light the north lamp";
+const SWITCH: &str = "Wire the switch";
+
+/// `sqlite3 <db> <sql>` on `home`'s queue of `slug`; it must succeed.
+fn queue_sql(home: &Path, slug: &str, sql: &str) {
+    let done = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(common::data_dir(home).join(format!("{slug}.db")))
+        .arg(sql)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(done.status.success(), "{sql}: {done:?}");
+}
+
+impl Press {
+    /// `spec --json task new --nodes node --title title` in the served
+    /// repository under the daemon's `HOME`: its ID.
+    fn new_task(&self, node: &str, title: &str) -> String {
+        let made = spec(
+            &self.home,
+            &self.root,
+            &["--json", "task", "new", "--nodes", node, "--title", title],
+        );
+        made.code(0);
+        made.json()["id"].as_str().expect("a task's ID").to_owned()
+    }
+
+    /// The game's `GET <LAMP>/cards/id`, a 200.
+    fn lamp_show(&self, id: &str) -> Reply {
+        let reply = self.server.get(&format!("{LAMP}/cards/{id}"));
+        assert_eq!(reply.status, 200, "{id}: {}", reply.text());
+        reply
+    }
+}
+
+/// docs/features/card-tasks.md CT-1, the daemon's half: `POST
+/// .../cards/C-0001/edit {"task": [...]}` is `spec card edit --task`: a 200,
+/// the write document, the list stored in the order given, one `card.edited`
+/// naming `tasks` (with `goal`, both in table order, `as` the body's), the
+/// git side untouched; `["-"]` clears. No such task, a repeat and no task ID
+/// are a 409 with the CLI's exit-1 document, nothing changed.
+#[test]
+fn card_tasks_ct1_an_edit_body_links_as_the_cli_does() {
+    let press = Press::lamp("cards-tasks-link");
+    assert_eq!(press.new_task("ISL-LAMP", NORTH), "T-0001");
+    assert_eq!(press.new_task("ISL-LAMP-ROOM", SWITCH), "T-0002");
+    let git = press.git_side();
+    let made = press.lamp_done(
+        "cards",
+        &json!({"title": "Light the lamp", "discipline": "development"}),
+    );
+    assert_eq!(made["id"], json!("C-0001"));
+    let ids = |press: &Press| -> Vec<Value> {
+        press.lamp_show("C-0001").json()["tasks"]
+            .as_array()
+            .expect("tasks")
+            .iter()
+            .map(|entry| entry["id"].clone())
+            .collect()
+    };
+    let edited = press.lamp_done("cards/C-0001/edit", &json!({"task": ["T-0002", "T-0001"]}));
+    let mut keys: Vec<&String> = edited.as_object().expect("an object").keys().collect();
+    keys.sort();
+    assert_eq!(keys, WRITE_KEYS, "{edited}");
+    assert_eq!(edited["revision"], json!("2"));
+    assert_eq!(ids(&press), [json!("T-0002"), json!("T-0001")]);
+    assert_eq!(
+        press.events().last(),
+        Some(&(
+            "card.edited".to_owned(),
+            json!({"id": "C-0001", "fields": ["tasks"], "as": "local"})
+        ))
+    );
+    let edited = press.lamp_done(
+        "cards/C-0001/edit",
+        &json!({"task": ["T-0001"], "goal": "Before the storm.", "as": "Ann"}),
+    );
+    assert_eq!(edited["revision"], json!("3"));
+    assert_eq!(ids(&press), [json!("T-0001")]);
+    assert_eq!(
+        press.events().last(),
+        Some(&(
+            "card.edited".to_owned(),
+            json!({"id": "C-0001", "fields": ["goal", "tasks"], "as": "Ann"})
+        ))
+    );
+    for (task, flags, reason) in [
+        (
+            json!(["T-0099"]),
+            &["--task", "T-0099"][..],
+            "task: no task T-0099; nothing changed",
+        ),
+        (
+            json!(["T-0001", "T-0001"]),
+            &["--task", "T-0001", "--task", "T-0001"][..],
+            "task: T-0001 is listed twice; nothing changed",
+        ),
+        (
+            json!(["foo"]),
+            &["--task", "foo"][..],
+            "task: \"foo\" is no task ID; nothing changed",
+        ),
+    ] {
+        let mut args = vec!["card", "edit", "C-0001"];
+        args.extend_from_slice(flags);
+        press.lamp_refused("cards/C-0001/edit", &json!({"task": task}), &args, reason);
+    }
+    let cleared = press.lamp_done("cards/C-0001/edit", &json!({"task": ["-"]}));
+    assert_eq!(cleared["revision"], json!("4"));
+    assert_eq!(ids(&press), Vec::<Value>::new());
+    assert_eq!(
+        press.events().last(),
+        Some(&(
+            "card.edited".to_owned(),
+            json!({"id": "C-0001", "fields": ["tasks"], "as": "local"})
+        ))
+    );
+    assert_eq!(press.git_side(), git, "the queue alone");
+}
+
+/// docs/features/card-tasks.md CT-2, the daemon's half (D6, D7): `GET
+/// .../cards/C-0001` serves `tasks` after `evidence`, each `{id, status,
+/// title, stale}` read at request time (a plan shows `review`, the card's
+/// `revision` unchanged), a corrupt row and a deleted one `null` with their
+/// notes; its body byte for byte `spec card show C-0001 --history --json`.
+#[test]
+fn card_tasks_ct2_the_read_serves_tasks_as_the_cli_document() {
+    let press = Press::lamp("cards-tasks-read");
+    assert_eq!(press.new_task("ISL-LAMP", NORTH), "T-0001");
+    assert_eq!(press.new_task("ISL-LAMP-ROOM", SWITCH), "T-0002");
+    assert_eq!(press.new_task("ISL-LAMP", "Trim the wick"), "T-0003");
+    press.lamp_done(
+        "cards",
+        &json!({"title": "Light the lamp", "discipline": "development",
+                "target": ["ISL-LAMP"]}),
+    );
+    press.lamp_done(
+        "cards/C-0001/edit",
+        &json!({"task": ["T-0001", "T-0002", "T-0003"]}),
+    );
+    let same = |press: &Press| -> Value {
+        let reply = press.lamp_show("C-0001");
+        let run = press.cli(&["card", "show", "C-0001", "--history"]);
+        run.code(0);
+        assert_eq!(reply.text(), run.document(), "the CLI's document");
+        reply.json()
+    };
+    let served = same(&press);
+    assert_eq!(
+        served["tasks"],
+        json!([
+            {"id": "T-0001", "status": "draft", "title": NORTH, "stale": null},
+            {"id": "T-0002", "status": "draft", "title": SWITCH, "stale": null},
+            {"id": "T-0003", "status": "draft", "title": "Trim the wick", "stale": null},
+        ]),
+        "{served}"
+    );
+    let text = press.lamp_show("C-0001").text().to_owned();
+    let evidence = text.find("\"evidence\":").expect("evidence");
+    let tasks = text.find("\"tasks\":").expect("tasks");
+    let acceptance = text.find("\"acceptance\":").expect("acceptance");
+    assert!(evidence < tasks && tasks < acceptance, "{text}");
+
+    // Read at request time: a plan by the CLI shows at once.
+    let plan = press.scratch.join("plan.md");
+    fs::write(&plan, "1. Light it.\n").expect("a plan");
+    let planned = spec(
+        &press.home,
+        &press.root,
+        &[
+            "task",
+            "plan",
+            "T-0001",
+            "--plan-file",
+            plan.to_str().expect("UTF-8"),
+        ],
+    );
+    planned.code(0);
+    let served = same(&press);
+    assert_eq!(served["tasks"][0]["status"], json!("review"), "{served}");
+    assert_eq!(served["revision"], json!("2"), "the card's revision stays");
+
+    queue_sql(
+        &press.home,
+        "studio-lamp",
+        "UPDATE tasks SET status = 'bogus' WHERE id = 'T-0002'; DELETE FROM tasks WHERE id = \
+         'T-0003';",
+    );
+    let served = same(&press);
+    assert_eq!(
+        served["tasks"][1],
+        json!({"id": "T-0002", "status": null, "title": null, "stale": null})
+    );
+    assert_eq!(
+        served["tasks"][2],
+        json!({"id": "T-0003", "status": null, "title": null, "stale": null})
+    );
+    let notes: Vec<&str> = served["notes"]
+        .as_array()
+        .expect("notes")
+        .iter()
+        .map(|note| note.as_str().expect("a note"))
+        .collect();
+    assert!(
+        notes.iter().any(
+            |note| note.starts_with("T-0002: its row does not read (`status`: ")
+                && note.ends_with("); no state shown")
+        ),
+        "{notes:?}"
+    );
+    assert!(
+        notes.contains(&"T-0003: no such task in this queue; no state shown"),
+        "{notes:?}"
+    );
+    // The board's read stays as it was: no task on a row (D9).
+    let board = press
+        .server
+        .get(&format!("{LAMP}/cards"))
+        .status(200)
+        .json();
+    let row = board["cards"][0].as_object().expect("a row");
+    assert_eq!(row.len(), 21, "{board}");
+    assert!(!row.contains_key("tasks"), "{board}");
+}

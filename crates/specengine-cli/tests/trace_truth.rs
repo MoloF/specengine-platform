@@ -2348,13 +2348,14 @@ fn ac08_no_card_answers_as_plain_show() {
 
 // ---------------------------------------------- the rest of the spec's rules
 
-/// "Schema": no queue step: 9 stays, the column holds JSON.
+/// "Schema": no queue step of its own: the build's schema (10 since
+/// docs/canon/cards.md "Store") stays, the column holds JSON.
 #[test]
 fn no_queue_step() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     let pair = Pair::new("tt-schema", ALMANAC);
     let id = cut(&pair, "Pages set", &[SET]);
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "9");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "10");
     let raw = pair.sql(&format!("SELECT snapshot FROM cards WHERE id = '{id}';"));
     let stored: Value = serde_json::from_str(raw.trim()).expect("the column holds JSON");
     assert!(stored[0]["within_hash"].is_string(), "{stored}");

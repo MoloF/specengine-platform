@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { aBundle, aCard, aCardList, aCardRow, aCheckReport, aGraphView, aHealthReport, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
 import { ClientError, NO_SUCH_PROPOSAL, STAGE_REFUSED } from "./client";
+import { QUEUE_EVENT_TYPES } from "./http";
 import { ApiProvider, createQueryClient } from "./provider";
 import {
   queryKeys,
@@ -24,6 +25,7 @@ import {
   useHealth,
   useIdentity,
   useInbox,
+  useLiveQueue,
   useNode,
   useProjects,
   useProposal,
@@ -673,6 +675,128 @@ describe("the cards (docs/features/board-ui.md \"Board\", \"Moving\")", () => {
       await expect(write?.mutateAsync({ write: "create", body: { title: "T", as: null } })).rejects.toThrow("no flow takes");
     });
     expect(client.getCard).not.toHaveBeenCalled();
+  });
+});
+
+describe("a card's linked tasks on the live tail (CT-5 of docs/features/card-tasks.md, D13)", () => {
+  type Tail = Parameters<StubClient["subscribe"]>;
+
+  /** The Board with C-0001 open, C-0002 read before and left: the list, one card on screen, the live tail. */
+  function OpenCard() {
+    useLiveQueue("alpha");
+    useCards("alpha");
+    useCard("alpha", "C-0001");
+    return null;
+  }
+
+  async function onScreen() {
+    const client = stubClient();
+    client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-0001" }), aCardRow({ id: "C-0002", position: 2 })]));
+    client.getCard.mockImplementation((_project, id) => Promise.resolve(aCard({ id, tasks: [{ id: "T-0001", status: "draft", title: "Light the north lamp", stale: null }] })));
+    let tail: Tail[1] = () => undefined;
+    const subscribe: StubClient["subscribe"] = (_project, onEvent) => {
+      tail = onEvent;
+      return () => undefined;
+    };
+    const queryClient = createQueryClient();
+    // C-0002 was open before: cached, not on screen.
+    queryClient.setQueryData(queryKeys.card("alpha", "C-0002"), aCard({ id: "C-0002" }));
+    render(
+      <ApiProvider client={{ ...client, subscribe }} queryClient={queryClient}>
+        <OpenCard />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(queryClient.isFetching()).toBe(0);
+    });
+    client.getCards.mockClear();
+    client.getCard.mockClear();
+    return {
+      client,
+      queryClient,
+      tail: (event: Parameters<Tail[1]>[0]) => {
+        tail(event);
+      },
+    };
+  }
+
+  async function quiet(queryClient: QueryClient) {
+    await waitFor(() => {
+      expect(queryClient.isFetching()).toBe(0);
+    });
+  }
+
+  it.each(QUEUE_EVENT_TYPES.filter((type) => type.startsWith("task.")))("%s reads the open card once and the list never: a card serves its tasks as read now", async (type) => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 70, type, payload: { id: "T-0001" } });
+    });
+    await quiet(queryClient);
+    expect(argsOf(client.getCard)).toEqual([["alpha", "C-0001"]]);
+    expect(client.getCards).not.toHaveBeenCalled();
+    // The card not on screen is marked stale, read when it opens again.
+    expect(queryClient.getQueryState(queryKeys.card("alpha", "C-0002"))?.isInvalidated).toBe(true);
+  });
+
+  it("a task event naming another task, or none, reads the open card all the same: no read says which cards link a task", async () => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 71, type: "task.claimed", payload: { id: "T-0042", run: 1 } });
+    });
+    await quiet(queryClient);
+    act(() => {
+      tail({ seq: 72, type: "task.created", payload: "not JSON" });
+    });
+    await quiet(queryClient);
+    expect(argsOf(client.getCard)).toEqual([
+      ["alpha", "C-0001"],
+      ["alpha", "C-0001"],
+    ]);
+    expect(client.getCards).not.toHaveBeenCalled();
+  });
+
+  it("the served state lands in the open card's read: after task.planned the card holds `review`", async () => {
+    const { client, queryClient, tail } = await onScreen();
+    client.getCard.mockImplementation((_project, id) => Promise.resolve(aCard({ id, tasks: [{ id: "T-0001", status: "review", title: "Light the north lamp", stale: null }] })));
+    act(() => {
+      tail({ seq: 73, type: "task.planned", payload: { id: "T-0001" } });
+    });
+    await quiet(queryClient);
+    const card = queryClient.getQueryData<ReturnType<typeof aCard>>(queryKeys.card("alpha", "C-0001"));
+    expect(card?.tasks.map((task) => task.status)).toEqual(["review"]);
+  });
+
+  it("proposal.applied reads the open card once: an apply may move a linked task's `stale`; the list is read once, for its marks, as before, never again for the tasks", async () => {
+    const { client, queryClient, tail } = await onScreen();
+    client.getCard.mockImplementation((_project, id) => Promise.resolve(aCard({ id, tasks: [{ id: "T-0001", status: "in_progress", title: "Light the north lamp", stale: true }] })));
+    act(() => {
+      tail({ seq: 75, type: "proposal.applied", payload: { id: "PR-0001" } });
+    });
+    await quiet(queryClient);
+    expect(argsOf(client.getCard)).toEqual([["alpha", "C-0001"]]);
+    expect(client.getCards).toHaveBeenCalledTimes(1);
+    expect(queryClient.getQueryState(queryKeys.card("alpha", "C-0002"))?.isInvalidated).toBe(true);
+    const card = queryClient.getQueryData<ReturnType<typeof aCard>>(queryKeys.card("alpha", "C-0001"));
+    expect(card?.tasks.map((task) => task.stale)).toEqual([true]);
+  });
+
+  it.each(["proposal.created", "proposal.approved", "proposal.rejected", "proposal.apply_failed"])("%s reads no card: no file changed, so no linked task's state moved", async (type) => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 76, type, payload: { id: "PR-0001" } });
+    });
+    await quiet(queryClient);
+    expect(client.getCard).not.toHaveBeenCalled();
+  });
+
+  it("a proposal event reads no card: only a task's own events move what a card shows of it", async () => {
+    const { client, queryClient, tail } = await onScreen();
+    act(() => {
+      tail({ seq: 74, type: "proposal.created", payload: { id: "PR-0001" } });
+    });
+    await quiet(queryClient);
+    expect(client.getCard).not.toHaveBeenCalled();
+    expect(client.getCards).not.toHaveBeenCalled();
   });
 });
 

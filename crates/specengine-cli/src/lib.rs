@@ -457,7 +457,7 @@ pub use specengine_core::task::{
 };
 pub use specengine_core::{ProjectConfig, TeamConfig, TeamEntry, TeamRole};
 /// The task package and its parts (the model's), for the bridges.
-pub use specengine_model::{RunOutcome, TaskPackage, TaskStatus};
+pub use specengine_model::{CARD_TASKS_MAX, RunOutcome, TaskPackage, TaskStatus};
 /// The caller's git environment a queue request carries.
 pub use specengine_store::GitEnv;
 /// A staged choice as the review document carries it (the store's).
@@ -487,10 +487,10 @@ pub use sync::{
     sync_once,
 };
 pub use task::{
-    TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListEntry, TaskListOutcome,
-    TaskListRequest, TaskNewRequest, TaskOutcome, TaskPlanRequest, TaskReportRequest,
-    TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes, task_claim,
-    task_complete, task_list, task_new, task_plan, task_report, task_show,
+    LinkedTask, TaskClaimRequest, TaskCompleteRequest, TaskDecisionRequest, TaskListEntry,
+    TaskListOutcome, TaskListRequest, TaskNewRequest, TaskOutcome, TaskPlanRequest,
+    TaskReportRequest, TaskShowOutcome, TaskShowRequest, task_approve, task_cancel, task_changes,
+    task_claim, task_complete, task_list, task_new, task_plan, task_report, task_show,
 };
 pub use team::{TeamEntryRow, TeamOutcome, TeamRow, team, team_read};
 pub use trace::{

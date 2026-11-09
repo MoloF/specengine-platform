@@ -36,7 +36,7 @@
 //! - Beside the criteria, from "Rules": R3's two rounds in one second, R11's
 //!   removed folder, R2's untouched projects; and a `queue` round over two
 //!   real projects of different nature (`fixtures/spec-a`, `fixtures/spec-b`)
-//!   with the built `spec`, whose dumps are format 3 queues.
+//!   with the built `spec`, whose dumps are format 4 queues.
 //!
 //! C4 and C5 run on CI alone; OP5 checks their steps exist. VF4-VF9 and
 //! HO1-HO17 are the owner's.
@@ -2571,8 +2571,9 @@ fn r11_a_removed_project_leaves_the_next_generation() {
 /// Beside docs/features/hub-ops.md "Acceptance criteria" OP8-OP9: a `queue`
 /// round over two real projects of different nature (a game design,
 /// `fixtures/spec-a`, and a command-line tool, `fixtures/spec-b`) with this
-/// build's `spec`: each generation file is that project's format-3 dump
-/// (`docs/canon/queue-backup.md` "Format"), holding its one question, and
+/// build's `spec`: each generation file is that project's format-4 dump
+/// (`docs/canon/queue-backup.md` "Format"; format 4 since card-tasks,
+/// RM-0092), holding its one question, and
 /// the projects are untouched (R2).
 #[test]
 fn data_a_queue_round_dumps_real_queues_with_the_built_spec() {
@@ -2620,7 +2621,7 @@ fn data_a_queue_round_dumps_real_queues_with_the_built_spec() {
             let dump = read(&generation.join(format!("{name}.jsonl")));
             let header: Value =
                 serde_json::from_str(dump.lines().next().expect("a header")).expect("JSON");
-            assert_eq!(header["format"], 3, "{shell}: {name}: {dump}");
+            assert_eq!(header["format"], 4, "{shell}: {name}: {dump}");
             assert_eq!(header["proposals"], 1, "{shell}: {name}: {dump}");
             if name == "a" {
                 assert_eq!(header["project"], "lantern-keep", "{shell}: {dump}");

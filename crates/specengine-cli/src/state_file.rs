@@ -1,15 +1,18 @@
-//! The queue's dump, format 3 (task spec `card-store`, "Backup"; format 2:
-//! canon `tasks`, "Backup"; format 1: canon `queue-backup`, "Format"): UTF-8
+//! The queue's dump, format 4
+//! (canon `queue-backup`, "Format", "Import";
+//! cards: canon `cards`, "Backup"; tasks: canon `tasks`, "Backup"): UTF-8
 //! compact JSON, one object per LF-ended line. The header
-//! `{"format":3,"queue_schema":9,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
+//! `{"format":4,"queue_schema":10,"project":"<slug>","proposals":<p>,"tasks":<t>,"runs":<r>,"cards":<c>,"events":<e>}`
 //! (keys in this order; the counts of the rows below it), then every
 //! `proposals` row by ID number, every `tasks` row by ID number, every
 //! `runs` row by task and number, every `cards` row by ID number, every
 //! `events` row by `seq`, each `{"<table>":{…}}` with every column in table
 //! order: `TEXT` a string, `NULL` `null`, `run`, `position` and `seq`
 //! numbers; JSON columns stay the strings stored. No export time and no host
-//! inside: equal queues give equal bytes. Format 3 holds queue schema 9
-//! alone. A format-1 dump (five header keys, queue schema 1, 2 or 3,
+//! inside: equal queues give equal bytes. Format 4 holds queue schema 10,
+//! its cards' 25 columns, `tasks` last. A format-3 dump (eight header keys)
+//! holds queue schema 9 and still restores, its cards' 24 columns, `tasks`
+//! restored `NULL`. A format-1 dump (five header keys, queue schema 1, 2 or 3,
 //! `proposals` and `events` rows only) still restores: its rows hold that
 //! schema's 24, 35 or 40 columns, the later ones restored `NULL`; format 2
 //! (seven header keys, no cards) holds queue schema 4 (41 columns, its stages restored `NULL`), 5 (43, a
@@ -35,14 +38,14 @@ use specengine_core::proposal::proposal_number;
 use specengine_core::task::task_number;
 use specengine_store::{
     CARD_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS, QUEUE_SCHEMA_VERSION, RUN_COLUMNS, StoredCard,
-    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
+    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, card_columns,
     proposal_columns,
 };
 
 use crate::CliError;
 
 /// The dump's format: the header's `format`.
-pub const STATE_FORMAT: u64 = 3;
+pub const STATE_FORMAT: u64 = 4;
 
 /// The oldest format this build restores: 1, proposals and events only.
 const PROPOSALS_ONLY_FORMAT: u64 = 1;
@@ -50,12 +53,19 @@ const PROPOSALS_ONLY_FORMAT: u64 = 1;
 /// The format of proposals, tasks, runs and events, no cards.
 const NO_CARDS_FORMAT: u64 = 2;
 
+/// The format of cards without their linked tasks: queue schema 9 alone.
+const NO_TASK_LINKS_FORMAT: u64 = 3;
+
 /// The first queue schema with tasks and runs: format 1 holds the schemas
 /// before it, format 2 it and those after, to [`CARDS_SCHEMA`].
 const TASKS_SCHEMA: i64 = 4;
 
-/// The first queue schema with cards: format 3 holds it, to this build's.
+/// The first queue schema with cards: format 3 holds it alone.
 const CARDS_SCHEMA: i64 = 9;
+
+/// The first queue schema whose cards link tasks: format 4 holds it, to
+/// this build's.
+const TASK_LINKS_SCHEMA: i64 = 10;
 
 /// The header's keys, in the order written.
 const HEADER_KEYS: [&str; 8] = [
@@ -317,6 +327,8 @@ struct Header {
     project: String,
     /// The `proposals` columns of its queue schema.
     columns: &'static [&'static str],
+    /// The `cards` columns of its queue schema: none before format 3.
+    card_columns: &'static [&'static str],
     proposals: u64,
     tasks: u64,
     runs: u64,
@@ -348,9 +360,9 @@ fn line_value(line: &[u8]) -> Result<Vec<(String, Json)>, &'static str> {
 }
 
 /// The header line: `format` first (a newer build's header may differ in
-/// all else), then exactly the format's keys (format 1: five; 2: seven; 3:
-/// eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9 to this
-/// build's), `project` the root's slug, the counts.
+/// all else), then exactly the format's keys (format 1: five; 2: seven; 3,
+/// 4: eight), `queue_schema` (format 1: 1 to 3; 2: 4 to 8; 3: 9; 4: 10 to
+/// this build's), `project` the root's slug, the counts.
 fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, String> {
     let named = |key: &str| {
         entries
@@ -410,11 +422,12 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         ));
     }
     // Format 1 holds the schemas before the tasks, format 2 those to the
-    // cards, format 3 the rest.
+    // cards, format 3 the one before a card's tasks, format 4 the rest.
     let held = match format {
         PROPOSALS_ONLY_FORMAT => 1..TASKS_SCHEMA,
         NO_CARDS_FORMAT => TASKS_SCHEMA..CARDS_SCHEMA,
-        _ => CARDS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
+        NO_TASK_LINKS_FORMAT => CARDS_SCHEMA..TASK_LINKS_SCHEMA,
+        _ => TASK_LINKS_SCHEMA..QUEUE_SCHEMA_VERSION + 1,
     };
     let columns = proposal_columns(schema).filter(|_| held.contains(&schema));
     let Some(columns) = columns else {
@@ -454,6 +467,7 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
         format,
         project: project.clone(),
         columns,
+        card_columns: card_columns(schema).unwrap_or_default(),
         proposals: count("proposals")?,
         tasks,
         runs,
@@ -463,11 +477,11 @@ fn read_header(entries: Vec<(String, Json)>, slug: &str) -> Result<Header, Strin
 }
 
 /// A row line: `{"proposals":{…}}`, `{"tasks":{…}}`, `{"runs":{…}}` (from
-/// format 2), `{"cards":{…}}` (format 3) or `{"events":{…}}`, every column of
-/// the table (`proposals`: of the header's queue schema) once and no other,
-/// `TEXT` a string or `null`, `run` and `seq` integers ≥ 1, `position` an
-/// integer or `null`, an `id` and a run's `task_id` as the queue writes them,
-/// `project` the header's.
+/// format 2), `{"cards":{…}}` (from format 3) or `{"events":{…}}`, every
+/// column of the table (`proposals`, `cards`: of the header's queue schema)
+/// once and no other, `TEXT` a string or `null`, `run` and `seq` integers ≥
+/// 1, `position` an integer or `null`, an `id` and a run's `task_id` as the
+/// queue writes them, `project` the header's.
 fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, String> {
     const SHAPE: &str = "not a row `{\"<table>\":{…}}` of one table";
     let project = header.project.as_str();
@@ -481,7 +495,7 @@ fn read_row(mut entries: Vec<(String, Json)>, header: &Header) -> Result<Row, St
         "proposals" => header.columns,
         "tasks" if with_tasks => &TASK_COLUMNS,
         "runs" if with_tasks => &RUN_COLUMNS,
-        "cards" if with_cards => &CARD_COLUMNS,
+        "cards" if with_cards => header.card_columns,
         "events" => &EVENT_COLUMNS,
         _ if with_cards => {
             return Err(

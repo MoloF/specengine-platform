@@ -79,9 +79,10 @@ const WRITE_KEYS: [&str; 7] = [
 ];
 
 /// `show`'s document: the columns in order, less `project`, `col` as
-/// `column`, `--marks`' four keys after `targets`, then `allowed`, `history`,
-/// `notes`.
-const SHOW_KEYS: [&str; 30] = [
+/// `column`, `--marks`' four keys after `targets`, `tasks` after `evidence`
+/// (docs/canon/cards.md "Documents and events": each linked task as read now),
+/// then `allowed`, `history`, `notes`.
+const SHOW_KEYS: [&str; 31] = [
     "id",
     "flow",
     "column",
@@ -103,6 +104,7 @@ const SHOW_KEYS: [&str; 30] = [
     "parent",
     "corrects",
     "evidence",
+    "tasks",
     "acceptance",
     "cancellation",
     "created_by",
@@ -2106,7 +2108,8 @@ fn cards_queue(pair: &Pair) {
     );
 }
 
-/// AC-07: a queue of every card shape dumps as format 3, schema 9, the
+/// AC-07: a queue of every card shape dumps as format 4, schema 10 (format 3,
+/// schema 9 until docs/canon/cards.md "Store" added `tasks`), the
 /// header's eight keys in order, `{"cards":{…}}` rows by number after the
 /// runs, their columns in `CARD_COLUMNS` order, `position` a number; the
 /// count lines and documents gain `cards`; a fresh `HOME` restores it,
@@ -2156,7 +2159,7 @@ fn ac07_cards_round_trip_through_a_format_3_dump() {
     assert_eq!(
         lines[0],
         format!(
-            "{{\"format\":3,\"queue_schema\":9,\"project\":\"card-press\",\"proposals\":0,\
+            "{{\"format\":4,\"queue_schema\":10,\"project\":\"card-press\",\"proposals\":0,\
              \"tasks\":1,\"runs\":0,\"cards\":4,\"events\":{event_rows}}}"
         )
     );
@@ -2272,8 +2275,9 @@ fn ac07_a_card_alone_occupies_a_queue() {
 }
 
 /// AC-07: a format-2 dump (seven header keys, no cards) restores into a
-/// fresh queue and re-exports as format 3; a schema-8 database exports as
-/// format 3 unmigrated, and steps to 9 when a command opens it, rows
+/// fresh queue and re-exports as format 4; a schema-8 database exports as
+/// format 4 unmigrated, and steps to 10 when a command opens it (format 3,
+/// schema 9 until docs/canon/cards.md "Store"), rows
 /// unchanged. Refused, exit 2 naming the file and the line, nothing made:
 /// the refusals of "Backup".
 #[test]
@@ -2290,7 +2294,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let v3_lines: Vec<String> = v3.lines().map(str::to_owned).collect();
     assert_eq!(
         v3_lines[0],
-        "{\"format\":3,\"queue_schema\":9,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
+        "{\"format\":4,\"queue_schema\":10,\"project\":\"card-press\",\"proposals\":0,\"tasks\":1,\
          \"runs\":0,\"cards\":0,\"events\":1}"
     );
     let old_header = "{\"format\":2,\"queue_schema\":8,\"project\":\"card-press\",\"proposals\":0,\
@@ -2308,7 +2312,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     assert_eq!(
         fs::read_to_string(&again).unwrap(),
         v3,
-        "re-exported as format 3"
+        "re-exported as format 4"
     );
 
     // A schema-8 database: exported unmigrated, then stepped by a card.
@@ -2323,7 +2327,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     );
     let rows = pair.sql("SELECT * FROM tasks; SELECT * FROM events;");
     assert_eq!(ok(&pair, &["card", "list"]), PRESS_BOARD);
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "9", "stepped");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "10", "stepped");
     assert_eq!(pair.sql("SELECT * FROM tasks; SELECT * FROM events;"), rows);
 
     // The refusals, on a dump holding one card.
@@ -2350,7 +2354,7 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut format_2_with_a_card = lines.clone();
     format_2_with_a_card[0] = format_2_with_a_card[0]
         .replacen(
-            "\"format\":3,\"queue_schema\":9,",
+            "\"format\":4,\"queue_schema\":10,",
             "\"format\":2,\"queue_schema\":8,",
             1,
         )
@@ -2360,25 +2364,25 @@ fn ac07_older_formats_restore_and_the_backup_refusals_exit_2() {
     let mut extra_column = lines.clone();
     extra_column[1] = card_row.replacen("\"goal\":null,", "\"goal\":null,\"bogus\":null,", 1);
     let cases: Vec<(&str, Vec<String>, usize)> = vec![
-        ("format-3-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
+        ("format-4-of-seven-keys", change(0, "\"cards\":1,", ""), 1),
         (
-            "format-3-of-schema-8",
-            change(0, "\"queue_schema\":9,", "\"queue_schema\":8,"),
+            "format-4-of-schema-9",
+            change(0, "\"queue_schema\":10,", "\"queue_schema\":9,"),
             1,
         ),
         (
             "format-2-of-eight-keys",
             change(
                 0,
-                "\"format\":3,\"queue_schema\":9,",
+                "\"format\":4,\"queue_schema\":10,",
                 "\"format\":2,\"queue_schema\":8,",
             ),
             1,
         ),
-        ("format-4", change(0, "\"format\":3,", "\"format\":4,"), 1),
+        ("format-5", change(0, "\"format\":4,", "\"format\":5,"), 1),
         (
-            "schema-10",
-            change(0, "\"queue_schema\":9,", "\"queue_schema\":10,"),
+            "schema-11",
+            change(0, "\"queue_schema\":10,", "\"queue_schema\":11,"),
             1,
         ),
         ("a-card-in-format-2", format_2_with_a_card, 2),
@@ -3191,7 +3195,7 @@ fn list_is_capped_with_a_tail() {
          INSERT INTO cards SELECT printf('C-%04d', i), project, flow, col, i, title, goal, \
          discipline, targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, \
          corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, \
-         revision FROM cards, n WHERE id = 'C-0001';",
+         revision, tasks FROM cards, n WHERE id = 'C-0001';",
     );
     let text = ok(&pair, &["card", "list"]);
     let last = text.lines().last().expect("a tail");

@@ -10,7 +10,9 @@
 //! `docs/index-decisions.md`, `docs/index-crates.md` and
 //! `docs/index-roadmap.md` (docs/features/roadmap-items.md SW-4) and the
 //! roadmap view `docs/generated/roadmap.md` (docs/features/roadmap-view.md
-//! SW-5) deleted, X recreates all eight byte-identical to the working
+//! SW-5) deleted (with the `proposal-*`, `hub*` and `card*` canon shards,
+//! eleven outputs in all since card-tasks, RM-0092), X recreates all
+//! byte-identical to the working
 //! tree's, one `wrote` line each in config order, the view last; run again
 //! it reports all `unchanged` and keeps the mtimes, the JSON with `shards`
 //! (the six, in order) and `roadmap`;
@@ -263,6 +265,8 @@ fn export_index_recreates_this_repository_s_index() {
         // docs/features/review-form.md: the `proposal-*` queue canons.
         "## Canon",
         // docs/features/hub-ops.md "Canon at ship": the `hub*` hub canons.
+        "## Canon",
+        // card-tasks (RM-0092): the `card*` card canons.
         "## Canon",
         "## Canon",
         "## Decisions",

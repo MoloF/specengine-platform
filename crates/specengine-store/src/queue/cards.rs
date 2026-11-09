@@ -17,7 +17,9 @@
 //!   `position` 0.
 //! - **IDs**: `C-` and 4 or more digits, the highest plus one in the
 //!   transaction, rows never deleted, so an ID is never reused.
-//! - **Columns**: `targets`, `criteria` JSON string lists, `evidence`
+//! - **Columns**: `targets`, `criteria`, `tasks` JSON string lists (`tasks`
+//!   the `T-` IDs a card links, `NULL` read as none, never read by a rule:
+//!   `docs/canon/card-tasks.md` "The rule"), `evidence`
 //!   `[{kind, value, by, at}]`, `acceptance` `{by, at, note, verdict, departs,
 //!   discrepancy}` (a row without `verdict` reads `briefed`), `cancellation`
 //!   `{by, at, reason}`, `snapshot` `[{id, rev, norm_hash, within_hash,
@@ -40,10 +42,11 @@ use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use specengine_core::card::{
     EVIDENCE_ENTRIES_MAX, accept_refusal, card_id, card_move, card_number, closed_refusal,
-    reviewer_problem, stale_refusal,
+    reviewer_problem, stale_refusal, task_links_problem,
 };
 use specengine_core::card_toml::CardFlow;
 use specengine_core::intake::{DISTINCT_MAX, distinct_entry_fits};
+use specengine_core::task::task_number;
 use specengine_core::trace::{
     ClearedNode, HashKind, TargetNorms, clear_refusal, cleared, clearer_problem,
     correction_refusal, freeze, refrozen, retargeted, suspect_on, vouched,
@@ -52,7 +55,7 @@ use specengine_model::{
     Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, CardVerdict, EvidenceKind,
 };
 
-use super::state::stored_text;
+use super::state::{TASK_LINKS_SCHEMA, stored_text};
 use super::{
     CARD_COLUMNS, EVENT_CREATED, Event, ID_ORDER, IntakeResult, NewIntake, ProposalKind,
     QueueError, SqliteQueue, check_time, existing, insert_intake, log, queue_matches, to_json,
@@ -90,10 +93,22 @@ const CLEARED_NEEDS_CORRECTION: &str = "needs_correction";
 /// `card.cleared`'s `outcome`: a correction accepted.
 const CLEARED_CORRECTED: &str = "corrected";
 
+/// The columns of `cards` step 9 made, in table order.
+macro_rules! step_9_columns {
+    () => {
+        "id, project, flow, col, position, title, goal, discipline, targets, snapshot, criteria, \
+         assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, \
+         cancellation, created_by, created_at, updated_at, revision"
+    };
+}
+
 /// Every column of `cards` in table order, for a statement.
-const CARD_SELECT: &str = "id, project, flow, col, position, title, goal, discipline, targets, \
-     snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, \
-     acceptance, cancellation, created_by, created_at, updated_at, revision";
+const CARD_SELECT: &str = concat!(step_9_columns!(), ", tasks");
+
+/// [`CARD_SELECT`] over a queue still at schema 9, no step run (a handle
+/// of [`SqliteQueue::open_existing`]): `tasks` read `NULL`, as on a row
+/// step 10 stepped.
+const CARD_SELECT_9: &str = concat!(step_9_columns!(), ", NULL");
 
 /// `position` among the columns; the one that is no `TEXT`.
 pub(super) const POSITION_COLUMN: usize = 4;
@@ -141,6 +156,11 @@ pub struct CardEdit {
     /// With `targets`, what they read now: a target kept keeps its entry, a
     /// new one is frozen. `None`: the snapshot is left alone.
     pub norms: Option<TargetNorms>,
+    /// The `T-` tasks it links, the whole list in the order given; `Some`
+    /// of none clears it. Core's grammar, repeat and cap are asked again
+    /// under the lock; whether a task exists is the caller's to ask, and no
+    /// task is read here (`docs/canon/card-tasks.md` "The rule").
+    pub tasks: Option<Vec<String>>,
 }
 
 impl CardEdit {
@@ -157,6 +177,7 @@ impl CardEdit {
             ("parent", self.parent.is_some()),
             ("corrects", self.corrects.is_some()),
             ("evidence", !self.evidence.is_empty()),
+            ("tasks", self.tasks.is_some()),
         ];
         written
             .into_iter()
@@ -366,7 +387,13 @@ impl SqliteQueue {
             return Err(QueueError::SchemaTooNew { found: version });
         }
         let list = if schema::has_table(&tx, "cards")? {
-            listed_cards(&tx, &self.project)?
+            // A queue at schema 9 holds no `tasks` yet: its cards link none.
+            let select = if version < TASK_LINKS_SCHEMA {
+                CARD_SELECT_9
+            } else {
+                CARD_SELECT
+            };
+            listed_from(&tx, &self.project, select)?
         } else {
             CardList::default()
         };
@@ -646,10 +673,16 @@ impl SqliteQueue {
 /// `project`'s cards by number, inside the caller's read; a row that does
 /// not decode into [`CardList::unreadable`].
 fn listed_cards(tx: &Transaction<'_>, project: &str) -> Result<CardList, QueueError> {
+    listed_from(tx, project, CARD_SELECT)
+}
+
+/// [`listed_cards`] by the columns `select`, [`CARD_SELECT`]'s or
+/// [`CARD_SELECT_9`]'s.
+fn listed_from(tx: &Transaction<'_>, project: &str, select: &str) -> Result<CardList, QueueError> {
     let raws = {
         let mut statement = tx
             .prepare(&format!(
-                "SELECT {CARD_SELECT} FROM main.cards WHERE project = ?1 {ID_ORDER}"
+                "SELECT {select} FROM main.cards WHERE project = ?1 {ID_ORDER}"
             ))
             .db()?;
         let mut rows = statement.query([project]).db()?;
@@ -904,7 +937,7 @@ fn insert_card(
         &format!(
             "INSERT INTO main.cards ({CARD_SELECT}) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, \
              ?9, ?10, ?11, ?12, ?19, ?13, ?14, ?15, ?16, '[]', NULL, NULL, ?17, ?18, ?18, \
-             '1')"
+             '1', '[]')"
         ),
         rusqlite::params![
             id,
@@ -1196,15 +1229,21 @@ impl Change<'_> {
                 ),
             ));
         }
+        if let Some(problem) = edit.tasks.as_deref().and_then(task_links_problem) {
+            return Err(refused(id, problem));
+        }
+        let tasks = edit.tasks.as_ref().map(to_json).transpose()?;
         if let (Some(targets), Some(norms)) = (&edit.targets, &edit.norms) {
             let snapshot = retargeted(card.snapshot.as_deref(), targets, norms);
             write_snapshot(self.tx, self.project, id, &snapshot)?;
         }
+        // `tasks` written whole when given, else left as stored (a row
+        // stepped from schema 9 keeps its `NULL`).
         self.tx
             .execute(
                 "UPDATE main.cards SET title = ?1, goal = ?2, targets = ?3, criteria = ?4, \
-                 estimate = ?5, due = ?6, parent = ?7, corrects = ?8, evidence = ?9 \
-                 WHERE id = ?10 AND project = ?11",
+                 estimate = ?5, due = ?6, parent = ?7, corrects = ?8, evidence = ?9, \
+                 tasks = COALESCE(?12, tasks) WHERE id = ?10 AND project = ?11",
                 rusqlite::params![
                     edit.title.as_ref().unwrap_or(&card.title),
                     keep(edit.goal.as_ref(), &card.goal),
@@ -1217,6 +1256,7 @@ impl Change<'_> {
                     to_json(&evidence)?,
                     id,
                     self.project,
+                    tasks,
                 ],
             )
             .db()?;
@@ -1640,6 +1680,13 @@ fn decode_card(raw: RawCard) -> Result<Card, UnreadableCard> {
                 format!("{revision_text:?} is no revision (1, 2, …)"),
             )
         })?;
+    // `NULL` (a row stepped from schema 9) links none; every entry must be
+    // a task ID, while a repeat or a long list a hand edit left reads as
+    // stored (`docs/canon/cards.md` "Store").
+    let tasks: Vec<String> = json_column(&id, "tasks", take())?;
+    if let Some(entry) = tasks.iter().find(|entry| task_number(entry).is_none()) {
+        return Err(unreadable(&id, "tasks", format!("{entry:?} is no task ID")));
+    }
     Ok(Card {
         id,
         project,
@@ -1665,5 +1712,6 @@ fn decode_card(raw: RawCard) -> Result<Card, UnreadableCard> {
         created_at,
         updated_at,
         revision,
+        tasks,
     })
 }

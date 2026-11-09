@@ -2714,3 +2714,128 @@ fn board_handoff_the_hub_card_texts_name_the_new_keys() {
         );
     }
 }
+
+// ------------------------------------------------ card-tasks (RM-0092) CT-7
+
+/// The note of each linked task a hub serves (card-tasks CT-7), after
+/// `<id>: `.
+const HUB_TASK_NOTE: &str = "a hub reads no task; its state is on the terminal that holds it";
+
+/// docs/features/card-tasks.md CT-7 over `/mcp`, both eras: in a hub-served
+/// `lantern-keep` whose queue holds `T-0001` (`review`, by SQL), `edit_card
+/// {task: ["T-0001", "T-0042"]}` by `mira` is stored, `card.edited` acting as
+/// her; `get_card` serves every entry `null` with the hub's note per ID, the
+/// same `tasks` and notes a page's `GET .../cards/C` serves; `["X-1"]`, a
+/// repeat and 33 entries are error results with the local reason, nothing
+/// stored. The hub's `edit_card` text names `task` and says the hub checks
+/// none, ASCII within 2 048 bytes, among 17 tools. M13, M14.
+#[test]
+fn card_tasks_ct7_the_hub_tools_keep_the_ids_and_read_no_task() {
+    let world = World::new("mcp-card-tasks");
+    let made = spec(
+        &world.home,
+        &world.keep,
+        &[
+            "--json",
+            "task",
+            "new",
+            "--nodes",
+            "MEC-STAMINA",
+            "--title",
+            "Stamina pass",
+        ],
+    );
+    made.code(0);
+    assert_eq!(made.json()["id"], json!("T-0001"), "{}", made.show());
+    let done = std::process::Command::new("/usr/bin/sqlite3")
+        .arg(common::data_dir(&world.home).join(format!("{KEEP}.db")))
+        .arg("UPDATE tasks SET status = 'review' WHERE id = 'T-0001';")
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(done.status.success(), "{done:?}");
+    let many: Vec<String> = (1..=33).map(|n| format!("T-{n:04}")).collect();
+    for era in ERAS {
+        let mut client = Client::open(era, world.port(), KEEP, "mira");
+        let made = client.call(
+            "create_card",
+            json!({"title": format!("Linked {era:?}"), "discipline": "sketch"}),
+        );
+        let card = answered(&made, "create_card")["id"]
+            .as_str()
+            .expect("a card")
+            .to_owned();
+        let edited = client.call(
+            "edit_card",
+            json!({"card_id": card, "task": ["T-0001", "T-0042"]}),
+        );
+        answered(&edited, "edit_card");
+        assert_eq!(
+            world.events().pop(),
+            Some((
+                "card.edited".to_owned(),
+                json!({"id": card, "fields": ["tasks"], "as": "mira"})
+            )),
+            "{era:?}"
+        );
+        let got = client.call("get_card", json!({"card_id": card}));
+        let document = answered(&got, "get_card");
+        assert_eq!(
+            document["tasks"],
+            json!([
+                {"id": "T-0001", "status": null, "title": null, "stale": null},
+                {"id": "T-0042", "status": null, "title": null, "stale": null},
+            ]),
+            "{era:?}: {document}"
+        );
+        assert_eq!(
+            document["notes"],
+            json!([
+                format!("T-0001: {HUB_TASK_NOTE}"),
+                format!("T-0042: {HUB_TASK_NOTE}"),
+            ]),
+            "{era:?}: {document}"
+        );
+        let page = world.page("tomas", &format!("/api/projects/{KEEP}/cards/{card}"));
+        assert_eq!(page.status, 200, "{}", page.text());
+        let page = page.json();
+        assert_eq!(page["tasks"], document["tasks"], "{era:?}: the page's read");
+        assert_eq!(page["notes"], document["notes"], "{era:?}: the page's read");
+
+        for (task, reason) in [
+            (
+                json!(["X-1"]),
+                "task: \"X-1\" is no task ID; nothing changed",
+            ),
+            (
+                json!(["T-0042", "T-0042"]),
+                "task: T-0042 is listed twice; nothing changed",
+            ),
+            (json!(many), "task: 33 tasks, at most 32; nothing changed"),
+        ] {
+            let before = world.events();
+            let refused = client.call("edit_card", json!({"card_id": card, "task": task}));
+            assert!(is_error(&refused), "{era:?} {task}: {refused}");
+            let text = content_text(&refused);
+            assert!(
+                text.trim_end().ends_with(reason),
+                "{era:?} {task}: {text:?}"
+            );
+            assert_eq!(world.events(), before, "{era:?} {task}: nothing stored");
+        }
+    }
+
+    let mut session = world.session(KEEP, "mira");
+    let hub = session.tools();
+    assert_eq!(tool_names(&hub).len(), 17);
+    let description = tool(&hub, "edit_card")["description"]
+        .as_str()
+        .expect("a description");
+    assert!(has_word(description, "task"), "{description}");
+    assert!(
+        description.contains("This hub holds no task: it checks none"),
+        "{description}"
+    );
+    assert!(description.is_ascii());
+    assert!(description.len() <= TEXT_LIMIT, "{}", description.len());
+}

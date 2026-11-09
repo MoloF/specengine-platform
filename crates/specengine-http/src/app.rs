@@ -1087,7 +1087,9 @@ async fn cards(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 }
 
 /// `GET …/cards/<id>`: `spec card show C --history --json`, uncut (no query
-/// name); no such card: the CLI's exit-1 document, a 404.
+/// name); no such card: the CLI's exit-1 document, a 404. A card's linked
+/// tasks are read in the daemon's repository; a hub reads none and serves
+/// their IDs without state (`docs/canon/card-tasks.md` "The rule").
 async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, rest) = app.project_of(&uri)?;
     let raw = rest
@@ -1095,11 +1097,14 @@ async fn card(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> 
         .ok_or_else(|| unknown_route_of(&uri))?;
     let id = percent_decode(raw).map_err(Refusal::bad_request)?;
     args("cards/:id", &[], &uri)?;
+    let tasks_here = app.hub.is_none();
     Ok(run_read(project, move |env, globals| {
         let request = CardShowRequest {
             id,
             history: true,
             marks: false,
+            git: process_git(env),
+            tasks_here,
         };
         specengine_cli::card_show(env, globals, &request)
             .map(|outcome| Outcome::CardShow(Box::new(outcome)))
@@ -1180,14 +1185,18 @@ async fn move_card(State(app): State<Shared>, request: Request) -> Result<Respon
     .await)
 }
 
-/// `POST …/cards/<id>/edit`: `card_edit`, past [`new_card`]'s door.
+/// `POST …/cards/<id>/edit`: `card_edit`, past [`new_card`]'s door; on a
+/// hub a linked task's ID is kept as written, no task checked
+/// (`docs/canon/card-tasks.md` "The rule").
 async fn edit_card(State(app): State<Shared>, request: Request) -> Result<Response, Refusal> {
     let (project, id) = written_target(&app, request.uri(), request.headers(), "/edit")?;
+    let tasks_here = app.hub.is_none();
     let login = login_of(&request);
     let mut body = written_body(request, CardEditBody::from_json).await?;
     hub::acting(login.as_ref(), &mut body.actor)?;
     Ok(run(project, move |env, globals| {
-        specengine_cli::card_edit(env, globals, &body.request(id, utc_now())).map(written)
+        specengine_cli::card_edit(env, globals, &body.request(id, utc_now(), tasks_here))
+            .map(written)
     })
     .await)
 }

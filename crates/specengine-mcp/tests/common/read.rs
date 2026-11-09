@@ -646,6 +646,10 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                         id,
                         history: args["history"] == json!(true),
                         marks: true,
+                        // docs/canon/card-tasks.md "The rule": the stdio
+                        // server reads each linked task in its repository.
+                        git: server_git(env),
+                        tasks_here: true,
                     },
                 )
                 .map(|outcome| Outcome::CardShow(Box::new(outcome))),
@@ -688,6 +692,10 @@ pub fn card_library(tool: &str, args: &Value, env: &Env, globals: &Globals, now:
                 parent: text("parent"),
                 corrects: text("corrects"),
                 evidence: strings(&args["evidence"]),
+                // docs/canon/cards.md "MCP": `task`, each a
+                // `--task`; `["-"]` clears.
+                tasks: strings(&args["task"]),
+                tasks_here: true,
                 reason: text("reason"),
                 revision: text("revision"),
                 actor,

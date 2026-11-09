@@ -29,7 +29,8 @@ pub mod task;
 pub mod value;
 
 pub use card::{
-    Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, CardVerdict, EvidenceKind,
+    CARD_TASKS_MAX, Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, CardVerdict,
+    EvidenceKind,
 };
 pub use diagnostic::{Diagnostic, DiagnosticCode, Severity};
 pub use grammar::{Canon, Definition, Found, Homoglyph};

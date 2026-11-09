@@ -422,7 +422,10 @@ const CARD_EVENT = "card.";
  * (`docs/features/ui-round.md` "Description and interactions"). The plan is read again on a
  * `task.*` event, `proposal.applied` and a gap, a read in flight aborted, never on a stage,
  * `.created`, `.approved`, `.rejected` or `.apply_failed` (`docs/features/roadmap-screen.md`). A
- * `card.*` event reads that project's card lists, that card (no string `id`: every card of it) and
+ * `task.*` event also reads the project's cards again (the open one; a card serves each task it
+ * links as read now, `docs/canon/card-tasks.md` "The rule"), never the card list, which shows no
+ * task; `proposal.applied` reads them too, an apply moving a linked task's staleness. A `card.*`
+ * event reads that project's card lists, that card (no string `id`: every card of it) and
  * its trace again, never anything else and with no outside-change alert: a card is no decision
  * (`docs/features/board-ui.md` "Rules and edge cases"); it reads the project's flows too, whose boxes
  * carry their rollups (`docs/features/trace-views.md` "Timeline"). A rejected discrepancy settles a
@@ -532,6 +535,9 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
             void queryClient.invalidateQueries({ queryKey: queryKeys.task(project, id), exact: true });
           }
           readPlanAgain();
+          // A card reads each task it links now: the card on screen is read again, whichever task
+          // this is (no read names which cards link it); the list shows no task and stays.
+          void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
           return;
         }
         if (!event.type.startsWith(PROPOSAL_EVENT)) {
@@ -551,6 +557,9 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
         readTasksAgain();
         if (event.type === APPLIED) {
           readSpecAgain();
+          // An apply may move a linked task's `stale`, which a card serves as read now: the card on
+          // screen is read again. The list is a spec read above, for its marks, and shows no task.
+          void queryClient.invalidateQueries({ queryKey: cardsOf(project) });
         }
         if (HEALTH_EVENTS.has(event.type)) {
           readHealthAgain();

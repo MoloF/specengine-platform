@@ -846,8 +846,8 @@ fn the_queue_refuses_a_newer_schema_and_numbers_past_9999() {
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .expect("user_version");
     assert_eq!(version, QUEUE_SCHEMA_VERSION);
-    // Queue schema 9 since docs/features/card-store.md "Store".
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+    // Queue schema 10 since docs/canon/cards.md "Store".
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     conn.execute(
         "UPDATE proposals SET id = 'PR-9999' WHERE id = 'PR-0002'",
         [],

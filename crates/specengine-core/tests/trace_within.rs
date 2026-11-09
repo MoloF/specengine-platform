@@ -78,6 +78,8 @@ fn card(entry: CardFrozen) -> Card {
         created_at: "2026-10-31T09:00:00Z".to_owned(),
         updated_at: "2026-10-31T09:00:00Z".to_owned(),
         revision: 1,
+        // docs/features/card-tasks.md: the `T-` tasks it links, none here.
+        tasks: Vec::new(),
     }
 }
 

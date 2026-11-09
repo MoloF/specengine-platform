@@ -21,6 +21,7 @@ import type {
 } from "../api/types";
 import { stamp } from "./build";
 import type { Scenario } from "./scenario";
+import { linkedTaskOf, type MockTasks } from "./tasks";
 
 // The mock's cards (`docs/canon/cards.md`), in memory until a reload: two invented boards and the
 // daemon's rules in its words, so the Board's refusals can be seen without one. harbor-sim prints an
@@ -37,9 +38,14 @@ import type { Scenario } from "./scenario";
 // both ways and hold no target, so no trace read changes: C-0001 has a child handed off (C-0013),
 // one taken in its own flow (C-0019), one accepted (C-0016) and one cancelled (C-0017); C-0003's
 // was returned (C-0015), C-0004's taken (C-0014), and the plate C-0009 handed a caption to copy (C-0018).
+// Cards link `T-` tasks of src/mocks/tasks.ts (`docs/canon/card-tasks.md` "The rule"), each read
+// when the card is: C-0001 links T-0107 (plan review), T-0109 (in progress, its spec changed) and
+// T-0106, whose row does not read; C-0004 links T-0104 (done); the accepted C-0012 keeps T-0111
+// (ready, its staleness unknown, a note); ledger-api's C-0102 links T-0033 (plan review) and C-0104
+// T-0031 (in progress). Every other card links none.
 
-/** A stored card: the document less what a read adds. */
-export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "allowed" | "history" | "notes">;
+/** A stored card: the document less what a read adds, its links as the task IDs the row keeps. */
+export type StoredCard = Omit<Card, "mark" | "on" | "discrepancy" | "correction" | "tasks" | "allowed" | "history" | "notes"> & { tasks: string[] };
 
 interface MockEvent extends CardEvent {
   id: string;
@@ -175,6 +181,7 @@ function aCard(at: number, fields: Partial<StoredCard> & Pick<StoredCard, "id" |
     parent: null,
     corrects: null,
     evidence: [],
+    tasks: [],
     acceptance: null,
     cancellation: null,
     created_by: "Mira Holt",
@@ -201,6 +208,7 @@ function harborCards(at: number): StoredCard[] {
       reviewer: "Ivo Brandt",
       estimate: "3",
       due: dayFrom(at, -2),
+      tasks: ["T-0107", "T-0109", "T-0106"],
     }),
     aCard(at, {
       id: "C-0002",
@@ -243,6 +251,7 @@ function harborCards(at: number): StoredCard[] {
       estimate: "1",
       due: dayFrom(at, 0),
       evidence: [{ kind: "url", value: "https://example.org/locks/hours-2026.pdf", by: "Mira Holt", at: stamp(at, 5 * 60) }],
+      tasks: ["T-0104"],
       revision: "5",
     }),
     aCard(at, {
@@ -351,6 +360,7 @@ function harborCards(at: number): StoredCard[] {
       reviewer: "Ivo Brandt",
       estimate: "2",
       acceptance: { by: "Ivo Brandt", at: stamp(at, 2 * MINUTE_DAY), note: null, verdict: "briefed", departs: [], discrepancy: null },
+      tasks: ["T-0111"],
       revision: "5",
     }),
     aCard(at, {
@@ -471,6 +481,7 @@ function ledgerCards(at: number): StoredCard[] {
       targets: ["POL-IDEMPOTENCY"],
       assignee: "Ana Weiss",
       due: dayFrom(at, 4),
+      tasks: ["T-0033"],
     }),
     aCard(at, {
       id: "C-0103",
@@ -492,6 +503,7 @@ function ledgerCards(at: number): StoredCard[] {
       assignee: "Omar Lind",
       reviewer: "Ana Weiss",
       estimate: "1",
+      tasks: ["T-0031"],
     }),
     aCard(at, {
       id: "C-0105",
@@ -612,14 +624,29 @@ export function cardListOf(board: MockBoard, options: CardsOptions, settled: Set
   return { flows: structuredClone(board.flows), cards: rows, notes, truncated: false, omitted: null };
 }
 
-/** `spec card show C --history --json`, uncut, as `GET cards/:id` serves it: no `--marks`, so its four keys null; an unknown C its exit-1 document. */
-export function cardShowOf(board: MockBoard, id: string): Card | CardNotFound {
+/**
+ * `spec card show C --history --json`, uncut, as `GET cards/:id` serves it: no `--marks`, so its four
+ * keys null; each linked task read now from `tasks`, its notes after the card's own, in link order;
+ * an unknown C its exit-1 document.
+ */
+export function cardShowOf(board: MockBoard, id: string, tasks: MockTasks): Card | CardNotFound {
   const card = board.cards.find((candidate) => candidate.id === id);
   if (card === undefined) {
     return { id, reason: `no card ${id}` };
   }
   const history = board.events.filter((event) => event.id === id).map(({ seq, type, at, payload }) => ({ seq, type, at, payload }));
-  return structuredClone({ ...card, mark: null, on: null, discrepancy: null, correction: null, allowed: allowedOf(board, card), history, notes: [] });
+  const linked = card.tasks.map((task) => linkedTaskOf(tasks, task));
+  return structuredClone({
+    ...card,
+    mark: null,
+    on: null,
+    discrepancy: null,
+    correction: null,
+    tasks: linked.map(({ task }) => task),
+    allowed: allowedOf(board, card),
+    history,
+    notes: linked.flatMap(({ notes }) => notes),
+  });
 }
 
 /** What cannot stand in a person's name: a control character, a line or paragraph separator, a bidirectional mark. */
@@ -743,6 +770,7 @@ export function createCardIn(board: MockBoard, body: CardCreateBody, at: string)
     parent: body.parent ?? null,
     corrects: body.corrects ?? null,
     evidence: [],
+    tasks: [],
     acceptance: null,
     cancellation: null,
     created_by: as,

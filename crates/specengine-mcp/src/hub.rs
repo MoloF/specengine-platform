@@ -39,11 +39,11 @@ use rmcp::model::{CallToolResult, ContentBlock, Extensions};
 use rmcp::service::RequestContext;
 use rmcp::{ErrorData, RoleServer, tool, tool_router};
 use specengine_cli::{
-    ANSWER_MAX, AUTHOR_FIELD_MAX, CRITERIA_MAX, CRITERION_MAX, CliError, DISTINCT_MAX,
-    EVIDENCE_ENTRIES_MAX, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, EVIDENCE_VALUE_MAX, Env, GOAL_MAX,
-    Globals, HUB_ID_START, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX, LABEL_MAX, LOCATION_MAX,
-    NODE_IDS_MAX, NODES_MAX, NOTE_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN, OUTPUT_CAP_CHARS,
-    RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, TITLE_MAX,
+    ANSWER_MAX, AUTHOR_FIELD_MAX, CARD_TASKS_MAX, CRITERIA_MAX, CRITERION_MAX, CliError,
+    DISTINCT_MAX, EVIDENCE_ENTRIES_MAX, EVIDENCE_MAX, EVIDENCE_TEXT_MAX, EVIDENCE_VALUE_MAX, Env,
+    GOAL_MAX, Globals, HUB_ID_START, INTAKE_MATCHES_MAX, INTERPRETATION_TEXT_MAX, LABEL_MAX,
+    LOCATION_MAX, NODE_IDS_MAX, NODES_MAX, NOTE_MAX, OPTION_TEXT_MAX, OPTIONS_MAX, OPTIONS_MIN,
+    OUTPUT_CAP_CHARS, RATIONALE_MAX, SHOW_TAIL_NAMES, SUMMARY_MAX, TEXT_MAX_BYTES, TITLE_MAX,
 };
 
 use crate::cards::{CreateCardArgs, EditCardArgs, MoveCardArgs};
@@ -583,7 +583,8 @@ target and criterion replace the list. estimate on a card holding one: reason sa
 and no other field beside it. evidence appends, at most 32 on a card: url=http..., \
 path=<path>@<hex blob>, build=... or note=..., one line, at most 1024 bytes: a reference, never a \
 binary, and nothing is fetched. revision: only if the card still stands at it, the revision a read \
-gave. ",
+gave. task: T- IDs as a terminal writes them, listed once, at most 32; it replaces the list, - \
+clears it. This hub holds no task: it checks none and get_card shows them without state. ",
     hub_card_tail!()
 );
 
@@ -879,6 +880,12 @@ const _: () = assert!(holds_number(
     "one line, at most ",
     EVIDENCE_VALUE_MAX,
     " bytes"
+));
+const _: () = assert!(holds_number(
+    HUB_EDIT_DESCRIPTION,
+    "listed once, at most ",
+    CARD_TASKS_MAX,
+    "; it"
 ));
 const _: () = assert!(holds_number(
     HUB_MOVE_DESCRIPTION,

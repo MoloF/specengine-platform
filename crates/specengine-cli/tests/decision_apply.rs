@@ -1336,7 +1336,7 @@ fn ac12_a_decided_item_round_trips_through_a_backup() {
     let lines = dump_lines(&bytes);
     assert!(
         lines[0].starts_with(
-            "{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":3,\
+            "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":3,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{}",
@@ -1420,13 +1420,13 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
 \"interpretation\":null,\"drift\":null,\"drift_hash\":null}}";
     let mut v2_lines = v3_lines.clone();
     assert!(
-        v2_lines[0].starts_with("{\"format\":3,\"queue_schema\":9,"),
+        v2_lines[0].starts_with("{\"format\":4,\"queue_schema\":10,"),
         "{}",
         v2_lines[0]
     );
     v2_lines[0] = v2_lines[0]
         .replacen(
-            "\"format\":3,\"queue_schema\":9,",
+            "\"format\":4,\"queue_schema\":10,",
             "\"format\":1,\"queue_schema\":2,",
             1,
         )
@@ -1445,7 +1445,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     assert_eq!(
         export(&pair, &home, &dumps.join("v2-again.jsonl")),
         v3,
-        "re-exported as format 3, queue_schema 9"
+        "re-exported as format 4, queue_schema 10"
     );
     // A schema-2 row with the record columns.
     let mut mixed = v2_lines.clone();
@@ -1472,7 +1472,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
     assert_eq!(
         export(&pair, &pair.home, &dumps.join("from-v2.jsonl")),
         v3,
-        "a version-2 DB exports as format 3, queue_schema 9"
+        "a version-2 DB exports as format 4, queue_schema 10"
     );
     assert_eq!(
         pair.sql("PRAGMA user_version;").trim(),
@@ -1480,7 +1480,7 @@ fn ac12_a_schema_2_dump_restores_and_a_version_2_database_steps_to_3() {
         "export steps nothing"
     );
     pair.inbox(&pair.main, true).expect("inbox");
-    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "9");
+    assert_eq!(pair.sql("PRAGMA user_version;").trim(), "10");
     assert_eq!(
         pair.sql("SELECT name FROM pragma_table_info('proposals');")
             .lines()

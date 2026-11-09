@@ -477,7 +477,7 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     // Schema 9 since docs/features/card-store.md "Store"; 46 columns since
     // docs/features/drift-queue.md
     // "Queue schema 8".
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[24..35], INTAKE_COLUMNS);
     assert_eq!(PROPOSAL_COLUMNS[35..40], RECORD_COLUMNS);
@@ -505,7 +505,10 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
     // `proposals` unchanged at 9 (docs/features/card-store.md "Store").
     assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(10), None);
+    // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
+    // stays 46).
+    assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(11), None);
 
     let scratch = Scratch::new("qi-v1");
     let db = scratch.db("q");
@@ -533,7 +536,7 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert!(state.tasks.is_empty() && state.runs.is_empty(), "no task");
 
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps the schema");
-    assert_eq!(user_version(&db), "9");
+    assert_eq!(user_version(&db), "10");
     let tables: Vec<String> = sqlite3(
         &db,
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('tasks', 'runs') \
@@ -572,7 +575,7 @@ fn ac10_a_version_1_database_steps_to_4_keeping_its_rows() {
     assert_eq!(next.id, "PR-0008");
     drop(queue);
     let reopened = SqliteQueue::open(&db, PROJECT).expect("reopen");
-    assert_eq!(user_version(&db), "9", "stepped once");
+    assert_eq!(user_version(&db), "10", "stepped once");
     assert_eq!(reopened.get("PR-0008").unwrap().unwrap(), next);
 }
 

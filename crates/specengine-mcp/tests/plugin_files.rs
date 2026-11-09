@@ -180,6 +180,11 @@
 //!   bullet 0.30.0's; a `SCHEMA_PINS` entry 0.31.0, 0.30.0's schemas today's
 //!   without the four keys ([`as_of_0_30_0`]); `read-spec`'s body at most
 //!   4 096 B.
+//! - card-tasks (RM-0092, D15): 0.31.0 -> 0.32.0, MINOR: a key a tool takes,
+//!   `edit_card`'s `task` (and one `get_card` returns, `tasks`). A `PINS`
+//!   entry 0.32.0, the tree with the version set back 0.31.0's (`read-spec`
+//!   byte-equal); a `SCHEMA_PINS` entry 0.32.0, 0.31.0's schemas today's
+//!   without the two keys ([`as_of_0_31_0`]).
 //!
 //! The repository is only read.
 
@@ -499,6 +504,13 @@ const PINS: &[(&str, &str)] = &[
         "0.31.0",
         "d7589a79e812009a154333cf3962a500c02b16d8e9379820c6796649a087da4f",
     ),
+    // card-tasks (RM-0092, D15: 0.31.0 -> 0.32.0, MINOR: a key a tool takes,
+    // `edit_card`'s `task`): plugin.json's version alone; the tree with the
+    // version set back hashes as 0.31.0's pin, so `read-spec` is byte-equal.
+    (
+        "0.32.0",
+        "d7f3ef1544ca3d444f05f0a4725e710cc6d5f47a53c81c6042548f9e1441a780",
+    ),
 ];
 
 /// docs/canon/card-flows.md "MCP and hub": the sentence 0.31.0
@@ -781,6 +793,12 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.31.0",
         "4e1d430350da7d035520432565b4f66f796986670612121ab1a3c5c1ec45a234",
+    ),
+    // card-tasks (RM-0092): `edit_card`'s `task` and `get_card`'s `tasks`
+    // ([`as_of_0_31_0`] takes both out; no other tool's schema changed).
+    (
+        "0.32.0",
+        "3e83494b51b8f4030f65d0286c0c36eab398332ac2f2c7bee6eac491714b7091",
     ),
 ];
 
@@ -1788,7 +1806,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// 4 096 B, the descriptions at the budget's whole, plugin.json 0.29.0 since
 /// docs/features/hub-confirm.md, 0.29.1 since docs/features/spec-ids.md,
 /// 0.30.0 since docs/features/flow-scope.md (FS-6), 0.31.0 since
-/// docs/features/board-handoff.md. No room is left, so the next byte is over.
+/// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092). No
+/// room is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
 fn flow_authoring_ac05_seven_skills_within_their_budgets() {
@@ -1810,7 +1829,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.31.0")
+        json!("0.32.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -1961,12 +1980,38 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // card-tasks (RM-0092, D15: 0.31.0 -> 0.32.0, MINOR: `edit_card`'s
+    // `task`): plugin.json's version alone; set back, the tree is 0.31.0's
+    // pinned content, `read-spec` byte-equal. M: the version kept; another
+    // file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.32.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.32.0"),
+        "plugin.json's version"
+    );
+    let at_0_31_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.32.0\"",
+        "\"version\": \"0.31.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_31_0),
+        PINS[PINS.len() - 2].1,
+        "0.32.0 changes plugin.json's version only"
+    );
+    let tree = at_0_31_0;
+    let pins_0_31_0 = &PINS[..PINS.len() - 1];
     // docs/canon/plugin-files.md "Changing it" (board-handoff, 0.30.0 ->
     // 0.31.0, MINOR: keys the card tools take): plugin.json's version and
     // `read-spec`'s cards bullet gaining the hand-off sentence; both set back,
     // the tree is 0.30.0's pinned content. M: the version kept; another file
     // changed; the sentence reworded.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.31.0"));
+    assert_eq!(
+        pins_0_31_0.last().map(|(version, _)| *version),
+        Some("0.31.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.31.0"),
@@ -1998,7 +2043,7 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_30_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_31_0[pins_0_31_0.len() - 2].1,
         "0.31.0 changes plugin.json's version and read-spec's one sentence only"
     );
     let reworded = edited(
@@ -2008,12 +2053,12 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "why it goes back again.",
     );
     assert_names(
-        &ac10_problems(&reworded, PINS),
+        &ac10_problems(&reworded, pins_0_31_0),
         "not the last pin's",
         "the sentence reworded",
     );
     let tree = at_0_30_0;
-    let pins = &PINS[..PINS.len() - 1];
+    let pins = &pins_0_31_0[..pins_0_31_0.len() - 1];
     // docs/features/flow-scope.md FS-6 (0.29.1 -> 0.30.0, MINOR, the
     // orchestrator's version decision of 2026-11-08): plugin.json's version
     // alone; set back, the tree is 0.29.1's pinned content. M: the version
@@ -2896,6 +2941,14 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// card-tasks (RM-0092): `schemas` as 0.31.0 listed them: `edit_card`
+/// without `task`, `get_card`'s document without `tasks`. No other tool's
+/// schema changed.
+fn as_of_0_31_0(schemas: &mut Value) {
+    without_key(&mut schemas["edit_card"]["inputSchema"], "task");
+    without_key(&mut schemas["get_card"]["outputSchema"], "tasks");
+}
+
 /// docs/canon/plugin-files.md "Changing it": `schemas` as 0.30.0
 /// listed them: `create_card` without `reviewer`, `move_card` without `note`,
 /// `list_cards` without `parent`, and each flow of `list_cards`' document
@@ -3348,7 +3401,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[20].0, "0.29.0", "an entry for 0.29.0");
     assert_eq!(SCHEMA_PINS[21].0, "0.30.0", "an entry for 0.30.0");
     assert_eq!(SCHEMA_PINS[22].0, "0.31.0", "an entry for 0.31.0");
-    assert_eq!(SCHEMA_PINS.len(), 23, "0.31.0 the last entry");
+    assert_eq!(SCHEMA_PINS[23].0, "0.32.0", "an entry for 0.32.0");
+    assert_eq!(SCHEMA_PINS.len(), 24, "0.32.0 the last entry");
+    // card-tasks (RM-0092): 0.31.0's schemas are today's without
+    // `edit_card`'s `task` and `get_card`'s `tasks`.
+    let mut at_0_31_0 = schemas.clone();
+    as_of_0_31_0(&mut at_0_31_0);
+    let at_0_31_0_hash = schema_hash(&at_0_31_0);
+    assert_eq!(
+        at_0_31_0_hash, SCHEMA_PINS[22].1,
+        "0.31.0's schemas are today's without the two card-tasks keys"
+    );
+    assert_ne!(at_0_31_0_hash, current, "card-tasks changed the schemas");
+    let (schemas, current) = (at_0_31_0, at_0_31_0_hash);
     // docs/canon/plugin-files.md "Changing it": 0.30.0's schemas are
     // today's without `reviewer`, `note`, `parent` and a flow's `return`.
     let mut at_0_30_0 = schemas.clone();

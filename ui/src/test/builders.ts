@@ -903,6 +903,7 @@ export function aCard(fields: Partial<Card> & { id: string }): Card {
     parent: null,
     corrects: null,
     evidence: [],
+    tasks: [],
     acceptance: null,
     cancellation: null,
     created_by: "local",

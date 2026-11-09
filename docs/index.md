@@ -21,7 +21,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/card-tasks.md](features/card-tasks.md) card-tasks: the T- tasks behind a card (RM-0092, 3b) · crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, scripts, fixtures, docs · draft
 - [docs/features/zone-index.md](features/zone-index.md) zone-index: canon under the index entry's unlisted globs takes no line, and canon retires by status (RM-0055) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, docs · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress
 - [docs/specs/specengine-platform/05-architecture.md](specs/specengine-platform/05-architecture.md) 05. Target architecture of SpecEngine · specengine · in-progress
@@ -36,6 +35,7 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 - [docs/index-canon-spec.md](index-canon-spec.md) `docs/canon/spec-*.md`
 - [docs/index-canon-proposal.md](index-canon-proposal.md) `docs/canon/proposal-*.md`
 - [docs/index-canon-hub.md](index-canon-hub.md) `docs/canon/hub*.md`
+- [docs/index-canon-card.md](index-canon-card.md) `docs/canon/card*.md`
 - [docs/index-canon.md](index-canon.md) `docs/canon/*.md`
 - [docs/index-decisions.md](index-decisions.md) `docs/decisions/*.md`
 - [docs/index-crates.md](index-crates.md) `crates/*/README.md`

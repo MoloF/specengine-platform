@@ -1381,10 +1381,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // docs/features/flow-scope.md FS-6 (`get_flow`'s `stage`, the
     // orchestrator's MINOR of 2026-11-08): 0.30.0;
     // docs/features/board-handoff.md (`reviewer`, `note`, `parent`, keys
-    // the card tools take): 0.31.0.
-    if plugin["version"] != "0.31.0" {
+    // the card tools take): 0.31.0; card-tasks (RM-0092, `edit_card`'s
+    // `task`): 0.32.0.
+    if plugin["version"] != "0.32.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.31.0",
+            "plugin.json: version {}, not 0.32.0",
             plugin["version"]
         ));
     }
@@ -1454,9 +1455,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.31.0\"", "\"0.30.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.31.0");
-    assert_names(&r2_problems(&older, &market), "not 0.31.0", "0.30.0");
+    let older = plugin.replacen("\"0.32.0\"", "\"0.31.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.32.0");
+    assert_names(&r2_problems(&older, &market), "not 0.32.0", "0.31.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

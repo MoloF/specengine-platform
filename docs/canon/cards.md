@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-mcp]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-10
 ---
 
 # Cards: commands, record, store
@@ -19,7 +19,7 @@ spec card list [--flow F] [--column K] [--discipline D] [--assignee N] [--parent
   [--no-target] [--with-cancelled] [--marks]
 spec card show C [--history] [--marks]
 spec card move C [--to K] [--before C] [--note T] [--revision R] [--as N]
-spec card edit C [new's flags but --discipline, --assignee] [--evidence KIND=VALUE]...
+spec card edit C [new's flags but --discipline, --assignee] [--task T]... [--evidence KIND=VALUE]...
   [--reason T] [--revision R]
 spec card assign C [--assignee N] [--reviewer N] [--revision R] [--as N]
 spec card cancel C --reason T [--revision R] [--as N]
@@ -27,9 +27,9 @@ spec card accept C --as N (--briefed | --departs REF...) [--note T] [--revision 
 spec card clear (C | --group REF) ... --reason T --as N
 ```
 
-Globals as the queue's. In `edit`, `assign` a value `-` clears; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children". `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`); the daemon's `Card*Body`, `in_view`: `board-ui.md`.
+Globals as the queue's. In `edit`, `assign` a value `-` clears; on `new`, `--assignee -` and `--reviewer -` are refused; `--target`, `--criterion` replace their list, `--evidence` appends. `--target` resolves as `task new --nodes` through `resolved_list`, stored canonical; a repeat is refused. A manual card has no targets. `--reviewer`, `--note` (a return's reason), `--parent` (a card's children): `card-flows.md` "Hand-off", "Return", "Children". `--task`, the `T-` tasks it links: `card-tasks.md` "Link". `move`, `edit`, `assign` with nothing asked: a `Usage` outcome in the library, `{id, reason}`, still exit 2 (`or_usage_error`). Library `card_{new,list,show,move,edit,assign,cancel,accept,clear,clear_group}` (`&Env, &Globals, &Card<Verb>Request`; writers `now`, a person's act a `Consent`; `CardShowRequest` and `CardEditRequest` also `tasks_here`, no `Default`: each caller states it; `show` `git`); `CardEditBody::request(id, now, tasks_here)`; the daemon's `Card*Body`, `in_view`: `board-ui.md`.
 
-`open_cards`, never `open_context`: no git runs, so any root works; `accept --departs` alone reads git.
+`open_cards`, never `open_context`: no git runs, so any root works; `accept --departs` and `show` of a card linking a task alone read git.
 
 - **Lines** `created|moved|edited|cancelled|accepted|cleared C-0001: plain/backlog`, `assigned C-0001: <assignee or ->, reviewer <reviewer or ->`. JSON of a write or a refusal `{id, flow, column, position, revision, allowed, notes}`; no such card, exit 1, `{id, reason}`, `no card C-0099`.
 - **`list`**, by flow, column (config order), position; a column `[card]` no longer places last in its flow, such a flow last of all, cancelled cards last in their column:
@@ -45,7 +45,7 @@ flow <name> | <column> <n> | ...
 - **`cancel`** takes the card out of its column (`position` 0, the column closes up), `reason` required. Only `--with-cancelled` lists it.
 - **`accept`**, **`clear`**, a person's acts (ADR-0057): `spec-trace.md`.
 
-**Exits** as the queue's. 1 refused: no such card, a move outside its flow, a closed card, a cap, a declined prompt, a stale `--revision`, a return with no note. 2 cannot run: `C` in `[ids]`, a look-alike ID (its Latin form named), `list --parent` off the ID grammar, a bad `[card]`, `--as` or `--revision` off their grammar, no terminal, a corrupt row, a newer schema, nothing asked.
+**Exits** as the queue's. 1 refused: no such card, a move outside its flow, a closed card, a cap, a declined prompt, a stale `--revision`, a return with no note, a task not found. 2 cannot run: `C` in `[ids]`, `T` there with `--task`, a look-alike ID (its Latin form named), `list --parent` off the ID grammar, a bad `[card]`, `--as` or `--revision` off their grammar, no terminal, a corrupt row, a newer schema, nothing asked.
 
 ## Who acts
 
@@ -63,15 +63,15 @@ Five tools, as `mcp-read.md`, acting as `agent`, on a hub as the login (`hub-mcp
 
 ## Store
 
-Queue step 8 -> 9 (`proposal-queue.md` "Store"); `events`, `proposals` unchanged. `STRICT`, `TEXT` but `position`:
+Queue steps 8 -> 9, 9 -> 10 (`proposal-queue.md` "Store"); `events`, `proposals` unchanged. `STRICT`, `TEXT` but `position`:
 
 ```text
 cards(id PRIMARY KEY, project, flow, col, position INTEGER, title, goal, discipline, targets,
   snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence,
-  acceptance, cancellation, created_by, created_at, updated_at, revision)
+  acceptance, cancellation, created_by, created_at, updated_at, revision, tasks)
 ```
 
-`CARD_COLUMNS` 24, pinned to `PRAGMA table_info`; `col` is the key `column`, an SQL word. JSON columns: `targets`, `criteria` string lists; `evidence` `[{kind, value, by, at}]`; `acceptance` `{by, at, note, verdict, departs, discrepancy}`, no `verdict` reading `briefed`; `cancellation` `{by, at, reason}`, `reason` <= `NOTE_MAX`; `snapshot` an array of `CardFrozen` (`spec-trace-record.md`), or `NULL`. A card holds no path: every repository of the slug sees one board.
+`CARD_COLUMNS` 25, pinned to `PRAGMA table_info`; `col` is the key `column`, an SQL word. JSON columns: `targets`, `criteria`, `tasks` string lists (`tasks` `NULL` none: `card-tasks.md` "Store and backup"); `evidence` `[{kind, value, by, at}]`; `acceptance` `{by, at, note, verdict, departs, discrepancy}`, no `verdict` reading `briefed`; `cancellation` `{by, at, reason}`, `reason` <= `NOTE_MAX`; `snapshot` an array of `CardFrozen` (`spec-trace-record.md`), or `NULL`. A card holds no path: every repository of the slug sees one board.
 
 API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), `card_history`, `change_card(id, seen, change, actor, now)`, `accept_card`, `list_existing_cards`, each write one `Immediate` transaction, one event; refusals `QueueError::CardRefused`.
 
@@ -84,7 +84,7 @@ API: `create_card`, `get_card`, `list_cards` (a corrupt row into `unreadable`), 
 
 ## Documents and events
 
-`show`, `get_card`, every key present, absent `null`; `mark` to `correction` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes}`.
+`show`, `get_card`, every key present, absent `null`; `mark` to `correction` `--marks`', which `get_card` always asks: `{id, flow, column, position, title, goal, discipline, targets, mark, on, discrepancy, correction, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, evidence, tasks, acceptance, cancellation, created_by, created_at, updated_at, revision, allowed, history, notes}`; `tasks` `[{id, status, title, stale}]`, read now: `card-tasks.md` "Read".
 
 - `allowed` `[{to, by}]`, per read: moves only, `by: []` anyone. A closed card, or one whose flow is gone: empty. `accept` is never in it: the board finds it through `accept.from`.
 - `history`, `--history` alone (else `null`): the card's last 64 `card.*` events (`HISTORY_MAX`), oldest first, `[{seq, type, at, payload}]`; a payload that does not parse is passed over.
@@ -95,7 +95,7 @@ Events, the `as` the acting name: `card.created {id, flow, column, position, ass
 
 ## Backup
 
-Format 3: `queue-backup.md`, `tasks.md` "Backup".
+Format 4 (3 imports): `queue-backup.md`, `tasks.md` "Backup".
 
 ## Rules
 

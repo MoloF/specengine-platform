@@ -505,7 +505,7 @@ export class MockClient implements SpecEngineClient {
   /** One card with its history; an unknown C answers the exit-1 document, as data. */
   async getCard(project: string, id: string): Promise<Card | CardNotFound> {
     await this.read();
-    return cardShowOf(this.board(project), id);
+    return cardShowOf(this.board(project), id, this.taskStore(project));
   }
 
   async createCard(project: string, body: CardCreateBody): Promise<CardWrite> {

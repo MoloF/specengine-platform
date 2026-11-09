@@ -1847,14 +1847,15 @@ fn ac_r10_the_review_is_a_new_files_46_keys() {
     let sets = fixture.as_object().expect("sets");
     assert_eq!(
         sets.len(),
-        113,
+        114,
         "no set added by the amendment: 41, health-left's three, \
          rev-discipline's `RevisionRow`, drift-queue's `DriftEvidence`, \
          health-code's ten, roadmap-screen's ten, bundle-bindings' `BindingRow`, \
          tested-reads' `TestedRow`, health-drift's six, ui-node-bindings' two, \
          lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, \
          trace-views' `TraceStage`, hub-identity's `Identity`, hub-team's `Team`, \
-         hub-confirm's `ConfirmRead`, hub-git's `HubSync` and workspaces' three"
+         hub-confirm's `ConfirmRead`, hub-git's `HubSync`, workspaces' three and \
+         card-tasks' `CardTask`"
     );
     // drift-queue's one: `{hash, rows, more}` as stored
     // (`docs/features/drift-queue.md` "Review, inbox, round, stage").
@@ -1974,7 +1975,7 @@ fn ac_r13_a_backup_with_amendments_round_trips_byte_identical() {
     let lines: Vec<&str> = text.lines().collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":2,"
+            "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":2,"
         ),
         "{}",
         lines[0]

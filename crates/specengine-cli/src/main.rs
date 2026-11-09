@@ -680,6 +680,9 @@ enum CardCommand {
         /// The card it corrects, never itself.
         #[arg(long, value_name = "C")]
         corrects: Option<String>,
+        /// A `T-` task it links, an existing task of this queue (repeatable, at most 32, each once): the list replaced, `-` alone clears it. The link decides nothing.
+        #[arg(long = "task", value_name = "T")]
+        tasks: Vec<String>,
         /// `url=http…`, `path=<path>@<hex blob>`, `build=…` or `note=…` (repeatable): a reference, nothing is fetched.
         #[arg(long = "evidence", value_name = "KIND=VALUE")]
         evidence: Vec<String>,
@@ -2338,9 +2341,19 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 parent,
             },
         )?))),
-        CardCommand::Show { id, history, marks } => Ok(Outcome::CardShow(Box::new(
-            specengine_cli::card_show(env, globals, &CardShowRequest { id, history, marks })?,
-        ))),
+        CardCommand::Show { id, history, marks } => {
+            Ok(Outcome::CardShow(Box::new(specengine_cli::card_show(
+                env,
+                globals,
+                &CardShowRequest {
+                    id,
+                    history,
+                    marks,
+                    git: process_git(env),
+                    tasks_here: true,
+                },
+            )?)))
+        }
         CardCommand::Move {
             id,
             to,
@@ -2371,6 +2384,7 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
             due,
             parent,
             corrects,
+            tasks,
             evidence,
             reason,
             revision,
@@ -2389,10 +2403,12 @@ fn run_card(env: &Env, globals: &Globals, command: CardCommand) -> Result<Outcom
                 parent,
                 corrects,
                 evidence,
+                tasks,
                 reason,
                 revision,
                 actor,
                 now: now(),
+                tasks_here: true,
             },
         )?),
         CardCommand::Assign {

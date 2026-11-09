@@ -84,9 +84,11 @@
 //!   `YYYY-MM-DDTHH:MM:SSZ`, stored as given.
 //! - **Backup** (`docs/canon/queue-backup.md` "Store", `queue/state.rs`;
 //!   format 2: `docs/canon/tasks.md` "Backup"; format 3: task spec
-//!   `card-store`, "Backup"): every row of the five tables read as stored
-//!   in one snapshot ([`SqliteQueue::stored_rows`]), and inserted as given
-//!   into an empty queue ([`SqliteQueue::restore`]).
+//!   `card-store`, "Backup"; format 4, a card's `tasks`:
+//!   `docs/canon/cards.md` "Backup"): every row of the five tables read as
+//!   stored in one snapshot ([`SqliteQueue::stored_rows`]), a schema-9
+//!   card's `tasks` `None`, and inserted as given into an empty queue
+//!   ([`SqliteQueue::restore`]).
 //! - **Tasks** (`docs/canon/tasks.md` "Store", `queue/tasks.rs`): step 4
 //!   adds `tasks`, `runs` and a proposal's `task_id`; a proposal binds to a
 //!   task at creation ([`ProposalQueue::create_with_task`],
@@ -160,7 +162,7 @@ pub use gate::{EVENT_GATE_OBSERVED, GateObserved, GateQueue, open_for_gate, reco
 pub use stage::{EVENT_STAGED, EVENT_UNSTAGED, Stage, StagedChoice};
 pub use state::{
     CARD_COLUMNS, EVENT_COLUMNS, PROPOSAL_COLUMNS, QueueCounts, RUN_COLUMNS, Restore, StoredCard,
-    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS,
+    StoredEvent, StoredProposal, StoredQueue, StoredRun, StoredTask, TASK_COLUMNS, card_columns,
     proposal_columns,
 };
 pub use tasks::{
@@ -172,7 +174,7 @@ pub use tasks::{
 };
 
 /// The `user_version` the queue's steps bring a DB to.
-pub const QUEUE_SCHEMA_VERSION: i64 = 9;
+pub const QUEUE_SCHEMA_VERSION: i64 = 10;
 
 /// The apply step whose failure leaves an `approved` proposal `approved`:
 /// the verification of a commit that exists ([`ProposalQueue::reopen`]).
@@ -273,6 +275,13 @@ CREATE TABLE cards (
   evidence TEXT, acceptance TEXT, cancellation TEXT,
   created_by TEXT, created_at TEXT, updated_at TEXT, revision TEXT
 ) STRICT;
+";
+
+/// Step 9 → 10: the `T-` tasks a card links, a JSON array of task IDs
+/// (`docs/canon/cards.md` "Store"; `docs/canon/card-tasks.md` "The rule"),
+/// `NULL` on every row stepped, which reads as none.
+const STEP_10: &str = "
+ALTER TABLE cards ADD COLUMN tasks TEXT;
 ";
 
 /// The record columns, in table order.
@@ -2074,9 +2083,11 @@ enum Hold<'a> {
 /// `editorial` (no column: every open approve stage rewritten with
 /// `"editorial":null`, task spec `rev-discipline`), 7 → 8 a drift item's
 /// two columns (task spec `drift-queue`), 8 → 9 the cards (task spec
-/// `card-store`; 0 → 9 runs all nine; a schema-5 DB opens as 9, every
-/// `interpretation`, `drift`, `drift_hash` `NULL`, no card);
-/// [`QUEUE_SCHEMA_VERSION`] is left alone; a higher version is refused.
+/// `card-store`), 9 → 10 a card's linked tasks
+/// (`docs/canon/cards.md` "Store"; 0 → 10 runs all ten; a schema-5 DB opens
+/// as 10, every `interpretation`, `drift`, `drift_hash` `NULL`, no card; a
+/// schema-9 card reads no task); [`QUEUE_SCHEMA_VERSION`] is left alone; a
+/// higher version is refused.
 fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     let version = user_version(conn)?;
     if version > QUEUE_SCHEMA_VERSION {
@@ -2129,6 +2140,10 @@ fn migrate(conn: &mut Connection) -> Result<(), QueueError> {
     if version == 8 {
         tx.execute_batch(STEP_9).db()?;
         version = 9;
+    }
+    if version == 9 {
+        tx.execute_batch(STEP_10).db()?;
+        version = 10;
     }
     tx.pragma_update(None, "user_version", version).db()?;
     tx.commit().db()?;

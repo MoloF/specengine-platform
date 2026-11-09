@@ -16,9 +16,10 @@ use rmcp::model::CallToolResult;
 use rmcp::{ErrorData, schemars, tool, tool_router};
 use serde::Deserialize;
 use specengine_cli::{
-    CRITERIA_MAX, CRITERION_MAX, CardEditRequest, CardListRequest, CardMoveRequest, CardNewRequest,
-    CardShowRequest, EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, GOAL_MAX, HISTORY_MAX, NODES_MAX,
-    NOTE_MAX, OUTPUT_CAP_CHARS, Outcome, TITLE_MAX, TOOL_ACTOR, utc_now,
+    CARD_TASKS_MAX, CRITERIA_MAX, CRITERION_MAX, CardEditRequest, CardListRequest, CardMoveRequest,
+    CardNewRequest, CardShowRequest, EVIDENCE_ENTRIES_MAX, EVIDENCE_VALUE_MAX, GOAL_MAX,
+    HISTORY_MAX, NODES_MAX, NOTE_MAX, OUTPUT_CAP_CHARS, Outcome, TITLE_MAX, TOOL_ACTOR,
+    process_git, utc_now,
 };
 
 use crate::mirror::{
@@ -67,7 +68,9 @@ cancelled card, allowed (the moves open now, each {to, by}, by empty when anyone
 notes, every key present, absent null.
 
 card_id: C- and 4 or more digits, as spec card list writes it. history: true: its last 64 card.* \
-events, oldest first; else null.
+events, oldest first; else null. tasks: each linked task {id, status, title, stale}, read now as \
+spec task list reads it; status null, with a note that starts with its ID, for a task this server \
+cannot read: a corrupt row, another repository, a hub.
 
 Reads only: no state changes, nothing under the project root is written. No such card: an error \
 result with the reason. A look-alike ID, a corrupt row or an index that cannot be read: an error \
@@ -101,7 +104,8 @@ target and criterion replace the list. estimate on a card holding one: reason sa
 and no other field beside it. evidence appends, at most 32 on a card: url=http..., \
 path=<path>@<hex blob>, build=... or note=..., one line, at most 1024 bytes: a reference, never a \
 binary, and nothing is fetched. revision: only if the card still stands at it, the revision a read \
-gave. ",
+gave. task: the T- tasks it links, each an existing task of this queue, listed once, at most 32; it \
+replaces the list, - clears it. The link decides nothing: no move, accept or gate reads it. ",
     card_tail!()
 );
 
@@ -198,6 +202,12 @@ const _: () = assert!(holds_number(
     " bytes"
 ));
 const _: () = assert!(holds_number(
+    EDIT_DESCRIPTION,
+    "listed once, at most ",
+    CARD_TASKS_MAX,
+    "; it"
+));
+const _: () = assert!(holds_number(
     MOVE_DESCRIPTION,
     "note: why it moves, at most ",
     NOTE_MAX,
@@ -266,6 +276,8 @@ pub(crate) struct EditCardArgs {
     pub corrects: Option<String>,
     /// Each `KIND=VALUE`; appended.
     pub evidence: Option<Vec<String>>,
+    /// The `T-` tasks it links, replacing the list; `["-"]` clears it.
+    pub task: Option<Vec<String>>,
     /// Why an estimate the card holds changes.
     pub reason: Option<String>,
     pub revision: Option<String>,
@@ -341,13 +353,18 @@ impl SpecEngineServer {
         &self,
         Parameters(args): Parameters<GetCardArgs>,
     ) -> Result<CallToolResult, ErrorData> {
-        let request = CardShowRequest {
-            id: args.card_id,
-            history: args.history.unwrap_or(false),
-            marks: true,
-        };
+        // A hub's queue holds no `T-` task: its linked IDs are served
+        // without state (`docs/canon/card-tasks.md` "The rule").
+        let tasks_here = self.seam().is_none();
         Ok(without_no_card(
             self.call(move |env, globals| {
+                let request = CardShowRequest {
+                    id: args.card_id,
+                    history: args.history.unwrap_or(false),
+                    marks: true,
+                    git: process_git(env),
+                    tasks_here,
+                };
                 specengine_cli::card_show(env, globals, &request)
                     .map(|outcome| Outcome::CardShow(Box::new(outcome)))
             })
@@ -447,8 +464,10 @@ impl SpecEngineServer {
         .into_tool_result("create_card")
     }
 
-    /// `spec card edit C …`.
+    /// `spec card edit C …`; on a hub the linked IDs are kept as written,
+    /// no task checked (`docs/canon/card-tasks.md` "The rule").
     pub(crate) async fn card_edit(&self, args: EditCardArgs, actor: String) -> CallToolResult {
+        let tasks_here = self.seam().is_none();
         without_no_card(
             self.call(move |env, globals| {
                 let request = CardEditRequest {
@@ -462,10 +481,12 @@ impl SpecEngineServer {
                     parent: args.parent,
                     corrects: args.corrects,
                     evidence: args.evidence.unwrap_or_default(),
+                    tasks: args.task.unwrap_or_default(),
                     reason: args.reason,
                     revision: args.revision,
                     actor: Some(actor),
                     now: utc_now(),
+                    tasks_here,
                 };
                 specengine_cli::card_edit(env, globals, &request)
                     .map(|outcome| Outcome::Card(Box::new(outcome)))

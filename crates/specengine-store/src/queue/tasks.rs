@@ -322,6 +322,53 @@ impl SqliteQueue {
         Ok(task)
     }
 
+    /// [`Self::get_task`] with a row that does not decode given back,
+    /// named, instead of failing: what a card's read shows beside it
+    /// (`docs/canon/card-tasks.md` "The rule"). `Ok(None)` when there is no
+    /// row.
+    pub fn read_task(&self, id: &str) -> Result<Option<Result<Task, UnreadableTask>>, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let raw = tx
+            .query_row(
+                &format!("SELECT {TASK_SELECT} FROM main.tasks WHERE id = ?1 AND project = ?2"),
+                [id, self.project.as_str()],
+                raw_task,
+            )
+            .optional()
+            .db()?;
+        let read = match raw {
+            Some(raw) => Some(decode_task(raw, raw_runs(&tx, id)?)),
+            None => None,
+        };
+        tx.commit().db()?;
+        Ok(read)
+    }
+
+    /// The first of `ids` that names no `tasks` row of the project, in one
+    /// snapshot: found by ID alone, in any repository of the slug and any
+    /// state, a row that does not decode included; `None` when each has one.
+    /// No row is decoded and no git runs.
+    pub fn missing_task(&self, ids: &[String]) -> Result<Option<String>, QueueError> {
+        let tx = Transaction::new_unchecked(&self.conn, TransactionBehavior::Deferred).db()?;
+        let mut missing = None;
+        {
+            let mut statement = tx
+                .prepare("SELECT 1 FROM main.tasks WHERE id = ?1 AND project = ?2")
+                .db()?;
+            for id in ids {
+                if !statement
+                    .exists([id.as_str(), self.project.as_str()])
+                    .db()?
+                {
+                    missing = Some(id.clone());
+                    break;
+                }
+            }
+        }
+        tx.commit().db()?;
+        Ok(missing)
+    }
+
     /// The project's tasks (of the repository `git_common_dir` when given)
     /// by number, in one snapshot; a row that does not decode is skipped
     /// into [`TaskList::unreadable`].

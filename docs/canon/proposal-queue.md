@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-11-10
 ---
 
 # Proposal queue: commands, states, store
@@ -56,7 +56,7 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 
 `id`: highest number + 1, never below a hub's floor (`queue-backup.md`), in the inserting transaction; rows never deleted, no ID reused. `target_id` canonical (Creation 1; a path iff `.md`, then `target_path`; unchecked when read), `target_path` its holder, root-relative; `base_hash` `b3:` + BLAKE3 of the span bytes (store `span_hash`); `patch_hash` `b3_hash(target_id LF base_hash LF new_text)`; `author` JSON (core `Author`); `diagnostics` JSON; times UTC `YYYY-MM-DDTHH:MM:SSZ` from the caller.
 
-- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 9; higher -> exit 2, nothing changed; a migrated queue refuses older builds, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 46). The index leaves them and `user_version` alone.
+- **Schema**: the queue's own steps on `PRAGMA user_version` (`QUEUE_SCHEMA_VERSION` 10; higher -> exit 2, nothing changed; a migrated queue refuses older builds, `SchemaTooNew`), all due ones in one `Immediate` transaction; `proposal_columns(schema)` a schema's columns (`PROPOSAL_COLUMNS` 46). The index leaves them and `user_version` alone.
 
 | Schema | Step adds | `proposals` columns | Canon |
 |---|---|---|---|
@@ -69,8 +69,9 @@ events(seq INTEGER PRIMARY KEY, project, type, payload, at)
 | 7 | no column: open approve stages gain `"editorial":null` | 44 | `proposal-revisions.md` "Stage and UI" |
 | 8 | `drift`, `drift_hash` | 46 | `proposal-drift-item.md` "The item" |
 | 9 | `cards` | 46 | `cards.md` "Store" |
+| 10 | `cards.tasks` | 46 | `cards.md` "Store" |
 
-- **Connection**: the index's PRAGMAs but `synchronous=FULL`; until the daemon is the sole writer, CLI, MCP and `specengine-http` (stages) write directly.
+- **Connection**: the index's PRAGMAs but `synchronous=FULL`; CLI, MCP and the daemon write directly.
 - **Not derived**: backup `queue-backup.md` (ADR-0003).
 
 `trait ProposalQueue`, `SqliteQueue::open(db, project)`; `QueueError` (`Status` names an applied one's commit; `Store`, `SchemaTooNew` exit 2). `Seen {status, updated_at, staged}` (`Proposal::seen()`), a run's compare-and-set key; `Decision {decided_by, note, staged_at}`.

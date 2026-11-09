@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-store, crates/specengine-cli, crates/specengine-core]
 owner: owner
-reviewed: 2026-10-15
+reviewed: 2026-11-10
 ---
 
 # Tasks: commands, transitions, place, store
@@ -81,8 +81,8 @@ API: `create_task`, `reject_with_task` (a follow-up), `get_task`, `list_tasks`, 
 
 ## Backup
 
-`STATE_FORMAT` 3; commands, import steps: `queue-backup.md`; export bounds: `queue-export.md`. Header `{"format":3,"queue_schema":9,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"cards":c,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), cards by number, events by `seq`. A schema 1-8 database exports unmigrated as format 3, schema 9 (1-3 without tasks or runs).
+`STATE_FORMAT` 4; commands, import steps: `queue-backup.md`; export bounds: `queue-export.md`. Header `{"format":4,"queue_schema":10,"project":"<slug>","proposals":p,"tasks":t,"runs":r,"cards":c,"events":e}`, then proposals by number, tasks by number, runs by (task, `run`; a number), cards by number, events by `seq`. A schema 1-9 database exports unmigrated as format 4, schema 10 (1-3 without tasks or runs).
 
-Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`), 2 (seven keys, schemas 4-8, no cards; a schema-6 dump's open approve stages restored in schema 7's shape, `proposal-revisions.md` "Stage and UI") or 3 (eight keys, schema 9). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven, a format-3 of seven; a task or card ID not as the queue writes it; a task, a card, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four, 3 five).
+Import takes format 1 (five header keys, queue schema 1-3, proposals and events; later columns, `task_id` too, `NULL`), 2 (seven keys, schemas 4-8, no cards; a schema-6 dump's open approve stages restored in schema 7's shape, `proposal-revisions.md` "Stage and UI"), 3 (eight keys, schema 9, a card's `tasks` `NULL`) or 4 (eight, schema 10). Refused, exit 2: a format-2 header of six keys or schema 3, a format-1 of seven, a format-3 or -4 of seven; a task or card ID not as the queue writes it; a task, a card, or a (task, `run`), repeated; a run of a task the dump lacks; a count off the header (format 2 names four, 3 and 4 five).
 
 Count lines `wrote <D>: <counts>`, `restored <counts> into <db>`, `<counts>` `<p> proposal(s), <t> task(s), <r> run(s), <c> card(s), <e> event(s)`; prompt `restore <p> proposal(s), <t> task(s), <r> run(s), <c> card(s) and <e> event(s) of <slug> from <FILE> into <db>? [y/N]`; the occupied refusal names the five counts; `--json` `{path|db, proposals, tasks, runs, cards, events}`. `QueueCounts`, `StoredQueue` + `tasks`, `runs`, `cards` (`StoredTask {columns: [_; 17]}`, `StoredRun {run, columns}`, `StoredCard {position, columns}`): a task or a card alone makes a queue occupied.

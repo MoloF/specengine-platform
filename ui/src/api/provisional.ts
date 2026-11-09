@@ -1936,7 +1936,21 @@ export interface CardEvent {
   payload: unknown;
 }
 
-/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data". */
+/**
+ * One `T-` task a card links, in link order, read when the card is: `status`, `title` and `stale`
+ * as `spec task list` reads the task now, all three null when this server cannot read it (a row
+ * that does not read, no such row, another repository's task, a root in no git repository, a hub),
+ * `stale` alone null when only its staleness fails; each null has a card note starting `<id>: `.
+ * Source: `docs/canon/cards.md` "Documents and events", `docs/canon/card-tasks.md` "The rule".
+ */
+export interface CardTask {
+  id: string;
+  status: TaskStatus | null;
+  title: string | null;
+  stale: boolean | null;
+}
+
+/** `spec card show C --history --json`: every key present, absent `null`. `mark`, `on`, `discrepancy` and `correction` are as on a `CardRow` under `--marks`, null without it, so always null on `GET cards/:id`: the panel keeps its marks from the list. `tasks` the linked `T-` tasks, read now, after `evidence`. Source: `docs/canon/cards.md` "Documents and events", `docs/features/card-trace.md` "Data", `docs/features/trace-truth.md` "Data", `docs/canon/card-tasks.md` "The rule". */
 export interface Card {
   id: string;
   flow: string;
@@ -1959,6 +1973,7 @@ export interface Card {
   parent: string | null;
   corrects: string | null;
   evidence: CardEvidence[];
+  tasks: CardTask[];
   acceptance: CardAcceptance | null;
   cancellation: CardCancellation | null;
   created_by: string;

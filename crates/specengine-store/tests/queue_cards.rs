@@ -3,9 +3,10 @@
 //! read from `fixtures/card-press/specengine.toml` by core's reader; the raw
 //! steps (an older schema, a corrupt row) use the system's `sqlite3`.
 //!
-//! - Schema 9: `cards` as "Store" gives it, 24 columns in `CARD_COLUMNS`
-//!   order, `STRICT`, `TEXT` but `position`; a schema-8 queue steps once, its
-//!   rows kept, `events` and `proposals` unchanged.
+//! - Schema 9: `cards` as "Store" gives it, `STRICT`, `TEXT` but
+//!   `position`; a schema-8 queue steps once, its rows kept, `events` and
+//!   `proposals` unchanged. Schema 10 (docs/canon/cards.md "Store"):
+//!   25 columns in `CARD_COLUMNS` order, `tasks` last.
 //! - Writes: one `Immediate` transaction, one event, `revision` raised; the
 //!   rules of core asked again under the lock (a CLI that skipped them, or a
 //!   stale read, changes nothing); a lost compare-and-set; dense positions,
@@ -21,6 +22,15 @@
 //! - The gate: `GateQueue::tasks` answers alike over a corrupt card row and
 //!   with no `cards` table at all, and `queue/gate.rs` names no card (M:
 //!   `GateQueue::tasks` reading `cards`).
+//! - card-tasks (RM-0092, CT-4, docs/canon/cards.md "Store"): a
+//!   schema-9 queue made with step 9's SQL, holding a card, opens at 10, the
+//!   card linking none (`NULL`, read as `[]`); `CardEdit.tasks` replaces the
+//!   list whole, `Some` of none clears it, `fields` names `tasks` last; core's
+//!   grammar, repeat and cap asked again under the lock, while no task is
+//!   looked up (D4: an ID no task holds is stored); a `tasks` that is no JSON
+//!   array of task IDs makes the row unreadable naming `tasks`, a repeat or a
+//!   long list a hand edit left reads as stored; the gate reads no link.
+//!   M6: `STEP_10` left out of `migrate`.
 //! - board-handoff (RM-0085, docs/canon/cards.md "Documents and events"):
 //!   `card.created` carries `reviewer` and `card.moved` `note`, each `null`
 //!   when none; the reviewer and the return column's note asked again under
@@ -54,8 +64,9 @@ const T1: &str = "2026-10-30T09:00:01Z";
 const T2: &str = "2026-10-30T09:00:02Z";
 const PROJECT: &str = "card-press";
 
-/// The columns as "Store" lists them, written here.
-const COLUMNS: [&str; 24] = [
+/// The columns as "Store" lists them, written here: step 9's 24, then step
+/// 10's `tasks` (docs/canon/cards.md "Store").
+const COLUMNS: [&str; 25] = [
     "id",
     "project",
     "flow",
@@ -80,7 +91,21 @@ const COLUMNS: [&str; 24] = [
     "created_at",
     "updated_at",
     "revision",
+    "tasks",
 ];
+
+/// Step 9's SQL as `crates/specengine-store/src/queue.rs` holds it
+/// (docs/features/card-store.md "Store"): the `cards` a schema-9 queue has.
+const STEP_9: &str = "
+CREATE TABLE cards (
+  id TEXT PRIMARY KEY,
+  project TEXT, flow TEXT, col TEXT, position INTEGER,
+  title TEXT, goal TEXT, discipline TEXT, targets TEXT, snapshot TEXT, criteria TEXT,
+  assignee TEXT, reviewer TEXT, estimate TEXT, due TEXT, parent TEXT, corrects TEXT,
+  evidence TEXT, acceptance TEXT, cancellation TEXT,
+  created_by TEXT, created_at TEXT, updated_at TEXT, revision TEXT
+) STRICT;
+";
 
 fn sqlite3(db: &Path, sql: &str) -> String {
     let client = ["/usr/bin/sqlite3", "/bin/sqlite3", "/usr/local/bin/sqlite3"]
@@ -189,16 +214,18 @@ fn card(id: &str, column: &str, position: u64) -> (String, String, u64) {
 // --------------------------------------------------------------- schema
 
 /// "Store": `cards` as `PRAGMA table_info` gives it, `id` the key, `position`
-/// the one `INTEGER`, `STRICT`; `CARD_COLUMNS` is that list, 24 of them. M: a
-/// column moved or retyped.
+/// the one `INTEGER`, `STRICT`; `CARD_COLUMNS` is that list, 25 of them since
+/// docs/features/card-tasks.md (`tasks` last, queue schema 10). M: a column
+/// moved or retyped.
 #[test]
-fn schema_9_makes_the_cards_table() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+fn schema_10_makes_the_cards_table() {
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     assert_eq!(CARD_COLUMNS, COLUMNS);
+    assert_eq!(CARD_COLUMNS.last(), Some(&"tasks"));
     let scratch = Scratch::new("qc-schema");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
     let want: Vec<String> = COLUMNS
         .iter()
         .map(|column| {
@@ -227,10 +254,11 @@ fn schema_9_makes_the_cards_table() {
 }
 
 /// AC-07, the store half: a schema-8 queue (a proposal's table, a task and
-/// an event in it) opens at 9, stepped once, every row byte for byte;
-/// `cards` empty, a card made after. M: the step skipped.
+/// an event in it) opens at 10 in one open (card-tasks CT-4: steps 9 and
+/// 10), every row byte for byte; `cards` empty, its 25 columns, a card made
+/// after. M: the step skipped.
 #[test]
-fn a_schema_8_queue_opens_at_9_with_its_rows_unchanged() {
+fn a_schema_8_queue_opens_at_10_with_its_rows_unchanged() {
     let scratch = Scratch::new("qc-step");
     let db = scratch.db("q");
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
@@ -265,7 +293,16 @@ fn a_schema_8_queue_opens_at_9_with_its_rows_unchanged() {
     };
     let before_step = raw(&db);
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(
+        sqlite3(
+            &db,
+            "SELECT group_concat(name, ' ') FROM (SELECT name FROM pragma_table_info('cards') \
+             ORDER BY cid);"
+        ),
+        COLUMNS.join(" "),
+        "steps 9 and 10 in one open"
+    );
     assert_eq!(raw(&db), before_step, "rows unchanged");
     assert_eq!(queue.dump().expect("dump"), rows);
     assert_eq!(
@@ -800,6 +837,7 @@ fn edits_write_what_they_name_and_keep_links_acyclic() {
                 evidence: vec![(EvidenceKind::Note, "Read twice.".to_owned())],
                 reason: None,
                 norms: None,
+                tasks: Some(vec!["T-0002".to_owned(), "T-0001".to_owned()]),
             }),
             "ana",
             T1,
@@ -810,14 +848,19 @@ fn edits_write_what_they_name_and_keep_links_acyclic() {
     assert_eq!(edited.evidence.len(), 1);
     assert_eq!(edited.evidence[0].by, "ana");
     assert_eq!(edited.evidence[0].at, T1);
+    assert_eq!(edited.tasks, ["T-0002", "T-0001"], "as given");
     assert_eq!(
         card_events(&queue).last(),
         Some(&(
             EVENT_CARD_EDITED.to_owned(),
             json!({"id": "C-0001", "fields": ["title", "goal", "targets", "criteria", "estimate",
-                                              "due", "parent", "corrects", "evidence"],
+                                              "due", "parent", "corrects", "evidence", "tasks"],
                    "as": "ana"})
         ))
+    );
+    assert_eq!(
+        sqlite3(&db, "SELECT tasks FROM cards WHERE id = 'C-0001';"),
+        "[\"T-0002\",\"T-0001\"]"
     );
     assert_eq!(
         sqlite3(&db, "SELECT evidence FROM cards WHERE id = 'C-0001';"),
@@ -841,6 +884,7 @@ fn edits_write_what_they_name_and_keep_links_acyclic() {
     assert_eq!(cleared.title, "Longer", "left");
     assert_eq!(cleared.corrects.as_deref(), Some("C-0002"), "left");
     assert_eq!(cleared.evidence.len(), 1, "left");
+    assert_eq!(cleared.tasks, ["T-0002", "T-0001"], "left");
 
     let linked = |parent: &str| {
         edit(CardEdit {
@@ -1398,6 +1442,33 @@ fn a_corrupt_row_is_named_and_skipped() {
             "C-0001",
             "goal",
         ),
+        // docs/canon/cards.md "Store": bad JSON, no array of strings,
+        // an entry that is no task ID.
+        (
+            "UPDATE cards SET tasks = 'not json' WHERE id = 'C-0001'",
+            "C-0001",
+            "tasks",
+        ),
+        (
+            "UPDATE cards SET tasks = '{}' WHERE id = 'C-0001'",
+            "C-0001",
+            "tasks",
+        ),
+        (
+            "UPDATE cards SET tasks = '[1]' WHERE id = 'C-0001'",
+            "C-0001",
+            "tasks",
+        ),
+        (
+            "UPDATE cards SET tasks = '[\"T-0001\",\"foo\"]' WHERE id = 'C-0001'",
+            "C-0001",
+            "tasks",
+        ),
+        (
+            "UPDATE cards SET tasks = '[\"\u{0422}-0001\"]' WHERE id = 'C-0001'",
+            "C-0001",
+            "tasks",
+        ),
     ] {
         let scratch = Scratch::new("qc-corrupt");
         let db = scratch.db("q");
@@ -1629,6 +1700,10 @@ fn the_gate_reads_tasks_alone() {
     assert!(sound.0.contains("T-0001"), "{sound:?}");
     assert!(!sound.0.contains("C-0001"), "{sound:?}");
     assert_eq!(sound.1, "[]");
+    sqlite3(&db, "UPDATE cards SET tasks = '[\"T-0001\"]';");
+    assert_eq!(tasks(), sound, "a card linking T-0001 (card-tasks CT-3)");
+    sqlite3(&db, "UPDATE cards SET tasks = 'not json';");
+    assert_eq!(tasks(), sound, "a card whose tasks do not read");
     sqlite3(
         &db,
         "UPDATE cards SET evidence = 'not json', id = 'X', project = NULL;",
@@ -1642,4 +1717,272 @@ fn the_gate_reads_tasks_alone() {
             .expect("the gate's source");
     assert!(source.contains("main.tasks"), "the scan reads the gate");
     assert!(!source.contains("cards"), "queue/gate.rs names no card");
+}
+
+// ------------------------------------------------ card-tasks (RM-0092)
+
+/// CT-4, the store half: a schema-9 queue made with step 9's SQL, holding
+/// one card, opens at 10 in one step: `PRAGMA table_info(cards)` is
+/// `CARD_COLUMNS` (25, `tasks` last), the old row's `tasks` `NULL`, read as
+/// none, every other column as it was; once more, no second step. M6:
+/// `STEP_10` left out of `migrate`.
+#[test]
+fn card_tasks_a_schema_9_queue_opens_at_10_and_its_card_links_none() {
+    let scratch = Scratch::new("qc-step-10");
+    let db = scratch.db("q");
+    drop(SqliteQueue::open(&db, PROJECT).expect("open"));
+    sqlite3(&db, "DROP TABLE cards;");
+    sqlite3(&db, STEP_9);
+    sqlite3(
+        &db,
+        &format!(
+            "INSERT INTO cards (id, project, flow, col, position, title, goal, discipline, \
+             targets, snapshot, criteria, assignee, reviewer, estimate, due, parent, corrects, \
+             evidence, acceptance, cancellation, created_by, created_at, updated_at, revision) \
+             VALUES ('C-0001', '{PROJECT}', 'copy', 'draft', 1, 'Before the step', NULL, \
+             'copy', '[]', NULL, '[]', NULL, NULL, NULL, NULL, NULL, NULL, '[]', NULL, NULL, \
+             'local', '{T0}', '{T0}', '1'); PRAGMA user_version = 9;"
+        ),
+    );
+    let columns = |db: &Path| {
+        sqlite3(
+            db,
+            "SELECT group_concat(name, ' ') FROM (SELECT name FROM pragma_table_info('cards') \
+             ORDER BY cid);",
+        )
+    };
+    assert_eq!(columns(&db), COLUMNS[..24].join(" "), "premise: schema 9");
+    let row = |db: &Path| {
+        sqlite3(
+            db,
+            &format!("SELECT {} FROM cards;", COLUMNS[..24].join(", ")),
+        )
+    };
+    let before = row(&db);
+
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open steps");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
+    assert_eq!(columns(&db), CARD_COLUMNS.join(" "));
+    assert_eq!(CARD_COLUMNS.len(), 25);
+    assert_eq!(
+        sqlite3(&db, "SELECT tasks IS NULL FROM cards WHERE id = 'C-0001';"),
+        "1",
+        "a stepped row holds NULL"
+    );
+    assert_eq!(row(&db), before, "every other column as it was");
+    let card = queue.get_card("C-0001").expect("read").expect("the card");
+    assert_eq!(card.tasks, Vec::<String>::new(), "NULL reads as none");
+    assert_eq!(card.title, "Before the step");
+    let listed = queue.list_cards().expect("list");
+    assert_eq!(listed.cards.len(), 1);
+    assert!(listed.unreadable.is_empty(), "{:?}", listed.unreadable);
+
+    // A card made after the step holds `'[]'`; an edit writes the list.
+    let config = press();
+    let made = queue
+        .create_card(&new_card(copy(&config), "After the step"), T1)
+        .expect("a card");
+    assert_eq!(made.tasks, Vec::<String>::new());
+    assert_eq!(
+        sqlite3(&db, "SELECT tasks FROM cards WHERE id = 'C-0002';"),
+        "[]"
+    );
+    drop(queue);
+    drop(SqliteQueue::open(&db, PROJECT).expect("open again"));
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "stepped once");
+    assert_eq!(columns(&db), CARD_COLUMNS.join(" "), "no second column");
+}
+
+/// CT-1, the store half (D2-D5): `CardEdit.tasks` replaces the list whole in
+/// the order given, `Some` of none clears it, `None` leaves it; each one
+/// `card.edited` naming `tasks`, `revision` one higher even when the list is
+/// unchanged. Core's grammar, repeat and cap are asked again under the lock
+/// (a CLI that skipped them changes nothing), and no task is looked up: an
+/// ID this queue holds no task of is stored (D4: the existence check is the
+/// caller's). A repeat or a long list a hand edit left reads as stored.
+#[test]
+fn card_tasks_an_edit_replaces_the_list_and_the_store_asks_the_rules_again() {
+    let scratch = Scratch::new("qc-tasks");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let config = press();
+    queue
+        .create_card(&new_card(copy(&config), "Masthead"), T0)
+        .expect("a card");
+    let edit = |tasks: Option<Vec<&str>>| {
+        CardChange::Edit(Box::new(CardEdit {
+            tasks: tasks.map(|tasks| tasks.into_iter().map(str::to_owned).collect()),
+            ..CardEdit::default()
+        }))
+    };
+    let stored = || sqlite3(&db, "SELECT tasks FROM cards WHERE id = 'C-0001';");
+    assert_eq!(stored(), "[]");
+    let mut events = card_events(&queue);
+    for (tasks, want, revision) in [
+        (vec!["T-0042", "T-0001"], "[\"T-0042\",\"T-0001\"]", 2),
+        (vec!["T-0042", "T-0001"], "[\"T-0042\",\"T-0001\"]", 3),
+        (vec![], "[]", 4),
+    ] {
+        let card = queue
+            .change_card(
+                "C-0001",
+                Some(revision - 1),
+                &edit(Some(tasks.clone())),
+                "ana",
+                T1,
+            )
+            .expect("edited");
+        assert_eq!(card.tasks, tasks, "{tasks:?}");
+        assert_eq!(card.revision, revision, "{tasks:?}");
+        assert_eq!(stored(), want, "{tasks:?}");
+        events.push((
+            EVENT_CARD_EDITED.to_owned(),
+            json!({"id": "C-0001", "fields": ["tasks"], "as": "ana"}),
+        ));
+        assert_eq!(card_events(&queue), events, "{tasks:?}");
+    }
+    // `None` leaves it.
+    queue
+        .change_card("C-0001", None, &edit(Some(vec!["T-0007"])), "ana", T1)
+        .expect("edited");
+    let goal = CardChange::Edit(Box::new(CardEdit {
+        goal: Some(Some("G.".to_owned())),
+        ..CardEdit::default()
+    }));
+    let card = queue
+        .change_card("C-0001", None, &goal, "ana", T2)
+        .expect("edited");
+    assert_eq!(card.tasks, ["T-0007"], "left");
+    assert_eq!(stored(), "[\"T-0007\"]");
+
+    // Under the lock: core's rules again.
+    let dump = queue.dump().expect("dump");
+    let many: Vec<String> = (1..=33).map(|n| format!("T-{n:04}")).collect();
+    for (tasks, reason) in [
+        (
+            vec!["foo".to_owned()],
+            "task: \"foo\" is no task ID; nothing changed",
+        ),
+        (
+            vec!["T-0001".to_owned(), "-".to_owned()],
+            "task: \"-\" is no task ID; nothing changed",
+        ),
+        (
+            vec!["T-0001".to_owned(), "T-0001".to_owned()],
+            "task: T-0001 is listed twice; nothing changed",
+        ),
+        (many.clone(), "task: 33 tasks, at most 32; nothing changed"),
+    ] {
+        let change = CardChange::Edit(Box::new(CardEdit {
+            tasks: Some(tasks.clone()),
+            ..CardEdit::default()
+        }));
+        assert_eq!(
+            refusal(queue.change_card("C-0001", None, &change, "ana", T2)),
+            reason,
+            "{tasks:?}"
+        );
+        assert_eq!(
+            queue.dump().expect("dump"),
+            dump,
+            "{tasks:?}: nothing changed"
+        );
+    }
+    let card = queue
+        .change_card(
+            "C-0001",
+            None,
+            &CardChange::Edit(Box::new(CardEdit {
+                tasks: Some(many[..32].to_vec()),
+                ..CardEdit::default()
+            })),
+            "ana",
+            T2,
+        )
+        .expect("32 stored");
+    assert_eq!(card.tasks, many[..32]);
+
+    // A hand edit's repeat and 33 entries read as stored.
+    let thirty_three = serde_json::to_string(&many).expect("JSON");
+    for written in ["[\"T-0001\",\"T-0001\"]".to_owned(), thirty_three] {
+        sqlite3(
+            &db,
+            &format!("UPDATE cards SET tasks = '{written}' WHERE id = 'C-0001';"),
+        );
+        let card = queue.get_card("C-0001").expect("read").expect("the card");
+        let want: Vec<String> = serde_json::from_str(&written).expect("JSON");
+        assert_eq!(card.tasks, want, "read as stored");
+        assert!(queue.list_cards().expect("list").unreadable.is_empty());
+    }
+    // `NULL` reads as none.
+    sqlite3(&db, "UPDATE cards SET tasks = NULL WHERE id = 'C-0001';");
+    let card = queue.get_card("C-0001").expect("read").expect("the card");
+    assert_eq!(card.tasks, Vec::<String>::new());
+}
+
+/// R7, the store half: an accept leaves the links; a closed card takes no
+/// link edit (the closed refusal); a correction starts with none.
+#[test]
+fn card_tasks_an_accept_keeps_the_links_and_a_closed_card_takes_no_link() {
+    let scratch = Scratch::new("qc-tasks-closed");
+    let db = scratch.db("q");
+    let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
+    let config = press();
+    let flow = plates(&config);
+    let mut card = new_card(flow, "Back page");
+    card.reviewer = Some("ben".to_owned());
+    queue.create_card(&card, T0).expect("a card");
+    queue
+        .change_card(
+            "C-0001",
+            None,
+            &CardChange::Edit(Box::new(CardEdit {
+                tasks: Some(vec!["T-0001".to_owned()]),
+                ..CardEdit::default()
+            })),
+            "ana",
+            T0,
+        )
+        .expect("linked");
+    queue
+        .change_card("C-0001", None, &to(flow, "checked"), "ana", T1)
+        .expect("moved");
+    let norms = TargetNorms::new();
+    queue
+        .accept_card(
+            "C-0001",
+            None,
+            &CardAccept {
+                flow: Some(flow),
+                note: None,
+                norms: &norms,
+            },
+            "ben",
+            T1,
+        )
+        .expect("accepted");
+    let accepted = queue.get_card("C-0001").expect("read").expect("the card");
+    assert!(accepted.acceptance.is_some());
+    assert_eq!(accepted.tasks, ["T-0001"], "the accept leaves the links");
+    let dump = queue.dump().expect("dump");
+    let reason = refusal(queue.change_card(
+        "C-0001",
+        None,
+        &CardChange::Edit(Box::new(CardEdit {
+            tasks: Some(Vec::new()),
+            ..CardEdit::default()
+        })),
+        "ana",
+        T2,
+    ));
+    assert!(reason.contains("--corrects"), "{reason}");
+    assert_eq!(queue.dump().expect("dump"), dump, "nothing changed");
+    let mut correction = new_card(flow, "Back page again");
+    correction.corrects = Some("C-0001".to_owned());
+    let made = queue.create_card(&correction, T2).expect("a correction");
+    assert_eq!(
+        made.tasks,
+        Vec::<String>::new(),
+        "a correction starts with none"
+    );
 }

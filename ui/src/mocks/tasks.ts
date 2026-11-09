@@ -1,5 +1,6 @@
 import type {
   Author,
+  CardTask,
   SnapshotDiff,
   SnapshotNode,
   TaskAssumption,
@@ -45,6 +46,8 @@ export type StoredTask = Omit<TaskPackage, "open_proposals" | "assumptions">;
 export interface MockTasks {
   tasks: StoredTask[];
   notes: string[];
+  /** The rows the list skips, by ID: the column that does not read and why, as a card's read words it. */
+  unreadable?: Readonly<Record<string, string>>;
 }
 
 const pad = (value: number, width = 2) => String(value).padStart(width, "0");
@@ -202,6 +205,7 @@ function harborTasks(): MockTasks {
 
   return {
     notes: ["T-0106: unreadable row (bad JSON in criteria); skipped"],
+    unreadable: { "T-0106": "`criteria`: bad JSON" },
     tasks: [
       task({
         id: "T-0104",
@@ -736,6 +740,26 @@ export function taskListOf(store: MockTasks): TaskList {
     })),
     notes: [...store.notes, ...placeNotes].sort((a, b) => a.localeCompare(b, "en", { numeric: true })),
   };
+}
+
+/** `task list`'s note for a task with no snapshot to compare: its staleness is not known. */
+const NO_SNAPSHOT = "stale unknown: no snapshot (the owner's `spec task approve` freezes one)";
+
+/**
+ * A task a card links, as `spec card show` reads it now
+ * (`docs/canon/cards.md` "Documents and events"): its state as `spec task list` reads it, a `null`
+ * stale adding its note; a row that does not read, or none, all three null with the daemon's note.
+ * Each note starts `<id>: `.
+ */
+export function linkedTaskOf(store: MockTasks, id: string): { task: CardTask; notes: string[] } {
+  const stored = store.tasks.find((candidate) => candidate.id === id);
+  if (stored !== undefined) {
+    const said = stored.spec_snapshot === null ? [NO_SNAPSHOT] : stored.notes;
+    return { task: { id, status: stored.status, title: stored.title, stale: stored.stale }, notes: stored.stale === null ? said.map((note) => `${id}: ${note}`) : [] };
+  }
+  const unread = store.unreadable?.[id];
+  const note = unread === undefined ? "no such task in this queue; no state shown" : `its row does not read (${unread}); no state shown`;
+  return { task: { id, status: null, title: null, stale: null }, notes: [`${id}: ${note}`] };
 }
 
 /** The exit-1 document of `spec task show` for a T the repository lacks (the daemon's 404). */

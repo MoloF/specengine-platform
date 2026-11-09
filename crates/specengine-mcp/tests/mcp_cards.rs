@@ -23,6 +23,15 @@
 //!   move into `sent-back` without a note refused, nothing stored; the
 //!   descriptions name the keys.
 //!
+//! - card-tasks (RM-0092), docs/canon/cards.md "MCP", CT-1
+//!   and CT-2, on `fixtures/studio-lamp` with `T-0001`, `T-0002` in both
+//!   queues: `edit_card {task}` equal to `spec card edit --task` on a twin
+//!   queue, one `card.edited` naming `tasks` acting as `agent`, `["-"]`
+//!   clearing; no such task, a repeat, no task ID and a look-alike refused as
+//!   the CLI refuses them, nothing stored; `get_card` serving `tasks` and the
+//!   task notes byte for byte as `spec card show --marks --json`; the stdio
+//!   descriptions holding "Data"'s sentences.
+//!
 //! Every server has a cleared environment and a scratch `HOME`.
 
 #![cfg(all(unix, not(feature = "probes")))]
@@ -33,11 +42,11 @@ mod common;
 mod git;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use common::read::{
     CARD_TOOLS, ERAS, Era, STACK_WORDS, Session, TOOLS, assert_bad_arguments, assert_parity,
-    card_library, checked_call, cli_env, content_text, has_word, output_schemas,
+    card_library, checked_call, cli_env, content_text, has_word, output_schemas, server_git,
 };
 use common::*;
 use git::Sandbox;
@@ -256,6 +265,8 @@ fn ac10_the_card_tools_and_their_schemas() {
                     "reason",
                     "revision",
                     "target",
+                    // docs/canon/cards.md "MCP".
+                    "task",
                     "title",
                 ],
                 vec!["card_id"],
@@ -1064,5 +1075,232 @@ fn board_handoff_the_descriptions_name_the_new_keys() {
         }
     }
     assert_eq!(specengine_mcp::INSTRUCTIONS.len(), 2048);
+    drop(session.finish());
+}
+
+// ---------------------------------------------------- card-tasks (RM-0092)
+
+/// The sentence `EDIT_DESCRIPTION` adds (card-tasks, CT-1).
+const EDIT_TASK_SENTENCE: &str = "task: the T- tasks it links, each an existing task of this \
+                                  queue, listed once, at most 32; it replaces the list, - clears \
+                                  it. The link decides nothing: no move, accept or gate reads it.";
+
+/// The sentence `GET_DESCRIPTION` adds, shared by stdio and a hub.
+const GET_TASKS_SENTENCE: &str = "tasks: each linked task {id, status, title, stale}, read now as \
+                                  spec task list reads it; status null, with a note that starts \
+                                  with its ID, for a task this server cannot read: a corrupt row, \
+                                  another repository, a hub.";
+
+/// `spec task new --nodes node --title title` through the library on the
+/// queue of `home` at [`CLOCK`]: its ID.
+fn task_in(repo: &Repo, home: &Path, node: &str, title: &str) -> String {
+    let env = cli_env(&repo.root, Some(home));
+    let outcome = specengine_cli::task_new(
+        &env,
+        &Globals::default(),
+        &specengine_cli::TaskNewRequest {
+            nodes: vec![node.to_owned()],
+            title: Some(title.to_owned()),
+            goal: None,
+            author_role: None,
+            author_model: None,
+            run: None,
+            now: CLOCK.to_owned(),
+            git: server_git(&env),
+        },
+    )
+    .unwrap_or_else(|error| panic!("task new {node}: {error}"));
+    outcome.id.expect("a task's ID")
+}
+
+/// CT-1 and CT-2, the tools' half: on studio-lamp, `T-0001` and `T-0002`
+/// made in the server's queue and the twin's, `edit_card {task}` answers as
+/// `spec card edit --task` on the twin (a refusal's document and line too)
+/// and stores the same list and event: `fields: ["tasks"]` (`["goal",
+/// "tasks"]` beside `goal`), acting as `agent`; `["-"]` clears. `get_card`'s
+/// `content` and `structuredContent` are `spec card show C --marks --json`'s,
+/// each `{id, status, title, stale}`, each task's note after `<id>: `. The
+/// repository stays clean.
+#[test]
+fn card_tasks_edit_card_links_and_get_card_reads_each_task() {
+    let repo = Repo::new("mc-tasks", "studio-lamp");
+    for home in [&repo.home, &repo.twin] {
+        assert_eq!(
+            task_in(&repo, home, "ISL-LAMP", "Light the north lamp"),
+            "T-0001"
+        );
+        assert_eq!(
+            task_in(&repo, home, "ISL-LAMP-ROOM", "Wire the switch"),
+            "T-0002"
+        );
+    }
+    let mut session = repo.session(Era::Stateless);
+    let schemas = output_schemas(&session.tools());
+    let env = cli_env(&repo.root, Some(&repo.home));
+    let globals = Globals::default();
+    let writes = [
+        (
+            "create_card",
+            json!({"title": "Light the lamp", "discipline": "development",
+                   "target": ["ISL-LAMP"]}),
+        ),
+        (
+            "edit_card",
+            json!({"card_id": "C-0001", "task": ["T-0001", "T-0002"]}),
+        ),
+    ];
+    for (tool, args) in writes {
+        twin_call(&repo, &mut session, &schemas, tool, args);
+        assert_eq!(repo.status(), "", "{tool}");
+    }
+    let shown = checked_call(
+        &mut session,
+        &schemas,
+        "get_card",
+        json!({"card_id": "C-0001"}),
+        &env,
+        &globals,
+    );
+    let document = &shown["structuredContent"];
+    assert_eq!(
+        document["tasks"],
+        json!([
+            {"id": "T-0001", "status": "draft", "title": "Light the north lamp", "stale": null},
+            {"id": "T-0002", "status": "draft", "title": "Wire the switch", "stale": null},
+        ]),
+        "{shown}"
+    );
+    // The key order is the CLI's (`card_tasks.rs`); here `serde_json` sorts.
+    let notes = document["notes"].as_array().expect("notes");
+    for (index, id) in ["T-0001", "T-0002"].iter().enumerate() {
+        assert!(
+            notes[index]
+                .as_str()
+                .is_some_and(|note| note.starts_with(&format!("{id}: "))),
+            "{notes:?}"
+        );
+    }
+
+    for (tool, args) in [
+        (
+            "edit_card",
+            json!({"card_id": "C-0001", "task": ["T-0002", "T-0001"],
+                   "goal": "Before the storm."}),
+        ),
+        (
+            "edit_card",
+            json!({"card_id": "C-0001", "task": ["T-0099"]}),
+        ),
+        (
+            "edit_card",
+            json!({"card_id": "C-0001", "task": ["T-0001", "T-0001"]}),
+        ),
+        ("edit_card", json!({"card_id": "C-0001", "task": ["foo"]})),
+        (
+            "edit_card",
+            json!({"card_id": "C-0001", "task": ["T-0001", "-"]}),
+        ),
+        (
+            "edit_card",
+            json!({"card_id": "C-0001", "task": ["\u{0422}-0001"]}),
+        ),
+    ] {
+        twin_call(&repo, &mut session, &schemas, tool, args);
+        assert_eq!(repo.status(), "", "{tool}");
+    }
+    let refused = session.call(
+        "edit_card",
+        json!({"card_id": "C-0001", "task": ["T-0099"]}),
+    );
+    let refused = result(&refused);
+    assert_eq!(refused["isError"], json!(true), "{refused}");
+    assert_eq!(
+        content_text(refused),
+        "spec: task: no task T-0099; nothing changed\n"
+    );
+    checked_call(
+        &mut session,
+        &schemas,
+        "get_card",
+        json!({"card_id": "C-0001", "history": true}),
+        &env,
+        &globals,
+    );
+    twin_call(
+        &repo,
+        &mut session,
+        &schemas,
+        "edit_card",
+        json!({"card_id": "C-0001", "task": ["-"]}),
+    );
+    let cleared = checked_call(
+        &mut session,
+        &schemas,
+        "get_card",
+        json!({"card_id": "C-0001"}),
+        &env,
+        &globals,
+    );
+    assert_eq!(
+        cleared["structuredContent"]["tasks"],
+        json!([]),
+        "{cleared}"
+    );
+    let edited: Vec<(String, Value)> = repo
+        .events()
+        .into_iter()
+        .filter(|(kind, _)| kind == "card.edited")
+        .collect();
+    assert_eq!(
+        edited,
+        [
+            (
+                "card.edited".to_owned(),
+                json!({"id": "C-0001", "fields": ["tasks"], "as": "agent"})
+            ),
+            (
+                "card.edited".to_owned(),
+                json!({"id": "C-0001", "fields": ["goal", "tasks"], "as": "agent"})
+            ),
+            (
+                "card.edited".to_owned(),
+                json!({"id": "C-0001", "fields": ["tasks"], "as": "agent"})
+            ),
+        ],
+        "the refused calls stored nothing"
+    );
+    drop(session.finish());
+    assert_eq!(repo.status(), "");
+}
+
+/// docs/canon/cards.md "MCP", D15: the stdio `edit_card`
+/// names `task` and holds its sentence, `get_card` holds the `tasks`
+/// sentence; both stay ASCII within 2 048 bytes, 29 tools.
+#[test]
+fn card_tasks_the_stdio_descriptions_name_task() {
+    assert_eq!(TOOLS.len(), 29);
+    let mut session = Session::open(Era::Legacy, &[], None, Home::Fresh);
+    let list = session.tools();
+    for (name, word, sentence) in [
+        ("edit_card", "task", EDIT_TASK_SENTENCE),
+        ("get_card", "tasks", GET_TASKS_SENTENCE),
+    ] {
+        let description = tool(&list, name)["description"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{name}: a description"));
+        assert!(has_word(description, word), "{name}: {description}");
+        assert!(
+            description.contains(sentence),
+            "{name} holds {sentence:?}: {description}"
+        );
+        assert!(description.is_ascii(), "{name}");
+        assert!(description.len() <= 2048, "{name}: {}", description.len());
+    }
+    assert!(
+        tool(&list, "edit_card")["inputSchema"]["properties"]
+            .get("task")
+            .is_some(),
+        "edit_card takes task"
+    );
     drop(session.finish());
 }

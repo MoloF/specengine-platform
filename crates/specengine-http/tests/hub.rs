@@ -2290,3 +2290,156 @@ fn board_handoff_bh20_no_return_route_and_the_classes_unchanged() {
         "nothing moved"
     );
 }
+
+// ------------------------------------------------ card-tasks (RM-0092) CT-7
+
+/// The note of each linked task a hub serves (card-tasks CT-7), after
+/// `<id>: `.
+const HUB_TASK_NOTE: &str = "a hub reads no task; its state is on the terminal that holds it";
+
+/// `sqlite3 <db> <sql>` on `home`'s queue of `slug`: its output.
+fn queue_sql(home: &std::path::Path, slug: &str, sql: &str) -> String {
+    let done = Command::new("/usr/bin/sqlite3")
+        .arg(data_dir(home).join(format!("{slug}.db")))
+        .arg(sql)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("sqlite3 runs");
+    assert!(done.status.success(), "{sql}: {done:?}");
+    String::from_utf8(done.stdout).expect("UTF-8")
+}
+
+/// docs/features/card-tasks.md CT-7 (D10, R6, Q2): on a hub over card-press
+/// whose queue holds `T-0001` (set to `review` by SQL), `POST
+/// .../cards/C-0001/edit {"task": ["T-0001", "T-0042"]}` by a login is
+/// stored with no `T-0042` anywhere, its `card.edited` acting as the login;
+/// `GET .../cards/C-0001`, by any login, serves every entry `null` with the
+/// hub's note per ID, in link order, and the task row is as it was. `["X-1"]`,
+/// a repeat and 33 entries are refused as locally: a 409, the reason last of
+/// `notes`, nothing changed. M13: the read ignoring `tasks_here` (`T-0001`
+/// shows `review`). M14: the edit ignoring it (`T-0042` refused).
+#[test]
+fn card_tasks_ct7_a_hub_keeps_the_ids_as_written_and_reads_no_task() {
+    let setup = Setup::new("hub-card-tasks", "card-press");
+    let made = spec(
+        &setup.home,
+        &setup.root,
+        &[
+            "--json",
+            "task",
+            "new",
+            "--nodes",
+            "SHT-FRONT",
+            "--title",
+            "Set the masthead",
+        ],
+    );
+    made.code(0);
+    assert_eq!(made.json()["id"], json!("T-0001"));
+    queue_sql(
+        &setup.home,
+        "card-press",
+        "UPDATE tasks SET status = 'review' WHERE id = 'T-0001';",
+    );
+    let task_row = queue_sql(&setup.home, "card-press", "SELECT * FROM tasks;");
+    let hub = setup.start();
+    hub.done(
+        "mira",
+        "cards",
+        &json!({"title": "Masthead", "discipline": "copy"}),
+    );
+    let edited = hub.done(
+        "mira",
+        "cards/C-0001/edit",
+        &json!({"task": ["T-0001", "T-0042"]}),
+    );
+    assert_eq!(edited["revision"], json!("2"), "{edited}");
+    assert_eq!(
+        hub.events().last(),
+        Some(&(
+            "card.edited".to_owned(),
+            json!({"id": "C-0001", "fields": ["tasks"], "as": "mira"})
+        ))
+    );
+    assert_eq!(
+        queue_sql(
+            &hub.setup.home,
+            "card-press",
+            "SELECT tasks FROM cards WHERE id = 'C-0001';"
+        ),
+        "[\"T-0001\",\"T-0042\"]\n",
+        "kept as written"
+    );
+
+    let path = format!("{P}/cards/C-0001");
+    let shown = hub.get("mira", &path);
+    assert_eq!(shown.status, 200, "{}", shown.text());
+    let card = shown.json();
+    assert_eq!(
+        card["tasks"],
+        json!([
+            {"id": "T-0001", "status": null, "title": null, "stale": null},
+            {"id": "T-0042", "status": null, "title": null, "stale": null},
+        ]),
+        "{card}"
+    );
+    assert_eq!(
+        card["notes"],
+        json!([
+            format!("T-0001: {HUB_TASK_NOTE}"),
+            format!("T-0042: {HUB_TASK_NOTE}"),
+        ]),
+        "{card}"
+    );
+    let other = hub.get("tomas", &path);
+    assert_eq!(other.status, 200, "{}", other.text());
+    assert_eq!(other.text(), shown.text(), "any login reads the same");
+    assert_eq!(
+        queue_sql(&hub.setup.home, "card-press", "SELECT * FROM tasks;"),
+        task_row,
+        "the hub read and wrote no task"
+    );
+
+    let many: Vec<String> = (1..=33).map(|n| format!("T-{n:04}")).collect();
+    for (body, reason) in [
+        (
+            json!({"task": ["X-1"]}),
+            "task: \"X-1\" is no task ID; nothing changed",
+        ),
+        (
+            json!({"task": ["T-0042", "T-0042"]}),
+            "task: T-0042 is listed twice; nothing changed",
+        ),
+        (
+            json!({"task": many}),
+            "task: 33 tasks, at most 32; nothing changed",
+        ),
+    ] {
+        let before = hub.board();
+        let reply = hub.post("mira", "cards/C-0001/edit", &body);
+        assert_eq!(reply.status, 409, "{body}: {}", reply.text());
+        assert_eq!(
+            reply.json()["notes"]
+                .as_array()
+                .and_then(|notes| notes.last()),
+            Some(&json!(reason)),
+            "{body}: {}",
+            reply.text()
+        );
+        assert_eq!(hub.board(), before, "{body}: nothing changed");
+    }
+    // 32 of them are kept as written: the hub checks no task.
+    let kept = hub.done(
+        "tomas",
+        "cards/C-0001/edit",
+        &json!({"task": many[..32].to_vec()}),
+    );
+    assert_eq!(kept["revision"], json!("3"), "{kept}");
+    assert_eq!(
+        hub.events().last(),
+        Some(&(
+            "card.edited".to_owned(),
+            json!({"id": "C-0001", "fields": ["tasks"], "as": "tomas"})
+        ))
+    );
+}

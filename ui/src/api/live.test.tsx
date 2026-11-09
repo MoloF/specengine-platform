@@ -1202,14 +1202,21 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     expect(client.getFlow).toHaveBeenCalledTimes(1);
   });
 
-  it("a gap reads the cards again; a proposal or a task event does not", async () => {
+  it("a gap reads the cards again; a proposal or a task event does not read the list, and a task event reads the open cards alone (card-tasks D13)", async () => {
     const { client, queryClient, tail, gap } = await onScreen();
     act(() => {
       tail({ seq: 92, type: "proposal.created", payload: { id: "PR-1" } });
+    });
+    await quiet(queryClient);
+    expect(client.getCard).not.toHaveBeenCalled();
+    act(() => {
       tail({ seq: 93, type: "task.claimed", payload: { id: "T-1" } });
     });
     await quiet(queryClient);
     expect(client.getCards).not.toHaveBeenCalled();
+    // A card serves each task it links as read now (docs/canon/card-tasks.md "The rule").
+    expect(client.getCard.mock.calls.map((call) => call[1]).sort()).toEqual(["C-0001", "C-0002"]);
+    client.getCard.mockClear();
     act(() => {
       gap();
     });

@@ -538,6 +538,19 @@ export const en = {
       returnedCount_one: "{{count}} returned",
       returnedCount_other: "{{count}} returned",
     },
+    // A card's linked T- tasks (CardTasks.tsx): each one's state as read now, the one command that waits on you, how to make and link one; the link decides nothing.
+    tasks: {
+      title: "Tasks",
+      list: "Tasks linked to {{id}}",
+      notRead: "State not read here",
+      awaiting: "Awaiting you",
+      notes: "Notes from the daemon on {{id}}",
+      none: "No task yet.",
+      howTo: "Make one on a terminal, then link it to this card.",
+      make: "Make a task on this card's nodes",
+      link: "Link it to this card",
+      onHub: "Tasks run on a terminal, and their state stays there. An agent links one to this card with edit_card.",
+    },
     // The write dialogs (CardDialogs.tsx): their titles, buttons and checks.
     dialog: {
       cancel: "Cancel",

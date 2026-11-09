@@ -272,10 +272,12 @@ fn the_column_lists_are_the_tables_columns_in_table_order() {
             CARD_COLUMNS.len()
         ),
         // 46 since docs/features/drift-queue.md "Queue schema 8"; `cards`
-        // since docs/features/card-store.md "Store".
-        (46, 17, 11, 24)
+        // since docs/features/card-store.md "Store"; 25 since
+        // docs/canon/cards.md "Store" (`tasks`, queue schema 10).
+        (46, 17, 11, 25)
     );
     assert_eq!(CARD_COLUMNS[4], "position");
+    assert_eq!(CARD_COLUMNS[24], "tasks");
     // docs/features/task-package.md iteration 2: the task's compare-and-set
     // key, its last column.
     assert_eq!(TASK_COLUMNS[16], "revision");
@@ -347,18 +349,18 @@ fn open_existing_creates_nothing_and_restore_runs_the_schema_steps() {
     assert_eq!(reopened.stored_rows().unwrap(), state);
 }
 
-/// A `user_version` above this build's (8,
-/// `docs/features/drift-queue.md` "Queue schema 8"): `open_existing` refuses it as
+/// A `user_version` above this build's (10,
+/// `docs/canon/cards.md` "Store"): `open_existing` refuses it as
 /// `SchemaTooNew`.
 #[test]
 fn open_existing_refuses_a_newer_schema() {
     let scratch = Scratch::new("qs-newer");
     let db = scratch.db("q");
     drop(SqliteQueue::open(&db, PROJECT).expect("open"));
-    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 9);
-    sqlite3(&db, "PRAGMA user_version = 10");
+    assert_eq!(specengine_store::QUEUE_SCHEMA_VERSION, 10);
+    sqlite3(&db, "PRAGMA user_version = 11");
     match SqliteQueue::open_existing(&db, PROJECT) {
-        Err(QueueError::SchemaTooNew { found: 10 }) => {}
+        Err(QueueError::SchemaTooNew { found: 11 }) => {}
         Err(other) => panic!("expected SchemaTooNew, got {other}"),
         Ok(_) => panic!("expected SchemaTooNew, got a handle"),
     }

@@ -32,9 +32,11 @@ import {
   type CardMark,
 } from "./labels";
 import { returnReasonOf, type Rollup } from "./rollup";
+import { CardTasks, ownNotes } from "./CardTasks";
 
 // A card's body (`docs/canon/cards.md` "Documents and events"): every field, its mark and Clear,
-// Accept's verdict, its history with each move's note, its links, its hand-offs and, standing in its
+// Accept's verdict, its history with each move's note, its links, its hand-offs, its linked `T-`
+// tasks (`docs/canon/card-tasks.md` "The rule"; their notes stand on their rows) and, standing in its
 // flow's return column, why it came back. The Board's modal and the card's page show it alike; the
 // acts open their dialogs over it (`docs/canon/card-flows.md` "The rule"). Nothing here judges a
 // column: the return column and the accept column are the flow's, looked up.
@@ -385,6 +387,7 @@ function Details({
   const cancelled = card.cancellation !== null;
   const back = flow?.return ?? null;
   const history = [...(card.history ?? [])].sort((a, b) => a.seq - b.seq);
+  const notes = ownNotes(card);
   return (
     <>
       <p className="board-panel-state">
@@ -393,9 +396,9 @@ function Details({
         {cancelled && <Badge look={cancelledLook(t)} />}
         {isOverdue({ due: card.due, accepted, cancelled }, today) && <Badge look={overdueLook(t)} />}
       </p>
-      {card.notes.length > 0 && (
+      {notes.length > 0 && (
         <ul className="note-list" aria-label={t("board.panel.notes")}>
-          {card.notes.map((note, index) => (
+          {notes.map((note, index) => (
             <li key={`${String(index)}-${note}`} lang="en">
               {note}
             </li>
@@ -451,6 +454,9 @@ function Details({
         )}
       </Part>
       <HandOffs rollup={handOffs} links={links} />
+      <Part title={t("board.tasks.title")}>
+        <CardTasks project={project} card={card} />
+      </Part>
       <Part title={t("board.panel.details")}>
         <dl className="facts">
           <Fact term={t("board.panel.discipline")}>

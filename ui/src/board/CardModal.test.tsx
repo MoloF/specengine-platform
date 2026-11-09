@@ -325,6 +325,44 @@ describe("the parent's hand-offs (BH-16)", () => {
   });
 });
 
+// CT-5 of card-tasks: the modal's body shows the card's linked `T-` tasks after its hand-offs, inside
+// the body that scrolls, so opening a card with tasks moves no column (BH-1).
+describe("the card's tasks (CT-5 of card-tasks)", () => {
+  it("lists each linked task after Hand-offs, in the scrolling body; the board's heads hold still and nothing reads a task", async () => {
+    const linked: Record<string, Card> = {
+      ...CARDS,
+      "C-0001": aCard({
+        id: "C-0001",
+        flow: "copy",
+        title: "The parent",
+        tasks: [
+          { id: "T-0001", status: "review", title: "Light the north lamp", stale: false },
+          { id: "T-0002", status: "in_progress", title: "Wire the switch", stale: true },
+          { id: "T-0003", status: null, title: null, stale: null },
+        ],
+        notes: ["T-0003: no such task in this queue; no state shown"],
+      }),
+    };
+    const client = await board(boardClient(LIST, linked));
+    const heads = Array.from(document.querySelectorAll(".board-head > *"), (head) => head.textContent);
+    expect(heads.length).toBeGreaterThan(0);
+    clickTitle("C-0001");
+    const dialog = await screen.findByRole("dialog", { name: "The parent" });
+    const part = await within(dialog).findByRole("region", { name: "Tasks" });
+    const parts = within(dialog).getAllByRole("region").map((region) => region.getAttribute("aria-label"));
+    expect(parts.indexOf("Tasks")).toBe(parts.indexOf("Hand-offs") + 1);
+    expect(part.closest(".card-modal-body")).not.toBeNull();
+    expect(Array.from(part.querySelectorAll("li[data-task]"), (row) => row.textContent)).toEqual([
+      "T-0001Light the north lampPlan reviewAwaiting youspec task approve T-0001Copy the command: spec task approve T-0001",
+      "T-0002Wire the switchIn progressSpec changed",
+      "T-0003State not read hereT-0003: no such task in this queue; no state shown",
+    ]);
+    expect(Array.from(document.querySelectorAll(".board-head > *"), (head) => head.textContent)).toEqual(heads);
+    expect(client.getTask).not.toHaveBeenCalled();
+    expect(client.getTasks).not.toHaveBeenCalled();
+  });
+});
+
 // Iteration 2 of board-handoff: what the modal holds belongs to its card. Another card, or none, takes
 // its refusal, its lines and notes, its Move menu and a dialog over it away; Back closes them with
 // it; a write made in the modal says its outcome in the modal, the board being inert beneath.

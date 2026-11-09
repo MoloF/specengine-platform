@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-10
 ---
 
 # Board screen: a still grid, the card modal and page, lanes, hand-off and return
@@ -32,7 +32,7 @@ On one tab no column header moves on open, close, a write, a refusal, notes, Sho
 
 ## The card modal and page
 
-- **Modal** at `#/<p>/board/<C>`: `role="dialog"`, `aria-modal`, labelled by its `h2`, the card's title, focus on it (`focusTitle`, Shift+Tab to the last stop); `min(48rem, 100vw - 2rem)` wide, at most `100dvh - 2rem` tall, its body scrolling; under 36rem the whole screen. Region and toolbar are `inert` under it; a scrim click closes it. Its body (`CardBody`): every field; targets link to the tree, `parent` and `corrects` to their cards; evidence as kind, value, by, at, a `url` text never an `href`; `history` by `seq`, move notes included; the mark and Clear; Accept's verdict; **Hand-offs**, its children. Acts (`CardActs.tsx`): Move, Hand off, Return, Edit, Assign, Cancel, Accept (in `accept.from`), Clear, each a dialog over it. Its Move menu offers Up and Down only when the card is drawn on the current tab. A write from it reports inside it: a refusal as its `role="alert"`, a 400 naming `--as`, the write's notes. What it holds is the shown card's: another card, or none, starts clean.
+- **Modal** at `#/<p>/board/<C>`: `role="dialog"`, `aria-modal`, labelled by its `h2`, the card's title, focus on it (`focusTitle`, Shift+Tab to the last stop); `min(48rem, 100vw - 2rem)` wide, at most `100dvh - 2rem` tall, its body scrolling; under 36rem the whole screen. Region and toolbar are `inert` under it; a scrim click closes it. Its body (`CardBody`): every field; targets link to the tree, `parent` and `corrects` to their cards; evidence as kind, value, by, at, a `url` text never an `href`; `history` by `seq`, move notes included; the mark and Clear; Accept's verdict; **Hand-offs**, its children; **Tasks**, its linked `T-` tasks (`card-tasks.md` "Screen"). Acts (`CardActs.tsx`): Move, Hand off, Return, Edit, Assign, Cancel, Accept (in `accept.from`), Clear, each a dialog over it. Its Move menu offers Up and Down only when the card is drawn on the current tab. A write from it reports inside it: a refusal as its `role="alert"`, a 400 naming `--as`, the write's notes. What it holds is the shown card's: another card, or none, starts clean.
 - **History**: opening from the board pushes one entry; a card link inside replaces and never switches the tab; Esc and Close go back when this board pushed, else replace with `#/<p>/board`; Back closes it, and with a dialog or menu over it closes both. Arriving by URL selects the card's flow once, a hidden one by Show all flows. Closing returns focus to the tile, in its current column; one not drawn (another tab, a collapsed lane, filtered out) sends it to the board's heading.
 - **Page** `#/<p>/board/<C>/page` (`cardPageHash`; `parseHash` gives `view: "page"` for exactly `board`, `<C>`, `page`, any other fourth segment not found): no columns, one `h1` (the title), the modal's body and acts, and "Open on the board" to `#/<p>/board/<C>`. The nav marks Board; a reload keeps it. Its moves come from `allowed`, Up and Down from the list; a 400 naming `--as` is its refusal. No such card shows `no card C-9999` verbatim under `lang="en"`, page and modal alike.
 - **Nothing opens while a card write is out**: every card write in the project shares one mutation key (`useCardWriting`); a click meanwhile is dropped, not delayed, and no dialog closes while its submit is pending.

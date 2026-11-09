@@ -46,10 +46,14 @@
 //! a corrupt row, nothing asked). Nothing here opens git, so any root works,
 //! but for `--departs`, which binds its discrepancy to a place as `propose
 //! update` does and reads git to do it: reads only, exit 2 outside a
-//! worktree. Nothing else reads a proposal, a lock or a task, and nothing is
+//! worktree; and `show` of a card that links `T-` tasks (`edit --task T…`),
+//! which reads each now as `spec task list` does, a task it cannot read a
+//! note, never an exit. Nothing else reads a proposal, a lock or a task, no
+//! rule reads a link (canon `card-tasks`, "The rule"), and nothing is
 //! written under the root: the queue is in the data directory.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::PathBuf;
 use std::slice;
 
 use serde::de::DeserializeOwned;
@@ -60,6 +64,7 @@ use specengine_core::card::{
     accept_refusal, allowed_moves, card_look_alike_message, card_move as decide_move, card_number,
     card_person, card_person_problem, card_prefix_clash, closed_refusal, due_problem,
     estimate_problem, parse_card_id, parse_evidence, reviewer_problem, stale_refusal,
+    task_links_problem,
 };
 use specengine_core::card_toml::{CardConfig, CardFlow, name_problem};
 use specengine_core::check::{NodeAt, SpecGraph};
@@ -67,15 +72,18 @@ use specengine_core::intake::{AuthorInput, GapType, discrepancy_problem};
 use specengine_core::proposal::{Author, prefix_clash};
 use specengine_core::task::{
     CRITERIA_MAX, CRITERION_MAX, GOAL_MAX, NODES_MAX, NOTE_MAX, TITLE_MAX, over_bytes, over_items,
+    task_prefix_clash,
 };
 use specengine_core::trace::{
     CardMark, Departure, MarkFacts, TargetNorms, card_mark, clear_refusal, clearer_problem,
     correction_refusal, correction_title, departure_input, freeze, mark_notes, suspect_on,
 };
-use specengine_model::{Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen};
+use specengine_model::{
+    Card, CardAcceptance, CardCancellation, CardEvidence, CardFrozen, TaskStatus,
+};
 use specengine_store::{
-    CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, Event, IntakeResult,
-    NewCard, NewIntake, Place, QueueError, SqliteQueue, WorktreeGit,
+    CardAccept, CardChange, CardClear, CardClearing, CardDeparture, CardEdit, Event, GitEnv,
+    IntakeResult, NewCard, NewIntake, Place, QueueError, SqliteQueue, WorktreeGit,
 };
 
 use crate::apply::Consent;
@@ -88,7 +96,7 @@ use crate::proposals::{checked_now, escaped_error, queue_cannot, require_root_co
 use crate::propose::resolved_node;
 use crate::search::notes;
 use crate::show::classify;
-use crate::task::resolved_list;
+use crate::task::{LinkPlace, LinkedTask, linked_tasks, resolved_list, written_task};
 use crate::trace::{
     QueueRead, correction_of, facts_of, fresh_norms, group_marks, held_documents, norms_read,
     settled_of, target_norms, target_places,
@@ -145,13 +153,20 @@ pub struct CardListRequest {
 }
 
 /// `spec card show C [--history] [--marks]`.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardShowRequest {
     pub id: String,
     /// The card's last `card.*` events.
     pub history: bool,
     /// `--marks`: its mark over all its targets, as its `list --marks` row.
     pub marks: bool,
+    /// The reading repository's git: where a linked task's state is read
+    /// (`TaskListRequest`'s), on a card that links one alone.
+    pub git: GitEnv,
+    /// This queue holds the project's `T-` tasks: true for the CLI, the
+    /// stdio MCP and a local daemon; false on a hub, which reads no task
+    /// (canon `card-tasks`, "The rule").
+    pub tasks_here: bool,
 }
 
 /// `spec card move C [--to K] [--before C] [--note T]`.
@@ -173,8 +188,9 @@ pub struct CardMoveRequest {
 }
 
 /// `spec card edit C …`: a value `-` clears; `targets`, `criteria` replace,
-/// `evidence` appends.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+/// `evidence` appends. No `Default`: [`CardEditRequest::tasks_here`] is each
+/// caller's to state.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CardEditRequest {
     pub id: String,
     pub title: Option<String>,
@@ -187,11 +203,18 @@ pub struct CardEditRequest {
     pub corrects: Option<String>,
     /// Each `KIND=VALUE`.
     pub evidence: Vec<String>,
+    /// `--task T…`: the `T-` tasks it links, replacing the list in the
+    /// order given; a lone `-` clears it.
+    pub tasks: Vec<String>,
     /// `--reason T`: why an estimate the card holds changes.
     pub reason: Option<String>,
     pub revision: Option<String>,
     pub actor: Option<String>,
     pub now: String,
+    /// This queue holds the project's `T-` tasks, so each linked one must
+    /// name a task row of it; false on a hub, which keeps the IDs as written
+    /// (canon `card-tasks`, "The rule").
+    pub tasks_here: bool,
 }
 
 /// `spec card assign C [--assignee N] [--reviewer N]`: a value `-` clears.
@@ -424,6 +447,8 @@ pub struct CardEditBody {
     pub corrects: Option<String>,
     /// Each `KIND=VALUE`; appended.
     pub evidence: Option<Vec<String>>,
+    /// The `T-` tasks it links, replacing the list; `["-"]` clears it.
+    pub task: Option<Vec<String>>,
     /// Why an estimate the card holds changes.
     pub reason: Option<String>,
     pub revision: Option<String>,
@@ -439,14 +464,15 @@ impl CardEditBody {
         let body: Self = decoded(
             bytes,
             "\"title\",\"goal\",\"target\",\"criterion\",\"estimate\",\"due\",\"parent\",\
-             \"corrects\",\"evidence\",\"reason\",\"revision\",\"as\"",
+             \"corrects\",\"evidence\",\"task\",\"reason\",\"revision\",\"as\"",
         )?;
         persons_named(body.actor.as_deref(), &[])?;
         Ok(body)
     }
 
-    /// The request for `id` at `now`.
-    pub fn request(self, id: String, now: String) -> CardEditRequest {
+    /// The request for `id` at `now`; `tasks_here` as
+    /// [`CardEditRequest::tasks_here`].
+    pub fn request(self, id: String, now: String, tasks_here: bool) -> CardEditRequest {
         CardEditRequest {
             id,
             title: self.title,
@@ -458,10 +484,12 @@ impl CardEditBody {
             parent: self.parent,
             corrects: self.corrects,
             evidence: self.evidence.unwrap_or_default(),
+            tasks: self.task.unwrap_or_default(),
             reason: self.reason,
             revision: self.revision,
             actor: self.actor,
             now,
+            tasks_here,
         }
     }
 }
@@ -915,6 +943,9 @@ pub struct CardShowOutcome {
     /// `--marks`' mark; `None` without it and on a cancelled card, which a
     /// read ignores.
     pub mark: Option<CardMark>,
+    /// Each task the card links, in link order, read now; a task's notes,
+    /// each starting with its ID, follow the card's own in `notes`.
+    pub tasks: Vec<LinkedTask>,
     pub notes: Vec<String>,
     /// The card asked for, when there is none.
     pub id: Option<String>,
@@ -969,6 +1000,7 @@ struct CardJson<'a> {
     parent: Option<&'a str>,
     corrects: Option<&'a str>,
     evidence: &'a [CardEvidence],
+    tasks: &'a [LinkedTask],
     acceptance: Option<&'a CardAcceptance>,
     cancellation: Option<&'a CardCancellation>,
     created_by: &'a str,
@@ -1012,6 +1044,7 @@ impl Serialize for CardShowOutcome {
             parent: card.parent.as_deref(),
             corrects: card.corrects.as_deref(),
             evidence: &card.evidence,
+            tasks: &self.tasks,
             acceptance: card.acceptance.as_ref(),
             cancellation: card.cancellation.as_ref(),
             created_by: &card.created_by,
@@ -1158,6 +1191,9 @@ impl Serialize for CardListOutcome {
 /// Where `spec card` runs: the project, its flows and its queue.
 struct CardContext {
     project: ProjectRoot,
+    slug: String,
+    /// The queue's directory.
+    data_dir: PathBuf,
     config: CardConfig,
     queue: SqliteQueue,
 }
@@ -1178,6 +1214,8 @@ fn open_cards(env: &Env, globals: &Globals) -> Result<CardContext, CliError> {
         SqliteQueue::open(data_dir.join(format!("{slug}.db")), &slug).map_err(queue_cannot)?;
     Ok(CardContext {
         project,
+        slug,
+        data_dir,
         config,
         queue,
     })
@@ -1535,6 +1573,7 @@ fn run_show(
         allowed: Vec::new(),
         history: None,
         mark: None,
+        tasks: Vec::new(),
         notes: Vec::new(),
         id,
         reason: Some(reason),
@@ -1568,12 +1607,29 @@ fn run_show(
     } else {
         None
     };
+    let allowed = allowed_moves(context.config.flow(&card.flow), &card);
+    // A card that links no task reads no task and runs no git.
+    let tasks = if card.tasks.is_empty() {
+        Vec::new()
+    } else {
+        let place = request.tasks_here.then(|| LinkPlace {
+            project: context.project,
+            slug: context.slug,
+            data_dir: context.data_dir,
+            queue: context.queue,
+        });
+        let (tasks, task_notes) =
+            linked_tasks(env, place, &card.tasks, &request.git, &mut messages);
+        notes.extend(task_notes);
+        tasks
+    };
     messages.extend(notes.iter().cloned().map(Message::Note));
     Ok(CardShowOutcome {
-        allowed: allowed_moves(context.config.flow(&card.flow), &card),
+        allowed,
         card: Some(Box::new(card)),
         history,
         mark,
+        tasks,
         messages,
         notes,
         id: None,
@@ -1996,7 +2052,8 @@ fn run_edit(
         || request.due.is_some()
         || request.parent.is_some()
         || request.corrects.is_some()
-        || !request.evidence.is_empty();
+        || !request.evidence.is_empty()
+        || !request.tasks.is_empty();
     let beside_estimate = request.title.is_some()
         || request.goal.is_some()
         || !request.targets.is_empty()
@@ -2004,7 +2061,8 @@ fn run_edit(
         || request.due.is_some()
         || request.parent.is_some()
         || request.corrects.is_some()
-        || !request.evidence.is_empty();
+        || !request.evidence.is_empty()
+        || !request.tasks.is_empty();
     if !asked {
         return Ok(CardOutcome::usage(
             ACTION,
@@ -2016,7 +2074,16 @@ fn run_edit(
     let id = written_card(&request.id)?;
     let parent = link_field("parent", request.parent.as_deref())?;
     let corrects = link_field("corrects", request.corrects.as_deref())?;
+    let tasks = written_tasks(&request.tasks)?;
     let mut context = open_cards(env, globals)?;
+    if tasks.is_some()
+        && let Some(clash) = task_prefix_clash(&context.project.config.scheme)
+    {
+        return Err(CliError::spec(format!(
+            "{}: {clash}",
+            context.project.config_label
+        )));
+    }
     let card = match named_card(&context, &request.id, id, ACTION)? {
         Ok(card) => card,
         Err(refused) => return Ok(*refused),
@@ -2101,6 +2168,24 @@ fn run_edit(
             Err(reason) => return refuse(&reason, &context, messages),
         }
     }
+    if let Some(tasks) = &tasks {
+        if let Some(problem) = task_links_problem(tasks) {
+            return refuse(&problem, &context, messages);
+        }
+        // Locally each names a task row of the project, any repository's,
+        // any state's, before the write; a hub keeps the IDs as written
+        // (canon `card-tasks`, "The rule").
+        if request.tasks_here
+            && !tasks.is_empty()
+            && let Some(missing) = context.queue.missing_task(tasks).map_err(queue_cannot)?
+        {
+            return refuse(
+                &format!("task: no task {missing}; nothing changed"),
+                &context,
+                messages,
+            );
+        }
+    }
     let (targets, norms) = if clears(&request.targets) {
         (Some(Vec::new()), Some(TargetNorms::new()))
     } else if request.targets.is_empty() {
@@ -2123,12 +2208,31 @@ fn run_edit(
         evidence,
         reason: request.reason.clone(),
         norms,
+        tasks,
     };
     let change = CardChange::Edit(Box::new(edit));
     let mut answer = changed(&mut context, ACTION, &card, seen, &change, &actor, now)?;
     answer.notes.splice(0..0, notes(&messages));
     answer.messages.splice(0..0, messages);
     Ok(answer)
+}
+
+/// `--task` as written: `None` when not given, none when a lone `-` clears
+/// the list, else each entry a task ID as `spec task` takes it, a look-alike
+/// exiting 2 naming its Latin form; an entry that is no task ID in any
+/// script is kept as written, for core's grammar to refuse.
+fn written_tasks(written: &[String]) -> Result<Option<Vec<String>>, CliError> {
+    if written.is_empty() {
+        return Ok(None);
+    }
+    if clears(written) {
+        return Ok(Some(Vec::new()));
+    }
+    let mut tasks = Vec::with_capacity(written.len());
+    for entry in written {
+        tasks.push(written_task(entry)?.unwrap_or_else(|| entry.clone()));
+    }
+    Ok(Some(tasks))
 }
 
 /// A card field of `edit` as written: absent, cleared, a card; a look-alike
@@ -3098,6 +3202,27 @@ fn show_lines(card: &Card, outcome: &CardShowOutcome) -> Vec<String> {
                     one_line(&entry.value),
                     entry.by,
                     entry.at
+                )
+            })
+            .collect(),
+    );
+    list(
+        &mut lines,
+        "tasks",
+        outcome
+            .tasks
+            .iter()
+            .map(|task| {
+                let stale = if task.stale == Some(true) {
+                    " | stale"
+                } else {
+                    ""
+                };
+                format!(
+                    "{} | {} | {}{stale}",
+                    task.id,
+                    task.status.map_or(ABSENT, TaskStatus::as_str),
+                    held(task.title.as_deref())
                 )
             })
             .collect(),

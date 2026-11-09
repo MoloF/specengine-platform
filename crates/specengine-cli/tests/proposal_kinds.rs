@@ -1468,7 +1468,7 @@ fn ac14_review_inbox_and_backup_carry_a_create() {
         .collect();
     assert!(
         lines[0].starts_with(
-            "{\"format\":3,\"queue_schema\":9,\"project\":\"lantern-keep\",\"proposals\":2,\
+            "{\"format\":4,\"queue_schema\":10,\"project\":\"lantern-keep\",\"proposals\":2,\
              \"tasks\":0,\"runs\":0,\"cards\":0,"
         ),
         "{}",
@@ -1501,7 +1501,7 @@ fn ac14_review_inbox_and_backup_carry_a_create() {
     assert_eq!(outcome.exit(), Exit::Answered, "{outcome:?}");
     assert_eq!(dump_at(&pair, &fresh), dump_at(&pair, &pair.home));
     assert_eq!(export(&pair, &fresh, &dumps.join("again.jsonl")), bytes);
-    assert_eq!(pair.sql("PRAGMA user_version;"), "9\n");
+    assert_eq!(pair.sql("PRAGMA user_version;"), "10\n");
     assert_eq!(
         pair.sql("SELECT count(*) FROM pragma_table_info('proposals');"),
         "46\n"

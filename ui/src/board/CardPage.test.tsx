@@ -82,6 +82,15 @@ describe("a card's page (BH-6)", () => {
     expect(client.moveCard.mock.calls[0]).toEqual(["alpha", "C-0001", { to: "doing", note: "Two endings.", revision: "1", as: null }]);
   });
 
+  it("shows the card's Tasks part, as the modal does: a card with no link says No task yet and how to make and link one (CT-5 of card-tasks)", async () => {
+    await page();
+    const part = await screen.findByRole("region", { name: "Tasks" });
+    expect(within(part).getByText("No task yet.")).toBeTruthy();
+    expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(['spec task new --nodes REF --title "..."', "spec card edit C-0001 --task T-NNNN"]);
+    const parts = screen.getAllByRole("region").map((region) => region.getAttribute("aria-label"));
+    expect(parts.indexOf("Tasks")).toBe(parts.indexOf("Hand-offs") + 1);
+  });
+
   it("no such card: the daemon's `no card C-9999` verbatim under lang=en", async () => {
     renderApp(pageClient(), "#/alpha/board/C-9999/page");
     await screen.findByRole("heading", { level: 1, name: "C-9999" });

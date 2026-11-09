@@ -478,18 +478,7 @@ pub(crate) fn open_context(
     let project = discover(env, globals)?;
     require_root_config(env, globals, &project)?;
     let slug = project.slug()?.to_owned();
-    if let Some(clash) = prefix_clash(&project.config.scheme) {
-        return Err(CliError::spec(format!("{}: {clash}", project.config_label)));
-    }
-    let git = WorktreeGit::new(&project.root, git_env)
-        .map_err(|error| CliError::spec(format!("cannot run git: {error}")))?;
-    let common_dir = git.common_dir().map_err(|error| {
-        CliError::spec(format!(
-            "the project root {} lies in no git worktree ({error}): proposals are bound to a \
-             git worktree and applied as commits",
-            project.root.display()
-        ))
-    })?;
+    let (git, common_dir) = repository_of(&project, git_env)?;
     let data_dir = prepared_data_dir(env, &project)?;
     let queue =
         SqliteQueue::open(data_dir.join(format!("{slug}.db")), &slug).map_err(queue_cannot)?;
@@ -503,6 +492,28 @@ pub(crate) fn open_context(
         rehearsal: false,
         hub: false,
     })
+}
+
+/// The current repository of `project`, as [`open_context`] reads it: git
+/// at its root and the canonical common dir; exit 2 for an `[ids]` taking
+/// `PR` and a root in no git worktree, [`open_context`]'s lines.
+pub(crate) fn repository_of(
+    project: &ProjectRoot,
+    git_env: &GitEnv,
+) -> Result<(WorktreeGit, PathBuf), CliError> {
+    if let Some(clash) = prefix_clash(&project.config.scheme) {
+        return Err(CliError::spec(format!("{}: {clash}", project.config_label)));
+    }
+    let git = WorktreeGit::new(&project.root, git_env)
+        .map_err(|error| CliError::spec(format!("cannot run git: {error}")))?;
+    let common_dir = git.common_dir().map_err(|error| {
+        CliError::spec(format!(
+            "the project root {} lies in no git worktree ({error}): proposals are bound to a \
+             git worktree and applied as commits",
+            project.root.display()
+        ))
+    })?;
+    Ok((git, common_dir))
 }
 
 /// `--config`, when given, must name the project root's own

@@ -6,14 +6,17 @@
 //! appears: `C` is the engine's, the rest comes in as data. Both the CLI and
 //! the store, again under its lock, ask these functions.
 
+use std::collections::BTreeSet;
+
 use serde::Serialize;
 use specengine_model::script::normalize_char;
-use specengine_model::{Card, EvidenceKind, IdScheme};
+use specengine_model::{CARD_TASKS_MAX, Card, EvidenceKind, IdScheme};
 
 use crate::card_toml::CardFlow;
 use crate::check::is_calendar_date;
 use crate::record::is_escaped;
 use crate::roadmap::parse_estimate;
+use crate::task::task_number;
 use crate::walk_scope::is_clean_relative;
 
 /// The prefix of every card ID; a project's `[ids]` may not take it.
@@ -425,6 +428,28 @@ pub fn estimate_problem(written: &str) -> Option<String> {
 /// Why `written` is no `--due`: a calendar date `YYYY-MM-DD`.
 pub fn due_problem(written: &str) -> Option<String> {
     (!is_calendar_date(written)).then(|| format!("due: `{written}` is no date YYYY-MM-DD"))
+}
+
+/// Why `tasks` is no list a card links
+/// (`docs/canon/card-tasks.md` "The rule"): an entry that is no task ID as
+/// [`task_number`] reads one (a `-` beside other entries too), an entry
+/// listed twice (refused, never folded), or more than [`CARD_TASKS_MAX`]
+/// entries; the line ends `nothing changed`. Grammar, repeat and cap alone: whether each task exists is the
+/// caller's to ask, and no task is read here.
+pub fn task_links_problem(tasks: &[String]) -> Option<String> {
+    if let Some(written) = tasks.iter().find(|written| task_number(written).is_none()) {
+        return Some(format!("task: {written:?} is no task ID; nothing changed"));
+    }
+    let mut seen = BTreeSet::new();
+    if let Some(repeated) = tasks.iter().find(|id| !seen.insert(id.as_str())) {
+        return Some(format!("task: {repeated} is listed twice; nothing changed"));
+    }
+    (tasks.len() > CARD_TASKS_MAX).then(|| {
+        format!(
+            "task: {} tasks, at most {CARD_TASKS_MAX}; nothing changed",
+            tasks.len()
+        )
+    })
 }
 
 /// The entry `--evidence KIND=VALUE` writes, else why not: `url`

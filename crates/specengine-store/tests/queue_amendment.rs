@@ -640,7 +640,7 @@ fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     // Schema 9 since docs/features/card-store.md "Store"; 46 columns since
     // docs/features/drift-queue.md
     // "Queue schema 8" (an amendment still adds none).
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     let scratch = Scratch::new("qa-schema");
     let db = scratch.db("q");
@@ -659,7 +659,7 @@ fn ac_r13_amendments_keep_schema_6_and_round_trip_byte_identical() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "46"

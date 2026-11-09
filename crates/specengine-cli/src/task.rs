@@ -37,8 +37,8 @@ use specengine_core::task::{
 use specengine_core::{Plan, PlanTask, next_order};
 use specengine_model::{SnapshotPlace, TaskClaim, TaskCriterion, TaskPackage, TaskStatus, grammar};
 use specengine_store::{
-    GitEnv, NewTask, QueueError, SnapshotEntry, StoredNote, Task, TaskChange, TaskSnapshot,
-    WorktreeGit, claimed_elsewhere, same_repository,
+    GitEnv, NewTask, QueueError, SnapshotEntry, SqliteQueue, StoredNote, Task, TaskChange,
+    TaskSnapshot, WorktreeGit, claimed_elsewhere, same_repository,
 };
 
 use crate::apply::Consent;
@@ -47,7 +47,9 @@ use crate::package::{
     NodeNow, Roots, assemble, node_now, plan_task, reading_plan, render_brief, staleness,
 };
 use crate::project::ProjectRoot;
-use crate::proposals::{QueueContext, checked_now, escaped_error, open_context, queue_cannot};
+use crate::proposals::{
+    QueueContext, checked_now, escaped_error, open_context, queue_cannot, repository_of,
+};
 use crate::propose::{ProposedText, is_path_target, read_text, resolved_node};
 use crate::{CliError, Env, Exit, Globals, Message, escape_controls, one_line};
 
@@ -712,6 +714,173 @@ fn run_list(
         notes,
         messages,
     })
+}
+
+// --------------------------------------------------------- card links
+
+/// One `T-` task a card links, as the card's read serves it
+/// (canon `cards`, "Documents and events"): `status`, `title` and
+/// `stale` read now, as `spec task list` reads them, never stored on the
+/// card. All three `None` when the task cannot be read here; `stale` alone
+/// when only its staleness cannot be told. The read decides nothing
+/// (canon `card-tasks`, "The rule").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct LinkedTask {
+    pub id: String,
+    pub status: Option<TaskStatus>,
+    pub title: Option<String>,
+    pub stale: Option<bool>,
+}
+
+impl LinkedTask {
+    /// `id` with no state read.
+    fn unread(id: &str) -> Self {
+        Self {
+            id: id.to_owned(),
+            status: None,
+            title: None,
+            stale: None,
+        }
+    }
+}
+
+/// Where a card's read finds the tasks it links: the card's project, its
+/// data directory and queue, opened without git.
+pub(crate) struct LinkPlace {
+    pub project: ProjectRoot,
+    pub slug: String,
+    pub data_dir: PathBuf,
+    pub queue: SqliteQueue,
+}
+
+/// The tasks `ids` a card links, in link order, and their notes, each
+/// starting with `<id>: `. `place` `None`: this server holds no `T-` task
+/// (a hub), so none is read. Else each is read now as `spec task list` reads
+/// a task of the current repository: its row's `status` and `title`, and
+/// its staleness at its compared place, through `git_env`. A task this read
+/// cannot reach (a row that does not read, no row, another repository's, a
+/// root in no git worktree) is served unread with its note; a staleness
+/// that cannot be told is `stale` unread with `task list`'s note. Nothing
+/// here exits, and nothing is written but a root's index refresh
+/// (canon `card-tasks`, "The rule").
+pub(crate) fn linked_tasks(
+    env: &Env,
+    place: Option<LinkPlace>,
+    ids: &[String],
+    git_env: &GitEnv,
+    messages: &mut Vec<Message>,
+) -> (Vec<LinkedTask>, Vec<String>) {
+    let unread = |why: &str| -> (Vec<LinkedTask>, Vec<String>) {
+        ids.iter()
+            .map(|id| (LinkedTask::unread(id), one_line(&format!("{id}: {why}"))))
+            .unzip()
+    };
+    let Some(place) = place else {
+        return unread("a hub reads no task; its state is on the terminal that holds it");
+    };
+    let context = match link_context(place, git_env) {
+        Ok(context) => context,
+        Err(error) => return unread(&format!("no state shown: {}", plain_line(&error))),
+    };
+    let mut roots = Roots::default();
+    let mut tasks = Vec::with_capacity(ids.len());
+    let mut notes = Vec::new();
+    for id in ids {
+        let (task, why) = linked_task(env, &context, id, git_env, &mut roots, messages);
+        notes.extend(why.iter().map(|why| one_line(&format!("{id}: {why}"))));
+        tasks.push(task);
+    }
+    (tasks, notes)
+}
+
+/// The queue's context of a card's linked tasks: `place` and the current
+/// repository, refused as [`open_tasks`] refuses it.
+fn link_context(place: LinkPlace, git_env: &GitEnv) -> Result<QueueContext, CliError> {
+    if let Some(clash) = task_prefix_clash(&place.project.config.scheme) {
+        return Err(CliError::spec(format!(
+            "{}: {clash}",
+            place.project.config_label
+        )));
+    }
+    let (git, common_dir) = repository_of(&place.project, git_env)?;
+    Ok(QueueContext {
+        project: place.project,
+        slug: place.slug,
+        data_dir: place.data_dir,
+        queue: place.queue,
+        git,
+        common_dir,
+        rehearsal: false,
+        hub: false,
+    })
+}
+
+/// One linked task read now, and why any of it is unread.
+fn linked_task(
+    env: &Env,
+    context: &QueueContext,
+    id: &str,
+    git_env: &GitEnv,
+    roots: &mut Roots,
+    messages: &mut Vec<Message>,
+) -> (LinkedTask, Vec<String>) {
+    let task = match context.queue.read_task(id) {
+        Ok(Some(Ok(task))) => task,
+        Ok(Some(Err(row))) => {
+            return (
+                LinkedTask::unread(id),
+                vec![format!(
+                    "its row does not read (`{}`: {}); no state shown",
+                    row.column, row.reason
+                )],
+            );
+        }
+        Ok(None) => {
+            return (
+                LinkedTask::unread(id),
+                vec!["no such task in this queue; no state shown".to_owned()],
+            );
+        }
+        Err(error) => {
+            return (
+                LinkedTask::unread(id),
+                vec![format!("no state shown: {error}")],
+            );
+        }
+    };
+    if !same_repository(&task.git_common_dir, &context.common_dir) {
+        return (
+            LinkedTask::unread(id),
+            vec![format!(
+                "a task of another repository of the project `{}`; its state is read there \
+                 (`spec task show {id}`)",
+                context.slug
+            )],
+        );
+    }
+    let (stale, why) = match staleness(env, context, &task, git_env, roots, messages) {
+        Ok(compared) if compared.stale.is_some() => (compared.stale, Vec::new()),
+        Ok(compared) => (None, compared.notes),
+        Err(error) => (None, vec![plain_line(&error)]),
+    };
+    (
+        LinkedTask {
+            id: task.id,
+            status: Some(task.status),
+            title: task.title,
+            stale,
+        },
+        why,
+    )
+}
+
+/// An error's line without the `spec: ` the terminal prints it with.
+fn plain_line(error: &CliError) -> String {
+    error
+        .message
+        .strip_prefix("spec: ")
+        .unwrap_or(&error.message)
+        .to_owned()
 }
 
 // ------------------------------------------------------------- owner

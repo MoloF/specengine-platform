@@ -444,3 +444,54 @@ async fn a_hub_write_with_no_login_stores_nothing_and_answers_the_fence_line() {
         turns.load(Ordering::SeqCst)
     );
 }
+
+// ---------------------------------------------------- card-tasks (RM-0092)
+
+/// The sentence the hub's `edit_card` text adds (card-tasks, CT-7).
+const HUB_EDIT_TASK_SENTENCE: &str = "task: T- IDs as a terminal writes them, listed once, at most \
+                                      32; it replaces the list, - clears it. This hub holds no \
+                                      task: it checks none and get_card shows them without state.";
+
+/// The sentence `GET_DESCRIPTION` adds, shared by stdio and a hub.
+const GET_TASKS_SENTENCE: &str = "tasks: each linked task {id, status, title, stale}, read now as \
+                                  spec task list reads it; status null, with a note that starts \
+                                  with its ID, for a task this server cannot read: a corrupt row, \
+                                  another repository, a hub.";
+
+/// CT-7, the crate's half: the hub's `edit_card` names `task`, takes it, and
+/// says the hub checks none; its `get_card` holds the shared `tasks`
+/// sentence; each ASCII within 2 048 bytes, still among the seventeen.
+#[test]
+fn card_tasks_the_hub_card_texts_name_task_and_check_none() {
+    assert_eq!(HUB_TOOLS.len(), 17);
+    let server = hub();
+    for (name, word, sentence) in [
+        ("edit_card", "task", HUB_EDIT_TASK_SENTENCE),
+        ("get_card", "tasks", GET_TASKS_SENTENCE),
+    ] {
+        let tool = server
+            .get_tool(name)
+            .unwrap_or_else(|| panic!("the hub routes no {name}"));
+        let description = tool
+            .description
+            .as_deref()
+            .unwrap_or_else(|| panic!("{name}: no description"));
+        assert!(has_word(description, word), "{name}: {description}");
+        assert!(
+            description.contains(sentence),
+            "{name} holds {sentence:?}: {description}"
+        );
+        assert!(description.is_ascii(), "{name}");
+        assert!(
+            description.len() <= TEXT_LIMIT,
+            "{name}: {} bytes",
+            description.len()
+        );
+    }
+    let edit = server.get_tool("edit_card").expect("edit_card");
+    let schema = serde_json::to_value(edit.input_schema.as_ref()).expect("a schema");
+    assert!(
+        schema["properties"].get("task").is_some(),
+        "the hub's edit_card takes task: {schema}"
+    );
+}

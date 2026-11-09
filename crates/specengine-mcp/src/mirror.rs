@@ -1422,6 +1422,8 @@ pub(crate) struct CardShowDocument {
     pub parent: Option<String>,
     pub corrects: Option<String>,
     pub evidence: Vec<CardEvidenceShape>,
+    /// Each `T-` task it links, in link order, read now.
+    pub tasks: Vec<CardTaskShape>,
     pub acceptance: Option<CardAcceptanceShape>,
     pub cancellation: Option<CardCancellationShape>,
     pub created_by: String,
@@ -1445,6 +1447,18 @@ pub(crate) struct CardFrozenShape {
     /// Hashes an editorial apply vouched for since, of the kind this entry
     /// compares.
     pub also: Vec<String>,
+}
+
+/// One `T-` task a card links, as the read serves it: `status`, `title`
+/// and `stale` all `null` when this server cannot read the task (a note
+/// starting with its ID says why); `stale` alone when only its staleness
+/// cannot be told.
+#[derive(JsonSchema)]
+pub(crate) struct CardTaskShape {
+    pub id: String,
+    pub status: Option<TaskState>,
+    pub title: Option<String>,
+    pub stale: Option<bool>,
 }
 
 #[derive(JsonSchema)]

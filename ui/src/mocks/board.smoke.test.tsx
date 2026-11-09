@@ -480,4 +480,47 @@ describe("hand-offs and returns over the mock", () => {
     const gone = await modal("Crane reach diagram");
     expect((await within(gone).findByRole("region", { name: "Returned" })).textContent).toContain("is no longer in this card's history");
   });
+
+  it("serves each card's linked tasks read now, in link order, a task not read null with its note; a card with none, none (CT-5 of card-tasks)", async () => {
+    const client = new MockClient("normal", { delayMs: 0 });
+    const shown = async (project: string, id: string) => {
+      const read = await client.getCard(project, id);
+      if (!("tasks" in read)) {
+        throw new Error(`no card ${id}`);
+      }
+      return read;
+    };
+    const first = await shown("harbor-sim", "C-0001");
+    expect(first.tasks).toEqual([
+      { id: "T-0107", status: "review", title: "Queue deep ships at the outer anchorage", stale: null },
+      { id: "T-0109", status: "in_progress", title: "One loader for both tide-table formats", stale: true },
+      { id: "T-0106", status: null, title: null, stale: null },
+    ]);
+    expect(first.notes).toEqual([
+      "T-0107: stale unknown: no snapshot (the owner's `spec task approve` freezes one)",
+      "T-0106: its row does not read (`criteria`: bad JSON); no state shown",
+    ]);
+    expect((await shown("harbor-sim", "C-0004")).tasks.map((task) => [task.id, task.status])).toEqual([["T-0104", "done"]]);
+    const accepted = await shown("harbor-sim", "C-0012");
+    expect([accepted.acceptance === null, accepted.tasks, accepted.notes]).toEqual([
+      false,
+      [{ id: "T-0111", status: "ready", title: "A wider window at spring tides", stale: null }],
+      ["T-0111: snapshot place /work/harbor-sim/T-0111 is gone (worktree removed); stale unknown"],
+    ]);
+    expect((await shown("harbor-sim", "C-0002")).tasks).toEqual([]);
+    expect((await shown("ledger-api", "C-0102")).tasks.map((task) => [task.id, task.status])).toEqual([["T-0033", "review"]]);
+    // The list's rows keep their 21 keys: no task on a tile.
+    const list = await client.getCards("harbor-sim", { marks: true });
+    expect(list.cards.every((row) => !("tasks" in row) && Object.keys(row).length === 21)).toBe(true);
+  });
+
+  it("the modal of a card with three links: its Tasks part shows each, the approval to copy on the one in review", async () => {
+    renderMock("normal", "#/harbor-sim/board/C-0001");
+    const opened = await modal("Write the tide table foreword");
+    const part = await within(opened).findByRole("region", { name: "Tasks" });
+    expect(Array.from(part.querySelectorAll("li[data-task]"), (row) => row.getAttribute("data-task"))).toEqual(["T-0107", "T-0109", "T-0106"]);
+    expect(within(part).getByRole("link", { name: "T-0107" }).getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
+    expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(["spec task approve T-0107"]);
+    expect(within(part).getByText("T-0106: its row does not read (`criteria`: bad JSON); no state shown").getAttribute("lang")).toBe("en");
+  });
 });

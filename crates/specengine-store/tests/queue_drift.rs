@@ -680,7 +680,7 @@ fn concurrent_raises_from_two_handles_store_one_item() {
 /// omitted; `proposal_columns` mapping 8 to 44.
 #[test]
 fn schema_6_and_7_step_to_8() {
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[44..], ["drift", "drift_hash"]);
     assert_eq!(proposal_columns(6), Some(&PROPOSAL_COLUMNS[..44]));
@@ -688,7 +688,10 @@ fn schema_6_and_7_step_to_8() {
     assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
     // `proposals` unchanged at 9 (docs/features/card-store.md "Store").
     assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(10), None);
+    // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
+    // stays 46).
+    assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(11), None);
     for version in [6, 7] {
         let scratch = Scratch::new(&format!("qdr-schema-{version}"));
         let db = scratch.db("q");
@@ -732,7 +735,7 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(sqlite3(&db, "PRAGMA user_version;"), version.to_string());
 
         let mut queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping to 9");
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9", "from {version}");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "from {version}");
         assert_eq!(
             sqlite3(
                 &db,
@@ -753,7 +756,7 @@ fn schema_6_and_7_step_to_8() {
         assert_eq!(id, "PR-0002");
         drop(queue);
         drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9", "stepped once");
+        assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "stepped once");
     }
 }
 

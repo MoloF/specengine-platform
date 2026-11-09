@@ -623,7 +623,7 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     // Schema 9 since docs/features/card-store.md "Store"; 46 columns since
     // docs/features/drift-queue.md
     // "Queue schema 8".
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[..4], ["id", "project", "kind", "status"]);
     let scratch = Scratch::new("qk-schema");
@@ -641,7 +641,7 @@ fn ac14_creates_keep_schema_3_and_40_columns() {
     let state = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "46"

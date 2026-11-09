@@ -182,7 +182,7 @@ pub use queue::{
     RecordSeries, RefreshEntry, Reservation, Restore, Run, Seen, SnapshotEntry, SqliteQueue, Stage,
     StagedChoice, StoredCard, StoredEvent, StoredNote, StoredProposal, StoredQueue, StoredRun,
     StoredTask, TASK_COLUMNS, TailEvent, Task, TaskChange, TaskList, TaskRefresh, TaskSeen,
-    TaskSnapshot, UnreadableCard, UnreadableRow, UnreadableTask, binding_problem,
+    TaskSnapshot, UnreadableCard, UnreadableRow, UnreadableTask, binding_problem, card_columns,
     claimed_elsewhere, open_for_gate, patch_hash, proposal_columns, record_gate_observed,
     task_event,
 };

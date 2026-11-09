@@ -1222,8 +1222,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/hub-confirm.md; 0.29.1 since
     // docs/features/spec-ids.md; 0.30.0 since docs/features/flow-scope.md
     // (FS-6, `get_flow`'s `stage`, the orchestrator's MINOR of 2026-11-08);
-    // 0.31.0 since docs/features/board-handoff.md (the card tools' keys).
-    assert_eq!(manifest["version"], "0.31.0");
+    // 0.31.0 since docs/features/board-handoff.md (the card tools' keys);
+    // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`).
+    assert_eq!(manifest["version"], "0.32.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1324,8 +1325,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/hub-confirm.md; 0.29.1 since
     // docs/features/spec-ids.md; 0.30.0 since docs/features/flow-scope.md
     // (FS-6, `get_flow`'s `stage`, the orchestrator's MINOR of 2026-11-08);
-    // 0.31.0 since docs/features/board-handoff.md (the card tools' keys).
-    assert_eq!(manifest["version"], "0.31.0");
+    // 0.31.0 since docs/features/board-handoff.md (the card tools' keys);
+    // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`).
+    assert_eq!(manifest["version"], "0.32.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1428,7 +1430,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.31.0",
+        manifest["version"], "0.32.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1436,7 +1438,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          tested-reads: 0.18.0; review-form: 0.19.0; layer-c-reads: 0.20.0; flow-read: 0.21.0; \
          flow-canvas: 0.22.0; card-store: 0.23.0; flow-authoring: 0.28.0; hub-confirm: 0.29.0; \
          spec-ids: 0.29.1; flow-scope (FS-6, `get_flow`'s `stage`): 0.30.0; board-handoff \
-         (`reviewer`, `note`, `parent`): 0.31.0"
+         (`reviewer`, `note`, `parent`): 0.31.0; card-tasks (`edit_card`'s `task`): 0.32.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -2510,6 +2512,7 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     .expect("JSON");
     // 0.29.1 for spec-ids; 0.30.0 since docs/features/flow-scope.md (FS-6,
     // `get_flow`'s `stage`, the orchestrator's MINOR of 2026-11-08); 0.31.0
-    // since docs/features/board-handoff.md (the card tools' keys).
-    assert_eq!(manifest["version"], "0.31.0");
+    // since docs/features/board-handoff.md (the card tools' keys); 0.32.0
+    // since card-tasks (RM-0092, `edit_card`'s `task`).
+    assert_eq!(manifest["version"], "0.32.0");
 }

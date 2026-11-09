@@ -27,6 +27,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/board-ui.md](features/board-ui.md) shipped
 - [docs/features/bundle-bindings.md](features/bundle-bindings.md) shipped
 - [docs/features/card-store.md](features/card-store.md) shipped
+- [docs/features/card-tasks.md](features/card-tasks.md) shipped
 - [docs/features/card-trace.md](features/card-trace.md) shipped
 - [docs/features/check-binding.md](features/check-binding.md) shipped
 - [docs/features/citation-sweep.md](features/citation-sweep.md) shipped
@@ -218,4 +219,5 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0084.md](roadmap/RM-0084.md) shipped
 - [docs/roadmap/RM-0085.md](roadmap/RM-0085.md) shipped
 - [docs/roadmap/RM-0090.md](roadmap/RM-0090.md) shipped
+- [docs/roadmap/RM-0092.md](roadmap/RM-0092.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

@@ -858,16 +858,17 @@ fn ac06_each_no_verdict_is_exit_2_naming_its_cause() {
     // Released: a verdict again.
     assert_refused(&verdict(&pair, &main, "src/a.rs"), "released");
 
-    // A queue of a newer schema (this build's is 9 since
-    // docs/features/card-store.md "Store").
-    pair.sql("PRAGMA user_version = 10;");
+    // A queue of a newer schema (this build's is 10 since
+    // docs/canon/cards.md "Store"; CT-4: the path an older build
+    // meets at 10).
+    pair.sql("PRAGMA user_version = 11;");
     let ran = spec_path(&pair, &main, "src/a.rs", false);
     assert_ran_no_verdict(
         &ran,
         "Reinstall spec and the plugin from one commit.",
-        "schema 10",
+        "schema 11",
     );
-    pair.sql("PRAGMA user_version = 9;");
+    pair.sql("PRAGMA user_version = 10;");
 
     // The root outside git.
     let loose = pair.scratch.copy("spec-a", "no-git");
@@ -2138,4 +2139,118 @@ fn serve_d9_the_gate_decides_alike_with_a_daemon_up_or_none() {
     assert!(discovery.exists(), "the stale daemon.json stays");
     let down = verdicts(&pair);
     assert_eq!(down, none, "a stale daemon.json changes no verdict");
+}
+
+// --------------------------------------------- card-tasks (RM-0092) CT-3
+
+/// Every face of one verdict on `src/a.rs` in `dir`, `(face, exit, stdout,
+/// stderr)`: the library's document and lines, `spec gate --path` as text
+/// and as `--json`, the hook's `spec gate --stdin`, and the wrapper.
+fn faces(pair: &Pair, dir: &Path) -> Vec<(String, i32, String, String)> {
+    let outcome = verdict(pair, dir, "src/a.rs");
+    let mut out = vec![(
+        "library".to_owned(),
+        i32::from(outcome.exit_code()),
+        outcome.to_json(),
+        outcome.stderr_lines().join("\n"),
+    )];
+    for json in [false, true] {
+        let ran = spec_path(pair, dir, "src/a.rs", json);
+        out.push((
+            format!("spec gate --path json={json}"),
+            ran.code,
+            ran.stdout_text(),
+            ran.stderr,
+        ));
+    }
+    let file = dir.join("src/a.rs");
+    let input = hook_json("Edit", dir, file.to_str().unwrap(), 0);
+    let ran = spec_stdin(pair, dir, Some(dir), Input::Bytes(input.clone()));
+    out.push((
+        "spec gate --stdin".to_owned(),
+        ran.code,
+        ran.stdout_text(),
+        ran.stderr,
+    ));
+    let ran = wrapper(pair, dir, input);
+    out.push((
+        "wrapper".to_owned(),
+        ran.code,
+        ran.stdout_text(),
+        ran.stderr,
+    ));
+    out
+}
+
+/// The exit codes of `faces`.
+fn face_codes(faces: &[(String, i32, String, String)]) -> Vec<i32> {
+    faces.iter().map(|(_, code, _, _)| *code).collect()
+}
+
+/// docs/features/card-tasks.md CT-3, R3, ADR-0075: the gate reads no link.
+/// In a `selective` scratch project with `src/**` controlled, `spec gate`
+/// on `src/a.rs` with `T-0001` `ready` and unclaimed (refused, naming it),
+/// then claimed here (passes): in each state, with no card, with `C-0001`
+/// linking `T-0001`, and with that card's `tasks` set by SQL to `not json`
+/// (the row does not read: `spec card show` exits 2 naming `tasks`), every
+/// face answers byte for byte alike: exit, stdout, stderr. M5:
+/// `open_for_gate` also reading `cards` and failing on an unreadable row.
+#[test]
+fn card_tasks_ct3_the_gate_reads_no_link() {
+    let pair = gated("ct3-gate", "selective");
+    let main = pair.main.clone();
+    let id = ready_task(&pair, &main);
+    assert_eq!(id, "T-0001");
+    let card = |args: &[&str]| {
+        let ran = pair.spec_piped(&main, args, b"");
+        ran.code(0);
+        ran.stdout
+    };
+    let tasks_column = || pair.sql("SELECT tasks FROM cards WHERE id = 'C-0001';");
+    let unreadable = || {
+        let shown = pair.spec_piped(&main, &["card", "show", "C-0001"], b"");
+        shown.code(2);
+        assert!(shown.stderr.contains("tasks"), "{}", shown.show());
+    };
+
+    // Refused: no task claimed.
+    let none = faces(&pair, &main);
+    assert_eq!(face_codes(&none), [2, 2, 2, 2, 2], "{none:#?}");
+    assert!(none[1].3.contains("T-0001 ready"), "{none:#?}");
+    assert_eq!(
+        serde_json::from_str::<Value>(&none[2].2).unwrap()["verdict"],
+        "refuse"
+    );
+    card(&["card", "new", "--title", "Stamina pass"]);
+    card(&["card", "edit", "C-0001", "--task", "T-0001"]);
+    assert_eq!(tasks_column(), "[\"T-0001\"]\n");
+    let linked = faces(&pair, &main);
+    assert_eq!(linked, none, "refused: a card linking T-0001");
+    pair.sql("UPDATE cards SET tasks = 'not json' WHERE id = 'C-0001';");
+    unreadable();
+    let corrupt = faces(&pair, &main);
+    assert_eq!(corrupt, none, "refused: the card row does not read");
+
+    // Passes: T-0001 claimed here.
+    pair.claim_ok(&main, &id, &main);
+    let corrupt = faces(&pair, &main);
+    assert_eq!(face_codes(&corrupt), [0, 0, 0, 0, 0], "{corrupt:#?}");
+    assert_eq!(
+        serde_json::from_str::<Value>(&corrupt[2].2).unwrap()["verdict"],
+        "pass"
+    );
+    pair.sql("UPDATE cards SET tasks = '[\"T-0001\"]' WHERE id = 'C-0001';");
+    let shown = pair.spec_piped(&main, &["--json", "card", "show", "C-0001"], b"");
+    shown.code(0);
+    assert_eq!(
+        shown.json()["tasks"][0]["status"],
+        "in_progress",
+        "{}",
+        shown.show()
+    );
+    let linked = faces(&pair, &main);
+    pair.sql("DELETE FROM cards;");
+    let none = faces(&pair, &main);
+    assert_eq!(linked, none, "passes: a card linking T-0001");
+    assert_eq!(corrupt, none, "passes: the card row does not read");
 }

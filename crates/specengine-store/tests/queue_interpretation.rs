@@ -344,7 +344,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     // Schema 9 since docs/features/card-store.md "Store"; 46 columns since
     // docs/features/drift-queue.md
     // "Queue schema 8": `drift`, `drift_hash` after `interpretation`.
-    assert_eq!(QUEUE_SCHEMA_VERSION, 9);
+    assert_eq!(QUEUE_SCHEMA_VERSION, 10);
     assert_eq!(PROPOSAL_COLUMNS.len(), 46);
     assert_eq!(PROPOSAL_COLUMNS[43], INTERPRETATION_KIND);
     assert_eq!(proposal_columns(5), Some(&PROPOSAL_COLUMNS[..43]));
@@ -355,7 +355,10 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     assert_eq!(proposal_columns(8), Some(&PROPOSAL_COLUMNS[..]));
     // `proposals` unchanged at 9 (docs/features/card-store.md "Store").
     assert_eq!(proposal_columns(9), Some(&PROPOSAL_COLUMNS[..]));
-    assert_eq!(proposal_columns(10), None);
+    // Nor at 10 (docs/canon/cards.md "Store": `proposal_columns`
+    // stays 46).
+    assert_eq!(proposal_columns(10), Some(&PROPOSAL_COLUMNS[..]));
+    assert_eq!(proposal_columns(11), None);
 
     let scratch = Scratch::new("qi-t5");
     let db = scratch.db("q");
@@ -367,7 +370,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     let made = queue.stored_rows().expect("rows");
     let dump = queue.dump().expect("dump");
     drop(queue);
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
     assert_eq!(
         sqlite3(
             &db,
@@ -408,7 +411,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     );
 
     let queue = SqliteQueue::open(&db, PROJECT).expect("opens, stepping 5 -> 8");
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10");
     assert_eq!(
         sqlite3(&db, "SELECT count(*) FROM pragma_table_info('proposals');"),
         "46"
@@ -426,7 +429,7 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     }
     drop(queue);
     drop(SqliteQueue::open(&db, PROJECT).expect("reopen"));
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "9", "stepped once");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "stepped once");
     // An interpretation goes into the stepped queue.
     let mut queue = SqliteQueue::open(&db, PROJECT).expect("open");
     assert_eq!(
@@ -438,22 +441,23 @@ fn ac_t5_a_schema_5_queue_opens_as_6_and_7_is_too_new() {
     );
     drop(queue);
 
-    // Schema 10: refused by an open and a read, left alone.
-    sqlite3(&db, "PRAGMA user_version = 10;");
+    // Schema 11 (this build's is 10, docs/canon/cards.md "Store"):
+    // refused by an open and a read, left alone.
+    sqlite3(&db, "PRAGMA user_version = 11;");
     let rows = sqlite3(&db, "SELECT count(*) FROM proposals;");
     for result in [
         SqliteQueue::open(&db, PROJECT).map(|_| ()),
         SqliteQueue::open_existing(&db, PROJECT).map(|_| ()),
     ] {
         match result {
-            Err(error @ QueueError::SchemaTooNew { found: 10 }) => {
+            Err(error @ QueueError::SchemaTooNew { found: 11 }) => {
                 let text = error.to_string();
-                assert!(text.contains("10") && text.contains('9'), "{text}");
+                assert!(text.contains("11") && text.contains("10"), "{text}");
             }
-            other => panic!("expected SchemaTooNew 10, got {other:?}"),
+            other => panic!("expected SchemaTooNew 11, got {other:?}"),
         }
     }
-    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "10", "left alone");
+    assert_eq!(sqlite3(&db, "PRAGMA user_version;"), "11", "left alone");
     assert_eq!(sqlite3(&db, "SELECT count(*) FROM proposals;"), rows);
 }
 

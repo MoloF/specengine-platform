@@ -20,9 +20,23 @@ const ACTIONS: Partial<Record<KnownTaskStatus, readonly OwnerAction[]>> = {
 /** Only an ID of this form enters a command: fixed words and a checked ID, nothing else. */
 export const TASK_ID = /^T-[0-9]{4,}$/;
 
+/**
+ * The one state that waits on the owner: a plan submitted, to approve or send back. Any other
+ * state, a known one or not, waits on nobody here (ADR-0012: nothing is held).
+ */
+const AWAITING: KnownTaskStatus = "review";
+
 /** The owner actions open in a state, in table order. */
 export function actionsFor(status: TaskStatus): readonly OwnerAction[] {
   return Object.hasOwn(ACTIONS, status) ? (ACTIONS[status as KnownTaskStatus] ?? []) : [];
+}
+
+/**
+ * Whether a task in this state awaits the owner: `review`, a plan submitted, alone. A state not
+ * read (null) awaits nothing. The card's Tasks part asks this, so it names no state itself.
+ */
+export function awaitsOwner(status: TaskStatus | null): boolean {
+  return status === AWAITING;
 }
 
 export interface OwnerCommand {
@@ -54,6 +68,11 @@ function textOf(action: OwnerAction, id: string): string {
     case "cancel":
       return `spec task cancel ${id}`;
   }
+}
+
+/** The approval of a task's plan, as copied; null when the ID is not a task ID: no command is offered for it. */
+export function approveCommand(id: string): string | null {
+  return TASK_ID.test(id) ? textOf("approve", id) : null;
 }
 
 /**

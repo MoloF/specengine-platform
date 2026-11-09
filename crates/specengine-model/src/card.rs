@@ -9,6 +9,10 @@
 
 use serde::{Deserialize, Serialize};
 
+/// The most `T-` tasks a card links
+/// (`docs/canon/card-tasks.md` "The rule").
+pub const CARD_TASKS_MAX: usize = 32;
+
 /// What an evidence entry is: a reference, never a binary, and nothing is
 /// fetched.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -155,6 +159,10 @@ pub struct Card {
     /// 1 when made, one more on every change of this card; a neighbour
     /// shifted by another card's move takes none.
     pub revision: u64,
+    /// The `T-` tasks it links, in the order written; none on a row stored
+    /// before the link. The link decides nothing: no rule reads it
+    /// (`docs/canon/card-tasks.md` "The rule").
+    pub tasks: Vec<String>,
 }
 
 impl Card {
