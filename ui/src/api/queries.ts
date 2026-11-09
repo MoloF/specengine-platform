@@ -1,4 +1,4 @@
-import { keepPreviousData, useIsMutating, useMutation, useQueries, useQuery, useQueryClient, type Query } from "@tanstack/react-query";
+import { keepPreviousData, useIsMutating, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState } from "react";
 import {
   apiErrorOf,
@@ -93,8 +93,8 @@ export const queryKeys = {
         archive: options.archive ?? false,
       },
     ] as const,
-  /** One read of `spec flow`: `root` null at the top (`docs/features/flow-canvas.md` "Data"), its badges with it (`docs/features/trace-views.md` "Flow badges"). */
-  flow: (project: string, options: FlowOptions) => ["flow", project, options.root ?? null, options.depth ?? null, options.trace ?? false] as const,
+  /** One read of `spec flow`: `root` null at the top, `stage` null for all (`docs/features/writer-studio.md` D2), its badges with it (`docs/features/trace-views.md` "Flow badges"). */
+  flow: (project: string, options: FlowOptions) => ["flow", project, options.root ?? null, options.depth ?? null, options.trace ?? false, options.stage ?? null] as const,
   tasks: (project: string) => ["tasks", project] as const,
   task: (project: string, id: string) => ["task", project, id] as const,
   check: (project: string) => ["check", project] as const,
@@ -663,64 +663,93 @@ export function useGraph(project: string, options: GraphOptions | null) {
 }
 
 /**
- * The Flow's top read: the top boxes, the edges lifted to them, the gap rows (`docs/features/flow-canvas.md` "Reads"), their badges (`docs/features/trace-views.md` "Flow badges");
- * under a module, rooted at its root (`docs/features/workspaces.md` "The UI").
+ * The three forms a Flow picture reads (`docs/features/writer-studio.md` D2), always with `trace`:
+ * the top `depth=0` with no root, a scope `root=R&depth=1`, a stage of a scope `root=R&stage=S`. A
+ * stage read always carries its scope's root: without one it would admit every document of the
+ * stage, a whole read in payload.
  */
-export function flowTop(root: string | null): FlowOptions {
-  return root === null ? { depth: 0, trace: true } : { root, depth: 0, trace: true };
+export function flowForm(root: string | null, stage: string | null): FlowOptions {
+  if (root === null) {
+    return { depth: 0, trace: true };
+  }
+  return stage === null ? { root, depth: 1, trace: true } : { root, stage, trace: true };
 }
 
 /**
- * The Flow's top read: `depth=0`, never a whole-flow read; `root` a module's, null for the whole
- * project. `enabled` false keeps it unread: the Flow waits for its module's root.
+ * The options of a Flow reading key, as the studio holds them: a place read before draws from its
+ * kept answer, read again on a live event that marks it or on the next entry to the screen
+ * (`docs/features/writer-studio.md` "The reads"). A key changing under a view reads nothing it
+ * holds; a hand edit, which raises no event, shows on coming back.
  */
-export function useFlow(project: string, root: string | null = null, enabled = true) {
+const KEPT_READ = { staleTime: Infinity, refetchOnMount: "always" } as const;
+
+/**
+ * One Flow picture's read, a `flowForm`. `enabled` false reads nothing and still says what is held:
+ * the lens root and Up are told from reads already in hand.
+ */
+export function useFlowRead(project: string, options: FlowOptions, enabled = true) {
   const client = useClient();
-  const top = flowTop(root);
   return useQuery({
-    queryKey: queryKeys.flow(project, top),
-    queryFn: ({ signal }) => client.getFlow(project, top, signal),
+    queryKey: queryKeys.flow(project, options),
+    queryFn: ({ signal }) => client.getFlow(project, options, signal),
     enabled,
+    ...KEPT_READ,
   });
 }
 
+/** A Flow read as a view shares it. */
+export type FlowQuery = ReturnType<typeof useFlowRead>;
+
 /**
- * One read per group, `root=G&depth=1`, in `names`' order, enabled only while the group is open: a
- * live event reads again what is open and only marks the rest, a closed read stays in hand, and
- * reopening reads nothing unless an event marked it. A read answered with a `reason` closed its group
- * and stays enabled, so an event can lift the refusal. A mount reads what is open again, as the
- * Flow's top read does, so a hand edit, which raises no event, shows on coming back to the screen.
+ * The holder a held Flow read names for `name`: a scope's own read gives its root no `group` (the
+ * holder is outside the scope), so Up is told from the reads already in hand, a picture above or a
+ * stage across; null when none holds it (`docs/features/writer-studio.md` "Description and interactions"). Reads nothing.
  */
-export function useFlowGroups(project: string, names: readonly string[], open: ReadonlySet<string>) {
+export function useHeldHolder(project: string, name: string | null): string | null {
+  const queryClient = useQueryClient();
+  if (name === null) {
+    return null;
+  }
+  for (const [, data] of queryClient.getQueriesData<FlowView>({ queryKey: ["flow", project] })) {
+    const holder = data?.nodes.find((node) => (node.id ?? node.path) === name && node.group !== null)?.group;
+    if (holder !== undefined && holder !== null) {
+      return holder;
+    }
+  }
+  return null;
+}
+
+/**
+ * A scope's lanes, `spec trace REF --summary` (`docs/canon/spec-trace.md` "The read"), by the
+ * scope's walk; never unrooted, one per scope, kept as a picture's read is.
+ */
+export function useScopeStages(project: string, ref: string, enabled = true) {
   const client = useClient();
-  return useQueries({
-    queries: names.map((root) => {
-      const options: FlowOptions = { root, depth: 1, trace: true };
-      return {
-        queryKey: queryKeys.flow(project, options),
-        queryFn: ({ signal }: { signal: AbortSignal }) => client.getFlow(project, options, signal),
-        enabled: (query: Query<FlowView>) => open.has(root) || (query.state.data?.reason ?? null) !== null,
-        staleTime: Infinity,
-        refetchOnMount: "always" as const,
-      };
-    }),
-    combine: (results) =>
-      results.map((result, index) => ({
-        name: names[index] ?? "",
-        data: result.data,
-        error: result.error,
-        fetching: result.isFetching,
-        /** Changes each time the read settles, even on an answer equal to the last. */
-        settled: `${String(result.dataUpdatedAt)}/${String(result.errorUpdateCount)}`,
-        retry: result.refetch,
-      })),
+  const options: TraceOptions = { ref, summary: true };
+  return useQuery({
+    queryKey: queryKeys.trace(project, options),
+    queryFn: ({ signal }) => client.getTrace(project, options, signal),
+    enabled,
+    ...KEPT_READ,
+  });
+}
+
+/** A scope's own text and links, `nodes/<REF>?with=links`, kept as a picture's read is: the panel shows it with nothing selected. */
+export function useScopeNode(project: string, ref: string, enabled = true) {
+  const client = useClient();
+  const options: NodeOptions = { with: ["links"] };
+  return useQuery({
+    queryKey: queryKeys.node(project, ref, options),
+    queryFn: ({ signal }) => client.getNode(project, ref, nodeRequest(options), signal),
+    enabled,
+    ...KEPT_READ,
   });
 }
 
 /**
- * The whole tree, on demand: the Flow asks it only for the `parent` chain of a name no read holds,
- * never to draw (`docs/features/flow-canvas.md` "Gap rows"). The Tree screen's entry, read again
- * only once a live event marks it.
+ * The whole tree, on demand: the Flow asks it only for the `parent` of a name no read holds, never to
+ * draw (`docs/features/writer-studio.md` R3). The Tree screen's entry, read again only once a live
+ * event marks it.
  */
 export function useTreeOnDemand(project: string): () => Promise<TreeView> {
   const client = useClient();
@@ -734,6 +763,24 @@ export function useTreeOnDemand(project: string): () => Promise<TreeView> {
       }),
     [client, project, queryClient],
   );
+}
+
+/**
+ * The Flow's top read on demand, the one `useFlowRead` keeps: a seek whose lens root is not known yet
+ * (the hash named a scope, so the top was not read) finds it, so a fix never writes the lens root as
+ * a scope (`docs/features/writer-studio.md` R3). Held, it is not read again.
+ */
+export function useTopOnDemand(project: string): () => Promise<FlowView> {
+  const client = useClient();
+  const queryClient = useQueryClient();
+  return useCallback(() => {
+    const options = flowForm(null, null);
+    return queryClient.query({
+      queryKey: queryKeys.flow(project, options),
+      queryFn: ({ signal }) => client.getFlow(project, options, signal),
+      staleTime: Infinity,
+    });
+  }, [client, project, queryClient]);
 }
 
 /** The project's tasks, one read for the whole list: filters never read again. */
@@ -1034,47 +1081,6 @@ export function useTrace(project: string, options: TraceOptions = {}, enabled = 
 
 /** A trace read as a view shares it. */
 export type TraceQuery = ReturnType<typeof useTrace>;
-
-/** What the Timeline and the stage filter read on load: the lanes, no node row (`docs/features/trace-views.md` "Timeline"). */
-const TRACE_SUMMARY: TraceOptions = { summary: true };
-
-/** The project's lanes: `spec trace --summary`, never a whole read. */
-export function useTraceSummary(project: string) {
-  return useTrace(project, TRACE_SUMMARY);
-}
-
-/**
- * One read per lane, by `spec trace --stage S`, in `stages`' order, enabled only while the lane is
- * open: as the Flow's group reads, an event reads again what is open and only marks the rest, a closed
- * lane stays in hand, and reopening reads nothing unless an event marked it; the Timeline mounting
- * reads what is open again, so a hand edit, which raises no event, shows on coming back.
- */
-export function useTraceLanes(project: string, stages: readonly string[], open: ReadonlySet<string>) {
-  const client = useClient();
-  return useQueries({
-    queries: stages.map((stage) => {
-      const options: TraceOptions = { stage };
-      return {
-        queryKey: queryKeys.trace(project, options),
-        queryFn: ({ signal }: { signal: AbortSignal }) => client.getTrace(project, options, signal),
-        enabled: open.has(stage),
-        staleTime: Infinity,
-        refetchOnMount: "always" as const,
-      };
-    }),
-    combine: (results) =>
-      results.map((result, index) => ({
-        stage: stages[index] ?? "",
-        data: result.data,
-        error: result.error,
-        fetching: result.isFetching,
-        errorCount: result.errorUpdateCount,
-        /** Changes each time the read lands, even on an answer equal to the last. */
-        updatedAt: result.dataUpdatedAt,
-        retry: result.refetch,
-      })),
-  });
-}
 
 /** One of the card writes, as `useCardWrite` sends it (`docs/features/board-ui.md` "Routes"). */
 export type CardWriteRequest =

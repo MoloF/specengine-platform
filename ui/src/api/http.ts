@@ -398,15 +398,16 @@ export class HttpClient implements SpecEngineClient {
   }
 
   /**
-   * `spec flow [ROOT] [--depth N] [--trace] --json` as the browser view, uncut
-   * (`docs/canon/spec-flow.md` "The read"): `root` a query value, encoded once, an absent option left
-   * out, `trace` sent only as true. A 404 is the exit-1 document (a ROOT naming nothing, `reason`
-   * set), resolved as data. Takes its query's AbortSignal.
+   * `spec flow [ROOT] [--depth N] [--stage S] [--trace] --json` as the browser view, uncut
+   * (`docs/canon/spec-flow.md` "The read"): `root` and `stage` query values, each encoded once, an
+   * absent option left out, `trace` sent only as true. A 404 is the exit-1 document (a ROOT naming
+   * nothing, `reason` set), resolved as data. Takes its query's AbortSignal.
    */
   async getFlow(project: string, options: FlowOptions, signal?: AbortSignal): Promise<FlowView> {
     const query = queryOf([
       ["root", options.root],
       ["depth", options.depth],
+      ["stage", options.stage],
       ["trace", options.trace === true ? true : undefined],
     ]);
     return (await request("GET", `${projectPath(project)}/flow${query}`, { signal })) as FlowView;

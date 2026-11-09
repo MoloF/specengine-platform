@@ -20,6 +20,9 @@ export const HARBOR_STAGES: ReadonlyMap<string, string> = new Map([
   ["MEC-FAIRWAY", "passage"],
   ["MEC-MOORING", "quayside"],
   ["MEC-OLD-QUAYS", "quayside"],
+  ["MEC-PILOT-CALL", "landfall"],
+  ["MEC-HARBOUR-LOG", "passage"],
+  ["MEC-PILOT-RETURN", "quayside"],
 ]);
 
 /** What a read takes besides the cards. */

@@ -76,6 +76,14 @@ function pressed(): string[] {
     .map((button) => button.textContent);
 }
 
+/** The module Flow's places pane names current: its bar's items are links to places (docs/features/writer-studio.md D4). */
+function currentModule(): string[] {
+  return within(bar() ?? document.body)
+    .getAllByRole("link")
+    .filter((link) => link.getAttribute("aria-current") === "true")
+    .map((link) => link.textContent);
+}
+
 /** The Flow's Top reads, in order: its `depth=0` reads. */
 function topReads(spy: { mock: { calls: readonly (readonly unknown[])[] } }): unknown[] {
   return argsOf(spy)
@@ -239,13 +247,16 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     expect(pressed()).toEqual(["Berths"]);
     await go("#/harbor-sim/flow");
     await screen.findByRole("heading", { level: 1, name: "Flow" });
+    // The module's root is Flow's lens root: its scope read, no top (docs/features/writer-studio.md D3).
     await waitFor(() => {
-      expect(topReads(spies.getFlow)).toEqual([{ root: "DOM-BERTHS", depth: 0, trace: true }]);
+      expect(argsOf(spies.getFlow).map((args) => args[1])).toEqual([{ root: "DOM-BERTHS", depth: 1, trace: true }]);
     });
+    expect(currentModule()).toEqual(["Berths"]);
 
-    fireEvent.click(within(bar() ?? document.body).getByRole("button", { name: "All modules" }));
+    fireEvent.click(within(bar() ?? document.body).getByRole("link", { name: "All modules" }));
     expect(window.localStorage.getItem("specengine.module.harbor-sim")).toBe("");
-    expect(pressed()).toEqual(["All modules"]);
+    await hashIs("#/harbor-sim/flow?module=");
+    expect(currentModule()).toEqual(["All modules"]);
     await waitFor(() => {
       expect(topReads(spies.getFlow).at(-1)).toEqual({ depth: 0, trace: true });
     });
@@ -262,9 +273,9 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     ({ spies } = reload("normal", "#/harbor-sim/flow"));
     await screen.findByRole("heading", { level: 1, name: "Flow" });
     await waitFor(() => {
-      expect(topReads(spies.getFlow)).toEqual([{ root: "DOM-WATER", depth: 0, trace: true }]);
+      expect(argsOf(spies.getFlow).map((args) => args[1])).toEqual([{ root: "DOM-WATER", depth: 1, trace: true }]);
     });
-    expect(pressed()).toEqual(["Harbour waters"]);
+    expect(currentModule()).toEqual(["Harbour waters"]);
 
     fireEvent.change(switcher(), { target: { value: "foundry" } });
     expect(window.localStorage.getItem("specengine.module.harbor-sim")).toBeNull();
@@ -279,20 +290,15 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     });
   });
 
-  it("keeps the other reads as they were: a group's root=G&depth=1, the stages' summary; a root's tree footer goes back to the whole tree", async () => {
+  it("roots Flow's reads at the module: its scope read at depth 1, its lanes under it; a root's tree footer goes back to the whole tree", async () => {
     window.localStorage.setItem("specengine.module.harbor-sim", "waters");
     const { spies } = renderMock("normal", "#/harbor-sim/flow");
     await screen.findByRole("heading", { level: 1, name: "Flow" });
     await waitFor(() => {
-      expect(topReads(spies.getFlow)).toEqual([{ root: "DOM-WATER", depth: 0, trace: true }]);
+      expect(argsOf(spies.getTrace)).toContainEqual(["harbor-sim", { ref: "DOM-WATER", summary: true }]);
     });
-    await waitFor(() => {
-      expect(argsOf(spies.getTrace)).toContainEqual(["harbor-sim", { summary: true }]);
-    });
-    const groups = argsOf(spies.getFlow)
-      .map((args) => args[1])
-      .filter((options) => typeof options === "object" && options !== null && "depth" in options && options.depth !== 0);
-    for (const options of groups) {
+    expect(topReads(spies.getFlow)).toEqual([]);
+    for (const options of argsOf(spies.getFlow).map((args) => args[1])) {
       expect(options).toEqual({ root: expect.any(String) as string, depth: 1, trace: true });
     }
     await go("#/harbor-sim/tree");
@@ -426,7 +432,7 @@ describe("notes and failures on the screen (WS-13)", () => {
     expect(await screen.findByRole("status", { name: "Loading the spec tree of harbor-sim" })).toBeTruthy();
     await go("#/harbor-sim/flow");
     expect(await screen.findByRole("status", { name: "Reading the flow of harbor-sim" })).toBeTruthy();
-    expect(document.querySelector(".flow-results")?.getAttribute("aria-busy")).toBe("true");
+    expect(document.querySelector(".flow-studio")?.getAttribute("aria-busy")).toBe("true");
     expect(spies.getTree).not.toHaveBeenCalled();
     expect(topReads(spies.getFlow)).toEqual([]);
   });

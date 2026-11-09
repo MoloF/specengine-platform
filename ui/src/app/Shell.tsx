@@ -198,7 +198,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
     }),
     [],
   );
-  /** The Flow's tab and open groups per project for this page's life; never in the hash (docs/features/flow-canvas.md "Data"). */
+  /** The Flow's tab and last place per project for this page's life: a bare `#/<p>/flow` takes the last place (docs/features/writer-studio.md D5). */
   const flowStates = useRef(new Map<string, FlowState>());
   const flowMemory = useMemo<FlowMemory>(
     () => ({
@@ -397,7 +397,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
   // to read them for (the projects could not be read, or there are none); a skeleton while it is out.
   const navPending = navProject === null ? projects.data === undefined && projectsFailure === null : workspaces.data === undefined && !workspacesFailed;
   const navSections = choice.workspace?.sections ?? ALL_SECTIONS;
-  const routeModules = route.type === "section" && (route.section === "tree" || route.section === "flow") ? (workspaces.data?.modules ?? []) : [];
+  const routeModules = route.type === "section" && route.section === "tree" ? (workspaces.data?.modules ?? []) : [];
 
   let view;
   if (route.type === "not_found") {
@@ -460,14 +460,17 @@ export function Shell({ scenario }: { scenario: string | null }) {
   } else if (route.section === "roadmap") {
     view = <RoadmapView key={route.project} project={route.project} itemId={route.id} memory={roadmapMemory} />;
   } else if (route.section === "flow") {
-    // A module's Flow is a reading of its own: its open groups are another root's (docs/features/workspaces.md "The UI").
+    // The module is in Flow's hash, the stored one its default; its bar is in the places pane (docs/features/writer-studio.md D4).
     view = (
       <FlowView
-        key={`${route.project}/${moduleRoot ?? ""}`}
+        key={route.project}
         project={route.project}
         nodeRef={route.id}
+        query={route.query}
         memory={flowMemory}
-        moduleRoot={moduleRoot ?? null}
+        modules={workspaces.data?.modules ?? []}
+        storedModule={choice.module}
+        onChooseModule={choice.chooseModule}
         moduleKnown={moduleRoot !== undefined}
       />
     );
@@ -573,7 +576,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
                 }}
               />
             )}
-            {/* The module bar on the Spec tree and the Flow alone; outside the view, so a root naming nothing leaves it (docs/features/workspaces.md "The UI"). */}
+            {/* The module bar on the Spec tree alone, outside the view, so a root naming nothing leaves it (docs/features/workspaces.md "The UI"); Flow's is in its places pane. */}
             {shownProject !== null && <ModuleBar modules={routeModules} chosen={choice.module} onChoose={choice.chooseModule} />}
             <ErrorBoundary key={viewKey} fallback={(error, reset) => <ViewFailure error={error} onRetry={reset} />}>
               {view}

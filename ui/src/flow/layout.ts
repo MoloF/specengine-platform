@@ -3,18 +3,16 @@ import { BOX_WIDTH, CANVAS_LIMIT, compareText, nodeName } from "../graph/layout"
 import { BOX_HEIGHT, curveMiddle, curvePath, curvePoints, loopPath, LOOP_DEPTH, roundedPath, type Point, type Rect, type Run } from "./geometry";
 import { edgeWords } from "./labels";
 
-// The Flow's layout (docs/features/flow-canvas.md "Layout"), hand-written and pure: the reads in
-// hand in, boxes, lanes and edges at absolute positions out. A lane per read, nested: a box's column
-// is its `distance` in the read drawing it, rows come from four barycentre sweeps, and an open group
-// is its lane under its head. Columns decide every edge's shape, never a type or a `kind`, so a loop
-// nobody declared shows as well as one declared. Nothing here follows, lifts or counts a link: each
-// edge drawn is its read's, unchanged. The input is sorted first, so the same reads in any order
-// give the same picture.
+// The Flow's layout (docs/features/flow-canvas.md "Layout"), hand-written and pure: one read in
+// (docs/features/writer-studio.md D1: a group is entered, never opened in place), boxes, its lane and
+// edges at absolute positions out. A box's column is its `distance` in the read, rows come from four
+// barycentre sweeps. Columns decide every edge's shape, never a type or a `kind`, so a loop nobody
+// declared shows as well as one declared. Nothing here follows, lifts or counts a link: each edge
+// drawn is the read's, unchanged. The input is sorted first, so the same read in any order gives the
+// same picture.
 
 export { BOX_HEIGHT, BOX_WIDTH, CANVAS_LIMIT };
 
-/** An open group's head, over its lane. */
-export const HEAD_HEIGHT = 44;
 /** The empty band between two columns, wide enough for a two-line edge label. */
 export const COLUMN_GAP = 136;
 /** Between two boxes of a column. */
@@ -27,9 +25,6 @@ export const TRACK_STEP = 16;
 export const SLOT_STEP = 10;
 /** From one port to the next on a box's side. */
 export const PORT_STEP = 8;
-
-/** An open group is at least this wide, so its head can say what it is. */
-const FRAME_MIN_WIDTH = 380;
 
 /** What a long forward edge reserves in a column it passes, and its distance to what is beside it. */
 const PASSAGE_HEIGHT = 2;
@@ -54,47 +49,17 @@ const LABEL_CHARACTER = 6;
 /** Above every real row: an arc's port sorts under the forward ones, a deeper track above a shallower. */
 const BELOW_THE_ROWS = 1_000_000;
 
-export interface FlowInput {
-  top: FlowView;
-  /** The groups' reads in hand, by name. */
-  groups: ReadonlyMap<string, FlowView>;
-  /** The groups asked open. */
-  open: ReadonlySet<string>;
-}
-
-/** A read as the screen shows it: Top, or an open group's. */
-export interface DrawnRead {
-  group: string | null;
-  /** The read whose lane holds the group's head; null for Top and for a group of Top. */
-  parent: string | null;
-  nesting: number;
-  view: FlowView;
-  /** Its boxes as served; a group's own read holds the group, here left out. */
-  boxes: FlowNode[];
-}
-
-/** A plain box, a closed group, or an open group: its head and frame. */
-export type BoxForm = "step" | "closed" | "open";
-
 export interface FlowBox extends Rect {
   /** `n:` and the name, the same box in every layout; a second holder of the name adds its path and line. */
   id: string;
   name: string;
   node: FlowNode;
-  form: BoxForm;
-  /** The group whose lane draws it; null at Top. */
-  group: string | null;
-  nesting: number;
   /** Its column in the lane; null in the band under it. */
   column: number | null;
   row: number;
-  /** Asked open, read, and past the cap: it stays closed. */
-  noRoom: boolean;
 }
 
 export interface FlowLane extends Rect {
-  group: string | null;
-  nesting: number;
   /** Each column's box ids, top to bottom. */
   columns: string[][];
   /** The band's rows of box ids, left to right. */
@@ -110,8 +75,6 @@ export interface LaidEdge {
   id: string;
   /** The read's edge, unchanged. */
   edge: FlowEdge;
-  group: string | null;
-  nesting: number;
   source: string;
   target: string;
   route: EdgeRoute;
@@ -128,12 +91,12 @@ export interface FlowLayout {
   edges: LaidEdge[];
   width: number;
   height: number;
-  /** Boxes the reads in hand hold, drawn or not. */
+  /** Boxes the read holds, drawn or not. */
   total: number;
   notDrawn: number;
 }
 
-/** A box's canvas id, a group's head's among them; a second holder of one ID adds its place. */
+/** A box's canvas id; a second holder of one ID adds its place. */
 export function boxId(name: string): string {
   return `n:${name}`;
 }
@@ -163,85 +126,29 @@ function byEdge(a: FlowEdge, b: FlowEdge): number {
   );
 }
 
-/** Whether the box can open: `holds > 0` is a closed group. */
+/** Whether the box is a group, entered as a scope: it holds documents. */
 export function isGroup(node: FlowNode): boolean {
   return node.holds > 0;
 }
 
 /**
- * The reads the screen shows: Top, then each open group with its read in hand, by (nesting, name),
- * reachable from Top through open groups. A read with a `reason` shows nothing: its group stays closed.
+ * The cap: the first `CANVAS_LIMIT` places of the read in served order are drawn; past it boxes stay
+ * undrawn, with their edges, and the List holds them all (docs/features/writer-studio.md R6).
  */
-export function readsOf(input: FlowInput): DrawnRead[] {
-  const reads: DrawnRead[] = [{ group: null, parent: null, nesting: 0, view: input.top, boxes: [...input.top.nodes].sort(byServed) }];
-  const seen = new Set<string>();
-  const asked = (boxes: readonly FlowNode[], parent: string | null) => boxes.filter((node) => isGroup(node) && input.open.has(nodeName(node))).map((node) => ({ name: nodeName(node), parent }));
-  let level = asked(reads[0]?.boxes ?? [], null);
-  for (let nesting = 1; level.length > 0; nesting += 1) {
-    const next: { name: string; parent: string | null }[] = [];
-    for (const { name, parent } of [...level].sort((a, b) => compareText(a.name, b.name))) {
-      const view = input.groups.get(name);
-      if (seen.has(name) || view === undefined || view.reason !== null) {
-        continue;
-      }
-      seen.add(name);
-      const boxes = view.nodes.filter((node) => nodeName(node) !== name).sort(byServed);
-      if (boxes.length > 0) {
-        reads.push({ group: name, parent, nesting, view, boxes });
-        next.push(...asked(boxes, name));
-      }
-    }
-    level = next;
-  }
-  return reads;
-}
-
-/** Which boxes of which read the cap leaves on the canvas. */
-interface Plan {
-  reads: Map<string | null, DrawnRead>;
-  drawn: Map<string | null, FlowNode[]>;
-  noRoom: Set<string>;
-  total: number;
-  placed: number;
-  /** The names a cell took while the lanes are drafted: a link lands on a name's first holder. */
-  held: Set<string>;
-}
-
-/**
- * The cap: from Top as served, then open groups by (nesting, name), `CANVAS_LIMIT` boxes in all. A
- * group's boxes past it stay undrawn, with their edges; a group with no room left stays closed.
- */
-function planOf(input: FlowInput): Plan {
-  const reads = readsOf(input);
-  const plan: Plan = {
-    reads: new Map(reads.map((read) => [read.group, read])),
-    drawn: new Map(),
-    noRoom: new Set(),
-    total: 0,
-    placed: 0,
-    held: new Set(),
-  };
+function drawnOf(view: FlowView): { drawn: FlowNode[]; total: number } {
+  const boxes = [...view.nodes].sort(byServed);
   const placed = new Set<string>();
-  for (const read of reads) {
-    plan.total += read.boxes.length;
-    if (read.group !== null && !plan.drawn.get(read.parent)?.some((node) => nodeName(node) === read.group)) {
-      continue;
+  const drawn: FlowNode[] = [];
+  for (const node of boxes) {
+    if (placed.size >= CANVAS_LIMIT) {
+      break;
     }
-    const room = CANVAS_LIMIT - placed.size;
-    if (room <= 0) {
-      if (read.group !== null) {
-        plan.noRoom.add(read.group);
-      }
-      continue;
-    }
-    const taken = read.boxes.filter((node) => !placed.has(placeOf(node))).slice(0, room);
-    for (const node of taken) {
+    if (!placed.has(placeOf(node))) {
       placed.add(placeOf(node));
+      drawn.push(node);
     }
-    plan.drawn.set(read.group, taken);
   }
-  plan.placed = placed.size;
-  return plan;
+  return { drawn, total: boxes.length };
 }
 
 /** A box in its lane while the lane is laid out, positions relative to the lane. */
@@ -249,8 +156,6 @@ interface Cell {
   id: string;
   name: string;
   node: FlowNode;
-  inner: Draft | null;
-  noRoom: boolean;
   width: number;
   height: number;
   /** From its top to its ports' middle. */
@@ -307,8 +212,6 @@ interface Channel {
 type Shape = { runs: Run[] } | { points: Point[] } | { box: Cell };
 
 interface Draft {
-  group: string | null;
-  nesting: number;
   cells: Cell[];
   edges: { laid: LaneEdge; shape: Shape; label: Point }[];
   columns: Cell[][];
@@ -531,8 +434,8 @@ function routeOf(from: Cell, to: Cell): EdgeRoute {
   return to.column === from.column ? "beside" : "forward";
 }
 
-function edgeKey(group: string | null, edge: FlowEdge): string {
-  return `e:${group ?? ""}:${edge.from}>${edge.to}:${edge.type}:${edge.kind ?? ""}`;
+function edgeKey(edge: FlowEdge): string {
+  return `e:${edge.from}>${edge.to}:${edge.type}:${edge.kind ?? ""}`;
 }
 
 function linked(a: Slot, b: Slot): void {
@@ -540,22 +443,20 @@ function linked(a: Slot, b: Slot): void {
   b.before.push(a);
 }
 
-/** A lane's boxes, opened ones holding their own lanes; only the cap's boxes. */
-function cellsOf(group: string | null, nesting: number, plan: Plan): Cell[] {
-  return (plan.drawn.get(group) ?? []).map((node): Cell => {
+/** The lane's boxes, the cap's alone; a name's first holder takes its plain id. */
+function cellsOf(drawn: readonly FlowNode[]): Cell[] {
+  const held = new Set<string>();
+  return drawn.map((node): Cell => {
     const name = nodeName(node);
-    const first = !plan.held.has(name);
-    plan.held.add(name);
-    const inner = first && plan.drawn.has(name) && isGroup(node) ? draftLane(name, nesting + 1, plan) : null;
+    const first = !held.has(name);
+    held.add(name);
     return {
       id: first ? boxId(name) : `${boxId(name)}@${placeOf(node)}`,
       name,
       node,
-      inner,
-      noRoom: plan.noRoom.has(name),
-      width: inner === null ? BOX_WIDTH : Math.max(FRAME_MIN_WIDTH, inner.width),
-      height: inner === null ? BOX_HEIGHT : HEAD_HEIGHT + inner.height,
-      anchor: (inner === null ? BOX_HEIGHT : HEAD_HEIGHT) / 2,
+      width: BOX_WIDTH,
+      height: BOX_HEIGHT,
+      anchor: BOX_HEIGHT / 2,
       loops: false,
       column: null,
       row: 0,
@@ -566,9 +467,9 @@ function cellsOf(group: string | null, nesting: number, plan: Plan): Cell[] {
   });
 }
 
-/** Lays out one read's lane, relative to its top left. */
-function draftLane(group: string | null, nesting: number, plan: Plan): Draft {
-  const cells = cellsOf(group, nesting, plan);
+/** Lays out the read's lane, relative to its top left. */
+function draftLane(view: FlowView, drawn: readonly FlowNode[]): Draft {
+  const cells = cellsOf(drawn);
   // A link lands on a name's first holder.
   const byName = new Map([...cells].reverse().map((cell) => [cell.name, cell]));
   const layers = [...new Set(cells.flatMap((cell) => (cell.node.distance === null ? [] : [cell.node.distance])))].sort((a, b) => a - b);
@@ -577,14 +478,13 @@ function draftLane(group: string | null, nesting: number, plan: Plan): Draft {
     cell.column = cell.node.distance === null ? null : (columnOf.get(cell.node.distance) ?? null);
   }
 
-  const read = plan.reads.get(group);
-  const edges: LaneEdge[] = [...(read?.view.edges ?? [])].sort(byEdge).flatMap((edge) => {
+  const edges: LaneEdge[] = [...view.edges].sort(byEdge).flatMap((edge) => {
     const from = byName.get(edge.from);
     const to = byName.get(edge.to);
     if (from === undefined || to === undefined) {
       return [];
     }
-    const id = edgeKey(group, edge);
+    const id = edgeKey(edge);
     return [{ edge, id, from, to, route: routeOf(from, to), chain: [], track: -1, direct: false, outKey: id, inKey: id, outChannel: null, inChannel: null }];
   });
   for (const laid of edges) {
@@ -897,8 +797,6 @@ function draftLane(group: string | null, nesting: number, plan: Plan): Draft {
   spreadLabels(shaped);
 
   return {
-    group,
-    nesting,
     cells,
     edges: shaped,
     columns: orders.map((slots) => slots.flatMap((slot) => (slot.cell === null ? [] : [slot.cell]))),
@@ -949,90 +847,45 @@ function columnLeftOf(orders: readonly Slot[][], column: number): number {
   return cell?.x ?? 0;
 }
 
-function moved(point: Point, by: Point): Point {
-  return { x: point.x + by.x, y: point.y + by.y };
-}
-
 /** Writes a lane and what it holds at absolute positions. */
-function placeLane(draft: Draft, origin: Point, into: FlowLayout): void {
-  into.lanes.push({
-    group: draft.group,
-    nesting: draft.nesting,
-    x: origin.x,
-    y: origin.y,
+/** The read's layout: the lane's boxes and edges at absolute positions, the lane at the origin. Pure and deterministic. */
+export function layoutFlow(view: FlowView): FlowLayout {
+  const { drawn, total } = drawnOf(view);
+  const draft = draftLane(view, drawn);
+  const layout: FlowLayout = {
+    boxes: draft.cells.map((cell) => ({ id: cell.id, name: cell.name, node: cell.node, column: cell.column, row: cell.row, x: cell.x, y: cell.y, width: cell.width, height: cell.height })),
+    lanes: [
+      {
+        x: 0,
+        y: 0,
+        width: draft.width,
+        height: draft.height,
+        columns: draft.columns.map((cells) => cells.map((cell) => cell.id)),
+        band: draft.band.map((cells) => cells.map((cell) => cell.id)),
+        bandY: draft.bandY,
+      },
+    ],
+    edges: draft.edges.map(({ laid, shape, label }): LaidEdge => {
+      if ("runs" in shape) {
+        return { ...laidOf(laid, label), path: curvePath(shape.runs), points: curvePoints(shape.runs) };
+      }
+      if ("points" in shape) {
+        return { ...laidOf(laid, label), path: roundedPath(shape.points), points: shape.points };
+      }
+      const loop = loopPath(shape.box);
+      return { ...laidOf(laid, label), path: loop.path, points: loop.points };
+    }),
     width: draft.width,
     height: draft.height,
-    columns: draft.columns.map((cells) => cells.map((cell) => cell.id)),
-    band: draft.band.map((cells) => cells.map((cell) => cell.id)),
-    bandY: draft.bandY === null ? null : origin.y + draft.bandY,
-  });
-  for (const cell of draft.cells) {
-    const x = origin.x + cell.x;
-    const y = origin.y + cell.y;
-    into.boxes.push({
-      id: cell.id,
-      name: cell.name,
-      node: cell.node,
-      form: cell.inner !== null ? "open" : isGroup(cell.node) ? "closed" : "step",
-      group: draft.group,
-      nesting: draft.nesting,
-      column: cell.column,
-      row: cell.row,
-      noRoom: cell.noRoom,
-      x,
-      y,
-      width: cell.width,
-      height: cell.height,
-    });
-    if (cell.inner !== null) {
-      placeLane(cell.inner, { x, y: y + HEAD_HEIGHT }, into);
-    }
-  }
-  for (const { laid, shape, label } of draft.edges) {
-    let path: string;
-    let points: Point[];
-    if ("runs" in shape) {
-      const runs = shape.runs.map((run) => ({ from: run.from + origin.x, to: run.to + origin.x, y: run.y + origin.y }));
-      path = curvePath(runs);
-      points = curvePoints(runs);
-    } else if ("points" in shape) {
-      points = shape.points.map((point) => moved(point, origin));
-      path = roundedPath(points);
-    } else {
-      const loop = loopPath({ x: shape.box.x + origin.x, y: shape.box.y + origin.y, width: shape.box.width, height: shape.box.height });
-      path = loop.path;
-      points = loop.points;
-    }
-    into.edges.push({
-      id: laid.id,
-      edge: laid.edge,
-      group: draft.group,
-      nesting: draft.nesting,
-      source: laid.from.id,
-      target: laid.to.id,
-      route: laid.route,
-      points,
-      path,
-      label: moved(label, origin),
-    });
-  }
+    total,
+    notDrawn: total - drawn.length,
+  };
+  return layout;
 }
 
-/** Lays out the reads in hand. Pure and deterministic. */
-export function layoutFlow(input: FlowInput): FlowLayout {
-  const plan = planOf(input);
-  const draft = draftLane(null, 0, plan);
-  const layout: FlowLayout = {
-    boxes: [],
-    lanes: [],
-    edges: [],
-    width: draft.width,
-    height: draft.height,
-    total: plan.total,
-    notDrawn: plan.total - plan.placed,
-  };
-  placeLane(draft, { x: 0, y: 0 }, layout);
-  return layout;
+/** A laid edge's own fields, its path and points aside. */
+function laidOf(laid: LaneEdge, label: Point): Omit<LaidEdge, "path" | "points"> {
+  return { id: laid.id, edge: laid.edge, source: laid.from.id, target: laid.to.id, route: laid.route, label };
 }
 
 function nearestBy(ids: readonly string[], boxes: ReadonlyMap<string, FlowBox>, at: number, along: (box: FlowBox) => number): string | null {
@@ -1048,52 +901,19 @@ function nearestBy(ids: readonly string[], boxes: ReadonlyMap<string, FlowBox>, 
   return best;
 }
 
-/** The first box of a lane: its first column's top, else its band's first. */
-function firstOf(lane: FlowLane): string | null {
-  return lane.columns[0]?.[0] ?? lane.band[0]?.[0] ?? null;
-}
-
-/**
- * What lies right of a lane: the box beside its frame, climbing out of as many frames as end there.
- * Without it a box right of an open group could not be reached: Right on the head goes into the lane.
- */
-function pastTheFrame(layout: FlowLayout, boxes: ReadonlyMap<string, FlowBox>, lane: FlowLane): string | null {
-  const midY = (other: FlowBox) => other.y + Math.min(other.height, BOX_HEIGHT) / 2;
-  for (let group = lane.group; group !== null; ) {
-    const head = boxes.get(boxId(group));
-    const outer = layout.lanes.find((candidate) => candidate.group === head?.group);
-    if (head === undefined || outer === undefined) {
-      return null;
-    }
-    const shelf = outer.band[head.row] ?? [];
-    const next = head.column === null ? shelf[shelf.indexOf(head.id) + 1] : nearestBy(outer.columns[head.column + 1] ?? [], boxes, midY(head), midY);
-    if (next !== undefined && next !== null) {
-      return next;
-    }
-    group = outer.group;
-  }
-  return null;
-}
-
 /**
  * The box a key moves to from `from`, or null to stay. Up and Down keep to a column, then the band
- * under it; Left and Right go across: Left from a first column to the frame's head, Right on an open
- * head into its lane, Right from a lane's last column to what lies past its frame.
+ * under it; Left and Right go to the nearest box of the column beside, and along the band.
  */
 export function boxAfterKey(layout: FlowLayout, from: string, key: string): string | null {
   const boxes = new Map(layout.boxes.map((box) => [box.id, box]));
   const box = boxes.get(from);
-  const lane = layout.lanes.find((candidate) => candidate.group === box?.group);
+  const lane = layout.lanes[0];
   if (box === undefined || lane === undefined) {
     return null;
   }
-  const midY = (other: FlowBox) => other.y + Math.min(other.height, BOX_HEIGHT) / 2;
-  const midX = (other: FlowBox) => other.x + Math.min(other.width, BOX_WIDTH) / 2;
-  const head = lane.group === null ? null : boxId(lane.group);
-  if (key === "ArrowRight" && box.form === "open") {
-    const inner = layout.lanes.find((candidate) => candidate.group === box.name);
-    return inner === undefined ? null : firstOf(inner);
-  }
+  const midY = (other: FlowBox) => other.y + other.height / 2;
+  const midX = (other: FlowBox) => other.x + other.width / 2;
   if (box.column !== null) {
     const column = lane.columns[box.column] ?? [];
     const row = column.indexOf(from);
@@ -1103,9 +923,9 @@ export function boxAfterKey(layout: FlowLayout, from: string, key: string): stri
       case "ArrowDown":
         return column[row + 1] ?? nearestBy(lane.band[0] ?? [], boxes, midX(box), midX);
       case "ArrowLeft":
-        return box.column === 0 ? head : nearestBy(lane.columns[box.column - 1] ?? [], boxes, midY(box), midY);
+        return nearestBy(lane.columns[box.column - 1] ?? [], boxes, midY(box), midY);
       case "ArrowRight":
-        return nearestBy(lane.columns[box.column + 1] ?? [], boxes, midY(box), midY) ?? pastTheFrame(layout, boxes, lane);
+        return nearestBy(lane.columns[box.column + 1] ?? [], boxes, midY(box), midY);
       default:
         return null;
     }
@@ -1114,9 +934,9 @@ export function boxAfterKey(layout: FlowLayout, from: string, key: string): stri
   const at = shelf.indexOf(from);
   switch (key) {
     case "ArrowLeft":
-      return shelf[at - 1] ?? head;
+      return shelf[at - 1] ?? null;
     case "ArrowRight":
-      return shelf[at + 1] ?? pastTheFrame(layout, boxes, lane);
+      return shelf[at + 1] ?? null;
     case "ArrowUp":
       return nearestBy(lane.band[box.row - 1] ?? lane.columns.flatMap((ids) => ids.slice(-1)), boxes, midX(box), midX);
     case "ArrowDown":
@@ -1124,19 +944,4 @@ export function boxAfterKey(layout: FlowLayout, from: string, key: string): stri
     default:
       return null;
   }
-}
-
-/** The nearest box still drawn that holds `id`, walking up the layout it was drawn in. */
-export function enclosingHead(before: FlowLayout, after: FlowLayout, id: string): string | null {
-  const boxes = new Map(before.boxes.map((box) => [box.id, box]));
-  const drawn = new Set(after.boxes.map((box) => box.id));
-  let group = boxes.get(id)?.group ?? null;
-  while (group !== null) {
-    const head = boxId(group);
-    if (drawn.has(head)) {
-      return head;
-    }
-    group = boxes.get(head)?.group ?? null;
-  }
-  return null;
 }

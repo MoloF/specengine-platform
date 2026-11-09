@@ -39,7 +39,8 @@ const SHARED = [
 describe("the followed types (AC-13)", () => {
   it("by default: the twelve shared types in the model's order, then the corpus's unknown ones by name, outgoing", async () => {
     const view = await graph({ ref: "MEC-TIDES" });
-    expect(view.types).toEqual([...SHARED, "precedes"].map((type) => ({ type, direction: "out" })));
+    // `follows`: the pilot station's flow links, written in its files (writer-studio's mocks).
+    expect(view.types).toEqual([...SHARED, "follows", "precedes"].map((type) => ({ type, direction: "out" })));
   });
 
   it("under impact: the impact table in its order and directions", async () => {

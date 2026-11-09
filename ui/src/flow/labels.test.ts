@@ -58,21 +58,59 @@ describe("the Flow's words in Russian (LG-3)", () => {
     ]);
   });
 
-  it("words lanes, steps, starts, holdings and the lines from ru.ts, English unchanged", () => {
+  it("words lanes, starts, holdings and the lines from ru.ts, English unchanged", () => {
     expect([flow.stageWords(null, ruT), flow.stageWords("draft", ruT)]).toEqual([ru.flow.noStage, "draft"]);
-    expect([flow.stepWords(null, ruT), flow.stepWords(2, ruT)]).toEqual([ru.flow.stepUnknown, ru.flow.step.replace("{{n}}", "3")]);
     expect([flow.startWord(false, ruT), flow.startWord(true, ruT)]).toEqual([ru.flow.start, ru.flow.entry]);
     expect([flow.holdsText(1, ruT), flow.holdsText(3, ruT), flow.holdsText(5, ruT)]).toEqual([
       ru.flow.holds_one.replace("{{count}}", "1"),
       ru.flow.holds_few.replace("{{count}}", "3"),
       ru.flow.holds_many.replace("{{count}}", "5"),
     ]);
-    expect([flow.noCardsYet(ruT), flow.lastReadWords(ruT), flow.statesHiddenWords(ruT), flow.noStagesYet(ruT)]).toEqual([ru.flow.noCardsYet, ru.flow.lastRead, ru.flow.statesHidden, ru.flow.noStagesYet]);
-    expect([flow.readCount({ nodes: [], edges: [] }, enT), flow.notDrawnLine(2, 9, enT), flow.confirmedLine(1, 4, enT), flow.withGapsText(1, enT)]).toEqual([
-      "0 boxes, 0 edges",
-      "2 of 9 boxes not drawn: close a group, or read the List",
+    expect([flow.lastReadWords(ruT), flow.statesHiddenWords(ruT)]).toEqual([ru.flow.lastRead, ru.flow.statesHidden]);
+    expect([flow.notDrawnLine(2, 9, enT), flow.confirmedLine(1, 4, enT), flow.withGapsText(1, enT)]).toEqual([
+      "2 of 9 boxes not drawn: choose a stage, enter a group, or read the List",
       "1 of 4 confirmed",
       "1 with gaps",
     ]);
+  });
+});
+
+// docs/features/writer-studio.md: the studio's words and keys, the hand-off's title.
+describe("the studio's words (writer-studio)", () => {
+  const edge = { from: "A", to: "B", type: "alpha_link", kind: null, when: null, count: 1, path: "docs/a.md", line: 3 };
+
+  it("keys an arrow by from, to, type and kind: one text, kind null apart from any kind", () => {
+    expect(flow.edgeKeyOf({ ...edge, kind: "repeat" })).toEqual({ from: "A", to: "B", type: "alpha_link", kind: "repeat" });
+    expect(flow.edgeKeyText(flow.edgeKeyOf(edge))).toBe(flow.edgeKeyText({ from: "A", to: "B", type: "alpha_link", kind: null }));
+    expect(flow.edgeKeyText(flow.edgeKeyOf(edge))).not.toBe(flow.edgeKeyText({ from: "A", to: "B", type: "alpha_link", kind: "repeat" }));
+  });
+
+  it("words a List row `<type> <to>, <title>[, <kind>][, when <when>][, ×<count>]`, never `path:line`", () => {
+    expect(flow.edgeRowWords(edge, null, enT)).toBe("alpha_link B");
+    expect(flow.edgeRowWords({ ...edge, kind: "alternative", when: "after dark", count: 3 }, "The berth", enT)).toBe("alpha_link B, The berth, alternative, when after dark, ×3");
+    expect(flow.edgeRowWords({ ...edge, when: "x" }, null, ruT)).toBe(`alpha_link B, ${ru.flow.edgeWhen.replace("{{when}}", "x")}`);
+    expect(flow.edgeRowWords(edge, "T", enT)).not.toContain("docs/a.md");
+  });
+
+  it("titles a gap's card by its code and members, cut past 120 characters to the first and a count", () => {
+    expect(flow.handTitle("cycle-no-repeat", ["MEC-FAIRWAY", "MEC-PILOTAGE"], enT)).toBe("Gap cycle-no-repeat: MEC-FAIRWAY + MEC-PILOTAGE");
+    const many = Array.from({ length: 12 }, (_, index) => `MEC-LONG-NAME-${String(index)}`);
+    expect(flow.handTitle("trap-cycle", many, enT)).toBe("Gap trap-cycle: MEC-LONG-NAME-0 and 11 more");
+    expect(flow.handTitle("trap-cycle", many, ruT)).toBe(ru.flow.handTitleCut_many.replace("{{code}}", "trap-cycle").replace("{{first}}", "MEC-LONG-NAME-0").replace("{{count}}", "11"));
+  });
+
+  it("reads `-` as No stage and any other asked value as served; a stage of 0 nodes says why", () => {
+    expect([flow.askedStageWords("-", enT), flow.askedStageWords("quayside", enT)]).toEqual(["No stage", "quayside"]);
+    expect([flow.emptyStageWords("-", enT), flow.emptyStageWords("quayside", enT)]).toEqual(["Every step here has a stage.", "No step here carries quayside."]);
+  });
+
+  it("says what a read left out, in the catalog's words; nothing, nothing", () => {
+    expect(flow.leftOutWords({ generated: 1, tier3: 2 }, enT)).toBe("Left out: 1 generated, 2 archived");
+    expect(flow.leftOutWords({ generated: 0, tier3: 0 }, enT)).toBeNull();
+  });
+
+  it("hands a measured row's items alone", () => {
+    expect(flow.isMeasured(aFlowGap("cycle-no-repeat", [["A", "B"]]))).toBe(true);
+    expect(flow.isMeasured(aFlowGap("no-start", [], { state: "not_configured", count: null }))).toBe(false);
   });
 });

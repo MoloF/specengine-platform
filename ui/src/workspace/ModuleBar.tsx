@@ -4,10 +4,11 @@ import { useTranslate } from "../i18n";
 import { ALL_MODULES } from "./choice";
 
 /**
- * The module bar (docs/features/workspaces.md "The UI"): on the Spec tree and the Flow alone, and
- * only when the project serves a module; none is made up from the tree (D10). All modules, then each
- * module's title in served order, the chosen one pressed. A choice roots both views there; the bar
- * stays whatever the rooted read answers, so another module can be chosen.
+ * The module bar (docs/features/workspaces.md "The UI"): on the Spec tree alone, and only when the
+ * project serves a module; none is made up from the tree (D10). All modules, then each module's
+ * title in served order, the chosen one pressed. A choice roots the tree there and is Flow's default
+ * too; the bar stays whatever the rooted read answers, so another module can be chosen. Flow's own
+ * bar, of links, is in its places pane (docs/features/writer-studio.md D4).
  */
 export function ModuleBar({
   modules,

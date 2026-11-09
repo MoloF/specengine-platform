@@ -588,12 +588,14 @@ export class MockClient implements SpecEngineClient {
     return structuredClone(this.traced(project, options));
   }
 
-  /** `spec trace` over the project's corpus, flow and queue. */
+  /** `spec trace` over the project's corpus, flow and queue; under a REF its lanes by the scope's own walk (`docs/canon/spec-trace.md` "The read"). */
   private traced(project: string, options: TraceOptions): TraceDocument {
     const { corpus } = this.project(project);
-    const walked = flowOf(project, corpus, this.scenario, {}).nodes;
+    const flow = mockFlowOf(project, corpus, this.scenario);
+    const rooted = options.ref !== undefined && flow.documents.some((document) => document.name === options.ref);
+    const walked = flowOf(project, corpus, this.scenario, rooted ? { root: options.ref } : {}).nodes;
     return traceOf(this.board(project), options, {
-      flow: mockFlowOf(project, corpus, this.scenario),
+      flow,
       corpus,
       distance: new Map(walked.map((node) => [node.id ?? node.path, node.distance])),
       settled: this.settled(project),

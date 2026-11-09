@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { IMPLICIT_SECTIONS } from "../test/builders";
-import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash } from "./routes";
+import { ALL_SECTIONS, flowHash, homeHash, isBareFlow, navOf, parseFlowPlace, parseHash, sectionHash, type FlowPlace } from "./routes";
 import { ru } from "../i18n/ru";
 import { enT, ruT } from "../test/text";
 import { aboutOf, isSectionId, sectionLabel, SECTIONS } from "./sections";
@@ -122,5 +122,86 @@ describe("the sections in Russian (LG-3)", () => {
       expect([id, sectionLabel(id, ruT), aboutOf(id, ruT)]).toEqual([id, ru.app.sections[id].label, ru.app.sections[id].about]);
     }
     expect(navOf("p", ["inbox"], ruT).map(({ label }) => label)).toEqual([ru.app.overview, ru.app.sections.inbox.label]);
+  });
+});
+
+// ST-1 of docs/features/writer-studio.md: Flow's place in the hash, `#/<p>/flow[/<name>][?module=&scope=&stage=&edge=]`.
+describe("Flow's place (ST-1 of writer-studio)", () => {
+  const read = (hash: string): FlowPlace => {
+    const route = parseHash(hash);
+    if (route.type !== "section" || route.section !== "flow") {
+      throw new Error(`${hash} is no Flow route`);
+    }
+    return parseFlowPlace(route);
+  };
+
+  const MODULES = [null, "", "berths"];
+  const SCOPES = [null, "DOM-BERTHS", "docs/a b/c#d?e&f=g,h+i%j.md"];
+  const STAGES = [null, "-", "quayside", "a b+c&d=e/f?#,%", "\u043f\u0435\u0447\u0430\u0442\u044c"];
+  const SELECTS: FlowPlace["select"][] = [
+    null,
+    { node: "MEC-MOORING" },
+    { node: "docs/x y.md" },
+    { edge: { from: "A", to: "B", type: "follows", kind: null } },
+    { edge: { from: "A/B?c", to: "C D&e=f", type: "uses", kind: "a,b" } },
+  ];
+
+  it("round-trips every place: modules, scopes, stages and selections crossed, 225 of them (M3: edge parts unencoded)", () => {
+    let count = 0;
+    for (const module of MODULES) {
+      for (const scope of SCOPES) {
+        for (const stage of STAGES) {
+          for (const select of SELECTS) {
+            const place: FlowPlace = { module, scope, stage, select };
+            expect(read(flowHash("harbor-sim", place))).toEqual(place);
+            count += 1;
+          }
+        }
+      }
+    }
+    expect(count).toBeGreaterThanOrEqual(200);
+  });
+
+  it("writes the keys in order, each only when set, the name as the path segment", () => {
+    expect(flowHash("harbor-sim", { module: "", scope: "DOM-BERTHS", stage: "quayside", select: { node: "MEC-MOORING" } })).toBe("#/harbor-sim/flow/MEC-MOORING?module=&scope=DOM-BERTHS&stage=quayside");
+    expect(flowHash("harbor-sim", { module: "", scope: null, stage: null, select: { edge: { from: "MEC-FAIRWAY", to: "DOM-BERTHS", type: "follows", kind: "alternative" } } })).toBe("#/harbor-sim/flow?module=&edge=MEC-FAIRWAY,DOM-BERTHS,follows,alternative");
+    expect(flowHash("harbor-sim", { module: null, scope: null, stage: null, select: null })).toBe("#/harbor-sim/flow");
+    expect(flowHash("a b", { module: null, scope: "x,y", stage: "-", select: null })).toBe("#/a%20b/flow?scope=x%2Cy&stage=-");
+  });
+
+  it("reads the old form as a selection alone (M2)", () => {
+    expect(read("#/harbor-sim/flow/MEC-MOORING")).toEqual({ module: null, scope: null, stage: null, select: { node: "MEC-MOORING" } });
+    expect(isBareFlow({ id: null })).toBe(true);
+    expect(isBareFlow({ id: null, query: "module=" })).toBe(false);
+    expect(isBareFlow({ id: "MEC-MOORING" })).toBe(false);
+  });
+
+  it("decodes with decodeURIComponent alone: a `+` is no space (M1)", () => {
+    expect(read("#/p/flow?scope=a+b&stage=c%20d").scope).toBe("a+b");
+    expect(read("#/p/flow?scope=a+b&stage=c%20d").stage).toBe("c d");
+  });
+
+  it("lets a name win over an edge, the first of a repeated key, and drops what does not read", () => {
+    expect(read("#/p/flow/N?edge=A,B,t").select).toEqual({ node: "N" });
+    expect(read("#/p/flow?scope=A&scope=B").scope).toBe("A");
+    expect(read("#/p/flow?scope=&stage=").scope).toBeNull();
+    expect(read("#/p/flow?scope=&stage=").stage).toBeNull();
+    expect(read("#/p/flow?module=").module).toBe("");
+    expect(read("#/p/flow?scope=%E0%A4%A&stage=s").scope).toBeNull();
+    expect(read("#/p/flow?scope=%E0%A4%A&stage=s").stage).toBe("s");
+    expect(read("#/p/flow?other=1&scope=S&module").scope).toBe("S");
+    expect(read("#/p/flow?module").module).toBeNull();
+    for (const edge of ["A,B", "A,,t", "A,B,t,k,x", "A,B,%E0%A4%A"]) {
+      expect([edge, read(`#/p/flow?edge=${edge}`).select]).toEqual([edge, null]);
+    }
+    expect(read("#/p/flow?edge=A,B,t,").select).toBeNull();
+    expect(read("#/p/flow?edge=A,B,t&edge=C,D,u").select).toEqual({ edge: { from: "A", to: "B", type: "t", kind: null } });
+  });
+
+  it("splits the first raw `?` for Flow alone: any other section keeps it in its name", () => {
+    expect(parseHash("#/p/tree/A?B")).toEqual({ type: "section", project: "p", section: "tree", id: "A?B" });
+    expect(parseHash("#/p/flow/A?scope=B")).toEqual({ type: "section", project: "p", section: "flow", id: "A", query: "scope=B" });
+    expect(parseHash("#/p/flow?scope=B?C")).toEqual({ type: "section", project: "p", section: "flow", id: null, query: "scope=B?C" });
+    expect(parseHash("#/p/inbox/PR-1")).toEqual({ type: "section", project: "p", section: "inbox", id: "PR-1" });
   });
 });

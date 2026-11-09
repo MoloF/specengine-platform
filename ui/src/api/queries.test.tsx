@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
-import { act, render, waitFor } from "@testing-library/react";
+import { act, render, renderHook, waitFor } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { aBundle, aCard, aCardList, aCardRow, aCheckReport, aGraphView, aHealthReport, anEntry, aProposal, aSearchResults, aTaskPackage, aTreeView } from "../test/builders";
 import { argsOf, STAGED_AT, stubClient, type StubClient } from "../test/stubClient";
@@ -15,8 +16,10 @@ import {
   useCards,
   useCardWrite,
   useCheck,
-  useFlow,
-  useFlowGroups,
+  flowForm,
+  useFlowRead,
+  useScopeNode,
+  useScopeStages,
   useGraph,
   useHealth,
   useIdentity,
@@ -30,8 +33,6 @@ import {
   useTasks,
   useTeam,
   useTrace,
-  useTraceLanes,
-  useTraceSummary,
   useTree,
 } from "./queries";
 
@@ -142,8 +143,8 @@ function EveryRead() {
   useSearch("alpha", { query: "q" });
   useBundle("alpha", { node_ids: ["R-1"] }, true);
   useGraph("alpha", { ref: "R-1" });
-  useFlow("alpha");
-  useFlowGroups("alpha", ["G-1"], new Set(["G-1"]));
+  useFlowRead("alpha", flowForm(null, null));
+  useFlowRead("alpha", flowForm("G-1", null));
   useTasks("alpha");
   useCachedTasks("beta");
   useTask("alpha", "T-0001");
@@ -152,57 +153,75 @@ function EveryRead() {
   return null;
 }
 
-describe("the flow's reads (flow-canvas)", () => {
-  const OPEN = new Set(["G-1", "G-2"]);
-
-  function FlowReads() {
-    useFlow("alpha");
-    useFlowGroups("alpha", ["G-1", "G-2"], OPEN);
-    return null;
-  }
-
-  it("keys a read by [flow, project, root, depth, trace], root null at the top", () => {
-    expect(queryKeys.flow("alpha", { depth: 0 })).toEqual(["flow", "alpha", null, 0, false]);
-    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1, trace: true })).toEqual(["flow", "alpha", "G-1", 1, true]);
+describe("the flow's reads (writer-studio D2)", () => {
+  it("keys a read by [flow, project, root, depth, trace, stage], root null at the top, stage null for all", () => {
+    expect(queryKeys.flow("alpha", { depth: 0 })).toEqual(["flow", "alpha", null, 0, false, null]);
+    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1, trace: true })).toEqual(["flow", "alpha", "G-1", 1, true, null]);
+    expect(queryKeys.flow("alpha", { root: "G-1", stage: "-", trace: true })).toEqual(["flow", "alpha", "G-1", null, true, "-"]);
   });
 
-  it("always carries a depth: the top at 0, each group's root at 1, never a whole-flow read (AC-02)", async () => {
-    const client = stubClient();
-    render(
-      <ApiProvider client={client}>
-        <FlowReads />
-      </ApiProvider>,
-    );
-    await waitFor(() => {
-      expect(client.getFlow).toHaveBeenCalledTimes(3);
-    });
-    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([{ depth: 0, trace: true }, { root: "G-1", depth: 1, trace: true }, { root: "G-2", depth: 1, trace: true }]);
+  it("has three forms: the top at depth 0, a scope at depth 1, a stage under its root; never a whole read", () => {
+    expect(flowForm(null, null)).toEqual({ depth: 0, trace: true });
+    expect(flowForm(null, "gather")).toEqual({ depth: 0, trace: true });
+    expect(flowForm("G-1", null)).toEqual({ root: "G-1", depth: 1, trace: true });
+    expect(flowForm("G-1", "gather")).toEqual({ root: "G-1", stage: "gather", trace: true });
   });
 
-  it("reads a group only while it is open; closing and reopening reads nothing", async () => {
+  it("reads a picture, a scope's lanes and its node once; a key changing back reads nothing it holds", async () => {
     const client = stubClient();
-    function Asked({ open }: { open: ReadonlySet<string> }) {
-      useFlowGroups("alpha", ["G-1", "G-2"], open);
+    function Reads({ root, stage }: { root: string; stage: string | null }) {
+      useFlowRead("alpha", flowForm(root, stage));
+      useScopeStages("alpha", root);
+      useScopeNode("alpha", root);
       return null;
     }
     const queryClient = createQueryClient();
-    const mounted = (open: ReadonlySet<string>) => (
+    const mounted = (root: string, stage: string | null) => (
       <ApiProvider client={client} queryClient={queryClient}>
-        <Asked open={open} />
+        <Reads root={root} stage={stage} />
       </ApiProvider>
     );
-    const { rerender } = render(mounted(new Set(["G-1"])));
+    const { rerender } = render(mounted("G-1", null));
     await waitFor(() => {
       expect(client.getFlow).toHaveBeenCalledTimes(1);
     });
-    expect(client.getFlow.mock.calls[0]?.[1]).toEqual({ root: "G-1", depth: 1, trace: true });
-    rerender(mounted(new Set()));
-    rerender(mounted(new Set(["G-1"])));
-    rerender(mounted(new Set(["G-1", "G-2"])));
+    rerender(mounted("G-1", "gather"));
     await waitFor(() => {
       expect(client.getFlow).toHaveBeenCalledTimes(2);
     });
-    expect(client.getFlow.mock.calls[1]?.[1]).toEqual({ root: "G-2", depth: 1, trace: true });
+    rerender(mounted("G-1", null));
+    rerender(mounted("G-1", "gather"));
+    await waitFor(() => {
+      expect(client.getNode).toHaveBeenCalledTimes(1);
+    });
+    expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([
+      { root: "G-1", depth: 1, trace: true },
+      { root: "G-1", stage: "gather", trace: true },
+    ]);
+    expect(argsOf(client.getTrace)).toEqual([["alpha", { ref: "G-1", summary: true }]]);
+    expect(argsOf(client.getNode)).toEqual([["alpha", "G-1", { with: ["links"] }]]);
+  });
+
+  it("reads nothing while disabled, yet says what is held", async () => {
+    const client = stubClient();
+    const queryClient = createQueryClient();
+    const { result, rerender } = renderHook(({ enabled }: { enabled: boolean }) => useFlowRead("alpha", flowForm(null, null), enabled).data, {
+      initialProps: { enabled: false },
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <ApiProvider client={client} queryClient={queryClient}>
+          {children}
+        </ApiProvider>
+      ),
+    });
+    expect(client.getFlow).not.toHaveBeenCalled();
+    expect(result.current).toBeUndefined();
+    rerender({ enabled: true });
+    await waitFor(() => {
+      expect(result.current).toBeDefined();
+    });
+    rerender({ enabled: false });
+    expect(result.current).toBeDefined();
+    expect(client.getFlow).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -668,7 +687,7 @@ describe("the trace and the clears (docs/features/card-trace.md)", () => {
       useTrace("alpha");
       useTrace("alpha", { ref: "R-1" });
       useTrace("alpha", { stage: "print" });
-      useTraceSummary("alpha");
+      useTrace("alpha", { summary: true });
       useTrace("alpha", { summary: false, stage: "held" }, false);
       return null;
     }
@@ -680,32 +699,6 @@ describe("the trace and the clears (docs/features/card-trace.md)", () => {
     await waitFor(() => {
       expect(argsOf(client.getTrace)).toEqual([["alpha"], ["alpha", { ref: "R-1" }], ["alpha", { stage: "print" }], ["alpha", { summary: true }]]);
     });
-  });
-
-  it("reads a lane only while it is open, by its stage; closing and reopening reads nothing", async () => {
-    const client = stubClient();
-    function Lanes({ open }: { open: ReadonlySet<string> }) {
-      useTraceLanes("alpha", ["gather", "-"], open);
-      return null;
-    }
-    const queryClient = createQueryClient();
-    const mounted = (open: ReadonlySet<string>) => (
-      <ApiProvider client={client} queryClient={queryClient}>
-        <Lanes open={open} />
-      </ApiProvider>
-    );
-    const { rerender } = render(mounted(new Set()));
-    expect(client.getTrace).not.toHaveBeenCalled();
-    rerender(mounted(new Set(["gather"])));
-    await waitFor(() => {
-      expect(client.getTrace).toHaveBeenCalledTimes(1);
-    });
-    rerender(mounted(new Set()));
-    rerender(mounted(new Set(["gather", "-"])));
-    await waitFor(() => {
-      expect(client.getTrace).toHaveBeenCalledTimes(2);
-    });
-    expect(argsOf(client.getTrace)).toEqual([["alpha", { stage: "gather" }], ["alpha", { stage: "-" }]]);
   });
 
   it("a clear goes out as a write, and the list, the card and the trace are read before it settles", async () => {

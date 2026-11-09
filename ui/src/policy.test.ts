@@ -105,9 +105,10 @@ const RUSSIAN_CATALOG = "/src/i18n/ru.ts";
 
 /**
  * The directories whose chrome is all in the catalog (docs/features/ui-languages.md LG-10): their
- * `.tsx` files hold no word of their own. 2b adds `/src/flow/`, RM-0090 the rest.
+ * `.tsx` files hold no word of their own. 2b added `/src/flow/` (docs/features/writer-studio.md
+ * ST-14), RM-0090 the rest.
  */
-const CONVERTED: readonly string[] = ["/src/app/", "/src/palette/", "/src/overview/", "/src/ui/", "/src/workspace/"];
+const CONVERTED: readonly string[] = ["/src/app/", "/src/palette/", "/src/overview/", "/src/ui/", "/src/workspace/", "/src/flow/"];
 
 /** The attributes whose value is read or shown: never a literal word in a converted directory. */
 const SHOWN_ATTRIBUTES: readonly string[] = ["aria-label", "aria-description", "aria-roledescription", "aria-valuetext", "title", "placeholder", "alt"];
@@ -360,13 +361,16 @@ describe("source policy", () => {
     const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
-    const rule = /\bhref=(?!\{(sectionHash|homeHash)\()/;
+    // Flow's place is routes.ts's too (docs/features/writer-studio.md D4): `flowHash`.
+    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash)\()/;
     expect(offending(rule, views)).toEqual([]);
     // The detector itself: a hash spelled by hand is caught, one from routes.ts is not.
     expect(rule.test("<a href={`#/${project}/tasks`}>")).toBe(true);
     expect(rule.test('<a href={"#/" + project}>')).toBe(true);
+    expect(rule.test("<a href={place.href}>")).toBe(true);
     expect(rule.test('<a href={sectionHash(project, "tasks")}>')).toBe(false);
     expect(rule.test("<a href={homeHash(project)}>")).toBe(false);
+    expect(rule.test("<a href={flowHash(project, place)}>")).toBe(false);
   });
 
   it("renders markdown only in src/markdown, raw HTML never interpreted (AC-02 of ui-markdown)", () => {
@@ -736,7 +740,7 @@ describe("source policy", () => {
   it("branches on no rollup, stage or mark word in the Flow, the node's cards or the Board but in their labels.ts (AC-08 of trace-views)", () => {
     const labels = ["/src/flow/labels.ts", "/src/board/labels.ts"];
     const scoped = (path: string) => (path.startsWith("/src/flow/") || path.startsWith("/src/trace/") || path.startsWith("/src/board/")) && !/\.test\.tsx?$/.test(path);
-    expect(Object.keys(sources).filter(scoped)).toEqual(expect.arrayContaining(["/src/trace/CardsBlock.tsx", "/src/trace/TraceBar.tsx", "/src/flow/TimelineView.tsx", "/src/flow/timeline.ts", "/src/board/BoardCard.tsx", ...labels]));
+    expect(Object.keys(sources).filter(scoped)).toEqual(expect.arrayContaining(["/src/trace/CardsBlock.tsx", "/src/trace/TraceBar.tsx", "/src/flow/FlowPlaces.tsx", "/src/flow/FlowView.tsx", "/src/flow/timeline.ts", "/src/board/BoardCard.tsx", ...labels]));
     const outside = (path: string) => !scoped(path) || labels.includes(path);
     const field = "\\.(rollup|stage|mark)\\b";
     // The same two words destructured or passed in: `rollup === "x"` is the same branch as `node.rollup === "x"`.
@@ -908,6 +912,16 @@ describe("languages policy (docs/features/ui-languages.md)", () => {
       }
     }
     expect(found).toEqual([]);
+  });
+
+  it("covers the Flow studio's views: every src/flow/*.tsx is scanned, and a literal word in one is caught (ST-14 of writer-studio)", () => {
+    const flowViews = Object.keys(sources).filter((path) => path.startsWith("/src/flow/") && path.endsWith(".tsx") && !isTestPath(path));
+    expect(flowViews).toEqual(expect.arrayContaining(["/src/flow/FlowView.tsx", "/src/flow/FlowCanvas.tsx", "/src/flow/FlowPanel.tsx", "/src/flow/FlowPlaces.tsx", "/src/flow/FlowList.tsx", "/src/flow/FlowGaps.tsx", "/src/flow/FlowLegend.tsx"]));
+    expect(flowViews.every((path) => CONVERTED.some((directory) => path.startsWith(directory)))).toBe(true);
+    // M29: a literal `Open` restored in a view.
+    const words = (text: string) => literalWords("/src/flow/Probe.tsx", text).map((hit) => hit.replace(/^[^ ]+ /, ""));
+    expect(words("export const A = () => <a href={flowHash(project, place)}>Open</a>;")).toEqual(['text "Open"']);
+    expect(words('export const A = () => <span>{t("flow.openGroup", { name })}</span>;')).toEqual([]);
   });
 
   it("sees each literal form LG-10 forbids and passes keys, data and code (the detector)", () => {

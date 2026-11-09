@@ -17,8 +17,8 @@ import {
   useCheck,
   useGraph,
   useInbox,
-  useFlow,
-  useFlowGroups,
+  flowForm,
+  useFlowRead,
   useLiveQueue,
   useNode,
   useProposal,
@@ -967,17 +967,18 @@ describe("the Bindings tab on the live tail (UI-6 of ui-node-bindings)", () => {
   });
 });
 
-describe("the flow on the live tail (flow-canvas)", () => {
+describe("the flow on the live tail (writer-studio)", () => {
   const FLOW_READS = ["/api/projects/alpha/flow?depth=0&trace=true", "/api/projects/alpha/flow?root=G-1&depth=1&trace=true"];
 
   function FlowReads() {
     useLiveQueue("alpha");
-    useFlow("alpha");
-    useFlowGroups("alpha", ["G-1", "G-2"], new Set(["G-1"]));
+    useFlowRead("alpha", flowForm(null, null));
+    useFlowRead("alpha", flowForm("G-1", null));
+    useFlowRead("alpha", flowForm("G-2", null), false);
     return null;
   }
 
-  it("proposal.applied reads the top and each open group again, a closed one not: a flow read is a read of the spec", async () => {
+  it("proposal.applied reads each picture shown again, one held and not shown not: a flow read is a read of the spec", async () => {
     const fetchStub = stubFetch((url) => (FLOW_READS.includes(url) ? jsonAnswer(200, aFlowView([], [])) : errorAnswer(404, `no route ${url}`)));
     render(
       <ApiProvider client={new HttpClient()} queryClient={createQueryClient()}>
@@ -1101,7 +1102,7 @@ describe("the cards on the live tail (docs/features/board-ui.md \"Rules and edge
     useCard("alpha", "C-0001");
     useCard("alpha", "C-0002");
     useTrace("alpha");
-    useFlow("alpha");
+    useFlowRead("alpha", flowForm(null, null));
     useInbox("alpha");
     useTasks("alpha");
     return outside === null ? null : <p>changed outside</p>;

@@ -1,6 +1,6 @@
-import type { FlowEdge, FlowNode, FlowView } from "../api/types";
-import type { FlowInput, FlowLayout } from "../flow/layout";
-import { aFlowEdge, aFlowNode, aFlowView } from "./builders";
+import type { FlowEdge, FlowNode, FlowView, TraceStage, TreeNode } from "../api/types";
+import type { FlowLayout } from "../flow/layout";
+import { aFlowEdge, aFlowNode, aFlowView, aNode, aTrace, aTreeView } from "./builders";
 import { stubClient } from "./stubClient";
 
 // Flows for the Flow's tests: reads as a daemon serves them, on invented names and types. The types
@@ -23,9 +23,45 @@ export function flowClient(top: FlowView, groups: Record<string, FlowView> = {})
   return client;
 }
 
-/** A group's read: the group itself, its children, the edges among them. */
-export function aGroupRead(group: string, nodes: FlowNode[], edges: FlowEdge[] = [], fields: Partial<FlowView> = {}): FlowView {
-  return aFlowView([aFlowNode({ id: group, distance: null }), ...nodes.map((node) => ({ ...node, group }))], edges, { root: group, depth: 1, ...fields });
+/** What a studio stub answers: the top, each scope's read by its root, each scope's lanes, the tree a seek reads. */
+export interface StudioReads {
+  top: FlowView;
+  scopes?: Record<string, FlowView>;
+  lanes?: Record<string, TraceStage[]>;
+  tree?: TreeNode[];
+}
+
+/**
+ * A stub client answering the studio's reads (docs/features/writer-studio.md "The reads"): the top
+ * with no root, a scope's read by its root, a stage of a scope cut from it after the fold as
+ * `spec flow --stage` cuts (its own stage, `-` a step with none, then the edges whose two ends stay),
+ * a scope's lanes for `trace REF --summary`.
+ */
+export function studioClient(reads: StudioReads) {
+  const client = stubClient();
+  client.getFlow.mockImplementation((_project, options) => {
+    if (options.root === undefined) {
+      return Promise.resolve(structuredClone(reads.top));
+    }
+    const scope = reads.scopes?.[options.root] ?? aFlowView([aFlowNode({ id: options.root, distance: null })], [], { root: options.root, depth: 1 });
+    if (options.stage === undefined) {
+      return Promise.resolve(structuredClone(scope));
+    }
+    const nodes = scope.nodes.filter((node) => (options.stage === "-" ? node.stage === null && node.holds === 0 && node.distance !== null : node.stage === options.stage));
+    const kept = new Set(nodes.map((node) => node.id ?? node.path));
+    return Promise.resolve(structuredClone({ ...scope, depth: null, nodes, edges: scope.edges.filter((edge) => kept.has(edge.from) && kept.has(edge.to)) }));
+  });
+  client.getTrace.mockImplementation((_project, options) => Promise.resolve(aTrace([], { ref: options?.ref ?? null, stages: structuredClone(reads.lanes?.[options?.ref ?? ""] ?? []) })));
+  // A node's read: its title and kind as the flow reads serve them.
+  client.getNode.mockImplementation((_project, ref) => {
+    const held = [reads.top, ...Object.values(reads.scopes ?? {})].flatMap((view) => view.nodes).find((candidate) => (candidate.id ?? candidate.path) === ref);
+    return Promise.resolve({ ref, reason: null, notes: [], nodes: [aNode({ id: ref, title: held?.title ?? null, kind: held?.kind ?? null })] });
+  });
+  if (reads.tree !== undefined) {
+    const tree = reads.tree;
+    client.getTree.mockImplementation(() => Promise.resolve(aTreeView(structuredClone(tree))));
+  }
+  return client;
 }
 
 /** The same small step-by-step flow read: a line of boxes with `distance` 0, 1, 2. */
@@ -47,7 +83,7 @@ function sequence(seed: number): (limit: number) => number {
  * 30 off the walk, 40 edges against it. Forward edges reach the next column, some skip one or two,
  * and every 5th box off the walk feeds a step while the others are used by two.
  */
-export function flow200(): FlowInput {
+export function flow200(): FlowView {
   const next = sequence(20_260_101);
   const widths = [2, 6, 10, 14, 18, 22, 24, 22, 18, 14, 12, 8];
   const columns: string[][] = [];
@@ -106,7 +142,7 @@ export function flow200(): FlowInput {
     seen.add(key);
     return true;
   });
-  return { top: aFlowView(nodes, unique), groups: new Map(), open: new Set() };
+  return aFlowView(nodes, unique);
 }
 
 /** The crossings of forward edges inside the gaps: two curves over one gap whose order swaps. */
@@ -120,7 +156,7 @@ export function forwardCrossings(layout: FlowLayout): number {
       const left = laid.points[index];
       const right = laid.points[index + 1];
       if (left !== undefined && right !== undefined) {
-        const key = `${laid.group ?? ""}:${String(left.x)}`;
+        const key = String(left.x);
         inGap.set(key, [...(inGap.get(key) ?? []), { from: left.y, to: right.y }]);
       }
     }

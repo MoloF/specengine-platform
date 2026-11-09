@@ -51,6 +51,17 @@ export const BASIN_NAME_DECOMPOSED =
 
 /** One unbroken 300-character token, as a loader error prints it. */
 export const LONG_TOKEN = "tide_table_sample_v3".padEnd(300, "k7Qm2Xr9Lp4Zt8Wn");
+/**
+ * The pilots' log (docs/features/writer-studio.md "Mocks (`ui/src/mocks/`)"): a 160-character title, a body past 8 KB,
+ * and a 300-character token no line break can split, so the panel's width holds against both.
+ */
+export const HARBOUR_LOG_TITLE = "Harbour log: every call, boarding, passage and berth written down in one running record, kept by the pilot station for each ship from first sighting to leaving.";
+export const HARBOUR_LOG_TOKEN = "pilot_log_entry_v2".padEnd(300, "Qx7Lm3Rp9Zt2Wn5");
+/** The pilot station's files: each step's `follows` link is written in its front matter, as the flow reads it. */
+const PILOT_CALL_FILE = "docs/spec/pilots/call.md";
+const HARBOUR_LOG_FILE = "docs/spec/pilots/harbour-log.md";
+const PILOT_RETURN_FILE = "docs/spec/pilots/return.md";
+const HARBOUR_LOG_ENTRIES = Array.from({ length: 64 }, (_, entry) => `- Entry ${String(entry + 1).padStart(2, "0")}: the pilot boarded at the outer mark, logged the draught, the tide and the berth asked for, then handed over at the quay.`);
 
 export const TIDE_FILE = "docs/spec/tides/tide-cycle.md";
 /** The ID-less document: the tree names it by its path. */
@@ -495,6 +506,52 @@ function harborCorpus(): MockCorpus {
       ],
       sections: [{ id: "RULE-PILOT-REQ", kind: "rule", title: "Pilot required above 120 m" }],
     }),
+    // The pilot station (docs/features/writer-studio.md "Mocks (`ui/src/mocks/`)"): its steps stand in landfall,
+    // passage and quayside, so each of those stages spans two groups.
+    specFile({
+      path: "docs/spec/pilots/README.md",
+      id: "DOM-PILOTS",
+      kind: "domain",
+      title: "Pilot station",
+      status: "accepted",
+      parent: "DOM-HARBOR",
+      lines: [...frontMatter({ id: "DOM-PILOTS", kind: "domain", status: "accepted", parent: "DOM-HARBOR" }), "", "# Pilot station", "", "The station sends a pilot to each ship that calls, and takes the pilot back once the ship is moored."],
+    }),
+    specFile({
+      path: PILOT_CALL_FILE,
+      id: "MEC-PILOT-CALL",
+      kind: "mechanic",
+      title: "Pilot call",
+      status: "draft",
+      parent: "DOM-PILOTS",
+      lines: [...frontMatter({ id: "MEC-PILOT-CALL", kind: "mechanic", status: "draft", parent: "DOM-PILOTS", links: "{follows: [RULE-SPRING-WINDOW]}" }), "", "# Pilot call", "", "A ship inside the spring window calls the station on the harbour channel and waits at the outer mark."],
+    }),
+    specFile({
+      path: HARBOUR_LOG_FILE,
+      id: "MEC-HARBOUR-LOG",
+      kind: "mechanic",
+      title: HARBOUR_LOG_TITLE,
+      status: "draft",
+      parent: "DOM-PILOTS",
+      lines: [
+        ...frontMatter({ id: "MEC-HARBOUR-LOG", kind: "mechanic", status: "draft", parent: "DOM-PILOTS", links: "{follows: [MEC-PILOT-CALL]}" }),
+        "",
+        `# ${HARBOUR_LOG_TITLE}`,
+        "",
+        `Each record carries a sample such as ${HARBOUR_LOG_TOKEN} for the reader to check.`,
+        "",
+        ...HARBOUR_LOG_ENTRIES,
+      ],
+    }),
+    specFile({
+      path: PILOT_RETURN_FILE,
+      id: "MEC-PILOT-RETURN",
+      kind: "mechanic",
+      title: "Pilot return",
+      status: "draft",
+      parent: "DOM-PILOTS",
+      lines: [...frontMatter({ id: "MEC-PILOT-RETURN", kind: "mechanic", status: "draft", parent: "DOM-PILOTS", links: "{follows: [MEC-MOORING]}" }), "", "# Pilot return", "", "Once the ship is moored the pilot goes back to the station on the launch."],
+    }),
     specFile({
       path: WEATHER_DECISION_FILE,
       id: WEATHER_DECISION,
@@ -682,6 +739,10 @@ function harborCorpus(): MockCorpus {
     treeNotes: [],
     documents,
     links: [
+      // The pilot station's flow links (docs/features/writer-studio.md "Mocks (`ui/src/mocks/`)"): a node's links agree with the edges the flow draws.
+      link({ type: "follows", origin: frontmatter, written: "RULE-SPRING-WINDOW", path: PILOT_CALL_FILE, line: linkAt(PILOT_CALL_FILE, "follows"), to: "RULE-SPRING-WINDOW" }),
+      link({ type: "follows", origin: frontmatter, written: "MEC-PILOT-CALL", path: HARBOUR_LOG_FILE, line: linkAt(HARBOUR_LOG_FILE, "follows"), to: "MEC-PILOT-CALL" }),
+      link({ type: "follows", origin: frontmatter, written: "MEC-MOORING", path: PILOT_RETURN_FILE, line: linkAt(PILOT_RETURN_FILE, "follows"), to: "MEC-MOORING" }),
       link({ type: "depends_on", origin: frontmatter, written: "DOM-BERTHS", path: TIDE_FILE, line: linkAt(TIDE_FILE, "depends_on:"), to: "DOM-BERTHS" }),
       link({
         type: "depends_on",

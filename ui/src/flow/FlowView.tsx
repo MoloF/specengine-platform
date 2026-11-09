@@ -1,14 +1,15 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { useFlow, useFlowGroups, useTraceSummary, useTreeOnDemand } from "../api/queries";
-import type { FlowNode, FlowView as FlowAnswer, TreeNode } from "../api/types";
-import { pushHash } from "../app/location";
+import { flowForm, useFlowRead, useHeldHolder, useScopeNode, useScopeStages, useTopOnDemand, useTreeOnDemand } from "../api/queries";
+import type { CardWrite, FlowGap, FlowNode, FlowView as FlowAnswer, WorkspaceModule } from "../api/types";
+import { pushHash, replaceHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
-import { sectionHash } from "../app/routes";
-import { aboutOf } from "../app/sections";
+import { flowHash, isBareFlow, parseFlowPlace, sectionHash, type FlowEdgeKey, type FlowPlace } from "../app/routes";
+import { aboutOf, sectionLabel } from "../app/sections";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { NewCardDialog, type NewCardPreset } from "../board/CardDialogs";
 import { nodeName } from "../graph/layout";
-import { leftOutText } from "../tree/LinksPanel";
+import { useTranslate } from "../i18n";
 import { useAnnounce } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -16,34 +17,29 @@ import { hasModifier, isTextField } from "../ui/keys";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
-import { useRetryFocus } from "../ui/useRetryFocus";
 import type { BoxCommand, Centring } from "./FlowCanvas";
-import { FlowDetails } from "./FlowDetails";
-import { FlowGaps, GapsClear, recallGapsHidden, rememberGapsHidden } from "./FlowGaps";
+import { FlowGaps, GapsClear } from "./FlowGaps";
 import { FlowLegend } from "./FlowLegend";
-import { FlowList } from "./FlowList";
-import { useTranslate } from "../i18n";
-import { allClear, namedByRows, notDrawnLine, readCount, statesHiddenWords, typesOf } from "./labels";
-import { boxId, isGroup, layoutFlow, readsOf, type FlowBox, type FlowInput } from "./layout";
-import { TimelineView } from "./TimelineView";
-import { ALL_STAGES, stageInForce, stageOptions, withoutStates, type StageOption } from "./timeline";
+import { FlowList, type ListPlaces } from "./FlowList";
+import { BoxView, EdgeView, ScopeView, type ScopeShown } from "./FlowPanel";
+import { FlowPlaces, type GroupLink, type StagesShown } from "./FlowPlaces";
+import { allClear, askedStageWords, boxWords, edgeKeyOf, edgeKeyText, emptyStageWords, handTitle, leftOutWords, namedByRows, namesDocuments, notDrawnLine, stageWords, statesHiddenWords, typesOf } from "./labels";
+import { isGroup, layoutFlow, type FlowBox, type LaidEdge } from "./layout";
+import { stageAsked, stageKey, withoutStates } from "./timeline";
 
 /** The canvas and its drawing library load with the first answer drawn, not with the app. */
 const FlowCanvas = lazy(() => import("./FlowCanvas").then((module) => ({ default: module.FlowCanvas })));
 
+export type FlowTab = "canvas" | "list";
 
-export type FlowTab = "canvas" | "list" | "timeline";
-
-/** What the Shell keeps per project for this page's life; null: nothing chosen yet. */
+/**
+ * What the Shell keeps per project for the page's life: the tab, and the last place, which stands in
+ * for a bare `#/<p>/flow` on entry (docs/features/writer-studio.md "State, client, tokens"). The hash
+ * is the store; this replaces nothing else.
+ */
 export interface FlowState {
   tab: FlowTab | null;
-  /** The module root the open groups were read under, null for the whole project: another root's groups never reopen. */
-  root: string | null;
-  open: readonly string[] | null;
-  /** The stage filter's value (src/flow/timeline.ts). */
-  stage: string;
-  /** The Timeline's open lanes, by `stageKey`. */
-  lanes: readonly string[];
+  place: FlowPlace | null;
 }
 
 export interface FlowMemory {
@@ -57,745 +53,943 @@ export const NO_FLOW_MEMORY: FlowMemory = { recall: () => undefined, remember: (
 /** Under this width the List comes first. */
 const NARROW = "(max-width: 48rem)";
 
-/** jsdom has no `matchMedia`: never narrow there. */
-function isNarrow(): boolean {
-  return typeof window.matchMedia === "function" && window.matchMedia(NARROW).matches;
-}
+/** Under this width the panes stack, the page scrolls and the wheel with it (R11). */
+const STACKED = "(max-width: 63.99rem)";
 
-/** A sole top group starts open: it is the whole picture, and folded it would say nothing. */
-function soleGroupOf(top: FlowAnswer | undefined): string[] {
-  const groups = (top?.nodes ?? []).filter(isGroup);
-  return groups.length === 1 ? groups.map(nodeName) : [];
-}
-
-/** Whether a known box is a group to open. */
-function isClosedBox(node: FlowNode | undefined): boolean {
-  return node !== undefined && isGroup(node);
-}
-
-/** A name's `parent` chain in the tree, top down, the name itself left out; null when no row holds it. */
-function chainOf(rows: readonly TreeNode[], name: string): string[] | null {
-  const byName = new Map(rows.map((row) => [row.id ?? row.path, row]));
-  let at = byName.get(name);
-  if (at === undefined) {
-    return null;
-  }
-  const chain: string[] = [];
-  while (at !== undefined && at.parent !== null && !chain.includes(at.parent)) {
-    chain.unshift(at.parent);
-    at = byName.get(at.parent);
-  }
-  return chain;
-}
-
-/** A box of a read, and whether it sits in a group's lane. */
-interface ShownBox {
-  node: FlowNode;
-  inLane: boolean;
-}
-
-/** A name to bring into the picture: one object per asking, so a gap item can ask again. */
-interface Seek {
-  name: string;
-}
-
-/** What the on-demand tree said for a seek. */
-interface Chain {
-  seek: Seek;
-  /** Top down; null: the tree holds no such name. */
-  names: string[] | null;
-}
-
-/** Why the tree could not be read for a seek. */
-interface ChainFailure {
-  seek: Seek;
-  message: string;
-}
-
-/** The box a panel shows: one of the reads shown; a name whose group was closed keeps its panel, its read still in hand. */
-function panelBox(name: string | null, nodes: ReadonlyMap<string, ShownBox>, answers: ReadonlyMap<string, FlowAnswer>): ShownBox | undefined {
-  if (name === null) {
-    return undefined;
-  }
-  const shown = nodes.get(name);
-  if (shown !== undefined) {
-    return shown;
-  }
-  for (const answer of answers.values()) {
-    const node = answer.nodes.find((candidate) => nodeName(candidate) === name && candidate.group !== null);
-    if (node !== undefined) {
-      return { node, inLane: true };
+function subscribeMedia(query: string) {
+  return (listener: () => void) => {
+    if (typeof window.matchMedia !== "function") {
+      return () => undefined;
     }
-  }
-  return undefined;
-}
-
-/** The select over the section: its options are the served lanes', and it compares nothing else. */
-function StageFilter({ value, options, onChange }: { value: string; options: readonly StageOption[]; onChange: (value: string) => void }) {
-  const id = useId();
-  return (
-    <div className="flow-stage-filter">
-      <label className="field-label" htmlFor={id}>
-        Stage
-      </label>
-      <select
-        id={id}
-        className="field"
-        value={value}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </div>
-  );
-}
-
-/** What the reads say besides their boxes: the daemon's notes, each once, what was left out. */
-function TopNotes({ top, notes }: { top: FlowAnswer; notes: readonly string[] }) {
-  const leftOut = leftOutText(top.left_out);
-  return (
-    <>
-      {notes.length > 0 && (
-        <ul className="note-list" aria-label="Notes from the daemon">
-          {notes.map((note, index) => (
-            <li key={`${String(index)}-${note}`}>{note}</li>
-          ))}
-        </ul>
-      )}
-      {leftOut !== null && (
-        <p className="note">
-          <Icon name="info" />
-          <span>{leftOut}</span>
-        </p>
-      )}
-    </>
-  );
-}
-
-/**
- * A group whose read failed: the line in the daemon's words and Retry. A read with no answer loses
- * its error while it retries, so the failure is kept up, and the Retry that has focus with it, until
- * the read settles. A retry that worked takes the button away: `onSettled` then hands focus on.
- */
-function GroupFailure({
-  name,
-  error,
-  fetching,
-  settled,
-  onRetry,
-  onSettled,
-}: {
-  name: string;
-  error: Error | null;
-  fetching: boolean;
-  /** Changes each time the read settles, whatever its answer. */
-  settled: string;
-  onRetry: () => void;
-  onSettled: (name: string) => void;
-}) {
-  const failure = useRetainedFailure(error, fetching);
-  /** What `settled` was when Retry was pressed. */
-  const retriedAt = useRef<string | null>(null);
-  useEffect(() => {
-    if (retriedAt.current === null || retriedAt.current === settled || fetching) {
-      return;
+    const list = window.matchMedia(query);
+    if (typeof list.addEventListener !== "function") {
+      return () => undefined;
     }
-    retriedAt.current = null;
-    if (error === null) {
-      onSettled(name);
-    }
-  });
-  if (failure === null) {
-    return null;
-  }
-  return (
-    <div className="flow-failed">
-      <p className="note" role="alert">
-        <Icon name="alert" />
-        <span>
-          <span className="mono">{name}</span> could not be read: {apiErrorOf(failure).message}
-        </span>
-      </p>
-      <button
-        type="button"
-        className="button"
-        aria-disabled={fetching}
-        onClick={() => {
-          if (!fetching) {
-            retriedAt.current = settled;
-            onRetry();
+    list.addEventListener("change", listener);
+    return () => {
+      list.removeEventListener("change", listener);
+    };
+  };
+}
+
+/** Whether a media query holds; jsdom has no `matchMedia`, so never there. */
+function useMedia(query: string): boolean {
+  const subscribe = useMemo(() => subscribeMedia(query), [query]);
+  return useSyncExternalStore(subscribe, () => typeof window.matchMedia === "function" && window.matchMedia(query).matches);
+}
+
+/** D3: Top's one node is the lens root when it holds documents; else the top stands unrooted. */
+function soleRootOf(top: FlowAnswer): string | null {
+  const [only, ...more] = top.nodes;
+  return only !== undefined && more.length === 0 && isGroup(only) ? nodeName(only) : null;
+}
+
+/** A selection of one place: the name it selects, or the arrow, or nothing. */
+function selectedName(place: FlowPlace): string | null {
+  return place.select !== null && "node" in place.select ? place.select.node : null;
+}
+
+function selectedEdgeKey(place: FlowPlace): FlowEdgeKey | null {
+  return place.select !== null && "edge" in place.select ? place.select.edge : null;
+}
+
+/** A gap handed to the AI: its New card's fields. */
+interface Hand {
+  preset: NewCardPreset;
+  trigger: HTMLElement | null;
+}
+
+/** The studio's top, measured: the shell above it may wrap, so its height is never a constant (R-header). */
+function useStudioTop(studio: { current: HTMLElement | null }) {
+  useLayoutEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const element = studio.current;
+        if (element !== null) {
+          const top = Math.max(0, Math.round(element.getBoundingClientRect().top + window.scrollY));
+          if (element.style.getPropertyValue("--flow-studio-top") !== `${String(top)}px`) {
+            element.style.setProperty("--flow-studio-top", `${String(top)}px`);
           }
-        }}
-      >
-        <Icon name="retry" />
-        <span>
-          {fetching ? "Retrying" : "Retry"} <span className="sr-only">reading {name}</span>
-        </span>
-      </button>
-    </div>
-  );
+        }
+      });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    const observer = new ResizeObserver(measure);
+    const header = document.querySelector(".app-header");
+    if (header !== null) {
+      observer.observe(header);
+    }
+    const main = studio.current?.parentElement;
+    if (main !== null && main !== undefined) {
+      observer.observe(main);
+    }
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("resize", measure);
+      observer.disconnect();
+    };
+  }, [studio]);
 }
 
 /**
- * The Flow (`#/<project>/flow[/<name>]`, docs/features/flow-canvas.md): the daemon's flow as a
- * diagram running forward, groups folding into one box. Every read carries a depth: Top at 0, a
- * group `root=G&depth=1`, so a whole-flow read is never made and the UI lifts nothing. Each box
- * carries its served rollup, a closed group its counts, and a third tab reads the stages
- * (docs/features/trace-views.md): nothing here counts a card. The name in the route only selects.
- * The spec is read only here, its changes going through the AI as proposals; a card is written from
- * the panel, a queue row. Under a module the Top read is rooted at its root
- * (docs/features/workspaces.md "The UI"); every other read is as without one.
+ * Flow as a studio (`#/<p>/flow[/<name>][?module=&scope=&stage=&edge=]`,
+ * docs/features/writer-studio.md): the places on the left, one scope's canvas in the centre, the
+ * panel always on the right. Each picture is one read of three forms (D2), never a whole read; the
+ * place is the hash's, so a reload, a link and Back draw one picture. A scope, stage or module change
+ * pushes; a selection, a seek's fix and a correction replace (D5). Nothing here blocks: a gap is
+ * information, and the one write is a card the owner makes from the panel (ADR-0012).
  */
 export function FlowView({
   project,
   nodeRef,
+  query,
   memory = NO_FLOW_MEMORY,
-  moduleRoot = null,
+  modules,
+  storedModule = null,
+  onChooseModule,
   moduleKnown = true,
 }: {
   project: string;
+  /** The route's name segment. */
   nodeRef: string | null;
+  /** The route's query, after the first raw `?`; undefined with none. */
+  query?: string;
   memory?: FlowMemory;
-  /** The chosen module's root, null for the whole project. */
-  moduleRoot?: string | null;
-  /** False while the workspaces are read: the Top read waits for its root (docs/features/workspaces.md WS-9). */
+  /** The served modules; undefined or none: no module bar. */
+  modules?: readonly WorkspaceModule[];
+  /** 1a's stored choice: the module of a hash naming none. */
+  storedModule?: WorkspaceModule | null;
+  /** The bar's choice, stored as 1a's key: written only here. */
+  onChooseModule?: (name: string) => void;
+  /** False while the workspaces are read: nothing is read before its module is known. */
   moduleKnown?: boolean;
 }) {
   const t = useTranslate();
-  const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
+  const openShortcuts = useOpenShortcuts();
   const titleId = useId();
   const tabsBase = useId();
+  const aboutId = useId();
+  const legendId = useId();
+  const studio = useRef<HTMLElement>(null);
+  const region = useRef<HTMLElement>(null);
+  const listRegion = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const panelHeading = useRef<HTMLHeadingElement>(null);
+  const legendToggle = useRef<HTMLButtonElement>(null);
+  const aboutToggle = useRef<HTMLButtonElement>(null);
   const [remembered] = useState(() => memory.recall(project));
-  const [narrow] = useState(isNarrow);
+  const narrow = useMedia(NARROW);
+  const stacked = useMedia(STACKED);
   const [chosenTab, setChosenTab] = useState<FlowTab | null>(remembered?.tab ?? null);
-  const [chosenOpen, setChosenOpen] = useState<readonly string[] | null>(remembered !== undefined && remembered.root === moduleRoot ? remembered.open : null);
-  const [chosenStage, setChosenStage] = useState(remembered?.stage ?? ALL_STAGES);
-  const [openLanes, setOpenLanes] = useState<readonly string[]>(remembered?.lanes ?? []);
-  /** Groups closed since they were read: their reads stay, so reopening reads nothing. */
-  const [closed, setClosed] = useState<readonly string[]>([]);
-  const [roving, setRoving] = useState<string | null>(null);
+  const tab = chosenTab ?? (narrow ? "list" : "canvas");
+  const [placesOpen, setPlacesOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [legendOpen, setLegendOpen] = useState(false);
   const [marks, setMarks] = useState<readonly string[]>([]);
   const [centring, setCentring] = useState<Centring | null>(null);
-  /** The route's name last sought, so a route change seeks once. */
-  const [soughtRef, setSoughtRef] = useState<string | null>(null);
-  const [seek, setSeek] = useState<Seek | null>(null);
-  const [chain, setChain] = useState<Chain | null>(null);
-  const [chainFailure, setChainFailure] = useState<ChainFailure | null>(null);
-  /** The name a finished seek did not find: a note until the route or a gap item asks for another. */
-  const [lostName, setLostName] = useState<string | null>(null);
-  const [gapsHidden, setGapsHidden] = useState(recallGapsHidden);
-  const results = useRef<HTMLDivElement>(null);
-  const detailsHeading = useRef<HTMLHeadingElement>(null);
-  const focusBox = useRef<(id: string) => void>(() => undefined);
-  /** A box's name whose panel takes focus once it shows. */
+  const [hand, setHand] = useState<Hand | null>(null);
+  /** New card on the scope, open, and the control it goes back to. */
+  const [scopeCard, setScopeCard] = useState<{ trigger: HTMLElement | null } | null>(null);
+  const [made, setMade] = useState<string | null>(null);
+  /** The seek that found nothing, or failed, for one place: a note until the place changes. */
+  const [lost, setLost] = useState<{ key: string; name: string } | null>(null);
+  const [seekFailure, setSeekFailure] = useState<{ key: string; name: string; message: string } | null>(null);
+  /** Where a selection was made: Esc puts focus back there. */
+  const origin = useRef<HTMLElement | null>(null);
+  /** A name whose panel takes the focus once it shows. */
   const headingFor = useRef<string | null>(null);
-  /** The last commit drew the gap rows' button, and the rows unless hidden. */
-  const rowsBefore = useRef(false);
+  /** The picture a Space entered: its first box takes the focus. */
+  const [spaceInto, setSpaceInto] = useState<string | null>(null);
+  /** The last box shown in the panel, kept mounted while the scope or an arrow shows, so coming back reads nothing again. */
+  const [keptBox, setKeptBox] = useState<FlowNode | null>(null);
 
-  const topRead = useFlow(project, moduleRoot, moduleKnown);
-  const failure = useRetainedFailure(topRead.error, topRead.isFetching);
-  // Keyed on the read settling, not on its data: an equal answer keeps its object (structural sharing).
-  const retried = useRetryFocus(topRead.dataUpdatedAt === 0 ? undefined : topRead.dataUpdatedAt, () => results.current);
+  // The place: the hash's. On entry a bare hash, the nav's link, stands for the project's last place.
+  const bare = isBareFlow({ id: nodeRef, query });
+  const [entry, setEntry] = useState<FlowPlace | null>(() => (bare ? (remembered?.place ?? null) : null));
+  if (entry !== null && !bare) {
+    // The last place took the bare hash's: from now on a bare hash is the lens root.
+    setEntry(null);
+  }
+  const parsed = useMemo(() => parseFlowPlace({ id: nodeRef, query }), [nodeRef, query]);
+  const place = entry ?? parsed;
+  useEffect(() => {
+    if (entry !== null) {
+      replaceHash(flowHash(project, entry));
+    }
+  }, [entry, project]);
+
+  // The module: the hash's; none named, the viewer's stored one; one not served is dropped (R2).
+  const served = useMemo(() => modules ?? [], [modules]);
+  const namedModule = place.module === null || place.module === "" ? null : (served.find((candidate) => candidate.name === place.module) ?? null);
+  const unserved = moduleKnown && place.module !== null && place.module !== "" && namedModule === null;
+  const module = place.module === null || unserved ? storedModule : namedModule;
+  const writtenModule = served.length > 0 ? (module?.name ?? "") : null;
+  /** A place as the screen writes it: naming the module in force whenever one is served (D4). */
+  const placeAt = useCallback((next: Omit<FlowPlace, "module">): FlowPlace => ({ ...next, module: writtenModule }), [writtenModule]);
+  const write = useCallback((next: Omit<FlowPlace, "module">) => flowHash(project, placeAt(next)), [project, placeAt]);
+
+  // The lens root (D3): the module's root; else Top's one node holding documents; else the unrooted top.
+  const moduleRoot = module?.root ?? null;
+  const topRead = useFlowRead(project, flowForm(null, null), moduleKnown && moduleRoot === null && place.scope === null);
+  const top = moduleRoot === null ? topRead.data : undefined;
+  const lensRoot: string | null | undefined = !moduleKnown ? undefined : (moduleRoot ?? (top === undefined ? undefined : soleRootOf(top)));
+  const scope = place.scope ?? lensRoot;
+  const rooted = typeof scope === "string";
+  const scopeName = rooted ? scope : null;
+  const stage = rooted ? place.stage : null;
+
+  // The reads (D2): the picture, and under a root its lanes and its own text; nothing at the top but the top.
+  const drawingForm = flowForm(scopeName, stage);
+  const drawing = useFlowRead(project, drawingForm, moduleKnown && scope !== undefined);
+  const scopeRead = useFlowRead(project, flowForm(scopeName, null), false);
+  const lanes = useScopeStages(project, scopeName ?? "", moduleKnown && rooted);
+  const scopeNode = useScopeNode(project, scopeName ?? "", moduleKnown && rooted);
   const readTree = useTreeOnDemand(project);
-  const summary = useTraceSummary(project);
-  const retriedStages = useRetryFocus(summary.dataUpdatedAt === 0 ? undefined : summary.dataUpdatedAt, () => results.current);
-  const top = topRead.data;
-  const tab = chosenTab ?? (narrow ? "list" : "canvas");
-  const open = useMemo(() => chosenOpen ?? soleGroupOf(top), [chosenOpen, top]);
-  const opened = useMemo(() => new Set(open), [open]);
-  const asked = useMemo(() => [...new Set([...open, ...closed])], [open, closed]);
-  const groups = useFlowGroups(project, asked, opened);
+  const readTop = useTopOnDemand(project);
+  const failure = useRetainedFailure(drawing.error, drawing.isFetching);
+  const topFailure = useRetainedFailure(topRead.error, topRead.isFetching);
+
+  const view = drawing.data;
+  const failedAgain = drawing.error !== null && view !== undefined;
+  const shown = useMemo(() => (view === undefined ? undefined : failedAgain ? withoutStates(view) : view), [view, failedAgain]);
+  const refused = shown?.reason ?? null;
+  const boxes = useMemo(() => (shown === undefined || refused !== null ? [] : shown.nodes.filter((node) => scopeName === null || nodeName(node) !== scopeName)), [shown, refused, scopeName]);
+  const edges = useMemo(() => (shown === undefined || refused !== null ? [] : shown.edges), [shown, refused]);
+  const layout = useMemo(() => (shown === undefined || refused !== null ? null : layoutFlow({ ...shown, nodes: boxes })), [shown, refused, boxes]);
+  const types = useMemo(() => (shown === undefined ? [] : typesOf(shown)), [shown]);
+  const named = useMemo(() => namedByRows(failedAgain ? [] : (shown?.gaps ?? [])), [shown, failedAgain]);
+  // SA1: a rooted read holds its root as a node; a stage read only when it carries the stage, so the scope's read held stands in.
+  const ownNode = useMemo(() => {
+    if (scopeName === null) {
+      return undefined;
+    }
+    const from = (read: FlowAnswer | undefined) => read?.nodes.find((node) => nodeName(node) === scopeName);
+    return from(scopeRead.data) ?? from(view);
+  }, [scopeName, scopeRead.data, view]);
+  const landed = shown !== undefined;
+
+  // The selection.
+  const selName = selectedName(place);
+  const selKey = selectedEdgeKey(place);
+  const selKeyText = selKey === null ? null : edgeKeyText(selKey);
+  const selBox = selName === null ? undefined : boxes.find((node) => nodeName(node) === selName);
+  const selEdge = selKeyText === null ? undefined : edges.find((edge) => edgeKeyText(edgeKeyOf(edge)) === selKeyText);
+  const laidSelected = useMemo(() => (selKeyText === null ? null : (layout?.edges.find((laid) => edgeKeyText(edgeKeyOf(laid.edge)) === selKeyText)?.id ?? null)), [layout, selKeyText]);
+  const marked = useMemo(() => new Set(selName !== null && marks.includes(selName) ? marks : []), [marks, selName]);
+  const placeKey = flowHash(project, place);
+  /** The place shown, as a seek's answer finds it: an answer for a place left is dropped. */
+  const currentKey = useRef(placeKey);
+  useEffect(() => {
+    currentKey.current = placeKey;
+  });
+
+  if (selBox !== undefined && keptBox !== selBox) {
+    setKeptBox(selBox);
+  }
 
   useEffect(() => {
-    // Not while the module is unknown: this mount's root is a guess, and a module's open groups would be lost.
-    if (moduleKnown) {
-      memory.remember(project, { tab: chosenTab, root: moduleRoot, open: chosenOpen, stage: chosenStage, lanes: openLanes });
+    if (entry === null) {
+      memory.remember(project, { tab: chosenTab, place });
     }
-  }, [memory, project, moduleKnown, chosenTab, moduleRoot, chosenOpen, chosenStage, openLanes]);
+  }, [memory, project, chosenTab, place, entry]);
 
-  // A read that failed again keeps its picture, and says no state it can no longer vouch for.
-  const answers = useMemo(() => new Map(groups.flatMap((group) => (group.data === undefined ? [] : [[group.name, group.error === null ? group.data : withoutStates(group.data)] as const]))), [groups]);
-  const topFailed = topRead.error !== null;
-  /** Top's rows have nothing to say; never on a failed read, or with no tools to hold the line. */
-  const clear = top !== undefined && top.nodes.length > 0 && !topFailed && allClear(top.gaps);
-  const input = useMemo<FlowInput | null>(() => (top === undefined ? null : { top: topFailed ? withoutStates(top) : top, groups: answers, open: opened }), [top, topFailed, answers, opened]);
-  const reads = useMemo(() => (input === null ? [] : readsOf(input)), [input]);
-  const notes = useMemo(() => [...new Set(reads.flatMap((read) => read.view.notes))], [reads]);
-  const layout = useMemo(() => (input === null ? null : layoutFlow(input)), [input]);
-  const types = useMemo(() => (top === undefined ? [] : typesOf(top)), [top]);
-  const named = useMemo(() => namedByRows(topFailed ? [] : (top?.gaps ?? [])), [top, topFailed]);
-  const marked = useMemo(() => new Set(nodeRef !== null && marks.includes(nodeRef) ? marks : []), [marks, nodeRef]);
-  const stages = useMemo(() => summary.data?.stages ?? [], [summary.data]);
-  const stageShown = stageInForce(chosenStage, stages);
-  const opening = useMemo(() => new Set(groups.filter((group) => group.data === undefined && group.error === null && opened.has(group.name)).map((group) => group.name)), [groups, opened]);
-  const refused = useMemo(() => groups.filter((group) => group.data !== undefined && group.data.reason !== null), [groups]);
-
-  /** The boxes of the reads shown, drawn or past the cap: a name here needs no chain. */
-  const nodes = useMemo(() => {
-    const found = new Map<string, ShownBox>();
-    for (const read of reads) {
-      for (const node of [...read.boxes].reverse()) {
-        found.set(nodeName(node), { node, inLane: read.group !== null });
-      }
-    }
-    return found;
-  }, [reads]);
-  const hasTop = top !== undefined;
-  const reading = opening.size > 0;
-  const drawnOpen = useMemo(() => new Set(layout?.boxes.filter((box) => box.form === "open").map((box) => box.name) ?? []), [layout]);
-
-  // A group read with a `reason` closes; its note stays.
-  const refusedOpen = refused.filter((group) => opened.has(group.name));
-  if (refusedOpen.length > 0) {
-    setChosenOpen(open.filter((name) => !refusedOpen.some((group) => group.name === name)));
-    setClosed([...new Set([...closed, ...refusedOpen.map((group) => group.name)])]);
-  }
-
-  // Each new name in the route is sought once: closing a group round it later reopens nothing.
-  if (hasTop && nodeRef !== soughtRef) {
-    setSoughtRef(nodeRef);
-    setSeek(nodeRef === null ? null : { name: nodeRef });
-    setLostName(null);
-    if (nodeRef !== null && centring?.name !== nodeRef) {
-      setCentring({ name: nodeRef, always: false });
-    }
-  }
-  const sought = seek === null ? undefined : nodes.get(seek.name);
-  if (seek !== null && sought !== undefined) {
-    setSeek(null);
-    setChain(null);
-  }
-
-  // The way to a name no read holds: its `parent` chain, from the tree, once the reads asked have landed.
-  const seeking = seek !== null && sought === undefined && !reading ? seek : null;
+  // A picture landing is said once, politely: its scope, its boxes, its stage.
+  const spokenFor = useRef<string | null>(null);
+  const drawingKey = JSON.stringify(drawingForm);
+  const scopeTitle =
+    scope === undefined ? "" : scopeName === null ? t("flow.topTitle") : (ownNode?.title ?? scopeNode.data?.nodes[0]?.title ?? scopeName);
+  const stageShown = stage === null ? null : askedStageWords(stage, t);
   useEffect(() => {
-    if (seeking === null || chain?.seek === seeking) {
+    if (!landed || refused !== null || spokenFor.current === drawingKey) {
       return;
     }
-    let current = true;
-    readTree().then(
-      (tree) => {
-        if (current) {
-          setChainFailure(null);
-          setChain({ seek: seeking, names: chainOf(tree.nodes, seeking.name) });
-        }
-      },
-      (error: unknown) => {
-        if (current) {
-          setChainFailure({ seek: seeking, message: apiErrorOf(error).message });
-        }
-      },
-    );
-    return () => {
-      current = false;
-    };
-  }, [seeking, chain, readTree]);
+    spokenFor.current = drawingKey;
+    announce(stageShown === null ? t("flow.showing", { scope: scopeTitle, count: boxes.length }) : t("flow.showingStage", { scope: scopeTitle, count: boxes.length, stage: stageShown }));
+  }, [landed, refused, drawingKey, scopeTitle, boxes.length, stageShown, announce, t]);
 
-  // Each closed box on the chain opens, top down: the next is known once the last has landed. A box
-  // whose read has a `reason` stays closed. A chain run out ends the seek: only a new one opens more.
-  const chainNames = chain !== null && chain.seek === seek ? (chain.names ?? []) : [];
-  const nextOnChain = chainNames.find((name) => !opened.has(name) && !refused.some((group) => group.name === name) && isClosedBox(nodes.get(name)?.node));
-  const chainFailed = groups.some((group) => group.error !== null && chainNames.includes(group.name));
-  if (refusedOpen.length === 0 && nextOnChain !== undefined) {
-    setChosenOpen([...open, nextOnChain]);
-  } else if (seek !== null && chain?.seek === seek && sought === undefined && refusedOpen.length === 0 && !reading && !chainFailed) {
-    setLostName(seek.name);
-    setSeek(null);
-    setChain(null);
-  }
-  const lost = lostName !== null && lostName === nodeRef && !nodes.has(lostName) ? lostName : null;
-
-  const selected = panelBox(nodeRef, nodes, answers);
-  const selectedBox = useMemo(() => layout?.boxes.find((box) => box.name === nodeRef), [layout, nodeRef]);
-  const drawn = useMemo(() => new Set(layout?.boxes.map((box) => box.id) ?? []), [layout]);
-  const rovingId = roving !== null && drawn.has(roving) ? roving : (selectedBox?.id ?? layout?.lanes[0]?.columns[0]?.[0] ?? layout?.lanes[0]?.band[0]?.[0] ?? null);
-
-  // The panel asked for by Enter takes focus once it shows.
+  // Corrections, each a replace (D5): a module not served (R2), a stage at the unrooted top (R2), the
+  // scope's own node selected (R3), an arrow this read does not hold (R4).
   useEffect(() => {
-    if (headingFor.current !== null && headingFor.current === nodeRef && selected !== undefined) {
-      headingFor.current = null;
-      detailsHeading.current?.focus();
+    if (!moduleKnown || entry !== null) {
+      return;
     }
-  });
-
-  // A read turning clean takes the rows and their button: focus on one goes to the results, never the body.
-  useEffect(() => {
-    if (clear && rowsBefore.current && focusIsLost()) {
-      results.current?.focus({ preventScroll: true });
+    let next = place;
+    if (unserved) {
+      next = { ...next, module: writtenModule };
     }
-    rowsBefore.current = top !== undefined && !clear;
-  });
-
-  // Each group's opening is said once, when its read lands.
-  const spoken = useRef(new Set<string>());
-  useEffect(() => {
-    for (const read of reads) {
-      if (read.group !== null && !spoken.current.has(read.group)) {
-        spoken.current.add(read.group);
-        announce(`${read.group} opened: ${readCount({ nodes: read.boxes, edges: read.view.edges }, t)}`);
+    if (scope === null && next.stage !== null) {
+      next = { ...next, stage: null };
+    }
+    if (scopeName !== null && selName === scopeName) {
+      next = { ...next, select: null };
+    }
+    const gone = landed && refused === null && selKey !== null && selEdge === undefined;
+    if (gone) {
+      next = { ...next, select: null };
+    }
+    if (next !== place) {
+      replaceHash(flowHash(project, next));
+      if (gone) {
+        announce(t("flow.edgeGone"));
       }
     }
-    for (const name of spoken.current) {
-      if (!opened.has(name)) {
-        spoken.current.delete(name);
-      }
-    }
-  }, [reads, opened, announce, t]);
+  }, [moduleKnown, entry, place, unserved, writtenModule, scope, scopeName, selName, landed, refused, selKey, selEdge, project, announce, t]);
 
-  const toggle = useCallback(
-    (name: string) => {
-      if (drawnOpen.has(name)) {
-        // A close is the owner's word: a seek under way opens nothing more.
-        setSeek(null);
-        setChain(null);
-        setClosed((names) => [...new Set([...names, name])]);
-        setChosenOpen(open.filter((other) => other !== name));
-        announce(`${name} closed`);
-      } else if (!opened.has(name)) {
-        setChosenOpen([...open, name]);
-      } else if (layout !== null && answers.has(name) && layout.notDrawn > 0) {
-        // Read and asked open, yet not drawn: the cap left it no room.
-        announce(notDrawnLine(layout.notDrawn, layout.total, t));
-      } else if (!answers.has(name) && !opening.has(name)) {
-        // Asked open and its read failed: the control says Open, so the press reads again.
-        void groups.find((group) => group.name === name)?.retry({ cancelRefetch: false });
+  /**
+   * R3: where a name stands, by its `parent` in the tree; null when the tree holds no such name. A
+   * parent that is the lens root is the place with no scope: a lens root not known yet (the hash named
+   * a scope) is found by the top read, never written as a scope.
+   */
+  const placeOf = useCallback(
+    async (name: string): Promise<FlowPlace | null> => {
+      const tree = await readTree();
+      const row = tree.nodes.find((candidate) => (candidate.id ?? candidate.path) === name);
+      if (row === undefined) {
+        return null;
       }
+      if (row.parent === null) {
+        return { module: served.length > 0 ? "" : null, scope: null, stage: null, select: { node: name } };
+      }
+      const lens = lensRoot !== undefined ? lensRoot : soleRootOf(await readTop());
+      return { module: writtenModule, scope: row.parent === lens ? null : row.parent, stage: null, select: { node: name } };
     },
-    [announce, answers, drawnOpen, groups, layout, open, opened, opening, t],
+    [readTree, readTop, served, writtenModule, lensRoot],
   );
 
-  /** A group's Retry worked and took its button away: focus goes to the group's head, or the results. */
-  const afterGroupRetry = (name: string) => {
-    if (!focusIsLost()) {
+  /** Seeks a name for one place: the fix replaces, a gap's pushes; a fix landing where it stands, or no row, says so. */
+  const seek = useCallback(
+    (name: string, key: string, push: boolean) => {
+      placeOf(name).then(
+        (found) => {
+          if (currentKey.current !== key) {
+            return;
+          }
+          const hash = found === null ? null : flowHash(project, found);
+          if (hash === null || hash === key) {
+            setLost({ key, name });
+          } else if (push) {
+            pushHash(hash);
+          } else {
+            replaceHash(hash);
+          }
+        },
+        (error: unknown) => {
+          if (currentKey.current === key) {
+            setSeekFailure({ key, name, message: apiErrorOf(error).message });
+          }
+        },
+      );
+    },
+    [placeOf, project],
+  );
+
+  // R3: a name the drawing read does not hold is sought once per place.
+  const soughtFor = useRef<string | null>(null);
+  const seekWanted = landed && refused === null && selName !== null && selName !== scopeName && selBox === undefined;
+  useEffect(() => {
+    if (!seekWanted || soughtFor.current === placeKey) {
       return;
     }
-    if (tab === "canvas" && drawn.has(boxId(name))) {
-      setRoving(boxId(name));
-      focusBox.current(boxId(name));
+    soughtFor.current = placeKey;
+    seek(selName, placeKey, false);
+  }, [seekWanted, selName, placeKey, seek]);
+
+  /** Where focus goes when it was lost: the tab's region, the canvas's or the List's, else the h1; never the body (R9). */
+  const focusFallback = useCallback(() => {
+    (tab === "canvas" ? region.current : listRegion.current)?.focus({ preventScroll: true });
+    if (focusIsLost()) {
+      heading.current?.focus({ preventScroll: true });
+    }
+  }, [tab]);
+
+  // R9: a place change that took the focused element away hands focus to the tab's region, never the body.
+  const placeBefore = useRef(placeKey);
+  useEffect(() => {
+    if (placeBefore.current === placeKey) {
+      return;
+    }
+    placeBefore.current = placeKey;
+    if (focusIsLost()) {
+      focusFallback();
+    }
+  });
+
+  // A panel asked for by Enter or a gap takes focus once it shows.
+  useEffect(() => {
+    if (headingFor.current !== null && headingFor.current === selName && selBox !== undefined) {
+      headingFor.current = null;
+      panelHeading.current?.focus();
+    }
+  });
+
+  useStudioTop(studio);
+
+  const enterPlace = useCallback((name: string) => placeAt({ scope: name, stage: null, select: null }), [placeAt]);
+  const selectPlace = useCallback((name: string) => placeAt({ scope: place.scope, stage: place.stage, select: { node: name } }), [placeAt, place.scope, place.stage]);
+  const enterHref = useCallback((name: string) => flowHash(project, enterPlace(name)), [project, enterPlace]);
+  const selectHref = useCallback((name: string) => flowHash(project, selectPlace(name)), [project, selectPlace]);
+  const listPlaces = useMemo<ListPlaces>(
+    () => ({ project, box: selectPlace, edge: (key) => placeAt({ scope: place.scope, stage: place.stage, select: { edge: key } }), enter: enterPlace }),
+    [project, selectPlace, placeAt, place.scope, place.stage, enterPlace],
+  );
+
+  function rememberOrigin(element: HTMLElement | null) {
+    origin.current = element ?? (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
+  }
+
+  function select(name: string, from: HTMLElement | null) {
+    rememberOrigin(from);
+    if (name !== selName) {
+      replaceHash(selectHref(name));
+    }
+  }
+
+  function clearSelection() {
+    if (place.select === null) {
+      return;
+    }
+    const back = origin.current;
+    replaceHash(write({ scope: place.scope, stage: place.stage, select: null }));
+    if (back !== null && back.isConnected) {
+      back.focus();
     } else {
-      results.current?.focus();
-    }
-  };
-
-  function select(name: string) {
-    if (name !== nodeRef) {
-      pushHash(sectionHash(project, "flow", name));
+      focusFallback();
     }
   }
 
-  /** Closes the panel; focus goes back to the box, on the List to its row. */
-  function closeDetails() {
-    const back = nodeRef;
-    pushHash(sectionHash(project, "flow"));
-    if (back === null) {
-      return;
-    }
-    if (tab === "canvas" && drawn.has(boxId(back))) {
-      setRoving(boxId(back));
-      focusBox.current(boxId(back));
-      return;
-    }
-    const rows = Array.from(results.current?.querySelectorAll<HTMLElement>("[data-flow-row]") ?? []);
-    const link = rows.find((row) => row.dataset.flowRow === back)?.querySelector("a");
-    (link ?? results.current)?.focus();
+  function enter(name: string, byKey: boolean) {
+    setSpaceInto(byKey ? name : null);
+    pushHash(enterHref(name));
   }
 
-  /** A gap item: routes to its first member, marks all, centres the first; focus stays on the item. */
-  function activate(item: readonly string[]) {
-    const first = item[0];
-    if (first === undefined) {
-      return;
-    }
-    setMarks(item);
-    setCentring({ name: first, always: true });
-    setChainFailure(null);
-    setLostName(null);
-    setSeek({ name: first });
-    select(first);
-  }
-
-  function onCommand(box: FlowBox, command: BoxCommand) {
+  function onCommand(box: FlowBox, command: BoxCommand, from: HTMLElement | null) {
     switch (command) {
       case "select":
-        select(box.name);
+        select(box.name, from);
         break;
       case "details":
         headingFor.current = box.name;
-        select(box.name);
-        if (box.name === nodeRef) {
+        select(box.name, from);
+        if (box.name === selName) {
           headingFor.current = null;
-          detailsHeading.current?.focus();
+          panelHeading.current?.focus();
         }
         break;
-      case "toggle":
+      case "enter":
+      case "enterByKey":
         if (isGroup(box.node)) {
-          toggle(box.name);
+          enter(box.name, command === "enterByKey");
         }
         break;
       case "tree":
         pushHash(sectionHash(project, "tree", box.name));
         break;
-      case "close":
-        if (nodeRef !== null) {
-          closeDetails();
-        }
-        break;
     }
   }
 
-  const setFocusBox = useCallback((focus: (id: string) => void) => {
-    focusBox.current = focus;
-  }, []);
-
-  function toggleLane(key: string) {
-    setOpenLanes((lanes) => (lanes.includes(key) ? lanes.filter((lane) => lane !== key) : [...lanes, key]));
+  function onEdge(laid: LaidEdge) {
+    origin.current = null;
+    replaceHash(write({ scope: place.scope, stage: place.stage, select: { edge: edgeKeyOf(laid.edge) } }));
   }
 
-  function onViewKeyDown(event: KeyboardEvent<HTMLElement>) {
+  /** A gap item: selects its first member (a seek pushes its scope if undrawn), marks all, centres the first; focus to the panel heading. */
+  function activate(item: readonly string[]) {
+    const [first] = item;
+    if (first === undefined) {
+      return;
+    }
+    rememberOrigin(null);
+    setMarks(item);
+    setCentring({ name: first, always: true });
+    headingFor.current = first;
+    setLost(null);
+    setSeekFailure(null);
+    if (boxes.some((node) => nodeName(node) === first)) {
+      if (first === selName) {
+        headingFor.current = null;
+        panelHeading.current?.focus();
+      } else {
+        replaceHash(selectHref(first));
+      }
+    } else {
+      soughtFor.current = placeKey;
+      seek(first, placeKey, true);
+    }
+  }
+
+  /** A gap's item to the AI (D11): New card, its members the targets, its cause the goal; `no-start` hands the scope. */
+  function handOff(gap: FlowGap, item: readonly string[]) {
+    const targets = namesDocuments(gap) ? item : scopeName === null ? [] : [scopeName];
+    if (targets.length === 0) {
+      return;
+    }
+    setMade(null);
+    setHand({ preset: { title: handTitle(gap.code, targets, t), goal: gap.cause ?? "", targets }, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+  }
+
+  function closeLegend() {
+    setLegendOpen(false);
+  }
+
+  function onStudioKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.defaultPrevented || hasModifier(event) || isTextField(event.target)) {
       return;
     }
     if (event.key === "?") {
       event.preventDefault();
       openShortcuts();
+      return;
+    }
+    if (event.key !== "Escape") {
+      return;
+    }
+    if (aboutOpen) {
+      event.preventDefault();
+      setAboutOpen(false);
+      aboutToggle.current?.focus();
+    } else if (legendOpen) {
+      event.preventDefault();
+      setLegendOpen(false);
+      legendToggle.current?.focus();
+    } else if (place.select !== null) {
+      event.preventDefault();
+      clearSelection();
     }
   }
 
-  function retryTop() {
-    retried();
-    void topRead.refetch({ cancelRefetch: false });
-  }
+  // The notes of every read shown, each once, in the daemon's words; then what the picture left out, in ours.
+  const notes = useMemo(() => [...new Set([...(shown?.notes ?? []), ...(rooted ? (lanes.data?.notes ?? []) : [])])], [shown, rooted, lanes.data]);
+  const leftOut = shown === undefined ? null : leftOutWords(shown.left_out, t);
+  const noted = notes.length + (leftOut === null ? 0 : 1);
 
-  let body;
-  if (top === undefined) {
-    body =
-      failure === null ? (
-        <div aria-busy="true">
-          <Skeleton label={`Reading the flow of ${project}`} lines={6} />
-        </div>
-      ) : (
-        <ErrorPanel title="The flow could not be read" message={apiErrorOf(failure).message} retrying={topRead.isFetching} attempt={topRead.errorUpdateCount} onRetry={retryTop} />
-      );
-  } else if (top.reason !== null) {
-    body = <ErrorPanel title="The flow could not be read" message={top.reason} retrying={topRead.isFetching} attempt={topRead.dataUpdatedAt} onRetry={retryTop} />;
-  } else {
-    const empty = top.nodes.length === 0;
-    const gapsShown = !clear && (empty || !gapsHidden);
-    const stage = ["flow-stage", !gapsShown && "no-gaps", !gapsShown && selected === undefined && "no-side"].filter(Boolean).join(" ");
-    body = (
-      <div className={stage}>
-        {gapsShown && <FlowGaps gaps={top.gaps} unread={topFailed} marked={marked} onActivate={activate} />}
-        <div className="flow-main">
-          <TopNotes top={top} notes={notes} />
-          {topRead.error !== null && (
-            <div className="flow-failed">
-              <p className="note" role="alert">
-                <Icon name="alert" />
-                <span>
-                  The flow could not be read again: {apiErrorOf(topRead.error).message}
-                  {tab !== "timeline" && (
-                    <>
-                      <br />
-                      {statesHiddenWords(t)}
-                    </>
-                  )}
-                </span>
-              </p>
-              <button type="button" className="button" aria-disabled={topRead.isFetching} onClick={topRead.isFetching ? undefined : retryTop}>
-                <Icon name="retry" />
-                <span>{topRead.isFetching ? "Retrying" : "Retry"}</span>
-              </button>
-            </div>
+  // The places pane. Up names the scope node's holder, from any read held, else the lens root; none at the lens root.
+  const holder = useHeldHolder(project, scopeName);
+  // A lens root not known yet (the hash named a scope, so the top was not read) is named as such, never as the whole project.
+  const up = useMemo(() => {
+    if (scopeName === null || scopeName === lensRoot) {
+      return null;
+    }
+    const group = ownNode?.group ?? holder;
+    if (group !== null && group !== lensRoot) {
+      return { place: enterPlace(group), label: t("flow.up", { name: group }) };
+    }
+    const label = typeof lensRoot === "string" ? t("flow.up", { name: lensRoot }) : lensRoot === null ? t("flow.up", { name: t("flow.topTitle") }) : t("flow.upStart");
+    return { place: placeAt({ scope: null, stage: null, select: null }), label };
+  }, [scopeName, lensRoot, ownNode, holder, enterPlace, placeAt, t]);
+  const groups = useMemo<GroupLink[]>(() => {
+    if (stage === null) {
+      return boxes.filter(isGroup).map((node) => ({ name: nodeName(node), label: boxWords(node), place: enterPlace(nodeName(node)) }));
+    }
+    const seen: string[] = [];
+    for (const node of boxes) {
+      if (node.group !== null && node.group !== scopeName && !seen.includes(node.group)) {
+        seen.push(node.group);
+      }
+    }
+    return seen.map((name) => ({ name, label: name, place: enterPlace(name) }));
+  }, [boxes, stage, scopeName, enterPlace]);
+  const stagesShown = useMemo<StagesShown>(() => {
+    if (scope === null) {
+      return { show: "top" };
+    }
+    if (lanes.data === undefined) {
+      if (lanes.error === null) {
+        return { show: "reading" };
+      }
+      return {
+        show: "failed",
+        message: apiErrorOf(lanes.error).message,
+        retrying: lanes.isFetching,
+        onRetry: () => {
+          void lanes.refetch({ cancelRefetch: false });
+        },
+      };
+    }
+    return {
+      show: "lanes",
+      all: { place: placeAt({ scope: place.scope, stage: null, select: null }), label: t("flow.allStages"), current: stage === null },
+      lanes: lanes.data.stages.map((lane) => ({
+        key: stageKey(lane.stage),
+        label: stageWords(lane.stage, t),
+        place: placeAt({ scope: place.scope, stage: stageAsked(lane.stage), select: null }),
+        current: stage === stageAsked(lane.stage),
+        counts: lane.counts,
+      })),
+    };
+  }, [scope, lanes, placeAt, place.scope, stage, t]);
+
+  const header = (
+    <header className="flow-head">
+      <h1 id={titleId} ref={heading} tabIndex={-1}>
+        {sectionLabel("flow", t)}
+      </h1>
+      <p className="flow-head-title" title={stageShown === null ? scopeTitle : t("flow.scopeAndStage", { scope: scopeTitle, stage: stageShown })}>
+        <bdi>{stageShown === null ? scopeTitle : t("flow.scopeAndStage", { scope: scopeTitle, stage: stageShown })}</bdi>
+      </p>
+      <Tabs
+        label={t("flow.tabsLabel")}
+        base={tabsBase}
+        selected={tab}
+        onSelect={setChosenTab}
+        tabs={[
+          { id: "canvas", label: t("flow.tabCanvas") },
+          { id: "list", label: t("flow.tabList") },
+        ]}
+      />
+      <div className="flow-about">
+        <button
+          ref={aboutToggle}
+          type="button"
+          className="button button-quiet"
+          aria-expanded={aboutOpen}
+          aria-controls={aboutId}
+          onClick={() => {
+            setAboutOpen(!aboutOpen);
+          }}
+        >
+          <Icon name="info" />
+          <span>{noted === 0 ? t("flow.about") : t("flow.aboutNotes", { count: noted })}</span>
+        </button>
+        <div id={aboutId} className="flow-about-body" hidden={!aboutOpen}>
+          <p>
+            {aboutOf("flow", t)} {t("flow.readOnly")}
+          </p>
+          {notes.length > 0 && (
+            <ul className="note-list" aria-label={t("flow.notesLabel")}>
+              {notes.map((note) => (
+                <li key={note} lang="en">
+                  {note}
+                </li>
+              ))}
+            </ul>
           )}
-          {groups
-            .filter((group) => opened.has(group.name))
-            .map((group) => (
-              <GroupFailure
-                key={group.name}
-                name={group.name}
-                error={group.error}
-                fetching={group.fetching}
-                settled={group.settled}
-                onRetry={() => {
-                  void group.retry({ cancelRefetch: false });
-                }}
-                onSettled={afterGroupRetry}
-              />
-            ))}
-          {summary.error !== null && tab !== "timeline" && (
-            <div className="flow-failed">
-              <p className="note" role="alert">
-                <Icon name="alert" />
-                <span>The stages could not be read: {apiErrorOf(summary.error).message}</span>
-              </p>
-              <button
-                type="button"
-                className="button"
-                aria-disabled={summary.isFetching}
-                onClick={
-                  summary.isFetching
-                    ? undefined
-                    : () => {
-                        retriedStages();
-                        void summary.refetch({ cancelRefetch: false });
-                      }
-                }
-              >
-                <Icon name="retry" />
-                <span>
-                  {summary.isFetching ? "Retrying" : "Retry"} <span className="sr-only">reading the stages</span>
-                </span>
-              </button>
-            </div>
-          )}
-          {refused
-            .filter((group) => nodes.has(group.name))
-            .map((group) => (
-            <p key={group.name} className="note">
-              <Icon name="info" />
-              <span>
-                <span className="mono">{group.name}</span> stays closed: <span className="verbatim">{group.data?.reason}</span>
-              </span>
-            </p>
-          ))}
-          {chainFailure !== null && chainFailure.seek === seek && (
-            <p className="note" role="alert">
-              <Icon name="alert" />
-              <span>
-                The way to <span className="mono">{chainFailure.seek.name}</span> could not be read: {chainFailure.message}
-              </span>
-            </p>
-          )}
-          {lost !== null && (
+          {leftOut !== null && (
             <p className="note">
               <Icon name="info" />
-              <span>
-                No box here is named <span className="mono">{lost}</span>.
-              </span>
-              <a href={sectionHash(project, "tree", lost)}>Open {lost} in the Spec tree</a>
+              <span>{leftOut}</span>
             </p>
           )}
-          {empty ? (
-            <div className="empty-state">
-              <p>No flow in this project yet. Next: have your AI add flow links.</p>
-            </div>
-          ) : (
-            <>
-              <div className="flow-tools">
-                <Tabs
-                  label="Views of the flow"
-                  base={tabsBase}
-                  selected={tab}
-                  onSelect={setChosenTab}
-                  tabs={[
-                    { id: "canvas", label: "Canvas" },
-                    { id: "list", label: "List" },
-                    { id: "timeline", label: "Timeline" },
-                  ]}
-                />
-                {tab !== "timeline" && <StageFilter value={stageShown} options={stageOptions(stages, t)} onChange={setChosenStage} />}
-                {clear ? (
-                  <GapsClear />
-                ) : (
-                  <button
-                    type="button"
-                    className="button button-quiet"
-                    aria-expanded={!gapsHidden}
-                    onClick={() => {
-                      rememberGapsHidden(!gapsHidden);
-                      setGapsHidden(!gapsHidden);
-                    }}
-                  >
-                    <Icon name="flowGap" />
-                    <span>{gapsHidden ? "Show gaps" : "Hide gaps"}</span>
-                  </button>
-                )}
-              </div>
-              <TabPanel base={tabsBase} id="canvas" selected={tab === "canvas"}>
-                {tab === "canvas" && layout !== null && (
-                  <div className="graph-canvas-panel">
-                    {layout.notDrawn > 0 && (
-                      <p className="notice cut-notice flow-limit" role="note">
-                        <span className="notice-title">
-                          <Icon name="info" />
-                          <span>{notDrawnLine(layout.notDrawn, layout.total, t)}</span>
-                        </span>
-                      </p>
-                    )}
-                    <RegionBoundary name="canvas">
-                      <Suspense fallback={<Skeleton label="Loading the canvas" lines={4} />}>
-                        <FlowCanvas
-                          layout={layout}
-                          types={types}
-                          rovingId={rovingId}
-                          selected={nodeRef}
-                          marked={marked}
-                          opening={opening}
-                          named={named}
-                          stage={stageShown}
-                          centring={centring}
-                          onRove={setRoving}
-                          onCommand={onCommand}
-                          focusRef={setFocusBox}
-                        />
-                      </Suspense>
-                    </RegionBoundary>
-                    <FlowLegend types={types} states={reads.some((read) => read.boxes.some((node) => node.rollup !== null))} />
-                  </div>
-                )}
-              </TabPanel>
-              <TabPanel base={tabsBase} id="list" selected={tab === "list"}>
-                {tab === "list" && (
-                  <RegionBoundary name="list">
-                    <FlowList project={project} reads={reads} open={drawnOpen} named={named} selected={nodeRef} marked={marked} stage={stageShown} scrollTo={centring} onToggle={toggle} />
-                  </RegionBoundary>
-                )}
-              </TabPanel>
-              <TabPanel base={tabsBase} id="timeline" selected={tab === "timeline"}>
-                {tab === "timeline" && (
-                  <RegionBoundary name="timeline">
-                    <TimelineView project={project} read={summary} openLanes={openLanes} selected={nodeRef} noted={notes} onToggle={toggleLane} />
-                  </RegionBoundary>
-                )}
-              </TabPanel>
-            </>
-          )}
         </div>
-        {selected !== undefined && nodeRef !== null && (
-          <FlowDetails
-            key={nodeRef}
-            project={project}
-            node={selected.node}
-            inLane={selected.inLane}
-            open={drawnOpen.has(nodeRef)}
-            noRoom={selectedBox?.noRoom ?? false}
-            headingRef={detailsHeading}
-            onToggle={toggle}
-            onClose={closeDetails}
-          />
-        )}
       </div>
+    </header>
+  );
+
+  // The canvas region's body: a skeleton, the daemon's refusal, the empty words, or the picture.
+  let picture;
+  const busy = !moduleKnown || (scope === undefined && topFailure === null) || drawing.isFetching;
+  if (!moduleKnown || (scope === undefined && topFailure === null) || (scope !== undefined && view === undefined && failure === null)) {
+    picture = (
+      <div aria-busy="true">
+        <Skeleton label={t("flow.reading", { project })} lines={6} />
+      </div>
+    );
+  } else if (scope === undefined && topFailure !== null) {
+    picture = (
+      <ErrorPanel
+        title={t("flow.readFailed")}
+        message={apiErrorOf(topFailure).message}
+        retrying={topRead.isFetching}
+        attempt={topRead.errorUpdateCount}
+        onRetry={() => {
+          void topRead.refetch({ cancelRefetch: false });
+        }}
+      />
+    );
+  } else if (view === undefined) {
+    picture = (
+      <ErrorPanel
+        title={t("flow.readFailed")}
+        message={failure === null ? "" : apiErrorOf(failure).message}
+        retrying={drawing.isFetching}
+        attempt={drawing.errorUpdateCount}
+        onRetry={() => {
+          void drawing.refetch({ cancelRefetch: false });
+        }}
+      />
+    );
+  } else if (refused !== null) {
+    picture = (
+      <ErrorPanel
+        title={t("flow.readFailed")}
+        message={refused}
+        retrying={drawing.isFetching}
+        attempt={drawing.dataUpdatedAt}
+        onRetry={() => {
+          void drawing.refetch({ cancelRefetch: false });
+        }}
+      />
+    );
+  } else if (boxes.length === 0) {
+    picture = (
+      <div className="empty-state">
+        <p>{stage !== null ? emptyStageWords(stage, t) : scopeName === null ? t("flow.emptyProject") : t("flow.emptyScope", { name: scopeName })}</p>
+      </div>
+    );
+  } else if (layout !== null) {
+    picture = (
+      <RegionBoundary name={t("flow.tabCanvas")}>
+        <Suspense fallback={<Skeleton label={t("flow.reading", { project })} lines={4} />}>
+          <FlowCanvas
+            key={drawingKey}
+            layout={layout}
+            types={types}
+            inLane={rooted}
+            selected={selName}
+            selectedEdge={laidSelected}
+            marked={marked}
+            named={named}
+            centring={centring}
+            focusFirst={spaceInto !== null && spaceInto === scopeName}
+            wheelPans={!stacked}
+            label={t("flow.canvasLabel")}
+            onCommand={onCommand}
+            onEdge={onEdge}
+          />
+        </Suspense>
+      </RegionBoundary>
     );
   }
 
+  const lines = (
+    <>
+      {failedAgain && (
+        <div className="flow-failed">
+          <p className="note" role="alert">
+            <Icon name="alert" />
+            <span>
+              {t("flow.readAgainFailed", { message: apiErrorOf(drawing.error).message })} {statesHiddenWords(t)}
+            </span>
+          </p>
+          <button
+            type="button"
+            className="button"
+            aria-disabled={drawing.isFetching}
+            onClick={
+              drawing.isFetching
+                ? undefined
+                : () => {
+                    void drawing.refetch({ cancelRefetch: false });
+                  }
+            }
+          >
+            <Icon name="retry" />
+            <span>{drawing.isFetching ? t("ui.retrying") : t("ui.retry")}</span>
+          </button>
+        </div>
+      )}
+      {seekFailure !== null && seekFailure.key === placeKey && (
+        <p className="note" role="alert">
+          <Icon name="alert" />
+          <span>{t("flow.seekFailed", { name: seekFailure.name, message: seekFailure.message })}</span>
+        </p>
+      )}
+      {lost !== null && lost.key === placeKey && (
+        <p className="note">
+          <Icon name="info" />
+          <span>{t("flow.lost", { name: lost.name })}</span> <a href={sectionHash(project, "tree", lost.name)}>{t("flow.lostTree", { name: lost.name })}</a>
+        </p>
+      )}
+    </>
+  );
+
+  const scopeShown: ScopeShown = {
+    name: scopeName,
+    title: scopeTitle,
+    kind: ownNode?.kind ?? scopeNode.data?.nodes[0]?.kind ?? null,
+    counts: ownNode?.counts ?? (rooted ? (lanes.data?.counts ?? null) : null),
+    read: scopeName === null ? null : scopeNode,
+  };
+  const gapRows =
+    shown === undefined || refused !== null ? null : !failedAgain && boxes.length > 0 && allClear(shown.gaps) ? (
+      <GapsClear />
+    ) : (
+      <FlowGaps gaps={shown.gaps} unread={failedAgain} rooted={rooted} marked={marked} headingLevel="h3" onActivate={activate} onHand={handOff} />
+    );
+  const boxShown = selBox ?? null;
+  const panelBody = (
+    <>
+      {keptBox !== null && (
+        <div hidden={boxShown === null || nodeName(boxShown) !== nodeName(keptBox)}>
+          <BoxView
+            key={nodeName(keptBox)}
+            project={project}
+            node={boxShown !== null && nodeName(boxShown) === nodeName(keptBox) ? boxShown : keptBox}
+            inLane={rooted}
+            scopeName={scopeName}
+            scopeTitle={scopeTitle}
+            headingRef={boxShown !== null ? panelHeading : undefined}
+            enterPlace={enterPlace}
+            onBack={clearSelection}
+          />
+        </div>
+      )}
+      {boxShown === null && selEdge !== undefined && (
+        <EdgeView
+          project={project}
+          edge={selEdge}
+          scopeTitle={scopeTitle}
+          headingRef={panelHeading}
+          isGroupName={(name) => boxes.some((node) => nodeName(node) === name && isGroup(node))}
+          selectPlace={(name) => (boxes.some((node) => nodeName(node) === name) ? selectPlace(name) : null)}
+          enterPlace={enterPlace}
+          onBack={clearSelection}
+        />
+      )}
+      {boxShown === null && selEdge === undefined && scope !== undefined && (
+        <ScopeView
+          project={project}
+          scope={scopeShown}
+          headingRef={panelHeading}
+          onNewCard={
+            scopeName === null
+              ? null
+              : () => {
+                  setMade(null);
+                  setScopeCard({ trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null });
+                }
+          }
+        >
+          {made !== null && (
+            <p className="note">
+              <Icon name="info" />
+              <span>
+                <span className="mono">{t("flow.cardMade", { id: made })}</span> <a href={sectionHash(project, "board", made)}>{t("flow.cardOnBoard")}</a>
+              </span>
+            </p>
+          )}
+          {gapRows}
+        </ScopeView>
+      )}
+    </>
+  );
+
+  const afterCard = (trigger: HTMLElement | null) => (answer: CardWrite | null) => {
+    setHand(null);
+    setScopeCard(null);
+    if (answer !== null && answer.id !== null) {
+      setMade(answer.id);
+      announce(t("flow.cardMade", { id: answer.id }));
+    }
+    if (trigger?.isConnected === true) {
+      trigger.focus();
+    }
+  };
+
   return (
-    <section className="view flow-view" aria-labelledby={titleId} onKeyDown={onViewKeyDown}>
-      <header className="view-head">
-        <h1 id={titleId} tabIndex={-1}>
-          Flow
-        </h1>
-        <p className="view-about">{aboutOf("flow", t)} The spec is read only here.</p>
-      </header>
-      <div ref={results} tabIndex={-1} className="flow-results" aria-busy={topRead.isFetching || opening.size > 0 || !moduleKnown}>
-        <RegionBoundary name="flow">{body}</RegionBoundary>
+    <section ref={studio} className="view flow-studio" aria-labelledby={titleId} aria-busy={busy} onKeyDown={onStudioKeyDown}>
+      {header}
+      <FlowPlaces
+        project={project}
+        here={write({ scope: place.scope, stage: place.stage, select: null })}
+        open={placesOpen}
+        onToggle={() => {
+          setPlacesOpen(!placesOpen);
+        }}
+        modules={served}
+        module={module?.name ?? ""}
+        onModule={(name) => {
+          onChooseModule?.(name);
+        }}
+        up={up}
+        scope={scope === undefined ? null : { place: placeAt({ scope: refused !== null ? null : place.scope, stage: null, select: null }), label: refused !== null ? (lensRoot ?? t("flow.topTitle")) : scopeTitle }}
+        stages={stagesShown}
+        groups={groups}
+      />
+      <div className="flow-centre">
+        <div className="flow-view-area">
+          <TabPanel base={tabsBase} id="canvas" selected={tab === "canvas"}>
+            {tab === "canvas" && (
+              <section ref={region} className="flow-canvas-region" aria-label={t("flow.canvasLabel")} tabIndex={-1} onFocus={closeLegend} onPointerDown={closeLegend}>
+                {lines}
+                {picture}
+              </section>
+            )}
+          </TabPanel>
+          <TabPanel base={tabsBase} id="list" selected={tab === "list"}>
+            {tab === "list" && (
+              <div ref={listRegion} className="flow-list-region" role="region" aria-label={t("flow.listLabel")} tabIndex={-1}>
+                <RegionBoundary name={t("flow.tabList")}>
+                  {lines}
+                  {landed && refused === null ? (
+                    <FlowList
+                      boxes={boxes}
+                      edges={edges}
+                      scope={scopeName}
+                      scopeTitle={scopeTitle}
+                      stageView={stage !== null}
+                      inLane={rooted}
+                      named={named}
+                      selected={selName}
+                      selectedEdge={selKeyText}
+                      marked={marked}
+                      places={listPlaces}
+                      scrollTo={centring}
+                      onSelect={(element) => {
+                        origin.current = element;
+                      }}
+                    />
+                  ) : (
+                    picture
+                  )}
+                </RegionBoundary>
+              </div>
+            )}
+          </TabPanel>
+          {tab === "canvas" && legendOpen && <FlowLegend id={legendId} types={types} states={boxes.some((node) => node.rollup !== null || node.counts !== null)} />}
+        </div>
+        {tab === "canvas" && (
+          <div className="flow-bar">
+            <button
+              ref={legendToggle}
+              type="button"
+              className="button button-quiet"
+              aria-expanded={legendOpen}
+              aria-controls={legendId}
+              onClick={() => {
+                setLegendOpen(!legendOpen);
+              }}
+            >
+              <Icon name={legendOpen ? "chevronDown" : "chevronRight"} />
+              <span>{t("flow.legendButton")}</span>
+            </button>
+            {layout !== null && layout.notDrawn > 0 && (
+              <p className="flow-bar-cut" role="note">
+                <Icon name="info" />
+                <span>{notDrawnLine(layout.notDrawn, layout.total, t)}</span>
+              </p>
+            )}
+          </div>
+        )}
       </div>
+      <aside className="flow-panel" aria-label={t("flow.panelLabel")}>
+        {panelBody}
+      </aside>
+      {hand !== null && (
+        <div
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <NewCardDialog project={project} preset={hand.preset} onClose={() => {
+            afterCard(hand.trigger)(null);
+          }} onDone={afterCard(hand.trigger)} />
+        </div>
+      )}
+      {scopeCard !== null && scopeName !== null && (
+        <div
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <NewCardDialog project={project} target={scopeName} onClose={() => {
+            afterCard(scopeCard.trigger)(null);
+          }} onDone={afterCard(scopeCard.trigger)} />
+        </div>
+      )}
     </section>
   );
 }

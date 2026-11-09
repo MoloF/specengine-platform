@@ -373,12 +373,20 @@ export interface NewCardForm {
   corrects: string;
 }
 
+/** What a New card opens with besides the node preset: a gap handed to the AI (docs/features/writer-studio.md D11). */
+export interface NewCardPreset {
+  title: string;
+  goal: string;
+  targets: readonly string[];
+}
+
 /**
  * New card: every field `create_card` takes, targets and criteria one per line. `target`: the node a
- * New card button stands on, already filled: how a board fills from the brief. Fields left empty are
- * no key: the daemon picks the flow by discipline, the first column.
+ * New card button stands on, already filled: how a board fills from the brief; `preset`: a gap's
+ * title, goal and targets. Fields left empty are no key: the daemon picks the flow by discipline, the
+ * first column.
  */
-export function NewCardDialog({ project, target, ...handlers }: { project: string; target?: string } & WriteHandlers) {
+export function NewCardDialog({ project, target, preset, ...handlers }: { project: string; target?: string; preset?: NewCardPreset } & WriteHandlers) {
   const t = useTranslate();
   const disciplinesId = useId();
   const namesId = useId();
@@ -387,10 +395,10 @@ export function NewCardDialog({ project, target, ...handlers }: { project: strin
   const known = useCards(project).data;
   const [acting] = useActing();
   const [form, setForm] = useState<NewCardForm>({
-    title: "",
-    goal: "",
+    title: preset?.title ?? "",
+    goal: preset?.goal ?? "",
     discipline: "",
-    targets: target ?? "",
+    targets: preset === undefined ? (target ?? "") : preset.targets.join("\n"),
     criteria: "",
     assignee: "",
     estimate: "",

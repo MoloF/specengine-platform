@@ -35,7 +35,9 @@ describe("the mock's trace", () => {
     expect(nodes.find((node) => node.id === "RULE-TIDE-WINDOW")?.rollup).toBe("departed");
     expect(nodes.some((node) => node.id === "RULE-HARBOR-CLOCK")).toBe(false);
     expect(nodes.map((node) => node.path)).toEqual([...nodes.map((node) => node.path)].sort());
-    expect(counts.no_card + counts.in_work + counts.suspect + counts.departed + counts.confirmed).toBe(nodes.length);
+    // DOM-PILOTS holds documents and has no card of its own: counted nowhere (docs/features/trace-truth.md).
+    expect(nodes.find((node) => node.id === "DOM-PILOTS")?.rollup).toBe("no card");
+    expect(counts.no_card + counts.in_work + counts.suspect + counts.departed + counts.confirmed).toBe(nodes.length - 1);
   });
 
   it("gives a row its stage, its distance and its counts over what it holds; a section its document's", async () => {
@@ -51,7 +53,7 @@ describe("the mock's trace", () => {
     const mock = client();
     const whole = await mock.getTrace("harbor-sim");
     const print = await mock.getTrace("harbor-sim", { stage: "landfall" });
-    expect(print.nodes.map((node) => node.id).sort()).toEqual(["MEC-PILOTAGE", "RULE-HIGH-WATER", "RULE-SPRING-WINDOW"]);
+    expect(print.nodes.map((node) => node.id).sort()).toEqual(["MEC-PILOT-CALL", "MEC-PILOTAGE", "RULE-HIGH-WATER", "RULE-SPRING-WINDOW"]);
     expect(new Set(print.nodes.map((node) => node.path.split("/")[2])).size).toBeGreaterThan(1);
     const none = await mock.getTrace("harbor-sim", { stage: "-" });
     expect(none.nodes.map((node) => node.id)).toEqual(["MEC-NIGHT-PASSAGE"]);
@@ -71,7 +73,7 @@ describe("the mock's trace", () => {
       ["quayside", 4],
       [null, 3],
     ]);
-    expect(stages[0]?.counts).toEqual({ no_card: 1, in_work: 0, suspect: 0, departed: 0, confirmed: 2 });
+    expect(stages[0]?.counts).toEqual({ no_card: 2, in_work: 0, suspect: 0, departed: 0, confirmed: 2 });
   });
 
   it("keeps a document neither a step nor staged out of every lane: it is counted, and stands in no lane", async () => {
@@ -79,7 +81,7 @@ describe("the mock's trace", () => {
     expect(nodes.some((node) => node.id === "DEC-0012")).toBe(true);
     const inLanes = stages.reduce((sum, lane) => sum + lane.counts.no_card + lane.counts.in_work + lane.counts.suspect + lane.counts.departed + lane.counts.confirmed, 0);
     expect(inLanes).toBeLessThan(nodes.length);
-    expect(counts.no_card + counts.in_work + counts.suspect + counts.departed + counts.confirmed).toBe(nodes.length);
+    expect(counts.no_card + counts.in_work + counts.suspect + counts.departed + counts.confirmed).toBe(nodes.length - 1);
     expect(stages.find((lane) => lane.stage === null)?.counts).toEqual({ no_card: 0, in_work: 1, suspect: 0, departed: 0, confirmed: 0 });
   });
 
@@ -93,6 +95,16 @@ describe("the mock's trace", () => {
     const { nodes, notes } = await client().getTrace("harbor-sim");
     expect(notes).toEqual(["C-0008: `MEC-OLD-SLIPWAY` no longer resolves"]);
     expect(nodes.some((node) => node.id === "MEC-OLD-SLIPWAY")).toBe(false);
+  });
+
+  it("orders a REF's lanes by the scope's own walk (writer-studio SA2)", async () => {
+    const pilots = await client().getTrace("harbor-sim", { ref: "DOM-PILOTS", summary: true });
+    expect(pilots.nodes).toEqual([]);
+    expect(pilots.stages.map((lane) => [lane.stage, lane.distance])).toEqual([
+      ["landfall", 0],
+      ["quayside", 0],
+      ["passage", 1],
+    ]);
   });
 
   it("serves one lane where no document has a stage", async () => {

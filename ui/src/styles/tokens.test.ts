@@ -244,7 +244,7 @@ describe("tokens.css (AC-09)", () => {
     const colours = FLOW_EDGE.map((value) => resolve(`--flow-edge-${value}`).toLowerCase());
     expect(new Set(colours).size).toBe(4);
     for (const value of FLOW_EDGE) {
-      for (const surface of [...SURFACES, "--flow-box-surface", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
+      for (const surface of [...SURFACES, "--flow-box-surface"]) {
         expect([value, surface, contrast(`--flow-edge-${value}`, surface) >= 3]).toEqual([value, surface, true]);
       }
     }
@@ -258,7 +258,7 @@ describe("tokens.css (AC-09)", () => {
     expect(states).not.toContain(resolve("--sync-ok").toLowerCase());
     expect(states).not.toContain(resolve("--sync-cannot-verify").toLowerCase());
     for (const state of TRACE) {
-      for (const surface of [...SURFACES, "--flow-box-surface", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
+      for (const surface of [...SURFACES, "--flow-box-surface"]) {
         expect([state, surface, contrast(`--trace-${state}`, surface) >= 3]).toEqual([state, surface, true]);
       }
     }
@@ -271,24 +271,11 @@ describe("tokens.css (AC-09)", () => {
     expect(/\.tone-trace-unknown,[^{]*\{\s*border-style: dashed;/.test(appCss)).toBe(true);
   });
 
-  it("keeps a box outside the stage filter readable: secondary text, dimmed with its box, stays at 4.5:1 on all it can sit on (trace-views)", () => {
-    const opacity = Number(tokens.get("--flow-dimmed"));
-    expect(opacity).toBeGreaterThan(0.6);
-    const blended = (over: string, under: string) => {
-      const channels = (hex: string) => [1, 3, 5].map((at) => parseInt(resolve(hex).slice(at, at + 2), 16));
-      const [top, base] = [channels(over), channels(under)];
-      const mixed = top.map((value, index) => Math.round(value * opacity + (base[index] ?? 0) * (1 - opacity)));
-      return `#${mixed.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
-    };
-    for (const under of ["--surface-canvas", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
-      for (const box of ["--flow-box-surface", "--surface-canvas"]) {
-        tokens.set("--test-dimmed-text", blended("--text-secondary", under));
-        tokens.set("--test-dimmed-surface", blended(box, under));
-        expect([under, box, contrast("--test-dimmed-text", "--test-dimmed-surface") >= 4.5]).toEqual([under, box, true]);
-        tokens.delete("--test-dimmed-text");
-        tokens.delete("--test-dimmed-surface");
-      }
-    }
+  it("sizes the Flow studio's panes: places 15rem, panel 22rem, the canvas 20rem at least; nothing dims (writer-studio D6, D7)", () => {
+    expect([tokens.get("--flow-places-width"), tokens.get("--flow-panel-width"), tokens.get("--flow-canvas-min")]).toEqual(["15rem", "22rem", "20rem"]);
+    expect(tokens.has("--flow-dimmed")).toBe(false);
+    // No frame is drawn: a group is entered, never opened in place (D1).
+    expect([...tokens.keys()].filter((name) => name.startsWith("--flow-frame"))).toEqual([]);
   });
 
   it("keeps a gap row that cannot be measured off None's colour, and None's off cannot-verify's (AC-08 of flow-canvas)", () => {
@@ -296,7 +283,7 @@ describe("tokens.css (AC-09)", () => {
     for (const state of FLOW_GAP.filter((value) => value !== "none")) {
       expect([state, resolve(`--flow-gap-${state}`).toLowerCase() === resolve("--flow-gap-none").toLowerCase()]).toEqual([state, false]);
     }
-    for (const surface of ["--flow-box-surface", "--flow-frame-surface", "--flow-frame-surface-nested"]) {
+    for (const surface of ["--flow-box-surface"]) {
       expect(contrast("--text-primary", surface)).toBeGreaterThanOrEqual(4.5);
       expect(contrast("--text-secondary", surface)).toBeGreaterThanOrEqual(4.5);
     }

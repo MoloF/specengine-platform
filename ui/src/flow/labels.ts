@@ -1,4 +1,5 @@
 import type { FlowEdge, FlowGap, FlowNode, FlowView, TraceCounts } from "../api/types";
+import type { FlowEdgeKey } from "../app/routes";
 import { compareText, nodeName } from "../graph/layout";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
@@ -89,11 +90,32 @@ export function edgeWords(edge: FlowEdge): string[] {
   return words;
 }
 
-/** An edge as `spec flow` prints it: `<from> -> <to> | <type> | x<count>[ | kind <kind>][ | when <when>] | <path>:<line>`. */
-export function edgeLine(edge: FlowEdge): string {
-  const kind = edge.kind === null ? "" : ` | kind ${edge.kind}`;
-  const when = edge.when === null ? "" : ` | when ${edge.when}`;
-  return `${edge.from} -> ${edge.to} | ${edge.type} | x${String(edge.count)}${kind}${when} | ${edge.path}:${String(edge.line)}`;
+/** An arrow's key as the hash names it (docs/features/writer-studio.md D4): its served from, to, type and kind. */
+export function edgeKeyOf(edge: FlowEdge): FlowEdgeKey {
+  return { from: edge.from, to: edge.to, type: edge.type, kind: edge.kind };
+}
+
+/** A key as one text: two keys name one arrow when their texts are equal. */
+export function edgeKeyText(key: FlowEdgeKey): string {
+  return [key.from, key.to, key.type, key.kind ?? ""].join("\n");
+}
+
+/** An arrow's row in the List: `<type> <to name>, <to title>[, <kind>][, when <when>][, ×<count>]`, its words whole, type raw. */
+export function edgeRowWords(edge: FlowEdge, toTitle: string | null, t: Translate): string {
+  const parts = [`${edge.type} ${edge.to}`];
+  if (toTitle !== null) {
+    parts.push(toTitle);
+  }
+  if (edge.kind !== null) {
+    parts.push(edge.kind);
+  }
+  if (edge.when !== null) {
+    parts.push(t("flow.edgeWhen", { when: edge.when }));
+  }
+  if (edge.count > 1) {
+    parts.push(`\u00d7${String(edge.count)}`);
+  }
+  return parts.join(", ");
 }
 
 /** An edge's accessible name: `<from> <type> <to>`, then what it says. */
@@ -126,6 +148,24 @@ export function gapMeaning(code: string, t: Translate): string | null {
 /** `no-start`'s item is the read's scope, no document: it stays text, never a button. */
 export function namesDocuments(gap: FlowGap): boolean {
   return gap.code !== "no-start";
+}
+
+/** Whether a row was measured: its items can go to the AI as a card (docs/features/writer-studio.md D11). */
+export function isMeasured(gap: FlowGap): boolean {
+  return gap.state === "measured";
+}
+
+/** The longest card title a gap's members make before they are cut to the first and a count. */
+export const HAND_TITLE_LONGEST = 120;
+
+/** A gap's card title: `Gap <code>: <m1> + <m2>…`; past 120 characters `Gap <code>: <m1> and <k> more`. */
+export function handTitle(code: string, members: readonly string[], t: Translate): string {
+  const whole = t("flow.handTitle", { code, members: members.join(" + ") });
+  const [first] = members;
+  if (Array.from(whole).length <= HAND_TITLE_LONGEST || first === undefined || members.length < 2) {
+    return whole;
+  }
+  return t("flow.handTitleCut", { code, first, count: members.length - 1 });
 }
 
 const STATES: readonly string[] = ["measured", "not_configured", "cannot"];
@@ -176,15 +216,9 @@ function rowNamesIt(t: Translate): GapMark {
   return { shown: t("flow.gapMark.shown"), said: t("flow.gapMark.said") };
 }
 
-/**
- * A box's gap mark, the same on the canvas and in the List; null for none. A closed group counts what
- * it holds. An open group says only what names it: what it holds shows on its own boxes.
- */
-export function gapMark(node: FlowNode, drawnOpen: boolean, named: ReadonlySet<string>, t: Translate): GapMark | null {
+/** A box's gap mark, the same on the canvas and in the List; null for none. A group counts what it holds. */
+export function gapMark(node: FlowNode, named: ReadonlySet<string>, t: Translate): GapMark | null {
   const namesIt = named.has(nodeName(node));
-  if (drawnOpen) {
-    return namesIt ? rowNamesIt(t) : null;
-  }
   if (node.holds > 0 && node.gaps > 0) {
     const text = withGapsText(node.gaps, t);
     return { shown: text, said: text };
@@ -226,9 +260,16 @@ export function startWord(inLane: boolean, t: Translate): string {
   return inLane ? t("flow.entry") : t("flow.start");
 }
 
-/** `<n> box(es), <e> edge(s)` of a read. */
-export function readCount(view: Pick<FlowView, "nodes" | "edges">, t: Translate): string {
-  return `${t("flow.boxes", { count: view.nodes.length })}, ${t("flow.edges", { count: view.edges.length })}`;
+/** What a read left out, `Left out: 3 generated, 1 archived`; null when nothing. */
+export function leftOutWords(leftOut: { generated: number; tier3: number }, t: Translate): string | null {
+  const parts: string[] = [];
+  if (leftOut.generated > 0) {
+    parts.push(t("flow.leftOutGenerated", { count: leftOut.generated }));
+  }
+  if (leftOut.tier3 > 0) {
+    parts.push(t("flow.leftOutArchived", { count: leftOut.tier3 }));
+  }
+  return parts.length === 0 ? null : t("flow.leftOut", { parts: parts.join(", ") });
 }
 
 /** A box's words as the panel, the canvas and the List say them. */
@@ -308,9 +349,17 @@ export function stageWords(stage: string | null, t: Translate): string {
   return stage ?? t("flow.noStage");
 }
 
-/** Where a step stands on the walk, counted from one; a distance the read did not give is not known, never a place. */
-export function stepWords(distance: number | null, t: Translate): string {
-  return distance === null ? t("flow.stepUnknown") : t("flow.step", { n: distance + 1 });
+/** What `spec flow --stage` and the hash take for the steps with no `stage:`. */
+export const NO_STAGE_ASKED = "-";
+
+/** A stage as asked (the hash's `stage=`), as a person reads it: `-` is No stage, any other value as served. */
+export function askedStageWords(asked: string, t: Translate): string {
+  return asked === NO_STAGE_ASKED ? t("flow.noStage") : asked;
+}
+
+/** A stage of 0 nodes, in words: none carries it; for `-`, every step has one. */
+export function emptyStageWords(asked: string, t: Translate): string {
+  return asked === NO_STAGE_ASKED ? t("flow.emptyNoStage") : t("flow.emptyStage", { stage: asked });
 }
 
 /** The lane's score: `<c> of <n> confirmed`. */
@@ -318,17 +367,12 @@ export function confirmedLine(confirmed: number, total: number, t: Translate): s
   return t("flow.confirmed", { confirmed, count: total });
 }
 
-/** No step has a card: a card may still stand elsewhere, on a target gone, and a note then says so. */
-export function noCardsYet(t: Translate): string {
-  return t("flow.noCardsYet");
-}
-
 /** Beside a re-read that failed: what stands under it is the last read's, not the state now. */
 export function lastReadWords(t: Translate): string {
   return t("flow.lastRead");
 }
 
-/** Beside the top read's failed re-read, on a tab drawing boxes: of those, only the top level's are that read's. */
+/** Beside the drawing read's failed re-read: its boxes say no state until it reads again. */
 export function statesHiddenWords(t: Translate): string {
   return t("flow.statesHidden");
 }
@@ -338,7 +382,3 @@ export function gapNotRead(t: Translate): Look {
   return { label: t("flow.gap.notRead"), tone: "flow-gap-unknown", icon: "unknown" };
 }
 
-/** No document has a stage: one lane, and what would give it others. */
-export function noStagesYet(t: Translate): string {
-  return t("flow.noStagesYet");
-}

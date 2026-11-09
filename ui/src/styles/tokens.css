@@ -183,8 +183,6 @@
   --flow-end: var(--accent);
   --flow-marked: var(--attention);
   --flow-box-surface: var(--surface-raised);
-  --flow-frame-surface: var(--surface-panel);
-  --flow-frame-surface-nested: var(--surface-canvas);
   --flow-repeat-width: 2.25;
 
   /* The Board (docs/features/board-ui.md): a closed card's two marks and a late one's, each a label
@@ -203,14 +201,19 @@
   /* A node against its cards (docs/features/trace-views.md): each state a label and an icon, never
      colour alone, none of them a hold on work. Confirmed is no sync colour, so it never reads as a
      check that passed; no card is the neutral of what is missing, drawn hollow; a word this build
-     does not know is dashed. Other boxes under the stage filter dim by this much. */
+     does not know is dashed. */
   --trace-confirmed: var(--card-accepted);
   --trace-in-work: var(--card-open);
   --trace-suspect: var(--card-suspect);
   --trace-departed: var(--card-departed);
   --trace-no-card: var(--sync-unbound);
   --trace-unknown: var(--severity-unknown);
-  --flow-dimmed: 0.72;
+
+  /* The Flow studio's panes (docs/features/writer-studio.md D6): places and panel fixed, the canvas
+     at least this wide between them. */
+  --flow-places-width: 15rem;
+  --flow-panel-width: 22rem;
+  --flow-canvas-min: 20rem;
 
   /* Section diffs. */
   --diff-added-surface: #123628;

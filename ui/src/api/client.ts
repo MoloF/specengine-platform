@@ -88,14 +88,17 @@ export interface GraphOptions {
 }
 
 /**
- * `spec flow`: ROOT, `--depth N`, `--trace`. The screen always sends a `depth`: the top is `depth=0`,
- * a group `root=G&depth=1`; a whole-flow read, which fails at volume, is never made
- * (`docs/features/flow-canvas.md` "Reads"). `trace` is sent only as true, and the Flow always sends
- * it (`docs/features/trace-views.md` "Flow badges").
+ * `spec flow`: ROOT, `--depth N`, `--stage S`, `--trace` (`docs/canon/spec-flow.md` "The read"). The
+ * screen sends one of three forms: the top `depth=0`, a scope `root=R&depth=1`, a stage of a scope
+ * `root=R&stage=S`; a whole-flow read, which fails at volume, is never made
+ * (`docs/features/writer-studio.md` D2). `trace` is sent only as true, and the Flow always sends it
+ * (`docs/features/trace-views.md` "Flow badges").
  */
 export interface FlowOptions {
   root?: string;
   depth?: number;
+  /** A served lane's stage, `-` for the steps with none. */
+  stage?: string;
   trace?: boolean;
 }
 

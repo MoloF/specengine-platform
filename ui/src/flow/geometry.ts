@@ -22,6 +22,9 @@ export interface Run {
   y: number;
 }
 
+/** The band along an arrow a click takes, in px: wide enough to hit, its stroke unseen (docs/features/writer-studio.md D8). */
+export const EDGE_HIT = 12;
+
 /** A box of the flow: the Graph's box and a line more, its state under its marks (docs/features/trace-views.md "Flow badges"). */
 export const BOX_HEIGHT = 92;
 
@@ -142,10 +145,7 @@ export function inView(box: Rect, view: { x: number; y: number; zoom: number; wi
   return left >= 0 && top >= 0 && left + box.width * view.zoom <= view.width && top + box.height * view.zoom <= view.height;
 }
 
-/** Free under a fitted picture: the canvas's controls stand there, over no box. */
-const CONTROLS_ROOM = 44;
-
-/** The fit's zoom: the flow fills the width, no larger than 100 %, no smaller than readable. Height has no say: the canvas follows the picture. */
+/** The fit's zoom: the flow fills the width, no larger than 100 %, no smaller than readable. Height has no say: a tall picture is panned. */
 function fitZoom(pictureWidth: number, width: number): number {
   return Math.max(FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, (width - 2 * FIT_MARGIN) / pictureWidth));
 }
@@ -162,11 +162,6 @@ export function fitOf(picture: { width: number; height: number }, width: number,
   const zoom = fitZoom(picture.width, width);
   const along = (size: number, span: number) => (span * zoom <= size - 2 * FIT_MARGIN ? (size - span * zoom) / 2 : FIT_MARGIN);
   return { x: along(width, picture.width), y: along(height, picture.height), zoom };
-}
-
-/** The height that holds a fitted picture whole, its margins and the controls under it: a short flow takes a short canvas. Null with no width yet. */
-export function fittedCanvasHeight(picture: { width: number; height: number }, width: number): number | null {
-  return width <= 0 ? null : Math.ceil(picture.height * fitZoom(picture.width, width) + 2 * FIT_MARGIN + CONTROLS_ROOM);
 }
 
 /** A duration token in milliseconds: 0 under reduced motion, or where no style sheet applies. */

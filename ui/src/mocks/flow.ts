@@ -11,11 +11,12 @@ import { HARBOR_STAGES } from "./trace";
 // written down, then kept to a read's scope. A mock is the one place that may lift an edge: the
 // screen never does.
 //
-// harbor-sim, over its own live documents: DOM-HARBOR over DOM-WATER, MEC-PILOTAGE, MEC-FAIRWAY and
-// DOM-BERTHS; every link type and `kind`; arcs against the walk with a kind and without one; a step
-// that repeats itself; MEC-TIDE-TABLES, a definition two levels under DOM-WATER, the gap item
-// `getTree` has to find; the berth limits, a child of DOM-BERTHS with no flow link, so only a rooted
-// read holds it.
+// harbor-sim, over its own live documents: DOM-HARBOR over DOM-WATER, MEC-PILOTAGE, MEC-FAIRWAY,
+// DOM-BERTHS and DOM-PILOTS; the three link types and every `kind`; arcs against the walk with a
+// kind and without one; a step that repeats itself; MEC-TIDE-TABLES, a definition two levels under
+// DOM-WATER, the gap item `getTree` has to find; the berth limits, a child of DOM-BERTHS with no flow
+// link, so only a rooted read holds it; the pilot station's steps in landfall, passage and quayside,
+// so each of those stages spans two groups (docs/features/writer-studio.md "Mocks (`ui/src/mocks/`)").
 // ledger-api: no `[flow]`, so its rows are `not_configured`. `empty`: no flow, the rows stay.
 // `large`: 500 documents in 25 groups, generated, past the canvas's cap once a few open.
 // `no-gaps`: harbor-sim's own links, its ten rows written down at None.
@@ -54,6 +55,9 @@ export interface MockFlow {
   rows: FlowGap[];
   leftOut: { generated: number; tier3: number };
 }
+
+/** What `spec flow --stage` takes for the steps with no `stage:`. */
+const NO_STAGE = "-";
 
 /** A row's line above 0, as `spec flow` words it (`crates/specengine-cli/src/flow.rs` `remedy`). */
 export const GAP_REMEDIES: Readonly<Record<string, string>> = {
@@ -95,9 +99,12 @@ const HARBOR_LINKS: FlowLink[] = [
   follows("MEC-FAIRWAY", "MEC-PILOTAGE"),
   follows("RULE-SPRING-WINDOW", "RULE-SPRING-WINDOW", "repeat", "the next spring tide"),
   { from: "MEC-MOORING", to: "RULE-HIGH-WATER", type: "uses" },
-  { from: "MEC-FAIRWAY", to: "RULE-HIGH-WATER", type: "depends_on" },
   { from: "MEC-TIDE-TABLES", to: "RULE-SPRING-WINDOW", type: "supplies" },
   { from: "RULE-HIGH-WATER", to: "MEC-MOORING", type: "supplies" },
+  // The pilot station: a call after the spring window, the log after the call, the return after mooring.
+  follows("RULE-SPRING-WINDOW", "MEC-PILOT-CALL"),
+  follows("MEC-PILOT-CALL", "MEC-HARBOUR-LOG"),
+  follows("MEC-MOORING", "MEC-PILOT-RETURN"),
 ];
 
 const HARBOR_ROWS: FlowGap[] = [
@@ -147,7 +154,6 @@ const LEDGER_LINKS: FlowLink[] = [
   follows("POL-WRITES", "POL-REFUND-RULES"),
   follows("POL-REFUND-RULES", "EP-REFUNDS"),
   follows("EP-REFUNDS", "POL-REFUND-RULES", "repeat", "the amount is corrected"),
-  { from: "EP-REFUNDS", to: "POL-WRITES", type: "depends_on" },
 ];
 
 /** The live documents of a corpus: tier 3 and generated stay out, counted; `stages` the project's `stage:` keys. */
@@ -218,7 +224,12 @@ function byText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-/** `spec flow` over a mock flow: the scope, the walk, the fold, the lifted edges, the rows kept to the scope. */
+/**
+ * `spec flow` over a mock flow: the scope, the walk, the fold, the lifted edges, the rows kept to the
+ * scope; then `stage` cuts the shown nodes after the fold and moves nothing else
+ * (`docs/canon/spec-flow.md` "The read"): a node whose own stage is S, `-` a shown step with none,
+ * never a group or a definition, then the edges whose two ends are kept.
+ */
 function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"> {
   const byName = new Map(flow.documents.map((document) => [document.name, document]));
   const kids = new Map<string, FlowDocument[]>();
@@ -298,11 +309,12 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
     return at;
   };
 
+  // Under a ROOT the mock serves Top's rows, keeping the items with a member in scope: the mock's reading.
   const rows = flow.rows.map((row): FlowGap => {
     if (options.root === undefined || row.state !== "measured") {
       return row;
     }
-    return measured(row.code, row.items.filter((item) => item.every(inScope)));
+    return measured(row.code, row.items.filter((item) => item.some(inScope)));
   });
   const named = new Set(rows.flatMap((row) => (row.code === "no-start" ? [] : row.items.flat())));
   const holds = new Map<string, number>();
@@ -367,7 +379,7 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
     }
   }
 
-  const nodes: FlowNode[] = [...scope]
+  const shown: FlowNode[] = [...scope]
     .filter((name) => inScope(name) && shownAs(name) === name)
     .flatMap((name) => {
       const document = byName.get(name);
@@ -397,7 +409,12 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
       ];
     })
     .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity) || byText(a.path, b.path));
-  const edges = [...merged.values()].sort((a, b) => byText(a.from, b.from) || byText(a.to, b.to) || byText(a.type, b.type) || byText(a.kind ?? "", b.kind ?? ""));
+  const folded = [...merged.values()].sort((a, b) => byText(a.from, b.from) || byText(a.to, b.to) || byText(a.type, b.type) || byText(a.kind ?? "", b.kind ?? ""));
+  const isStep = (node: FlowNode) => node.holds === 0 && steps.has(node.id ?? node.path);
+  const kept = options.stage === undefined ? shown : shown.filter((node) => (options.stage === NO_STAGE ? node.stage === null && isStep(node) : node.stage === options.stage));
+  const keptNames = new Set(kept.map((node) => node.id ?? node.path));
+  const edges = options.stage === undefined ? folded : folded.filter((edge) => keptNames.has(edge.from) && keptNames.has(edge.to));
+  const nodes = kept;
   return {
     root: options.root ?? null,
     depth: options.depth ?? null,

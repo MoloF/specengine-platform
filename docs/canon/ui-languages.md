@@ -46,7 +46,7 @@ Plural forms by `Intl.PluralRules` (Russian 1, 21 `one`; 2-4 `few`; 0, 5-20 `man
 
 ## Converted
 
-`src/app/`, `palette/`, `overview/`, `ui/`, `workspace/`; the six `labels.ts`, `tasks/groups.ts`, `main.tsx`'s mock lines, dates. Other screens stay English until 2b (`src/flow/`) and RM-0090; a slice touching a screen keys its new strings and adds its directory to the scan.
+`src/app/`, `palette/`, `overview/`, `ui/`, `workspace/`, `flow/` (2b, `writer-studio`); the six `labels.ts`, `tasks/groups.ts`, `main.tsx`'s mock lines, dates. Other screens stay English until RM-0090, `tree/LinksPanel.tsx` and `trace/CardsBlock.tsx` inside Flow's panel too; a slice touching a screen keys its new strings and adds its directory to the scan.
 
 ## Guards
 
@@ -57,7 +57,7 @@ Plural forms by `Intl.PluralRules` (Russian 1, 21 `one`; 2-4 `few`; 0, 5-20 `man
 ## Known limits
 
 - Until RM-0090 a converted label sits in an English screen.
-- Every page loads both catalogs, +99 kB at 1b; past +120 kB Russian goes to a lazy chunk.
+- Every page loads both catalogs: the main chunk +99 kB at 1b, +111 kB after 2b (726.99 kB), near the bar: past +120 kB Russian goes to a lazy chunk, RM-0090's to weigh as its strings land.
 - Spec content carries no `lang`; one choice per browser, no cross-tab sync.
 - The Russian awaits the owner's review; rewording breaks no test.
 

@@ -4696,94 +4696,402 @@ mark {
   flex-wrap: wrap;
 }
 
-/* The Flow (docs/features/flow-canvas.md): the gaps and the panel beside the canvas above 64rem;
-   under it stacked, the canvas first; under 48rem the gaps above, the panel below. The canvas shares
-   the Graph's base.css roles. */
-.flow-results {
+/* The Flow studio (docs/features/writer-studio.md D6): places, the canvas and the panel in three
+   fixed panes. Above 64rem it fills the viewport below the shell, measured, never a constant, and
+   the page never scrolls: each pane scrolls inside. From 64 to 80rem the places pane folds into a
+   disclosure over the canvas; under 64rem the panes stack and the page scrolls. The canvas shares
+   the Graph's base.css roles. Every pane that scrolls or clips is positioned: an absolutely
+   positioned descendant (a visually hidden label) then stays inside it and adds nothing to the
+   page's own scroll. */
+.flow-studio {
+  position: relative;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "head" "places" "centre" "panel";
   gap: var(--space-3);
   min-width: 0;
 }
 
-.flow-stage {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: "gaps" "main" "panel";
-  gap: var(--space-4);
-  align-items: start;
+.flow-head {
+  display: flex;
+  flex-wrap: wrap;
+  grid-area: head;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
   min-width: 0;
 }
 
-.flow-main {
+.flow-head h1 {
+  flex: none;
+}
+
+/* The scope's title, cut with an ellipsis rather than a second line. */
+.flow-head-title {
+  flex: 1 1 6rem;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-head .tabs {
+  flex: none;
+}
+
+.flow-about {
+  position: relative;
+  flex: none;
+}
+
+/* The about text and the daemon's notes lie over the panes: the header stays one line. */
+.flow-about-body {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 6;
   display: grid;
-  grid-area: main;
+  gap: var(--space-2);
+  width: min(30rem, calc(100vw - 2 * var(--space-4)));
+  max-height: 60dvh;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-m);
+  background: var(--surface-overlay);
+}
+
+.flow-places {
+  position: relative;
+  grid-area: places;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.flow-places:not(.is-open) .flow-places-body {
+  display: none;
+}
+
+.flow-places-body {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.flow-places-part {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.flow-places-heading {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: 600;
+}
+
+.flow-places-body ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-places-body a {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  min-height: max(var(--target-min), 2rem);
+  padding: var(--space-1) var(--space-2);
+  border-left: 3px solid transparent;
+  border-radius: var(--radius-s);
+  color: var(--text-primary);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.flow-places-body a:hover {
+  background: var(--surface-raised);
+}
+
+/* Where you are, by more than colour: a bar and a weight. */
+.flow-places-body a[aria-current] {
+  border-left-color: var(--accent);
+  background: var(--surface-raised);
+  font-weight: 650;
+}
+
+.flow-places-body .module-option {
+  min-height: max(var(--target-min), 2rem);
+  border: 0;
+  border-left: 3px solid transparent;
+}
+
+.flow-places-groups {
+  margin-left: var(--space-3);
+}
+
+.flow-places-words {
+  display: grid;
+  min-width: 0;
+}
+
+.flow-places-name,
+.flow-places-score {
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+  font-weight: 400;
+}
+
+.flow-places-lane .trace-bar {
+  flex: 1 1 100%;
+  height: 6px;
+}
+
+.flow-centre {
+  position: relative;
+  display: grid;
+  grid-area: centre;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.flow-view-area {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+
+.flow-view-area > .tab-panel {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  padding-top: 0;
+}
+
+.flow-canvas-region {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  height: min(70dvh, 40rem);
+  min-width: 0;
+  min-height: 16rem;
+}
+
+.flow-canvas-region:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* The legend lies over the canvas from its bottom edge, at most half its height, and scrolls inside. */
+.flow-legend {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
+  max-height: 50%;
+  overflow: auto;
+  border-color: var(--border-control);
+}
+
+/* The bar: the Legend and, past the cap, what was not drawn; one line. */
+.flow-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-3);
+  min-width: 0;
+  padding: var(--space-1) 0;
+  background: var(--surface-canvas);
+}
+
+.flow-bar-cut {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-s);
+}
+
+.flow-panel {
+  position: relative;
+  display: grid;
+  grid-area: panel;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-m);
+  background: var(--surface-panel);
+}
+
+.flow-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-2);
+}
+
+.flow-panel-title {
+  font-size: var(--font-size-m);
+  overflow-wrap: anywhere;
+}
+
+.flow-panel-back {
+  margin: 0;
+}
+
+.flow-panel-section {
+  display: grid;
   gap: var(--space-2);
   min-width: 0;
 }
 
-.flow-details {
-  grid-area: panel;
+.flow-panel-actions,
+.flow-panel-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
 }
 
-.flow-stage.no-gaps {
-  grid-template-areas: "main" "panel";
+.flow-panel-counts {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--font-size-s);
+  font-weight: 600;
 }
 
-@media (min-width: 48rem) and (max-width: 63.99rem) {
-  .flow-stage:not(.no-gaps) {
-    grid-template-areas: "main" "panel" "gaps";
+.flow-panel-inner {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* Under 64rem the bar keeps to the viewport's foot as the page scrolls; a focused control clears it. */
+@media (max-width: 63.99rem) {
+  .flow-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    border-top: 1px solid var(--border-subtle);
+  }
+
+  html:has(.flow-bar) {
+    scroll-padding-bottom: 3rem;
+  }
+
+  /* The about text opens under the header across its width: at 320px it stays on the screen. */
+  .flow-head {
+    position: relative;
+  }
+
+  .flow-about {
+    position: static;
+  }
+
+  .flow-about-body {
+    right: 0;
+    left: 0;
+    width: auto;
   }
 }
 
 @media (min-width: 64rem) {
-  .flow-stage {
-    grid-template-rows: auto 1fr;
-    grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
-    grid-template-areas: "main panel" "main gaps";
-    row-gap: 0;
+  .flow-studio {
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-columns: minmax(var(--flow-canvas-min), 1fr) var(--flow-panel-width);
+    grid-template-areas: "head head" "places places" "centre panel";
+    height: calc(100dvh - var(--flow-studio-top, 8rem) - var(--space-6));
+    overflow: hidden;
   }
 
-  .flow-stage.no-gaps {
-    grid-template-areas: "main panel" "main panel";
+  /* The shell's body sizes to its content on Flow: a header wrapped to two rows (measured into
+     --flow-studio-top) must not push the page past the viewport. Other screens keep their floor. */
+  .app-body:has(.flow-studio) {
+    min-height: 0;
   }
 
-  /* The side column gone with the gaps and no panel open: the canvas takes the width. */
-  .flow-stage.no-side {
-    grid-template-rows: auto;
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "main";
+  .flow-head {
+    flex-wrap: nowrap;
   }
 
-  .flow-details {
-    margin-bottom: var(--space-4);
+  .flow-panel {
+    width: var(--flow-panel-width);
+  }
+
+  .flow-canvas-region {
+    height: 100%;
+    min-height: 0;
+  }
+
+  .flow-view-area > .tab-panel {
+    overflow: auto;
+  }
+
+  /* From 64 to 80rem: a strip with Places; open, the pane lies over the canvas, which keeps its width. */
+  .flow-places {
+    position: relative;
+    z-index: 5;
+    overflow: visible;
+  }
+
+  .flow-places.is-open .flow-places-body {
+    position: absolute;
+    top: calc(100% + var(--space-1));
+    left: 0;
+    width: var(--flow-places-width);
+    max-height: calc(100dvh - var(--flow-studio-top, 8rem) - 8rem);
+    overflow: auto;
+    border-color: var(--border-control);
   }
 }
 
-.flow-tools {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: var(--space-2);
-}
+@media (min-width: 80rem) {
+  .flow-studio {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-columns: var(--flow-places-width) minmax(var(--flow-canvas-min), 1fr) var(--flow-panel-width);
+    grid-template-areas: "head head head" "places centre panel";
+  }
 
-.flow-tools .tabs {
-  flex: 1 1 auto;
-}
+  .flow-places {
+    overflow: auto;
+  }
 
-.flow-stage-filter {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
+  .flow-places-toggle {
+    display: none;
+  }
 
-/* Stands where the gaps button does, and as tall, so the tools do not jump when a row turns up. */
-.flow-gaps-clear {
-  align-items: center;
-  min-height: max(var(--target-min), 2.25rem);
-}
-
-.flow-gaps-clear .icon {
-  color: var(--flow-gap-none);
+  .flow-places:not(.is-open) .flow-places-body,
+  .flow-places.is-open .flow-places-body {
+    position: relative;
+    display: grid;
+    width: auto;
+    max-height: none;
+    overflow: visible;
+  }
 }
 
 .flow-failed {
@@ -4793,19 +5101,16 @@ mark {
   gap: var(--space-2);
 }
 
-.flow-limit {
-  margin: 0;
+.flow-gaps-clear .icon {
+  color: var(--flow-gap-none);
 }
 
 .flow-gaps {
   display: grid;
-  grid-area: gaps;
   gap: var(--space-2);
   min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
-  background: var(--surface-panel);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .flow-gap-list,
@@ -4863,8 +5168,23 @@ mark {
 }
 
 .flow-gap-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2px var(--space-2);
   min-width: 0;
   overflow-wrap: anywhere;
+}
+
+.flow-gap-members {
+  min-width: 0;
+}
+
+.flow-gap-hand {
+  min-height: var(--target-min);
+  padding-block: 0;
+  font-size: var(--font-size-s);
 }
 
 .flow-gap-item .link-button {
@@ -4877,27 +5197,18 @@ mark {
   font-weight: 650;
 }
 
-/* As high as the fitted picture wants, never past the Graph's measure: a short flow takes a short canvas. */
-.flow-canvas {
-  height: min(var(--flow-canvas-fitted, 100vh), clamp(24rem, 72vh, 52rem));
+/* The canvas fills its region: the picture is panned, never the page (D9). */
+.flow-canvas-region .flow-canvas {
+  flex: 1 1 auto;
+  height: auto;
   min-height: 12rem;
-}
-
-/* A row under the picture: over no box. */
-.flow-canvas .react-flow__controls-button {
-  border-right: 1px solid var(--border-subtle);
-  border-bottom: 0;
-}
-
-.flow-canvas .react-flow__controls-button:last-child {
-  border-right: 0;
 }
 
 .flow-canvas .react-flow__minimap {
   margin: var(--space-1) var(--space-2);
 }
 
-/* Labels over every lane; the edges' stacking is the layout's. */
+/* Labels over every edge; the edges' stacking is the layout's. */
 .flow-canvas .react-flow__edgelabel-renderer {
   z-index: 100;
 }
@@ -4906,10 +5217,9 @@ mark {
   stroke-linecap: round;
 }
 
-.flow-canvas .react-flow__minimap-node.flow-node-frame {
-  fill: transparent;
-  stroke: var(--graph-minimap-node);
-  stroke-width: 4;
+/* An arrow takes a click on its band, so the hand says so. */
+.flow-canvas .react-flow__edge {
+  cursor: pointer;
 }
 
 .flow-box {
@@ -4938,8 +5248,7 @@ mark {
   white-space: nowrap;
 }
 
-.flow-box .icon,
-.flow-frame .icon {
+.flow-box .icon {
   width: 12px;
   height: 12px;
 }
@@ -4966,8 +5275,7 @@ mark {
     4px 4px 0 0 var(--border-control);
 }
 
-.flow-box.has-gap::before,
-.flow-frame.has-gap::before {
+.flow-box.has-gap::before {
   content: "";
   position: absolute;
   top: 8px;
@@ -4978,40 +5286,19 @@ mark {
   background: var(--flow-gap-found);
 }
 
-.flow-frame.has-gap::before {
-  bottom: auto;
-  height: 28px;
-}
-
-.flow-box.is-selected,
-.flow-frame.is-selected {
+.flow-box.is-selected {
   border: var(--xy-node-border-selected);
 }
 
-.flow-box.is-marked,
-.flow-frame.is-marked {
+.flow-box.is-marked {
   outline: 2px dashed var(--flow-marked);
   outline-offset: 3px;
 }
 
-.flow-box-title,
-.flow-head-title {
+.flow-box-title {
   min-width: 0;
   overflow: hidden;
   font-weight: 650;
-  text-overflow: ellipsis;
-}
-
-/* In a narrow head the name and the kind give way first: the title and the marks stay. */
-.flow-head-title {
-  flex: 0 1 auto;
-}
-
-.flow-head .flow-box-id,
-.flow-head .flow-box-kind {
-  flex: 0 100 auto;
-  min-width: 0;
-  overflow: hidden;
   text-overflow: ellipsis;
 }
 
@@ -5075,12 +5362,6 @@ mark {
 .flow-box.is-hollow {
   border-style: dashed;
   background: var(--surface-canvas);
-}
-
-/* Outside the stage filter: its place kept, its words still readable on a zoomed-in box. */
-.flow-box.is-dimmed,
-.flow-frame.is-dimmed .flow-head {
-  opacity: var(--flow-dimmed);
 }
 
 .flow-mark {
@@ -5170,33 +5451,6 @@ mark {
   color: var(--flow-marked);
 }
 
-.flow-frame {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-m);
-  background: var(--flow-frame-surface);
-  color: var(--xy-node-color);
-  font-size: var(--font-size-s);
-  cursor: pointer;
-}
-
-.flow-frame.nesting-1 {
-  background: var(--flow-frame-surface-nested);
-}
-
-.flow-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  height: 43px;
-  padding-inline: var(--space-3);
-  overflow: hidden;
-  border-bottom: 1px solid var(--border-subtle);
-  white-space: nowrap;
-}
-
 .flow-band {
   color: var(--text-secondary);
   font-size: var(--font-size-s);
@@ -5234,14 +5488,94 @@ mark {
   stroke-width: 2;
 }
 
+/* The List: an outline of links, each row selecting what it names (D10), in a region that takes
+   focus when a place change took it away (R9). */
+.flow-list-region {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.flow-list-region:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.flow-list {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-1) 0 var(--space-3);
+}
+
+.flow-list-boxes,
+.flow-list-edges {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-list-group {
+  margin: 0 0 var(--space-1);
+  font-size: var(--font-size-s);
+}
+
+.flow-list-box {
+  display: grid;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-s);
+  background: var(--surface-raised);
+  overflow-wrap: anywhere;
+}
+
 .flow-list-box[aria-current="true"] {
   border-color: var(--accent);
 }
 
-.flow-list-counts {
-  color: var(--text-primary);
+.flow-list-head,
+.flow-list-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--space-2);
+  min-width: 0;
+}
+
+.flow-list-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-2);
+  min-width: 0;
+}
+
+.flow-list-meta,
+.flow-list-holds {
+  color: var(--text-secondary);
   font-size: var(--font-size-s);
-  font-weight: 600;
+}
+
+.flow-list-edges {
+  margin-left: var(--space-4);
+  font-size: var(--font-size-s);
+}
+
+.flow-list-edges a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--target-min);
+}
+
+.flow-list-edges li[aria-current="true"] a {
+  font-weight: 650;
 }
 
 /* A bar drawn from served counts: its words always stand beside it; each part keeps a width to be seen at. */
@@ -5263,136 +5597,6 @@ mark {
 .trace-bar-part.is-hollow {
   border: 1px dashed var(--badge-color);
   background: transparent;
-}
-
-/* The Timeline (docs/features/trace-views.md): a lane per stage, its bar, its steps when open. */
-.timeline {
-  display: grid;
-  gap: var(--space-3);
-  min-width: 0;
-}
-
-.timeline-lanes,
-.timeline-parts,
-.timeline-steps {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.timeline-lanes {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.timeline-lane {
-  display: grid;
-  gap: var(--space-2);
-  padding: var(--space-3);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-m);
-  background: var(--surface-panel);
-}
-
-.timeline-lane-title {
-  margin: 0;
-  font-size: var(--font-size-m);
-}
-
-.timeline-lane-head {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: var(--target-min);
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--text-primary);
-  font: inherit;
-  text-align: start;
-  cursor: pointer;
-}
-
-.timeline-stage {
-  min-width: 0;
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
-.timeline-score {
-  flex: none;
-  margin-left: auto;
-  color: var(--text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.timeline-parts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-}
-
-.timeline-steps {
-  display: grid;
-  gap: var(--space-1);
-}
-
-.timeline-step {
-  display: grid;
-  grid-template-columns: minmax(0, 13rem) minmax(0, 1fr) 7.5rem 6.75rem;
-  align-items: center;
-  justify-items: start;
-  gap: var(--space-1) var(--space-3);
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-s);
-  background: var(--surface-raised);
-  overflow-wrap: anywhere;
-}
-
-/* A step with no card keeps its place in the walk, and nothing fills it. */
-.timeline-step.is-hollow {
-  border: 1px dashed var(--border-control);
-  background: transparent;
-}
-
-.timeline-step[aria-current="true"] {
-  border-color: var(--accent);
-}
-
-@media (max-width: 48rem) {
-  .timeline-step {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-}
-
-/* Each in its column, a step with no title too. */
-.timeline-step-name {
-  grid-column: 1;
-}
-
-.timeline-step-title {
-  grid-column: 2;
-}
-
-.timeline-step .timeline-step-place {
-  grid-column: 3;
-  justify-self: end;
-  font-size: var(--font-size-s);
-}
-
-.timeline-step .badge {
-  grid-column: 4;
-  justify-self: end;
-}
-
-@media (max-width: 48rem) {
-  .timeline-step > *,
-  .timeline-step .timeline-step-place,
-  .timeline-step .badge {
-    grid-column: auto;
-  }
 }
 
 /* A node's cards (docs/features/trace-views.md "A node's cards"): the Flow's panel and the tree's pane. */
@@ -5459,7 +5663,7 @@ mark {
   margin: 0;
 }
 
-.flow-details-text {
+.flow-panel-text {
   min-width: 0;
   overflow-wrap: anywhere;
 }

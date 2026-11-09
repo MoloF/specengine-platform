@@ -8,109 +8,94 @@ reviewed: 2026-11-09
 
 # The Flow screen
 
-The flow drawn, lifting nothing (ADR-0033, ADR-0055), its boxes against their cards; `flow-canvas`, `trace-views`; code `ui/src/flow/`, `ui/src/trace/`. The reads: `spec-flow.md`, `spec-trace.md`. Gaps and marks stop nothing (ADR-0012); a spec change stays with the AI, through proposals; a card is written from the panel.
+The flow as a three-pane studio, one scope at a time, lifting nothing (ADR-0033, ADR-0055), its boxes against their cards; `flow-canvas`, `trace-views`, `writer-studio`; code `ui/src/flow/`, `ui/src/trace/`. Reads: `spec-flow.md`, `spec-trace.md`; the place and the places pane: `spec-flow-place.md`; placing, fit, forms: `spec-flow-layout.md`. Gaps and marks stop nothing (ADR-0012); spec changes go through the AI's proposals; cards, a gap's too, are written from the panel.
 
-## Route
+## Studio
 
-`#/<p>/flow[/<name>]`, the name only selecting. A section, not a Graph mode: `spec graph` needs a REF, and its chips, impact switch and grid fit neither groups nor gap rows.
+A section, not a Graph mode (`spec graph` needs a REF). `.flow-studio`: places (`--flow-places-width` 15rem), the centre (the canvas, at least `--flow-canvas-min` 20rem, over the bar), the panel (`--flow-panel-width` 22rem).
+
+- **Header**, one line: the `h1` "Flow", the scope's title (` · <stage>` when chosen, an ellipsis when cut), the Canvas and List tabs, one disclosure (`flow.about`; with notes `flow.aboutNotes`) holding the about text, `left_out` and each note of every read shown, once.
+- **Canvas**, a `region` "Flow canvas", one read. A group is entered, a scope change, never opened in place: no frames, no open groups. A click selects a box; a double-click, its caret, Space or the panel's Open enters a group; a pane click does nothing; an edge click selects the edge (`EDGE_HIT`, 12 px). The wheel pans; a pinch, or the wheel with xyflow's zoom key, zooms; no zoom or fit buttons. No `onlyRenderVisibleElements`: a read draws at most 200 boxes, each reached by the arrow keys.
+- **Bar**, the centre's last row: the Legend toggle (`aria-expanded`) and, past the cap, `flow.notDrawn`. Open, the legend lies over the canvas from its bottom edge, at most half its height, scrolling inside; a focus or click in the canvas closes it.
+- **Width.** Above 64rem the studio fills the viewport below the shell (`100dvh` less the measured `--flow-studio-top`), `overflow: hidden`, each pane scrolling inside and positioned, so a hidden label adds no page scroll; `.app-body:has(.flow-studio)` drops the shell's floor. From 64 to 80rem the places fold into a disclosure (`flow.placesToggle`) opening over the canvas. Under 64rem one column (header, places closed, canvas, panel) and the page scrolls: `panOnScroll` off, `preventScrolling` false, a drag pans; the bar sticky, `scroll-padding-bottom` its height. Under 48rem the List is the default tab unless another is remembered.
 
 ## Reads
 
-| Read | Query | For |
+| Picture or pane | Call | When |
 |---|---|---|
-| Top | `depth=0&trace=true`, `root=` a module's (`workspaces.md`) | top boxes, edges lifted to them, gap rows, `left_out`, `notes` |
-| Group G | `root=G&depth=1&trace=true` | G's children, edges among them; one per open group |
-| Lanes | trace `summary=true` | the Stage filter, the Timeline |
-| Lane S | trace `stage=S`, `-` for none | its steps; one per open lane |
-| Node R | trace `ref=R` | the panel's Cards block |
+| Top | `getFlow({depth: 0, trace: true})` | no module, no scope: once, finding the lens root; drawn if it is one |
+| Scope R | `getFlow({root: R, depth: 1, trace: true})` | All stages |
+| Stage S in R | `getFlow({root: R, stage: S, trace: true})` | `-` for No stage |
+| Lanes | `getTrace({ref: R, summary: true})` | each rooted scope, never at Top |
+| Scope view | `getNode(R, {with: ["links"]})` | each rooted scope |
+| Box N | `getNode(N, {with: ["links"]})`, `getTrace({ref: N})` | N selected |
+| Seek | `getTree({})`, Top's read | on demand: a name no drawing read holds, a lens root unknown |
 
-- **No whole read.** Every `getFlow` carries a `depth`, always `trace`; a whole-flow read fails at volume. `getTrace` is never `{}` here. `getTree` on demand is the one wide read, for a gap activation or a route name no read holds, never to draw.
-- **Groups.** `holds > 0` is a closed group; a sole top group starts open. Group reads are enabled only while open, `staleTime: Infinity`, `refetchOnMount: "always"`, so a hand edit, which raises no event, shows on coming back. Closing keeps the answer; reopening reads nothing unless an event marked it.
-- **Nothing lifted.** Every drawn edge is the drawing read's, unchanged, `count` included.
-- **A crossing edge stays on the frame.** A read keeps only edges with both ends in scope, so G's read holds none across G. The enclosing read's lifted edge ends on G's frame or box, left port the entry, right port the exit; the child it reaches is in the panel's links.
-- **An edge between a group and its child**, in the group's read, is undrawn and shows in the List and the panel.
-
-## Layout
-
-`layout.ts` places each read, the view fits it and the edges take their forms: `spec-flow-layout.md`.
-
-- **Boxes.** Name, title, `kind`, marks, gaps; a closed group adds a caret and `<holds> documents`. `start` shows "Start" at Top and "Entry" in a group's lane, a closed group too, `end` "End": the read folds both. A box is 92 px tall, Flow only (`geometry.ts` `BOX_HEIGHT`). It shows its served rollup; a closed group its `counts`, `3 confirmed, 1 suspect, 2 no card`, zero parts left out, and a bar (`TraceBar.tsx`), a group's rollup covering its own cards only. A no-card step is hollow; open frames say nothing; no served rollup, no line.
-- **Cap.** `CANVAS_LIMIT`, 200 boxes: Top as served, then open groups by (nesting, name), partly drawing the last group; past it undrawn, with its edges; a group with no room stays closed; `<k> of <n> boxes not drawn: close a group, or read the List`.
-- **Stages:** no band: the Stage filter and the Timeline say them, across groups.
+- **No whole read.** Every `getFlow` is one of the three forms (`flowForm`), always `trace`; a stage read carries its scope's root, else it admits the whole stage. No `getTrace` is `{}` or holds `stage`; `getTree` never draws.
+- **The lens root**, the scope when the hash names none: the chosen module's `root`; else Top's one node, when Top holds exactly one and it holds documents; else the unrooted Top, offering no stage, only its groups.
+- **Kept answers.** Drawing keys: `staleTime: Infinity`, `refetchOnMount: "always"`: a place read before draws at once and reads again on a marking live event or the next entry, so a hand edit shows on coming back. Back and Forward over held places read nothing.
+- **Nothing lifted.** Each drawn edge is the read's, unchanged, `count` included; an edge into a group ends on its box. The scope's own node is not drawn: it is the panel's scope view, its edges in the List.
 
 ## Gap rows
 
-A list beside the canvas, outside the tabs: Top's ten rows as served, unknown states last; a group read's rows are not shown. All rows None on a fresh read: one line in the tools, no list, no side column.
+In the panel's scope view: the drawing read's ten rows as served, unknown states last; all None on a fresh read, one line.
 
 - **A row:** code raw, its meaning, a state in words: `None` at 0, `<n> found` with its `cause`; `Not configured` or `Cannot measure` with `cause` verbatim and no number, the latter in the `cannot-verify` colour and icon; another state a neutral badge.
-- **Items:** eight, then "Show all <n>", members joined ` + `; each a button, but `no-start`'s scope, text.
-- **Top not read.** A failed re-read of Top takes every row's state, items and cause ("Not read") and the top level's Gap marks; its line adds "Top-level boxes show no state until it reads.", not on the Timeline. Boxes under a group whose read landed keep theirs.
-- **Activating one** routes to the item's first member, marks all, centres the first; focus stays. In the List it scrolls to the row.
-- **A seek** runs once per route change or gap item, first member only. A name no read holds takes `getTree`, and closed boxes on its `parent` chain open top down. A refused box is skipped; a chain with a failed group read keeps its seek for Retry; a chain run out ends it with a note; the owner's close ends it.
-- **Marks.** A drawn box a row names shows "Gap"; a closed group its served `gaps`, `<g> with gaps`, by its own read's rows, so a nested group goes by its sub-flow's. An open group says only what names it.
-- **Hide gaps**, or Show gaps, collapses the side column, `aria-expanded` following; `localStorage` key `specengine.flow.gaps-hidden`, per viewer, for every project, `on` when hidden, removed when shown. Refused storage keeps the choice for the view alone. A selected box brings the side column back for its panel; an empty flow always shows rows. The line stands in this button's place; focus lost with it goes to the results.
+- **Items:** eight, then "Show all <n>", members joined ` + `; each a button, but `no-start`'s scope, text. Activating one selects its first member by a replace (undrawn: a seek, its fix a push), marks every drawn member, centres the first, focus to the panel heading.
+- **Hand to your AI**, beside each measured item: New card preset (`NewCardDialog` `preset`), members as targets in order, the `cause` verbatim as goal, `flow.handTitle` (`flow.handTitleCut` past 120 characters). Create is one `createCard`; no `T-` task. `no-start` hands the scope's root when rooted, nothing at Top.
+- **Marks.** A drawn box a row names shows "Gap"; a group box its served `gaps`.
 
 ## Panel
 
-A click or Enter routes the name. Beside the canvas: the box's words, `path:line`, `distance`, stage, a group's `inner` and Open or Close; the Cards block; text through `src/markdown/`; links by `LinksPanel`; "Open in Spec tree", "Open in Graph"; "Changes go through your AI, as proposals." The spec is read only here; a card is a queue row, written from this block. Esc closes, focus back on the box.
+`role="complementary"` "Details", always mounted, at `--flow-panel-width`, scrolling inside.
+
+- **The scope**, nothing selected: title, name, `kind`, counts and bar (the node's `counts`); text and links; Open in Spec tree; New card (the scope as target); the gap rows. At Top: `flow.topTitle` and the rows.
+- **A box**: its words, `path:line`, `distance`, stage, a group's `inner` and Open, its `group` with Open unless the scope, `backTo(scope)` on top, acting as Esc; the Cards block; text through `src/markdown/`; links by `LinksPanel`; "Open in Spec tree", "Open in Graph"; "Changes go through your AI, as proposals." The last box stays mounted, hidden, while the scope or an arrow shows, so coming back reads nothing.
+- **An edge**: From and To, each a link selecting that end (a group end adds Open); Type, raw; Kind, raw or `none`; When, or `none`; Links, the `count`; `path:line`, the first written.
 
 **Cards block.** `src/trace/CardsBlock.tsx`, here and in the tree's `NodePane`: the rollup, a read of more than one node its counts; each card once, its mark, `flow/column`, a link to the Board; `uses` rows; New card, the node preset. A suspect card's Clear is the Board's dialog and finishes on the page; a read of more than one node with one to clear adds Clear all, no effect only, one POST (`ClearGroupDialog`). With no row for the node (`rowOf`) it says the state is not known, never another's. A failed read: the daemon's words, Retry; a failed re-read adds that what stands below is from the last read.
 
+## List
+
+The canvas's text twin, in served order, past the cap too: each box an `<a>` selecting it by a replace (a group adds `<holds> documents` and Open); under it its outgoing edges, each a link selecting the edge, `<type> <to name>, <to title>[, <kind>][, when <when>][, x<count>]`; the scope's own edges first, under its name; in a stage view, boxes under their `group`. No row prints `path:line`; the panel does.
+
 ## States and live
 
-- Loading: a skeleton, `aria-busy`, until Top lands; a group opening stays closed, "Opening".
-- Failed Top: `ErrorPanel`, verbatim, Retry. Failed group read or re-read: the picture kept, a line, Retry. A failed re-read leaves no state above its line: Top's or a group's drops that read's badges, counts and gaps (`withoutStates`), the legend's state rows and the accessible names with them; the Cards block drops its state row. An unknown mark word is a neutral badge, never a clean tile. Each Retry hands focus on when the read settles, not when `data` changes.
-- Notes: the daemon's, of every read shown, group reads too, each once.
-- Empty: "No flow in this project yet. Next: have your AI add flow links."; the rows stay.
-- No `[flow]`: the canvas drawn; over the rows `<k> rows need [flow] rules in specengine.toml`. Bad `[flow]`: `Cannot measure`, `<config>:<line>: <message>`.
-- A name no read or chain finds: a note and a Tree link. A group read with `reason`: it closes, a note.
-- Live: `flow` and `cards` are in `READS_OF_THE_SPEC`: an apply or a gap reads what is open and marks the rest; a stage does not. `card.*` and decision events read the flows and traces again, so badges and lanes fill with no reload.
-
-## Timeline
-
-The third tab (`TimelineView.tsx`, `timeline.ts`). Lanes in served order, "No stage" last, from `getTrace({summary: true})`, shared with the filter and read again as the tab mounts.
-
-- **A lane:** the stage, `<c> of <n> confirmed`, a bar from served `counts`, each part labelled, never by colour alone.
-- **Open:** one `{stage}` read, enabled while open and kept closed, as a group's; steps by `distance`, off the walk last, each linked to the flow with its place, "Step <n>" from one, or "Step unknown", and its rollup. A `no card` step keeps its place, hollow, "No card".
-- **States.** Failed `summary`: `ErrorPanel`, Retry; a failed re-read of it or a lane: a line that what stands below is from the last read, Retry. No step with a card: "No step has a card yet. Next: open a step and press New card." No `stage:` anywhere: "Next: give documents a `stage:` key" over one "No stage" lane, or none when `stages` is `[]`. A bad `[flow]`: lanes by name, the daemon's note.
-
-## Stage filter
-
-A select beside the tabs, hidden on the Timeline, its options the served lanes': All stages, each stage, No stage; `timeline.ts` compares nothing but the served value. The Canvas dims other boxes and open frames' heads (`--flow-dimmed`, 0.72), keeping the layout; the List hides boxes and their edges. A group with no stage of its own is not judged (`outsideStage`, `keptInList`): not dimmed, not called outside, and the List keeps every group with its Open, the way to what it holds. A stage no lane serves any more reads as All. Failed `summary`: a line and Retry over the tabs.
+- Loading: a skeleton, `aria-busy`, until the drawing read lands; the places pane its own.
+- Failed drawing read: `ErrorPanel` in the canvas, verbatim, Retry. A failed re-read keeps the picture, a line and Retry, and drops what it cannot vouch for: badges, counts, gaps (`withoutStates`), the legend's state rows, those words in accessible names; rows "Not read". An unknown mark word is a neutral badge. Retry hands focus on when the read settles.
+- Empty: "No flow in this project yet. Next: have your AI add flow links."; a scope holding nothing `flow.emptyScope`, a stage of no node `flow.emptyStage` (`-`: `flow.emptyNoStage`); a scope naming nothing, the read's `reason`, the places at the lens root. The rows stand.
+- No `[flow]`: the canvas drawn, rows needing it `Not configured`. No start: derived starts; none, `distance` null, stages in the summary's order, boxes "Not on the walk", `no-start` and `unreachable` say why. Bad `[flow]`: `Cannot measure`, `<config>:<line>: <message>`.
+- A picture landing is announced politely (`flow.showing`, `flow.showingStage`).
+- Live: `flow` and `cards` are in `READS_OF_THE_SPEC`: an apply or a gap reads what is shown and marks the rest; `card.*` and decision events read flows and traces again.
 
 ## Keyboard, motion, width
 
-`ui/README.md` "Screen rules" applies; Canvas, List and Timeline tabs, kept per project in the Shell with the open groups, the filter and the open lanes (`FlowState`), never in the hash.
+`ui/README.md` "Screen rules" applies; the Canvas and List tabs are kept per project in the Shell (`spec-flow-place.md` "Memory"). Width: "Studio".
 
-- **Keys,** one tab stop. Arrows only move: Up, Down in a column; Left, Right across; Left from a first column to the frame head; Right on an open head into its lane; Right from a lane's last column climbs past the frame. Enter selects, focus to the panel heading. Space opens or closes a group, focus kept. `o` the Tree, `c` centres, Esc closes; `?` lists them.
-- **Focus.** A focused box leaving the picture hands focus to its enclosing head. Each box's name says its title, marks and gaps.
-- **Motion.** Viewport moves take `--duration-*`; frames never animate.
-- **Width.** Above `64rem`: the side column. Between 48 and 64rem the order is canvas, panel, gaps. Under `48rem`: gaps above, panel below, the List unless a tab is remembered, no sideways page scroll at 320 px.
+- **Keys,** one tab stop on the canvas, none on edges: the List is the keyboard's way to an arrow. Arrows move among boxes only, Up and Down in a column, Left and Right across. Enter selects, focus to the panel heading. Space enters a group, focus to the new picture's first box. `o` the Tree, `c` centres (`letterOf`); Esc closes the legend if open, else clears the selection, focus back where it was made; `?` lists them.
+- **Focus** stays on the link that changed the scope while it stands; lost, on the canvas region, never `body`. A box's name says its title, marks and gaps.
+- **Motion.** Viewport moves take `--duration-*`.
 
 ## Rules
 
-- No spec write; no hold word (ADR-0012); no link type quoted in app code. `src/flow/`, `src/trace/` branch on no rollup, stage or mark word but through `labels.ts` (`policy.test.ts`).
+- No spec write; no hold word (ADR-0012); no link type quoted in app code, `type` raw. `src/flow/`, `src/trace/` branch on no rollup, stage or mark word but through `labels.ts` (`policy.test.ts`).
 - The one exception to the `.kind` scan of `policy.test.ts`: `edge.kind` under `src/flow/`, the closed `FlowEdgeKind` of `mirror.rs`. `FlowNode.kind` stays scanned.
-- Texts: `labels.ts`, the views; pinned by tests.
+- Every chrome string of `src/flow/` is a `flow.` key (`ui-languages.md`) or a `labels.ts` word, data a placeholder; `src/flow/` is scanned.
 
 ## Mock
 
-`ui/src/mocks/flow.ts`, harbor-sim's documents and kinds: DOM-HARBOR over four groups, every link type and `kind`, arcs with a kind and without, a self-repeat, a definition two levels down for `getTree`, a child of DOM-BERTHS with no flow link. ledger-api has no `[flow]`. `empty`: rows and no node. `large`: 500 documents in 25 groups. `no-gaps`: harbor-sim's ten rows at None. `ui/src/mocks/trace.ts` serves `spec trace` over the mock board, `withTrace` the badges. The mock alone may lift an edge and join a rollup. `flow200()` in `src/test/flowStub.ts` is the trial's input.
+`ui/src/mocks/flow.ts`, harbor-sim: DOM-HARBOR's groups, DOM-PILOTS among them, so `landfall` and `quayside` each span two; MEC-HARBOUR-LOG's long title, body and token; every flow link type and `kind`, arcs, a self-repeat, a definition two levels down, a child of DOM-BERTHS with no flow link. `getFlow` cuts `stage` after the fold; under a ROOT it serves Top's rows, keeping items with a member in scope. ledger-api: no `[flow]`. `empty`: rows, no node. `large`: 500 documents in 25 groups. `no-gaps`: ten rows at None. `mocks/trace.ts` serves `spec trace`, a REF's lanes by its own walk; `withTrace` the badges. Only the mock may lift an edge or join a rollup. `flow200()` (`src/test/flowStub.ts`) is the trial's input.
 
 ## Known limits
 
-- **Decision 11, the owner's call.** The 200-box trial with random wiring passes (median 1.9 ms, no overlap) with 1,920 forward crossings, "a hairball by eye". The look at the cap, `?scenario=large`, is the owner's to judge. A layout library would need the owner's allowlist.
-- No round trip against a real daemon in a browser yet.
-- **320 px** is unproven by a test: it needs a browser. A headless look saw `scrollWidth` 320.
-- Exit steps carry no mark: core `Steps.leaving` is not served.
-- Only an item's first member is sought; the others are marked if drawn.
-- A crossing edge's child is named in the panel's links, not on the canvas.
-- In the List and the panel a group in flight has no "Opening" word and cannot be closed.
-- With no room left, the List shows the group's section while its row says "Open".
-- A Retry answered with `reason` drops focus to `body`; rare.
-- A refused group is re-read only on a live event, so after a hand edit its note stays until the view is left or the page reloaded.
-- A failed group cannot be dismissed: the line stays until a Retry or Open succeeds.
+- **Decision 11, the owner's call.** The 200-box trial with random wiring passes (median 1.9 ms, no overlap) with 1,920 forward crossings, "a hairball by eye"; the look at the cap, `?scenario=large`, is his to judge. A layout library needs his allowlist.
+- **Cost.** At 100k a scope change waits about 1.5 s on two O(N) reads, each taking a hub's project turn (`scale-eval.md` "Baseline").
+- **Up** comes from held reads: `spec-flow-place.md` "Known limits".
+- **Zoom.** No keyboard zoom or refit; the zoom and fit buttons are gone, a working answer for the owner to confirm. The List is the keyboard path.
+- The hidden box panel keeps its node and trace queries live.
+- Edges answer the mouse only; only an item's first member is sought; exit steps carry no mark (core `Steps.leaving` is not served).
+- 320 px and the still page are proven by looks, not tests: jsdom lays nothing out.
 
 ## Tests
 
-`ui/src/flow/FlowView.test.tsx`, `layout.test.ts`, `geometry.test.ts`, `timeline.test.ts`; `ui/src/trace/CardsBlock.test.tsx`; `ui/src/mocks/flow.test.ts`, `trace.test.ts`, `flow.smoke.test.tsx`; `api/live.test.tsx`, `queries.test.tsx`, `http.test.ts`; `policy.test.ts`, `styles/tokens.test.ts`.
+`ui/src/flow/*.test.*` (`FlowView.test.tsx` on a stub client, `styles.test.ts` the CSS pins); `ui/src/mocks/flow.smoke.test.tsx` (harbor-sim: history, a stage, the hand-off, bounded reads), `flow.test.ts`, `trace.test.ts`; `app/routes.test.ts`; `trace/CardsBlock.test.tsx`; `api/*.test.*`; `policy.test.ts`, `styles/tokens.test.ts`.
