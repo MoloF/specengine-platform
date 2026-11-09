@@ -2,9 +2,10 @@ import type { HealthQuery } from "../api/queries";
 import type { AssumesCounts, AssumesRow, HealthCode } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
-import { CodePart, CodeRowList, counted, oneLine, RowNotMeasured } from "./codeRows";
+import { CodePart, CodeRowList, oneLine, RowNotMeasured } from "./codeRows";
 import { assumedLook, isMeasuredState } from "./labels";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
+import { around, fill, slot } from "../i18n/fill";
 
 /**
  * The tail `spec health` prints after a row 4 line's relation (docs/canon/health-code.md "Text"):
@@ -12,7 +13,7 @@ import { useTranslate } from "../i18n";
  * carries them, a rejection's note; the node an `@assumes` names, where it is, then either the open
  * items holding it or its status and successor. Null when the row has neither (no such item).
  */
-function tailOf(row: AssumesRow, record: boolean, under: boolean): string | null {
+function tailOf(row: AssumesRow, record: boolean, under: boolean, t: Translate): string | null {
   const parts: string[] = [];
   if (row.proposal !== null) {
     const item = row.proposal;
@@ -25,20 +26,20 @@ function tailOf(row: AssumesRow, record: boolean, under: boolean): string | null
     }
     parts.push(said);
     if (record && item.record_id !== null && item.record_path !== null) {
-      parts.push(`record ${item.record_id} ${item.record_path}`);
+      parts.push(t("health.assumes.record", { id: item.record_id, path: item.record_path }));
     }
   }
   if (row.node !== null) {
     const node = row.node;
     parts.push(node.id, `${node.path}:${String(node.line)}`);
     if (under) {
-      parts.push(`under ${node.proposals.join(", ")}`);
+      parts.push(t("health.assumes.under", { ids: node.proposals.join(", ") }));
     } else {
       if (node.status !== null) {
-        parts.push(`status ${node.status}`);
+        parts.push(t("health.assumes.status", { status: node.status }));
       }
       if (node.successor !== null) {
-        parts.push(`successor ${node.successor}`);
+        parts.push(t("health.assumes.successor", { id: node.successor }));
       }
     }
   }
@@ -71,11 +72,11 @@ function AssumesLine({ project, row }: { project: string; row: AssumesRow }) {
   } else {
     named = <span className="health-code-id">{id}</span>;
   }
-  const tail = tailOf(row, record, under);
+  const tail = tailOf(row, record, under, t);
   return (
     <li className="health-left-row health-code-row" data-assumes={row.id} tabIndex={-1}>
       <p className="health-code-head">
-        <Badge name="State" look={look} />
+        <Badge name={t("health.assumes.state")} look={look} />
         {named}
       </p>
       <p className="health-code-meta">
@@ -99,26 +100,29 @@ function AssumesLine({ project, row }: { project: string; row: AssumesRow }) {
  * markers judged and the code files read, never a bare 0.
  */
 function Assumes({ project, counts, rows, code }: { project: string; counts: AssumesCounts; rows: AssumesRow[]; code: HealthCode | null }) {
+  const t = useTranslate();
+  const markers = t("health.code.markers", { count: counts.markers });
   if (rows.length === 0) {
-    const files = code === null ? "" : ` in ${counted(code.files, "code file", "code files")}`;
     return (
       <>
         <p className="health-left-total health-code-none">
-          <span className="health-value health-measured">None</span>: no code rests on a queue item, an archived node or a node in question.
+          {fill(t("health.assumes.none", { none: slot("none") }), { none: <span className="health-value health-measured">{t("health.amendments.noneWord")}</span> })}
         </p>
         <p className="health-amendments-scope">
-          Measured over {counted(counts.markers, "marker", "markers")}
-          {files}.
+          {code === null ? t("health.code.measuredOver", { markers }) : t("health.code.measuredOverIn", { markers, files: t("health.code.files", { count: code.files }) })}
         </p>
       </>
     );
   }
+  const [before, after] = around(t("health.code.rowsOf", { count: counts.rows, markers }), String(counts.rows));
   return (
     <>
       <p className="health-left-total">
-        <strong className="health-value health-measured">{counts.rows}</strong> {counts.rows === 1 ? "row" : "rows"} of {counted(counts.markers, "marker", "markers")}
+        {before}
+        <strong className="health-value health-measured">{counts.rows}</strong>
+        {after}
       </p>
-      <CodeRowList rows={rows} label="Code assuming a decision, by ID" order="by ID" render={(row) => <AssumesLine project={project} row={row} />} />
+      <CodeRowList rows={rows} label={t("health.assumes.listLabel")} order={t("health.assumes.order")} render={(row) => <AssumesLine project={project} row={row} />} />
     </>
   );
 }
@@ -132,7 +136,7 @@ function Assumes({ project, counts, rows, code }: { project: string; counts: Ass
  */
 export function AssumesPart({ project, health, failure, busy }: { project: string; health: HealthQuery; failure: Error | null; busy: boolean }) {
   return (
-    <CodePart health={health} failure={failure} busy={busy} row="assumes" title="Code assuming a decision" what="code assuming a decision">
+    <CodePart health={health} failure={failure} busy={busy} row="assumes">
       {(report, retry) => {
         const row = report.assumes;
         if (isMeasuredState(row.state) && row.counts !== null && row.rows !== null) {

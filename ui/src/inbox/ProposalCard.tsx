@@ -15,14 +15,15 @@ import { ErrorPanel, Section, Skeleton } from "../ui/states";
 import { formatAge, formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
-import { DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
+import { DECISION_KEYS, isStaged, verbOf, type DecisionKind } from "./decisions";
 import { DriftSection, TerminalDecision } from "./DriftItem";
 import { gapLabel, previewLabel, severityLook, statusLook } from "./labels";
 import { isRefused } from "./revisions";
 import { RevisionList } from "./RevisionList";
 import { summaryOf } from "./summary";
 import { targetsOf } from "./targets";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 /**
  * The staged choice arrives in a chunk of its own, loaded only for a proposal with one staged
@@ -39,10 +40,11 @@ const InterpretationSection = lazy(() => import("./InterpretationSection").then(
 
 /** The target in the Spec tree: its text, links, bundle and other proposals. */
 function OpenInTree({ project, id }: { project: string; id: string }) {
+  const t = useTranslate();
   return (
     <p className="target-open">
       <a href={sectionHash(project, "tree", id)}>
-        Open in spec tree<span className="sr-only">: {id}</span>
+        {fill(t("inbox.card.openInTree", { id: slot("id") }), { id: <span className="sr-only">{t("inbox.card.openInTreeId", { id })}</span> })}
       </a>
     </p>
   );
@@ -54,6 +56,7 @@ function OpenInTree({ project, id }: { project: string; id: string }) {
  * instead of the page's body, so the queue's keys keep working.
  */
 function TargetNode({ project, id, mode, onMode }: { project: string; id: string; mode: TextMode; onMode: (mode: TextMode) => void }) {
+  const t = useTranslate();
   const query = useNode(project, id);
   const failure = useRetainedFailure(query.error, query.isFetching);
   const head = useRef<HTMLParagraphElement>(null);
@@ -74,10 +77,10 @@ function TargetNode({ project, id, mode, onMode }: { project: string; id: string
       <li className="target">
         <p className="target-head mono">{id}</p>
         {failure === null ? (
-          <Skeleton label={`Loading the current section of ${id}`} lines={2} />
+          <Skeleton label={t("inbox.card.sectionLoading", { id })} lines={2} />
         ) : (
           <ErrorPanel
-            title={`The current section of ${id} could not be read`}
+            title={t("inbox.card.sectionFailed", { id })}
             message={apiErrorOf(failure).message}
             retrying={query.isFetching}
             attempt={query.errorUpdateCount}
@@ -97,7 +100,13 @@ function TargetNode({ project, id, mode, onMode }: { project: string; id: string
         <p ref={head} className="target-head mono" tabIndex={-1}>
           {id}
         </p>
-        <p className="muted">{view.reason ?? "No node answers this ID."}</p>
+        {view.reason === null ? (
+          <p className="muted">{t("inbox.card.noNode")}</p>
+        ) : (
+          <p className="muted" lang="en">
+            {view.reason}
+          </p>
+        )}
         <OpenInTree project={project} id={id} />
       </li>
     );
@@ -108,16 +117,16 @@ function TargetNode({ project, id, mode, onMode }: { project: string; id: string
         <li key={`${node.path}:${String(node.line)}`} className="target">
           <p ref={index === 0 ? head : undefined} className="target-head" tabIndex={-1}>
             <span className="mono">{node.id ?? id}</span>
-            <span className="kind-tag">{node.kind ?? "no kind"}</span>
+            <span className="kind-tag">{node.kind ?? t("inbox.card.noKind")}</span>
             {node.title !== null && <span className="target-title">{node.title}</span>}
           </p>
           <p className="target-path mono">
             {node.path}:{node.line}
-            {node.rev !== null && ` | rev ${String(node.rev)}`}
+            {node.rev !== null && t("inbox.card.rev", { rev: node.rev })}
           </p>
           <div className="target-label-row">
-            <p className="target-label">Current section</p>
-            <TextModeSwitch mode={mode} label={`Show the current section of ${node.id ?? id} as`} onChange={onMode} />
+            <p className="target-label">{t("inbox.card.currentSection")}</p>
+            <TextModeSwitch mode={mode} label={t("inbox.card.showSectionAs", { id: node.id ?? id })} onChange={onMode} />
           </div>
           {mode === "source" ? (
             <pre className="node-text">{node.text}</pre>
@@ -133,9 +142,7 @@ function TargetNode({ project, id, mode, onMode }: { project: string; id: string
             />
           )}
           {node.truncated && node.omitted !== null && (
-            <p className="muted">
-              Cut at the output cap: lines {node.omitted.lines[0]}-{node.omitted.lines[1]} not shown.
-            </p>
+            <p className="muted">{t("inbox.card.cut", { from: node.omitted.lines[0], to: node.omitted.lines[1] })}</p>
           )}
           {index === 0 && <OpenInTree project={project} id={id} />}
         </li>
@@ -145,15 +152,15 @@ function TargetNode({ project, id, mode, onMode }: { project: string; id: string
 }
 
 /** The owner's choice a decision record holds, in words: an option by its label, the working answer, an answer. */
-function choiceText(choice: Choice, options: readonly ProposalOption[]): string {
+function choiceText(choice: Choice, options: readonly ProposalOption[], t: Translate): string {
   if ("option" in choice) {
     const label = options[choice.option]?.label;
-    return label === undefined ? `Option ${String(choice.option)}` : `Option ${String(choice.option)}: ${label}`;
+    return label === undefined ? t("inbox.card.option", { index: choice.option }) : t("inbox.card.optionLabel", { index: choice.option, label });
   }
   if ("answer" in choice) {
     return choice.answer;
   }
-  return "The working answer";
+  return t("inbox.staged.workingAnswer");
 }
 
 /** The review document's sections, as `spec review` sent them. */
@@ -183,7 +190,7 @@ function ReviewBody({
       {drift !== null && <DriftSection project={project} drift={drift} commit={review.base_commit} />}
 
       {review.evidence.length > 0 && (
-        <Section title="Evidence">
+        <Section title={t("inbox.card.evidence")}>
           <ul className="evidence-list">
             {review.evidence.map((item, index) => (
               <li key={`${String(index)}-${item.file}`} className="evidence">
@@ -193,9 +200,9 @@ function ReviewBody({
                 </p>
                 {item.qpath !== null && <p className="mono muted">{item.qpath}</p>}
                 <dl className="pairs">
-                  <dt>Observed in the code</dt>
+                  <dt>{t("inbox.card.observed")}</dt>
                   <dd>{item.observed}</dd>
-                  <dt>Documented in the spec</dt>
+                  <dt>{t("inbox.card.documented")}</dt>
                   <dd>{item.documented}</dd>
                 </dl>
               </li>
@@ -206,9 +213,9 @@ function ReviewBody({
 
       {/* A drift item has no options to choose: decided on a terminal, its section left out. */}
       {drift === null && (
-        <Section title="Options">
+        <Section title={t("inbox.card.options")}>
           {review.options.length === 0 ? (
-            <p className="muted">No options attached.</p>
+            <p className="muted">{t("inbox.card.noOptions")}</p>
           ) : (
             <ol className="option-list">
               {review.options.map((choice, index) => {
@@ -223,13 +230,13 @@ function ReviewBody({
                       {recommended && (
                         <span className="recommended-mark">
                           <Icon name="recommended" />
-                          Recommended
+                          {t("inbox.recommended")}
                         </span>
                       )}
                     </p>
                     <Prose className="option-effect" source={choice.effect} links={null} project={project} baseLevel={3} frontMatter={false} />
                     <div className="option-price">
-                      <p className="price-label">Price:</p>
+                      <p className="price-label">{t("inbox.card.price")}</p>
                       <Prose source={choice.price} links={null} project={project} baseLevel={3} frontMatter={false} />
                     </div>
                   </li>
@@ -241,11 +248,11 @@ function ReviewBody({
       )}
 
       {review.working_answer !== null && (
-        <Section title="Working answer">
+        <Section title={t("inbox.card.workingAnswer")}>
           <Prose className="prose" source={review.working_answer} links={null} project={project} baseLevel={3} frontMatter={false} />
           {review.price_of_other !== null && (
             <div className="prose">
-              <p className="price-label">Price of another answer:</p>
+              <p className="price-label">{t("inbox.card.priceOfOther")}</p>
               <Prose source={review.price_of_other} links={null} project={project} baseLevel={3} frontMatter={false} />
             </div>
           )}
@@ -253,7 +260,7 @@ function ReviewBody({
       )}
 
       {review.rationale !== null && review.rationale !== review.summary && (
-        <Section title="Rationale">
+        <Section title={t("inbox.card.rationale")}>
           <Prose className="prose" source={review.rationale} links={null} project={project} baseLevel={3} frontMatter={false} />
         </Section>
       )}
@@ -262,8 +269,8 @@ function ReviewBody({
       {review.interpretation !== null && (
         <Suspense
           fallback={
-            <Section title="Interpretation">
-              <Skeleton label="Loading the interpretation" lines={3} />
+            <Section title={t("inbox.interpretation.title")}>
+              <Skeleton label={t("inbox.interpretation.loading")} lines={3} />
             </Section>
           }
         >
@@ -272,60 +279,60 @@ function ReviewBody({
       )}
 
       {review.record_id !== null && (
-        <Section title="Decision record">
+        <Section title={t("inbox.card.record")}>
           <dl className="pairs">
-            <dt>Record</dt>
+            <dt>{t("inbox.card.recordId")}</dt>
             <dd className="mono">{review.record_id}</dd>
             {review.record_title !== null && (
               <>
-                <dt>Title</dt>
+                <dt>{t("inbox.card.title")}</dt>
                 <dd>{review.record_title}</dd>
               </>
             )}
             {review.record_path !== null && (
               <>
-                <dt>File</dt>
+                <dt>{t("inbox.card.file")}</dt>
                 <dd className="mono">{review.record_path}</dd>
               </>
             )}
             {review.choice !== null && (
               <>
-                <dt>Your choice</dt>
-                <dd>{choiceText(review.choice, review.options)}</dd>
+                <dt>{t("inbox.card.yourChoice")}</dt>
+                <dd>{choiceText(review.choice, review.options, t)}</dd>
               </>
             )}
           </dl>
         </Section>
       )}
 
-      <Section title="Provenance">
+      <Section title={t("inbox.card.provenance")}>
         <dl className="pairs">
-          <dt>Author</dt>
+          <dt>{t("inbox.card.author")}</dt>
           <dd>
             {author === null
-              ? "Unknown"
-              : [author.type, author.role === null ? null : `role ${author.role}`].filter((part) => part !== null).join(", ")}
+              ? t("inbox.card.unknown")
+              : [author.type, author.role === null ? null : t("inbox.card.role", { role: author.role })].filter((part) => part !== null).join(", ")}
           </dd>
           {login !== undefined && (
             <>
-              <dt>Login</dt>
+              <dt>{t("inbox.card.login")}</dt>
               {/* Data, as a Confirm dialog shows it: every control and format character `\u{..}`, isolated. */}
               <dd className="mono">
                 <bdi>{shownConfirmText(login)}</bdi>
               </dd>
             </>
           )}
-          <dt>Model</dt>
-          <dd className="mono">{author?.model ?? "Unknown"}</dd>
+          <dt>{t("inbox.card.model")}</dt>
+          <dd className="mono">{author?.model ?? t("inbox.card.unknown")}</dd>
           {author !== null && author.run !== null && (
             <>
-              <dt>Run</dt>
+              <dt>{t("inbox.card.run")}</dt>
               <dd className="mono">{author.run}</dd>
             </>
           )}
           {review.created_at !== null && (
             <>
-              <dt>Raised</dt>
+              <dt>{t("inbox.card.raised")}</dt>
               <dd>
                 <time dateTime={review.created_at}>
                   {formatAge(review.created_at, now, t)} ({formatUtc(review.created_at, t)})
@@ -335,19 +342,19 @@ function ReviewBody({
           )}
           {review.branch !== null && (
             <>
-              <dt>Branch</dt>
+              <dt>{t("inbox.card.branch")}</dt>
               <dd className="mono">{review.branch}</dd>
             </>
           )}
           {review.worktree !== null && (
             <>
-              <dt>Worktree</dt>
+              <dt>{t("inbox.card.worktree")}</dt>
               <dd className="mono">{review.worktree}</dd>
             </>
           )}
           {review.linked !== null && (
             <>
-              <dt>Linked proposal</dt>
+              <dt>{t("inbox.card.linked")}</dt>
               <dd className="mono">
                 <a href={sectionHash(project, "inbox", review.linked)}>{review.linked}</a>
               </dd>
@@ -355,13 +362,13 @@ function ReviewBody({
           )}
           {review.distinct_from.length > 0 && (
             <>
-              <dt>Raised as distinct from</dt>
+              <dt>{t("inbox.card.distinctFrom")}</dt>
               <dd className="mono">{review.distinct_from.join(", ")}</dd>
             </>
           )}
           {review.decision_note !== null && (
             <>
-              <dt>Last decision note</dt>
+              <dt>{t("inbox.card.decisionNote")}</dt>
               <dd>
                 <Prose source={review.decision_note} links={null} project={project} baseLevel={3} frontMatter={false} />
               </dd>
@@ -371,8 +378,8 @@ function ReviewBody({
       </Section>
 
       {others.length > 0 && (
-        <Section title="Also open on these nodes">
-          <p className="muted">Information only: each proposal is decided on its own and rebased when applied.</p>
+        <Section title={t("inbox.card.others")}>
+          <p className="muted">{t("inbox.card.othersNote")}</p>
           <ul className="other-list">
             {others.map((other) => (
               <li key={other.id}>
@@ -385,8 +392,8 @@ function ReviewBody({
                 >
                   {other.id}
                 </button>
-                <Badge name="Status" look={statusLook(other.status, t)} />
-                <span>{summaryOf(other)}</span>
+                <Badge name={t("inbox.statusName")} look={statusLook(other.status, t)} />
+                <span>{summaryOf(other, t)}</span>
               </li>
             ))}
           </ul>
@@ -395,12 +402,12 @@ function ReviewBody({
 
       {/* A drift item changes no spec text: no diff, preview or conflict to show (the key decides, never the kind). */}
       {drift === null && (
-        <Section title="Section diff">
+        <Section title={t("inbox.card.diff")}>
           <DiffView diff={review.diff} />
-          {preview !== null && <p className="muted">Apply preview: {preview}.</p>}
+          {preview !== null && <p className="muted">{t("inbox.card.preview", { preview })}</p>}
           {review.conflict !== null && (
             <>
-              <p className="target-label">Conflict at apply</p>
+              <p className="target-label">{t("inbox.card.conflict")}</p>
               <pre className="node-text">{review.conflict}</pre>
             </>
           )}
@@ -409,16 +416,12 @@ function ReviewBody({
 
       {/* As the review document lists them after `conflict`; null: no section (the key decides, never the kind). */}
       {review.revisions !== null && (
-        <Section title="Revisions">
+        <Section title={t("inbox.card.revisions")}>
           {review.revisions.length === 0 ? (
-            <p className="muted">No node's meaning changes: approval keeps every revision.</p>
+            <p className="muted">{t("inbox.card.noRevisions")}</p>
           ) : (
             <>
-              <p className="muted">
-                {review.revisions.some(isRefused)
-                  ? "The terminal refuses a meaning approval while a raise below is refused, for the reason given. An editorial approval keeps every revision and refreshes the lock entries that vouch for the old text."
-                  : "Approval raises each revision below. An editorial approval keeps them and refreshes the lock entries that vouch for the old text."}
-              </p>
+              <p className="muted">{review.revisions.some(isRefused) ? t("inbox.card.revisionsRefused") : t("inbox.card.revisionsRaised")}</p>
               <RevisionList entries={review.revisions} />
             </>
           )}
@@ -426,7 +429,7 @@ function ReviewBody({
       )}
 
       {diagnostics.length > 0 && (
-        <Section title="Check findings the change introduces">
+        <Section title={t("inbox.card.findings")}>
           <ul className="finding-list">
             {diagnostics.map((finding, index) => (
               <li key={`${String(index)}-${finding.code}`}>
@@ -436,7 +439,7 @@ function ReviewBody({
                 <span className="mono muted">
                   {finding.path}:{finding.line}
                 </span>{" "}
-                <span>{finding.message}</span>
+                <span lang="en">{finding.message}</span>
               </li>
             ))}
           </ul>
@@ -444,10 +447,12 @@ function ReviewBody({
       )}
 
       {review.notes.length > 0 && (
-        <Section title="Notes">
+        <Section title={t("inbox.card.notes")}>
           <ul className="note-list">
             {review.notes.map((note) => (
-              <li key={note}>{note}</li>
+              <li key={note} lang="en">
+                {note}
+              </li>
             ))}
           </ul>
         </Section>
@@ -515,11 +520,11 @@ export function ProposalCard({
     content =
       failure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Loading the review of ${id}`} lines={4} />
+          <Skeleton label={t("inbox.card.reviewLoading", { id })} lines={4} />
         </div>
       ) : (
         <ErrorPanel
-          title={`The review of ${id} could not be read`}
+          title={t("inbox.card.reviewFailed", { id })}
           message={apiErrorOf(failure).message}
           retrying={review.isFetching}
           attempt={review.errorUpdateCount}
@@ -534,11 +539,13 @@ export function ProposalCard({
       <div className="notice">
         <p className="notice-title">
           <Icon name="info" />
-          <span>{id} has no review document in this repository</span>
+          <span>{t("inbox.card.noReview", { id })}</span>
         </p>
         <ul className="note-list">
           {review.data.notes.map((note) => (
-            <li key={note}>{note}</li>
+            <li key={note} lang="en">
+              {note}
+            </li>
           ))}
         </ul>
       </div>
@@ -552,21 +559,21 @@ export function ProposalCard({
       <header className="card-head">
         <p className="card-id mono">{id}</p>
         <h2 id="card-title" className="card-title">
-          {summaryOf(reviewed ?? entry)}
+          {summaryOf(reviewed ?? entry, t)}
         </h2>
         <dl className="facts">
           <div className="fact">
-            <dt>Kind</dt>
+            <dt>{t("inbox.card.kind")}</dt>
             <dd className="mono">{reviewed?.kind ?? entry.kind}</dd>
           </div>
           {reviewed !== undefined && (
             <div className="fact">
-              <dt>Gap type</dt>
-              <dd>{gapLabel(reviewed.gap_type, t) ?? "None"}</dd>
+              <dt>{t("inbox.card.gapType")}</dt>
+              <dd>{gapLabel(reviewed.gap_type, t) ?? t("inbox.card.none")}</dd>
             </div>
           )}
           <div className="fact">
-            <dt>Severity</dt>
+            <dt>{t("inbox.severityName")}</dt>
             <dd>
               <Badge look={severityLook(reviewed === undefined ? entry.severity : reviewed.severity, t)} />
             </dd>
@@ -574,14 +581,14 @@ export function ProposalCard({
           {/* Only the review document names the task (an inbox entry has no `task_id`): absent until it is read. */}
           {reviewed !== undefined && (
             <div className="fact">
-              <dt>Task</dt>
+              <dt>{t("inbox.card.task")}</dt>
               <dd className="mono">
-                {reviewed.task_id === null ? "No task" : <a href={sectionHash(project, "tasks", reviewed.task_id)}>{reviewed.task_id}</a>}
+                {reviewed.task_id === null ? t("inbox.card.noTask") : <a href={sectionHash(project, "tasks", reviewed.task_id)}>{reviewed.task_id}</a>}
               </dd>
             </div>
           )}
           <div className="fact">
-            <dt>Status</dt>
+            <dt>{t("inbox.statusName")}</dt>
             <dd>
               <Badge look={statusLook(reviewed?.status ?? entry.status, t)} />
             </dd>
@@ -591,9 +598,9 @@ export function ProposalCard({
           <TerminalDecision id={id} worktree={reviewed.worktree} />
         ) : (
           <>
-            <div className="decision-bar" role="group" aria-label={`Decide ${id}`}>
+            <div className="decision-bar" role="group" aria-label={t("inbox.card.decide", { id })}>
               {DECISION_KEYS.map(([kind, key]) => {
-                const idle = deciding || !ready || (WORDING[kind].staged && !canStage);
+                const idle = deciding || !ready || (isStaged(kind) && !canStage);
                 return (
                   <button
                     key={kind}
@@ -607,7 +614,7 @@ export function ProposalCard({
                       }
                     }}
                   >
-                    <span>{WORDING[kind].verb}</span>
+                    <span>{verbOf(kind, t)}</span>
                     <kbd aria-hidden="true">{key}</kbd>
                   </button>
                 );
@@ -620,8 +627,9 @@ export function ProposalCard({
           <Suspense
             fallback={
               <p className="staged-pending" aria-busy="true">
-                Staged <time dateTime={reviewed.staged_at}>{reviewed.staged_at}</time>
-                {onConfirm === undefined ? "; confirmed only on a terminal." : "."}
+                {fill(t(onConfirm === undefined ? "inbox.card.stagedTerminal" : "inbox.card.stagedHere", { at: slot("at") }), {
+                  at: <time dateTime={reviewed.staged_at}>{reviewed.staged_at}</time>,
+                })}
               </p>
             }
           >
@@ -631,9 +639,9 @@ export function ProposalCard({
       </header>
 
       <div className="card-body" ref={body} tabIndex={-1}>
-        <Section title="Targets">
+        <Section title={t("inbox.card.targets")}>
           {targets.length === 0 ? (
-            <p className="muted">No target node named.</p>
+            <p className="muted">{t("inbox.card.noTargets")}</p>
           ) : (
             <ul className="target-list">
               {targets.map((target) => (

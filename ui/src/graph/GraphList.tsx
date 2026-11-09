@@ -7,8 +7,10 @@ import { linkStateLook } from "../tree/labels";
 import { endsOf, nodeName, type StubEnd } from "./layout";
 import { edgeLine } from "./lines";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 function NodeRow({ project, node }: { project: string; node: GraphNode }) {
+  const t = useTranslate();
   const name = nodeName(node);
   return (
     <li className="graph-list-node">
@@ -17,20 +19,20 @@ function NodeRow({ project, node }: { project: string; node: GraphNode }) {
           {name}
         </a>
         <span className="kind-tag">
-          <span className="sr-only">Kind: </span>
+          <span className="sr-only">{t("graph.list.kind")}</span>
           {node.kind ?? "-"}
         </span>
         {node.title !== null && <span>{node.title}</span>}
         {node.distance === 0 && (
           <span className="graph-mark graph-mark-focus">
             <Icon name="focus" />
-            Focus
+            {t("graph.focus")}
           </span>
         )}
         {node.archived && (
           <span className="plain-tag">
             <Icon name="archived" />
-            archived
+            {t("graph.archivedWord")}
           </span>
         )}
       </p>
@@ -39,7 +41,7 @@ function NodeRow({ project, node }: { project: string; node: GraphNode }) {
           {node.path}:{node.line}
         </span>
         <a href={sectionHash(project, "graph", name)}>
-          Centre here<span className="sr-only"> on {name}</span>
+          {fill(t("graph.list.centre", { on: slot("on") }), { on: <span className="sr-only">{t("graph.list.centreOn", { name })}</span> })}
         </a>
       </p>
     </li>
@@ -55,9 +57,9 @@ function StubRow({ stub }: { stub: StubEnd }) {
         <span className="mono graph-list-name">{end.type === "section" ? end.name : end.edge.written}</span>
         <span className="graph-mark">
           <Icon name="stub" />
-          {end.type === "section" ? "Not walked: a section" : "Not walked"}
+          {end.type === "section" ? t("graph.notWalkedSection") : t("graph.notWalked")}
         </span>
-        {end.type === "unresolved" && <Badge name="State" look={linkStateLook(end.edge.state, t)} />}
+        {end.type === "unresolved" && <Badge name={t("graph.list.state")} look={linkStateLook(end.edge.state, t)} />}
       </p>
       <ul className="graph-edge-lines">
         {stub.edges.map((edge, index) => (
@@ -66,7 +68,11 @@ function StubRow({ stub }: { stub: StubEnd }) {
           </li>
         ))}
       </ul>
-      {end.type === "unresolved" && end.edge.reason !== null && <p className="verbatim link-reason">{end.edge.reason}</p>}
+      {end.type === "unresolved" && end.edge.reason !== null && (
+        <p className="verbatim link-reason" lang="en">
+          {end.edge.reason}
+        </p>
+      )}
     </li>
   );
 }
@@ -77,6 +83,8 @@ function StubRow({ stub }: { stub: StubEnd }) {
  * order, the stubs, every edge line.
  */
 export const GraphList = memo(function GraphList({ project, answer }: { project: string; answer: GraphView }) {
+  // The shown language re-renders the List: `t` changes with it, the answer does not.
+  const t = useTranslate();
   const groups = useMemo(() => {
     const byDistance = new Map<number, GraphNode[]>();
     for (const node of answer.nodes) {
@@ -95,7 +103,7 @@ export const GraphList = memo(function GraphList({ project, answer }: { project:
       {groups.map(([distance, nodes]) => (
         <section key={distance} className="graph-list-group" aria-labelledby={`graph-distance-${String(distance)}`}>
           <h2 id={`graph-distance-${String(distance)}`} tabIndex={-1} className="graph-list-heading" data-distance={distance}>
-            Distance {distance} ({nodes.length})
+            {t("graph.list.distance", { distance, count: nodes.length })}
           </h2>
           <ul className="graph-list-nodes">
             {nodes.map((node) => (
@@ -107,7 +115,7 @@ export const GraphList = memo(function GraphList({ project, answer }: { project:
       {stubs.length > 0 && (
         <section className="graph-list-group" aria-labelledby="graph-stubs">
           <h2 id="graph-stubs" tabIndex={-1} className="graph-list-heading">
-            Not walked ({stubs.length})
+            {t("graph.list.notWalked", { count: stubs.length })}
           </h2>
           <ul className="graph-list-nodes">
             {stubs.map((stub) => (
@@ -118,7 +126,7 @@ export const GraphList = memo(function GraphList({ project, answer }: { project:
       )}
       <section className="graph-list-group" aria-labelledby="graph-edges">
         <h2 id="graph-edges" className="graph-list-heading">
-          Edges ({answer.edges.length})
+          {t("graph.list.edges", { count: answer.edges.length })}
         </h2>
         <ul className="graph-edge-lines">
           {answer.edges.map((edge, index) => (

@@ -5,9 +5,9 @@ import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
 import { Section } from "../ui/states";
 import { shownText } from "../ui/text";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { driftCommands, driftRowsText, driftRowText, storedRowOf } from "./drift";
-
-const COPY_FAILED = "Copy failed: select the command and copy it";
 
 /**
  * A drift item's decision, in place of the four decision buttons: it is decided on a terminal
@@ -16,33 +16,29 @@ const COPY_FAILED = "Copy failed: select the command and copy it";
  * Copy; nothing waits on the item.
  */
 export function TerminalDecision({ id, worktree }: { id: string; worktree: string | null }) {
+  const t = useTranslate();
   const headingId = useId();
-  const commands = driftCommands(id);
+  const commands = driftCommands(id, t);
   return (
     <section className="owner-commands terminal-decision" aria-labelledby={headingId}>
       <h3 id={headingId} className="owner-commands-title">
         <Icon name="terminal" />
-        <span>Decided on a terminal</span>
+        <span>{t("inbox.drift.terminalTitle")}</span>
       </h3>
       <p className="owner-commands-note">
-        A drift item is decided only on a terminal, in the worktree where it was raised
-        {worktree !== null && (
-          <>
-            {" ("}
-            <span className="mono">{worktree}</span>)
-          </>
-        )}
-        , which asks [y/N]. Nothing is staged here, and nothing waits on it.
+        {worktree === null
+          ? t("inbox.drift.terminalNote")
+          : fill(t("inbox.drift.terminalNoteAt", { worktree: slot("worktree") }), { worktree: <span className="mono">{worktree}</span> })}
       </p>
       {commands === null ? (
-        <p className="muted">No command for this ID</p>
+        <p className="muted">{t("inbox.drift.noCommand")}</p>
       ) : (
         <ul className="command-list">
           {commands.map((command) => (
             <li key={command.action} className="command" data-action={command.action}>
               <span className="command-meaning">{command.meaning}</span>
               <code className="command-text">{command.text}</code>
-              <CopyButton text={command.text} context={`the command: ${command.text}`} failed={COPY_FAILED} />
+              <CopyButton text={command.text} context={t("inbox.copyContext", { command: command.text })} failed={t("inbox.copyFailed")} />
             </li>
           ))}
         </ul>
@@ -56,9 +52,10 @@ export function TerminalDecision({ id, worktree }: { id: string; worktree: strin
  * control or bidirectional mark JSON leaves as is written `\u{..}` (`shownText`), as every field.
  */
 function RawRow({ row }: { row: unknown }) {
+  const t = useTranslate();
   return (
     <li className="drift-raw" data-raw="">
-      <span className="drift-raw-note">Shown as sent: not in the shape this screen reads.</span>
+      <span className="drift-raw-note">{t("inbox.drift.raw")}</span>
       <code>{shownText(driftRowText(row))}</code>
     </li>
   );
@@ -72,19 +69,20 @@ function RawRow({ row }: { row: unknown }) {
  * JSON, still counted.
  */
 export function DriftSection({ project, drift, commit }: { project: string; drift: DriftEvidence; commit: string | null }) {
+  const t = useTranslate();
   return (
-    <Section title="Drift evidence">
-      <p>Bindings of the node that spec verify finds out of step with spec.lock, as judged when the item was raised.</p>
+    <Section title={t("inbox.drift.title")}>
+      <p>{t("inbox.drift.about")}</p>
       <dl className="pairs">
-        <dt>Rows</dt>
-        <dd>{driftRowsText(drift)}</dd>
-        <dt>Commit judged</dt>
-        <dd className="mono">{commit ?? "Unknown"}</dd>
-        <dt>Evidence hash</dt>
+        <dt>{t("inbox.drift.rowsName")}</dt>
+        <dd>{driftRowsText(drift, t)}</dd>
+        <dt>{t("inbox.drift.commit")}</dt>
+        <dd className="mono">{commit ?? t("inbox.drift.unknown")}</dd>
+        <dt>{t("inbox.drift.hash")}</dt>
         <dd className="mono">{drift.hash}</dd>
       </dl>
       {drift.rows.length > 0 && (
-        <ol className="drift-rows" aria-label="Stored rows, in spec verify's order">
+        <ol className="drift-rows" aria-label={t("inbox.drift.rowsLabel")}>
           {drift.rows.map((row, index) => {
             const typed = storedRowOf(row);
             // The stored order is the rows' identity: two rows may share a node and a place.

@@ -4,6 +4,7 @@ import appCss from "../styles/app.css?raw";
 import { ClientError } from "../api/client";
 import type { DriftRow, LockDiffNode, LockDiffRow, LockDiffView, ShownBindings } from "../api/types";
 import { aDriftRow } from "../test/builders";
+import { enT } from "../test/text";
 import { nodeCommands } from "./commands";
 import { renderApp } from "../test/render";
 import { argsOf, type StubClient } from "../test/stubClient";
@@ -368,7 +369,7 @@ describe("the commands beside a row (UI-5 of lock-diff-ui)", () => {
     const list = await within(section).findByRole("list", { name: "Commands for the row of LAW-BOUND" });
     expect(commandsOf(list)).toEqual(["spec verify --node LAW-BOUND", "spec propose drift LAW-BOUND", "spec lock accept LAW-BOUND"]);
     expect(within(list).getAllByRole("button", { name: /^Copy/ })).toHaveLength(3);
-    expect(Array.from(list.querySelectorAll(".command-meaning"), (meaning) => meaning.textContent)).toEqual(nodeCommands("LAW-BOUND")?.map((command) => command.meaning));
+    expect(Array.from(list.querySelectorAll(".command-meaning"), (meaning) => meaning.textContent)).toEqual(nodeCommands("LAW-BOUND", enT)?.map((command) => command.meaning));
   });
 
   it.each([

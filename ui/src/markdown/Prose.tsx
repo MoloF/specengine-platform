@@ -8,11 +8,10 @@ const Markdown = lazy(() => import("./Markdown").then((module) => ({ default: mo
 
 /** Spec prose rendered as markdown (`./Markdown`), the text itself while the renderer loads. */
 export function Prose(props: MarkdownProps) {
-  const pending = props.className === undefined ? "markdown markdown-pending" : `markdown markdown-pending ${props.className}`;
   return (
     <Suspense
       fallback={
-        <div className={pending} aria-busy="true">
+        <div className={props.className === undefined ? "markdown markdown-pending" : `markdown markdown-pending ${props.className}`} aria-busy="true">
           {props.source}
         </div>
       }

@@ -43,14 +43,11 @@ export function QuestionsView({ project, memory }: { project: string; memory: Ro
     >
       <header className="view-head">
         <h1 id="questions-title" tabIndex={-1}>
-          Questions
+          {t("round.title")}
         </h1>
-        <p className="view-about">
-          {aboutOf("questions", t)} Pick an answer per item and stage them at once; each is asked again on a terminal, one at a time.
-          Nothing waits on them: agents work on with their working answer.
-        </p>
+        <p className="view-about">{t("round.about", { about: aboutOf("questions", t) })}</p>
       </header>
-      <Suspense fallback={<Skeleton label={`Loading the question round of ${project}`} lines={5} />}>
+      <Suspense fallback={<Skeleton label={t("round.loading", { project })} lines={5} />}>
         <RoundScreen project={project} round={round} memory={memory} />
       </Suspense>
     </section>

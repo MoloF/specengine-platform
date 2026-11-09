@@ -37,22 +37,24 @@ import { useTranslate, type Translate } from "../i18n";
 // page, never zooms it: pinch and the zoom buttons do.
 
 /**
- * Every key of React Flow's `defaultAriaLabelConfig` (`@xyflow/system`), replaced: nothing here
- * can be removed, dragged, joined or edited, so no description says so.
+ * Every key of React Flow's `defaultAriaLabelConfig` (`@xyflow/system`), replaced in the catalog's
+ * words: nothing here can be removed, dragged, joined or edited, so no description says so.
  */
-export const GRAPH_ARIA_LABELS = {
-  "node.a11yDescription.default": "A box of the graph. Arrow keys go to other boxes; Enter opens its details.",
-  "node.a11yDescription.keyboardDisabled": "A box of the graph. Arrow keys go to other boxes; Enter opens its details.",
-  "node.a11yDescription.ariaLiveMessage": () => "",
-  "edge.a11yDescription.default": "A link between two boxes; the List view names every link as text.",
-  "controls.ariaLabel": "Canvas zoom",
-  "controls.zoomIn.ariaLabel": "Zoom in",
-  "controls.zoomOut.ariaLabel": "Zoom out",
-  "controls.fitView.ariaLabel": "Fit the graph to the view, its text readable",
-  "controls.interactive.ariaLabel": "Canvas lock",
-  "minimap.ariaLabel": "Overview of the graph",
-  "handle.ariaLabel": "Link end",
-} satisfies AriaLabelConfig;
+function graphAriaLabels(t: Translate) {
+  return {
+    "node.a11yDescription.default": t("graph.aria.node"),
+    "node.a11yDescription.keyboardDisabled": t("graph.aria.node"),
+    "node.a11yDescription.ariaLiveMessage": () => "",
+    "edge.a11yDescription.default": t("graph.aria.edge"),
+    "controls.ariaLabel": t("graph.aria.controls"),
+    "controls.zoomIn.ariaLabel": t("graph.aria.zoomIn"),
+    "controls.zoomOut.ariaLabel": t("graph.aria.zoomOut"),
+    "controls.fitView.ariaLabel": t("graph.aria.fit"),
+    "controls.interactive.ariaLabel": t("graph.aria.lock"),
+    "minimap.ariaLabel": t("graph.aria.minimap"),
+    "handle.ariaLabel": t("graph.aria.handle"),
+  } satisfies AriaLabelConfig;
+}
 
 type BoxData = { box: LayoutBox; selected: boolean };
 type BoxNode = Node<BoxData, "spec" | "stub" | "more">;
@@ -74,16 +76,18 @@ function Handles() {
 }
 
 function SelectedMark() {
+  const t = useTranslate();
   return (
     <span className="graph-mark graph-mark-selected">
       <Icon name="selected" />
-      Selected
+      {t("graph.selected")}
     </span>
   );
 }
 
 /** A walked node: name, Focus and Selected as text and icon, title (clipped), kind, distance. */
 const SpecBox = memo(function SpecBox({ data }: NodeProps<BoxNode>) {
+  const t = useTranslate();
   const content = data.box.content;
   if (content.type !== "walked") {
     return null;
@@ -100,7 +104,7 @@ const SpecBox = memo(function SpecBox({ data }: NodeProps<BoxNode>) {
         {walked.distance === 0 && (
           <span className="graph-mark graph-mark-focus">
             <Icon name="focus" />
-            Focus
+            {t("graph.focus")}
           </span>
         )}
         {data.selected && <SelectedMark />}
@@ -111,11 +115,11 @@ const SpecBox = memo(function SpecBox({ data }: NodeProps<BoxNode>) {
         {archived && (
           <span className="graph-box-flag">
             <Icon name="archived" />
-            archived
+            {t("graph.archivedWord")}
           </span>
         )}
-        {walked.holders.length > 1 && <span className="graph-box-flag">{walked.holders.length} holders</span>}
-        <span className="graph-box-distance">d {walked.distance}</span>
+        {walked.holders.length > 1 && <span className="graph-box-flag">{t("graph.holders", { count: walked.holders.length })}</span>}
+        <span className="graph-box-distance">{t("graph.distanceShort", { distance: walked.distance })}</span>
       </p>
     </div>
   );
@@ -139,9 +143,9 @@ const StubBox = memo(function StubBox({ data }: NodeProps<BoxNode>) {
       <p className="graph-box-meta">
         <span className="graph-box-flag">
           <Icon name="stub" />
-          Not walked
+          {t("graph.notWalked")}
         </span>
-        {stub.type === "section" ? <span className="graph-box-flag">a section</span> : <Badge look={linkStateLook(stub.edge.state, t)} />}
+        {stub.type === "section" ? <span className="graph-box-flag">{t("graph.aSection")}</span> : <Badge look={linkStateLook(stub.edge.state, t)} />}
       </p>
     </div>
   );
@@ -149,6 +153,7 @@ const StubBox = memo(function StubBox({ data }: NodeProps<BoxNode>) {
 
 /** The rest of a collapsed column. */
 const MoreBox = memo(function MoreBox({ data }: NodeProps<BoxNode>) {
+  const t = useTranslate();
   const content = data.box.content;
   if (content.type !== "more") {
     return null;
@@ -158,9 +163,9 @@ const MoreBox = memo(function MoreBox({ data }: NodeProps<BoxNode>) {
       <Handles />
       <p className="graph-box-top">
         <Icon name="more" />
-        <span className="graph-more-count">{moreLabel(content.hidden, content.column)}</span>
+        <span className="graph-more-count">{moreLabel(content.hidden, content.column, t)}</span>
       </p>
-      <p className="graph-box-meta">Every node is in the List</p>
+      <p className="graph-box-meta">{t("graph.everyNodeInList")}</p>
     </div>
   );
 });
@@ -216,16 +221,16 @@ const ARROW_EMPHASIS: EdgeMarker = { ...ARROW, color: "currentColor" };
 export function boxName(box: LayoutBox, t: Translate): string {
   const content = box.content;
   if (content.type === "walked") {
-    return boxLabel(content.walked);
+    return boxLabel(content.walked, t);
   }
   if (content.type === "more") {
-    return `${moreLabel(content.hidden, content.column)}; every node is in the List`;
+    return t("graph.moreName", { more: moreLabel(content.hidden, content.column, t) });
   }
   const stub = content.stub.stub;
   if (stub.type === "section") {
-    return `${stub.name}, not walked: a section`;
+    return t("graph.stubSectionName", { name: stub.name });
   }
-  return `${stub.edge.written}, not walked: ${linkStateLook(stub.edge.state, t).label}`;
+  return t("graph.stubName", { name: stub.edge.written, state: linkStateLook(stub.edge.state, t).label });
 }
 
 function nodeOf(box: LayoutBox, t: Translate): BoxNode {
@@ -381,6 +386,7 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
   const fit = useReadableFit(layout);
 
   const baseNodes = useMemo(() => layout.boxes.map((box) => nodeOf(box, t)), [layout, t]);
+  const labels = useMemo(() => graphAriaLabels(t), [t]);
   const nodes = useMemo(
     () =>
       baseNodes.map((node) => {
@@ -466,14 +472,14 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
   return (
     <div ref={wrapper} className="graph-canvas" onKeyDown={onKeyDown} onFocus={onFocus}>
       <p id={hintId} className="sr-only">
-        The List view holds every node and edge as text.
+        {t("graph.canvasHint")}
       </p>
       <ReactFlow<BoxNode, LinkEdge>
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
-        aria-label="Graph canvas"
+        aria-label={t("graph.canvasLabel")}
         aria-describedby={hintId}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -491,7 +497,7 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
         panActivationKeyCode={null}
         zoomActivationKeyCode={null}
         proOptions={{ hideAttribution: true }}
-        ariaLabelConfig={GRAPH_ARIA_LABELS}
+        ariaLabelConfig={labels}
         defaultMarkerColor={null}
         colorMode="dark"
         minZoom={0.1}
@@ -504,8 +510,8 @@ function Canvas({ layout, rovingId, selectedId, onRove, onSelect, onCommand, foc
         <Controls showInteractive={false} showFitView={false}>
           <ControlButton
             className="react-flow__controls-fitview"
-            title={GRAPH_ARIA_LABELS["controls.fitView.ariaLabel"]}
-            aria-label={GRAPH_ARIA_LABELS["controls.fitView.ariaLabel"]}
+            title={labels["controls.fitView.ariaLabel"]}
+            aria-label={labels["controls.fitView.ariaLabel"]}
             onClick={() => {
               fit();
             }}

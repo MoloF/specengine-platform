@@ -16,15 +16,19 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { chipsOf, DEFAULT_FILTERS, isFiltered, isPressed, matchesFilters, toggleChip, type TaskFilters } from "./filter";
 import { groupsOf, waitsForYou } from "./groups";
 import { specChanged, taskStatusLook } from "./labels";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
+import { around, fill, slot } from "../i18n/fill";
 
 /** How many targets a row names before "+k". */
 const ROW_TARGETS = 3;
 
+/** The command that creates a task, fixed words shown as code. */
+const NEW_TASK_COMMAND = "spec task new --nodes REF...";
+
 /** A row's targets: the first three, then "+k" for the rest. */
-export function targetsText(targets: readonly string[]): string {
+function targetsText(targets: readonly string[], t: Translate): string {
   if (targets.length === 0) {
-    return "No target";
+    return t("tasks.noTarget");
   }
   const shown = targets.slice(0, ROW_TARGETS).join(", ");
   return targets.length > ROW_TARGETS ? `${shown} +${String(targets.length - ROW_TARGETS)}` : shown;
@@ -62,19 +66,32 @@ function TaskRow({
     >
       <span className="task-row-top">
         <span className="mono task-row-id">{entry.id}</span>
-        <Badge name="State" look={taskStatusLook(entry.status, t)} />
+        <Badge name={t("tasks.stateName")} look={taskStatusLook(entry.status, t)} />
         {entry.stale === true && <Badge look={specChanged(t)} />}
         <time className="task-row-age" dateTime={entry.updated_at} title={formatUtc(entry.updated_at, t)}>
-          <span className="sr-only">Updated </span>
+          <span className="sr-only">{t("tasks.updated")}</span>
           {formatAge(entry.updated_at, now, t)}
         </time>
       </span>
-      <span className={entry.title === null ? "task-row-title muted" : "task-row-title"}>{entry.title ?? "Untitled"}</span>
+      <span className={entry.title === null ? "task-row-title muted" : "task-row-title"}>{entry.title ?? t("tasks.untitled")}</span>
       <span className="task-row-targets mono">
-        <span className="sr-only">Targets: </span>
-        {targetsText(entry.targets)}
+        <span className="sr-only">{t("tasks.targetsSaid")}</span>
+        {targetsText(entry.targets, t)}
       </span>
     </div>
+  );
+}
+
+/** A group's count: the number shown, the words around it read out. */
+function GroupCount({ count }: { count: number }) {
+  const t = useTranslate();
+  const [before, after] = around(t("tasks.groupCount", { count }), String(count));
+  return (
+    <span className="task-group-count">
+      <span className="sr-only">{before}</span>
+      {count}
+      <span className="sr-only">{after}</span>
+    </span>
   );
 }
 
@@ -133,11 +150,11 @@ export function TaskList({
   if (tasks.data === undefined) {
     return failure === null ? (
       <div aria-busy="true" className="tasks-loading">
-        <Skeleton label={`Loading the tasks of ${project}`} lines={6} />
+        <Skeleton label={t("tasks.loading", { project })} lines={6} />
       </div>
     ) : (
       <ReadFailure
-        title="The tasks could not be loaded"
+        title={t("tasks.failed")}
         failure={failure}
         retrying={tasks.isFetching}
         attempt={tasks.errorUpdateCount}
@@ -152,9 +169,9 @@ export function TaskList({
   const answer = tasks.data;
   const notes =
     answer.notes.length > 0 ? (
-      <ul className="note-list" aria-label="Notes from the daemon on the list">
+      <ul className="note-list" aria-label={t("tasks.notes")}>
         {answer.notes.map((note, index) => (
-          <li key={`${String(index)}-${note}`} className="verbatim-note">
+          <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
             {note}
           </li>
         ))}
@@ -167,9 +184,12 @@ export function TaskList({
         {notes}
         <div className="empty-state">
           <p>
-            <strong>No tasks yet.</strong> Create one: <code>spec task new --nodes REF...</code>
+            {fill(t("tasks.none", { none: slot("none"), command: slot("command") }), {
+              none: <strong>{t("tasks.noneYet")}</strong>,
+              command: <code>{NEW_TASK_COMMAND}</code>,
+            })}
           </p>
-          <p className="muted">A task names the spec nodes to work on; you approve it on a terminal, and agents work from its package.</p>
+          <p className="muted">{t("tasks.noneAbout")}</p>
         </div>
       </div>
     );
@@ -243,11 +263,9 @@ export function TaskList({
       {notes}
       <p className="tasks-summary">
         <Icon name="waiting" />
-        <span>
-          <strong>{waiting}</strong> waiting for you, {answer.tasks.length} {answer.tasks.length === 1 ? "task" : "tasks"} in all
-        </span>
+        <span>{fill(t("tasks.summary", { count: answer.tasks.length, waiting: slot("waiting") }), { waiting: <strong>{waiting}</strong> })}</span>
       </p>
-      <div className="task-filters" role="group" aria-label="Filter the tasks">
+      <div className="task-filters" role="group" aria-label={t("tasks.filterLabel")}>
         <div className="task-chips">
           {chips.map((chip) => {
             const pressed = isPressed(filters, chip.key);
@@ -280,11 +298,11 @@ export function TaskList({
               {filters.changedOnly && <Icon name="selected" />}
             </span>
             <Icon name="specChanged" />
-            <span>Spec changed</span> <span className="chip-count">{changedCount}</span>
+            <span>{t("tasks.specChanged")}</span> <span className="chip-count">{changedCount}</span>
           </button>
         </div>
         <label className="field-label" htmlFor={fieldId}>
-          Filter by ID, title or target
+          {t("tasks.filterField")}
         </label>
         <input
           id={fieldId}
@@ -302,20 +320,20 @@ export function TaskList({
       </div>
       {order.length === 0 ? (
         <div className="empty-filter">
-          <p>No task matches the filters.</p>
+          <p>{t("tasks.noMatch")}</p>
           {isFiltered(
             filters,
             chips.map((chip) => chip.key),
           ) ? (
             <button type="button" className="button" onClick={clearFilters}>
-              Clear filters
+              {t("tasks.clearFilters")}
             </button>
           ) : (
-            <p className="muted">Every task is closed: press Closed to list them.</p>
+            <p className="muted">{t("tasks.allClosed")}</p>
           )}
         </div>
       ) : (
-        <div ref={listbox} role="listbox" aria-label="Tasks, what waits for you first" className="task-list" onKeyDown={onKeyDown}>
+        <div ref={listbox} role="listbox" aria-label={t("tasks.listboxLabel")} className="task-list" onKeyDown={onKeyDown}>
           {groups.map((group) => (
             <div
               key={group.key}
@@ -326,11 +344,7 @@ export function TaskList({
               <div id={`${fieldId}-${group.key}`} role="presentation" className="task-group-title">
                 {group.waiting && <Icon name="waiting" />}
                 <span>{group.title}</span>
-                <span className="task-group-count">
-                  <span className="sr-only">, </span>
-                  {group.entries.length}
-                  <span className="sr-only">{group.entries.length === 1 ? " task" : " tasks"}</span>
-                </span>
+                <GroupCount count={group.entries.length} />
               </div>
               {group.entries.map((entry) => (
                 <TaskRow
@@ -353,7 +367,7 @@ export function TaskList({
       )}
       {tasks.error !== null && (
         <p className="note" role="alert">
-          The tasks could not be read again: {apiErrorOf(tasks.error).message}
+          {fill(t("tasks.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(tasks.error).message}</span> })}
         </p>
       )}
     </div>

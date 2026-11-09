@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
-import { LANGUAGE_KEY, startLanguage, switchLanguage } from "../i18n";
+import { LANGUAGE_KEY, languageName, startLanguage, switchLanguage } from "../i18n";
 import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
 import { aCardList, aCardRow, aProposal, aTaskEntry, aTreeNode, aTreeView, aWorkspace, aWorkspaces, IMPLICIT_SECTIONS } from "../test/builders";
@@ -97,10 +97,12 @@ describe("the switch (LG-2)", () => {
     await homeShown(client);
     expect(shownIn(en)).toEqual(expectedIn(en, "en"));
     const select = languageSelect(en.language.label);
+    // Each option its language's own name from Intl (languageName), Russian's before its chunk loads.
     expect([...select.options].map((option) => [option.value, option.textContent, option.lang])).toEqual([
-      ["en", en.language.self, "en"],
-      ["ru", ru.language.self, "ru"],
+      ["en", "English", "en"],
+      ["ru", "\u0420\u0443\u0441\u0441\u043a\u0438\u0439", "ru"],
     ]);
+    expect([languageName("en"), languageName("ru")]).toEqual(["English", "\u0420\u0443\u0441\u0441\u043a\u0438\u0439"]);
     select.focus();
     const before = callsOf(client);
 

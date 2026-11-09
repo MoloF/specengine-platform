@@ -31,7 +31,7 @@ const STATUS: Record<KnownTaskStatus, Mark> = {
 /** A task state's look; the raw text in a neutral badge when unknown. */
 export function taskStatusLook(status: TaskStatus, t: Translate): Look {
   const mark = lookup(STATUS, status);
-  return mark === null ? { label: status, tone: "task-unknown", icon: "unknown" } : { label: t(`tasks.status.${status as KnownTaskStatus}`), ...mark };
+  return mark === null ? { label: status, tone: "task-unknown", icon: "unknown", served: true } : { label: t(`tasks.status.${status as KnownTaskStatus}`), ...mark };
 }
 
 /** Whether the state is one of the ten. */
@@ -55,7 +55,7 @@ export const KNOWN_RUN_OUTCOMES = Object.keys(OUTCOME) as readonly KnownRunOutco
 /** A run outcome's look; the raw text in a neutral badge when unknown. */
 export function runOutcomeLook(outcome: RunOutcome, t: Translate): Look {
   const mark = lookup(OUTCOME, outcome);
-  return mark === null ? { label: outcome, tone: "run-unknown", icon: "unknown" } : { label: t(`tasks.outcome.${outcome as KnownRunOutcome}`), ...mark };
+  return mark === null ? { label: outcome, tone: "run-unknown", icon: "unknown", served: true } : { label: t(`tasks.outcome.${outcome as KnownRunOutcome}`), ...mark };
 }
 
 const STALENESS: Record<"changed" | "unchanged" | "unknown", { tone: string; icon: IconName }> = {

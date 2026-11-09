@@ -25,7 +25,7 @@ export function ProposalList({
 }) {
   const t = useTranslate();
   return (
-    <div role="listbox" aria-label="Proposals by severity, then age" className="queue-list">
+    <div role="listbox" aria-label={t("inbox.listLabel")} className="queue-list">
       {proposals.map((proposal) => {
         const selected = proposal.id === selectedId;
         const status = statusLook(proposal.status, t);
@@ -43,29 +43,29 @@ export function ProposalList({
             }}
           >
             <span className="queue-item-top">
-              <Badge name="Severity" look={severityLook(proposal.severity, t)} />
+              <Badge name={t("inbox.severityName")} look={severityLook(proposal.severity, t)} />
               <span className="mono queue-item-id">{proposal.id}</span>
               <time className="queue-item-age" dateTime={proposal.created_at} title={formatUtc(proposal.created_at, t)}>
                 {formatAge(proposal.created_at, now, t)}
               </time>
             </span>
-            <span className="queue-item-summary">{summaryOf(proposal)}</span>
+            <span className="queue-item-summary">{summaryOf(proposal, t)}</span>
             <span className="queue-item-meta">
               <span className="mono">{proposal.kind}</span>
               <span aria-hidden="true"> | </span>
-              <span className="mono">{targets.length === 0 ? "no target" : targets.join(", ")}</span>
+              <span className="mono">{targets.length === 0 ? t("inbox.noTarget") : targets.join(", ")}</span>
               {proposal.status !== "open" && (
                 <>
                   <span aria-hidden="true"> | </span>
-                  <Badge name="Status" look={status} />
+                  <Badge name={t("inbox.statusName")} look={status} />
                 </>
               )}
               {proposal.staged_at !== null && (
                 <>
                   <span aria-hidden="true"> | </span>
-                  <span className="staged-mark" title={`Staged ${proposal.staged_at}`}>
+                  <span className="staged-mark" title={t("inbox.stagedAt", { at: proposal.staged_at })}>
                     <Icon name="terminal" />
-                    Staged
+                    {t("inbox.staged.mark")}
                   </span>
                 </>
               )}

@@ -1,5 +1,7 @@
 import type { OutsideStage } from "../api/queries";
 import { sectionHash } from "../app/routes";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { Icon } from "../ui/Icon";
 
 /**
@@ -9,28 +11,22 @@ import { Icon } from "../ui/Icon";
  * until dismissed or replaced by the next change.
  */
 export function OutsideStageAlert({ change, onDismiss }: { change: OutsideStage; onDismiss: () => void }) {
+  const t = useTranslate();
   return (
     <div className="notice notice-outside-stage" role="alert">
       <p className="notice-title">
         <Icon name="alert" />
-        <span>
-          {change.stagedAt === null
-            ? `The staged decision on ${change.id} was removed outside this tab`
-            : `The staged decision on ${change.id} changed outside this tab`}
-        </span>
+        <span>{change.stagedAt === null ? t("inbox.outside.removed", { id: change.id }) : t("inbox.outside.changed", { id: change.id })}</span>
       </p>
       {change.stagedAt === null ? (
-        <p>Nothing is staged for it now.</p>
+        <p>{t("inbox.outside.nothing")}</p>
       ) : (
-        <p>
-          A choice was staged <time dateTime={change.stagedAt}>{change.stagedAt}</time> by another page or process. Read it
-          before you confirm anything on a terminal.
-        </p>
+        <p>{fill(t("inbox.outside.staged", { at: slot("at") }), { at: <time dateTime={change.stagedAt}>{change.stagedAt}</time> })}</p>
       )}
       <p className="notice-actions">
-        <a href={sectionHash(change.project, "inbox", change.id)}>Show {change.id} in the Inbox</a>
+        <a href={sectionHash(change.project, "inbox", change.id)}>{t("inbox.outside.show", { id: change.id })}</a>
         <button type="button" className="button button-quiet" onClick={onDismiss}>
-          Dismiss
+          {t("inbox.outside.dismiss")}
         </button>
       </p>
     </div>

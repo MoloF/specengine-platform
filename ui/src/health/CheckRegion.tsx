@@ -1,7 +1,7 @@
 import { useRef } from "react";
 import { apiErrorOf } from "../api/client";
 import type { CheckQuery, HealthQuery } from "../api/queries";
-import type { CheckCounts, CheckReport } from "../api/types";
+import type { CheckReport } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
@@ -12,18 +12,22 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { HealthRegion } from "./parts";
 import { isCannotCheck, isClean, isKnownMode, unknownModeLook, verdictLook } from "./labels";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
-/** The counts in the report's order, each with its label; one the report omits is not shown (W-1). */
-const COUNTS: readonly (readonly [keyof Omit<CheckCounts, "worst_w_bytes">, string])[] = [
-  ["documents", "Documents"],
-  ["errors", "Errors"],
-  ["warnings", "Warnings"],
-  ["debt", "In debt"],
-  ["expired", "Expired debt"],
-  ["stale", "Stale debt entries"],
-  ["introduced", "Introduced"],
-  ["new_debt", "New debt"],
-];
+/** The counts in the report's order, each with its label's key; one the report omits is not shown (W-1). */
+const COUNTS = [
+  ["documents", "health.check.count.documents"],
+  ["errors", "health.check.count.errors"],
+  ["warnings", "health.check.count.warnings"],
+  ["debt", "health.check.count.debt"],
+  ["expired", "health.check.count.expired"],
+  ["stale", "health.check.count.stale"],
+  ["introduced", "health.check.count.introduced"],
+  ["new_debt", "health.check.count.newDebt"],
+] as const;
+
+/** The log Task W will be read from, named as code. */
+const BUNDLES_LOG = "bundles";
 
 /** A cause as the CLI prints it after `cannot`: `<path>: <message>`, `.` for no path (core `check/report.rs` `shown`). */
 function causeText(path: string, message: string): string {
@@ -36,44 +40,38 @@ function CheckAnswer({ project, report }: { project: string; report: CheckReport
   const verdict = verdictLook(report.verdict, t);
   const counts = COUNTS.flatMap(([key, label]) => {
     const value = report.counts[key];
-    return value === undefined ? [] : [{ key, label, value }];
+    return value === undefined ? [] : [{ key, label: t(label), value }];
   });
   const clean = isClean(report.verdict) && report.findings.length === 0 && report.stale.length === 0;
   return (
     <>
       <p className="check-verdict">
-        <Badge name="Verdict" look={verdict} />
+        <Badge name={t("health.check.verdict")} look={verdict} />
       </p>
       {clean && (
         <div className="health-clean">
-          <p>
-            The check is clean: {report.counts.documents} {report.counts.documents === 1 ? "document" : "documents"}, no findings, no debt.
-          </p>
-          <p>
-            Next: <a href={sectionHash(project, "inbox")}>see what waits in the Inbox</a>.
-          </p>
+          <p>{t("health.check.clean", { count: report.counts.documents })}</p>
+          <p>{fill(t("health.check.cleanNext", { link: slot("link") }), { link: <a href={sectionHash(project, "inbox")}>{t("health.check.cleanNextLink")}</a> })}</p>
         </div>
       )}
       <p className="check-line">
-        <span className="check-line-label">Mode:</span>{" "}
+        <span className="check-line-label">{t("health.check.mode")}</span>{" "}
         {isKnownMode(report.mode) ? <span className="mono check-mode">{report.mode}</span> : <Badge look={unknownModeLook(report.mode)} />}
       </p>
       <p className="check-line">
-        <span className="check-line-label">Worst W:</span>{" "}
-        <span className="health-value check-worst-w">{cannot ? "Not measured" : `${String(report.counts.worst_w_bytes)} B`}</span>
+        <span className="check-line-label">{t("health.check.worstW")}</span>{" "}
+        <span className="health-value check-worst-w">{cannot ? t("health.check.notMeasured") : t("health.check.bytes", { bytes: report.counts.worst_w_bytes })}</span>
       </p>
       <p className="check-line">
-        <span className="check-line-label">Task W:</span>{" "}
-        <span className="health-value check-task-w">
-          Not measured yet (the <code>bundles</code> log)
-        </span>
+        <span className="check-line-label">{t("health.check.taskW")}</span>{" "}
+        <span className="health-value check-task-w">{fill(t("health.check.taskWNot", { log: slot("log") }), { log: <code>{BUNDLES_LOG}</code> })}</span>
       </p>
       {report.cannot_check.length > 0 && (
         <div className="health-part">
-          <h3 className="health-part-title">Why the check could not vouch for the corpus</h3>
+          <h3 className="health-part-title">{t("health.check.causes")}</h3>
           <ul className="check-causes">
             {report.cannot_check.map((cause, index) => (
-              <li key={`${String(index)}-${cause.path}`} className="verbatim">
+              <li key={`${String(index)}-${cause.path}`} className="verbatim" lang="en">
                 {causeText(cause.path, cause.message)}
               </li>
             ))}
@@ -81,8 +79,8 @@ function CheckAnswer({ project, report }: { project: string; report: CheckReport
         </div>
       )}
       <div className="health-part">
-        <h3 className="health-part-title">Counts</h3>
-        {cannot && <p className="muted">Counts cover only what the check could read.</p>}
+        <h3 className="health-part-title">{t("health.check.counts")}</h3>
+        {cannot && <p className="muted">{t("health.check.countsCannot")}</p>}
         <dl className="check-counts">
           {counts.map(({ key, label, value }) => (
             <div key={key} className="check-count" data-count={key}>
@@ -117,7 +115,7 @@ export function CheckRegion({ project, check, health }: { project: string; check
     void health.refetch({ cancelRefetch: false });
     void check.refetch({ cancelRefetch: false }).then((result) => {
       if (result.data !== undefined && result.error === null) {
-        announce(`Checked again: ${verdictLook(result.data.verdict, t).label}.`);
+        announce(t("health.check.checkedAgain", { verdict: verdictLook(result.data.verdict, t).label }));
       }
     });
   }
@@ -126,10 +124,10 @@ export function CheckRegion({ project, check, health }: { project: string; check
   if (check.data === undefined) {
     body =
       failure === null ? (
-        <Skeleton label={`Checking ${project}`} lines={4} />
+        <Skeleton label={t("health.check.checking", { project })} lines={4} />
       ) : (
         <ReadFailure
-          title="The check could not be read"
+          title={t("health.check.failed")}
           failure={failure}
           retrying={check.isFetching}
           attempt={check.errorUpdateCount}
@@ -145,7 +143,7 @@ export function CheckRegion({ project, check, health }: { project: string; check
         <CheckAnswer project={project} report={check.data} />
         {check.error !== null && !check.isFetching && (
           <p className="note" role="alert">
-            The check could not be read again: {apiErrorOf(check.error).message}
+            {fill(t("health.check.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(check.error).message}</span> })}
           </p>
         )}
       </>
@@ -154,8 +152,8 @@ export function CheckRegion({ project, check, health }: { project: string; check
 
   return (
     <HealthRegion
-      title="Check"
-      boundary="check"
+      title={t("health.check.title")}
+      boundary={t("health.check.boundary")}
       headingRef={heading}
       busy={check.data === undefined ? failure === null : check.isFetching}
       className="health-check"
@@ -163,7 +161,7 @@ export function CheckRegion({ project, check, health }: { project: string; check
         check.data === undefined ? null : (
           <button type="button" className="button" aria-disabled={check.isFetching} onClick={checkAgain}>
             <Icon name="retry" />
-            <span>{check.isFetching ? "Checking" : "Check again"}</span>
+            <span>{check.isFetching ? t("health.check.checkingButton") : t("health.check.again")}</span>
           </button>
         )
       }

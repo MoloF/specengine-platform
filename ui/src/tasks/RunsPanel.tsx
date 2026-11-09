@@ -14,36 +14,34 @@ function RunItem({ project, run }: { project: string; run: TaskRun }) {
   return (
     <li className="task-run">
       <h3 className="task-run-title">
-        <span>Run {run.run}</span>
+        <span>{t("tasks.runs.run", { run: run.run })}</span>
         {run.ended_at === null ? (
           <span className="plain-tag running-tag">
             <Icon name="taskInProgress" />
-            Running
+            {t("tasks.runs.running")}
           </span>
         ) : run.outcome === null ? (
-          <span className="plain-tag">No outcome reported</span>
+          <span className="plain-tag">{t("tasks.runs.noOutcome")}</span>
         ) : (
-          <Badge name="Outcome" look={runOutcomeLook(run.outcome, t)} />
+          <Badge name={t("tasks.runs.outcome")} look={runOutcomeLook(run.outcome, t)} />
         )}
       </h3>
       <dl className="pairs">
-        <dt>Role</dt>
+        <dt>{t("tasks.runs.role")}</dt>
         <dd className="mono run-role">{run.role}</dd>
-        <dt>Started</dt>
+        <dt>{t("tasks.runs.started")}</dt>
         <dd>
           <When at={run.started_at} />
         </dd>
-        <dt>Ended</dt>
-        <dd>{run.ended_at === null ? "Running" : <When at={run.ended_at} />}</dd>
+        <dt>{t("tasks.runs.ended")}</dt>
+        <dd>{run.ended_at === null ? t("tasks.runs.running") : <When at={run.ended_at} />}</dd>
       </dl>
       {run.summary !== null && <Prose className="task-text run-summary" source={run.summary} links={null} project={project} baseLevel={3} frontMatter={false} />}
       {run.changed_files.length === 0 ? (
-        <p className="muted">No changed file reported.</p>
+        <p className="muted">{t("tasks.runs.noFiles")}</p>
       ) : (
         <details className="run-files" open={run.changed_files.length <= SHOWN_OPEN}>
-          <summary>
-            {run.changed_files.length} changed {run.changed_files.length === 1 ? "file" : "files"}
-          </summary>
+          <summary>{t("tasks.runs.files", { count: run.changed_files.length })}</summary>
           <ul className="run-file-list mono">
             {run.changed_files.map((file, index) => (
               <li key={`${String(index)}-${file}`}>{file}</li>
@@ -57,31 +55,32 @@ function RunItem({ project, run }: { project: string; run: TaskRun }) {
 
 /** The Runs tab: the claim, else "Not claimed"; each run by number, an open one "Running". */
 export function RunsPanel({ project, task }: { project: string; task: TaskPackage }) {
+  const t = useTranslate();
   const claim = task.claim;
   const runs = [...task.runs].sort((a, b) => a.run - b.run);
   return (
     <div className="task-panel">
-      <Part title="Claim">
+      <Part title={t("tasks.runs.claim")}>
         {claim === null ? (
-          <p className="muted">Not claimed</p>
+          <p className="muted">{t("tasks.runs.notClaimed")}</p>
         ) : (
           <dl className="pairs">
-            <dt>Claimed</dt>
+            <dt>{t("tasks.runs.claimed")}</dt>
             <dd>
               <When at={claim.at} />
             </dd>
-            <dt>Role</dt>
+            <dt>{t("tasks.runs.role")}</dt>
             <dd className="mono claim-role">{claim.role}</dd>
-            <dt>Worktree</dt>
+            <dt>{t("tasks.runs.worktree")}</dt>
             <dd className="mono">{claim.worktree}</dd>
-            <dt>Branch</dt>
+            <dt>{t("tasks.runs.branch")}</dt>
             <dd className="mono">{claim.branch}</dd>
           </dl>
         )}
       </Part>
-      <Part title="Runs" count={runs.length}>
+      <Part title={t("tasks.runs.title")} count={runs.length}>
         {runs.length === 0 ? (
-          <p className="muted">No run yet.</p>
+          <p className="muted">{t("tasks.runs.none")}</p>
         ) : (
           <ol className="task-runs">
             {runs.map((run) => (

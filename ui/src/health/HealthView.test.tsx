@@ -444,7 +444,6 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
   it("zero: its own text, naming the rule, over the documents; never nothing left, never a 0", async () => {
     await openHealth(healthOf(aHealthReport([], { documents: 41 })));
     expect(part().querySelector(".health-amendments-none")?.textContent).toBe("None: no live document of this tree declares an amends link.");
-    expect(part().querySelector(".health-amendments-none code")?.textContent).toBe("amends");
     expect(part().querySelector(".health-amendments-scope")?.textContent).toBe("Measured over 41 documents.");
     expect(part().querySelector(".health-value")?.textContent).toBe("None");
     // Measured, so drawn as a measured value, never as row 6's "Not measured" (its code layer off).

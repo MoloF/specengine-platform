@@ -52,7 +52,7 @@ describe("verdicts (AC-03)", () => {
   });
 
   it("show any other verdict raw in a neutral badge", () => {
-    expect(verdictLook("triage", enT)).toEqual({ label: "triage", tone: "check-unknown", icon: "unknown" });
+    expect(verdictLook("triage", enT)).toEqual({ label: "triage", tone: "check-unknown", icon: "unknown", served: true });
     expect(verdictLook("Clean", enT).tone).toBe("check-unknown");
     expect(verdictLook("toString", enT).tone).toBe("check-unknown");
   });
@@ -96,7 +96,7 @@ describe("rows 4 and 5's words (health-code-ui)", () => {
     expect(ASSUMED_STATES.filter((state) => assumedLook(state, enT).under)).toEqual(["in_question"]);
     expect(looks.map(({ look }) => look.label).join(" ")).not.toMatch(/block/i);
     for (const word of ["superseded_x", "constructor", "toString"]) {
-      expect(assumedLook(word, enT)).toEqual({ look: { label: word, tone: "assumed-unknown", icon: "unknown" }, record: false, under: false });
+      expect(assumedLook(word, enT)).toEqual({ look: { label: word, tone: "assumed-unknown", icon: "unknown", served: true }, record: false, under: false });
     }
   });
 
@@ -106,7 +106,7 @@ describe("rows 4 and 5's words (health-code-ui)", () => {
     expect(new Set(looks.map((look) => look.label)).size).toBe(4);
     expect(new Set(looks.map((look) => look.tone)).size).toBe(4);
     expect(unboundReasonLook("cannot_verify", enT)).toEqual({ label: "Cannot verify", tone: "unbound-cannot-verify", icon: "cannotCheck" });
-    expect(unboundReasonLook("shadowed", enT)).toEqual({ label: "shadowed", tone: "unbound-unknown", icon: "unknown" });
+    expect(unboundReasonLook("shadowed", enT)).toEqual({ label: "shadowed", tone: "unbound-unknown", icon: "unknown", served: true });
     expect(unboundReasonLook("constructor", enT).tone).toBe("unbound-unknown");
   });
 
@@ -147,7 +147,7 @@ describe("row 6's words (health-drift-ui)", () => {
     // A cannot row looks like a cannot-verify state, never like an ok one.
     expect(driftClassLook("cannot", enT)).toEqual(syncLook("cannot_verify", enT));
     expect(driftClassLook("cannot", enT).tone).not.toBe(syncLook("ok", enT).tone);
-    expect(driftClassLook("advisory", enT)).toEqual({ label: "advisory", tone: "sync-unknown", icon: "unknown" });
+    expect(driftClassLook("advisory", enT)).toEqual({ label: "advisory", tone: "sync-unknown", icon: "unknown", served: true });
     expect(driftClassLook("constructor", enT).tone).toBe("sync-unknown");
     expect(driftClassLook(null, enT)).toEqual({ label: "No class", tone: "sync-unknown", icon: "unknown" });
   });
@@ -170,7 +170,7 @@ describe("row 6's words (health-drift-ui)", () => {
     expect(new Set(looks.map((look) => look.icon)).size).toBe(4);
     expect(testedLook("unverifiable", enT)).toEqual({ label: "Unverifiable", tone: "sync-cannot-verify", icon: "cannotCheck" });
     expect(testedLook("unverifiable", enT).tone).not.toBe(testedLook("verified", enT).tone);
-    expect(testedLook("expired", enT)).toEqual({ label: "expired", tone: "sync-unknown", icon: "unknown" });
+    expect(testedLook("expired", enT)).toEqual({ label: "expired", tone: "sync-unknown", icon: "unknown", served: true });
     expect(testedLook("toString", enT).tone).toBe("sync-unknown");
     expect([...looks, ...DRIFT_CLASSES.map((value) => driftClassLook(value, enT))].map((look) => look.label).join(" ")).not.toMatch(/block/i);
   });

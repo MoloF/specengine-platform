@@ -39,7 +39,7 @@ export function severityLook(value: Severity | null, t: Translate): Look {
     return { label: t("inbox.severity.none"), tone: "severity-unknown", icon: "unknown" };
   }
   const mark = lookup(SEVERITY, value);
-  return mark === null ? { label: value, tone: "severity-unknown", icon: "unknown" } : { label: t(`inbox.severity.${value as KnownSeverity}`), ...mark };
+  return mark === null ? { label: value, tone: "severity-unknown", icon: "unknown", served: true } : { label: t(`inbox.severity.${value as KnownSeverity}`), ...mark };
 }
 
 export function severityRank(value: Severity | null): number {
@@ -61,7 +61,7 @@ const STATUS: Record<KnownProposalStatus, Mark> = {
 
 export function statusLook(value: ProposalStatus, t: Translate): Look {
   const mark = lookup(STATUS, value);
-  return mark === null ? { label: value, tone: "proposal-unknown", icon: "unknown" } : { label: t(`inbox.status.${value as KnownProposalStatus}`), ...mark };
+  return mark === null ? { label: value, tone: "proposal-unknown", icon: "unknown", served: true } : { label: t(`inbox.status.${value as KnownProposalStatus}`), ...mark };
 }
 
 const STATUS_ORDER: readonly string[] = Object.keys(STATUS);

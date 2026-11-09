@@ -48,6 +48,13 @@ type HastProperties = HastElement["properties"];
 /** How an anchor is to be shown: matched against the links read, as text with its URL, or as text. */
 export type LinkKind = "local" | "external" | "autolink" | "none";
 
+/** The words the rewrite writes into the text, in the language shown: an image's label, a footnote's. */
+export interface SpecWords {
+  image: string;
+  imageAlt: (alt: string) => string;
+  footnote: (label: string) => string;
+}
+
 export interface SpecOptions {
   /** The text parsed: offsets and lines below are into it. */
   source: string;
@@ -55,6 +62,7 @@ export interface SpecOptions {
   lineBase: number;
   /** The level of the heading the text sits under, 1-5. */
   baseLevel: number;
+  words: SpecWords;
 }
 
 /** Block nodes that carry `data-line`. */
@@ -323,7 +331,7 @@ class Rewrite {
   }
 
   private image(alt: string | null | undefined, url: string, position: MdPosition | undefined): MdText {
-    const label = alt === null || alt === undefined || alt === "" ? "Image" : `Image: ${alt}`;
+    const label = alt === null || alt === undefined || alt === "" ? this.options.words.image : this.options.words.imageAlt(alt);
     return shownAs(
       "span",
       "md-image",
@@ -333,7 +341,7 @@ class Rewrite {
   }
 
   private footnote(node: MdOf<"footnoteDefinition">): MdNode {
-    const label: MdParagraph = { type: "paragraph", children: [{ type: "text", value: `Footnote [${node.label ?? node.identifier}]` }] };
+    const label: MdParagraph = { type: "paragraph", children: [{ type: "text", value: this.options.words.footnote(node.label ?? node.identifier) }] };
     setProperties(label, { className: ["md-footnote-label"] });
     const shown: MdOf<"blockquote"> = {
       type: "blockquote",

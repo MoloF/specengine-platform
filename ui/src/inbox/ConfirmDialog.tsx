@@ -2,6 +2,8 @@ import { useEffect, useId, useRef, useState } from "react";
 import { apiErrorOf } from "../api/client";
 import { useConfirmProposal, useConfirmRead, useProposal } from "../api/queries";
 import type { ApiError, Proposal, Team } from "../api/types";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
 import { Dialog } from "../ui/Dialog";
 import { DiffView } from "../ui/DiffView";
@@ -15,11 +17,10 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
  * redirect (`docs/canon/hub-confirm.md` "Known limits"), or a connection dropped, after the commit
  * too, so it never says that nothing was confirmed (`docs/features/hub-confirm.md` "Description and interactions").
  */
-const NO_ANSWER = "No answer: read again to see whether it was confirmed.";
 
 /** The heading of a refusal; the daemon's own words stand under it. */
-function headingOf({ status }: ApiError): string {
-  return status === 0 ? NO_ANSWER : "The daemon refused to confirm it.";
+function headingOf({ status }: ApiError, t: Translate): string {
+  return status === 0 ? t("inbox.confirm.noAnswer") : t("inbox.confirm.refused");
 }
 
 /**
@@ -36,14 +37,12 @@ function lacksDiff(review: Proposal): boolean {
  * True on every hub: the click pushes nothing, though a `--push` hub's sync sends the commit later
  * (`docs/features/hub-git.md`).
  */
-function effectOf(review: Proposal): string | null {
+function effectOf(review: Proposal, t: Translate): string | null {
   const stage = review.staged;
   if (stage === null) {
     return null;
   }
-  return stage.decision === "reject"
-    ? "Confirming rejects this proposal under your login; no spec file changes."
-    : "Confirming applies this staged choice as one commit in this hub's checkout, under your login; this click pushes nothing.";
+  return stage.decision === "reject" ? t("inbox.confirm.effectReject") : t("inbox.confirm.effectApprove");
 }
 
 /**
@@ -52,6 +51,7 @@ function effectOf(review: Proposal): string | null {
  * in its place, which say why.
  */
 function ChangeShown({ review }: { review: Proposal }) {
+  const t = useTranslate();
   if (review.diff !== null) {
     return <DiffView diff={shownConfirmText(review.diff)} />;
   }
@@ -60,12 +60,12 @@ function ChangeShown({ review }: { review: Proposal }) {
       <div className="notice">
         <p className="notice-title">
           <Icon name="alert" />
-          <span>No diff to show: this change cannot be confirmed here</span>
+          <span>{t("inbox.confirm.noDiff")}</span>
         </p>
         {review.notes.length > 0 && (
-          <ul className="note-list" aria-label="The review's notes">
+          <ul className="note-list" aria-label={t("inbox.confirm.reviewNotes")}>
             {review.notes.map((note, index) => (
-              <li key={`${String(index)}-${note}`} className="agent-text" dir="auto">
+              <li key={`${String(index)}-${note}`} className="agent-text" dir="auto" lang="en">
                 {shownConfirmText(note)}
               </li>
             ))}
@@ -78,7 +78,7 @@ function ChangeShown({ review }: { review: Proposal }) {
     return null;
   }
   return (
-    <figure className="diff-figure" aria-label={`Record ${review.record_id ?? ""}`.trim()}>
+    <figure className="diff-figure" aria-label={review.record_id === null ? t("inbox.confirm.recordBare") : t("inbox.confirm.record", { id: review.record_id })}>
       <pre className="node-text agent-text" dir="auto">
         {shownConfirmText(review.record_text)}
       </pre>
@@ -123,6 +123,7 @@ export function ConfirmDialog({
   /** The daemon confirmed it: its answer, the review document, handed on once. The caller closes the dialog. */
   onConfirmed: (review: Proposal) => void;
 }) {
+  const t = useTranslate();
   const read = useConfirmRead(project, id);
   const proposal = useProposal(project, id);
   const write = useConfirmProposal(project);
@@ -207,7 +208,7 @@ export function ConfirmDialog({
         setPending(false);
         setRefusal(refused);
       } else {
-        announce(`${headingOf(refused)} ${id}: ${refused.message}`, "assertive");
+        announce(t("inbox.confirm.refusedSaid", { heading: headingOf(refused, t), id, message: refused.message }), "assertive");
       }
       return;
     }
@@ -222,16 +223,16 @@ export function ConfirmDialog({
 
   if (done !== null) {
     return (
-      <Dialog title={`Confirm ${id}`} onClose={cancel} className="confirm-dialog">
-        <div id={doneId} className="confirm-body" role="group" aria-label={`What confirming ${id} did`} tabIndex={0}>
+      <Dialog title={t("inbox.confirm.title", { id })} onClose={cancel} className="confirm-dialog">
+        <div id={doneId} className="confirm-body" role="group" aria-label={t("inbox.confirm.did", { id })} tabIndex={0}>
           <p className="dialog-text confirm-done">
             {/* A check, no state's icon: a staged reject is confirmed too. */}
             <Icon name="selected" />
-            <span>Confirmed.</span>
+            <span>{t("inbox.confirm.done")}</span>
           </p>
-          <ul className="note-list" aria-label="The daemon's notes">
+          <ul className="note-list" aria-label={t("inbox.confirm.daemonNotes")}>
             {done.notes.map((note, index) => (
-              <li key={`${String(index)}-${note}`} className="agent-text" dir="auto">
+              <li key={`${String(index)}-${note}`} className="agent-text" dir="auto" lang="en">
                 {shownConfirmText(note)}
               </li>
             ))}
@@ -239,17 +240,17 @@ export function ConfirmDialog({
         </div>
         <div className="dialog-actions">
           <button ref={closeButton} type="button" className="button" data-autofocus="" aria-describedby={doneId} onClick={cancel}>
-            Close
+            {t("inbox.dialog.close")}
           </button>
         </div>
       </Dialog>
     );
   }
 
-  const effect = review === undefined ? null : effectOf(review);
+  const effect = review === undefined ? null : effectOf(review, t);
   return (
-    <Dialog title={`Confirm ${id}`} onClose={cancel} className="confirm-dialog">
-      <div className="confirm-body" role="group" aria-label={`What confirming ${id} does`} tabIndex={0}>
+    <Dialog title={t("inbox.confirm.title", { id })} onClose={cancel} className="confirm-dialog">
+      <div className="confirm-body" role="group" aria-label={t("inbox.confirm.does", { id })} tabIndex={0}>
         {review !== undefined && (
           <>
             <p className="dialog-text agent-text" dir="auto">
@@ -260,7 +261,7 @@ export function ConfirmDialog({
         )}
         {effect !== null && <p className="dialog-text dialog-effect">{effect}</p>}
         <dl className="pairs">
-          <dt>Confirming as</dt>
+          <dt>{t("inbox.confirm.as")}</dt>
           <dd>
             <span className="mono">
               <bdi>{shownConfirmSlot(team.login)}</bdi>
@@ -276,12 +277,12 @@ export function ConfirmDialog({
         {asked === undefined
           ? failedRead === null && (
               <div aria-busy="true">
-                <Skeleton label={`Reading the question of ${id}`} lines={2} />
+                <Skeleton label={t("inbox.confirm.reading", { id })} lines={2} />
               </div>
             )
           : (
-              <figure className="diff-figure" aria-label="The question a terminal would ask">
-                <pre className="node-text agent-text" dir="auto">
+              <figure className="diff-figure" aria-label={t("inbox.confirm.question")}>
+                <pre className="node-text agent-text" dir="auto" lang="en">
                   {shownConfirmText(asked.question)}
                 </pre>
               </figure>
@@ -291,18 +292,20 @@ export function ConfirmDialog({
         <div className="refusal" role="alert">
           <p className="refusal-title">
             <Icon name="alert" />
-            <span>{headingOf(failure)}</span>
+            <span>{headingOf(failure, t)}</span>
           </p>
-          <p className="verbatim">{failure.message}</p>
+          <p className="verbatim" lang="en">
+            {failure.message}
+          </p>
         </div>
       )}
       {moved && failure === null && (
         <div className="notice" role="alert">
           <p className="notice-title">
             <Icon name="alert" />
-            <span>This proposal changed since this dialog read it</span>
+            <span>{t("inbox.confirm.moved")}</span>
           </p>
-          <p>Nothing was confirmed. Read it again, check it, then confirm.</p>
+          <p>{t("inbox.confirm.movedText")}</p>
         </div>
       )}
       <div className="dialog-actions">
@@ -314,15 +317,15 @@ export function ConfirmDialog({
             void submit();
           }}
         >
-          {pending ? "Confirming" : "Confirm"} <span className="sr-only">{id}</span>
+          {fill(t(pending ? "inbox.confirm.confirming" : "inbox.confirm.confirm", { id: slot("id") }), { id: <span className="sr-only">{id}</span> })}
         </button>
         {stale && (
           <button type="button" className="button" onClick={readAgain}>
-            Read again
+            {t("inbox.confirm.readAgain")}
           </button>
         )}
         <button ref={cancelButton} type="button" className="button" data-autofocus="" aria-disabled={pending} onClick={cancel}>
-          Cancel
+          {t("inbox.dialog.cancel")}
         </button>
       </div>
     </Dialog>

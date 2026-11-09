@@ -17,3 +17,13 @@ export function slot(name: string): string {
 export function fill(text: string, slots: Readonly<Record<string, ReactNode>>): ReactNode[] {
   return text.split(MARK).map((piece, index) => createElement(Fragment, { key: index }, index % 2 === 1 ? (slots[piece] ?? piece) : piece));
 }
+
+/**
+ * The text before and after the first `value` in a translated sentence: a count drawn on its own,
+ * the words around it read out (`, 3 cards`: `, ` and ` cards` spoken, `3` shown). Not found: the
+ * whole text before.
+ */
+export function around(text: string, value: string): readonly [string, string] {
+  const at = text.indexOf(value);
+  return at < 0 ? [text, ""] : [text.slice(0, at), text.slice(at + value.length)];
+}

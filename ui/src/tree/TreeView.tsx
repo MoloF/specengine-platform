@@ -6,6 +6,8 @@ import { movesHere, pushHash, useHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { DEFAULT_TEXT_MODE, type TextMode } from "../markdown/TextMode";
 import { useAnnounce } from "../ui/announcer";
 import { Icon } from "../ui/Icon";
@@ -37,14 +39,15 @@ function TreeFooter({
   narrowTo: string | null;
   onRoot: (root: string | null) => void;
 }) {
-  const leftOut = leftOutText(tree.left_out);
+  const t = useTranslate();
+  const leftOut = leftOutText(tree.left_out, t);
   return (
     <div className="tree-foot">
       {tree.truncated && (
         <div className="notice cut-notice" role="note">
           <p className="notice-title">
             <Icon name="info" />
-            <span>Showing the first {tree.nodes.length} nodes: the list was cut</span>
+            <span>{t("tree.view.cut", { count: tree.nodes.length })}</span>
           </p>
           {narrowTo !== null && (
             <button
@@ -54,7 +57,7 @@ function TreeFooter({
                 onRoot(narrowTo);
               }}
             >
-              Show <span className="mono">{narrowTo}</span> as root
+              {fill(t("tree.view.showAsRoot", { name: slot("name") }), { name: <span className="mono">{narrowTo}</span> })}
             </button>
           )}
         </div>
@@ -67,23 +70,22 @@ function TreeFooter({
             onRoot(null);
           }}
         >
-          Whole tree
+          {t("tree.view.wholeTree")}
         </button>
       )}
       {tree.notes.length > 0 && (
-        <ul className="note-list" aria-label="Notes from the daemon">
+        <ul className="note-list" aria-label={t("tree.view.notes")}>
           {tree.notes.map((note) => (
-            <li key={note}>{note}</li>
+            <li key={note} lang="en">
+              {note}
+            </li>
           ))}
         </ul>
       )}
       {leftOut !== null && (
         <p className="note">
           <Icon name="info" />
-          <span>
-            {leftOut}
-            {tree.left_out.tier3 > 0 && !archive && ". Include archive to show the archived ones."}
-          </span>
+          <span>{tree.left_out.tier3 > 0 && !archive ? t("tree.view.leftOutArchive", { leftOut }) : leftOut}</span>
         </p>
       )}
     </div>
@@ -126,24 +128,26 @@ function SearchField({
   onSearch: (query: string) => void;
   onBack: () => void;
 }) {
+  const t = useTranslate();
   const searchId = useId();
   const [query, setQuery] = useState("");
-  const [queryError, setQueryError] = useState<string | null>(null);
+  /** A search submitted empty: the field says what to type. */
+  const [queryError, setQueryError] = useState(false);
 
   function submit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (query.trim() === "") {
-      setQueryError("Type what to search for: words of three or more letters.");
+      setQueryError(true);
       return;
     }
-    setQueryError(null);
+    setQueryError(false);
     onSearch(query);
   }
 
   return (
-    <form role="search" aria-label="Spec search" className="tree-search" onSubmit={submit} noValidate>
+    <form role="search" aria-label={t("tree.search.formLabel")} className="tree-search" onSubmit={submit} noValidate>
       <label className="field-label" htmlFor={searchId}>
-        Search the spec
+        {t("tree.search.field")}
       </label>
       <div className="search-row">
         <input
@@ -153,13 +157,13 @@ function SearchField({
           type="search"
           autoComplete="off"
           spellCheck={false}
-          placeholder="Words of three or more letters"
+          placeholder={t("tree.search.placeholder")}
           value={query}
-          aria-invalid={queryError !== null}
-          aria-describedby={queryError === null ? undefined : `${searchId}-error`}
+          aria-invalid={queryError}
+          aria-describedby={queryError ? `${searchId}-error` : undefined}
           onChange={(event) => {
             setQuery(event.target.value);
-            setQueryError(null);
+            setQueryError(false);
           }}
           onKeyDown={(event) => {
             if (event.key === "Escape" && showHits) {
@@ -170,12 +174,12 @@ function SearchField({
         />
         <button type="submit" className="button">
           <Icon name="search" />
-          <span>Search</span>
+          <span>{t("tree.search.submit")}</span>
         </button>
       </div>
-      {queryError !== null && (
+      {queryError && (
         <p id={`${searchId}-error`} className="field-error" role="alert">
-          {queryError}
+          {t("tree.search.empty")}
         </p>
       )}
     </form>
@@ -202,6 +206,7 @@ export function TreeView({
   /** False while the workspaces are read: the tree waits for its root (docs/features/workspaces.md WS-9). */
   moduleKnown?: boolean;
 }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
@@ -304,8 +309,8 @@ export function TreeView({
       return;
     }
     spoken.current = answered;
-    announce(hitCount(results));
-  }, [answered, showHits, results, announce]);
+    announce(hitCount(results, t));
+  }, [answered, showHits, results, announce, t]);
 
   function open(name: string) {
     pushHash(sectionHash(project, "tree", name));
@@ -341,11 +346,11 @@ export function TreeView({
     treeBody =
       treeFailure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Loading the spec tree of ${project}`} lines={8} />
+          <Skeleton label={t("tree.view.loading", { project })} lines={8} />
         </div>
       ) : (
         <ErrorPanel
-          title="The spec tree could not be loaded"
+          title={t("tree.view.failed")}
           message={apiErrorOf(treeFailure).message}
           retrying={tree.isFetching}
           attempt={tree.errorUpdateCount}
@@ -358,24 +363,23 @@ export function TreeView({
   } else if (tree.data.reason !== null) {
     treeBody = (
       <div className="empty-state">
-        <p>No tree from that root:</p>
-        <p className="verbatim">{tree.data.reason}</p>
+        <p>{t("tree.view.noRoot")}</p>
+        <p className="verbatim" lang="en">
+          {tree.data.reason}
+        </p>
         <TreeFooter tree={tree.data} archive={archive} rooted={root !== null} narrowTo={null} onRoot={setRoot} />
       </div>
     );
   } else if (rows.length === 0) {
     treeBody = (
       <div className="empty-state">
-        <h2>No document in the tree</h2>
+        <h2>{t("tree.view.empty")}</h2>
         {tree.data.notes.map((note) => (
-          <p key={note} className="verbatim">
+          <p key={note} className="verbatim" lang="en">
             {note}
           </p>
         ))}
-        <p className="muted">
-          Next: write a spec document under the project&rsquo;s spec path; the tree shows it on the next read.
-          {!archive && tree.data.left_out.tier3 > 0 && " Or include the archive."}
-        </p>
+        <p className="muted">{!archive && tree.data.left_out.tier3 > 0 ? t("tree.view.emptyNextArchive") : t("tree.view.emptyNext")}</p>
         {root !== null && <TreeFooter tree={{ ...tree.data, notes: [] }} archive={archive} rooted narrowTo={null} onRoot={setRoot} />}
       </div>
     );
@@ -383,9 +387,7 @@ export function TreeView({
     treeBody = (
       <>
         {root !== null && (
-          <p className="tree-rooted">
-            Rooted at <span className="mono">{root}</span>
-          </p>
+          <p className="tree-rooted">{fill(t("tree.view.rooted", { root: slot("root") }), { root: <span className="mono">{root}</span> })}</p>
         )}
         <SpecTree rows={rows} current={current} counts={counts} drift={drift?.byRow ?? null} onOpen={openRow} activeRef={setActiveRow} />
         <TreeFooter
@@ -404,7 +406,7 @@ export function TreeView({
     if (searchFailure !== null && search.data === undefined) {
       hits = (
         <ErrorPanel
-          title="The search could not run"
+          title={t("tree.search.failed")}
           message={apiErrorOf(searchFailure).message}
           retrying={search.isFetching}
           attempt={search.errorUpdateCount}
@@ -417,7 +419,7 @@ export function TreeView({
     } else if (search.data === undefined) {
       hits = (
         <div aria-busy="true">
-          <Skeleton label={`Searching for ${submitted ?? ""}`} lines={5} />
+          <Skeleton label={t("tree.search.searching", { query: submitted ?? "" })} lines={5} />
         </div>
       );
     } else {
@@ -434,7 +436,7 @@ export function TreeView({
           />
           {search.error !== null && (
             <p className="note" role="alert">
-              The search could not run again: {apiErrorOf(search.error).message}
+              {fill(t("tree.search.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(search.error).message}</span> })}
             </p>
           )}
         </div>
@@ -456,9 +458,9 @@ export function TreeView({
               setArchive(event.target.checked);
             }}
           />
-          <label htmlFor={archiveId}>Include archive</label>
+          <label htmlFor={archiveId}>{t("tree.view.includeArchive")}</label>
           <span id={`${archiveId}-hint`} className="sr-only">
-            Archived documents in the tree and the search, and the links written in them.
+            {t("tree.view.archiveHint")}
           </span>
         </div>
         <div className="archive-toggle">
@@ -472,28 +474,28 @@ export function TreeView({
               rememberShowDrift(project, event.target.checked);
             }}
           />
-          <label htmlFor={driftId}>Show drift</label>
+          <label htmlFor={driftId}>{t("tree.view.showDrift")}</label>
           <span id={`${driftId}-hint`} className="sr-only">
-            Badges on each node for its own bindings in Health&rsquo;s drift row: Fix, Check, Cannot verify. While on, the tree reads Health.
+            {t("tree.view.driftHint", { fix: t("health.driftClass.fix"), check: t("health.driftClass.check"), cannot: t("health.driftClass.cannot") })}
           </span>
         </div>
         {/* Only once the tree has answered: before, no line and no Retry, so nothing can read Health first. */}
         {showDrift && tree.data !== undefined && (
-          <RegionBoundary name="drift">
+          <RegionBoundary name={t("tree.view.boundary.drift")}>
             <DriftStatus project={project} health={health} failure={healthFailure} drift={drift} treeShown={rows.length > 0} />
           </RegionBoundary>
         )}
         {showHits && (
-          <section className="search-region" aria-label="Search results">
-            <RegionBoundary name="search results">{hits}</RegionBoundary>
+          <section className="search-region" aria-label={t("tree.view.searchResults")}>
+            <RegionBoundary name={t("tree.view.boundary.search")}>{hits}</RegionBoundary>
           </section>
         )}
         <div ref={treeRegion} tabIndex={-1} className="tree-region" hidden={showHits} aria-busy={tree.data !== undefined && tree.isFetching}>
-          <RegionBoundary name="spec tree">{treeBody}</RegionBoundary>
+          <RegionBoundary name={t("tree.view.boundary.tree")}>{treeBody}</RegionBoundary>
         </div>
       </div>
       <div className="node-column">
-        <RegionBoundary key={nodeRef ?? ""} name="node">
+        <RegionBoundary key={nodeRef ?? ""} name={t("tree.view.boundary.node")}>
           {nodeRef === null ? (
             <NoNodePane />
           ) : (

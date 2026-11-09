@@ -19,7 +19,7 @@ describe("a rollup's word", () => {
   });
 
   it("shows a word this build does not know raw and neutral", () => {
-    expect(rollupLook("pondering", enT)).toEqual({ label: "pondering", tone: "trace-unknown", icon: "unknown" });
+    expect(rollupLook("pondering", enT)).toEqual({ label: "pondering", tone: "trace-unknown", icon: "unknown", served: true });
   });
 
   it("knows a step with no card, and nothing else, as hollow", () => {

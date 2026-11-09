@@ -32,22 +32,20 @@ function NoTaskPane({ waiting }: { waiting: number | null }) {
     <section className="task-pane" aria-labelledby="tasks-title">
       <header className="task-head">
         <h1 id="tasks-title" tabIndex={-1}>
-          Tasks
+          {t("tasks.title")}
         </h1>
         <p className="view-about">{aboutOf("tasks", t)}</p>
       </header>
       <div className="empty-state">
-        <h2>No task open</h2>
+        <h2>{t("tasks.noneOpen")}</h2>
         {waiting !== null && waiting > 0 && (
           <p className="waiting-note">
             <Icon name="waiting" />
-            <span>
-              {waiting} {waiting === 1 ? "task waits" : "tasks wait"} for you: the list shows them first.
-            </span>
+            <span>{t("tasks.waiting", { count: waiting })}</span>
           </p>
         )}
-        <p>Pick a task in the list to read its goal, plan, spec changes, proposals and runs, and the terminal commands for what you decide.</p>
-        <p className="muted">In the list: the arrow keys move, Enter opens, ? lists every key.</p>
+        <p>{t("tasks.pick")}</p>
+        <p className="muted">{t("tasks.keysHint")}</p>
       </div>
     </section>
   );
@@ -60,6 +58,7 @@ function NoTaskPane({ waiting }: { waiting: number | null }) {
  * owner action is a command for a terminal (docs/canon/architecture.md#control).
  */
 export function TasksView({ project, taskId }: { project: string; taskId: string | null }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const tasks = useTasks(project);
   const listRegion = useRef<HTMLDivElement>(null);
@@ -122,20 +121,20 @@ export function TasksView({ project, taskId }: { project: string; taskId: string
 
   return (
     <div className="tasks-view" onKeyDown={onViewKeyDown}>
-      <section className="tasks-pane" aria-label="Task list">
+      <section className="tasks-pane" aria-label={t("tasks.listLabel")}>
         <div
           ref={listRegion}
           tabIndex={-1}
           className="tasks-region"
           aria-busy={tasks.data === undefined ? tasks.error === null : tasks.isFetching}
         >
-          <RegionBoundary name="task list">
+          <RegionBoundary name={t("tasks.boundary.list")}>
             <TaskList project={project} taskId={taskId} tasks={tasks} onOpened={onOpened} />
           </RegionBoundary>
         </div>
       </section>
       <div ref={taskColumn} className="task-column">
-        <RegionBoundary key={taskId ?? ""} name="task" heading={taskId ?? "Tasks"}>
+        <RegionBoundary key={taskId ?? ""} name={t("tasks.boundary.task")} heading={taskId ?? t("tasks.title")}>
           {taskId === null ? (
             <NoTaskPane waiting={waiting} />
           ) : (

@@ -20,6 +20,7 @@ import { severityCountsOf } from "./findings";
 import { HealthRegion } from "./parts";
 import { UnboundPart } from "./UnboundPart";
 import { useTranslate } from "../i18n";
+import { around, fill, slot } from "../i18n/fill";
 
 /** How many proposals of the queue are listed, in the Inbox's order. */
 export const LEFT_ROWS = 5;
@@ -28,22 +29,25 @@ export const LEFT_ROWS = 5;
 function Queue({ project, answer }: { project: string; answer: Inbox }) {
   const t = useTranslate();
   const ordered = queueOrder(answer.proposals);
-  const notes = <Notes notes={answer.notes} label="Notes from the daemon on the queue" />;
+  const notes = <Notes notes={answer.notes} label={t("health.left.queueNotes")} />;
   if (ordered.length === 0) {
     return (
       <>
         {notes}
-        <p className="health-left-total">No proposal waits for your decision.</p>
+        <p className="health-left-total">{t("health.left.queueClear")}</p>
       </>
     );
   }
+  const [before, after] = around(t("health.left.queueTotal", { count: ordered.length }), String(ordered.length));
   return (
     <>
       {notes}
       <p className="health-left-total">
-        <strong>{ordered.length}</strong> {ordered.length === 1 ? "proposal" : "proposals"} in the queue
+        {before}
+        <strong>{ordered.length}</strong>
+        {after}
       </p>
-      <ul className="health-tally" aria-label="Open proposals by severity">
+      <ul className="health-tally" aria-label={t("health.left.bySeverity")}>
         {severityCountsOf(ordered).map(({ severity, count }) => (
           <li key={severity ?? ""}>
             <Badge look={severityLook(severity, t)} />
@@ -51,16 +55,16 @@ function Queue({ project, answer }: { project: string; answer: Inbox }) {
           </li>
         ))}
       </ul>
-      <h4 className="health-subtitle">First in the queue</h4>
+      <h4 className="health-subtitle">{t("health.left.first")}</h4>
       <ol className="health-left-list">
         {ordered.slice(0, LEFT_ROWS).map((proposal) => (
           <li key={proposal.id} className="health-left-row">
             <a className="health-left-link" href={sectionHash(project, "inbox", proposal.id)}>
-              <span className="mono">{proposal.id}</span>: <span>{summaryOf(proposal)}</span>
+              <span className="mono">{proposal.id}</span>: <span>{summaryOf(proposal, t)}</span>
             </a>
             <span className="health-left-meta">
-              <Badge name="Severity" look={severityLook(proposal.severity, t)} />
-              <Stored label="Created" at={proposal.created_at} />
+              <Badge name={t("health.left.severity")} look={severityLook(proposal.severity, t)} />
+              <Stored label={t("health.left.created")} at={proposal.created_at} />
             </span>
           </li>
         ))}
@@ -78,6 +82,7 @@ function Queue({ project, answer }: { project: string; answer: Inbox }) {
  * other standing, and one health row that cannot be measured leaves the others as they are.
  */
 export function LeftRegion({ project, health }: { project: string; health: HealthQuery }) {
+  const t = useTranslate();
   const inbox = useInbox(project);
   const failure = useRetainedFailure(inbox.error, inbox.isFetching);
   const healthFailure = useRetainedFailure(health.error, health.isFetching);
@@ -91,10 +96,10 @@ export function LeftRegion({ project, health }: { project: string; health: Healt
   if (inbox.data === undefined) {
     queue =
       failure === null ? (
-        <Skeleton label={`Loading the queue of ${project}`} lines={4} />
+        <Skeleton label={t("health.left.queueLoading", { project })} lines={4} />
       ) : (
         <ReadFailure
-          title="The queue could not be loaded"
+          title={t("health.left.queueFailed")}
           failure={failure}
           retrying={inbox.isFetching}
           attempt={inbox.errorUpdateCount}
@@ -110,7 +115,7 @@ export function LeftRegion({ project, health }: { project: string; health: Healt
         <Queue project={project} answer={inbox.data} />
         {inbox.error !== null && !inbox.isFetching && (
           <p className="note" role="alert">
-            The queue could not be read again: {apiErrorOf(inbox.error).message}
+            {fill(t("health.left.queueFailedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(inbox.error).message}</span> })}
           </p>
         )}
       </>
@@ -119,28 +124,28 @@ export function LeftRegion({ project, health }: { project: string; health: Healt
 
   return (
     <HealthRegion
-      title="What is left"
-      boundary="list of what is left"
+      title={t("health.left.title")}
+      boundary={t("health.left.boundary")}
       headingRef={heading}
       busy={queueBusy || healthBusy}
       className="health-left"
       action={
         <a className="health-open" href={sectionHash(project, "inbox")}>
-          Open Inbox
+          {t("health.left.openInbox")}
           <Icon name="arrowRight" />
         </a>
       }
     >
       <div className="health-part" aria-busy={queueBusy}>
-        <h3 className="health-part-title">Proposals in the queue</h3>
-        <RegionBoundary name="queue">{queue}</RegionBoundary>
+        <h3 className="health-part-title">{t("health.left.queueTitle")}</h3>
+        <RegionBoundary name={t("health.left.queueBoundary")}>{queue}</RegionBoundary>
       </div>
       <UnappliedAmendments project={project} health={health} failure={healthFailure} busy={healthBusy} />
       <AssumesPart project={project} health={health} failure={healthFailure} busy={healthBusy} />
       <UnboundPart project={project} health={health} failure={healthFailure} busy={healthBusy} />
       <DriftPart project={project} health={health} failure={healthFailure} busy={healthBusy} />
       <p className="health-pointer">
-        Documents over their budget: see Budgets, under <span className="health-pointer-name">Debt and budgets</span>.
+        {fill(t("health.left.pointer", { region: slot("region") }), { region: <span className="health-pointer-name">{t("health.debt.title")}</span> })}
       </p>
     </HealthRegion>
   );

@@ -10,15 +10,25 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { linkStateLook, WEAK_LINK_TYPE } from "./labels";
 import { placeKey, rowName } from "./rows";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
+
+/** The parts the live rule left out, zero parts omitted, joined; null when nothing was. */
+function leftOutParts(leftOut: { generated: number; tier3: number }, t: Translate): string | null {
+  const parts: string[] = [];
+  if (leftOut.generated > 0) {
+    parts.push(t("tree.leftOutGenerated", { count: leftOut.generated }));
+  }
+  if (leftOut.tier3 > 0) {
+    parts.push(t("tree.leftOutArchived", { count: leftOut.tier3 }));
+  }
+  return parts.length === 0 ? null : parts.join(", ");
+}
 
 /** What the live rule left out, zero parts omitted; null when nothing was. */
-export function leftOutText(leftOut: { generated: number; tier3: number }): string | null {
-  const parts = [
-    leftOut.generated > 0 ? `${String(leftOut.generated)} generated` : null,
-    leftOut.tier3 > 0 ? `${String(leftOut.tier3)} archived` : null,
-  ].filter((part): part is string => part !== null);
-  return parts.length === 0 ? null : `Left out: ${parts.join(", ")}`;
+export function leftOutText(leftOut: { generated: number; tier3: number }, t: Translate): string | null {
+  const parts = leftOutParts(leftOut, t);
+  return parts === null ? null : t("tree.leftOut", { parts });
 }
 
 /**
@@ -64,7 +74,7 @@ function LinkRow({
     <li className="link-row">
       <p className="link-row-head">
         <span className="kind-tag">{link.type}</span>
-        {link.type === WEAK_LINK_TYPE && <span className="weak-tag">weak</span>}
+        {link.type === WEAK_LINK_TYPE && <span className="weak-tag">{t("tree.links.weak")}</span>}
         {link.state === "resolved" && link.name !== null ? (
           <a className="mono link-name" href={sectionHash(project, "tree", link.name)} onClick={onFollow}>
             {link.name}
@@ -72,22 +82,14 @@ function LinkRow({
         ) : (
           <span className="mono link-name">{shown}</span>
         )}
-        <Badge name="State" look={linkStateLook(link.state, t)} />
+        <Badge name={t("tree.links.state")} look={linkStateLook(link.state, t)} />
       </p>
       <p className="link-row-meta">
         <span className="mono">
           {link.path}:{link.line}
         </span>
-        {link.at !== null && (
-          <span>
-            at <span className="mono">{link.at}</span>
-          </span>
-        )}
-        {asWritten !== null && (
-          <span>
-            as <span className="mono">{asWritten}</span>
-          </span>
-        )}
+        {link.at !== null && <span>{fill(t("tree.links.at", { at: slot("at") }), { at: <span className="mono">{link.at}</span> })}</span>}
+        {asWritten !== null && <span>{fill(t("tree.links.as", { written: slot("written") }), { written: <span className="mono">{asWritten}</span> })}</span>}
         {inText && (
           <button
             type="button"
@@ -96,11 +98,15 @@ function LinkRow({
               onShowInText(placeKey(holder), link.line);
             }}
           >
-            Show in text<span className="sr-only">, line {link.line}</span>
+            {fill(t("tree.links.showInText", { line: slot("line") }), { line: <span className="sr-only">{t("tree.links.showInTextLine", { line: link.line })}</span> })}
           </button>
         )}
       </p>
-      {link.reason !== null && <p className="link-reason verbatim">{link.reason}</p>}
+      {link.reason !== null && (
+        <p className="link-reason verbatim" lang="en">
+          {link.reason}
+        </p>
+      )}
     </li>
   );
 }
@@ -157,12 +163,13 @@ function HolderLinks({
   onShowInText: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
-  const leftOut = leftOutText(links.left_out);
+  const t = useTranslate();
+  const parts = leftOutParts(links.left_out, t);
   // One holder: its lists sit under the node's h1; several: under each holder's h2.
   const common = { project, holder, onShowInText, onFollow, level: many ? 3 : 2 } as const;
   const none = links.outgoing.length === 0 && links.incoming.length === 0;
   return (
-    <section className="holder-links" aria-label={many ? `Links at ${holder.path}:${String(holder.line)}` : undefined}>
+    <section className="holder-links" aria-label={many ? t("tree.links.holder", { place: `${holder.path}:${String(holder.line)}` }) : undefined}>
       {many && (
         <h2 className="holder-text-title mono">
           {holder.path}:{holder.line}-{holder.end_line}
@@ -170,28 +177,22 @@ function HolderLinks({
       )}
       {none ? (
         <div className="empty-state">
-          <p>No link is written in this node, and none lands on it.</p>
-          <p className="muted">
-            Next: links come from front-matter fields and references in the text.
-            {!archive && " Include archive adds the links written in archived documents."}
-          </p>
+          <p>{t("tree.links.none")}</p>
+          <p className="muted">{archive ? t("tree.links.next") : t("tree.links.nextArchive")}</p>
         </div>
       ) : (
         <>
-          <LinkList title="Outgoing" links={links.outgoing} empty="None written in this node." outgoing {...common} />
-          <LinkList title="Incoming" links={links.incoming} empty="None lands on this node." outgoing={false} {...common} />
+          <LinkList title={t("tree.links.outgoing")} links={links.outgoing} empty={t("tree.links.noneOut")} outgoing {...common} />
+          <LinkList title={t("tree.links.incoming")} links={links.incoming} empty={t("tree.links.noneIn")} outgoing={false} {...common} />
         </>
       )}
-      {leftOut !== null && (
+      {parts !== null && (
         <p className="note">
           <Icon name="info" />
-          <span>
-            {leftOut}
-            {links.left_out.tier3 > 0 && !archive && ". Include archive to list the archived ones."}
-          </span>
+          <span>{links.left_out.tier3 > 0 && !archive ? t("tree.links.leftOutArchive", { parts }) : t("tree.leftOut", { parts })}</span>
         </p>
       )}
-      {links.omitted > 0 && <p className="note">{links.omitted} links not shown</p>}
+      {links.omitted > 0 && <p className="note">{t("tree.links.omitted", { count: links.omitted })}</p>}
     </section>
   );
 }
@@ -216,6 +217,7 @@ export function LinksPanel({
   onShowInText: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   const failure = useRetainedFailure(query.error, query.isFetching);
   const region = useRef<HTMLDivElement>(null);
   const retried = useRetryFocus(query.data, () => region.current);
@@ -223,11 +225,11 @@ export function LinksPanel({
   if (query.data === undefined) {
     return failure === null ? (
       <div aria-busy="true">
-        <Skeleton label={`Loading the links of ${nodeRef}`} lines={4} />
+        <Skeleton label={t("tree.links.loading", { ref: nodeRef })} lines={4} />
       </div>
     ) : (
       <ErrorPanel
-        title={`The links of ${nodeRef} could not be read`}
+        title={t("tree.links.failed", { ref: nodeRef })}
         message={apiErrorOf(failure).message}
         retrying={query.isFetching}
         attempt={query.errorUpdateCount}
@@ -241,7 +243,11 @@ export function LinksPanel({
   const view = query.data;
   return (
     <div ref={region} tabIndex={-1} className="links-panel" aria-busy={query.isFetching}>
-      {view.reason !== null && <p className="verbatim">{view.reason}</p>}
+      {view.reason !== null && (
+        <p className="verbatim" lang="en">
+          {view.reason}
+        </p>
+      )}
       {view.nodes.map((holder) =>
         holder.links === null ? null : (
           <HolderLinks
@@ -258,7 +264,7 @@ export function LinksPanel({
       )}
       {query.error !== null && (
         <p className="note" role="alert">
-          The links could not be read again: {apiErrorOf(query.error).message}
+          {fill(t("tree.links.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(query.error).message}</span> })}
         </p>
       )}
     </div>

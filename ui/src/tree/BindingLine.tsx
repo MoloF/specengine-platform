@@ -44,29 +44,29 @@ export function BindingLine({ row, tokens = null, noId, focusable = false }: { r
         <span className="mono">{oneLine(placeOf(row))}</span>
       </p>
       <p className="bundle-item-meta">
-        {key === null ? <span>No symbol</span> : <span className="mono">{oneLine(key)}</span>}
-        {row.layer !== null && <span>layer {oneLine(row.layer)}</span>}
-        {tokens !== null && <span>{tokens} tokens</span>}
+        {key === null ? <span>{t("tree.binding.noSymbol")}</span> : <span className="mono">{oneLine(key)}</span>}
+        {row.layer !== null && <span>{t("tree.binding.layer", { layer: oneLine(row.layer) })}</span>}
+        {tokens !== null && <span>{t("tree.binding.tokens", { count: tokens })}</span>}
       </p>
       <p className="bundle-item-meta">
-        <Badge name="Sync" look={syncLook(row.sync, t)} />
+        <Badge name={t("tree.binding.sync")} look={syncLook(row.sync, t)} />
         {judgement !== "" && <span className="mono">{oneLine(judgement)}</span>}
       </p>
       {row.signature !== null && (
         <p className="bundle-item-meta">
-          <span>Signature:</span>
+          <span>{t("tree.binding.signature")}</span>
           <span className="mono">{oneLine(row.signature)}</span>
         </p>
       )}
       {from !== null && (
         <p className="bundle-item-meta">
-          <span>Moved from</span>
+          <span>{t("tree.binding.movedFrom")}</span>
           <span className="mono">{oneLine(`${from.file} | ${bindingOf(from)}`)}</span>
         </p>
       )}
       {candidates.map((candidate) => (
         <p key={`${candidate.file}|${bindingOf(candidate)}`} className="bundle-item-meta">
-          <span>Candidate</span>
+          <span>{t("tree.binding.candidate")}</span>
           <span className="mono">{oneLine(`${candidate.file} | ${bindingOf(candidate)}`)}</span>
         </p>
       ))}

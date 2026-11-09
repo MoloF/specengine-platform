@@ -8,9 +8,10 @@ import type { Drafts } from "./drafts";
 // left and came back clears its drafts and leaves its outcome where the screen now on view reads
 // them, and no screen keeps a copy of its own to write back over it.
 
-/** What the last POST said, shown under the sheet: its summary, the daemon's notes, how many of the answers sent it staged. */
+/** What the last POST said, shown under the sheet in the language shown: the items staged and not, the daemon's notes, how many of the answers sent it staged. */
 export interface RoundResult {
-  text: string;
+  stagedIds: readonly string[];
+  otherIds: readonly string[];
   notes: readonly string[];
   staged: number;
   sent: number;

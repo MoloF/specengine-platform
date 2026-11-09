@@ -1,14 +1,16 @@
 import { useId } from "react";
-import { isLanguage, LANGUAGES, useLanguage, useTranslate } from "../i18n";
+import { isLanguage, LANGUAGES, languageName, useLanguage, useTranslate } from "../i18n";
 
 /**
- * The Language select in the header (docs/features/ui-languages.md D7): always shown, beside
- * Workspace; each option is its language's own name, tagged with that language. A choice switches
- * the chrome at once, reads nothing and keeps focus here; it holds for this browser until changed.
+ * The Language select in the header (docs/canon/ui-languages.md "Switcher"): beside Workspace; each
+ * option is its language's own name from `Intl`, tagged with that language, so Russian reads right
+ * before its chunk loads. A choice switches the chrome at once, or once Russian's chunk lands (the
+ * select shows the choice, busy, meanwhile); it reads nothing from the daemon and keeps focus here. A
+ * chunk that failed leaves English and says so until the next choice.
  */
 export function LanguageSwitcher() {
   const t = useTranslate();
-  const { language, choose } = useLanguage();
+  const { language, pending, failed, choose } = useLanguage();
   const id = useId();
   return (
     <div className="language-switcher">
@@ -16,7 +18,8 @@ export function LanguageSwitcher() {
       <select
         id={id}
         className="field"
-        value={language}
+        value={pending ?? language}
+        aria-busy={pending === null ? undefined : true}
         onChange={(event) => {
           const next = event.target.value;
           if (isLanguage(next)) {
@@ -26,10 +29,15 @@ export function LanguageSwitcher() {
       >
         {LANGUAGES.map((each) => (
           <option key={each} value={each} lang={each}>
-            {t("language.self", { lng: each })}
+            {languageName(each)}
           </option>
         ))}
       </select>
+      {failed && (
+        <p role="status" className="language-failed">
+          {t("language.failed")}
+        </p>
+      )}
     </div>
   );
 }

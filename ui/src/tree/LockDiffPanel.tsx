@@ -2,7 +2,9 @@ import { useId, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useLockDiff } from "../api/queries";
 import type { DriftRow, LockDiffCodeSide, LockDiffNode, LockDiffRow, LockDiffSpecSide } from "../api/types";
-import { CodeRowList, counted, oneLine } from "../health/codeRows";
+import { CodeRowList, oneLine } from "../health/codeRows";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { DriftLine } from "../health/DriftPart";
 import { Notes } from "../overview/parts";
 import { useAnnounce } from "../ui/announcer";
@@ -28,17 +30,18 @@ import { placeKey, rowName } from "./rows";
 
 /** A present side's body: its hunks in a figure named by its title; `""` equal; `null` not shown, why from its note or the notes above, never "No change". */
 function SideBody({ title, diff, why }: { title: string; diff: string | null; why: string | null }) {
+  const t = useTranslate();
   if (diff === null) {
     return (
       <p className="bindings-state" data-diff-state="not-shown">
-        {why === null ? <>No diff: the daemon&rsquo;s notes above say why.</> : `No diff: ${oneLine(why)}`}
+        {why === null ? t("tree.lockDiff.noDiffNotes") : fill(t("tree.lockDiff.noDiff", { why: slot("why") }), { why: <span lang="en">{oneLine(why)}</span> })}
       </p>
     );
   }
   if (diff === "") {
     return (
       <p className="bindings-state" data-diff-state="equal">
-        No change since the lock
+        {t("tree.lockDiff.noChange")}
       </p>
     );
   }
@@ -57,12 +60,14 @@ function Side({ which, title, diff, why }: { which: "spec" | "code"; title: stri
 
 /** The node's side: its text at the entry's commit against the working tree's. */
 function SpecSide({ side, why }: { side: LockDiffSpecSide; why: string | null }) {
-  return <Side which="spec" title={`Node text since the lock: ${oneLine(side.path)} at ${oneLine(side.commit)}`} diff={side.diff} why={why} />;
+  const t = useTranslate();
+  return <Side which="spec" title={t("tree.lockDiff.specSide", { path: oneLine(side.path), commit: oneLine(side.commit) })} diff={side.diff} why={why} />;
 }
 
 /** The code's side: the entry's blob against the working tree's. */
 function CodeSide({ side, why }: { side: LockDiffCodeSide; why: string | null }) {
-  return <Side which="code" title={`Code since the lock: ${oneLine(side.file)}, blob ${oneLine(side.blob)}`} diff={side.diff} why={why} />;
+  const t = useTranslate();
+  return <Side which="code" title={t("tree.lockDiff.codeSide", { file: oneLine(side.file), blob: oneLine(side.blob) })} diff={side.diff} why={why} />;
 }
 
 /**
@@ -84,17 +89,14 @@ function Sides({ entry, notes }: { entry: LockDiffRow; notes: readonly string[] 
 
 /** A kept row's commands for its node, the ID checked as the tab's REF is (`nodeCommands`); an ID failing the check gets none, said so. */
 function RowCommands({ row }: { row: DriftRow }) {
-  const commands = nodeCommands(row.node);
+  const t = useTranslate();
+  const commands = nodeCommands(row.node, t);
   if (commands === null) {
-    return (
-      <p className="muted lock-diff-commands">
-        No command for <bdi className="mono">{oneLine(row.node)}</bdi>: only a REF of Latin letters, digits and . _ / - is put in a command.
-      </p>
-    );
+    return <p className="muted lock-diff-commands">{fill(t("tree.commands.none", { ref: slot("ref") }), { ref: <bdi className="mono">{oneLine(row.node)}</bdi> })}</p>;
   }
   return (
     <div className="lock-diff-commands">
-      <CommandList commands={commands} label={`Commands for the row of ${row.node}`} />
+      <CommandList commands={commands} label={t("tree.lockDiff.commandsLabel", { id: row.node })} />
     </div>
   );
 }
@@ -117,29 +119,30 @@ function HolderChanges({
   many: boolean;
   onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   const place = placeKey(holder);
   let body;
   if (holder.rows === null) {
     body = (
       <p className="bindings-state bindings-not-read" data-diff-state="not-judged">
         <Icon name="info" />
-        <span>Not judged: the daemon&rsquo;s note above says why.</span>
+        <span>{t("tree.lockDiff.notJudged")}</span>
       </p>
     );
   } else if (holder.rows.length === 0) {
     body = (
       <p className="bindings-state" data-diff-state="none">
-        None: no drifted binding of this node has a lock entry.
+        {t("tree.lockDiff.none")}
       </p>
     );
   } else {
     body = (
       <>
-        <p className="bindings-count">{counted(holder.rows.length, "drifted row", "drifted rows")}</p>
+        <p className="bindings-count">{t("tree.lockDiff.rows", { count: holder.rows.length })}</p>
         <CodeRowList
           rows={holder.rows}
-          label={`Changes since the lock of ${rowName(holder)}, in spec verify's order`}
-          order="in spec verify's order"
+          label={t("tree.lockDiff.listLabel", { name: rowName(holder) })}
+          order={t("tree.bindings.order")}
           render={(entry) => (
             <DriftLine project={project} row={entry.row} onFollow={onFollow}>
               <Sides entry={entry} notes={notes} />
@@ -151,7 +154,7 @@ function HolderChanges({
     );
   }
   return (
-    <section className="lock-diff-holder" aria-label={many ? `Changes at ${place}` : undefined} data-holder={place}>
+    <section className="lock-diff-holder" aria-label={many ? t("tree.lockDiff.at", { place }) : undefined} data-holder={place}>
       {many && <h3 className="holder-text-title mono">{place}</h3>}
       {body}
     </section>
@@ -168,6 +171,7 @@ function HolderChanges({
  * tab's test evidence takes it.
  */
 export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string; nodeRef: string; onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useTranslate();
   const base = useId();
   const titleId = `${base}-title`;
   const bodyId = `${base}-body`;
@@ -190,7 +194,7 @@ export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string;
     }
     void query.refetch({ cancelRefetch: false }).then((result) => {
       if (result.data !== undefined && result.error === null) {
-        announce(`The changes since the lock of ${nodeRef} were read again.`);
+        announce(t("tree.lockDiff.readAgainSaid", { ref: nodeRef }));
       }
     });
   }
@@ -201,11 +205,11 @@ export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string;
     body =
       failure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Loading the changes since the lock of ${nodeRef}`} lines={3} />
+          <Skeleton label={t("tree.lockDiff.loading", { ref: nodeRef })} lines={3} />
         </div>
       ) : (
         <ErrorPanel
-          title={`The changes since the lock of ${nodeRef} could not be read`}
+          title={t("tree.lockDiff.failed", { ref: nodeRef })}
           message={apiErrorOf(failure).message}
           retrying={query.isFetching}
           attempt={query.errorUpdateCount}
@@ -223,14 +227,16 @@ export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string;
           {/* Described by the panel's heading: a screen reader tells it from the tab's Read again. */}
           <button type="button" className="button" aria-disabled={query.isFetching} aria-describedby={titleId} onClick={readAgain}>
             <Icon name="retry" />
-            <span>{query.isFetching ? "Reading" : "Read again"}</span>
+            <span>{query.isFetching ? t("tree.bindings.reading") : t("tree.bindings.readAgain")}</span>
           </button>
         </p>
         {view.reason !== null ? (
-          <p className="verbatim">{view.reason}</p>
+          <p className="verbatim" lang="en">
+            {view.reason}
+          </p>
         ) : (
           <>
-            <Notes notes={view.notes.map(oneLine)} label="Notes from the daemon on the changes since the lock" />
+            <Notes notes={view.notes.map(oneLine)} label={t("tree.lockDiff.notes")} />
             {view.nodes.map((holder) => (
               <HolderChanges key={placeKey(holder)} project={project} holder={holder} notes={view.notes} many={many} onFollow={onFollow} />
             ))}
@@ -238,7 +244,7 @@ export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string;
         )}
         {query.error !== null && !query.isFetching && (
           <p className="note" role="alert">
-            The changes since the lock could not be read again: {apiErrorOf(query.error).message}
+            {fill(t("tree.lockDiff.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(query.error).message}</span> })}
           </p>
         )}
       </div>
@@ -250,13 +256,10 @@ export function LockDiffPanel({ project, nodeRef, onFollow }: { project: string;
       <h2 className="lock-diff-title">
         <button id={titleId} type="button" className="button lock-diff-toggle" aria-expanded={open} aria-controls={open ? bodyId : undefined} onClick={toggle}>
           <Icon name={open ? "chevronDown" : "chevronRight"} />
-          <span>Changes since the lock</span>
+          <span>{t("tree.lockDiff.title")}</span>
         </button>
       </h2>
-      <p className="muted lock-diff-about">
-        For each drifted binding with a lock entry, what moved in the node&rsquo;s text and in its code since the lock, as git&rsquo;s hunks against the
-        working tree. Read when first opened; a code edit shows after Read again.
-      </p>
+      <p className="muted lock-diff-about">{t("tree.lockDiff.about")}</p>
       {open && <div id={bodyId}>{body}</div>}
     </section>
   );

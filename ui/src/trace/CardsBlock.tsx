@@ -10,6 +10,7 @@ import { isCard } from "../board/CardPanel";
 import { canClear, cardStateLook, isMarked } from "../board/labels";
 import { countsText, lastReadWords, rollupLook } from "../flow/labels";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
@@ -84,7 +85,7 @@ function CardLine({ project, card, clears, onClear }: { project: string; card: T
             }
           }}
         >
-          Clear <span className="sr-only">{card.id}</span>
+          {fill(t("trace.clear", { id: slot("id") }), { id: <span className="sr-only">{card.id}</span> })}
         </button>
       )}
     </li>
@@ -93,18 +94,17 @@ function CardLine({ project, card, clears, onClear }: { project: string; card: T
 
 /** A Clear reads its card first: the dialog goes on the revision read now. A card that cannot be read says so, in the daemon's words. */
 function ClearCard({ project, clearing, onClose, onDone }: { project: string; clearing: Clearing; onClose: () => void; onDone: (answer: CardWrite) => void }) {
+  const t = useTranslate();
   const read = useCard(project, clearing.card.id);
   const answer = read.data;
   if (answer === undefined || !isCard(answer)) {
     const reason = read.error === null ? answer?.reason : apiErrorOf(read.error).message;
     return reason === undefined ? (
-      <Skeleton label={`Reading ${clearing.card.id}`} lines={1} />
+      <Skeleton label={t("trace.cardReading", { id: clearing.card.id })} lines={1} />
     ) : (
       <p className="note" role="alert">
         <Icon name="alert" />
-        <span>
-          {clearing.card.id} could not be read: {reason}
-        </span>
+        <span>{fill(t("trace.cardFailed", { id: clearing.card.id, reason: slot("reason") }), { reason: <span lang="en">{reason}</span> })}</span>
       </p>
     );
   }
@@ -153,7 +153,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
     setClearing(null);
     setNotes(answer.notes);
     backTo(trigger);
-    announce(`${answer.id ?? "The card"} is cleared`);
+    announce(answer.id === null ? t("trace.clearedCard") : t("trace.cleared", { id: answer.id }));
   }
 
   let body: ReactNode;
@@ -161,10 +161,10 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
   if (trace === undefined) {
     body =
       failure === null ? (
-        <Skeleton label={`Reading the cards of ${nodeRef}`} lines={2} />
+        <Skeleton label={t("trace.reading", { ref: nodeRef })} lines={2} />
       ) : (
         <ErrorPanel
-          title={`The cards of ${nodeRef} could not be read`}
+          title={t("trace.failed", { ref: nodeRef })}
           message={apiErrorOf(failure).message}
           retrying={read.isFetching}
           attempt={read.errorUpdateCount}
@@ -172,7 +172,11 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
         />
       );
   } else if (trace.reason !== null) {
-    body = <p className="verbatim">{trace.reason}</p>;
+    body = (
+      <p className="verbatim" lang="en">
+        {trace.reason}
+      </p>
+    );
   } else {
     const row = rowOf(trace, nodeRef);
     const cards = cardsOf(trace);
@@ -185,14 +189,16 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
         {/* A state read before a failure is no state now: the failure line below speaks for what stands under it. */}
         {read.error === null &&
           (row === undefined ? (
-            <p className="cards-state muted">This read holds no row for {nodeRef}: its state is not known.</p>
+            <p className="cards-state muted">{t("trace.noRow", { ref: nodeRef })}</p>
           ) : (
             <p className="cards-state">{group ? countsText(row.counts, t) : <Badge look={rollupLook(row.rollup, t)} />}</p>
           ))}
         {trace.notes.length > 0 && (
-          <ul className="note-list" aria-label={`Notes from the daemon on the cards of ${nodeRef}`}>
+          <ul className="note-list" aria-label={t("trace.notes", { ref: nodeRef })}>
             {trace.notes.map((note, index) => (
-              <li key={`${String(index)}-${note}`}>{note}</li>
+              <li key={`${String(index)}-${note}`} lang="en">
+                {note}
+              </li>
             ))}
           </ul>
         )}
@@ -201,20 +207,20 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
             <p className="note" role="alert">
               <Icon name="alert" />
               <span>
-                The cards of {nodeRef} could not be read again: {apiErrorOf(read.error).message}
+                {fill(t("trace.failedAgain", { ref: nodeRef, message: slot("message") }), { message: <span lang="en">{apiErrorOf(read.error).message}</span> })}
                 <br />
                 {lastReadWords(t)}
               </span>
             </p>
             <button type="button" className="button" aria-disabled={read.isFetching} onClick={read.isFetching ? undefined : retry}>
               <Icon name="retry" />
-              <span>{read.isFetching ? "Retrying" : "Retry"}</span>
+              <span>{read.isFetching ? t("ui.retrying") : t("ui.retry")}</span>
             </button>
           </div>
         )}
-        {cards.length === 0 && row !== undefined && <p className="muted">No card holds this yet. Next: press New card.</p>}
+        {cards.length === 0 && row !== undefined && <p className="muted">{t("trace.none")}</p>}
         {cards.length > 0 && (
-          <ul className="cards-lines" aria-label={`Cards of ${nodeRef}`}>
+          <ul className="cards-lines" aria-label={t("trace.cardsOf", { ref: nodeRef })}>
             {cards.map((shown) => (
               <CardLine
                 key={shown.id}
@@ -232,15 +238,15 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
         {clearable > 0 && !allows("clear") && <ActOff act="clear" />}
         {uses.length > 0 && (
           <>
-            <p className="field-label">Used by</p>
-            <ul className="cards-lines" aria-label={`Nodes using ${nodeRef}`}>
+            <p className="field-label">{t("trace.usedBy")}</p>
+            <ul className="cards-lines" aria-label={t("trace.usingOf", { ref: nodeRef })}>
               {uses.map((use) => (
                 <li key={use.id} className="cards-line">
                   <a className="mono cards-line-title" href={sectionHash(project, section, use.id)}>
                     <bdi>{shownSlot(use.id)}</bdi>
                   </a>
                   <Badge look={rollupLook(use.rollup, t)} />
-                  <span className="muted cards-line-place">{use.cards === 1 ? "1 card" : `${String(use.cards)} cards`}</span>
+                  <span className="muted cards-line-place">{t("trace.usesCards", { count: use.cards })}</span>
                 </li>
               ))}
             </ul>
@@ -260,7 +266,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
                 }
               }}
             >
-              Clear all
+              {t("trace.clearAll")}
             </button>
           </p>
         )}
@@ -279,7 +285,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
                 setClearingAll(false);
                 setNotes(answer.notes);
                 backTo(allButton.current);
-                announce(`${String(answer.cleared.length)} cleared under ${answer.group}`);
+                announce(t("trace.clearedGroup", { count: answer.cleared.length, group: answer.group }));
               }}
             />
           </OwnKeys>
@@ -289,10 +295,10 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
   }
 
   return (
-    <section className="cards-block" aria-label="Cards">
+    <section className="cards-block" aria-label={t("trace.title")}>
       <div className="cards-head">
         <Heading ref={title} tabIndex={-1} className="card-section-title">
-          Cards
+          {t("trace.title")}
         </Heading>
         <button
           ref={newButton}
@@ -304,7 +310,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
           }}
         >
           <Icon name="cardNew" />
-          <span>New card</span>
+          <span>{t("trace.newCard")}</span>
         </button>
       </div>
       {body}
@@ -312,14 +318,19 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
         <p className="note">
           <Icon name="info" />
           <span>
-            <span className="mono">{made}</span> created. <a href={sectionHash(project, "board", made)}>Open it on the Board</a>
+            {fill(t("trace.made", { id: slot("id"), link: slot("link") }), {
+              id: <span className="mono">{made}</span>,
+              link: <a href={sectionHash(project, "board", made)}>{t("trace.openOnBoard")}</a>,
+            })}
           </span>
         </p>
       )}
       {notes.length > 0 && (
-        <ul className="note-list" aria-label="Notes from the daemon on the last write">
+        <ul className="note-list" aria-label={t("trace.writeNotes")}>
           {notes.map((note, index) => (
-            <li key={`${String(index)}-${note}`}>{note}</li>
+            <li key={`${String(index)}-${note}`} lang="en">
+              {note}
+            </li>
           ))}
         </ul>
       )}
@@ -351,7 +362,7 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
               backTo(newButton.current);
               if (id !== null) {
                 setMade(id);
-                announce(`${id} created`);
+                announce(t("trace.created", { id }));
               }
             }}
           />

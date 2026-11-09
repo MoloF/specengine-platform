@@ -52,4 +52,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0087.md](roadmap/RM-0087.md) roadmap-states (Phase 7, v4 step 5): the owner's states, and views by state, release and timeline · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) plain-questions (Phase 7, v4 step 6): questions in plain language, collisions as pairs · crates/specengine-mcp, crates/specengine-cli, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-workspace (Phase 7, v4, later): a hub's per-login default workspace · crates/specengine-http, ui · draft
-- [docs/roadmap/RM-0090.md](roadmap/RM-0090.md) ui-languages-sweep (Phase 7, v4 step 2d): every screen left joins the catalog · ui · draft
+- [docs/roadmap/RM-0091.md](roadmap/RM-0091.md) english-polish: the UI's English grammar slips, fixed with their tests · ui · draft

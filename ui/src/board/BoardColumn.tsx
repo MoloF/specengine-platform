@@ -1,4 +1,6 @@
 import { useId, type DragEvent, type ReactNode } from "react";
+import { useTranslate } from "../i18n";
+import { around } from "../i18n/fill";
 import { COLUMN_SHOWN, type BoardLane } from "./filter";
 
 /** Where a drag at height `y` would put its card: the first card whose middle lies below it; none: last. */
@@ -44,6 +46,9 @@ export function BoardColumn({
   onDrop: (lane: BoardLane, before: string | null) => void;
   children: ReactNode;
 }) {
+  const t = useTranslate();
+  // The count drawn, the words around it read out: `, 3 cards`.
+  const countSaid = around(t("board.column.count", { count: lane.count }), String(lane.count));
   const titleId = useId();
   const accepts = dropping && lane.column !== null;
 
@@ -80,9 +85,9 @@ export function BoardColumn({
       <h2 id={titleId} className="board-column-title">
         <bdi>{lane.title}</bdi>
         <span className="board-column-count">
-          <span className="sr-only">, </span>
+          <span className="sr-only">{countSaid[0]}</span>
           {lane.count}
-          <span className="sr-only">{lane.count === 1 ? " card" : " cards"}</span>
+          <span className="sr-only">{countSaid[1]}</span>
         </span>
       </h2>
       {note}
@@ -96,7 +101,7 @@ export function BoardColumn({
             onShowAll(lane);
           }}
         >
-          Show all {lane.rows.length}
+          {t("board.column.showAll", { count: lane.rows.length })}
         </button>
       )}
     </section>

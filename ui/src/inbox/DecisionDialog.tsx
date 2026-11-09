@@ -4,7 +4,9 @@ import { Dialog } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
-import { WORDING, type DecisionKind } from "./decisions";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
+import { wordingOf, type DecisionKind } from "./decisions";
 import { isRefused, revisionsToKeep } from "./revisions";
 import { RevisionList } from "./RevisionList";
 
@@ -34,21 +36,22 @@ function stageOf(kind: "accept" | "reject", option: number | null, editorial: bo
  * so the dialog says what they would do, that nothing is sent, and closes.
  */
 function NotStaged({ id, proposal, kind, onCancel }: { id: string; proposal: Proposal; kind: DecisionKind; onCancel: () => void }) {
-  const wording = WORDING[kind];
+  const t = useTranslate();
+  const wording = wordingOf(kind, id, t);
   return (
-    <Dialog title={wording.title(id)} onClose={onCancel} className="decision-dialog">
+    <Dialog title={wording.title} onClose={onCancel} className="decision-dialog">
       <p className="dialog-text">{proposal.summary ?? proposal.target_id ?? proposal.kind ?? id}</p>
       <p className="dialog-text dialog-effect">{wording.effect}</p>
       <div className="notice notice-not-served" role="status">
         <p className="notice-title">
           <Icon name="info" />
-          <span>Not built yet: only Accept and Reject are staged</span>
+          <span>{t("inbox.dialog.notBuilt")}</span>
         </p>
-        <p>Nothing is sent. The proposal stays in the queue as it is, and nothing waits on it.</p>
+        <p>{t("inbox.dialog.notSent")}</p>
       </div>
       <div className="dialog-actions">
         <button type="button" className="button" data-autofocus="" onClick={onCancel}>
-          Close
+          {t("inbox.dialog.close")}
         </button>
       </div>
     </Dialog>
@@ -104,7 +107,8 @@ function StageDialog({
   onCancel: () => void;
   onSubmit: (stage: StageChoice, updatedAt: string) => Promise<string | null>;
 }) {
-  const wording = WORDING[kind];
+  const t = useTranslate();
+  const wording = wordingOf(kind, id, t);
   const textId = useId();
   const editorialId = useId();
   const editorialHintId = useId();
@@ -184,15 +188,15 @@ function StageDialog({
   }
 
   return (
-    <Dialog title={wording.title(id)} onClose={cancel} className="decision-dialog">
+    <Dialog title={wording.title} onClose={cancel} className="decision-dialog">
       {changed && (
         // A new alert for each revision, so a second one is spoken too.
         <div key={shown.updated_at} className="notice" role="alert">
           <p className="notice-title">
             <Icon name="alert" />
-            <span>This proposal changed since you opened it</span>
+            <span>{t("inbox.dialog.changed")}</span>
           </p>
-          <p>The dialog now shows the new version and keeps your text. Check it, then stage your decision again.</p>
+          <p>{t("inbox.dialog.changedText")}</p>
         </div>
       )}
       <p className="dialog-text">{shown.summary ?? shown.target_id ?? shown.kind ?? id}</p>
@@ -200,16 +204,18 @@ function StageDialog({
       {shown.interpretation !== null && (
         // Whatever its kind: the key alone says the change carries a decision.
         <p className="dialog-text">
-          It interprets decision{" "}
-          <span className="mono">
-            <bdi>{shownSlot(shown.interpretation.decision)}</bdi>
-          </span>
-          ; the card's Interpretation section says how and why.
+          {fill(t("inbox.dialog.interprets", { decision: slot("decision") }), {
+            decision: (
+              <span className="mono">
+                <bdi>{shownSlot(shown.interpretation.decision)}</bdi>
+              </span>
+            ),
+          })}
         </p>
       )}
       {shown.staged_at !== null && (
         <p className="dialog-text">
-          It replaces the choice staged <time dateTime={shown.staged_at}>{shown.staged_at}</time>.
+          {fill(t("inbox.dialog.replaces", { at: slot("at") }), { at: <time dateTime={shown.staged_at}>{shown.staged_at}</time> })}
         </p>
       )}
       <form
@@ -223,7 +229,7 @@ function StageDialog({
       >
         {hasOptions && (
           <fieldset className="option-choice">
-            <legend>Option</legend>
+            <legend>{t("inbox.dialog.option")}</legend>
             {shown.options.map((choice, index) => (
               <label key={`${String(index)}-${choice.label}`} className="option-radio">
                 <input
@@ -243,12 +249,12 @@ function StageDialog({
                     {index === shown.recommendation && (
                       <span className="recommended-mark">
                         <Icon name="recommended" />
-                        Recommended
+                        {t("inbox.recommended")}
                       </span>
                     )}
                   </span>
                   <span className="option-radio-detail">{choice.effect}</span>
-                  <span className="option-radio-detail">Price: {choice.price}</span>
+                  <span className="option-radio-detail">{t("inbox.price", { price: choice.price })}</span>
                 </span>
               </label>
             ))}
@@ -256,12 +262,12 @@ function StageDialog({
         )}
         {kind === "accept" && !hasOptions && shown.working_answer !== null && (
           <div className="dialog-text">
-            <p className="field-label">The working answer is recorded:</p>
+            <p className="field-label">{t("inbox.dialog.workingRecorded")}</p>
             <p className="staged-text">{shown.working_answer}</p>
           </div>
         )}
         {kind === "accept" && !hasOptions && shown.working_answer === null && (
-          <p className="dialog-text">This proposal has no options to choose from.</p>
+          <p className="dialog-text">{t("inbox.dialog.noOptions")}</p>
         )}
         {raised !== null && (
           <div className="editorial-choice">
@@ -276,19 +282,12 @@ function StageDialog({
             />
             <div className="editorial-body">
               <label htmlFor={editorialId} className="option-radio-label">
-                Editorial: keep the revision
+                {t("inbox.dialog.editorial")}
               </label>
               <div id={editorialHintId} className="option-radio-detail">
-                <p>
-                  {raised.some(isRefused)
-                    ? "Unchecked, this is a meaning approval, which the terminal refuses while a raise below is refused:"
-                    : "Unchecked, approval raises the revision of each node whose meaning the change alters:"}
-                </p>
+                <p>{raised.some(isRefused) ? t("inbox.dialog.uncheckedRefused") : t("inbox.dialog.unchecked")}</p>
                 <RevisionList entries={raised} />
-                <p>
-                  Checked, every revision stays as it is, and the lock entries that vouch for the old text take the new text's hash in the
-                  same commit. Only for wording that keeps the meaning.
-                </p>
+                <p>{t("inbox.dialog.checked")}</p>
               </div>
             </div>
           </div>
@@ -323,9 +322,11 @@ function StageDialog({
           <div id={refusalId} className="refusal" role="alert">
             <p className="refusal-title">
               <Icon name="alert" />
-              <span>The daemon refused to stage it; nothing changed.</span>
+              <span>{t("inbox.dialog.refused")}</span>
             </p>
-            <p className="verbatim">{refusal}</p>
+            <p className="verbatim" lang="en">
+              {refusal}
+            </p>
           </div>
         )}
         <div className="dialog-actions">
@@ -334,10 +335,10 @@ function StageDialog({
             className={kind === "reject" ? "button button-danger" : "button button-primary"}
             aria-disabled={pending}
           >
-            {pending ? "Staging" : wording.submit}
+            {pending ? t("inbox.staging") : wording.submit}
           </button>
           <button type="button" className="button" aria-disabled={pending} onClick={cancel}>
-            Cancel
+            {t("inbox.dialog.cancel")}
           </button>
         </div>
       </form>

@@ -202,9 +202,11 @@ kbd {
   max-width: 100%;
 }
 
-/* The Language select (docs/features/ui-languages.md D7): beside Workspace, always shown. */
+/* The Language select (docs/features/ui-languages.md D7): beside Workspace, always shown; a failed
+   Russian chunk's line wraps under it. */
 .language-switcher {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
   min-width: 0;
@@ -216,6 +218,14 @@ kbd {
 .language-switcher .field {
   width: auto;
   max-width: 100%;
+}
+
+/* Russian's chunk failed: English shows, and this line says so until the next choice. */
+.language-failed {
+  margin: 0;
+  max-width: 32rem;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .config-notes {

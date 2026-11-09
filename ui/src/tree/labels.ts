@@ -30,7 +30,7 @@ export const KNOWN_LINK_STATES = Object.keys(LINK_STATE) as readonly KnownLinkSt
 /** A link's state: label, colour role and icon; the raw text in a neutral badge when unknown. */
 export function linkStateLook(state: LinkState, t: Translate): Look {
   const mark = lookup(LINK_STATE, state);
-  return mark === null ? { label: state, tone: "link-unknown", icon: "unknown" } : { label: t(`tree.linkState.${state as KnownLinkState}`), ...mark };
+  return mark === null ? { label: state, tone: "link-unknown", icon: "unknown", served: true } : { label: t(`tree.linkState.${state as KnownLinkState}`), ...mark };
 }
 
 type KnownMark = "dangling-parent" | "parent-cycle";
@@ -46,7 +46,7 @@ export const KNOWN_TREE_MARKS = Object.keys(MARK) as readonly KnownMark[];
 /** Why a row is a root although its document names a parent. */
 export function markLook(mark: TreeMark, t: Translate): Look {
   const known = lookup(MARK, mark);
-  return known === null ? { label: mark, tone: "mark-unknown", icon: "unknown" } : { label: t(`tree.mark.${known.key}`), tone: known.tone, icon: known.icon };
+  return known === null ? { label: mark, tone: "mark-unknown", icon: "unknown", served: true } : { label: t(`tree.mark.${known.key}`), tone: known.tone, icon: known.icon };
 }
 
 type KnownForm = "text" | "outline" | "header" | "summary";
@@ -122,7 +122,7 @@ export function syncLook(sync: SyncState | null, t: Translate): Look {
     return { label: t("tree.notJudged"), tone: "sync-not-judged", icon: "stub" };
   }
   const mark = lookup(SYNC, sync);
-  return mark === null ? { label: oneLine(sync), tone: "sync-unknown", icon: "unknown" } : { label: t(`tree.sync.${sync as KnownSyncState}`), ...mark };
+  return mark === null ? { label: oneLine(sync), tone: "sync-unknown", icon: "unknown", served: true } : { label: t(`tree.sync.${sync as KnownSyncState}`), ...mark };
 }
 
 /** The weak link type (`docs/canon/spec-cli-graph.md` "Link types"): listed after the strong ones. */

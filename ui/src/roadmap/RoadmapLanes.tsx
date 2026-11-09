@@ -6,22 +6,22 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import {
   countsText,
-  CURRENT,
+  currentLook,
   cutRuleText,
   estimateText,
-  IN_A_CYCLE,
+  inACycleLook,
   isPool,
   isRelease,
   isUnplaced,
   itemStatusLook,
   laneName,
-  MVP_CUT,
+  mvpCutLook,
   oneLine,
   priorityText,
   sumText,
-  UNESTIMATED,
+  unestimatedLook,
   unplacedReleaseText,
-  WAITS_ON,
+  waitsOnLook,
 } from "./text";
 import { useTranslate } from "../i18n";
 
@@ -74,14 +74,14 @@ function ItemCard({
         <span className="roadmap-card-name">{item.title === null ? "-" : oneLine(item.title)}</span>
       </h3>
       <p className="roadmap-card-facts">
-        <Badge look={itemStatusLook(item.status)} />
-        <span className="roadmap-priority">{priorityText(item.priority)}</span>
-        {item.estimate === null ? <Badge look={UNESTIMATED} /> : <span className="roadmap-estimate">{estimateText(item.estimate, unit)}</span>}
-        {isUnplaced(group) && <span className="roadmap-release">{unplacedReleaseText(item.release)}</span>}
+        <Badge look={itemStatusLook(item.status, t)} />
+        <span className="roadmap-priority">{priorityText(item.priority, t)}</span>
+        {item.estimate === null ? <Badge look={unestimatedLook(t)} /> : <span className="roadmap-estimate">{estimateText(item.estimate, unit)}</span>}
+        {isUnplaced(group) && <span className="roadmap-release">{unplacedReleaseText(item.release, t)}</span>}
       </p>
       {item.waits_on.length > 0 && (
         <p className="roadmap-waits">
-          <Badge look={WAITS_ON} />
+          <Badge look={waitsOnLook(t)} />
           <span className="roadmap-waits-list">
             {item.waits_on.map((id, index) => (
               <Fragment key={`${String(index)}-${id}`}>
@@ -96,17 +96,17 @@ function ItemCard({
       )}
       {item.cycle && (
         <p className="roadmap-cycle" data-cycle="">
-          <Badge look={IN_A_CYCLE} />
+          <Badge look={inACycleLook(t)} />
         </p>
       )}
       {item.tasks.length > 0 && (
-        <ul className="roadmap-tasks" aria-label={`Tasks executing ${item.id}`}>
+        <ul className="roadmap-tasks" aria-label={t("roadmap.tasksOf", { id: item.id })}>
           {item.tasks.map((task) => (
             <li key={task.id} className="roadmap-task" data-task={task.id}>
               <a href={sectionHash(project, "tasks", task.id)} className="mono">
                 {task.id}
               </a>
-              <Badge name="State" look={taskStatusLook(task.status, t)} />
+              <Badge name={t("roadmap.state")} look={taskStatusLook(task.status, t)} />
             </li>
           ))}
         </ul>
@@ -123,7 +123,7 @@ function PoolTasks({ project, tasks }: { project: string; tasks: RoadmapPoolTask
   return (
     <section className="roadmap-pool-tasks" aria-labelledby={headingId}>
       <h3 id={headingId} className="card-section-title">
-        Pool tasks
+        {t("roadmap.poolTasks")}
       </h3>
       <ul className="roadmap-pool-task-list">
         {tasks.map((task) => (
@@ -131,7 +131,7 @@ function PoolTasks({ project, tasks }: { project: string; tasks: RoadmapPoolTask
             <a href={sectionHash(project, "tasks", task.id)} className="mono">
               {task.id}
             </a>
-            <Badge name="State" look={taskStatusLook(task.status, t)} />
+            <Badge name={t("roadmap.state")} look={taskStatusLook(task.status, t)} />
             <span className="roadmap-pool-task-title">{task.title === null ? "-" : oneLine(task.title)}</span>
             <span className="roadmap-pool-task-targets mono">{task.targets.length === 0 ? "-" : task.targets.join(", ")}</span>
           </li>
@@ -157,6 +157,7 @@ function Lane({
   selectedId: string | null;
   headingRef: (element: HTMLHeadingElement | null) => void;
 }) {
+  const t = useTranslate();
   const headingId = useId();
   const release = isRelease(group);
   const cards = group.items.map((item) => (
@@ -168,14 +169,14 @@ function Lane({
     <section className="roadmap-lane" aria-labelledby={headingId} data-group={group.group}>
       <header className="roadmap-lane-head">
         <h2 id={headingId} ref={headingRef} tabIndex={-1} className="roadmap-lane-name">
-          {laneName(group)}
+          {laneName(group, t)}
         </h2>
-        {group.current && <Badge look={CURRENT} />}
-        {group.mvp_cut && <Badge look={MVP_CUT} />}
-        <p className="roadmap-lane-counts">{countsText(group)}</p>
+        {group.current && <Badge look={currentLook(t)} />}
+        {group.mvp_cut && <Badge look={mvpCutLook(t)} />}
+        <p className="roadmap-lane-counts">{countsText(group, t)}</p>
         <p className="roadmap-lane-sum">
           {release && scale > 0 && <RangeBar sum={group.sum} scale={scale} />}
-          <span className="roadmap-sum-text">{sumText(group.sum, plan.unit)}</span>
+          <span className="roadmap-sum-text">{sumText(group.sum, plan.unit, t)}</span>
         </p>
       </header>
       {cards.length > 0 && (release ? <ol className="roadmap-items">{cards}</ol> : <ul className="roadmap-items">{cards}</ul>)}
@@ -192,11 +193,13 @@ function Lane({
  * `isFetching` never re-renders hundreds of cards.
  */
 export const RoadmapLanes = memo(function RoadmapLanes({ project, plan, selectedId }: { project: string; plan: RoadmapDocument; selectedId: string | null }) {
+  // The shown language re-renders the lanes: `t` changes with it, the plan does not.
+  const t = useTranslate();
   const headings = useRef(new Map<number, HTMLHeadingElement>());
   const notesHeading = useRef<HTMLHeadingElement>(null);
   const notesId = useId();
   const scale = plan.groups.reduce((largest, group) => (isRelease(group) ? Math.max(largest, group.sum.max) : largest), 0);
-  const cutRule = cutRuleText(plan);
+  const cutRule = cutRuleText(plan, t);
 
   function jumpTo(heading: HTMLElement | null | undefined) {
     heading?.focus();
@@ -205,7 +208,7 @@ export const RoadmapLanes = memo(function RoadmapLanes({ project, plan, selected
 
   return (
     <div className="roadmap-lanes">
-      <nav className="roadmap-jumps" aria-label="Lanes of the plan">
+      <nav className="roadmap-jumps" aria-label={t("roadmap.jumpsLabel")}>
         <ul>
           {plan.groups.map((group, index) => (
             <li key={`${String(index)}-${group.group}`}>
@@ -216,7 +219,7 @@ export const RoadmapLanes = memo(function RoadmapLanes({ project, plan, selected
                   jumpTo(headings.current.get(index));
                 }}
               >
-                {laneName(group)}
+                {laneName(group, t)}
               </button>
             </li>
           ))}
@@ -229,7 +232,7 @@ export const RoadmapLanes = memo(function RoadmapLanes({ project, plan, selected
                   jumpTo(notesHeading.current);
                 }}
               >
-                Notes
+                {t("roadmap.notes")}
               </button>
             </li>
           )}
@@ -253,7 +256,7 @@ export const RoadmapLanes = memo(function RoadmapLanes({ project, plan, selected
           />
           {isRelease(group) && group.mvp_cut && cutRule !== null && (
             <p className="roadmap-cut-rule" data-cut="">
-              <Icon name={MVP_CUT.icon} />
+              <Icon name={mvpCutLook(t).icon} />
               <span>{cutRule}</span>
             </p>
           )}
@@ -262,11 +265,13 @@ export const RoadmapLanes = memo(function RoadmapLanes({ project, plan, selected
       {plan.notes.length > 0 && (
         <section className="roadmap-notes" aria-labelledby={notesId}>
           <h2 id={notesId} ref={notesHeading} tabIndex={-1}>
-            Notes
+            {t("roadmap.notes")}
           </h2>
           <ul className="note-list">
             {plan.notes.map((note, index) => (
-              <li key={`${String(index)}-${note}`}>{note}</li>
+              <li key={`${String(index)}-${note}`} lang="en">
+                {note}
+              </li>
             ))}
           </ul>
         </section>

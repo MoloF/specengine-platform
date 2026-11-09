@@ -41,12 +41,13 @@ export function GraphControls({
   const base = useId();
   const [typed, setTyped] = useState(nodeRef ?? "");
   const [shown, setShown] = useState(nodeRef);
-  const [error, setError] = useState<string | null>(null);
+  /** A Show pressed on an empty field: the field says what to type. */
+  const [missing, setMissing] = useState(false);
   if (shown !== nodeRef) {
     // Storing information from previous renders (react.dev, useState): a new REF fills the field.
     setShown(nodeRef);
     setTyped(nodeRef ?? "");
-    setError(null);
+    setMissing(false);
   }
   const pressed = chips.filter((chip) => chip.pressed).length;
 
@@ -54,20 +55,20 @@ export function GraphControls({
     event.preventDefault();
     const ref = typed.trim();
     if (ref === "") {
-      setError("Type a REF: an ID, slug/ID, ID#SECTION or a root-relative .md path.");
+      setMissing(true);
       return;
     }
-    setError(null);
+    setMissing(false);
     pushHash(sectionHash(project, "graph", ref));
   }
 
-  const describedBy = [error === null ? null : `${base}-error`, emptyHintId].filter((id): id is string => id !== null).join(" ");
+  const describedBy = [missing ? `${base}-error` : null, emptyHintId].filter((id): id is string => id !== null).join(" ");
 
   return (
-    <form className="graph-options" aria-label="Graph options" onSubmit={submit} noValidate>
+    <form className="graph-options" aria-label={t("graph.controls.label")} onSubmit={submit} noValidate>
       <div className="graph-ref">
         <label className="field-label" htmlFor={`${base}-ref`}>
-          REF
+          {t("graph.controls.ref")}
         </label>
         <div className="search-row">
           <input
@@ -77,27 +78,27 @@ export function GraphControls({
             type="text"
             autoComplete="off"
             spellCheck={false}
-            placeholder="ID, slug/ID, ID#SECTION or a .md path"
+            placeholder={t("graph.controls.placeholder")}
             value={typed}
-            aria-invalid={error !== null}
+            aria-invalid={missing}
             aria-describedby={describedBy === "" ? undefined : describedBy}
             onChange={(event) => {
               setTyped(event.target.value);
-              setError(null);
+              setMissing(false);
             }}
           />
           <button type="submit" className="button button-primary">
-            Show
+            {t("graph.controls.show")}
           </button>
         </div>
-        {error !== null && (
+        {missing && (
           <p id={`${base}-error`} className="field-error" role="alert">
-            {error}
+            {t("graph.controls.typeRef")}
           </p>
         )}
       </div>
       <fieldset className="graph-mode">
-        <legend className="field-label">Mode</legend>
+        <legend className="field-label">{t("graph.controls.mode")}</legend>
         <label className="graph-radio">
           <input
             type="radio"
@@ -107,7 +108,7 @@ export function GraphControls({
               onMode(false);
             }}
           />
-          <span>Outgoing</span>
+          <span>{t("graph.controls.outgoing")}</span>
         </label>
         <label className="graph-radio">
           <input
@@ -118,12 +119,12 @@ export function GraphControls({
               onMode(true);
             }}
           />
-          <span>Impact</span>
+          <span>{t("graph.controls.impact")}</span>
         </label>
       </fieldset>
       <div className="graph-depth">
         <label className="field-label" htmlFor={`${base}-depth`}>
-          Depth
+          {t("graph.controls.depth")}
         </label>
         <select
           id={`${base}-depth`}
@@ -139,7 +140,7 @@ export function GraphControls({
               {depth}
             </option>
           ))}
-          <option value={ALL}>All</option>
+          <option value={ALL}>{t("graph.controls.all")}</option>
         </select>
       </div>
       <div className="archive-toggle graph-archive">
@@ -153,15 +154,15 @@ export function GraphControls({
             onChange((current) => ({ ...current, archive }));
           }}
         />
-        <label htmlFor={`${base}-archive`}>Include archive</label>
+        <label htmlFor={`${base}-archive`}>{t("graph.includeArchive")}</label>
         <span id={`${base}-archive-hint`} className="sr-only">
-          Links written in archived documents are followed too.
+          {t("graph.controls.archiveHint")}
         </span>
       </div>
       <fieldset className="graph-types">
-        <legend className="field-label">Types followed</legend>
+        <legend className="field-label">{t("graph.controls.types")}</legend>
         {chips.length === 0 ? (
-          <p className="muted graph-types-pending">The types appear with the first answer of this mode.</p>
+          <p className="muted graph-types-pending">{t("graph.controls.typesPending")}</p>
         ) : (
           <div className="graph-chips">
             {chips.map((chip) => {
@@ -200,7 +201,7 @@ export function GraphControls({
         )}
         {pressed === 1 && (
           <p id={`${base}-last`} className="note graph-types-note">
-            At least one type is followed
+            {t("graph.controls.atLeastOne")}
           </p>
         )}
       </fieldset>

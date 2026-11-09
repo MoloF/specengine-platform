@@ -25,7 +25,7 @@ import { BOX_HANDLES, BOX_HEIGHT, BOX_WIDTH, HANDLE_SIZE } from "../graph/layout
 import { taskStatusLook } from "../tasks/labels";
 import { Icon } from "../ui/Icon";
 import { chainOf, LANE_HEAD, type ChainBox, type ChainEdge, type ChainLane, type ChainLayout } from "./chain";
-import { CANVAS_DESCRIPTION, countsText, CURRENT, cutRuleText, IN_A_CYCLE, laneName, MVP_CUT, notDrawnText, oneLine } from "./text";
+import { countsText, currentLook, cutRuleText, inACycleLook, laneName, mvpCutLook, notDrawnText, oneLine } from "./text";
 import { useTranslate, type Translate } from "../i18n";
 
 // The chain canvas (docs/features/roadmap-screen.md; ui/README.md "Screen rules", Canvas): the
@@ -34,20 +34,22 @@ import { useTranslate, type Translate } from "../i18n";
 // key option null (each default listens on the document); boxes are not focusable (the Lanes tab is
 // the keyboard's path); a click selects the item through the route. The wheel scrolls the page.
 
-/** Every key of React Flow's `defaultAriaLabelConfig`, replaced: nothing here can be changed. */
-export const CHAIN_ARIA_LABELS = {
-  "node.a11yDescription.default": "A plan item; the Lanes tab holds it as text.",
-  "node.a11yDescription.keyboardDisabled": "A plan item; the Lanes tab holds it as text.",
-  "node.a11yDescription.ariaLiveMessage": () => "",
-  "edge.a11yDescription.default": "An item waiting on another; the Lanes tab names every wait as text.",
-  "controls.ariaLabel": "Canvas zoom",
-  "controls.zoomIn.ariaLabel": "Zoom in",
-  "controls.zoomOut.ariaLabel": "Zoom out",
-  "controls.fitView.ariaLabel": "Fit the plan to the view, its text readable",
-  "controls.interactive.ariaLabel": "Canvas lock",
-  "minimap.ariaLabel": "Overview of the plan",
-  "handle.ariaLabel": "Link end",
-} satisfies AriaLabelConfig;
+/** Every key of React Flow's `defaultAriaLabelConfig`, replaced in the catalog's words: nothing here can be changed. */
+function chainAriaLabels(t: Translate) {
+  return {
+    "node.a11yDescription.default": t("roadmap.aria.item"),
+    "node.a11yDescription.keyboardDisabled": t("roadmap.aria.item"),
+    "node.a11yDescription.ariaLiveMessage": () => "",
+    "edge.a11yDescription.default": t("roadmap.aria.wait"),
+    "controls.ariaLabel": t("roadmap.aria.controls"),
+    "controls.zoomIn.ariaLabel": t("roadmap.aria.zoomIn"),
+    "controls.zoomOut.ariaLabel": t("roadmap.aria.zoomOut"),
+    "controls.fitView.ariaLabel": t("roadmap.aria.fit"),
+    "controls.interactive.ariaLabel": t("roadmap.aria.lock"),
+    "minimap.ariaLabel": t("roadmap.aria.minimap"),
+    "handle.ariaLabel": t("roadmap.aria.handle"),
+  } satisfies AriaLabelConfig;
+}
 
 type ItemData = { box: ChainBox; selected: boolean };
 type LaneData = { lane: ChainLane };
@@ -83,14 +85,14 @@ const ItemBox = memo(function ItemBox({ data }: NodeProps<Node<ItemData, "item">
         <span className="graph-box-name mono">{item.id}</span>
         {item.cycle && (
           <span className="graph-mark chain-mark-cycle" data-cycle="">
-            <Icon name={IN_A_CYCLE.icon} />
-            {IN_A_CYCLE.label}
+            <Icon name={inACycleLook(t).icon} />
+            {inACycleLook(t).label}
           </span>
         )}
         {data.selected && (
           <span className="graph-mark graph-mark-selected">
             <Icon name="selected" />
-            Selected
+            {t("roadmap.selected")}
           </span>
         )}
       </p>
@@ -114,24 +116,25 @@ const ItemBox = memo(function ItemBox({ data }: NodeProps<Node<ItemData, "item">
 
 /** A lane's name, marks and counts, drawn as text above its boxes. */
 const LaneLabel = memo(function LaneLabel({ data }: NodeProps<Node<LaneData, "lane">>) {
+  const t = useTranslate();
   const group = data.lane.group;
   return (
     <div className="chain-lane" aria-hidden="true">
-      <p className="chain-lane-name">{laneName(group)}</p>
+      <p className="chain-lane-name">{laneName(group, t)}</p>
       <p className="chain-lane-marks">
         {group.current && (
           <span className="graph-mark">
-            <Icon name={CURRENT.icon} />
-            {CURRENT.label}
+            <Icon name={currentLook(t).icon} />
+            {currentLook(t).label}
           </span>
         )}
         {group.mvp_cut && (
           <span className="graph-mark">
-            <Icon name={MVP_CUT.icon} />
-            {MVP_CUT.label}
+            <Icon name={mvpCutLook(t).icon} />
+            {mvpCutLook(t).label}
           </span>
         )}
-        <span>{countsText(group)}</span>
+        <span>{countsText(group, t)}</span>
       </p>
     </div>
   );
@@ -139,10 +142,11 @@ const LaneLabel = memo(function LaneLabel({ data }: NodeProps<Node<LaneData, "la
 
 /** The cut's rule: a dashed line down the gap after the `mvp_cut` lane, its words at the top. */
 const CutRule = memo(function CutRule({ data }: NodeProps<Node<CutData, "cut">>) {
+  const t = useTranslate();
   return (
     <div className="chain-cut" aria-hidden="true" style={{ height: data.height }}>
       <span className="chain-cut-label">
-        <Icon name={MVP_CUT.icon} />
+        <Icon name={mvpCutLook(t).icon} />
         {data.text}
       </span>
     </div>
@@ -168,15 +172,15 @@ const ARROW: EdgeMarker = { type: MarkerType.ArrowClosed, width: 14, height: 14 
 /** A box's accessible name: its ID, title, cycle mark, waits and task cells. */
 export function itemBoxName(box: ChainBox, t: Translate): string {
   const item = box.item;
-  const parts = [item.id, item.title === null ? "no title" : oneLine(item.title)];
+  const parts = [item.id, item.title === null ? t("roadmap.noTitle") : oneLine(item.title)];
   if (item.cycle) {
-    parts.push(IN_A_CYCLE.label.toLowerCase());
+    parts.push(inACycleLook(t).label.toLowerCase());
   }
   if (item.waits_on.length > 0) {
-    parts.push(`waits on ${item.waits_on.join(", ")}`);
+    parts.push(t("roadmap.waitsOnIds", { ids: item.waits_on.join(", ") }));
   }
   for (const task of item.tasks) {
-    parts.push(`task ${task.id} ${taskStatusLook(task.status, t).label}`);
+    parts.push(t("roadmap.task", { id: task.id, state: taskStatusLook(task.status, t).label }));
   }
   return parts.join(", ");
 }
@@ -224,7 +228,7 @@ function laneNode(lane: ChainLane): ChainNode {
   };
 }
 
-function waitEdge(edge: ChainEdge): WaitEdge {
+function waitEdge(edge: ChainEdge, t: Translate): WaitEdge {
   return {
     id: edge.id,
     type: "wait",
@@ -233,7 +237,7 @@ function waitEdge(edge: ChainEdge): WaitEdge {
     sourceHandle: edge.sourceHandle,
     targetHandle: edge.targetHandle,
     data: { edge },
-    ariaLabel: `${edge.to} waits on ${edge.from}`,
+    ariaLabel: t("roadmap.waitEdge", { to: edge.to, from: edge.from }),
     markerEnd: ARROW,
     focusable: false,
     selectable: false,
@@ -293,7 +297,8 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
   const t = useTranslate();
   const hintId = useId();
   const fit = useReadableFit(layout);
-  const cutText = cutRuleText(plan);
+  const cutText = cutRuleText(plan, t);
+  const labels = useMemo(() => chainAriaLabels(t), [t]);
 
   const nodes = useMemo<ChainNode[]>(() => {
     const placed: ChainNode[] = [...layout.lanes.map(laneNode)];
@@ -318,19 +323,19 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
     }
     return placed;
   }, [layout, selectedId, cutText, t]);
-  const edges = useMemo(() => layout.edges.map(waitEdge), [layout]);
+  const edges = useMemo(() => layout.edges.map((edge) => waitEdge(edge, t)), [layout, t]);
 
   return (
     <div className="graph-canvas chain-canvas">
       <p id={hintId} className="sr-only">
-        {CANVAS_DESCRIPTION}
+        {t("roadmap.canvasDescription")}
       </p>
       <ReactFlow<ChainNode, WaitEdge>
         nodes={nodes}
         edges={edges}
         nodeTypes={NODE_TYPES}
         edgeTypes={EDGE_TYPES}
-        aria-label="Roadmap canvas"
+        aria-label={t("roadmap.canvasLabel")}
         aria-describedby={hintId}
         nodesDraggable={false}
         nodesConnectable={false}
@@ -350,7 +355,7 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
         panActivationKeyCode={null}
         zoomActivationKeyCode={null}
         proOptions={{ hideAttribution: true }}
-        ariaLabelConfig={CHAIN_ARIA_LABELS}
+        ariaLabelConfig={labels}
         defaultMarkerColor={null}
         colorMode="dark"
         minZoom={0.1}
@@ -364,8 +369,8 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
         <Controls showInteractive={false} showFitView={false}>
           <ControlButton
             className="react-flow__controls-fitview"
-            title={CHAIN_ARIA_LABELS["controls.fitView.ariaLabel"]}
-            aria-label={CHAIN_ARIA_LABELS["controls.fitView.ariaLabel"]}
+            title={labels["controls.fitView.ariaLabel"]}
+            aria-label={labels["controls.fitView.ariaLabel"]}
             onClick={() => {
               fit();
             }}
@@ -384,6 +389,7 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
  * past CANVAS_LIMIT boxes, whole lanes only and the count of those not drawn named above it.
  */
 export function RoadmapChain(props: RoadmapChainProps) {
+  const t = useTranslate();
   const layout = useMemo(() => chainOf(props.plan), [props.plan]);
   const limit = layout.limit;
   return (
@@ -392,7 +398,7 @@ export function RoadmapChain(props: RoadmapChainProps) {
         <p className="notice cut-notice chain-limit" role="note">
           <span className="notice-title">
             <Icon name="info" />
-            <span>{notDrawnText(limit.hidden, limit.total)}</span>
+            <span>{notDrawnText(limit.hidden, limit.total, t)}</span>
           </span>
         </p>
       )}
@@ -400,7 +406,7 @@ export function RoadmapChain(props: RoadmapChainProps) {
         <Canvas {...props} layout={layout} />
       </ReactFlowProvider>
       {/* React Flow's attribution is hidden on the canvas, so it is credited here as text (ui/README.md "Screen rules", Canvas). */}
-      <p className="graph-legend-credit">Drawn with React Flow (MIT)</p>
+      <p className="graph-legend-credit">{t("roadmap.credit")}</p>
     </div>
   );
 }

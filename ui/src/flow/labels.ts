@@ -198,7 +198,7 @@ export function gapLook(gap: FlowGap, t: Translate): Look {
   if (gap.state === "cannot") {
     return { label: t("flow.gap.cannotMeasure"), tone: "sync-cannot-verify", icon: "cannotCheck" };
   }
-  return { label: gap.state, tone: "flow-gap-unknown", icon: "unknown" };
+  return { label: gap.state, tone: "flow-gap-unknown", icon: "unknown", served: true };
 }
 
 /** Every document a row's items name, `no-start`'s scope left out. */
@@ -297,7 +297,7 @@ export const ROLLUP_WORDS: readonly string[] = [...ROLLUPS.keys()];
 /** How a rollup looks; one this build does not know raw and neutral (`docs/features/trace-views.md` "Flow badges"). */
 export function rollupLook(rollup: string, t: Translate): Look {
   const known = ROLLUPS.get(rollup);
-  return known === undefined ? { label: rollup, tone: "trace-unknown", icon: "unknown" } : { label: t(`flow.rollup.${known.key}`), tone: known.tone, icon: known.icon };
+  return known === undefined ? { label: rollup, tone: "trace-unknown", icon: "unknown", served: true } : { label: t(`flow.rollup.${known.key}`), tone: known.tone, icon: known.icon };
 }
 
 /** Whether a rollup is a step with no card: it stays in its place, hollow. */

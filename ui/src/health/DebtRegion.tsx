@@ -9,16 +9,24 @@ import { budgetRowsOf, debtRowsOf, rowsOf } from "./findings";
 import { findingSeverityLook, isCannotCheck } from "./labels";
 import { DebtNote, FindingMessage, FindingPlace, FindingSubject, HealthRegion } from "./parts";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
+
+/** The baseline's file, named as code. */
+const DEBT_FILE = ".spec-debt.toml";
 
 /**
  * A baseline entry that matched nothing, by its line in `.spec-debt.toml` (never a line of its
  * `path`): "`.spec-debt.toml` line <line>: <code> on <path> matches nothing".
  */
 function StaleLine({ entry }: { entry: DebtEntry }) {
+  const t = useTranslate();
   return (
     <li className="stale-row">
-      <code>.spec-debt.toml</code> line {entry.line}: <code className="stale-code">{entry.code}</code> on{" "}
-      <span className="mono stale-path">{entry.path === "" ? '""' : entry.path}</span> matches nothing
+      {fill(t("health.debt.staleLine", { file: slot("file"), line: entry.line, code: slot("code"), path: slot("path") }), {
+        file: <code>{DEBT_FILE}</code>,
+        code: <code className="stale-code">{entry.code}</code>,
+        path: <span className="mono stale-path">{entry.path === "" ? '""' : entry.path}</span>,
+      })}
     </li>
   );
 }
@@ -34,23 +42,17 @@ function DebtAndBudgets({ project, report }: { project: string; report: CheckRep
   return (
     <>
       <div className="health-part">
-        <h3 className="health-part-title">Debt: expired first, then by expiry</h3>
+        <h3 className="health-part-title">{t("health.debt.debtTitle")}</h3>
         {debt.length === 0 ? (
           <p className="muted">
-            {cannot ? (
-              "No finding in debt was reported, but the check could not read everything."
-            ) : (
-              <>
-                No finding is in debt: none matches an entry of <code>.spec-debt.toml</code>.
-              </>
-            )}
+            {cannot ? t("health.debt.noDebtCannot") : fill(t("health.debt.noDebt", { file: slot("file") }), { file: <code>{DEBT_FILE}</code> })}
           </p>
         ) : (
           <ul className="debt-list">
             {debt.map(({ key, finding }) => (
               <li key={key} className="debt-row" data-debt={key}>
                 <span className="finding-head">
-                  <Badge name="Severity" look={findingSeverityLook(finding.severity, t)} />
+                  <Badge name={t("health.severityName")} look={findingSeverityLook(finding.severity, t)} />
                   <code className="debt-code">{finding.code}</code>
                   <FindingPlace project={project} finding={finding} linked={false} />
                   <FindingSubject subject={finding.subject} />
@@ -62,11 +64,9 @@ function DebtAndBudgets({ project, report }: { project: string; report: CheckRep
         )}
       </div>
       <div className="health-part">
-        <h3 className="health-part-title">Stale entries</h3>
+        <h3 className="health-part-title">{t("health.debt.staleTitle")}</h3>
         {report.stale.length === 0 ? (
-          <p className="muted">
-            {cannot ? "No stale entry was reported, but the check could not read everything." : "Every entry of the baseline matches a finding."}
-          </p>
+          <p className="muted">{cannot ? t("health.debt.noStaleCannot") : t("health.debt.noStale")}</p>
         ) : (
           <ul className="stale-list">
             {report.stale.map((entry, index) => (
@@ -76,20 +76,16 @@ function DebtAndBudgets({ project, report }: { project: string; report: CheckRep
         )}
       </div>
       <div className="health-part">
-        <h3 className="health-part-title">Budgets</h3>
+        <h3 className="health-part-title">{t("health.debt.budgetsTitle")}</h3>
         {budgets.length === 0 ? (
-          <p className="muted">
-            {cannot
-              ? "No document was reported over its budget, but the check could not read everything."
-              : "No document is over its budget."}
-          </p>
+          <p className="muted">{cannot ? t("health.debt.noBudgetCannot") : t("health.debt.noBudget")}</p>
         ) : (
           <ul className="budget-list">
             {budgets.map(({ key, finding }) => (
               <li key={key} className="budget-row" data-budget={key}>
                 <span className="finding-head">
                   <span className="budget-slot">
-                    <span className="budget-slot-label">Slot</span> <span className="finding-subject-text mono verbatim">{finding.subject}</span>
+                    <span className="budget-slot-label">{t("health.debt.slot")}</span> <span className="finding-subject-text mono verbatim">{finding.subject}</span>
                   </span>
                   <FindingPlace project={project} finding={finding} linked={false} />
                 </span>
@@ -110,6 +106,7 @@ function DebtAndBudgets({ project, report }: { project: string; report: CheckRep
  * size and the cap live only in the message, never parsed).
  */
 export function DebtRegion({ project, check }: { project: string; check: CheckQuery }) {
+  const t = useTranslate();
   const failure = useRetainedFailure(check.error, check.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(check.data, () => heading.current);
@@ -118,10 +115,10 @@ export function DebtRegion({ project, check }: { project: string; check: CheckQu
   if (check.data === undefined) {
     body =
       failure === null ? (
-        <Skeleton label={`Loading the debt and budgets of ${project}`} lines={3} />
+        <Skeleton label={t("health.debt.loading", { project })} lines={3} />
       ) : (
         <ReadFailure
-          title="The debt and budgets could not be read"
+          title={t("health.debt.failed")}
           failure={failure}
           retrying={check.isFetching}
           attempt={check.errorUpdateCount}
@@ -138,8 +135,8 @@ export function DebtRegion({ project, check }: { project: string; check: CheckQu
 
   return (
     <HealthRegion
-      title="Debt and budgets"
-      boundary="debt and budgets"
+      title={t("health.debt.title")}
+      boundary={t("health.debt.boundary")}
       headingRef={heading}
       busy={check.data === undefined ? failure === null : check.isFetching}
       className="health-debt"

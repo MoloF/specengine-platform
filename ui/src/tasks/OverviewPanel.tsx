@@ -1,5 +1,7 @@
 import type { TaskPackage, TaskTarget } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { Prose } from "../markdown/Prose";
 import { Part, When } from "./parts";
 
@@ -13,11 +15,12 @@ function nameOf(target: TaskTarget): string | null {
  * stored name as text, no link.
  */
 function Target({ project, target }: { project: string; target: TaskTarget }) {
+  const t = useTranslate();
   const name = nameOf(target);
   return (
     <li className="task-target">
       <p className="task-target-head">
-        <span className="mono">{name ?? "Unnamed target"}</span>
+        <span className="mono">{name ?? t("tasks.overview.unnamed")}</span>
         {target.kind !== null && <span className="kind-tag">{target.kind}</span>}
         {target.title !== null && <span className="task-target-title">{target.title}</span>}
       </p>
@@ -25,10 +28,10 @@ function Target({ project, target }: { project: string; target: TaskTarget }) {
       {target.kind !== null && name !== null && (
         <p className="task-target-links">
           <a href={sectionHash(project, "tree", name)}>
-            Open in spec tree<span className="sr-only">: {name}</span>
+            {fill(t("tasks.overview.openInTree", { name: slot("name") }), { name: <span className="sr-only">{t("tasks.overview.nameSaid", { name })}</span> })}
           </a>
           <a href={sectionHash(project, "graph", name)}>
-            Show in graph<span className="sr-only">: {name}</span>
+            {fill(t("tasks.overview.showInGraph", { name: slot("name") }), { name: <span className="sr-only">{t("tasks.overview.nameSaid", { name })}</span> })}
           </a>
         </p>
       )}
@@ -41,26 +44,27 @@ function Target({ project, target }: { project: string; target: TaskTarget }) {
  * Goal, criterion, assumption and note texts render as markdown; names and paths stay verbatim.
  */
 export function OverviewPanel({ project, task }: { project: string; task: TaskPackage }) {
+  const t = useTranslate();
   return (
     <div className="task-panel">
-      <Part title="Goal">
+      <Part title={t("tasks.overview.goal")}>
         {task.goal === null ? (
-          <p className="muted">No goal given.</p>
+          <p className="muted">{t("tasks.overview.noGoal")}</p>
         ) : (
           <Prose className="task-text task-goal" source={task.goal} links={null} project={project} baseLevel={2} frontMatter={false} />
         )}
       </Part>
 
-      <Part title="Criteria" count={task.criteria.length}>
+      <Part title={t("tasks.overview.criteria")} count={task.criteria.length}>
         {task.criteria.length === 0 ? (
-          <p className="muted">No criteria yet.</p>
+          <p className="muted">{t("tasks.overview.noCriteria")}</p>
         ) : (
           <ol className="task-criteria">
             {task.criteria.map((criterion, index) => (
               <li key={`${String(index)}-${criterion.ref ?? ""}`} className="task-criterion">
                 <p className="task-criterion-ref">
                   {criterion.ref === null ? (
-                    <span className="plain-tag">Free text</span>
+                    <span className="plain-tag">{t("tasks.overview.freeText")}</span>
                   ) : (
                     <a className="mono" href={sectionHash(project, "tree", criterion.ref)}>
                       {criterion.ref}
@@ -68,7 +72,7 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
                   )}
                 </p>
                 {criterion.text === null ? (
-                  <p className="muted">Not found in the compared place</p>
+                  <p className="muted">{t("tasks.overview.notFound")}</p>
                 ) : (
                   <Prose className="task-text criterion-text" source={criterion.text} links={null} project={project} baseLevel={2} frontMatter={false} />
                 )}
@@ -78,9 +82,9 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
         )}
       </Part>
 
-      <Part title="Targets" count={task.targets.length}>
+      <Part title={t("tasks.overview.targets")} count={task.targets.length}>
         {task.targets.length === 0 ? (
-          <p className="muted">No target named.</p>
+          <p className="muted">{t("tasks.overview.noTargets")}</p>
         ) : (
           <ul className="task-targets">
             {task.targets.map((target, index) => (
@@ -90,9 +94,9 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
         )}
       </Part>
 
-      <Part title="Affected nodes" count={task.affected_nodes.length}>
+      <Part title={t("tasks.overview.affected")} count={task.affected_nodes.length}>
         {task.affected_nodes.length === 0 ? (
-          <p className="muted">None named.</p>
+          <p className="muted">{t("tasks.overview.noneNamed")}</p>
         ) : (
           <ul className="task-names">
             {task.affected_nodes.map((id) => (
@@ -106,9 +110,9 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
         )}
       </Part>
 
-      <Part title="Assumptions" count={task.assumptions.length}>
+      <Part title={t("tasks.overview.assumptions")} count={task.assumptions.length}>
         {task.assumptions.length === 0 ? (
-          <p className="muted">No working assumption.</p>
+          <p className="muted">{t("tasks.overview.noAssumptions")}</p>
         ) : (
           <ul className="task-assumptions">
             {task.assumptions.map((assumption) => (
@@ -123,9 +127,9 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
         )}
       </Part>
 
-      <Part title="Owner notes" count={task.owner_notes.length}>
+      <Part title={t("tasks.overview.ownerNotes")} count={task.owner_notes.length}>
         {task.owner_notes.length === 0 ? (
-          <p className="muted">No note from you yet.</p>
+          <p className="muted">{t("tasks.overview.noNotes")}</p>
         ) : (
           <ol className="task-notes">
             {task.owner_notes.map((note, index) => (
@@ -140,8 +144,8 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
         )}
       </Part>
 
-      <Part title="Profile">
-        {task.profile === null ? <p className="muted">No profile</p> : <p className="mono task-profile">{task.profile}</p>}
+      <Part title={t("tasks.overview.profile")}>
+        {task.profile === null ? <p className="muted">{t("tasks.overview.noProfile")}</p> : <p className="mono task-profile">{task.profile}</p>}
       </Part>
     </div>
   );

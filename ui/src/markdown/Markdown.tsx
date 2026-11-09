@@ -7,9 +7,9 @@ import { linkStateLook } from "../tree/labels";
 import type { LineTarget } from "../tree/TextView";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { numberProperty, remarkSpec, stringProperty, type HastElement } from "./plugin";
+import { numberProperty, remarkSpec, stringProperty, type HastElement, type SpecWords } from "./plugin";
 import { splitFrontMatter } from "./source";
-import { useTranslate } from "../i18n";
+import { useLanguage, useTranslate, type Translate } from "../i18n";
 
 // The renderer (docs/features/ui-markdown.md; ADR-0036), loaded on demand like the graph canvas:
 // the only module importing react-markdown and remark-gfm. React elements only, never an HTML
@@ -98,7 +98,7 @@ function Anchor({ node, children }: Props<"a">) {
   }
   return (
     <span className="md-link md-link-unresolved">
-      {children} <Badge name="Link" look={linkStateLook(unresolved.state, t)} />
+      {children} <Badge name={t("markdown.link")} look={linkStateLook(unresolved.state, t)} />
     </span>
   );
 }
@@ -111,16 +111,18 @@ function heading(level: 1 | 2 | 3 | 4 | 5 | 6) {
 
 /** An image is never loaded: its alt text and path as text (./plugin turns each into that first). */
 function Image({ alt }: Props<"img">) {
-  return <span className="md-image">{alt === undefined || alt === "" ? "Image" : `Image: ${alt}`}</span>;
+  const t = useTranslate();
+  return <span className="md-image">{alt === undefined || alt === "" ? t("markdown.image") : t("markdown.imageAlt", { alt })}</span>;
 }
 
 /** A task item's box: an icon and a word, never a form control. */
 function TaskState({ checked }: Props<"input">) {
+  const t = useTranslate();
   const done = checked === true;
   return (
     <span className="md-task-state">
       <Icon name={done ? "taskItemDone" : "taskItemOpen"} />
-      <span>{done ? "Done" : "Not done"}</span>
+      <span>{done ? t("markdown.done") : t("markdown.notDone")}</span>
     </span>
   );
 }
@@ -144,9 +146,10 @@ function Pre({ node, children }: Props<"pre">) {
 
 /** A table: its own focusable scroll region, named by its line. */
 function Table({ node, children }: Props<"table">) {
+  const t = useTranslate();
   const line = numberProperty(node, "dataLine");
   return (
-    <div className="md-table-region" role="region" aria-label={line === null ? "Table" : `Table at line ${String(line)}`} tabIndex={0} data-line={line ?? undefined}>
+    <div className="md-table-region" role="region" aria-label={line === null ? t("markdown.table") : t("markdown.tableAt", { line })} tabIndex={0} data-line={line ?? undefined}>
       <table className="md-table">{children}</table>
     </div>
   );
@@ -179,16 +182,25 @@ const PARSES_KEPT = 32;
  */
 const parses = new Map<string, ReactElement>();
 
-/** The text's elements: react-markdown's sync component called once per text, lines and level. */
-function parsed(body: string, lineBase: number, baseLevel: number): ReactElement {
-  const key = `${String(lineBase)}:${String(baseLevel)}:${body}`;
+/** The words the rewrite writes, in the language `t` reads. */
+function specWords(t: Translate): SpecWords {
+  return {
+    image: t("markdown.image"),
+    imageAlt: (alt) => t("markdown.imageAlt", { alt }),
+    footnote: (label) => t("markdown.footnote", { label }),
+  };
+}
+
+/** The text's elements: react-markdown's sync component called once per text, lines, level and language. */
+function parsed(body: string, lineBase: number, baseLevel: number, language: string, words: SpecWords): ReactElement {
+  const key = `${language}:${String(lineBase)}:${String(baseLevel)}:${body}`;
   const kept = parses.get(key);
   if (kept !== undefined) {
     parses.delete(key);
     parses.set(key, kept);
     return kept;
   }
-  const elements = ReactMarkdown({ remarkPlugins: [remarkGfm, [remarkSpec, { source: body, lineBase, baseLevel }]], components: COMPONENTS, children: body });
+  const elements = ReactMarkdown({ remarkPlugins: [remarkGfm, [remarkSpec, { source: body, lineBase, baseLevel, words }]], components: COMPONENTS, children: body });
   parses.set(key, elements);
   for (const oldest of parses.keys()) {
     if (parses.size <= PARSES_KEPT) {
@@ -199,13 +211,16 @@ function parsed(body: string, lineBase: number, baseLevel: number): ReactElement
   return elements;
 }
 
-/** The parse and its elements: again only when the text, its lines or its level change. */
-const Rendered = memo(function Rendered({ body, lineBase, baseLevel }: { body: string; lineBase: number; baseLevel: number }) {
-  return parsed(body, lineBase, baseLevel);
+/** The parse and its elements: again only when the text, its lines, its level or the language change. */
+const Rendered = memo(function Rendered({ body, lineBase, baseLevel, language, words }: { body: string; lineBase: number; baseLevel: number; language: string; words: SpecWords }) {
+  return parsed(body, lineBase, baseLevel, language, words);
 });
 
 /** Markdown prose as React elements; a document's front-matter verbatim above it. */
 export function Markdown({ source, links, project, baseLevel, frontMatter, firstLine = 1, path = null, target = null, onFollow, className }: MarkdownProps) {
+  const t = useTranslate();
+  const { language } = useLanguage();
+  const words = useMemo(() => specWords(t), [t]);
   const container = useRef<HTMLDivElement>(null);
   const split = useMemo(() => (frontMatter ? splitFrontMatter(source) : { block: null, lines: 0, body: source }), [source, frontMatter]);
   // A leading BOM with no front-matter: the parser skips it without counting it in its offsets, so
@@ -247,7 +262,7 @@ export function Markdown({ source, links, project, baseLevel, frontMatter, first
             {split.block}
           </pre>
         )}
-        <Rendered body={body} lineBase={firstLine + split.lines - 1} baseLevel={baseLevel} />
+        <Rendered body={body} lineBase={firstLine + split.lines - 1} baseLevel={baseLevel} language={language} words={words} />
       </div>
     </LinkScopeContext>
   );

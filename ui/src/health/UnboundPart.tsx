@@ -2,9 +2,10 @@ import type { HealthQuery } from "../api/queries";
 import type { UnboundCounts, UnboundMarker, UnboundRow } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
-import { CodePart, CodeRowList, counted, oneLine, RowNotMeasured } from "./codeRows";
+import { CodePart, CodeRowList, oneLine, RowNotMeasured } from "./codeRows";
 import { bindingLabel, idStateLabel, isMeasuredState, unboundReasonLook } from "./labels";
 import { useTranslate } from "../i18n";
+import { around, fill, slot } from "../i18n/fill";
 
 /**
  * A marker that names an unbound node yet binds it not: where it is, its relation raw, its ID
@@ -19,12 +20,12 @@ function MarkerLine({ marker }: { marker: UnboundMarker }) {
       </span>
       <span className="kind-tag">{oneLine(marker.relation)}</span>
       <span className="health-code-fact">
-        ID <span className="health-code-word">{oneLine(idStateLabel(marker.id_state, t))}</span>
+        {fill(t("health.unboundRow.idFact", { word: slot("word") }), { word: <span className="health-code-word">{oneLine(idStateLabel(marker.id_state, t))}</span> })}
       </span>
       <span className="health-code-fact">
-        Binding <span className="health-code-word">{oneLine(bindingLabel(marker.binding, t))}</span>
+        {fill(t("health.unboundRow.bindingFact", { word: slot("word") }), { word: <span className="health-code-word">{oneLine(bindingLabel(marker.binding, t))}</span> })}
       </span>
-      <Badge name="Binds it not" look={unboundReasonLook(marker.reason, t)} />
+      <Badge name={t("health.unboundRow.bindsNot")} look={unboundReasonLook(marker.reason, t)} />
     </li>
   );
 }
@@ -35,6 +36,7 @@ function MarkerLine({ marker }: { marker: UnboundMarker }) {
  * name it without binding it.
  */
 function UnboundLine({ project, row }: { project: string; row: UnboundRow }) {
+  const t = useTranslate();
   return (
     <li className="health-left-row health-code-row" data-unbound={row.id} tabIndex={-1}>
       <p className="health-code-head">
@@ -48,13 +50,11 @@ function UnboundLine({ project, row }: { project: string; row: UnboundRow }) {
         <span className="mono health-code-place">
           {oneLine(row.path)}:{row.line}
         </span>
-        <span className="health-code-rules">
-          Rules failed: <span className="mono">{row.rules.join(", ")}</span>
-        </span>
-        <span className="health-code-mentions">{counted(row.mentions, "mention", "mentions")}</span>
+        <span className="health-code-rules">{fill(t("health.unboundRow.rules", { rules: slot("rules") }), { rules: <span className="mono">{row.rules.join(", ")}</span> })}</span>
+        <span className="health-code-mentions">{t("health.unboundRow.mentions", { count: row.mentions })}</span>
       </p>
       {row.markers.length > 0 && (
-        <ul className="health-code-markers" aria-label={`Markers naming ${oneLine(row.id)} without binding it`}>
+        <ul className="health-code-markers" aria-label={t("health.unboundRow.markersLabel", { id: oneLine(row.id) })}>
           {row.markers.map((marker, index) => (
             <MarkerLine key={`${String(index)}-${marker.path}:${String(marker.line)}:${String(marker.column)}`} marker={marker} />
           ))}
@@ -70,23 +70,26 @@ function UnboundLine({ project, row }: { project: string; row: UnboundRow }) {
  * nodes, never a bare 0.
  */
 function Unbound({ project, counts, rows }: { project: string; counts: UnboundCounts; rows: UnboundRow[] }) {
-  const selected = counted(counts.selected, "selected node", "selected nodes");
+  const t = useTranslate();
   if (rows.length === 0) {
     return (
       <>
         <p className="health-left-total health-code-none">
-          <span className="health-value health-measured">None</span>: every node the rules select is bound.
+          {fill(t("health.unboundRow.none", { none: slot("none") }), { none: <span className="health-value health-measured">{t("health.amendments.noneWord")}</span> })}
         </p>
-        <p className="health-amendments-scope">Measured over {selected}.</p>
+        <p className="health-amendments-scope">{t("health.unboundRow.measuredOver", { count: counts.selected })}</p>
       </>
     );
   }
+  const [before, after] = around(t("health.unboundRow.total", { unbound: counts.unbound, count: counts.selected }), String(counts.unbound));
   return (
     <>
       <p className="health-left-total">
-        <strong className="health-value health-measured">{counts.unbound}</strong> of {selected}
+        {before}
+        <strong className="health-value health-measured">{counts.unbound}</strong>
+        {after}
       </p>
-      <CodeRowList rows={rows} label="Unbound nodes, by path" order="by path" render={(row) => <UnboundLine project={project} row={row} />} />
+      <CodeRowList rows={rows} label={t("health.unboundRow.listLabel")} order={t("health.code.byPath")} render={(row) => <UnboundLine project={project} row={row} />} />
     </>
   );
 }
@@ -100,7 +103,7 @@ function Unbound({ project, counts, rows }: { project: string; counts: UnboundCo
  */
 export function UnboundPart({ project, health, failure, busy }: { project: string; health: HealthQuery; failure: Error | null; busy: boolean }) {
   return (
-    <CodePart health={health} failure={failure} busy={busy} row="unbound" title="Unbound nodes" what="unbound nodes">
+    <CodePart health={health} failure={failure} busy={busy} row="unbound">
       {(report, retry) => {
         const row = report.unbound;
         if (isMeasuredState(row.state) && row.counts !== null && row.rows !== null) {

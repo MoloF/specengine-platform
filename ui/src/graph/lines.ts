@@ -31,28 +31,26 @@ export function isArchived(walked: Walked): boolean {
 }
 
 /** A walked box's accessible name: `<name>, <kind>, <title>, distance <d>[, focus][, archived]`. */
-export function boxLabel(walked: Walked): string {
+export function boxLabel(walked: Walked, t: Translate): string {
   const first = walked.holders[0];
-  const parts = [walked.name, first?.kind ?? "no kind", first?.title ?? "no title", `distance ${String(walked.distance)}`];
+  const parts = [walked.name, first?.kind ?? t("graph.noKind"), first?.title ?? t("graph.noTitle"), t("graph.distance", { distance: walked.distance })];
   if (walked.distance === 0) {
-    parts.push("focus");
+    parts.push(t("graph.focusWord"));
   }
   if (isArchived(walked)) {
-    parts.push("archived");
+    parts.push(t("graph.archivedWord"));
   }
   return parts.join(", ");
 }
 
 /** "+k more at distance d". */
-export function moreLabel(hidden: number, column: number): string {
-  return `+${String(hidden)} more at distance ${String(column)}`;
+export function moreLabel(hidden: number, column: number, t: Translate): string {
+  return t("graph.more", { hidden, column });
 }
 
-/** "<n> nodes, <e> edges", singular where one. */
-export function countText(view: Pick<GraphView, "nodes" | "edges">): string {
-  const nodes = view.nodes.length;
-  const edges = view.edges.length;
-  return `${String(nodes)} ${nodes === 1 ? "node" : "nodes"}, ${String(edges)} ${edges === 1 ? "edge" : "edges"}`;
+/** "<n> nodes, <e> edges": each count its own plural group. */
+export function countText(view: Pick<GraphView, "nodes" | "edges">, t: Translate): string {
+  return t("graph.counts", { nodes: t("graph.nodes", { count: view.nodes.length }), edges: t("graph.edges", { count: view.edges.length }) });
 }
 
 type KnownDirection = "in" | "out";

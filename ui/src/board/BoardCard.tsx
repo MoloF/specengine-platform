@@ -7,6 +7,7 @@ import { hasModifier } from "../ui/keys";
 import { shownSlot } from "../ui/text";
 import { isOverdue } from "./due";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { acceptedLook, byHand, cancelledLook, markLook, markNames, overdueLook, rowMark, unassigned } from "./labels";
 
 /** What a card asks of its board. */
@@ -31,7 +32,7 @@ function Source({ project, targets }: { project: string; targets: readonly strin
   }
   return (
     <span className="board-card-source">
-      <span className="sr-only">Source: </span>
+      <span className="sr-only">{t("board.card.source")}</span>
       <a href={sectionHash(project, "tree", first)} tabIndex={-1} draggable={false}>
         <bdi className="mono">{shownSlot(first)}</bdi>
       </a>
@@ -136,13 +137,13 @@ export const BoardCard = memo(function BoardCard({
           </a>
         </h3>
         <p className={row.assignee === null ? "board-card-who muted" : "board-card-who"}>
-          <span className="sr-only">Assignee: </span>
+          <span className="sr-only">{t("board.card.assignee")}</span>
           <bdi>{row.assignee === null ? unassigned(t) : shownSlot(row.assignee)}</bdi>
         </p>
         {(row.due !== null || row.estimate !== null) && (
           <p className="board-card-when">
-            {row.due !== null && <span>Due {shownSlot(row.due)}</span>}
-            {row.estimate !== null && <span>Estimate {shownSlot(row.estimate)}</span>}
+            {row.due !== null && <span>{t("board.card.due", { due: shownSlot(row.due) })}</span>}
+            {row.estimate !== null && <span>{t("board.card.estimate", { estimate: shownSlot(row.estimate) })}</span>}
           </p>
         )}
         <div className="board-card-foot">
@@ -160,9 +161,7 @@ export const BoardCard = memo(function BoardCard({
               }}
             >
               <Icon name="cardMove" />
-              <span>
-                Move<span className="sr-only"> {row.id}</span>
-              </span>
+              <span>{fill(t("board.card.move", { id: slot("id") }), { id: <span className="sr-only">{t("board.card.moveId", { id: row.id })}</span> })}</span>
             </button>
           )}
         </div>

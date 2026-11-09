@@ -70,7 +70,7 @@ function InboxSummary({ project, answer }: { project: string; answer: Inbox }) {
           {first.map((proposal) => (
             <li key={proposal.id} className="home-row">
               <a className="home-row-link" href={sectionHash(project, "inbox", proposal.id)}>
-                <span className="mono">{proposal.id}</span>: <span>{summaryOf(proposal)}</span>
+                <span className="mono">{proposal.id}</span>: <span>{summaryOf(proposal, t)}</span>
               </a>
               <span className="home-row-meta">
                 <Badge name={t("home.inbox.status")} look={statusLook(proposal.status, t)} />

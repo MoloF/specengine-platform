@@ -3,13 +3,15 @@
 // (`docs/features/daemon-read.md` "Data"); `?scenario=<name>` before the `#` serves the mock
 // instead, "Mock data" shown on every route. The mock client and its invented projects load in a
 // chunk of their own, only under `?scenario=`: the daemon's page never fetches them. The catalog's
-// instance starts with the first import, before anything renders (docs/features/ui-languages.md D4).
+// instance starts with the first import in English; a page starting in Russian renders nothing until
+// Russian's chunk lands or the wait runs out (docs/canon/ui-languages.md "Catalog"), so a local
+// daemon's page never flashes English.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import type { SpecEngineClient } from "./api/client";
 import { HttpClient } from "./api/http";
 import { App } from "./app/App";
-import { useTranslate } from "./i18n";
+import { readyLanguage, useTranslate } from "./i18n";
 import { fill, slot } from "./i18n/fill";
 import { scenarioFromSearch } from "./mocks/scenario";
 // React Flow's structural styles only (base.css, never style.css); its colours come from tokens.css.
@@ -58,14 +60,19 @@ function showFailure(error: unknown) {
 
 // A plain dynamic import, never an await: awaited at the top, it would make the bundler pull
 // every module the mock shares with the app out of the entry chunk (the entry may not be imported
-// back while it waits), splitting the daemon's page into a score of small chunks.
-if (mocked) {
-  root.render(<MockLoading />);
-  import("./mocks/MockClient")
-    .then(({ MockClient }) => {
-      start(new MockClient(scenario));
-    })
-    .catch(showFailure);
-} else {
-  start(new HttpClient());
+// back while it waits), splitting the daemon's page into a score of small chunks. The language's
+// gate is chained the same way, and never rejects.
+function boot() {
+  if (mocked) {
+    root.render(<MockLoading />);
+    import("./mocks/MockClient")
+      .then(({ MockClient }) => {
+        start(new MockClient(scenario));
+      })
+      .catch(showFailure);
+  } else {
+    start(new HttpClient());
+  }
 }
+
+void readyLanguage().then(boot);

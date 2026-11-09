@@ -33,7 +33,7 @@ function OptionText({ option }: { option: PaletteOption }) {
       return (
         <>
           <span className="palette-option-main">
-            <span className="mono">{option.proposal.id}</span>: <span>{summaryOf(option.proposal)}</span>
+            <span className="mono">{option.proposal.id}</span>: <span>{summaryOf(option.proposal, t)}</span>
           </span>
           <Badge name={t("palette.status")} look={statusLook(option.proposal.status, t)} />
         </>

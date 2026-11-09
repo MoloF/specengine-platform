@@ -1,4 +1,5 @@
 import type { KnownTaskStatus, TaskStatus } from "../api/types";
+import type { Translate } from "../i18n";
 
 // The owner's actions on a task, as commands for a terminal (docs/canon/architecture.md#control,
 // ADR-0012): the browser changes nothing; the terminal asks [y/N]. Which action applies in which
@@ -33,14 +34,14 @@ export interface OwnerCommand {
   text: string;
 }
 
-function meaningOf(action: OwnerAction, status: TaskStatus): string {
+function meaningOf(action: OwnerAction, status: TaskStatus, t: Translate): string {
   switch (action) {
     case "approve":
-      return status === "ready" ? "Approve again: re-freezes the snapshot" : "Approve: the task becomes ready";
+      return status === "ready" ? t("tasks.command.approveAgain") : t("tasks.command.approve");
     case "changes":
-      return "Request changes: type your note in place of ...";
+      return t("tasks.command.changes");
     case "cancel":
-      return "Cancel the task";
+      return t("tasks.command.cancel");
   }
 }
 
@@ -59,13 +60,13 @@ function textOf(action: OwnerAction, id: string): string {
  * The commands for a task: its state's row of the table, then `spec task show`. Null when the ID
  * is not a task ID: no command is offered for it.
  */
-export function ownerCommands(id: string, status: TaskStatus | null): OwnerCommand[] | null {
+export function ownerCommands(id: string, status: TaskStatus | null, t: Translate): OwnerCommand[] | null {
   if (!TASK_ID.test(id)) {
     return null;
   }
   const actions = status === null ? [] : actionsFor(status);
   return [
-    ...actions.map((action) => ({ action, meaning: meaningOf(action, status ?? ""), text: textOf(action, id) })),
-    { action: "show" as const, meaning: "Read the task on the terminal", text: `spec task show ${id}` },
+    ...actions.map((action) => ({ action, meaning: meaningOf(action, status ?? "", t), text: textOf(action, id) })),
+    { action: "show" as const, meaning: t("tasks.command.show"), text: `spec task show ${id}` },
   ];
 }

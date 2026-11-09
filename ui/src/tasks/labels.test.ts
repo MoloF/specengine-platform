@@ -41,7 +41,7 @@ describe("task states (AC-03)", () => {
   });
 
   it("show an unknown state raw in the neutral badge", () => {
-    expect(taskStatusLook("triage", enT)).toEqual({ label: "triage", tone: "task-unknown", icon: "unknown" });
+    expect(taskStatusLook("triage", enT)).toEqual({ label: "triage", tone: "task-unknown", icon: "unknown", served: true });
     expect(taskStatusLook("hasOwnProperty", enT).label).toBe("hasOwnProperty");
   });
 });
@@ -54,7 +54,7 @@ describe("run outcomes (AC-03)", () => {
       expect(look.icon).not.toBe("unknown");
       expect(look.tone).toMatch(/^run-/);
     }
-    expect(runOutcomeLook("postponed", enT)).toEqual({ label: "postponed", tone: "run-unknown", icon: "unknown" });
+    expect(runOutcomeLook("postponed", enT)).toEqual({ label: "postponed", tone: "run-unknown", icon: "unknown", served: true });
   });
 });
 

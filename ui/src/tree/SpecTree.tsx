@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent } from "react";
+import { useTranslate } from "../i18n";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { useFocusLater } from "../ui/useFocusLater";
@@ -46,6 +47,7 @@ export const SpecTree = memo(function SpecTree({
   /** Receives the row that has the tab stop, so the view can focus it (Back to tree). */
   activeRef: (element: HTMLElement | null) => void;
 }) {
+  const t = useTranslate();
   const container = useRef<HTMLDivElement>(null);
   const focusLater = useFocusLater();
   const [expanded, setExpanded] = useState<ReadonlySet<string> | null>(null);
@@ -182,7 +184,7 @@ export const SpecTree = memo(function SpecTree({
   }
 
   return (
-    <div ref={container} role="tree" aria-label="Spec tree" className="tree" onKeyDown={onKeyDown}>
+    <div ref={container} role="tree" aria-label={t("tree.label")} className="tree" onKeyDown={onKeyDown}>
       {shown.map((row) => {
         const node = row.node;
         const parent = row.children.length > 0;

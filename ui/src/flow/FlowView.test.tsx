@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { FlowEdge, FlowNode, FlowView as FlowAnswer, QueueEvent, TraceCounts, TraceStage } from "../api/types";
@@ -635,12 +635,43 @@ describe("the places pane", () => {
     await drawn("A");
     fireEvent.click(within(places()).getByRole("link", { name: /^Craft/ }));
     await drawn("X");
-    expect(within(places()).getByRole("link", { name: "Up: G" }).getAttribute("href")).toBe("#/alpha/flow");
+    // Named by its title, which a held read gives (LS-8 of ui-languages-sweep).
+    expect(within(places()).getByRole("link", { name: "Up: The guild" }).getAttribute("href")).toBe("#/alpha/flow");
     // In a stage view too: C's read, held, names X's holder.
     act(() => {
       window.location.hash = "#/alpha/flow?scope=X&stage=gather";
     });
-    expect((await within(places()).findByRole("link", { name: "Up: C" })).getAttribute("href")).toBe("#/alpha/flow?scope=C");
+    expect((await within(places()).findByRole("link", { name: "Up: Craft" })).getAttribute("href")).toBe("#/alpha/flow?scope=C");
+  });
+
+  it("names Up by the holder's title from a held read, else by its ID, reading nothing more (LS-8 of ui-languages-sweep)", async () => {
+    const client = studioClient(reads());
+    renderApp(client, "#/alpha/flow");
+    await drawn("A");
+    fireEvent.click(within(places()).getByRole("link", { name: /^Craft/ }));
+    await drawn("X");
+    const calls = client.getFlow.mock.calls.length;
+    // C's holder G, titled "The guild" by the top read and by G's own: the words Up says.
+    expect(within(places()).getByRole("link", { name: enT("flow.up", { name: "The guild" }) }).getAttribute("href")).toBe("#/alpha/flow");
+    expect(within(places()).queryByRole("link", { name: enT("flow.up", { name: "G" }) })).toBeNull();
+    expect(client.getFlow.mock.calls.length).toBe(calls);
+
+    // A holder no held read titles: its ID.
+    const untitled = studioClient(
+      reads({
+        top: aFlowView([aFlowNode({ id: "G", distance: 0, holds: 7, start: true, end: true, title: null })], []),
+        scopes: { G: scopeOfG(), C: SCOPE_C },
+      }),
+    );
+    untitled.getFlow.mockImplementation((_project, options) =>
+      Promise.resolve(structuredClone(options.root === "G" ? aFlowView([aFlowNode({ id: "G", distance: null, kind: "domain", title: null }), ...CHILDREN], EDGES, { root: "G", depth: 1 }) : options.root === "C" ? SCOPE_C : aFlowView([aFlowNode({ id: "G", distance: 0, holds: 7, start: true, end: true, title: null })], []))),
+    );
+    cleanup();
+    renderApp(untitled, "#/alpha/flow");
+    await drawn("A");
+    fireEvent.click(within(places()).getByRole("link", { name: /^Craft/ }));
+    await drawn("X");
+    expect(within(places()).getByRole("link", { name: enT("flow.up", { name: "G" }) }).getAttribute("href")).toBe("#/alpha/flow");
   });
 
   it("writes no lens root as a scope: a seek whose lens root was not read reads the top to know it (R3)", async () => {

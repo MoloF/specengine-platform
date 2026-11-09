@@ -10,8 +10,11 @@ import { useRetryFocus } from "../ui/useRetryFocus";
 import { BindingLine } from "./BindingLine";
 import { directionLabel, formLabel, isCodeLayer, layerHeading, layerHeadings, linkStateLook } from "./labels";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 const DIGITS = /^\d*$/;
+/** The bundle's hash as the CLI names it, shown as code. */
+const BUNDLE_HASH = "bundle_hash";
 /** The largest budget the daemon takes (`u32::MAX`, `docs/canon/spec-cli-bundle.md` "Command"). */
 const MAX_BUDGET = 4294967295;
 
@@ -32,34 +35,35 @@ function ItemRow({ project, item, onFollow }: { project: string; item: BundleIte
           {item.path}:{item.line}
         </span>
         <span>{formLabel(item.form, t)}</span>
-        <span>{item.tokens_est} tokens</span>
+        <span>{t("tree.binding.tokens", { count: item.tokens_est })}</span>
         {item.status !== null && (
           <span className="status-tag">
-            <span className="sr-only">Status: </span>
+            <span className="sr-only">{t("tree.row.status")}</span>
             {item.status}
           </span>
         )}
-        {item.archived && <span className="plain-tag">archived</span>}
+        {item.archived && <span className="plain-tag">{t("tree.row.archived")}</span>}
       </p>
       {item.via !== null && item.via.length > 0 && (
         <p className="bundle-item-meta">
-          via{" "}
-          {item.via.map((via, index) => (
-            <span key={`${via.type}-${via.direction}`}>
-              {index > 0 && ", "}
-              <span className="mono">{via.type}</span> {directionLabel(via.direction, t)}
-            </span>
-          ))}
+          {fill(t("tree.bundle.via", { links: slot("links") }), {
+            links: item.via.map((via, index) => (
+              <span key={`${via.type}-${via.direction}`}>
+                {index > 0 && ", "}
+                <span className="mono">{via.type}</span> {directionLabel(via.direction, t)}
+              </span>
+            )),
+          })}
         </p>
       )}
       {answer !== null && (
         <p className="bundle-item-meta">
-          <span>Working answer:</span>
+          <span>{t("tree.bundle.workingAnswer")}</span>
           <span className="mono">{answer.name ?? answer.written}</span>
           <span className="mono">
             {answer.path}:{answer.line}
           </span>
-          <Badge name="State" look={linkStateLook(answer.state, t)} />
+          <Badge name={t("tree.links.state")} look={linkStateLook(answer.state, t)} />
         </p>
       )}
     </li>
@@ -116,7 +120,7 @@ function TailLine({ project, entry, onFollow }: { project: string; entry: TailEn
       <li>
         <span className="mono">{entry.name}</span> <span>{entry.title ?? "-"}</span>{" "}
         <span className="muted">
-          | <span className="mono">{entry.path}:{entry.line}</span> | {entry.tokens_est} tokens | {layerHeading(entry.layer, t)}
+          | <span className="mono">{entry.path}:{entry.line}</span> | {t("tree.binding.tokens", { count: entry.tokens_est })} | {layerHeading(entry.layer, t)}
         </span>
       </li>
     );
@@ -126,7 +130,10 @@ function TailLine({ project, entry, onFollow }: { project: string; entry: TailEn
       <a className="mono" href={sectionHash(project, "tree", entry.name)} onClick={onFollow}>
         {entry.name}
       </a>{" "}
-      <span>{entry.title ?? "-"}</span> <span className="muted">| {entry.tokens_est} tokens | {layerHeading(entry.layer, t)}</span>
+      <span>{entry.title ?? "-"}</span>{" "}
+      <span className="muted">
+        | {t("tree.binding.tokens", { count: entry.tokens_est })} | {layerHeading(entry.layer, t)}
+      </span>
     </li>
   );
 }
@@ -136,8 +143,10 @@ function BundleBody({ project, bundle, onFollow }: { project: string; bundle: Bu
   if (bundle.reason !== null) {
     return (
       <div className="empty-state">
-        <p>No bundle for this REF:</p>
-        <p className="verbatim">{bundle.reason}</p>
+        <p>{t("tree.bundle.none")}</p>
+        <p className="verbatim" lang="en">
+          {bundle.reason}
+        </p>
       </div>
     );
   }
@@ -147,18 +156,25 @@ function BundleBody({ project, bundle, onFollow }: { project: string; bundle: Bu
   return (
     <>
       <p className="bundle-summary">
-        tokens {bundle.tokens ?? "-"} of {bundle.budget ?? "-"}, {bundle.chars ?? "-"} chars, {bundle.bytes ?? "-"} bytes, not
-        included {tail.length + more}
+        {t("tree.bundle.summary", {
+          tokens: bundle.tokens ?? "-",
+          budget: bundle.budget ?? "-",
+          chars: bundle.chars ?? "-",
+          bytes: bundle.bytes ?? "-",
+          left: tail.length + more,
+        })}
       </p>
       {bundle.bundle_hash !== null && (
         <p className="bundle-hash">
-          <span className="muted">bundle_hash</span> <span className="mono">{bundle.bundle_hash}</span>
+          <span className="muted">{BUNDLE_HASH}</span> <span className="mono">{bundle.bundle_hash}</span>
         </p>
       )}
       {bundle.notes.length > 0 && (
-        <ul className="note-list" aria-label="Notes from the daemon">
+        <ul className="note-list" aria-label={t("tree.bundle.notes")}>
           {bundle.notes.map((note) => (
-            <li key={note}>{note}</li>
+            <li key={note} lang="en">
+              {note}
+            </li>
           ))}
         </ul>
       )}
@@ -171,19 +187,19 @@ function BundleBody({ project, bundle, onFollow }: { project: string; bundle: Bu
         ))}
       {(tail.length > 0 || more > 0) && (
         <section className="bundle-layer">
-          <h2 className="card-section-title">Not included</h2>
+          <h2 className="card-section-title">{t("tree.bundle.notIncluded")}</h2>
           <ul className="bundle-tail">
             {tail.map((entry, index) => (
               // A code row's place may repeat (two relations, one symbol): the index keeps keys distinct.
               <TailLine key={`${String(index)}:${entry.path}:${String(entry.line)}`} project={project} entry={entry} onFollow={onFollow} />
             ))}
-            {more > 0 && <li className="muted">{more} more</li>}
+            {more > 0 && <li className="muted">{t("tree.bundle.more", { count: more })}</li>}
           </ul>
         </section>
       )}
       {bundle.body !== null && (
         <details className="bundle-body">
-          <summary>The body as an agent reads it</summary>
+          <summary>{t("tree.bundle.body")}</summary>
           <pre className="node-text">{bundle.body}</pre>
         </details>
       )}
@@ -197,10 +213,12 @@ function BundleBody({ project, bundle, onFollow }: { project: string; bundle: Bu
  * refusal (a budget under the minimum) is shown in the daemon's words and the typed value stays.
  */
 export function BundlePanel({ project, nodeRef, onFollow }: { project: string; nodeRef: string; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useTranslate();
   const fieldId = useId();
   const [typed, setTyped] = useState("");
   const [budget, setBudget] = useState<number | null>(null);
-  const [fieldError, setFieldError] = useState<string | null>(null);
+  /** What the budget field says is wrong: not digits, or more than the daemon takes. */
+  const [fieldError, setFieldError] = useState<"digits" | "tooLarge" | null>(null);
   /** Retry was pressed: its panel, and the Retry that has focus, stay up until the answer. */
   const [retrying, setRetrying] = useState(false);
   const query = useBundle(project, budget === null ? { node_ids: [nodeRef] } : { node_ids: [nodeRef], budget }, true);
@@ -212,12 +230,12 @@ export function BundlePanel({ project, nodeRef, onFollow }: { project: string; n
     event.preventDefault();
     const value = typed.trim();
     if (!DIGITS.test(value)) {
-      setFieldError("Digits only: a whole number of tokens, or empty for the project's default.");
+      setFieldError("digits");
       return;
     }
     const next = value === "" ? null : Number(value);
     if (next !== null && next > MAX_BUDGET) {
-      setFieldError(`That number is too large to send; the daemon takes at most ${String(MAX_BUDGET)}.`);
+      setFieldError("tooLarge");
       return;
     }
     setFieldError(null);
@@ -234,7 +252,7 @@ export function BundlePanel({ project, nodeRef, onFollow }: { project: string; n
   if (failure !== null) {
     content = (
       <ErrorPanel
-        title="The bundle could not be read"
+        title={t("tree.bundle.failed")}
         message={apiErrorOf(failure).message}
         retrying={query.isFetching}
         attempt={query.errorUpdateCount}
@@ -248,7 +266,7 @@ export function BundlePanel({ project, nodeRef, onFollow }: { project: string; n
   } else if (query.data === undefined) {
     content = (
       <div aria-busy="true">
-        <Skeleton label={`Loading the bundle of ${nodeRef}`} lines={5} />
+        <Skeleton label={t("tree.bundle.loading", { ref: nodeRef })} lines={5} />
       </div>
     );
   } else {
@@ -261,13 +279,11 @@ export function BundlePanel({ project, nodeRef, onFollow }: { project: string; n
 
   return (
     <div className="bundle-panel">
-      <p className="muted">
-        The context an agent gets for {nodeRef} within a token budget; what does not fit is named for a follow-up read.
-      </p>
+      <p className="muted">{t("tree.bundle.about", { ref: nodeRef })}</p>
       <form className="bundle-form" onSubmit={submit} noValidate>
         <div className="bundle-field">
           <label className="field-label" htmlFor={fieldId}>
-            Budget in tokens
+            {t("tree.bundle.budget")}
           </label>
           <input
             id={fieldId}
@@ -275,7 +291,7 @@ export function BundlePanel({ project, nodeRef, onFollow }: { project: string; n
             inputMode="numeric"
             autoComplete="off"
             spellCheck={false}
-            placeholder="Project default"
+            placeholder={t("tree.bundle.default")}
             value={typed}
             aria-invalid={fieldError !== null}
             aria-describedby={fieldError === null ? undefined : errorId}
@@ -288,11 +304,11 @@ export function BundlePanel({ project, nodeRef, onFollow }: { project: string; n
           />
         </div>
         <button type="submit" className="button">
-          Get bundle
+          {t("tree.bundle.get")}
         </button>
         {fieldError !== null && (
           <p id={errorId} className="field-error" role="alert">
-            {fieldError}
+            {fieldError === "digits" ? t("tree.bundle.digits") : t("tree.bundle.tooLarge", { max: MAX_BUDGET })}
           </p>
         )}
       </form>

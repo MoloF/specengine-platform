@@ -11,6 +11,7 @@ import { SHOWN_OPEN } from "./findings";
 import { codeRowLook, measuredWithoutCounts } from "./labels";
 import { oneLine } from "./oneLine";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 // What rows 4 to 6 of What is left share (docs/features/health-code-ui.md "Data";
 // docs/features/health-drift-ui.md "Description and interactions"): the part's frame and its four
@@ -18,11 +19,6 @@ import { useTranslate } from "../i18n";
 
 /** How many lines of a code row are rendered until "Show all": as many as a Findings group shows open. */
 export const CODE_ROWS_SHOWN = SHOWN_OPEN;
-
-/** "<n> <noun>", the noun in the singular for one. */
-export function counted(count: number, one: string, many: string): string {
-  return `${String(count)} ${count === 1 ? one : many}`;
-}
 
 /** A field on one line, as `spec health` prints it (`./oneLine.ts`, a leaf the label maps read too). */
 export { oneLine };
@@ -39,9 +35,9 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
   const look = codeRowLook(row.state, t);
   const causes =
     row.causes.length === 0 ? null : (
-      <ul className={look.retry ? "check-causes health-code-causes" : "note-list health-code-causes"} aria-label="Causes, as the daemon gives them">
+      <ul className={look.retry ? "check-causes health-code-causes" : "note-list health-code-causes"} aria-label={t("health.code.causes")}>
         {row.causes.map((cause, index) => (
-          <li key={`${String(index)}-${cause}`} className="verbatim" dir="auto">
+          <li key={`${String(index)}-${cause}`} className="verbatim" dir="auto" lang="en">
             {oneLine(cause)}
           </li>
         ))}
@@ -66,7 +62,7 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
           }}
         >
           <Icon name="retry" />
-          <span>{retrying ? "Retrying" : "Retry"}</span>
+          <span>{retrying ? t("ui.retrying") : t("ui.retry")}</span>
         </button>
       </div>
     );
@@ -74,7 +70,10 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
   return (
     <>
       <p className="health-left-total health-code-off">
-        <span className="health-value">Not measured</span>: <span className="health-code-state">{oneLine(look.measured ? measuredWithoutCounts(t) : look.label)}</span>
+        {fill(t("health.code.notMeasured", { word: slot("word"), state: slot("state") }), {
+          word: <span className="health-value">{t("health.code.notMeasuredWord")}</span>,
+          state: <span className="health-code-state">{oneLine(look.measured ? measuredWithoutCounts(t) : look.label)}</span>,
+        })}
       </p>
       {causes}
     </>
@@ -86,6 +85,7 @@ export function RowNotMeasured({ row, retrying, onRetry }: { row: HealthAssumes 
  * the rest not until "Show all <n>", which hands the focus to the first line it adds.
  */
 export function CodeRowList<T>({ rows, label, order, render }: { rows: readonly T[]; label: string; order: string; render: (row: T) => ReactNode }) {
+  const t = useTranslate();
   const [all, setAll] = useState(false);
   const list = useRef<HTMLOListElement>(null);
   const focusLater = useFocusLater();
@@ -101,9 +101,7 @@ export function CodeRowList<T>({ rows, label, order, render }: { rows: readonly 
       </ol>
       {hidden > 0 && (
         <div className="health-amendments-more">
-          <p className="health-amendments-scope">
-            The first {shown.length} of {rows.length}, {order}.
-          </p>
+          <p className="health-amendments-scope">{t("health.code.firstOf", { shown: shown.length, count: rows.length, order })}</p>
           <button
             type="button"
             className="button"
@@ -112,7 +110,7 @@ export function CodeRowList<T>({ rows, label, order, render }: { rows: readonly 
               focusLater(() => list.current?.querySelectorAll<HTMLElement>(":scope > li")[CODE_ROWS_SHOWN]);
             }}
           >
-            Show all {rows.length}
+            {t("health.code.showAll", { count: rows.length })}
           </button>
         </div>
       )}
@@ -124,6 +122,31 @@ export function CodeRowList<T>({ rows, label, order, render }: { rows: readonly 
 function RowBody({ report, retry, draw }: { report: HealthReport; retry: () => void; draw: (report: HealthReport, retry: () => void) => ReactNode }) {
   return draw(report, retry);
 }
+
+/** Each code row's words: its heading, its states' lines, its boundary's name. */
+const PART_WORDS = {
+  assumes: {
+    title: "health.assumes.title",
+    measuring: "health.assumes.measuring",
+    failed: "health.assumes.failed",
+    failedAgain: "health.assumes.failedAgain",
+    boundary: "health.assumes.boundary",
+  },
+  unbound: {
+    title: "health.unboundRow.title",
+    measuring: "health.unboundRow.measuring",
+    failed: "health.unboundRow.failed",
+    failedAgain: "health.unboundRow.failedAgain",
+    boundary: "health.unboundRow.boundary",
+  },
+  drift: {
+    title: "health.drift.title",
+    measuring: "health.drift.measuring",
+    failed: "health.drift.failed",
+    failedAgain: "health.drift.failedAgain",
+    boundary: "health.drift.boundary",
+  },
+} as const;
 
 /**
  * Row 4, 5 or 6 of What is left (docs/features/health-code-ui.md, docs/features/health-drift-ui.md
@@ -139,20 +162,17 @@ export function CodePart({
   failure,
   busy,
   row,
-  title,
-  what,
   children,
 }: {
   health: HealthQuery;
   failure: Error | null;
   busy: boolean;
-  /** The part's `data-row`: the report's key. */
+  /** The part's `data-row`: the report's key, and its words. */
   row: "assumes" | "unbound" | "drift";
-  title: string;
-  /** The row in a sentence, after "The": "code assuming a decision". */
-  what: string;
   children: (report: HealthReport, retry: () => void) => ReactNode;
 }) {
+  const t = useTranslate();
+  const words = PART_WORDS[row];
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(health.data, () => heading.current);
   const retry = () => {
@@ -164,9 +184,9 @@ export function CodePart({
   if (health.data === undefined) {
     body =
       failure === null ? (
-        <Skeleton label={`Measuring the ${what}`} lines={2} />
+        <Skeleton label={t(words.measuring)} lines={2} />
       ) : (
-        <ReadFailure title={`The ${what} could not be read`} failure={failure} retrying={health.isFetching} attempt={health.errorUpdateCount} announce={false} onRetry={retry} />
+        <ReadFailure title={t(words.failed)} failure={failure} retrying={health.isFetching} attempt={health.errorUpdateCount} announce={false} onRetry={retry} />
       );
   } else {
     body = (
@@ -174,7 +194,7 @@ export function CodePart({
         <RowBody report={health.data} retry={retry} draw={children} />
         {health.error !== null && !health.isFetching && (
           <p className="note">
-            The {what} could not be read again: {apiErrorOf(health.error).message}
+            {fill(t(words.failedAgain, { message: slot("message") }), { message: <span lang="en">{apiErrorOf(health.error).message}</span> })}
           </p>
         )}
       </>
@@ -184,9 +204,9 @@ export function CodePart({
   return (
     <div className="health-part health-code-part" data-row={row} aria-busy={busy}>
       <h3 className="health-part-title" ref={heading} tabIndex={-1}>
-        {title}
+        {t(words.title)}
       </h3>
-      <RegionBoundary name={what}>{body}</RegionBoundary>
+      <RegionBoundary name={t(words.boundary)}>{body}</RegionBoundary>
     </div>
   );
 }

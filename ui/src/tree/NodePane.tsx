@@ -4,6 +4,8 @@ import { useNode, type InboxQuery } from "../api/queries";
 import type { ShownNode } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { CardsBlock } from "../trace/CardsBlock";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -22,26 +24,30 @@ import { TextPanel, type TextTarget } from "./TextPanel";
 
 type TabId = "text" | "links" | "bindings" | "bundle" | "proposals";
 
+/** The forms a REF takes, written as typed: code in every language. */
+const REF_FORMS = { slug: "slug/ID", section: "ID#SECTION", md: ".md" } as const;
+
 /** How the pane came to show its node, for where focus goes (docs/features/ui-tree-node.md "Implementation", Keys). */
 export type Arrival = "start" | "follow" | "change";
 
 /** One holder's header facts: kind, place, status, rev, size, span hash, flags. */
 function Facts({ holder }: { holder: ShownNode }) {
+  const t = useTranslate();
   return (
     <dl className="facts node-facts">
       <div className="fact">
-        <dt>Kind</dt>
+        <dt>{t("tree.node.kind")}</dt>
         <dd className="mono">{holder.kind ?? "-"}</dd>
       </div>
       <div className="fact">
-        <dt>Where</dt>
+        <dt>{t("tree.node.where")}</dt>
         <dd className="mono">
           {holder.path}:{holder.line}-{holder.end_line}
         </dd>
       </div>
       {holder.status !== null && (
         <div className="fact">
-          <dt>Status</dt>
+          <dt>{t("tree.node.status")}</dt>
           <dd>
             <span className="status-tag">{holder.status}</span>
           </dd>
@@ -49,29 +55,29 @@ function Facts({ holder }: { holder: ShownNode }) {
       )}
       {holder.rev !== null && (
         <div className="fact">
-          <dt>Rev</dt>
+          <dt>{t("tree.node.rev")}</dt>
           <dd className="mono">{holder.rev}</dd>
         </div>
       )}
       <div className="fact">
-        <dt>Size</dt>
-        <dd>{holder.tokens_est} tokens</dd>
+        <dt>{t("tree.node.size")}</dt>
+        <dd>{t("tree.binding.tokens", { count: holder.tokens_est })}</dd>
       </div>
       <div className="fact fact-wide">
-        <dt>Span hash</dt>
+        <dt>{t("tree.node.spanHash")}</dt>
         <dd className="mono">{holder.span_hash}</dd>
       </div>
       {(holder.archived || !holder.utf8) && (
         <div className="fact">
-          <dt>Flags</dt>
+          <dt>{t("tree.node.flags")}</dt>
           <dd className="flags">
             {holder.archived && (
               <span className="plain-tag">
                 <Icon name="archived" />
-                archived
+                {t("tree.row.archived")}
               </span>
             )}
-            {!holder.utf8 && <span className="plain-tag">not UTF-8</span>}
+            {!holder.utf8 && <span className="plain-tag">{t("tree.node.notUtf8")}</span>}
           </dd>
         </div>
       )}
@@ -81,21 +87,19 @@ function Facts({ holder }: { holder: ShownNode }) {
 
 /** The node pane with no node chosen: the view's heading and where to start. */
 export function NoNodePane() {
+  const t = useTranslate();
   return (
     <article className="node-pane" aria-labelledby="tree-title">
       <header className="node-head">
         <h1 id="tree-title" tabIndex={-1}>
-          Spec tree
+          {t("tree.label")}
         </h1>
-        <p className="view-about">The business-logic tree and each node&rsquo;s text, links, code bindings, bundle and proposals.</p>
+        <p className="view-about">{t("tree.node.about")}</p>
       </header>
       <div className="empty-state">
-        <h2>No node open</h2>
-        <p>
-          Pick a node in the tree, or search the spec, to read its text as written, its links, the code bound to it, the bundle an agent gets and the
-          proposals that name it.
-        </p>
-        <p className="muted">In the tree: the arrow keys move, Enter opens, ? lists every key.</p>
+        <h2>{t("tree.node.noneOpen")}</h2>
+        <p>{t("tree.node.pick")}</p>
+        <p className="muted">{t("tree.node.keysHint")}</p>
       </div>
     </article>
   );
@@ -132,6 +136,7 @@ export function NodePane({
   /** An anchor to another node was clicked: the view decides whether it moves this page. */
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   const view = useNode(project, nodeRef);
   // One observer of the links read: the Links tab shows this same read, and adds none.
   const links = useNode(project, nodeRef, { with: ["links"], archive });
@@ -191,11 +196,11 @@ export function NodePane({
     body =
       failure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Loading ${nodeRef}`} lines={6} />
+          <Skeleton label={t("tree.node.loading", { ref: nodeRef })} lines={6} />
         </div>
       ) : (
         <ErrorPanel
-          title={`${nodeRef} could not be read`}
+          title={t("tree.node.failed", { ref: nodeRef })}
           message={apiErrorOf(failure).message}
           retrying={view.isFetching}
           attempt={view.errorUpdateCount}
@@ -208,11 +213,18 @@ export function NodePane({
   } else if (holders.length === 0) {
     body = (
       <div className="empty-state">
-        <h2>Nothing answers this REF</h2>
-        {data.reason !== null && <p className="verbatim">{data.reason}</p>}
+        <h2>{t("tree.node.nothing")}</h2>
+        {data.reason !== null && (
+          <p className="verbatim" lang="en">
+            {data.reason}
+          </p>
+        )}
         <p>
-          Next: search the spec for it, or pick a node in the tree. A REF is an ID, <span className="mono">slug/ID</span>,{" "}
-          <span className="mono">ID#SECTION</span> or a root-relative <span className="mono">.md</span> path.
+          {fill(t("tree.node.nothingNext", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
+            slug: <span className="mono">{REF_FORMS.slug}</span>,
+            section: <span className="mono">{REF_FORMS.section}</span>,
+            md: <span className="mono">{REF_FORMS.md}</span>,
+          })}
         </p>
       </div>
     );
@@ -221,20 +233,20 @@ export function NodePane({
     body = (
       <>
         <Tabs
-          label={`Views of ${nodeRef}`}
+          label={t("tree.node.views", { ref: nodeRef })}
           base={base}
           selected={tab}
           onSelect={select}
           tabs={[
-            { id: "text", label: "Text" },
-            { id: "links", label: "Links" },
-            { id: "bindings", label: "Bindings" },
-            { id: "bundle", label: "Bundle" },
+            { id: "text", label: t("tree.node.tabText") },
+            { id: "links", label: t("tree.node.tabLinks") },
+            { id: "bindings", label: t("tree.node.tabBindings") },
+            { id: "bundle", label: t("tree.node.tabBundle") },
             {
               id: "proposals",
               label: (
                 <>
-                  Proposals
+                  {t("tree.node.tabProposals")}
                   {count !== null && (
                     <>
                       {" "}
@@ -247,7 +259,7 @@ export function NodePane({
           ]}
         />
         <TabPanel base={base} id="text" selected={tab === "text"}>
-          <RegionBoundary name="text">
+          <RegionBoundary name={t("tree.node.boundary.text")}>
             <TextPanel
               project={project}
               holders={holders}
@@ -263,28 +275,28 @@ export function NodePane({
         </TabPanel>
         <TabPanel base={base} id="links" selected={tab === "links"}>
           {opened.has("links") && (
-            <RegionBoundary name="links">
+            <RegionBoundary name={t("tree.node.boundary.links")}>
               <LinksPanel project={project} nodeRef={nodeRef} archive={archive} query={links} onShowInText={jump} onFollow={onFollow} />
             </RegionBoundary>
           )}
         </TabPanel>
         <TabPanel base={base} id="bindings" selected={tab === "bindings"}>
           {opened.has("bindings") && (
-            <RegionBoundary name="bindings">
+            <RegionBoundary name={t("tree.node.boundary.bindings")}>
               <BindingsPanel project={project} nodeRef={nodeRef} onFollow={onFollow} />
             </RegionBoundary>
           )}
         </TabPanel>
         <TabPanel base={base} id="bundle" selected={tab === "bundle"}>
           {opened.has("bundle") && (
-            <RegionBoundary name="bundle">
+            <RegionBoundary name={t("tree.node.boundary.bundle")}>
               <BundlePanel project={project} nodeRef={nodeRef} onFollow={onFollow} />
             </RegionBoundary>
           )}
         </TabPanel>
         <TabPanel base={base} id="proposals" selected={tab === "proposals"}>
           {opened.has("proposals") && (
-            <RegionBoundary name="proposals">
+            <RegionBoundary name={t("tree.node.boundary.proposals")}>
               <ProposalsPanel project={project} holders={holders} inbox={inbox} />
             </RegionBoundary>
           )}
@@ -303,16 +315,14 @@ export function NodePane({
           <div className="node-actions">
             <a className="node-action" href={sectionHash(project, "graph", nodeRef)}>
               <Icon name="graph" />
-              Show in graph
+              {t("tree.node.showInGraph")}
             </a>
           </div>
         )}
         {single !== undefined && <Facts holder={single} />}
         {holders.length > 1 && (
           <>
-            <p className="muted">
-              {holders.length} holders: {nodeRef} is declared in more than one place. Each is shown below.
-            </p>
+            <p className="muted">{t("tree.node.holders", { count: holders.length, ref: nodeRef })}</p>
             <ul className="holder-list">
               {holders.map((holder) => (
                 <li key={`${holder.path}:${String(holder.line)}`} className="holder">
@@ -327,28 +337,28 @@ export function NodePane({
           </>
         )}
         {data !== undefined && data.notes.length > 0 && (
-          <ul className="note-list" aria-label="Notes from the daemon">
+          <ul className="note-list" aria-label={t("tree.node.notes")}>
             {data.notes.map((note) => (
-              <li key={note}>{note}</li>
+              <li key={note} lang="en">
+                {note}
+              </li>
             ))}
           </ul>
         )}
         {data !== undefined && view.error !== null && (
           <p className="note" role="alert">
-            {nodeRef} could not be read again: {apiErrorOf(view.error).message}
+            {fill(t("tree.node.failedAgain", { ref: nodeRef, message: slot("message") }), { message: <span lang="en">{apiErrorOf(view.error).message}</span> })}
           </p>
         )}
       </header>
       {holders.length > 0 && (
-        <RegionBoundary name="cards">
+        <RegionBoundary name={t("tree.node.boundary.cards")}>
           <CardsBlock key={nodeRef} project={project} nodeRef={nodeRef} section="tree" heading="h2" />
         </RegionBoundary>
       )}
       {body}
       {data !== undefined && holders.length > 0 && (
-        <p className="node-foot muted">
-          Read-only: text changes reach the spec only through a proposal you accept. <a href={sectionHash(project, "inbox")}>Open the Inbox</a>
-        </p>
+        <p className="node-foot muted">{fill(t("tree.node.readOnly", { link: slot("link") }), { link: <a href={sectionHash(project, "inbox")}>{t("tree.node.openInbox")}</a> })}</p>
       )}
     </article>
   );

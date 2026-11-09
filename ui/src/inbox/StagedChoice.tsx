@@ -3,9 +3,9 @@ import type { ProposalOption, Stage } from "../api/types";
 import { CopyButton } from "../ui/CopyButton";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
-import { confirmCommand, WORDING } from "./decisions";
-
-const COPY_FAILED = "Copy failed: select the command and copy it";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
+import { confirmCommand, verbOf } from "./decisions";
 
 /**
  * What a staged choice is read from: a review document (the Inbox's card) or a round sheet's item
@@ -22,8 +22,8 @@ interface StagedOf {
  * The staged option's label: agent text, written as the round sheet writes a slot (controls and
  * bidirectional marks as `\u{..}`, `docs/canon/round.md` "Sheet") and isolated from its neighbours.
  */
-function stagedLabel(label: string | undefined) {
-  return label === undefined ? "Not among this proposal's options" : <bdi>{shownSlot(label)}</bdi>;
+function stagedLabel(label: string | undefined, t: Translate) {
+  return label === undefined ? t("inbox.staged.notAnOption") : <bdi>{shownSlot(label)}</bdi>;
 }
 
 /**
@@ -56,6 +56,7 @@ export function StagedChoice({
   /** A write is being sent: Confirm stays focusable but does nothing. */
   confirmBusy?: boolean;
 }) {
+  const t = useTranslate();
   const headingId = useId();
   const staged = review.staged;
   const at = review.staged_at;
@@ -67,60 +68,62 @@ export function StagedChoice({
     <section className="staged-choice" aria-labelledby={headingId}>
       <h3 id={headingId} className="staged-title">
         <Icon name="terminal" />
-        <span>Staged decision</span>
+        <span>{t("inbox.staged.title")}</span>
       </h3>
       <p className="staged-line">
-        Staged <time dateTime={at}>{at}</time>. Confirm on a terminal:{" "}
-        {command === null ? <span>no command is offered for this ID.</span> : <code className="command-text">{command}</code>}
+        {fill(t("inbox.staged.line", { at: slot("at"), command: slot("command") }), {
+          at: <time dateTime={at}>{at}</time>,
+          command: command === null ? <span>{t("inbox.staged.noCommand")}</span> : <code className="command-text">{command}</code>,
+        })}
       </p>
-      {command !== null && <CopyButton text={command} context={`the command: ${command}`} failed={COPY_FAILED} />}
+      {command !== null && <CopyButton text={command} context={t("inbox.copyContext", { command })} failed={t("inbox.copyFailed")} />}
       <dl className="pairs">
-        <dt>Decision</dt>
-        <dd>{staged.decision === "approve" ? WORDING.accept.verb : WORDING.reject.verb}</dd>
+        <dt>{t("inbox.staged.decision")}</dt>
+        <dd>{verbOf(staged.decision === "approve" ? "accept" : "reject", t)}</dd>
         {staged.decision === "approve" ? (
           <>
             {staged.option !== null && (
               <>
-                <dt>Option</dt>
+                <dt>{t("inbox.staged.option")}</dt>
                 <dd>
-                  <span className="mono">[{staged.option}]</span> {stagedLabel(review.options[staged.option]?.label)}
+                  <span className="mono">[{staged.option}]</span> {stagedLabel(review.options[staged.option]?.label, t)}
                 </dd>
               </>
             )}
             {staged.answer !== null && (
               <>
-                <dt>Answer</dt>
+                <dt>{t("inbox.staged.answer")}</dt>
                 <dd className="staged-text">{staged.answer}</dd>
               </>
             )}
             {staged.option === null && staged.answer === null && review.working_answer !== null && (
               <>
-                <dt>Choice</dt>
-                <dd>The working answer</dd>
+                <dt>{t("inbox.staged.choice")}</dt>
+                <dd>{t("inbox.staged.workingAnswer")}</dd>
               </>
             )}
             {staged.canon !== null && (
               <>
-                <dt>Canon</dt>
+                <dt>{t("inbox.staged.canon")}</dt>
                 <dd className="mono">{staged.canon}</dd>
               </>
             )}
             {staged.editorial === true && (
               <>
-                <dt>Editorial</dt>
-                <dd>Keep the revision</dd>
+                <dt>{t("inbox.staged.editorial")}</dt>
+                <dd>{t("inbox.staged.keepRevision")}</dd>
               </>
             )}
             {staged.note !== null && (
               <>
-                <dt>Note</dt>
+                <dt>{t("inbox.staged.note")}</dt>
                 <dd className="staged-text">{staged.note}</dd>
               </>
             )}
           </>
         ) : (
           <>
-            <dt>Reason</dt>
+            <dt>{t("inbox.staged.reason")}</dt>
             <dd className="staged-text">{staged.reason}</dd>
           </>
         )}
@@ -137,7 +140,7 @@ export function StagedChoice({
               }
             }}
           >
-            Confirm <span className="sr-only">{id}</span>
+            {fill(t("inbox.staged.confirm", { id: slot("id") }), { id: <span className="sr-only">{id}</span> })}
           </button>
         )}
         <button
@@ -150,16 +153,18 @@ export function StagedChoice({
             }
           }}
         >
-          Unstage <span className="sr-only">{id}</span>
+          {fill(t("inbox.staged.unstage", { id: slot("id") }), { id: <span className="sr-only">{id}</span> })}
         </button>
       </div>
       {refusal !== null && (
         <div className="refusal" role="alert">
           <p className="refusal-title">
             <Icon name="alert" />
-            <span>The daemon refused to unstage it; nothing changed.</span>
+            <span>{t("inbox.staged.refused")}</span>
           </p>
-          <p className="verbatim">{refusal}</p>
+          <p className="verbatim" lang="en">
+            {refusal}
+          </p>
         </div>
       )}
     </section>

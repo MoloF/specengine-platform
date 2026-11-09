@@ -10,6 +10,7 @@ import { useFocusLater } from "../ui/useFocusLater";
 import { capOf, draftOf, offers, stateOf, textOf, type Draft, type DraftPick } from "./drafts";
 import { utf8Bytes } from "./text";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 /**
  * Agent text of several lines as the sheet prints it: verbatim, never markdown, its controls
@@ -49,6 +50,7 @@ function DraftText({
   missing: string | null;
   onChange: (value: string) => void;
 }) {
+  const t = useTranslate();
   const fieldId = useId();
   const counterId = useId();
   const missingId = useId();
@@ -74,8 +76,8 @@ function DraftText({
       />
       <p id={counterId} className={over ? "byte-count byte-count-over" : "byte-count"}>
         {over && <Icon name="alert" />}
-        <span className="byte-count-value">{`${String(bytes)}/${String(cap)} bytes`}</span>
-        {over && <span>: over the cap, so the daemon refuses it; nothing is cut</span>}
+        <span className="byte-count-value">{t("round.bytes", { bytes, cap })}</span>
+        {over && <span>{t("round.overCap")}</span>}
       </p>
       {missing !== null && (
         <p id={missingId} className="note">
@@ -89,9 +91,10 @@ function DraftText({
 
 /** A target on the Concerns line: `<title> (<ID or path>)`, linked to the spec tree. */
 function Concern({ project, target }: { project: string; target: RoundItem["targets"][number] }) {
+  const t = useTranslate();
   const name = target.id ?? target.path;
   if (name === null) {
-    return <span className="muted">A target no longer found</span>;
+    return <span className="muted">{t("round.targetGone")}</span>;
   }
   return (
     <a href={sectionHash(project, "tree", name)}>
@@ -207,15 +210,15 @@ export const RoundItemCard = memo(function RoundItemCard({
           <span className="kind-tag">
             <Slot text={item.kind} />
           </span>
-          {item.severity !== null && <Badge name="Severity" look={severityLook(item.severity, t)} />}
+          {item.severity !== null && <Badge name={t("round.severity")} look={severityLook(item.severity, t)} />}
           {item.staged_at !== null && (
-            <span className="staged-mark" title={`Staged ${item.staged_at}`}>
+            <span className="staged-mark" title={t("round.stagedAt", { at: item.staged_at })}>
               <Icon name="terminal" />
-              Staged
+              {t("round.staged")}
             </span>
           )}
           <a className="round-open" href={sectionHash(project, "inbox", item.id)}>
-            Open in Inbox<span className="sr-only">: {item.id}</span>
+            {fill(t("round.openInInbox", { id: slot("id") }), { id: <span className="sr-only">{t("round.openInInboxId", { id: item.id })}</span> })}
           </a>
         </header>
 
@@ -223,13 +226,13 @@ export const RoundItemCard = memo(function RoundItemCard({
 
         {item.working_answer !== null && (
           <div className="round-part">
-            <p className="round-label">Working answer</p>
+            <p className="round-label">{t("round.workingAnswer")}</p>
             <AgentText text={item.working_answer} />
           </div>
         )}
         {item.price_of_other !== null && (
           <div className="round-part">
-            <p className="round-label">Another answer costs</p>
+            <p className="round-label">{t("round.priceOfOther")}</p>
             <AgentText text={item.price_of_other} />
           </div>
         )}
@@ -238,7 +241,7 @@ export const RoundItemCard = memo(function RoundItemCard({
           <dl className="round-links">
             {item.targets.length > 0 && (
               <div>
-                <dt>Concerns</dt>
+                <dt>{t("round.concerns")}</dt>
                 <dd>
                   <ul className="round-link-list">
                     {item.targets.map((target, index) => (
@@ -252,7 +255,7 @@ export const RoundItemCard = memo(function RoundItemCard({
             )}
             {item.tasks.length > 0 && (
               <div>
-                <dt>Waiting</dt>
+                <dt>{t("round.waiting")}</dt>
                 <dd>
                   <ul className="round-link-list">
                     {item.tasks.map((task) => (
@@ -297,8 +300,7 @@ export const RoundItemCard = memo(function RoundItemCard({
 
         <fieldset ref={choices} className="option-choice round-choice" disabled={!canStage}>
           <legend>
-            {item.staged_at === null ? "Answer" : "Answer again: replaces the staged choice"}{" "}
-            <span className="sr-only">{item.id}</span>
+            {fill(t(item.staged_at === null ? "round.answerLegend" : "round.answerAgainLegend", { id: slot("id") }), { id: <span className="sr-only">{item.id}</span> })}
           </legend>
           {hasOptions
             ? item.options.map((option, index) =>
@@ -311,37 +313,35 @@ export const RoundItemCard = memo(function RoundItemCard({
                       {index === item.recommendation && (
                         <span className="recommended-mark">
                           <Icon name="recommended" />
-                          Recommended
+                          {t("round.recommended")}
                         </span>
                       )}
                     </span>
                     <span className="option-radio-detail">
                       <Slot text={option.effect} />
                     </span>
-                    <span className="option-radio-detail">
-                      Price: <Slot text={option.price} />
-                    </span>
+                    <span className="option-radio-detail">{fill(t("round.price", { price: slot("price") }), { price: <Slot text={option.price} /> })}</span>
                   </span>,
                   index,
                 ),
               )
             : (
                 <>
-                  {item.working_answer !== null && radio("working", <span className="option-radio-label">Take the working answer</span>)}
-                  {radio("answer", <span className="option-radio-label">Your answer</span>)}
+                  {item.working_answer !== null && radio("working", <span className="option-radio-label">{t("round.takeWorking")}</span>)}
+                  {radio("answer", <span className="option-radio-label">{t("round.yourAnswer")}</span>)}
                 </>
               )}
-          {radio("reject", <span className="option-radio-label">Reject with a reason</span>)}
-          {radio("open", <span className="option-radio-label">Leave open</span>)}
+          {radio("reject", <span className="option-radio-label">{t("round.reject")}</span>)}
+          {radio("open", <span className="option-radio-label">{t("round.leaveOpen")}</span>)}
         </fieldset>
 
         {canStage && cap !== null && current !== undefined && (
           <DraftText
-            label={shown === "reject" ? `Reason for rejecting ${item.id}` : `Your answer to ${item.id}`}
+            label={shown === "reject" ? t("round.reasonFor", { id: item.id }) : t("round.answerTo", { id: item.id })}
             value={shown === "reject" ? current.reason : current.answer}
             cap={cap}
             sent={sentText}
-            missing={sentText === "" ? (shown === "reject" ? "Write a reason to include this item." : "Write your answer to include this item.") : null}
+            missing={sentText === "" ? (shown === "reject" ? t("round.writeReason") : t("round.writeAnswer")) : null}
             onChange={(value) => {
               write(shown === "reject" ? "reason" : "answer", value);
             }}
@@ -352,14 +352,14 @@ export const RoundItemCard = memo(function RoundItemCard({
           <div className="notice round-changed">
             <p className="notice-title">
               <Icon name="alert" />
-              <span>Changed since you answered</span>
+              <span>{t("round.changed")}</span>
             </p>
             {current === undefined ? (
               // The revised item no longer offers the pick: nothing of it can be kept.
-              <p>The item was revised after you picked your answer, and no longer offers it; it is left out until you pick again.</p>
+              <p>{t("round.changedGone")}</p>
             ) : (
               <>
-                <p>The item was revised after you picked your answer; it is left out until you pick again.</p>
+                <p>{t("round.changedKept")}</p>
                 <button
                   type="button"
                   className="button"
@@ -369,7 +369,7 @@ export const RoundItemCard = memo(function RoundItemCard({
                     focusLater(() => choices.current?.querySelector<HTMLElement>("input:checked") ?? choices.current);
                   }}
                 >
-                  Keep my answer for this version <span className="sr-only">of {item.id}</span>
+                  {fill(t("round.keep", { id: slot("id") }), { id: <span className="sr-only">{t("round.keepOf", { id: item.id })}</span> })}
                 </button>
               </>
             )}
@@ -380,13 +380,13 @@ export const RoundItemCard = memo(function RoundItemCard({
           <div className="refusal">
             <p className="refusal-title">
               <Icon name="alert" />
-              <span>
-                {result.outcome === "refused"
-                  ? "The daemon refused this answer; nothing was staged for it."
-                  : `The daemon answered ${result.outcome} for this answer.`}
-              </span>
+              <span>{result.outcome === "refused" ? t("round.answerRefused") : t("round.answerOutcome", { outcome: result.outcome })}</span>
             </p>
-            {result.reason !== null && <p className="verbatim">{result.reason}</p>}
+            {result.reason !== null && (
+              <p className="verbatim" lang="en">
+                {result.reason}
+              </p>
+            )}
           </div>
         )}
       </article>

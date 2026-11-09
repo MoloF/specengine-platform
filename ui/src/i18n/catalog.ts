@@ -1,8 +1,8 @@
-// The two catalogs and their type, as docs/features/ui-languages.md
-// "The catalog, `ui/src/i18n/`" lays them out: English is the source of the keys, Russian is typed
-// against it, so a Russian key missing or added fails `tsc` (LG-1). No string is resolved here.
-import { en } from "./en";
-import { ru } from "./ru";
+// The catalogs' type, as docs/canon/ui-languages.md "Catalog" lays it out: English is the source of
+// the keys, Russian is typed against it, so a Russian key missing or added fails `tsc`. No string is
+// resolved here, and no Russian value is imported: ru.ts is a chunk of its own, reached only through
+// index.ts's `import("./ru")`.
+import type { en } from "./en";
 
 /** The chrome's languages: a third one is a new decision (ADR-0072). */
 export type Language = "en" | "ru";
@@ -24,9 +24,7 @@ type Shaped<T> = {
 /** A catalog of the chrome: what `ru.ts` is typed as. */
 export type Catalog = Shaped<typeof en>;
 
-/** Any catalog as plain nested text, English's included: what the instance and the parity test read. */
+/** Any catalog as plain nested text, English's included: what the parity test reads. */
 export interface Messages {
   readonly [key: string]: string | Messages;
 }
-
-export const CATALOGS: Readonly<Record<Language, Messages>> = { en, ru };

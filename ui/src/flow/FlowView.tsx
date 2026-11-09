@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { flowForm, useFlowRead, useHeldHolder, useScopeNode, useScopeStages, useTopOnDemand, useTreeOnDemand } from "../api/queries";
+import { flowForm, useFlowRead, useHeldHolder, useHeldTitle, useScopeNode, useScopeStages, useTopOnDemand, useTreeOnDemand } from "../api/queries";
 import type { CardWrite, FlowGap, FlowNode, FlowView as FlowAnswer, WorkspaceModule } from "../api/types";
 import { pushHash, replaceHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
@@ -568,18 +568,20 @@ export function FlowView({
 
   // The places pane. Up names the scope node's holder, from any read held, else the lens root; none at the lens root.
   const holder = useHeldHolder(project, scopeName);
+  const upName = ownNode?.group ?? holder;
+  // Up says where it goes in the holder's own title when a held read gives one, else its name; it reads nothing.
+  const upTitle = useHeldTitle(project, upName !== null && upName !== lensRoot ? upName : typeof lensRoot === "string" ? lensRoot : null);
   // A lens root not known yet (the hash named a scope, so the top was not read) is named as such, never as the whole project.
   const up = useMemo(() => {
     if (scopeName === null || scopeName === lensRoot) {
       return null;
     }
-    const group = ownNode?.group ?? holder;
-    if (group !== null && group !== lensRoot) {
-      return { place: enterPlace(group), label: t("flow.up", { name: group }) };
+    if (upName !== null && upName !== lensRoot) {
+      return { place: enterPlace(upName), label: t("flow.up", { name: upTitle ?? upName }) };
     }
-    const label = typeof lensRoot === "string" ? t("flow.up", { name: lensRoot }) : lensRoot === null ? t("flow.up", { name: t("flow.topTitle") }) : t("flow.upStart");
+    const label = typeof lensRoot === "string" ? t("flow.up", { name: upTitle ?? lensRoot }) : lensRoot === null ? t("flow.up", { name: t("flow.topTitle") }) : t("flow.upStart");
     return { place: placeAt({ scope: null, stage: null, select: null }), label };
-  }, [scopeName, lensRoot, ownNode, holder, enterPlace, placeAt, t]);
+  }, [scopeName, lensRoot, upName, upTitle, enterPlace, placeAt, t]);
   const groups = useMemo<GroupLink[]>(() => {
     if (stage === null) {
       return boxes.filter(isGroup).map((node) => ({ name: nodeName(node), label: boxWords(node), place: enterPlace(nodeName(node)) }));

@@ -1,5 +1,7 @@
 import { useRef, useState, type KeyboardEvent } from "react";
 import type { SearchHit, SearchResults as Results, Snippet } from "../api/types";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
 import { useFocusLater } from "../ui/useFocusLater";
@@ -19,12 +21,13 @@ export function SnippetText({ snippet }: { snippet: Snippet }) {
 }
 
 function HitContent({ hit }: { hit: SearchHit }) {
+  const t = useTranslate();
   return (
     <>
       <span className="hit-head">
         <span className="mono hit-name">{rowName(hit)}</span>
         <span className="kind-tag">
-          <span className="sr-only">Kind: </span>
+          <span className="sr-only">{t("tree.row.kind")}</span>
           {hit.kind ?? "-"}
         </span>
         {hit.title !== null && <span className="hit-title">{hit.title}</span>}
@@ -36,7 +39,7 @@ function HitContent({ hit }: { hit: SearchHit }) {
         {hit.archived && (
           <span className="plain-tag">
             <Icon name="archived" />
-            archived
+            {t("tree.row.archived")}
           </span>
         )}
       </span>
@@ -46,9 +49,8 @@ function HitContent({ hit }: { hit: SearchHit }) {
 }
 
 /** "<n> hits (limit <l>)": what the polite live region says too. */
-export function hitCount(results: Results): string {
-  const n = results.hits.length;
-  return `${String(n)} ${n === 1 ? "hit" : "hits"} (limit ${String(results.limit)})`;
+export function hitCount(results: Results, t: Translate): string {
+  return t("tree.search.count", { count: results.hits.length, limit: results.limit });
 }
 
 /**
@@ -68,6 +70,7 @@ export function SearchResultsList({
   onOpen: (hit: SearchHit) => void;
   onBack: () => void;
 }) {
+  const t = useTranslate();
   const focusLater = useFocusLater();
   const list = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
@@ -129,26 +132,19 @@ export function SearchResultsList({
   return (
     <div className="search-results" onKeyDown={onKeyDown}>
       <div className="search-results-head">
-        <p className="search-query">
-          Hits for <span className="verbatim">{results.query}</span>
-        </p>
+        <p className="search-query">{fill(t("tree.search.hitsFor", { query: slot("query") }), { query: <span className="verbatim">{results.query}</span> })}</p>
         <button type="button" className="button button-quiet" onClick={onBack}>
           <Icon name="back" />
-          <span>Back to tree</span>
+          <span>{t("tree.search.back")}</span>
         </button>
       </div>
       {hits.length === 0 ? (
         <div className="empty-state">
-          <p>
-            No node matches &ldquo;<span className="verbatim">{results.query}</span>&rdquo;.
-          </p>
-          <p className="muted">
-            Next: every word of three or more letters must occur in a node&rsquo;s title or text; try fewer or other words
-            {!archive && ", or include archived documents"}.
-          </p>
+          <p>{fill(t("tree.search.none", { query: slot("query") }), { query: <span className="verbatim">{results.query}</span> })}</p>
+          <p className="muted">{archive ? t("tree.search.next") : t("tree.search.nextArchive")}</p>
         </div>
       ) : (
-        <div ref={list} role="listbox" aria-label={`Search hits for ${results.query}`} className="hit-list" onKeyDown={onListKeyDown}>
+        <div ref={list} role="listbox" aria-label={t("tree.search.label", { query: results.query })} className="hit-list" onKeyDown={onListKeyDown}>
           {hits.map((hit, index) => (
             <div
               key={`${hit.path}:${String(hit.line)}`}
@@ -168,27 +164,26 @@ export function SearchResultsList({
         </div>
       )}
       <div className="search-foot">
-        <p className="search-count">{hitCount(results)}</p>
+        <p className="search-count">{hitCount(results, t)}</p>
         {results.tier3_left_out > 0 && (
           <p className="note">
             <Icon name="archived" />
-            <span>
-              {results.tier3_left_out} archived {results.tier3_left_out === 1 ? "match" : "matches"} left out
-              {!archive && ": Include archive to list them"}
-            </span>
+            <span>{archive ? t("tree.search.leftOut", { count: results.tier3_left_out }) : t("tree.search.leftOutArchive", { count: results.tier3_left_out })}</span>
           </p>
         )}
         {results.notes.length > 0 && (
-          <ul className="note-list" aria-label="Notes from the daemon">
+          <ul className="note-list" aria-label={t("tree.search.notes")}>
             {results.notes.map((note) => (
-              <li key={note}>{note}</li>
+              <li key={note} lang="en">
+                {note}
+              </li>
             ))}
           </ul>
         )}
         {results.truncated && (
           <p className="note">
             <Icon name="info" />
-            <span>The list was cut at the output cap: narrow the query to see the rest.</span>
+            <span>{t("tree.search.cut")}</span>
           </p>
         )}
       </div>

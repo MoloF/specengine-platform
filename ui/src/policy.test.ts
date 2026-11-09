@@ -104,11 +104,16 @@ const PROVISIONAL = /(^|\/)provisional(\.[jt]sx?)?$/;
 const RUSSIAN_CATALOG = "/src/i18n/ru.ts";
 
 /**
- * The directories whose chrome is all in the catalog (docs/features/ui-languages.md LG-10): their
- * `.tsx` files hold no word of their own. 2b added `/src/flow/` (docs/features/writer-studio.md
- * ST-14), RM-0090 the rest.
+ * The directories left out of the language scan (docs/canon/ui-languages.md "Guards"): the transport,
+ * the catalog itself, the mock's data, the styles and the test helpers. Every other `src/` directory
+ * is scanned, a new one from the start: its chrome is all in the catalog.
  */
-const CONVERTED: readonly string[] = ["/src/app/", "/src/palette/", "/src/overview/", "/src/ui/", "/src/workspace/", "/src/flow/"];
+const NOT_SCANNED: readonly string[] = ["/src/api/", "/src/i18n/", "/src/mocks/", "/src/styles/", "/src/test/"];
+
+/** A source the language scan reads: a non-test `.ts` or `.tsx` outside the five directories. */
+function isScanned(path: string): boolean {
+  return /\.tsx?$/.test(path) && !/\.d\.ts$/.test(path) && !isTestPath(path) && !NOT_SCANNED.some((directory) => path.startsWith(directory));
+}
 
 /** The attributes whose value is read or shown: never a literal word in a converted directory. */
 const SHOWN_ATTRIBUTES: readonly string[] = ["aria-label", "aria-description", "aria-roledescription", "aria-valuetext", "title", "placeholder", "alt"];
@@ -198,6 +203,191 @@ function literalWords(path: string, text: string): string[] {
           found.push(`${at(node)}: <${owner} ${name}> ${JSON.stringify(literal)}`);
         }
       }
+    }
+    ts.forEachChild(node, walk);
+  }
+  walk(file);
+  return found;
+}
+
+/** A phrase of two words or more, or one capitalised word alone: what reads as English to the prose rule. */
+const PHRASE = /\b[A-Za-z][a-z]+[ ,;:]+[a-z]{2,}\b/;
+const CAPITALISED = /^[A-Z][a-z]+[.:]?$/;
+
+/** The attributes and properties whose value is never shown: a class, a key, an ID, a link, a language, a role, a type. */
+const NOT_SHOWN: readonly string[] = ["className", "key", "id", "href", "lang", "role", "type"];
+
+/**
+ * The DOM, storage, string and collection methods whose first argument is code: a selector, a
+ * storage key, an attribute's name, a separator, a pattern, a lookup. Their other arguments (a value
+ * stored, set or put in) may be shown, and are read as any literal.
+ */
+const CODE_METHODS: readonly string[] = [
+  "querySelector",
+  "querySelectorAll",
+  "closest",
+  "matches",
+  "getItem",
+  "setItem",
+  "removeItem",
+  "getAttribute",
+  "setAttribute",
+  "hasAttribute",
+  "removeAttribute",
+  "addEventListener",
+  "removeEventListener",
+  "startsWith",
+  "endsWith",
+  "includes",
+  "indexOf",
+  "split",
+  "replace",
+  "replaceAll",
+  "get",
+  "has",
+  "set",
+  "delete",
+  "add",
+];
+
+/**
+ * The literals the prose rule lets through, exact, by file, each for its reason: code that reads as a
+ * word. A new entry names why it is never chrome.
+ */
+const PROSE_ALLOWED: Readonly<Record<string, readonly string[]>> = {
+  // The palette's group IDs: a group's key and its option IDs' prefix, its shown name from the catalog.
+  "/src/palette/Palette.tsx": ["Projects", "Tasks", "Inbox"],
+  "/src/palette/options.ts": ["Sections", "Tasks", "Inbox", "Projects", "Spec tree"],
+  // The dialog's focus selectors.
+  "/src/ui/Dialog.tsx": ["button:not([disabled])", "input:not([disabled])", "select:not([disabled])", "textarea:not([disabled])"],
+  // Flow's rollup words, the daemon's own, matched in labels.ts alone (AC-08 of trace-views).
+  "/src/flow/labels.ts": ["no card", "in work"],
+  // A CSS transform for the canvas's floating label.
+  "/src/flow/FlowCanvas.tsx": ["translate(-50%, -50%) translate( px,  px)"],
+  // The same transform for an edge's label; the key names a move goes on, looked up, never shown.
+  "/src/graph/GraphCanvas.tsx": ["translate(-50%, -50%) translate( px,  px)", "Home", "End"],
+  // The daemon's lock diff note's start, matched against its notes, never shown.
+  "/src/tree/lockDiff.ts": ["lock diff:  : no   diff: "],
+  // The bootstrap's own error, thrown when the page lacks its root: there is no page to show it in.
+  "/src/main.tsx": ["index.html lacks the root element"],
+};
+
+/** A node's parent: none at the file's root, which the compiler's types do not say. */
+function parentOf(node: ts.Node): ts.Node | undefined {
+  const holder: { readonly parent?: ts.Node } = node;
+  return holder.parent;
+}
+
+/** The text a literal or template holds, a template's pieces joined by a space where its values stand. */
+function literalText(node: ts.Node): string | null {
+  if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) {
+    return node.text;
+  }
+  if (ts.isTemplateExpression(node)) {
+    return [node.head.text, ...node.templateSpans.map((span) => span.literal.text)].join(" ");
+  }
+  return null;
+}
+
+function readsAsEnglish(text: string): boolean {
+  const trimmed = text.trim();
+  return PHRASE.test(trimmed) || CAPITALISED.test(trimmed);
+}
+
+/**
+ * Whether a literal stands where code does, never shown: an import, a type, a property name, a `case`
+ * label, an operand of `===`, `!==` or `in`, `t`'s key, a code method's argument, a value not shown
+ * or a `…COMMAND` constant. A template, parentheses, a conditional's branch or `??`/`||` are looked
+ * through: the place counts, not the wrapping.
+ */
+function isCodePosition(node: ts.Node, file: ts.SourceFile): boolean {
+  let child: ts.Node = node;
+  let parent = parentOf(node);
+  const passThrough = (at: ts.Node, inner: ts.Node) =>
+    ts.isTemplateSpan(at) ||
+    ts.isTemplateExpression(at) ||
+    ts.isParenthesizedExpression(at) ||
+    ts.isAsExpression(at) ||
+    ts.isSatisfiesExpression(at) ||
+    (ts.isConditionalExpression(at) && at.condition !== inner) ||
+    (ts.isBinaryExpression(at) && [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(at.operatorToken.kind));
+  while (parent !== undefined && passThrough(parent, child)) {
+    child = parent;
+    parent = parentOf(parent);
+  }
+  if (parent === undefined) {
+    return false;
+  }
+  const nameOf = (name: ts.Node) => name.getText(file).replace(/^["']|["']$/g, "");
+  if (ts.isImportDeclaration(parent) || ts.isExportDeclaration(parent) || ts.isLiteralTypeNode(parent) || ts.isCaseClause(parent)) {
+    return true;
+  }
+  if ((ts.isPropertyAssignment(parent) || ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent) || ts.isMethodDeclaration(parent)) && parent.name === child) {
+    return true;
+  }
+  if (ts.isElementAccessExpression(parent) && parent.argumentExpression === child) {
+    return true;
+  }
+  if (ts.isBinaryExpression(parent) && [ts.SyntaxKind.EqualsEqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsEqualsToken, ts.SyntaxKind.InKeyword].includes(parent.operatorToken.kind)) {
+    return true;
+  }
+  if (ts.isCallExpression(parent) && parent.arguments.some((argument) => argument === child)) {
+    const callee = parent.expression;
+    if (callee.kind === ts.SyntaxKind.ImportKeyword) {
+      return true;
+    }
+    if (ts.isIdentifier(callee) && callee.text === "t" && parent.arguments[0] === child) {
+      return true;
+    }
+    if (ts.isPropertyAccessExpression(callee) && CODE_METHODS.includes(callee.name.text) && parent.arguments[0] === child) {
+      return true;
+    }
+  }
+  if (ts.isJsxAttribute(parent) && NOT_SHOWN.includes(nameOf(parent.name))) {
+    return true;
+  }
+  if (ts.isJsxExpression(parent) && ts.isJsxAttribute(parent.parent) && NOT_SHOWN.includes(nameOf(parent.parent.name))) {
+    return true;
+  }
+  if (ts.isPropertyAssignment(parent) && parent.initializer === child && NOT_SHOWN.includes(nameOf(parent.name))) {
+    return true;
+  }
+  return ts.isVariableDeclaration(parent) && parent.initializer === child && /COMMAND$/.test(parent.name.getText(file));
+}
+
+/** Each literal a `.ts` or `.tsx` file holds that reads as English, outside a code position, a code token and PROSE_ALLOWED. */
+function proseWords(path: string, text: string): string[] {
+  const found: string[] = [];
+  const file = parsed(path, text);
+  const allowed = PROSE_ALLOWED[path] ?? [];
+  const at = (node: ts.Node) => `${path}:${String(file.getLineAndCharacterOfPosition(node.getStart(file)).line + 1)}`;
+  function walk(node: ts.Node): void {
+    // A template's pieces are read once, as the whole template.
+    const parent = parentOf(node);
+    const words = parent !== undefined && ts.isTemplateSpan(parent) && node !== parent.expression ? null : literalText(node);
+    if (words !== null && readsAsEnglish(words) && !words.startsWith("spec ") && !allowed.includes(words) && !isCodePosition(node, file)) {
+      found.push(`${at(node)}: prose ${JSON.stringify(words)}`);
+    }
+    ts.forEachChild(node, walk);
+  }
+  walk(file);
+  return found;
+}
+
+/** Each static import of the Russian catalog, and each `import("…/ru")`, by the file that makes it. */
+function russianImports(path: string, text: string): { static: string[]; dynamic: string[] } {
+  const file = parsed(path, text);
+  const found = { static: [] as string[], dynamic: [] as string[] };
+  const isRussian = (specifier: ts.Node) => ts.isStringLiteral(specifier) && resolvedFrom(path, specifier.text) === RUSSIAN_CATALOG.replace(/\.ts$/, "");
+  function walk(node: ts.Node): void {
+    if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier !== undefined && isRussian(node.moduleSpecifier)) {
+      const typeOnly = ts.isImportDeclaration(node) ? node.importClause?.phaseModifier === ts.SyntaxKind.TypeKeyword : node.isTypeOnly;
+      if (!typeOnly) {
+        found.static.push(`${path}: ${node.getText(file)}`);
+      }
+    }
+    if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword && node.arguments[0] !== undefined && isRussian(node.arguments[0])) {
+      found.dynamic.push(`${path}: ${node.getText(file)}`);
     }
     ts.forEachChild(node, walk);
   }
@@ -904,20 +1094,124 @@ describe("languages policy (docs/features/ui-languages.md)", () => {
     expect(["i18next-http-backend", "my-i18next", "./i18n"].some((name) => i18nPackage.test(name))).toBe(false);
   });
 
-  it("holds no word of their own in the converted directories' .tsx files (LG-10)", () => {
+  it("scans every screen: every src/ directory but the five, every non-test .tsx of the ten RM-0090 converted (LS-1 of ui-languages-sweep)", () => {
+    expect(NOT_SCANNED).toEqual(["/src/api/", "/src/i18n/", "/src/mocks/", "/src/styles/", "/src/test/"]);
+    const directories = new Set(Object.keys(sources).filter((path) => path.split("/").length > 3).map((path) => `${path.split("/").slice(0, 3).join("/")}/`));
+    const scannedDirectories = [...directories].filter((directory) => Object.keys(sources).some((path) => path.startsWith(directory) && isScanned(path)));
+    expect(scannedDirectories.sort()).toEqual([...directories].filter((directory) => !NOT_SCANNED.includes(directory)).sort());
+    expect(scannedDirectories).toEqual(expect.arrayContaining(["/src/app/", "/src/palette/", "/src/overview/", "/src/ui/", "/src/workspace/", "/src/flow/"]));
+    const swept = ["inbox", "tasks", "board", "roadmap", "tree", "graph", "health", "round", "trace", "markdown"].map((name) => `/src/${name}/`);
+    const views = Object.keys(sources).filter((path) => swept.some((directory) => path.startsWith(directory)) && path.endsWith(".tsx") && !isTestPath(path));
+    expect(views.length).toBeGreaterThan(70);
+    expect(views.filter((path) => !isScanned(path))).toEqual([]);
+    expect(views).toEqual(expect.arrayContaining(["/src/tree/LinksPanel.tsx", "/src/trace/CardsBlock.tsx", "/src/health/HealthView.tsx", "/src/round/RoundScreen.tsx"]));
+    // The bootstrap at src/ itself is scanned; the tests are not.
+    expect([isScanned("/src/main.tsx"), isScanned("/src/main.test.tsx"), isScanned("/src/i18n/en.ts"), isScanned("/src/api/http.ts")]).toEqual([true, false, false, false]);
+  });
+
+  it("holds no word of their own in the scanned .tsx files' JSX (LG-10)", () => {
     const found: string[] = [];
     for (const [path, text] of Object.entries(sources)) {
-      if (path.endsWith(".tsx") && !isTestPath(path) && CONVERTED.some((directory) => path.startsWith(directory))) {
+      if (path.endsWith(".tsx") && isScanned(path)) {
         found.push(...literalWords(path, text));
       }
     }
     expect(found).toEqual([]);
   });
 
+  it("holds no prose of their own in the scanned .ts and .tsx files (LS-2 of ui-languages-sweep)", () => {
+    const found: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      if (isScanned(path)) {
+        found.push(...proseWords(path, text));
+      }
+    }
+    expect(found).toEqual([]);
+    // Every exemption names a file that holds it: a stale one goes.
+    for (const [path, literals] of Object.entries(PROSE_ALLOWED)) {
+      const file = parsed(path, sources[path] ?? "");
+      const held: string[] = [];
+      const walk = (node: ts.Node): void => {
+        const words = literalText(node);
+        if (words !== null) {
+          held.push(words);
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(file);
+      expect([path, literals.filter((literal) => !held.includes(literal))]).toEqual([path, []]);
+    }
+  });
+
+  it("sees the prose LS-2 forbids and passes keys, code tokens, comparisons, labels and classes (the prose detector)", () => {
+    const prose = (text: string) => proseWords("/src/board/Probe.tsx", text).map((hit) => hit.replace(/^[^ ]+ /, ""));
+    // M2: `label="Title"` restored on a field; M3: a lane name restored in a table.
+    expect(prose('export const A = () => <Field label="Title" />;')).toEqual(['prose "Title"']);
+    expect(prose('const NAMES = { pool: "Pool" };')).toEqual(['prose "Pool"']);
+    expect(prose("const line = `${n} open, ${m} done`;")).toEqual(['prose "  open,   done"']);
+    expect(prose('const error = new Error("the card could not be moved");')).toEqual(['prose "the card could not be moved"']);
+    // M4: the code-token exemption is the text's start, never the word anywhere.
+    expect(prose('const hint = "Open the spec in your editor";')).toEqual(['prose "Open the spec in your editor"']);
+    expect(prose("const hint = `Ask your AI: spec ${id}`;")).toEqual(['prose "Ask your AI: spec  "']);
+    // A code method's first argument alone is code: the value it sets, stores, adds or puts in is read.
+    expect(
+      prose(
+        [
+          'el.setAttribute("aria-label", "Close panel");',
+          'map.set(key, "Shown text");',
+          's.replace(x, "Some words");',
+          's.replaceAll(/x/g, "Other words");',
+          'window.localStorage.setItem(KEY, "Saved words");',
+          'names.add("Added words");',
+        ].join("\n"),
+      ),
+    ).toEqual(['prose "Close panel"', 'prose "Shown text"', 'prose "Some words"', 'prose "Other words"', 'prose "Saved words"']);
+    // Keys, commands, comparisons, case labels, classes and the code positions pass.
+    expect(
+      prose(
+        [
+          'const a = t("roadmap.pool");',
+          "const b = `spec approve ${id}`;",
+          'const c = x === "Release";',
+          'switch (key) { case "Escape": break; }',
+          'export const D = () => <p className="a b-c" id="Main panel" role="status">{t("x.y")}</p>;',
+          'const e = row.querySelector("button:not([disabled])");',
+          'const f = text.split(", ").join("; ");',
+          'type G = "Release" | "Pool";',
+          'const h = { "Release": 1 };',
+          'const REVIEW_COMMAND = "approve or reject";',
+          'import { x } from "./Some module";',
+          'const i = "Release" in groups;',
+          "const j = { className: `card ${state} card-wide` };",
+        ].join("\n"),
+      ),
+    ).toEqual([]);
+  });
+
+  it("reaches the Russian catalog through one import(\"./ru\") in src/i18n/index.ts, and no non-test module imports it statically (LS-7 of ui-languages-sweep)", () => {
+    const statics: string[] = [];
+    const dynamics: string[] = [];
+    for (const [path, text] of Object.entries(sources)) {
+      if (!/\.tsx?$/.test(path) || isTestPath(path)) {
+        continue;
+      }
+      const found = russianImports(path, text);
+      statics.push(...found.static);
+      dynamics.push(...found.dynamic);
+    }
+    expect(statics).toEqual([]);
+    expect(dynamics).toEqual(['/src/i18n/index.ts: import("./ru")']);
+    // The detector itself: M11's static import is caught, a type-only import is not.
+    expect(russianImports("/src/i18n/catalog.ts", 'import { ru } from "./ru";').static).toHaveLength(1);
+    expect(russianImports("/src/app/Shell.tsx", 'export { ru } from "../i18n/ru";').static).toHaveLength(1);
+    expect(russianImports("/src/i18n/catalog.ts", 'import type { ru } from "./ru";').static).toEqual([]);
+    expect(russianImports("/src/i18n/index.ts", 'const m = await import("./ru.ts");').dynamic).toHaveLength(1);
+  });
+
   it("covers the Flow studio's views: every src/flow/*.tsx is scanned, and a literal word in one is caught (ST-14 of writer-studio)", () => {
     const flowViews = Object.keys(sources).filter((path) => path.startsWith("/src/flow/") && path.endsWith(".tsx") && !isTestPath(path));
     expect(flowViews).toEqual(expect.arrayContaining(["/src/flow/FlowView.tsx", "/src/flow/FlowCanvas.tsx", "/src/flow/FlowPanel.tsx", "/src/flow/FlowPlaces.tsx", "/src/flow/FlowList.tsx", "/src/flow/FlowGaps.tsx", "/src/flow/FlowLegend.tsx"]));
-    expect(flowViews.every((path) => CONVERTED.some((directory) => path.startsWith(directory)))).toBe(true);
+    expect(flowViews.every(isScanned)).toBe(true);
     // M29: a literal `Open` restored in a view.
     const words = (text: string) => literalWords("/src/flow/Probe.tsx", text).map((hit) => hit.replace(/^[^ ]+ /, ""));
     expect(words("export const A = () => <a href={flowHash(project, place)}>Open</a>;")).toEqual(['text "Open"']);

@@ -132,12 +132,12 @@ export function markLook(card: CardMark, t: Translate): Look | null {
     return null;
   }
   const known = markOf(card.mark);
-  return known === undefined ? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" } : { label: t(`board.mark.${card.mark as MarkWord}`), tone: known.tone, icon: known.icon };
+  return known === undefined ? { label: card.mark, tone: "card-mark-unknown", icon: "unknown", served: true } : { label: t(`board.mark.${card.mark as MarkWord}`), tone: known.tone, icon: known.icon };
 }
 
 /** A card's word in a node's block: its mark, or the plain state its word names. */
 export function cardStateLook(card: CardMark, t: Translate): Look {
-  return markLook(card, t) ?? plainLook(card.mark, t) ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown" };
+  return markLook(card, t) ?? plainLook(card.mark, t) ?? { label: card.mark, tone: "card-mark-unknown", icon: "unknown", served: true };
 }
 
 /** A mark in a sentence; one this build does not know, its target, else its word. */

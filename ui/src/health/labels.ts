@@ -41,7 +41,7 @@ function lookup<K extends string, V>(table: Record<K, V>, value: string): V | nu
 /** A verdict's label and look; an unknown one raw, neutral. */
 export function verdictLook(value: CheckVerdict, t: Translate): Look {
   const known = lookup(VERDICT, value);
-  return known === null ? { label: value, tone: "check-unknown", icon: "unknown" } : { label: t(`health.verdict.${known.key}`), tone: known.tone, icon: known.icon };
+  return known === null ? { label: value, tone: "check-unknown", icon: "unknown", served: true } : { label: t(`health.verdict.${known.key}`), tone: known.tone, icon: known.icon };
 }
 
 /** The report says the corpus is clean (its own verdict, read, never derived). */
@@ -64,7 +64,7 @@ const SEVERITY_ORDER: readonly string[] = Object.keys(SEVERITY);
 /** A finding's severity: label and icon; an unknown one raw, neutral. */
 export function findingSeverityLook(value: FindingSeverity, t: Translate): Look {
   const mark = lookup(SEVERITY, value);
-  return mark === null ? { label: value, tone: "finding-unknown", icon: "unknown" } : { label: t(`health.severity.${value as KnownFindingSeverity}`), ...mark };
+  return mark === null ? { label: value, tone: "finding-unknown", icon: "unknown", served: true } : { label: t(`health.severity.${value as KnownFindingSeverity}`), ...mark };
 }
 
 /** Errors first, then warnings, then any unknown severity. */
@@ -82,7 +82,7 @@ export function isKnownMode(value: CheckMode): boolean {
 
 /** An unknown mode's badge: the raw text, neutral. */
 export function unknownModeLook(value: CheckMode): Look {
-  return { label: value, tone: "check-unknown", icon: "unknown" };
+  return { label: value, tone: "check-unknown", icon: "unknown", served: true };
 }
 
 // Rows 4-5 of What is left (docs/canon/health-code.md "Document", "Row 4: assumes",
@@ -159,7 +159,7 @@ export const ASSUMED_STATES: readonly string[] = Object.keys(ASSUMED);
 /** A row 4 line's state: label, colour role, icon, the tail it carries; any other word raw, neutral, no record, no list. */
 export function assumedLook(value: AssumedState, t: Translate): AssumedLook {
   if (!Object.hasOwn(ASSUMED, value)) {
-    return { look: { label: value, tone: "assumed-unknown", icon: "unknown" }, record: false, under: false };
+    return { look: { label: value, tone: "assumed-unknown", icon: "unknown", served: true }, record: false, under: false };
   }
   const state = value as keyof typeof ASSUMED;
   const { mark, record, under } = ASSUMED[state];
@@ -179,7 +179,7 @@ export const UNBOUND_REASONS: readonly string[] = Object.keys(UNBOUND_REASON);
 /** Why a marker naming an unbound node binds it not; cannot_verify in cannot-verify's role, never ok's; any other word raw, neutral. */
 export function unboundReasonLook(value: UnboundReason, t: Translate): Look {
   const mark = lookup(UNBOUND_REASON, value);
-  return mark === null ? { label: value, tone: "unbound-unknown", icon: "unknown" } : { label: t(`health.unbound.${value as keyof typeof UNBOUND_REASON}`), ...mark };
+  return mark === null ? { label: value, tone: "unbound-unknown", icon: "unknown", served: true } : { label: t(`health.unbound.${value as keyof typeof UNBOUND_REASON}`), ...mark };
 }
 
 /** A marker's ID states as `spec refs` words them (docs/canon/code-bindings.md "ID state"). */
@@ -225,16 +225,17 @@ function classLook(value: keyof typeof DRIFT_CLASS, t: Translate): Look {
 export const DRIFT_CLASSES: readonly string[] = Object.keys(DRIFT_CLASS);
 
 /** A class row 6 does not know, or none (only an `ok` row has none, and row 6 lists none): neutral, never ok's; the word on one line (`oneLine`). */
-function rawClass(label: string): Look {
-  return { label: oneLine(label), tone: "sync-unknown", icon: "unknown" };
+function rawClass(label: string, served: boolean): Look {
+  const look: Look = { label: oneLine(label), tone: "sync-unknown", icon: "unknown" };
+  return served ? { ...look, served: true } : look;
 }
 
 /** A row 6 line's class: Fix, Check, or Cannot verify in cannot-verify's role, never ok's; any other word raw, neutral. */
 export function driftClassLook(value: string | null, t: Translate): Look {
   if (value === null) {
-    return rawClass(t("health.noClass"));
+    return rawClass(t("health.noClass"), false);
   }
-  return Object.hasOwn(DRIFT_CLASS, value) ? classLook(value as keyof typeof DRIFT_CLASS, t) : rawClass(value);
+  return Object.hasOwn(DRIFT_CLASS, value) ? classLook(value as keyof typeof DRIFT_CLASS, t) : rawClass(value, true);
 }
 
 /** verify's three classes, as the tree's badges count a node's own row 6 rows (docs/features/ui-tree-drift.md). */
@@ -311,7 +312,7 @@ export const TESTED_STATES: readonly string[] = Object.keys(TESTED);
 /** A `[[tested]]` entry's state: its label, colour role and icon; unverifiable in cannot-verify's role, never verified's; any other word raw, neutral. */
 export function testedLook(value: TestedState, t: Translate): Look {
   const mark = lookup(TESTED, value);
-  return mark === null ? { label: value, tone: "sync-unknown", icon: "unknown" } : { label: t(`health.tested.${value as keyof typeof TESTED}`), ...mark };
+  return mark === null ? { label: value, tone: "sync-unknown", icon: "unknown", served: true } : { label: t(`health.tested.${value as keyof typeof TESTED}`), ...mark };
 }
 
 /**

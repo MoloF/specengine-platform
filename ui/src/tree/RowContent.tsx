@@ -21,33 +21,33 @@ export function RowContent({ node, count, drift }: { node: TreeNode; count: numb
       {node.title !== null && <span className="tree-row-title">{node.title}</span>}
       <span className="tree-row-meta">
         <span className="kind-tag">
-          <span className="sr-only">Kind: </span>
+          <span className="sr-only">{t("tree.row.kind")}</span>
           {node.kind ?? "-"}
         </span>
         {node.status !== null && (
           <span className="status-tag">
-            <span className="sr-only">Status: </span>
+            <span className="sr-only">{t("tree.row.status")}</span>
             {node.status}
           </span>
         )}
-        {node.rev !== null && <span className="tree-row-rev">rev {node.rev}</span>}
+        {node.rev !== null && <span className="tree-row-rev">{t("tree.row.rev", { rev: node.rev })}</span>}
         {node.archived && (
           <span className="plain-tag">
             <Icon name="archived" />
-            archived
+            {t("tree.row.archived")}
           </span>
         )}
         {node.mark !== null && <Badge look={markLook(node.mark, t)} />}
         {count !== null && count > 0 && (
           <span className="count-tag">
             <Icon name="inbox" />
-            {count} in inbox
+            {t("tree.row.inInbox", { count })}
           </span>
         )}
         {drift !== null &&
           driftBadgeLooks(drift, t).map((look) => (
             <span key={look.tone} className="tree-drift-badge">
-              <Badge name="Drift" look={look} />
+              <Badge name={t("tree.row.drift")} look={look} />
             </span>
           ))}
       </span>

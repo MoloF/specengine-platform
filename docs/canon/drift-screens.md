@@ -72,7 +72,7 @@ One row component draws `spec verify`'s row in both places: Health's row 6 (the 
 - No deep link to a tab; no trigger of its own: the tab is stale after a code edit until "Read again", re-entry or an apply.
 - With Show drift on, each Tree entry, toggle-on and `proposal.approved`, `.rejected`, `.apply_failed`, `.applied` or gap event runs a whole Health walk (rows 3-6, `health-drift.md` "Known limits"), node and search reads waiting in the project's turn; the first three move no badge.
 - An ID with two holders counts its rows on both lines, as the inbox counter does.
-- `DriftPart` and `codeRows` load with the main chunk, the Inbox card pulling in `DriftPart` too (480.13 kB, under Vite's 500 kB warning).
+- `DriftPart` and `codeRows` load with the main chunk, the Inbox card pulling in `DriftPart` too; first-load JS is gated in `ui-languages.md` "Size".
 - A card's Editorial mark and facts are as of `base_commit`, so may be stale against `HEAD`; the terminal judges again.
 
 ## Tests

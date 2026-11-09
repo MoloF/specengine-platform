@@ -45,3 +45,61 @@ describe("plural forms (LG-4)", () => {
     expect(ruT("ui.time.minutesAgo", { count: 1000 })).toBe(ru.ui.time.minutesAgo_many.replace("{{count}}", "1000"));
   });
 });
+
+/** Every leaf of a catalog by its dotted path. */
+function leavesOf(messages: object, prefix = ""): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const [key, value] of Object.entries(messages) as [string, unknown][]) {
+    const path = prefix === "" ? key : `${prefix}.${key}`;
+    if (typeof value === "string") {
+      out.set(path, value);
+    } else if (typeof value === "object" && value !== null) {
+      for (const [inner, text] of leavesOf(value, path)) {
+        out.set(inner, text);
+      }
+    }
+  }
+  return out;
+}
+
+/** A value with `count` and every other placeholder filled. */
+function filledAll(value: string, count: number): string {
+  return value.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => (name === "count" ? String(count) : `<${name}>`));
+}
+
+describe("every plural group (LS-5 of ui-languages-sweep)", () => {
+  const english = leavesOf(en);
+  const russian = leavesOf(ru);
+  const groups = [...english.keys()].filter((key) => key.endsWith("_other")).map((key) => key.slice(0, -"_other".length));
+  /** `t` over a key only known at run time, every placeholder but `count` its own name in brackets. */
+  const ruAny = ruT as unknown as (key: string, options: Record<string, unknown>) => string;
+
+  it("are many: the sweep's groups among them", () => {
+    expect(groups.length).toBeGreaterThan(90);
+    expect(groups).toEqual(expect.arrayContaining(["roadmap.open", "trace.usesCards", "board.column.count", "health.findings.counted", "tree.search.count"]));
+  });
+
+  it.each([
+    [1, "one"],
+    [21, "one"],
+    [3, "few"],
+    [5, "many"],
+  ] as const)("take the Russian form Intl names at %i (%s)", (count, form) => {
+    const wrong: string[] = [];
+    for (const base of groups) {
+      const value = russian.get(`${base}_${form}`) ?? "";
+      const options: Record<string, unknown> = { count };
+      for (const match of value.matchAll(/\{\{(\w+)\}\}/g)) {
+        const name = match[1] ?? "";
+        if (name !== "count") {
+          options[name] = `<${name}>`;
+        }
+      }
+      const shown = ruAny(base, options);
+      if (shown !== filledAll(value, count)) {
+        wrong.push(`${base} at ${String(count)}: ${shown}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+});

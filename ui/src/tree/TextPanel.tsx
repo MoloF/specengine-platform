@@ -3,6 +3,8 @@ import type { NodeView, ShownLink, ShownNode } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { Prose } from "../markdown/Prose";
 import { TextModeSwitch, type TextMode } from "../markdown/TextMode";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { Icon } from "../ui/Icon";
 import { placeKey, rowName, type TreeRow } from "./rows";
 import { splitLines, TextView, type LineTarget } from "./TextView";
@@ -28,8 +30,8 @@ export function sectionLine(holder: ShownNode, section: string, rows: readonly T
   return at < 0 ? null : holder.line + at;
 }
 
-function names(list: string[], more: number): string {
-  return more > 0 ? `${list.join(", ")}, ${String(more)} more` : list.join(", ");
+function names(list: string[], more: number, t: Translate): string {
+  return more > 0 ? t("tree.text.namesMore", { names: list.join(", "), count: more }) : list.join(", ");
 }
 
 /**
@@ -63,6 +65,7 @@ function HolderText({
   onJump: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   const place = placeKey(holder);
   // One scan of the rows per holder and tree read, not one per section on every render.
   const sectionLines = useMemo(
@@ -72,11 +75,11 @@ function HolderText({
   const range = `${holder.path}:${String(holder.line)}-${String(holder.end_line)}`;
   const omitted = holder.omitted;
   return (
-    <section className="holder-text" aria-label={many ? `Text at ${range}` : undefined}>
+    <section className="holder-text" aria-label={many ? t("tree.text.at", { range }) : undefined}>
       {many && <h2 className="holder-text-title mono">{range}</h2>}
       {holder.sections.length > 0 && (
-        <nav className="section-jumps" aria-label={`Sections of ${rowName(holder)}`}>
-          <span className="section-jumps-label">Sections</span>
+        <nav className="section-jumps" aria-label={t("tree.text.sectionsOf", { name: rowName(holder) })}>
+          <span className="section-jumps-label">{t("tree.text.sections")}</span>
           <ul>
             {holder.sections.map((section) => {
               const line = sectionLines.get(section) ?? null;
@@ -93,7 +96,7 @@ function HolderText({
                       }}
                     >
                       {section}
-                      <span className="sr-only">, line {line}</span>
+                      <span className="sr-only">{t("tree.links.showInTextLine", { line })}</span>
                     </button>
                   )}
                 </li>
@@ -106,42 +109,38 @@ function HolderText({
         <div className="notice cut-notice" role="note">
           <p className="notice-title">
             <Icon name="info" />
-            <span>
-              Lines {omitted.lines[0]}-{omitted.lines[1]} not shown
-            </span>
+            <span>{t("tree.text.linesCut", { from: omitted.lines[0], to: omitted.lines[1] })}</span>
           </p>
           {omitted.sections.length > 0 && (
             <p>
-              Sections not shown:{" "}
-              {omitted.sections.map((section, index) => (
-                <span key={section}>
-                  {index > 0 && ", "}
-                  <a className="mono" href={sectionHash(project, "tree", section)} onClick={onFollow}>
-                    {section}
-                  </a>
-                </span>
-              ))}
-              {omitted.sections_more > 0 && `, ${String(omitted.sections_more)} more`}
+              {fill(t(omitted.sections_more > 0 ? "tree.text.sectionsCutMore" : "tree.text.sectionsCut", { sections: slot("sections"), count: omitted.sections_more }), {
+                sections: omitted.sections.map((section, index) => (
+                  <span key={section}>
+                    {index > 0 && ", "}
+                    <a className="mono" href={sectionHash(project, "tree", section)} onClick={onFollow}>
+                      {section}
+                    </a>
+                  </span>
+                )),
+              })}
             </p>
           )}
           {omitted.holders.length > 0 && (
-            <p>
-              Holders not shown: <span className="mono">{names(omitted.holders, omitted.holders_more)}</span>
-            </p>
+            <p>{fill(t("tree.text.holdersCut", { holders: slot("holders") }), { holders: <span className="mono">{names(omitted.holders, omitted.holders_more, t)}</span> })}</p>
           )}
         </div>
       )}
       {!holder.utf8 && (
         <p className="note">
           <Icon name="info" />
-          <span>This file is not UTF-8: undecodable bytes show as replacement characters.</span>
+          <span>{t("tree.text.notUtf8")}</span>
         </p>
       )}
       {mode === "source" ? (
         <TextView
           text={holder.text}
           firstLine={holder.line}
-          label={`Text of ${rowName(holder)}, lines ${String(holder.line)} to ${String(holder.end_line)}`}
+          label={t("tree.text.label", { name: rowName(holder), from: holder.line, to: holder.end_line })}
           target={target !== null && target.place === place ? target : null}
         />
       ) : (
@@ -188,9 +187,10 @@ export function TextPanel({
   onJump: (place: string, line: number) => void;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   return (
     <div className="text-panel">
-      <TextModeSwitch mode={mode} label="Show the text as" onChange={onMode} />
+      <TextModeSwitch mode={mode} label={t("tree.text.showAs")} onChange={onMode} />
       {holders.map((holder) => (
         <HolderText
           key={placeKey(holder)}

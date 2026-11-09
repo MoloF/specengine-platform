@@ -136,7 +136,7 @@ function Notes({ notes, label }: { notes: readonly string[]; label: string }) {
     notes.length > 0 && (
       <ul className="note-list" aria-label={label}>
         {notes.map((note, index) => (
-          <li key={`${String(index)}-${note}`} className="verbatim-note">
+          <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
             {note}
           </li>
         ))}
@@ -401,7 +401,7 @@ export function BoardView({
       setWriteNotes(answer.notes);
       setActingLine(null);
       follow(answer);
-      announce(spoken ?? `${row.id} moved to ${columnTitle(flow, answer.column ?? row.column)}`);
+      announce(spoken ?? t("board.said.moved", { id: row.id, column: columnTitle(flow, answer.column ?? row.column) }));
     } catch (error) {
       const answer = apiErrorOf(error);
       if (isActingLine(answer)) {
@@ -432,21 +432,21 @@ export function BoardView({
     if (lane !== undefined && whole !== undefined && lane.column !== null) {
       const { up, down } = reorderOf(row.id, openRows(lane.rows), openRows(whole.rows));
       if (up !== null) {
-        choices.push({ key: "up", label: "Up", detail: null, icon: "cardUp", asked: { before: up.before }, spoken: `${row.id} moved up in ${lane.title}` });
+        choices.push({ key: "up", label: t("board.menu.up"), detail: null, icon: "cardUp", asked: { before: up.before }, spoken: t("board.said.movedUp", { id: row.id, lane: lane.title }) });
       }
       if (down !== null) {
         choices.push({
           key: "down",
-          label: "Down",
+          label: t("board.menu.down"),
           detail: null,
           icon: "cardDown",
           asked: down.before === null ? { to: lane.column } : { before: down.before },
-          spoken: `${row.id} moved down in ${lane.title}`,
+          spoken: t("board.said.movedDown", { id: row.id, lane: lane.title }),
         });
       }
     }
     if (row.column === flow?.accept.from && allows("accept")) {
-      choices.push({ key: "accept", label: "Accept", detail: null, icon: "taskAccepted", asked: null, spoken: null });
+      choices.push({ key: "accept", label: t("board.menu.accept"), detail: null, icon: "taskAccepted", asked: null, spoken: null });
     }
     return choices;
   }
@@ -616,7 +616,8 @@ export function BoardView({
   }
 
   /** A dialog's write went through: the board has read again. `toCard`: focus goes to the card, else back to the dialog's trigger. */
-  function written(answer: CardWrite, spoken: string, toCard: boolean) {
+  /** `said` words the write's outcome around the card's ID, "The card" when the answer names none. */
+  function written(answer: CardWrite, said: (id: string) => string, toCard: boolean) {
     setRefusal(null);
     setActingLine(null);
     setWriteNotes(answer.notes);
@@ -624,7 +625,7 @@ export function BoardView({
       follow(answer);
     }
     closeDialog();
-    announce(`${answer.id ?? "The card"} ${spoken}`);
+    announce(said(answer.id ?? t("board.said.theCard")));
   }
 
   function onAct(action: CardAction, card: Card, trigger: HTMLElement) {
@@ -662,7 +663,7 @@ export function BoardView({
           onClose={closeDialog}
           onActingLine={setActingLine}
           onDone={(answer) => {
-            written(answer, `created in ${columnTitle(flowOf(answer.flow ?? ""), answer.column ?? "")}`, true);
+            written(answer, (id) => t("board.said.created", { id, column: columnTitle(flowOf(answer.flow ?? ""), answer.column ?? "") }), true);
           }}
         />
       );
@@ -676,7 +677,7 @@ export function BoardView({
           onActingLine={setActingLine}
           onDone={(answer) => {
             // From the Move menu the trigger is the card, which has moved; from the panel, its Accept, gone with the write.
-            written(answer, "is accepted", dialog.trigger?.dataset.card !== undefined);
+            written(answer, (id) => t("board.said.accepted", { id }), dialog.trigger?.dataset.card !== undefined);
           }}
         />
       );
@@ -688,7 +689,7 @@ export function BoardView({
           onClose={closeDialog}
           onActingLine={setActingLine}
           onDone={(answer) => {
-            written(answer, "is saved", false);
+            written(answer, (id) => t("board.said.saved", { id }), false);
           }}
         />
       );
@@ -701,7 +702,7 @@ export function BoardView({
           onClose={closeDialog}
           onActingLine={setActingLine}
           onDone={(answer) => {
-            written(answer, "is cleared", false);
+            written(answer, (id) => t("board.said.cleared", { id }), false);
           }}
         />
       );
@@ -713,7 +714,7 @@ export function BoardView({
           onClose={closeDialog}
           onActingLine={setActingLine}
           onDone={(answer) => {
-            written(answer, "is assigned", false);
+            written(answer, (id) => t("board.said.assigned", { id }), false);
           }}
         />
       );
@@ -725,7 +726,7 @@ export function BoardView({
           onClose={closeDialog}
           onActingLine={setActingLine}
           onDone={(answer) => {
-            written(answer, "is cancelled", false);
+            written(answer, (id) => t("board.said.cancelled", { id }), false);
           }}
         />
       );
@@ -737,12 +738,12 @@ export function BoardView({
     body =
       (list === undefined || !flowsKnown) && failure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Reading the cards of ${project}`} lines={6} />
+          <Skeleton label={t("board.view.reading", { project })} lines={6} />
         </div>
       ) : (
         <ErrorPanel
-          title="The board could not be read"
-          message={failure === null ? "The daemon served no flow." : apiErrorOf(failure).message}
+          title={t("board.view.failed")}
+          message={failure === null ? t("board.view.noFlow") : apiErrorOf(failure).message}
           retrying={cards.isFetching}
           attempt={cards.errorUpdateCount}
           onRetry={retry}
@@ -759,7 +760,7 @@ export function BoardView({
         ref={board}
         className="board-columns"
         role="group"
-        aria-label={tabs.length > 1 ? `Board ${tab.name}` : "Board"}
+        aria-label={tabs.length > 1 ? t("board.view.boardOf", { name: tab.name }) : t("board.view.title")}
         onKeyDown={onBoardKeyDown}
       >
         {shownLanes.map((lane, index) => {
@@ -771,7 +772,7 @@ export function BoardView({
               expanded={expanded.has(lane.key)}
               dropping={dragged !== null}
               dropAtEnd={dropAt?.lane === lane.key && dropAt.before === null}
-              note={<Notes notes={notes} label="Notes from the daemon on this lane" />}
+              note={<Notes notes={notes} label={t("board.view.laneNotes")} />}
               onShowAll={showAll}
               onDragOver={onDragOver}
               onDragLeave={onDragLeave}
@@ -798,26 +799,28 @@ export function BoardView({
     body = (
       <div className={cardId === null ? "board-stage" : "board-stage board-stage-panel"}>
         <div className="board-main">
-          {!boardFailed && <Notes notes={list.notes.filter((note) => !placedNotes.has(note))} label="Notes from the daemon" />}
-          <Notes notes={writeNotes} label="Notes from the daemon on the last write" />
+          {!boardFailed && <Notes notes={list.notes.filter((note) => !placedNotes.has(note))} label={t("board.view.notes")} />}
+          <Notes notes={writeNotes} label={t("board.view.writeNotes")} />
           {!boardFailed && list.truncated && (
             <p className="note">
               <Icon name="info" />
-              <span>{list.omitted ?? 0} cards not shown.</span>
+              <span>{t("board.view.omitted", { count: list.omitted ?? 0 })}</span>
             </p>
           )}
           {refusal !== null && (
             <div key={refusal.count} className="refusal" role="alert">
               <p className="refusal-title">
                 <Icon name="alert" />
-                <span>The daemon did not take it.</span>
+                <span>{t("board.view.refused")}</span>
               </p>
-              <p className="verbatim">{refusal.message}</p>
+              <p className="verbatim" lang="en">
+                {refusal.message}
+              </p>
             </div>
           )}
           {cards.error !== null ? (
             // No tile drawn on the last read: a card may be suspect now, and a clean tile would say it is not.
-            <ErrorPanel title="The board could not be read" message={apiErrorOf(cards.error).message} retrying={cards.isFetching} attempt={cards.errorUpdateCount} onRetry={retry} />
+            <ErrorPanel title={t("board.view.failed")} message={apiErrorOf(cards.error).message} retrying={cards.isFetching} attempt={cards.errorUpdateCount} onRetry={retry} />
           ) : (
             <>
               {list.cards.length === 0 && (
@@ -827,10 +830,10 @@ export function BoardView({
               )}
               {all.length > 0 && visible.length === 0 && (
                 <div className="empty-filter">
-                  <p>No card matches the filters.</p>
+                  <p>{t("board.view.noMatch")}</p>
                   {filtered && (
                     <button type="button" className="button" onClick={clearFilters}>
-                      Clear filters
+                      {t("board.view.clearFilters")}
                     </button>
                   )}
                 </div>
@@ -857,7 +860,7 @@ export function BoardView({
               {tabs.length > 1 ? (
                 <>
                   <Tabs
-                    label="Boards"
+                    label={t("board.view.boards")}
                     base={tabsBase}
                     selected={tab.name}
                     onSelect={setChosenFlow}
@@ -872,12 +875,12 @@ export function BoardView({
               ) : (
                 boardBody
               )}
-              <p className="muted board-hint">Arrow keys move between cards. Enter opens one, m moves it, n adds a card, ? lists every key.</p>
+              <p className="muted board-hint">{t("board.view.hint")}</p>
             </>
           )}
         </div>
         {cardId !== null && (
-          <RegionBoundary key={cardId} name="card" heading={cardId}>
+          <RegionBoundary key={cardId} name={t("board.view.boundaryCard")} heading={cardId}>
             <CardPanel
               project={project}
               id={cardId}
@@ -908,21 +911,21 @@ export function BoardView({
         }}
       >
         <Icon name="cardNew" />
-        <span>New card</span>
+        <span>{t("board.view.newCard")}</span>
       </button>
       <FilterSelect
-        label="Discipline"
+        label={t("board.view.discipline")}
         value={filters.discipline}
-        every="All disciplines"
+        every={t("board.view.allDisciplines")}
         choices={disciplines}
         onChange={(discipline) => {
           setFilters((current) => ({ ...current, discipline }));
         }}
       />
       <FilterSelect
-        label="Assignee"
+        label={t("board.view.assignee")}
         value={filters.assignee}
-        every="Everyone"
+        every={t("board.view.everyone")}
         choices={assignees}
         onChange={(assignee) => {
           setFilters((current) => ({ ...current, assignee }));
@@ -937,11 +940,11 @@ export function BoardView({
             setWithCancelled(event.target.checked);
           }}
         />
-        <label htmlFor={cancelledId}>Show cancelled</label>
+        <label htmlFor={cancelledId}>{t("board.view.showCancelled")}</label>
       </div>
       <div className="board-tool board-acting">
         <label className="field-label" htmlFor={actingId}>
-          Acting as
+          {t("board.view.actingAs")}
         </label>
         <input
           id={actingId}
@@ -959,7 +962,7 @@ export function BoardView({
           }}
         />
         {actingLine !== null && (
-          <p id={actingLineId} className="field-error" role="alert">
+          <p id={actingLineId} className="field-error" role="alert" lang="en">
             {actingLine}
           </p>
         )}
@@ -971,20 +974,20 @@ export function BoardView({
     <section className="view board-view" aria-labelledby={titleId} onKeyDown={onViewKeyDown}>
       <header className="view-head">
         <h1 id={titleId} tabIndex={-1}>
-          Board
+          {t("board.view.title")}
         </h1>
         <p className="view-about">{aboutOf("board", t)}</p>
       </header>
       {tools}
       <div ref={results} tabIndex={-1} className="board-results" aria-busy={cards.isFetching}>
-        <RegionBoundary name="board">{body}</RegionBoundary>
+        <RegionBoundary name={t("board.view.boundaryBoard")}>{body}</RegionBoundary>
       </div>
       {menu !== null && menuRow !== undefined && (
         <MoveMenu
-          label={`Move ${menuRow.id}`}
+          label={t("board.menu.label", { id: menuRow.id })}
           anchor={menu.anchor}
           choices={choicesFor(menuRow)}
-          empty="No move from here."
+          empty={t("board.menu.empty")}
           onChoose={(choice) => {
             takeChoice(menuRow, choice);
           }}

@@ -21,7 +21,8 @@ import { When } from "./parts";
 import { RunsPanel } from "./RunsPanel";
 import { SpecChangesPanel } from "./SpecChangesPanel";
 import { TaskProposalsPanel } from "./TaskProposalsPanel";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 export type TaskTab = "overview" | "plan" | "changes" | "proposals" | "runs" | "package";
 
@@ -38,17 +39,14 @@ function withCount(label: string, count: number | null): ReactNode {
 
 /** Why a task waits for the owner, in the list's terms (`status`, `stale`): nothing else is read. */
 function WaitingNote({ task }: { task: TaskPackage }) {
+  const t = useTranslate();
   if (!waitsForYou(task)) {
     return null;
   }
   return (
     <p className="waiting-note">
       <Icon name="waiting" />
-      <span>
-        {task.status === "review"
-          ? "Waiting for you: the plan is ready for your review."
-          : "Waiting for you: the spec changed since you approved this task. Spec changes shows how; approving again re-freezes it."}
-      </span>
+      <span>{task.status === "review" ? t("tasks.detail.waitingPlan") : t("tasks.detail.waitingChanged")}</span>
     </p>
   );
 }
@@ -60,17 +58,17 @@ function Facts({ task }: { task: TaskPackage }) {
   return (
     <>
       <div className="task-badges">
-        <Badge name="State" look={taskStatusLook(task.status, t)} />
+        <Badge name={t("tasks.stateName")} look={taskStatusLook(task.status, t)} />
         {staleness === null ? (
           <span className="muted frozen-note">{frozenAtApproval(t)}</span>
         ) : (
-          <Badge name="Spec since approval" look={staleness} />
+          <Badge name={t("tasks.detail.specSince")} look={staleness} />
         )}
       </div>
       {task.notes.length > 0 && (
-        <ul className="note-list" aria-label="Notes from the daemon on this task">
+        <ul className="note-list" aria-label={t("tasks.detail.notes")}>
           {task.notes.map((note, index) => (
-            <li key={`${String(index)}-${note}`} className="verbatim-note">
+            <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
               {note}
             </li>
           ))}
@@ -78,13 +76,13 @@ function Facts({ task }: { task: TaskPackage }) {
       )}
       <dl className="facts">
         <div className="fact">
-          <dt>Created</dt>
+          <dt>{t("tasks.detail.created")}</dt>
           <dd>
             <When at={task.created_at} />
           </dd>
         </div>
         <div className="fact">
-          <dt>Updated</dt>
+          <dt>{t("tasks.detail.updated")}</dt>
           <dd>
             <When at={task.updated_at} />
           </dd>
@@ -96,7 +94,7 @@ function Facts({ task }: { task: TaskPackage }) {
 }
 
 /** The content of the shown tab; only the Package tab for a package this screen does not read. */
-function panelOf(id: TaskTab, project: string, taskId: string, task: TaskPackage, readable: boolean): ReactNode {
+function panelOf(id: TaskTab, project: string, taskId: string, task: TaskPackage, readable: boolean, t: Translate): ReactNode {
   if (id === "package") {
     return <PackagePanel id={taskId} answer={task} />;
   }
@@ -110,7 +108,7 @@ function panelOf(id: TaskTab, project: string, taskId: string, task: TaskPackage
       return (
         <div className="task-panel">
           {task.plan === null ? (
-            <p className="muted">No plan yet</p>
+            <p className="muted">{t("tasks.detail.noPlan")}</p>
           ) : (
             <Prose className="task-plan" source={task.plan} links={null} project={project} baseLevel={1} frontMatter={false} />
           )}
@@ -125,17 +123,17 @@ function panelOf(id: TaskTab, project: string, taskId: string, task: TaskPackage
   }
 }
 
-function tabsOf(task: TaskPackage, readable: boolean): TabSpec<TaskTab>[] {
+function tabsOf(task: TaskPackage, readable: boolean, t: Translate): TabSpec<TaskTab>[] {
   if (!readable) {
-    return [{ id: "package", label: "Package" }];
+    return [{ id: "package", label: t("tasks.tab.package") }];
   }
   return [
-    { id: "overview", label: "Overview" },
-    { id: "plan", label: "Plan" },
-    { id: "changes", label: withCount("Spec changes", task.snapshot_diff?.length ?? null) },
-    { id: "proposals", label: withCount("Proposals", task.open_proposals.length) },
-    { id: "runs", label: withCount("Runs", task.runs.length) },
-    { id: "package", label: "Package" },
+    { id: "overview", label: t("tasks.tab.overview") },
+    { id: "plan", label: t("tasks.tab.plan") },
+    { id: "changes", label: withCount(t("tasks.tab.changes"), task.snapshot_diff?.length ?? null) },
+    { id: "proposals", label: withCount(t("tasks.tab.proposals"), task.open_proposals.length) },
+    { id: "runs", label: withCount(t("tasks.tab.runs"), task.runs.length) },
+    { id: "package", label: t("tasks.tab.package") },
   ];
 }
 
@@ -163,6 +161,7 @@ export function TaskDetail({
   /** "Back to tasks" was followed: focus the list. */
   onBackToList: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   const query = useTask(project, taskId);
   const failure = useRetainedFailure(query.error, query.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
@@ -189,11 +188,11 @@ export function TaskDetail({
     body =
       failure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Loading ${taskId}`} lines={6} />
+          <Skeleton label={t("tasks.detail.loading", { id: taskId })} lines={6} />
         </div>
       ) : (
         <ReadFailure
-          title={`${taskId} could not be read`}
+          title={t("tasks.detail.failed", { id: taskId })}
           failure={failure}
           retrying={query.isFetching}
           attempt={query.errorUpdateCount}
@@ -206,18 +205,20 @@ export function TaskDetail({
   } else if (found === null) {
     body = (
       <div className="empty-state">
-        <h2>No such task</h2>
-        <p className="verbatim">{isTaskNotFound(answer) ? answer.reason : ""}</p>
+        <h2>{t("tasks.detail.noSuch")}</h2>
+        <p className="verbatim" lang="en">
+          {isTaskNotFound(answer) ? answer.reason : ""}
+        </p>
         <p>
           <a className="back-link" href={sectionHash(project, "tasks")} onClick={onBackToList}>
             <Icon name="back" />
-            Back to tasks
+            {t("tasks.detail.back")}
           </a>
         </p>
       </div>
     );
   } else {
-    const tabs = tabsOf(found, readable);
+    const tabs = tabsOf(found, readable, t);
     const shown: TaskTab = readable ? tab : "package";
     head = readable ? (
       <>
@@ -229,21 +230,19 @@ export function TaskDetail({
         <div className="notice notice-version" role="note">
           <p className="notice-title">
             <Icon name="info" />
-            <span>
-              This package has schema_version {String(found.schema_version)}; this screen reads version {READ_SCHEMA_VERSION}.
-            </span>
+            <span>{t("tasks.detail.schema", { version: found.schema_version, read: READ_SCHEMA_VERSION })}</span>
           </p>
-          <p>Only the Package tab is shown, exactly as the daemon sent it.</p>
+          <p>{t("tasks.detail.packageOnly")}</p>
         </div>
         <OwnerCommands id={taskId} status={null} />
       </>
     );
     body = (
       <>
-        <Tabs label={`Views of ${taskId}`} base={base} tabs={tabs} selected={shown} onSelect={onTab} />
+        <Tabs label={t("tasks.detail.views", { id: taskId })} base={base} tabs={tabs} selected={shown} onSelect={onTab} />
         {tabs.map(({ id }) => (
           <TabPanel key={id} base={base} id={id} selected={id === shown}>
-            {id === shown && panelOf(id, project, taskId, found, readable)}
+            {id === shown && panelOf(id, project, taskId, found, readable, t)}
           </TabPanel>
         ))}
       </>
@@ -259,14 +258,14 @@ export function TaskDetail({
             <>
               {/* Drawn, the flex gap parts them; read aloud, a colon and a space. */}
               <span className="sr-only">:</span>{" "}
-              <span className={title === null ? "task-title-text muted" : "task-title-text"}>{title ?? "Untitled"}</span>
+              <span className={title === null ? "task-title-text muted" : "task-title-text"}>{title ?? t("tasks.untitled")}</span>
             </>
           )}
         </h1>
         {head}
         {answer !== undefined && query.error !== null && (
           <p className="note" role="alert">
-            {taskId} could not be read again: {apiErrorOf(query.error).message}
+            {fill(t("tasks.detail.failedAgain", { id: taskId, message: slot("message") }), { message: <span lang="en">{apiErrorOf(query.error).message}</span> })}
           </p>
         )}
       </header>

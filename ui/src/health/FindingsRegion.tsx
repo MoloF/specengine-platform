@@ -89,7 +89,7 @@ const FindingItem = memo(function FindingItem({
       }}
     >
       <span className="finding-head">
-        <Badge name="Severity" look={findingSeverityLook(finding.severity, t)} />
+        <Badge name={t("health.severityName")} look={findingSeverityLook(finding.severity, t)} />
         <FindingPlace project={project} finding={finding} linked />
         <FindingSubject subject={finding.subject} />
       </span>
@@ -97,7 +97,7 @@ const FindingItem = memo(function FindingItem({
       {finding.debt !== undefined && <DebtNote debt={finding.debt} />}
       {finding.fix !== undefined && (
         <p className="finding-fix">
-          <span className="finding-fix-label">Fix, as data (nothing applies it here):</span>{" "}
+          <span className="finding-fix-label">{t("health.findings.fixLabel")}</span>{" "}
           <code className="finding-fix-text verbatim">{finding.fix.text}</code>
         </p>
       )}
@@ -131,9 +131,9 @@ function FindingList({ project, report }: { project: string; report: CheckReport
     return (
       <div className="empty-state">
         {isCannotCheck(report.verdict) ? (
-          <p>No finding was reported, but the check could not read everything: see why under Check.</p>
+          <p>{t("health.findings.noneCannot")}</p>
         ) : (
-          <p>No findings: every document read passes every rule.</p>
+          <p>{t("health.findings.none")}</p>
         )}
       </div>
     );
@@ -217,9 +217,9 @@ function FindingList({ project, report }: { project: string; report: CheckReport
 
   return (
     <>
-      <div className="finding-filters" role="group" aria-label="Filter the findings">
+      <div className="finding-filters" role="group" aria-label={t("health.findings.filterLabel")}>
         <Chips
-          label="By severity"
+          label={t("health.findings.bySeverity")}
           chips={severityChips}
           filters={filters}
           onToggle={(key) => {
@@ -227,7 +227,7 @@ function FindingList({ project, report }: { project: string; report: CheckReport
           }}
         />
         <Chips
-          label="By code"
+          label={t("health.findings.byCode")}
           chips={codeChips}
           filters={filters}
           onToggle={(key) => {
@@ -235,7 +235,7 @@ function FindingList({ project, report }: { project: string; report: CheckReport
           }}
         />
         <label className="field-label" htmlFor={`${baseId}-filter`}>
-          Filter by path, subject, message or code
+          {t("health.findings.filterField")}
         </label>
         <input
           id={`${baseId}-filter`}
@@ -252,14 +252,13 @@ function FindingList({ project, report }: { project: string; report: CheckReport
         />
       </div>
       <p className="finding-total">
-        {isFiltered(filters) ? `${String(shown)} of ${String(rows.length)} findings shown` : `${String(rows.length)} ${rows.length === 1 ? "finding" : "findings"}`}
-        {", by code, errors first"}
+        {isFiltered(filters) ? t("health.findings.totalShown", { shown, count: rows.length }) : t("health.findings.total", { count: rows.length })}
       </p>
       {groups.length === 0 ? (
         <div className="empty-filter">
-          <p>No finding matches the filters.</p>
+          <p>{t("health.findings.noMatch")}</p>
           <button type="button" className="button" onClick={clearFilters}>
-            Clear filters
+            {t("health.findings.clearFilters")}
           </button>
         </div>
       ) : (
@@ -282,7 +281,7 @@ function FindingList({ project, report }: { project: string; report: CheckReport
                   >
                     <Icon name={open ? "chevronDown" : "chevronRight"} />
                     <code className="finding-code">{group.code}</code>
-                    <Counted count={group.rows.length} one="finding" many="findings" />
+                    <Counted count={group.rows.length} said={t("health.findings.counted", { count: group.rows.length })} />
                   </button>
                 </h3>
                 {open && (
@@ -313,6 +312,7 @@ function FindingList({ project, report }: { project: string; report: CheckReport
  * findings as sent, grouped and filtered over the one report read; its states are the check's.
  */
 export function FindingsRegion({ project, check }: { project: string; check: CheckQuery }) {
+  const t = useTranslate();
   const failure = useRetainedFailure(check.error, check.isFetching);
   const heading = useRef<HTMLHeadingElement>(null);
   const retried = useRetryFocus(check.data, () => heading.current);
@@ -321,10 +321,10 @@ export function FindingsRegion({ project, check }: { project: string; check: Che
   if (check.data === undefined) {
     body =
       failure === null ? (
-        <Skeleton label={`Loading the findings of ${project}`} lines={5} />
+        <Skeleton label={t("health.findings.loading", { project })} lines={5} />
       ) : (
         <ReadFailure
-          title="The findings could not be read"
+          title={t("health.findings.failed")}
           failure={failure}
           retrying={check.isFetching}
           attempt={check.errorUpdateCount}
@@ -341,8 +341,8 @@ export function FindingsRegion({ project, check }: { project: string; check: Che
 
   return (
     <HealthRegion
-      title="Findings"
-      boundary="findings"
+      title={t("health.findings.title")}
+      boundary={t("health.findings.boundary")}
       headingRef={heading}
       busy={check.data === undefined ? failure === null : check.isFetching}
       className="health-findings"

@@ -1,4 +1,5 @@
 import type { DriftEvidence, StoredDriftRow } from "../api/types";
+import type { Translate } from "../i18n";
 import { PROPOSAL_ID } from "./decisions";
 
 // A drift item (`docs/features/drift-queue.md` "Review, inbox, round, stage", "Approve"): `spec
@@ -24,35 +25,33 @@ export interface DriftCommand {
  * "Approve"). Fixed words and the checked ID only; null when the ID is not a proposal ID: no command
  * is offered for it.
  */
-export function driftCommands(id: string): DriftCommand[] | null {
+export function driftCommands(id: string, t: Translate): DriftCommand[] | null {
   if (!PROPOSAL_ID.test(id)) {
     return null;
   }
   return [
     {
       action: "approve",
-      meaning: "Approve: shows the rows, asks [y/N], then locks the node and its code at HEAD as spec lock accept does, in a commit of spec.lock alone",
+      meaning: t("inbox.drift.approve"),
       text: `spec approve ${id}`,
     },
     {
       action: "editorial",
-      meaning:
-        "Approve as editorial: only when the node's text changed at its locked revision and keeps its meaning; rows marked Editorial were so when the item was raised, and the terminal judges HEAD again; a plain approve refused for that names this command",
+      meaning: t("inbox.drift.editorial"),
       text: `spec approve ${id} --editorial`,
     },
     {
       action: "reject",
-      meaning: "Reject: spec.lock stays as it is, and the same evidence is not queued again; type your reason in place of ...",
+      meaning: t("inbox.drift.reject"),
       text: `spec reject ${id} --reason "..."`,
     },
   ];
 }
 
 /** How many rows the evidence counts, the stored ones (whatever their shape) and those past them. */
-export function driftRowsText(drift: DriftEvidence): string {
-  const total = drift.rows.length + drift.more;
-  const rows = `${String(total)} ${total === 1 ? "row" : "rows"}`;
-  return drift.more > 0 ? `${rows}, the first ${String(drift.rows.length)} stored with the item` : rows;
+export function driftRowsText(drift: DriftEvidence, t: Translate): string {
+  const count = drift.rows.length + drift.more;
+  return drift.more > 0 ? t("inbox.drift.rowsStored", { count, stored: drift.rows.length }) : t("inbox.drift.rows", { count });
 }
 
 /** A row as sent: its compact JSON, for a row not in the shape `storedRowOf` reads. */

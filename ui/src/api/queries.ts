@@ -720,6 +720,25 @@ export function useHeldHolder(project: string, name: string | null): string | nu
 }
 
 /**
+ * The title a held Flow read gives the node `name` names, the Up line's words for a holder: the
+ * first read in hand that titles it; null when none does, and the name is shown as it is. Reads
+ * nothing.
+ */
+export function useHeldTitle(project: string, name: string | null): string | null {
+  const queryClient = useQueryClient();
+  if (name === null) {
+    return null;
+  }
+  for (const [, data] of queryClient.getQueriesData<FlowView>({ queryKey: ["flow", project] })) {
+    const title = data?.nodes.find((node) => (node.id ?? node.path) === name && node.title !== null)?.title;
+    if (title !== undefined && title !== null) {
+      return title;
+    }
+  }
+  return null;
+}
+
+/**
  * A scope's lanes, `spec trace REF --summary` (`docs/canon/spec-trace.md` "The read"), by the
  * scope's walk; never unrooted, one per scope, kept as a picture's read is.
  */

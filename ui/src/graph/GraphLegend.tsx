@@ -22,9 +22,9 @@ export function PatternSwatch({ position }: { position: number }) {
 export function GraphLegend({ types, order }: { types: readonly FollowedType[]; order: readonly string[] }) {
   const t = useTranslate();
   return (
-    <section className="graph-legend" aria-label="Legend">
-      <h2 className="card-section-title">Legend</h2>
-      <p className="graph-legend-about">Arrows point as the link is written; columns are the distance.</p>
+    <section className="graph-legend" aria-label={t("graph.legend.title")}>
+      <h2 className="card-section-title">{t("graph.legend.title")}</h2>
+      <p className="graph-legend-about">{t("graph.legend.about")}</p>
       <ul className="graph-legend-list">
         {types.map((followed) => (
           <li key={followed.type} className="graph-legend-item">
@@ -38,40 +38,40 @@ export function GraphLegend({ types, order }: { types: readonly FollowedType[]; 
         <li className="graph-legend-item">
           <span className="graph-mark graph-mark-focus">
             <Icon name="focus" />
-            Focus
+            {t("graph.focus")}
           </span>
-          <span>the REF, distance 0</span>
+          <span>{t("graph.legend.focus")}</span>
         </li>
         <li className="graph-legend-item">
           <span className="graph-mark graph-mark-selected">
             <Icon name="selected" />
-            Selected
+            {t("graph.selected")}
           </span>
-          <span>its details are open, its links drawn bold</span>
+          <span>{t("graph.legend.selected")}</span>
         </li>
         <li className="graph-legend-item">
           <span className="graph-box-flag">
             <Icon name="archived" />
-            archived
+            {t("graph.archivedWord")}
           </span>
-          <span>in an archived file</span>
+          <span>{t("graph.legend.archived")}</span>
         </li>
         <li className="graph-legend-item">
           <span className="graph-box-flag graph-legend-stub">
             <Icon name="stub" />
-            Not walked
+            {t("graph.notWalked")}
           </span>
-          <span>a nested section or an unresolved end, dashed; never followed</span>
+          <span>{t("graph.legend.notWalked")}</span>
         </li>
         <li className="graph-legend-item">
           <span className="graph-box-flag">
             <Icon name="more" />
-            +k more
+            {t("graph.legend.moreMark")}
           </span>
-          <span>the rest of a full column; every node is in the List</span>
+          <span>{t("graph.legend.more")}</span>
         </li>
       </ul>
-      <p className="graph-legend-credit">Drawn with React Flow (MIT)</p>
+      <p className="graph-legend-credit">{t("graph.legend.credit")}</p>
     </section>
   );
 }

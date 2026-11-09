@@ -13,6 +13,7 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { proposalsFor } from "./matching";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 /**
  * The Proposals tab: the inbox items targeting this node, by ID, `slug/ID` or, ID-less, path, with
@@ -37,11 +38,11 @@ export function ProposalsPanel({
   if (inbox.data === undefined) {
     return failure === null ? (
       <div aria-busy="true">
-        <Skeleton label="Loading the inbox" lines={3} />
+        <Skeleton label={t("tree.proposals.loading")} lines={3} />
       </div>
     ) : (
       <ErrorPanel
-        title="The inbox could not be read"
+        title={t("tree.proposals.failed")}
         message={apiErrorOf(failure).message}
         retrying={inbox.isFetching}
         attempt={inbox.errorUpdateCount}
@@ -55,13 +56,11 @@ export function ProposalsPanel({
   const matching = proposalsFor(inbox.data.proposals, holders);
   return (
     <div ref={region} tabIndex={-1} className="proposals-panel">
-      <p className="muted">Information only: nothing waits on these. Agents keep working with their working answer.</p>
+      <p className="muted">{t("tree.proposals.note")}</p>
       {matching.length === 0 ? (
         <div className="empty-state">
-          <p>No inbox item targets this node.</p>
-          <p>
-            Next: <a href={sectionHash(project, "inbox")}>the Inbox lists every proposal waiting for you</a>.
-          </p>
+          <p>{t("tree.proposals.none")}</p>
+          <p>{fill(t("tree.proposals.next", { link: slot("link") }), { link: <a href={sectionHash(project, "inbox")}>{t("tree.proposals.nextLink")}</a> })}</p>
         </div>
       ) : (
         <ul className="node-proposals">
@@ -72,20 +71,20 @@ export function ProposalsPanel({
                   {proposal.id}
                 </a>
                 <span className="kind-tag">{proposal.kind}</span>
-                <Badge name="Status" look={statusLook(proposal.status, t)} />
-                <Badge name="Severity" look={severityLook(proposal.severity, t)} />
+                <Badge name={t("tree.proposals.status")} look={statusLook(proposal.status, t)} />
+                <Badge name={t("tree.proposals.severity")} look={severityLook(proposal.severity, t)} />
                 <time className="muted" dateTime={proposal.created_at} title={formatUtc(proposal.created_at, t)}>
                   {formatAge(proposal.created_at, now, t)}
                 </time>
               </p>
-              <p>{summaryOf(proposal)}</p>
+              <p>{summaryOf(proposal, t)}</p>
             </li>
           ))}
         </ul>
       )}
       {inbox.error !== null && (
         <p className="note" role="alert">
-          The inbox could not be read again: {apiErrorOf(inbox.error).message}
+          {fill(t("tree.proposals.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(inbox.error).message}</span> })}
         </p>
       )}
     </div>

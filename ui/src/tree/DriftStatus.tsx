@@ -7,11 +7,10 @@ import { Icon } from "../ui/Icon";
 import { ReadFailure } from "../ui/states";
 import { driftOf, driftWords, measuredRows, type TreeDrift } from "./drift";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
-/** "<n> drift row(s) name(s)": the count and its verb. */
-function rowsNaming(count: number): string {
-  return count === 1 ? "1 drift row names" : `${String(count)} drift rows name`;
-}
+/** The command whose rows the line counts, named as code. */
+const VERIFY_COMMAND = "spec verify";
 
 /**
  * What "Show drift" says after the toggles (docs/features/ui-tree-drift.md "Line"), drawn only once
@@ -43,7 +42,7 @@ export function DriftStatus({
       return (
         <div className="tree-drift">
           <ReadFailure
-            title="Drift could not be read"
+            title={t("tree.drift.failed")}
             failure={failure}
             retrying={health.isFetching}
             attempt={health.errorUpdateCount}
@@ -57,7 +56,7 @@ export function DriftStatus({
     return (
       <div className="tree-drift" aria-busy={health.isFetching}>
         <p className="note tree-drift-line" data-drift-state="measuring">
-          Measuring drift
+          {t("tree.drift.measuring")}
         </p>
       </div>
     );
@@ -72,15 +71,15 @@ export function DriftStatus({
       <p className="note tree-drift-line" data-drift-state="not-measured">
         <Icon name={look?.retry === true ? "cannotCheck" : "info"} />
         <span>
-          No drift badges: {look === null || look.measured ? measuredWithoutCounts(t) : oneLine(look.label)}
-          {causes.length > 0 && (
-            <>
-              :{" "}
-              <span className="verbatim" dir="auto">
-                {causes.map(oneLine).join("; ")}
-              </span>
-            </>
-          )}
+          {causes.length === 0
+            ? t("tree.drift.noBadges", { state: look === null || look.measured ? measuredWithoutCounts(t) : oneLine(look.label) })
+            : fill(t("tree.drift.noBadgesCauses", { state: look === null || look.measured ? measuredWithoutCounts(t) : oneLine(look.label), causes: slot("causes") }), {
+                causes: (
+                  <span className="verbatim" dir="auto" lang="en">
+                    {causes.map(oneLine).join("; ")}
+                  </span>
+                ),
+              })}
         </span>
       </p>
     );
@@ -88,9 +87,7 @@ export function DriftStatus({
     body = (
       <p className="note tree-drift-line" data-drift-state="none">
         <Icon name="checkClean" />
-        <span>
-          No drift: every binding <code>spec verify</code> judges is in sync.
-        </span>
+        <span>{fill(t("tree.drift.none", { command: slot("command") }), { command: <code>{VERIFY_COMMAND}</code> })}</span>
       </p>
     );
   } else if (treeShown && drift !== null && drift.unmatched > 0) {
@@ -98,7 +95,7 @@ export function DriftStatus({
       <p className="note tree-drift-line" data-drift-state="unmatched">
         <Icon name="info" />
         <span>
-          {rowsNaming(drift.unmatched)} no line of this tree. <a href={sectionHash(project, "health")}>See them in Health</a>
+          {fill(t("tree.drift.unmatched", { count: drift.unmatched, link: slot("link") }), { link: <a href={sectionHash(project, "health")}>{t("tree.drift.seeHealth")}</a> })}
         </span>
       </p>
     );
@@ -108,7 +105,7 @@ export function DriftStatus({
       {body}
       {health.error !== null && !health.isFetching && (
         <p className="note tree-drift-line" role="alert">
-          Drift could not be read again: {apiErrorOf(health.error).message}
+          {fill(t("tree.drift.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(health.error).message}</span> })}
         </p>
       )}
     </div>

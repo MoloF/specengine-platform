@@ -91,7 +91,7 @@ ledger-api with no `[code]` (or `code-cannot`): `rows` null with the one `bindin
 - A row key holding characters that verify's text escapes matches no note, so it gets the fallback, never "No change".
 - Hunks are uncut, so a document node's can be long; a CRLF working copy differs on every line (`spec-lock-diff.md` "Known limits").
 - No deep link, no `spec lock diff` row command, no word diff.
-- The panel loads with the main chunk (480.13 kB, under Vite's 500 kB warning).
+- The panel loads with the main chunk; first-load JS is gated in `ui-languages.md` "Size".
 
 ## Tests
 

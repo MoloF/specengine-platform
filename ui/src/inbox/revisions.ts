@@ -1,4 +1,5 @@
 import type { Proposal, RevisionChange } from "../api/types";
+import type { Translate } from "../i18n";
 
 // What approval does to the revisions of the nodes a proposal changes, as the review document's
 // `revisions` says it (docs/features/rev-discipline.md "Review document, stage, queue", "UI"). The
@@ -21,18 +22,16 @@ export function isRefused(entry: RevisionChange): boolean {
 }
 
 /** The lock entries an editorial approval refreshes for one node: a count, or unknown when the lock is unreadable. */
-export function lockEntriesText(count: number | null): string {
-  if (count === null) {
-    return "lock entries unknown";
-  }
-  return count === 1 ? "1 lock entry" : `${String(count)} lock entries`;
+export function lockEntriesText(count: number | null, t: Translate): string {
+  return count === null ? t("inbox.lockEntriesUnknown") : t("inbox.lockEntries", { count });
 }
 
 /**
- * One node's line as `spec review` writes it (`R-12 3 -> 4 (2 lock entries)`, a refused raise
- * `ADR-0007 1 -> refused (0 lock entries)`), `rev` named and the arrow drawn (U+2192).
+ * One node's line in the form `spec review` writes it (`R-12 3 -> 4 (2 lock entries)`, a refused
+ * raise `ADR-0007 1 -> refused (0 lock entries)`), `rev` named and the arrow drawn (U+2192): its
+ * words the catalog's, its ID, numbers and arrow as written.
  */
-export function revisionText(entry: RevisionChange): string {
-  const to = isRefused(entry) ? "refused" : String(entry.to);
-  return `${entry.id} rev ${String(entry.rev)} → ${to} (${lockEntriesText(entry.lock_entries)})`;
+export function revisionText(entry: RevisionChange, t: Translate): string {
+  const to = isRefused(entry) ? t("inbox.revisionRefused") : String(entry.to);
+  return t("inbox.revision", { id: entry.id, rev: entry.rev, to, entries: lockEntriesText(entry.lock_entries, t) });
 }

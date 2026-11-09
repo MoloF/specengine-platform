@@ -1,7 +1,7 @@
 import { createContext, use } from "react";
 import { useTranslate, type Translate } from "../i18n";
 import type { en } from "../i18n/en";
-import { DECISION_KEYS, WORDING } from "../inbox/decisions";
+import { DECISION_KEYS, verbOf } from "../inbox/decisions";
 import { Dialog } from "../ui/Dialog";
 import type { SectionId } from "./sections";
 
@@ -32,7 +32,7 @@ const CLOSE_DIALOG: Shortcut = [["esc"], (t) => t("app.shortcuts.closeDialog")];
 const INBOX_KEYS: readonly Shortcut[] = [
   [[typed("j"), "down"], (t) => t("app.shortcuts.inbox.next")],
   [[typed("k"), "up"], (t) => t("app.shortcuts.inbox.previous")],
-  ...DECISION_KEYS.map(([kind, key]): Shortcut => [[typed(key)], () => WORDING[kind].verb]),
+  ...DECISION_KEYS.map(([kind, key]): Shortcut => [[typed(key)], (t) => verbOf(kind, t)]),
   JUMP,
   SHOW_LIST,
   CLOSE_DIALOG,

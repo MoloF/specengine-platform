@@ -3,7 +3,7 @@ import { ALL_SECTIONS, homeHash, navOf, sectionHash } from "../app/routes";
 import type { Translate } from "../i18n";
 import { fold } from "../inbox/filter";
 import { queueOrder } from "../inbox/order";
-import { summaryOf } from "../inbox/summary";
+import { writtenSummary } from "../inbox/summary";
 import { groupsOf } from "../tasks/groups";
 
 // The palette's options (docs/features/ui-home.md "Implementation", Palette): built from what the
@@ -121,9 +121,15 @@ function tasksInOrder(tasks: readonly TaskListEntry[], t: Translate): readonly I
   );
 }
 
-/** The proposals in the Inbox's order (`queueOrder`), matched on ID and summary. */
+/** The proposals in the Inbox's order (`queueOrder`), matched on ID and the agent's summary, else kind and target: the same in every language. */
 function queueInOrder(proposals: readonly InboxEntry[]): readonly Indexed<InboxEntry>[] {
-  return indexedOnce(QUEUE_IN_ORDER, proposals, queueOrder, (proposal) => [proposal.id, summaryOf(proposal)], (proposal) => proposal.id);
+  return indexedOnce(
+    QUEUE_IN_ORDER,
+    proposals,
+    queueOrder,
+    (proposal) => [proposal.id, writtenSummary(proposal) ?? `${proposal.kind} ${proposal.target_id}`],
+    (proposal) => proposal.id,
+  );
 }
 
 /** The held entries whose folded words hold the needle (all of them for an empty one). */

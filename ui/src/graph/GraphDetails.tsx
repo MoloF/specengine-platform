@@ -8,10 +8,12 @@ import { linkStateLook } from "../tree/labels";
 import type { BoxContent, LayoutBox } from "./layout";
 import { edgeLine, moreLabel } from "./lines";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 
 function EdgeLines({ edges }: { edges: readonly GraphEdge[] }) {
+  const t = useTranslate();
   if (edges.length === 0) {
-    return <p className="muted">No edge of this answer ends here.</p>;
+    return <p className="muted">{t("graph.details.noEdge")}</p>;
   }
   return (
     <ul className="graph-edge-lines">
@@ -69,26 +71,26 @@ export function GraphDetails({
             <li key={`${holder.path}:${String(holder.line)}`} className="graph-holder">
               <dl className="facts">
                 <div className="fact">
-                  <dt>Kind</dt>
+                  <dt>{t("graph.details.kind")}</dt>
                   <dd className="mono">{holder.kind ?? "-"}</dd>
                 </div>
                 <div className="fact fact-wide">
-                  <dt>Title</dt>
+                  <dt>{t("graph.details.title")}</dt>
                   <dd>{holder.title ?? "-"}</dd>
                 </div>
                 <div className="fact fact-wide">
-                  <dt>Where</dt>
+                  <dt>{t("graph.details.where")}</dt>
                   <dd className="mono">
                     {holder.path}:{holder.line}
                   </dd>
                 </div>
                 {holder.archived && (
                   <div className="fact">
-                    <dt>Flags</dt>
+                    <dt>{t("graph.details.flags")}</dt>
                     <dd>
                       <span className="plain-tag">
                         <Icon name="archived" />
-                        archived
+                        {t("graph.archivedWord")}
                       </span>
                     </dd>
                   </div>
@@ -98,25 +100,25 @@ export function GraphDetails({
           ))}
         </ul>
         <p className="graph-details-distance">
-          Distance {walked.distance}
+          {t("graph.details.distance", { distance: walked.distance })}
           {walked.distance === 0 && (
             <span className="graph-mark graph-mark-focus">
               <Icon name="focus" />
-              Focus
+              {t("graph.focus")}
             </span>
           )}
         </p>
         <section className="graph-details-section">
-          <h3 className="card-section-title">Edges ({edges.length})</h3>
+          <h3 className="card-section-title">{t("graph.list.edges", { count: edges.length })}</h3>
           <EdgeLines edges={edges} />
         </section>
         <p className="graph-details-actions">
           <a className="button" href={sectionHash(project, "tree", walked.name)}>
-            Open in spec tree
+            {t("graph.details.openInTree")}
           </a>
           <a className="button" href={sectionHash(project, "graph", walked.name)}>
             <Icon name="focus" />
-            Centre here
+            {t("graph.details.centre")}
           </a>
         </p>
       </>
@@ -129,9 +131,9 @@ export function GraphDetails({
         <>
           <p className="graph-mark">
             <Icon name="stub" />
-            Not walked: a section
+            {t("graph.notWalkedSection")}
           </p>
-          <p className="muted">An edge ends at this nested section by its own name; the walk did not reach it.</p>
+          <p className="muted">{t("graph.details.sectionStub")}</p>
           <EdgeLines edges={content.stub.edges} />
         </>
       );
@@ -142,23 +144,24 @@ export function GraphDetails({
           <p className="graph-details-state">
             <span className="graph-mark">
               <Icon name="stub" />
-              Not walked
+              {t("graph.notWalked")}
             </span>
-            <Badge name="State" look={linkStateLook(stub.edge.state, t)} />
+            <Badge name={t("graph.list.state")} look={linkStateLook(stub.edge.state, t)} />
           </p>
           <EdgeLines edges={[stub.edge]} />
-          {stub.edge.reason !== null && <p className="verbatim">{stub.edge.reason}</p>}
+          {stub.edge.reason !== null && (
+            <p className="verbatim" lang="en">
+              {stub.edge.reason}
+            </p>
+          )}
         </>
       );
     }
   } else {
-    title = moreLabel(content.hidden, content.column);
+    title = moreLabel(content.hidden, content.column, t);
     body = (
       <>
-        <p>
-          The column at distance {content.column} holds {content.hidden} more boxes than the canvas draws; the List holds every
-          one.
-        </p>
+        <p>{t("graph.details.moreText", { column: content.column, count: content.hidden })}</p>
         <p>
           <button
             type="button"
@@ -167,7 +170,7 @@ export function GraphDetails({
               onShowInList(content);
             }}
           >
-            Show in List
+            {t("graph.details.showInList")}
           </button>
         </p>
       </>
@@ -182,10 +185,10 @@ export function GraphDetails({
         </h2>
         <span className="graph-mark graph-mark-selected">
           <Icon name="selected" />
-          Selected
+          {t("graph.selected")}
         </span>
         <button type="button" className="button button-quiet graph-details-close" onClick={onClose}>
-          Close<span className="sr-only"> the details</span>
+          {fill(t("graph.details.close", { what: slot("what") }), { what: <span className="sr-only">{t("graph.details.closeWhat")}</span> })}
         </button>
       </header>
       {body}

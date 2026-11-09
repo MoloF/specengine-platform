@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../app/App";
-import { CUT_NOTICE, TOTAL_CUT_NOTICE } from "../tasks/SpecChangesPanel";
+import { en } from "../i18n/en";
 import { argsOf } from "../test/stubClient";
 import { MockClient } from "./MockClient";
 import type { Scenario } from "./scenario";
@@ -272,8 +272,8 @@ describe("the large scenario (AC-14)", () => {
     const entries = Array.from(panel.querySelectorAll<HTMLElement>(".snapshot-diff"));
     const notes = entries.map((entry) => entry.querySelector(".cut-note")?.textContent);
     expect([entries.length, within(panel).getAllByRole("figure").length]).toEqual([128, 32]);
-    expect(notes.slice(0, 32).every((note) => note === CUT_NOTICE)).toBe(true);
-    expect(notes.slice(32).every((note) => note === TOTAL_CUT_NOTICE)).toBe(true);
+    expect(notes.slice(0, 32).every((note) => note === en.tasks.changes.cut)).toBe(true);
+    expect(notes.slice(32).every((note) => note === en.tasks.changes.totalCut)).toBe(true);
     expect(entries.slice(32).every((entry) => entry.querySelector(".diff") === null)).toBe(true);
     expect(within(panel).queryByText("No section diff attached.")).toBeNull();
   });

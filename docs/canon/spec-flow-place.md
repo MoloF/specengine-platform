@@ -51,10 +51,10 @@ A selected name the drawing read lacks seeks once per place: `getTree({})`, then
 The left pane (`FlowPlaces.tsx`), a `<nav>` "Flow places" apart from the app's; every item an `<a>`, so a click pushes.
 
 - **Modules**, when `[[module]]` serves one: All modules, then titles, the one in force `aria-current`.
-- **Scope**: Up, then the scope's title (`aria-current="location"`). Up names the holder a held read gives (`useHeldHolder`), else the lens root; none at the lens root; a lens root not yet read: `flow.upStart`.
+- **Scope**: Up, then the scope's title (`aria-current="location"`). Up names the holder a held read gives (`useHeldHolder`), else the lens root, by the title a held read gives it (`useHeldTitle`, no read of its own), else its ID; none at the lens root; a lens root not yet read: `flow.upStart`.
 - **Stages**, from the summary: All stages, the lanes in served order, each `<c> of <n> confirmed` and a bar from served `counts`, No stage last. At an unrooted Top: `flow.stagesAtTop`, no read. A failed summary: `flow.stagesFailed` and Retry; the canvas stands.
 - **Under the current item**: for All stages, the scope's groups (`holds > 0`); for a stage, the distinct `group`s its nodes name, first seen, the scope left out.
 
 ## Known limits
 
-- **Up from held reads**: a rooted read leaves its root's `group` null. A fresh deep mount says `flow.upStart`, going to the lens root, maybe skipping a level; a held holder is named by its ID, not its title.
+- **Up from held reads**: a rooted read leaves its root's `group` null. A fresh deep mount says `flow.upStart`, going to the lens root, maybe skipping a level; a holder no held read titles is named by its ID.

@@ -1,4 +1,5 @@
 import { act, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { sentence } from "../test/text";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { Card, CardList, CardRow, QueueEvent } from "../api/types";
@@ -1389,7 +1390,7 @@ describe("the card against its brief", () => {
     client.getTrace.mockRejectedValue(new ClientError({ status: 503, message: "the index is locked" }));
     await open(client, "#/alpha/board/C-0001");
     const panel = await screen.findByRole("complementary", { name: "The card" });
-    expect((await within(panel).findByText(/could not be read: the index is locked/)).textContent).toContain("The state of this card's targets");
+    expect((await within(panel).findByText(sentence(/could not be read: the index is locked/))).textContent).toContain("The state of this card's targets");
     expect(within(panel).getByRole("button", { name: "Clear" })).toBeTruthy();
     expect(within(card("C-0001")).getByText("Suspect")).toBeTruthy();
   });
@@ -1448,7 +1449,7 @@ describe("the card against its brief", () => {
     act(() => {
       tail({ seq: 9, type: "card.moved", payload: { id: "C-0002" } });
     });
-    expect((await within(panel).findByText(/could not be read: the queue is locked/)).textContent).toContain("Whether the brief changed");
+    expect((await within(panel).findByText(sentence(/could not be read: the queue is locked/))).textContent).toContain("Whether the brief changed");
     expect(within(panel).queryByRole("button", { name: "Clear" })).toBeNull();
     expect(within(panel).queryByRole("region", { name: "Against the brief" })).toBeNull();
   });

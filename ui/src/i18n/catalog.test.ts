@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { enT } from "../test/text";
-import { CATALOGS, isLanguage, LANGUAGES, type Messages } from "./catalog";
+import { isLanguage, LANGUAGES, type Messages } from "./catalog";
 import { en } from "./en";
 import { ru } from "./ru";
 
@@ -136,7 +136,6 @@ describe("the catalogs (LG-1)", () => {
 
   it("are the two languages the select offers", () => {
     expect(LANGUAGES).toEqual(["en", "ru"]);
-    expect(Object.keys(CATALOGS)).toEqual(["en", "ru"]);
     expect([isLanguage("en"), isLanguage("ru"), isLanguage("ru-RU"), isLanguage("uk"), isLanguage("")]).toEqual([true, true, false, false, false]);
   });
 
@@ -179,5 +178,54 @@ describe("typed keys (LG-9)", () => {
     expect(enT("app.mockData")).toBe("Mock data");
     // @ts-expect-error: no such key; `tsc --noEmit` fails once keys are untyped (M24).
     expect(enT("app.nope")).toBe("app.nope");
+  });
+});
+
+/**
+ * The keys `fill.ts` `around()` reads: a sentence holding a count that is drawn, the words around it
+ * read out. `around` cuts at the first place the count's digits stand, so the count's placeholder
+ * must come first in every language, no digit before it. Each by the placeholder it searches for.
+ */
+const AROUND: Readonly<Record<string, string>> = {
+  "tasks.groupCount": "count",
+  "board.column.count": "count",
+  "health.left.queueTotal": "count",
+  "health.amendments.total": "count",
+  "health.code.rowsOf": "count",
+  "health.unboundRow.total": "unbound",
+  "health.drift.total": "shown",
+  "health.findings.counted": "count",
+};
+
+const viewSources = import.meta.glob<string>(["/src/**/*.tsx", "!/src/**/*.test.tsx"], { query: "?raw", import: "default", eager: true });
+
+describe("the sentences around() cuts (fill.ts)", () => {
+  it("are every key a view passes to around(), a Counted's phrase included", () => {
+    const read = new Set<string>();
+    for (const text of Object.values(viewSources)) {
+      for (const match of text.matchAll(/around\(\s*t\("([\w.]+)"|said=\{t\("([\w.]+)"/g)) {
+        read.add(match[1] ?? match[2] ?? "");
+      }
+    }
+    expect([...read].sort()).toEqual(Object.keys(AROUND).sort());
+  });
+
+  it("put the searched count first in every form of every language, no digit before it", () => {
+    const wrong: string[] = [];
+    for (const [language, leaves] of [["en", flat(en)] as const, ["ru", flat(ru)] as const]) {
+      for (const [key, searched] of Object.entries(AROUND)) {
+        const forms = [...leaves.entries()].filter(([path]) => path === key || path.replace(PLURAL, "") === key);
+        if (forms.length === 0) {
+          wrong.push(`${language} ${key}: no value`);
+        }
+        for (const [path, value] of forms) {
+          const first = /\{\{([a-z][A-Za-z0-9]*)\}\}/.exec(value);
+          if (first?.[1] !== searched || /\d/.test(value.slice(0, first.index))) {
+            wrong.push(`${language} ${path}: ${value}`);
+          }
+        }
+      }
+    }
+    expect(wrong).toEqual([]);
   });
 });

@@ -6,6 +6,8 @@ import { pushHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
@@ -37,18 +39,24 @@ import {
   type GraphTab,
 } from "./settings";
 
+/** The forms a REF takes, written as typed: code in every language. */
+const REF_FORMS = { slug: "slug/ID", section: "ID#SECTION", md: ".md" } as const;
+
 /** The canvas and its drawing library load with the first answer drawn, not with the app. */
 const GraphCanvas = lazy(() => import("./GraphCanvas").then((module) => ({ default: module.GraphCanvas })));
 
 /** What the answer says besides its nodes and edges: notes, what was left out, a cut. */
 function AnswerNotes({ answer, onArchive }: { answer: GraphAnswer; onArchive: (() => void) | null }) {
-  const leftOut = leftOutText(answer.left_out);
+  const t = useTranslate();
+  const leftOut = leftOutText(answer.left_out, t);
   return (
     <>
       {answer.notes.length > 0 && (
-        <ul className="note-list" aria-label="Notes from the daemon">
+        <ul className="note-list" aria-label={t("graph.notes")}>
           {answer.notes.map((note, index) => (
-            <li key={`${String(index)}-${note}`}>{note}</li>
+            <li key={`${String(index)}-${note}`} lang="en">
+              {note}
+            </li>
           ))}
         </ul>
       )}
@@ -61,7 +69,7 @@ function AnswerNotes({ answer, onArchive }: { answer: GraphAnswer; onArchive: ((
               <>
                 {" ("}
                 <button type="button" className="link-button" onClick={onArchive}>
-                  Include archive
+                  {t("graph.includeArchive")}
                 </button>
                 {")"}
               </>
@@ -73,7 +81,7 @@ function AnswerNotes({ answer, onArchive }: { answer: GraphAnswer; onArchive: ((
         <div className="notice cut-notice" role="note">
           <p className="notice-title">
             <Icon name="info" />
-            <span>The daemon cut this answer: some nodes or edges are not in it. Lower the depth or follow fewer types.</span>
+            <span>{t("graph.cut")}</span>
           </p>
         </div>
       )}
@@ -99,30 +107,28 @@ function NoEdge({
   onMentions: () => void;
   onArchive: () => void;
 }) {
+  const t = useTranslate();
   return (
     <div className="empty-state">
-      <h2>No link to draw</h2>
+      <h2>{t("graph.noEdge")}</h2>
       <p>
-        {settings.impact
-          ? `Nothing reaches ${nodeRef} along the impact types: an edit to it touches no other node they name.`
-          : `No link of the followed types leaves ${nodeRef}.`}{" "}
-        {countText(answer)}.
+        {settings.impact ? t("graph.noImpact", { ref: nodeRef }) : t("graph.noOutgoing", { ref: nodeRef })} {t("graph.countLine", { counts: countText(answer, t) })}
       </p>
-      <p className="muted">Next: show what an edit reaches, follow mentions too, or include the archive.</p>
+      <p className="muted">{t("graph.noEdgeNext")}</p>
       <p className="graph-next">
         {!settings.impact && (
           <button type="button" className="button" onClick={onImpact}>
-            Show Impact
+            {t("graph.showImpact")}
           </button>
         )}
         {mentionsChip && (
           <button type="button" className="button" onClick={onMentions}>
-            Follow mentions too
+            {t("graph.followMentions")}
           </button>
         )}
         {!settings.archive && (
           <button type="button" className="button" onClick={onArchive}>
-            Include archive
+            {t("graph.includeArchive")}
           </button>
         )}
       </p>
@@ -136,6 +142,7 @@ function NoEdge({
  * and its cut stay in core; the options live in memory per project, the REF in the hash.
  */
 export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: string; nodeRef: string | null; memory?: GraphMemory }) {
+  const t = useTranslate();
   const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
@@ -194,8 +201,8 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
       return;
     }
     spoken.current = answered;
-    announce(countText(fresh));
-  }, [fresh, answered, announce]);
+    announce(countText(fresh, t));
+  }, [fresh, answered, announce, t]);
 
   // No REF: the field takes focus, after the shell has focused the view's heading.
   useEffect(() => {
@@ -298,23 +305,26 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
   if (nodeRef === null) {
     body = (
       <div className="empty-state">
-        <h2 id={emptyId}>Give a REF to draw its links</h2>
+        <h2 id={emptyId}>{t("graph.empty")}</h2>
         <p>
-          A REF is an ID, <span className="mono">slug/ID</span>, <span className="mono">ID#SECTION</span> or a root-relative{" "}
-          <span className="mono">.md</span> path. Outgoing draws what the node reaches; Impact, what an edit to it touches.
+          {fill(t("graph.emptyRef", { slug: slot("slug"), section: slot("section"), md: slot("md") }), {
+            slug: <span className="mono">{REF_FORMS.slug}</span>,
+            section: <span className="mono">{REF_FORMS.section}</span>,
+            md: <span className="mono">{REF_FORMS.md}</span>,
+          })}
         </p>
-        <p className="muted">Next: type a REF above and press Show, or open a node in the spec tree and choose Show in graph.</p>
+        <p className="muted">{t("graph.emptyNext")}</p>
       </div>
     );
   } else if (answer === undefined) {
     body =
       failure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Drawing the graph of ${nodeRef}`} lines={6} />
+          <Skeleton label={t("graph.drawing", { ref: nodeRef })} lines={6} />
         </div>
       ) : (
         <ReadFailure
-          title={`The graph of ${nodeRef} could not be read`}
+          title={t("graph.failed", { ref: nodeRef })}
           failure={failure}
           retrying={graph.isFetching}
           attempt={graph.errorUpdateCount}
@@ -328,7 +338,7 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
     body = (
       <>
         <ErrorPanel
-          title={`${nodeRef} names nothing to draw`}
+          title={t("graph.namesNothing", { ref: nodeRef })}
           message={answer.reason}
           retrying={graph.isFetching}
           attempt={graph.dataUpdatedAt}
@@ -363,17 +373,17 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
     body = (
       <>
         <div className="graph-summary">
-          <p className="graph-count">{countText(answer)}</p>
+          <p className="graph-count">{countText(answer, t)}</p>
           <AnswerNotes answer={answer} onArchive={settings.archive ? null : includeArchive} />
         </div>
         <Tabs
-          label="Views of the graph"
+          label={t("graph.tabsLabel")}
           base={tabsBase}
           selected={settings.tab}
           onSelect={setTab}
           tabs={[
-            { id: "canvas", label: "Canvas" },
-            { id: "list", label: "List" },
+            { id: "canvas", label: t("graph.tabCanvas") },
+            { id: "list", label: t("graph.tabList") },
           ]}
         />
         <TabPanel base={tabsBase} id="canvas" selected={settings.tab === "canvas"}>
@@ -383,16 +393,13 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
                 <p className="notice cut-notice graph-limit" role="note">
                   <span className="notice-title">
                     <Icon name="info" />
-                    <span>
-                      The canvas shows distance 0-{layout.limit.lastColumn}: {layout.limit.shown} of {layout.limit.total} nodes; see the
-                      List.
-                    </span>
+                    <span>{t("graph.limit", { last: layout.limit.lastColumn, shown: layout.limit.shown, count: layout.limit.total })}</span>
                   </span>
                 </p>
               )}
               <div className={`graph-stage${selectedBox === undefined ? "" : " has-details"}`}>
-                <RegionBoundary name="canvas">
-                  <Suspense fallback={<Skeleton label="Loading the canvas" lines={4} />}>
+                <RegionBoundary name={t("graph.boundary.canvas")}>
+                  <Suspense fallback={<Skeleton label={t("graph.canvasLoading")} lines={4} />}>
                     <GraphCanvas
                       layout={layout}
                       rovingId={rovingId}
@@ -421,7 +428,7 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
         </TabPanel>
         <TabPanel base={tabsBase} id="list" selected={settings.tab === "list"}>
           {settings.tab === "list" && (
-            <RegionBoundary name="list">
+            <RegionBoundary name={t("graph.boundary.list")}>
               <GraphList project={project} answer={answer} />
             </RegionBoundary>
           )}
@@ -434,9 +441,9 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
     <section className="view graph-view" aria-labelledby={titleId} onKeyDown={onViewKeyDown}>
       <header className="view-head">
         <h1 id={titleId} tabIndex={-1}>
-          {nodeRef === null ? "Graph" : `Graph: ${nodeRef}`}
+          {nodeRef === null ? t("graph.title") : t("graph.titleOf", { ref: nodeRef })}
         </h1>
-        <p className="view-about">What a node reaches along its links, and what an edit to it touches (Impact). Read-only.</p>
+        <p className="view-about">{t("graph.about")}</p>
       </header>
       <GraphControls
         project={project}
@@ -450,10 +457,10 @@ export function GraphView({ project, nodeRef, memory = NO_MEMORY }: { project: s
         onChip={onChip}
       />
       <div ref={results} tabIndex={-1} className="graph-results" aria-busy={busy}>
-        <RegionBoundary name="graph">{body}</RegionBoundary>
+        <RegionBoundary name={t("graph.boundary.graph")}>{body}</RegionBoundary>
         {answer !== undefined && graph.error !== null && (
           <p className="note" role="alert">
-            The graph could not be read again: {apiErrorOf(graph.error).message}
+            {fill(t("graph.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(graph.error).message}</span> })}
           </p>
         )}
       </div>

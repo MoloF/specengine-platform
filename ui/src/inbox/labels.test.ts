@@ -8,7 +8,7 @@ import * as inbox from "./labels";
 describe("closed tables (AC-07)", () => {
   it("label known severities and keep an unknown one raw and neutral", () => {
     expect(severityLook("high", enT)).toMatchObject({ label: "High", tone: "severity-high" });
-    expect(severityLook("urgent", enT)).toEqual({ label: "urgent", tone: "severity-unknown", icon: "unknown" });
+    expect(severityLook("urgent", enT)).toEqual({ label: "urgent", tone: "severity-unknown", icon: "unknown", served: true });
     expect(severityLook(null, enT).tone).toBe("severity-unknown");
     expect(severityRank("urgent")).toBe(UNRANKED);
     expect(severityRank("low")).toBeLessThan(UNRANKED);
@@ -17,7 +17,7 @@ describe("closed tables (AC-07)", () => {
 
   it("label known states and keep an unknown one raw and neutral", () => {
     expect(statusLook("changes_requested", enT)).toMatchObject({ label: "Changes requested", tone: "proposal-changes-requested" });
-    expect(statusLook("escalated", enT)).toEqual({ label: "escalated", tone: "proposal-unknown", icon: "unknown" });
+    expect(statusLook("escalated", enT)).toEqual({ label: "escalated", tone: "proposal-unknown", icon: "unknown", served: true });
     expect(statusLook("constructor", enT).tone).toBe("proposal-unknown");
   });
 

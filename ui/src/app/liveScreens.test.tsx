@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpClient } from "../api/http";
 import type { CheckReport, GraphView, TaskList, TaskNotFound, TaskPackage } from "../api/types";
-import { NO_DIFF_NOTICE } from "../tasks/SpecChangesPanel";
+import { en } from "../i18n/en";
 import {
   aCheckFinding,
   aCheckReport,
@@ -315,7 +315,7 @@ describe("Tasks over the daemon (AC-11 of ui-live-tasks)", () => {
     fireEvent.click(within(pane).getByRole("tab", { name: /^Spec changes/ }));
     const changes = within(pane).getByRole("tabpanel");
     const entry = changes.querySelector('.snapshot-diff[data-node="MEC-ANCHORAGE"]');
-    expect([entry?.querySelector(".diff"), entry?.querySelector(".cut-note")?.textContent]).toEqual([null, NO_DIFF_NOTICE]);
+    expect([entry?.querySelector(".diff"), entry?.querySelector(".cut-note")?.textContent]).toEqual([null, en.tasks.changes.noDiff]);
 
     fireEvent.click(within(pane).getByRole("tab", { name: "Package" }));
     const json = within(pane).getByRole("tabpanel").querySelector(".task-json")?.textContent ?? "";

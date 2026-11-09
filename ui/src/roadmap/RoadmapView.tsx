@@ -6,6 +6,7 @@ import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { aboutOf } from "../app/sections";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
@@ -14,7 +15,7 @@ import { TabPanel, Tabs } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { RoadmapLanes } from "./RoadmapLanes";
-import { emptyPlanText, headerLine, NO_PLAN_LINE, unlistedText } from "./text";
+import { emptyPlanText, headerLine, unlistedText } from "./text";
 
 /** The canvas and its drawing library load when the Chain tab is first shown, not with the app. */
 const RoadmapChain = lazy(() => import("./RoadmapChain").then((module) => ({ default: module.RoadmapChain })));
@@ -92,11 +93,11 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
   if (plan === undefined) {
     body =
       failure === null ? (
-        <Skeleton label={`Reading the plan of ${project}`} lines={6} />
+        <Skeleton label={t("roadmap.reading", { project })} lines={6} />
       ) : (
         <div className="roadmap-failure">
           <ErrorPanel
-            title="The plan could not be read"
+            title={t("roadmap.failed")}
             message={apiErrorOf(failure).message}
             retrying={roadmap.isFetching}
             attempt={roadmap.errorUpdateCount}
@@ -104,7 +105,7 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
           />
           <p className="note roadmap-no-plan">
             <Icon name="info" />
-            <span>{NO_PLAN_LINE}</span>
+            <span>{t("roadmap.noPlan")}</span>
           </p>
         </div>
       );
@@ -112,19 +113,19 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
     // The exit-1 document: only for a release the screen never sends; shown as the daemon says it.
     body = (
       <div className="roadmap-failure">
-        <ErrorPanel title="The plan could not be read" message={plan.reason} retrying={roadmap.isFetching} attempt={roadmap.dataUpdatedAt} onRetry={retry} />
+        <ErrorPanel title={t("roadmap.failed")} message={plan.reason} retrying={roadmap.isFetching} attempt={roadmap.dataUpdatedAt} onRetry={retry} />
         <p className="note roadmap-no-plan">
           <Icon name="info" />
-          <span>{NO_PLAN_LINE}</span>
+          <span>{t("roadmap.noPlan")}</span>
         </p>
       </div>
     );
   } else {
-    const empty = emptyPlanText(plan);
+    const empty = emptyPlanText(plan, t);
     body = (
       <>
         <div className="roadmap-head">
-          <p className="roadmap-line">{headerLine(plan)}</p>
+          <p className="roadmap-line">{headerLine(plan, t)}</p>
           <button
             type="button"
             className="button"
@@ -133,18 +134,18 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
             }}
           >
             <Icon name="retry" />
-            <span>Read again</span>
+            <span>{t("roadmap.readAgain")}</span>
           </button>
         </div>
         {roadmap.error !== null && (
           <div className="roadmap-reread-failed">
             <p className="note" role="alert">
               <Icon name="alert" />
-              <span>The plan could not be read again: {apiErrorOf(roadmap.error).message}</span>
+              <span>{fill(t("roadmap.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(roadmap.error).message}</span> })}</span>
             </p>
             <button type="button" className="button" aria-disabled={roadmap.isFetching} onClick={roadmap.isFetching ? undefined : retry}>
               <Icon name="retry" />
-              <span>{roadmap.isFetching ? "Retrying" : "Retry"}</span>
+              <span>{roadmap.isFetching ? t("ui.retrying") : t("ui.retry")}</span>
             </button>
           </div>
         )}
@@ -152,31 +153,31 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
         {itemId !== null && !listed && (
           <p className="note roadmap-unlisted">
             <Icon name="info" />
-            <span>{unlistedText(itemId)}</span>
-            <a href={sectionHash(project, "tree", itemId)}>Open {itemId} in the Spec tree</a>
+            <span>{unlistedText(itemId, t)}</span>
+            <a href={sectionHash(project, "tree", itemId)}>{t("roadmap.openInTree", { id: itemId })}</a>
           </p>
         )}
         <Tabs
-          label="Views of the plan"
+          label={t("roadmap.tabsLabel")}
           base={tabsBase}
           selected={tab}
           onSelect={setTab}
           tabs={[
-            { id: "lanes", label: "Lanes" },
-            { id: "chain", label: "Chain" },
+            { id: "lanes", label: t("roadmap.lanes") },
+            { id: "chain", label: t("roadmap.chain") },
           ]}
         />
         <TabPanel base={tabsBase} id="lanes" selected={tab === "lanes"}>
           {tab === "lanes" && (
-            <RegionBoundary name="lanes">
+            <RegionBoundary name={t("roadmap.boundary.lanes")}>
               <RoadmapLanes project={project} plan={plan} selectedId={listed ? itemId : null} />
             </RegionBoundary>
           )}
         </TabPanel>
         <TabPanel base={tabsBase} id="chain" selected={tab === "chain"}>
           {tab === "chain" && (
-            <RegionBoundary name="canvas">
-              <Suspense fallback={<Skeleton label="Loading the canvas" lines={4} />}>
+            <RegionBoundary name={t("roadmap.boundary.canvas")}>
+              <Suspense fallback={<Skeleton label={t("roadmap.canvasLoading")} lines={4} />}>
                 <RoadmapChain
                   plan={plan}
                   selectedId={listed ? itemId : null}
@@ -196,12 +197,12 @@ export function RoadmapView({ project, itemId, memory = NO_ROADMAP_MEMORY }: { p
     <section className="view roadmap-view" aria-labelledby={titleId} onKeyDown={onKeyDown}>
       <header className="view-head">
         <h1 id={titleId} tabIndex={-1}>
-          Roadmap
+          {t("roadmap.title")}
         </h1>
-        <p className="view-about">{aboutOf("roadmap", t)} Read only.</p>
+        <p className="view-about">{t("roadmap.about", { about: aboutOf("roadmap", t) })}</p>
       </header>
       <div ref={results} tabIndex={-1} className="roadmap-results" aria-busy={roadmap.isFetching}>
-        <RegionBoundary name="plan">{body}</RegionBoundary>
+        <RegionBoundary name={t("roadmap.boundary.plan")}>{body}</RegionBoundary>
       </div>
     </section>
   );

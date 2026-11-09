@@ -2,12 +2,15 @@ import { lazy, Suspense, type KeyboardEvent } from "react";
 import { useCheck, useHealth } from "../api/queries";
 import { aboutOf } from "../app/sections";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { hasModifier, isTextField } from "../ui/keys";
 import { Skeleton } from "../ui/states";
 
 const HealthRegions = lazy(() => import("./HealthRegions").then((module) => ({ default: module.HealthRegions })));
 
+/** The command whose report Health shows, fixed words shown as code. */
+const CHECK_COMMAND = "spec check";
 
 /**
  * Health (`#/<project>/health`, docs/features/ui-health.md): `spec check`'s answer and what is left
@@ -38,13 +41,16 @@ export function HealthView({ project }: { project: string }) {
     <section className="view health-view" aria-labelledby="health-title" onKeyDown={onKeyDown}>
       <header className="view-head">
         <h1 id="health-title" tabIndex={-1}>
-          Health
+          {t("health.title")}
         </h1>
         <p className="view-about">
-          {aboutOf("health", t)} The check of <span className="mono">{project}</span>, as <code>spec check</code> reports it.
+          {fill(t("health.about", { about: aboutOf("health", t), project: slot("project"), command: slot("command") }), {
+            project: <span className="mono">{project}</span>,
+            command: <code>{CHECK_COMMAND}</code>,
+          })}
         </p>
       </header>
-      <Suspense fallback={<Skeleton label={`Loading the Health of ${project}`} lines={6} />}>
+      <Suspense fallback={<Skeleton label={t("health.loading", { project })} lines={6} />}>
         <HealthRegions project={project} check={check} health={health} />
       </Suspense>
     </section>

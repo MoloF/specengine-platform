@@ -2,7 +2,7 @@ import { useId, useRef, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNodeBindings } from "../api/queries";
 import type { ShownBindings, ShownNode, TestedRow } from "../api/types";
-import { CodeRowList, counted, oneLine } from "../health/codeRows";
+import { CodeRowList, oneLine } from "../health/codeRows";
 import { TestedLine } from "../health/DriftPart";
 import { Notes } from "../overview/parts";
 import { useAnnounce } from "../ui/announcer";
@@ -15,6 +15,14 @@ import { CommandList } from "./CommandList";
 import { nodeCommands } from "./commands";
 import { LockDiffPanel } from "./LockDiffPanel";
 import { placeKey, rowName } from "./rows";
+import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
+
+/** The commands and the evidence table the tab names, as code. */
+const VERIFY_NODE_COMMAND = "spec verify --node";
+const LOCK_ACCEPT_COMMAND = "spec lock accept";
+const PROPOSE_DRIFT_COMMAND = "spec propose drift";
+const TESTED_TABLE = "[[tested]]";
 
 // The Bindings tab (docs/features/ui-node-bindings.md), its data
 // `docs/canon/code-reads.md` "spec show --bindings": per holder, its code bindings and those of
@@ -34,33 +42,32 @@ function Heading({ many, children }: { many: boolean; children: string }) {
  * all", in the daemon's order (verify's key order), never sorted here.
  */
 function Rows({ name, bindings, many }: { name: string; bindings: ShownBindings; many: boolean }) {
+  const t = useTranslate();
   const { rows, omitted } = bindings;
   let body;
   if (rows.length === 0 && omitted === 0) {
     body = (
       <p className="bindings-state">
-        <span className="health-value health-measured">None</span>: no marker or lock entry binds code to this node or a section within it.
+        {fill(t("tree.bindings.none", { none: slot("none") }), { none: <span className="health-value health-measured">{t("tree.bindings.noneWord")}</span> })}
       </p>
     );
   } else {
+    const counted = t("tree.bindings.rows", { count: rows.length });
     body = (
       <>
-        <p className="bindings-count">
-          {counted(rows.length, "row", "rows")}
-          {omitted > 0 && `, ${String(omitted)} more not shown`}
-        </p>
+        <p className="bindings-count">{omitted > 0 ? t("tree.bindings.rowsMore", { rows: counted, more: omitted }) : counted}</p>
         <CodeRowList
           rows={rows}
-          label={`Code bindings of ${name}, in spec verify's order`}
-          order="in spec verify's order"
-          render={(row) => <BindingLine row={row} noId="No ID" focusable />}
+          label={t("tree.bindings.listLabel", { name })}
+          order={t("tree.bindings.order")}
+          render={(row) => <BindingLine row={row} noId={t("tree.bindings.noId")} focusable />}
         />
       </>
     );
   }
   return (
     <section className="bindings-part">
-      <Heading many={many}>Code bindings</Heading>
+      <Heading many={many}>{t("tree.bindings.title")}</Heading>
       {body}
     </section>
   );
@@ -80,33 +87,39 @@ function Tested({
   many: boolean;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   let body;
   if (tested === null) {
     body = (
       <p className="bindings-state" data-evidence-state="not-judged">
-        <span className="health-value">Not judged</span>: the <code>[[tested]]</code> entries were not judged on this read; the daemon&rsquo;s note
-        above says why.
+        {fill(t("tree.bindings.testedNotJudged", { word: slot("word"), table: slot("table") }), {
+          word: <span className="health-value">{t("tree.notJudged")}</span>,
+          table: <code>{TESTED_TABLE}</code>,
+        })}
       </p>
     );
   } else if (tested.length === 0) {
     body = (
       <p className="bindings-state" data-evidence-state="none">
-        <span className="health-value health-measured">None</span>: no <code>[[tested]]</code> block covers this node or a section within it.
+        {fill(t("tree.bindings.testedNone", { none: slot("none"), table: slot("table") }), {
+          none: <span className="health-value health-measured">{t("tree.bindings.noneWord")}</span>,
+          table: <code>{TESTED_TABLE}</code>,
+        })}
       </p>
     );
   } else {
     body = (
       <CodeRowList
         rows={tested}
-        label={`Test evidence of ${name}, by node`}
-        order="by node"
+        label={t("tree.bindings.testedLabel", { name })}
+        order={t("tree.bindings.byNode")}
         render={(entry) => <TestedLine project={project} entry={entry} onFollow={onFollow} />}
       />
     );
   }
   return (
     <section className="bindings-part">
-      <Heading many={many}>Test evidence</Heading>
+      <Heading many={many}>{t("tree.bindings.testedTitle")}</Heading>
       {body}
     </section>
   );
@@ -128,10 +141,11 @@ function HolderBindings({
   many: boolean;
   onFollow: (event: MouseEvent<HTMLAnchorElement>) => void;
 }) {
+  const t = useTranslate();
   const name = rowName(holder);
   const place = `${holder.path}:${String(holder.line)}`;
   return (
-    <section className="holder-bindings" aria-label={many ? `Bindings at ${place}` : undefined} data-holder={place}>
+    <section className="holder-bindings" aria-label={many ? t("tree.bindings.at", { place }) : undefined} data-holder={place}>
       {many && (
         <h2 className="holder-text-title mono">
           {holder.path}:{holder.line}-{holder.end_line}
@@ -141,8 +155,7 @@ function HolderBindings({
         <p className="bindings-state bindings-not-read">
           <Icon name="info" />
           <span>
-            <span className="health-value">Not read</span>: no code binding of this node came with the read; the daemon&rsquo;s note above says
-            why.
+            {fill(t("tree.bindings.notRead", { word: slot("word") }), { word: <span className="health-value">{t("tree.bindings.notReadWord")}</span> })}
           </span>
         </p>
       ) : (
@@ -162,39 +175,32 @@ function HolderBindings({
  * drift` and `lock accept` each need one node with an ID; a REF the check refuses gets none.
  */
 function NodeCommands({ nodeRef, holders }: { nodeRef: string; holders: readonly ShownNode[] }) {
+  const t = useTranslate();
   const headingId = useId();
   const several = holders.length > 1;
   const idless = holders.length === 1 && holders[0]?.id === null;
-  const commands = nodeCommands(nodeRef, several || idless);
+  const commands = nodeCommands(nodeRef, t, several || idless);
+  const ref = <bdi className="mono">{oneLine(nodeRef)}</bdi>;
+  const accept = <code>{LOCK_ACCEPT_COMMAND}</code>;
+  const drift = <code>{PROPOSE_DRIFT_COMMAND}</code>;
   return (
     <section className="owner-commands" aria-labelledby={headingId}>
       <h2 id={headingId} className="owner-commands-title">
         <Icon name="terminal" />
-        <span>Commands for a terminal</span>
+        <span>{t("tree.commands.title")}</span>
       </h2>
-      <p className="owner-commands-note">
-        Copy a command and run it in the project&rsquo;s worktree; only <code>spec lock accept</code> asks [y/N], before it writes spec.lock, and{" "}
-        <code>spec propose drift</code> queues an item for your decision. Nothing runs from here, and nothing waits on these rows.
-      </p>
+      <p className="owner-commands-note">{fill(t("tree.commands.note", { accept: slot("accept"), drift: slot("drift") }), { accept, drift })}</p>
       {commands === null ? (
-        <p className="muted">
-          No command for <bdi className="mono">{oneLine(nodeRef)}</bdi>: only a REF of Latin letters, digits and . _ / - is put in a command.
-        </p>
+        <p className="muted">{fill(t("tree.commands.none", { ref: slot("ref") }), { ref })}</p>
       ) : (
         <>
           {several && (
             <p className="owner-commands-note">
-              Only verify is offered: <bdi className="mono">{oneLine(nodeRef)}</bdi> names {holders.length} nodes, and <code>spec propose drift</code> and{" "}
-              <code>spec lock accept</code> each name one.
+              {fill(t("tree.commands.verifyOnly", { ref: slot("ref"), count: holders.length, drift: slot("drift"), accept: slot("accept") }), { ref, drift, accept })}
             </p>
           )}
-          {idless && (
-            <p className="owner-commands-note">
-              <bdi className="mono">{oneLine(nodeRef)}</bdi> names a document with no ID; <code>spec propose drift</code> and <code>spec lock accept</code>{" "}
-              need one.
-            </p>
-          )}
-          <CommandList commands={commands} label={`Commands for ${nodeRef}`} />
+          {idless && <p className="owner-commands-note">{fill(t("tree.commands.idless", { ref: slot("ref"), drift: slot("drift"), accept: slot("accept") }), { ref, drift, accept })}</p>}
+          <CommandList commands={commands} label={t("tree.commands.label", { ref: nodeRef })} />
         </>
       )}
     </section>
@@ -209,6 +215,7 @@ function NodeCommands({ nodeRef, holders }: { nodeRef: string; holders: readonly
  * its own read and its own Read again; this one never reads it.
  */
 export function BindingsPanel({ project, nodeRef, onFollow }: { project: string; nodeRef: string; onFollow: (event: MouseEvent<HTMLAnchorElement>) => void }) {
+  const t = useTranslate();
   const query = useNodeBindings(project, nodeRef);
   const failure = useRetainedFailure(query.error, query.isFetching);
   const region = useRef<HTMLDivElement>(null);
@@ -221,7 +228,7 @@ export function BindingsPanel({ project, nodeRef, onFollow }: { project: string;
     }
     void query.refetch({ cancelRefetch: false }).then((result) => {
       if (result.data !== undefined && result.error === null) {
-        announce(`The bindings of ${nodeRef} were read again.`);
+        announce(t("tree.bindings.readAgainSaid", { ref: nodeRef }));
       }
     });
   }
@@ -229,11 +236,11 @@ export function BindingsPanel({ project, nodeRef, onFollow }: { project: string;
   if (query.data === undefined) {
     return failure === null ? (
       <div aria-busy="true">
-        <Skeleton label={`Loading the bindings of ${nodeRef}`} lines={4} />
+        <Skeleton label={t("tree.bindings.loading", { ref: nodeRef })} lines={4} />
       </div>
     ) : (
       <ErrorPanel
-        title={`The bindings of ${nodeRef} could not be read`}
+        title={t("tree.bindings.failed", { ref: nodeRef })}
         message={apiErrorOf(failure).message}
         retrying={query.isFetching}
         attempt={query.errorUpdateCount}
@@ -249,17 +256,18 @@ export function BindingsPanel({ project, nodeRef, onFollow }: { project: string;
   return (
     <div ref={region} tabIndex={-1} className="bindings-panel" aria-busy={query.isFetching}>
       <div className="bindings-head">
-        <p className="muted">
-          The code bound to {nodeRef} and to the sections within it, each binding with the state <code>spec verify --node</code> gives it now. Read when
-          this tab first opens; a code edit shows after Read again.
-        </p>
+        <p className="muted">{fill(t("tree.bindings.about", { ref: nodeRef, command: slot("command") }), { command: <code>{VERIFY_NODE_COMMAND}</code> })}</p>
         <button type="button" className="button" aria-disabled={query.isFetching} onClick={readAgain}>
           <Icon name="retry" />
-          <span>{query.isFetching ? "Reading" : "Read again"}</span>
+          <span>{query.isFetching ? t("tree.bindings.reading") : t("tree.bindings.readAgain")}</span>
         </button>
       </div>
-      {view.reason !== null && <p className="verbatim">{view.reason}</p>}
-      <Notes notes={view.notes.map(oneLine)} label="Notes from the daemon on the bindings" />
+      {view.reason !== null && (
+        <p className="verbatim" lang="en">
+          {view.reason}
+        </p>
+      )}
+      <Notes notes={view.notes.map(oneLine)} label={t("tree.bindings.notes")} />
       {view.nodes.map((holder) => (
         <HolderBindings key={placeKey(holder)} project={project} holder={holder} many={many} onFollow={onFollow} />
       ))}
@@ -267,7 +275,7 @@ export function BindingsPanel({ project, nodeRef, onFollow }: { project: string;
       {view.nodes.length > 0 && <NodeCommands nodeRef={nodeRef} holders={view.nodes} />}
       {query.error !== null && !query.isFetching && (
         <p className="note" role="alert">
-          The bindings could not be read again: {apiErrorOf(query.error).message}
+          {fill(t("tree.bindings.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(query.error).message}</span> })}
         </p>
       )}
     </div>

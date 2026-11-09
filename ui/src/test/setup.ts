@@ -5,9 +5,11 @@ import { recordConsole, takeConsoleCalls } from "./console";
 beforeEach(async () => {
   // The viewer's choices kept in storage (the tree's Show drift, docs/features/ui-tree-drift.md) start each test cleared.
   window.localStorage.clear();
-  // Each test starts in English, `<html lang>` with it (docs/features/ui-languages.md "Data"). Read
-  // here, not imported above: a test file mocking the catalog loads it first.
-  const { switchLanguage } = await import("../i18n");
+  // Each test starts in English, `<html lang>` with it, Russian's chunk loaded once per file so a
+  // switch is at once (docs/canon/ui-languages.md "Tests"). Read here, not imported above: a test
+  // file mocking the catalog loads it first.
+  const { loadLanguage, switchLanguage } = await import("../i18n");
+  await loadLanguage("ru");
   switchLanguage("en");
   takeConsoleCalls();
   vi.spyOn(console, "error").mockImplementation((...values: unknown[]) => {

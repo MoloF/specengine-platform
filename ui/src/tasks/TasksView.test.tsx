@@ -7,7 +7,7 @@ import { sectionHash } from "../app/routes";
 import { aTaskEntry, aTaskPackage, aTaskProposal, aTaskRun } from "../test/builders";
 import { renderApp } from "../test/render";
 import { SOME_TASKS, taskClient } from "../test/taskStub";
-import { NO_DIFF_NOTICE, TOTAL_CUT_NOTICE } from "./SpecChangesPanel";
+import { en } from "../i18n/en";
 import { argsOf } from "../test/stubClient";
 
 // docs/features/ui-tasks.md on a stub client: AC-01 (what a route reads), AC-03 (an unknown state
@@ -381,7 +381,7 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     expect(within(panel).getAllByRole("figure").map((figure) => figure.getAttribute("aria-label"))).toEqual(["Changes to R-1 since approval"]);
     expect(within(panel).queryByText("No section diff attached.")).toBeNull();
     expect(entry("R-1")?.querySelector(".cut-note")).toBeNull();
-    for (const [id, notice] of [["R-2", TOTAL_CUT_NOTICE], ["R-3", NO_DIFF_NOTICE]] as const) {
+    for (const [id, notice] of [["R-2", en.tasks.changes.totalCut], ["R-3", en.tasks.changes.noDiff]] as const) {
       const shown = entry(id);
       expect([id, shown?.querySelector(".diff"), shown?.querySelector(".cut-note")?.textContent]).toEqual([id, null, notice]);
       expect(shown?.querySelector(".snapshot-diff-head a")?.getAttribute("href")).toBe(sectionHash("alpha", "tree", id));

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import inboxSource from "./InboxView.tsx?raw";
 import stagedSource from "./StagedChoice.tsx?raw";
-import { confirmCommand, DECISION_KEYS, PROPOSAL_ID, WORDING } from "./decisions";
+import { enT } from "../test/text";
+import { confirmCommand, DECISION_KEYS, PROPOSAL_ID, wordingOf } from "./decisions";
 
 // AC-14 of docs/features/decision-staging.md: the command a staged choice offers to copy is fixed
 // words and an ID matching ^PR-[0-9]{4,}$, never free text; Accept and Reject stage, the other two
@@ -63,7 +64,7 @@ describe("the editorial approve's command stays bare (UI-2, Q14 of rev-disciplin
 
 describe("the four decisions' words (AC-14 of decision-staging)", () => {
   it("stages Accept and Reject; Needs clarification and Defer are not sent", () => {
-    expect(DECISION_KEYS.map(([kind]) => [kind, WORDING[kind].staged])).toEqual([
+    expect(DECISION_KEYS.map(([kind]) => [kind, wordingOf(kind, "PR-0001", enT).staged])).toEqual([
       ["accept", true],
       ["reject", true],
       ["needs_clarification", false],
@@ -73,8 +74,8 @@ describe("the four decisions' words (AC-14 of decision-staging)", () => {
 
   it("says Accept and Reject stage, confirmed on a terminal; none says the daemon applies", () => {
     for (const kind of ["accept", "reject"] as const) {
-      expect([kind, WORDING[kind].effect]).toEqual([kind, expect.stringMatching(/^Stages .* Confirm it on a terminal: spec (approve|reject) with this ID /)]);
+      expect([kind, wordingOf(kind, "PR-0001", enT).effect]).toEqual([kind, expect.stringMatching(/^Stages .* Confirm it on a terminal: spec (approve|reject) with this ID /)]);
     }
-    expect(Object.values(WORDING).map((wording) => wording.effect).filter((effect) => /daemon applies|apply_proposal/.test(effect))).toEqual([]);
+    expect(DECISION_KEYS.map(([kind]) => wordingOf(kind, "PR-0001", enT).effect).filter((effect) => /daemon applies|apply_proposal/.test(effect))).toEqual([]);
   });
 });

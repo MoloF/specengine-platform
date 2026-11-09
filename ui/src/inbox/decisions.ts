@@ -1,4 +1,5 @@
 import type { Proposal } from "../api/types";
+import type { Translate } from "../i18n";
 
 /**
  * The owner's four decisions on a proposal, as the Inbox offers them (06 §3.3): each a button, a key
@@ -10,7 +11,7 @@ export type DecisionKind = "accept" | "reject" | "needs_clarification" | "defer"
 interface Wording {
   /** The button, the shortcut list and the dialog's title say this. */
   verb: string;
-  title: (id: string) => string;
+  title: string;
   effect: string;
   /** The daemon stages it; false: not built, the dialog sends nothing. */
   staged: boolean;
@@ -21,60 +22,66 @@ interface Wording {
   missing: string;
 }
 
-/** The four decisions (06 §3.3): what each is called, what it does, what it asks for. */
-export const WORDING: Record<DecisionKind, Wording> = {
-  accept: {
-    verb: "Accept",
-    title: (id) => `Accept ${id}`,
-    effect:
-      "Stages your approval; nothing is applied here. Confirm it on a terminal: spec approve with this ID shows the staged choice and its time and asks [y/N], then applies it as its own commit.",
-    staged: true,
-    submit: "Stage accept",
-    field: "Note for the record (optional)",
-    required: false,
-    missing: "",
-  },
-  reject: {
-    verb: "Reject",
-    title: (id) => `Reject ${id}`,
-    effect:
-      "Stages the rejection with your reason; nothing changes here. Confirm it on a terminal: spec reject with this ID shows the reason and asks [y/N]; an agent proposing the same again then gets the reason back.",
-    staged: true,
-    submit: "Stage reject",
-    field: "Reason (required)",
-    required: true,
-    missing: "Write a reason: the author reads it, and so does the next agent proposing the same.",
-  },
-  needs_clarification: {
-    verb: "Needs clarification",
-    title: (id) => `Needs clarification: ${id}`,
-    effect: "The author would see your question and extend the proposal; it would stay in the queue.",
-    staged: false,
-    submit: "",
-    field: "",
-    required: false,
-    missing: "",
-  },
-  defer: {
-    verb: "Defer",
-    title: (id) => `Defer ${id}`,
-    effect: "The proposal would stay in the queue with a mark; work goes on with the working answer.",
-    staged: false,
-    submit: "",
-    field: "",
-    required: false,
-    missing: "",
-  },
-};
+/** Whether the daemon stages the decision: Accept and Reject; the other two are not built, nothing is sent. */
+export function isStaged(kind: DecisionKind): boolean {
+  return kind === "accept" || kind === "reject";
+}
+
+/** What a decision is called: its button, its key in the shortcut list. */
+export function verbOf(kind: DecisionKind, t: Translate): string {
+  switch (kind) {
+    case "accept":
+      return t("inbox.decision.accept.verb");
+    case "reject":
+      return t("inbox.decision.reject.verb");
+    case "needs_clarification":
+      return t("inbox.decision.needsClarification.verb");
+    case "defer":
+      return t("inbox.decision.defer.verb");
+  }
+}
+
+/** The four decisions (06 §3.3): what each is called, what it does, what it asks for, in the language `t` reads. */
+export function wordingOf(kind: DecisionKind, id: string, t: Translate): Wording {
+  const verb = verbOf(kind, t);
+  switch (kind) {
+    case "accept":
+      return {
+        verb,
+        title: t("inbox.decision.accept.title", { id }),
+        effect: t("inbox.decision.accept.effect"),
+        staged: true,
+        submit: t("inbox.decision.accept.submit"),
+        field: t("inbox.decision.accept.field"),
+        required: false,
+        missing: "",
+      };
+    case "reject":
+      return {
+        verb,
+        title: t("inbox.decision.reject.title", { id }),
+        effect: t("inbox.decision.reject.effect"),
+        staged: true,
+        submit: t("inbox.decision.reject.submit"),
+        field: t("inbox.decision.reject.field"),
+        required: true,
+        missing: t("inbox.decision.reject.missing"),
+      };
+    case "needs_clarification":
+      return { verb, title: t("inbox.decision.needsClarification.title", { id }), effect: t("inbox.decision.needsClarification.effect"), staged: false, submit: "", field: "", required: false, missing: "" };
+    case "defer":
+      return { verb, title: t("inbox.decision.defer.title", { id }), effect: t("inbox.decision.defer.effect"), staged: false, submit: "", field: "", required: false, missing: "" };
+  }
+}
 
 /**
  * What a Confirm says once the daemon answered, from the review document it answered: the state as
  * sent and the commit `apply_proposal` made, when one was (`docs/features/hub-confirm.md`). The click
  * pushes nothing, on every hub; a `--push` hub's sync sends the commit later (`docs/features/hub-git.md`).
  */
-export function confirmedLine(id: string, review: Proposal): string {
-  const state = review.status ?? "no state sent";
-  return review.applied_commit === null ? `Confirmed ${id}: ${state}; no commit.` : `Confirmed ${id}: ${state} as commit ${review.applied_commit}, in this hub's checkout; this click pushes nothing.`;
+export function confirmedLine(id: string, review: Proposal, t: Translate): string {
+  const state = review.status ?? t("inbox.noStateSent");
+  return review.applied_commit === null ? t("inbox.confirmed", { id, state }) : t("inbox.confirmedCommit", { id, state, commit: review.applied_commit });
 }
 
 /** The decisions in the order and with the keys of 06 §3.3; keys are lower case, as typed. */

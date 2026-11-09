@@ -4,6 +4,7 @@ import type { Proposal, QueueEvent, RevisionChange } from "../api/types";
 import { aProposal } from "../test/builders";
 import { renderApp } from "../test/render";
 import { STAGED_AT, stubClient } from "../test/stubClient";
+import { enT } from "../test/text";
 import { isRefused, lockEntriesText, revisionsToKeep, revisionText } from "./revisions";
 
 // UI-1, UI-2 and UI-3 of docs/features/rev-discipline.md on a stub client ("UI"): Accept offers
@@ -89,13 +90,13 @@ afterEach(() => {
 
 describe("a revisions line (UI-3 of rev-discipline)", () => {
   it("writes each node as the review sends it: its ID, rev, the daemon's to, the lock entries", () => {
-    expect([R12, R13, { ...R12, lock_entries: 1 }, { ...R12, lock_entries: 0 }].map(revisionText)).toEqual([
+    expect([R12, R13, { ...R12, lock_entries: 1 }, { ...R12, lock_entries: 0 }].map((entry) => revisionText(entry, enT))).toEqual([
       "R-12 rev 3 \u2192 9 (2 lock entries)",
       "R-13 rev 1 \u2192 2 (lock entries unknown)",
       "R-12 rev 3 \u2192 9 (1 lock entry)",
       "R-12 rev 3 \u2192 9 (0 lock entries)",
     ]);
-    expect([lockEntriesText(0), lockEntriesText(1), lockEntriesText(7), lockEntriesText(null)]).toEqual([
+    expect([lockEntriesText(0, enT), lockEntriesText(1, enT), lockEntriesText(7, enT), lockEntriesText(null, enT)]).toEqual([
       "0 lock entries",
       "1 lock entry",
       "7 lock entries",
@@ -104,7 +105,7 @@ describe("a revisions line (UI-3 of rev-discipline)", () => {
   });
 
   it("writes a refused raise as refused, never a number or null (Q15)", () => {
-    expect([ADR7, { ...ADR7, lock_entries: 2 }, { ...R12, to: null }].map(revisionText)).toEqual([
+    expect([ADR7, { ...ADR7, lock_entries: 2 }, { ...R12, to: null }].map((entry) => revisionText(entry, enT))).toEqual([
       "ADR-0007 rev 1 \u2192 refused (0 lock entries)",
       "ADR-0007 rev 1 \u2192 refused (2 lock entries)",
       "R-12 rev 3 \u2192 refused (2 lock entries)",
@@ -218,7 +219,7 @@ describe("Accept's editorial toggle (UI-1 of rev-discipline)", () => {
       expect([id, hint?.querySelector("p")?.textContent, linesOf(hint)]).toEqual([
         id,
         "Unchecked, this is a meaning approval, which the terminal refuses while a raise below is refused:",
-        revisions.map((entry) => [revisionText(entry), entry.refused]),
+        revisions.map((entry) => [revisionText(entry, enT), entry.refused]),
       ]);
       expect(hint?.textContent).not.toContain("null");
       cleanup();

@@ -48,9 +48,9 @@ describe("a binding row's sync (UI-2 of bundle-bindings)", () => {
   });
 
   it("shows any other word raw in a neutral badge, an own property name too", () => {
-    expect(syncLook("drifting", enT)).toEqual({ label: "drifting", tone: "sync-unknown", icon: "unknown" });
+    expect(syncLook("drifting", enT)).toEqual({ label: "drifting", tone: "sync-unknown", icon: "unknown", served: true });
     expect(syncLook("OK", enT).tone).toBe("sync-unknown");
-    expect(syncLook("toString", enT)).toEqual({ label: "toString", tone: "sync-unknown", icon: "unknown" });
+    expect(syncLook("toString", enT)).toEqual({ label: "toString", tone: "sync-unknown", icon: "unknown", served: true });
   });
 
   it("gives every tone a badge rule in app.css and a colour role in tokens.css", () => {

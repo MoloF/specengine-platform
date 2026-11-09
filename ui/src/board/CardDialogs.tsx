@@ -9,6 +9,7 @@ import { shownSlot } from "../ui/text";
 import { actingName, isActingLine, useActing, useHubLogin, useTeamRow } from "./acting";
 import { assigneeChoices, disciplineChoices } from "./filter";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { evidenceKinds, gapTypes, nameIsLogin, nameIsTyped } from "./labels";
 
 /** How `spec card edit` and `assign` write a cleared value (`docs/canon/cards.md` "Commands"). */
@@ -205,7 +206,7 @@ function WriteDialog({
   title,
   action,
   sending,
-  dismiss = "Cancel",
+  dismiss,
   danger = false,
   revision = null,
   canSubmit = true,
@@ -227,6 +228,7 @@ function WriteDialog({
   onSubmit: () => Promise<string | null>;
   children: ReactNode;
 }) {
+  const t = useTranslate();
   const form = useRef<HTMLFormElement>(null);
   const inFlight = useRef(false);
   const [pending, setPending] = useState(false);
@@ -289,9 +291,9 @@ function WriteDialog({
         <div key={shown} className="notice" role="alert">
           <p className="notice-title">
             <Icon name="alert" />
-            <span>This card changed since you opened it</span>
+            <span>{t("board.dialog.changed")}</span>
           </p>
-          <p>Fields you left alone keep the new value; what you changed is sent.</p>
+          <p>{t("board.dialog.changedText")}</p>
         </div>
       )}
       <form
@@ -313,9 +315,11 @@ function WriteDialog({
           <div className="refusal" role="alert">
             <p className="refusal-title">
               <Icon name="alert" />
-              <span>The daemon did not take it.</span>
+              <span>{t("board.view.refused")}</span>
             </p>
-            <p className="verbatim">{refusal}</p>
+            <p className="verbatim" lang="en">
+              {refusal}
+            </p>
           </div>
         )}
         <div className="dialog-actions">
@@ -323,7 +327,7 @@ function WriteDialog({
             {pending ? sending : action}
           </button>
           <button type="button" className="button" aria-disabled={pending} onClick={cancel}>
-            {dismiss}
+            {dismiss ?? t("board.dialog.cancel")}
           </button>
         </div>
       </form>
@@ -423,22 +427,22 @@ export function NewCardDialog({ project, target, preset, ...handlers }: { projec
 
   return (
     <WriteDialog
-      title="New card"
-      action="Create card"
-      sending="Creating"
+      title={t("board.dialog.newTitle")}
+      action={t("board.dialog.create")}
+      sending={t("board.dialog.creating")}
       onClose={onClose}
       check={() => {
         const missing = form.title.trim() === "";
         setTitleMissing(missing);
-        return missing ? "A card needs a title." : null;
+        return missing ? t("board.dialog.needsTitle") : null;
       }}
       onSubmit={() => send({ write: "create", body: createBodyOf(form, actingName(acting)) })}
     >
-      <TextField label="Title" value={form.title} onChange={field("title")} required autoFocus invalid={titleMissing && form.title.trim() === ""} />
-      <TextArea label="Goal" value={form.goal} onChange={field("goal")} />
+      <TextField label={t("board.field.title")} value={form.title} onChange={field("title")} required autoFocus invalid={titleMissing && form.title.trim() === ""} />
+      <TextArea label={t("board.field.goal")} value={form.goal} onChange={field("goal")} />
       <div className="card-form-row">
-        <TextField label="Discipline" value={form.discipline} onChange={field("discipline")} list={disciplinesId} hint="Picks the flow; empty: the flow that lists none." />
-        <TextField label="Assignee" value={form.assignee} onChange={field("assignee")} list={namesId} />
+        <TextField label={t("board.field.discipline")} value={form.discipline} onChange={field("discipline")} list={disciplinesId} hint={t("board.hint.discipline")} />
+        <TextField label={t("board.field.assignee")} value={form.assignee} onChange={field("assignee")} list={namesId} />
       </div>
       <datalist id={disciplinesId}>
         {disciplines.map((name) => (
@@ -450,15 +454,15 @@ export function NewCardDialog({ project, target, preset, ...handlers }: { projec
           <option key={choice.key} value={choice.label} />
         ))}
       </datalist>
-      <TextArea label="Source" value={form.targets} onChange={field("targets")} hint="Spec nodes, one per line; none: a card by hand." />
-      <TextArea label="Criteria" value={form.criteria} onChange={field("criteria")} hint="One per line." />
+      <TextArea label={t("board.field.source")} value={form.targets} onChange={field("targets")} hint={t("board.hint.sourceNew")} />
+      <TextArea label={t("board.field.criteria")} value={form.criteria} onChange={field("criteria")} hint={t("board.hint.perLine")} />
       <div className="card-form-row">
-        <TextField label="Estimate" value={form.estimate} onChange={field("estimate")} hint="N or N-M, no unit." />
-        <TextField label="Due" type="date" value={form.due} onChange={field("due")} />
+        <TextField label={t("board.field.estimate")} value={form.estimate} onChange={field("estimate")} hint={t("board.hint.estimate")} />
+        <TextField label={t("board.field.due")} type="date" value={form.due} onChange={field("due")} />
       </div>
       <div className="card-form-row">
-        <TextField label="Parent" value={form.parent} onChange={field("parent")} hint="A card's ID." />
-        <TextField label="Corrects" value={form.corrects} onChange={field("corrects")} hint="A card's ID." />
+        <TextField label={t("board.field.parent")} value={form.parent} onChange={field("parent")} hint={t("board.hint.cardId")} />
+        <TextField label={t("board.field.corrects")} value={form.corrects} onChange={field("corrects")} hint={t("board.hint.cardId")} />
       </div>
     </WriteDialog>
   );
@@ -556,40 +560,40 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
 
   return (
     <WriteDialog
-      title={`Edit ${card.id}`}
-      action="Save"
-      sending="Saving"
+      title={t("board.dialog.editTitle", { id: card.id })}
+      action={t("board.dialog.save")}
+      sending={t("board.dialog.saving")}
       revision={card.revision}
       onClose={onClose}
       check={() => {
         if (form.title.trim() === "") {
-          return "A card needs a title.";
+          return t("board.dialog.needsTitle");
         }
-        return Object.keys(changes).length === 0 ? "Nothing to save: no field changed." : null;
+        return Object.keys(changes).length === 0 ? t("board.dialog.noFieldChanged") : null;
       }}
       onSubmit={() =>
         send({ write: "edit", id: card.id, body: { ...changes, ...(reestimated && reason.trim() !== "" ? { reason: reason.trim() } : {}), revision: card.revision, as: actingName(acting) } })
       }
     >
-      <TextField label="Title" value={form.title} onChange={field("title")} required autoFocus invalid={form.title.trim() === ""} />
-      <TextArea label="Goal" value={form.goal} onChange={field("goal")} />
-      <TextArea label="Source" value={form.targets} onChange={field("targets")} hint="Spec nodes, one per line; the list is replaced." />
-      <TextArea label="Criteria" value={form.criteria} onChange={field("criteria")} hint="One per line; the list is replaced." />
+      <TextField label={t("board.field.title")} value={form.title} onChange={field("title")} required autoFocus invalid={form.title.trim() === ""} />
+      <TextArea label={t("board.field.goal")} value={form.goal} onChange={field("goal")} />
+      <TextArea label={t("board.field.source")} value={form.targets} onChange={field("targets")} hint={t("board.hint.sourceEdit")} />
+      <TextArea label={t("board.field.criteria")} value={form.criteria} onChange={field("criteria")} hint={t("board.hint.perLineReplaced")} />
       <div className="card-form-row">
-        <TextField label="Estimate" value={form.estimate} onChange={field("estimate")} hint="N or N-M, no unit." />
-        <TextField label="Due" type="date" value={form.due} onChange={field("due")} />
+        <TextField label={t("board.field.estimate")} value={form.estimate} onChange={field("estimate")} hint={t("board.hint.estimate")} />
+        <TextField label={t("board.field.due")} type="date" value={form.due} onChange={field("due")} />
       </div>
-      {reestimated && <TextArea label="Why the estimate changes" value={reason} onChange={setReason} required hint="A changed estimate is saved alone, with this reason." />}
+      {reestimated && <TextArea label={t("board.field.whyEstimate")} value={reason} onChange={setReason} required hint={t("board.hint.whyEstimate")} />}
       <div className="card-form-row">
-        <TextField label="Parent" value={form.parent} onChange={field("parent")} hint="A card's ID." />
-        <TextField label="Corrects" value={form.corrects} onChange={field("corrects")} hint="A card's ID." />
+        <TextField label={t("board.field.parent")} value={form.parent} onChange={field("parent")} hint={t("board.hint.cardId")} />
+        <TextField label={t("board.field.corrects")} value={form.corrects} onChange={field("corrects")} hint={t("board.hint.cardId")} />
       </div>
       <fieldset className="card-evidence-field">
-        <legend>Add evidence</legend>
+        <legend>{t("board.dialog.addEvidence")}</legend>
         <div className="card-form-row">
           <div className="card-field">
             <label className="field-label" htmlFor={kindId}>
-              Kind
+              {t("board.dialog.kind")}
             </label>
             <select
               id={kindId}
@@ -606,7 +610,7 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
               ))}
             </select>
           </div>
-          <TextField label="Value" value={value} onChange={setValue} hint={valueHint} />
+          <TextField label={t("board.field.value")} value={value} onChange={setValue} hint={valueHint} />
         </div>
       </fieldset>
     </WriteDialog>
@@ -615,6 +619,7 @@ export function EditCardDialog({ project, card, ...handlers }: { project: string
 
 /** Assign: the assignee and the reviewer, changed ones only, `-` for one cleared. */
 export function AssignDialog({ project, card, ...handlers }: { project: string; card: Card } & WriteHandlers) {
+  const t = useTranslate();
   const { onClose } = handlers;
   const send = useSend(project, handlers);
   const [acting] = useActing();
@@ -625,25 +630,26 @@ export function AssignDialog({ project, card, ...handlers }: { project: string; 
 
   return (
     <WriteDialog
-      title={`Assign ${card.id}`}
-      action="Save"
-      sending="Saving"
+      title={t("board.dialog.assignTitle", { id: card.id })}
+      action={t("board.dialog.save")}
+      sending={t("board.dialog.saving")}
       revision={card.revision}
       onClose={onClose}
-      check={() => (Object.keys(changes).length === 0 ? "Nothing to save: no name changed." : null)}
+      check={() => (Object.keys(changes).length === 0 ? t("board.dialog.noNameChanged") : null)}
       onSubmit={() => send({ write: "assign", id: card.id, body: { ...changes, revision: card.revision, as: actingName(acting) } })}
     >
       <p className="dialog-text">
         <bdi>{shownSlot(card.title)}</bdi>
       </p>
-      <TextField label="Assignee" value={assignee} onChange={setAssignee} autoFocus hint="Who does the work; empty: nobody." />
-      <TextField label="Reviewer" value={reviewer} onChange={setReviewer} hint="Who accepts the result; empty: nobody." />
+      <TextField label={t("board.field.assignee")} value={assignee} onChange={setAssignee} autoFocus hint={t("board.hint.assignee")} />
+      <TextField label={t("board.field.reviewer")} value={reviewer} onChange={setReviewer} hint={t("board.hint.reviewer")} />
     </WriteDialog>
   );
 }
 
 /** Cancel card: a required reason. */
 export function CancelCardDialog({ project, card, ...handlers }: { project: string; card: Card } & WriteHandlers) {
+  const t = useTranslate();
   const { onClose } = handlers;
   const send = useSend(project, handlers);
   const [acting] = useActing();
@@ -652,25 +658,25 @@ export function CancelCardDialog({ project, card, ...handlers }: { project: stri
 
   return (
     <WriteDialog
-      title={`Cancel ${card.id}`}
-      action="Cancel card"
-      sending="Cancelling"
-      dismiss="Keep card"
+      title={t("board.dialog.cancelTitle", { id: card.id })}
+      action={t("board.dialog.cancelCard")}
+      sending={t("board.dialog.cancelling")}
+      dismiss={t("board.dialog.keepCard")}
       danger
       revision={card.revision}
       onClose={onClose}
       check={() => {
         const empty = reason.trim() === "";
         setMissing(empty);
-        return empty ? "Say why this card is cancelled." : null;
+        return empty ? t("board.dialog.cancelWhy") : null;
       }}
       onSubmit={() => send({ write: "cancel", id: card.id, body: { reason: reason.trim(), revision: card.revision, as: actingName(acting) } })}
     >
       <p className="dialog-text">
         <bdi>{shownSlot(card.title)}</bdi>
       </p>
-      <p className="dialog-text dialog-effect">The card leaves its column and takes no further change. Show cancelled still lists it.</p>
-      <TextArea label="Reason" value={reason} onChange={setReason} required autoFocus invalid={missing && reason.trim() === ""} />
+      <p className="dialog-text dialog-effect">{t("board.dialog.cancelEffect")}</p>
+      <TextArea label={t("board.field.reason")} value={reason} onChange={setReason} required autoFocus invalid={missing && reason.trim() === ""} />
     </WriteDialog>
   );
 }
@@ -711,30 +717,30 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
 
   return (
     <WriteDialog
-      title={`Accept ${card.id}`}
-      action="Accept card"
-      sending="Accepting"
+      title={t("board.dialog.acceptTitle", { id: card.id })}
+      action={t("board.dialog.acceptCard")}
+      sending={t("board.dialog.accepting")}
       revision={card.revision}
       canSubmit={name !== null && complete}
       onClose={onClose}
-      onSubmit={() => (name === null ? Promise.resolve("A name is needed.") : send({ write: "accept", id: card.id, body: bodyOf(name) }))}
+      onSubmit={() => (name === null ? Promise.resolve(t("board.dialog.nameNeeded")) : send({ write: "accept", id: card.id, body: bodyOf(name) }))}
     >
       <p className="dialog-text">
         <bdi>{shownSlot(card.title)}</bdi>
       </p>
       <dl className="facts">
         <div className="fact">
-          <dt>Reviewer</dt>
+          <dt>{t("board.field.reviewer")}</dt>
           <dd>{card.reviewer === null ? "-" : <bdi>{shownSlot(card.reviewer)}</bdi>}</dd>
         </div>
         <div className="fact">
-          <dt>Assignee</dt>
+          <dt>{t("board.field.assignee")}</dt>
           <dd>{card.assignee === null ? "-" : <bdi>{shownSlot(card.assignee)}</bdi>}</dd>
         </div>
       </dl>
       <ActingNote />
       <fieldset className="card-evidence-field">
-        <legend>Against the brief</legend>
+        <legend>{t("board.panel.brief")}</legend>
         <div className="card-field">
           <label htmlFor={`${verdictId}-briefed`}>
             <input
@@ -746,7 +752,7 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
                 setVerdict("briefed");
               }}
             />{" "}
-            As briefed
+            {t("board.dialog.asBriefed")}
           </label>
           <label htmlFor={`${verdictId}-departs`}>
             <input
@@ -759,19 +765,19 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
                 setVerdict("departs");
               }}
             />{" "}
-            Departs from it
+            {t("board.dialog.departsFromIt")}
           </label>
         </div>
       </fieldset>
       {departing && (
         <>
-          <TextArea label="Departs from" value={departs} onChange={setDeparts} required invalid={departed.length === 0} hint="Direct targets of this card, one per line." />
-          <TextField label="Summary" value={summary} onChange={setSummary} required invalid={summary.trim() === ""} />
-          <TextArea label="What the result does" value={observed} onChange={setObserved} required invalid={observed.trim() === ""} />
-          <TextArea label="What the brief says" value={documented} onChange={setDocumented} required invalid={documented.trim() === ""} />
+          <TextArea label={t("board.field.departsFrom")} value={departs} onChange={setDeparts} required invalid={departed.length === 0} hint={t("board.hint.departsFrom")} />
+          <TextField label={t("board.field.summary")} value={summary} onChange={setSummary} required invalid={summary.trim() === ""} />
+          <TextArea label={t("board.field.observed")} value={observed} onChange={setObserved} required invalid={observed.trim() === ""} />
+          <TextArea label={t("board.field.documented")} value={documented} onChange={setDocumented} required invalid={documented.trim() === ""} />
           <div className="card-field">
             <label className="field-label" htmlFor={gapId}>
-              The gap
+              {t("board.dialog.gap")}
             </label>
             <select
               id={gapId}
@@ -788,11 +794,11 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
               ))}
             </select>
           </div>
-          <p className="dialog-text dialog-effect">This raises a discrepancy for the owner; it stops nothing and the card is accepted.</p>
+          <p className="dialog-text dialog-effect">{t("board.dialog.raisesDiscrepancy")}</p>
         </>
       )}
-      <TextArea label="Note" value={note} onChange={setNote} autoFocus={name !== null} />
-      <ActingField project={project} label="Accepting as" value={acting} onChange={setActing} autoFocus={name === null} hint="Its reviewer's name, never its assignee's." />
+      <TextArea label={t("board.field.note")} value={note} onChange={setNote} autoFocus={name !== null} />
+      <ActingField project={project} label={t("board.field.acceptingAs")} value={acting} onChange={setActing} autoFocus={name === null} hint={t("board.hint.acceptingAs")} />
     </WriteDialog>
   );
 }
@@ -805,6 +811,7 @@ export function AcceptCardDialog({ project, card, ...handlers }: { project: stri
  * is the Board's one field and stands last, as in Accept, so a refusal of it is said right under it.
  */
 export function ClearCardDialog({ project, card, on, ...handlers }: { project: string; card: Card; on: string | null } & WriteHandlers) {
+  const t = useTranslate();
   const outcomeId = useId();
   const { onClose } = handlers;
   const send = useSend(project, handlers);
@@ -825,32 +832,30 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
 
   return (
     <WriteDialog
-      title={`Clear ${card.id}`}
-      action="Clear card"
-      sending="Clearing"
+      title={t("board.dialog.clearTitle", { id: card.id })}
+      action={t("board.dialog.clearCard")}
+      sending={t("board.dialog.clearing")}
       revision={card.revision}
       canSubmit={name !== null}
       onClose={onClose}
       check={() => {
         setChecked(true);
         if (reason.trim() === "") {
-          return "Say why the mark clears.";
+          return t("board.dialog.clearWhy");
         }
-        return correcting && estimate.trim() === "" ? "A correction needs an estimate." : null;
+        return correcting && estimate.trim() === "" ? t("board.dialog.correctionEstimate") : null;
       }}
-      onSubmit={() => (name === null ? Promise.resolve("A name is needed.") : send({ write: "clear", id: card.id, body: bodyOf(name) }))}
+      onSubmit={() => (name === null ? Promise.resolve(t("board.dialog.nameNeeded")) : send({ write: "clear", id: card.id, body: bodyOf(name) }))}
     >
       <p className="dialog-text">
         <bdi>{shownSlot(card.title)}</bdi>
       </p>
       {on !== null && (
-        <p className="dialog-text dialog-effect">
-          The brief changed at <bdi className="mono">{shownSlot(on)}</bdi>.
-        </p>
+        <p className="dialog-text dialog-effect">{fill(t("board.dialog.briefChangedAt", { on: slot("on") }), { on: <bdi className="mono">{shownSlot(on)}</bdi> })}</p>
       )}
       <ActingNote />
       <fieldset className="card-evidence-field">
-        <legend>What the change means for this card</legend>
+        <legend>{t("board.dialog.meaning")}</legend>
         <div className="card-field">
           <label htmlFor={`${outcomeId}-none`}>
             <input
@@ -862,7 +867,7 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
                 setOutcome("no_effect");
               }}
             />{" "}
-            No effect
+            {t("board.dialog.noEffect")}
           </label>
           <label htmlFor={`${outcomeId}-correct`}>
             <input
@@ -875,20 +880,20 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
                 setOutcome("needs_correction");
               }}
             />{" "}
-            Needs correction
+            {t("board.dialog.needsCorrection")}
           </label>
-          {!accepted && <p className="card-field-hint">A correction answers an accepted card.</p>}
+          {!accepted && <p className="card-field-hint">{t("board.dialog.correctionAccepted")}</p>}
         </div>
       </fieldset>
-      <TextArea label="Reason" value={reason} onChange={setReason} required autoFocus={name !== null} invalid={checked && reason.trim() === ""} />
+      <TextArea label={t("board.field.reason")} value={reason} onChange={setReason} required autoFocus={name !== null} invalid={checked && reason.trim() === ""} />
       {correcting && (
         <>
-          <TextField label="Estimate" value={estimate} onChange={setEstimate} required invalid={checked && estimate.trim() === ""} hint="N or N-M, no unit." />
-          <TextField label="Title of the correction" value={title} onChange={setTitle} hint={`Empty: Correct ${shownSlot(card.title)}`} />
-          <p className="dialog-text dialog-effect">This opens a new card. This one stays accepted, and its mark stands until the new card is accepted.</p>
+          <TextField label={t("board.field.estimate")} value={estimate} onChange={setEstimate} required invalid={checked && estimate.trim() === ""} hint={t("board.hint.estimate")} />
+          <TextField label={t("board.field.correctionTitle")} value={title} onChange={setTitle} hint={t("board.hint.correctionTitle", { title: shownSlot(card.title) })} />
+          <p className="dialog-text dialog-effect">{t("board.dialog.correctionEffect")}</p>
         </>
       )}
-      <ActingField project={project} label="Clearing as" value={acting} onChange={setActing} autoFocus={name === null} hint="Your name: a person answers a mark." />
+      <ActingField project={project} label={t("board.field.clearingAs")} value={acting} onChange={setActing} autoFocus={name === null} hint={t("board.hint.clearingAs")} />
     </WriteDialog>
   );
 }
@@ -900,6 +905,7 @@ export function ClearCardDialog({ project, card, on, ...handlers }: { project: s
  * (`docs/features/hub-team.md` "Data"); locally there is no such key.
  */
 export function ClearGroupDialog({ project, group, cards, onClose, onDone }: { project: string; group: string; cards: number; onClose: () => void; onDone: (answer: CardClearGroupWrite) => void }) {
+  const t = useTranslate();
   const clear = useCardClearGroup(project);
   const login = useHubLogin();
   const [acting, setActing] = useActing();
@@ -918,23 +924,21 @@ export function ClearGroupDialog({ project, group, cards, onClose, onDone }: { p
 
   return (
     <WriteDialog
-      title={`Clear all under ${group}`}
-      action="Clear all"
-      sending="Clearing"
+      title={t("board.dialog.clearAllTitle", { group })}
+      action={t("board.dialog.clearAll")}
+      sending={t("board.dialog.clearing")}
       canSubmit={name !== null}
       onClose={onClose}
       check={() => {
         setChecked(true);
-        return reason.trim() === "" ? "Say why the marks clear." : null;
+        return reason.trim() === "" ? t("board.dialog.clearAllWhy") : null;
       }}
-      onSubmit={() => (name === null ? Promise.resolve("A name is needed.") : send(name))}
+      onSubmit={() => (name === null ? Promise.resolve(t("board.dialog.nameNeeded")) : send(name))}
     >
-      <p className="dialog-text">
-        {cards === 1 ? "1 suspect card" : `${String(cards)} suspect cards`} of <bdi className="mono">{shownSlot(group)}</bdi> and what it holds clear as no effect. A card a correction holds, or one that reads departed, is passed over.
-      </p>
+      <p className="dialog-text">{fill(t("board.dialog.clearAllText", { count: cards, group: slot("group") }), { group: <bdi className="mono">{shownSlot(group)}</bdi> })}</p>
       <ActingNote />
-      <TextArea label="Reason" value={reason} onChange={setReason} required autoFocus={name !== null} invalid={checked && reason.trim() === ""} />
-      <ActingField project={project} label="Clearing as" value={acting} onChange={setActing} autoFocus={name === null} hint="Your name: a person answers a mark." />
+      <TextArea label={t("board.field.reason")} value={reason} onChange={setReason} required autoFocus={name !== null} invalid={checked && reason.trim() === ""} />
+      <ActingField project={project} label={t("board.field.clearingAs")} value={acting} onChange={setActing} autoFocus={name === null} hint={t("board.hint.clearingAs")} />
     </WriteDialog>
   );
 }

@@ -14,7 +14,8 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useAllowed } from "./acting";
 import { ActOff } from "./ActOff";
 import { isOverdue } from "./due";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { acceptedLook, byHand, canClear, cancelledLook, columnTitle, eventWords, markLine, markLook, overdueLook, unassigned, type CardMark } from "./labels";
 
 /** The panel's five writes, each a dialog. */
@@ -63,24 +64,24 @@ function payloadWord(payload: unknown, key: string): string | null {
 }
 
 /** What an event says besides its words, by the keys its payload holds: from and to, the column, the fields, the names. */
-function eventDetail(payload: unknown, flow: CardFlow | undefined): string {
+function eventDetail(payload: unknown, flow: CardFlow | undefined, t: Translate): string {
   const from = payloadWord(payload, "from");
   const to = payloadWord(payload, "to");
   const column = payloadWord(payload, "column");
   const parts: string[] = [];
   if (from !== null && to !== null) {
-    parts.push(from === to ? `within ${columnTitle(flow, to)}` : `from ${columnTitle(flow, from)} to ${columnTitle(flow, to)}`);
+    parts.push(from === to ? t("board.history.within", { column: columnTitle(flow, to) }) : t("board.history.fromTo", { from: columnTitle(flow, from), to: columnTitle(flow, to) }));
   } else if (column !== null) {
-    parts.push(`in ${columnTitle(flow, column)}`);
+    parts.push(t("board.history.in", { column: columnTitle(flow, column) }));
   }
   for (const [key, word] of [
-    ["fields", "changed"],
-    ["assignee", "assignee"],
-    ["reviewer", "reviewer"],
+    ["fields", "board.history.changed"],
+    ["assignee", "board.history.assignee"],
+    ["reviewer", "board.history.reviewer"],
   ] as const) {
     const value = payloadWord(payload, key);
     if (value !== null) {
-      parts.push(`${word} ${value}`);
+      parts.push(t(word, { value }));
     }
   }
   return parts.join(", ");
@@ -90,18 +91,13 @@ function eventDetail(payload: unknown, flow: CardFlow | undefined): string {
 function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undefined }) {
   const t = useTranslate();
   const by = payloadWord(event.payload, "as");
-  const detail = eventDetail(event.payload, flow);
+  const detail = eventDetail(event.payload, flow, t);
   return (
     <li className="board-history-line">
       <At at={event.at} />
       <span>
         <strong>{eventWords(event.type, t)}</strong>
-        {by !== null && (
-          <>
-            {" "}
-            by <bdi>{shownSlot(by)}</bdi>
-          </>
-        )}
+        {by !== null && fill(t("board.history.by", { by: slot("by") }), { by: <bdi>{shownSlot(by)}</bdi> })}
         {detail !== "" && <span className="muted"> {shownSlot(detail)}</span>}
       </span>
     </li>
@@ -119,31 +115,28 @@ function Part({ title, children }: { title: string; children: ReactNode }) {
 
 /** A closed card has no actions: who closed it, when and what they said. */
 function Closure({ card }: { card: Card }) {
+  const t = useTranslate();
   return (
     <>
       {card.acceptance !== null && (
-        <Part title="Acceptance">
-          <p>
-            By <bdi>{shownSlot(card.acceptance.by)}</bdi>, <At at={card.acceptance.at} />
-          </p>
+        <Part title={t("board.panel.acceptance")}>
+          <p>{fill(t("board.panel.byAt", { by: slot("by"), at: slot("at") }), { by: <bdi>{shownSlot(card.acceptance.by)}</bdi>, at: <At at={card.acceptance.at} /> })}</p>
           {card.acceptance.verdict === "departs" && (
             <p>
-              Departs from <bdi>{shownSlot(card.acceptance.departs.join(", "))}</bdi>
-              {card.acceptance.discrepancy !== null && (
-                <>
-                  : <bdi>{shownSlot(card.acceptance.discrepancy)}</bdi>
-                </>
-              )}
+              {card.acceptance.discrepancy === null
+                ? fill(t("board.panel.departs", { from: slot("from") }), { from: <bdi>{shownSlot(card.acceptance.departs.join(", "))}</bdi> })
+                : fill(t("board.panel.departsWith", { from: slot("from"), discrepancy: slot("discrepancy") }), {
+                    from: <bdi>{shownSlot(card.acceptance.departs.join(", "))}</bdi>,
+                    discrepancy: <bdi>{shownSlot(card.acceptance.discrepancy)}</bdi>,
+                  })}
             </p>
           )}
           {card.acceptance.note !== null && <p className="board-text">{shownText(card.acceptance.note)}</p>}
         </Part>
       )}
       {card.cancellation !== null && (
-        <Part title="Cancellation">
-          <p>
-            By <bdi>{shownSlot(card.cancellation.by)}</bdi>, <At at={card.cancellation.at} />
-          </p>
+        <Part title={t("board.panel.cancellation")}>
+          <p>{fill(t("board.panel.byAt", { by: slot("by"), at: slot("at") }), { by: <bdi>{shownSlot(card.cancellation.by)}</bdi>, at: <At at={card.cancellation.at} /> })}</p>
           <p className="board-text">{shownText(card.cancellation.reason)}</p>
         </Part>
       )}
@@ -162,7 +155,7 @@ function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; 
     return null;
   }
   return (
-    <Part title="Against the brief">
+    <Part title={t("board.panel.brief")}>
       <p className="board-panel-state">
         <Badge look={look} />
         <span>
@@ -181,7 +174,7 @@ function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; 
               }
             }}
           >
-            Clear
+            {t("board.panel.clear")}
           </button>
         </div>
       )}
@@ -197,6 +190,7 @@ function TargetState({ rollup }: { rollup: string | undefined }) {
 }
 
 function Actions({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | undefined; accepts: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+  const t = useTranslate();
   const inAcceptColumn = card.column === flow?.accept.from;
   function act(action: CardAction) {
     return (event: MouseEvent<HTMLButtonElement>) => {
@@ -205,20 +199,20 @@ function Actions({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | 
   }
   return (
     <>
-      <div className="board-panel-actions" role="group" aria-label="Actions">
+      <div className="board-panel-actions" role="group" aria-label={t("board.panel.actions")}>
         {inAcceptColumn && (
           <button type="button" className="button button-primary" aria-disabled={!accepts} onClick={accepts ? act("accept") : undefined}>
-            Accept
+            {t("board.panel.accept")}
           </button>
         )}
         <button type="button" className="button" onClick={act("edit")}>
-          Edit
+          {t("board.panel.edit")}
         </button>
         <button type="button" className="button" onClick={act("assign")}>
-          Assign
+          {t("board.panel.assign")}
         </button>
         <button type="button" className="button button-danger" onClick={act("cancel")}>
-          Cancel card
+          {t("board.panel.cancel")}
         </button>
       </div>
       {inAcceptColumn && !accepts && <ActOff act="accept" />}
@@ -255,17 +249,17 @@ function Details({
   return (
     <>
       <p className="board-panel-state">
-        <span>
-          In <bdi>{columnTitle(flow, card.column)}</bdi>
-        </span>
+        <span>{fill(t("board.panel.in", { column: slot("column") }), { column: <bdi>{columnTitle(flow, card.column)}</bdi> })}</span>
         {accepted && <Badge look={acceptedLook(t)} />}
         {cancelled && <Badge look={cancelledLook(t)} />}
         {isOverdue({ due: card.due, accepted, cancelled }, today) && <Badge look={overdueLook(t)} />}
       </p>
       {card.notes.length > 0 && (
-        <ul className="note-list" aria-label="Notes from the daemon on the card">
+        <ul className="note-list" aria-label={t("board.panel.notes")}>
           {card.notes.map((note, index) => (
-            <li key={`${String(index)}-${note}`}>{note}</li>
+            <li key={`${String(index)}-${note}`} lang="en">
+              {note}
+            </li>
           ))}
         </ul>
       )}
@@ -274,23 +268,23 @@ function Details({
         // Not known, never read as clean: no mark is shown for a read that failed.
         <p className="note">
           <Icon name="alert" />
-          <span>Whether the brief changed under this card could not be read: {markFailure}</span>
+          <span>{fill(t("board.panel.markFailed", { message: slot("message") }), { message: <span lang="en">{markFailure}</span> })}</span>
         </p>
       )}
       {stateFailure !== null && (
         <p className="note">
           <Icon name="alert" />
-          <span>The state of this card's targets could not be read: {stateFailure}</span>
+          <span>{fill(t("board.panel.stateFailed", { message: slot("message") }), { message: <span lang="en">{stateFailure}</span> })}</span>
         </p>
       )}
       {accepted || cancelled ? <Closure card={card} /> : <Actions card={card} flow={flow} accepts={allows("accept")} onAct={onAct} />}
       {card.goal !== null && (
-        <Part title="Goal">
+        <Part title={t("board.panel.goal")}>
           <p className="board-text">{shownText(card.goal)}</p>
         </Part>
       )}
       {card.criteria.length > 0 && (
-        <Part title="Criteria">
+        <Part title={t("board.panel.criteria")}>
           <ul className="board-panel-list">
             {card.criteria.map((criterion, index) => (
               <li key={`${String(index)}-${criterion}`} className="board-text">
@@ -300,7 +294,7 @@ function Details({
           </ul>
         </Part>
       )}
-      <Part title="Source">
+      <Part title={t("board.panel.source")}>
         {card.targets.length === 0 ? (
           <p className="muted">{byHand(t)}</p>
         ) : (
@@ -316,38 +310,38 @@ function Details({
           </ul>
         )}
       </Part>
-      <Part title="Details">
+      <Part title={t("board.panel.details")}>
         <dl className="facts">
-          <Fact term="Discipline">
+          <Fact term={t("board.panel.discipline")}>
             <Value text={card.discipline} />
           </Fact>
-          <Fact term="Estimate">
+          <Fact term={t("board.panel.estimate")}>
             <Value text={card.estimate} />
           </Fact>
-          <Fact term="Due">
+          <Fact term={t("board.panel.due")}>
             <Value text={card.due} />
           </Fact>
-          <Fact term="Assignee">{card.assignee === null ? unassigned(t) : <Value text={card.assignee} />}</Fact>
-          <Fact term="Reviewer">
+          <Fact term={t("board.panel.assignee")}>{card.assignee === null ? unassigned(t) : <Value text={card.assignee} />}</Fact>
+          <Fact term={t("board.panel.reviewer")}>
             <Value text={card.reviewer} />
           </Fact>
-          <Fact term="Parent">
+          <Fact term={t("board.panel.parent")}>
             <CardLink project={project} id={card.parent} />
           </Fact>
-          <Fact term="Corrects">
+          <Fact term={t("board.panel.corrects")}>
             <CardLink project={project} id={card.corrects} />
           </Fact>
-          <Fact term="Created by">
+          <Fact term={t("board.panel.createdBy")}>
             <Value text={card.created_by} />
           </Fact>
-          <Fact term="Created at">
+          <Fact term={t("board.panel.createdAt")}>
             <At at={card.created_at} />
           </Fact>
         </dl>
       </Part>
-      <Part title="Evidence">
+      <Part title={t("board.panel.evidence")}>
         {card.evidence.length === 0 ? (
-          <p className="muted">None yet.</p>
+          <p className="muted">{t("board.panel.noneYet")}</p>
         ) : (
           <ul className="board-panel-list">
             {card.evidence.map((entry, index) => (
@@ -363,9 +357,9 @@ function Details({
           </ul>
         )}
       </Part>
-      <Part title="History">
+      <Part title={t("board.panel.history")}>
         {history.length === 0 ? (
-          <p className="muted">None yet.</p>
+          <p className="muted">{t("board.panel.noneYet")}</p>
         ) : (
           <ol className="board-panel-list">
             {history.map((event) => (
@@ -413,6 +407,7 @@ export function CardPanel({
   onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
   onClose: () => void;
 }) {
+  const t = useTranslate();
   const titleId = useId();
   const failure = useRetainedFailure(query.error, query.isFetching);
   const answer = query.data;
@@ -431,11 +426,11 @@ export function CardPanel({
     body =
       failure === null ? (
         <div aria-busy="true">
-          <Skeleton label={`Loading ${id}`} lines={5} />
+          <Skeleton label={t("board.panel.loading", { id })} lines={5} />
         </div>
       ) : (
         <ErrorPanel
-          title={`${id} could not be read`}
+          title={t("board.panel.failed", { id })}
           message={apiErrorOf(failure).message}
           retrying={query.isFetching}
           attempt={query.errorUpdateCount}
@@ -447,10 +442,10 @@ export function CardPanel({
   } else if (card === undefined) {
     body = (
       <div className="empty-state">
-        <p className="verbatim">{isCard(answer) ? "" : answer.reason}</p>
-        <p>
-          Next: pick a card on the board. <a href={sectionHash(project, "board")}>Back to the board</a>
+        <p className="verbatim" lang="en">
+          {isCard(answer) ? "" : answer.reason}
         </p>
+        <p>{fill(t("board.panel.next", { link: slot("link") }), { link: <a href={sectionHash(project, "board")}>{t("board.panel.back")}</a> })}</p>
       </div>
     );
   } else {
@@ -463,9 +458,7 @@ export function CardPanel({
         <p className="mono board-card-id">{id}</p>
         <button type="button" className="button button-quiet" onClick={onClose}>
           <Icon name="rejected" />
-          <span>
-            Close<span className="sr-only"> the panel</span>
-          </span>
+          <span>{fill(t("board.panel.close", { what: slot("what") }), { what: <span className="sr-only">{t("board.panel.closeWhat")}</span> })}</span>
         </button>
         <h2 id={titleId} ref={headingRef} tabIndex={-1} className="board-panel-title">
           <bdi>{card === undefined ? id : shownSlot(card.title)}</bdi>
@@ -474,9 +467,7 @@ export function CardPanel({
       {answer !== undefined && query.error !== null && (
         <p className="note" role="alert">
           <Icon name="alert" />
-          <span>
-            {id} could not be read again: {apiErrorOf(query.error).message}
-          </span>
+          <span>{fill(t("board.panel.failedAgain", { id, message: slot("message") }), { message: <span lang="en">{apiErrorOf(query.error).message}</span> })}</span>
         </p>
       )}
       {body}

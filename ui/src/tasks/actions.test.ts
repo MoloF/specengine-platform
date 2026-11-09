@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import source from "./actions.ts?raw";
+import { enT } from "../test/text";
 import { actionsFor, ownerCommands, TASK_ID } from "./actions";
 
 // AC-09 of docs/features/ui-tasks.md: per state exactly its row of the transition table
@@ -23,11 +24,11 @@ const TABLE: [string, string[]][] = [
 describe("the owner's actions per state (AC-09)", () => {
   it.each(TABLE)("%s: %j", (status, actions) => {
     expect(actionsFor(status)).toEqual(actions);
-    expect(ownerCommands("T-0107", status)?.map((command) => command.action)).toEqual([...actions, "show"]);
+    expect(ownerCommands("T-0107", status, enT)?.map((command) => command.action)).toEqual([...actions, "show"]);
   });
 
   it("words T-0107's commands exactly, the note a placeholder typed on the terminal", () => {
-    expect(ownerCommands("T-0107", "review")?.map((command) => command.text)).toEqual([
+    expect(ownerCommands("T-0107", "review", enT)?.map((command) => command.text)).toEqual([
       "spec task approve T-0107",
       'spec task changes T-0107 --note "..."',
       "spec task cancel T-0107",
@@ -36,12 +37,12 @@ describe("the owner's actions per state (AC-09)", () => {
   });
 
   it("says approval again re-freezes the snapshot for a ready task", () => {
-    expect(ownerCommands("T-0108", "ready")?.[0]?.meaning).toMatch(/re-freezes the snapshot/);
+    expect(ownerCommands("T-0108", "ready", enT)?.[0]?.meaning).toMatch(/re-freezes the snapshot/);
   });
 
   it("offers no command for an ID that is not a task ID", () => {
     for (const id of ["T-1; rm -rf ~", "T-1", "T-0107 ", "t-0107", "T-0107\nrm", "$(T-0107)", "T-01a7", ""]) {
-      expect([id, ownerCommands(id, "review")]).toEqual([id, null]);
+      expect([id, ownerCommands(id, "review", enT)]).toEqual([id, null]);
     }
     expect(TASK_ID.test("T-12345")).toBe(true);
   });

@@ -5,6 +5,8 @@ import type { Proposal, RoundAnswersOutcome, RoundItem, RoundSheet, Team } from 
 import { sectionHash } from "../app/routes";
 import { useAllowed, useConfirmer } from "../board/acting";
 import { ActOff } from "../board/ActOff";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { confirmedLine } from "../inbox/decisions";
 import { useAnnounce } from "../ui/announcer";
 import { CopyButton } from "../ui/CopyButton";
@@ -16,11 +18,9 @@ import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { answerOf, stateOf, withDraft, type Draft } from "./drafts";
-import { useRoundEntry, type RoundEntry, type RoundMemory } from "./memory";
+import { useRoundEntry, type RoundEntry, type RoundMemory, type RoundResult } from "./memory";
 import { RoundItemCard } from "./RoundItemCard";
 import { ROUND_COMMAND, ROUND_LIMIT_MAX } from "./text";
-
-const COPY_FAILED = "Copy failed: select the command and copy it";
 
 /** The Confirm dialog, a hub's alone, so a local page never loads its chunk. */
 const ConfirmDialog = lazy(() => import("../inbox/ConfirmDialog").then((module) => ({ default: module.ConfirmDialog })));
@@ -28,26 +28,23 @@ const ConfirmDialog = lazy(() => import("../inbox/ConfirmDialog").then((module) 
 /** The outcome of an answer the daemon staged. */
 const STAGED = "staged";
 
-/** `1 answer`, `2 answers`: a count and its noun, with an `s` past one. */
-function counted(count: number, noun: string): string {
-  return `${String(count)} ${noun}${count === 1 ? "" : "s"}`;
+/** `a, b and c`. */
+function listed(ids: readonly string[], t: Translate): string {
+  return ids.length <= 1 ? ids.join("") : t("round.listed", { rest: ids.slice(0, -1).join(", "), last: ids.at(-1) ?? "" });
 }
 
-/** `a, b and c`. */
-function listed(ids: readonly string[]): string {
-  return ids.length <= 1 ? ids.join("") : `${ids.slice(0, -1).join(", ")} and ${ids.at(-1) ?? ""}`;
+/** What a POST's 200 staged and did not, by item, its notes and counts: kept, and worded as shown. */
+function resultOf(document: RoundAnswersOutcome): RoundResult {
+  const stagedIds = document.answers.filter((answer) => answer.outcome === STAGED).map((answer) => answer.id);
+  const otherIds = document.answers.filter((answer) => answer.outcome !== STAGED).map((answer) => answer.id);
+  return { stagedIds, otherIds, notes: document.notes, staged: stagedIds.length, sent: document.answers.length };
 }
 
 /** What a POST's 200 says, spoken politely and shown: what was staged, what was not, the next step. */
-function summaryOf(document: RoundAnswersOutcome): string {
-  const staged = document.answers.filter((answer) => answer.outcome === STAGED).map((answer) => answer.id);
-  const others = document.answers.filter((answer) => answer.outcome !== STAGED).map((answer) => answer.id);
-  const notStaged = others.length === 0 ? "" : `; ${counted(others.length, "answer")} not staged: ${listed(others)}`;
-  const next =
-    staged.length === 0
-      ? "Nothing new is staged; each refusal is shown on its item."
-      : `Nothing is applied yet. Confirm on a terminal: ${ROUND_COMMAND}; each answer is asked again there, one at a time.`;
-  return `Staged ${counted(staged.length, "answer")}${notStaged}. ${next}`;
+function summaryOf(result: RoundResult, t: Translate): string {
+  const notStaged = result.otherIds.length === 0 ? "" : t("round.notStaged", { count: result.otherIds.length, ids: listed(result.otherIds, t) });
+  const next = result.stagedIds.length === 0 ? t("round.nextNone") : t("round.nextConfirm", { command: ROUND_COMMAND });
+  return t("round.summary", { staged: t("round.stagedCount", { count: result.stagedIds.length }), notStaged, next });
 }
 
 /**
@@ -56,18 +53,21 @@ function summaryOf(document: RoundAnswersOutcome): string {
  * takes the command alone, fixed words; the root is shown, never copied.
  */
 function ConfirmOnTerminal({ root, count }: { root: string | null; count: number }) {
+  const t = useTranslate();
   return (
     <section className="owner-commands round-confirm" aria-labelledby="round-confirm-title">
       <h2 id="round-confirm-title" className="owner-commands-title">
         <Icon name="terminal" />
-        <span>Confirm on a terminal</span>
+        <span>{t("round.confirmTitle")}</span>
       </h2>
-      <p className="owner-commands-note">{counted(count, "item")} {count === 1 ? "is" : "are"} staged on this sheet; nothing is applied until you confirm.</p>
+      <p className="owner-commands-note">{t("round.stagedOnSheet", { count })}</p>
       <p className="round-confirm-line">
-        Confirm on a terminal in <span className="mono">{root === null ? "the project's root" : <bdi>{root}</bdi>}</span>:{" "}
-        <code className="command-text">{ROUND_COMMAND}</code>; each answer is asked again there, one at a time.
+        {fill(t("round.confirmLine", { root: slot("root"), command: slot("command") }), {
+          root: <span className="mono">{root === null ? t("round.projectRoot") : <bdi>{root}</bdi>}</span>,
+          command: <code className="command-text">{ROUND_COMMAND}</code>,
+        })}
       </p>
-      <CopyButton text={ROUND_COMMAND} context={`the command: ${ROUND_COMMAND}`} failed={COPY_FAILED} />
+      <CopyButton text={ROUND_COMMAND} context={t("round.copyContext", { command: ROUND_COMMAND })} failed={t("round.copyFailed")} />
     </section>
   );
 }
@@ -95,6 +95,7 @@ function without<T>(map: ReadonlyMap<string, T>, id: string): ReadonlyMap<string
  * the sheet cannot take a refusal away with it.
  */
 export function RoundScreen({ project, round, memory }: { project: string; round: RoundQuery; memory: RoundMemory }) {
+  const t = useTranslate();
   const stage = useStageRoundAnswers(project);
   const posting = useRoundPosting(project);
   const decide = useStageDecision(project);
@@ -119,8 +120,8 @@ export function RoundScreen({ project, round, memory }: { project: string; round
   const [unstageRefusal, setUnstageRefusal] = useState<{ id: string; message: string } | null>(null);
   /** The open Confirm dialog: its item and the `[team]` row it opened under. */
   const [confirming, setConfirming] = useState<{ id: string; team: Team } | null>(null);
-  /** The last Confirm's outcome, a visible copy of what was spoken. */
-  const [confirmedSaid, setConfirmedSaid] = useState<string | null>(null);
+  /** The last Confirm's outcome, a visible copy of what was spoken, worded as shown. */
+  const [confirmedSaid, setConfirmedSaid] = useState<{ id: string; answered: Proposal } | null>(null);
   const entry = useRoundEntry(memory, project);
   const { drafts, refused, result, failure: postFailure, dropped, limit } = entry;
 
@@ -216,20 +217,20 @@ export function RoundScreen({ project, round, memory }: { project: string; round
       const refusal = apiErrorOf(error);
       update((current) => ({ ...current, failure: refusal }));
       if (!memory.onView(project)) {
-        const what = refusal.status === 0 ? "no answer from the daemon; some answers may have been staged" : "the daemon refused the answers; nothing was staged";
-        announce(`Questions of ${project}: ${what}. ${refusal.message}`, "assertive");
+        const what = refusal.status === 0 ? t("round.noAnswerSaid") : t("round.refusedSaid");
+        announce(t("round.failedOf", { project, what, message: refusal.message }), "assertive");
       }
       return;
     }
     sending.current = false;
-    const stagedIds = new Set(document.answers.filter((answer) => answer.outcome === STAGED).map((answer) => answer.id));
-    const said = summaryOf(document);
-    announce(memory.onView(project) ? said : `Questions of ${project}: ${said}`);
+    const outcome = resultOf(document);
+    const said = summaryOf(outcome, t);
+    announce(memory.onView(project) ? said : t("round.saidOf", { project, said }));
     update((current) => ({
       ...current,
-      drafts: [...stagedIds].reduce((next, id) => (current.drafts.get(id) === sent.get(id) ? withDraft(next, id, undefined) : next), current.drafts),
+      drafts: outcome.stagedIds.reduce((next, id) => (current.drafts.get(id) === sent.get(id) ? withDraft(next, id, undefined) : next), current.drafts),
       refused: new Map(document.answers.filter((answer) => answer.outcome !== STAGED).map((answer) => [answer.id, answer])),
-      result: { text: said, notes: document.notes, staged: stagedIds.size, sent: document.answers.length },
+      result: outcome,
     }));
   }
 
@@ -248,14 +249,14 @@ export function RoundScreen({ project, round, memory }: { project: string; round
     } catch (error) {
       sending.current = false;
       const refusal = apiErrorOf(error);
-      announce(`The daemon refused to unstage ${item.id}; nothing changed. ${refusal.message}`, "assertive");
+      announce(t("round.unstageRefused", { id: item.id, message: refusal.message }), "assertive");
       if (top.current !== null) {
         setUnstageRefusal({ id: item.id, message: refusal.message });
       }
       return;
     }
     sending.current = false;
-    announce(`Unstaged the answer on ${item.id}; nothing is staged for it now.`);
+    announce(t("round.unstaged", { id: item.id }));
     if (top.current !== null) {
       setUnstageRefusal(null);
       unstaged.current = item.id;
@@ -280,9 +281,9 @@ export function RoundScreen({ project, round, memory }: { project: string; round
 
   /** The daemon's answer, spoken and shown; the item has left the sheet, so focus goes to the sheet. */
   function confirmed(id: string, answered: Proposal) {
-    const said = confirmedLine(id, answered);
-    announce(memory.onView(project) ? said : `Questions of ${project}: ${said}`);
-    setConfirmedSaid(said);
+    const said = confirmedLine(id, answered, t);
+    announce(memory.onView(project) ? said : t("round.saidOf", { project, said }));
+    setConfirmedSaid({ id, answered });
     setConfirming(null);
     focusLater(() => top.current);
   }
@@ -306,11 +307,11 @@ export function RoundScreen({ project, round, memory }: { project: string; round
       <div className="round" ref={top} tabIndex={-1}>
         {failure === null ? (
           <div aria-busy="true">
-            <Skeleton label={`Loading the question round of ${project}`} lines={5} />
+            <Skeleton label={t("round.loading", { project })} lines={5} />
           </div>
         ) : (
           <ErrorPanel
-            title="The question round could not be loaded"
+            title={t("round.failed")}
             message={apiErrorOf(failure).message}
             retrying={round.isFetching}
             attempt={round.errorUpdateCount}
@@ -340,12 +341,14 @@ export function RoundScreen({ project, round, memory }: { project: string; round
       </Suspense>
     );
   // A visible copy; screen readers hear it through the page's live region (useAnnounce).
-  const confirmedResult = confirmedSaid === null ? null : <p className="decision-result">{confirmedSaid}</p>;
+  const confirmedResult = confirmedSaid === null ? null : <p className="decision-result">{confirmedLine(confirmedSaid.id, confirmedSaid.answered, t)}</p>;
   const notes =
     sheet.notes.length === 0 ? null : (
-      <ul className="note-list" aria-label="Notes from the daemon">
+      <ul className="note-list" aria-label={t("round.notes")}>
         {sheet.notes.map((note, index) => (
-          <li key={`${String(index)}-${note}`}>{shownSlot(note)}</li>
+          <li key={`${String(index)}-${note}`} lang="en">
+            {shownSlot(note)}
+          </li>
         ))}
       </ul>
     );
@@ -354,11 +357,9 @@ export function RoundScreen({ project, round, memory }: { project: string; round
       <div className="notice round-dropped" role="status">
         <p className="notice-title">
           <Icon name="info" />
-          <span>
-            {dropped.length === 1 ? `Your answer to ${listed(dropped)} was dropped` : `Your answers to ${listed(dropped)} were dropped`}
-          </span>
+          <span>{dropped.length === 1 ? t("round.droppedOne", { ids: listed(dropped, t) }) : t("round.droppedMany", { ids: listed(dropped, t) })}</span>
         </p>
-        <p>No longer on the sheet: decided elsewhere, or moved past the sheet's limit.</p>
+        <p>{t("round.droppedWhy")}</p>
         <button
           type="button"
           className="button button-quiet"
@@ -367,14 +368,14 @@ export function RoundScreen({ project, round, memory }: { project: string; round
             focusLater(() => top.current);
           }}
         >
-          Dismiss
+          {t("round.dismiss")}
         </button>
       </div>
     );
   const rereadFailure =
     round.error === null ? null : (
       <p className="note" role="alert">
-        The sheet could not be read again: {apiErrorOf(round.error).message}
+        {fill(t("round.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(round.error).message}</span> })}
       </p>
     );
 
@@ -384,15 +385,14 @@ export function RoundScreen({ project, round, memory }: { project: string; round
         {confirmedResult}
         {droppedNotice}
         <div className="empty-state">
-          <h2>No open questions or discrepancies.</h2>
+          <h2>{t("round.emptyTitle")}</h2>
           {notes}
+          <p>{t("round.emptyWhy")}</p>
           <p>
-            Agents raise a question or a discrepancy when the spec leaves something open, and keep working on their working
-            answer meanwhile.
-          </p>
-          <p>
-            Next: <a href={sectionHash(project, "inbox")}>review the change proposals in the Inbox</a>, or{" "}
-            <a href={sectionHash(project, "tasks")}>approve the tasks that are ready</a>.
+            {fill(t("round.emptyNext", { inbox: slot("inbox"), tasks: slot("tasks") }), {
+              inbox: <a href={sectionHash(project, "inbox")}>{t("round.emptyInbox")}</a>,
+              tasks: <a href={sectionHash(project, "tasks")}>{t("round.emptyTasks")}</a>,
+            })}
           </p>
         </div>
         {rereadFailure}
@@ -407,7 +407,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
   return (
     <div className="round" ref={top} tabIndex={-1}>
       <div className="round-intro">
-        <p className="round-count">{`${counted(items.length, "item")}, about ${String(sheet.minutes)} min of reading`}</p>
+        <p className="round-count">{t("round.itemCount", { count: items.length, minutes: sheet.minutes })}</p>
         {notes}
         {sheet.more > 0 && all > items.length && all !== limit && (
           <button
@@ -420,22 +420,19 @@ export function RoundScreen({ project, round, memory }: { project: string; round
               }
             }}
           >
-            {all === items.length + sheet.more ? `Show all ${String(all)}` : `Show ${String(all)}, the most one sheet holds`}
+            {all === items.length + sheet.more ? t("round.showAll", { count: all }) : t("round.showMost", { count: all })}
           </button>
         )}
         <p className="note">
           <Icon name="info" />
-          <span>
-            Your answers stay in this tab while it is open, across sections; a reload drops them. Nothing is staged until you
-            press Stage, and nothing is applied here.
-          </span>
+          <span>{t("round.draftsKept")}</span>
         </p>
       </div>
       {confirmedResult}
       {droppedNotice}
       {rereadFailure}
       {staged > 0 && <ConfirmOnTerminal root={root} count={staged} />}
-      <ol className="round-list" aria-label="Open questions and discrepancies, in round order" aria-busy={round.isPlaceholderData}>
+      <ol className="round-list" aria-label={t("round.listLabel")} aria-busy={round.isPlaceholderData}>
         {items.map((item) => (
           <RoundItemCard
             key={item.id}
@@ -455,44 +452,42 @@ export function RoundScreen({ project, round, memory }: { project: string; round
       </ol>
       {details && (
         // Out of the sticky bar, so the bar stays short and never covers the control in focus.
-        <section ref={atLength} className="round-stage-details" aria-label="The answers to stage" tabIndex={-1}>
+        <section ref={atLength} className="round-stage-details" aria-label={t("round.detailsLabel")} tabIndex={-1}>
           {replacing.length > 0 && (
             <p className="round-stage-note">
-              Replaces the choice staged on{" "}
-              {replacing.map((item, index) => (
-                <span key={item.id}>
-                  {index > 0 && (index === replacing.length - 1 ? " and " : ", ")}
-                  <span className="mono">{item.id}</span> (<time dateTime={item.staged_at ?? ""}>{item.staged_at}</time>)
-                </span>
-              ))}
-              .
+              {fill(t("round.replaces", { items: slot("items") }), {
+                items: replacing.map((item, index) => (
+                  <span key={item.id}>
+                    {index > 0 && (index === replacing.length - 1 ? t("round.and") : ", ")}
+                    <span className="mono">{item.id}</span> (<time dateTime={item.staged_at ?? ""}>{item.staged_at}</time>)
+                  </span>
+                )),
+              })}
             </p>
           )}
-          {changed.length > 0 && (
-            <p className="round-stage-note">Left out, changed since you answered: {listed(changed)}. Pick again to include them.</p>
-          )}
-          {unwritten.length > 0 && <p className="round-stage-note">Left out, nothing written yet: {listed(unwritten)}.</p>}
+          {changed.length > 0 && <p className="round-stage-note">{t("round.leftOutChanged", { ids: listed(changed, t) })}</p>}
+          {unwritten.length > 0 && <p className="round-stage-note">{t("round.leftOutUnwritten", { ids: listed(unwritten, t) })}</p>}
           {postFailure !== null && (
             <div className="refusal" role="alert">
               <p className="refusal-title">
                 <Icon name="alert" />
-                <span>
-                  {postFailure.status === 0
-                    ? "No answer from the daemon: some answers may have been staged. The sheet is read again; your answers are kept."
-                    : "The daemon refused the answers; nothing was staged. Your answers are kept."}
-                </span>
+                <span>{postFailure.status === 0 ? t("round.noAnswer") : t("round.refused")}</span>
               </p>
-              <p className="verbatim">{postFailure.message}</p>
+              <p className="verbatim" lang="en">
+                {postFailure.message}
+              </p>
             </div>
           )}
           {/* A visible copy; screen readers hear it through the page's live region (useAnnounce). */}
           {result !== null && (
             <div className="decision-result">
-              <p>{result.text}</p>
+              <p>{summaryOf(result, t)}</p>
               {result.notes.length > 0 && (
-                <ul className="note-list" aria-label="Notes from the daemon on the answers">
+                <ul className="note-list" aria-label={t("round.resultNotes")}>
                   {result.notes.map((note, index) => (
-                    <li key={`${String(index)}-${note}`}>{shownSlot(note)}</li>
+                    <li key={`${String(index)}-${note}`} lang="en">
+                      {shownSlot(note)}
+                    </li>
                   ))}
                 </ul>
               )}
@@ -502,15 +497,9 @@ export function RoundScreen({ project, round, memory }: { project: string; round
       )}
       <section className="round-stage" aria-labelledby="round-stage-title" aria-busy={busy}>
         <h2 id="round-stage-title" className="sr-only">
-          Stage your answers
+          {t("round.stageTitle")}
         </h2>
-        <p className="round-stage-count">
-          {posting
-            ? "Staging the answers sent; nothing else is sent until they are answered."
-            : answered === 0
-              ? "No answer picked yet."
-              : `${counted(answered, "answer")} ready to stage.`}
-        </p>
+        <p className="round-stage-count">{posting ? t("round.posting") : answered === 0 ? t("round.nonePicked") : t("round.ready", { count: answered })}</p>
         {!posting && (postFailure !== null || result !== null) && (
           // The last Stage's outcome in one line, here where it was pressed; at length above the bar.
           <p className="round-stage-outcome">
@@ -523,9 +512,9 @@ export function RoundScreen({ project, round, memory }: { project: string; round
             >
               {postFailure !== null
                 ? postFailure.status === 0
-                  ? "No answer from the daemon: see below"
-                  : "Not staged: see why below"
-                : `Staged ${String(result?.staged ?? 0)} of ${String(result?.sent ?? 0)}: see the outcome below`}
+                  ? t("round.outcomeNoAnswer")
+                  : t("round.outcomeRefused")
+                : t("round.outcome", { staged: result?.staged ?? 0, count: result?.sent ?? 0 })}
             </button>
           </p>
         )}
@@ -538,7 +527,7 @@ export function RoundScreen({ project, round, memory }: { project: string; round
             void submit();
           }}
         >
-          {posting ? "Staging" : `Stage ${counted(answered, "answer")}`}
+          {posting ? t("round.staging") : t("round.stage", { count: answered })}
         </button>
       </section>
       {confirmDialog}

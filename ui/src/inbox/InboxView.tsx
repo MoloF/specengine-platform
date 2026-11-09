@@ -7,7 +7,8 @@ import { sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { useAllowed, useConfirmer } from "../board/acting";
 import { actOff } from "../board/labels";
-import { useTranslate } from "../i18n";
+import { useTranslate, type Translate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { useAnnounce } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
@@ -16,7 +17,7 @@ import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useNow } from "../ui/useNow";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
-import { confirmCommand, confirmedLine, DECISION_KEYS, WORDING, type DecisionKind } from "./decisions";
+import { confirmCommand, confirmedLine, DECISION_KEYS, isStaged, verbOf, type DecisionKind } from "./decisions";
 import { matchesFilter } from "./filter";
 import { severityRank } from "./labels";
 import { queueOrder } from "./order";
@@ -36,13 +37,15 @@ const ConfirmDialog = lazy(() => import("./ConfirmDialog").then((module) => ({ d
 const LETTERS = new Map<string, DecisionKind>(DECISION_KEYS.map(([kind, key]) => [key, kind]));
 
 /** What a stage says once stored: the decision, its time, the terminal command that confirms it. */
-function stagedAnnouncement(id: string, stage: StageChoice, review: Proposal): string {
-  const verb = stage.decision === "approve" ? WORDING.accept.verb : WORDING.reject.verb;
-  const at = review.staged_at === null ? "" : ` at ${review.staged_at}`;
+function stagedAnnouncement(id: string, stage: StageChoice, review: Proposal, t: Translate): string {
+  const verb = verbOf(stage.decision === "approve" ? "accept" : "reject", t);
   const command = confirmCommand(stage.decision, id);
-  const confirm = command === null ? "Confirm it on a terminal." : `Confirm it on a terminal: ${command}.`;
-  return `Staged ${verb} on ${id}${at}; nothing is applied yet. ${confirm}`;
+  const confirm = command === null ? t("inbox.confirmOnTerminal") : t("inbox.confirmCommand", { command });
+  return review.staged_at === null ? t("inbox.stagedSaid", { verb, id, confirm }) : t("inbox.stagedSaidAt", { verb, id, at: review.staged_at, confirm });
 }
+
+/** A line the view shows after a write, worded in the language shown when it renders. */
+type Said = (t: Translate) => string;
 
 /**
  * The open decision dialog: the proposal's review document as it was when opened, so a re-read
@@ -90,7 +93,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   const [dialog, setDialog] = useState<OpenDecision | null>(null);
   /** The open Confirm dialog: its proposal and the `[team]` row it opened under. */
   const [confirming, setConfirming] = useState<{ id: string; team: Team } | null>(null);
-  const [result, setResult] = useState("");
+  const [result, setResult] = useState<Said | null>(null);
   /** The daemon's words refusing the last unstage, by proposal. */
   const [unstageRefusal, setUnstageRefusal] = useState<{ id: string; message: string } | null>(null);
 
@@ -167,10 +170,10 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
       return;
     }
     if (reviewed.drift !== null) {
-      announce(`${selected.id} is a drift item, decided on a terminal only; nothing is staged here. Its card lists the commands.`);
+      announce(t("inbox.driftKey", { id: selected.id }));
       return;
     }
-    if (WORDING[kind].staged && !canStage) {
+    if (isStaged(kind) && !canStage) {
       announce(actOff("stage", t));
       return;
     }
@@ -219,13 +222,13 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
       return refused(id, apiErrorOf(error));
     }
     deciding.current = false;
-    const said = stagedAnnouncement(id, stage, review);
-    announce(said);
+    const said: Said = (shown) => stagedAnnouncement(id, stage, review, shown);
+    announce(said(t));
     if (!mounted.current) {
       return null;
     }
     setUnstageRefusal(null);
-    setResult(said);
+    setResult(() => said);
     if (closeOwnDialog(id)) {
       focusAfterStage(id);
     }
@@ -235,7 +238,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   /** A refusal stays in the dialog, or is spoken when the view is gone. */
   function refused(id: string, refusal: ApiError): string | null {
     if (!mounted.current) {
-      announce(`The daemon refused to stage the decision on ${id}; nothing changed. ${refusal.message}`, "assertive");
+      announce(t("inbox.stageRefusedSaid", { id, message: refusal.message }), "assertive");
       return null;
     }
     return refusal.message;
@@ -259,13 +262,13 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
 
   /** The daemon's answer, spoken and shown; the item has left the queue, so focus goes to the one now selected. */
   function confirmed(id: string, answered: Proposal) {
-    const said = confirmedLine(id, answered);
-    announce(said);
+    const said: Said = (shown) => confirmedLine(id, answered, shown);
+    announce(said(t));
     if (!mounted.current) {
       return;
     }
     setUnstageRefusal(null);
-    setResult(said);
+    setResult(() => said);
     setConfirming(null);
     focusLater(() => queue.current?.querySelector<HTMLElement>('[role="option"][aria-selected="true"]') ?? heading.current);
   }
@@ -281,20 +284,20 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     } catch (error) {
       deciding.current = false;
       const refusal = apiErrorOf(error);
-      announce(`The daemon refused to unstage ${id}; nothing changed. ${refusal.message}`, "assertive");
+      announce(t("inbox.unstageRefusedSaid", { id, message: refusal.message }), "assertive");
       if (mounted.current) {
         setUnstageRefusal({ id, message: refusal.message });
       }
       return;
     }
     deciding.current = false;
-    const said = `Unstaged the decision on ${id}; nothing is staged for it now.`;
-    announce(said);
+    const said: Said = (shown) => shown("inbox.unstagedSaid", { id });
+    announce(said(t));
     if (!mounted.current) {
       return;
     }
     setUnstageRefusal(null);
-    setResult(said);
+    setResult(() => said);
     // The Unstage button that had focus is gone with the staged choice.
     focusLater(() => itemElement(id));
   }
@@ -329,11 +332,11 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     body =
       failure === null ? (
         <div className="queue-loading" aria-busy="true">
-          <Skeleton label={`Loading the inbox of ${project}`} lines={4} />
+          <Skeleton label={t("inbox.loading", { project })} lines={4} />
         </div>
       ) : (
         <ErrorPanel
-          title="The inbox could not be loaded"
+          title={t("inbox.failed")}
           message={apiErrorOf(failure).message}
           retrying={inbox.isFetching}
           attempt={inbox.errorUpdateCount}
@@ -346,14 +349,9 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
   } else if (ordered.length === 0) {
     body = (
       <div className="empty-state">
-        <h2>The queue is clear</h2>
-        <p>
-          No proposal in {project} waits for your decision. Agents add one when the code and the spec disagree or a
-          section needs an edit, and keep working on their working answer meanwhile.
-        </p>
-        <p>
-          Next: <a href={sectionHash(project, "tasks")}>approve the tasks that are ready for development</a>.
-        </p>
+        <h2>{t("inbox.clearTitle")}</h2>
+        <p>{t("inbox.clearText", { project })}</p>
+        <p>{fill(t("inbox.clearNext", { link: slot("link") }), { link: <a href={sectionHash(project, "tasks")}>{t("inbox.clearNextLink")}</a> })}</p>
       </div>
     );
   } else {
@@ -361,11 +359,9 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     body = (
       <div className="queue" ref={queue} onKeyDown={onQueueKeyDown}>
         <div className="queue-pane">
-          <p className="queue-summary">
-            {ordered.length} in the queue, {high} high severity
-          </p>
+          <p className="queue-summary">{t("inbox.queueSummary", { count: ordered.length, high })}</p>
           <label className="field-label" htmlFor={filterId}>
-            Filter
+            {t("inbox.filter")}
           </label>
           <input
             id={filterId}
@@ -374,7 +370,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
             autoComplete="off"
             spellCheck={false}
             value={query}
-            placeholder="ID, words, kind, branch or target"
+            placeholder={t("inbox.filterPlaceholder")}
             onChange={(event) => {
               setQuery(event.target.value);
             }}
@@ -382,21 +378,21 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
           {absentId !== null && (
             <p className="note" role="status">
               <Icon name="info" />
-              <span>
-                {absentId} is not in this inbox; it may have been decided. The first proposal is shown.
-              </span>
+              <span>{t("inbox.absent", { id: absentId })}</span>
             </p>
           )}
           {inbox.data.notes.length > 0 && (
-            <ul className="note-list" aria-label="Notes from the daemon">
+            <ul className="note-list" aria-label={t("inbox.notes")}>
               {inbox.data.notes.map((note) => (
-                <li key={note}>{note}</li>
+                <li key={note} lang="en">
+                  {note}
+                </li>
               ))}
             </ul>
           )}
           {selected === null ? (
             <div className="empty-filter">
-              <p>No proposal matches &ldquo;{query}&rdquo;.</p>
+              <p>{t("inbox.noMatch", { query })}</p>
               <button
                 type="button"
                 className="button"
@@ -404,7 +400,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
                   setQuery("");
                 }}
               >
-                Clear the filter
+                {t("inbox.clearFilter")}
               </button>
             </div>
           ) : (
@@ -419,7 +415,7 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
           )}
           {inbox.error !== null && (
             <p className="note" role="alert">
-              The inbox could not be read again: {apiErrorOf(inbox.error).message}
+              {fill(t("inbox.failedAgain", { message: slot("message") }), { message: <span lang="en">{apiErrorOf(inbox.error).message}</span> })}
             </p>
           )}
         </div>
@@ -457,15 +453,12 @@ export function InboxView({ project, selectedId }: { project: string; selectedId
     <section className="view inbox" aria-labelledby="inbox-title" aria-busy={inbox.data === undefined && failure === null}>
       <header className="view-head">
         <h1 id="inbox-title" ref={heading} tabIndex={-1}>
-          Inbox
+          {t("inbox.title")}
         </h1>
-        <p className="view-about">
-          Proposals waiting for your decision. Nothing waits on them: agents work on with their working answer, and
-          your control point is approving tasks.
-        </p>
+        <p className="view-about">{t("inbox.about")}</p>
       </header>
       {/* A visible copy; screen readers hear it through the page's live region (useAnnounce). */}
-      {result !== "" && <p className="decision-result">{result}</p>}
+      {result !== null && <p className="decision-result">{result(t)}</p>}
       {body}
       {dialog !== null && (
         <Suspense fallback={null}>

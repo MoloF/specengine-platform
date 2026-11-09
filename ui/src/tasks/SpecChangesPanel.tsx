@@ -5,19 +5,8 @@ import { DiffView } from "../ui/DiffView";
 import { Icon } from "../ui/Icon";
 import { frozenAtApproval } from "./labels";
 import { useTranslate } from "../i18n";
+import { fill, slot } from "../i18n/fill";
 import { Part, When } from "./parts";
-
-/** The cut the core makes in a diff (`docs/canon/task-package.md` "Caps"). */
-export const CUT_NOTICE = "Diff cut by SpecEngine at 8 192 bytes; the file in the worktree holds the rest.";
-
-/** An entry past the package's total: `diff` null, `cut` true (`docs/canon/task-package.md` "Caps"). */
-export const TOTAL_CUT_NOTICE = "Diff cut: the package's diffs reached their size cap (262 144 bytes in all); the file in the worktree holds this change.";
-
-/** An entry with no diff and no cut, a diff git cannot make: the daemon's notes on the task say why (`docs/canon/task-package.md` "Staleness"). */
-export const NO_DIFF_NOTICE = "No diff sent for this node; the daemon's notes on this task say why.";
-
-/** What a node whose diff removes it says in place of a link. */
-export const REMOVED = "Removed since approval";
 
 /** Node lists up to this long show open; longer ones open on demand. */
 const SHOWN_OPEN = 10;
@@ -27,10 +16,11 @@ const SHOWN_OPEN = 10;
  * `docs/canon/task-package.md` "Staleness") as text with what happened to it, never a link to nothing.
  */
 function NodeName({ project, id, removed }: { project: string; id: string; removed: boolean }) {
+  const t = useTranslate();
   if (removed) {
     return (
       <>
-        <span className="mono">{id}</span> <span className="plain-tag">{REMOVED}</span>
+        <span className="mono">{id}</span> <span className="plain-tag">{t("tasks.changes.removed")}</span>
       </>
     );
   }
@@ -58,13 +48,14 @@ function DiffNote({ text }: { text: string }) {
 
 /** An entry's hunks as sent with the core's cut under them, or, with none sent, why. */
 function EntryDiff({ entry }: { entry: SnapshotDiff }) {
+  const t = useTranslate();
   if (entry.diff === null) {
-    return <DiffNote text={entry.cut ? TOTAL_CUT_NOTICE : NO_DIFF_NOTICE} />;
+    return <DiffNote text={entry.cut ? t("tasks.changes.totalCut") : t("tasks.changes.noDiff")} />;
   }
   return (
     <>
-      <DiffView diff={entry.diff} label={`Changes to ${entry.id} since approval`} />
-      {entry.cut && <DiffNote text={CUT_NOTICE} />}
+      <DiffView diff={entry.diff} label={t("tasks.changes.diffLabel", { id: entry.id })} />
+      {entry.cut && <DiffNote text={t("tasks.changes.cut")} />}
     </>
   );
 }
@@ -82,7 +73,7 @@ export function SpecChangesPanel({ project, task }: { project: string; task: Tas
       <div className="task-panel">
         <div className="empty-state">
           <p>{frozenAtApproval(t)}</p>
-          <p className="muted">This task has no approval yet, so there is nothing to compare.</p>
+          <p className="muted">{t("tasks.changes.noApproval")}</p>
         </div>
       </div>
     );
@@ -91,25 +82,23 @@ export function SpecChangesPanel({ project, task }: { project: string; task: Tas
   const removed = new Set((diffs ?? []).filter(removes).map((entry) => entry.id));
   return (
     <div className="task-panel">
-      <Part title="Frozen at approval">
+      <Part title={t("tasks.changes.frozen")}>
         <dl className="pairs">
-          <dt>When</dt>
+          <dt>{t("tasks.changes.when")}</dt>
           <dd>
             <When at={snapshot.at} />
           </dd>
-          <dt>Worktree</dt>
+          <dt>{t("tasks.runs.worktree")}</dt>
           <dd className="mono">{snapshot.place.worktree}</dd>
-          <dt>Spec root</dt>
-          <dd className="mono">{snapshot.place.root_rel === "" ? "(the worktree's root)" : snapshot.place.root_rel}</dd>
-          <dt>Branch</dt>
+          <dt>{t("tasks.changes.root")}</dt>
+          <dd className="mono">{snapshot.place.root_rel === "" ? t("tasks.changes.worktreeRoot") : snapshot.place.root_rel}</dd>
+          <dt>{t("tasks.runs.branch")}</dt>
           <dd className="mono">{snapshot.place.branch}</dd>
-          <dt>Commit</dt>
+          <dt>{t("tasks.changes.commit")}</dt>
           <dd className="mono">{snapshot.place.commit}</dd>
         </dl>
         <details className="snapshot-nodes" open={snapshot.nodes.length <= SHOWN_OPEN}>
-          <summary>
-            {snapshot.nodes.length} {snapshot.nodes.length === 1 ? "node" : "nodes"} frozen
-          </summary>
+          <summary>{t("tasks.changes.nodesFrozen", { count: snapshot.nodes.length })}</summary>
           <ul className="snapshot-node-list">
             {snapshot.nodes.map((node) => (
               <li key={`${node.id}:${node.path}`}>
@@ -121,21 +110,21 @@ export function SpecChangesPanel({ project, task }: { project: string; task: Tas
         </details>
       </Part>
 
-      <Part title="Changes since approval" count={diffs?.length}>
+      <Part title={t("tasks.changes.since")} count={diffs?.length}>
         {diffs === null ? (
           <div className="notice notice-unknown">
             <p className="notice-title">
               <Icon name="unknown" />
-              <span>Unknown: the spec could not be compared.</span>
+              <span>{t("tasks.changes.unknown")}</span>
             </p>
             {task.notes.map((note, index) => (
-              <p key={`${String(index)}-${note}`} className="verbatim">
+              <p key={`${String(index)}-${note}`} className="verbatim" lang="en">
                 {note}
               </p>
             ))}
           </div>
         ) : diffs.length === 0 ? (
-          <p className="muted">No change since approval.</p>
+          <p className="muted">{t("tasks.changes.none")}</p>
         ) : (
           <ol className="snapshot-diffs">
             {diffs.map((entry, index) => (
@@ -144,7 +133,7 @@ export function SpecChangesPanel({ project, task }: { project: string; task: Tas
                   <NodeName project={project} id={entry.id} removed={removes(entry)} />
                   <span className="mono muted">{entry.path}</span>
                 </p>
-                <p className="mono muted hash">At approval: {entry.span_hash}</p>
+                <p className="mono muted hash">{fill(t("tasks.changes.atApproval", { hash: slot("hash") }), { hash: entry.span_hash })}</p>
                 <EntryDiff entry={entry} />
               </li>
             ))}

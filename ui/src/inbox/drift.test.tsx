@@ -132,21 +132,21 @@ afterEach(() => {
 
 describe("a drift item's commands and rows (UI-1 of drift-queue)", () => {
   it("decides it on a terminal: approve, approve --editorial, reject with a reason; fixed words and a checked ID only", () => {
-    expect(driftCommands("PR-0012")?.map((command) => [command.action, command.text])).toEqual([
+    expect(driftCommands("PR-0012", enT)?.map((command) => [command.action, command.text])).toEqual([
       ["approve", "spec approve PR-0012"],
       ["editorial", "spec approve PR-0012 --editorial"],
       ["reject", 'spec reject PR-0012 --reason "..."'],
     ]);
     for (const id of ["PR-12", "PR-0012; rm -rf ~", "pr-0012", ""]) {
-      expect([id, driftCommands(id)]).toEqual([id, null]);
+      expect([id, driftCommands(id, enT)]).toEqual([id, null]);
     }
   });
 
   it("counts the rows stored and those past them; writes a row as its compact JSON", () => {
     expect([
-      driftRowsText(EVIDENCE),
-      driftRowsText({ hash: HASH, rows: ROWS.slice(0, 1), more: 0 }),
-      driftRowsText({ hash: HASH, rows: ROWS, more: 70 }),
+      driftRowsText(EVIDENCE, enT),
+      driftRowsText({ hash: HASH, rows: ROWS.slice(0, 1), more: 0 }, enT),
+      driftRowsText({ hash: HASH, rows: ROWS, more: 70 }, enT),
     ]).toEqual(["2 rows", "1 row", "72 rows, the first 2 stored with the item"]);
     expect(driftRowText(ROWS[0])).toBe(JSON.stringify(ROWS[0]));
     expect(driftRowText({ b: 1, a: [null] })).toBe('{"b":1,"a":[null]}');

@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useNode } from "../api/queries";
 import type { Interpretation } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { useTranslate } from "../i18n";
 import { ErrorPanel, Section } from "../ui/states";
 import { shownSlot, shownText } from "../ui/text";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
@@ -16,6 +17,7 @@ import { useRetryFocus } from "../ui/useRetryFocus";
  * instead of the page's body.
  */
 function DecisionRef({ project, decision }: { project: string; decision: string }) {
+  const t = useTranslate();
   const query = useNode(project, decision);
   const failure = useRetainedFailure(query.error, query.isFetching);
   const name = useRef<HTMLElement | null>(null);
@@ -37,7 +39,7 @@ function DecisionRef({ project, decision }: { project: string; decision: string 
         </p>
         {failure !== null && (
           <ErrorPanel
-            title={`The decision ${shownSlot(decision)} could not be read`}
+            title={t("inbox.interpretation.failed", { id: shownSlot(decision) })}
             message={apiErrorOf(failure).message}
             retrying={query.isFetching}
             attempt={query.errorUpdateCount}
@@ -59,9 +61,13 @@ function DecisionRef({ project, decision }: { project: string; decision: string 
           </span>
         </p>
         {/* The daemon's reason quotes the stored ID: its controls written `\u{..}` as the Questions screen writes a note, its direction its own. */}
-        <p className="muted" dir="auto">
-          {view.reason === null ? "No node answers this ID." : shownSlot(view.reason)}
-        </p>
+        {view.reason === null ? (
+          <p className="muted">{t("inbox.interpretation.noNode")}</p>
+        ) : (
+          <p className="muted" dir="auto" lang="en">
+            {shownSlot(view.reason)}
+          </p>
+        )}
       </div>
     );
   }
@@ -89,17 +95,18 @@ function DecisionRef({ project, decision }: { project: string; decision: string 
  * own direction. Shown for any proposal whose document holds one, whatever its kind.
  */
 export function InterpretationSection({ project, interpretation }: { project: string; interpretation: Interpretation }) {
+  const t = useTranslate();
   return (
-    <Section title="Interpretation">
+    <Section title={t("inbox.interpretation.title")}>
       <dl className="interpretation">
         <div className="interpretation-part">
-          <dt>Decision</dt>
+          <dt>{t("inbox.interpretation.decision")}</dt>
           <dd>
             <DecisionRef key={interpretation.decision} project={project} decision={interpretation.decision} />
           </dd>
         </div>
         <div className="interpretation-part">
-          <dt>How the decision was applied</dt>
+          <dt>{t("inbox.interpretation.how")}</dt>
           <dd>
             <p className="agent-text" dir="auto">
               {shownText(interpretation.how)}
@@ -107,7 +114,7 @@ export function InterpretationSection({ project, interpretation }: { project: st
           </dd>
         </div>
         <div className="interpretation-part">
-          <dt>Why interpretation was needed</dt>
+          <dt>{t("inbox.interpretation.why")}</dt>
           <dd>
             <p className="agent-text" dir="auto">
               {shownText(interpretation.why)}
