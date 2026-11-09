@@ -1,4 +1,4 @@
-import { createContext, createElement, memo, use, useEffect, useMemo, useRef, type JSX, type MouseEvent } from "react";
+import { createContext, createElement, memo, use, useEffect, useMemo, useRef, type JSX, type MouseEvent, type ReactElement } from "react";
 import ReactMarkdown, { type Components, type ExtraProps } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import type { ShownLink } from "../api/types";
@@ -165,13 +165,41 @@ const COMPONENTS: Components = {
   h6: heading(6),
 };
 
+/** How many parses are kept, the last used last: a screen's texts and a few more. */
+const PARSES_KEPT = 32;
+
+/**
+ * The last parses by text, lines and level. A render React makes again before committing it (one a
+ * later read's answer cut into, or Strict Mode's second call) finds the elements the first one made,
+ * so a text is parsed once per change however often it is rendered (docs/features/ui-markdown.md
+ * AC-13). The elements carry no state: the links reach them through context, the focus through the
+ * DOM.
+ */
+const parses = new Map<string, ReactElement>();
+
+/** The text's elements: react-markdown's sync component called once per text, lines and level. */
+function parsed(body: string, lineBase: number, baseLevel: number): ReactElement {
+  const key = `${String(lineBase)}:${String(baseLevel)}:${body}`;
+  const kept = parses.get(key);
+  if (kept !== undefined) {
+    parses.delete(key);
+    parses.set(key, kept);
+    return kept;
+  }
+  const elements = ReactMarkdown({ remarkPlugins: [remarkGfm, [remarkSpec, { source: body, lineBase, baseLevel }]], components: COMPONENTS, children: body });
+  parses.set(key, elements);
+  for (const oldest of parses.keys()) {
+    if (parses.size <= PARSES_KEPT) {
+      break;
+    }
+    parses.delete(oldest);
+  }
+  return elements;
+}
+
 /** The parse and its elements: again only when the text, its lines or its level change. */
 const Rendered = memo(function Rendered({ body, lineBase, baseLevel }: { body: string; lineBase: number; baseLevel: number }) {
-  return (
-    <ReactMarkdown remarkPlugins={[remarkGfm, [remarkSpec, { source: body, lineBase, baseLevel }]]} components={COMPONENTS}>
-      {body}
-    </ReactMarkdown>
-  );
+  return parsed(body, lineBase, baseLevel);
 });
 
 /** Markdown prose as React elements; a document's front-matter verbatim above it. */

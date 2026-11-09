@@ -1,4 +1,4 @@
-import { act, fireEvent, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import { SYNC_EVERY_MS } from "../api/queries";
@@ -237,8 +237,8 @@ describe("when it is read", () => {
     const client = hubClient(aSync({ ahead: 2 }));
     renderApp(client, "#/alpha/inbox");
     await screen.findByText("2 commits not pushed");
-    fireEvent.click(screen.getByRole("link", { name: "Tasks" }));
-    await screen.findByRole("heading", { level: 1, name: "Tasks" });
+    fireEvent.click(await within(screen.getByRole("navigation", { name: "Sections" })).findByRole("link", { name: "Graph" }));
+    await screen.findByRole("heading", { level: 1, name: "Graph" });
     expect(await screen.findByText("2 commits not pushed")).toBeTruthy();
     await tick();
     expect(client.getSync).toHaveBeenCalledTimes(1);

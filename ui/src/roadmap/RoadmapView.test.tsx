@@ -246,8 +246,8 @@ describe("selection by the route (UI-3)", () => {
   it("keeps the chosen tab per project while the page lives", async () => {
     await openRoadmap();
     fireEvent.click(screen.getByRole("tab", { name: "Chain" }));
-    await follow(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Tasks" }));
-    await screen.findByRole("heading", { level: 1, name: "Tasks" });
+    await follow(await within(screen.getByRole("navigation", { name: "Sections" })).findByRole("link", { name: "Inbox" }));
+    await screen.findByRole("heading", { level: 1, name: "Inbox" });
     await follow(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Roadmap" }));
     const chain = await screen.findByRole("tab", { name: "Chain" });
     expect(chain.getAttribute("aria-selected")).toBe("true");

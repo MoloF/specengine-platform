@@ -100,6 +100,13 @@ const FIXTURES: [&str; 19] = [
     "verify-tests",
 ];
 
+/// The configured fixtures added after the golden's recording
+/// (docs/features/workspaces.md, `fixtures/studio-lamp`): the golden cannot
+/// hold their rows, since a recording after the slice proves nothing, so no
+/// replay runs over them; the in-crate differential (`store_reads_tests.rs`)
+/// covers them with the binary under test.
+const AFTER_THE_GOLDEN: [&str; 1] = ["studio-lamp"];
+
 /// A path no fixture holds: exit 1, `is no indexed document`.
 const MISSING_PATH: &str = "docs/store-reads-missing.md";
 
@@ -681,7 +688,17 @@ fn sr0_the_fixtures_are_every_configured_fixture() {
         .map(|entry| entry.file_name().to_string_lossy().into_owned())
         .collect();
     found.sort();
-    assert_eq!(found, FIXTURES.map(str::to_owned).to_vec());
+    let mut listed: Vec<String> = FIXTURES
+        .iter()
+        .chain(&AFTER_THE_GOLDEN)
+        .map(|name| (*name).to_owned())
+        .collect();
+    listed.sort();
+    assert_eq!(found, listed);
+    assert!(
+        AFTER_THE_GOLDEN.iter().all(|name| !FIXTURES.contains(name)),
+        "a fixture is in the golden or after it, not both"
+    );
 }
 
 /// SR-0 "The golden": it holds exactly the rows of the spec, in order

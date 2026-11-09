@@ -52,6 +52,9 @@ import type {
   UnappliedAmendment,
   UnboundMarker,
   UnboundRow,
+  Workspace,
+  WorkspaceDocument,
+  WorkspaceModule,
 } from "../api/types";
 
 /** A whole review document for tests; omitted keys null or empty as the review JSON gives them. */
@@ -930,4 +933,27 @@ export function aTraceNode(id: string, cards: TraceCard[], fields: Partial<Trace
 /** `spec trace --json` over nodes. */
 export function aTrace(nodes: TraceNode[], fields: Partial<TraceDocument> = {}): TraceDocument {
   return { ref: null, reason: null, notes: [], counts: { no_card: 0, in_work: 0, suspect: 0, departed: 0, confirmed: 0 }, stages: [], nodes, truncated: false, omitted: null, ...fields };
+}
+
+/** The implicit workspace's eight sections: `sections.ts`'s nine but `tasks`, in order (docs/features/workspaces.md D3). */
+export const IMPLICIT_SECTIONS = ["inbox", "board", "roadmap", "flow", "tree", "graph", "health", "questions"];
+
+/** One workspace; omitted keys as the implicit one's (docs/features/workspaces.md "Data"). */
+export function aWorkspace(fields: Partial<Workspace> & Pick<Workspace, "name">): Workspace {
+  return { title: fields.name, landing: "overview", sections: [...IMPLICIT_SECTIONS], flows: null, module: null, ...fields };
+}
+
+/** One module. */
+export function aModule(fields: Partial<WorkspaceModule> & Pick<WorkspaceModule, "name" | "root">): WorkspaceModule {
+  return { title: fields.name, ...fields };
+}
+
+/** `spec workspace --json` over a project with no table: the implicit document of docs/features/workspaces.md "Data". */
+export function anImplicitWorkspaces(notes: string[] = []): WorkspaceDocument {
+  return { source: "implicit", notes, workspaces: [aWorkspace({ name: "all", title: "All sections" })], modules: [] };
+}
+
+/** A configured workspaces document. */
+export function aWorkspaces(workspaces: Workspace[], modules: WorkspaceModule[] = [], fields: Partial<WorkspaceDocument> = {}): WorkspaceDocument {
+  return { source: "config", notes: [], workspaces, modules, ...fields };
 }

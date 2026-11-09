@@ -1,0 +1,13 @@
+{
+  "prefixes": [
+    "CHP",
+    "ISL",
+    "SCN"
+  ],
+  "kinds": [
+    "chapter",
+    "island",
+    "scene"
+  ],
+  "workspaces": "workspaces config | workspaces 4, modules 2\nworkspace writing | Writing | landing flow | sections flow, tree, board, questions, inbox | flows narrative | module (none)\nworkspace development | Development | landing board | sections board, inbox, tree, flow, graph, health, roadmap, questions | flows development | module (none)\nworkspace art | Art and levels | landing board | sections board, flow, tree, questions, inbox | flows art, level-design | module (none)\nworkspace production | Production | landing overview | sections inbox, roadmap, board, flow, tree, graph, health, questions | flows (all) | module (none)\nmodule shore | The shore | root CHP-SHORE\nmodule island | The lamp island | root ISL-LAMP\n"
+}

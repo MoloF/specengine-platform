@@ -82,6 +82,47 @@ export interface HubSync {
   at: string | null;
 }
 
+/** Where the served workspaces come from: the project's `[[workspace]]` tables, or the implicit one. Source: `docs/features/workspaces.md` "Data". */
+export type KnownWorkspaceSource = "config" | "implicit";
+
+/** A workspaces document's source as sent; other strings kept, never branched on. Source: `docs/features/workspaces.md` "Data". */
+export type WorkspaceSource = KnownWorkspaceSource | Unlisted;
+
+/**
+ * One workspace, a trade's lens: `sections` the nav's section IDs in its order (an ID the UI does
+ * not know is not drawn), `landing` `overview` or one of them, `flows` the card flows its Board
+ * shows in its order (null: every flow), `module` a served module's name or null. Every name and
+ * title is the project's data, shown or sent, never compared to a word of the UI's.
+ * Source: `docs/features/workspaces.md` "Data".
+ */
+export interface Workspace {
+  name: string;
+  title: string;
+  landing: string;
+  sections: string[];
+  flows: string[] | null;
+  module: string | null;
+}
+
+/** One module: a root document and its subtree; `root` a REF in any `spec show` form, resolved by the read it roots. Source: `docs/features/workspaces.md` "Data". */
+export interface WorkspaceModule {
+  name: string;
+  title: string;
+  root: string;
+}
+
+/**
+ * `spec workspace --json`, the answer of `GET .../workspaces`: every key present, `workspaces`
+ * never empty (the implicit one when none is configured), `notes` the reader's lines verbatim in
+ * served order. Source: `docs/features/workspaces.md` "Data".
+ */
+export interface WorkspaceDocument {
+  source: WorkspaceSource;
+  notes: string[];
+  workspaces: Workspace[];
+  modules: WorkspaceModule[];
+}
+
 /** Queue order, never a hold on work (ADR-0012). Source: `docs/specs/specengine-platform/05-architecture.md` "3.3. Index schema (SQLite)". */
 export type KnownSeverity = "high" | "normal" | "low";
 

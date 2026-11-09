@@ -974,7 +974,7 @@ describe("decisions: Accept and Reject stage (AC-14, AC-14 of decision-staging)"
   async function leaveWhileSending(client: StubClient) {
     renderApp(client, "#/alpha/tasks");
     await screen.findByRole("heading", { level: 1, name: "Tasks" });
-    const inboxLink = within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Inbox" });
+    const inboxLink = await within(screen.getByRole("navigation", { name: "Sections" })).findByRole("link", { name: "Inbox" });
     fireEvent.click(inboxLink);
     const card = await screen.findByRole("article");
     // A decision needs the review document: its sections are read before the buttons act.

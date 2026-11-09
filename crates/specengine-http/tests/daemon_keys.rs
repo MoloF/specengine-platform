@@ -239,6 +239,16 @@
 //! upstream (`ahead`, `behind` null, `error` a line), so the two hold one order
 //! of keys. A local daemon and a hub without `--push` do not serve it
 //! (`tests/hub_git.rs`, P18).
+//!
+//! docs/features/workspaces.md "Acceptance criteria", WS-12: three sets more,
+//! 113 in all, last, after `HubSync` ("The daemon", **Key sets**):
+//! `WorkspaceDocument` (`{source, notes, workspaces, modules}`), `Workspace`
+//! (`{name, title, landing, sections, flows, module}`) and `WorkspaceModule`
+//! (`{name, title, root}`), from `GET .../workspaces` on a local daemon over git
+//! copies of `fixtures/card-press` (its two workspaces, a module and none, two
+//! modules) and `fixtures/spec-a` (the implicit document, `flows` null), so
+//! every instance holds every key ([`workspace_documents`]). M27: a key missing
+//! from a set.
 
 mod common;
 mod task_state;
@@ -537,6 +547,27 @@ fn hub_syncs() -> Vec<String> {
     documents
 }
 
+/// `GET .../workspaces` on a local daemon over git copies of
+/// `fixtures/card-press` and `fixtures/spec-a` (docs/features/workspaces.md
+/// "Data"): the configured document and the implicit one, each a 200.
+fn workspace_documents() -> Vec<String> {
+    let scratch = Scratch::new("daemon-keys-workspaces");
+    let press = scratch.repo("card-press", "press", "main");
+    let a = scratch.repo("spec-a", "a", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&press, &a]);
+    ["card-press", "lantern-keep"]
+        .map(|slug| {
+            server
+                .get(&format!("/api/projects/{slug}/workspaces"))
+                .status(200)
+                .text()
+                .to_owned()
+        })
+        .to_vec()
+}
+
 fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let scratch = Scratch::new("daemon-keys");
     let a = scratch.repo("spec-a", "a", "main");
@@ -689,6 +720,15 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     let teams = team_rows();
     let confirms = confirm_reads();
     let syncs = hub_syncs();
+    let workspace_docs = workspace_documents();
+    let workspace_items: Vec<String> = workspace_docs
+        .iter()
+        .flat_map(|doc| raw_items(doc, "workspaces"))
+        .collect();
+    let workspace_modules: Vec<String> = workspace_docs
+        .iter()
+        .flat_map(|doc| raw_items(doc, "modules"))
+        .collect();
     let inbox = server
         .get(&format!("{p}/inbox"))
         .status(200)
@@ -1689,6 +1729,18 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             one_key_set("ConfirmRead", &confirms, keys_of),
         ),
         ("HubSync", one_key_set("HubSync", &syncs, keys_of)),
+        (
+            "WorkspaceDocument",
+            one_key_set("WorkspaceDocument", &workspace_docs, keys_of),
+        ),
+        (
+            "Workspace",
+            one_key_set("Workspace", &workspace_items, keys_of),
+        ),
+        (
+            "WorkspaceModule",
+            one_key_set("WorkspaceModule", &workspace_modules, keys_of),
+        ),
     ]
 }
 
@@ -2015,12 +2067,12 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        110,
+        113,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
          board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108; \
-         hub-confirm: 109; hub-git: 110)"
+         hub-confirm: 109; hub-git: 110; workspaces: 113)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2631,6 +2683,16 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     // hub-git's one, last: docs/features/hub-git.md "Data".
     assert_eq!(sets[109].0, "HubSync");
     assert_eq!(sets[109].1, ["ahead", "behind", "state", "error", "at"]);
+    // workspaces' three, last: docs/features/workspaces.md "The daemon".
+    assert_eq!(sets[110].0, "WorkspaceDocument");
+    assert_eq!(sets[110].1, ["source", "notes", "workspaces", "modules"]);
+    assert_eq!(sets[111].0, "Workspace");
+    assert_eq!(
+        sets[111].1,
+        ["name", "title", "landing", "sections", "flows", "module"]
+    );
+    assert_eq!(sets[112].0, "WorkspaceModule");
+    assert_eq!(sets[112].1, ["name", "title", "root"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -2651,7 +2713,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 110 sets (41 until
+/// unchanged, no new key): the fixture holds 113 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2669,7 +2731,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/hub-identity.md its `Identity`, and
 /// docs/features/hub-team.md its `Team`, and
 /// docs/features/hub-confirm.md its `ConfirmRead`, and
-/// docs/features/hub-git.md its `HubSync`); a decision
+/// docs/features/hub-git.md its `HubSync`, and
+/// docs/features/workspaces.md its three); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -2683,15 +2746,16 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        110,
-        "110 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        113,
+        "113 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
-         hub-team's `Team`, hub-confirm's `ConfirmRead` and hub-git's `HubSync`"
+         hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync` and \
+         workspaces' three (WS-12)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -2805,7 +2869,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 110 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 113 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2821,7 +2885,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/hub-identity.md its `Identity`, and
 /// docs/features/hub-team.md its `Team`, and
 /// docs/features/hub-confirm.md its `ConfirmRead`, and
-/// docs/features/hub-git.md its `HubSync`); the amendment of
+/// docs/features/hub-git.md its `HubSync`, and
+/// docs/features/workspaces.md its three); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -2838,15 +2903,16 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        110,
-        "110 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        113,
+        "113 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
          health-drift's six (TE-5), ui-node-bindings' two (TE-1), \
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
-         hub-team's `Team`, hub-confirm's `ConfirmRead` and hub-git's `HubSync`"
+         hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync` and \
+         workspaces' three (WS-12)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

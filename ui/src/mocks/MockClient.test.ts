@@ -68,6 +68,32 @@ describe("the normal scenario", () => {
     expect((await rejection(new MockClient("normal", { now: clock }).getTeam())).status).toBe(404);
   });
 
+  it("serves harbor-sim's two workspaces and two modules, ledger-api the implicit one; config-notes their notes (docs/features/workspaces.md \"The UI\")", async () => {
+    const client = new MockClient("normal", { now: clock });
+    const harbor = await client.getWorkspaces("harbor-sim");
+    expect(harbor.source).toBe("config");
+    expect(harbor.workspaces.map(({ name, landing, sections, flows, module }) => [name, landing, sections, flows, module])).toEqual([
+      ["galley", "flow", ["board", "flow", "tree", "inbox"], ["copy"], "berths"],
+      ["foundry", "overview", ["board", "health", "graph", "tree"], ["plates"], null],
+    ]);
+    expect(harbor.modules.map(({ name, root }) => [name, root])).toEqual([
+      ["berths", "DOM-BERTHS"],
+      ["waters", "DOM-WATER"],
+    ]);
+    expect(harbor.notes).toEqual([]);
+    const ledger = await client.getWorkspaces("ledger-api");
+    expect([ledger.source, ledger.workspaces.map((workspace) => workspace.name), ledger.modules, ledger.notes]).toEqual(["implicit", ["all"], [], []]);
+    const noted = new MockClient("config-notes", { now: clock });
+    expect((await noted.getWorkspaces("harbor-sim")).notes).toHaveLength(2);
+    expect((await noted.getWorkspaces("ledger-api")).notes).toEqual([expect.stringMatching(/; the implicit workspace is served$/)]);
+    expect((await noted.getWorkspaces("ledger-api")).source).toBe("implicit");
+    // Every key of the document present, in the spec's order.
+    expect(Object.keys(harbor)).toEqual(["source", "notes", "workspaces", "modules"]);
+    expect(Object.keys(harbor.workspaces[0] ?? {})).toEqual(["name", "title", "landing", "sections", "flows", "module"]);
+    expect(Object.keys(harbor.modules[0] ?? {})).toEqual(["name", "title", "root"]);
+    expect((await rejection(client.getWorkspaces("nowhere"))).status).toBe(404);
+  });
+
   it("holds every case the slice names in harbor-sim's queue", async () => {
     const client = new MockClient("normal", { now: clock });
     const { proposals } = await client.getInbox("harbor-sim");
@@ -228,6 +254,7 @@ describe("the other scenarios", () => {
       client.getProjects(),
       client.getIdentity(),
       client.getTeam(),
+      client.getWorkspaces("harbor-sim"),
       client.getInbox("harbor-sim"),
       client.getNode("harbor-sim", "MEC-TIDES"),
       client.getTree("harbor-sim"),

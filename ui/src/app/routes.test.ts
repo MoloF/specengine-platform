@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { homeHash, navOf, parseHash, sectionHash } from "./routes";
+import { IMPLICIT_SECTIONS } from "../test/builders";
+import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash } from "./routes";
+import { isSectionId, SECTIONS } from "./sections";
 
 describe("hash routes", () => {
   it.each([
@@ -30,8 +32,8 @@ describe("hash routes", () => {
     expect(parseHash(hash)).toEqual(route);
   });
 
-  it("lists the nav: Overview to the home, then the nine sections, Board third, Roadmap fourth, Flow fifth", () => {
-    expect(navOf("a b").map(({ label, hash }) => [label, hash])).toEqual([
+  it("lists the nav over every section: Overview to the home, then the nine, Board third, Roadmap fourth, Flow fifth (the palette's list, and the nav when no workspace was read)", () => {
+    expect(navOf("a b", ALL_SECTIONS).map(({ label, hash }) => [label, hash])).toEqual([
       ["Overview", "#/a%20b"],
       ["Inbox", "#/a%20b/inbox"],
       ["Tasks", "#/a%20b/tasks"],
@@ -43,6 +45,31 @@ describe("hash routes", () => {
       ["Health", "#/a%20b/health"],
       ["Questions", "#/a%20b/questions"],
     ]);
+    expect(ALL_SECTIONS).toEqual(SECTIONS.map((section) => section.id));
+  });
+
+  // WS-1 of docs/features/workspaces.md: the implicit workspace's nav, Tasks off it (M2: the nav drawn from SECTIONS).
+  it("lists Overview, then a workspace's sections in its order: the implicit eight leave Tasks out", () => {
+    expect(navOf("ledger-api", IMPLICIT_SECTIONS).map(({ label }) => label)).toEqual(["Overview", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+    expect(navOf("p", ["health", "board", "tree"]).map(({ key, hash }) => [key, hash])).toEqual([
+      ["overview", "#/p"],
+      ["health", "#/p/health"],
+      ["board", "#/p/board"],
+      ["tree", "#/p/tree"],
+    ]);
+  });
+
+  it("draws a served ID only if it is one of the nine, and once; a list of none is Overview alone (A4 and the edge cases of workspaces)", () => {
+    expect(navOf("p", ["board", "stage", "board", "overview", "Tree", "tasks"]).map(({ key }) => key)).toEqual(["overview", "board", "tasks"]);
+    expect(navOf("p", []).map(({ key }) => key)).toEqual(["overview"]);
+    expect(navOf("p", ["stage"]).map(({ key }) => key)).toEqual(["overview"]);
+  });
+
+  // WS-2: Tasks leaves the nav by data, never the routes (M3: tasks dropped from isSectionId).
+  it("keeps Tasks a section and a route", () => {
+    expect(isSectionId("tasks")).toBe(true);
+    expect(parseHash("#/ledger-api/tasks/T-0107")).toEqual({ type: "section", project: "ledger-api", section: "tasks", id: "T-0107" });
+    expect(ALL_SECTIONS).toContain("tasks");
   });
 
   it("writes what it reads", () => {

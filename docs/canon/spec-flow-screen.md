@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-10-31
+reviewed: 2026-11-09
 ---
 
 # The Flow screen
@@ -12,13 +12,13 @@ The flow drawn, lifting nothing (ADR-0033, ADR-0055), its boxes against their ca
 
 ## Route
 
-`#/<p>/flow[/<name>]`, nav fourth of eight, the name only selecting. A section, not a Graph mode: `spec graph` needs a REF, and its chips, impact switch and grid fit neither groups nor gap rows.
+`#/<p>/flow[/<name>]`, the name only selecting. A section, not a Graph mode: `spec graph` needs a REF, and its chips, impact switch and grid fit neither groups nor gap rows.
 
 ## Reads
 
 | Read | Query | For |
 |---|---|---|
-| Top | `depth=0&trace=true` | top boxes, edges lifted to them, gap rows, `left_out`, `notes` |
+| Top | `depth=0&trace=true`, `root=` a module's (`workspaces.md`) | top boxes, edges lifted to them, gap rows, `left_out`, `notes` |
 | Group G | `root=G&depth=1&trace=true` | G's children, edges among them; one per open group |
 | Lanes | trace `summary=true` | the Stage filter, the Timeline |
 | Lane S | trace `stage=S`, `-` for none | its steps; one per open lane |

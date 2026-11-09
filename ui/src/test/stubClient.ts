@@ -54,6 +54,7 @@ import type {
   Team,
   TraceDocument,
   TreeView,
+  WorkspaceDocument,
 } from "../api/types";
 import {
   aBundle,
@@ -70,6 +71,7 @@ import {
   aRoadmapItem,
   aRoundSheet,
   aSearchResults,
+  anImplicitWorkspaces,
   aTrace,
   aTreeNode,
   aTreeView,
@@ -116,6 +118,8 @@ export function stubClient(proposals: Proposal[] = [], notes: string[] = []) {
     getIdentity: vi.fn<(signal?: AbortSignal) => Promise<Identity>>(() => Promise.resolve({ login: null })),
     // A local daemon's answer: its unknown route (docs/features/hub-team.md A7); a test of a hub overrides it.
     getTeam: vi.fn<(project: string, signal?: AbortSignal) => Promise<Team>>(() => Promise.reject(new ClientError({ status: 404, message: "no route /api/projects/alpha/team: the routes are /api/projects and the web UI" }))),
+    // A project with no `[[workspace]]` table: the implicit workspace, every section but Tasks (docs/features/workspaces.md D3); a test of a configured one overrides it.
+    getWorkspaces: vi.fn<(project: string, signal?: AbortSignal) => Promise<WorkspaceDocument>>(() => Promise.resolve(anImplicitWorkspaces())),
     getInbox: vi.fn<(project: string, signal?: AbortSignal) => Promise<Inbox>>(() =>
       Promise.resolve({ proposals: state.proposals.map((p) => entryOf(p)), notes: [...state.notes] }),
     ),

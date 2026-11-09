@@ -30,6 +30,8 @@ describe("SpecEngineClient's endpoint comments (AC-01)", () => {
     ["getIdentity", '/** GET /api/identity (docs/canon/hub.md "Routes"; a hub\'s login, null on a local daemon; no project) */'],
     // docs/features/hub-team.md "Data": a hub's route alone; the page asks it once a login is known.
     ["getTeam", '/** GET /api/projects/:p/team (docs/features/hub-team.md "Data"; a hub alone: the asking login\'s row of `[team]`, a local daemon\'s unknown route) */'],
+    // docs/features/workspaces.md "The UI": the route 07 s3 names, its document the CLI's; no query, no turn.
+    ["getWorkspaces", '/** GET /api/projects/:p/workspaces (docs/features/workspaces.md "Data"; = spec workspace --json, no query, no turn; judged: only a 200 resolves) */'],
     ["getInbox", "/** GET /api/projects/:p/inbox */"],
     ["getProposal", "/** GET /api/projects/:p/proposals/:id */"],
     // AC-14 of docs/features/decision-staging.md: the stage's two writes on one path.

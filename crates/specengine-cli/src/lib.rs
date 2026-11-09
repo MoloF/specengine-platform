@@ -296,6 +296,7 @@ mod verify;
 mod verify_node;
 mod verify_rows;
 mod verify_tests;
+mod workspace;
 
 use std::ffi::OsString;
 use std::fmt;
@@ -506,6 +507,7 @@ pub use verify_tests::{
     VerifyTestsLock, VerifyTestsNode, VerifyTestsOutcome, VerifyTestsProbe, VerifyTestsRequest,
     VerifyTestsRow, verify_tests,
 };
+pub use workspace::{WorkspaceOutcome, workspace};
 
 /// The exit code of a command (the verdict scheme of `spec check`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -722,6 +724,8 @@ pub enum Outcome {
     SparseSet(SparseOutcome),
     /// `team`: the project's `[team]` entries, by login.
     Team(TeamOutcome),
+    /// `workspace`: the project's workspaces and modules, as read.
+    Workspace(Box<WorkspaceOutcome>),
 }
 
 impl Outcome {
@@ -826,6 +830,8 @@ impl Outcome {
             Self::SparseSet(outcome) => (&outcome.messages, None),
             // A read of the config alone: nothing to note.
             Self::Team(_) => return Vec::new(),
+            // The tables' notes, escaped already, as JSON `notes` holds them.
+            Self::Workspace(outcome) => return outcome.stderr_lines(),
         };
         let mut lines: Vec<String> = messages.iter().map(Message::line).collect();
         if let Some(reason) = reason {
@@ -939,6 +945,7 @@ pub fn render_text(outcome: &Outcome) -> String {
         Outcome::RoundAnswers(outcome) => round::answers_outcome_text(outcome),
         Outcome::SparseSet(outcome) => sparse::render_text(outcome),
         Outcome::Team(outcome) => team::render_text(outcome),
+        Outcome::Workspace(outcome) => workspace::render_text(outcome),
     }
 }
 
@@ -993,6 +1000,7 @@ impl serde::Serialize for Outcome {
             Self::RoundAnswers(outcome) => outcome.serialize(serializer),
             Self::SparseSet(outcome) => outcome.serialize(serializer),
             Self::Team(outcome) => outcome.serialize(serializer),
+            Self::Workspace(outcome) => outcome.serialize(serializer),
         }
     }
 }

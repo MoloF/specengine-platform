@@ -53,6 +53,8 @@ export const queryKeys = {
   confirmRead: (project: string, id: string) => ["confirm", project, id] as const,
   /** A `--push` hub's push status of the project's repository (`docs/features/hub-git.md` "Data"): no event reads it. */
   sync: (project: string) => ["sync", project] as const,
+  /** A project's workspaces and modules (`docs/features/workspaces.md` "Data"): its config alone, so no event reads it. */
+  workspaces: (project: string) => ["workspaces", project] as const,
   tree: (project: string, options: TreeOptions = {}) =>
     [
       "tree",
@@ -272,6 +274,24 @@ export function useSync(project: string, enabled: boolean) {
     refetchInterval: SYNC_EVERY_MS,
   });
 }
+
+/**
+ * The project's workspaces and modules (`docs/features/workspaces.md` "The UI"): the shell's one read,
+ * unread until `enabled`, a project known. The config changes by an edit or a commit, which raises
+ * no event, so window focus reads it again; nothing else does.
+ */
+export function useWorkspaces(project: string, enabled = true) {
+  const client = useClient();
+  return useQuery({
+    queryKey: queryKeys.workspaces(project),
+    queryFn: ({ signal }) => client.getWorkspaces(project, signal),
+    enabled,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/** The workspaces read as the shell shares it. */
+export type WorkspacesQuery = ReturnType<typeof useWorkspaces>;
 
 export function useInbox(project: string) {
   const client = useClient();
@@ -546,12 +566,17 @@ export function useLiveQueue(project: string | null): { outside: OutsideStage | 
   return { outside: outside !== null && outside.project === project ? outside : null, dismiss };
 }
 
-/** The containment tree; while new options are read, the last tree stays up (no layout jump). */
-export function useTree(project: string, options: TreeOptions) {
+/**
+ * The containment tree; while new options are read, the last tree stays up (no layout jump).
+ * `enabled` false keeps it unread: the Spec tree waits for its module's root
+ * (`docs/features/workspaces.md` "The UI").
+ */
+export function useTree(project: string, options: TreeOptions, enabled = true) {
   const client = useClient();
   return useQuery({
     queryKey: queryKeys.tree(project, options),
     queryFn: ({ signal }) => client.getTree(project, treeRequest(options), signal),
+    enabled,
     placeholderData: keepPreviousData,
   });
 }
@@ -637,15 +662,25 @@ export function useGraph(project: string, options: GraphOptions | null) {
   });
 }
 
-/** The Flow's top read: the top boxes, the edges lifted to them, the gap rows (`docs/features/flow-canvas.md` "Reads"), their badges (`docs/features/trace-views.md` "Flow badges"). */
-const FLOW_TOP: FlowOptions = { depth: 0, trace: true };
+/**
+ * The Flow's top read: the top boxes, the edges lifted to them, the gap rows (`docs/features/flow-canvas.md` "Reads"), their badges (`docs/features/trace-views.md` "Flow badges");
+ * under a module, rooted at its root (`docs/features/workspaces.md` "The UI").
+ */
+export function flowTop(root: string | null): FlowOptions {
+  return root === null ? { depth: 0, trace: true } : { root, depth: 0, trace: true };
+}
 
-/** The Flow's top read: `depth=0`, never a whole-flow read. */
-export function useFlow(project: string) {
+/**
+ * The Flow's top read: `depth=0`, never a whole-flow read; `root` a module's, null for the whole
+ * project. `enabled` false keeps it unread: the Flow waits for its module's root.
+ */
+export function useFlow(project: string, root: string | null = null, enabled = true) {
   const client = useClient();
+  const top = flowTop(root);
   return useQuery({
-    queryKey: queryKeys.flow(project, FLOW_TOP),
-    queryFn: ({ signal }) => client.getFlow(project, FLOW_TOP, signal),
+    queryKey: queryKeys.flow(project, top),
+    queryFn: ({ signal }) => client.getFlow(project, top, signal),
+    enabled,
   });
 }
 

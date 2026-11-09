@@ -110,7 +110,9 @@ fn default_members_are_exactly_the_core_packages() {
 /// no retired package, `.cargo/config.toml` keeps only `[build] target-dir`
 /// (no alias), `scripts/` holds only `hooks-install.sh` and, a decided
 /// change of docs/features/hub-deploy.md (Q1, "Data" "Files"), the folder
-/// `deploy/`, a hub's compose deployment and image, never a retired script.
+/// `deploy/`, a hub's compose deployment and image, and, by
+/// docs/features/workspaces.md (D11), the folder `presets/`, the packs a
+/// project copies, never a retired script.
 #[test]
 fn no_retired_package_alias_or_script_is_left() {
     let root = workspace_root();
@@ -136,7 +138,11 @@ fn no_retired_package_alias_or_script_is_left() {
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
         .collect();
     scripts.sort();
-    assert_eq!(scripts, ["deploy", "hooks-install.sh"]);
+    assert_eq!(scripts, ["deploy", "hooks-install.sh", "presets"]);
+    assert!(
+        root.join("scripts/presets").is_dir(),
+        "scripts/presets is a folder"
+    );
     assert!(
         root.join("scripts/deploy").is_dir(),
         "scripts/deploy is a folder"

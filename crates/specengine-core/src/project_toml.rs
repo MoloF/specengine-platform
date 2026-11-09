@@ -20,8 +20,8 @@
 //!   a discrepancy needs it.
 //! - Top-level keys: `project`, `paths`, `ids`, `decision_records`, then
 //!   `budgets`, `classes`, `check`, `generators`, `zones`, `gate`, `code`,
-//!   `verify`, `health`, `roadmap`, `flow`, `card`, `team`, which are only
-//!   name-checked here
+//!   `verify`, `health`, `roadmap`, `flow`, `card`, `team`, `workspace`,
+//!   `module`, which are only name-checked here
 //!   (their readers are the check's, [`crate::gate`]'s for `zones` and
 //!   `gate`, [`crate::code_toml`]'s and [`crate::verify`]'s, read only where
 //!   code is read, [`crate::health_toml`]'s and [`crate::roadmap_toml`]'s,
@@ -29,8 +29,10 @@
 //!   check tables when the index entry registers a `roadmap` view,
 //!   [`crate::flow_toml`]'s, read only by `spec flow`, [`crate::card_toml`]'s,
 //!   read only by `spec card`, [`crate::team_toml`]'s, read only by a hub's
-//!   acts and the check's `team-config`): a bad `[gate]`, `[verify]`,
-//!   `[roadmap]`, `[flow]`, `[card]` or `[team]` fails no read; any other key
+//!   acts and the check's `team-config`, [`crate::workspace_toml`]'s, read
+//!   only by `spec workspace` and its route, which never fails): a bad
+//!   `[gate]`, `[verify]`, `[roadmap]`, `[flow]`, `[card]`, `[team]`,
+//!   `[[workspace]]` or `[[module]]` fails no read; any other key
 //!   is an error at its line, so a `[path]` typo cannot silently fall back to
 //!   the default walk.
 //!
@@ -318,6 +320,10 @@ struct RawFile {
     card: Option<IgnoredAny>,
     #[serde(default)]
     team: Option<IgnoredAny>,
+    #[serde(default)]
+    workspace: Option<IgnoredAny>,
+    #[serde(default)]
+    module: Option<IgnoredAny>,
 }
 
 /// `[project]`; any other key is an error.

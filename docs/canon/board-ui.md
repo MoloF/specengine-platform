@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-http, crates/specengine-cli, ui]
 owner: owner
-reviewed: 2026-11-01
+reviewed: 2026-11-09
 ---
 
 # Board: card routes and screen
@@ -54,9 +54,9 @@ The local fence does not change: the `127.0.0.1` bind, `Host` and `Origin` namin
 
 ## Screen
 
-Section `board`, third of nine: `#/<p>/board[/<C>]`, the ID selecting a card and opening its flow. One read of `getCards(project, options?, signal?)`, always `marks`, `with_cancelled` on Show cancelled; `getCard` for the routed panel; `card.*` events and gaps read both again, apply and decision events and window focus (a hand edit raises no event; `provider.tsx` brings `window` `focus` to `refetchOnWindowFocus`) the list. **Marks come from the list**: `rowMark` over its four served keys, so a card can never look normal while suspect or departed; an index that cannot be read is the read's 503, so `ErrorPanel` stands where a clean board would. The whole trace read (`useTrace`) serves the panel only, enabled while one is open, for each target's rollup word; `card.*`, apply and decision events and gaps read it again. Columns, moves and accept come from the read: the UI looks them up and never judges, and `labels.ts` is the one word map.
+Section `board`: `#/<p>/board[/<C>]`, the ID selecting a card and opening its flow. One read of `getCards(project, options?, signal?)`, always `marks`, `with_cancelled` on Show cancelled; `getCard` for the routed panel; `card.*` events and gaps read both again, apply and decision events and window focus (a hand edit raises no event; `provider.tsx` brings `window` `focus` to `refetchOnWindowFocus`) the list. **Marks come from the list**: `rowMark` over its four served keys, so a card can never look normal while suspect or departed; an index that cannot be read is the read's 503, so `ErrorPanel` stands where a clean board would. The whole trace read (`useTrace`) serves the panel only, enabled while one is open, for each target's rollup word; `card.*`, apply and decision events and gaps read it again. Columns, moves and accept come from the read: the UI looks them up and never judges, and `labels.ts` is the one word map.
 
-- **Flows and filters.** A tab per flow, none for one flow. Discipline and Assignee (with Unassigned) AND, per-project screen state. A column ends "Show all <n>" past 200.
+- **Flows and filters.** A tab per flow the chosen workspace shows, in its order, none for one; past them `Showing <k> of <n> card flows.` and Show all flows (`workspaces.md` "Screen"). Discipline and Assignee (with Unassigned) AND, per-project screen state. A column ends "Show all <n>" past 200.
 - **A card** shows title, assignee, due, estimate and its source: the first target, a `routes.ts` link, `+<n>` for the rest; no target, "By hand". Accepted and cancelled say so, with an icon. A mark stands first on the tile: Suspect, Departed or Correcting, a label and an icon from `labels.ts`, naming the target, the discrepancy or the correction. An accepted word yields to it; a gone target shows its mark and Clear; an unknown mark word is a neutral badge, never a clean tile.
 - **Overdue.** Reads carry no clock, so `due.ts` alone holds one: `localToday` by local date, overdue as `due < today` strings, never on a closed card; label and icon. Cards are memoised; the clock redraws only when the day turns.
 - **Vocabulary.** A column named `blocked` is one more column. `src/board/` branches on no column, flow, discipline or event word (`policy.test.ts`).

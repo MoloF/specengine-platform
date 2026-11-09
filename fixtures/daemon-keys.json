@@ -108,5 +108,8 @@
   "Identity": ["login"],
   "Team": ["login", "name", "allowed"],
   "ConfirmRead": ["id", "question", "updated_at"],
-  "HubSync": ["ahead", "behind", "state", "error", "at"]
+  "HubSync": ["ahead", "behind", "state", "error", "at"],
+  "WorkspaceDocument": ["source", "notes", "workspaces", "modules"],
+  "Workspace": ["name", "title", "landing", "sections", "flows", "module"],
+  "WorkspaceModule": ["name", "title", "root"]
 }

@@ -61,6 +61,11 @@
 //!   built `ui/dist/index.html` when it is there. M: an inline `<script>`
 //!   (run on a scratch copy named by `UI_POLICY_INDEX_HTML`, never by
 //!   editing `ui/index.html`).
+//!
+//! - docs/features/workspaces.md "Acceptance criteria" (RM-0081), its eval
+//!   half: core's `workspace_toml::SECTIONS` is `ui/src/app/sections.ts`'s
+//!   section IDs in its order, read as text. M: a section added to one side
+//!   alone.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -1756,4 +1761,44 @@ fn ui_embed_t6_the_scan_sees_each_inline_form_and_passes_the_rest() {
         ["line 3: <style>"],
         "the line of the form"
     );
+}
+
+/// The `id: "…"` values of `SECTIONS` in `sections.ts`'s text, in order.
+fn section_ids(text: &str) -> Vec<String> {
+    let start = text
+        .find("export const SECTIONS = [")
+        .expect("`export const SECTIONS = [` in sections.ts");
+    let body = &text[start..];
+    let end = body.find("] as const;").expect("its `] as const;`");
+    body[..end]
+        .match_indices("id: \"")
+        .map(|(at, opening)| {
+            let rest = &body[at + opening.len()..];
+            rest[..rest.find('"').expect("a closed ID")].to_owned()
+        })
+        .collect()
+}
+
+/// docs/features/workspaces.md (RM-0081) "Acceptance criteria", the eval
+/// half: the core's nine section IDs are the nav's, in the nav's order, and the
+/// reader of `sections.ts` sees an ID added to one side alone (M).
+#[test]
+fn workspaces_core_sections_are_the_nav_s_ids_in_order() {
+    let text = read(&ui_dir().join("src/app/sections.ts"));
+    let ui = section_ids(&text);
+    let core: Vec<String> = specengine_core::workspace_toml::SECTIONS
+        .iter()
+        .map(|id| (*id).to_owned())
+        .collect();
+    assert_eq!(ui.len(), 9, "sections.ts's nine: {ui:?}");
+    assert_eq!(core, ui, "core's SECTIONS against ui/src/app/sections.ts");
+
+    let added = text.replacen(
+        "] as const;",
+        "  { id: \"atlas\", label: \"Atlas\", about: \"A tenth.\" },\n] as const;",
+        1,
+    );
+    let read_added = section_ids(&added);
+    assert_eq!(read_added.len(), 10);
+    assert_ne!(core, read_added, "a section added to the UI alone is seen");
 }

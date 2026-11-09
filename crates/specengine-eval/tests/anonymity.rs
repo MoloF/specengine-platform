@@ -13,6 +13,12 @@
 //! T-6 of docs/features/plugin-roles.md: the six paths it adds (the five
 //! agents, `skills/feature/SKILL.md`) are scanned the same way, a Cyrillic
 //! letter in each flagged, and the repository walk reads each.
+//! docs/features/workspaces.md (RM-0081) "Acceptance criteria", WS-7:
+//! `scripts/presets` joins the areas (a preset is copied into a project's
+//! config, so it carries no pilot name either);
+//! `presets_are_scanned_so_a_planted_name_is_found` pins that on a scratch tree
+//! and the repository walk reads `scripts/presets/gamedev.toml` (mutation M17:
+//! `scripts/presets` out of `AREAS`, so a planted pilot name passes).
 //! The ID prefixes of a runtime census config (08 §4.3;
 //! `crates/specengine-import/README.md`) are not grepped here: such a
 //! config may name single letters or prefixes this repository uses itself,
@@ -32,8 +38,16 @@ fn repository_root() -> PathBuf {
         .expect("repository root exists")
 }
 
-/// The scanned top-level areas of the repository.
-const AREAS: [&str; 5] = ["docs", "crates", "fixtures", "plugin", "ui"];
+/// The scanned areas of the repository: five top-level directories and the
+/// presets a project copies (docs/features/workspaces.md, WS-7).
+const AREAS: [&str; 6] = [
+    "docs",
+    "crates",
+    "fixtures",
+    "plugin",
+    "ui",
+    "scripts/presets",
+];
 
 /// The dot-named directories the walk enters (every other one is skipped):
 /// the plugin's manifest directories.
@@ -412,4 +426,50 @@ fn the_repository_walk_reads_the_plugin_files() {
             "{expected} is not scanned"
         );
     }
+}
+
+/// WS-7 of docs/features/workspaces.md "Acceptance criteria" on a scratch tree:
+/// a planted name in a preset is found (as a pilot name would be) and so is a
+/// raw Cyrillic letter; the rest of `scripts/` stays outside the areas. The
+/// name and the letter are assembled at run time. M17.
+#[test]
+fn presets_are_scanned_so_a_planted_name_is_found() {
+    let planted = format!("planted-{}-name", "pilot");
+    let letter = char::from_u32(0x0416).expect("a Cyrillic letter");
+    let tree = Scratch::new("presets-tree");
+    tree.write(
+        "scripts/presets/trade.toml",
+        &format!("# {planted}\ntitle = \"{letter}\"\n"),
+    );
+    tree.write("scripts/deploy/compose.yml", &format!("# {planted}\n"));
+    tree.write("docs/english.md", "plain English\n");
+    let names = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &[],
+        "<planted>",
+        |line| line.contains(&planted),
+    );
+    assert_eq!(names, ["scripts/presets/trade.toml:1: <planted>"]);
+    let letters = lines_matching(
+        &tree.0,
+        text_files_under(&tree.0),
+        &RUSSIAN_TEST_TEXT,
+        "cyrillic",
+        has_cyrillic,
+    );
+    assert_eq!(letters, ["scripts/presets/trade.toml:2: cyrillic"]);
+}
+
+/// The real walk reads the gamedev preset.
+#[test]
+fn the_repository_walk_reads_the_preset() {
+    let root = repository_root();
+    assert!(
+        text_files()
+            .iter()
+            .any(|(path, _)| path.strip_prefix(&root).unwrap_or(path)
+                == Path::new("scripts/presets/gamedev.toml")),
+        "scripts/presets/gamedev.toml is not scanned"
+    );
 }

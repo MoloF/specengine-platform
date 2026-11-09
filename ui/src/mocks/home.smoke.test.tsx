@@ -44,7 +44,9 @@ function sum(lines: string[]): number {
 }
 
 describe("the home over the mock", () => {
-  it("#/ lands on harbor-sim's home; #/harbor-sim reads the projects, the inbox and the tasks once each (AC-02)", async () => {
+  it("#/ lands on harbor-sim's home in a workspace landing on the Overview; #/harbor-sim reads the projects, the inbox and the tasks once each (AC-02)", async () => {
+    // foundry lands on the Overview; galley, the first, on the Flow (docs/features/workspaces.md WS-11).
+    window.localStorage.setItem("specengine.workspace.harbor-sim", "foundry");
     const { spies } = renderMock("normal", "#/");
     await screen.findByRole("heading", { level: 1, name: "Overview" });
     expect(window.location.hash).toBe("#/harbor-sim");

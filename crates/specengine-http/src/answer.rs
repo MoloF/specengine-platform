@@ -119,7 +119,7 @@ impl IntoResponse for Refusal {
 }
 
 /// The CLI's `--json` line without its final line end.
-fn document(outcome: &Outcome) -> String {
+pub(crate) fn document(outcome: &Outcome) -> String {
     let mut text = render_json(outcome);
     if text.ends_with('\n') {
         text.pop();

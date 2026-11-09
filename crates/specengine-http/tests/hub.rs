@@ -44,6 +44,14 @@
 //! route added under GET that the pin does not list, kept as a test on a copy
 //! in memory of the live router.
 //!
+//! docs/features/workspaces.md (RM-0081) "Acceptance criteria", WS-10: on a hub
+//! over card-press whose `[team]` holds an unknown key, any login's `GET
+//! .../workspaces` (one in the table, one outside it) is a 200 byte-equal to a
+//! local daemon's over the same copy, and again with `[team]` fixed; the bad
+//! table is seen (`.../team` a 503). The pin holds 28 routes, the new one among
+//! them. M22: the route reading `TeamConfig` (503). M23: the route left out of
+//! the pin.
+//!
 //! From docs/features/stream-life.md (RM-0075): SL5, a tail resumed through
 //! the proxy with `Last-Event-ID` gets every later event once. M: the opening
 //! cursor ignoring `Last-Event-ID`; resuming at `seq >= n`.
@@ -1407,7 +1415,13 @@ fn raw_forms_of_a_local_route_and_other_methods_stay_refused() {
 /// session's SSE stream, which carries only that session's own messages to the
 /// login that opened it (a session of another login is the rmcp 404, "Rules",
 /// **Sessions**), and the fence refuses its query on every method.
-const GET_ROUTES: [&str; 27] = [
+///
+/// docs/features/workspaces.md (RM-0081) judged `/api/projects/{p}/workspaces`,
+/// the 28th: mounted for every login, a plain read of the project's config
+/// alone (never `[team]`, never the index): the workspaces and modules a project
+/// configures, each a name, a title, sections, flows and a root, which every
+/// login may read (WS-10). A lens entitles no one (ADR-0073).
+const GET_ROUTES: [&str; 28] = [
     "/",
     "/api/identity",
     "/api/projects",
@@ -1433,6 +1447,7 @@ const GET_ROUTES: [&str; 27] = [
     "/api/projects/{p}/team",
     "/api/projects/{p}/trace",
     "/api/projects/{p}/tree",
+    "/api/projects/{p}/workspaces",
     "/assets/{file}",
     "/mcp/{p}",
 ];
@@ -1587,6 +1602,68 @@ fn a_get_route_the_pin_does_not_list_parts_from_it() {
         mutated.iter().any(|path| path == "/api/added"),
         "{mutated:?}"
     );
+}
+
+// ------------------------------------------------------ the workspaces read
+
+/// The print shop's route on a hub and on a local daemon.
+const WORKSPACES: &str = "/api/projects/card-press/workspaces";
+
+/// A `[team]` whose one entry holds a key the table does not know.
+const BAD_TEAM: &str = "\n[team.mira]\nrole = \"member\"\nemail = \"mira@example.org\"\nhat = 5\n";
+
+/// WS-10: a bad `[team]` leaves the workspaces read of every login a 200, the
+/// bytes of a local daemon over the same copy; the bad table is seen where it
+/// is read (`.../team` a 503); fixed, the bytes stay equal. M22: the route
+/// reading `TeamConfig`.
+#[test]
+fn workspaces_ws10_a_bad_team_leaves_the_read_of_every_login() {
+    let setup = Setup::new("hub-workspaces", "card-press");
+    let config = read_text(&setup.root, "specengine.toml");
+    common::write(
+        &setup.root,
+        "specengine.toml",
+        format!("{config}{BAD_TEAM}"),
+    );
+    let local_home = setup.scratch.home("local");
+    let local = Server::serve(&local_home, &setup.cwd, &[&setup.root]);
+    let hub = setup.start();
+
+    for fixed in [false, true] {
+        if fixed {
+            common::write(
+                &hub.setup.root,
+                "specengine.toml",
+                format!("{config}{}", BAD_TEAM.replace("hat = 5\n", "")),
+            );
+        }
+        let want = local.get(WORKSPACES);
+        assert_eq!(want.status, 200, "local, fixed {fixed}: {}", want.text());
+        for login in ["mira", "eve"] {
+            let reply = hub.get(login, WORKSPACES);
+            assert_eq!(
+                reply.status,
+                200,
+                "{login}, fixed {fixed}: {}",
+                reply.text()
+            );
+            assert_eq!(
+                reply.text(),
+                want.text(),
+                "{login}, fixed {fixed}: a local daemon's bytes"
+            );
+        }
+        let team = hub.get("mira", &format!("{P}/team"));
+        assert_eq!(
+            team.status == 503,
+            !fixed,
+            "the control: `[team]` is bad until fixed: {} {}",
+            team.status,
+            team.text()
+        );
+    }
+    // The local daemon stops before the hub's scratch goes.
+    drop(local);
 }
 
 // --------------------------------------------------------------- AC-09

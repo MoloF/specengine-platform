@@ -47,6 +47,7 @@ A UI 200 carries `Cache-Control: no-store` (as every response, assets too) and `
 ## Known limits
 
 - The warning catches a missing `ui/dist`, not a stale one: build the UI before installing.
+- One `EventSource` per tab over HTTP/1.1: about six tabs exhaust Chrome's connections.
 - Size: `ui/dist` 1016 KB; the release binary 10 941 136 -> 11 969 600 B (2026-10-10), not capped.
 
 ## Tests

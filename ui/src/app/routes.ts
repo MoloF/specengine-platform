@@ -54,17 +54,30 @@ export function sectionHash(project: string, section: SectionId, id: string | nu
 /** The home's label in the nav and the palette. */
 export const OVERVIEW_LABEL = "Overview";
 
-/** One entry of the nav: the home, then the nine sections. */
+/** One entry of the nav: the home, then a section. */
 export interface NavEntry {
   key: "overview" | SectionId;
   label: string;
   hash: string;
 }
 
-/** The nav in order: Overview first, then the nine sections (07 §3 "Web UI — screens"). */
-export function navOf(project: string): NavEntry[] {
+/** The nine section IDs in `sections.ts` order: the palette's list, and the nav's when no workspace was read. */
+export const ALL_SECTIONS: readonly SectionId[] = SECTIONS.map((section) => section.id);
+
+/**
+ * The nav in order: Overview first, then `sections` in their order (07 §3 "Web UI — screens"), each
+ * drawn only if it is one of the nine and only once: a workspace's served list
+ * (`docs/features/workspaces.md` "The UI"), or ALL_SECTIONS.
+ */
+export function navOf(project: string, sections: readonly string[]): NavEntry[] {
+  const shown: SectionId[] = [];
+  for (const id of sections) {
+    if (isSectionId(id) && !shown.includes(id)) {
+      shown.push(id);
+    }
+  }
   return [
     { key: "overview", label: OVERVIEW_LABEL, hash: homeHash(project) },
-    ...SECTIONS.map((section) => ({ key: section.id, label: section.label, hash: sectionHash(project, section.id) })),
+    ...shown.map((id) => ({ key: id, label: SECTIONS.find((section) => section.id === id)?.label ?? id, hash: sectionHash(project, id) })),
   ];
 }

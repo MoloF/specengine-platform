@@ -73,7 +73,7 @@ spec index [--full]                      # the index (incremental by BLAKE3), + 
 spec serve [DIR...] [--port 7777]        # built: execs specengine-http; canon/serve.md
 specengine-http --root DIR... [--port N]  # built: reads, staging; crates/specengine-http/README.md
 spec mcp                                 # on a trigger: MCP stdio bridge
-spec workspace [--json]                  # to come (RM-0081): a project's workspaces and modules, docs/features/workspaces.md
+spec workspace [--json]                  # built: a project's workspaces and modules, docs/canon/workspaces.md
 
 # tree and nodes
 spec tree [ROOT] [--depth N] [--kind K] [--archive]  # shipped: docs/canon/spec-cli-graph.md
@@ -136,7 +136,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 
 - `127.0.0.1:7777`, a Host, Origin and Sec-Fetch-Site fence; no authentication, ever (ADR-0034). Built, reads and staging: `specengine-http` by `spec serve` (`docs/canon/serve.md`).
 - A hub, `specengine-http --public-origin URL`, keeps that bind behind a proxy on its host, fences its public origin and one proxy-set `Remote-User` on every request, and of the writes keeps five card routes for any login and, for the logins a project's `[team]` names, stages, round answers, accept and clear; a `lead` covering every target or the `owner` confirms one staged choice per click, a commit in the hub's checkout, pushed by its sync with `--push` (ADR-0058 to ADR-0061, ADR-0064, `docs/canon/hub-git.md`, `docs/canon/hub.md`, `docs/canon/hub-team.md`, `docs/canon/hub-confirm.md`).
-- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|flow|check|health|roadmap|lock-diff|inbox|proposals/:id|tasks|tasks/:id|round` (built); `/api/identity`, the login or `null`; `/api/projects/:p/team`, a hub's alone, the asker's row of `[team]`; `.../proposals/:id/confirm`, a hub's alone, the question a confirm answers; `symbols` to come; `.../workspaces`, a project's workspaces and modules, to come (`docs/features/workspaces.md`)
+- `GET /api/projects`, `/api/projects/:p/tree|nodes/{*ref}|search|bundle|graph|flow|check|health|roadmap|lock-diff|inbox|proposals/:id|tasks|tasks/:id|round` (built); `/api/identity`, the login or `null`; `/api/projects/:p/team`, a hub's alone, the asker's row of `[team]`; `.../proposals/:id/confirm`, a hub's alone, the question a confirm answers; `symbols` to come; `.../workspaces`, a project's workspaces and modules, no turn (built: `docs/canon/workspaces.md`)
 - `POST`, `DELETE /api/projects/:p/proposals/:id/decision`: stage, unstage, `POST .../round/answers` (built), `/tasks/:id/transition`, `/nodes/:id` (owner edit): only staging, a terminal confirms (ADR-0035); `POST .../proposals/:id/confirm`, a hub's alone, confirms one stage (ADR-0061)
 - `GET /api/projects/:p/events` -- **SSE**, the project's `events` (built; the UI updates live)
 - `/mcp/<slug>` — MCP Streamable HTTP (rmcp Tower service in axum), a hub's alone, both eras, GET/SSE (built: `docs/canon/hub-mcp.md`)
@@ -144,7 +144,7 @@ spec export index [--stdout]                         # [paths] index, its shards
 
 ### Web UI — screens
 
-UI in **English** (ADR-0014); spec content as is (the project's language), fonts and search handle non-Latin scripts. Data: `specengine-http` by default, the mock with `?scenario=` (`ui/README.md` "Contract seam").
+UI in **English** (ADR-0014); spec content as is (the project's language), fonts and search handle non-Latin scripts. Data: `specengine-http` by default, the mock with `?scenario=` (`ui/README.md` "Contract seam"). The nav is Overview, then the chosen workspace's sections (`docs/canon/workspaces.md`).
 
 | Screen | Content |
 |---|---|
@@ -153,7 +153,7 @@ UI in **English** (ADR-0014); spec content as is (the project's language), fonts
 | **Node** | rendered markdown, Source a toggle away (ADR-0036; editing: CodeMirror later); tabs: links (direct and reverse), bindings (rows with `sync`, test evidence, commands to copy: `docs/canon/drift-screens.md`; the changes since the lock: `docs/canon/lock-diff-panel.md`), bundle, history (git), proposals |
 | **Graph** | `@xyflow/react` with a hand-written layered layout (no ELK or dagre; `docs/features/ui-graph.md`); filter by link type; "impact" mode |
 | **Queue** | proposal and question cards: evidence (a drift item's rows typed: `docs/canon/drift-screens.md`), options with price, `@codemirror/merge` diff editable in place; a decision staged, its command to copy; hotkeys a/e/r/c/d |
-| **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`) |
+| **Tasks** | a list by state, "Waiting for you" first, beside the task's plan, spec changes, proposals and runs; owner actions as commands to copy (`docs/features/ui-tasks.md`); off the nav; a route and a palette entry |
 | **Roadmap** | the plan, read-only: a lane per release (current, the MVP cut, range bars), the pool with its tasks, unplaced items; each card's waits and executing tasks; a lazy chain canvas, Lanes its text twin (`docs/canon/spec-roadmap-screen.md`) |
 | **Flow** | the flow: groups that open and close, typed edges, arcs against the walk, gap rows beside it, rollup badges, a Timeline by stage, a List as its text twin; the spec is read only here, a node's cards are written from its panel (`docs/canon/spec-flow-screen.md`) |
 | **Health** | "what is left" (rows 4-5 from `spec health`: `docs/canon/health-code.md`; drawn by `health-code-ui`), drift (row 6 from `spec health`: `docs/canon/health-drift.md`; drawn by `health-drift-ui`), budgets, W metrics |
@@ -223,4 +223,16 @@ scip = false                # retired (ADR-0049): an unknown key; layer C is `sp
 mode = "observe"            # observe | enforce-introduced | enforce
 tests = ["scripts/run-test", "{package}", "{target_kind}", "{target}", "{test}"]  # argv, no shell; run only by the owner
 timeout = 600               # seconds per invocation, 1..86400
+
+[[workspace]]               # built: docs/canon/workspaces.md "Config"; a lens, never a right
+name = "newsroom"
+sections = ["board", "tree", "inbox"]
+landing = "board"           # overview by default
+flows = ["copy"]            # [[card.flow]] names; absent: every flow
+module = "weekly"
+
+[[module]]                  # one root and its subtree, rooting Tree and Flow
+name = "weekly"
+title = "The weekly run"
+root = "PRN-WEEKLY"
 ```

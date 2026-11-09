@@ -1,0 +1,66 @@
+# The gamedev preset (docs/features/workspaces.md "The gamedev preset"): five
+# card flows and four workspaces for a game studio's trades. Copy it into a
+# project's specengine.toml, add the project's own [[module]] tables and a
+# workspace's `module`, and retitle anything in the project's language.
+# Every name is data: no SpecEngine code reads one (ADR-0008, ADR-0073).
+
+[[card.flow]]
+name = "narrative"
+disciplines = ["narrative"]
+columns = ["backlog", "outline", "draft", "review", "approved", "ready-for-dev", "in-game"]
+titles = { backlog = "Backlog", outline = "Outline", draft = "Draft", review = "Review", approved = "Approved", ready-for-dev = "Ready for dev", in-game = "In game" }
+accept = { from = "ready-for-dev", to = "in-game" }
+
+[[card.flow]]
+name = "development"
+disciplines = ["development"]
+columns = ["backlog", "ready", "in-progress", "in-review", "verify", "done"]
+titles = { backlog = "Backlog", ready = "Ready", in-progress = "In progress", in-review = "In review", verify = "Verify", done = "Done" }
+accept = { from = "verify", to = "done" }
+
+[[card.flow]]
+name = "art"
+disciplines = ["art"]
+columns = ["waiting", "ready", "in-progress", "pending-review", "approved", "in-engine"]
+titles = { waiting = "Waiting", ready = "Ready", in-progress = "In progress", pending-review = "Pending review", approved = "Approved", in-engine = "In engine" }
+accept = { from = "approved", to = "in-engine" }
+
+[[card.flow]]
+name = "level-design"
+disciplines = ["level-design"]
+columns = ["layout", "blockout", "playtest", "scripting", "lighting", "art-pass", "final"]
+titles = { layout = "Layout", blockout = "Blockout", playtest = "Playtest", scripting = "Scripting", lighting = "Lighting", art-pass = "Art pass", final = "Final" }
+accept = { from = "art-pass", to = "final" }
+
+[[card.flow]]
+name = "production"
+disciplines = ["production"]
+columns = ["to-do", "in-progress", "review", "done"]
+titles = { to-do = "To do", in-progress = "In progress", review = "Review", done = "Done" }
+accept = { from = "review", to = "done" }
+
+[[workspace]]
+name = "writing"
+title = "Writing"
+sections = ["flow", "tree", "board", "questions", "inbox"]
+landing = "flow"
+flows = ["narrative"]
+
+[[workspace]]
+name = "development"
+title = "Development"
+sections = ["board", "inbox", "tree", "flow", "graph", "health", "roadmap", "questions"]
+landing = "board"
+flows = ["development"]
+
+[[workspace]]
+name = "art"
+title = "Art and levels"
+sections = ["board", "flow", "tree", "questions", "inbox"]
+landing = "board"
+flows = ["art", "level-design"]
+
+[[workspace]]
+name = "production"
+title = "Production"
+sections = ["inbox", "roadmap", "board", "flow", "tree", "graph", "health", "questions"]

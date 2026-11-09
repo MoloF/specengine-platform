@@ -138,6 +138,7 @@ pub mod tokens;
 pub mod trace;
 pub mod verify;
 pub mod walk_scope;
+pub mod workspace_toml;
 mod yaml;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -177,6 +178,10 @@ pub use team_toml::{TEAM_ENTRIES_MAX, TeamConfig, TeamEntry, TeamRole, team_from
 pub use tokens::tokens_est;
 pub use verify::{VerifyConfig, verify_from_toml};
 pub use walk_scope::{DOCUMENT_EXTENSION, WalkScope, is_clean_relative, is_under};
+pub use workspace_toml::{
+    Workspace, WorkspaceConfig, WorkspaceModule, WorkspaceNote, WorkspaceSource,
+    workspace_from_toml,
+};
 pub use yaml::{MAX_ALIAS_EXPANSION, MAX_DEPTH};
 
 use crate::front_matter::{FrontMatter, PendingLink};

@@ -32,3 +32,27 @@ name = "plates"
 disciplines = ["plates"]
 columns = ["queued", "blocked", "checked", "struck"]
 accept = { from = "checked", to = "struck" }
+
+[[workspace]]
+name = "newsroom"
+title = "Newsroom"
+sections = ["board", "tree", "inbox"]
+landing = "board"
+flows = ["copy"]
+module = "weekly"
+
+[[workspace]]
+name = "pressroom"
+title = "Pressroom"
+sections = ["board", "flow", "tree", "health"]
+flows = ["plates"]
+
+[[module]]
+name = "weekly"
+title = "The weekly run"
+root = "PRN-WEEKLY"
+
+[[module]]
+name = "rulings"
+title = "Style rulings"
+root = "STY-0001"

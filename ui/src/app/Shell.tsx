@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
-import { useLiveQueue, useProjects } from "../api/queries";
+import { useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
 import type { Project } from "../api/types";
 import { BoardView, type BoardMemory, type BoardState } from "../board/BoardView";
 import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
@@ -23,11 +23,15 @@ import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
+import { landingHash, useWorkspaceChoice } from "../workspace/choice";
+import { ModuleBar } from "../workspace/ModuleBar";
+import { WORKSPACE_TEXT } from "../workspace/text";
+import { ConfigNotes, WorkspaceSwitcher } from "../workspace/WorkspaceControls";
 import { isJumpChord, JUMP_KEYSHORTCUTS } from "./chord";
 import { DataSource } from "./DataSource";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { pushHash, replaceHash, useHash } from "./location";
-import { homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
+import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { SyncLine } from "./SyncLine";
 import { NotFound, ViewFailure } from "./views";
@@ -142,7 +146,11 @@ function ProjectSwitcher({
   );
 }
 
-/** Header, the home and the nine sections, the current view inside its own error boundary, the jump palette. */
+/**
+ * Header, the home and the chosen workspace's sections, the current view inside its own error
+ * boundary, the jump palette. A workspace orders the nav and hides no route: every section renders
+ * at its hash, from the palette and from any link (docs/features/workspaces.md "The UI", W4).
+ */
 export function Shell({ scenario }: { scenario: string | null }) {
   const hash = useHash();
   const route = parseHash(hash);
@@ -217,13 +225,44 @@ export function Shell({ scenario }: { scenario: string | null }) {
   // The shown project's live queue; a stage it says changed outside this tab is an alert above the
   // view (docs/canon/decision-staging.md "UI").
   const live = useLiveQueue(shownProject);
+  const navProject = routeProject ?? firstProject;
+  // The nav's project's workspaces and modules (docs/features/workspaces.md "The UI"): a config
+  // read, no turn; while it is out the nav is a skeleton, and failed it lists every section.
+  const workspaces = useWorkspaces(navProject ?? "", navProject !== null);
+  const workspacesFailure = useRetainedFailure(workspaces.error, workspaces.isFetching);
+  const choice = useWorkspaceChoice(navProject, workspaces.data);
+  /** The workspaces read failed with no answer to keep: every section is shown. */
+  const workspacesFailed = workspaces.data === undefined && workspacesFailure !== null;
+  const navRef = useRef<HTMLElement>(null);
+  /** Retry was pressed in the config notes; its answer may take the button that had focus. */
+  const workspacesRetried = useRef(false);
+  /**
+   * The root the Spec tree and the Flow read from: the chosen module's, null for the whole project
+   * (no module, or the read failed), undefined while the read is out, so neither view reads before
+   * its module is known (WS-9).
+   */
+  const moduleRoot = workspaces.data !== undefined ? (choice.module?.root ?? null) : workspacesFailed ? null : undefined;
+  const landingProject = route.type === "home" ? firstProject : null;
+  const landing = landingProject === null ? null : workspaces.data !== undefined ? landingHash(landingProject, choice.workspace) : workspacesFailed ? homeHash(landingProject) : null;
 
-  // `#/` is the first project's home, without a history entry of its own.
+  // `#/` is the first project's landing in its chosen workspace, once its workspaces are read, or its
+  // home if they cannot be; without a history entry of its own. A typed `#/<p>` is never redirected.
   useEffect(() => {
-    if (route.type === "home" && firstProject !== null) {
-      replaceHash(homeHash(firstProject));
+    if (landing !== null) {
+      replaceHash(landing);
     }
-  }, [route.type, firstProject]);
+  }, [landing]);
+
+  // A Retry in the config notes answered: the nav changed under it; focus lost with the button goes there.
+  useEffect(() => {
+    if (!workspacesRetried.current || workspaces.data === undefined) {
+      return;
+    }
+    workspacesRetried.current = false;
+    if (focusIsLost()) {
+      navRef.current?.querySelector<HTMLElement>("a")?.focus();
+    }
+  }, [workspaces.data]);
 
   // A palette jump: focus went to main as the palette closed; the destination's heading takes it
   // once rendered, also when the view stays the same (one task to another).
@@ -333,8 +372,27 @@ export function Shell({ scenario }: { scenario: string | null }) {
     focusLater(() => main.current);
   }
 
-  const navProject = projectOf(route) ?? firstProject;
   const inboxHref = navProject === null ? "#/" : sectionHash(navProject, "inbox");
+
+  function chooseWorkspace(name: string) {
+    if (navProject === null || workspaces.data === undefined) {
+      return;
+    }
+    choice.chooseWorkspace(name);
+    // Its landing, one history entry (none when it is the hash shown).
+    pushHash(landingHash(navProject, workspaces.data.workspaces.find((workspace) => workspace.name === name) ?? null));
+  }
+
+  function retryWorkspaces() {
+    workspacesRetried.current = true;
+    void workspaces.refetch({ cancelRefetch: false });
+  }
+
+  // The nav: the chosen workspace's sections; every section when the read failed, or with no project
+  // to read them for (the projects could not be read, or there are none); a skeleton while it is out.
+  const navPending = navProject === null ? projects.data === undefined && projectsFailure === null : workspaces.data === undefined && !workspacesFailed;
+  const navSections = choice.workspace?.sections ?? ALL_SECTIONS;
+  const routeModules = route.type === "section" && (route.section === "tree" || route.section === "flow") ? (workspaces.data?.modules ?? []) : [];
 
   let view;
   if (route.type === "not_found") {
@@ -383,13 +441,33 @@ export function Shell({ scenario }: { scenario: string | null }) {
   } else if (route.section === "tasks") {
     view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
   } else if (route.section === "board") {
-    view = <BoardView key={route.project} project={route.project} cardId={route.id} memory={boardMemory} />;
+    view = (
+      <BoardView
+        key={route.project}
+        project={route.project}
+        cardId={route.id}
+        memory={boardMemory}
+        flows={choice.workspace?.flows ?? null}
+        flowsKnown={workspaces.data !== undefined || workspacesFailed}
+        lens={choice.workspace?.name ?? null}
+      />
+    );
   } else if (route.section === "roadmap") {
     view = <RoadmapView key={route.project} project={route.project} itemId={route.id} memory={roadmapMemory} />;
   } else if (route.section === "flow") {
-    view = <FlowView key={route.project} project={route.project} nodeRef={route.id} memory={flowMemory} />;
+    // A module's Flow is a reading of its own: its open groups are another root's (docs/features/workspaces.md "The UI").
+    view = (
+      <FlowView
+        key={`${route.project}/${moduleRoot ?? ""}`}
+        project={route.project}
+        nodeRef={route.id}
+        memory={flowMemory}
+        moduleRoot={moduleRoot ?? null}
+        moduleKnown={moduleRoot !== undefined}
+      />
+    );
   } else if (route.section === "tree") {
-    view = <TreeView key={route.project} project={route.project} nodeRef={route.id} />;
+    view = <TreeView key={route.project} project={route.project} nodeRef={route.id} moduleRoot={moduleRoot ?? null} moduleKnown={moduleRoot !== undefined} />;
   } else if (route.section === "graph") {
     view = <GraphView key={route.project} project={route.project} nodeRef={route.id} memory={graphMemory} />;
   } else if (route.section === "health") {
@@ -420,6 +498,20 @@ export function Shell({ scenario }: { scenario: string | null }) {
             retrying={projects.isFetching}
             onRetry={retryProjects}
           />
+          {navProject !== null && choice.workspace !== null && workspaces.data !== undefined && (
+            <WorkspaceSwitcher workspaces={workspaces.data.workspaces} chosen={choice.workspace} onChoose={chooseWorkspace} />
+          )}
+          {navProject !== null && (
+            <ConfigNotes
+              key={navProject}
+              notes={workspaces.data?.notes ?? []}
+              failure={workspacesFailure === null ? null : apiErrorOf(workspacesFailure).message}
+              kept={workspaces.data !== undefined}
+              retrying={workspaces.isFetching}
+              attempt={workspaces.errorUpdateCount}
+              onRetry={retryWorkspaces}
+            />
+          )}
           <DataSource dataSource={dataSource} scenario={scenario} />
           <button
             type="button"
@@ -442,19 +534,24 @@ export function Shell({ scenario }: { scenario: string | null }) {
           </button>
         </header>
         <div className="app-body">
-          <nav className="app-nav" aria-label="Sections">
-            <ul>
-              {navOf(navProject ?? "").map((entry) => {
-                const active = entry.key === "overview" ? route.type === "project" : route.type === "section" && route.section === entry.key;
-                return (
-                  <li key={entry.key}>
-                    <a href={navProject === null ? "#/" : entry.hash} aria-current={active ? "page" : undefined}>
-                      {entry.label}
-                    </a>
-                  </li>
-                );
-              })}
-            </ul>
+          <nav ref={navRef} className="app-nav" aria-label="Sections" aria-busy={navPending ? true : undefined}>
+            {navPending ? (
+              <Skeleton label={WORKSPACE_TEXT.navPending} lines={6} />
+            ) : (
+              <ul>
+                {navOf(navProject ?? "", navSections).map((entry) => {
+                  // A section the nav does not list still renders at its hash; then no item is current.
+                  const active = entry.key === "overview" ? route.type === "project" : route.type === "section" && route.section === entry.key;
+                  return (
+                    <li key={entry.key}>
+                      <a href={navProject === null ? "#/" : entry.hash} aria-current={active ? "page" : undefined}>
+                        {entry.label}
+                      </a>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
           </nav>
           <main id="main" ref={main} tabIndex={-1} className="app-main">
             {/* A hub's push status, above the view, no control (docs/features/hub-git.md "Status and the screen"). */}
@@ -470,6 +567,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
                 }}
               />
             )}
+            {/* The module bar on the Spec tree and the Flow alone; outside the view, so a root naming nothing leaves it (docs/features/workspaces.md "The UI"). */}
+            {shownProject !== null && <ModuleBar modules={routeModules} chosen={choice.module} onChoose={choice.chooseModule} />}
             <ErrorBoundary key={viewKey} fallback={(error, reset) => <ViewFailure error={error} onRetry={reset} />}>
               {view}
             </ErrorBoundary>

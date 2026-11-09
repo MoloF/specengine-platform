@@ -55,6 +55,7 @@ import type {
   Team,
   TraceDocument,
   TreeView,
+  WorkspaceDocument,
 } from "./types";
 
 // SpecEngineClient over the daemon, specengine-http (`docs/features/daemon-read.md` "Data", the
@@ -64,7 +65,8 @@ import type {
 // `docs/features/health-left.md` "Data", the plan `crates/specengine-http/README.md` "Endpoints",
 // the lock diff `docs/features/lock-diff.md` "Route", the flow `docs/features/flow-canvas.md`
 // "Data", the cards `docs/features/board-ui.md` "Routes", the identity `docs/canon/hub.md` "Routes",
-// the confirm `docs/features/hub-confirm.md` "Data", the sync `docs/features/hub-git.md` "Data"):
+// the confirm `docs/features/hub-confirm.md` "Data", the sync `docs/features/hub-git.md` "Data",
+// the workspaces `docs/features/workspaces.md` "Data"):
 // `fetch` and `EventSource`, no package.
 // Same origin: the dev server proxies `/api` to 127.0.0.1:7777 (vite.config.ts). A path segment
 // (project, REF, proposal ID) is encoded once with encodeURIComponent (`#` → %23, `/` → %2F); a
@@ -323,6 +325,15 @@ export class HttpClient implements SpecEngineClient {
   /** A hub's route alone (`docs/features/hub-team.md` "Data"): asked once a login is known, a local daemon answering its unknown-route 404. */
   async getTeam(project: string, signal?: AbortSignal): Promise<Team> {
     return (await request("GET", `${projectPath(project)}/team`, { signal })) as Team;
+  }
+
+  /**
+   * `spec workspace --json` (`docs/features/workspaces.md` "Data"): no query, which the daemon
+   * refuses (400), and no turn. Judged, so only a 200 resolves: an older daemon's 404 and a 503 (a
+   * config `discover` refuses) reject in the daemon's words, and the nav falls back to every section.
+   */
+  async getWorkspaces(project: string, signal?: AbortSignal): Promise<WorkspaceDocument> {
+    return (await request("GET", `${projectPath(project)}/workspaces`, { signal, judged: true })) as WorkspaceDocument;
   }
 
   async getInbox(project: string, signal?: AbortSignal): Promise<Inbox> {

@@ -84,7 +84,7 @@ describe("what the home reads (AC-02)", () => {
     const client = await openHome();
     await settle();
     // The shell's one identity read: a local page's `{login: null}`, so no sync read follows (docs/features/hub-git.md "Status and the screen").
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getInbox: 1, getTasks: 1 });
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 1, getTasks: 1 });
     expect(argsOf(client.getInbox)).toEqual([["alpha"]]);
     expect(argsOf(client.getTasks)).toEqual([["alpha"]]);
   });
@@ -268,7 +268,7 @@ describe("each region's states (AC-06)", () => {
     retry.focus();
     fireEvent.click(retry);
     await within(tasks).findByRole("link", { name: "T-0002: Plan to read" });
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getInbox: 1, getTasks: 2 });
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 1, getTasks: 2 });
     await waitFor(() => {
       expect(document.activeElement).toBe(within(tasks).getByRole("heading", { level: 2, name: "Tasks" }));
     });
@@ -283,7 +283,7 @@ describe("each region's states (AC-06)", () => {
     await within(region("Tasks")).findByRole("link", { name: "T-0002: Plan to read" });
     fireEvent.click(within(inbox).getByRole("button", { name: "Retry" }));
     await within(inbox).findByRole("link", { name: "PR-2: High" });
-    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getInbox: 2, getTasks: 1 });
+    expect(callsOf(client)).toEqual({ getProjects: 1, getIdentity: 1, getWorkspaces: 1, getInbox: 2, getTasks: 1 });
   });
 
   it("keeps a region's render failure in that region", async () => {
@@ -334,12 +334,14 @@ describe("nav, switcher and keys (AC-08)", () => {
     return within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link");
   }
 
-  it("lists ten entries, Overview first to the home, current only there", async () => {
+  it("lists nine entries, Overview first to the home, current only there; Tasks off the nav (docs/features/workspaces.md WS-1)", async () => {
     await openHome();
+    await waitFor(() => {
+      expect(navLinks()).toHaveLength(9);
+    });
     expect(navLinks().map((link) => [link.textContent, link.getAttribute("href"), link.getAttribute("aria-current")])).toEqual([
       ["Overview", "#/alpha", "page"],
       ["Inbox", "#/alpha/inbox", null],
-      ["Tasks", "#/alpha/tasks", null],
       ["Board", "#/alpha/board", null],
       ["Roadmap", "#/alpha/roadmap", null],
       ["Flow", "#/alpha/flow", null],

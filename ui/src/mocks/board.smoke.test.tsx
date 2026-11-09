@@ -52,6 +52,8 @@ async function closed() {
 describe("the Board over the mock", () => {
   it("harbor-sim: copy and plates give two tabs; `blocked` is a column like any other; every card links to its source (AC-08)", async () => {
     renderMock("normal", "#/harbor-sim/board");
+    // galley, the first workspace, shows copy alone (docs/features/workspaces.md WS-14): every flow for the visit.
+    fireEvent.click(await screen.findByRole("button", { name: "Show all flows" }));
     const tabs = await screen.findAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual(["copy", "plates"]);
     await shows("C-0001");
@@ -169,6 +171,7 @@ describe("the Board over the mock", () => {
   it("empty: the columns of each flow and the line naming how to add a card (AC-09)", async () => {
     renderMock("empty", "#/harbor-sim/board");
     await screen.findByText("No cards yet. Next: press New card, press New card on a node in the Spec tree, or have your AI call create_card.");
+    fireEvent.click(screen.getByRole("button", { name: "Show all flows" }));
     expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual(["copy", "plates"]);
     expect(screen.getByRole("heading", { level: 2, name: /^Draft/ })).toBeTruthy();
   });

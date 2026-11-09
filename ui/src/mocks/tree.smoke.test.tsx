@@ -16,6 +16,9 @@ import type { Scenario } from "./scenario";
 // a look-alike letter), the hostile and long fixtures, the `empty` and `large` scenarios.
 
 function renderMock(scenario: Scenario, hash: string) {
+  // The whole project, as before modules: All modules stored, as the module bar's first button
+  // stores it; harbor-sim's first workspace roots both views at its module (docs/features/workspaces.md).
+  window.localStorage.setItem("specengine.module.harbor-sim", "");
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
   const client = new MockClient(scenario, { delayMs: 0 });
   render(<App client={client} scenario={scenario === "normal" ? null : scenario} />);
@@ -507,6 +510,7 @@ describe("Show drift over the mock (UI-8 of ui-tree-drift)", () => {
   it("slow: the tree, then Measuring drift, then the badges", async () => {
     window.history.replaceState(null, "", "/?scenario=slow#/harbor-sim/tree");
     window.localStorage.setItem("specengine.tree.show-drift.harbor-sim", "on");
+    window.localStorage.setItem("specengine.module.harbor-sim", "");
     const client = new MockClient("slow");
     render(<App client={client} scenario="slow" />);
     await screen.findByRole("tree", {}, { timeout: 6000 });

@@ -2,7 +2,7 @@ import { act, createEvent, fireEvent, screen, waitFor, within } from "@testing-l
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { Card, CardList, CardRow, QueueEvent } from "../api/types";
-import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aTrace, aTraceCard, aTraceNode } from "../test/builders";
+import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aTrace, aTraceCard, aTraceNode, aWorkspace, aWorkspaces } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
 import { ACTING_KEY } from "./acting";
@@ -83,6 +83,73 @@ const TWO_FLOWS = [
   }),
 ];
 
+// docs/features/workspaces.md "The UI": the workspace's flows, judged against the read list alone.
+describe("the workspace's flows", () => {
+  it("a routed card of a shown flow, its card read answering before the list: the workspace's tab alone, nothing shown beyond it", async () => {
+    const list = aCardList([aCardRow({ id: "C-0001", flow: "copy" }), aCardRow({ id: "C-0002", flow: "plates" })], { flows: TWO_FLOWS });
+    const client = boardClient(list, { "C-0001": aCard({ id: "C-0001", flow: "copy" }) });
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "w-copy", flows: ["copy"] }), aWorkspace({ name: "w-plates", flows: ["plates"] })]));
+    let release: () => void = () => undefined;
+    client.getCards.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            resolve(structuredClone(list));
+          };
+        }),
+    );
+    renderApp(client, "#/alpha/board/C-0001");
+    await screen.findByRole("heading", { level: 1, name: "Board" });
+    await waitFor(() => {
+      expect(client.getCard).toHaveBeenCalled();
+    });
+    // The card's read has answered; the list's has not.
+    await act(async () => {
+      await Promise.resolve();
+    });
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    expect(await screen.findByText("Showing 1 of 2 card flows.")).toBeTruthy();
+    expect(screen.queryAllByRole("tab")).toEqual([]);
+    expect(screen.getByRole("button", { name: "Show all flows" })).toBeTruthy();
+    await waitFor(() => {
+      expect(card("C-0001")).toBeTruthy();
+    });
+  });
+
+  it("a routed card of a hidden flow, its card read answering first: every flow, its own selected", async () => {
+    const list = aCardList([aCardRow({ id: "C-0001", flow: "copy" }), aCardRow({ id: "C-0002", flow: "plates" })], { flows: TWO_FLOWS });
+    const client = boardClient(list, { "C-0002": aCard({ id: "C-0002", flow: "plates" }) });
+    client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "w-copy", flows: ["copy"] }), aWorkspace({ name: "w-plates", flows: ["plates"] })]));
+    let release: () => void = () => undefined;
+    client.getCards.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => {
+            resolve(structuredClone(list));
+          };
+        }),
+    );
+    renderApp(client, "#/alpha/board/C-0002");
+    await waitFor(() => {
+      expect(client.getCard).toHaveBeenCalled();
+    });
+    await act(async () => {
+      release();
+      await Promise.resolve();
+    });
+    await waitFor(() => {
+      expect(screen.getAllByRole("tab").map((tab) => [tab.textContent, tab.getAttribute("aria-selected")])).toEqual([
+        ["copy", "false"],
+        ["plates", "true"],
+      ]);
+    });
+    expect(screen.getByRole("button", { name: "Show this workspace's flows" })).toBeTruthy();
+  });
+});
+
 describe("the board", () => {
   it("a flow gives no tabs; its columns with titles as stored and counts (one read)", async () => {
     const client = boardClient(aCardList([aCardRow({ id: "C-0001" }), aCardRow({ id: "C-0002" }), aCardRow({ id: "C-0003", column: "doing" })]));
@@ -154,7 +221,7 @@ describe("the board", () => {
       expect(shown()).toHaveLength(2);
     });
     fireEvent.change(screen.getByLabelText("Discipline"), { target: { value: "plates" } });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Tasks" }));
+    fireEvent.click(await within(screen.getByRole("navigation", { name: "Sections" })).findByRole("link", { name: "Inbox" }));
     window.location.hash = "#/alpha/tasks";
     await screen.findByRole("listbox", { hidden: true }).catch(() => null);
     window.location.hash = "#/alpha/board";

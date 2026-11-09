@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import type { WorkspaceDocument } from "./api/types";
 import packageJson from "../package.json?raw";
 import eslintConfig from "../eslint.config.js?raw";
 import viteConfig from "../vite.config.ts?raw";
@@ -63,6 +64,13 @@ const ROUND_TEXT = "/src/round/text";
 
 /** The two text modules as loaded, for their exports. */
 const textModules = import.meta.glob<Record<string, unknown>>(["/src/round/text.ts", "/src/ui/text.ts"], { eager: true });
+
+/**
+ * The mock's workspaces and its scenarios, loaded as data through Vite (no `import` of the mocks, which
+ * only the bootstrap makes): WS-6 (c) of docs/features/workspaces.md reads their names at run time.
+ */
+const mockWorkspaces = import.meta.glob<{ workspacesOf: (slug: string, scenario: string) => WorkspaceDocument }>("/src/mocks/workspaces.ts", { eager: true });
+const mockScenarios = import.meta.glob<{ SCENARIOS: readonly string[] }>("/src/mocks/scenario.ts", { eager: true });
 
 /** The Bindings tab's sources (docs/features/ui-node-bindings.md): held to Health's rules for rows (UI-7); its command list shared with the lock diff's rows. */
 const BINDINGS_TAB: readonly string[] = ["/src/tree/BindingsPanel.tsx", "/src/tree/BindingLine.tsx", "/src/tree/commands.ts", "/src/tree/CommandList.tsx"];
@@ -623,6 +631,38 @@ describe("source policy", () => {
     }
     for (const line of ["<Badge look={rollupLook(node.rollup)} />", "{node.stage !== null && <span>{node.stage}</span>}", "!inStage(box.node.stage, stage)", "const hollow = !closed && node.rollup !== null && isNoCard(node.rollup);", "stageKey(lane.stage)", "new Map(nodes.map((node) => [node.id, node.rollup]))", "const shown = mark === null ? null : markLook(mark);", "return rollup === undefined ? null : <Badge look={rollupLook(rollup)} />;", "function TargetState({ rollup }: { rollup: string | undefined }) {", "const word = rollup ?? fallback;", "mark?: string;", "return stage === null ? NO_STAGE : `stage:${stage}`;", "!inStage(node.stage, stage)"]) {
       expect([line, compared.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  it("spells no workspace or module name the mock serves in app code: names are data, shown or sent, never compared (WS-6 (c) of workspaces)", () => {
+    const workspacesOf = mockWorkspaces["/src/mocks/workspaces.ts"]?.workspacesOf;
+    const scenarios = mockScenarios["/src/mocks/scenario.ts"]?.SCENARIOS ?? [];
+    expect(workspacesOf).toBeDefined();
+    expect(scenarios.length).toBeGreaterThan(1);
+    const names = new Set<string>();
+    for (const scenario of scenarios) {
+      for (const slug of ["harbor-sim", "ledger-api"]) {
+        const served = workspacesOf?.(slug, scenario);
+        // The implicit workspace's name is the core's constant, served alike to every project that configures none, never a project's.
+        if (served === undefined || served.source !== "config") {
+          continue;
+        }
+        for (const named of [...served.workspaces, ...served.modules]) {
+          names.add(named.name);
+        }
+      }
+    }
+    expect([...names].sort()).toEqual(["berths", "foundry", "galley", "waters"]);
+    const appCode = (path: string) =>
+      path.startsWith("/src/mocks/") || path.startsWith("/src/test/") || /\.test\.tsx?$/.test(path) || path.endsWith(".css");
+    const quoted = new RegExp(`["'\`](${[...names].join("|")})["'\`]`);
+    expect(offending(quoted, appCode)).toEqual([]);
+    // The detector itself: the slice's M15 and its kin are caught; a name shown or sent is not.
+    for (const line of ['if (workspace.name === "galley") {', "const lens = `foundry`;", "modules.find((module) => module.name === 'berths')"]) {
+      expect([line, quoted.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["<option value={workspace.name}>{workspace.title}</option>", "moduleOf(document, workspace, stored)", 'const label = "Galley";']) {
+      expect([line, quoted.test(line)]).toEqual([line, false]);
     }
   });
 

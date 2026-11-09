@@ -46,6 +46,12 @@
 //! sent while the corpus's reads hold its turn is answered after them,
 //! while A's `/health`, sent at the same time, is answered before the
 //! corpus's first read ends. M: the handler outside the turn.
+//!
+//! docs/features/workspaces.md (RM-0081) "Acceptance criteria", WS-12, the
+//! turn's half: `GET .../workspaces` reads the config alone and takes no turn
+//! (W3), as `/api/projects` does. With the generated corpus served, its
+//! `/workspaces` sent while the corpus's reads hold its turn is answered, a 200,
+//! before the corpus's first read ends. M26: the handler awaiting the turn.
 
 mod common;
 mod task_state;
@@ -72,6 +78,8 @@ const CHECK: &str = "/api/projects/big-corpus/check";
 const ROUND: &str = "/api/projects/big-corpus/round";
 
 const HEALTH: &str = "/api/projects/big-corpus/health";
+
+const WORKSPACES: &str = "/api/projects/big-corpus/workspaces";
 
 /// A project of `FILES` generated mechanic files, committed once.
 fn corpus(scratch: &Scratch) -> std::path::PathBuf {
@@ -569,5 +577,47 @@ fn health_left_t3_a_health_waits_for_its_own_projects_reads_not_anothers() {
     assert!(
         own_at > second_at,
         "the corpus's health ran beside its project's reads, outside the turn: {report}"
+    );
+}
+
+/// WS-12 (docs/features/workspaces.md "Acceptance criteria"): the route takes
+/// no turn. Sent while the corpus's first read holds its turn and a second
+/// waits, the corpus's own `/workspaces` is answered before the first read
+/// ends. M26: the handler awaiting the turn (it would end after the second).
+#[test]
+fn workspaces_ws12_the_route_answers_while_its_projects_turn_is_held() {
+    let scratch = Scratch::new("turn-workspaces");
+    let root = corpus(&scratch);
+    // A fresh HOME: the corpus's first read builds its whole index.
+    let home = scratch.home("fresh");
+    let server = Server::serve(&home, scratch.path(), &[Path::new(&root)]);
+    let port = server.port;
+    let start = Instant::now();
+    // The corpus's turn: its first read, then a second one queued.
+    let first = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    let second = timed(port, TREE, start);
+    thread::sleep(Duration::from_millis(100));
+    // Sent while the corpus's reads hold its turn.
+    let own = timed(port, WORKSPACES, start);
+
+    let (status, own_at) = own.join().expect("the corpus's workspaces");
+    assert_eq!(status, 200, "the corpus's workspaces");
+    let (status, first_at) = first.join().expect("the corpus's first read");
+    assert_eq!(status, 200, "the first read");
+    let (status, second_at) = second.join().expect("the corpus's second read");
+    assert_eq!(status, 200, "the second read");
+    let report = format!(
+        "answers after the start: the corpus's workspaces {own_at:?}, its reads {first_at:?} \
+         and {second_at:?}"
+    );
+    eprintln!("{report}");
+    assert!(
+        first_at > Duration::from_millis(300),
+        "the first read is too quick to hold the turn while the read arrives: {report}"
+    );
+    assert!(
+        own_at < first_at,
+        "the workspaces read waited for its project's turn: {report}"
     );
 }

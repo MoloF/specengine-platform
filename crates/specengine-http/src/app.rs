@@ -12,7 +12,9 @@
 //! `Allow: GET, POST`; `…/cards/<id>` a read; its six writes `Allow: POST`.
 //! `…/trace` a read, `…/trace/clear` a write (docs/features/card-trace.md).
 //! `/api/identity` a read of the request's login, no project, no turn
-//! (docs/features/hub-identity.md); a hub has its own fence ([`crate::hub`]),
+//! (docs/features/hub-identity.md); `…/workspaces` a read of the config
+//! alone, no turn, locally and on a hub alike
+//! (docs/features/workspaces.md); a hub has its own fence ([`crate::hub`]),
 //! and `…/team`, the asker's own row of a project's `[team]`, and
 //! `…/proposals/<id>/confirm` ([`crate::confirm`]) are routes of a hub alone
 //! (docs/features/hub-team.md, docs/features/hub-confirm.md): locally they are
@@ -245,6 +247,7 @@ pub(crate) fn router(app: Shared) -> Router {
             post(round_answers).fallback(only_round_answers),
         )
         .route("/api/projects/{p}/events", read(tail::events))
+        .route("/api/projects/{p}/workspaces", read(workspaces))
         // The web UI (docs/features/ui-embed.md "Data"): reads like the
         // API's, no config, no turn.
         .route("/", read(ui::page))
@@ -463,7 +466,8 @@ pub(crate) fn unknown_route_of(uri: &Uri) -> Refusal {
         format!(
             "no route {}: the routes are /api/projects and /api/projects/<slug>/{{tree, \
              nodes/<REF>, search, bundle, trace, flow, graph, check, health, roadmap, lock-diff, \
-             inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events}}, \
+             inbox, proposals/<id>, tasks, tasks/<id>, cards, cards/<id>, round, events, \
+             workspaces}}, \
              /api/identity; the web UI: / and /assets/<file>",
             uri.path()
         ),
@@ -550,6 +554,23 @@ async fn projects(State(app): State<Shared>, uri: Uri) -> Result<Response, Refus
         )
     })?;
     Ok(json(StatusCode::OK, body))
+}
+
+/// `GET …/workspaces`: `spec workspace --json` byte for byte, the
+/// project's workspaces and modules as its config reads now
+/// (docs/features/workspaces.md "Data"). No query and no turn: it
+/// reads the config alone, as `/api/projects` does, never `[team]` or the
+/// index, so a local daemon and every hub login get the same document. The
+/// tables never refuse it; a config the discovery refuses is a 503.
+async fn workspaces(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
+    let (project, _) = app.project_of(&uri)?;
+    args("workspaces", &[], &uri)?;
+    let outcome = answer::read(project, |env, globals, _| {
+        specengine_cli::workspace(env, globals)
+    })
+    .await?;
+    let document = answer::document(&Outcome::Workspace(Box::new(outcome)));
+    Ok(json(StatusCode::OK, document))
 }
 
 /// `GET …/tree`: `spec tree --json`, the browser view.

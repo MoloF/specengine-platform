@@ -27,6 +27,14 @@
 //! arm) and checked against the library's `TaskStatus::ALL`: a `status`
 //! value is judged by the model's `TaskStatus::parse`, never by a literal.
 //! M: a handler comparing `"ready"`.
+//!
+//! docs/features/workspaces.md (RM-0081) "Acceptance criteria", WS-6 (a): the
+//! words gain every `name` of a `[[workspace]]` or `[[module]]` table in every
+//! repository `specengine.toml` (its own and each under `fixtures/`) and in
+//! `scripts/presets/*.toml`, read with the TOML reader when the test runs: a
+//! name is a project's data, shown or sent, never compared (W5). A planted
+//! `"writing"` in a probe source is red. M12: a handler branching on
+//! `"writing"`.
 
 mod common;
 
@@ -284,6 +292,51 @@ fn kinds() -> (BTreeSet<String>, Vec<PathBuf>) {
     (kinds, files)
 }
 
+/// The `toml` files of `dir` (not below it), sorted.
+fn toml_files(dir: &Path) -> Vec<PathBuf> {
+    let mut files: Vec<PathBuf> = fs::read_dir(dir)
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.extension().is_some_and(|ext| ext == "toml"))
+                .collect()
+        })
+        .unwrap_or_default();
+    files.sort();
+    files
+}
+
+/// The `name` of every `[[workspace]]` and `[[module]]` table of the
+/// repository's config, every config under `fixtures/` and every preset under
+/// `scripts/presets/`, lowercased; and the files read. A file the TOML reader
+/// refuses (a fixture's deliberately broken config) holds no table.
+fn workspace_names() -> (BTreeSet<String>, Vec<PathBuf>) {
+    let root = repository_root();
+    let mut files = vec![root.join("specengine.toml")];
+    configs(&root.join("fixtures"), &mut files);
+    files.extend(toml_files(&root.join("scripts/presets")));
+    files.sort();
+    let mut names = BTreeSet::new();
+    for file in &files {
+        let text = fs::read_to_string(file).expect("a config");
+        let Ok(table) = text.parse::<toml::Table>() else {
+            continue;
+        };
+        for key in ["workspace", "module"] {
+            let Some(items) = table.get(key).and_then(toml::Value::as_array) else {
+                continue;
+            };
+            for item in items {
+                if let Some(name) = item.get("name").and_then(toml::Value::as_str) {
+                    names.insert(name.to_lowercase());
+                }
+            }
+        }
+    }
+    (names, files)
+}
+
 /// `TaskStatus::ALL` as `crates/specengine-model/src/task.rs` defines it:
 /// the variants of the array, in order, each named by its `as_str` arm.
 fn task_states() -> Vec<String> {
@@ -332,13 +385,15 @@ fn route_path(text: &str) -> bool {
     text.starts_with('/') && !text.chars().any(char::is_whitespace)
 }
 
-/// The words of `literal` that are a verdict, a link type, a task state
-/// or a kind (with the reason), and whether the exemption was used.
+/// The words of `literal` that are a verdict, a link type, a task state,
+/// a kind or a workspace or module name (with the reason), and whether the
+/// exemption was used.
 fn domain_words(
     literal: &str,
     links: &[String],
     states: &[String],
     kinds: &BTreeSet<String>,
+    names: &BTreeSet<String>,
 ) -> (Vec<(String, &'static str)>, bool) {
     let mut hits = Vec::new();
     let mut exempted = false;
@@ -361,6 +416,8 @@ fn domain_words(
             } else {
                 hits.push((word, "a kind"));
             }
+        } else if names.contains(&word) {
+            hits.push((word, "a workspace or module name"));
         }
     }
     (hits, exempted)
@@ -404,6 +461,35 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
     for kind in ["mechanic", "rule", "decision", "edge-case", "requirement"] {
         assert!(kinds.contains(kind), "spec-a's `{kind}` is read: {kinds:?}");
     }
+    // docs/features/workspaces.md WS-6 (a) and risk 8: studio-lamp's kinds are
+    // read too, and the names of card-press, studio-lamp and the preset.
+    for kind in ["chapter", "scene", "island"] {
+        assert!(
+            kinds.contains(kind),
+            "studio-lamp's `{kind}` is read: {kinds:?}"
+        );
+    }
+    let (names, name_files) = workspace_names();
+    assert!(
+        name_files
+            .iter()
+            .any(|file| file.ends_with("scripts/presets/gamedev.toml")),
+        "{name_files:?}"
+    );
+    for name in [
+        "newsroom",
+        "pressroom",
+        "weekly",
+        "rulings",
+        "writing",
+        "development",
+        "art",
+        "production",
+        "shore",
+        "island",
+    ] {
+        assert!(names.contains(name), "`{name}` is read: {names:?}");
+    }
     let mut found = Vec::new();
     let mut exempt = Vec::new();
     let mut scanned = 0;
@@ -415,7 +501,7 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
             .to_string();
         for literal in literals(&text) {
             scanned += 1;
-            let (hits, exempted) = domain_words(&literal.text, &links, &states, &kinds);
+            let (hits, exempted) = domain_words(&literal.text, &links, &states, &kinds, &names);
             for (word, why) in hits {
                 found.push(format!(
                     "{relative}:{}: {:?} holds `{word}`, {why}",
@@ -429,10 +515,13 @@ fn ac08_no_literal_in_the_daemon_names_a_verdict_a_link_type_or_a_kind() {
     }
     eprintln!(
         "{scanned} literals scanned; {} task states: {states:?}; {} kinds from {} configs: \
-         {kinds:?}; exempt route paths: {exempt:#?}",
+         {kinds:?}; {} workspace and module names from {} files: {names:?}; exempt route \
+         paths: {exempt:#?}",
         states.len(),
         kinds.len(),
-        configs.len()
+        configs.len(),
+        names.len(),
+        name_files.len()
     );
     assert!(scanned > 50, "the scan reads the literals: {scanned}");
     // docs/features/ui-round.md T-05: the round's handlers are scanned (their
@@ -488,7 +577,7 @@ fn f(verdict: &str) -> u16 {
     let mut hits = Vec::new();
     let mut exempt = Vec::new();
     for literal in literals(probe) {
-        let (found, exempted) = domain_words(&literal.text, &links, &[], &kinds);
+        let (found, exempted) = domain_words(&literal.text, &links, &[], &kinds, &BTreeSet::new());
         for (word, _) in found {
             hits.push((literal.line, word));
         }
@@ -559,7 +648,13 @@ fn tasks(query: &str) -> u16 {
 "#;
     let mut hits = Vec::new();
     for literal in literals(probe) {
-        let (found, exempted) = domain_words(&literal.text, &[], &states, &BTreeSet::new());
+        let (found, exempted) = domain_words(
+            &literal.text,
+            &[],
+            &states,
+            &BTreeSet::new(),
+            &BTreeSet::new(),
+        );
         assert!(!exempted);
         for (word, why) in found {
             hits.push((literal.line, word, why));
@@ -572,6 +667,42 @@ fn tasks(query: &str) -> u16 {
             (5, "in_progress".to_owned(), "a task state"),
             (8, "done".to_owned(), "a task state"),
             (9, "cancelled".to_owned(), "a task state"),
+        ]
+    );
+}
+
+/// WS-6 (a) of docs/features/workspaces.md "Acceptance criteria": with the
+/// names the repository's configs and presets hold, a probe source branching
+/// on `"writing"`, or wording a module's name in a message, is red; a comment,
+/// the route's own path and a word that only holds a name are not. M12.
+#[test]
+fn workspaces_ws6a_the_scan_sees_a_workspace_or_module_name_in_a_literal() {
+    let (names, _) = workspace_names();
+    let probe = r#"
+// A comment saying writing or newsroom is no literal.
+fn lens(name: &str) -> u16 {
+    if name == "writing" { return 1; }
+    let _ = "the Newsroom tab";
+    let _ = "/api/projects/{p}/workspaces";
+    let _ = "rewriting; the weeklyish run";
+    let _ = "module `shore`: no root";
+    0
+}
+"#;
+    let mut hits = Vec::new();
+    for literal in literals(probe) {
+        let (found, exempted) = domain_words(&literal.text, &[], &[], &BTreeSet::new(), &names);
+        assert!(!exempted);
+        for (word, why) in found {
+            hits.push((literal.line, word, why));
+        }
+    }
+    assert_eq!(
+        hits,
+        [
+            (4, "writing".to_owned(), "a workspace or module name"),
+            (5, "newsroom".to_owned(), "a workspace or module name"),
+            (8, "shore".to_owned(), "a workspace or module name"),
         ]
     );
 }

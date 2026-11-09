@@ -10,7 +10,9 @@ import { App } from "./App";
 
 // AC-11, AC-16 and AC-17 of docs/features/ui-shell.md; the Graph is built since ui-graph, Tasks
 // since ui-tasks; the home ("Overview", first in the nav) since ui-home, where `#/` lands; Health
-// since ui-health; the question round since ui-round: no section is left unbuilt.
+// since ui-health; the question round since ui-round: no section is left unbuilt. Since workspaces
+// (docs/features/workspaces.md WS-1, WS-2) the stub serves the implicit workspace: Tasks is off the
+// nav and still a route.
 
 /** The app's header (several `header` elements count as banners to Testing Library). */
 function appHeader(): HTMLElement {
@@ -25,29 +27,28 @@ function navLinks(): HTMLElement[] {
   return within(screen.getByRole("navigation", { name: "Sections" })).getAllByRole("link");
 }
 
-function navLink(name: string): HTMLElement {
-  return within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name });
+/** The nav's links once the workspaces are read: a skeleton before (docs/features/workspaces.md "The UI"). */
+async function shownNav(): Promise<HTMLElement[]> {
+  return within(screen.getByRole("navigation", { name: "Sections" })).findAllByRole("link");
+}
+
+async function navLink(name: string): Promise<HTMLElement> {
+  return within(screen.getByRole("navigation", { name: "Sections" })).findByRole("link", { name });
 }
 
 describe("the shell (AC-11)", () => {
-  it("lists the home and the nine sections in order and marks the current one", async () => {
-    renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/alpha/inbox");
+  it("lists the home and the implicit workspace's eight sections in order, Tasks off the nav, and marks the current one (WS-1)", async () => {
+    const client = stubClient([aProposal({ id: "PR-1" })]);
+    renderApp(client, "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
-    expect(navLinks().map((link) => link.textContent)).toEqual([
-      "Overview",
-      "Inbox",
-      "Tasks",
-      "Board",
-      "Roadmap",
-      "Flow",
-      "Spec tree",
-      "Graph",
-      "Health",
-      "Questions",
-    ]);
-    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null, null, null]);
+    expect((await shownNav()).map((link) => link.textContent)).toEqual(["Overview", "Inbox", "Board", "Roadmap", "Flow", "Spec tree", "Graph", "Health", "Questions"]);
+    expect(navLinks().map((link) => link.getAttribute("aria-current"))).toEqual([null, "page", null, null, null, null, null, null, null]);
     expect(navLinks()[0]?.getAttribute("href")).toBe("#/alpha");
-    expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/tasks");
+    expect(navLinks()[2]?.getAttribute("href")).toBe("#/alpha/board");
+    // One workspace: no switcher, no notes.
+    expect(within(appHeader()).queryByLabelText("Workspace")).toBeNull();
+    expect(within(appHeader()).queryByRole("button", { name: /^Config notes/ })).toBeNull();
+    expect(client.getWorkspaces).toHaveBeenCalledTimes(1);
   });
 
   it("builds Questions: its heading and its about without pasted answers, the sheet read, no stand-in (ui-round)", async () => {
@@ -60,7 +61,7 @@ describe("the shell (AC-11)", () => {
     expect(about.textContent).toMatch(/^The question round: a sheet in the project's language and the answers\. /);
     expect(about.textContent).not.toMatch(/paste/i);
     expect(client.getRound).toHaveBeenCalledTimes(1);
-    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    const current = (await shownNav()).find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Questions");
   });
 
@@ -73,7 +74,7 @@ describe("the shell (AC-11)", () => {
     expect(screen.queryByText(/Not built yet/)).toBeNull();
     expect(client.getRoadmap).toHaveBeenCalledTimes(1);
     expect(client.getRound).not.toHaveBeenCalled();
-    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    const current = (await shownNav()).find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Roadmap");
   });
 
@@ -82,7 +83,7 @@ describe("the shell (AC-11)", () => {
     expect(await screen.findByRole("heading", { level: 1, name: "Graph" })).toBeTruthy();
     expect(screen.getByRole("form", { name: "Graph options" })).toBeTruthy();
     expect(screen.queryByText(/Not built yet/)).toBeNull();
-    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    const current = (await shownNav()).find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Graph");
   });
 
@@ -97,7 +98,7 @@ describe("the shell (AC-11)", () => {
       "Findings",
       "Debt and budgets",
     ]);
-    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    const current = (await shownNav()).find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Health");
   });
 
@@ -106,7 +107,7 @@ describe("the shell (AC-11)", () => {
     renderApp(client, "#/alpha/flow");
     expect(await screen.findByRole("heading", { level: 1, name: "Flow" })).toBeTruthy();
     expect(await screen.findByRole("region", { name: "Gaps" })).toBeTruthy();
-    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
+    const current = (await shownNav()).find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Flow");
     expect(client.getFlow.mock.calls.every((call) => call[1].depth !== undefined)).toBe(true);
   });
@@ -118,16 +119,18 @@ describe("the shell (AC-11)", () => {
     const about = screen.getByText(/^Tasks from draft to done/);
     expect(about.textContent).toBe("Tasks from draft to done: what waits for you, each task's plan, spec changes and runs.");
     expect(about.textContent).not.toMatch(/accepted|board/);
-    const current = navLinks().find((link) => link.getAttribute("aria-current") === "page");
-    expect(current?.textContent).toBe("Tasks");
+    // Off the nav, still a route: the view renders at its hash and no item is current (WS-2, W4).
+    expect((await shownNav()).map((link) => link.textContent)).not.toContain("Tasks");
+    expect(navLinks().filter((link) => link.getAttribute("aria-current") === "page")).toEqual([]);
+    expect(window.location.hash).toBe("#/alpha/tasks");
   });
 
   it("navigates with the nav, and back returns", async () => {
     renderApp(stubClient([aProposal({ id: "PR-1" })]), "#/alpha/inbox");
     await screen.findByRole("heading", { level: 1, name: "Inbox" });
-    fireEvent.click(navLink("Tasks"));
-    expect(await screen.findByRole("heading", { level: 1, name: "Tasks" })).toBeTruthy();
-    expect(window.location.hash).toBe("#/alpha/tasks");
+    fireEvent.click(await navLink("Graph"));
+    expect(await screen.findByRole("heading", { level: 1, name: "Graph" })).toBeTruthy();
+    expect(window.location.hash).toBe("#/alpha/graph");
     // jsdom traverses history in a task of its own; wait for the hashchange it fires, not a clock.
     const traversed = new Promise<void>((resolve) => {
       window.addEventListener(
@@ -254,8 +257,8 @@ describe("error boundaries (AC-16)", () => {
     });
     expect(await screen.findByRole("heading", { level: 1, name: "This view failed" })).toBeTruthy();
     expect(caught.length).toBeGreaterThan(0);
-    fireEvent.click(navLink("Tasks"));
-    expect(await screen.findByRole("heading", { level: 1, name: "Tasks" })).toBeTruthy();
+    fireEvent.click(await navLink("Graph"));
+    expect(await screen.findByRole("heading", { level: 1, name: "Graph" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "This view failed" })).toBeNull();
   });
 

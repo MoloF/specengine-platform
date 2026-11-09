@@ -13,8 +13,10 @@
  * refuses a project's first card write as changed meanwhile, `large` puts 231 cards in one column.
  * `no-gaps`: as `normal` but harbor-sim's flow, each gap row at None, so its Flow shows the one line
  * in place of the rows (`docs/features/screen-fit.md`; src/mocks/flow.ts); ledger-api keeps its rows.
+ * `config-notes`: as `normal` but the workspaces' config notes, harbor-sim's two wrong values and
+ * ledger-api's malformed table (`docs/features/workspaces.md` "The UI"; src/mocks/workspaces.ts).
  */
-export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps"] as const;
+export const SCENARIOS = ["normal", "empty", "error", "slow", "conflict", "large", "cannot-check", "editorial", "code-cannot", "not-configured", "no-gaps", "config-notes"] as const;
 
 export type Scenario = (typeof SCENARIOS)[number];
 

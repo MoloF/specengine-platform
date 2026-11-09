@@ -10,6 +10,7 @@
     "style-ruling"
   ],
   "board": "flow copy | draft 0 | edit 0 | proof 0 | filed 0\nflow plates | queued 0 | blocked 0 | checked 0 | struck 0\n",
+  "workspaces": "workspaces config | workspaces 2, modules 2\nworkspace newsroom | Newsroom | landing board | sections board, tree, inbox | flows copy | module weekly\nworkspace pressroom | Pressroom | landing overview | sections board, flow, tree, health | flows plates | module (none)\nmodule weekly | The weekly run | root PRN-WEEKLY\nmodule rulings | Style rulings | root STY-0001\n",
   "flows": [
     {
       "name": "copy",

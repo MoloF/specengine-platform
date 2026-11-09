@@ -54,6 +54,7 @@ import type {
   Team,
   TraceDocument,
   TreeView,
+  WorkspaceDocument,
 } from "../api/types";
 import { mockCode } from "./bindings";
 import { inboxEntryOf, noReview, proposal, stamp, type MockProject, type MockProposal, type StoredReview } from "./build";
@@ -87,6 +88,7 @@ import { mockPlan, noPlan, roadmapOf, taskPlaceOf } from "./roadmap";
 import { SLOW_MS, type Scenario } from "./scenario";
 import { largeTasks, mockTasks, packageOf, taskListOf, taskNotFound, type MockTasks } from "./tasks";
 import { traceOf, withTrace } from "./trace";
+import { workspacesOf } from "./workspaces";
 
 export interface MockOptions {
   /** The clock; fixture times are relative to it at construction. */
@@ -194,6 +196,13 @@ export class MockClient implements SpecEngineClient {
   async getTeam(): Promise<Team> {
     await this.read();
     throw new ClientError({ status: 404, message: "no route /api/projects/<slug>/team: the routes are /api/projects and the web UI (mock)" });
+  }
+
+  /** The project's workspaces and modules for the scenario (src/mocks/workspaces.ts); the daemon reads its own config (`docs/features/workspaces.md` "Data"). */
+  async getWorkspaces(project: string): Promise<WorkspaceDocument> {
+    await this.read();
+    this.project(project);
+    return structuredClone(workspacesOf(project, this.scenario));
   }
 
   async getInbox(project: string): Promise<Inbox> {

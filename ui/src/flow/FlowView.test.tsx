@@ -1262,9 +1262,8 @@ describe("the sole top group", () => {
     await waitFor(() => {
       expect(hasBox("X")).toBe(false);
     });
-    fireEvent.click(within(screen.getByRole("navigation", { name: "Sections" })).getByRole("link", { name: "Tasks" }));
-    window.location.hash = "#/alpha/tasks";
-    await screen.findByRole("heading", { level: 1, name: "Tasks" });
+    fireEvent.click(await within(screen.getByRole("navigation", { name: "Sections" })).findByRole("link", { name: "Inbox" }));
+    await screen.findByRole("heading", { level: 1, name: "Inbox" });
     window.location.hash = "#/alpha/flow";
     await drawn("G");
     expect(hasBox("X")).toBe(false);
@@ -2292,6 +2291,37 @@ describe("the stage filter (trace-views)", () => {
     fireEvent.change(screen.getByLabelText("Stage"), { target: { value: "all" } });
     expect(rows()).toEqual(["A", "B", "C"]);
     expect(document.querySelectorAll(".graph-edge-lines li")).toHaveLength(2);
+  });
+
+  // docs/features/workspaces.md "The UI": a mount waiting for its module's root guesses none, and keeps a module's memory.
+  it("is not remembered while the module is unknown: a module's open groups survive a mount that waits for its root", async () => {
+    const kept: FlowState = { tab: "list", root: "G", open: ["G-ONE"], stage: "all", lanes: [] };
+    const remembered = new Map<string, FlowState>([["alpha", kept]]);
+    const memory = { recall: (project: string) => remembered.get(project), remember: (project: string, state: FlowState) => remembered.set(project, state) };
+    const client = stagedClient(reads, stages);
+    const view = render(
+      <ApiProvider client={client}>
+        <FlowView project="alpha" nodeRef={null} memory={memory} moduleRoot={null} moduleKnown={false} />
+      </ApiProvider>,
+    );
+    expect(await screen.findByRole("status", { name: "Reading the flow of alpha" })).toBeTruthy();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(remembered.get("alpha")).toBe(kept);
+    expect(client.getFlow.mock.calls.filter((call) => call[1].depth === 0)).toEqual([]);
+    view.unmount();
+    // Known, the module's mount takes its tab back, and remembers from then on.
+    render(
+      <ApiProvider client={client}>
+        <FlowView project="alpha" nodeRef={null} memory={memory} moduleRoot={null} />
+      </ApiProvider>,
+    );
+    await waitFor(() => {
+      expect(remembered.get("alpha")?.root).toBeNull();
+    });
+    expect(remembered.get("alpha")?.tab).toBe("list");
+    expect(remembered.get("alpha")?.open).toBeNull();
   });
 
   it("is remembered per project with the tab and the open lanes, and a stage no lane serves now shows all", async () => {

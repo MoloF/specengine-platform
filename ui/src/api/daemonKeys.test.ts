@@ -112,6 +112,9 @@ import type {
   UnboundCounts,
   UnboundMarker,
   UnboundRow,
+  Workspace,
+  WorkspaceDocument,
+  WorkspaceModule,
 } from "./types";
 
 // AC-09 of docs/features/daemon-read.md and of docs/features/ui-live.md, AC-07 of
@@ -163,9 +166,11 @@ import type {
 // `GET .../team`, the hundred-and-eighth `Team`); and hub-confirm's one (docs/features/hub-confirm.md
 // "Data": the answer of `GET .../confirm`, the hundred-and-ninth `ConfirmRead`), with an
 // author's optional `login`, in no set; and hub-git's one (docs/features/hub-git.md "Data": the answer
-// of `GET .../sync`, set 110 `HubSync`, the last). A key the types carry ahead of the file is listed in
-// AHEAD_OF_FIXTURE, empty today; a listed key the file already names fails. While that file is absent
-// the comparison is skipped, saying so; once it exists it names all one hundred and ten, in the
+// of `GET .../sync`, set 110 `HubSync`); and workspaces' three (docs/features/workspaces.md "Data": the
+// answer of `GET .../workspaces`, a workspace, a module, sets 111 to 113, `WorkspaceModule` the last).
+// A key the types carry ahead of the file is listed in AHEAD_OF_FIXTURE, empty again since workspaces'
+// test wrote sets 111 to 113; a listed key the file already names fails. While that file is absent
+// the comparison is skipped, saying so; once it exists it names all one hundred and thirteen, in the
 // slices' order.
 
 const KEYS = {
@@ -804,6 +809,10 @@ const KEYS = {
   ConfirmRead: { id: true, question: true, updated_at: true } satisfies Record<keyof ConfirmRead, true>,
   // docs/features/hub-git.md "Data": the sync read's answer, all five keys always present.
   HubSync: { ahead: true, behind: true, state: true, error: true, at: true } satisfies Record<keyof HubSync, true>,
+  // docs/features/workspaces.md "Data": the workspaces read's answer, a workspace, a module; every key present.
+  WorkspaceDocument: { source: true, notes: true, workspaces: true, modules: true } satisfies Record<keyof WorkspaceDocument, true>,
+  Workspace: { name: true, title: true, landing: true, sections: true, flows: true, module: true } satisfies Record<keyof Workspace, true>,
+  WorkspaceModule: { name: true, title: true, root: true } satisfies Record<keyof WorkspaceModule, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -932,6 +941,9 @@ const CITED: Record<Named, string> = {
   Team: "login, name, allowed",
   ConfirmRead: "id, question, updated_at",
   HubSync: "ahead, behind, state, error, at",
+  WorkspaceDocument: "source, notes, workspaces, modules",
+  Workspace: "name, title, landing, sections, flows, module",
+  WorkspaceModule: "name, title, root",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1118,8 +1130,14 @@ const BEFORE_HUB_GIT: readonly Named[] = [...BEFORE_HUB_CONFIRM, ...HUB_CONFIRM]
 /** hub-git's one: the sync read's answer, set 110 (docs/features/hub-git.md "Data"). */
 const HUB_GIT: readonly Named[] = ["HubSync"];
 
+/** The hundred and ten types the fixture named before workspaces. */
+const BEFORE_WORKSPACES: readonly Named[] = [...BEFORE_HUB_GIT, ...HUB_GIT];
+
+/** workspaces' three: the workspaces read's answer, a workspace, a module, sets 111 to 113 (docs/features/workspaces.md "Data"). */
+const WORKSPACES: readonly Named[] = ["WorkspaceDocument", "Workspace", "WorkspaceModule"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_HUB_GIT, ...HUB_GIT];
+const ALL: readonly Named[] = [...BEFORE_WORKSPACES, ...WORKSPACES];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1146,7 +1164,8 @@ function served(name: Named): string[] {
  * a key, the comparison leaves it out of the type's keys, and a set all of whose keys it lacks out
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
- * hub-git's test wrote its one set, the hundred-and-tenth and last (docs/features/hub-git.md "Data").
+ * workspaces' test wrote its three sets, the hundred-and-eleventh to the hundred-and-thirteenth and
+ * last (docs/features/workspaces.md "Data").
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1194,7 +1213,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HUB_TEAM.at(-1)).toBe("Identity");
     expect(BEFORE_HUB_CONFIRM.at(-1)).toBe("Team");
     expect(BEFORE_HUB_GIT.at(-1)).toBe("ConfirmRead");
-    expect(ALL.at(-1)).toBe("HubSync");
+    expect(BEFORE_WORKSPACES.at(-1)).toBe("HubSync");
+    expect(ALL.at(-1)).toBe("WorkspaceModule");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1223,7 +1243,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(110);
+    expect(ALL).toHaveLength(113);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1234,12 +1254,31 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since hub-git's test wrote set 110 into the file (UI-1 of lock-diff, U1 of hub-git)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since workspaces' test wrote sets 111 to 113 into the file (UI-1 of lock-diff, U1 of hub-git, docs/features/workspaces.md \"Data\")", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
     expect(LOCK_DIFF.flatMap((name) => served(name))).toHaveLength(17);
     expect(AHEAD_OF_FIXTURE).toEqual([]);
+  });
+
+  it('types the workspaces read\'s three as the spec writes them: 4, 6 and 3 keys, every one present, `flows` and `module` nullable, a source kept whatever its word, each citing `docs/features/workspaces.md` "Data"', () => {
+    expect(WORKSPACES.map((name) => served(name))).toEqual([
+      ["source", "notes", "workspaces", "modules"],
+      ["name", "title", "landing", "sections", "flows", "module"],
+      ["name", "title", "root"],
+    ]);
+    for (const name of WORKSPACES) {
+      expect([name, declaredKeys(name)]).toEqual([name, served(name)]);
+      const at = source.indexOf(`export interface ${name} `);
+      expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/features/workspaces.md` "Data"');
+    }
+    expect(source).toMatch(/^export interface WorkspaceDocument \{\n {2}source: WorkspaceSource;\n {2}notes: string\[\];\n {2}workspaces: Workspace\[\];\n {2}modules: WorkspaceModule\[\];\n\}$/m);
+    expect(source).toMatch(/^export interface Workspace \{\n {2}name: string;\n {2}title: string;\n {2}landing: string;\n {2}sections: string\[\];\n {2}flows: string\[\] \| null;\n {2}module: string \| null;\n\}$/m);
+    expect(source).toMatch(/^export interface WorkspaceModule \{\n {2}name: string;\n {2}title: string;\n {2}root: string;\n\}$/m);
+    expect(source).toMatch(/^export type KnownWorkspaceSource = "config" \| "implicit";$/m);
+    expect(source).toMatch(/^export type WorkspaceSource = KnownWorkspaceSource \| Unlisted;$/m);
+    expect(ALL.slice(BEFORE_WORKSPACES.length)).toEqual([...WORKSPACES]);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -1388,8 +1427,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HUB_TEAM).toHaveLength(107);
     expect(BEFORE_HUB_CONFIRM).toHaveLength(108);
     expect(BEFORE_HUB_GIT).toHaveLength(109);
-    expect(ALL).toHaveLength(110);
-    expect(new Set(ALL).size).toBe(110);
+    expect(BEFORE_WORKSPACES).toHaveLength(110);
+    expect(ALL).toHaveLength(113);
+    expect(new Set(ALL).size).toBe(113);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1631,12 +1671,20 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and ten types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one", () => {
+  it("names exactly the one hundred and thirteen types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and ten, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and thirteen, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(110);
+    expect(Object.keys(sets)).toHaveLength(113);
+  });
+
+  it('names workspaces\' three last, after HubSync, sets 111 to 113, each with its keys in the types\' order: 4, 6, 3 (docs/features/workspaces.md "Data")', () => {
+    expect(Object.keys(sets).slice(BEFORE_WORKSPACES.length)).toEqual([...WORKSPACES]);
+    expect(Object.keys(sets).at(-1)).toBe("WorkspaceModule");
+    expect(Object.keys(sets).indexOf("WorkspaceDocument")).toBe(110);
+    expect(WORKSPACES.map((name) => sets[name])).toEqual(WORKSPACES.map((name) => served(name)));
+    expect(WORKSPACES.map((name) => sets[name]?.length)).toEqual([4, 6, 3]);
   });
 
   it("lists no key ahead of the file that the file names: the list is emptied when the file catches up", () => {
@@ -1737,8 +1785,8 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   });
 
   it('names hub-git\'s HubSync last, after ConfirmRead, the hundred-and-tenth, with its five keys in the types\' order (docs/features/hub-git.md "Data")', () => {
-    expect(Object.keys(sets).slice(BEFORE_HUB_GIT.length)).toEqual([...HUB_GIT]);
-    expect(Object.keys(sets).at(-1)).toBe("HubSync");
+    expect(Object.keys(sets).slice(BEFORE_HUB_GIT.length, BEFORE_WORKSPACES.length)).toEqual([...HUB_GIT]);
+    expect(Object.keys(sets).at(BEFORE_WORKSPACES.length - 1)).toBe("HubSync");
     expect(Object.keys(sets).indexOf("HubSync")).toBe(109);
     expect(sets.HubSync).toEqual(["ahead", "behind", "state", "error", "at"]);
     expect(sets.HubSync).toEqual(served("HubSync"));

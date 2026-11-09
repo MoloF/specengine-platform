@@ -771,9 +771,13 @@ fn ac5_a_trusted_read_does_not_walk() {
 
 // ------------------------------------------------------------------ AC-6 (g)
 
+/// The interval is 3 s, not 1 s: each step below that must fall within it
+/// asserts so as a premise first, so a loaded run that outlasts it says so
+/// instead of failing on the trust's state (a read past the interval walks,
+/// which clears the very mark the step looks at).
 #[test]
 fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
-    let every = Duration::from_secs(1);
+    let every = Duration::from_secs(3);
     let place = notes("reconcile", "\"notes\"");
     place.index().expect("spec index");
     let trust = IndexTrust::with_every(place.root.clone(), every);
@@ -798,6 +802,9 @@ fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
     assert_eq!(trust.walks(), 1, "no walk within the interval");
 
     std::thread::sleep(every + Duration::from_millis(100));
+    // The reconcile's walk begins inside this search: its clock starts no
+    // earlier than here.
+    let reconciled_at = Instant::now();
     let after = trusted(&[&trust], || Printed::of(place.search("lomidrax"), false));
     assert!(
         finds(&after, "R-02"),
@@ -814,6 +821,13 @@ fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
     });
     assert_eq!(shown.code, 0, "{}", shown.show());
     assert!(
+        reconciled_at.elapsed() < every,
+        "premise: the show ran within the interval of the reconcile's walk ({:?} of {every:?}; \
+         a loaded machine: rerun), so it trusted the index and did not walk",
+        reconciled_at.elapsed()
+    );
+    assert_eq!(trust.walks(), 2, "premise: the show trusted the index");
+    assert!(
         shown.text().contains("pevantu") && !shown.text().contains("lomidrax"),
         "show prints the file as it is now\n{}",
         shown.show()
@@ -821,6 +835,12 @@ fn ac6g_a_hand_edit_shows_after_the_reconcile_and_at_once_in_a_printed_file() {
     assert!(trust.is_dirty(), "a T5 mismatch marks the trust dirty");
     let walks = trust.walks();
     let next = trusted(&[&trust], || Printed::of(place.search(WORDS[0]), false));
+    assert!(
+        reconciled_at.elapsed() < every,
+        "premise: the next read ran within the interval ({:?} of {every:?}; a loaded \
+         machine: rerun), so only the mark can make it walk",
+        reconciled_at.elapsed()
+    );
     assert!(finds(&next, "R-01"), "{}", next.show());
     assert_eq!(
         trust.walks(),

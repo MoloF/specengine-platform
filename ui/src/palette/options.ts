@@ -1,5 +1,5 @@
 import type { InboxEntry, Project, SearchHit, TaskListEntry } from "../api/types";
-import { homeHash, navOf, sectionHash } from "../app/routes";
+import { ALL_SECTIONS, homeHash, navOf, sectionHash } from "../app/routes";
 import { fold } from "../inbox/filter";
 import { queueOrder } from "../inbox/order";
 import { summaryOf } from "../inbox/summary";
@@ -142,7 +142,8 @@ export function paletteGroups(input: PaletteInput): PaletteGroup[] {
   const built: Built[] = [];
 
   if (project !== null) {
-    const sections = navOf(project)
+    // Every section, whatever the nav lists: a workspace hides no route (docs/features/workspaces.md "The UI").
+    const sections = navOf(project, ALL_SECTIONS)
       .filter((entry) => holds(needle, [entry.label]))
       .map((entry): PaletteOption => ({ type: "section", key: `section:${entry.key}`, label: entry.label, hash: entry.hash }));
     built.push(build("Sections", sections));

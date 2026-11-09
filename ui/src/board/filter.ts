@@ -84,6 +84,25 @@ export function tabsOf(list: CardList): BoardTab[] {
   return tabs;
 }
 
+/**
+ * The tabs a workspace shows (docs/features/workspaces.md "The UI"): its flows, in its order, that
+ * the read serves; every tab with `flows` null, or with none of them served. A flow is looked up by
+ * the served name the workspace lists, never by a word of the UI's.
+ */
+export function workspaceTabs(tabs: readonly BoardTab[], flows: readonly string[] | null): BoardTab[] {
+  if (flows === null) {
+    return [...tabs];
+  }
+  const kept: BoardTab[] = [];
+  for (const name of flows) {
+    const tab = tabs.find((candidate) => candidate.flow !== undefined && candidate.name === name);
+    if (tab !== undefined && !kept.includes(tab)) {
+      kept.push(tab);
+    }
+  }
+  return kept.length === 0 ? [...tabs] : kept;
+}
+
 /** One column on a board: `column` null for the lane of cards outside `columns[]`; `key` holds the flow's name, so two flows' columns of one name stay apart. */
 export interface BoardLane {
   key: string;

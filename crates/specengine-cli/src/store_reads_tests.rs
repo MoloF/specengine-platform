@@ -57,7 +57,7 @@ use crate::{
 // ------------------------------------------------------------------ the scratch
 
 /// The configured fixtures: every `fixtures/*/specengine.toml`.
-const FIXTURES: [&str; 19] = [
+const FIXTURES: [&str; 20] = [
     "anchor-states",
     "card-press",
     "code-a",
@@ -74,6 +74,7 @@ const FIXTURES: [&str; 19] = [
     "spec-a",
     "spec-b",
     "spec-c",
+    "studio-lamp",
     "trace-almanac",
     "verify-ecs",
     "verify-tests",
@@ -1079,6 +1080,7 @@ per_fixture! {
     sr0_differential_spec_a, ac12_subset_spec_a => "spec-a";
     sr0_differential_spec_b, ac12_subset_spec_b => "spec-b";
     sr0_differential_spec_c, ac12_subset_spec_c => "spec-c";
+    sr0_differential_studio_lamp, ac12_subset_studio_lamp => "studio-lamp";
     sr0_differential_trace_almanac, ac12_subset_trace_almanac => "trace-almanac";
     sr0_differential_verify_ecs, ac12_subset_verify_ecs => "verify-ecs";
     sr0_differential_verify_tests, ac12_subset_verify_tests => "verify-tests";

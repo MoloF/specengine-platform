@@ -105,6 +105,36 @@ describe("the team read (A9 of hub-team)", () => {
   });
 });
 
+describe("the workspaces read (docs/features/workspaces.md \"The UI\")", () => {
+  const served = {
+    source: "config",
+    notes: ["specengine.toml:41: workspace `w-one`: `stage` is no section (inbox, tasks, board, roadmap, flow, tree, graph, health, questions): left out"],
+    workspaces: [{ name: "w-one", title: "One", landing: "board", sections: ["board", "tree"], flows: ["f-one"], module: "m-one" }],
+    modules: [{ name: "m-one", title: "One", root: "ROOT-ONE" }],
+  };
+
+  it("asks the route with no query, its answer resolved as sent", async () => {
+    const fetchStub = stubFetch(() => jsonAnswer(200, served));
+    expect(await new HttpClient().getWorkspaces("my project")).toEqual(served);
+    expect(urlsOf(fetchStub)).toEqual(["/api/projects/my%20project/workspaces"]);
+    expect(fetchStub.mock.calls[0]?.[1]?.method).toBe("GET");
+  });
+
+  it.each([
+    [404, "no route /api/projects/alpha/workspaces: the routes are /api/projects and the web UI"],
+    [400, "spec workspace takes no query: `x`"],
+    [503, "specengine.toml:2: `[project] slug`: `Alpha` is not a slug"],
+  ])("a %i error body rejects in the daemon's words: the nav then shows every section", async (status, message) => {
+    stubFetch(() => errorAnswer(status, message));
+    expect(apiErrorOf(await rejection(new HttpClient().getWorkspaces("alpha")))).toEqual({ status, message });
+  });
+
+  it("is judged: a 404 that is no error body rejects too, never read as a document", async () => {
+    stubFetch(() => jsonAnswer(404, { proposals: [] }));
+    expect((await rejection(new HttpClient().getWorkspaces("alpha"))).status).toBe(404);
+  });
+});
+
 describe("each method hits its URL (AC-09)", () => {
   let fetchStub: ReturnType<typeof stubFetch>;
 
@@ -116,6 +146,7 @@ describe("each method hits its URL (AC-09)", () => {
     ["getProjects", (client) => client.getProjects(), "/api/projects"],
     ["getIdentity", (client) => client.getIdentity(), "/api/identity"],
     ["getTeam, a slug as a segment", (client) => client.getTeam("my project"), "/api/projects/my%20project/team"],
+    ["getWorkspaces, no query", (client) => client.getWorkspaces("my project"), "/api/projects/my%20project/workspaces"],
     ["getInbox", (client) => client.getInbox("alpha"), "/api/projects/alpha/inbox"],
     ["getProposal", (client) => client.getProposal("alpha", "PR-0004"), "/api/projects/alpha/proposals/PR-0004"],
     ["getTree, no option", (client) => client.getTree("alpha"), "/api/projects/alpha/tree"],
@@ -297,6 +328,7 @@ describe("each method hits its URL (AC-09)", () => {
     ["getProjects", (client, signal) => client.getProjects(signal)],
     ["getIdentity", (client, signal) => client.getIdentity(signal)],
     ["getTeam", (client, signal) => client.getTeam("alpha", signal)],
+    ["getWorkspaces", (client, signal) => client.getWorkspaces("alpha", signal)],
     ["getInbox", (client, signal) => client.getInbox("alpha", signal)],
     ["getProposal", (client, signal) => client.getProposal("alpha", "PR-0004", signal)],
     ["getTree", (client, signal) => client.getTree("alpha", undefined, signal)],

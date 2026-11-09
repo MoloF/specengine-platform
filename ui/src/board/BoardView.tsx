@@ -16,6 +16,7 @@ import { TabPanel, Tabs } from "../ui/Tabs";
 import { useFocusLater } from "../ui/useFocusLater";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
+import { WORKSPACE_TEXT } from "../workspace/text";
 import { actingName, isActingLine, useActing, useAllowed, useHubLogin } from "./acting";
 import { BoardCard, type CardActions } from "./BoardCard";
 import { BoardColumn } from "./BoardColumn";
@@ -35,6 +36,7 @@ import {
   reorderOf,
   standingBefore,
   tabsOf,
+  workspaceTabs,
   type BoardFilters,
   type BoardLane,
 } from "./filter";
@@ -150,8 +152,27 @@ function Notes({ notes, label }: { notes: readonly string[]; label: string }) {
  * judges: each move is posted, redrawn from the daemon's read, refused in its words. The route's ID
  * selects a card, opens its panel and its flow. One tab stop over the cards: arrows move it, Enter
  * opens, `m` moves, `n` adds; Esc closes and puts focus back on the card; nothing is optimistic.
+ * The tabs are the chosen workspace's flows, in its order; Show all flows shows the rest for the
+ * visit, and a card the route names in one of them shows them too (docs/features/workspaces.md "The UI").
  */
-export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { project: string; cardId: string | null; memory?: BoardMemory }) {
+export function BoardView({
+  project,
+  cardId,
+  memory = NO_BOARD_MEMORY,
+  flows = null,
+  flowsKnown = true,
+  lens = null,
+}: {
+  project: string;
+  cardId: string | null;
+  memory?: BoardMemory;
+  /** The chosen workspace's flows, in its order; null: every flow. */
+  flows?: readonly string[] | null;
+  /** False while the workspaces are read: the board waits to draw its tabs, so none flash and go. */
+  flowsKnown?: boolean;
+  /** The chosen workspace's name, held only to tell a change: a new workspace shows its own flows again. */
+  lens?: string | null;
+}) {
   const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
@@ -164,6 +185,13 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   const [chosenFlow, setChosenFlow] = useState<string | null>(remembered?.flow ?? null);
   const [filters, setFilters] = useState<BoardFilters>(remembered?.filters ?? NO_FILTERS);
   const [withCancelled, setWithCancelled] = useState(remembered?.withCancelled ?? false);
+  /** Show all flows was pressed for this visit, under the workspace `shownFor` names. */
+  const [allFlows, setAllFlows] = useState(false);
+  const [shownFor, setShownFor] = useState(lens);
+  if (shownFor !== lens) {
+    setShownFor(lens);
+    setAllFlows(false);
+  }
   /** The route's ID whose flow has been opened: a new ID opens its flow once, then a tab is the owner's. */
   const [flowOpenedFor, setFlowOpenedFor] = useState<string | null>(null);
   const [roving, setRoving] = useState<string | null>(cardId);
@@ -211,15 +239,24 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   /** The list could not be read: no tile, no mark, whatever the last read said. */
   const boardFailed = cards.error !== null;
   const all = useMemo(() => list?.cards ?? [], [list]);
-  const tabs = useMemo(() => (list === undefined ? [] : tabsOf(list)), [list]);
+  const everyTab = useMemo(() => (list === undefined ? [] : tabsOf(list)), [list]);
+  const lensTabs = useMemo(() => workspaceTabs(everyTab, flows), [everyTab, flows]);
+  /** Some flows are left out of the tabs by the workspace. */
+  const flowsHidden = lensTabs.length < everyTab.length;
+  const tabs = allFlows ? everyTab : lensTabs;
   const visible = useMemo(() => all.filter((row) => matchesFilters(row, filters)), [all, filters]);
 
   // A new ID in the route opens its flow, once its row or its card has said which.
   const routed = panel.data !== undefined && isCard(panel.data) ? panel.data.flow : (all.find((row) => row.id === cardId)?.flow ?? null);
-  if (cardId !== flowOpenedFor && (cardId === null || routed !== null)) {
+  // Judged once the list is read too: before it the workspace's tabs are none, and every flow would look hidden.
+  if (flowsKnown && list !== undefined && cardId !== flowOpenedFor && (cardId === null || routed !== null)) {
     setFlowOpenedFor(cardId);
     if (routed !== null) {
       setChosenFlow(routed);
+      // A card of a flow the workspace leaves out is never shown on a board that hides it.
+      if (!lensTabs.some((candidate) => candidate.name === routed)) {
+        setAllFlows(true);
+      }
     }
   }
 
@@ -696,9 +733,9 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
   }
 
   let body;
-  if (list === undefined || tab === undefined) {
+  if (list === undefined || tab === undefined || !flowsKnown) {
     body =
-      list === undefined && failure === null ? (
+      (list === undefined || !flowsKnown) && failure === null ? (
         <div aria-busy="true">
           <Skeleton label={`Reading the cards of ${project}`} lines={6} />
         </div>
@@ -796,6 +833,25 @@ export function BoardView({ project, cardId, memory = NO_BOARD_MEMORY }: { proje
                       Clear filters
                     </button>
                   )}
+                </div>
+              )}
+              {flowsHidden && (
+                <div className="board-flows-line">
+                  {!allFlows && (
+                    <p className="note">
+                      <Icon name="info" />
+                      <span>{WORKSPACE_TEXT.flowsShown(lensTabs.length, everyTab.length)}</span>
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className="button button-quiet"
+                    onClick={() => {
+                      setAllFlows(!allFlows);
+                    }}
+                  >
+                    {allFlows ? WORKSPACE_TEXT.showWorkspaceFlows : WORKSPACE_TEXT.showAllFlows}
+                  </button>
                 </div>
               )}
               {tabs.length > 1 ? (

@@ -291,7 +291,8 @@ describe("markup in data stays text; hrefs come from the route (AC-07)", () => {
     );
     await openNode(client);
     expect(screen.getByText(HOSTILE, { selector: ".node-title-text" })).toBeTruthy();
-    expect(screen.getByText(HOSTILE, { selector: ".tree-row-title" })).toBeTruthy();
+    // The tree reads once its module is known (docs/features/workspaces.md WS-9): after the node pane, here.
+    expect(await screen.findByText(HOSTILE, { selector: ".tree-row-title" })).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Search the spec"), { target: { value: "img" } });
     fireEvent.submit(screen.getByRole("search"));
     const hits = await screen.findByRole("listbox", { name: /Search hits/ });
@@ -781,7 +782,7 @@ describe("states of the node and its tabs (AC-12)", () => {
     const article = await screen.findByRole("article");
     const alert = await within(article).findByRole("alert");
     expect(alert.textContent).toBe(`DOC-A could not be read${message}`);
-    expect(screen.getByRole("tree")).toBeTruthy();
+    expect(await screen.findByRole("tree")).toBeTruthy();
     const retry = within(article).getByRole("button", { name: "Retry" });
     retry.focus();
     fireEvent.click(retry);

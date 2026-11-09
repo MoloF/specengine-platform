@@ -185,9 +185,23 @@ function SearchField({
 /**
  * The Spec tree view (`#/<project>/tree[/<REF>]`): the containment tree with search on the left,
  * the node the route names on the right; stacked on narrow screens. Every region reads, fails
- * and retries on its own. Read-only: nothing here writes the spec.
+ * and retries on its own. Read-only: nothing here writes the spec. The tree starts at the chosen
+ * module's root and goes back to it when the choice changes; Whole tree and Show as root change
+ * this view's root alone (docs/features/workspaces.md "The UI").
  */
-export function TreeView({ project, nodeRef }: { project: string; nodeRef: string | null }) {
+export function TreeView({
+  project,
+  nodeRef,
+  moduleRoot = null,
+  moduleKnown = true,
+}: {
+  project: string;
+  nodeRef: string | null;
+  /** The chosen module's root, null for the whole project. */
+  moduleRoot?: string | null;
+  /** False while the workspaces are read: the tree waits for its root (docs/features/workspaces.md WS-9). */
+  moduleKnown?: boolean;
+}) {
   const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
   const focusLater = useFocusLater();
@@ -199,11 +213,18 @@ export function TreeView({ project, nodeRef }: { project: string; nodeRef: strin
   const [showDrift, setShowDrift] = useState(() => recallShowDrift(project));
   // Rendered or Source, kept from node to node (docs/features/ui-markdown.md AC-09).
   const [textMode, setTextMode] = useState<TextMode>(DEFAULT_TEXT_MODE);
-  const [root, setRoot] = useState<string | null>(null);
+  const [root, setRoot] = useState<string | null>(moduleRoot);
+  /** The module root `root` last started from: a new choice starts the tree there again. */
+  const [rootFrom, setRootFrom] = useState(moduleRoot);
   const [submitted, setSubmitted] = useState<string | null>(null);
   const [showHits, setShowHits] = useState(false);
+  if (rootFrom !== moduleRoot) {
+    // Storing information from previous renders (react.dev, useState).
+    setRootFrom(moduleRoot);
+    setRoot(moduleRoot);
+  }
 
-  const tree = useTree(project, root === null ? { archive } : { root, archive });
+  const tree = useTree(project, root === null ? { archive } : { root, archive }, moduleKnown);
   const treeFailure = useRetainedFailure(tree.error, tree.isFetching);
   const node = useNode(project, nodeRef ?? "", {}, nodeRef !== null);
   const inbox = useInbox(project);

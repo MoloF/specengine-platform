@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { aCardFlow, aCardList, aCardRow } from "../test/builders";
-import { assigneeChoices, disciplineChoices, dropMove, lanesOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf } from "./filter";
+import { assigneeChoices, disciplineChoices, dropMove, lanesOf, matchesFilters, NO_FILTERS, NOBODY, openRows, reorderOf, standingBefore, tabsOf, workspaceTabs } from "./filter";
 import { canClear, markLine, markLook, markNames, rowMark } from "./labels";
 
 // The Board's arrangement of one answer (docs/features/board-ui.md "Board", "Rules and edge cases").
@@ -84,6 +84,19 @@ describe("the tabs and the columns", () => {
       ["a", true],
       ["old", false],
     ]);
+  });
+
+  // docs/features/workspaces.md "The UI", WS-14 (M30: tabs that ignore the workspace).
+  it("gives a workspace's flows, in its order, that the read serves; every tab with none named or none served", () => {
+    const tabs = tabsOf(aCardList([aCardRow({ id: "C-1", flow: "old" })], { flows: [aCardFlow({ name: "b" }), aCardFlow({ name: "a" }), aCardFlow({ name: "c" })] }));
+    const names = (flows: readonly string[] | null) => workspaceTabs(tabs, flows).map((tab) => tab.name);
+    expect(names(["c", "b"])).toEqual(["c", "b"]);
+    expect(names(["a", "gone", "a"])).toEqual(["a"]);
+    // A flow only a row still names is no flow of `[card]`: never one a workspace keeps.
+    expect(names(["old"])).toEqual(["b", "a", "c", "old"]);
+    expect(names(null)).toEqual(["b", "a", "c", "old"]);
+    expect(names([])).toEqual(["b", "a", "c", "old"]);
+    expect(names(["gone"])).toEqual(["b", "a", "c", "old"]);
   });
 
   it("keeps empty columns, the daemon's order, and counts what stands in a column: a cancelled card has left it", () => {

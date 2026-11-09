@@ -37,6 +37,8 @@ export type FlowTab = "canvas" | "list" | "timeline";
 /** What the Shell keeps per project for this page's life; null: nothing chosen yet. */
 export interface FlowState {
   tab: FlowTab | null;
+  /** The module root the open groups were read under, null for the whole project: another root's groups never reopen. */
+  root: string | null;
   open: readonly string[] | null;
   /** The stage filter's value (src/flow/timeline.ts). */
   stage: string;
@@ -247,9 +249,24 @@ function GroupFailure({
  * carries its served rollup, a closed group its counts, and a third tab reads the stages
  * (docs/features/trace-views.md): nothing here counts a card. The name in the route only selects.
  * The spec is read only here, its changes going through the AI as proposals; a card is written from
- * the panel, a queue row.
+ * the panel, a queue row. Under a module the Top read is rooted at its root
+ * (docs/features/workspaces.md "The UI"); every other read is as without one.
  */
-export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { project: string; nodeRef: string | null; memory?: FlowMemory }) {
+export function FlowView({
+  project,
+  nodeRef,
+  memory = NO_FLOW_MEMORY,
+  moduleRoot = null,
+  moduleKnown = true,
+}: {
+  project: string;
+  nodeRef: string | null;
+  memory?: FlowMemory;
+  /** The chosen module's root, null for the whole project. */
+  moduleRoot?: string | null;
+  /** False while the workspaces are read: the Top read waits for its root (docs/features/workspaces.md WS-9). */
+  moduleKnown?: boolean;
+}) {
   const openShortcuts = useOpenShortcuts();
   const announce = useAnnounce();
   const titleId = useId();
@@ -257,7 +274,7 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   const [remembered] = useState(() => memory.recall(project));
   const [narrow] = useState(isNarrow);
   const [chosenTab, setChosenTab] = useState<FlowTab | null>(remembered?.tab ?? null);
-  const [chosenOpen, setChosenOpen] = useState<readonly string[] | null>(remembered?.open ?? null);
+  const [chosenOpen, setChosenOpen] = useState<readonly string[] | null>(remembered !== undefined && remembered.root === moduleRoot ? remembered.open : null);
   const [chosenStage, setChosenStage] = useState(remembered?.stage ?? ALL_STAGES);
   const [openLanes, setOpenLanes] = useState<readonly string[]>(remembered?.lanes ?? []);
   /** Groups closed since they were read: their reads stay, so reopening reads nothing. */
@@ -281,7 +298,7 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   /** The last commit drew the gap rows' button, and the rows unless hidden. */
   const rowsBefore = useRef(false);
 
-  const topRead = useFlow(project);
+  const topRead = useFlow(project, moduleRoot, moduleKnown);
   const failure = useRetainedFailure(topRead.error, topRead.isFetching);
   // Keyed on the read settling, not on its data: an equal answer keeps its object (structural sharing).
   const retried = useRetryFocus(topRead.dataUpdatedAt === 0 ? undefined : topRead.dataUpdatedAt, () => results.current);
@@ -296,8 +313,11 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
   const groups = useFlowGroups(project, asked, opened);
 
   useEffect(() => {
-    memory.remember(project, { tab: chosenTab, open: chosenOpen, stage: chosenStage, lanes: openLanes });
-  }, [memory, project, chosenTab, chosenOpen, chosenStage, openLanes]);
+    // Not while the module is unknown: this mount's root is a guess, and a module's open groups would be lost.
+    if (moduleKnown) {
+      memory.remember(project, { tab: chosenTab, root: moduleRoot, open: chosenOpen, stage: chosenStage, lanes: openLanes });
+    }
+  }, [memory, project, moduleKnown, chosenTab, moduleRoot, chosenOpen, chosenStage, openLanes]);
 
   // A read that failed again keeps its picture, and says no state it can no longer vouch for.
   const answers = useMemo(() => new Map(groups.flatMap((group) => (group.data === undefined ? [] : [[group.name, group.error === null ? group.data : withoutStates(group.data)] as const]))), [groups]);
@@ -772,7 +792,7 @@ export function FlowView({ project, nodeRef, memory = NO_FLOW_MEMORY }: { projec
         </h1>
         <p className="view-about">{ABOUT} The spec is read only here.</p>
       </header>
-      <div ref={results} tabIndex={-1} className="flow-results" aria-busy={topRead.isFetching || opening.size > 0}>
+      <div ref={results} tabIndex={-1} className="flow-results" aria-busy={topRead.isFetching || opening.size > 0 || !moduleKnown}>
         <RegionBoundary name="flow">{body}</RegionBoundary>
       </div>
     </section>

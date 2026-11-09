@@ -8,6 +8,9 @@ import type { Scenario } from "./scenario";
 // on harbor-sim, AC-08 on ledger-api, AC-09's item two levels down, AC-11's `large` past the cap.
 
 function renderMock(scenario: Scenario, hash: string) {
+  // The whole project, as before modules: All modules stored, as the module bar's first button
+  // stores it; harbor-sim's first workspace roots both views at its module (docs/features/workspaces.md).
+  window.localStorage.setItem("specengine.module.harbor-sim", "");
   window.history.replaceState(null, "", `/?scenario=${scenario}${hash}`);
   const client = new MockClient(scenario, { delayMs: 0 });
   const getFlow = vi.spyOn(client, "getFlow");
@@ -48,6 +51,7 @@ function options(getFlow: ReturnType<typeof renderMock>["getFlow"]) {
 
 describe("the Flow over the mock", () => {
   it("harbor-sim: badges, counts, and a Start on what folds a start; the Timeline's lanes, a lane's steps by distance, the hollow step in its place (trace-views)", async () => {
+    window.localStorage.setItem("specengine.module.harbor-sim", "");
     window.history.replaceState(null, "", "/?scenario=normal#/harbor-sim/flow");
     const client = new MockClient("normal", { delayMs: 0 });
     const getTrace = vi.spyOn(client, "getTrace");
@@ -167,8 +171,9 @@ describe("the Flow over the mock", () => {
 
   it("error: the daemon's message, Retry", async () => {
     renderMock("error", "#/harbor-sim/flow");
-    expect(await screen.findByText(/database is locked/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Retry" })).toBeTruthy();
+    // The Flow reads once its module is known: the workspaces read fails first, so no module, then the flow's.
+    expect(await screen.findByRole("button", { name: "Retry" })).toBeTruthy();
+    expect(within(screen.getByRole("main")).getByText(/database is locked/)).toBeTruthy();
   });
 
   it("large, opened past 200: 200 boxes, the line, the List whole (AC-11)", async () => {
