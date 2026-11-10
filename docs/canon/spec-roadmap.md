@@ -16,7 +16,7 @@ Plan items are `spec`-class files; the path and the pool are computed per read f
 [roadmap]
 prefix     = "RM"                         # required: an [ids] prefix, shape number, scope project
 dir        = "docs/roadmap"               # required: where items are created; the [paths] path rules
-releases   = ["mvp", "v1", "v2", "v3", "v4"] # required: the path's order
+releases   = ["mvp", "v1", "v2", "v3", "v4", "v5"] # required: the path's order
 mvp_cut    = "mvp"                        # optional: one of releases
 priorities = ["must", "should", "could"]  # required: highest first
 unit       = "days"                       # optional: printed after every sum, never converted

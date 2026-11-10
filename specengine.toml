@@ -44,11 +44,11 @@ when  = { status = "shipped" }
 parts = ["Implementation"]
 
 # The plan: items found by prefix, the path computed by `spec roadmap` (ADR-0052; docs/canon/spec-roadmap.md).
-# mvp: the rest of Phases 0-2; v1: Phases 3, 4 and 6; v2: Phase 5; v3: Phase 7's hosted hub; v4: trade workspaces, the writer studio, then the rest of Phase 7 (08 s2).
+# mvp: the rest of Phases 0-2; v1: Phases 3, 4 and 6; v2: Phase 5; v3: Phase 7's hosted hub; v4: trade workspaces, the writer studio, the board's hand-off; v5: a Jira-like UI over the pipeline (08 s2).
 [roadmap]
 prefix     = "RM"
 dir        = "docs/roadmap"
-releases   = ["mvp", "v1", "v2", "v3", "v4"]
+releases   = ["mvp", "v1", "v2", "v3", "v4", "v5"]
 mvp_cut    = "mvp"
 priorities = ["must", "should", "could"]
 unit       = "days"
