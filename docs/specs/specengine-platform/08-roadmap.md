@@ -229,13 +229,13 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - **Proof** is a decision record that the card links back to.
 - **Folded in the UI.** These are local technical details: the UI folds them and never moves them. They are IDs, paths, raw kinds, revisions and hashes, tokens, distance, gap codes, Bindings, Bundle, the lock diff and drift. `T-` tasks show as a Development summary.
 
-The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6 come to 53-78 pipeline hours and steps 7-13 to 27-46.
+The order is the one `spec roadmap` computes: `must` first, then `should`, then `could`, each after what it waits on. Steps 1-6 come to 55-82 pipeline hours (step 3 took RM-0101 in) and steps 7-13 to 27-46.
 
 | Step | Slice | Item | Result | ADR issued | Hours | After |
 |---|---|---|---|---|---|---|
 | 1 | `design-foundation` | RM-0093 | Shipped 2026-11-10: light and dark tokens as `light-dark()` roles (light by default, dark by the system, a Theme select per viewer); Inter 4.001 bundled as files; a rem type scale, spacing on 8 px, radii, a guard with 29 listed exceptions; Button, Lozenge, PropertyList, Breadcrumbs, IssueView, EmptyState, Disclosure; the card modal and page as the first work item; column heads by status category; a one-row header; first-load JS 806.03 kB of 845 (`docs/canon/ui-design.md`) | - | 12-17 | - |
 | 2 | `flow-scenario` | RM-0094 | Shipped 2026-11-10: a domain-free `in_flow` on every flow node, folded, `types`, and an opt-in cut counting `not_in_flow`; the canvas the cut's nodes, top to bottom, stage dividers, 160 px boxes, a 0.92 fit floor, off-walk edges on selection; Gaps in the bar; Records for the AI on demand; a served `ancestors` path from the subset's `PARENT` rows, the places pane that path, Up gone; plugin 0.33.0; first-load JS 815.13 kB of 845; its follow-up RM-0101 `gap-titles` in the pool (`docs/canon/spec-flow-cuts.md`, `spec-flow-bar.md`) | - | 11-17 | 1 |
-| 3 | `doc-modal` | RM-0095, RM-0091 | Flow v2 3d: link ends' titles, one document modal and page everywhere, the path its breadcrumb, technical details folded; RM-0091's plural fixes | - | 8-12 | 1, 2 |
+| 3 | `doc-modal` | RM-0095, RM-0091, RM-0101 | Flow v2 3d: link ends' titles, one document modal and page everywhere, the path its breadcrumb, technical details folded; RM-0091's plural fixes; gap items' titles (RM-0101); plugin 0.34.0 (`docs/features/doc-modal.md`) | - | 10-16 | 1, 2 |
 | 4 | `departments` | RM-0096 | The owner's words; `[[card.flow]] title`; `[[module]] kinds`; hand-off by department; preset titles | `departments` (amends ADR-0073) | 9-13 | 1 |
 | 5 | `card-questions` | RM-0097 | Intake items name `card_id` (queue schema 11, backup format 5); a decision's `why`; Activity; "Ask the writers" in Return; answers from the task | `card-questions` (supplements ADR-0056, ADR-0074, ADR-0075) | 10-14 | 1 |
 | 6 | `handoff-progress` | RM-0098 | Ready to accept, a segmented bar, cancelled subtasks with reasons, "Relies on"; UI only | - | 3-5 | 1 |
@@ -250,7 +250,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | opt. | `journeys` | RM-0100 | One act hands a task to several departments, with a soft `after` | one, for the new key | 6-9 | 4, 6, gate |
 
 **Lanes.** Two lanes run side by side.
-- **The Rust lane** holds the cores of steps 2-5 (`in_flow` and `ancestors`, link ends' titles, the department keys, the card's intake link), then steps 8 and 9.
+- **The Rust lane** holds the cores of steps 2-5 (`in_flow` and `ancestors`, link ends' and gap members' titles, the department keys, the card's intake link), then steps 8 and 9.
 - **The UI lane** starts with step 1, then takes the UIs of steps 2-5, then steps 6 and 7.
 
 A slice's UI waits for its core and for step 1; no core waits for the UI lane. Steps 10-13 follow both lanes.
@@ -270,7 +270,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 - **Into `v5`.** RM-0086 becomes step 12 and RM-0088 step 10, both re-scoped; RM-0089 becomes step 13. Steps 17-19 (RM-0059 to RM-0061) become steps 8, 9 and 11. RM-0091 ships inside step 3.
 - **To the pool**, priorities kept: 10c (RM-0052), steps 13-16 (RM-0055 to RM-0058, with RM-0035 and RM-0036 inside step 14), steps 20 and 21 (RM-0062, RM-0017), RM-0070 and RM-0063. RM-0087 goes to the pool as `could` (Q12).
 - `zone-index`'s draft spec stays committed.
-- RM-0101 `gap-titles`, step 2's follow-up, joins the pool as `should`.
+- RM-0101 `gap-titles`, step 2's follow-up, joins the pool as `should`; the same day it rides in step 3's Rust lane, as `must` in `v5` (one plugin MINOR for both).
 - `spec roadmap` still reads `current mvp`.
 
 **Risks.**
