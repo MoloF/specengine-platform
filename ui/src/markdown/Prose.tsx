@@ -2,7 +2,8 @@ import { lazy, Suspense } from "react";
 import type { MarkdownProps } from "./Markdown";
 
 // What the views import (docs/features/ui-markdown.md "Implementation"): the renderer arrives in a
-// chunk of its own, like the graph canvas. Until it does, the text shows as it was sent, wrapped.
+// chunk of its own, like the graph canvas. Until it does, the text shows as it was sent, wrapped; a
+// lead (the first paragraph alone) shows nothing until it is parsed.
 
 const Markdown = lazy(() => import("./Markdown").then((module) => ({ default: module.Markdown })));
 
@@ -12,7 +13,7 @@ export function Prose(props: MarkdownProps) {
     <Suspense
       fallback={
         <div className={props.className === undefined ? "markdown markdown-pending" : `markdown markdown-pending ${props.className}`} aria-busy="true">
-          {props.source}
+          {props.firstParagraph === true ? null : props.source}
         </div>
       }
     >

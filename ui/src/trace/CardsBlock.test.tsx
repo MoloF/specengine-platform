@@ -8,8 +8,9 @@ import { flowClient } from "../test/flowStub";
 import { renderApp } from "../test/render";
 import { TREE, treeClient } from "../test/treeStub";
 
-// docs/features/trace-views.md "A node's cards", AC-08 on a stub: the block in the Flow's panel and
-// the tree's pane: what it reads, shows and links, and that a Clear finishes on the page.
+// docs/features/trace-views.md "A node's cards", AC-08 on a stub: the block on the tree's pane and in
+// the document view (Flow's panel holds none since doc-modal, DM-14): what it reads, shows and links,
+// and that a Clear finishes on the page.
 
 const SUSPECT = aTraceCard({ id: "C-0001", title: "The suspect card", flow: "work", column: "todo", mark: "suspect", on: "A" });
 
@@ -21,7 +22,7 @@ function flowOn(name: string, trace: (options: TraceOptions | undefined) => Trac
 
 /** The block of `name`, its read landed. */
 async function block(client: ReturnType<typeof flowOn>, name = "A"): Promise<HTMLElement> {
-  renderApp(client, `#/alpha/flow/${name}`);
+  renderApp(client, `#/alpha/tree/${name}`);
   const found = await screen.findByRole("region", { name: "Cards" });
   await waitFor(() => {
     expect(found.querySelector(".cards-state, .verbatim, .error-message")).not.toBeNull();
@@ -60,10 +61,10 @@ describe("what the block shows", () => {
     expect(within(shown).getByText("No card holds this yet. Next: press New card.")).toBeTruthy();
   });
 
-  it("lists the nodes using it, each linking its node and saying its rollup; in the Flow to the Flow", async () => {
+  it("lists the nodes using it, each linking its node and saying its rollup; in the tree to the tree", async () => {
     const shown = await block(flowOn("A", () => aTrace([aTraceNode("A", [], { uses: [{ id: "B", rollup: "in work", cards: 2 }] })])));
     const use = within(shown).getByRole("link", { name: "B" });
-    expect(use.getAttribute("href")).toBe("#/alpha/flow/B");
+    expect(use.getAttribute("href")).toBe("#/alpha/tree/B");
     expect(use.closest("li")?.textContent).toContain("In work");
     expect(use.closest("li")?.textContent).toContain("2 cards");
   });
@@ -202,7 +203,7 @@ describe("Clear on the page", () => {
       expect(shown.querySelector(".cards-state")?.textContent).toBe("In work");
     });
     expect(within(shown).queryByRole("button", { name: /^Clear/ })).toBeNull();
-    expect(window.location.hash).toBe("#/alpha/flow/A");
+    expect(window.location.hash).toBe("#/alpha/tree/A");
     expect(within(shown).getByText("the mark clears")).toBeTruthy();
     expect(document.querySelector('[aria-live="polite"]')?.textContent).toBe("C-0001 is cleared");
     // Its button went with its mark: focus lands on the block, never the body.
@@ -248,7 +249,7 @@ describe("Clear on the page", () => {
     await waitFor(() => {
       expect(screen.queryByRole("dialog")).toBeNull();
     });
-    expect(window.location.hash).toBe("#/alpha/flow/A");
+    expect(window.location.hash).toBe("#/alpha/tree/A");
     await waitFor(() => {
       expect(document.activeElement).toBe(button);
     });
@@ -379,5 +380,25 @@ describe("in the Spec tree", () => {
     expect(within(shown).getByRole("heading", { level: 2, name: "Cards" })).toBeTruthy();
     fireEvent.click(within(shown).getByRole("button", { name: "New card" }));
     expect(await screen.findByRole("dialog", { name: "New card" })).toBeTruthy();
+  });
+});
+
+// DM-12 of docs/features/doc-modal.md: in the document view the block's head holds no New card (the
+// view's own head does), and a node using it opens as a document.
+describe("in the document view", () => {
+  it("has no New card of its own, and a using node is a document link: its page the href, a plain click the modal", async () => {
+    const client = treeClient();
+    client.getTrace.mockResolvedValue(aTrace([aTraceNode("DOC-A", [SUSPECT], { rollup: "suspect", uses: [{ id: "DOC-C", rollup: "in work", cards: 1 }] })]));
+    renderApp(client, "#/alpha/inbox?doc=DOC-A");
+    const modal = await screen.findByRole("dialog", { name: "Title of DOC-A" });
+    const shown = await within(modal).findByRole("region", { name: "Cards" });
+    const use = await within(shown).findByRole("link", { name: "DOC-C" });
+    expect(use.getAttribute("href")).toBe("#/alpha/tree/DOC-C/page");
+    expect(within(shown).queryByRole("button", { name: "New card" })).toBeNull();
+    expect(within(shown).getByRole("heading", { level: 3, name: "Cards" })).toBeTruthy();
+    fireEvent.click(use);
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/inbox?doc=DOC-C");
+    });
   });
 });

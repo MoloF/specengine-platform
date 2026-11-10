@@ -115,7 +115,8 @@ describe("the header stays; the page never scrolls sideways (BH-2)", () => {
     const modal = ruleWith(".card-modal", /width/);
     expect(modal).toMatch(/width:\s*min\(var\(--modal-width-l\), 100vw - 2rem\);/);
     expect(modal).toMatch(/max-height:\s*calc\(100dvh - 2rem\);/);
-    expect(ruleWith(".card-modal .issue-view-body", /overflow/)).toMatch(/overflow:\s*auto;/);
+    // Its body's scrolling is the work item's own in any dialog (docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look).
+    expect(ruleWith(".dialog > .issue-view > .issue-view-body", /overflow/)).toMatch(/overflow:\s*auto;/);
   });
 
   it("stretches the title's link over the tile, the other controls above it", () => {

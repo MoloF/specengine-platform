@@ -46,6 +46,11 @@
 //! stderr with nothing removed. The golden does not change,
 //! and `flow-aside` joins [`AFTER_THE_GOLDEN`].
 //!
+//! docs/features/doc-modal.md (RM-0095) DM-1, its test churn: a `show
+//! --json` stream loses a shown link's `title` and `end_kind` too
+//! ([`common::keys::without_doc_modal_keys`]: only beside `end_kind`, so a
+//! node's own `title` stays); the text is never stripped.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024);
 //! the golden's are JSON `\u` escapes.
 
@@ -62,7 +67,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use common::keys::{SHOW_KEYS, without_keys};
+use common::keys::{SHOW_KEYS, without_doc_modal_keys, without_keys};
 use common::{SPEC, Scratch, fixture, repository_root};
 use serde::{Deserialize, Serialize};
 use specengine_core::ProjectConfig;
@@ -450,13 +455,14 @@ fn placeholders(
 }
 
 /// A `show --json` stream with flow-scenario's `ancestors` taken out
-/// (RM-0094, its test churn), every other byte kept; a `bundle` stream (its
+/// (RM-0094, its test churn) and doc-modal's link `title` and `end_kind`
+/// (RM-0095, DM-1), every other byte kept; a `bundle` stream (its
 /// own `ancestors` layer stays) and a stream holding no JSON document (exit
 /// 2, or not UTF-8) as they are.
 fn without_show_keys(command: &str, bytes: &[u8]) -> Vec<u8> {
     match std::str::from_utf8(bytes) {
         Ok(text) if command == "show" && text.starts_with('{') => {
-            without_keys(text, &SHOW_KEYS).into_bytes()
+            without_doc_modal_keys(&without_keys(text, &SHOW_KEYS)).into_bytes()
         }
         _ => bytes.to_vec(),
     }

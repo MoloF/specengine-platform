@@ -189,10 +189,12 @@ fn the_skills_path_reads_ten_rows_at_zero() {
     // Step 5: the read.
     let reply = session.call("get_flow", json!({}));
     let document = answered(&reply, "get_flow");
+    // docs/features/doc-modal.md DM-3: `titles`, parallel to `items`.
     for (gap, code) in document["gaps"].as_array().expect("gaps").iter().zip(CODES) {
         assert_eq!(
             *gap,
-            json!({"code": code, "state": "measured", "count": 0, "items": [], "cause": null}),
+            json!({"code": code, "state": "measured", "count": 0, "items": [], "titles": [],
+                "cause": null}),
         );
     }
     assert!(

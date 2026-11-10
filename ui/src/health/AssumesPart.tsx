@@ -1,6 +1,7 @@
 import type { HealthQuery } from "../api/queries";
 import type { AssumesCounts, AssumesRow, HealthCode } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { Badge } from "../ui/Badge";
 import { CodePart, CodeRowList, oneLine, RowNotMeasured } from "./codeRows";
 import { assumedLook, isMeasuredState } from "./labels";
@@ -59,9 +60,9 @@ function AssumesLine({ project, row }: { project: string; row: AssumesRow }) {
   let named;
   if (row.node !== null) {
     named = (
-      <a className="health-code-id" href={sectionHash(project, "tree", row.node.id)}>
+      <DocLink className="health-code-id" project={project} docRef={row.node.id}>
         {id}
-      </a>
+      </DocLink>
     );
   } else if (row.proposal !== null) {
     named = (

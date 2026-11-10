@@ -250,7 +250,7 @@ describe("a resolved login", () => {
       Promise.resolve(aTrace([aTraceNode("A", [aTraceCard({ id: "C-0001", mark: "suspect", on: "A" })], { rollup: "suspect" }), aTraceNode("B", [aTraceCard({ id: "C-0002", mark: "suspect", on: "B" })], { rollup: "suspect" })])),
     );
     client.clearCardGroup.mockRejectedValue(new ClientError({ status: 403, message: FORBIDDEN }));
-    renderApp(client, "#/alpha/flow/A");
+    renderApp(client, "#/alpha/tree/A");
     const block = await screen.findByRole("region", { name: "Cards" });
     const dialog = await dialogOf("Clear all", block);
     const field = within(dialog).getByLabelText<HTMLInputElement>("Clearing as");
@@ -486,7 +486,7 @@ function clearClient(team: Team | ClientError): StubClient {
   return client;
 }
 
-/** The Flow's stub with a group of two suspect cards, as `team` answers; login null: a local daemon's. */
+/** A stub with a group of two suspect cards, its block on the Spec tree's node pane, as `team` answers; login null: a local daemon's. */
 function groupClient(team: Team | ClientError, login: string | null = "mira"): StubClient {
   const client = flowClient(aFlowView([aFlowNode({ id: "A", distance: 0 })], []));
   client.getIdentity.mockResolvedValue({ login });
@@ -548,7 +548,7 @@ async function teamRead(client: StubClient) {
 }
 
 async function nodeBlock(client: StubClient): Promise<HTMLElement> {
-  renderApp(client, "#/alpha/flow/A");
+  renderApp(client, "#/alpha/tree/A");
   const block = await screen.findByRole("region", { name: "Cards" });
   await within(block).findByRole("button", { name: "Clear all" });
   return block;

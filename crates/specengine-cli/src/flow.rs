@@ -23,10 +23,12 @@
 //!
 //! All ten gap rows come first, so a cut never hides one: a row prints at
 //! most [`GAP_ITEMS_SHOWN`] items, then `, … and <k> more`, `count` the
-//! whole; a row not measured prints `-` for its count, never 0. Nodes and
-//! edges then fit within [`crate::OUTPUT_CAP_CHARS`] ([`View::Capped`]:
-//! nodes first, a node cut drops every edge), JSON holding the printed
-//! items; the daemon's [`View::Browser`] shows everything.
+//! whole; a row not measured prints `-` for its count, never 0; the JSON's
+//! `titles`, parallel to `items`, is cut with them and never printed.
+//! Nodes and edges then fit within [`crate::OUTPUT_CAP_CHARS`]
+//! ([`View::Capped`]: nodes first, a node cut drops every edge), JSON
+//! holding the printed items; the daemon's [`View::Browser`] shows
+//! everything.
 //!
 //! Exit 0 answered, zero nodes and any gap included; 1 a `ROOT` naming
 //! nothing; 2 usage, a bad `--depth`, a look-alike ID, a config error
@@ -516,6 +518,8 @@ struct GapJson<'a> {
     state: &'static str,
     count: Option<usize>,
     items: &'a [Vec<String>],
+    /// Parallel to `items`, cut with them (task spec `doc-modal` DM-3).
+    titles: &'a [Vec<Option<String>>],
     cause: Option<String>,
 }
 
@@ -566,6 +570,7 @@ fn gap_json(gap: &FlowGap, limit: Option<usize>) -> GapJson<'_> {
         state: gap.state.as_str(),
         count: gap.count,
         items: &gap.items[..shown],
+        titles: &gap.titles[..shown.min(gap.titles.len())],
         cause: gap.cause.as_ref().map(cause_text),
     }
 }

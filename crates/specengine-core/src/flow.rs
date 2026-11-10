@@ -160,6 +160,9 @@ pub struct FlowGap {
     pub count: Option<usize>,
     /// By name, each item's members by name.
     pub items: Vec<Vec<String>>,
+    /// Parallel to `items`: each member's title, `None` when it has none
+    /// (`docs/features/doc-modal.md` "Acceptance criteria", DM-3).
+    pub titles: Vec<Vec<Option<String>>>,
     /// The files its items name, ascending; `no-start`'s scope is no
     /// document, so that row holds none.
     pub files: Vec<usize>,
@@ -909,29 +912,39 @@ fn cycles(nodes: &BTreeSet<usize>, next: &Adjacency) -> Vec<Vec<usize>> {
 }
 
 /// A counted row of documents: named and sorted, each item's members too;
-/// above 0 it carries [`GapCause::Found`].
+/// above 0 it carries [`GapCause::Found`]. Each member's title rides with
+/// its name, from the parse the read holds; a title only breaks a tie of
+/// names, so `items` sorts as by names alone.
 fn measured(graph: &SpecGraph<'_>, code: GapCode, items: &[Vec<usize>]) -> FlowGap {
     let files: BTreeSet<usize> = items.iter().flatten().copied().collect();
-    let mut named: Vec<Vec<String>> = items
+    let mut named: Vec<(Vec<String>, Vec<Option<String>>)> = items
         .iter()
         .map(|item| {
-            let mut members: Vec<String> = item
+            let mut members: Vec<(String, Option<String>)> = item
                 .iter()
-                .map(|&file| graph.name(document(file)))
+                .map(|&file| (graph.name(document(file)), title_of(graph, document(file))))
                 .collect();
             members.sort();
-            members
+            members.into_iter().unzip()
         })
         .collect();
     named.sort();
+    let (items_named, titles): (Vec<Vec<String>>, Vec<Vec<Option<String>>>) =
+        named.into_iter().unzip();
     FlowGap {
         code,
         state: GapState::Measured,
-        count: Some(named.len()),
-        items: named,
+        count: Some(items_named.len()),
+        items: items_named,
+        titles,
         files: files.into_iter().collect(),
         cause: (!items.is_empty()).then_some(GapCause::Found(code)),
     }
+}
+
+/// A node's title, `None` when it has none.
+fn title_of(graph: &SpecGraph<'_>, at: NodeAt) -> Option<String> {
+    graph.node(at).and_then(|node| node.title.clone())
 }
 
 /// A row with no count.
@@ -941,6 +954,7 @@ fn unmeasured(code: GapCode, state: GapState, cause: GapCause) -> FlowGap {
         state,
         count: None,
         items: Vec::new(),
+        titles: Vec::new(),
         files: Vec::new(),
         cause: Some(cause),
     }
@@ -989,6 +1003,9 @@ fn gaps_of(
         let mut row = measured(graph, GapCode::NoStart, &[]);
         if headless {
             row.items = vec![vec![ask.scope_name.to_owned()]];
+            // The scope's title: its first `ROOT` holder's; none at Top.
+            let scope = ask.roots.and_then(<[NodeAt]>::first);
+            row.titles = vec![vec![scope.and_then(|&at| title_of(graph, at))]];
             row.count = Some(1);
             row.cause = Some(GapCause::Found(GapCode::NoStart));
         }
@@ -1044,7 +1061,7 @@ fn gaps_of(
         let matching = defined.filter(|file| users.get(file).map_or(0, BTreeSet::len) == wanted);
         one_each(matching)
     };
-    vec![
+    let rows = vec![
         no_start,
         two_starts,
         unreachable,
@@ -1057,7 +1074,20 @@ fn gaps_of(
         definition(GapCode::DefinitionOnce)
             .unwrap_or_else(|| measured(graph, GapCode::DefinitionOnce, &used_by(1))),
         measured(graph, GapCode::SupplyUnfed, &unfed(members, links)),
-    ]
+    ];
+    // `titles` has `items`' shape on every finished row: a row whose items
+    // are set without titles goes red in tests, never a shorter list served
+    // (`docs/features/doc-modal.md` "Acceptance criteria", DM-3).
+    debug_assert!(
+        rows.iter().all(|row| row.titles.len() == row.items.len()
+            && row
+                .items
+                .iter()
+                .zip(&row.titles)
+                .all(|(item, titles)| item.len() == titles.len())),
+        "a gap row's titles do not match its items"
+    );
+    rows
 }
 
 /// One item per file.

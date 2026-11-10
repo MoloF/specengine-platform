@@ -384,7 +384,7 @@ describe("the Questions screen takes the decision by structure (AC-U2)", () => {
     expect(within(card).getByText(CRANES_DECISION.text)).toBeTruthy();
     expect(within(card).getByText(CRANES_DECISION.working_answer)).toBeTruthy();
     expect(within(card).getByText(CRANES_DECISION.price_of_other)).toBeTruthy();
-    expect(within(card).getByRole("link", { name: `Cargo cranes (${CRANES})` }).getAttribute("href")).toBe(`#/${SLUG}/tree/${CRANES}`);
+    expect(within(card).getByRole("link", { name: `Cargo cranes (${CRANES})` }).getAttribute("href")).toBe(`#/${SLUG}/tree/${CRANES}/page`);
     expect(within(card).getByRole("link", { name: `Open in Inbox: ${DECISION}` }).getAttribute("href")).toBe(`#/${SLUG}/inbox/${DECISION}`);
     // `ok` and a text are answers; a number is not: no option to pick, Leave open the default.
     expect(radiosOf(card)).toEqual([

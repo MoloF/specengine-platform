@@ -1,6 +1,6 @@
 import type { HealthQuery } from "../api/queries";
 import type { UnboundCounts, UnboundMarker, UnboundRow } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { Badge } from "../ui/Badge";
 import { CodePart, CodeRowList, oneLine, RowNotMeasured } from "./codeRows";
 import { bindingLabel, idStateLabel, isMeasuredState, unboundReasonLook } from "./labels";
@@ -40,9 +40,9 @@ function UnboundLine({ project, row }: { project: string; row: UnboundRow }) {
   return (
     <li className="health-left-row health-code-row" data-unbound={row.id} tabIndex={-1}>
       <p className="health-code-head">
-        <a className="health-code-id" href={sectionHash(project, "tree", row.id)}>
+        <DocLink className="health-code-id" project={project} docRef={row.id}>
           <bdi className="mono">{oneLine(row.id)}</bdi>
-        </a>
+        </DocLink>
         {row.kind !== null && <span className="kind-tag">{oneLine(row.kind)}</span>}
         {row.title !== null && <bdi className="health-code-title">{oneLine(row.title)}</bdi>}
       </p>

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-10-21
+reviewed: 2026-11-11
 ---
 
 # Drift screens in the web UI
@@ -17,7 +17,7 @@ Drift shown where the owner already reads, in the browser: the node's Bindings t
 **Panel** (`tree/BindingsPanel.tsx`), in order: an about line and "Read again"; `reason`, verbatim; the read's notes, each through `health/oneLine.ts` `oneLine` as Health's causes, in the daemon's order (the `bindings:` and `tested:` causes, `code-reads.md` "Degrade"); each holder in the daemon's order; "Changes since the lock" (`lock-diff-panel.md`); one commands block. One holder: h2 parts, no holder heading. Several (a REF declared twice): an h2 `<path>:<line>-<end_line>` each over a section "Bindings at <path>:<line>", h3 parts.
 
 - **Code bindings**: `counted(n, "row", "rows")`, ", <k> more not shown" when `omitted` > 0 (never in the browser view); rows through `CodeRowList` (10, then "Show all <n>", focus on the 11th), each a `BindingLine`.
-- **Test evidence**: every entry, `verified` too, a `health/DriftPart.tsx` `TestedLine` (`testedLook`), its node a tree link taking the tree view's `onFollow` (optional, as Health omits it).
+- **Test evidence**: every entry, `verified` too, a `health/DriftPart.tsx` `TestedLine` (`testedLook`), its node a tree link with the tree view's `onFollow`, on Health a document link.
 
 **Row** (`tree/BindingLine.tsx`; the Bundle tab renders the same line plus `<n> tokens`), every daemon word on one line through `oneLine` (`health/oneLine.ts`, a leaf over `ui/text.ts` `shownText`, re-exported by `codeRows.tsx`: a line break a space, other controls and bidi marks `\u{..}`): the node as sent in a `<bdi>`, never a link, `""` "No ID" here and a plain `-` in Bundle; relation raw; place `<file>:<line>-<end_line>`, `<file>:<line>` or `<file>`; binding `<kind> <symbol>[ <item_kind>]`, "No symbol" when `kind` or `symbol` is null; `layer <layer>` when set; a Sync badge (`syncLook`: null "Not judged", never "In sync"; an unlisted word through `oneLine`, neutral); category and detail joined; "Signature:" and the text; "Moved from <file> | <binding>"; "Candidate <file> | <binding>" per candidate. The `binding-line` wrap rule holds in both tabs.
 
@@ -46,7 +46,7 @@ One row component draws `spec verify`'s row in both places: Health's row 6 (the 
 
 **Line** (`health/DriftPart.tsx` `DriftLine {project, row: StoredDriftRow, markEditorial?, onFollow?, children?}`): `<li class="health-left-row health-code-row" data-drift=<node> tabIndex=-1>`, every daemon word through `oneLine`, an unlisted class or state word too (`health/labels.ts` `rawClass`, `syncLook`; its badge neutral). In order:
 
-- head: the Class badge (`driftClassLook`), the node linked to the tree (`""` "No ID"), the relation, "Pre-existing" when `pre_existing`, "Editorial" when `markEditorial` and `isEditorialRow(row)`;
+- head: the Class badge (`driftClassLook`), the node linked so (`""` "No ID"), the relation, "Pre-existing" when `pre_existing`, "Editorial" when `markEditorial` and `isEditorialRow(row)`;
 - judgement: the State badge (`syncLook`), category and detail joined;
 - place: the file, `<kind> <symbol>[ <item_kind>]` (`tree/BindingLine.tsx` `bindingOf`) or "No symbol";
 - facts: "No marker", "Marker line 41 @5" or "Markers line 41 @5, line 88 unversioned" (a null `rev`: unversioned or malformed, the row's `bad_marker bad_rev` tells which); "Node rev 5" or "No node revision"; "Locked rev 5, <commit>, <verified_at>" (the whole commit, the date in a `<time>`) or "Not locked"; "Compared <word>" or "Not compared";

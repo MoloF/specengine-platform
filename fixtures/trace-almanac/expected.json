@@ -145,6 +145,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     },
     {
@@ -152,6 +153,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     },
     {
@@ -159,6 +161,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     },
     {
@@ -166,6 +169,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     },
     {
@@ -173,6 +177,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     },
     {
@@ -180,6 +185,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     },
     {
@@ -187,6 +193,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     },
     {
@@ -194,6 +201,7 @@
       "state": "not_configured",
       "count": null,
       "items": [],
+      "titles": [],
       "cause": "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds"
     },
     {
@@ -201,6 +209,7 @@
       "state": "not_configured",
       "count": null,
       "items": [],
+      "titles": [],
       "cause": "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds"
     },
     {
@@ -208,6 +217,7 @@
       "state": "measured",
       "count": 0,
       "items": [],
+      "titles": [],
       "cause": null
     }
   ],

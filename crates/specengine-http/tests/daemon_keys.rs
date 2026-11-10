@@ -266,6 +266,10 @@
 //! `ShownNode` `ancestors` before `links` (20), and one set more, 115 in all,
 //! last: `ShownAncestor` (`{id, kind, title, path}`), from MEC-STAMINA's read
 //! on spec-a. M: a key missing from the fixture.
+//!
+//! docs/features/doc-modal.md (RM-0095) DM-2: `ShownLink` gains `title` and
+//! `end_kind` after `name` (11 keys), `FlowGap` `titles` after `items` (6);
+//! still 115 sets.
 
 mod common;
 mod task_state;
@@ -2271,11 +2275,14 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         sets[42].1,
         ["path", "id", "title", "class", "status", "links"]
     );
+    // docs/features/doc-modal.md DM-2: the other end's `title` and
+    // `end_kind`, after `name`.
     assert_eq!(sets[43].0, "ShownLink");
     assert_eq!(
         sets[43].1,
         [
-            "type", "origin", "at", "name", "written", "path", "line", "state", "reason"
+            "type", "origin", "at", "name", "title", "end_kind", "written", "path", "line",
+            "state", "reason"
         ]
     );
     // rev-discipline's one: docs/features/rev-discipline.md
@@ -2566,7 +2573,11 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "edges",
             ],
         ),
-        ("FlowGap", &["code", "state", "count", "items", "cause"]),
+        // docs/features/doc-modal.md DM-3: `titles`, parallel to `items`.
+        (
+            "FlowGap",
+            &["code", "state", "count", "items", "titles", "cause"],
+        ),
         (
             "FlowNode",
             &[

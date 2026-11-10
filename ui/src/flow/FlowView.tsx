@@ -204,13 +204,11 @@ export function FlowView({
   const [legendOpen, setLegendOpen] = useState(false);
   const [gapsOpen, setGapsOpen] = useState(false);
   const [records, setRecords] = useState<RecordsOpen | null>(null);
-  /** The titles the tree gives, read once the Gaps control names a document no drawing read titles. */
-  const [treeTitles, setTreeTitles] = useState<{ project: string; titles: ReadonlyMap<string, string> } | null>(null);
   const [marks, setMarks] = useState<readonly string[]>([]);
   const [centring, setCentring] = useState<Centring | null>(null);
   const [hand, setHand] = useState<Hand | null>(null);
-  /** New card on the scope, open, and the control it goes back to. */
-  const [scopeCard, setScopeCard] = useState<{ trigger: HTMLElement | null } | null>(null);
+  /** New card on the scope or a box, open: its target and the control it goes back to. */
+  const [scopeCard, setScopeCard] = useState<{ target: string; trigger: HTMLElement | null } | null>(null);
   const [made, setMade] = useState<string | null>(null);
   /** The seek that found nothing, or failed, for one place: a note until the place changes. */
   const [lost, setLost] = useState<{ key: string; name: string } | null>(null);
@@ -306,6 +304,13 @@ export function FlowView({
   const selKeyText = selKey === null ? null : edgeKeyText(selKey);
   const selBox = selName === null ? undefined : boxes.find((node) => nodeName(node) === selName);
   const selEdge = selKeyText === null ? undefined : edges.find((edge) => edgeKeyText(edgeKeyOf(edge)) === selKeyText);
+  // A card made from the panel is said where it was made: another selection takes its note away.
+  const selectionKey = selName ?? selKeyText ?? "";
+  const [madeFor, setMadeFor] = useState(selectionKey);
+  if (madeFor !== selectionKey) {
+    setMadeFor(selectionKey);
+    setMade(null);
+  }
   const laidSelected = useMemo(() => (selKeyText === null ? null : (layout?.edges.find((laid) => edgeKeyText(edgeKeyOf(laid.edge)) === selKeyText)?.id ?? null)), [layout, selKeyText]);
   const marked = useMemo(() => new Set(selName !== null && marks.includes(selName) ? marks : []), [marks, selName]);
   const placeKey = flowHash(project, place);
@@ -331,10 +336,7 @@ export function FlowView({
   const scopeTitle =
     scope === undefined ? "" : scopeName === null ? t("flow.topTitle") : (ownNode?.title ?? scopeNode.data?.nodes[0]?.title ?? scopeName);
   /** A name's words (flow-scenario D12): its title where a read in hand gives one, else the name. */
-  const titleOf = useCallback(
-    (name: string): string => heldTitles.get(name) ?? (treeTitles?.project === project ? treeTitles.titles.get(name) : undefined) ?? (name === scopeName ? scopeTitle : name),
-    [heldTitles, treeTitles, project, scopeName, scopeTitle],
-  );
+  const titleOf = useCallback((name: string): string => heldTitles.get(name) ?? (name === scopeName ? scopeTitle : name), [heldTitles, scopeName, scopeTitle]);
   const stageShown = stage === null ? null : askedStageWords(stage, t);
   useEffect(() => {
     if (!landed || refused !== null || spokenFor.current === drawingKey) {
@@ -682,28 +684,6 @@ export function FlowView({
       </p>
     );
 
-  // Titles the Gaps control needs that no read in hand gives: the tree's, read once, on demand.
-  const untitled = useMemo(
-    () => gapsOpen && shown !== undefined && shown.gaps.some((gap) => namesDocuments(gap) && gap.items.some((item) => item.some((member) => !heldTitles.has(member)))),
-    [gapsOpen, shown, heldTitles],
-  );
-  useEffect(() => {
-    if (!untitled || treeTitles?.project === project) {
-      return;
-    }
-    let live = true;
-    readTree().then(
-      (tree) => {
-        if (live) {
-          setTreeTitles({ project, titles: new Map(tree.nodes.flatMap((row) => (row.title === null ? [] : [[row.id ?? row.path, row.title] as const]))) });
-        }
-      },
-      () => undefined,
-    );
-    return () => {
-      live = false;
-    };
-  }, [untitled, treeTitles, project, readTree]);
   const stagesShown = useMemo<StagesShown>(() => {
     if (scope === null) {
       return { show: "top" };
@@ -944,6 +924,15 @@ export function FlowView({
   };
   const gapsShown = shown !== undefined && refused === null;
   const boxShown = selBox ?? null;
+  const madeNote =
+    made === null ? null : (
+      <p className="note">
+        <Icon name="info" />
+        <span>
+          <span className="mono">{t("flow.cardMade", { id: made })}</span> <a href={sectionHash(project, "board", made)}>{t("flow.cardOnBoard")}</a>
+        </span>
+      </p>
+    );
   const panelBody = (
     <>
       {keptBox !== null && (
@@ -956,10 +945,14 @@ export function FlowView({
             scopeName={scopeName}
             scopeTitle={scopeTitle}
             titleOf={titleOf}
+            named={named}
             headingRef={boxShown !== null ? panelHeading : undefined}
             enterPlace={enterPlace}
             onBack={clearSelection}
-          />
+            onNewCard={newCard}
+          >
+            {boxShown !== null && nodeName(boxShown) === nodeName(keptBox) ? madeNote : null}
+          </BoxView>
         </div>
       )}
       {boxShown === null && selEdge !== undefined && (
@@ -979,27 +972,19 @@ export function FlowView({
           project={project}
           scope={scopeShown}
           headingRef={panelHeading}
-          onNewCard={
-            scopeName === null
-              ? null
-              : () => {
-                  setMade(null);
-                  setScopeCard({ trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null });
-                }
-          }
+          onNewCard={newCard}
         >
-          {made !== null && (
-            <p className="note">
-              <Icon name="info" />
-              <span>
-                <span className="mono">{t("flow.cardMade", { id: made })}</span> <a href={sectionHash(project, "board", made)}>{t("flow.cardOnBoard")}</a>
-              </span>
-            </p>
-          )}
+          {madeNote}
         </ScopeView>
       )}
     </>
   );
+
+  /** New card from the panel: the scope or the box its target. */
+  function newCard(target: string, trigger: HTMLElement) {
+    setMade(null);
+    setScopeCard({ target, trigger });
+  }
 
   const afterCard = (trigger: HTMLElement | null) => (answer: CardWrite | null) => {
     setHand(null);
@@ -1118,7 +1103,7 @@ export function FlowView({
           )}
         </div>
         {/* After its toggle in the DOM, so Tab goes from the toggle into it; the grid lays it over the canvas. */}
-        {gapsOpen && shown !== undefined && <FlowGaps id={gapsId} gaps={shown.gaps} unread={failedAgain} rooted={rooted} marked={marked} titleOf={titleOf} onActivate={activate} onHand={handOff} />}
+        {gapsOpen && shown !== undefined && <FlowGaps id={gapsId} gaps={shown.gaps} unread={failedAgain} rooted={rooted} marked={marked} onActivate={activate} onHand={handOff} />}
       </div>
       <aside className="flow-panel" aria-label={t("flow.panelLabel")}>
         {panelBody}
@@ -1143,13 +1128,13 @@ export function FlowView({
           <FlowRecords project={project} scope={scopeName} scopeTitle={scopeTitle} count={recordsCount === undefined ? null : recordsCount} onClose={closeRecords} />
         </div>
       )}
-      {scopeCard !== null && scopeName !== null && (
+      {scopeCard !== null && (
         <div
           onKeyDown={(event) => {
             event.stopPropagation();
           }}
         >
-          <NewCardDialog project={project} target={scopeName} onClose={() => {
+          <NewCardDialog project={project} target={scopeCard.target} onClose={() => {
             afterCard(scopeCard.trigger)(null);
           }} onDone={afterCard(scopeCard.trigger)} />
         </div>

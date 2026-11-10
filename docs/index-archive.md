@@ -38,6 +38,7 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/features/decision-apply.md](features/decision-apply.md) shipped
 - [docs/features/decision-staging.md](features/decision-staging.md) shipped
 - [docs/features/design-foundation.md](features/design-foundation.md) shipped
+- [docs/features/doc-modal.md](features/doc-modal.md) shipped
 - [docs/features/drift-follow-up.md](features/drift-follow-up.md) shipped
 - [docs/features/drift-queue.md](features/drift-queue.md) shipped
 - [docs/features/edge-table.md](features/edge-table.md) shipped
@@ -221,7 +222,10 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0084.md](roadmap/RM-0084.md) shipped
 - [docs/roadmap/RM-0085.md](roadmap/RM-0085.md) shipped
 - [docs/roadmap/RM-0090.md](roadmap/RM-0090.md) shipped
+- [docs/roadmap/RM-0091.md](roadmap/RM-0091.md) shipped
 - [docs/roadmap/RM-0092.md](roadmap/RM-0092.md) shipped
 - [docs/roadmap/RM-0093.md](roadmap/RM-0093.md) shipped
 - [docs/roadmap/RM-0094.md](roadmap/RM-0094.md) shipped
+- [docs/roadmap/RM-0095.md](roadmap/RM-0095.md) shipped
+- [docs/roadmap/RM-0101.md](roadmap/RM-0101.md) shipped
 - [docs/specs/specengine-platform/03-critique-of-initial-spec.md](specs/specengine-platform/03-critique-of-initial-spec.md) shipped

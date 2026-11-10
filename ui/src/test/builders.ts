@@ -255,6 +255,9 @@ export function aLink(fields: Partial<ShownLink> & Pick<ShownLink, "type" | "wri
     origin: "frontmatter",
     at: null,
     name: fields.written,
+    // The other end's title and kind (docs/features/doc-modal.md "Acceptance criteria", DM-1): none unless told.
+    title: null,
+    end_kind: null,
     path: "docs/spec/a.md",
     line: 2,
     state: "resolved",
@@ -388,7 +391,9 @@ export const GAP_REMEDIES: Readonly<Record<string, string>> = {
 
 /** A measured gap row for tests: above 0 it carries its remedy, at 0 `null`, as the daemon sends it. */
 export function aFlowGap(code: string, items: string[][] = [], fields: Partial<FlowGap> = {}): FlowGap {
-  return { code, state: "measured", count: items.length, items, cause: items.length > 0 ? (GAP_REMEDIES[code] ?? null) : null, ...fields };
+  // Each member untitled unless told (docs/features/doc-modal.md "Acceptance criteria", DM-3): `titles` has `items`' shape.
+  const titles = items.map((item) => item.map(() => null));
+  return { code, state: "measured", count: items.length, items, titles, cause: items.length > 0 ? (GAP_REMEDIES[code] ?? null) : null, ...fields };
 }
 
 /** The ten gap rows in table order, all measured at 0, `rows` replacing theirs by code. */

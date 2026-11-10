@@ -3,12 +3,12 @@ class: canon
 tier: 2
 scope: [crates/specengine-mcp, crates/specengine-cli]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # MCP read tools and resources
 
-The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the spec through their native surface (typed arguments, annotations, tool search, `@`-mentions) and get exactly what the CLI answers. One core, four adapters (05 §1): every tool and resource is one call into the CLI library (`crates/specengine-cli/README.md`), so discovery, freshness, REF resolution, the cut, tails, hints, exits and writes are the CLI's; MCP adds no cap, sort, default or rendering. Eras, stdout, exits, Claude Code facts: `crates/specengine-mcp/README.md`.
+The MCP stdio pass (`docs/features/mcp-read.md`, 07 §1.1-1.3): agents read the spec through their native surface and get exactly what the CLI answers. One core, four adapters (05 §1): every tool and resource is one call into the CLI library (`crates/specengine-cli/README.md`), so discovery, freshness, REF resolution, the cut, tails, hints, exits and writes are the CLI's; MCP adds no cap, sort, default or rendering. Eras, stdout, exits, Claude Code facts: `crates/specengine-mcp/README.md`.
 
 ## Binary
 
@@ -48,7 +48,7 @@ Each request finds the project anew from the process's current directory and the
 
 ## Size
 
-`MAX_RESULT_CHARS` = 500 000 per tool, text and serialized `structuredContent` together. The bound: text <= 40 000 characters + one tail (<= `SHOW_TAIL_NAMES` names per list) + note lines; JSON holds the printed items only, a character escaping into <= 6 (`\u00XX`). Measured maxima (text + JSON, debug, control characters): `get_node` 267 668, `get_tree` 246 644, `search` 231 083, `get_context_bundle` 246 360, with rows 121 817. `get_task`: JSON and notes within `PACKAGE_BUDGET` 460 000, the brief 40 000: within 500 000 whenever its other fields fit (`task-package.md` "Caps"). Unbounded residue (corpus defects): `check_binding`'s uncut `delta` keys; many holders of one ID in plain `show` JSON without `--links` (every holder's node kept: ~1 700 holders pass 500 000); `warning:` lines listing corpus defects; ID and path length; a package's agent free text of control characters escaped six-fold (~+290 000) or `"`, `\` doubled in changed files (+131 000), ~60 owner notes of 4 096 B or as many open proposals on its nodes, long corpus titles and paths, corrupt-row notes. `get_flow`'s gap rows are never cut: a `cycle-no-repeat` or `two-starts` item can pass `OUTPUT_CAP_CHARS` (a 4 000-member ring: 48 034 characters on one row), and the tail's "lower --depth" cannot shrink a row.
+`MAX_RESULT_CHARS` = 500 000 per tool, text and serialized `structuredContent` together. The bound: text <= 40 000 characters + one tail (<= `SHOW_TAIL_NAMES` names per list) + note lines; JSON holds the printed items only, a character escaping into <= 6 (`\u00XX`), but JSON-only link-end and gap-member titles (0.34.0). Measured maxima (text + JSON, debug, control characters, ordinary titles): `get_node` 267 668, with links 258 002, `get_tree` 246 644, `search` 231 083, `get_context_bundle` 246 360, with rows 121 817, `get_flow` over a 300-step ring 165 855. `get_task`: JSON and notes within `PACKAGE_BUDGET` 460 000, the brief 40 000: within 500 000 whenever its other fields fit (`task-package.md` "Caps"). Unbounded residue (corpus defects): `check_binding`'s uncut `delta` keys; many holders of one ID in plain `show` JSON without `--links` (every holder's node kept: ~1 700 holders pass 500 000); `warning:` lines listing corpus defects; ID and path length; a package's agent free text of control characters escaped six-fold (~+290 000) or `"`, `\` doubled in changed files (+131 000), ~60 owner notes of 4 096 B or as many open proposals on its nodes, long corpus titles and paths (those titles of control characters: `get_node {MEC-STAMINA, with links}` 549 458, `get_flow {}` over a 300-step ring 576 111, pinned by `mcp_size`), corrupt-row notes. `get_flow`'s gap rows are never cut: a `cycle-no-repeat` or `two-starts` item can pass `OUTPUT_CAP_CHARS` (a 4 000-member ring: 48 034 characters on one row), and the tail's "lower --depth" cannot shrink a row.
 
 ## Latency
 
@@ -58,14 +58,14 @@ AC-21, debug, scratch `HOME`: spec-a, spec-b cold 8-28 ms, warm 2-6 ms; 83 docs 
 
 AC-16, by hand; re-run on a Claude Code upgrade, the version written down. **Recorded 2026-10-03**: Claude Code 2.1.288, `claude --mcp-config fixtures/mcp/mcp.json --strict-mcp-config` from the repository root, `MAX_MCP_OUTPUT_TOKENS` unset.
 
-- `${…}` expands: the DB landed in the scratch `HOME`; the owner's data directory was not created. `/mcp`: 7 tools, the `probes` set.
+- `${…}` expands: the DB landed in the scratch `HOME`, not the owner's data directory. `/mcp`: 7 tools, the `probes` set.
 - cwd = the session's: `get_tree {}` used this repository's config.
-- The four tools work: `search` "bundle budget" 12 hits; `get_node ADR-0031`; `get_context_bundle ADR-0031` budget 2 000: 385 tokens.
+- The four tools work (`get_context_bundle ADR-0031` at budget 2 000: 385 tokens).
 - `structuredContent` reaches the model: it gave `end_line` 18, `utf8` `true` of `get_node ADR-0031` (JSON only; `wc -l` 18).
-- Content only (`probe_output`, no lever): 48 000 characters inline; 60 000, 104 000, 200 000 stored in a file: the content cap lies in 48 000-60 000 (Phase 0: 48 000 in, 104 000 out).
-- Above it in total, `get_node` of 05 (text ≈ 40 000 characters, `truncated: false`, the same text in `structuredContent`, whose `truncated`, `sections` the model reported) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished. Read tools pass at this size: Q3's fallback untriggered.
+- Content only (`probe_output`, no lever): 48 000 characters inline; 60 000, 104 000, 200 000 stored in a file: the content cap lies in 48 000-60 000.
+- Above it in total, `get_node` of 05 (text ≈ 40 000 characters, the same in `structuredContent`) arrived inline: `structuredContent` uncounted or the cap raised by the declared 500 000, not distinguished.
 - `@specengine:` lists the template and documents by path, not the `tree` resource.
-- Not verified: which explanation holds (a probe with the lever; one with small text, large `structuredContent`); UTF-16 counting; the adversarial maxima (to ~268 000 combined, Size); `nextCursor` (< 200 resources here); inserting a node by `@`-mention.
+- Not verified: which explanation holds (a probe with the lever; one with small text, large `structuredContent`); UTF-16 counting; the adversarial maxima (Size); `nextCursor` (< 200 resources here); inserting a node by `@`-mention.
 
 ## Tests
 

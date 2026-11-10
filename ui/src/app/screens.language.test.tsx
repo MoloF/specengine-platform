@@ -5,7 +5,7 @@ import type { ShownLinks } from "../api/types";
 import type { Translate } from "../i18n";
 import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
-import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView } from "../test/builders";
+import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aLink, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView } from "../test/builders";
 import { ASIDE, asideClient } from "../test/asideStub";
 import { renderApp } from "../test/render";
 import { stubClient, STAGED_AT, type StubClient } from "../test/stubClient";
@@ -112,7 +112,7 @@ const SCREENS: SweptScreen[] = [
     headings: (t) => [[2, t("roadmap.group.pool")]],
   },
   {
-    name: "Flow, a node selected: its links and cards",
+    name: "Flow, a node selected: its acts and its facts folded",
     hash: "#/alpha/flow/A",
     client: () => {
       const client = stubClient();
@@ -121,7 +121,33 @@ const SCREENS: SweptScreen[] = [
       return client;
     },
     heading: (t) => t("app.sections.flow.label"),
-    own: (t) => [t("tree.links.none"), t("trace.title")],
+    own: (t) => [t("flow.openDoc"), t("ui.technicalDetails")],
+  },
+  // DM-18 of docs/features/doc-modal.md: the document view, as a modal over a screen and as its page.
+  {
+    name: "The document modal over the Inbox",
+    hash: "#/alpha/inbox?doc=A",
+    client: () => {
+      const client = stubClient();
+      client.getNode.mockImplementation((_project, ref) => Promise.resolve({ ref, reason: null, notes: [], nodes: [aNode({ id: ref, links: NO_LINKS })] }));
+      return client;
+    },
+    heading: (t) => t("inbox.title"),
+    own: (t) => [t("doc.text"), t("doc.links.none"), t("doc.inside.heading"), t("doc.openPage"), t("doc.newCard")],
+    headings: (t) => [[3, t("doc.links.heading")]],
+  },
+  {
+    name: "A document's page",
+    hash: "#/alpha/tree/A/page",
+    client: () => {
+      const client = stubClient();
+      client.getNode.mockImplementation((_project, ref) => Promise.resolve({ ref, reason: null, notes: [], nodes: [aNode({ id: ref, links: NO_LINKS })] }));
+      return client;
+    },
+    // The title is the spec's, the same in both languages.
+    heading: () => "Title of A",
+    own: (t) => [t("doc.text"), t("doc.links.none"), t("doc.inside.heading"), t("doc.openFlow")],
+    headings: (t) => [[2, t("doc.links.heading")]],
   },
   {
     name: "Spec tree",
@@ -294,6 +320,66 @@ describe("served text stays as served (LS-4)", () => {
     await settle();
     const shown = screen.getByText(title);
     expect([shown.getAttribute("lang"), shown.closest("[lang]")?.tagName]).toEqual([null, "HTML"]);
+  });
+});
+
+// DM-18 of docs/features/doc-modal.md: the document view in Russian, as a modal and as a page: its
+// chrome from ru.ts, the spec's title and text as written with no lang, the daemon's words (a read's
+// notes, a link's reason, a 404's reason) byte for byte under lang="en".
+describe("the document view in Russian (DM-18 of doc-modal)", () => {
+  const title = "Le titre: \u0422\u0438\u0442\u0443\u043b \u00e9crit";
+  const line = "\u041f\u0430\u0440\u043e\u043c \u043f\u043b\u044b\u0432\u0451\u0442 a ferry.";
+  const note = "the index was rebuilt before this read";
+  const reason = "`GONE` resolves to no ID and no alias";
+
+  function docClient(): StubClient {
+    const client = stubClient();
+    client.getNode.mockImplementation((_project, ref) =>
+      Promise.resolve(
+        ref === "GONE"
+          ? { ref, reason, notes: [], nodes: [] }
+          : {
+              ref,
+              reason: null,
+              notes: [note],
+              nodes: [aNode({ id: ref, title, text: `# ${title}\n\n${line}\n`, links: { ...NO_LINKS, outgoing: [aLink({ type: "uses", written: "GONE", name: null, state: "dangling", reason })] } })],
+            },
+      ),
+    );
+    return client;
+  }
+
+  it("the modal: Russian chrome, the title and text as written, the notes and a link's reason under lang=en", async () => {
+    renderApp(docClient(), "#/alpha/inbox?doc=A");
+    const modal = await screen.findByRole("dialog", { name: title });
+    await within(modal).findByText(line);
+    fireEvent.change(languageSelect(en.language.label), { target: { value: "ru" } });
+    await settle();
+    expect(within(modal).getByRole("link", { name: ru.doc.openPage })).toBeTruthy();
+    expect(within(modal).getByRole("heading", { level: 3, name: ru.doc.text })).toBeTruthy();
+    expect(within(modal).getByRole("button", { name: ru.doc.inside.heading })).toBeTruthy();
+    expect(within(modal).getByText(ru.doc.links.none)).toBeTruthy();
+    const technical = within(modal).getByRole("button", { name: ru.ui.technicalDetails });
+    fireEvent.click(technical);
+    expect(within(modal).getByText(ruT("doc.technical.unresolved", { count: 1 }))).toBeTruthy();
+    expect(servedIn(within(modal).getByText(reason))).toEqual(["en", reason]);
+    expect(servedIn(within(modal).getByText(note))).toEqual(["en", note]);
+    const shown = within(modal).getByText(line);
+    expect([shown.closest("[lang]")?.tagName]).toEqual(["HTML"]);
+    expect(within(modal).getByRole("heading", { level: 2 }).closest("[lang]")?.tagName).toBe("HTML");
+    for (const word of [en.doc.openPage, en.doc.text, en.doc.inside.heading, en.doc.links.none, en.doc.throughAi]) {
+      expect([word, within(modal).queryAllByText(word).length]).toEqual([word, 0]);
+    }
+  });
+
+  it("the page: a REF naming nothing says the daemon's reason under lang=en, the acts in Russian", async () => {
+    renderApp(docClient(), "#/alpha/tree/GONE/page");
+    await screen.findByText(reason);
+    fireEvent.change(languageSelect(en.language.label), { target: { value: "ru" } });
+    await settle();
+    expect(servedIn(screen.getByText(reason))).toEqual(["en", reason]);
+    expect(screen.getByRole("link", { name: ru.doc.openTree })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "GONE" })).toBeTruthy();
   });
 });
 

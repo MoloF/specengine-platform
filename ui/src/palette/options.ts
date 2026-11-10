@@ -19,8 +19,8 @@ export type PaletteOption =
   | { type: "proposal"; key: string; proposal: InboxEntry; hash: string }
   | { type: "project"; key: string; project: Project; hash: string }
   | { type: "search"; key: string; query: string }
-  | { type: "ref"; key: string; ref: string; hash: string }
-  | { type: "hit"; key: string; hit: SearchHit; hash: string };
+  | { type: "ref"; key: string; ref: string }
+  | { type: "hit"; key: string; hit: SearchHit; doc: string };
 
 /** A group's own name, fixed in every language: its key, and the ID of its label. */
 export type GroupName = "Sections" | "Tasks" | "Inbox" | "Projects" | "Spec tree";
@@ -226,7 +226,8 @@ export function paletteGroups(input: PaletteInput, t: Translate): PaletteGroup[]
               type: "hit",
               key: `hit:${hit.path}:${String(hit.line)}`,
               hit,
-              hash: sectionHash(project, "tree", hit.id ?? hit.path),
+              // A document: the modal over the current screen (docs/features/doc-modal.md "Acceptance criteria", DM-16).
+              doc: hit.id ?? hit.path,
             }),
           )
         : [];
@@ -235,7 +236,7 @@ export function paletteGroups(input: PaletteInput, t: Translate): PaletteGroup[]
         "Spec tree",
         [
           { type: "search", key: "search", query: input.text },
-          { type: "ref", key: "ref", ref, hash: sectionHash(project, "tree", ref) },
+          { type: "ref", key: "ref", ref },
           ...hits,
         ],
         null,

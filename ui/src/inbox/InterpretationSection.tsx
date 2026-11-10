@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNode } from "../api/queries";
 import type { Interpretation } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { useTranslate } from "../i18n";
 import { ErrorPanel, Section } from "../ui/states";
 import { shownSlot, shownText } from "../ui/text";
@@ -74,7 +74,7 @@ function DecisionRef({ project, decision }: { project: string; decision: string 
   return (
     <div className="decision-ref">
       <p>
-        <a ref={keep} href={sectionHash(project, "tree", decision)}>
+        <DocLink ref={keep} project={project} docRef={decision}>
           <span className="mono">{id}</span>
           {node.title !== null && (
             <>
@@ -82,7 +82,7 @@ function DecisionRef({ project, decision }: { project: string; decision: string 
               <bdi>{node.title}</bdi>
             </>
           )}
-        </a>
+        </DocLink>
       </p>
     </div>
   );

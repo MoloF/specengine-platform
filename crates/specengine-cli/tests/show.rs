@@ -291,8 +291,11 @@ fn show_json_has_exactly_the_data_keys() {
     );
     // Nothing cut: `omitted` is 0, never `null`.
     assert_eq!(links["omitted"], 0, "{json}");
+    // docs/features/doc-modal.md DM-1: the other end's `title` and
+    // `end_kind`, both always present.
     let link_keys = BTreeSet::from([
-        "type", "origin", "at", "name", "written", "path", "line", "state", "reason",
+        "type", "origin", "at", "name", "title", "end_kind", "written", "path", "line", "state",
+        "reason",
     ]);
     let all: Vec<&serde_json::Value> = links["outgoing"]
         .as_array()

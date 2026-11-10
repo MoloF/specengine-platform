@@ -136,15 +136,16 @@ describe("the palette over the mock (AC-13)", () => {
     });
   });
 
-  it("opens the REF of the spec's Data in the tree, with no call", async () => {
+  it("opens the REF of the spec's Data as a document over the screen, with no search (DM-16 of doc-modal)", async () => {
     const { spies } = await loadedHome();
     const before = calls(spies);
     await open();
     fireEvent.change(combobox(), { target: { value: "MEC-TIDES#RULE-TIDE-WINDOW" } });
-    fireEvent.click(screen.getByRole("option", { name: "Open 'MEC-TIDES#RULE-TIDE-WINDOW' in the spec tree" }));
+    fireEvent.click(screen.getByRole("option", { name: "Open document 'MEC-TIDES#RULE-TIDE-WINDOW'" }));
     await waitFor(() => {
-      expect(window.location.hash).toBe("#/harbor-sim/tree/MEC-TIDES%23RULE-TIDE-WINDOW");
+      expect(window.location.hash).toBe("#/harbor-sim?doc=MEC-TIDES%23RULE-TIDE-WINDOW");
     });
+    expect(await screen.findByRole("dialog")).toBeTruthy();
     expect(calls(spies).search).toBeUndefined();
     expect(before.search).toBeUndefined();
   });

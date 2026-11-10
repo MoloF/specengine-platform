@@ -85,7 +85,7 @@ describe("harbor-sim's interpretation (AC-U3 of kind-interpretation)", () => {
   it("renders the section alike over the mock and over HttpClient: the same document, the same DOM", async () => {
     const mock = new MockClient("normal", { now: () => NOW, delayMs: 0 });
     const shown = await interpretationOver(mock);
-    expect(within(shown.section).getByRole("link", { name: LINK_NAME }).getAttribute("href")).toBe(`#/harbor-sim/tree/${WEATHER_DECISION}`);
+    expect(within(shown.section).getByRole("link", { name: LINK_NAME }).getAttribute("href")).toBe(`#/harbor-sim/tree/${WEATHER_DECISION}/page`);
     expect(shown.section.querySelector("p.agent-text")?.textContent).toBe(CLOCK_INTERPRETATION.how);
     expect(screen.getByText("Mock data")).toBeTruthy();
     cleanup();

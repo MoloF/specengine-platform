@@ -616,6 +616,37 @@ export function useNode(project: string, ref: string, options: NodeOptions = {},
 export type NodeQuery = ReturnType<typeof useNode>;
 
 /**
+ * A document as the document view reads it, `nodes/<REF>?with=links` (docs/features/doc-modal.md
+ * "Acceptance criteria", DM-14): the key of every other links read of it, so Flow's panel and the
+ * modal share one. A read another view holds open is current, read again on the events that read the
+ * spec again: opening the modal on it makes no call; with no other holder it is read on open.
+ */
+export function useDocNode(project: string, ref: string) {
+  const client = useClient();
+  const options: NodeOptions = { with: ["links"] };
+  return useQuery({
+    queryKey: queryKeys.node(project, ref, options),
+    queryFn: ({ signal }) => client.getNode(project, ref, nodeRequest(options), signal),
+    refetchOnMount: (query) => query.getObserversCount() <= 1,
+  });
+}
+
+/**
+ * What a document consists of, `tree?root=<REF>&depth=2`
+ * (docs/features/doc-modal.md "Acceptance criteria", DM-13): read only once `enabled`, the first
+ * expansion of Inside, never on open; a new REF never shows the last one's rows.
+ */
+export function useInside(project: string, ref: string, enabled: boolean) {
+  const client = useClient();
+  const options: TreeOptions = { root: ref, depth: 2 };
+  return useQuery({
+    queryKey: queryKeys.tree(project, options),
+    queryFn: ({ signal }) => client.getTree(project, treeRequest(options), signal),
+    enabled,
+  });
+}
+
+/**
  * A node's code bindings, `nodes/<REF>?with=bindings`:
  * `docs/canon/code-reads.md` "spec show --bindings". The Bindings tab's one read, made when it
  * mounts on the tab's first opening. Its key is the node's, `["node", project, ref, {with:

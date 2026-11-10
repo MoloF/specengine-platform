@@ -1,6 +1,7 @@
 import { memo, useId, useRef, type ReactNode } from "react";
 import type { RoundAnswerEntry, RoundItem } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { severityLook } from "../inbox/labels";
 import { StagedChoice } from "../inbox/StagedChoice";
 import { Badge } from "../ui/Badge";
@@ -97,7 +98,7 @@ function Concern({ project, target }: { project: string; target: RoundItem["targ
     return <span className="muted">{t("round.targetGone")}</span>;
   }
   return (
-    <a href={sectionHash(project, "tree", name)}>
+    <DocLink project={project} docRef={name}>
       {target.title === null ? (
         <span className="mono">
           <Slot text={name} />
@@ -107,7 +108,7 @@ function Concern({ project, target }: { project: string; target: RoundItem["targ
           <Slot text={target.title} /> (<span className="mono">{shownSlot(name)}</span>)
         </>
       )}
-    </a>
+    </DocLink>
   );
 }
 

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useDataSource } from "../api/provider";
-import { useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
+import { useCardWriting, useLiveQueue, useProjects, useWorkspaces } from "../api/queries";
 import type { Project } from "../api/types";
 import { BoardView, type BoardMemory, type BoardState } from "../board/BoardView";
 import { CardPage } from "../board/CardPage";
+import { DocModal } from "../doc/DocModal";
+import { DocPage } from "../doc/DocPage";
 import { FlowView, type FlowMemory, type FlowState } from "../flow/FlowView";
 import { GraphView } from "../graph/GraphView";
 import { HealthView } from "../health/HealthView";
@@ -20,6 +22,7 @@ import { TasksView } from "../tasks/TasksView";
 import { useTranslate } from "../i18n";
 import { TreeView } from "../tree/TreeView";
 import { Announcer } from "../ui/announcer";
+import { focusables } from "../ui/Dialog";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
@@ -33,7 +36,7 @@ import { DataSource } from "./DataSource";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { ThemeSwitcher } from "./ThemeSwitcher";
-import { pushHash, replaceHash, useHash } from "./location";
+import { closeDoc, forgetDoc, openDocFrom, pushHash, replaceHash, useHash } from "./location";
 import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
 import { SyncLine } from "./SyncLine";
@@ -53,6 +56,32 @@ function viewKeyOf(route: Route): string {
 /** The project a route names, if any. */
 function projectOf(route: Route): string | null {
   return route.type === "section" || route.type === "project" ? route.project : null;
+}
+
+/** The document a route opens in the modal, if any. */
+function docRefOf(route: Route): string | null {
+  return route.type === "section" || route.type === "project" ? (route.doc ?? null) : null;
+}
+
+/** What the document view keeps per project for the page's life (docs/features/doc-modal.md "Acceptance criteria", DM-13). */
+export interface DocState {
+  insideOpen: boolean;
+}
+
+/**
+ * Where focus goes once the document modal is gone: its opener while it stands and is not inert;
+ * else the dialog left on top (a card's modal: its title); else the view's `h1`.
+ */
+function afterDocModal(opener: HTMLElement | null, main: HTMLElement | null): HTMLElement | null {
+  if (opener !== null && opener.isConnected && opener.closest("[inert]") === null) {
+    return opener;
+  }
+  const open = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).filter((dialog) => dialog.closest("[inert]") === null);
+  const under = open.at(-1);
+  if (under !== undefined) {
+    return under.querySelector<HTMLElement>(".dialog-title[tabindex]") ?? focusables(under)[0] ?? under;
+  }
+  return main?.querySelector<HTMLElement>("h1") ?? main;
 }
 
 /**
@@ -227,6 +256,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
   );
   /** The Questions screen's drafts, limit and last outcome per project for this page's life; a reload drops them (docs/features/ui-round.md). */
   const [roundMemory] = useState(createRoundMemory);
+  /** The document view's choices per project for this page's life: Inside kept open or not. */
+  const [docStates, setDocStates] = useState<ReadonlyMap<string, DocState>>(() => new Map());
   const firstProject = projects.data?.[0]?.slug ?? null;
   const viewKey = viewKeyOf(route);
   const routeProject = projectOf(route);
@@ -259,9 +290,40 @@ export function Shell({ scenario }: { scenario: string | null }) {
   // home if they cannot be; without a history entry of its own. A typed `#/<p>` is never redirected.
   useEffect(() => {
     if (landing !== null) {
-      replaceHash(landing);
+      replaceHash(landing, { keepDoc: false });
     }
   }, [landing]);
+
+  // The document modal (docs/features/doc-modal.md "Acceptance criteria", DM-9): the route's `doc`,
+  // held while a card write is out, so Back takes effect once it settles; on a project's route only,
+  // never over a project the daemon does not list.
+  const routeDoc = docRefOf(route);
+  const writing = useCardWriting(routeProject ?? "");
+  const [shownDoc, setShownDoc] = useState<string | null>(routeDoc);
+  if (shownDoc !== routeDoc && !writing) {
+    setShownDoc(routeDoc);
+  }
+  const docShown = shownDoc !== null && routeProject !== null && !(projects.data !== undefined && !projects.data.some((project) => project.slug === routeProject));
+  // The modal gone, by whatever means: focus back to its opener, else the dialog under it, else the view's heading.
+  const docBefore = useRef(docShown);
+  // A modal this page finds open on its first render came by URL: no entry of its own to go back to.
+  useEffect(() => {
+    forgetDoc();
+  }, []);
+  useEffect(() => {
+    const was = docBefore.current;
+    docBefore.current = docShown;
+    if (was && !docShown) {
+      const opener = forgetDoc();
+      focusLater(() => afterDocModal(opener, main.current));
+    }
+  }, [docShown, focusLater]);
+  const insideOpen = routeProject === null ? false : (docStates.get(routeProject)?.insideOpen ?? false);
+  function setInsideOpen(open: boolean) {
+    if (routeProject !== null) {
+      setDocStates((states) => new Map(states).set(routeProject, { insideOpen: open }));
+    }
+  }
 
   // A Retry in the config notes answered: the nav changed under it; focus lost with the button goes there.
   useEffect(() => {
@@ -293,9 +355,12 @@ export function Shell({ scenario }: { scenario: string | null }) {
   const chordAction = useRef<() => void>(() => undefined);
   useEffect(() => {
     chordAction.current = () => {
+      // Over no dialog, or over the document modal when it is the top one (focus in it): the palette picks documents there too.
+      const active = document.activeElement;
+      const overDoc = active !== null && active.closest(".doc-modal") !== null;
       if (paletteShown.current) {
         paletteInput.current?.focus();
-      } else if (document.querySelector('[role="dialog"]') === null) {
+      } else if (document.querySelector('[role="dialog"]') === null || overDoc) {
         openPalette(document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
       }
     };
@@ -383,6 +448,22 @@ export function Shell({ scenario }: { scenario: string | null }) {
     focusLater(() => main.current);
   }
 
+  /**
+   * A document picked in the palette, of the palette's project: the modal over the current screen, or
+   * the open one's document replaced; over that project's home when the current route shows no modal
+   * of it (no project, a route naming nothing, a project the daemon does not list, another project).
+   */
+  function jumpToDoc(ref: string, project: string) {
+    paletteShown.current = false;
+    setPaletteOpen(false);
+    jumpedTo.current = null;
+    const trigger = paletteTrigger.current;
+    const here = (route.type === "project" || route.type === "section") && route.project === project && !(projects.data !== undefined && !projects.data.some((listed) => listed.slug === project));
+    openDocFrom(ref, trigger, here ? window.location.hash : homeHash(project));
+    // The same document already open: nothing mounts, so focus goes back where the palette was asked.
+    focusLater(() => (document.activeElement !== null && document.activeElement !== document.body ? null : trigger?.isConnected === true ? trigger : main.current));
+  }
+
   const inboxHref = navProject === null ? "#/" : sectionHash(navProject, "inbox");
 
   function chooseWorkspace(name: string) {
@@ -451,6 +532,8 @@ export function Shell({ scenario }: { scenario: string | null }) {
     view = <InboxView key={route.project} project={route.project} selectedId={route.id} />;
   } else if (route.section === "tasks") {
     view = <TasksView key={route.project} project={route.project} taskId={route.id} />;
+  } else if (route.section === "tree" && route.view !== undefined && route.id !== null) {
+    view = <DocPage key={`${route.project}/${route.id}`} project={route.project} docRef={route.id} insideOpen={insideOpen} onInside={setInsideOpen} />;
   } else if (route.section === "board" && route.view !== undefined && route.id !== null) {
     view = <CardPage key={`${route.project}/${route.id}`} project={route.project} id={route.id} />;
   } else if (route.section === "board") {
@@ -592,6 +675,10 @@ export function Shell({ scenario }: { scenario: string | null }) {
             </ErrorBoundary>
           </main>
         </div>
+        {/* After the view, so it mounts over any dialog of the view in the same commit (DM-10). */}
+        {docShown && (
+          <DocModal key={`${routeProject}/${shownDoc}`} project={routeProject} docRef={shownDoc} pending={writing} insideOpen={insideOpen} onInside={setInsideOpen} onClose={closeDoc} />
+        )}
         {shortcutsOpen && <ShortcutsDialog section={route.type === "section" ? route.section : null} onClose={closeShortcuts} />}
         {paletteOpen && (
           <Palette
@@ -600,6 +687,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
             projectsFailure={projectsFailure === null ? null : apiErrorOf(projectsFailure).message}
             inputRef={paletteInput}
             onJump={jump}
+            onOpenDoc={jumpToDoc}
             onClose={closePalette}
           />
         )}

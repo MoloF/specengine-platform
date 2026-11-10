@@ -1099,3 +1099,66 @@ describe("Show drift (ui-tree-drift)", () => {
     expect(driftLines()).toEqual([]);
   });
 });
+
+// DM-16 of docs/features/doc-modal.md: in the Spec tree, the pane's own links stay the tree's; the
+// node's Open document opens the document modal over the tree.
+describe("the document view from the tree (DM-16 of doc-modal)", () => {
+  function textClient(): StubClient {
+    const client = treeClient();
+    client.getNode.mockImplementation((_project, ref, options) => {
+      const view = viewOf(ref, options?.with?.includes("links") === true);
+      return Promise.resolve({
+        ...view,
+        nodes: view.nodes.map((node) => ({
+          ...node,
+          text: `## ${ref}\n\nSee [the section](SEC-A1).\n`,
+          links: node.links === null ? null : { ...node.links, outgoing: [...node.links.outgoing, aLink({ type: "mentions", origin: "inline", written: "SEC-A1", name: "SEC-A1", path: node.path, line: node.line + 2 })] },
+        })),
+      });
+    });
+    return client;
+  }
+
+  it("keeps the text's anchor, a Links row and a Bundle entry on the tree: each `#/<p>/tree/<X>`; a plain click moves the tree, no modal (M: LinksPanel on DocLink)", async () => {
+    await openTree(textClient(), "#/alpha/tree/DOC-A");
+    const anchor = await screen.findByRole("link", { name: "the section" });
+    expect(anchor.getAttribute("href")).toBe("#/alpha/tree/SEC-A1");
+    fireEvent.click(await screen.findByRole("tab", { name: "Links" }));
+    const panel = await screen.findByRole("tabpanel", { name: "Links" });
+    for (const link of await within(panel).findAllByRole("link", { name: /^R-/ })) {
+      expect(link.getAttribute("href")).toMatch(/^#\/alpha\/tree\/R-\d$/);
+    }
+    fireEvent.click(screen.getByRole("tab", { name: "Bundle" }));
+    const bundle = await screen.findByRole("tabpanel", { name: "Bundle" });
+    for (const link of await within(bundle).findAllByRole("link")) {
+      expect(link.getAttribute("href")).toMatch(/^#\/alpha\/tree\/[^/?]+$/);
+    }
+    fireEvent.click(screen.getByRole("tab", { name: "Text" }));
+    clickLink(anchor);
+    await followTo("#/alpha/tree/SEC-A1");
+    await settle();
+    expect(screen.getByRole("heading", { level: 1 }).textContent).toContain("SEC-A1");
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("opens the document over the tree with Open document: one entry, the tree beneath", async () => {
+    await openTree(treeClient(), "#/alpha/tree/DOC-A");
+    const before = window.history.length;
+    // A mouse click focuses no button in Safari or macOS Firefox: the button pressed is the opener all the same (the review's R2).
+    const act = await screen.findByRole("button", { name: "Open document" });
+    expect(document.activeElement).not.toBe(act);
+    fireEvent.click(act);
+    expect(window.location.hash).toBe("#/alpha/tree/DOC-A?doc=DOC-A");
+    expect(window.history.length).toBe(before + 1);
+    const dialog = await screen.findByRole("dialog", { name: "Title of DOC-A" });
+    expect(await within(dialog).findByRole("link", { name: "Open in Spec tree" })).toBeTruthy();
+    expect(screen.getByRole("tree", { name: "Spec tree", hidden: true })).toBeTruthy();
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/tree/DOC-A");
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: "Open document" }));
+    });
+  });
+});

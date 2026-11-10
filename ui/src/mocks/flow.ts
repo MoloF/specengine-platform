@@ -90,9 +90,9 @@ const NO_RULE = {
 } as const;
 
 /** A counted row: above 0 it carries its remedy, at 0 `null`, as the daemon sends it. */
-const measured = (code: string, items: string[][] = []): FlowGap => ({ code, state: "measured", count: items.length, items, cause: items.length > 0 ? (GAP_REMEDIES[code] ?? null) : null });
+const measured = (code: string, items: string[][] = []): FlowGap => ({ code, state: "measured", count: items.length, items, titles: items.map((item) => item.map(() => null)), cause: items.length > 0 ? (GAP_REMEDIES[code] ?? null) : null });
 
-const notConfigured = (code: string, table: keyof typeof NO_RULE): FlowGap => ({ code, state: "not_configured", count: null, items: [], cause: NO_RULE[table] });
+const notConfigured = (code: string, table: keyof typeof NO_RULE): FlowGap => ({ code, state: "not_configured", count: null, items: [], titles: [], cause: NO_RULE[table] });
 
 const follows = (from: string, to: string, kind?: string, when?: string): FlowLink => ({ from, to, type: "follows", ...(kind === undefined ? {} : { kind }), ...(when === undefined ? {} : { when }) });
 
@@ -149,7 +149,7 @@ const NO_RULES: FlowGap[] = [
 const NO_STEP: FlowGap[] = [
   measured("no-start", [["all"]]),
   measured("two-starts"),
-  { code: "unreachable", state: "cannot", count: null, items: [], cause: "no start and no entering edge to walk from" },
+  { code: "unreachable", state: "cannot", count: null, items: [], titles: [], cause: "no start and no entering edge to walk from" },
   measured("no-way-to-end"),
   measured("trap-cycle"),
   measured("unjoined-parallel"),
@@ -474,7 +474,8 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
     omitted_edges: 0,
     not_in_flow: notInFlow,
     types: [...FLOW_TYPES],
-    gaps: rows,
+    // Each member's title, as the daemon serves it beside `items` (docs/features/doc-modal.md "Acceptance criteria", DM-3).
+    gaps: rows.map((row) => ({ ...row, titles: row.items.map((item) => item.map((name) => byName.get(name)?.title ?? null)) })),
     nodes,
     edges,
   };

@@ -470,6 +470,8 @@ const KEYS = {
     origin: true,
     at: true,
     name: true,
+    title: true,
+    end_kind: true,
     written: true,
     path: true,
     line: true,
@@ -707,7 +709,7 @@ const KEYS = {
     nodes: true,
     edges: true,
   } satisfies Record<keyof FlowView, true>,
-  FlowGap: { code: true, state: true, count: true, items: true, cause: true } satisfies Record<keyof FlowGap, true>,
+  FlowGap: { code: true, state: true, count: true, items: true, titles: true, cause: true } satisfies Record<keyof FlowGap, true>,
   FlowNode: {
     id: true,
     kind: true,
@@ -893,7 +895,7 @@ const CITED: Record<Named, string> = {
   RoundAnswerEntry: "id, outcome, stage, staged_at, replaced, reason",
   HealthReport: "documents, amendments, notes, code, assumes, unbound, drift",
   UnappliedAmendment: "path, id, title, class, status, links",
-  ShownLink: "type, origin, at, name, written, path, line, state, reason",
+  ShownLink: "type, origin, at, name, title, end_kind, written, path, line, state, reason",
   RevisionRow: "id, rev, to, lock_entries, refused",
   DriftEvidence: "hash, rows, more",
   HealthCode: "files, rs, ron, skipped",
@@ -932,7 +934,7 @@ const CITED: Record<Named, string> = {
   LockDiffSpecSide: "commit, path, diff",
   LockDiffCodeSide: "blob, file, diff",
   FlowView: "root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, not_in_flow, types, gaps, nodes, edges",
-  FlowGap: "code, state, count, items, cause",
+  FlowGap: "code, state, count, items, titles, cause",
   FlowNode: "id, kind, title, path, line, distance, group, stage, start, end, in_flow, holds, inner, gaps, rollup, counts",
   FlowEdge: "from, to, type, kind, when, count, path, line",
   FlowInner: "type, count",
@@ -1200,8 +1202,9 @@ function served(name: Named): string[] {
  * workspaces' test wrote its three sets, the hundred-and-eleventh to the hundred-and-thirteenth
  * (docs/features/workspaces.md "Data"), since board-handoff's wrote a flow's `return`, since
  * card-tasks' wrote a card's `tasks` and set 114 `CardTask` (docs/features/card-tasks.md
- * "Documents"), and again since flow-scenario's (RM-0094) wrote its four keys and set 115
- * `ShownAncestor`.
+ * "Documents"), since flow-scenario's (RM-0094) wrote its four keys and set 115 `ShownAncestor`,
+ * and again since doc-modal's wrote a link's `title` and `end_kind` and a gap row's `titles`
+ * (docs/features/doc-modal.md "Acceptance criteria", DM-2).
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1292,7 +1295,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since flow-scenario's test wrote its four keys and set 115 into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094)", () => {
+  it("lists ahead of the fixture only keys their types serve, none since doc-modal's test wrote its three keys into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094, DM-2 of doc-modal)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1586,8 +1589,10 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source.slice(source.lastIndexOf("/**", own), own)).toContain('`docs/canon/task-package.md` "Package"');
   });
 
-  it("counts health-left's three: 3 document keys (7 since health-code's three and health-drift's one follow them), 6 amendment keys, 9 link keys (AC-U2 of health-left)", () => {
-    expect(HEALTH_LEFT.map((name) => served(name).length)).toEqual([7, 6, 9]);
+  it("counts health-left's three: 3 document keys (7 since health-code's three and health-drift's one follow them), 6 amendment keys, 9 link keys (11 since doc-modal's two, DM-2) (AC-U2 of health-left)", () => {
+    expect(HEALTH_LEFT.map((name) => served(name).length)).toEqual([7, 6, 11]);
+    // The other end's title and kind right after `name` (docs/features/doc-modal.md "Acceptance criteria", DM-1).
+    expect(served("ShownLink")).toEqual(["type", "origin", "at", "name", "title", "end_kind", "written", "path", "line", "state", "reason"]);
     expect(served("HealthReport").slice(0, 3)).toEqual(["documents", "amendments", "notes"]);
     expect(served("UnappliedAmendment")).toEqual(["path", "id", "title", "class", "status", "links"]);
   });
@@ -1941,12 +1946,13 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
 
-  it("names flow-read's five after LockDiffCodeSide, before board-ui's twelve: 13, 5, 16, 8, 2 keys in the types' order (flow-scenario's three), the eighty-sixth FlowInner (docs/features/flow-read.md, flow-canvas.md, flow-scenario.md)", () => {
+  it("names flow-read's five after LockDiffCodeSide, before board-ui's twelve: 13, 6, 16, 8, 2 keys in the types' order (flow-scenario's three, doc-modal's gap `titles`), the eighty-sixth FlowInner (docs/features/flow-read.md, flow-canvas.md, flow-scenario.md, doc-modal.md)", () => {
     expect(Object.keys(sets).slice(BEFORE_FLOW_READ.length, BEFORE_BOARD_UI.length)).toEqual([...FLOW_READ]);
     expect(Object.keys(sets).indexOf("FlowView")).toBe(81);
     expect(Object.keys(sets).at(BEFORE_BOARD_UI.length - 1)).toBe("FlowInner");
     expect(FLOW_READ.map((name) => sets[name])).toEqual(FLOW_READ.map((name) => served(name)));
-    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([13, 5, 16, 8, 2]);
+    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([13, 6, 16, 8, 2]);
+    expect(sets.FlowGap).toEqual(["code", "state", "count", "items", "titles", "cause"]);
     expect(FLOW_READ.map((name) => declaredKeys(name))).toEqual(FLOW_READ.map((name) => served(name)));
   });
 

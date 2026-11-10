@@ -691,12 +691,15 @@ fn ac_r3_the_document_keys_counts_order_and_text() {
                 ["path", "id", "title", "class", "status", "links"],
                 "{context}"
             );
+            // docs/features/doc-modal.md DM-2: an amendment's links share
+            // the link object, so they gain `title` and `end_kind` after
+            // `name`.
             for link in row.get("links").items() {
                 assert_eq!(
                     link.keys(),
                     [
-                        "type", "origin", "at", "name", "written", "path", "line", "state",
-                        "reason"
+                        "type", "origin", "at", "name", "title", "end_kind", "written", "path",
+                        "line", "state", "reason"
                     ],
                     "{context}"
                 );

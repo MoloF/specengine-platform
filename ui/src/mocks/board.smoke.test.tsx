@@ -81,7 +81,7 @@ describe("the Board over the mock", () => {
     const tabs = await screen.findAllByRole("tab");
     expect(tabs.map((tab) => tab.textContent)).toEqual(["copy", "plates"]);
     await shows("C-0001");
-    expect(within(card("C-0001")).getByRole("link", { name: "MEC-TIDE-TABLES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDE-TABLES");
+    expect(within(card("C-0001")).getByRole("link", { name: "MEC-TIDE-TABLES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDE-TABLES/page");
     fireEvent.click(tabs[1] as HTMLElement);
     await shows("C-0008");
     expect(screen.getByRole("heading", { level: 2, name: /^blocked/ })).toBeTruthy();
@@ -187,7 +187,7 @@ describe("the Board over the mock", () => {
   it("the modal: fields, evidence, history; a cancelled card is listed only when asked, with why (AC-09)", async () => {
     renderMock("normal", "#/harbor-sim/board/C-0003");
     const panel = await modal("Night passage rules, plain words");
-    expect(within(panel).getByRole("link", { name: "MEC-NIGHT-PASSAGE" }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-NIGHT-PASSAGE");
+    expect(within(panel).getByRole("link", { name: "MEC-NIGHT-PASSAGE" }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-NIGHT-PASSAGE/page");
     expect(within(within(panel).getByRole("region", { name: "Evidence" })).getByText("Second read done with the pilots' office")).toBeTruthy();
     expect(within(within(panel).getByRole("region", { name: "History" })).getByText("Created")).toBeTruthy();
     expect(document.querySelector('[data-card="C-0006"]')).toBeNull();
@@ -219,7 +219,7 @@ describe("the Board over the mock", () => {
     fireEvent.click(link);
     window.location.hash = "#/harbor-sim/board/C-0020";
     const source = await shows("C-0020");
-    expect(within(source).getByRole("link", { name: "MEC-TIDES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDES");
+    expect(within(source).getByRole("link", { name: "MEC-TIDES", hidden: true }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-TIDES/page");
   });
 
   it("error: the daemon's message, Retry", async () => {

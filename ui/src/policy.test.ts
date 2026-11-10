@@ -556,11 +556,11 @@ describe("source policy", () => {
   });
 
   it("takes every href in the views of spec data from routes.ts (AC-07 of ui-tree-node, AC-12 of ui-graph, AC-07 of ui-tasks, AC-07 of ui-home, AC-03 of ui-markdown, AC-07 of ui-health)", () => {
-    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/"];
+    const viewDirs = ["/src/tree/", "/src/inbox/", "/src/graph/", "/src/flow/", "/src/tasks/", "/src/overview/", "/src/palette/", "/src/markdown/", "/src/health/", "/src/roadmap/", "/src/board/", "/src/trace/", "/src/doc/"];
     const views = (path: string) => !viewDirs.some((dir) => path.startsWith(dir)) || /\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter((path) => path.startsWith("/src/overview/") && !views(path)).length).toBeGreaterThan(0);
-    // Flow's place is routes.ts's too (docs/features/writer-studio.md D4): `flowHash`.
-    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash|cardPageHash)\()/;
+    // Flow's place is routes.ts's too (docs/features/writer-studio.md D4): `flowHash`; a document's page (docs/features/doc-modal.md DM-7): `docPageHash`.
+    const rule = /\bhref=(?!\{(sectionHash|homeHash|flowHash|cardPageHash|docPageHash)\()/;
     expect(offending(rule, views)).toEqual([]);
     // The detector itself: a hash spelled by hand is caught, one from routes.ts is not.
     expect(rule.test("<a href={`#/${project}/tasks`}>")).toBe(true);
@@ -569,6 +569,51 @@ describe("source policy", () => {
     expect(rule.test('<a href={sectionHash(project, "tasks")}>')).toBe(false);
     expect(rule.test("<a href={homeHash(project)}>")).toBe(false);
     expect(rule.test("<a href={flowHash(project, place)}>")).toBe(false);
+  });
+
+  // DM-8 of docs/features/doc-modal.md: a document opens as a document (src/doc/DocLink.tsx) everywhere
+  // but where the Spec tree is meant: these calls of `sectionHash(…, "tree", …)`, by file and count.
+  it("links the Spec tree only where it is meant: the tree's own navigation, explicit acts, the `o` key, the ID-less records and the tree branches of Markdown and DriftPart (DM-8 of doc-modal)", () => {
+    const TREE_LINKS: Readonly<Record<string, number>> = {
+      // The tree's own navigation.
+      "/src/tree/TextPanel.tsx": 1,
+      "/src/tree/LinksPanel.tsx": 1,
+      "/src/tree/TreeView.tsx": 2,
+      "/src/tree/BundlePanel.tsx": 2,
+      // Explicit acts: the Roadmap's Open in Spec tree, the Graph's, Flow's lost name; the `o` key in Graph and Flow.
+      "/src/roadmap/RoadmapView.tsx": 1,
+      "/src/graph/GraphDetails.tsx": 1,
+      "/src/flow/FlowView.tsx": 2,
+      "/src/graph/GraphView.tsx": 1,
+      // The records without an ID live in the Spec tree (the owner's answer).
+      "/src/flow/FlowRecords.tsx": 1,
+      // Their branch taken inside the tree.
+      "/src/markdown/Markdown.tsx": 1,
+      "/src/health/DriftPart.tsx": 1,
+      // The document view's own Open in Spec tree and its count of ID-less children.
+      "/src/doc/DocBody.tsx": 1,
+      "/src/doc/DocInside.tsx": 1,
+    };
+    const counted: Record<string, number> = {};
+    for (const [path, text] of Object.entries(sources)) {
+      // routes.ts builds the document's page on the tree's hash: the one definition, no link.
+      if (!/\.tsx?$/.test(path) || isTestPath(path) || path === "/src/app/routes.ts") {
+        continue;
+      }
+      const file = parsed(path, text);
+      const walk = (node: ts.Node): void => {
+        if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "sectionHash") {
+          const section = node.arguments[1];
+          if (section !== undefined && ts.isStringLiteral(section) && section.text === "tree") {
+            counted[path] = (counted[path] ?? 0) + 1;
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(file);
+    }
+    expect(counted).toEqual(TREE_LINKS);
+    expect(Object.values(TREE_LINKS).reduce((sum, count) => sum + count, 0)).toBe(16);
   });
 
   it("renders markdown only in src/markdown, raw HTML never interpreted (AC-02 of ui-markdown)", () => {
@@ -994,7 +1039,8 @@ describe("source policy", () => {
 
   it("branches on no rollup, stage or mark word in the Flow, the node's cards or the Board but in their labels.ts (AC-08 of trace-views)", () => {
     const labels = ["/src/flow/labels.ts", "/src/board/labels.ts"];
-    const scoped = (path: string) => (path.startsWith("/src/flow/") || path.startsWith("/src/trace/") || path.startsWith("/src/board/")) && !/\.test\.tsx?$/.test(path);
+    // The document view's work state too (DM-12 of docs/features/doc-modal.md): a rollup looked up, never compared.
+    const scoped = (path: string) => (path.startsWith("/src/flow/") || path.startsWith("/src/trace/") || path.startsWith("/src/board/") || path.startsWith("/src/doc/")) && !/\.test\.tsx?$/.test(path);
     expect(Object.keys(sources).filter(scoped)).toEqual(expect.arrayContaining(["/src/trace/CardsBlock.tsx", "/src/trace/TraceBar.tsx", "/src/flow/FlowPlaces.tsx", "/src/flow/FlowView.tsx", "/src/flow/timeline.ts", "/src/board/BoardCard.tsx", ...labels]));
     const outside = (path: string) => !scoped(path) || labels.includes(path);
     const field = "\\.(rollup|stage|mark)\\b";
@@ -1164,7 +1210,9 @@ describe("languages policy (docs/features/ui-languages.md)", () => {
     const directories = new Set(Object.keys(sources).filter((path) => path.split("/").length > 3).map((path) => `${path.split("/").slice(0, 3).join("/")}/`));
     const scannedDirectories = [...directories].filter((directory) => Object.keys(sources).some((path) => path.startsWith(directory) && isScanned(path)));
     expect(scannedDirectories.sort()).toEqual([...directories].filter((directory) => !NOT_SCANNED.includes(directory)).sort());
-    expect(scannedDirectories).toEqual(expect.arrayContaining(["/src/app/", "/src/palette/", "/src/overview/", "/src/ui/", "/src/workspace/", "/src/flow/"]));
+    // The document view's directory from its start (DM-18 of docs/features/doc-modal.md).
+    expect(scannedDirectories).toEqual(expect.arrayContaining(["/src/app/", "/src/palette/", "/src/overview/", "/src/ui/", "/src/workspace/", "/src/flow/", "/src/doc/"]));
+    expect(Object.keys(sources).filter((path) => path.startsWith("/src/doc/") && path.endsWith(".tsx") && !isTestPath(path)).every(isScanned)).toBe(true);
     const swept = ["inbox", "tasks", "board", "roadmap", "tree", "graph", "health", "round", "trace", "markdown"].map((name) => `/src/${name}/`);
     const views = Object.keys(sources).filter((path) => swept.some((directory) => path.startsWith(directory)) && path.endsWith(".tsx") && !isTestPath(path));
     expect(views.length).toBeGreaterThan(70);

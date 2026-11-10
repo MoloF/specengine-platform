@@ -63,6 +63,10 @@ export interface SpecOptions {
   /** The level of the heading the text sits under, 1-5. */
   baseLevel: number;
   words: SpecWords;
+  /** A title the frame shows: the text's first heading, when it says the same, is left out. */
+  dropTitle?: string | null;
+  /** Only the text's first top-level paragraph is kept: a panel's lead (docs/features/doc-modal.md "Acceptance criteria", DM-14). */
+  firstParagraph?: boolean;
 }
 
 /** Block nodes that carry `data-line`. */
@@ -118,6 +122,20 @@ function walk(node: MdNode, visit: (node: MdNode) => void): void {
   }
 }
 
+/** A node's text as read: its text and code runs joined. */
+function plainText(node: MdNode): string {
+  if (node.type === "text" || node.type === "inlineCode") {
+    return node.value;
+  }
+  return isParent(node) ? node.children.map(plainText).join("") : "";
+}
+
+/** A heading's words as a title is compared with them: its trailing `{...}` block and the blanks around cut. */
+function headingWords(node: MdNode): string {
+  const text = plainText(node);
+  return (attributeBlock(text)?.before ?? text).trim();
+}
+
 class Rewrite {
   private readonly lineOf: (offset: number) => number;
   private readonly definitions = new Map<string, MdOf<"definition">>();
@@ -128,14 +146,29 @@ class Rewrite {
   }
 
   run(root: MdRoot): void {
-    let shallowest = 7;
     walk(root, (node) => {
       if (node.type === "definition") {
         const key = node.identifier.toUpperCase();
         if (!this.definitions.has(key)) {
           this.definitions.set(key, node);
         }
-      } else if (node.type === "heading") {
+      }
+    });
+    // The frame's title said again as the first heading is left out (docs/features/doc-modal.md
+    // "Acceptance criteria", DM-12), before the levels are counted: the next heading lands one below the frame.
+    const title = this.options.dropTitle ?? null;
+    const first = root.children.find((child) => child.type === "heading");
+    if (title !== null && first !== undefined && headingWords(first) === title.trim()) {
+      root.children = root.children.filter((child) => child !== first);
+    }
+    // A panel's lead: the first paragraph alone, past front matter, headings, lists, tables, fences and raw HTML.
+    if (this.options.firstParagraph === true) {
+      const lead = root.children.find((child) => child.type === "paragraph");
+      root.children = lead === undefined ? [] : [lead];
+    }
+    let shallowest = 7;
+    walk(root, (node) => {
+      if (node.type === "heading") {
         shallowest = Math.min(shallowest, node.depth);
       }
     });

@@ -2,26 +2,41 @@ import type { Translate } from "../i18n";
 import { isSectionId, sectionLabel, SECTIONS, type SectionId } from "./sections";
 
 /**
- * Where the hash points: `#/<project>` (its home), `#/<project>/<section>[/<id>]`, a card's page
- * `#/<project>/board/<C>/page`, `#/` (replaced by the first project's home) or nowhere known.
+ * Where the hash points: `#/<project>` (its home), `#/<project>/<section>[/<id>]`, a page
+ * `#/<project>/board/<C>/page` or `#/<project>/tree/<REF>/page`, `#/` (replaced by the first
+ * project's home) or nowhere known. A project or section route may carry the document modal, the
+ * `doc` pair after the first raw `?` (docs/features/doc-modal.md "Acceptance criteria", DM-5).
  */
 export type Route =
   | { type: "home" }
-  | { type: "project"; project: string }
+  | {
+      type: "project";
+      project: string;
+      /** The document modal's REF, decoded; absent with none. */
+      doc?: string;
+    }
   | {
       type: "section";
       project: string;
       section: SectionId;
       id: string | null;
-      /** Flow's alone: what follows the first raw `?`, undecoded; absent with none (docs/features/writer-studio.md D4). */
+      /** Flow's alone: what follows the first raw `?`, undecoded, less every `doc` pair; absent with none (docs/features/writer-studio.md D4). */
       query?: string;
-      /** The Board's alone: a card's page, `board`, `<C>`, `page`, never a tenth section (`ui/README.md` "Screen rules", Shell). */
+      /** A card's page (`board/<C>/page`) or a document's (`tree/<REF>/page`), never a tenth section (`ui/README.md` "Screen rules", Shell). */
       view?: "page";
+      /** The document modal's REF, decoded; absent with none. */
+      doc?: string;
     }
   | { type: "not_found" };
 
-/** The fourth segment of a card's page. */
+/** The fourth segment of a page: a card's or a document's. */
 const PAGE = "page";
+
+/** The sections whose item has a page of its own: a card's, a document's. */
+const PAGED: readonly SectionId[] = ["board", "tree"];
+
+/** The hash key of the document modal. */
+const DOC_KEY = "doc";
 
 function decode(segment: string): string | null {
   try {
@@ -31,17 +46,46 @@ function decode(segment: string): string | null {
   }
 }
 
-export function parseHash(hash: string): Route {
-  const path = hash.startsWith("#") ? hash.slice(1) : hash;
-  // Flow's place follows the first raw `?`; any other section keeps a `?` in its name.
-  const mark = path.indexOf("?");
-  if (mark >= 0) {
-    const route = parsePath(path.slice(0, mark));
-    if (route.type === "section" && route.section === "flow") {
-      return { ...route, query: path.slice(mark + 1) };
+/** Whether a `key=value` pair (or a bare key) of the query is a `doc` pair. */
+function isDocPair(pair: string): boolean {
+  const at = pair.indexOf("=");
+  return (at < 0 ? pair : pair.slice(0, at)) === DOC_KEY;
+}
+
+/** The query's pairs split: the first `doc` whose value decodes to a non-empty REF, and every other pair as written. */
+function splitDoc(query: string): { doc: string | null; rest: string[] } {
+  let doc: string | null = null;
+  const rest: string[] = [];
+  for (const pair of query.split("&")) {
+    if (!isDocPair(pair)) {
+      rest.push(pair);
+      continue;
+    }
+    const at = pair.indexOf("=");
+    const value = at < 0 ? null : decode(pair.slice(at + 1));
+    if (doc === null && value !== null && value !== "") {
+      doc = value;
     }
   }
-  return parsePath(path);
+  return { doc, rest };
+}
+
+/**
+ * Reads a hash. The first raw `?` ends the path on every route; what follows is pairs. The first
+ * `doc` pair that decodes to a non-empty REF is the modal on a project or section route; every `doc`
+ * pair is removed before Flow takes the rest as its query, absent when only `doc` pairs stood there.
+ * Other sections ignore other pairs.
+ */
+export function parseHash(hash: string): Route {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  const mark = raw.indexOf("?");
+  const route = parsePath(mark < 0 ? raw : raw.slice(0, mark));
+  if (mark < 0 || (route.type !== "project" && route.type !== "section")) {
+    return route;
+  }
+  const { doc, rest } = splitDoc(raw.slice(mark + 1));
+  const withQuery = route.type === "section" && route.section === "flow" && rest.length > 0 ? { ...route, query: rest.join("&") } : route;
+  return doc === null ? withQuery : { ...withQuery, doc };
 }
 
 function parsePath(path: string): Route {
@@ -64,8 +108,8 @@ function parsePath(path: string): Route {
     return { type: "not_found" };
   }
   if (rest.length > 0) {
-    // A card's page: exactly the three segments `board`, `<C>`, `page`; any other fourth names nothing.
-    return section === "board" && id !== undefined && id !== "" && rest.length === 1 && rest[0] === PAGE ? { type: "section", project, section, id, view: PAGE } : { type: "not_found" };
+    // A page: exactly `board`, `<C>`, `page` or `tree`, `<REF>`, `page`; any other fourth segment names nothing.
+    return PAGED.includes(section) && id !== undefined && id !== "" && rest.length === 1 && rest[0] === PAGE ? { type: "section", project, section, id, view: PAGE } : { type: "not_found" };
   }
   return { type: "section", project, section, id: id === undefined || id === "" ? null : id };
 }
@@ -83,6 +127,40 @@ export function sectionHash(project: string, section: SectionId, id: string | nu
 /** A card's page, `#/<p>/board/<C>/page`: the card alone, its modal's body and actions, no columns. */
 export function cardPageHash(project: string, id: string): string {
   return `${sectionHash(project, "board", id)}/${PAGE}`;
+}
+
+/** A document's page, `#/<p>/tree/<REF>/page`: the document view alone, the Spec tree marked in the nav. */
+export function docPageHash(project: string, ref: string): string {
+  return `${sectionHash(project, "tree", ref)}/${PAGE}`;
+}
+
+/** A hash split at its first raw `?`: the part before, and the pairs after (null with no `?`). */
+function hashParts(hash: string): { base: string; pairs: string[] | null } {
+  const mark = hash.indexOf("?");
+  return mark < 0 ? { base: hash, pairs: null } : { base: hash.slice(0, mark), pairs: hash.slice(mark + 1).split("&") };
+}
+
+/** The hash with the document modal on `ref`: every `doc` pair removed, `doc=<ref>` appended after `?`, or `&` when pairs remain. */
+export function withDoc(hash: string, ref: string): string {
+  const { base, pairs } = hashParts(hash);
+  const kept = (pairs ?? []).filter((pair) => !isDocPair(pair));
+  return `${base}?${[...kept, `${DOC_KEY}=${encodeURIComponent(ref)}`].join("&")}`;
+}
+
+/** The hash without the document modal: every `doc` pair removed, and the `?` when none remains. */
+export function withoutDoc(hash: string): string {
+  const { base, pairs } = hashParts(hash);
+  if (pairs === null) {
+    return hash;
+  }
+  const kept = pairs.filter((pair) => !isDocPair(pair));
+  return kept.length === 0 ? base : `${base}?${kept.join("&")}`;
+}
+
+/** The document a hash opens in the modal: `parseHash`'s `doc`, else null. */
+export function docOf(hash: string): string | null {
+  const route = parseHash(hash);
+  return route.type === "project" || route.type === "section" ? (route.doc ?? null) : null;
 }
 
 /** An arrow of a flow read by its served key: no fourth part, `kind` null. */

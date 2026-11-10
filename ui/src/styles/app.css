@@ -4077,7 +4077,7 @@ mark {
 .md-image-path {
   color: var(--text-secondary);
   font-family: var(--font-mono);
-  font-size: 0.92em;
+  font-size: var(--font-size-code);
   overflow-wrap: anywhere;
 }
 
@@ -5999,8 +5999,22 @@ mark {
   margin: 0;
 }
 
-.flow-panel-text {
+.flow-panel-lead {
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* A box's line: its stage, its work state and the marks the canvas gives it, each a label and an icon. */
+.flow-panel-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  margin: 0;
+}
+
+.flow-panel-group {
+  margin: 0;
   overflow-wrap: anywhere;
 }
 
@@ -6501,33 +6515,149 @@ mark {
 }
 
 /* The card over the board (docs/features/design-foundation.md "The work item: the task modal and page"):
-   the work item, 968 px wide or the viewport less 2rem, its head staying and its body scrolling
-   inside; the whole screen on a phone. */
+   the work item, 968 px wide or the viewport less 2rem; how it scrolls is the work item's own (below,
+   "The work item in a dialog"); the whole screen on a phone. */
 .card-modal {
-  display: flex;
-  flex-direction: column;
   width: min(var(--modal-width-l), 100vw - 2rem);
   max-height: calc(100dvh - 2rem);
-  overflow: hidden;
   overflow-wrap: anywhere;
-}
-
-.card-modal .issue-view {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.card-modal .issue-view-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: auto;
-  padding: var(--space-050);
 }
 
 .card-page {
   max-width: var(--modal-width-l);
+}
+
+/* The document over any screen (src/doc/; docs/features/doc-modal.md "Acceptance criteria", DM-9):
+   the card modal's frame, 968 px or the viewport less 2rem, scrolling as the work item does; on its
+   page as wide as a card's. Every size is a token. */
+.doc-modal {
+  width: min(var(--modal-width-l), 100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-wrap: anywhere;
+}
+
+.doc-page {
+  max-width: var(--modal-width-l);
+  overflow-wrap: anywhere;
+}
+
+.doc-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-100);
+}
+
+.doc-meta-item {
+  display: inline-flex;
+  align-items: center;
+}
+
+.doc-part {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+/* The document's text: 16/24, at most 68ch, any script wrapping. */
+.doc-text {
+  max-width: var(--reading-width);
+  font-size: var(--font-size-document);
+  line-height: var(--line-height-document);
+  overflow-wrap: anywhere;
+}
+
+.doc-subheading {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
+  font-weight: var(--font-weight-semibold);
+}
+
+.doc-link-group,
+.doc-inside-kind {
+  display: grid;
+  gap: var(--space-075);
+  min-width: 0;
+}
+
+.doc-link-list,
+.doc-inside-list,
+.doc-unresolved {
+  display: grid;
+  gap: var(--space-075);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.doc-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-050) var(--space-100);
+  min-width: 0;
+}
+
+.doc-link-end {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.doc-inside-group {
+  display: grid;
+  gap: var(--space-150);
+  min-width: 0;
+}
+
+.doc-inside-holder {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.doc-inside-list a,
+.doc-inside-noid a {
+  display: inline-block;
+  min-height: var(--target-min);
+}
+
+.doc-inside-noid {
+  margin: 0;
+}
+
+/* Inside's toggle stands in a heading at its part's level, sized as the part titles beside it. */
+.disclosure-heading {
+  margin: 0;
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+}
+
+.doc-inside > .disclosure-heading > .disclosure-button {
+  font-size: var(--font-size-heading-s);
+  line-height: var(--line-height-heading-s);
+  font-weight: var(--font-weight-semibold);
+}
+
+.doc-technical-id {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+}
+
+.doc-unresolved > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-050) var(--space-100);
+  min-width: 0;
+}
+
+.doc-unresolved-reason {
+  flex-basis: 100%;
+  color: var(--text-secondary);
 }
 
 .board-handoff {
@@ -6767,6 +6897,18 @@ mark {
   }
 
   .card-modal {
+    width: 100vw;
+    max-height: 100dvh;
+    height: 100dvh;
+    border-radius: 0;
+  }
+
+  /* The document over a screen fills it too (DM-21's 320 px look). */
+  .dialog-host:has(.doc-modal) {
+    padding: 0;
+  }
+
+  .doc-modal {
     width: 100vw;
     max-height: 100dvh;
     height: 100dvh;
@@ -7012,6 +7154,15 @@ mark {
   min-width: 0;
 }
 
+/* Under the title: the item's state as lozenges, wrapping. */
+.issue-view-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-100);
+  min-width: 0;
+}
+
 .issue-view-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -7039,6 +7190,41 @@ mark {
   gap: var(--space-200);
   min-width: 0;
   max-width: var(--issue-side-width);
+}
+
+/* The work item in a dialog (a card's modal, a document's): the head stays and the body scrolls
+   inside; under 36rem, where the dialog is the screen, the dialog is the one scroll container and the
+   head scrolls away with the body (docs/features/doc-modal.md "Acceptance criteria", DM-21's 320 px look). */
+.dialog:has(> .issue-view) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dialog > .issue-view {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dialog > .issue-view > .issue-view-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--space-050);
+}
+
+@media (max-width: 36rem) {
+  .dialog:has(> .issue-view) {
+    overflow-y: auto;
+  }
+
+  .dialog > .issue-view,
+  .dialog > .issue-view > .issue-view-body {
+    flex: none;
+    overflow: visible;
+  }
 }
 
 /* A part of the work item's main column: its title a section's, its body the chrome's. */

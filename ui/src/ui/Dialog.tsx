@@ -53,9 +53,11 @@ export function focusables(root: HTMLElement): HTMLElement[] {
  * marked `data-autofocus`, else the first stop; with `focusTitle`, on the heading itself (a dialog
  * that is read first), whence Tab goes to the first stop after it in the DOM and Shift+Tab to the
  * last. A stop inside a collapsed (`hidden`) region is no stop. Dialogs stack: each makes what lies under it inert, the one under too, and
- * gives it back when it closes. The caller returns focus on close. With `frame`, the caller lays the
- * heading out among its own parts (the work item's breadcrumbs above it, its columns below), the
- * children after them.
+ * gives it back when it closes. With `top` (the document modal, docs/features/doc-modal.md
+ * "Acceptance criteria", DM-10) it stays over a dialog of the view mounted in the same commit (a
+ * reload of a card's modal with a document over it): what that one made inert of it as it mounted is
+ * given back first. The caller returns focus on close. With `frame`, the caller lays the heading out
+ * among its own parts (the work item's breadcrumbs above it, its columns below), the children after them.
  */
 export function Dialog({
   title,
@@ -64,6 +66,7 @@ export function Dialog({
   className,
   closeOnScrim = false,
   focusTitle = false,
+  top = false,
   frame,
 }: {
   title: ReactNode;
@@ -74,6 +77,8 @@ export function Dialog({
   closeOnScrim?: boolean;
   /** Focus starts on the heading, which then takes focus by script alone. */
   focusTitle?: boolean;
+  /** Over every dialog mounted with it: a sibling of the same commit that made this one inert gives it back. */
+  top?: boolean;
   /** Lays the heading out with the caller's parts around it; the dialog's own `h2` all the same. */
   frame?: (heading: ReactNode) => ReactNode;
 }) {
@@ -85,9 +90,12 @@ export function Dialog({
     if (root === null) {
       return;
     }
+    const host = root.closest<HTMLElement>("[data-dialog-host]");
+    if (top && host !== null) {
+      host.inert = false;
+    }
     const preferred = focusTitle ? root.querySelector<HTMLElement>(".dialog-title") : root.querySelector<HTMLElement>("[data-autofocus]");
     (preferred ?? focusables(root)[0] ?? root).focus();
-    const host = root.closest<HTMLElement>("[data-dialog-host]");
     const siblings = Array.from(document.body.children).filter(
       (element): element is HTMLElement =>
         element instanceof HTMLElement &&
@@ -103,7 +111,7 @@ export function Dialog({
         element.inert = false;
       }
     };
-  }, [focusTitle]);
+  }, [focusTitle, top]);
 
   function onKeyDown(event: KeyboardEvent<HTMLElement>) {
     if (event.key === "Escape") {

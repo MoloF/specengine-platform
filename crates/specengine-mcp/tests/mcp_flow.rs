@@ -25,6 +25,10 @@
 //! `fixtures/trace-almanac`; the input schema gains `stage` with its spec
 //! text, and a wrong type is a bad argument. M9: `FlowArgs.stage` dropped.
 //!
+//! docs/features/doc-modal.md DM-3 (RM-0101), the tool: a gap row's
+//! `titles`, the CLI library's within the schema, which requires it, each
+//! title a string or `null`.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -305,10 +309,12 @@ fn get_flow_equals_the_cli_within_its_schema() {
         "{}",
         content_text(broken)
     );
+    // docs/features/doc-modal.md DM-3: each member's title rides with it.
     assert_eq!(
         broken["structuredContent"]["gaps"][1],
         json!({"code": "two-starts", "state": "measured", "count": 1,
             "items": [["LND-A", "LND-B"]],
+            "titles": [["The first closed desk", "The second closed desk"]],
             "cause": "more than one start: narrow [[flow.start]] to one"})
     );
     // A lifted edge carries its count.
@@ -812,6 +818,93 @@ fn fs10_get_flow_takes_in_flow() {
             let reply = session.call("get_flow", args.clone());
             assert_bad_arguments(&reply, "", &format!("{era:?} get_flow {args}"));
         }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
+}
+
+// ------------------------------------------------------------------ doc-modal DM-3
+
+/// docs/features/doc-modal.md DM-3 (RM-0101), the tool, on a scratch copy of
+/// `fixtures/flow-aside`: `get_flow {root: "ATL-POTTERY", depth: 1, in_flow:
+/// true}` is the CLI library's read within the schema (both eras), its
+/// `two-starts` row DM-3's, the members folded into `KRUN-FIRING` and
+/// `WBAY-GALLERY` titled by their own titles; the output schema's gap row
+/// requires `titles`, a list of lists of a string or `null`. M: the mirror
+/// without `titles` (the strict walker refuses the key).
+#[test]
+fn dm3_get_flow_serves_gap_titles_within_its_schema() {
+    let project = Project::new("flow-aside");
+    let results = parity(
+        &project,
+        &[
+            json!({"root": "ATL-POTTERY", "depth": 1, "in_flow": true}),
+            json!({}),
+        ],
+    );
+    let row = |document: &Value, code: &str| -> Value {
+        document["gaps"]
+            .as_array()
+            .expect("gaps")
+            .iter()
+            .find(|gap| gap["code"] == code)
+            .unwrap_or_else(|| panic!("no row {code}: {document}"))
+            .clone()
+    };
+    assert_eq!(
+        row(&results[0]["structuredContent"], "two-starts"),
+        json!({"code": "two-starts", "state": "measured", "count": 1,
+            "items": [["POT-WEDGE", "docs/workshop/gallery/open-day.md"]],
+            "titles": [["Wedging", "Open day"]],
+            "cause": "more than one start: narrow [[flow.start]] to one"})
+    );
+    for result in &results {
+        for gap in result["structuredContent"]["gaps"]
+            .as_array()
+            .expect("gaps")
+        {
+            let shape = |key: &str| -> Vec<usize> {
+                gap[key]
+                    .as_array()
+                    .unwrap_or_else(|| panic!("`{key}` is no list: {gap}"))
+                    .iter()
+                    .map(|item| item.as_array().map_or(usize::MAX, Vec::len))
+                    .collect()
+            };
+            assert_eq!(shape("titles"), shape("items"), "{gap}");
+        }
+    }
+    for era in ERAS {
+        let mut session = project.session(era);
+        let schemas = output_schemas(&session.tools());
+        let gaps = property(&schemas["get_flow"], "gaps").expect("gaps");
+        let gap = &gaps["items"];
+        assert_eq!(
+            property_names(gap),
+            sorted(&["code", "state", "count", "items", "titles", "cause"]),
+            "{era:?}: a gap row's six keys: {gap}"
+        );
+        assert!(
+            gap["required"]
+                .as_array()
+                .is_some_and(|required| required.contains(&json!("titles"))),
+            "{era:?}: `titles` required: {gap}"
+        );
+        let titles = &gap["properties"]["titles"];
+        assert_eq!(titles["type"], json!("array"), "{era:?}: {titles}");
+        assert_eq!(titles["items"]["type"], json!("array"), "{era:?}: {titles}");
+        let member = &titles["items"]["items"];
+        for value in [json!("Wedging"), Value::Null] {
+            assert_eq!(
+                conforms(member, &value, "a title"),
+                Ok(()),
+                "{era:?}: {value} meets {member}"
+            );
+        }
+        assert!(
+            conforms(member, &json!(1), "a title").is_err(),
+            "{era:?}: a number is no title: {member}"
+        );
         let done = session.finish();
         assert!(done.status.success(), "{era:?}: {}", done.stderr);
     }

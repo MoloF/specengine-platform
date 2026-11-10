@@ -2,6 +2,7 @@ import type { MouseEvent, ReactNode } from "react";
 import type { HealthQuery } from "../api/queries";
 import type { BindingPlace, DriftCounts, DriftLevels, DriftLock, DriftMarker, DriftRow, StoredDriftRow, TestedRow } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { Notes } from "../overview/parts";
 import { bindingOf } from "../tree/BindingLine";
 import { syncLook } from "../tree/labels";
@@ -21,15 +22,20 @@ function placeOf(place: BindingPlace): string {
 }
 
 /**
- * A row's node: linked to the tree as cited (an unresolved or gone ID opens the tree's "names
- * nothing"); a bare marker's `""` as text. `onFollow`: the tree view's, when the link sits in it.
+ * A row's node as cited (an unresolved or gone ID says it names nothing): in the tree, with the tree
+ * view's `onFollow`, a tree link; on Health a document link
+ * (docs/features/doc-modal.md "Acceptance criteria", DM-8). A bare marker's `""` as text.
  */
 function NodeLink({ project, node, onFollow }: { project: string; node: string; onFollow?: (event: MouseEvent<HTMLAnchorElement>) => void }) {
   const t = useTranslate();
   if (node === "") {
     return <span className="health-code-id">{t("health.drift.noId")}</span>;
   }
-  return (
+  return onFollow === undefined ? (
+    <DocLink className="health-code-id" project={project} docRef={node}>
+      <bdi className="mono">{oneLine(node)}</bdi>
+    </DocLink>
+  ) : (
     <a className="health-code-id" href={sectionHash(project, "tree", node)} onClick={onFollow}>
       <bdi className="mono">{oneLine(node)}</bdi>
     </a>

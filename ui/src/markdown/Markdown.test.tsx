@@ -71,7 +71,7 @@ describe("a hostile corpus stays text (AC-03)", () => {
     const attributes = attributesOf(root);
     expect(attributes.filter((name) => /\[(id|on[a-z]+|src\w*|action|style|title|target|name)\]$/.test(name))).toEqual([]);
     const anchors = Array.from(root.querySelectorAll("a"));
-    expect(anchors.map((anchor) => anchor.getAttribute("href"))).toEqual(["#/alpha/tree/R-OK"]);
+    expect(anchors.map((anchor) => anchor.getAttribute("href"))).toEqual(["#/alpha/tree/R-OK/page"]);
     // An anchor writes its href and class, nothing it was handed (the parse's title, data, node).
     expect(attributes.filter((name) => name.startsWith("a["))).toEqual(["a[class]", "a[href]"]);
   });
@@ -141,7 +141,7 @@ describe("links (AC-04, AC-06)", () => {
       inline("docs/gone.md", 3, { state: "dangling", reason: "`docs/gone.md` names no file" }),
     ];
     const root = show(source, { links });
-    expect(within(root).getByRole("link", { name: "the rule" }).getAttribute("href")).toBe("#/alpha/tree/R-9");
+    expect(within(root).getByRole("link", { name: "the rule" }).getAttribute("href")).toBe("#/alpha/tree/R-9/page");
     const gone = within(root).getByText("gone").closest(".md-link");
     expect(gone?.closest("a")).toBeNull();
     expect(gone?.querySelector(".badge-label")?.textContent).toBe("Dangling");
@@ -168,7 +168,7 @@ describe("links (AC-04, AC-06)", () => {
   it("counts the destination's line from the text's first line in the file, front-matter included", () => {
     const text = "---\nid: DOC-A\n---\n\n[r](docs/r.md)\n";
     const root = show(text, { links: [inline("docs/r.md", 14, { name: "R-1" })], frontMatter: true, firstLine: 10 });
-    expect(within(root).getByRole("link", { name: "r" }).getAttribute("href")).toBe("#/alpha/tree/R-1");
+    expect(within(root).getByRole("link", { name: "r" }).getAttribute("href")).toBe("#/alpha/tree/R-1/page");
   });
 
   it("anchors only when every entry at the link's place resolved to the same node: `[R-9](R-9)`", () => {
@@ -180,7 +180,7 @@ describe("links (AC-04, AC-06)", () => {
     expect(text.querySelector(".md-link-unresolved .badge-label")?.textContent).toBe("Not checked");
     cleanup();
     const both = show("See [R-9](R-9).\n", { links: [mention, { ...file, name: "R-9", state: "resolved", reason: null }] });
-    expect(within(both).getByRole("link", { name: "R-9" }).getAttribute("href")).toBe("#/alpha/tree/R-9");
+    expect(within(both).getByRole("link", { name: "R-9" }).getAttribute("href")).toBe("#/alpha/tree/R-9/page");
     cleanup();
     const apart = show("See [R-9](R-9).\n", { links: [mention, { ...file, name: "R-8", state: "resolved", reason: null }] });
     expect(apart.querySelector("a")).toBeNull();
@@ -190,7 +190,7 @@ describe("links (AC-04, AC-06)", () => {
   it("reads past a leading BOM: offsets, lines and anchors as without it", () => {
     for (const frontMatter of [true, false]) {
       const root = show("\uFEFF# T\n\nSee [r](docs/r.md).\n", { links: [inline("docs/r.md", 3, { name: "R-1" })], frontMatter });
-      expect(within(root).getByRole("link", { name: "r" }).getAttribute("href")).toBe("#/alpha/tree/R-1");
+      expect(within(root).getByRole("link", { name: "r" }).getAttribute("href")).toBe("#/alpha/tree/R-1/page");
       expect(root.querySelector(".md-heading")?.getAttribute("data-line")).toBe("1");
       expect(root.querySelector(".md-url")).toBeNull();
       cleanup();
@@ -199,7 +199,7 @@ describe("links (AC-04, AC-06)", () => {
 
   it("reads a reference link at its definition", () => {
     const root = show("Use [the ref][r].\n\n[r]: <docs/ref file.md>\n", { links: [inline("docs/ref file.md", 3, { name: "R-REF" })] });
-    expect(within(root).getByRole("link", { name: "the ref" }).getAttribute("href")).toBe("#/alpha/tree/R-REF");
+    expect(within(root).getByRole("link", { name: "the ref" }).getAttribute("href")).toBe("#/alpha/tree/R-REF/page");
   });
 
   it("shows no anchor before the links read lands", () => {
@@ -366,5 +366,62 @@ describe("prose under a view's heading", () => {
     expect(screen.getByText("step").tagName).toBe("EM");
     expect(screen.getByText("code").tagName).toBe("CODE");
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual(["First", "Second"]);
+  });
+});
+
+// DM-12, DM-14, DM-16 of docs/features/doc-modal.md: an anchor is a document link but in the Spec
+// tree; a frame's title said again is left out; a panel's lead is the first top-level paragraph.
+describe("the document view's cuts (doc-modal)", () => {
+  it("anchors a resolved link as the tree's own link in the Spec tree (DM-16)", () => {
+    const root = show("See [r](docs/r.md).\n", { links: [inline("docs/r.md", 1, { name: "R-1" })], linkTo: "tree" });
+    expect(within(root).getByRole("link", { name: "r" }).getAttribute("href")).toBe("#/alpha/tree/R-1");
+  });
+
+  it("leaves out a first heading saying the frame's title, its `{#…}` attribute aside; a different one stays; the next heading lands one below the frame (DM-12)", () => {
+    const text = "# The ferry {#DOM-FERRY}\n\nA flat boat.\n\n## Tides {#RULE-FERRY-TIDES}\n\nSlack water.\n";
+    const dropped = show(text, { dropTitle: "The ferry", baseLevel: 2 });
+    expect(Array.from(dropped.querySelectorAll(".md-heading"), (heading) => [heading.tagName, heading.textContent])).toEqual([["H3", "Tides RULE-FERRY-TIDES"]]);
+    cleanup();
+    const kept = show(text, { dropTitle: "The barge", baseLevel: 2 });
+    expect(Array.from(kept.querySelectorAll(".md-heading"), (heading) => heading.textContent)).toEqual(["The ferry DOM-FERRY", "Tides RULE-FERRY-TIDES"]);
+    cleanup();
+    const whole = show(text, { baseLevel: 2 });
+    expect(whole.querySelectorAll(".md-heading")).toHaveLength(2);
+  });
+
+  it("keeps the first paragraph alone, past front-matter, headings, a leading list, a table and a fence (DM-14)", () => {
+    const text = [
+      "---",
+      "id: A",
+      "---",
+      "",
+      "# A title",
+      "",
+      "- a leading list",
+      "",
+      "| a | table |",
+      "| - | - |",
+      "| 1 | 2 |",
+      "",
+      "```",
+      "a fence",
+      "```",
+      "",
+      "The *first* paragraph, with [a link](docs/r.md).",
+      "",
+      "The second paragraph.",
+      "",
+    ].join("\n");
+    const root = show(text, { frontMatter: true, firstParagraph: true, links: [inline("docs/r.md", 17, { name: "R-1" })] });
+    expect(Array.from(root.querySelectorAll("p"), (paragraph) => paragraph.textContent)).toEqual(["The first paragraph, with a link."]);
+    expect(root.querySelector("ul, table, pre, h1, h2, h3, h4, .md-front-matter")).toBeNull();
+    expect(within(root).getByRole("link", { name: "a link" }).getAttribute("href")).toBe("#/alpha/tree/R-1/page");
+    expect(root.textContent).not.toContain("second");
+  });
+
+  it("renders nothing for a text with no paragraph", () => {
+    const root = show("# Only a heading\n\n- and a list\n", { firstParagraph: true });
+    expect(root.textContent).toBe("");
+    expect(root.querySelector("p")).toBeNull();
   });
 });

@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # UI design: themes, the scale, primitives, the work item
@@ -38,7 +38,7 @@ One file, `src/styles/tokens.css`, holds every colour literal, in both themes, a
 
 `src/styles/scale.test.ts` reads every CSS file under `src` but `tokens.css`: `font-size`, `line-height`, `padding*`, `margin*`, gaps and radii take one `var()` of their family (spacing also `0`, `auto`, `calc()` of tokens); `font` only `inherit`; a last declaration with no `;`, a raw length in a custom property outside `tokens.css` and a `var()` fallback count. Every token resolves into the scale's sets. `.button` and `.field` are `var(--control-height)` tall, `.button-compact` the compact one. No non-test `.tsx` sets a size, space or radius inline.
 
-`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0095" | "RM-0099" | null}` matching a declaration. 14, Flow's 15 gone with RM-0094: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), one the document modal's (RM-0095), 11 other screens' (RM-0099). A new one names its reason and the item that empties it.
+`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0099" | null}` matching a declaration. 13: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), 11 other screens' (RM-0099). A new one names its reason and the item that empties it.
 
 ## Primitives
 
@@ -47,7 +47,7 @@ In `src/ui/`, each with its test:
 - `Lozenge({appearance, icon, label, lang}: LozengeLook & { lang?: "en" })`, `LozengeLook {appearance: LozengeAppearance; icon: IconName; label: string}`, `LOZENGE_APPEARANCES`: 20 px, 12/16 at 500, padding 2 px 4 px, radius 4; at most 200 px, a longer label wrapping by whole 16 px lines, never cut.
 - `PropertyList({label, items, foldEmpty?})`, `Property {key; label; value: ReactNode | null}`: a `dl`, labels small and secondary. With `foldEmpty`, `null` rows stand in order under one "More fields (n)" disclosure, collapsed, each "None".
 - `Breadcrumbs({items})`, `Crumb {key; label; href?; mono?; onFollow?}`: a `nav` "Breadcrumbs" around an `ol`; all but the last link from `routes.ts`, at least 24 px; the last `aria-current="page"`, no `href`; `/` separators `aria-hidden`; `onFollow` takes a plain click in place.
-- `IssueView({breadcrumbs, tools?, title, actions?, main, side})`: "The work item".
+- `IssueView({breadcrumbs, tools?, title, meta?, actions?, main, side})`: "The work item".
 - `EmptyState({title, level: 2 | 3 | 4, description?, primary?, secondary?})`: at most 464 px, sentence case, never a failure, one primary at most.
 - `Disclosure({summary, regionLabel?, className?, children})`: a button with `aria-expanded`, `aria-controls`; its region `hidden` while collapsed, a `section` landmark with `regionLabel`; focus stays on the button; only the chevron turns, by the duration tokens.
 - `.badge` and tags take the lozenge's metrics, the label `--text-primary`, the tone on icon and 1 px border. Icons are hand-drawn at 16 px.
@@ -58,11 +58,11 @@ In `src/ui/`, each with its test:
 
 ## The work item
 
-`CardModal` (`view: (frame: {heading, tools}) => ReactNode`, by `Dialog`'s `frame`) and `CardPage` render one `CardView` (`CardPanel.tsx`) in an `IssueView`. Routes, history, focus and writes: `board-screen.md` "The card modal and page".
+`CardModal` (`view: (frame: {heading, tools}) => ReactNode`, by `Dialog`'s `frame`) and `CardPage` render one `CardView` (`CardPanel.tsx`) in an `IssueView`; a document's, `DocFrame` (`doc-view.md`). Routes, history, focus and writes: `board-screen.md` "The card modal and page".
 - **Head.** Breadcrumbs Project (`#/<p>`), Board, the parent card (its modal, replacing the entry), the card's ID current; the tools on that line (modal: Open as a page, Close; page: Open on the board); the title, the modal's focused `h2` or the page's `h1`; the acts Accept (primary, in `accept.from` only), Hand off, Return…, Edit, Assign, Cancel card (subtle, last).
 - **Main.** Mark and Clear, return reason, acceptance, cancellation; Goal and Criteria at the document step; Source; Hand-offs (ID, title, flow name, status lozenge, assignee, rollup word); Evidence; History.
 - **Side**, at most 330 px. Status: the lozenge, then Move, compact, none on a closed card. Details (`board.panel.details`): Assignee, Reviewer, Flow, Due, Estimate, Discipline, Parent, Corrects, Created by, Created at, empty ones under More fields. Development, collapsed, "Development · n agent tasks" or "No agent tasks", holds `card-tasks.md` "Screen".
-- **Width.** One column, main first, under 42.5rem of its own width (`@container issue-view`); DOM order main then side. The modal: 968 px or the viewport less 2rem; under 36rem the screen.
+- **Width.** One column, main first, under 42.5rem of its own width (`@container issue-view`); DOM order main then side. The modal: 968 px or the viewport less 2rem, its body the one scroller; under 36rem the screen, scrolling as one.
 
 ## The focus trap
 

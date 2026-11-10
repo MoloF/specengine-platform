@@ -1,6 +1,7 @@
 import { Fragment, memo, useId, useRef } from "react";
 import type { RoadmapDocument, RoadmapGroup, RoadmapItem, RoadmapPoolTask, RoadmapSum } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { taskStatusLook } from "../tasks/labels";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
@@ -68,9 +69,9 @@ function ItemCard({
     >
       <h3 id={headingId} className="roadmap-card-title">
         {isRelease(group) && item.position !== null && <span className="roadmap-position">{item.position}.</span>}
-        <a href={sectionHash(project, "tree", item.id)} className="mono roadmap-card-id">
+        <DocLink project={project} docRef={item.id} className="mono roadmap-card-id">
           {item.id}
-        </a>
+        </DocLink>
         <span className="roadmap-card-name">{item.title === null ? "-" : oneLine(item.title)}</span>
       </h3>
       <p className="roadmap-card-facts">

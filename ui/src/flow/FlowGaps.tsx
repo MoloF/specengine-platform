@@ -9,27 +9,26 @@ import { gapLook, gapMeaning, gapNotRead, gapsInOrder, gapsSorted, isMeasured, n
 /** Items a row shows before "Show all". */
 export const GAP_ITEMS_SHOWN = 8;
 
-/** A member's words: its title where a read gives one, else its name (flow-scenario D12). */
-export type TitleOf = (name: string) => string;
-
 function GapItem({
   gap,
   item,
+  titles,
   marked,
-  titleOf,
   onActivate,
   onHand,
 }: {
   gap: FlowGap;
   item: readonly string[];
+  /** Each member's served title, parallel to `item` (docs/features/doc-modal.md "Acceptance criteria", DM-15). */
+  titles: readonly (string | null)[];
   marked: ReadonlySet<string>;
-  titleOf: TitleOf;
   onActivate: (item: readonly string[]) => void;
   /** Null: this item has nothing to hand (`no-start` at the top). */
   onHand: ((gap: FlowGap, item: readonly string[]) => void) | null;
 }) {
   const t = useTranslate();
-  const words = item.map(titleOf).join(" + ");
+  // A member's words: the read's title for it, else its name; nothing else is read for them.
+  const words = item.map((member, index) => titles[index] ?? member).join(" + ");
   return (
     <li className="flow-gap-item">
       {namesDocuments(gap) ? (
@@ -72,7 +71,6 @@ function GapRow({
   unread,
   rooted,
   marked,
-  titleOf,
   onActivate,
   onHand,
 }: {
@@ -81,7 +79,6 @@ function GapRow({
   /** `no-start`'s item hands the scope's root under one, and nothing at the top. */
   rooted: boolean;
   marked: ReadonlySet<string>;
-  titleOf: TitleOf;
   onActivate: (item: readonly string[]) => void;
   onHand: (gap: FlowGap, item: readonly string[]) => void;
 }) {
@@ -120,8 +117,8 @@ function GapRow({
       </p>
       {items.length > 0 && (
         <ul ref={list} className="flow-gap-items">
-          {items.map((item) => (
-            <GapItem key={item.join("\n")} gap={gap} item={item} marked={marked} titleOf={titleOf} onActivate={onActivate} onHand={namesDocuments(gap) || rooted ? onHand : null} />
+          {items.map((item, index) => (
+            <GapItem key={item.join("\n")} gap={gap} item={item} titles={gap.titles[index] ?? []} marked={marked} onActivate={onActivate} onHand={namesDocuments(gap) || rooted ? onHand : null} />
           ))}
         </ul>
       )}
@@ -154,7 +151,8 @@ function GapRow({
  * rows at 0; each row's code and its `cause` folded under Technical details, the cause the daemon's
  * words. A row changes no status or control (ADR-0012): it says what was found, each item takes you
  * to it, and each measured item can go to your AI as a card, which changes no status either. `unread`:
- * the read's last fetch failed, so no row says a state, an item or a cause. It lies over the canvas
+ * the read's last fetch failed, so no row says a state, an item or a cause. Each member reads by the
+ * read's own `titles`, else its name: the control reads nothing of its own. It lies over the canvas
  * from its bottom edge, as the legend does.
  */
 export function FlowGaps({
@@ -163,7 +161,6 @@ export function FlowGaps({
   unread,
   rooted,
   marked,
-  titleOf,
   onActivate,
   onHand,
 }: {
@@ -172,7 +169,6 @@ export function FlowGaps({
   unread: boolean;
   rooted: boolean;
   marked: ReadonlySet<string>;
-  titleOf: TitleOf;
   onActivate: (item: readonly string[]) => void;
   onHand: (gap: FlowGap, item: readonly string[]) => void;
 }) {
@@ -191,7 +187,7 @@ export function FlowGaps({
       {shown.length > 0 && (
         <ul className="flow-gap-list">
           {shown.map((gap) => (
-            <GapRow key={gap.code} gap={gap} unread={unread} rooted={rooted} marked={marked} titleOf={titleOf} onActivate={onActivate} onHand={onHand} />
+            <GapRow key={gap.code} gap={gap} unread={unread} rooted={rooted} marked={marked} onActivate={onActivate} onHand={onHand} />
           ))}
         </ul>
       )}

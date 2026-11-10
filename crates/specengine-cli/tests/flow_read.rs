@@ -34,6 +34,9 @@
 //!   `trace_views.rs`.
 //! - docs/features/flow-authoring.md D11: a row above 0 carries its line, the
 //!   rows printed here with it; `flow_authoring.rs` holds the table.
+//! - docs/features/doc-modal.md DM-3 (RM-0101): a gap row's `titles`, parallel
+//!   to `items` and cut with them at 50; the text never prints them. The
+//!   fixtures' titles are `doc_modal.rs`.
 //!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
@@ -725,10 +728,16 @@ fn every_key_is_present() {
             "{document}"
         );
         for gap in document["gaps"].as_array().expect("gaps") {
+            // docs/features/doc-modal.md DM-3: `titles`, parallel to `items`.
             assert_eq!(
                 keys(gap),
-                BTreeSet::from(["code", "state", "count", "items", "cause"]),
+                BTreeSet::from(["code", "state", "count", "items", "titles", "cause"]),
                 "{gap}"
+            );
+            assert_eq!(
+                shape(&gap["titles"]),
+                shape(&gap["items"]),
+                "`titles` has `items`' shape: {gap}"
             );
             assert!(
                 ["measured", "not_configured", "cannot"].contains(&gap["state"].as_str().unwrap()),
@@ -1340,8 +1349,21 @@ fn ac07_edges_past_the_cut_leave_the_json() {
     assert!(edges > 0 && edges < 199, "{edges} edges printed");
 }
 
+/// The lengths of a list of lists, `None` for anything else: `titles` and
+/// `items` compared by shape (docs/features/doc-modal.md DM-3).
+fn shape(value: &Value) -> Option<Vec<usize>> {
+    value
+        .as_array()?
+        .iter()
+        .map(|item| item.as_array().map(Vec::len))
+        .collect()
+}
+
 /// "Output": a row prints at most 50 items, then `, ... and <k> more`; `count`
-/// is the whole; the text's row stays one line.
+/// is the whole; the text's row stays one line. docs/features/doc-modal.md
+/// DM-3: `titles` is cut with `items`, each the step's own title, and the
+/// text prints none; 51 unreachable steps give 50 items and 50 title lists.
+/// M: `titles` not cut with `items`.
 #[test]
 fn a_row_prints_at_most_fifty_items() {
     let flow = Flow::new("flow-items");
@@ -1371,6 +1393,48 @@ fn a_row_prints_at_most_fifty_items() {
             .len(),
         50,
         "JSON holds the printed items only"
+    );
+    let titled = |document: &Value| -> Vec<(Value, Value)> {
+        let gap = row(document, "unreachable");
+        let items = gap["items"].as_array().expect("items");
+        let titles = gap["titles"]
+            .as_array()
+            .unwrap_or_else(|| panic!("no `titles`: {gap}"));
+        assert_eq!(
+            titles.len(),
+            items.len(),
+            "`titles` cut with `items`: {gap}"
+        );
+        items.iter().cloned().zip(titles.iter().cloned()).collect()
+    };
+    for (item, titles) in titled(&document) {
+        let name = item[0].as_str().expect("a name");
+        let step: usize = name["PACE-".len()..].parse().expect("a step number");
+        assert_eq!(item.as_array().map(Vec::len), Some(1), "{item}");
+        assert_eq!(titles, json!([format!("A step {step}")]), "{name}");
+    }
+    assert!(
+        gap_lines(&run.stdout)
+            .iter()
+            .all(|line| !line.contains("A step")),
+        "a gap line prints no title: {}",
+        run.show()
+    );
+
+    // 51 unreachable steps: 50 items, 50 title lists, one more.
+    let root = generated(&flow.scratch, "fifty-one", table, 52, "A step", |_| {
+        String::new()
+    });
+    let document = flow.json(&root, &[]);
+    assert_eq!(row(&document, "unreachable")["count"], json!(51));
+    let pairs = titled(&document);
+    assert_eq!(pairs.len(), 50, "50 items and 50 title lists");
+    assert_eq!(pairs[49].1, json!(["A step 51"]));
+    assert!(
+        gap_lines(&flow.text(&root, &[]).stdout)
+            .iter()
+            .any(|line| line.contains(", PACE-0051, \u{2026} and 1 more | ")),
+        "the text's tail"
     );
 
     // At exactly 50, no tail.

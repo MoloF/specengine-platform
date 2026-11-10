@@ -250,12 +250,14 @@ describe("a stage narrows (ST-6)", () => {
     await drawn("MEC-HARBOUR-LOG");
     expect(Array.from(HARBOUR_LOG_TITLE)).toHaveLength(160);
     expect(within(panel()).getAllByText(HARBOUR_LOG_TITLE).length).toBeGreaterThan(0);
+    // Its first paragraph holds the token (doc-modal DM-14: the panel shows the lead alone).
     expect(await within(panel()).findByText(new RegExp(HARBOUR_LOG_TOKEN))).toBeTruthy();
-    // Its links agree with the arrow the canvas draws into it.
-    await waitFor(() => {
-      expect(within(panel()).getAllByText("MEC-PILOT-CALL").length).toBeGreaterThan(0);
-    });
-    expect(within(panel()).queryByText(/No link is written in this node/)).toBeNull();
+    // Its links, in the document modal, agree with the arrow the canvas draws into it: the other end by its title.
+    fireEvent.click(within(panel()).getByRole("button", { name: "Open document" }));
+    const modal = await screen.findByRole("dialog");
+    const links = await within(modal).findByRole("region", { name: "Links" });
+    expect(within(links).getByRole("link", { name: "Pilot call" }).getAttribute("href")).toBe("#/harbor-sim/tree/MEC-PILOT-CALL/page");
+    expect(within(links).getByText("follows")).toBeTruthy();
   });
 });
 
@@ -281,7 +283,9 @@ describe("a gap to the AI (ST-12)", () => {
     expect(spies.createCard.mock.calls[0]?.[1]).toMatchObject({ target: ["MEC-FAIRWAY", "MEC-PILOTAGE"], goal: cause });
     await within(panel()).findByText(/created\.$/);
     fireEvent.click(box("MEC-FAIRWAY"));
-    const cards = await within(panel()).findByRole("region", { name: /cards/i });
+    // The box's cards are the document's: its modal holds them (doc-modal DM-14).
+    fireEvent.click(await within(panel()).findByRole("button", { name: "Open document" }));
+    const cards = await within(await screen.findByRole("dialog")).findByRole("region", { name: /cards/i });
     expect(await within(cards).findByText("Gap cycle-no-repeat: MEC-FAIRWAY + MEC-PILOTAGE")).toBeTruthy();
     expect(spies.getTask).not.toHaveBeenCalled();
     expect(spies.getTasks).not.toHaveBeenCalled();
@@ -289,7 +293,7 @@ describe("a gap to the AI (ST-12)", () => {
 });
 
 describe("the reads stay bounded (ST-13)", () => {
-  it("(a) to (e): the lens root's four reads; a stage one; a box two; a scope three; Back and Forward none", async () => {
+  it("(a) to (e): the lens root's four reads; a stage one; a box one; a scope three; Back and Forward none", async () => {
     const spies = renderMock(LENS);
     await drawn("DOM-BERTHS");
     await settled();
@@ -307,9 +311,11 @@ describe("the reads stay bounded (ST-13)", () => {
       expect(panelTitle()).toBe("Mooring");
     });
     await settled();
-    expect(readLines(spies).filter((line) => !before.includes(line)).sort()).toEqual(["node MEC-MOORING", 'trace {"ref":"MEC-MOORING"}']);
+    // The box reads its document alone: its work state and marks are the drawing read's (doc-modal DM-14).
+    expect(readLines(spies).filter((line) => !before.includes(line)).sort()).toEqual(["node MEC-MOORING"]);
     before = readLines(spies);
-    fireEvent.click(within(panel()).getByRole("link", { name: "Open Berths and moorings" }));
+    // The box's group by its title, a place link (doc-modal DM-14).
+    fireEvent.click(within(panel()).getByRole("link", { name: "Berths and moorings" }));
     await waitFor(() => {
       expect(panelTitle()).toBe("Berths and moorings");
     });
@@ -335,7 +341,7 @@ describe("the reads stay bounded (ST-13)", () => {
     expect(spies.getTree).not.toHaveBeenCalled();
   });
 
-  it("(f) an old link with All modules stored: the lens root's reads, one tree, the parent's three, the box's two; the hash replaced", async () => {
+  it("(f) an old link with All modules stored: the lens root's reads, one tree, the parent's three, the box's one; the hash replaced", async () => {
     const spies = renderMock("#/harbor-sim/flow/MEC-PILOT-RETURN");
     const before = window.history.length;
     await hashIs("#/harbor-sim/flow/MEC-PILOT-RETURN?module=&scope=DOM-PILOTS");
@@ -352,7 +358,6 @@ describe("the reads stay bounded (ST-13)", () => {
         'flow {"root":"DOM-PILOTS","depth":1,"in_flow":true,"trace":true}',
         'trace {"ref":"DOM-PILOTS","summary":true}',
         "node DOM-PILOTS",
-        'trace {"ref":"MEC-PILOT-RETURN"}',
         "node MEC-PILOT-RETURN",
       ].sort(),
     );
@@ -450,7 +455,7 @@ describe("the aside scenarios (flow-scenario)", () => {
     await within(dialog).findByRole("group", { name: "puzzle" });
     expect(spies.getFlow.mock.calls.slice(before).map((call) => call[1])).toEqual([{ root: "WBAY-KILN", depth: 1 }]);
     expect(["edict", "hunch", "puzzle"].map((kind) => within(dialog).getByRole("group", { name: kind }).querySelectorAll("li").length)).toEqual([32, 59, 50]);
-    expect(within(dialog).getAllByRole("link")[0]?.getAttribute("href")).toBe("#/harbor-sim/tree/EDICT-0001");
+    expect(within(dialog).getAllByRole("link")[0]?.getAttribute("href")).toBe("#/harbor-sim/tree/EDICT-0001/page");
     fireEvent.keyDown(dialog, { key: "Escape" });
     expect(document.activeElement).toBe(within(places()).getByRole("button", { name: "Records for the AI (141)" }));
   });

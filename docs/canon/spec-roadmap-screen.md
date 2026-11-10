@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-11
 ---
 
 # The Roadmap screen
@@ -18,7 +18,7 @@ The plan drawn read-only, computing nothing (ADR-0052, ADR-0033); `roadmap-scree
 
 Header: `Plan::summary`'s line, Read again; tabs Lanes, Chain (kept per project).
 
-- **Lanes**, the text twin and keyboard path: jump buttons to lane headings; per group in served order its name, Current, MVP cut, counts, a bar (`aria-hidden`, the sum beside it), cards; the cut rule after the `mvp_cut` release; Pool, then its tasks; Unplaced, `release <as written>`; Notes. A card: position, ID to the Tree, title, `status` and `priority` raw, the estimate with its unit or "unestimated", "Waits on" links, "In a cycle", its tasks' states.
+- **Lanes**, the text twin and keyboard path: jump buttons to lane headings; per group in served order its name, Current, MVP cut, counts, a bar (`aria-hidden`, the sum beside it), cards; the cut rule after the `mvp_cut` release; Pool, then its tasks; Unplaced, `release <as written>`; Notes. A card: position, ID a document link (`doc-view.md`), title, `status` and `priority` raw, the estimate with its unit or "unestimated", "Waits on" links, "In a cycle", its tasks' states.
 - **Chain**, lazy `@xyflow/react`: a column per group, a box at (column, item index), no layering; an edge per `waits_on` pair of two drawn items, across lanes, none to itself; at most 200 boxes in whole lanes, then `<k> of <n> items not drawn`. A click selects by route, moving no focus. The Graph's read-only props, handles closed (`isConnectableStart`/`End`, `connectOnClick` false); attribution hidden, credited "Drawn with React Flow (MIT)".
 
 ## States and live
@@ -34,7 +34,7 @@ Loading a skeleton, `aria-busy`. A refusal or the exit-1 document: `ErrorPanel`,
 
 ## Mock
 
-harbor-sim's plan in its own words (`ui/src/mocks/roadmap.ts`), every shape in `normal`, 500 items in `large`; ledger-api has no `[roadmap]`: its 503, the scenario's under `error`. Plan items are not in the mock corpus: a card's Tree link resolves to nothing.
+harbor-sim's plan in its own words (`ui/src/mocks/roadmap.ts`), every shape in `normal`, 500 items in `large`; ledger-api has no `[roadmap]`: its 503, the scenario's under `error`. Plan items are not in the mock corpus: a card's document link finds nothing.
 
 ## Known limits
 

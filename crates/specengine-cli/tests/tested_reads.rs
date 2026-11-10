@@ -1158,8 +1158,13 @@ fn before_record(program: &Path, strip: bool, tag: &str) -> Vec<Value> {
                 let json = without_read_tested(&read.json_run.stdout, case.keys);
                 // docs/features/flow-scenario.md FS-8: a shown node's
                 // `ancestors` out too; a bundle's own `ancestors` layer stays.
+                // docs/features/doc-modal.md DM-1: a shown link's `title`
+                // and `end_kind` out too, only beside `end_kind`.
                 if case.args.first().map(String::as_str) == Some("show") {
-                    common::keys::without_keys(&json, &common::keys::SHOW_KEYS)
+                    common::keys::without_doc_modal_keys(&common::keys::without_keys(
+                        &json,
+                        &common::keys::SHOW_KEYS,
+                    ))
                 } else {
                     json
                 }

@@ -288,6 +288,12 @@ pub(crate) struct ShowLink {
     pub origin: LinkOrigin,
     pub at: Option<String>,
     pub name: Option<String>,
+    /// The title of the node `name` names; `null` when unresolved or
+    /// untitled.
+    pub title: Option<String>,
+    /// The kind of the node `name` names; `null` when unresolved or
+    /// kindless.
+    pub end_kind: Option<String>,
     pub written: String,
     pub path: String,
     pub line: usize,
@@ -1230,6 +1236,8 @@ pub(crate) struct FlowGap {
     pub count: Option<usize>,
     /// The printed items, each a list of names.
     pub items: Vec<Vec<String>>,
+    /// Parallel to `items`: each member's title, `null` when it has none.
+    pub titles: Vec<Vec<Option<String>>>,
     /// One line: why it was not counted, or, above 0, how to clear it;
     /// `null` at 0.
     pub cause: Option<String>,

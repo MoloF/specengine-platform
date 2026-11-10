@@ -1,8 +1,7 @@
 import { memo, useId, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import type { CheckQuery } from "../api/queries";
 import type { CheckReport } from "../api/types";
-import { pushHash } from "../app/location";
-import { sectionHash } from "../app/routes";
+import { openDoc } from "../app/location";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField } from "../ui/keys";
@@ -189,7 +188,7 @@ function FindingList({ project, report }: { project: string; report: CheckReport
         if (!isSpecPath(here.finding.path)) {
           return;
         }
-        pushHash(sectionHash(project, "tree", here.finding.path));
+        openDoc(here.finding.path);
         break;
       default:
         return;

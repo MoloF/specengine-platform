@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-11
 ---
 
 # UI languages: the chrome in English and Russian
@@ -43,7 +43,7 @@ Byte for byte in either language: the daemon's `message`, notes, `reason`, gap `
 
 ## Dates and counts
 
-Plural forms by `Intl.PluralRules` (Russian 1, 21 `one`; 2-4 `few`; 0, 5-20 `many`), numbers ungrouped. `ui/time.ts` `formatUtc(stored, t)` fills `ui.time.stamp` from `Intl.DateTimeFormat("en-US", {timeZone: "UTC", hourCycle: "h23", …})` parts: `2026-10-05 21:14 UTC`, Russian `05.10.2026 21:14 UTC`, unparsable raw. `formatAge(stored, now, t)`: plural keys.
+Plural forms by `Intl.PluralRules` (Russian 1, 21 `one`; 2-4 `few`; 0, 5-20 `many`), numbers ungrouped. `ui/time.ts` `formatUtc(stored, t)` fills `ui.time.stamp` from `Intl.DateTimeFormat("en-US", {timeZone: "UTC", hourCycle: "h23", …})` parts: `2026-10-05 21:14 UTC`, Russian `05.10.2026 21:14 UTC`, unparsable raw. `formatAge(stored, now, t)`: plural keys. An English `_one` reads right at 1 ("1 link not shown"; RM-0091, `i18n/plural.test.ts`).
 
 ## Converted
 
@@ -59,12 +59,11 @@ Every screen: Home, Inbox, Tasks, Board, Roadmap, Spec tree, Graph, Health, Ques
 
 The gate is **first-load JS**: the entry `<script>` of `ui/dist/index.html` plus every `<link rel="modulepreload">` it lists, raw bytes on disk, as the daemon sends them (no `content-encoding`, `serve-ui.md`). Each UI slice prints it in its "Implementation" with the first-load gzip (Vite's per-chunk figures, summed) and `ru-*.js` raw and gzip, for a hub behind a compressing proxy. Baseline, 2026-11-09 (RM-0090): 768.96 kB (768 959 B: `index-*.js` 622.62, `Icon-*.js` 140.15 holding i18next and English, four small chunks), gzip 219.15 kB; `ru-*.js` 134.98 kB, gzip 31.13 kB.
 
-**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a screen or part out of first load (a lazy chunk, as `HealthRegions`, `RoundScreen` and `Markdown` are) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's 500 kB warning on `index-*.js` is not the gate.
+**Bar: 845 kB**, the baseline plus 10 %. A slice that would pass it moves a screen or part out of first load (a lazy chunk, as `HealthRegions`, `RoundScreen`, `Markdown` and `DocBody` are) before it ships; the bar is never raised. `ru-*.js` has none: only a Russian viewer fetches it, once a page. Vite's 500 kB warning on `index-*.js` is not the gate.
 
 ## Known limits
 
 - A Russian start on a slow link shows an empty page for up to 2 s, then English until the chunk lands.
-- English keeps the pre-catalog grammar slips byte-equal ("1 links not shown", "1 tokens"): RM-0091.
 - The prose rule is a net, not a proof: a bare lower-case word passes; review covers it.
 - Spec content carries no `lang`; one choice per browser, no cross-tab sync.
 - The Russian awaits the owner's review; rewording breaks no test.

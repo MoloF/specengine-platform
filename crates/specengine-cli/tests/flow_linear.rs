@@ -57,6 +57,11 @@
 //! with nothing removed. The golden and its pinned blob do not
 //! change. M: a ` | in flow` field on a text node line.
 //!
+//! docs/features/doc-modal.md (RM-0095) DM-3 and its test churn: a gap
+//! row's `titles` is taken out too
+//! ([`common::keys::without_doc_modal_keys`], only from a gap row; a node's
+//! `title` stays); the text with nothing removed.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -69,7 +74,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use common::graph::spec30;
-use common::keys::{FLOW_KEYS, without_keys};
+use common::keys::{FLOW_KEYS, without_doc_modal_keys, without_keys};
 use common::{Run, Scratch, one_json_document, repository_root};
 use serde::Serialize as _;
 use serde_json::Value;
@@ -300,9 +305,10 @@ fn differences(row: &Row, text: &Run, json: &Run, first: &mut Option<String>) ->
         return parts;
     }
     let code = row.code.expect("a row of bytes has its code");
-    // flow-scenario's keys out of a flow row's JSON, every other byte kept.
+    // flow-scenario's keys out of a flow row's JSON, and doc-modal's gap
+    // `titles` (DM-3), every other byte kept.
     let json_before = if command(row) == "flow" && json.stdout.starts_with('{') {
-        without_keys(&json.stdout, &FLOW_KEYS)
+        without_doc_modal_keys(&without_keys(&json.stdout, &FLOW_KEYS))
     } else {
         json.stdout.clone()
     };

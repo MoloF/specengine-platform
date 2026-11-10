@@ -61,6 +61,17 @@
 //! tail within the cut, the sum within `MAX_RESULT_CHARS`; the maximum
 //! printed (`flow_cut_stays_under_the_declared_cap`).
 //!
+//! docs/features/doc-modal.md (RM-0095) DM-1 and DM-3: a link's end and a
+//! gap's member now carry their titles in the JSON alone, uncut, as corpus
+//! content: on titles of control characters (six-fold in JSON) the links of
+//! `MEC-STAMINA` and the flow ring pass `MAX_RESULT_CHARS`, the residue
+//! docs/canon/mcp-read.md "Size" lists as long corpus titles. The cap tests
+//! keep the bounded claim on the same corpora with ordinary titles of the
+//! same length (control characters stay in the questions' bodies); the
+//! residue is pinned to its measured size on the control titles
+//! (`doc_modal_control_title_residue_is_its_measured_size`), so a later
+//! change shows.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -235,32 +246,126 @@ fn flow_cut_stays_under_the_declared_cap() {
             ("get_flow", json!({"root": "S-0001"})),
         ],
     );
-    // Titles of control characters: each escapes to six in JSON.
-    let control = scratch.dir("control");
-    write(
-        &control,
-        "specengine.toml",
-        "[project]\nslug = \"control\"\n\n[ids]\nS = { kind = \"pace\", width = 4 }\n",
-    );
-    let c = controls();
-    for n in 1..=300 {
-        let to = if n == 1 { 300 } else { n - 1 };
-        write(
-            &control,
-            &format!("docs/spec/s-{n:04}.md"),
-            format!(
-                "---\nid: S-{n:04}\nlinks:\n  follows: [S-{to:04}]\n---\n\n# {} zzq\n\nzzq\n",
-                c.repeat(7)
-            ),
-        );
-    }
+    // A ring of 300 long titles, ordinary since doc-modal (DM-3: the
+    // cycle row titles its 300 members too; the control titles' residue is
+    // `doc_modal_control_title_residue_is_its_measured_size`).
+    let ring = scratch.dir("ring");
+    flow_ring(&ring, &ordinary(controls().chars().count() * 7));
     largest = largest.max(measure(
-        "flow-control-titles",
-        &control,
+        "flow-ring-titles",
+        &ring,
         &home,
         &[("get_flow", json!({}))],
     ));
     eprintln!("flow-read get_flow maximum: {largest}");
+}
+
+/// `n` ordinary characters: a title as long as one of control characters,
+/// with no escape in JSON.
+fn ordinary(n: usize) -> String {
+    "w".repeat(n)
+}
+
+/// The flow ring of `flow_cut_stays_under_the_declared_cap`: 300 steps,
+/// each following the one before, the first the last, every title `title`
+/// then ` zzq`.
+fn flow_ring(root: &Path, title: &str) {
+    write(
+        root,
+        "specengine.toml",
+        "[project]\nslug = \"control\"\n\n[ids]\nS = { kind = \"pace\", width = 4 }\n",
+    );
+    for n in 1..=300 {
+        let to = if n == 1 { 300 } else { n - 1 };
+        write(
+            root,
+            &format!("docs/spec/s-{n:04}.md"),
+            format!(
+                "---\nid: S-{n:04}\nlinks:\n  follows: [S-{to:04}]\n---\n\n# {title} zzq\n\nzzq\n"
+            ),
+        );
+    }
+}
+
+/// The questions of `ac15_nodes_and_bundles_cut_stay_under_the_declared_cap`:
+/// a copy of spec-a with 3 000 open questions on MEC-STAMINA, each titled
+/// `title` then its number, its body `body`.
+fn questions(scratch: &Scratch, dir: &str, title: &str, body: &str) -> std::path::PathBuf {
+    let root = scratch.copy("spec-a", dir);
+    replace(
+        &root,
+        "specengine.toml",
+        "TERM = { kind = \"term\",        shape = \"name\" }\n",
+        "TERM = { kind = \"term\",        shape = \"name\" }\nOQ   = { kind = \"question\",    width = 4 }\n",
+    );
+    for n in 0..3_000 {
+        write(
+            &root,
+            &format!("docs/records/OQ/OQ-{n:04}.md"),
+            format!(
+                "---\nid: OQ-{n:04}\nclass: canon\nstatus: open\nworking_answer: A-101\n\
+                 refs: [MEC-STAMINA]\nowner: owner\nreviewed: 2026-09-20\n---\n\n# {title}{n}\n\n\
+                 {body}\n"
+            ),
+        );
+    }
+    root
+}
+
+/// The sizes of one call, the CLI library's answer within the CLI's cut, by
+/// `measure`'s rules but the cap: `(characters, UTF-16 units)` of the text
+/// plus the serialized `structuredContent`.
+fn residue(root: &Path, home: &Path, tool: &str, args: Value) -> (usize, usize) {
+    let env = cli_env(root, Some(home));
+    let globals = Globals::default();
+    let mut session = Session::open(Era::Legacy, &[], Some(root), Home::At(home));
+    let schemas = output_schemas(&session.tools());
+    let result = checked_call(&mut session, &schemas, tool, args.clone(), &env, &globals);
+    assert_eq!(result["isError"], json!(false), "{tool} {args}");
+    let (text, structured, chars, units) = sizes(&result);
+    eprintln!(
+        "doc-modal residue {tool} {args}: text {text}, structuredContent {structured}, sum \
+         {chars} chars, {units} UTF-16 units"
+    );
+    assert!(
+        before_tail(content_text(&result)).chars().count() <= OUTPUT_CAP_CHARS,
+        "{tool} {args}: the text within the CLI's cut"
+    );
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+    (chars, units)
+}
+
+/// docs/features/doc-modal.md DM-1 and DM-3, the residue (docs/canon/mcp-read.md
+/// "Size", long corpus titles): on the control-character titles the cap
+/// tests had before the slice, `get_node {id: "MEC-STAMINA", with:
+/// ["links"]}` over 3 000 questions and `get_flow {}` over the ring of 300
+/// are each their measured size (the 2026-11-10 measurement), above
+/// `MAX_RESULT_CHARS`: the titles of link ends and gap members are corpus
+/// content, uncut. A change of either size shows here.
+#[test]
+fn doc_modal_control_title_residue_is_its_measured_size() {
+    let scratch = Scratch::new("size-residue");
+    let home = scratch.home("h");
+    let c = controls();
+    let root = questions(&scratch, "questions", &c.repeat(3), "x");
+    let links = residue(
+        &root,
+        &home,
+        "get_node",
+        json!({"id": "MEC-STAMINA", "with": ["links"]}),
+    );
+    let ring = scratch.dir("ring");
+    flow_ring(&ring, &c.repeat(7));
+    let flow = residue(&ring, &home, "get_flow", json!({}));
+    assert_eq!(links, (549_458, 549_458), "get_node with links");
+    assert_eq!(flow, (576_111, 576_111), "get_flow");
+    for (chars, _) in [links, flow] {
+        assert!(
+            chars as u64 > MAX_RESULT_CHARS,
+            "the residue is past the cap"
+        );
+    }
 }
 
 #[test]
@@ -290,26 +395,17 @@ fn ac15_nodes_and_bundles_cut_stay_under_the_declared_cap() {
         &home,
         &[("get_node", json!({"id": "docs/spec/ctrl.md"}))],
     );
-    // 3 000 open questions on MEC-STAMINA with titles of control
-    // characters: the links block and the bundle at the ceiling.
-    let root = scratch.copy("spec-a", "questions");
-    replace(
-        &root,
-        "specengine.toml",
-        "TERM = { kind = \"term\",        shape = \"name\" }\n",
-        "TERM = { kind = \"term\",        shape = \"name\" }\nOQ   = { kind = \"question\",    width = 4 }\n",
+    // 3 000 open questions on MEC-STAMINA: the links block and the bundle
+    // at the ceiling. Since doc-modal (DM-1) each link carries its end's
+    // title, so the titles are ordinary, as long as the control ones were,
+    // and the control characters sit in each body; the control titles'
+    // residue is `doc_modal_control_title_residue_is_its_measured_size`.
+    let root = questions(
+        &scratch,
+        "questions",
+        &ordinary(c.chars().count() * 3),
+        &c.repeat(3),
     );
-    for n in 0..3_000 {
-        write(
-            &root,
-            &format!("docs/records/OQ/OQ-{n:04}.md"),
-            format!(
-                "---\nid: OQ-{n:04}\nclass: canon\nstatus: open\nworking_answer: A-101\n\
-                 refs: [MEC-STAMINA]\nowner: owner\nreviewed: 2026-09-20\n---\n\n# {}{n}\n\nx\n",
-                c.repeat(3)
-            ),
-        );
-    }
     largest = largest.max(measure(
         "questions",
         &root,

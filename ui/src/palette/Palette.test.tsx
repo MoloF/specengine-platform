@@ -483,7 +483,7 @@ describe("what the palette reads (AC-12)", () => {
     await waitFor(() => {
       expect(groups().find(([label]) => label === "Spec tree")?.[1]).toEqual([
         "Search the spec for '  harbour pilots '",
-        "Open 'harbour pilots' in the spec tree",
+        "Open document 'harbour pilots'",
         "RULE-TIDE-WINDOW: Entry window",
       ]);
     });
@@ -555,7 +555,7 @@ describe("matching and jumps (AC-13)", () => {
     expect(window.history.length).toBe(before);
   });
 
-  it("opens a hit with no ID by its path", async () => {
+  it("opens a hit with no ID by its path, as a document over the screen (DM-16 of doc-modal)", async () => {
     const stub = await home();
     stub.search.mockResolvedValue(aSearchResults([aSearchHit({ id: null, path: "docs/spec/tides/tide-cycle.md", title: null })]));
     await openPalette();
@@ -563,18 +563,74 @@ describe("matching and jumps (AC-13)", () => {
     key("Enter");
     const hit = await within(listbox()).findByRole("option", { name: "docs/spec/tides/tide-cycle.md" });
     fireEvent.click(hit);
-    await hashIs("#/alpha/tree/docs%2Fspec%2Ftides%2Ftide-cycle.md");
+    await hashIs("#/alpha?doc=docs%2Fspec%2Ftides%2Ftide-cycle.md");
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Overview" })).toBeTruthy();
   });
 
-  it("opens the REF as typed, trimmed and unchecked, with no call", async () => {
+  it("opens the REF as typed, trimmed and unchecked, with no search: the document over the screen (DM-16 of doc-modal)", async () => {
     const stub = await home();
     const before = callsOf(stub);
     await openPalette();
     type(" MEC-TIDES#RULE-TIDE-WINDOW ");
-    fireEvent.click(within(listbox()).getByRole("option", { name: "Open 'MEC-TIDES#RULE-TIDE-WINDOW' in the spec tree" }));
-    await hashIs("#/alpha/tree/MEC-TIDES%23RULE-TIDE-WINDOW");
+    fireEvent.click(within(listbox()).getByRole("option", { name: "Open document 'MEC-TIDES#RULE-TIDE-WINDOW'" }));
+    await hashIs("#/alpha?doc=MEC-TIDES%23RULE-TIDE-WINDOW");
     expect(callsOf(stub).search).toBeUndefined();
     expect(callsOf(stub).getTasks).toBe(before.getTasks);
+  });
+
+  // DM-16 of docs/features/doc-modal.md: a ref and a hit open the modal over the current screen, one
+  // entry; with the modal open they replace its document; the search option is unchanged.
+  it("opens the modal over the Inbox, then, with the modal open, replaces its document: one history entry in all", async () => {
+    const stub = client();
+    stub.search.mockResolvedValue(aSearchResults([aSearchHit({ id: "RULE-TIDE-WINDOW", title: "Entry window" })]));
+    renderApp(stub, "#/alpha/inbox");
+    await screen.findByRole("heading", { level: 1, name: "Inbox" });
+    const before = window.history.length;
+    await openPalette();
+    type("MEC-TIDES");
+    fireEvent.click(within(listbox()).getByRole("option", { name: "Open document 'MEC-TIDES'" }));
+    await hashIs("#/alpha/inbox?doc=MEC-TIDES");
+    const modal = await screen.findByRole("dialog", { name: /MEC-TIDES/ });
+    expect(window.history.length).toBe(before + 1);
+    // The chord over the modal, focus in it: the palette opens over it.
+    await waitFor(() => {
+      expect(modal.contains(document.activeElement)).toBe(true);
+    });
+    expect(chord(document.activeElement ?? document.body)).toBe(false);
+    await screen.findByRole("dialog", { name: "Jump to" });
+    type("tide");
+    fireEvent.click(within(listbox()).getByRole("option", { name: "Search the spec for 'tide'" }));
+    const hit = await within(listbox()).findByRole("option", { name: "RULE-TIDE-WINDOW: Entry window" });
+    fireEvent.click(hit);
+    await hashIs("#/alpha/inbox?doc=RULE-TIDE-WINDOW");
+    expect(window.history.length).toBe(before + 1);
+    expect(await screen.findByRole("dialog", { name: /RULE-TIDE-WINDOW/ })).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1, name: "Inbox" })).toBeTruthy();
+  });
+
+  // The review's R1 (DM-16 of docs/features/doc-modal.md): a route that shows no modal of the
+  // palette's project (it names nothing, or a project the daemon does not list) opens the document over
+  // that project's home, one entry the close goes back from.
+  it.each([
+    ["names nothing", "#/alpha/nowhere"],
+    ["names a project the daemon does not list", "#/zeta/inbox"],
+  ])("opens a document over the palette's project's home when the route %s; its close goes back there", async (_why, hash) => {
+    renderApp(client(), hash);
+    await screen.findByRole("heading", { level: 1, name: "Not found" });
+    await openPalette();
+    type("MEC-TIDES");
+    fireEvent.click(within(listbox()).getByRole("option", { name: "Open document 'MEC-TIDES'" }));
+    await hashIs("#/alpha?doc=MEC-TIDES");
+    const modal = await screen.findByRole("dialog", { name: /MEC-TIDES/ });
+    expect(screen.getByRole("heading", { level: 1, name: "Overview", hidden: true })).toBeTruthy();
+    await waitFor(() => {
+      expect(modal.contains(document.activeElement)).toBe(true);
+    });
+    // The close goes back: the open was one pushed entry, the modal's own.
+    fireEvent.keyDown(document.activeElement ?? modal, { key: "Escape" });
+    await hashIs(hash);
+    expect(screen.queryByRole("dialog")).toBeNull();
   });
 
   it("shows hostile text as text", async () => {
@@ -584,7 +640,7 @@ describe("matching and jumps (AC-13)", () => {
     expect(groups()).toEqual([
       ["Tasks", [`T-1: ${HOSTILE}State: Draft`]],
       ["Inbox", [`PR-1: ${HOSTILE}Status: Open`]],
-      ["Spec tree", ["Search the spec for 'onerror'", "Open 'onerror' in the spec tree"]],
+      ["Spec tree", ["Search the spec for 'onerror'", "Open document 'onerror'"]],
     ]);
     expect(document.querySelector("img")).toBeNull();
   });

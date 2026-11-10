@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useProjects, type CardQuery } from "../api/queries";
 import type { Card, CardEvent, CardFlow, CardNotFound } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
+import { DocLink } from "../doc/DocLink";
 import { cardPageHash, homeHash, sectionHash } from "../app/routes";
 import { rollupLook } from "../flow/labels";
 import { Badge } from "../ui/Badge";
@@ -423,9 +424,10 @@ function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, 
           <ul className="board-panel-list">
             {card.targets.map((target) => (
               <li key={target} className="board-panel-target">
-                <a href={sectionHash(project, "tree", target)}>
+                {/* The document over the card, stacked (docs/features/doc-modal.md "Acceptance criteria", DM-10). */}
+                <DocLink project={project} docRef={target}>
                   <bdi className="mono">{shownSlot(target)}</bdi>
-                </a>
+                </DocLink>
                 <TargetState rollup={rollups.get(target)} />
               </li>
             ))}

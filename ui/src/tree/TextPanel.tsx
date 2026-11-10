@@ -154,6 +154,7 @@ function HolderText({
           firstLine={holder.line}
           path={holder.path}
           target={target !== null && target.place === place ? target : null}
+          linkTo="tree"
           onFollow={onFollow}
         />
       )}

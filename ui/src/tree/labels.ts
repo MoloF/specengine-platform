@@ -1,4 +1,4 @@
-import type { BundleForm, BundleLayers, Direction, KnownSyncState, LinkState, SyncState, TreeMark } from "../api/types";
+import type { BundleForm, BundleLayers, Direction, KnownSyncState, LinkState, ShownLink, SyncState, TreeMark } from "../api/types";
 import { oneLine } from "../health/oneLine";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
@@ -127,3 +127,13 @@ export function syncLook(sync: SyncState | null, t: Translate): Look {
 
 /** The weak link type (`docs/canon/spec-cli-graph.md` "Link types"): listed after the strong ones. */
 export const WEAK_LINK_TYPE = "mentions";
+
+/** Whether a link names a node it lands on: shown by its end's title; any other stands under Technical details (docs/features/doc-modal.md "Acceptance criteria", DM-12). */
+export function isResolvedLink(link: ShownLink): link is ShownLink & { name: string } {
+  return link.state === "resolved" && link.name !== null;
+}
+
+/** Whether a link is the weak one: a document's mentions fold under their own disclosure. */
+export function isWeakLink(link: ShownLink): boolean {
+  return link.type === WEAK_LINK_TYPE;
+}

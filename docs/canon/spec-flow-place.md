@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # The Flow screen: the place in the hash
@@ -22,7 +22,7 @@ edge=<from>,<to>,<type>[,<kind>]   no fourth part: kind null
 
 `FlowPlace {module, scope, stage, select}`: `module` null when absent (the stored choice), `""` All modules; `scope` null for the lens root (`spec-flow-screen.md` "Reads"); `stage` null for All stages; `select` `{node}`, `{edge: {from, to, type, kind}}` or null. The `/<name>` segment selects a node, as `sectionHash` writes it.
 
-- **Splitting.** `parseHash` splits off the first raw `?` for `flow` alone; a `?` in a Tree id stays in it.
+- **Splitting.** `parseHash` splits off the first raw `?` on every route, so a raw `?` ends a Tree id; the `doc` pairs, the document modal's (`doc-view.md` "The hash"), leave first and Flow reads the rest.
 - **Writing.** `flowHash(project, place)`: keys in the order module, scope, stage, edge, each only when non-null; each value and each edge part through `encodeURIComponent`, the parts joined by a raw `,`.
 - **Reading.** `parseFlowPlace(route)` decodes with `decodeURIComponent`, never `URLSearchParams` (`+` is no space). A key drops when its value fails to decode, when it is unknown, when `scope` or `stage` is empty, or when `edge` has fewer than three parts or an empty one. The first of a repeated key wins; a name wins over an `edge`.
 - **Written hashes** name the effective module whenever `[[module]]` serves one (`module=` for All), never otherwise. A literal stage `-` cannot be asked, as in `spec trace`.
@@ -32,7 +32,7 @@ Examples: `#/harbor-sim/flow/MEC-MOORING?module=&scope=DOM-BERTHS&stage=quayside
 
 ## History
 
-A scope, stage or module change pushes: a place link, Space, a double-click, Open. A selection, an arrow, Esc's clear, a seek's fix and a correction replace; a gap activation's seek pushes. On entering Flow, a bare `#/<p>/flow` (the nav's link) is replaced by the project's last place in this Shell's life; within Flow a bare hash is the lens root.
+A scope, stage or module change pushes: a place link, Space, a double-click, Open. A selection, an arrow, Esc's clear, a seek's fix and a correction replace; a gap activation's seek pushes. On entering Flow, a bare `#/<p>/flow` (the nav's link) is replaced by the project's last place in this Shell's life; within Flow a bare hash is the lens root. A replace keeps an open `doc` pair, a push drops it (`doc-view.md` "History and focus").
 
 ## The module
 
@@ -40,7 +40,7 @@ The hash's `module` wins; with none, `specengine.module.<p>` (`workspaces.md`) i
 
 ## The seek
 
-A selected name the drawing read lacks seeks once per place: `getTree({})`, then a replace with `{module, scope: parent, stage: null, select}`; a parent equal to the lens root gives `scope: null`, a top document `module: ""`. A lens root not yet known reads Top first (`useTopOnDemand`), so no lens root is written as a scope. A name the tree lacks: a note and a Tree link. The scope's own node selected is the scope view: its selection drops by a replace. An arrow not drawn drops by a replace, announcing `flow.edgeGone`.
+A selected name the drawing read lacks seeks once per place: `getTree({})` (`useTreeOnDemand`, Flow's only tree read), then a replace with `{module, scope: parent, stage: null, select}`; a parent equal to the lens root gives `scope: null`, a top document `module: ""`. A lens root not yet known reads Top first (`useTopOnDemand`), so no lens root is written as a scope. A name the tree lacks: a note and a Tree link. The scope's own node selected is the scope view: its selection drops by a replace. An arrow not drawn drops by a replace, announcing `flow.edgeGone`.
 
 ## Memory
 

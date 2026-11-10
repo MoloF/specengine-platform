@@ -1,5 +1,6 @@
 import type { TaskPackage, TaskTarget } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { Prose } from "../markdown/Prose";
@@ -27,9 +28,9 @@ function Target({ project, target }: { project: string; target: TaskTarget }) {
       {target.id !== null && target.path !== null && <p className="mono muted task-target-path">{target.path}</p>}
       {target.kind !== null && name !== null && (
         <p className="task-target-links">
-          <a href={sectionHash(project, "tree", name)}>
-            {fill(t("tasks.overview.openInTree", { name: slot("name") }), { name: <span className="sr-only">{t("tasks.overview.nameSaid", { name })}</span> })}
-          </a>
+          <DocLink project={project} docRef={name}>
+            {fill(t("tasks.overview.openDoc", { name: slot("name") }), { name: <span className="sr-only">{t("tasks.overview.nameSaid", { name })}</span> })}
+          </DocLink>
           <a href={sectionHash(project, "graph", name)}>
             {fill(t("tasks.overview.showInGraph", { name: slot("name") }), { name: <span className="sr-only">{t("tasks.overview.nameSaid", { name })}</span> })}
           </a>
@@ -66,9 +67,9 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
                   {criterion.ref === null ? (
                     <span className="plain-tag">{t("tasks.overview.freeText")}</span>
                   ) : (
-                    <a className="mono" href={sectionHash(project, "tree", criterion.ref)}>
+                    <DocLink className="mono" project={project} docRef={criterion.ref}>
                       {criterion.ref}
-                    </a>
+                    </DocLink>
                   )}
                 </p>
                 {criterion.text === null ? (
@@ -101,9 +102,9 @@ export function OverviewPanel({ project, task }: { project: string; task: TaskPa
           <ul className="task-names">
             {task.affected_nodes.map((id) => (
               <li key={id}>
-                <a className="mono" href={sectionHash(project, "tree", id)}>
+                <DocLink className="mono" project={project} docRef={id}>
                   {id}
-                </a>
+                </DocLink>
               </li>
             ))}
           </ul>

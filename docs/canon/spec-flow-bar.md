@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # The Flow screen: the bar, Gaps and Records for the AI
@@ -22,12 +22,12 @@ The drawing read's ten rows: those found, in served order; those not measured; t
 - **Items:** eight, then "Show all <n>" (focus to the ninth); members by title joined ` + `; each a button, but `no-start`'s scope, text. Activating one closes the control, then selects its first member by a replace when drawn, else seeks it, the fix a push (`spec-flow-place.md` "The seek"); marks every drawn member, centres the first, focus to the panel heading.
 - **Hand to your AI**, beside each measured item: New card preset (`NewCardDialog` `preset`), members as targets in order, the `cause` verbatim as goal, `flow.handTitle` (`flow.handTitleCut` past 120 characters). Create is one `createCard`; no `T-` task. `no-start` hands the scope's root when rooted, nothing at Top.
 - **Marks.** A drawn box a row names shows "Gap"; a group box its served `gaps`.
-- **Titles.** A member's title comes from a read in hand; while the control is open and a member has none, the tree is read once (`useTreeOnDemand`), else the name shows (`spec-flow-screen.md` "Known limits").
+- **Titles.** A member's title is the drawing read's gap `titles` (`spec-flow.md` "Output"), else its name shows; the control reads nothing (RM-0101).
 
 ## Records for the AI
 
 - **The button**, subtle, at the foot of the places pane: `flow.records.open` with N, the drawing read's `not_in_flow` for a scope read; in a stage view the held scope read's, with no read of its own, else `flow.records.openPlain`. None at an unrooted Top, at N = 0, or on a read the daemon did not cut (`not_in_flow` null).
-- **The dialog** (`Dialog`, 600 px, `aria-modal`) is labelled by its `h2`, `flow.records.title` with N, then `flow.records.about`. Its read, `recordsForm(scope)`, the scope read uncut and without trace, is made only while it is open, and a live mark re-reads it only then. It lists the read's nodes with `in_flow: false` but the scope's own: those with an ID grouped by raw `kind` (sorted, `flow.records.noKind` last), each group a `role="group"` labelled by its heading, entries in served order, each a Spec tree link (`sectionHash`) by title, a folded one adding `flow.holds`; ID-less nodes not listed, one line `flow.records.noId` linking the Spec tree at the scope. The first 200 (`RECORDS_SHOWN`), then `flow.records.showAll`, focus to the 201st.
+- **The dialog** (`Dialog`, 600 px, `aria-modal`) is labelled by its `h2`, `flow.records.title` with N, then `flow.records.about`. Its read, `recordsForm(scope)`, the scope read uncut and without trace, is made only while it is open, and a live mark re-reads it only then. It lists the read's nodes with `in_flow: false` but the scope's own: those with an ID grouped by raw `kind` (sorted, `flow.records.noKind` last), each group a `role="group"` labelled by its heading, entries in served order, each a `DocLink` by title opening the document modal over the dialog (`doc-view.md`), a folded one adding `flow.holds`; ID-less nodes not listed, one line `flow.records.noId` linking the Spec tree at the scope. The first 200 (`RECORDS_SHOWN`), then `flow.records.showAll`, focus to the 201st.
 - **States:** a skeleton, `flow.records.reading`; a failure, `flow.records.failed`, the daemon's words `lang="en"`, a Retry `Button`; none out of the flow, `EmptyState` `flow.records.none`. Close or Esc returns focus to the button; a key inside reaches no Flow shortcut.
 
 ## The cut's empty states

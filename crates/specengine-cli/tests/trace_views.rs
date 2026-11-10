@@ -47,7 +47,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use common::graph::spec30;
-use common::keys::{FLOW_KEYS, without_keys};
+use common::keys::{FLOW_KEYS, without_doc_modal_keys, without_keys};
 use common::proposal::{LATER, Pair};
 use common::{Run, Scratch, fixture, index, md_files, read, read_text, replace, write};
 use serde_json::{Value, json};
@@ -866,9 +866,10 @@ fn before_rows() -> Vec<Before> {
 /// the binary before it wrote. A key left with another value stays, and the
 /// comparison shows it. docs/features/flow-scenario.md (RM-0094), its test
 /// churn: the three flow keys of that slice are taken out first, whatever their value
-/// ([`without_keys`]).
+/// ([`without_keys`]); docs/features/doc-modal.md (RM-0095), its test churn:
+/// a gap row's `titles` too, only from a gap row ([`without_doc_modal_keys`]).
 fn without_this_slice(stdout: &str) -> String {
-    without_keys(stdout, &FLOW_KEYS)
+    without_doc_modal_keys(&without_keys(stdout, &FLOW_KEYS))
         .replace("\"stage\":null,", "")
         .replace("\"rollup\":null,", "")
         .replace("\"counts\":null,", "")

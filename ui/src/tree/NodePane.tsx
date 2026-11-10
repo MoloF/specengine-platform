@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
 import { useNode, type InboxQuery } from "../api/queries";
-import type { ShownNode } from "../api/types";
+import { openDocFrom } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
 import { sectionHash } from "../app/routes";
 import { useTranslate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
 import { CardsBlock } from "../trace/CardsBlock";
+import { Button } from "../ui/Button";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import type { TextMode } from "../markdown/TextMode";
@@ -16,6 +17,7 @@ import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { useRetryFocus } from "../ui/useRetryFocus";
 import { BindingsPanel } from "./BindingsPanel";
 import { BundlePanel } from "./BundlePanel";
+import { Facts } from "./Facts";
 import { LinksPanel } from "./LinksPanel";
 import { proposalsFor } from "./matching";
 import { ProposalsPanel } from "./ProposalsPanel";
@@ -29,61 +31,6 @@ const REF_FORMS = { slug: "slug/ID", section: "ID#SECTION", md: ".md" } as const
 
 /** How the pane came to show its node, for where focus goes (docs/features/ui-tree-node.md "Implementation", Keys). */
 export type Arrival = "start" | "follow" | "change";
-
-/** One holder's header facts: kind, place, status, rev, size, span hash, flags. */
-function Facts({ holder }: { holder: ShownNode }) {
-  const t = useTranslate();
-  return (
-    <dl className="facts node-facts">
-      <div className="fact">
-        <dt>{t("tree.node.kind")}</dt>
-        <dd className="mono">{holder.kind ?? "-"}</dd>
-      </div>
-      <div className="fact">
-        <dt>{t("tree.node.where")}</dt>
-        <dd className="mono">
-          {holder.path}:{holder.line}-{holder.end_line}
-        </dd>
-      </div>
-      {holder.status !== null && (
-        <div className="fact">
-          <dt>{t("tree.node.status")}</dt>
-          <dd>
-            <span className="status-tag">{holder.status}</span>
-          </dd>
-        </div>
-      )}
-      {holder.rev !== null && (
-        <div className="fact">
-          <dt>{t("tree.node.rev")}</dt>
-          <dd className="mono">{holder.rev}</dd>
-        </div>
-      )}
-      <div className="fact">
-        <dt>{t("tree.node.size")}</dt>
-        <dd>{t("tree.binding.tokens", { count: holder.tokens_est })}</dd>
-      </div>
-      <div className="fact fact-wide">
-        <dt>{t("tree.node.spanHash")}</dt>
-        <dd className="mono">{holder.span_hash}</dd>
-      </div>
-      {(holder.archived || !holder.utf8) && (
-        <div className="fact">
-          <dt>{t("tree.node.flags")}</dt>
-          <dd className="flags">
-            {holder.archived && (
-              <span className="plain-tag">
-                <Icon name="archived" />
-                {t("tree.row.archived")}
-              </span>
-            )}
-            {!holder.utf8 && <span className="plain-tag">{t("tree.node.notUtf8")}</span>}
-          </dd>
-        </div>
-      )}
-    </dl>
-  );
-}
 
 /** The node pane with no node chosen: the view's heading and where to start. */
 export function NoNodePane() {
@@ -313,6 +260,18 @@ export function NodePane({
         </h1>
         {holders.length > 0 && (
           <div className="node-actions">
+            {/* The document view over the tree, its own links there taking the modal (docs/features/doc-modal.md "Acceptance criteria", DM-16). */}
+            <Button
+              appearance="subtle"
+              spacing="compact"
+              icon="document"
+              aria-haspopup="dialog"
+              onClick={(event) => {
+                openDocFrom(nodeRef, event.currentTarget);
+              }}
+            >
+              {t("tree.node.openDoc")}
+            </Button>
             <a className="node-action" href={sectionHash(project, "graph", nodeRef)}>
               <Icon name="graph" />
               {t("tree.node.showInGraph")}

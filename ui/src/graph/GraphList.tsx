@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import type { GraphNode, GraphView } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { linkStateLook } from "../tree/labels";
@@ -15,9 +16,9 @@ function NodeRow({ project, node }: { project: string; node: GraphNode }) {
   return (
     <li className="graph-list-node">
       <p className="graph-list-node-head">
-        <a className="mono graph-list-name" href={sectionHash(project, "tree", name)}>
+        <DocLink className="mono graph-list-name" project={project} docRef={name}>
           {name}
-        </a>
+        </DocLink>
         <span className="kind-tag">
           <span className="sr-only">{t("graph.list.kind")}</span>
           {node.kind ?? "-"}

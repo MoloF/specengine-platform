@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useNode, type ProposalQuery } from "../api/queries";
 import type { Choice, InboxEntry, Proposal, ProposalOption } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { ActOff } from "../board/ActOff";
 import { Prose } from "../markdown/Prose";
 import { DEFAULT_TEXT_MODE, TextModeSwitch, type TextMode } from "../markdown/TextMode";
@@ -38,14 +39,14 @@ const StagedChoice = lazy(() => import("./StagedChoice").then((module) => ({ def
  */
 const InterpretationSection = lazy(() => import("./InterpretationSection").then((module) => ({ default: module.InterpretationSection })));
 
-/** The target in the Spec tree: its text, links, bundle and other proposals. */
+/** The target as a document: the modal over the Inbox (docs/features/doc-modal.md "Acceptance criteria", DM-8). */
 function OpenInTree({ project, id }: { project: string; id: string }) {
   const t = useTranslate();
   return (
     <p className="target-open">
-      <a href={sectionHash(project, "tree", id)}>
-        {fill(t("inbox.card.openInTree", { id: slot("id") }), { id: <span className="sr-only">{t("inbox.card.openInTreeId", { id })}</span> })}
-      </a>
+      <DocLink project={project} docRef={id}>
+        {fill(t("inbox.card.openDoc", { id: slot("id") }), { id: <span className="sr-only">{t("inbox.card.openDocId", { id })}</span> })}
+      </DocLink>
     </p>
   );
 }

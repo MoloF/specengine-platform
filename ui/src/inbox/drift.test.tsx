@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DriftEvidence, DriftRow, Proposal, StoredDriftRow } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { docPageHash } from "../app/routes";
 import { driftClassLook, isEditorialRow } from "../health/labels";
 import { aDriftRow, aProposal } from "../test/builders";
 import { renderApp } from "../test/render";
@@ -431,11 +431,11 @@ describe("a drift item's rows on its card (UI-2, UI-3, UI-4 of ui-drift-evidence
         return [...badge(head), textOf(id), id?.getAttribute("href") ?? null, textOf(head?.querySelector(".kind-tag")), Array.from(head?.querySelectorAll(".plain-tag") ?? [], (tag) => tag.textContent)];
       }),
     ).toEqual([
-      ["Check", "finding-warning", "R-12", sectionHash("alpha", "tree", "R-12"), "implements", ["Pre-existing"]],
+      ["Check", "finding-warning", "R-12", docPageHash("alpha", "R-12"), "implements", ["Pre-existing"]],
       ["Fix", "finding-error", "No ID", null, "verifies", ["Pre-existing"]],
-      ["Check", "finding-warning", "A-1", sectionHash("alpha", "tree", "A-1"), "implements", ["Pre-existing", "Editorial"]],
-      ["Check", "finding-warning", "A-1", sectionHash("alpha", "tree", "A-1"), "implements", []],
-      ["Fix", "finding-error", "A-1", sectionHash("alpha", "tree", "A-1"), "implements", []],
+      ["Check", "finding-warning", "A-1", docPageHash("alpha", "A-1"), "implements", ["Pre-existing", "Editorial"]],
+      ["Check", "finding-warning", "A-1", docPageHash("alpha", "A-1"), "implements", []],
+      ["Fix", "finding-error", "A-1", docPageHash("alpha", "A-1"), "implements", []],
     ]);
     const metas = lines.map((line) => Array.from(line.querySelectorAll(".health-code-meta")));
     expect(metas.map(([state]) => [...badge(state), textOf(state?.querySelector(".health-code-word"))])).toEqual([

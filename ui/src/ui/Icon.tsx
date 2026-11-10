@@ -86,6 +86,8 @@ const PATHS = {
   laneClosed: "M6 3.5 10.5 8 6 12.5",
   laneOpen: "M3.5 6 8 10.5 12.5 6",
   cardPage: "M9 2.5h4.5V7 M13.5 2.5 7.5 8.5 M11.5 9.5v4h-9v-9h4",
+  // The document view (docs/features/doc-modal.md "Acceptance criteria", DM-12): a page with its corner turned.
+  document: "M3.5 1.5h6l3 3v10h-9Z M9.5 1.5v3h3 M5.5 8h5 M5.5 10.5h5",
   // The header (docs/features/design-foundation.md "The header"): the theme's three choices, the
   // language, the project and the workspace, each in front of its select's value.
   themeSystem: "M2 3h12v8H2Z M6 14h4 M8 11v3",

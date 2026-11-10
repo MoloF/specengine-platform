@@ -185,8 +185,8 @@ describe("the sheet as sent (U-02)", () => {
     expect(within(article).getByText(/^Does regeneration/).textContent).toBe("Does regeneration wait for rest?\nIt resumes after 1.5 s.");
     expect(within(article).getByText("Working answer").nextElementSibling?.textContent).toBe("yes, 1.5 s");
     expect(within(article).getByText("Another answer costs").nextElementSibling?.textContent).toBe("A second timer");
-    expect(within(article).getByRole("link", { name: "Stamina (MEC-STAMINA)" }).getAttribute("href")).toBe("#/alpha/tree/MEC-STAMINA");
-    expect(within(article).getByRole("link", { name: "docs/spec/regen.md" }).getAttribute("href")).toBe("#/alpha/tree/docs%2Fspec%2Fregen.md");
+    expect(within(article).getByRole("link", { name: "Stamina (MEC-STAMINA)" }).getAttribute("href")).toBe("#/alpha/tree/MEC-STAMINA/page");
+    expect(within(article).getByRole("link", { name: "docs/spec/regen.md" }).getAttribute("href")).toBe("#/alpha/tree/docs%2Fspec%2Fregen.md/page");
     expect(within(article).getByRole("link", { name: "Tune stamina (T-0004)" }).getAttribute("href")).toBe("#/alpha/tasks/T-0004");
     expect(within(article).getByRole("link", { name: "Open in Inbox: PR-0003" }).getAttribute("href")).toBe("#/alpha/inbox/PR-0003");
     for (const hidden of ["WORKTREE-X", "BRANCH-X", "contradicts", "Contradicts", "ROLE-X", "MODEL-X", "OBSERVED-X", "DOCUMENTED-X", "src/stamina.rs"]) {

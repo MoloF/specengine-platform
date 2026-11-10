@@ -1,7 +1,7 @@
 import { useId, type ReactNode, type Ref } from "react";
 import type { CheckFinding } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
-import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { useTranslate } from "../i18n";
 import { around, fill, slot } from "../i18n/fill";
 import { Icon } from "../ui/Icon";
@@ -45,8 +45,8 @@ export function HealthRegion({
 }
 
 /**
- * Where a finding is: `path:line`; an `.md` path links its node in the spec tree (no Tab stop of
- * its own: the row holds it, Enter follows it), any other path is text, `""` no file.
+ * Where a finding is: `path:line`; an `.md` path links its document (no Tab stop of its own: the row
+ * holds it, Enter opens it), any other path is text, `""` no file.
  */
 export function FindingPlace({ project, finding, linked }: { project: string; finding: CheckFinding; linked: boolean }) {
   const t = useTranslate();
@@ -56,9 +56,9 @@ export function FindingPlace({ project, finding, linked }: { project: string; fi
   const text = `${finding.path}:${String(finding.line)}`;
   if (linked && isSpecPath(finding.path)) {
     return (
-      <a className="finding-place mono" href={sectionHash(project, "tree", finding.path)} tabIndex={-1}>
+      <DocLink className="finding-place mono" project={project} docRef={finding.path} tabIndex={-1}>
         {text}
-      </a>
+      </DocLink>
     );
   }
   return <span className="finding-place mono">{text}</span>;

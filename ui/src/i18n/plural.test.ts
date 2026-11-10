@@ -103,3 +103,39 @@ describe("every plural group (LS-5 of ui-languages-sweep)", () => {
     expect(wrong).toEqual([]);
   });
 });
+
+// DM-17 of docs/features/doc-modal.md (RM-0091): the English `_one` forms that read wrong at 1, fixed;
+// at 2 each reads as before; Russian keeps its forms.
+describe("English at one (DM-17 of doc-modal, RM-0091)", () => {
+  /** Each key, its options, the fixed form at 1 and the form at 2, unchanged. */
+  const FIXED: readonly (readonly [string, Record<string, unknown>, string, string])[] = [
+    ["board.view.omitted", {}, "1 card not shown.", "2 cards not shown."],
+    ["tree.links.omitted", {}, "1 link not shown", "2 links not shown"],
+    ["tree.binding.tokens", {}, "1 token", "2 tokens"],
+    ["graph.holders", {}, "1 holder", "2 holders"],
+    ["tree.node.holders", { ref: "R" }, "1 holder: R is declared in one place. It is shown below.", "2 holders: R is declared in more than one place. Each is shown below."],
+    ["graph.details.moreText", { column: 3 }, "The column at distance 3 holds 1 more box than the canvas draws; the List holds it.", "The column at distance 3 holds 2 more boxes than the canvas draws; the List holds every one."],
+    ["tree.view.cut", {}, "Showing the first 1 node: the list was cut", "Showing the first 2 nodes: the list was cut"],
+    ["tree.commands.verifyOnly", { ref: "R", drift: "D", accept: "A" }, "Only verify is offered: R names 1 node, and D and A each name one.", "Only verify is offered: R names 2 nodes, and D and A each name one."],
+    ["graph.limit", { last: 4, shown: 1 }, "The canvas shows distance 0-4: 1 of 1 node; see the List.", "The canvas shows distance 0-4: 1 of 2 nodes; see the List."],
+    ["flow.notDrawn", { hidden: 1 }, "1 of 1 box not drawn: choose a stage, enter a group, or read the List", "1 of 2 boxes not drawn: choose a stage, enter a group, or read the List"],
+    ["roadmap.notDrawn", { hidden: 1 }, "1 of 1 item not drawn", "1 of 2 items not drawn"],
+    ["workspace.flowsShown", { shown: 1 }, "Showing 1 of 1 card flow.", "Showing 1 of 2 card flows."],
+    ["health.findings.totalShown", { shown: 1 }, "1 of 1 finding shown, by code, errors first", "1 of 2 findings shown, by code, errors first"],
+  ];
+  const enAny = enT as unknown as (key: string, options: Record<string, unknown>) => string;
+  const ruAny = ruT as unknown as (key: string, options: Record<string, unknown>) => string;
+  const russian = leavesOf(ru);
+
+  it.each(FIXED)("%s reads right at 1, as before at 2 (M: tree.links.omitted_one restored)", (key, options, one, two) => {
+    expect(enAny(key, { ...options, count: 1 })).toBe(one);
+    expect(enAny(key, { ...options, count: 2 })).toBe(two);
+  });
+
+  it("leaves Russian its own forms", () => {
+    for (const [key, options] of FIXED) {
+      const value = russian.get(`${key}_one`) ?? "";
+      expect([key, ruAny(key, { ...options, count: 1 }) === filledAll(value, 1).replace(/<(\w+)>/g, (_match, name: string) => String(options[name]))]).toEqual([key, true]);
+    }
+  });
+});

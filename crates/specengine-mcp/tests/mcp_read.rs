@@ -31,6 +31,10 @@
 //! with `bindings` non-null once, its keys and a row's 14. M7: `with:
 //! ["bindings"]` ignored. Variant: a CLI key without its mirror.
 //!
+//! docs/features/doc-modal.md DM-2, `get_node` with links on
+//! `fixtures/flow-aside`: each link's `title` and `end_kind`, the CLI
+//! library's within the schema, which requires both, nullable.
+//!
 //! Non-Latin characters are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -905,11 +909,14 @@ fn ac14_every_mostly_null_key_is_non_null_once_with_its_exact_keys() {
             .chain(linked["incoming"].as_array().unwrap())
             .collect();
         assert!(!all.is_empty());
+        // docs/features/doc-modal.md DM-2: the other end's `title` and
+        // `end_kind` too.
         for link in all {
             assert_eq!(
                 key_set(link, "link"),
                 set_of(&[
-                    "type", "origin", "at", "name", "written", "path", "line", "state", "reason"
+                    "type", "origin", "at", "name", "title", "end_kind", "written", "path", "line",
+                    "state", "reason"
                 ])
             );
         }
@@ -1715,4 +1722,89 @@ fn fs10_get_node_serves_the_ancestors() {
     assert_eq!(keys, ["id", "kind", "path", "title"], "{ancestors}");
     let done = session.finish();
     assert!(done.status.success(), "{}", done.stderr);
+}
+
+// ------------------------------------------------------------------ doc-modal DM-2
+
+/// docs/features/doc-modal.md DM-2, `get_node`: on a scratch copy of
+/// `fixtures/flow-aside`, `{id: "POT-BISQUE", with: ["links"]}` is the CLI
+/// library's `spec show POT-BISQUE --links` (text and document, both eras,
+/// within the schema), its first outgoing and first incoming link DM-1's;
+/// the schema's link object requires `title` and `end_kind`, each a string
+/// or `null`. On `fixtures/spec-b` the dangling mention of `MOD-CLI` serves
+/// both `null` within the same schema. M: the mirror without `end_kind` (the
+/// strict walker refuses the key).
+#[test]
+fn dm2_get_node_serves_link_titles_within_its_schema() {
+    let project = Project::new("flow-aside");
+    let results = project.parity(&[links("POT-BISQUE", None)]);
+    for era in &results {
+        let shown = &era[0]["structuredContent"]["nodes"][0]["links"];
+        assert_eq!(
+            shown["outgoing"][0],
+            json!({"type": "follows", "origin": "frontmatter", "at": null, "name": "POT-DRY",
+                "title": "Drying on the racks", "end_kind": "potstep", "written": "POT-DRY",
+                "path": "docs/workshop/run/bisque.md", "line": 10, "state": "resolved",
+                "reason": null}),
+            "{shown}"
+        );
+        assert_eq!(
+            shown["incoming"][0],
+            json!({"type": "depends_on", "origin": "frontmatter", "at": null,
+                "name": "PUZZLE-0003", "title": "A puzzle of a cone that bends late, the first",
+                "end_kind": "puzzle", "written": "POT-BISQUE",
+                "path": "docs/puzzles/PUZZLE-0003.md", "line": 9, "state": "resolved",
+                "reason": null}),
+            "{shown}"
+        );
+    }
+    let (session, schemas) = project.open(ERAS[0]);
+    let link = schemas["get_node"]
+        .pointer("/properties/nodes/items/properties/links")
+        .unwrap_or_else(|| panic!("no `links` in ShowNode: {}", schemas["get_node"]));
+    let object = link
+        .pointer("/properties/outgoing/items")
+        .or_else(|| {
+            link["anyOf"]
+                .as_array()?
+                .iter()
+                .find_map(|branch| branch.pointer("/properties/outgoing/items"))
+        })
+        .unwrap_or_else(|| panic!("no link object: {link}"));
+    for key in ["title", "end_kind"] {
+        assert!(
+            object["required"]
+                .as_array()
+                .is_some_and(|required| required.contains(&json!(key))),
+            "`{key}` required: {object}"
+        );
+        let property = &object["properties"][key];
+        for value in [json!("Drying on the racks"), Value::Null] {
+            assert_eq!(
+                conforms(property, &value, key),
+                Ok(()),
+                "`{key}`: {value} meets {property}"
+            );
+        }
+        assert!(conforms(property, &json!(1), key).is_err(), "{property}");
+    }
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+
+    let b = Project::new("spec-b");
+    let results = b.parity(&[links("MOD-CLI", None)]);
+    for era in &results {
+        let shown = &era[0]["structuredContent"]["nodes"][0]["links"];
+        let dangling: Vec<&Value> = shown["outgoing"]
+            .as_array()
+            .expect("outgoing")
+            .iter()
+            .filter(|link| link["state"] != "resolved")
+            .collect();
+        assert_eq!(dangling.len(), 1, "{shown}");
+        assert_eq!(dangling[0]["path"], json!("docs/spec/cli.md"));
+        assert_eq!(dangling[0]["line"], json!(25));
+        assert_eq!(dangling[0]["title"], Value::Null, "{}", dangling[0]);
+        assert_eq!(dangling[0]["end_kind"], Value::Null, "{}", dangling[0]);
+    }
 }

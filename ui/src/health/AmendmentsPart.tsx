@@ -3,7 +3,7 @@ import { apiErrorOf } from "../api/client";
 import type { HealthQuery } from "../api/queries";
 import type { HealthReport, ShownLink, UnappliedAmendment } from "../api/types";
 import { RegionBoundary } from "../app/RegionBoundary";
-import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { Notes } from "../overview/parts";
 import { linkStateLook } from "../tree/labels";
 import { writtenAs } from "../tree/LinksPanel";
@@ -33,9 +33,9 @@ function AmendedLink({ project, link, here }: { project: string; link: ShownLink
         {link.name === null ? (
           <span className="mono link-name">{link.written}</span>
         ) : (
-          <a className="mono link-name" href={sectionHash(project, "tree", link.name)}>
+          <DocLink className="mono link-name" project={project} docRef={link.name}>
             {link.name}
-          </a>
+          </DocLink>
         )}
         <Badge name={t("health.amendments.state")} look={linkStateLook(link.state, t)} />
       </p>
@@ -62,9 +62,9 @@ function AmendmentRow({ project, amendment }: { project: string; amendment: Unap
   return (
     <li className="health-left-row health-amendment" data-amendment={amendment.path}>
       <p className="health-amendment-head">
-        <a className="health-amendment-path" href={sectionHash(project, "tree", amendment.path)}>
+        <DocLink className="health-amendment-path" project={project} docRef={amendment.path}>
           <span className="mono">{amendment.path}</span>
-        </a>
+        </DocLink>
         {amendment.title !== null && <span className="health-amendment-title">{amendment.title}</span>}
       </p>
       {facts && (

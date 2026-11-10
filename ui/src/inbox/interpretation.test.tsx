@@ -92,7 +92,7 @@ describe("the Interpretation section (AC-U2 of kind-interpretation)", () => {
     const section = await interpretationOf(card);
     expect(Array.from(section.querySelectorAll("dt"), (dt) => dt.textContent)).toEqual(LABELS);
     const link = await within(section).findByRole("link", { name: "DEC-0023: Rest is slow movement" });
-    expect(link.getAttribute("href")).toBe("#/alpha/tree/DEC-0023");
+    expect(link.getAttribute("href")).toBe("#/alpha/tree/DEC-0023/page");
     expect(valueOf(section, "Why interpretation was needed").textContent).toBe(INTERPRETATION.why);
     // Placed where the commit puts the texts: after the rationale, before the provenance and the diff.
     const titles = within(card)

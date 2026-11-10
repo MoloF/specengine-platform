@@ -306,3 +306,30 @@ describe("radii and control heights (DF-3)", () => {
     expect([resolved("--control-height"), resolved("--control-height-compact"), resolved("--target-min"), resolved("--nav-height")]).toEqual(["2rem", "1.5rem", "24px", "3rem"]);
   });
 });
+
+// DM-19 of docs/features/doc-modal.md: the document view's styles take tokens alone, and its entry
+// leaves the exceptions: 13, none for RM-0095.
+describe("the document view's tokens (DM-19 of doc-modal)", () => {
+  const exceptionsSource = import.meta.glob<string>("/src/styles/scale-exceptions.ts", { query: "?raw", import: "default", eager: true })["/src/styles/scale-exceptions.ts"] ?? "";
+
+  it("lists 13 exceptions, none until RM-0095, and the `until` type names it no more", () => {
+    expect(SCALE_EXCEPTIONS).toHaveLength(13);
+    expect(new Set(SCALE_EXCEPTIONS.map((exception) => exception.until))).toEqual(new Set([null, "RM-0099"]));
+    expect(exceptionsSource).toMatch(/until: "RM-0099" \| null;/);
+    expect(exceptionsSource).not.toContain("RM-0095");
+  });
+
+  it("sets a raw URL's and an image path's size by a type token", () => {
+    const sizes = DECLARATIONS.filter((declaration) => declaration.selector === ".md-url, .md-image-path" && declaration.property === "font-size");
+    expect(sizes.map((declaration) => declaration.value)).toEqual(["var(--font-size-code)"]);
+  });
+
+  it("styles the document view by tokens alone: every size, space and radius of a `.doc-` rule one var(), no exception (M: a raw font size in .doc-body)", () => {
+    const doc = DECLARATIONS.filter((declaration) => /\.doc-/.test(declaration.selector));
+    expect(doc.length).toBeGreaterThan(20);
+    const sized = doc.filter((declaration) => /^(font-size|line-height|gap|row-gap|column-gap|border-radius|padding|margin)(-[a-z-]+)?$/.test(declaration.property));
+    expect(sized.filter((declaration) => !/^(0|var\(--[a-z0-9-]+\)( var\(--[a-z0-9-]+\))*)$/.test(declaration.value)).map(shown)).toEqual([]);
+    expect(SCALE_EXCEPTIONS.filter((exception) => exception.selector.includes(".doc-"))).toEqual([]);
+    expect(doc.filter(listed).map(shown)).toEqual([]);
+  });
+});

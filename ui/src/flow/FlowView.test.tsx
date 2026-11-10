@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { FlowEdge, FlowNode, FlowView as FlowAnswer, QueueEvent, TraceCounts, TraceStage } from "../api/types";
-import { aFlowEdge, aFlowGap, aFlowNode, aFlowView, aTreeNode, tenGapRows } from "../test/builders";
+import { aCardWrite, aFlowEdge, aFlowGap, aFlowNode, aFlowView, aTreeNode, tenGapRows } from "../test/builders";
 import { ASIDE, asideClient, asideFiring, asideLens, OPEN_DAY } from "../test/asideStub";
 import { studioClient, TYPE_A, TYPE_B, type StudioReads } from "../test/flowStub";
 import { renderApp } from "../test/render";
@@ -41,7 +41,12 @@ const EDGES: FlowEdge[] = [
   aFlowEdge({ from: "G", to: "D", type: TYPE_B }),
 ];
 
-const ROWS = tenGapRows([aFlowGap("no-start", [["G"]]), aFlowGap("cycle-no-repeat", [["B", "E"]]), aFlowGap("unreachable", [["X"]])]);
+// Each member titled as the daemon serves it beside its items (docs/features/doc-modal.md "Acceptance criteria", DM-15).
+const ROWS = tenGapRows([
+  aFlowGap("no-start", [["G"]], { titles: [["The guild"]] }),
+  aFlowGap("cycle-no-repeat", [["B", "E"]], { titles: [["Bind", "Engrave"]] }),
+  aFlowGap("unreachable", [["X"]], { titles: [["Title of X"]] }),
+]);
 
 function scopeOfG(fields: Partial<FlowAnswer> = {}): FlowAnswer {
   return aFlowView([aFlowNode({ id: "G", distance: null, kind: "domain", title: "The guild", counts: { ...NONE, confirmed: 2, no_card: 3 } }), ...CHILDREN], EDGES, { root: "G", depth: 1, gaps: ROWS, ...fields });
@@ -315,8 +320,10 @@ describe("the panel (ST-5)", () => {
     expect([fact("Name"), fact("Kind"), fact("Where")]).toEqual(["G", "domain", "docs/spec/g.md:1"]);
     expect(region?.contains(within(panel()).getAllByText("Name", { selector: "dt" })[0] ?? null)).toBe(true);
     expect(shown.getByText("2 confirmed, 3 no card")).toBeTruthy();
-    expect(shown.getByRole("link", { name: "Open in Spec tree" }).getAttribute("href")).toBe("#/alpha/tree/G");
+    // The scope's acts (doc-modal DM-14): Open document, the one primary, and New card; the tree is the modal's to open.
+    expect(shown.getByRole("button", { name: "Open document" }).className).toContain("button-primary");
     expect(shown.getByRole("button", { name: "New card" })).toBeTruthy();
+    expect(shown.queryByRole("link", { name: "Open in Spec tree" })).toBeNull();
     expect(panel().querySelectorAll("li.flow-gap")).toHaveLength(0);
   });
 
@@ -374,9 +381,9 @@ describe("the panel (ST-5)", () => {
     const scopes = { G: aFlowView([...scopeOfG().nodes, deeper], EDGES, { root: "G", depth: 1, gaps: ROWS }), C: SCOPE_C };
     renderApp(studioClient(reads({ scopes })), "#/alpha/flow/Z?stage=print");
     await drawn("Z");
-    // No read in hand titles C on this fresh mount (the stage read holds Z and E alone): its name stands.
-    expect(fact("Group")).toBe("C Open C");
-    expect(within(panel()).getByRole("link", { name: "Open C" }).getAttribute("href")).toBe("#/alpha/flow?scope=C");
+    // No read in hand titles C on this fresh mount (the stage read holds Z and E alone): its name stands, a place link.
+    expect(within(panel()).getByText(/^Group:/).closest("p")?.textContent).toBe("Group: C");
+    expect(within(panel()).getByRole("link", { name: "C" }).getAttribute("href")).toBe("#/alpha/flow?scope=C");
   });
 });
 
@@ -1013,12 +1020,16 @@ describe("the scenario on flow-aside (RM-0094)", () => {
       expect(within(rows[0] as HTMLElement).getByText("more than one start: narrow [[flow.start]] to one").closest("[hidden]")).not.toBeNull();
     });
 
-    it("names an item's members by title, reading the tree for those no read in hand titles; activating it closes the control and seeks, focus to the panel heading", async () => {
+    // DM-15 of docs/features/doc-modal.md (RM-0101): the members' titles are the read's own `titles`.
+    it("names an item's members by the read's titles, reading no tree while open; activating it closes the control and seeks, focus to the panel heading", async () => {
       const client = asideClient();
       renderApp(client, LENS_ROOT);
       await drawn("WBAY-KILN");
       const item = await within(openGaps()).findByRole("button", { name: "Wedging + Open day" });
-      expect(client.getTree).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(client.getTree).not.toHaveBeenCalled();
       const before = window.history.length;
       fireEvent.click(item);
       expect(screen.queryByRole("region", { name: "Gaps" })).toBeNull();
@@ -1030,6 +1041,22 @@ describe("the scenario on flow-aside (RM-0094)", () => {
         expect(document.activeElement?.textContent).toBe("Wedging");
       });
       expect(document.activeElement?.tagName).toBe("H2");
+    });
+
+    it("names a member the read leaves untitled by its name, still reading no tree (DM-15)", async () => {
+      const client = asideClient();
+      const served = client.getFlow.getMockImplementation();
+      client.getFlow.mockImplementation(async (project, options, signal) => {
+        const view = await (served?.(project, options, signal) ?? Promise.resolve(asideLens()));
+        return { ...view, gaps: view.gaps.map((row) => (row.code === "two-starts" ? { ...row, titles: [["Wedging", null]] } : row)) };
+      });
+      renderApp(client, LENS_ROOT);
+      await drawn("WBAY-KILN");
+      expect(await within(openGaps()).findByRole("button", { name: `Wedging + ${OPEN_DAY}` })).toBeTruthy();
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+      expect(client.getTree).not.toHaveBeenCalled();
     });
 
     it("hands an item to the AI as one card, no task", async () => {
@@ -1075,7 +1102,7 @@ describe("the scenario on flow-aside (RM-0094)", () => {
   });
 
   describe("Records for the AI (FS-18)", () => {
-    it("at the kiln bay reads nothing until asked; then one uncut read, a dialog labelled by its h2, the records by kind, each a Spec tree link by title; Esc gives focus back", async () => {
+    it("at the kiln bay reads nothing until asked; then one uncut read, a dialog labelled by its h2, the records by kind, each a document link by title; Esc gives focus back", async () => {
       const client = asideClient();
       renderApp(client, `#/${ASIDE}/flow?scope=WBAY-KILN`);
       await drawn("CONE-GLOST");
@@ -1090,7 +1117,8 @@ describe("the scenario on flow-aside (RM-0094)", () => {
       expect(flowCalls(client).flow.slice(1)).toEqual([{ root: "WBAY-KILN", depth: 1 }]);
       expect(["edict", "hunch", "puzzle"].map((kind) => within(dialog).getByRole("group", { name: kind }).querySelectorAll("li").length)).toEqual([32, 59, 50]);
       const first = within(within(dialog).getByRole("group", { name: "edict" })).getAllByRole("link")[0];
-      expect([first?.textContent, first?.getAttribute("href")]).toEqual(["Kiln edict no. 1", `#/${ASIDE}/tree/EDICT-0001`]);
+      // Each a document link by title (doc-modal DM-10): its page the href, a plain click the modal over the dialog.
+      expect([first?.textContent, first?.getAttribute("href")]).toEqual(["Kiln edict no. 1", `#/${ASIDE}/tree/EDICT-0001/page`]);
       expect(within(dialog).queryByText("Glaze crawls on damp bisque")).toBeNull();
       fireEvent.keyDown(dialog, { key: "Escape" });
       expect(screen.queryByRole("dialog")).toBeNull();
@@ -1357,5 +1385,189 @@ describe("the scenario on flow-aside (RM-0094)", () => {
       });
       expect((await screen.findByRole("heading", { level: 2, name: "Every step here has a stage." })).closest(".empty-state-box")).not.toBeNull();
     });
+  });
+});
+
+// DM-6 of docs/features/doc-modal.md: Flow's own replaces keep an open document modal.
+describe("the document modal over Flow (DM-6, DM-10 of doc-modal)", () => {
+  it("keeps `doc` through the bare-hash replacement: the remembered place, the pair after it (the review's R3)", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow/A");
+    await drawn("A");
+    await waitFor(() => {
+      expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Ask");
+    });
+    act(() => {
+      window.location.hash = "#/alpha/inbox";
+    });
+    await screen.findByRole("heading", { level: 1, name: "Inbox" });
+    const before = window.history.length;
+    act(() => {
+      window.location.hash = "#/alpha/flow?doc=C";
+    });
+    // The nav's bare hash stands for Flow's last place, replaced in place: the modal's pair kept after it.
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/flow/A?doc=C");
+    });
+    expect(window.history.length).toBe(before + 1);
+    expect(await screen.findByRole("dialog", { name: "Craft" })).toBeTruthy();
+    await drawn("A");
+  });
+
+  it("keeps `doc` through a seek's fix", async () => {
+    const before = window.history.length;
+    renderApp(studioClient(reads()), "#/alpha/flow/X?doc=A");
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/flow/X?scope=C&doc=A");
+    });
+    expect(window.history.length).toBe(before);
+    expect(await screen.findByRole("dialog", { name: "Ask" })).toBeTruthy();
+  });
+
+  it("keeps `doc` through a module's drop", async () => {
+    renderApp(studioClient(reads()), "#/alpha/flow/G?module=nope&doc=A");
+    await drawn("A");
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/flow?doc=A");
+    });
+    expect(screen.getByRole("dialog", { name: "Ask" })).toBeTruthy();
+  });
+
+  it("opens a Records entry as the document over the dialog; Esc closes the document, then the dialog (DM-10)", async () => {
+    renderApp(asideClient(), `#/${ASIDE}/flow?scope=WBAY-KILN`);
+    await drawn("CONE-GLOST");
+    fireEvent.click(within(places()).getByRole("button", { name: /^Records for the AI/ }));
+    const records = await screen.findByRole("dialog", { name: "Records for the AI (141)" });
+    const entry = within(await within(records).findByRole("group", { name: "edict" })).getAllByRole("link")[0] as HTMLElement;
+    fireEvent.click(entry);
+    expect(window.location.hash).toBe(`#/${ASIDE}/flow?scope=WBAY-KILN&doc=EDICT-0001`);
+    const doc = await screen.findByRole("dialog", { name: "Kiln edict no. 1" });
+    await waitFor(() => {
+      expect(doc.contains(document.activeElement)).toBe(true);
+    });
+    expect((records.closest("[data-dialog-host]") as HTMLElement).inert).toBe(true);
+    fireEvent.keyDown(document.activeElement ?? doc, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog", { name: "Kiln edict no. 1" })).toBeNull();
+    });
+    expect(screen.getByRole("dialog", { name: "Records for the AI (141)" })).toBe(records);
+    await waitFor(() => {
+      expect(document.activeElement).toBe(entry);
+    });
+    fireEvent.keyDown(entry, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(window.location.hash).toBe(`#/${ASIDE}/flow?scope=WBAY-KILN`);
+  });
+});
+
+// DM-14 of docs/features/doc-modal.md: the panel is minimal; the whole document is the modal's.
+describe("the minimal panel (DM-14 of doc-modal)", () => {
+  const FIRING = `#/${ASIDE}/flow?scope=KRUN-FIRING`;
+
+  async function bisque(client = asideClient()) {
+    renderApp(client, FIRING);
+    fireEvent.click(await drawn("POT-BISQUE"));
+    await waitFor(() => {
+      expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Bisque firing");
+    });
+    await within(panel()).findByText("Bone-dry pots are fired once, slowly, to a low cone.");
+    return client;
+  }
+
+  it("shows a box's title, stage, work state and first paragraph alone (M: the whole text in the panel)", async () => {
+    await bisque();
+    const line = panel().querySelector(".flow-panel-line");
+    expect(line?.textContent).toContain("bisque");
+    const state = line?.querySelector(".lozenge");
+    expect([state?.textContent, state?.querySelector("svg") !== null]).toEqual(["In work", true]);
+    const lead = panel().querySelector(".flow-panel-lead");
+    expect(Array.from(lead?.querySelectorAll("p") ?? [], (paragraph) => paragraph.textContent)).toEqual(["Bone-dry pots are fired once, slowly, to a low cone."]);
+    expect(panel().textContent).not.toContain("The kiln is opened only when cold.");
+    expect(lead?.querySelector("h1, h2, h3, h4, .md-front-matter")).toBeNull();
+  });
+
+  it("acts with Open document, the one primary, and New card alone; a group adds its Open; no links, cards, tree or graph in the panel", async () => {
+    await bisque();
+    const acts = Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent);
+    expect(acts).toEqual(["Open document", "New card"]);
+    expect(within(panel()).getByRole("button", { name: "Open document" }).className).toContain("button-primary");
+    expect(panel().querySelectorAll(".button-primary")).toHaveLength(1);
+    expect(panel().querySelector(".links-panel, .cards-block")).toBeNull();
+    expect(within(panel()).queryByRole("region", { name: "Cards" })).toBeNull();
+    for (const name of ["Open in Spec tree", "Open in Graph"]) {
+      expect([name, within(panel()).queryByRole("link", { name })]).toEqual([name, null]);
+    }
+    act(() => {
+      window.location.hash = `#/${ASIDE}/flow/KRUN-FIRING`;
+    });
+    await waitFor(() => {
+      expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Firing run");
+    });
+    expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New card", "Open Firing run"]);
+  });
+
+  it("folds name, kind, place and distance under Technical details, collapsed", async () => {
+    await bisque();
+    const details = within(panel()).getByRole("button", { name: "Technical details" });
+    expect(details.getAttribute("aria-expanded")).toBe("false");
+    expect(document.getElementById(details.getAttribute("aria-controls") ?? "")?.hidden).toBe(true);
+    expect([fact("Name"), fact("Kind"), fact("Where"), fact("Distance")]).toEqual(["POT-BISQUE", "potstep", "docs/workshop/run/bisque.md:1", "4"]);
+  });
+
+  it("reads no trace for a selection; Open document pushes `doc` and the modal draws from the held read, no new call (M: getTrace on a selection)", async () => {
+    const client = await bisque();
+    expect(client.getTrace.mock.calls.map((call) => call[1])).not.toContainEqual({ ref: "POT-BISQUE" });
+    const nodeCalls = client.getNode.mock.calls.length;
+    const before = window.history.length;
+    fireEvent.click(within(panel()).getByRole("button", { name: "Open document" }));
+    expect(window.location.hash).toBe(`#/${ASIDE}/flow/POT-BISQUE?scope=KRUN-FIRING&doc=POT-BISQUE`);
+    expect(window.history.length).toBe(before + 1);
+    const modal = await screen.findByRole("dialog", { name: "Bisque firing" });
+    await within(modal).findByText("The kiln is opened only when cold.");
+    expect(client.getNode.mock.calls.length).toBe(nodeCalls);
+  });
+
+  it("gives focus back to Open document, the button pressed, when the modal closes, though a click focused it not (the review's R2)", async () => {
+    await bisque();
+    const open = within(panel()).getByRole("button", { name: "Open document" });
+    expect(document.activeElement).not.toBe(open);
+    fireEvent.click(open);
+    const modal = await screen.findByRole("dialog", { name: "Bisque firing" });
+    fireEvent.keyDown(modal, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(open);
+    });
+  });
+
+  it("says a card made from a box in that box's panel alone: another selection takes the note away (the review's nit)", async () => {
+    const client = await bisque();
+    client.createCard.mockResolvedValue(aCardWrite("C-0042"));
+    fireEvent.click(within(panel()).getByRole("button", { name: "New card" }));
+    const dialog = await screen.findByRole("dialog", { name: "New card" });
+    expect(within(dialog).getByLabelText<HTMLTextAreaElement>("Source", { exact: false }).value).toBe("POT-BISQUE");
+    fireEvent.change(within(dialog).getByLabelText("Title"), { target: { value: "Fire it" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create card" }));
+    expect(await within(panel()).findByText("C-0042 created.")).toBeTruthy();
+    fireEvent.keyDown(box("POT-BISQUE"), { key: "Escape" });
+    await waitFor(() => {
+      expect(within(panel()).getByRole("heading", { level: 2 }).textContent).toBe("Firing run");
+    });
+    expect(within(panel()).queryByText("C-0042 created.")).toBeNull();
+  });
+
+  it("shows the scope's lead, Open document and New card; an unrooted top none", async () => {
+    renderApp(asideClient(), FIRING);
+    await drawn("POT-BISQUE");
+    await waitFor(() => {
+      expect(Array.from(panel().querySelectorAll(".flow-panel-actions > *"), (act) => act.textContent)).toEqual(["Open document", "New card"]);
+    });
+    renderApp(studioClient(reads({ top: aFlowView([aFlowNode({ id: "P", distance: 0 }), aFlowNode({ id: "Q", distance: 1 })], []) })), "#/alpha/flow");
+    await drawn("Q");
+    const panels = screen.getAllByRole("complementary", { name: "Details" });
+    const top = panels[panels.length - 1] as HTMLElement;
+    expect(within(top).queryByRole("button", { name: "Open document" })).toBeNull();
+    expect(within(top).queryByRole("button", { name: "New card" })).toBeNull();
   });
 });

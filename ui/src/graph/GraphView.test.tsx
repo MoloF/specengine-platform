@@ -689,7 +689,7 @@ describe("accessible names and words (AC-09)", () => {
     expect(lines).toContain(`A2 --zeta_type--> ${HOSTILE_LINK} | docs/spec/a2.md:3 | dangling: \`R-404\` resolves to no ID and no alias`);
     expect(lines).toContain("B2 --alpha_type--> other:R-9 | docs/spec/b2.md:3 | skipped");
     expect(within(panel).getAllByRole("link", { name: /^Centre here/ })).toHaveLength(6);
-    expect(within(panel).getByRole("link", { name: "A1" }).getAttribute("href")).toBe("#/alpha/tree/A1");
+    expect(within(panel).getByRole("link", { name: "A1" }).getAttribute("href")).toBe("#/alpha/tree/A1/page");
     for (const anchor of Array.from(panel.querySelectorAll("a[href]"))) {
       expect(anchor.getAttribute("href")?.startsWith("#/")).toBe(true);
     }

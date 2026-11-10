@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { IMPLICIT_SECTIONS } from "../test/builders";
-import { ALL_SECTIONS, cardPageHash, flowHash, homeHash, isBareFlow, navOf, parseFlowPlace, parseHash, sectionHash, type FlowPlace } from "./routes";
+import { ALL_SECTIONS, cardPageHash, docOf, docPageHash, flowHash, homeHash, isBareFlow, navOf, parseFlowPlace, parseHash, sectionHash, withDoc, withoutDoc, type FlowPlace } from "./routes";
 import { ru } from "../i18n/ru";
 import { enT, ruT } from "../test/text";
 import { aboutOf, isSectionId, sectionLabel, SECTIONS } from "./sections";
@@ -198,8 +198,8 @@ describe("Flow's place (ST-1 of writer-studio)", () => {
     expect(read("#/p/flow?edge=A,B,t&edge=C,D,u").select).toEqual({ edge: { from: "A", to: "B", type: "t", kind: null } });
   });
 
-  it("splits the first raw `?` for Flow alone: any other section keeps it in its name", () => {
-    expect(parseHash("#/p/tree/A?B")).toEqual({ type: "section", project: "p", section: "tree", id: "A?B" });
+  it("splits the first raw `?` on every route: Flow takes what follows as its query, any other section ignores it (DM-5 of doc-modal)", () => {
+    expect(parseHash("#/p/tree/A?B")).toEqual({ type: "section", project: "p", section: "tree", id: "A" });
     expect(parseHash("#/p/flow/A?scope=B")).toEqual({ type: "section", project: "p", section: "flow", id: "A", query: "scope=B" });
     expect(parseHash("#/p/flow?scope=B?C")).toEqual({ type: "section", project: "p", section: "flow", id: null, query: "scope=B?C" });
     expect(parseHash("#/p/inbox/PR-1")).toEqual({ type: "section", project: "p", section: "inbox", id: "PR-1" });
@@ -211,7 +211,7 @@ describe("a card's page", () => {
   it("parses exactly `board`, `<C>`, `page` as the board with the card's page; any other fourth segment is not found (M8)", () => {
     expect(parseHash("#/alpha/board/C-0001/page")).toEqual({ type: "section", project: "alpha", section: "board", id: "C-0001", view: "page" });
     expect(parseHash("#/alpha/board/C-0001")).toEqual({ type: "section", project: "alpha", section: "board", id: "C-0001" });
-    for (const hash of ["#/alpha/board/C-0001/pages", "#/alpha/board/C-0001/page/x", "#/alpha/board/C-0001/", "#/alpha/board//page", "#/alpha/tree/R-1/page", "#/alpha/tasks/T-1/page"]) {
+    for (const hash of ["#/alpha/board/C-0001/pages", "#/alpha/board/C-0001/page/x", "#/alpha/board/C-0001/", "#/alpha/board//page", "#/alpha/tasks/T-1/page"]) {
       expect([hash, parseHash(hash).type]).toEqual([hash, "not_found"]);
     }
   });
@@ -229,5 +229,59 @@ describe("a card's page", () => {
   it("is no section: the nine stay pinned", () => {
     expect(ALL_SECTIONS).toHaveLength(9);
     expect(isSectionId("page")).toBe(false);
+  });
+});
+
+// DM-5 of docs/features/doc-modal.md: the document modal is the `doc` pair of any project route.
+describe("the document modal's pair (DM-5 of doc-modal)", () => {
+  it("reads `doc` on the project's home, a card, a page and Flow; Flow's query keeps the rest in order", () => {
+    expect(parseHash("#/p?doc=A")).toEqual({ type: "project", project: "p", doc: "A" });
+    expect(parseHash("#/p/board/C-1?doc=A")).toEqual({ type: "section", project: "p", section: "board", id: "C-1", doc: "A" });
+    expect(parseHash("#/p/tree/R/page?doc=A")).toEqual({ type: "section", project: "p", section: "tree", id: "R", view: "page", doc: "A" });
+    expect(parseHash("#/p/flow?scope=S&doc=A&stage=x")).toEqual({ type: "section", project: "p", section: "flow", id: null, query: "scope=S&stage=x", doc: "A" });
+    expect(parseHash("#/p/inbox?doc=DOM-HARBOR%23RULE-HARBOR-CLOCK")).toEqual({ type: "section", project: "p", section: "inbox", id: null, doc: "DOM-HARBOR#RULE-HARBOR-CLOCK" });
+  });
+
+  it("leaves Flow bare under the modal alone, drops an empty or undecodable `doc`, and lets the first decodable one win", () => {
+    expect(parseHash("#/p/flow?doc=A")).toEqual({ type: "section", project: "p", section: "flow", id: null, doc: "A" });
+    expect(isBareFlow({ id: null, query: (parseHash("#/p/flow?doc=A") as { query?: string }).query })).toBe(true);
+    expect(parseHash("#/p/inbox?doc=")).toEqual({ type: "section", project: "p", section: "inbox", id: null });
+    expect(parseHash("#/p/inbox?doc=%E0%A4%A")).toEqual({ type: "section", project: "p", section: "inbox", id: null });
+    expect(parseHash("#/p?doc")).toEqual({ type: "project", project: "p" });
+    expect(docOf("#/p/inbox?doc=&doc=%E0%A4%A&doc=B&doc=C")).toBe("B");
+    expect(parseHash("#/p/flow?doc=&scope=S")).toEqual({ type: "section", project: "p", section: "flow", id: null, query: "scope=S" });
+    // `#/` and a route that names nothing take no modal.
+    expect(docOf("#/?doc=A")).toBeNull();
+    expect(docOf("#/p/nowhere?doc=A")).toBeNull();
+  });
+
+  it("ends a Tree id at a raw `?`; `tree/<REF>/page` is a document's page, any other fourth segment nothing (DM-11)", () => {
+    expect(parseHash("#/p/tree/A?B")).toEqual({ type: "section", project: "p", section: "tree", id: "A" });
+    expect(parseHash("#/p/tree/R/page")).toEqual({ type: "section", project: "p", section: "tree", id: "R", view: "page" });
+    for (const hash of ["#/p/tree/R/pages", "#/p/tree/R/page/x", "#/p/tree//page", "#/p/graph/R/page", "#/p/flow/R/page", "#/p/inbox/PR-1/page"]) {
+      expect([hash, parseHash(hash).type]).toEqual([hash, "not_found"]);
+    }
+    expect(parseHash("#/p/board/C-1/page")).toEqual({ type: "section", project: "p", section: "board", id: "C-1", view: "page" });
+  });
+
+  it("writes a document's page with its REF encoded: `#` and `/` held in one segment", () => {
+    expect(docPageHash("p", "ID#SEC")).toBe("#/p/tree/ID%23SEC/page");
+    expect(docPageHash("a b", "docs/x y.md")).toBe("#/a%20b/tree/docs%2Fx%20y.md/page");
+    for (const ref of ["ID#SEC", "docs/x y.md", "slug/ID", "50%"]) {
+      expect(parseHash(docPageHash("p", ref))).toEqual({ type: "section", project: "p", section: "tree", id: ref, view: "page" });
+    }
+  });
+
+  it("puts one `doc` pair last and takes every one away, round-tripping Flow's pairs with an edge's raw commas (M: a second `doc` kept)", () => {
+    const flow = "#/p/flow?module=&scope=DOM-BERTHS&edge=MEC-FAIRWAY,DOM-BERTHS,follows,alternative";
+    expect(withDoc(flow, "MEC-MOORING")).toBe(`${flow}&doc=MEC-MOORING`);
+    expect(withoutDoc(withDoc(flow, "MEC-MOORING"))).toBe(flow);
+    expect(withDoc(`${flow}&doc=A`, "B")).toBe(`${flow}&doc=B`);
+    expect(withDoc("#/p/flow?doc=A&scope=S&doc=B", "C")).toBe("#/p/flow?scope=S&doc=C");
+    expect(withDoc("#/p/board/C-1", "ID#SEC")).toBe("#/p/board/C-1?doc=ID%23SEC");
+    expect(withoutDoc("#/p/board/C-1?doc=A")).toBe("#/p/board/C-1");
+    expect(withoutDoc("#/p/inbox")).toBe("#/p/inbox");
+    expect(parseFlowPlace(parseHash(withDoc(flow, "X")) as { id: string | null; query?: string })).toEqual(parseFlowPlace(parseHash(flow) as { id: string | null; query?: string }));
+    expect(docOf(withDoc("#/p", "docs/a b.md"))).toBe("docs/a b.md");
   });
 });

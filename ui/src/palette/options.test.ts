@@ -34,7 +34,12 @@ function shape(text: string, fields: Partial<PaletteInput> = {}): [string, strin
 }
 
 function hashOf(option: PaletteOption | undefined): string | null {
-  return option === undefined || option.type === "search" ? null : option.hash;
+  return option === undefined || option.type === "search" || option.type === "ref" || option.type === "hit" ? null : option.hash;
+}
+
+/** A document option's REF: the modal opens on it (docs/features/doc-modal.md "Acceptance criteria", DM-16). */
+function docOf(option: PaletteOption | undefined): string | null {
+  return option?.type === "ref" ? option.ref : option?.type === "hit" ? option.doc : null;
 }
 
 describe("the palette's groups", () => {
@@ -125,13 +130,13 @@ describe("the palette's groups", () => {
     const tree = groups.find((group) => group.name === "Spec tree");
     const [search, ref] = tree?.options ?? [];
     expect(search).toEqual({ type: "search", key: "search", query: "  MEC-TIDES#RULE-TIDE-WINDOW " });
-    expect(hashOf(ref)).toBe("#/alpha/tree/MEC-TIDES%23RULE-TIDE-WINDOW");
+    expect(docOf(ref)).toBe("MEC-TIDES#RULE-TIDE-WINDOW");
   });
 
   it("lists the search's hits after the two, each to its ID, else its path", () => {
     const hits: SearchHit[] = [aSearchHit({ id: "R-1" }), aSearchHit({ id: null, path: "docs/spec/a b.md" })];
     const tree = paletteGroups(input("text", { search: ready(hits) }), enT).find((group) => group.name === "Spec tree");
-    expect(tree?.options.map(hashOf)).toEqual([null, "#/alpha/tree/text", "#/alpha/tree/R-1", "#/alpha/tree/docs%2Fspec%2Fa%20b.md"]);
+    expect(tree?.options.map(docOf)).toEqual([null, "text", "R-1", "docs/spec/a b.md"]);
     const busy = paletteGroups(input("text", { search: { state: "loading" } }), enT).find((group) => group.name === "Spec tree");
     expect(busy === undefined ? "" : groupLabel(busy, enT)).toBe("Spec tree, loading");
   });

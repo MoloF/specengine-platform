@@ -191,6 +191,11 @@
 //!   `read-spec`'s two additions set back 0.32.0's; a `SCHEMA_PINS` entry
 //!   0.33.0, 0.32.0's schemas today's without the five keys
 //!   ([`as_of_0_32_0`]).
+//! - doc-modal (RM-0095, DM-2): 0.33.0 -> 0.34.0, MINOR: keys a tool
+//!   returns, `get_node`'s link `title` and `end_kind` and `get_flow`'s gap
+//!   `titles`. A `PINS` entry 0.34.0, the tree with the version set back
+//!   0.33.0's (no skill or role text changes); a `SCHEMA_PINS` entry 0.34.0,
+//!   0.33.0's schemas today's without the three keys ([`as_of_0_33_0`]).
 //!
 //! The repository is only read.
 
@@ -527,6 +532,14 @@ const PINS: &[(&str, &str)] = &[
         "0.33.0",
         "199db58b28e08d71dad038c0858d2551932aab3013f5bd93e020fe183041976d",
     ),
+    // doc-modal (RM-0095, DM-2: 0.33.0 -> 0.34.0, MINOR: keys a tool
+    // returns, `get_node`'s link `title` and `end_kind`, `get_flow`'s gap
+    // `titles`): plugin.json's version alone; the tree with the version set
+    // back hashes as 0.33.0's pin.
+    (
+        "0.34.0",
+        "87e770c2c5da0dfcfc8f425f18d0f5ce8a416de488c45d22666946202014edec",
+    ),
 ];
 
 /// flow-scenario (RM-0094): `read-spec`'s step 2 node bullet as 0.33.0
@@ -831,6 +844,13 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.33.0",
         "ca95725f785c3e05500031dcce1c3253913796089d76bb7cd455cface0240d4f",
+    ),
+    // doc-modal (RM-0095, DM-2): `get_node`'s link `title` and `end_kind`,
+    // `get_flow`'s gap `titles` ([`as_of_0_33_0`] takes them out; no other
+    // tool's schema changed).
+    (
+        "0.34.0",
+        "fd816ac668d71ceb7b9e4ff127bee58bcb78e596ff98314e95244e1867562cd0",
     ),
 ];
 
@@ -1839,7 +1859,7 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// docs/features/hub-confirm.md, 0.29.1 since docs/features/spec-ids.md,
 /// 0.30.0 since docs/features/flow-scope.md (FS-6), 0.31.0 since
 /// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092), 0.33.0
-/// since flow-scenario (RM-0094). No
+/// since flow-scenario (RM-0094), 0.34.0 since doc-modal (RM-0095). No
 /// room is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
@@ -1862,7 +1882,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.33.0")
+        json!("0.34.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -2013,11 +2033,36 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // doc-modal (RM-0095, DM-2: 0.33.0 -> 0.34.0): plugin.json's version
+    // alone; set back, the tree is 0.33.0's pinned content, every skill and
+    // role byte-equal. M: the version kept; another file changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.34.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.34.0"),
+        "plugin.json's version"
+    );
+    let at_0_33_0 = edited(
+        &tree,
+        PLUGIN_JSON,
+        "\"version\": \"0.34.0\"",
+        "\"version\": \"0.33.0\"",
+    );
+    assert_eq!(
+        content_hash(&at_0_33_0),
+        PINS[PINS.len() - 2].1,
+        "0.34.0 changes plugin.json's version only"
+    );
+    let tree = at_0_33_0;
+    let pins_0_33_0 = &PINS[..PINS.len() - 1];
     // flow-scenario (RM-0094, FS-11: 0.32.0 -> 0.33.0): plugin.json's
     // version and `read-spec`'s two lines, each whole; all set back, the
     // tree is 0.32.0's pinned content. M: the version kept; another file
     // changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.33.0"));
+    assert_eq!(
+        pins_0_33_0.last().map(|(version, _)| *version),
+        Some("0.33.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.33.0"),
@@ -2041,11 +2086,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_32_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_33_0[pins_0_33_0.len() - 2].1,
         "0.33.0 changes plugin.json's version and read-spec's two lines only"
     );
     let tree = at_0_32_0;
-    let pins_0_32_0 = &PINS[..PINS.len() - 1];
+    let pins_0_32_0 = &pins_0_33_0[..pins_0_33_0.len() - 1];
     // card-tasks (RM-0092, D15: 0.31.0 -> 0.32.0, MINOR: `edit_card`'s
     // `task`): plugin.json's version alone; set back, the tree is 0.31.0's
     // pinned content, `read-spec` byte-equal. M: the version kept; another
@@ -3010,6 +3055,57 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// doc-modal (RM-0095, DM-2): `schemas` as 0.33.0 listed them: `get_node`'s
+/// link object (outgoing and incoming alike) without `title` and
+/// `end_kind`, `get_flow`'s gap row without `titles`. No other tool's
+/// schema changed.
+fn as_of_0_33_0(schemas: &mut Value) {
+    assert_eq!(
+        without_link_ends(&mut schemas["get_node"]["outputSchema"]),
+        2,
+        "the outgoing and the incoming link objects"
+    );
+    without_key(
+        &mut schemas["get_flow"]["outputSchema"]["properties"]["gaps"]["items"],
+        "titles",
+    );
+}
+
+/// `schema` with `title` and `end_kind` dropped (each property and its
+/// `required` entry) from every object schema whose properties hold
+/// `written`, `state` and `end_kind` (a shown link): how many.
+fn without_link_ends(schema: &mut Value) -> usize {
+    let mut stripped = 0;
+    if let Some(object) = schema.as_object_mut() {
+        let target = object
+            .get("properties")
+            .and_then(Value::as_object)
+            .is_some_and(|properties| {
+                ["written", "state", "end_kind"]
+                    .iter()
+                    .all(|key| properties.contains_key(*key))
+            });
+        if target {
+            let mut link = Value::Object(std::mem::take(object));
+            without_key(&mut link, "title");
+            without_key(&mut link, "end_kind");
+            *object = match link {
+                Value::Object(map) => map,
+                _ => unreachable!("an object stays one"),
+            };
+            stripped += 1;
+        }
+        for value in object.values_mut() {
+            stripped += without_link_ends(value);
+        }
+    } else if let Some(items) = schema.as_array_mut() {
+        for item in items {
+            stripped += without_link_ends(item);
+        }
+    }
+    stripped
+}
+
 /// flow-scenario (RM-0094, FS-11): `schemas` as 0.32.0 listed them:
 /// `get_flow` taking no `in_flow`, its document without `not_in_flow` and
 /// `types`, its nodes without `in_flow`; `get_node`'s nodes without
@@ -3488,7 +3584,19 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[22].0, "0.31.0", "an entry for 0.31.0");
     assert_eq!(SCHEMA_PINS[23].0, "0.32.0", "an entry for 0.32.0");
     assert_eq!(SCHEMA_PINS[24].0, "0.33.0", "an entry for 0.33.0");
-    assert_eq!(SCHEMA_PINS.len(), 25, "0.33.0 the last entry");
+    assert_eq!(SCHEMA_PINS[25].0, "0.34.0", "an entry for 0.34.0");
+    assert_eq!(SCHEMA_PINS.len(), 26, "0.34.0 the last entry");
+    // doc-modal (RM-0095, DM-2): 0.33.0's schemas are today's without a
+    // shown link's `title` and `end_kind` and a gap row's `titles`.
+    let mut at_0_33_0 = schemas.clone();
+    as_of_0_33_0(&mut at_0_33_0);
+    let at_0_33_0_hash = schema_hash(&at_0_33_0);
+    assert_eq!(
+        at_0_33_0_hash, SCHEMA_PINS[24].1,
+        "0.33.0's schemas are today's without doc-modal's three keys"
+    );
+    assert_ne!(at_0_33_0_hash, current, "doc-modal changed the schemas");
+    let (schemas, current) = (at_0_33_0, at_0_33_0_hash);
     // flow-scenario (RM-0094, FS-11): 0.32.0's schemas are today's without
     // `get_flow`'s `in_flow`, `not_in_flow`, `types` and a node's `in_flow`,
     // and without a shown node's `ancestors`.

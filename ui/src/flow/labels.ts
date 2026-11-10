@@ -3,7 +3,7 @@ import type { FlowEdgeKey } from "../app/routes";
 import { compareText, nodeName } from "../graph/layout";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
-import type { LozengeLook } from "../ui/Lozenge";
+import type { LozengeAppearance, LozengeLook } from "../ui/Lozenge";
 
 // The Flow's closed tables and words (docs/features/flow-canvas.md "Data", "Gap rows";
 // docs/features/trace-views.md; docs/features/flow-scenario.md D3, D9, D10). The one place under
@@ -329,13 +329,13 @@ const NO_CARD = "no card";
 type RollupKey = "confirmed" | "inWork" | "suspect" | "departed" | "noCard";
 
 /** The rollups as the daemon writes them, each with its catalog key, colour role and icon. */
-const ROLLUPS: ReadonlyMap<string, Omit<Look, "label"> & { key: RollupKey }> = new Map([
-  ["confirmed", { key: "confirmed", tone: "trace-confirmed", icon: "taskAccepted" }],
-  ["in work", { key: "inWork", tone: "trace-in-work", icon: "taskInProgress" }],
-  ["suspect", { key: "suspect", tone: "trace-suspect", icon: "specChanged" }],
-  ["departed", { key: "departed", tone: "trace-departed", icon: "cardDeparted" }],
-  [NO_CARD, { key: "noCard", tone: "trace-no-card", icon: "open" }],
-] satisfies [string, Omit<Look, "label"> & { key: RollupKey }][]);
+const ROLLUPS: ReadonlyMap<string, Omit<Look, "label"> & { key: RollupKey; appearance: LozengeAppearance }> = new Map([
+  ["confirmed", { key: "confirmed", tone: "trace-confirmed", icon: "taskAccepted", appearance: "success" }],
+  ["in work", { key: "inWork", tone: "trace-in-work", icon: "taskInProgress", appearance: "information" }],
+  ["suspect", { key: "suspect", tone: "trace-suspect", icon: "specChanged", appearance: "warning" }],
+  ["departed", { key: "departed", tone: "trace-departed", icon: "cardDeparted", appearance: "discovery" }],
+  [NO_CARD, { key: "noCard", tone: "trace-no-card", icon: "open", appearance: "neutral" }],
+] satisfies [string, Omit<Look, "label"> & { key: RollupKey; appearance: LozengeAppearance }][]);
 
 /** The five rollups, as the daemon writes them. */
 export const ROLLUP_WORDS: readonly string[] = [...ROLLUPS.keys()];
@@ -344,6 +344,18 @@ export const ROLLUP_WORDS: readonly string[] = [...ROLLUPS.keys()];
 export function rollupLook(rollup: string, t: Translate): Look {
   const known = ROLLUPS.get(rollup);
   return known === undefined ? { label: rollup, tone: "trace-unknown", icon: "unknown", served: true } : { label: t(`flow.rollup.${known.key}`), tone: known.tone, icon: known.icon };
+}
+
+/**
+ * A rollup as a lozenge, a work item's work state (docs/features/doc-modal.md "Acceptance criteria",
+ * DM-12, DM-14): its label and icon, an appearance by what it says; one this build does not know raw,
+ * neutral, `served` so it is tagged English.
+ */
+export function rollupLozenge(rollup: string, t: Translate): LozengeLook & { served: boolean } {
+  const known = ROLLUPS.get(rollup);
+  return known === undefined
+    ? { appearance: "neutral", icon: "unknown", label: rollup, served: true }
+    : { appearance: known.appearance, icon: known.icon, label: t(`flow.rollup.${known.key}`), served: false };
 }
 
 /** Whether a rollup is a step with no card: it stays in its place, hollow. */

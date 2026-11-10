@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # The Flow screen
@@ -28,9 +28,8 @@ A section, not a Graph mode (`spec graph` needs a REF). `.flow-studio`: places (
 | Stage S in R | `getFlow({root: R, stage: S, in_flow: true, trace: true})` | `-` for No stage |
 | Lanes | `getTrace({ref: R, summary: true})` | each rooted scope, never at Top |
 | Scope view | `getNode(R, {with: ["links"]})`, its `ancestors` the path | each rooted scope |
-| Box N | `getNode(N, {with: ["links"]})`, `getTrace({ref: N})` | N selected |
+| Box N | `getNode(N, {with: ["links"]})`, the document modal's key; its work state and marks from the drawing read | N selected |
 | Records | `getFlow({root: R, depth: 1})` (`recordsForm`) | while its dialog is open |
-| Gap titles | `getTree({})` | once, while Gaps is open and a member has no title in hand |
 | Seek | `getTree({})`, Top's read | on demand: a name no drawing read holds, a lens root unknown |
 
 - **No whole read.** Every drawing `getFlow` is one of the three forms (`flowForm`), always `trace` and `in_flow`; a stage read carries its scope's root, else it admits the whole stage. No `getTrace` is `{}` or holds `stage`; `getTree` never draws.
@@ -47,11 +46,11 @@ In the bar's Gaps control: `spec-flow-bar.md` "Gaps". The scope view lists none.
 `role="complementary"` "Details", always mounted, at `--flow-panel-width`, scrolling inside.
 
 - **Titles first.** Boxes, List rows, places, gap items and headings show a node's `title`, else its ID, else its path; an untitled group, its ID. IDs, raw kinds, places, `distance`, start or end and `inner` sit under one collapsed "Technical details" (`ui.technicalDetails`).
-- **The scope**, nothing selected: title, counts and bar (the node's `counts`); text and links; Open in Spec tree; New card (the scope as target); name, `kind`, path folded. At Top: `flow.topTitle`.
-- **A box**: its title, stage, a group's Open, its `group` by title with Open unless the scope, `backTo(scope)` on top, acting as Esc; the Cards block; text through `src/markdown/`; links by `LinksPanel`; "Open in Spec tree", "Open in Graph"; "Changes go through your AI, as proposals." The last box stays mounted, hidden, while the scope or an arrow shows, so coming back reads nothing.
+- **The scope**, nothing selected: its title (`flow.topTitle` at Top), counts and bar (the node's `counts`), its text's first paragraph, Open document (primary), New card (the scope as target); name, `kind`, path folded. An unrooted Top: no document, no act.
+- **A box**: `backTo(scope)` on top, acting as Esc; its title (`h2`); a line of its stage, work state (a `Lozenge` of the read's `rollup`) and the canvas's marks (suspect, departed, Gap), each a label and an icon; its text's first paragraph (the first top-level `paragraph` `src/markdown/` parses, anchors as `DocLink`s); Open document (primary), New card (a card made is noted under the acts until the selection changes), a group's Open; its `group` by title as a place link unless the scope; folded: name, kind, place, distance, start and end, `inner` per type. Its text, links and cards are the document modal's (`doc-view.md`). The last box stays mounted, hidden, while the scope or an arrow shows, so coming back reads nothing.
 - **An edge**: From and To, each a link selecting that end (a group end adds Open); Type, raw; Kind, `flow.edgeKind.*` (unknown raw) or `none`; When, or `none`; Links, the `count`; `path:line`, the first written.
 
-**Cards block.** `src/trace/CardsBlock.tsx`, here and in the tree's `NodePane`: the rollup, a read of more than one node its counts; each card once, its mark, `flow/column`, a link to the Board; `uses` rows; New card, the node preset. A suspect card's Clear is the Board's dialog and finishes on the page; a read of more than one node with one to clear adds Clear all, no effect only, one POST (`ClearGroupDialog`). With no row for the node (`rowOf`) it says the state is not known, never another's. A failed read: the daemon's words, Retry; a failed re-read adds that what stands below is from the last read.
+**Cards block.** `src/trace/CardsBlock.tsx`, in the tree's `NodePane` and the document view (its own New card off there): the rollup, a read of more than one node its counts; each card once, its mark, `flow/column`, a link to the Board; `uses` rows; New card, the node preset. A suspect card's Clear is the Board's dialog and finishes on the page; a read of more than one node with one to clear adds Clear all, no effect only, one POST (`ClearGroupDialog`). With no row for the node (`rowOf`) it says the state is not known, never another's. A failed read: the daemon's words, Retry; a failed re-read adds that what stands below is from the last read.
 
 ## List
 
@@ -89,13 +88,12 @@ The canvas's text twin, in served order, past the cap too: each box an `<a>` sel
 - **Decision 11, the owner's call.** The 200-box trial with random wiring passes (median 1.9 ms, no overlap) with 1,920 forward crossings, "a hairball by eye"; the look at the cap, `?scenario=large`, is his to judge. A layout library needs his allowlist.
 - **Cost.** At 100k a scope change waits about 1.5 s on two O(N) reads, each taking a hub's project turn (`scale-eval.md` "Baseline").
 - **Two hashes, one picture.** Before the lens root is known, the path's top entry writes `scope=<id>`, the lens root's picture under a second hash.
-- **Gap titles.** A gap member no read in hand titles costs one whole `getTree` while Gaps is open, heavy at 100k, until gap items serve titles (RM-0101).
 - **Minimap.** Bottom-left, it covers a box of a tall flow at fit until panned.
 - **Zoom.** No keyboard zoom or refit; the zoom and fit buttons are gone, a working answer for the owner to confirm. The List is the keyboard path.
-- The hidden box panel keeps its node and trace queries live.
+- The hidden box panel keeps its node query live.
 - Edges answer the mouse only; only an item's first member is sought; exit steps carry no mark (core `Steps.leaving` is not served).
 - 320 px and the still page are proven by looks, not tests: jsdom lays nothing out.
 
 ## Tests
 
-`ui/src/flow/*.test.*` (`FlowView.test.tsx` on stub clients, `src/test/asideStub.ts` the pottery's, `styles.test.ts` the CSS pins); `ui/src/mocks/flow.smoke.test.tsx` (harbor-sim: history, a stage, the hand-off, bounded reads), `flow.test.ts`, `trace.test.ts`; `app/routes.test.ts`; `trace/CardsBlock.test.tsx`; `api/*.test.*`; `policy.test.ts`, `styles/tokens.test.ts`.
+`ui/src/flow/*.test.*` (`FlowView.test.tsx` on stub clients, `src/test/asideStub.ts` the pottery's, `styles.test.ts` the CSS pins); `ui/src/mocks/flow.smoke.test.tsx` (harbor-sim: history, a stage, the hand-off, bounded reads), `flow.test.ts`, `trace.test.ts`; `app/routes.test.ts`; `trace/CardsBlock.test.tsx`; `markdown/Markdown.test.tsx` (the first paragraph); `api/*.test.*`; `policy.test.ts`, `styles/tokens.test.ts`.

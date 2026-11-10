@@ -384,11 +384,15 @@ export function linksOf(corpus: MockCorpus, node: MockNode, archive: boolean): S
     }
     const inSpan = written.path === node.path && node.line <= written.line && written.line <= node.endLine;
     if (inSpan) {
+      // The other end, as `name` reads it (docs/features/doc-modal.md "Acceptance criteria", DM-1): its title and kind, none unresolved.
+      const end = written.state === "resolved" && written.to !== null ? nodeNamed(corpus, written.to) : null;
       outgoing.push({
         type: written.type,
         origin: written.origin,
         at: source === node ? null : source.id,
         name: written.state === "resolved" ? written.to : null,
+        title: end?.title ?? null,
+        end_kind: end?.kind ?? null,
         written: written.written,
         path: written.path,
         line: written.line,
@@ -417,6 +421,8 @@ export function linksOf(corpus: MockCorpus, node: MockNode, archive: boolean): S
       origin: written.origin,
       at: landed === node ? null : landed.id,
       name: nameOf(source),
+      title: source.title,
+      end_kind: source.kind,
       written: written.written,
       path: written.path,
       line: written.line,

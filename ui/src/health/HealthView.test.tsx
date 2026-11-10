@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import { KNOWN_CHECK_VERDICTS, type AssumesRow, type CheckReport, type DriftRow, type HealthReport, type Proposal, type TestedRow, type UnboundRow } from "../api/types";
 import { App } from "../app/App";
-import { sectionHash } from "../app/routes";
+import { docPageHash, sectionHash } from "../app/routes";
 import { queueOrder } from "../inbox/order";
 import {
   aCheckFinding,
@@ -397,7 +397,7 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
     await openHealth(healthOf(aHealthReport(LISTED)));
     const [decision, draft] = [only(amendmentRows(), 0), only(amendmentRows(), 1)];
     const path = decision.querySelector(".health-amendment-path");
-    expect([path?.textContent, path?.getAttribute("href")]).toEqual(["docs/spec/zz-last.md", sectionHash("alpha", "tree", "docs/spec/zz-last.md")]);
+    expect([path?.textContent, path?.getAttribute("href")]).toEqual(["docs/spec/zz-last.md", docPageHash("alpha", "docs/spec/zz-last.md")]);
     expect(decision.querySelector(".health-amendment-title")?.textContent).toBe("Quay lights stay amber");
     const facts = (row: HTMLElement) => Array.from(row.querySelectorAll(".health-amendment-facts .fact"), (fact) => [fact.querySelector("dt")?.textContent, fact.querySelector("dd")?.textContent]);
     expect(facts(decision)).toEqual([
@@ -405,7 +405,7 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
       ["Class", "decision"],
       ["Status", "accepted"],
     ]);
-    expect(draft.querySelector(".health-amendment-path")?.getAttribute("href")).toBe(sectionHash("alpha", "tree", "docs/features/aa-first.md"));
+    expect(draft.querySelector(".health-amendment-path")?.getAttribute("href")).toBe(docPageHash("alpha", "docs/features/aa-first.md"));
     expect(draft.querySelector(".health-amendment-title")).toBeNull();
     expect(facts(draft)).toEqual([["Status", "in-flight"]]);
     expect(part().textContent).not.toMatch(/null|undefined/);
@@ -425,7 +425,7 @@ describe("unapplied amendments, row 3 (AC-U3, AC-U4 of health-left; replacing AC
     expect(dangling?.querySelector(".link-reason")?.textContent).toBe("`RULE-QUAY-LIGHTS` resolves to no ID and no alias");
     const [resolved, unknown] = links(only(amendmentRows(), 1));
     const name = resolved?.querySelector("a.link-name");
-    expect([name?.textContent, name?.getAttribute("href")]).toEqual(["R-1", sectionHash("alpha", "tree", "R-1")]);
+    expect([name?.textContent, name?.getAttribute("href")]).toEqual(["R-1", docPageHash("alpha", "R-1")]);
     expect(resolved?.querySelector(".badge-label")?.textContent).toBe("Resolved");
     expect(resolved?.querySelector(".link-row-meta")?.textContent).toBe("docs/features/aa-first.md:5as rule-alias");
     expect(resolved?.querySelector(".link-reason")).toBeNull();
@@ -691,8 +691,8 @@ describe("rows 4 and 5: code assuming a decision, unbound nodes (UI-1, UI-6 of h
       ["PR-0027", sectionHash("alpha", "inbox", "PR-0027")],
       ["PR-7", null],
       // The ID as written, linked to the node it names (its canonical ID).
-      ["MEC-OLD", sectionHash("alpha", "tree", "MEC-OLD-QUAYS")],
-      ["RULE-BERTH", sectionHash("alpha", "tree", "RULE-BERTH-DRAFT")],
+      ["MEC-OLD", docPageHash("alpha", "MEC-OLD-QUAYS")],
+      ["RULE-BERTH", docPageHash("alpha", "RULE-BERTH-DRAFT")],
     ]);
     expect(lines("assumes").map((row) => textOf(row.querySelector(".health-code-meta")))).toEqual([
       "src/zz.rs:17:4assumes",
@@ -733,7 +733,7 @@ describe("rows 4 and 5: code assuming a decision, unbound nodes (UI-1, UI-6 of h
   it("measured: each node's ID linked to the tree, kind and title raw (markup as text, any script), path:line plain, the rules it fails, its mentions", async () => {
     await openHealth(healthOf(aHealthReport([], { unbound: measuredUnbound(UNBOUND, 41, 2) })));
     const [zed, alpha, bare] = [line("unbound", 0), line("unbound", 1), line("unbound", 2)];
-    expect([textOf(zed.querySelector("a.health-code-id")), zed.querySelector("a.health-code-id")?.getAttribute("href")]).toEqual(["RULE-ZED", sectionHash("alpha", "tree", "RULE-ZED")]);
+    expect([textOf(zed.querySelector("a.health-code-id")), zed.querySelector("a.health-code-id")?.getAttribute("href")]).toEqual(["RULE-ZED", docPageHash("alpha", "RULE-ZED")]);
     expect([textOf(zed.querySelector(".kind-tag")), textOf(zed.querySelector(".health-code-title"))]).toEqual(["rule", HOSTILE]);
     expect(zed.querySelector("img")).toBeNull();
     expect(textOf(alpha.querySelector(".health-code-title"))).toBe("\u0417\u0430\u043b\u0438\u0432");
@@ -1068,12 +1068,12 @@ describe("row 6: drift (UI-2, UI-3 of health-drift-ui)", () => {
         return [textOf(id), id?.getAttribute("href") ?? null, textOf(line.querySelector(".health-code-head .kind-tag"))];
       }),
     ).toEqual([
-      ["R-12", sectionHash("alpha", "tree", "R-12"), "implements"],
-      ["MEC-ALPHA", sectionHash("alpha", "tree", "MEC-ALPHA"), "configures"],
+      ["R-12", docPageHash("alpha", "R-12"), "implements"],
+      ["MEC-ALPHA", docPageHash("alpha", "MEC-ALPHA"), "configures"],
       ["No ID", null, "implements"],
-      ["Z-9", sectionHash("alpha", "tree", "Z-9"), "implements"],
-      ["A-1", sectionHash("alpha", "tree", "A-1"), "implements"],
-      [LOOKALIKE, sectionHash("alpha", "tree", LOOKALIKE), "verifies"],
+      ["Z-9", docPageHash("alpha", "Z-9"), "implements"],
+      ["A-1", docPageHash("alpha", "A-1"), "implements"],
+      [LOOKALIKE, docPageHash("alpha", LOOKALIKE), "verifies"],
     ]);
     const metas = lines().map((line) => Array.from(line.querySelectorAll(".health-code-meta")));
     expect(metas.map(([state]) => [...badge(state), textOf(state?.querySelector(".health-code-word"))])).toEqual([
@@ -1171,9 +1171,9 @@ describe("row 6: drift (UI-2, UI-3 of health-drift-ui)", () => {
     expect(
       entries().map((entry) => [entry.dataset.tested, ...badge(entry.querySelector(".health-code-head")), entry.querySelector("a")?.getAttribute("href") ?? null, textOf(entry.querySelector(".health-code-word"))]),
     ).toEqual([
-      ["R-12", "Stale", "stale-changed", sectionHash("alpha", "tree", "R-12"), "code_changed"],
-      ["A-1", "Unverifiable", "sync-cannot-verify", sectionHash("alpha", "tree", "A-1"), "predated"],
-      ["GONE-1", "Node gone", "sync-broken-binding", sectionHash("alpha", "tree", "GONE-1"), null],
+      ["R-12", "Stale", "stale-changed", docPageHash("alpha", "R-12"), "code_changed"],
+      ["A-1", "Unverifiable", "sync-cannot-verify", docPageHash("alpha", "A-1"), "predated"],
+      ["GONE-1", "Node gone", "sync-broken-binding", docPageHash("alpha", "GONE-1"), null],
     ]);
     expect(entries().map((entry) => textOf(entry.querySelector(".health-code-meta")))).toEqual([
       "Vouched for rev 2Now rev 2Commit c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00Tests passed 2026-10-09",
@@ -1448,7 +1448,7 @@ describe("links (AC-07)", () => {
       ),
     );
     const links = Array.from(region("Findings").querySelectorAll("a"));
-    expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["docs/spec/x y.md:4", sectionHash("alpha", "tree", "docs/spec/x y.md")]]);
+    expect(links.map((link) => [link.textContent, link.getAttribute("href")])).toEqual([["docs/spec/x y.md:4", docPageHash("alpha", "docs/spec/x y.md")]]);
     expect(Array.from(region("Findings").querySelectorAll(".finding-subject-text"), (subject) => subject.closest("a"))).toEqual([null, null, null]);
     expect(rows().map((item) => item.querySelector(".finding-place")?.textContent)).toEqual(["No file", "docs/spec/x y.md:4", "specengine.toml:2"]);
   });
@@ -1670,17 +1670,18 @@ describe("keyboard (AC-10)", () => {
     expect(window.history.length).toBe(before);
   });
 
-  it("opens a spec document's finding with Enter: one history entry, to the tree", async () => {
+  it("opens a spec document's finding with Enter: one history entry, the document over Health (DM-8 of doc-modal)", async () => {
     await openHealth();
     const before = window.history.length;
     const target = row("docs/spec/berths/mooring.md");
     target.focus();
     fireEvent.keyDown(target, { key: "Enter" });
     await waitFor(() => {
-      expect(window.location.hash).toBe(sectionHash("alpha", "tree", "docs/spec/berths/mooring.md"));
+      expect(window.location.hash).toBe(`${sectionHash("alpha", "health")}?doc=${encodeURIComponent("docs/spec/berths/mooring.md")}`);
     });
     expect(window.history.length).toBe(before + 1);
-    expect(await screen.findByRole("heading", { level: 1 })).toBeTruthy();
+    expect(await screen.findByRole("dialog")).toBeTruthy();
+    expect(screen.getByRole("heading", { level: 1 })).toBeTruthy();
   });
 
   it("does nothing with Enter on a finding outside the spec, nor with Ctrl, Alt or Cmd, nor in the filter", async () => {

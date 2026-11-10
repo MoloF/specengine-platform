@@ -1,31 +1,31 @@
-import { useState, type MouseEvent, type ReactNode, type Ref } from "react";
+import type { MouseEvent, ReactNode, Ref } from "react";
 import { apiErrorOf } from "../api/client";
 import type { NodeQuery } from "../api/queries";
 import { useNode } from "../api/queries";
 import type { FlowEdge, FlowNode, TraceCounts } from "../api/types";
-import { replaceHash } from "../app/location";
-import { flowHash, sectionHash, type FlowPlace } from "../app/routes";
+import { openDocFrom, replaceHash } from "../app/location";
+import { flowHash, type FlowPlace } from "../app/routes";
 import { nodeName } from "../graph/layout";
 import { useTranslate } from "../i18n";
 import { Prose } from "../markdown/Prose";
 import { splitFrontMatter } from "../markdown/source";
-import { CardsBlock } from "../trace/CardsBlock";
 import { TraceBar } from "../trace/TraceBar";
-import { LinksPanel } from "../tree/LinksPanel";
-import type { LineTarget } from "../tree/TextView";
+import { Button } from "../ui/Button";
 import { Disclosure } from "../ui/Disclosure";
 import { Icon } from "../ui/Icon";
+import { Lozenge } from "../ui/Lozenge";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { isPlainClick } from "./clicks";
-import { boxWords, countsText, holdsText, kindWords, stageWords, startWord, withGapsText } from "./labels";
+import { countsText, gapMark, holdsText, kindWords, rollupLozenge, stageWords, startWord } from "./labels";
 import { isGroup } from "./layout";
 
-// The panel (docs/features/writer-studio.md D7, "Panel"; docs/features/flow-scenario.md D12): always
-// mounted, at its own width, scrolling inside. With nothing selected it shows the scope and its
-// actions; a box shows its title, stage, holder, cards, text and links; an arrow its served words.
-// IDs, raw kinds, `path:line`, distance and inner counts stand folded under Technical details. The
-// gap rows are the bar's (D10). The spec is read only here and changes through the AI, as proposals;
-// a card is written, a queue row.
+// The panel (docs/features/writer-studio.md D7; docs/features/doc-modal.md "Acceptance criteria",
+// DM-14): always mounted, at its own width, scrolling inside, and minimal. With nothing selected it
+// shows the scope; a box its title, stage, work state and marks, its text's first paragraph and Open
+// document, the whole of it in the document modal; an arrow its served words. IDs, raw kinds,
+// `path:line`, distance and inner counts stand folded under Technical details. The gap rows are the
+// bar's. Its work state and marks are the drawing read's: the panel reads no trace. The spec is read
+// only here; a card is written, a queue row.
 
 /** A link that selects: one history entry replaced, never pushed (D5). */
 function SelectLink({ project, place, className, children }: { project: string; place: FlowPlace; className?: string; children: ReactNode }) {
@@ -58,16 +58,15 @@ function BackTo({ name, onBack }: { name: string; onBack: () => void }) {
   );
 }
 
-/** A node's text and links, from its `with=links` read. */
-function NodeText({ project, name, read }: { project: string; name: string; read: NodeQuery }) {
+/** A document's lead: its text's first paragraph from its `with=links` read, anchors as document links; none, nothing. */
+function Lead({ project, name, read }: { project: string; name: string; read: NodeQuery }) {
   const t = useTranslate();
-  const [target, setTarget] = useState<LineTarget | null>(null);
   const holder = read.data?.nodes[0];
   const text = holder === undefined ? null : splitFrontMatter(holder.text);
   return (
     <>
-      {read.data === undefined && read.error === null && <Skeleton label={t("flow.nodeReading", { name })} lines={3} />}
-      {read.error !== null && (
+      {read.data === undefined && read.error === null && <Skeleton label={t("flow.nodeReading", { name })} lines={2} />}
+      {read.data === undefined && read.error !== null && (
         <ErrorPanel
           title={t("flow.nodeFailed", { name })}
           message={apiErrorOf(read.error).message}
@@ -84,33 +83,18 @@ function NodeText({ project, name, read }: { project: string; name: string; read
         </p>
       )}
       {holder !== undefined && text !== null && (
-        <section className="flow-panel-section" aria-label={t("flow.textHeading")}>
-          <h3 className="card-section-title">{t("flow.textHeading")}</h3>
-          <Prose
-            className="flow-panel-text"
-            source={text.body}
-            links={holder.links?.outgoing ?? null}
-            project={project}
-            baseLevel={3}
-            frontMatter={false}
-            firstLine={holder.line + text.lines}
-            path={holder.path}
-            target={target}
-          />
-        </section>
-      )}
-      <section className="flow-panel-section" aria-label={t("flow.linksHeading")}>
-        <LinksPanel
+        <Prose
+          className="flow-panel-lead"
+          source={text.body}
+          links={holder.links?.outgoing ?? null}
           project={project}
-          nodeRef={name}
-          archive={false}
-          query={read}
-          onShowInText={(_place, line) => {
-            setTarget((last) => ({ line, nonce: (last?.nonce ?? 0) + 1 }));
-          }}
-          onFollow={() => undefined}
+          baseLevel={3}
+          frontMatter={false}
+          firstLine={holder.line + text.lines}
+          path={holder.path}
+          firstParagraph
         />
-      </section>
+      )}
     </>
   );
 }
@@ -126,6 +110,35 @@ function Counts({ counts }: { counts: TraceCounts | null }) {
       <p>{countsText(counts, t)}</p>
       <TraceBar counts={counts} />
     </div>
+  );
+}
+
+/** Open document, the primary, and New card: a document's ways on from the panel. */
+function Acts({ name, onNewCard, children }: { name: string; onNewCard: (name: string, trigger: HTMLElement) => void; children?: ReactNode }) {
+  const t = useTranslate();
+  return (
+    <p className="flow-panel-actions">
+      <Button
+        appearance="primary"
+        icon="document"
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          openDocFrom(name, event.currentTarget);
+        }}
+      >
+        {t("flow.openDoc")}
+      </Button>
+      <Button
+        icon="cardNew"
+        aria-haspopup="dialog"
+        onClick={(event) => {
+          onNewCard(name, event.currentTarget);
+        }}
+      >
+        {t("flow.newCard")}
+      </Button>
+      {children}
+    </p>
   );
 }
 
@@ -153,7 +166,7 @@ function TechnicalDetails({ children, more }: { children: ReactNode; more?: Reac
   );
 }
 
-/** The scope: its title, counts, its ways out, text and links, then what the caller puts under; its name, kind and place folded. */
+/** The scope: its title, counts and lead, Open document and New card, then what the caller puts under; its name, kind and place folded. An unrooted top has none of these. */
 export function ScopeView({
   project,
   scope,
@@ -164,8 +177,7 @@ export function ScopeView({
   project: string;
   scope: ScopeShown;
   headingRef: Ref<HTMLHeadingElement>;
-  /** Opens New card with the scope as its target; null at the top. */
-  onNewCard: (() => void) | null;
+  onNewCard: (name: string, trigger: HTMLElement) => void;
   children: ReactNode;
 }) {
   const t = useTranslate();
@@ -177,21 +189,9 @@ export function ScopeView({
         </h2>
       </header>
       <Counts counts={scope.counts} />
-      {scope.name !== null && (
-        <p className="flow-panel-actions">
-          <a className="button" href={sectionHash(project, "tree", scope.name)}>
-            {t("flow.openInTree")}
-          </a>
-          {onNewCard !== null && (
-            <button type="button" className="button button-quiet" aria-haspopup="dialog" onClick={onNewCard}>
-              <Icon name="cardNew" />
-              <span>{t("flow.newCard")}</span>
-            </button>
-          )}
-        </p>
-      )}
+      {scope.name !== null && scope.read !== null && <Lead project={project} name={scope.name} read={scope.read} />}
+      {scope.name !== null && <Acts name={scope.name} onNewCard={onNewCard} />}
       {children}
-      {scope.name !== null && scope.read !== null && <NodeText project={project} name={scope.name} read={scope.read} />}
       {scope.name !== null && (
         <TechnicalDetails>
           <div className="fact fact-wide">
@@ -208,12 +208,11 @@ export function ScopeView({
           </div>
         </TechnicalDetails>
       )}
-      <p className="muted">{t("flow.throughAi")}</p>
     </>
   );
 }
 
-/** A box: its title, stage and holder with Open, a group's Open, its cards, its text and links; its name, kind, place, distance, marks and inner links folded. */
+/** A box: its title; a line of its stage, its work state and the marks the canvas gives it; its lead; Open document, New card, a group's Open; its group by title; its name, kind, place, distance, start, end and inner links folded. */
 export function BoxView({
   project,
   node,
@@ -221,27 +220,38 @@ export function BoxView({
   scopeName,
   scopeTitle,
   titleOf,
+  named,
   headingRef,
   enterPlace,
   onBack,
+  onNewCard,
+  children,
 }: {
   project: string;
   node: FlowNode;
   inLane: boolean;
-  /** The scope drawn: its own name is no holder to open. */
+  /** The scope drawn: its own name is no group to show. */
   scopeName: string | null;
   scopeTitle: string;
   /** A name's title where a read gives one, else the name. */
   titleOf: (name: string) => string;
+  /** The names the read's gap rows name: the box's gap mark, as on the canvas. */
+  named: ReadonlySet<string>;
   headingRef: Ref<HTMLHeadingElement> | undefined;
   /** The place entering a group. */
   enterPlace: (name: string) => FlowPlace;
   onBack: () => void;
+  onNewCard: (name: string, trigger: HTMLElement) => void;
+  /** Under the acts: the note of a card made from this box. */
+  children?: ReactNode;
 }) {
   const t = useTranslate();
   const name = nodeName(node);
-  const title = boxWords(node);
+  const title = node.title ?? name;
+  // The document's read, the modal's key: Open document draws from it at once.
   const read = useNode(project, name, { with: ["links"] });
+  const gap = gapMark(node, named, t);
+  const state = node.rollup === null ? null : rollupLozenge(node.rollup, t);
   return (
     <>
       <BackTo name={scopeTitle} onBack={onBack} />
@@ -250,48 +260,39 @@ export function BoxView({
           <bdi>{title}</bdi>
         </h2>
       </header>
-      <dl className="facts">
-        <div className="fact">
-          <dt>{t("flow.fact.stage")}</dt>
-          <dd>
-            <bdi>{stageWords(node.stage, t)}</bdi>
-          </dd>
-        </div>
-        {node.group !== null && node.group !== scopeName && (
-          <div className="fact fact-wide">
-            <dt>{t("flow.fact.group")}</dt>
-            <dd>
-              <bdi>{titleOf(node.group)}</bdi> <a href={flowHash(project, enterPlace(node.group))}>{t("flow.openGroup", { name: titleOf(node.group) })}</a>
-            </dd>
-          </div>
+      <p className="flow-panel-line">
+        <span className="flow-panel-stage">
+          <span className="sr-only">{t("flow.factLabel", { fact: t("flow.fact.stage") })}</span>
+          <bdi>{stageWords(node.stage, t)}</bdi>
+        </span>
+        {state !== null && <Lozenge appearance={state.appearance} icon={state.icon} label={state.label} lang={state.served ? "en" : undefined} />}
+        {gap !== null && (
+          <span className="flow-mark flow-mark-gap">
+            <Icon name="flowGap" />
+            {gap.shown}
+          </span>
         )}
-      </dl>
-      {isGroup(node) && (
-        <section className="flow-panel-section" aria-label={t("flow.groupHeading")}>
-          <h3 className="card-section-title">{t("flow.groupHeading")}</h3>
-          <p>
-            {holdsText(node.holds, t)}
-            {node.gaps > 0 && `, ${withGapsText(node.gaps, t)}`}
-          </p>
-          <p>
-            <a className="button" href={flowHash(project, enterPlace(name))}>
-              <Icon name="chevronRight" />
-              <span>{t("flow.openGroup", { name: title })}</span>
-            </a>
-          </p>
-        </section>
-      )}
-      <CardsBlock project={project} nodeRef={name} section="flow" heading="h3" />
-      <NodeText project={project} name={name} read={read} />
-      <p className="flow-panel-actions">
-        <a className="button" href={sectionHash(project, "tree", name)}>
-          {t("flow.openInTree")}
-        </a>
-        <a className="button" href={sectionHash(project, "graph", name)}>
-          <Icon name="graph" />
-          <span>{t("flow.openInGraph")}</span>
-        </a>
+        {isGroup(node) && <span className="flow-mark">{holdsText(node.holds, t)}</span>}
       </p>
+      {isGroup(node) && <Counts counts={node.counts} />}
+      <Lead project={project} name={name} read={read} />
+      <Acts name={name} onNewCard={onNewCard}>
+        {isGroup(node) && (
+          <a className="button" href={flowHash(project, enterPlace(name))}>
+            <Icon name="chevronRight" />
+            <span>{t("flow.openGroup", { name: title })}</span>
+          </a>
+        )}
+      </Acts>
+      {children}
+      {node.group !== null && node.group !== scopeName && (
+        <p className="flow-panel-group">
+          <span>{t("flow.factLabel", { fact: t("flow.fact.group") })}</span>
+          <a href={flowHash(project, enterPlace(node.group))}>
+            <bdi>{titleOf(node.group)}</bdi>
+          </a>
+        </p>
+      )}
       <TechnicalDetails
         more={
           (node.start || node.end) && (
@@ -345,7 +346,6 @@ export function BoxView({
           </div>
         )}
       </TechnicalDetails>
-      <p className="muted">{t("flow.throughAi")}</p>
     </>
   );
 }
@@ -438,7 +438,6 @@ export function EdgeView({
           </dd>
         </div>
       </dl>
-      <p className="muted">{t("flow.throughAi")}</p>
     </>
   );
 }

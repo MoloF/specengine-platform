@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { ClientError } from "../api/client";
 import type { Card, CardList } from "../api/types";
 import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite } from "../test/builders";
+import { docView, FERRY } from "../test/docStub";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
 import { statusLook } from "./category";
@@ -519,5 +520,98 @@ describe("the heads hold still under Show cancelled (D2)", () => {
     });
     expect(heads()).toEqual(before);
     expect(before).not.toContain("Not in the flow");
+  });
+});
+
+// DM-10 of docs/features/doc-modal.md: a card's target opens the document over the card's modal, the
+// document always the top dialog: the card's modal inert under it, Esc and Back closing the document
+// alone; a reload of both draws the document on top, however late the card's read lands.
+describe("the document over the card (DM-10 of doc-modal)", () => {
+  const TARGETED: Record<string, Card> = { ...CARDS, "C-0002": aCard({ id: "C-0002", flow: "copy", title: "Second", position: 2, targets: [FERRY] }) };
+
+  function targetedClient(): StubClient {
+    const client = boardClient(LIST, TARGETED);
+    client.getNode.mockImplementation((_project, ref) => Promise.resolve(docView(ref)));
+    return client;
+  }
+
+  function hostOf(dialog: HTMLElement): HTMLElement {
+    const host = dialog.closest<HTMLElement>("[data-dialog-host]");
+    if (host === null) {
+      throw new Error("no dialog host");
+    }
+    return host;
+  }
+
+  it("a target link pushes the document's pair; the card's modal inert beneath; Esc closes the document alone, focus back to the link; Back likewise", async () => {
+    await board(targetedClient());
+    clickTitle("C-0002");
+    const card = await screen.findByRole("dialog", { name: "Second" });
+    const target = await within(card).findByRole("link", { name: FERRY });
+    expect(target.getAttribute("href")).toBe(`#/alpha/tree/${FERRY}/page`);
+    for (const how of ["Escape", "Back"] as const) {
+      const before = window.history.length;
+      fireEvent.click(target);
+      expect(window.location.hash).toBe(`#/alpha/board/C-0002?doc=${FERRY}`);
+      if (how === "Escape") {
+        expect(window.history.length).toBe(before + 1);
+      }
+      const doc = await screen.findByRole("dialog", { name: "The ferry" });
+      await waitFor(() => {
+        expect(document.activeElement).toBe(within(doc).getByRole("heading", { level: 2, name: "The ferry" }));
+      });
+      expect(inert(card)).toBe(true);
+      expect(inert(doc)).toBe(false);
+      expect(hostOf(card).compareDocumentPosition(hostOf(doc)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      if (how === "Escape") {
+        fireEvent.keyDown(document.activeElement ?? doc, { key: "Escape" });
+      } else {
+        act(() => {
+          window.history.back();
+        });
+      }
+      await waitFor(() => {
+        expect(screen.queryByRole("dialog", { name: "The ferry" })).toBeNull();
+      });
+      expect([how, window.location.hash]).toEqual([how, "#/alpha/board/C-0002"]);
+      expect(screen.getByRole("dialog", { name: "Second" })).toBe(card);
+      expect(inert(card)).toBe(false);
+      await waitFor(() => {
+        expect(document.activeElement).toBe(target);
+      });
+    }
+  });
+
+  it("a cold render of the card with the document draws the document on top, though the card's read lands later (M: the document mounted before the view)", async () => {
+    const client = targetedClient();
+    let land: (card: Card) => void = () => undefined;
+    client.getCard.mockImplementation(() => new Promise((resolve) => {
+      land = resolve;
+    }));
+    renderApp(client, `#/alpha/board/C-0002?doc=${FERRY}`);
+    const doc = await screen.findByRole("dialog", { name: "The ferry" });
+    await within(doc).findByText("A flat boat crosses the river on a cable.");
+    const card = screen.getAllByRole("dialog").find((dialog) => dialog !== doc) as HTMLElement;
+    expect(card).toBeTruthy();
+    const check = () => {
+      expect(hostOf(card).compareDocumentPosition(hostOf(doc)) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(inert(card)).toBe(true);
+      expect(inert(doc)).toBe(false);
+      expect(doc.contains(document.activeElement)).toBe(true);
+    };
+    await waitFor(check);
+    act(() => {
+      land(structuredClone(TARGETED["C-0002"] as Card));
+    });
+    await within(card).findByRole("link", { name: FERRY });
+    check();
+    // Its close, the modal not pushed here: a replace, focus to the card's title beneath.
+    fireEvent.keyDown(doc, { key: "Escape" });
+    await waitFor(() => {
+      expect(window.location.hash).toBe("#/alpha/board/C-0002");
+    });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(within(card).getByRole("heading", { level: 2, name: "Second" }));
+    });
   });
 });

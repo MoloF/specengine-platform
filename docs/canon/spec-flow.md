@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-model, crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # `spec flow`: the walk, typed edges, lifted edges and gap rows
@@ -34,7 +34,7 @@ gap <code> | <state> | <count>[ | <item>, …][ | <cause>]
 [truncated: <k> of <n> nodes and <j> of <m> edges not shown; give a ROOT or lower --depth]
 ```
 
-JSON, every key present, absent `null`: `{root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, not_in_flow, types, gaps, nodes, edges}`; `not_in_flow` an integer under `--in-flow`, `null` otherwise, 0 in the exit-1 document under it; `types` the model's three, on every read (`spec-flow-cuts.md` "Count and types"); a gap `{code, state, count, items, cause}`, `state` `measured | not_configured | cannot`, `items` a list of name lists, `cause` one line, `null` at 0; a node, 16 keys, `{id, kind, title, path, line, distance, group, stage, start, end, in_flow, holds, inner, gaps, rollup, counts}`, `inner` `[{type, count}]`, `counts` `{no_card, in_work, suspect, departed, confirmed}`; an edge `{from, to, type, kind, when, count, path, line}`.
+JSON, every key present, absent `null`: `{root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, not_in_flow, types, gaps, nodes, edges}`; `not_in_flow` an integer under `--in-flow`, `null` otherwise, 0 in the exit-1 document under it; `types` the model's three, on every read (`spec-flow-cuts.md` "Count and types"); a gap `{code, state, count, items, titles, cause}`, `state` `measured | not_configured | cannot`, `items` a list of name lists, `titles` parallel, each member's title or `null`, `[]` where `items` is, cut with `items` at `GAP_ITEMS_SHOWN` (the core's `FlowGap` cuts none; the text prints no title), the headless `no-start` row's one title its first ROOT holder's, `[[null]]` at Top (item `all`); `cause` one line, `null` at 0; a node, 16 keys, `{id, kind, title, path, line, distance, group, stage, start, end, in_flow, holds, inner, gaps, rollup, counts}`, `inner` `[{type, count}]`, `counts` `{no_card, in_work, suspect, departed, confirmed}`; an edge `{from, to, type, kind, when, count, path, line}`.
 
 **Cap** as `mcp-read.md` "Size": text at most `OUTPUT_CAP_CHARS` plus one tail, cut at a line, JSON the printed items only; the daemon's `View::Browser` uncut. **Exits** as `spec graph`: 0 answered, zero nodes and any gap included; 1 only a ROOT naming nothing, JSON `reason` (the daemon's 404); 2 usage, a bad `--depth`, a look-alike ID, config outside `[flow]`, `HOME`, `StoreError`.
 
@@ -70,7 +70,7 @@ Each table lists rules, a rule's selectors `kinds`, `classes`, `paths`, `when` i
 | `definition-once` | `definition` | a definition | one does | `only one document uses it: add a uses link from a second document, or fold it into that document` |
 | `supply-unfed` | - | its members | a `supplies` cycle no node outside it feeds | `these only supply each other: add a supplies link into them from a node outside` |
 
-A cycle is Tarjan's component of two or more nodes or with a self-edge. Items sort by name. A `cause` is one line, why plus how, in text, JSON and the Flow screen; no key was added. Core `measured()` sets `GapCause::Found(code)` above 0, on the headless `no-start` row too; at 0 `null`. A row needing an absent table: `not_configured`, never 0, its cause `` no [[flow.<table>]] rule: add one naming `` the first step by paths, the last step by paths, or what steps share, by paths or kinds. A bad table: the first error by line, `<config>:<line>: <message>`; the rows needing it `cannot`, exit 0. An unknown key in `[flow]` marks all four tables.
+A cycle is Tarjan's component of two or more nodes or with a self-edge. Items sort by name; members by (name, title), titles from the parses the read holds (a `debug_assert!` in `gaps_of` keeps `titles` in `items`' shape). A `cause` is one line, why plus how, in text, JSON and the Flow screen; no key was added. Core `measured()` sets `GapCause::Found(code)` above 0, on the headless `no-start` row too; at 0 `null`. A row needing an absent table: `not_configured`, never 0, its cause `` no [[flow.<table>]] rule: add one naming `` the first step by paths, the last step by paths, or what steps share, by paths or kinds. A bad table: the first error by line, `<config>:<line>: <message>`; the rows needing it `cannot`, exit 0. An unknown key in `[flow]` marks all four tables.
 
 **`endless`: no new word.** ADR-0055's three kinds stand. An end step may carry a `repeat` edge to itself, and a loop that can reach an end is no trap, so a flow with no finish marks its resting step as an end and lists nothing.
 

@@ -15,6 +15,11 @@
 //! - docs/features/trace-views.md "Folded start and end": at every depth a
 //!   shown node's `start` and `end` over what it holds, its `stage` its own,
 //!   read from the unfolded read alone.
+//! - docs/features/doc-modal.md DM-3 (RM-0101): a gap row's `titles`,
+//!   parallel to `items`, each member's own title at every depth, `None`
+//!   for a member with neither `title:` nor a heading; the read cuts
+//!   nothing (51 unreachable steps, 51 of each). The CLI's cut at 50 is CLI
+//!   `tests/flow_read.rs`.
 //!
 //! The reads, exits and surfaces are CLI `tests/flow_read.rs`, MCP
 //! `tests/mcp_flow.rs` and http `tests/flow.rs`.
@@ -1311,4 +1316,168 @@ fn fs2_a_tier_3_root_holding_a_live_step_is_in_the_flow_by_the_fold() {
     );
     assert_eq!(cut.nodes, whole.nodes, "a ROOT stays");
     assert_eq!(cut.not_in_flow, Some(0));
+}
+
+// ------------------------------------------------------------- doc-modal DM-3
+
+/// The title the parse holds for the node named `name`, `None` when no node
+/// is named so (a headless scope's name at Top).
+fn own_title(graph: &SpecGraph<'_>, name: &str) -> Option<String> {
+    (0..graph.paths().len())
+        .flat_map(|file| (0..graph.nodes(file).len()).map(move |ord| NodeAt { file, ord }))
+        .find(|&at| graph.name(at) == name)
+        .and_then(|at| graph.node(at))
+        .and_then(|node| node.title.clone())
+}
+
+/// docs/features/doc-modal.md DM-3 (RM-0101): on five fixtures, whole and
+/// under a ROOT, at every depth, each row's `titles` has `items`' shape and
+/// each title is the member's own (its parse's `title:`, else its first H1),
+/// not the box it is folded into; a row not measured holds none. M: titles
+/// from the folded box (`flow-aside`'s `POT-WEDGE` titled "Firing run").
+#[test]
+fn dm3_a_gap_title_is_its_members_own() {
+    let mut titled = 0usize;
+    for (corpus, root) in [
+        (GAPS, None),
+        (GAPS, Some("WING-BROKEN")),
+        (GAPS, Some("WING-HEADLESS")),
+        (GAPS, Some("WING-LIBRARY")),
+        (RELAY, None),
+        (HIRE, None),
+        (ALMANAC, None),
+        ("flow-aside", None),
+        ("flow-aside", Some("ATL-POTTERY")),
+    ] {
+        let (config, input) = fixture_input(&fixture(corpus));
+        let graph = SpecGraph::new(&input, &config.scheme, &config.paths);
+        for depth in [None, Some(0), Some(1), Some(2)] {
+            let context = format!("{corpus} {root:?} at depth {depth:?}");
+            let read = read_input(&config_text(corpus), &config, &input, root, depth);
+            for gap in &read.gaps {
+                assert_eq!(
+                    gap.titles.len(),
+                    gap.items.len(),
+                    "{context}: {:?}",
+                    gap.code
+                );
+                if gap.state != GapState::Measured {
+                    assert!(gap.titles.is_empty(), "{context}: {gap:?}");
+                }
+                for (item, titles) in gap.items.iter().zip(&gap.titles) {
+                    assert_eq!(titles.len(), item.len(), "{context}: {gap:?}");
+                    for (name, title) in item.iter().zip(titles) {
+                        assert_eq!(
+                            *title,
+                            own_title(&graph, name),
+                            "{context}: {:?} member {name}",
+                            gap.code
+                        );
+                        titled += usize::from(title.is_some());
+                    }
+                }
+            }
+        }
+    }
+    assert!(titled > 0, "premise: some member is titled");
+    // DM-3's example: flow-aside at depth 1, the two starts folded into KRUN-FIRING
+    // and WBAY-GALLERY, titled by their own titles.
+    let aside = read("flow-aside", Some("ATL-POTTERY"), Some(1));
+    let two = row(&aside, GapCode::TwoStarts);
+    assert_eq!(
+        two.items,
+        [["POT-WEDGE", "docs/workshop/gallery/open-day.md"]]
+    );
+    assert_eq!(
+        two.titles,
+        [[Some("Wedging".to_owned()), Some("Open day".to_owned())]]
+    );
+}
+
+/// A corpus of one start `STEP-01` and `steps` more, each unreached;
+/// `body(step)` writes the unreached step's document.
+fn unreached(steps: usize, body: impl Fn(usize) -> String) -> (String, Config, CheckInput) {
+    let text = "[project]\nslug = \"unreached\"\n\n[ids]\nSTEP = { kind = \"stage\", width = 2 }\n\n\
+                [[flow.step]]\nkinds = [\"stage\"]\n\n[[flow.start]]\npaths = [\"docs/spec/step-01.md\"]\n\n\
+                [[flow.end]]\npaths = [\"docs/spec/step-01.md\"]\n"
+        .to_owned();
+    let config = Config::from_toml(&text);
+    let mut files = vec![(
+        step_path(0),
+        "---\nid: STEP-01\nclass: canon\ntitle: The start\nowner: owner\n\
+         reviewed: 2026-10-01\n---\n\n# The start\n\nA step.\n"
+            .to_owned(),
+    )];
+    for step in 1..=steps {
+        files.push((step_path(step), body(step)));
+    }
+    let borrowed: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(path, body)| (path.as_str(), body.as_str()))
+        .collect();
+    let input = config.input(&borrowed);
+    (text, config, input)
+}
+
+/// docs/features/doc-modal.md DM-3: a member with neither `title:` nor a
+/// heading serves `None`; one with an H1 alone serves the H1; one with
+/// `title:` serves it over its H1. M: an untitled member given its name.
+#[test]
+fn dm3_a_member_with_no_title_serves_none() {
+    let (text, config, input) = unreached(3, |step| {
+        let id = step_name(step);
+        match step {
+            1 => format!(
+                "---\nid: {id}\nclass: canon\nowner: owner\nreviewed: 2026-10-01\n---\n\n\
+                 A step with no title and no heading.\n"
+            ),
+            2 => format!(
+                "---\nid: {id}\nclass: canon\nowner: owner\nreviewed: 2026-10-01\n---\n\n\
+                 # A heading alone\n\nA step.\n"
+            ),
+            _ => format!(
+                "---\nid: {id}\nclass: canon\ntitle: A written title\nowner: owner\n\
+                 reviewed: 2026-10-01\n---\n\n# Another heading\n\nA step.\n"
+            ),
+        }
+    });
+    let read = read_input(&text, &config, &input, None, None);
+    let gap = row(&read, GapCode::Unreachable);
+    assert_eq!(
+        gap.items,
+        [["STEP-02"], ["STEP-03"], ["STEP-04"]],
+        "{gap:?}"
+    );
+    assert_eq!(
+        gap.titles,
+        [
+            vec![None],
+            vec![Some("A heading alone".to_owned())],
+            vec![Some("A written title".to_owned())],
+        ],
+        "{gap:?}"
+    );
+}
+
+/// docs/features/doc-modal.md DM-3: the read cuts nothing: 51 unreachable
+/// steps are 51 items and 51 title lists, each the step's own; the cut at 50
+/// is the CLI's (CLI `tests/flow_read.rs`).
+#[test]
+fn dm3_fifty_one_unreached_steps_keep_every_title() {
+    let (text, config, input) = unreached(51, |step| {
+        format!(
+            "---\nid: {id}\nclass: canon\ntitle: Step {step}\nowner: owner\n\
+             reviewed: 2026-10-01\n---\n\n# Step {step}\n\nA step.\n",
+            id = step_name(step)
+        )
+    });
+    let read = read_input(&text, &config, &input, None, None);
+    let gap = row(&read, GapCode::Unreachable);
+    assert_eq!(gap.count, Some(51));
+    assert_eq!(gap.items.len(), 51);
+    assert_eq!(gap.titles.len(), 51);
+    for (item, titles) in gap.items.iter().zip(&gap.titles) {
+        let step: usize = item[0]["STEP-".len()..].parse().expect("a number");
+        assert_eq!(*titles, [Some(format!("Step {}", step - 1))], "{item:?}");
+    }
 }

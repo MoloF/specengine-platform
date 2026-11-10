@@ -209,18 +209,18 @@ describe("Health over the mock", () => {
     expect(decision?.querySelector(".health-amendment-link .badge-label")?.textContent).toBe("Dangling");
     expect(decision?.querySelector(".health-amendment-link .link-row-meta")?.textContent).toBe("docs/decisions/DEC-0014.md:8");
     expect(Array.from(draft?.querySelectorAll(".health-amendment-facts dd") ?? [], (fact) => fact.textContent)).toEqual(["spec", "draft"]);
-    expect(draft?.querySelector(".health-amendment-link a")?.getAttribute("href")).toBe("#/harbor-sim/tree/RULE-BERTH-DRAFT");
+    expect(draft?.querySelector(".health-amendment-link a")?.getAttribute("href")).toBe("#/harbor-sim/tree/RULE-BERTH-DRAFT/page");
     expect(draft?.querySelector(".health-amendment-link .badge-label")?.textContent).toBe("Resolved");
   });
 
   it.each([
     ["docs/decisions/DEC-0014.md", "Quay lights stay amber"],
     ["docs/features/deep-berth.md", "Berth 4 takes 13.0 m draft after the dredging"],
-  ])("normal: %s's path opens its document in the tree, a node of the mock's corpus", async (path, title) => {
+  ])("normal: %s's path opens its document's page, a node of the mock's corpus", async (path, title) => {
     const { spies } = await loadedHealth();
     const link = amendments().querySelector<HTMLAnchorElement>(`[data-amendment="${path}"] .health-amendment-path`);
     const href = link?.getAttribute("href") ?? "";
-    expect(href).toBe(`#/harbor-sim/tree/${encodeURIComponent(path)}`);
+    expect(href).toBe(`#/harbor-sim/tree/${encodeURIComponent(path)}/page`);
     fireEvent.click(link as HTMLAnchorElement);
     // jsdom follows a clicked hash link only a task later; the browser at once.
     window.location.hash = href;
@@ -317,11 +317,11 @@ describe("Health over the mock", () => {
   it.each([
     ["assumes", "RULE-BERTH-DRAFT", "Draft limit at a berth"],
     ["unbound", "RULE-MOOR-CREW", "Mooring crew"],
-  ] as const)("normal: %s's %s opens its node in the tree (UI-6)", async (row, id, title) => {
+  ] as const)("normal: %s's %s opens its document's page (UI-6)", async (row, id, title) => {
     const { spies } = await loadedHealth();
     const link = codePart(row).querySelector<HTMLAnchorElement>(`[data-${row}="${id}"] a.health-code-id`);
     const href = link?.getAttribute("href") ?? "";
-    expect(href).toBe(`#/harbor-sim/tree/${id}`);
+    expect(href).toBe(`#/harbor-sim/tree/${id}/page`);
     fireEvent.click(link as HTMLAnchorElement);
     window.location.hash = href;
     await waitFor(() => {
@@ -464,11 +464,11 @@ describe("Health over the mock", () => {
     expect(codePart("drift").textContent).not.toMatch(/Pre-existing|Editorial/);
   });
 
-  it("normal: a row's node opens its node in the tree", async () => {
+  it("normal: a row's node opens its document's page", async () => {
     const { spies } = await loadedHealth();
     const link = codePart("drift").querySelector<HTMLAnchorElement>('[data-drift="MEC-TIDES"] a.health-code-id');
     const href = link?.getAttribute("href") ?? "";
-    expect(href).toBe("#/harbor-sim/tree/MEC-TIDES");
+    expect(href).toBe("#/harbor-sim/tree/MEC-TIDES/page");
     fireEvent.click(link as HTMLAnchorElement);
     window.location.hash = href;
     await waitFor(() => {

@@ -673,12 +673,19 @@ export interface LeftOut {
   tier3: number;
 }
 
-/** One link of a shown node; `type` is corpus vocabulary, a plain string (ADR-0031). Source: `docs/canon/spec-cli-graph.md` "spec show --links". */
+/**
+ * One link of a shown node; `type` is corpus vocabulary, a plain string (ADR-0031). `title` and
+ * `end_kind` are the other end's (`name`'s) node title and kind, both null when the link does not
+ * resolve or that node has none; `kind` is taken by a labelled edge's word. Sources:
+ * `docs/canon/spec-cli-graph.md` "spec show --links"; `docs/features/doc-modal.md` "Acceptance criteria" (DM-1).
+ */
 export interface ShownLink {
   type: string;
   origin: LinkOrigin;
   at: string | null;
   name: string | null;
+  title: string | null;
+  end_kind: string | null;
   written: string;
   path: string;
   line: number;
@@ -1317,6 +1324,8 @@ export interface FlowGap {
   state: FlowGapState;
   count: number | null;
   items: string[][];
+  /** `titles[i][j]` the title of `items[i][j]`, else null; cut with `items` (`docs/features/doc-modal.md` "Acceptance criteria", DM-3). */
+  titles: (string | null)[][];
   cause: string | null;
 }
 

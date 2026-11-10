@@ -125,7 +125,9 @@ fn spec_a_links_of_a_document_and_a_section() {
         .collect::<String>();
     assert_block_shape(&run.stdout, section.as_bytes(), "RULE-STAM-REGEN");
 
-    // The JSON: the same links, exactly the keys of "Data".
+    // The JSON: the same links, exactly the keys of "Data"; since
+    // docs/features/doc-modal.md DM-1, a link's `title` and `end_kind`, the
+    // other end's.
     let json = spec30(
         &home,
         &root,
@@ -152,7 +154,8 @@ fn spec_a_links_of_a_document_and_a_section() {
         assert_eq!(
             keys(link),
             [
-                "type", "origin", "at", "name", "written", "path", "line", "state", "reason"
+                "type", "origin", "at", "name", "title", "end_kind", "written", "path", "line",
+                "state", "reason"
             ]
             .into(),
             "{link}"
@@ -168,6 +171,7 @@ fn spec_a_links_of_a_document_and_a_section() {
         canon,
         &serde_json::json!({
             "type": "canon", "origin": "frontmatter", "at": null, "name": "DEC-0023",
+            "title": "Regeneration waits for rest", "end_kind": "decision",
             "written": "docs/spec/movement/stamina.md#regeneration",
             "path": "docs/records/DEC/DEC-0023.md", "line": 6, "state": "resolved",
             "reason": null
@@ -332,13 +336,15 @@ fn superseded_by_is_outgoing_on_the_superseding_node() {
         [
             &serde_json::json!({
                 "type": "supersedes", "origin": "frontmatter", "at": null,
-                "name": "DEC-0007", "written": "DEC-0023",
+                "name": "DEC-0007", "title": "Stamina regenerates while walking",
+                "end_kind": "decision", "written": "DEC-0023",
                 "path": "docs/records/DEC/DEC-0007.md", "line": 4,
                 "state": "resolved", "reason": null
             }),
             &serde_json::json!({
                 "type": "supersedes", "origin": "frontmatter", "at": null,
-                "name": "DEC-0007", "written": "DEC-0007",
+                "name": "DEC-0007", "title": "Stamina regenerates while walking",
+                "end_kind": "decision", "written": "DEC-0007",
                 "path": "docs/records/DEC/DEC-0023.md", "line": 7,
                 "state": "resolved", "reason": null
             }),

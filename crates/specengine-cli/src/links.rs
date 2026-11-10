@@ -20,6 +20,8 @@
 //! `name`: the other end, its ID else its path; `at`: the nested section
 //! that holds the link or that it lands on; `as`: the written form when it
 //! is not the name of the node it names; `kind`, `when`: a labelled edge's.
+//! The JSON alone adds `title` and `end_kind` after `name`: that node's title
+//! and kind (task spec `doc-modal` DM-1).
 
 use serde::Serialize;
 use specengine_core::check::{Endpoint, LinkState, NodeAt, SpecGraph};
@@ -63,6 +65,12 @@ pub struct ShownLink {
     pub at: Option<String>,
     /// The other end, its ID else its path; `None` when unresolved.
     pub name: Option<String>,
+    /// The title of the node `name` names; `None` when unresolved or
+    /// untitled (task spec `doc-modal` DM-1).
+    pub title: Option<String>,
+    /// The kind of the node `name` names; `None` when unresolved or
+    /// kindless. Not `kind`: that is a labelled edge's.
+    pub end_kind: Option<String>,
     /// The reference or path as written.
     pub written: String,
     /// Where it is written.
@@ -90,34 +98,45 @@ pub(crate) fn node_links(
 ) -> ShownLinks {
     let found = graph.links(at, |file| admission.admits(file));
     let edges = graph.edges();
-    let first_name = |end: &Endpoint| match end {
-        Endpoint::Nodes(nodes) => nodes.first().map(|&node| graph.name(node)),
+    let first_node = |end: &Endpoint| match end {
+        Endpoint::Nodes(nodes) => nodes.first().copied(),
         _ => None,
     };
     // `here`: the node of `at`'s span that holds it or that it names as its
     // source (outgoing), or that it lands on (incoming).
     let link = |index: usize, direction: Direction, here: NodeAt| {
         let edge = &edges[index];
-        let (name, named) = match direction {
+        // The other end: outgoing the target, incoming the source.
+        let (end, name, named) = match direction {
             Direction::Out => {
-                let name = first_name(&edge.target);
+                let end = first_node(&edge.target);
+                let name = end.map(|node| graph.name(node));
                 let named = if edge.names_source {
                     Some(graph.name(here))
                 } else {
                     name.clone()
                 };
-                (name, named)
+                (end, name, named)
             }
             Direction::In => {
-                let name = first_name(&edge.source);
+                let end = first_node(&edge.source);
+                let name = end.map(|node| graph.name(node));
                 let named = if edge.names_source {
                     name.clone()
                 } else {
                     Some(graph.name(here))
                 };
-                (name, named)
+                (end, name, named)
             }
         };
+        // The end's title and kind, from the parse the graph already holds
+        // for it: a subset read decodes every end file of the rows it reads
+        // (canon `spec-read-subset`, "The subset"), so no file is read for
+        // them (task spec `doc-modal` DM-1 and DM-4).
+        let state = edge.state();
+        let end_node = end
+            .filter(|_| state == LinkState::Resolved)
+            .and_then(|node| graph.node(node));
         let (kind, when) = label_strings(edge.edge.as_ref());
         ShownLink {
             direction,
@@ -125,10 +144,12 @@ pub(crate) fn node_links(
             origin: edge.origin,
             at: (here != at).then(|| graph.name(here)),
             name,
+            title: end_node.and_then(|node| node.title.clone()),
+            end_kind: end_node.and_then(|node| node.kind.clone()),
             written: edge.written.clone(),
             path: graph.paths()[edge.file].to_owned(),
             line: edge.line,
-            state: edge.state(),
+            state,
             reason: edge.reason().map(str::to_owned),
             kind,
             when,
@@ -267,6 +288,10 @@ pub(crate) struct LinkJson<'a> {
     origin: LinkOrigin,
     at: Option<&'a str>,
     name: Option<&'a str>,
+    /// Always present, `null` when unresolved or untitled (task spec
+    /// `doc-modal` DM-1).
+    title: Option<&'a str>,
+    end_kind: Option<&'a str>,
     written: &'a str,
     path: &'a str,
     line: usize,
@@ -297,6 +322,8 @@ pub(crate) fn link_json(link: &ShownLink) -> LinkJson<'_> {
         origin: link.origin,
         at: link.at.as_deref(),
         name: link.name.as_deref(),
+        title: link.title.as_deref(),
+        end_kind: link.end_kind.as_deref(),
         written: &link.written,
         path: &link.path,
         line: link.line,

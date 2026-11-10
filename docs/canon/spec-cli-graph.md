@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-core, crates/specengine-model]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-11
 ---
 
 # spec tree, spec graph, show --links
@@ -78,7 +78,7 @@ Nodes by (distance, path, ord), then edges by (type, path, line, column) in link
   links <o> out, <i> in[; left out: …]
 ```
 
-`at`: the nested section holding the link or landed on. `as`: the written form when it is not the name of the node it lands on (for `superseded-by`'s out link: the shown node); `[[X]]` prints `as [[X]]`. JSON: a node's `links` (`null` without `--links`) `{outgoing, incoming, left_out, omitted}`; a link `{type, origin, at, name, written, path, line, state, reason}`, + `kind`, `when` when labelled, `state` `resolved | dangling | skipped | unchecked`.
+`at`: the nested section holding the link or landed on. `as`: the written form when it is not the name of the node it lands on (for `superseded-by`'s out link: the shown node); `[[X]]` prints `as [[X]]`. JSON: a node's `links` (`null` without `--links`) `{outgoing, incoming, left_out, omitted}`; a link `{type, origin, at, name, title, end_kind, written, path, line, state, reason}`, + `kind`, `when` when labelled, `state` `resolved | dangling | skipped | unchecked`.
 
 ## Exit, cap, determinism
 

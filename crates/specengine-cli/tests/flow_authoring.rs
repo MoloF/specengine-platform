@@ -592,10 +592,12 @@ fn assert_ten_rows_at_zero(project: &Project, context: &str) {
     let (_, document) = project.json(&["flow"]);
     let gaps = document["gaps"].as_array().expect("gaps");
     assert_eq!(gaps.len(), 10, "{context}: {document}");
+    // docs/features/doc-modal.md DM-3: `titles`, parallel to `items`.
     for (gap, code) in gaps.iter().zip(CODES) {
         assert_eq!(
             *gap,
-            json!({"code": code, "state": "measured", "count": 0, "items": [], "cause": null}),
+            json!({"code": code, "state": "measured", "count": 0, "items": [], "titles": [],
+                "cause": null}),
             "{context}"
         );
     }

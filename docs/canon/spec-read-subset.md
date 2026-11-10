@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-core]
 owner: owner
-reviewed: 2026-11-10
+reviewed: 2026-11-11
 ---
 
 # spec show, show --links, spec bundle: a subset read from the index
@@ -43,7 +43,7 @@ The walk is the whole read, each command's function from before the subset, kept
 - a second mismatch;
 - `NotIndexed` from a snapshot: a stamp or worktree row gone after the freshness step (another build recreated the tables, or a row was deleted);
 - any other store error in an attempt or from `update_paths`;
-- **`covers`** fails: a row whose holder or resolved end is not a node of the subset's files. The plan decodes every file a row names, so only a corrupted row fails it, and the walk resolves again instead of printing a row no file holds.
+- **`covers`** fails: a row whose holder or resolved end is not a node of the subset's files. The plan decodes every file a row names, so only a corrupted row fails it, and the walk resolves again instead of printing a row no file holds. So a link end's `title` and `end_kind` (`spec-cli-read.md` "Output") read its node there, no file more.
 
 **The walk's own change, beside the race cases below.** `show --links`' whole read printed each holder from a second read of its file, so a same-size edit between the two reads could pair one version's structure with the other's text: the AC-7 flipper found 3 mixed answers in 150 runs. It now prints a holder from the bytes `read_bytes` attached to its input (`indexed_read`), read once. Output at rest is unchanged.
 

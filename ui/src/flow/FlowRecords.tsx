@@ -3,6 +3,7 @@ import { apiErrorOf } from "../api/client";
 import { useRecordsRead } from "../api/queries";
 import type { FlowNode } from "../api/types";
 import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { nodeName } from "../graph/layout";
 import { useTranslate } from "../i18n";
 import { Button } from "../ui/Button";
@@ -17,7 +18,9 @@ export const RECORDS_SHOWN = 200;
 /**
  * Records for the AI (RM-0094 flow-scenario): a 600 px dialog over Flow, its `h2` the
  * title with the count, then what the records are; the scope's read uncut, made only while it is
- * open, listing each record as a Spec tree link by title, the first 200, then Show all. Read only:
+ * open, listing each record as a document link by title (the modal over the dialog,
+ * docs/features/doc-modal.md "Acceptance criteria", DM-10), the first 200, then Show all; the ID-less
+ * ones are counted, a Spec tree link. Read only:
  * the AI reads these documents, the canvas leaves them out, and nothing here changes one.
  */
 export function FlowRecords({ project, scope, scopeTitle, count, onClose }: { project: string; scope: string; scopeTitle: string; count: number | null; onClose: () => void }) {
@@ -89,9 +92,9 @@ export function FlowRecords({ project, scope, scopeTitle, count, onClose }: { pr
               <ul>
                 {group.nodes.map((node) => (
                   <li key={`${node.path}:${String(node.line)}`}>
-                    <a href={sectionHash(project, "tree", nodeName(node))}>
+                    <DocLink project={project} docRef={nodeName(node)}>
                       <bdi>{boxWords(node)}</bdi>
-                    </a>
+                    </DocLink>
                     {node.holds > 0 && <span className="flow-records-holds">{holdsText(node.holds, t)}</span>}
                   </li>
                 ))}

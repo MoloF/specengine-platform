@@ -179,7 +179,7 @@ describe("cards and links (UI-3)", () => {
     await openRoadmap();
     expect(Array.from(lane("beta").querySelectorAll(".roadmap-position"), (position) => position.textContent)).toEqual(["1.", "2.", "3.", "4."]);
     expect(lane("Pool").querySelectorAll(".roadmap-position")).toHaveLength(0);
-    expect(within(card("RM-0017")).getByRole("link", { name: "RM-0017" }).getAttribute("href")).toBe("#/alpha/tree/RM-0017");
+    expect(within(card("RM-0017")).getByRole("link", { name: "RM-0017" }).getAttribute("href")).toBe("#/alpha/tree/RM-0017/page");
     expect(card("RM-0017").querySelector(".roadmap-path")?.textContent).toBe("plan/RM-0017.md");
   });
 

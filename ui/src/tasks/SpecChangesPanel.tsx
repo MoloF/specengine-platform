@@ -1,5 +1,5 @@
 import type { SnapshotDiff, TaskPackage } from "../api/types";
-import { sectionHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { removesAll } from "../ui/diff";
 import { DiffView } from "../ui/DiffView";
 import { Icon } from "../ui/Icon";
@@ -25,9 +25,9 @@ function NodeName({ project, id, removed }: { project: string; id: string; remov
     );
   }
   return (
-    <a className="mono" href={sectionHash(project, "tree", id)}>
+    <DocLink className="mono" project={project} docRef={id}>
       {id}
-    </a>
+    </DocLink>
   );
 }
 

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
 import type { TaskPackage } from "../api/types";
 import { App } from "../app/App";
-import { sectionHash } from "../app/routes";
+import { docPageHash, sectionHash } from "../app/routes";
 import { aTaskEntry, aTaskPackage, aTaskProposal, aTaskRun } from "../test/builders";
 import { renderApp } from "../test/render";
 import { SOME_TASKS, taskClient } from "../test/taskStub";
@@ -302,13 +302,13 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     const pane = screen.getByRole("article");
     const hrefs = Array.from(pane.querySelectorAll("a[href]")).map((anchor) => anchor.getAttribute("href"));
     expect(hrefs).toEqual([
-      sectionHash("alpha", "tree", "R-1#AC-01"),
-      sectionHash("alpha", "tree", "R-9"),
-      sectionHash("alpha", "tree", "R-1"),
+      docPageHash("alpha", "R-1#AC-01"),
+      docPageHash("alpha", "R-9"),
+      docPageHash("alpha", "R-1"),
       sectionHash("alpha", "graph", "R-1"),
-      sectionHash("alpha", "tree", "docs/spec/idless.md"),
+      docPageHash("alpha", "docs/spec/idless.md"),
       sectionHash("alpha", "graph", "docs/spec/idless.md"),
-      sectionHash("alpha", "tree", "R-2"),
+      docPageHash("alpha", "R-2"),
       sectionHash("alpha", "inbox", "PR-0007"),
     ]);
     const gone = Array.from(pane.querySelectorAll(".task-target")).find((item) => item.textContent.includes("R-GONE"));
@@ -343,7 +343,7 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     showTab(/^Spec changes/);
     const panel = screen.getByRole("tabpanel");
     const hrefs = Array.from(panel.querySelectorAll("a[href]")).map((anchor) => anchor.getAttribute("href"));
-    expect(hrefs).toEqual([sectionHash("alpha", "tree", "R-1"), sectionHash("alpha", "tree", "R-1")]);
+    expect(hrefs).toEqual([docPageHash("alpha", "R-1"), docPageHash("alpha", "R-1")]);
     const frozen = Array.from(panel.querySelectorAll(".snapshot-node-list > li")).find((item) => item.textContent.startsWith("R-GONE"));
     const entry = panel.querySelector('.snapshot-diff[data-node="R-GONE"] .snapshot-diff-head');
     for (const place of [frozen, entry]) {
@@ -384,7 +384,7 @@ describe("the task's text and links (AC-07, AC-13)", () => {
     for (const [id, notice] of [["R-2", en.tasks.changes.totalCut], ["R-3", en.tasks.changes.noDiff]] as const) {
       const shown = entry(id);
       expect([id, shown?.querySelector(".diff"), shown?.querySelector(".cut-note")?.textContent]).toEqual([id, null, notice]);
-      expect(shown?.querySelector(".snapshot-diff-head a")?.getAttribute("href")).toBe(sectionHash("alpha", "tree", id));
+      expect(shown?.querySelector(".snapshot-diff-head a")?.getAttribute("href")).toBe(docPageHash("alpha", id));
       expect(shown?.querySelector(".snapshot-diff-head .mono.muted")?.textContent).toBe(`docs/spec/${id.toLowerCase()}.md`);
       expect(shown?.querySelector(".plain-tag")).toBeNull();
     }

@@ -4,6 +4,7 @@ import { useCard, useTrace } from "../api/queries";
 import type { CardWrite, TraceCard, TraceDocument, TraceNode, TraceUse } from "../api/types";
 import { sectionHash } from "../app/routes";
 import { useAllowed } from "../board/acting";
+import { DocLink } from "../doc/DocLink";
 import { ActOff } from "../board/ActOff";
 import { ClearCardDialog, ClearGroupDialog, NewCardDialog } from "../board/CardDialogs";
 import { isCard } from "../board/CardPanel";
@@ -116,13 +117,27 @@ function ClearCard({ project, clearing, onClose, onDone }: { project: string; cl
 }
 
 /**
- * A node's cards (docs/features/trace-views.md "A node's cards"), beside it in the Flow's panel and the
- * Spec tree: `getTrace(ref)`'s rollup, each card with its mark, linked to the Board, the nodes using
+ * A node's cards (docs/features/trace-views.md "A node's cards"), beside it in the Spec tree and the
+ * document view: `getTrace(ref)`'s rollup, each card with its mark, linked to the Board, the nodes using
  * it, New card. A suspect card takes its Clear here, the dialog of the Board; a group's block adds
  * Clear all, no effect only. Nothing here is counted: a group says the counts served for it. On a hub
- * Clear and Clear all stand idle where `allowed` omits them (`docs/features/hub-team.md`).
+ * Clear and Clear all stand idle where `allowed` omits them (`docs/features/hub-team.md`). In the
+ * document view (`section` "doc") a using node opens as a document and the head holds New card, so
+ * `newCard` is off (docs/features/doc-modal.md "Acceptance criteria", DM-12).
  */
-export function CardsBlock({ project, nodeRef, section, heading: Heading }: { project: string; nodeRef: string; section: "flow" | "tree"; heading: "h2" | "h3" }) {
+export function CardsBlock({
+  project,
+  nodeRef,
+  section,
+  heading: Heading,
+  newCard = true,
+}: {
+  project: string;
+  nodeRef: string;
+  section: "flow" | "tree" | "doc";
+  heading: "h2" | "h3" | "h4";
+  newCard?: boolean;
+}) {
   const t = useTranslate();
   const read = useTrace(project, { ref: nodeRef });
   const failure = useRetainedFailure(read.error, read.isFetching);
@@ -242,9 +257,15 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
             <ul className="cards-lines" aria-label={t("trace.usingOf", { ref: nodeRef })}>
               {uses.map((use) => (
                 <li key={use.id} className="cards-line">
-                  <a className="mono cards-line-title" href={sectionHash(project, section, use.id)}>
-                    <bdi>{shownSlot(use.id)}</bdi>
-                  </a>
+                  {section === "doc" ? (
+                    <DocLink className="mono cards-line-title" project={project} docRef={use.id}>
+                      <bdi>{shownSlot(use.id)}</bdi>
+                    </DocLink>
+                  ) : (
+                    <a className="mono cards-line-title" href={sectionHash(project, section, use.id)}>
+                      <bdi>{shownSlot(use.id)}</bdi>
+                    </a>
+                  )}
                   <Badge look={rollupLook(use.rollup, t)} />
                   <span className="muted cards-line-place">{t("trace.usesCards", { count: use.cards })}</span>
                 </li>
@@ -300,18 +321,20 @@ export function CardsBlock({ project, nodeRef, section, heading: Heading }: { pr
         <Heading ref={title} tabIndex={-1} className="card-section-title">
           {t("trace.title")}
         </Heading>
-        <button
-          ref={newButton}
-          type="button"
-          className="button button-quiet"
-          aria-haspopup="dialog"
-          onClick={() => {
-            setCreating(true);
-          }}
-        >
-          <Icon name="cardNew" />
-          <span>{t("trace.newCard")}</span>
-        </button>
+        {newCard && (
+          <button
+            ref={newButton}
+            type="button"
+            className="button button-quiet"
+            aria-haspopup="dialog"
+            onClick={() => {
+              setCreating(true);
+            }}
+          >
+            <Icon name="cardNew" />
+            <span>{t("trace.newCard")}</span>
+          </button>
+        )}
       </div>
       {body}
       {made !== null && (

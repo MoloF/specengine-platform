@@ -15,7 +15,7 @@ export interface ScaleException {
   /** Why it is not a token. */
   reason: string;
   /** The item that removes it; null: kept. */
-  until: "RM-0095" | "RM-0099" | null;
+  until: "RM-0099" | null;
 }
 
 const APP = "src/styles/app.css";
@@ -56,7 +56,4 @@ export const SCALE_EXCEPTIONS: readonly ScaleException[] = [
   { file: APP, selector: ".graph-box", property: "line-height", value: "1.3", reason: GRAPH_LAYOUT, until: "RM-0099" },
   { file: APP, selector: ".graph-edge-label", property: "font-size", value: "0.6875rem", reason: GRAPH_LAYOUT, until: "RM-0099" },
   { file: APP, selector: ".graph-edge-label", property: "line-height", value: "1.5", reason: GRAPH_LAYOUT, until: "RM-0099" },
-
-  // Rendered markdown, the document modal's (RM-0095).
-  { file: APP, selector: ".md-url, .md-image-path", property: "font-size", value: "0.92em", reason: "a raw URL or image path at the size of the prose around it", until: "RM-0095" },
 ];

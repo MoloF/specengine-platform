@@ -96,6 +96,7 @@ export function Palette({
   projectsFailure,
   inputRef,
   onJump,
+  onOpenDoc,
   onClose,
 }: {
   /** The route's project, or null on a route without one. */
@@ -105,6 +106,8 @@ export function Palette({
   projectsFailure: string | null;
   inputRef: Ref<HTMLInputElement>;
   onJump: (hash: string) => void;
+  /** A document picked (a REF or a search hit) of `project`, the palette's: the document modal over the current screen, or over that project's home. */
+  onOpenDoc: (ref: string, project: string) => void;
   onClose: () => void;
 }) {
   // While the projects are on their way or failed, the route's project stands (the shell shows its
@@ -165,6 +168,13 @@ export function Palette({
     if (option.type === "search") {
       setActive(option.key);
       search.mutate(option.query);
+      return;
+    }
+    if (option.type === "ref" || option.type === "hit") {
+      // A document is the palette's project's: its options stand only when there is one.
+      if (project !== null) {
+        onOpenDoc(option.type === "ref" ? option.ref : option.doc, project);
+      }
       return;
     }
     onJump(option.hash);

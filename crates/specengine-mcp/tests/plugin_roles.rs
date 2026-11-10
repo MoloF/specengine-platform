@@ -1383,10 +1383,11 @@ fn r2_problems(plugin: &str, marketplace: &str) -> Vec<String> {
     // docs/features/board-handoff.md (`reviewer`, `note`, `parent`, keys
     // the card tools take): 0.31.0; card-tasks (RM-0092, `edit_card`'s
     // `task`): 0.32.0; flow-scenario (RM-0094, `get_flow`'s `in_flow`):
-    // 0.33.0.
-    if plugin["version"] != "0.33.0" {
+    // 0.33.0; doc-modal (RM-0095, `get_node`'s link `title` and `end_kind`,
+    // `get_flow`'s gap `titles`): 0.34.0.
+    if plugin["version"] != "0.34.0" {
         problems.push(format!(
-            "plugin.json: version {}, not 0.33.0",
+            "plugin.json: version {}, not 0.34.0",
             plugin["version"]
         ));
     }
@@ -1456,9 +1457,9 @@ fn r2_the_three_descriptions_name_the_roles_and_the_skill() {
         "plugin.json: description does not name spec-author",
         "spec-author",
     );
-    let older = plugin.replacen("\"0.33.0\"", "\"0.32.0\"", 1);
-    assert_ne!(older, plugin, "the committed version is 0.33.0");
-    assert_names(&r2_problems(&older, &market), "not 0.33.0", "0.32.0");
+    let older = plugin.replacen("\"0.34.0\"", "\"0.33.0\"", 1);
+    assert_ne!(older, plugin, "the committed version is 0.34.0");
+    assert_names(&r2_problems(&older, &market), "not 0.34.0", "0.33.0");
 }
 
 /// docs/features/tested-evidence.md RD-8 (Q-G; M: the tester role's old

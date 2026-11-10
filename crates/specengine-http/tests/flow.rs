@@ -35,6 +35,11 @@
 //! words; `nodes/{*ref}` carries `ancestors`. M: the route not passing
 //! `in_flow` on (145 nodes).
 //!
+//! docs/features/doc-modal.md (RM-0095) DM-2 and DM-3, the routes: on
+//! `fixtures/flow-aside`, `nodes/POT-BISQUE?with=links` is `spec show
+//! POT-BISQUE --links --json`'s bytes, its links titled; `flow` serves gap
+//! `titles` as `spec flow --json` does, byte for byte.
+//!
 //! Key sets are `daemon_keys.rs`; the route's list, `methods.rs` and
 //! `projects.rs`.
 
@@ -303,10 +308,12 @@ fn every_flow_is_the_clis_document_byte_for_byte() {
     let reply = server.get(&format!("{P}/flow?root=WING-BROKEN"));
     let document: Value = serde_json::from_str(reply.text()).expect("JSON");
     assert_eq!(document["gaps"].as_array().expect("gaps").len(), 10);
+    // docs/features/doc-modal.md DM-3: each member's title rides with it.
     assert_eq!(
         document["gaps"][7],
         json!({"code": "definition-unused", "state": "measured", "count": 3,
             "items": [["PLT-FEED-A"], ["PLT-FEED-B"], ["PLT-UNUSED"]],
+            "titles": [["The ink plate"], ["The paper plate"], ["The old plate"]],
             "cause": "no document uses it: add a uses link to it, or drop it from \
                       [[flow.definition]]"}),
         "{document}"
@@ -690,5 +697,70 @@ fn fs10_in_flow_is_the_clis_document_byte_for_byte() {
             .map(|entry| entry["id"].as_str().expect("an id"))
             .collect();
         assert_eq!(json!(chain), want, "{path}");
+    }
+}
+
+// ------------------------------------------------------------------ doc-modal
+
+/// docs/features/doc-modal.md DM-2 and DM-3, the routes, on a scratch git
+/// copy of `fixtures/flow-aside`: `GET nodes/POT-BISQUE?with=links` is `spec
+/// show POT-BISQUE --links --json`'s bytes, its first outgoing link titled
+/// "Drying on the racks" (`potstep`); `GET flow` with `ATL-POTTERY` at depth
+/// 1 in the flow, and at Top, are `spec flow`'s bytes, the `two-starts` row
+/// titled "Wedging" and "Open day". M: a route serving its own link or gap
+/// shape.
+#[test]
+fn dm2_dm3_the_routes_serve_the_titles_byte_for_byte() {
+    let scratch = Scratch::new("doc-modal");
+    let root = scratch.repo("flow-aside", "aside", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+
+    let path = format!("{ASIDE}/nodes/POT-BISQUE?with=links");
+    let run = spec_json(&home, &cwd, &root, &["show", "POT-BISQUE", "--links"]);
+    assert_eq!(run.code, 0, "spec show: {}", run.document());
+    let reply = server.get(&path);
+    assert_eq!(reply.status, 200, "{path}: {}", reply.text());
+    assert_eq!(
+        reply.text(),
+        run.document(),
+        "{path} is `spec show --links`'s"
+    );
+    let link = &reply.json()["nodes"][0]["links"]["outgoing"][0];
+    assert_eq!(link["name"], json!("POT-DRY"), "{link}");
+    assert_eq!(link["title"], json!("Drying on the racks"), "{link}");
+    assert_eq!(link["end_kind"], json!("potstep"), "{link}");
+
+    for (query, flags) in [
+        (
+            "?root=ATL-POTTERY&depth=1&in_flow=true",
+            &["ATL-POTTERY", "--depth", "1", "--in-flow"][..],
+        ),
+        ("", &[][..]),
+    ] {
+        let mut args = vec!["flow"];
+        args.extend_from_slice(flags);
+        let reply = same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{ASIDE}/flow{query}"),
+            &args,
+        );
+        let document = reply.json();
+        let row = document["gaps"]
+            .as_array()
+            .expect("gaps")
+            .iter()
+            .find(|gap| gap["code"] == "two-starts")
+            .cloned()
+            .expect("the two-starts row");
+        assert_eq!(
+            row["titles"],
+            json!([["Wedging", "Open day"]]),
+            "{query}: {row}"
+        );
     }
 }

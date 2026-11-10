@@ -1,6 +1,7 @@
 import { memo, type DragEvent, type MouseEvent } from "react";
 import type { CardRow } from "../api/types";
-import { cardPageHash, sectionHash } from "../app/routes";
+import { cardPageHash } from "../app/routes";
+import { DocLink } from "../doc/DocLink";
 import { Badge } from "../ui/Badge";
 import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
@@ -38,9 +39,9 @@ function Source({ project, targets }: { project: string; targets: readonly strin
   return (
     <span className="board-card-source">
       <span className="sr-only">{t("board.card.source")}</span>
-      <a href={sectionHash(project, "tree", first)} tabIndex={-1} draggable={false}>
+      <DocLink project={project} docRef={first} tabIndex={-1} draggable={false}>
         <bdi className="mono">{shownSlot(first)}</bdi>
-      </a>
+      </DocLink>
       {targets.length > 1 && <span className="muted"> +{targets.length - 1}</span>}
     </span>
   );

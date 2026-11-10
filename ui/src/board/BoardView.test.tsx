@@ -336,7 +336,7 @@ describe("the board", () => {
     expect(first.getByText("Mira Holt")).toBeTruthy();
     expect(first.getByText("Due 2999-01-01")).toBeTruthy();
     expect(first.getByText("Estimate 2-3")).toBeTruthy();
-    expect(first.getByRole("link", { name: "R-1", hidden: true }).getAttribute("href")).toBe("#/alpha/tree/R-1");
+    expect(first.getByRole("link", { name: "R-1", hidden: true }).getAttribute("href")).toBe("#/alpha/tree/R-1/page");
     expect(first.getByText("+2")).toBeTruthy();
     const second = within(card("C-0002"));
     expect(second.getByText("Unassigned")).toBeTruthy();
@@ -787,7 +787,7 @@ describe("the card's modal", () => {
     for (const value of ["copy", "3", "2999-01-01", "Mira Holt", "Ivo Brandt", "Lena Fisk"]) {
       expect(panel.getAllByText(value).length).toBeGreaterThan(0);
     }
-    expect(panel.getByRole("link", { name: "R-2" }).getAttribute("href")).toBe("#/alpha/tree/R-2");
+    expect(panel.getByRole("link", { name: "R-2" }).getAttribute("href")).toBe("#/alpha/tree/R-2/page");
     // The parent is in the breadcrumbs too (DF-8 of design-foundation): its field's link, in Details.
     const details = within(panel.getByRole("region", { name: "Details" }));
     expect(details.getByRole("link", { name: "C-0007" }).getAttribute("href")).toBe("#/alpha/board/C-0007");

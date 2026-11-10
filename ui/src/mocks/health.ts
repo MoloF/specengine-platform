@@ -68,6 +68,8 @@ function amendsLink(fields: Pick<ShownLink, "written" | "path" | "line"> & Parti
     origin: "frontmatter",
     at: null,
     name: null,
+    title: null,
+    end_kind: null,
     state: "dangling",
     reason: null,
     ...fields,
@@ -103,7 +105,7 @@ function harborAmendments(): UnappliedAmendment[] {
       title: "Berth 4 takes 13.0 m draft after the dredging",
       class: "spec",
       status: "draft",
-      links: [amendsLink({ written: "RULE-BERTH-DRAFT", name: "RULE-BERTH-DRAFT", state: "resolved", path: DEEP_BERTH, line: 6 })],
+      links: [amendsLink({ written: "RULE-BERTH-DRAFT", name: "RULE-BERTH-DRAFT", title: "Draft limit at a berth", end_kind: "rule", state: "resolved", path: DEEP_BERTH, line: 6 })],
     },
   ];
 }

@@ -377,13 +377,18 @@ fn row_of(place: &Place, name: &str, args: &[String], [plain, json]: &[Printed; 
 }
 
 /// A `show --json` stream with docs/features/flow-scenario.md's `ancestors`
+/// and docs/features/doc-modal.md's link `title` and `end_kind` (DM-1)
 /// taken out, every other byte kept, as `store_reads.rs` compares it; a
 /// `bundle` stream (its own `ancestors` layer stays) and a stream holding no
 /// JSON document as they are.
 fn without_show_keys(args: &[String], bytes: &[u8]) -> Vec<u8> {
     match std::str::from_utf8(bytes) {
         Ok(text) if args.first().map(String::as_str) == Some("show") && text.starts_with('{') => {
-            common::keys::without_keys(text, &common::keys::SHOW_KEYS).into_bytes()
+            common::keys::without_doc_modal_keys(&common::keys::without_keys(
+                text,
+                &common::keys::SHOW_KEYS,
+            ))
+            .into_bytes()
         }
         _ => bytes.to_vec(),
     }

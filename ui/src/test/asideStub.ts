@@ -64,7 +64,8 @@ const part = (word: string, title: string, fields: Partial<FlowNode> = {}) =>
 export function asideRows(): FlowGap[] {
   const definition = "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds";
   return tenGapRows([
-    aFlowGap("two-starts", [["POT-WEDGE", OPEN_DAY]], { cause: "more than one start: narrow [[flow.start]] to one" }),
+    // The members titled as `spec flow --json` serves them (docs/features/doc-modal.md "Acceptance criteria", DM-3, DM-15).
+    aFlowGap("two-starts", [["POT-WEDGE", OPEN_DAY]], { titles: [["Wedging", "Open day"]], cause: "more than one start: narrow [[flow.start]] to one" }),
     aFlowGap("definition-unused", [], { state: "not_configured", count: null, cause: definition }),
     aFlowGap("definition-once", [], { state: "not_configured", count: null, cause: definition }),
   ]);
@@ -75,7 +76,7 @@ function noStartRows(root: string): FlowGap[] {
   const definition = "no [[flow.definition]] rule: add one naming what steps share, by paths or kinds";
   return tenGapRows([
     aFlowGap("no-start", [[root]], { cause: "no step here is a start: match the flow's first step in [[flow.start]], or, reading a part, add a follows link into it from outside" }),
-    { code: "unreachable", state: "cannot", count: null, items: [], cause: "no start and no entering edge to walk from" },
+    { code: "unreachable", state: "cannot", count: null, items: [], titles: [], cause: "no start and no entering edge to walk from" },
     aFlowGap("definition-unused", [], { state: "not_configured", count: null, cause: definition }),
     aFlowGap("definition-once", [], { state: "not_configured", count: null, cause: definition }),
   ]);
@@ -128,7 +129,8 @@ const step = (word: string, title: string, stage: string, fields: Partial<FlowNo
 
 /** `spec flow KRUN-FIRING --depth 1 --in-flow`: the ten steps and the run, eleven `follows`. */
 export function asideFiring(): FlowView {
-  const nodes = [...STEPS.map(([word, title, stage]) => step(word, title, stage, { start: word === "WEDGE", end: word === "PACK" })), firing()];
+  // The bisque firing is in work: the drawing read's own rollup, the panel's work state (docs/features/doc-modal.md DM-14).
+  const nodes = [...STEPS.map(([word, title, stage]) => step(word, title, stage, { start: word === "WEDGE", end: word === "PACK", rollup: word === "BISQUE" ? "in work" : null })), firing()];
   const follows = (from: string, to: string, fields: Partial<FlowEdge> = {}) => aFlowEdge({ from: `POT-${from}`, to: `POT-${to}`, type: "follows", ...fields });
   const edges = [
     follows("BISQUE", "GLAZE"),
@@ -214,7 +216,25 @@ export function asideNode(ref: string): NodeView {
   // The CLI's chains: a root none; a part, a note and the run under the pottery; a record, a cone or a desk paper under its bay too.
   const fallback = held.group === null ? [] : held.group === "ATL-POTTERY" ? ["ATL-POTTERY"] : ["ATL-POTTERY", held.group];
   const ancestors = (CHAINS[ref] ?? fallback).flatMap((name) => (ANCESTOR[name] === undefined ? [] : [ANCESTOR[name]]));
-  return { ref, reason: null, notes: [], nodes: [aNode({ id: held.id, kind: held.kind, title: held.title, path: held.path, ancestors, links: { outgoing: [], incoming: [], omitted: 0, left_out: { generated: 0, tier3: 0 } } })] };
+  const text = BISQUE_TEXT[ref] ?? `## ${ref}\n\nCurrent text.\n`;
+  return { ref, reason: null, notes: [], nodes: [aNode({ id: held.id, kind: held.kind, title: held.title, path: held.path, ancestors, text, links: { outgoing: [], incoming: [], omitted: 0, left_out: { generated: 0, tier3: 0 } } })] };
+}
+
+/** The bisque firing's text as the fixture writes it: front-matter, its title, then two paragraphs. */
+const BISQUE_TEXT: Readonly<Record<string, string>> = {
+  "POT-BISQUE": ["---", "id: POT-BISQUE", "kind: potstep", "stage: bisque", "---", "", "# Bisque firing", "", "Bone-dry pots are fired once, slowly, to a low cone.", "", "The kiln is opened only when cold.", ""].join("\n"),
+};
+
+/** `spec tree WBAY-KILN --depth 2`: the bay, its 144 children, and a section of a cone (a child's own), 146 rows. */
+export function asideKilnTree(): TreeNode[] {
+  const kids = [...cones(), ...asideKilnUncut().nodes.filter((node) => node.group === "WBAY-KILN" && node.kind !== "conerule")];
+  return [
+    aTreeNode({ id: "WBAY-KILN", depth: 0, kind: "workbay", title: "Kiln bay", path: "docs/workshop/bays/kiln.md" }),
+    ...kids.flatMap((node) => {
+      const row = aTreeNode({ id: node.id, depth: 1, parent: "WBAY-KILN", kind: node.kind, title: node.title, path: node.path });
+      return node.id === "CONE-GLOST" ? [row, aTreeNode({ id: "CONE-GLOST-SHELF", depth: 2, parent: "CONE-GLOST", kind: "conerule", title: "The glost shelf", path: node.path, line: 9 })] : [row];
+    }),
+  ];
 }
 
 /** The lanes `spec trace REF --summary` gives: the run's four stages; none elsewhere. */
@@ -286,7 +306,7 @@ export function asideClient({ times = 1, module = null }: { times?: number; modu
   client.getFlow.mockImplementation((_project, options) => Promise.resolve(structuredClone(flowRead(options, times))));
   client.getNode.mockImplementation((_project, ref) => Promise.resolve(structuredClone(asideNode(ref))));
   client.getTrace.mockImplementation((_project, options) => Promise.resolve(aTrace([], { ref: options?.ref ?? null, stages: asideLanes(options?.ref ?? "") })));
-  client.getTree.mockImplementation(() => Promise.resolve(aTreeView(asideTree())));
+  client.getTree.mockImplementation((_project, options) => Promise.resolve(options?.root === "WBAY-KILN" ? aTreeView(asideKilnTree(), { ref: "WBAY-KILN", depth: 2 }) : aTreeView(asideTree())));
   if (module !== null) {
     client.getWorkspaces.mockResolvedValue(aWorkspaces([aWorkspace({ name: "all", title: "All sections" })], [{ name: "kiln", title: "Kiln bay", root: module }]));
   }
