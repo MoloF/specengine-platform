@@ -29,6 +29,12 @@
 //! repeated `stage` is a 400 with the spec's line. M8: the route parsing
 //! `stage` but not passing it on (the whole read answered).
 //!
+//! docs/features/flow-scenario.md (RM-0094) FS-10, the route: `in_flow=` on
+//! `fixtures/flow-aside` is `spec flow --in-flow --json`'s bytes, beside
+//! `stage`, `trace` and no ROOT; another value is a 400 with the spec's
+//! words; `nodes/{*ref}` carries `ancestors`. M: the route not passing
+//! `in_flow` on (145 nodes).
+//!
 //! Key sets are `daemon_keys.rs`; the route's list, `methods.rs` and
 //! `projects.rs`.
 
@@ -557,4 +563,132 @@ fn fs6_the_stage_is_the_clis_document_byte_for_byte() {
     let before = beyond_daemon(&fresh);
     assert_eq!(server.get(&path).status, 400);
     assert_eq!(beyond_daemon(&fresh), before, "no database opened");
+}
+
+// ------------------------------------------------------------------ flow-scenario
+
+/// The pottery's project, `fixtures/flow-aside` (flow-scenario, RM-0094).
+const ASIDE: &str = "/api/projects/flow-aside";
+
+/// docs/features/flow-scenario.md FS-10, the route: `in_flow=true` is `spec
+/// flow --in-flow`'s document byte for byte (WBAY-KILN at depth 1: its four
+/// nodes in the flow, 141 left out), beside `stage`, `trace` and no ROOT;
+/// `in_flow=false` and no `in_flow` are the uncut read (145 nodes,
+/// `not_in_flow` `null`); `in_flow=yes` is a 400 with the words of "Data",
+/// a fresh `HOME` still empty after; `GET .../nodes/HUNCH-0007` carries
+/// `ancestors`, `spec show`'s byte for byte. M: the route not passing
+/// `in_flow` (145 nodes).
+#[test]
+fn fs10_in_flow_is_the_clis_document_byte_for_byte() {
+    let scratch = Scratch::new("flow-aside");
+    let root = scratch.repo("flow-aside", "aside", "main");
+    let home = scratch.home("h");
+    let cwd = scratch.dir("cwd");
+    let server = Server::serve(&home, &cwd, &[&root]);
+    let forms: [(&str, &[&str]); 7] = [
+        (
+            "?root=WBAY-KILN&depth=1&in_flow=true",
+            &["WBAY-KILN", "--depth", "1", "--in-flow"],
+        ),
+        (
+            "?root=WBAY-KILN&depth=1&in_flow=false",
+            &["WBAY-KILN", "--depth", "1"],
+        ),
+        ("?root=WBAY-KILN&depth=1", &["WBAY-KILN", "--depth", "1"]),
+        (
+            "?root=ATL-POTTERY&depth=1&in_flow=true&trace=true",
+            &["ATL-POTTERY", "--depth", "1", "--in-flow", "--trace"],
+        ),
+        (
+            "?root=KRUN-FIRING&stage=glazing&in_flow=true",
+            &["KRUN-FIRING", "--stage", "glazing", "--in-flow"],
+        ),
+        ("?depth=0&in_flow=true", &["--depth", "0", "--in-flow"]),
+        (
+            "?root=WBAY-NOWHERE&in_flow=true",
+            &["WBAY-NOWHERE", "--in-flow"],
+        ),
+    ];
+    for (query, flags) in forms {
+        let mut args = vec!["flow"];
+        args.extend_from_slice(flags);
+        same(
+            &server,
+            &home,
+            &cwd,
+            &root,
+            &format!("{ASIDE}/flow{query}"),
+            &args,
+        );
+    }
+    let read = |query: &str| -> Value { server.get(&format!("{ASIDE}/flow{query}")).json() };
+    let names = |document: &Value| -> Vec<String> {
+        document["nodes"]
+            .as_array()
+            .expect("nodes")
+            .iter()
+            .map(|node| node["id"].as_str().expect("an id").to_owned())
+            .collect()
+    };
+    let cut = read("?root=WBAY-KILN&depth=1&in_flow=true");
+    assert_eq!(
+        names(&cut),
+        ["HUNCH-0007", "WBAY-KILN", "CONE-BISQUE", "CONE-GLOST"],
+        "{cut}"
+    );
+    assert_eq!(cut["not_in_flow"], json!(141), "{cut}");
+    assert_eq!(
+        cut["types"],
+        json!(["follows", "uses", "supplies"]),
+        "{cut}"
+    );
+    for query in [
+        "?root=WBAY-KILN&depth=1&in_flow=false",
+        "?root=WBAY-KILN&depth=1",
+    ] {
+        let whole = read(query);
+        assert_eq!(
+            whole["nodes"].as_array().map(Vec::len),
+            Some(145),
+            "{query}"
+        );
+        assert_eq!(whole["not_in_flow"], Value::Null, "{query}");
+    }
+
+    let path = format!("{ASIDE}/flow?root=WBAY-KILN&in_flow=yes");
+    let reply = server.get(&path);
+    assert_eq!(reply.status, 400, "{path}: {}", reply.text());
+    assert_eq!(
+        reply.error_message(),
+        "`in_flow=yes`: not `true` or `false`",
+        "{path}"
+    );
+    let fresh = scratch.home("fresh");
+    let other = Server::serve(&fresh, &cwd, &[&root]);
+    let before = beyond_daemon(&fresh);
+    assert_eq!(other.get(&path).status, 400);
+    assert_eq!(beyond_daemon(&fresh), before, "no database opened");
+
+    for (reference, want) in [
+        ("HUNCH-0007", json!(["ATL-POTTERY", "WBAY-KILN"])),
+        (
+            "CONE-GLOST-SHELF",
+            json!(["ATL-POTTERY", "WBAY-KILN", "CONE-GLOST"]),
+        ),
+        ("ATL-POTTERY", json!([])),
+    ] {
+        let path = format!("{ASIDE}/nodes/{reference}");
+        let run = spec_json(&home, &cwd, &root, &["show", reference]);
+        let reply = server.get(&path);
+        assert_eq!(reply.status, 200, "{path}: {}", reply.text());
+        assert_eq!(reply.text(), run.document(), "{path} is `spec show`'s");
+        let node = &reply.json()["nodes"][0];
+        let chain: Vec<&str> = node["ancestors"]
+            .as_array()
+            .unwrap_or_else(|| panic!("{path}: no `ancestors`: {node}"))
+            .iter()
+            .map(|entry| entry["id"].as_str().expect("an id"))
+            .collect();
+        assert_eq!(json!(chain), want, "{path}");
+    }
 }

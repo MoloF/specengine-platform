@@ -50,6 +50,13 @@
 //! node only such edges admitted; every `trace` and `bundle` row is
 //! byte-equal. M13: a re-record that also drops a `follows` edge.
 //!
+//! docs/features/flow-scenario.md (RM-0094) FS-5 and its test churn: a
+//! `flow` row's JSON is compared after removing exactly `in_flow`,
+//! `not_in_flow` and `types` ([`common::keys::without_keys`], every other
+//! byte kept; no row here is a `show`, the fourth key's command); its text
+//! with nothing removed. The golden and its pinned blob do not
+//! change. M: a ` | in flow` field on a text node line.
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024).
 
 #![cfg(unix)]
@@ -62,6 +69,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use common::graph::spec30;
+use common::keys::{FLOW_KEYS, without_keys};
 use common::{Run, Scratch, one_json_document, repository_root};
 use serde::Serialize as _;
 use serde_json::Value;
@@ -292,6 +300,12 @@ fn differences(row: &Row, text: &Run, json: &Run, first: &mut Option<String>) ->
         return parts;
     }
     let code = row.code.expect("a row of bytes has its code");
+    // flow-scenario's keys out of a flow row's JSON, every other byte kept.
+    let json_before = if command(row) == "flow" && json.stdout.starts_with('{') {
+        without_keys(&json.stdout, &FLOW_KEYS)
+    } else {
+        json.stdout.clone()
+    };
     if text.code != code || json.code != code {
         parts.push(format!(
             "exit {} and {} (--json), {code} before",
@@ -306,7 +320,7 @@ fn differences(row: &Row, text: &Run, json: &Run, first: &mut Option<String>) ->
         ),
         (
             "the JSON",
-            &json.stdout,
+            &json_before,
             row.json.as_deref().unwrap_or_default(),
         ),
     ] {

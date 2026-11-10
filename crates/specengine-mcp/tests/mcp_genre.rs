@@ -47,8 +47,9 @@ use serde_json::json;
 /// Every `kind = "…"` of the fixtures' configs: spec-a, spec-b, the
 /// non-Rust spec-c (07 s1.2 P2-5), the flow fixtures
 /// (docs/features/flow-read.md AC-06), the print shop
-/// (docs/features/card-trace.md) and the almanac
-/// (docs/features/trace-views.md).
+/// (docs/features/card-trace.md), the almanac
+/// (docs/features/trace-views.md) and the pottery
+/// (docs/features/flow-scenario.md FS-1).
 fn fixture_kinds() -> Vec<String> {
     let mut kinds = Vec::new();
     for name in [
@@ -60,6 +61,7 @@ fn fixture_kinds() -> Vec<String> {
         "flow-gaps",
         "card-press",
         "trace-almanac",
+        "flow-aside",
     ] {
         let text = read_text(&fixture(name), "specengine.toml");
         for part in text.split("kind").skip(1) {
@@ -118,7 +120,8 @@ fn ac12_the_sources_hold_no_fixture_kind_and_no_stack_word() {
     assert!(
         kinds.contains(&"mechanic".to_owned())
             && kinds.contains(&"flag".to_owned())
-            && kinds.contains(&"tariff".to_owned()),
+            && kinds.contains(&"tariff".to_owned())
+            && kinds.contains(&"hunch".to_owned()),
         "{kinds:?}"
     );
     let skipped = probes_only_modules(&src);

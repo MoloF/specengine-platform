@@ -249,7 +249,7 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     await screen.findByRole("heading", { level: 1, name: "Flow" });
     // The module's root is Flow's lens root: its scope read, no top (docs/features/writer-studio.md D3).
     await waitFor(() => {
-      expect(argsOf(spies.getFlow).map((args) => args[1])).toEqual([{ root: "DOM-BERTHS", depth: 1, trace: true }]);
+      expect(argsOf(spies.getFlow).map((args) => args[1])).toEqual([{ root: "DOM-BERTHS", depth: 1, in_flow: true, trace: true }]);
     });
     expect(currentModule()).toEqual(["Berths"]);
 
@@ -258,7 +258,7 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     await hashIs("#/harbor-sim/flow?module=");
     expect(currentModule()).toEqual(["All modules"]);
     await waitFor(() => {
-      expect(topReads(spies.getFlow).at(-1)).toEqual({ depth: 0, trace: true });
+      expect(topReads(spies.getFlow).at(-1)).toEqual({ depth: 0, in_flow: true, trace: true });
     });
     await go("#/harbor-sim/tree");
     await waitFor(() => {
@@ -273,7 +273,7 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     ({ spies } = reload("normal", "#/harbor-sim/flow"));
     await screen.findByRole("heading", { level: 1, name: "Flow" });
     await waitFor(() => {
-      expect(argsOf(spies.getFlow).map((args) => args[1])).toEqual([{ root: "DOM-WATER", depth: 1, trace: true }]);
+      expect(argsOf(spies.getFlow).map((args) => args[1])).toEqual([{ root: "DOM-WATER", depth: 1, in_flow: true, trace: true }]);
     });
     expect(currentModule()).toEqual(["Harbour waters"]);
 
@@ -286,7 +286,7 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     expect(pressed()).toEqual(["All modules"]);
     await go("#/harbor-sim/flow");
     await waitFor(() => {
-      expect(topReads(spies.getFlow).at(-1)).toEqual({ depth: 0, trace: true });
+      expect(topReads(spies.getFlow).at(-1)).toEqual({ depth: 0, in_flow: true, trace: true });
     });
   });
 
@@ -299,7 +299,7 @@ describe("modules root the Spec tree and the Flow (WS-9)", () => {
     });
     expect(topReads(spies.getFlow)).toEqual([]);
     for (const options of argsOf(spies.getFlow).map((args) => args[1])) {
-      expect(options).toEqual({ root: expect.any(String) as string, depth: 1, trace: true });
+      expect(options).toEqual({ root: expect.any(String) as string, depth: 1, in_flow: true, trace: true });
     }
     await go("#/harbor-sim/tree");
     await screen.findByRole("tree", { name: "Spec tree" });

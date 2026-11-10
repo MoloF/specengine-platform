@@ -1155,7 +1155,14 @@ fn before_record(program: &Path, strip: bool, tag: &str) -> Vec<Value> {
             let args: Vec<&str> = case.args.iter().map(String::as_str).collect();
             let read = read_program(program, &case.cwd, &args, &case.vars);
             let json = if strip {
-                without_read_tested(&read.json_run.stdout, case.keys)
+                let json = without_read_tested(&read.json_run.stdout, case.keys);
+                // docs/features/flow-scenario.md FS-8: a shown node's
+                // `ancestors` out too; a bundle's own `ancestors` layer stays.
+                if case.args.first().map(String::as_str) == Some("show") {
+                    common::keys::without_keys(&json, &common::keys::SHOW_KEYS)
+                } else {
+                    json
+                }
             } else {
                 read.json_run.stdout.clone()
             };
@@ -1202,7 +1209,8 @@ fn record_the_bytes_before_tested_reads() {
 /// (and no lock), `show --bindings`, the bundle (text and JSON outright),
 /// the brief and impact print the text, stderr and exit the binary before
 /// 8b-2 printed (its record), and their JSON once the `tested` keys
-/// (`[]`: each shown node's, the package's, impact's) are taken out.
+/// (`[]`: each shown node's, the package's, impact's) are taken out, and a
+/// shown node's `ancestors` since docs/features/flow-scenario.md.
 #[test]
 fn evidence_free_reads_unchanged() {
     let record: Value =

@@ -195,11 +195,24 @@ pub(crate) struct ShowNode {
     pub text: String,
     pub truncated: bool,
     pub omitted: Option<ShowOmitted>,
+    /// The nodes it is listed under, top first; `[]` for a root.
+    pub ancestors: Vec<ShowAncestor>,
     /// `null` without `with: ["links"]`.
     pub links: Option<ShowLinks>,
     /// `null` without `with: ["bindings"]`, without a `[code]` table, or
     /// when the code layer could not be read (a note says why).
     pub bindings: Option<ShowBindings>,
+}
+
+/// A node a shown node is listed under: a section's enclosing node, a
+/// document's `parent:`.
+#[derive(JsonSchema)]
+pub(crate) struct ShowAncestor {
+    pub id: Option<String>,
+    pub kind: Option<String>,
+    pub title: Option<String>,
+    /// Its file.
+    pub path: String,
 }
 
 /// A node's code bindings and its sections', in verify's row order: those
@@ -1198,6 +1211,11 @@ pub(crate) struct FlowDocument {
     pub truncated: bool,
     pub omitted_nodes: usize,
     pub omitted_edges: usize,
+    /// With `in_flow`, the documents its cut left out, each dropped node 1
+    /// and what it holds; `null` without it.
+    pub not_in_flow: Option<usize>,
+    /// The flow link types, in the model's order, on every read.
+    pub types: Vec<String>,
     /// All ten in one order; empty only when ROOT names nothing.
     pub gaps: Vec<FlowGap>,
     pub nodes: Vec<FlowNode>,
@@ -1260,6 +1278,9 @@ pub(crate) struct FlowNode {
     pub start: bool,
     /// It or something it holds is an end.
     pub end: bool,
+    /// It or something it holds is in the flow: held by the read with no
+    /// root.
+    pub in_flow: bool,
     /// The documents folded into it.
     pub holds: usize,
     pub inner: Vec<FlowInner>,

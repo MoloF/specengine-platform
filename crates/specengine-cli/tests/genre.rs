@@ -18,6 +18,11 @@
 //! docs/features/trace-views.md: `--stage`, `--trace` and `--marks` are read
 //! here, the words of `fixtures/trace-almanac` join the list. `PART-` stays
 //! out: `src/show.rs` tests a made-up scheme of its own under that prefix.
+//!
+//! docs/features/flow-scenario.md: `--in-flow` and `ancestors` are read in
+//! `src/flow.rs`, `src/show.rs` and `src/subset.rs`, and the words of
+//! `fixtures/flow-aside` join the list. `CONE-` stays out: `src/node_set.rs`
+//! tests a made-up ID of its own under that prefix.
 
 #![cfg(unix)]
 
@@ -35,8 +40,9 @@ use common::{FIXTURES, Scratch, data_dir, md_files, read_text, snapshot, spec, w
 /// its shard; docs/features/flow-read.md the flow fixtures' prefixes and
 /// kinds; docs/features/card-store.md the card fixture's;
 /// docs/features/card-trace.md that fixture's ruling;
-/// docs/features/trace-views.md the almanac's).
-const FORBIDDEN: [&str; 40] = [
+/// docs/features/trace-views.md the almanac's;
+/// docs/features/flow-scenario.md the pottery's).
+const FORBIDDEN: [&str; 57] = [
     "docs/",
     "ADR",
     "CLAUDE.md",
@@ -90,6 +96,25 @@ const FORBIDDEN: [&str; 40] = [
     "yearbook",
     "committee",
     "errand",
+    // docs/features/flow-scenario.md: no `spec flow --in-flow` line and no
+    // `ancestors` entry by a word of the project it reads (`CONE-` aside).
+    "ATL-",
+    "KRUN-",
+    "POT-",
+    "WBAY-",
+    "DESK-",
+    "HUNCH-",
+    "PUZZLE-",
+    "EDICT-",
+    "atelier",
+    "kilnrun",
+    "potstep",
+    "workbay",
+    "conerule",
+    "deskpaper",
+    "hunch",
+    "puzzle",
+    "edict",
 ];
 
 fn cli_sources() -> Vec<PathBuf> {

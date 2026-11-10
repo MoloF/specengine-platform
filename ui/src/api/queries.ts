@@ -93,8 +93,8 @@ export const queryKeys = {
         archive: options.archive ?? false,
       },
     ] as const,
-  /** One read of `spec flow`: `root` null at the top, `stage` null for all (`docs/features/writer-studio.md` D2), its badges with it (`docs/features/trace-views.md` "Flow badges"). */
-  flow: (project: string, options: FlowOptions) => ["flow", project, options.root ?? null, options.depth ?? null, options.trace ?? false, options.stage ?? null] as const,
+  /** One read of `spec flow`: `root` null at the top, `stage` null for all (`docs/features/writer-studio.md` D2), its badges with it (`docs/features/trace-views.md` "Flow badges"), cut to the flow or whole (`docs/features/flow-scenario.md` D6). */
+  flow: (project: string, options: FlowOptions) => ["flow", project, options.root ?? null, options.depth ?? null, options.trace ?? false, options.stage ?? null, options.in_flow ?? false] as const,
   tasks: (project: string) => ["tasks", project] as const,
   task: (project: string, id: string) => ["task", project, id] as const,
   check: (project: string) => ["check", project] as const,
@@ -680,16 +680,24 @@ export function useGraph(project: string, options: GraphOptions | null) {
 }
 
 /**
- * The three forms a Flow picture reads (`docs/features/writer-studio.md` D2), always with `trace`:
- * the top `depth=0` with no root, a scope `root=R&depth=1`, a stage of a scope `root=R&stage=S`. A
- * stage read always carries its scope's root: without one it would admit every document of the
- * stage, a whole read in payload.
+ * The three forms a Flow picture reads (`docs/features/writer-studio.md` D2), always with `trace` and
+ * cut to the flow (`docs/features/flow-scenario.md` D6): the top `depth=0` with no root, a scope
+ * `root=R&depth=1`, a stage of a scope `root=R&stage=S`. A stage read always carries its scope's
+ * root: without one it would admit every document of the stage, a whole read in payload.
  */
 export function flowForm(root: string | null, stage: string | null): FlowOptions {
   if (root === null) {
-    return { depth: 0, trace: true };
+    return { depth: 0, in_flow: true, trace: true };
   }
-  return stage === null ? { root, depth: 1, trace: true } : { root, stage, trace: true };
+  return stage === null ? { root, depth: 1, in_flow: true, trace: true } : { root, stage, in_flow: true, trace: true };
+}
+
+/**
+ * The Records for the AI's read (`docs/features/flow-scenario.md` D6): the scope's read uncut and
+ * without trace, made only while the dialog is open; its `in_flow: false` nodes are the list.
+ */
+export function recordsForm(root: string): FlowOptions {
+  return { root, depth: 1 };
 }
 
 /**
@@ -702,7 +710,7 @@ const KEPT_READ = { staleTime: Infinity, refetchOnMount: "always" } as const;
 
 /**
  * One Flow picture's read, a `flowForm`. `enabled` false reads nothing and still says what is held:
- * the lens root and Up are told from reads already in hand.
+ * the lens root is told from the top read already in hand.
  */
 export function useFlowRead(project: string, options: FlowOptions, enabled = true) {
   const client = useClient();
@@ -718,41 +726,17 @@ export function useFlowRead(project: string, options: FlowOptions, enabled = tru
 export type FlowQuery = ReturnType<typeof useFlowRead>;
 
 /**
- * The holder a held Flow read names for `name`: a scope's own read gives its root no `group` (the
- * holder is outside the scope), so Up is told from the reads already in hand, a picture above or a
- * stage across; null when none holds it (`docs/features/writer-studio.md` "Description and interactions"). Reads nothing.
+ * The Records for the AI's list, `recordsForm(root)`, read only while the dialog is open: a live
+ * mark reads it again only then (`docs/canon/spec-flow-screen.md` "Reads"; RM-0094).
  */
-export function useHeldHolder(project: string, name: string | null): string | null {
-  const queryClient = useQueryClient();
-  if (name === null) {
-    return null;
-  }
-  for (const [, data] of queryClient.getQueriesData<FlowView>({ queryKey: ["flow", project] })) {
-    const holder = data?.nodes.find((node) => (node.id ?? node.path) === name && node.group !== null)?.group;
-    if (holder !== undefined && holder !== null) {
-      return holder;
-    }
-  }
-  return null;
-}
-
-/**
- * The title a held Flow read gives the node `name` names, the Up line's words for a holder: the
- * first read in hand that titles it; null when none does, and the name is shown as it is. Reads
- * nothing.
- */
-export function useHeldTitle(project: string, name: string | null): string | null {
-  const queryClient = useQueryClient();
-  if (name === null) {
-    return null;
-  }
-  for (const [, data] of queryClient.getQueriesData<FlowView>({ queryKey: ["flow", project] })) {
-    const title = data?.nodes.find((node) => (node.id ?? node.path) === name && node.title !== null)?.title;
-    if (title !== undefined && title !== null) {
-      return title;
-    }
-  }
-  return null;
+export function useRecordsRead(project: string, root: string, enabled: boolean) {
+  const client = useClient();
+  const options = recordsForm(root);
+  return useQuery({
+    queryKey: queryKeys.flow(project, options),
+    queryFn: ({ signal }) => client.getFlow(project, options, signal),
+    enabled,
+  });
 }
 
 /**

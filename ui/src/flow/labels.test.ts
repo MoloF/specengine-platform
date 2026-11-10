@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aFlowGap, tenGapRows } from "../test/builders";
+import { aFlowEdge, aFlowGap, aFlowNode, aFlowView, tenGapRows } from "../test/builders";
 import { allClear } from "./labels";
 import { ru } from "../i18n/ru";
 import { enT, ruT } from "../test/text";
@@ -85,9 +85,9 @@ describe("the studio's words (writer-studio)", () => {
     expect(flow.edgeKeyText(flow.edgeKeyOf(edge))).not.toBe(flow.edgeKeyText({ from: "A", to: "B", type: "alpha_link", kind: "repeat" }));
   });
 
-  it("words a List row `<type> <to>, <title>[, <kind>][, when <when>][, ×<count>]`, never `path:line`", () => {
+  it("words a List row `<type> <to title>[, <kind>][, when <when>][, ×<count>]`, the name with no title, never `path:line` (flow-scenario D12)", () => {
     expect(flow.edgeRowWords(edge, null, enT)).toBe("alpha_link B");
-    expect(flow.edgeRowWords({ ...edge, kind: "alternative", when: "after dark", count: 3 }, "The berth", enT)).toBe("alpha_link B, The berth, alternative, when after dark, ×3");
+    expect(flow.edgeRowWords({ ...edge, kind: "alternative", when: "after dark", count: 3 }, "The berth", enT)).toBe("alpha_link The berth, alternative, when after dark, ×3");
     expect(flow.edgeRowWords({ ...edge, when: "x" }, null, ruT)).toBe(`alpha_link B, ${ru.flow.edgeWhen.replace("{{when}}", "x")}`);
     expect(flow.edgeRowWords(edge, "T", enT)).not.toContain("docs/a.md");
   });
@@ -112,5 +112,72 @@ describe("the studio's words (writer-studio)", () => {
   it("hands a measured row's items alone", () => {
     expect(flow.isMeasured(aFlowGap("cycle-no-repeat", [["A", "B"]]))).toBe(true);
     expect(flow.isMeasured(aFlowGap("no-start", [], { state: "not_configured", count: null }))).toBe(false);
+  });
+});
+
+// flow-scenario FS-16, FS-17, FS-18 (RM-0094): the served types, no count on the canvas, the Gaps
+// toggle's look, the records by kind.
+describe("the scenario's words (FS-16 to FS-18)", () => {
+  const types = ["first_link", "second_link", "third_link"];
+  const edge = { from: "A", to: "B", type: "second_link", kind: null, when: null, count: 5, path: "docs/a.md", line: 3 };
+
+  it("takes the types the read serves, in their order: a picture lacking a type dashes the others as one holding all three", () => {
+    const lacking = aFlowView([aFlowNode({ id: "A", distance: 0 })], [aFlowEdge({ from: "A", to: "A", type: "third_link" })], { types });
+    expect(flow.typesOf(lacking)).toEqual(types);
+    expect(flow.typeColour("third_link", flow.typesOf(lacking))).toBe("var(--flow-edge-2)");
+    expect(flow.typeDash("second_link", flow.typesOf(lacking))).toBe(flow.typeDash("second_link", types));
+    // M: types from the read's edges would place the third type first.
+    expect(flow.typeColour("third_link", flow.typesOf(lacking))).not.toBe("var(--flow-edge-0)");
+  });
+
+  it("puts no count on the canvas; the List keeps it", () => {
+    expect(flow.edgeWords(edge)).toEqual([]);
+    expect(flow.edgeWords({ ...edge, kind: "alternative", when: "cracked" })).toEqual(["alternative", "cracked"]);
+    expect(flow.edgeName(edge, enT)).toBe("A second_link B");
+    expect(flow.edgeRowWords(edge, "Kiln bay", enT)).toBe("second_link Kiln bay, ×5");
+  });
+
+  it("names the closed edge kinds in the viewer's language, the canvas, the List and the name alike; an unknown kind raw", () => {
+    const parallel = { ...edge, kind: "parallel" };
+    expect(flow.edgeShownWords(parallel, ruT)).toEqual([ru.flow.edgeKind.parallel]);
+    expect(flow.edgeRowWords(parallel, "Kiln bay", ruT)).toBe(`second_link Kiln bay, ${ru.flow.edgeKind.parallel}, ×5`);
+    expect(flow.edgeName({ ...edge, kind: "repeat" }, ruT)).toBe(`A second_link B, ${ru.flow.edgeKind.repeat}`);
+    expect(flow.FLOW_KINDS.map((kind) => flow.kindWords(kind, ruT))).toEqual([ru.flow.edgeKind.alternative, ru.flow.edgeKind.parallel, ru.flow.edgeKind.repeat]);
+    expect(flow.kindWords("detour", ruT)).toBe("detour");
+    expect(flow.edgeShownWords({ ...edge, kind: "alternative", when: "cracked" }, enT)).toEqual(["alternative", "cracked"]);
+  });
+
+  it("looks the Gaps toggle up: rows found, warning; any not measured, neutral; else None; a failed read, Not read", () => {
+    const found = tenGapRows([aFlowGap("two-starts", [["A", "B"]]), aFlowGap("definition-once", [], { state: "not_configured", count: null })]);
+    expect(flow.gapsLook(found, false, enT)).toEqual({ appearance: "warning", icon: "flowGap", label: "1 found" });
+    expect(flow.gapsLook(tenGapRows([aFlowGap("definition-once", [], { state: "not_configured", count: null })]), false, enT)).toEqual({ appearance: "neutral", icon: "info", label: "not all measured" });
+    expect(flow.gapsLook(tenGapRows(), false, enT)).toEqual({ appearance: "success", icon: "checkClean", label: "None" });
+    expect(flow.gapsLook(found, true, enT).label).toBe("Not read");
+    const sorted = flow.gapsSorted(found);
+    expect([sorted.found.map((gap) => gap.code), sorted.unmeasured.map((gap) => gap.code), sorted.zero]).toEqual([["two-starts"], ["definition-once"], 8]);
+  });
+
+  it("lists the records a read leaves out of the flow: by raw kind, sorted, no kind last, served order; ID-less ones counted apart; the scope's own node never", () => {
+    const nodes = [
+      aFlowNode({ id: "SCOPE", distance: null, in_flow: false }),
+      aFlowNode({ id: "Z-2", kind: "zeta", distance: null, in_flow: false }),
+      aFlowNode({ id: "A-1", kind: "alpha", distance: null, in_flow: false }),
+      aFlowNode({ id: "Z-1", kind: "zeta", distance: null, in_flow: false }),
+      aFlowNode({ id: "N-1", kind: null, distance: null, in_flow: false }),
+      aFlowNode({ id: null, kind: null, distance: null, path: "docs/notes/a.md", in_flow: false }),
+      aFlowNode({ id: "STEP", kind: "alpha", distance: 0 }),
+    ];
+    const listed = flow.recordsOf(nodes, "SCOPE");
+    expect(listed.groups.map((group) => [group.kind, group.nodes.map((node) => node.id)])).toEqual([
+      ["alpha", ["A-1"]],
+      ["zeta", ["Z-2", "Z-1"]],
+      [null, ["N-1"]],
+    ]);
+    expect([listed.withId, listed.noId]).toEqual([4, 1]);
+  });
+
+  it("joins a divider's stages with a middle dot, raw", () => {
+    expect(flow.dividerWords(["glazing"])).toBe("glazing");
+    expect(flow.dividerWords(["one", "two"])).toBe("one · two");
   });
 });

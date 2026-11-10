@@ -57,13 +57,14 @@ use crate::{
 // ------------------------------------------------------------------ the scratch
 
 /// The configured fixtures: every `fixtures/*/specengine.toml`.
-const FIXTURES: [&str; 20] = [
+const FIXTURES: [&str; 21] = [
     "anchor-states",
     "card-press",
     "code-a",
     "code-bevy",
     "code-index",
     "corpus-mini",
+    "flow-aside",
     "flow-gaps",
     "flow-hire",
     "flow-relay",
@@ -686,7 +687,10 @@ fn targets(whole: &Whole, graph: &SpecGraph<'_>, text: &str) -> Vec<NodeAt> {
     }
 }
 
-/// The subset of `read` of `text` by "Data", from the whole graph.
+/// The subset of `read` of `text` by "Data", from the whole graph. Since
+/// the flow-scenario slice (its D5), a `show` read's plan adds each
+/// shown node's chain of `PARENT` rows, file by file, as `bundle` does
+/// ([`chain_files`]): its `ancestors`.
 fn oracle(
     whole: &Whole,
     read: Read,
@@ -696,10 +700,12 @@ fn oracle(
     let graph = whole.graph();
     let mut out = whole.closure(text);
     match read {
-        Read::Show { links: false, .. } => {}
-        Read::Show { links: true, .. } => {
+        Read::Show { links, .. } => {
             for n in shown_nodes(&graph, outcome.expect("the show's outcome")) {
-                links_files(&graph, n, &mut out);
+                chain_files(&graph, n, &mut out);
+                if links {
+                    links_files(&graph, n, &mut out);
+                }
             }
         }
         Read::Bundle { .. } => {
@@ -1070,6 +1076,7 @@ per_fixture! {
     sr0_differential_code_bevy, ac12_subset_code_bevy => "code-bevy";
     sr0_differential_code_index, ac12_subset_code_index => "code-index";
     sr0_differential_corpus_mini, ac12_subset_corpus_mini => "corpus-mini";
+    sr0_differential_flow_aside, ac12_subset_flow_aside => "flow-aside";
     sr0_differential_flow_gaps, ac12_subset_flow_gaps => "flow-gaps";
     sr0_differential_flow_hire, ac12_subset_flow_hire => "flow-hire";
     sr0_differential_flow_relay, ac12_subset_flow_relay => "flow-relay";
@@ -1097,6 +1104,98 @@ fn the_fixture_list_is_every_configured_fixture() {
         .collect();
     found.sort();
     assert_eq!(found, FIXTURES.map(str::to_owned).to_vec());
+}
+
+// ------------------------------------------------------------------ flow-scenario FS-9
+
+/// The one node of the whole graph whose ID is `id`.
+fn node_with_id(graph: &SpecGraph<'_>, id: &str) -> NodeAt {
+    let mut found = Vec::new();
+    for file in 0..graph.paths().len() {
+        for ord in 0..graph.nodes(file).len() {
+            let at = NodeAt { file, ord };
+            if graph.node(at).and_then(|node| node.id.as_deref()) == Some(id) {
+                found.push(at);
+            }
+        }
+    }
+    assert_eq!(found.len(), 1, "{id}: {found:?}");
+    found[0]
+}
+
+/// The flow-scenario slice's FS-9, from the subset, on `flow-aside`:
+/// a plain `show` of every document two `parent:` levels under the top (the
+/// 142 records among them) decodes C(REF) and its two chain files, nothing
+/// else, from one attempt with no whole decode, no whole graph and no walk;
+/// its `ancestors` are not empty and are the walk's. The REFs are read from
+/// the copy, so no project word is written here. M: the chain from a whole
+/// decode; the chain left out of the plan (`[]` against the walk's list).
+#[test]
+fn fs9_a_show_reads_its_chain_from_the_subset() {
+    clean_seams();
+    let place = Place::new("flow-aside");
+    let whole = Whole::of(&place);
+    let graph = whole.graph();
+    let (good, _) = whole.references();
+    let read = Read::Show {
+        links: false,
+        archive: false,
+    };
+    // The freshness step's full pass, once, so every read below is warm.
+    let _ = answer(&place, read, &good[0]);
+    let mut two_deep = 0usize;
+    let mut failed: Vec<String> = Vec::new();
+    for reference in good.iter().filter(|reference| !reference.ends_with(".md")) {
+        let at = node_with_id(&graph, reference);
+        let own = graph.paths()[at.file].to_owned();
+        let chain: BTreeSet<String> = graph
+            .ancestors(at)
+            .into_iter()
+            .map(|node| graph.paths()[node.file].to_owned())
+            .filter(|path| *path != own)
+            .collect();
+        if at.ord != 0 || chain.len() != 2 {
+            continue;
+        }
+        two_deep += 1;
+        let _ = seams::take_read_counts();
+        let got = answer(&place, read, reference);
+        let counts = seams::take_read_counts();
+        let mut want = whole.closure(reference);
+        want.insert(own);
+        want.extend(chain);
+        let decoded: BTreeSet<String> = counts.decoded.iter().cloned().collect();
+        if decoded != want || decoded.len() != counts.decoded.len() {
+            failed.push(format!(
+                "{reference}: decoded {:?}, want {want:?}",
+                counts.decoded
+            ));
+        }
+        if counts.whole_decodes != 0
+            || counts.whole_graphs != 0
+            || counts.walks != 0
+            || counts.attempts != 1
+        {
+            failed.push(format!("{reference}: counters {counts:?}"));
+        }
+        if !got.contains("\"ancestors\":[{\"id\":") {
+            failed.push(format!("{reference}: an empty or missing list: {got}"));
+        }
+        let walked = walk_answer(&place, read, reference);
+        if got != walked {
+            failed.push(format!("{reference}: {}", first_difference(&got, &walked)));
+        }
+    }
+    assert!(
+        two_deep >= 142,
+        "premise: the records stand two deep: {two_deep}"
+    );
+    assert!(
+        failed.is_empty(),
+        "{} of {two_deep} reads:\n{}",
+        failed.len(),
+        failed.join("\n")
+    );
 }
 
 // ------------------------------------------------------------------ AC-7 the swap
@@ -1815,6 +1914,7 @@ fn whole_read(place: &Place, command: &str, reference: &str) -> String {
                 depth: None,
                 stage: None,
                 trace: false,
+                in_flow: false,
             },
         )
         .map(|outcome| Outcome::Flow(Box::new(outcome))),

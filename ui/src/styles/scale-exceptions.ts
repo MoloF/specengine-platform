@@ -15,13 +15,10 @@ export interface ScaleException {
   /** Why it is not a token. */
   reason: string;
   /** The item that removes it; null: kept. */
-  until: "RM-0094" | "RM-0095" | "RM-0099" | null;
+  until: "RM-0095" | "RM-0099" | null;
 }
 
 const APP = "src/styles/app.css";
-
-/** Flow's canvas: its labels and boxes are sized against the hand-written layout's measured boxes. */
-const FLOW_LAYOUT = "Flow's canvas: sized against the hand-written layout's boxes, which RM-0094 redraws";
 
 /** Graph's canvas likewise. */
 const GRAPH_LAYOUT = "Graph's canvas: sized against the hand-written layout's boxes";
@@ -62,29 +59,4 @@ export const SCALE_EXCEPTIONS: readonly ScaleException[] = [
 
   // Rendered markdown, the document modal's (RM-0095).
   { file: APP, selector: ".md-url, .md-image-path", property: "font-size", value: "0.92em", reason: "a raw URL or image path at the size of the prose around it", until: "RM-0095" },
-
-  // Flow's canvas (RM-0094).
-  { file: APP, selector: ".flow-box", property: "line-height", value: "1.3", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box", property: "gap", value: "1px", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box.is-start, .flow-box.is-end", property: "border-radius", value: "36px", reason: "a flowchart's terminator, rounded to its box's height", until: "RM-0094" },
-  { file: APP, selector: ".flow-box p.flow-box-name", property: "font-size", value: "0.6875rem", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box-id", property: "font-size", value: "0.6875rem", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box-kind", property: "font-size", value: "0.6875rem", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box p.flow-box-state", property: "font-size", value: "0.6875rem", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box p.flow-box-state", property: "line-height", value: "1.5", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box .badge", property: "font-size", value: "0.6875rem", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-box .badge", property: "line-height", value: "1.4", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-tab", property: "font-size", value: "0.6875rem", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-tab", property: "line-height", value: "1.5", reason: FLOW_LAYOUT, until: "RM-0094" },
-  {
-    file: APP,
-    selector: ".flow-band",
-    property: "line-height",
-    value: "24px",
-    // --target-min is 24px but a target's size, no line height; the scale's 1.5rem pairs with a 20 px heading.
-    reason: "an arrow's band, its line the layout's 24 px hit area, which is no step of the line-height scale",
-    until: "RM-0094",
-  },
-  { file: APP, selector: ".flow-edge-label", property: "font-size", value: "0.6875rem", reason: FLOW_LAYOUT, until: "RM-0094" },
-  { file: APP, selector: ".flow-edge-label", property: "padding", value: "1px var(--space-1)", reason: FLOW_LAYOUT, until: "RM-0094" },
 ];

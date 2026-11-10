@@ -720,12 +720,26 @@ export interface ShownNode {
   text: string;
   truncated: boolean;
   omitted: Omitted | null;
+  /**
+   * The node's path from the top, top first, `[]` for a root: a section climbs to its enclosing
+   * node, a document to its `parent:`'s first holder by (path, ord); a dangling, foreign or cyclic
+   * `parent:` ends it (RM-0094). Source: `crates/specengine-cli/README.md` "Output and the cap".
+   */
+  ancestors: ShownAncestor[];
   links: ShownLinks | null;
   /**
    * The node's code bindings, after `links`: null without `with=bindings` (the Bindings tab asks),
    * without `[code]` or under a cause that lists no row. Source: `docs/canon/code-reads.md` "spec show --bindings".
    */
   bindings: ShownBindings | null;
+}
+
+/** One step of a shown node's `ancestors` (RM-0094): `path` its file, since a section's enclosing document may have no ID. Source: `crates/specengine-cli/README.md` "Output and the cap". */
+export interface ShownAncestor {
+  id: string | null;
+  kind: string | null;
+  title: string | null;
+  path: string;
 }
 
 // Code in reads (docs/canon/code-reads.md): a node's code bindings as rows whose `sync` is the
@@ -1312,7 +1326,7 @@ export interface FlowInner {
   count: number;
 }
 
-/** A shown document: `distance` the steps from the starts, the least of what it holds, null where none is reached; `group` the shown node holding it; `stage` its own, project vocabulary; `start` and `end` true when it or anything it holds is one; `holds` the documents folded into it; `gaps` the documents this read's gap rows name among what it holds, each once; `rollup` and `counts` `spec trace`'s, null without `--trace`. Source: `docs/features/flow-read.md` "Output", `docs/features/flow-canvas.md` "Data", `docs/features/trace-views.md` "Routes and types". */
+/** A shown document: `distance` the steps from the starts, the least of what it holds, null where none is reached; `group` the shown node holding it; `stage` its own, project vocabulary; `start` and `end` true when it or anything it holds is one; `in_flow` true when it or anything it holds is in the flow a read with no ROOT admits; `holds` the documents folded into it; `gaps` the documents this read's gap rows name among what it holds, each once; `rollup` and `counts` `spec trace`'s, null without `--trace`. Source: `docs/features/flow-read.md` "Output", `docs/features/flow-canvas.md` "Data", `docs/features/trace-views.md` "Routes and types", `docs/canon/spec-flow.md` "Output". */
 export interface FlowNode {
   id: string | null;
   kind: string | null;
@@ -1324,6 +1338,7 @@ export interface FlowNode {
   stage: string | null;
   start: boolean;
   end: boolean;
+  in_flow: boolean;
   holds: number;
   inner: FlowInner[];
   gaps: number;
@@ -1343,7 +1358,12 @@ export interface FlowEdge {
   line: number;
 }
 
-/** `spec flow --json`: all ten gap rows, then the nodes and edges, or why ROOT names nothing (exit 1). Source: `docs/features/flow-read.md` "Output". */
+/**
+ * `spec flow --json`: all ten gap rows, then the nodes and edges, or why ROOT names nothing (exit 1);
+ * `not_in_flow` the documents the `in_flow` cut left out (1 + `holds` of each dropped node), null
+ * without the cut; `types` the model's flow link types in their order, on every read. Source:
+ * `docs/features/flow-read.md` "Output", `docs/canon/spec-flow.md` "Output".
+ */
 export interface FlowView {
   root: string | null;
   reason: string | null;
@@ -1353,6 +1373,8 @@ export interface FlowView {
   truncated: boolean;
   omitted_nodes: number;
   omitted_edges: number;
+  not_in_flow: number | null;
+  types: string[];
   gaps: FlowGap[];
   nodes: FlowNode[];
   edges: FlowEdge[];

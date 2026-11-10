@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-10
 ---
 
 # The Flow screen: the place in the hash
@@ -48,13 +48,17 @@ A selected name the drawing read lacks seeks once per place: `getTree({})`, then
 
 ## Places
 
-The left pane (`FlowPlaces.tsx`), a `<nav>` "Flow places" apart from the app's; every item an `<a>`, so a click pushes.
+The left pane (`FlowPlaces.tsx`), a `<nav>` "Flow places" apart from the app's; every item an `<a>`, so a click pushes. Nothing in it reads: the view hands it what its reads hold.
 
 - **Modules**, when `[[module]]` serves one: All modules, then titles, the one in force `aria-current`.
-- **Scope**: Up, then the scope's title (`aria-current="location"`). Up names the holder a held read gives (`useHeldHolder`), else the lens root, by the title a held read gives it (`useHeldTitle`, no read of its own), else its ID; none at the lens root; a lens root not yet read: `flow.upStart`.
+- **Path**: an `ol` labelled `flow.path`, from the scope view's `getNode(R)` first node's served `ancestors`, top first, then the scope: no other read and no held-read guess (`spec-read-subset.md` "The subset"). Each entry a `flowHash` link by title (else ID, else path), indented one step per level (`calc(var(--space-150) * n)`, 12 to 72 px), at most six; long titles wrap; the last `aria-current="location"`. Entries above the lens root are left out (with a module, its root; else Top's one node, once Top is read); a scope outside the module shows the whole chain. An entry equal to a known lens root writes `scope` null, any other `scope=<id>`. At the lens root, one entry: its title, or `flow.topTitle` at an unrooted Top. While the read is pending the ancestors are a skeleton line; failed, the current entry alone, `flow.pathFailed` and Retry; the canvas stands.
+- **Under the current entry**, one level deeper: for All stages, the drawing read's groups (`holds > 0`) but the scope; for a stage, the distinct `group`s its nodes name, first seen, the scope left out. A group row keeps its chevron on the title's first line: `flex-wrap: nowrap`, `align-items: flex-start`, the words `flex: 1 1 0` with `min-width: 0`, the icon `flex: none`.
 - **Stages**, from the summary: All stages, the lanes in served order, each `<c> of <n> confirmed` and a bar from served `counts`, No stage last. At an unrooted Top: `flow.stagesAtTop`, no read. A failed summary: `flow.stagesFailed` and Retry; the canvas stands.
-- **Under the current item**: for All stages, the scope's groups (`holds > 0`); for a stage, the distinct `group`s its nodes name, first seen, the scope left out.
+- **Records for the AI** at the foot (`spec-flow-bar.md`).
+
+There is no Up link: the path is the way up.
 
 ## Known limits
 
-- **Up from held reads**: a rooted read leaves its root's `group` null. A fresh deep mount says `flow.upStart`, going to the lens root, maybe skipping a level; a holder no held read titles is named by its ID.
+- **Two hashes, one picture**: a top entry written before the lens root is known names it as `scope=<id>` (`spec-flow-screen.md` "Known limits").
+- **No Records place**: the dialog's being open is not held in the hash.

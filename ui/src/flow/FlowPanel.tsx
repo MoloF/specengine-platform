@@ -13,16 +13,19 @@ import { CardsBlock } from "../trace/CardsBlock";
 import { TraceBar } from "../trace/TraceBar";
 import { LinksPanel } from "../tree/LinksPanel";
 import type { LineTarget } from "../tree/TextView";
+import { Disclosure } from "../ui/Disclosure";
 import { Icon } from "../ui/Icon";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { isPlainClick } from "./clicks";
-import { boxWords, countsText, holdsText, stageWords, startWord, withGapsText } from "./labels";
+import { boxWords, countsText, holdsText, kindWords, stageWords, startWord, withGapsText } from "./labels";
 import { isGroup } from "./layout";
 
-// The panel (docs/features/writer-studio.md D7, "Panel"): always mounted, at its own width, scrolling
-// inside. With nothing selected it shows the scope, its actions and its gap rows; a box shows its
-// words, place, cards, text and links; an arrow its served words. The spec is read only here and
-// changes through the AI, as proposals; a card is written, a queue row.
+// The panel (docs/features/writer-studio.md D7, "Panel"; docs/features/flow-scenario.md D12): always
+// mounted, at its own width, scrolling inside. With nothing selected it shows the scope and its
+// actions; a box shows its title, stage, holder, cards, text and links; an arrow its served words.
+// IDs, raw kinds, `path:line`, distance and inner counts stand folded under Technical details. The
+// gap rows are the bar's (D10). The spec is read only here and changes through the AI, as proposals;
+// a card is written, a queue row.
 
 /** A link that selects: one history entry replaced, never pushed (D5). */
 function SelectLink({ project, place, className, children }: { project: string; place: FlowPlace; className?: string; children: ReactNode }) {
@@ -132,12 +135,25 @@ export interface ScopeShown {
   name: string | null;
   title: string;
   kind: string | null;
+  /** Its `path:line`, from the read that holds it; null while none does. */
+  where: string | null;
   counts: TraceCounts | null;
   /** Its `with=links` read; null at the top. */
   read: NodeQuery | null;
 }
 
-/** The scope: its words, counts, text and links, its ways out, then what the caller puts under (the gap rows). */
+/** The facts a person rarely needs, folded: a disclosure, collapsed (flow-scenario D12). */
+function TechnicalDetails({ children, more }: { children: ReactNode; more?: ReactNode }) {
+  const t = useTranslate();
+  return (
+    <Disclosure summary={t("ui.technicalDetails")} className="flow-panel-details">
+      <dl className="facts">{children}</dl>
+      {more}
+    </Disclosure>
+  );
+}
+
+/** The scope: its title, counts, its ways out, text and links, then what the caller puts under; its name, kind and place folded. */
 export function ScopeView({
   project,
   scope,
@@ -160,18 +176,6 @@ export function ScopeView({
           <bdi>{scope.title}</bdi>
         </h2>
       </header>
-      {scope.name !== null && (
-        <dl className="facts">
-          <div className="fact fact-wide">
-            <dt>{t("flow.fact.name")}</dt>
-            <dd className="mono">{scope.name}</dd>
-          </div>
-          <div className="fact">
-            <dt>{t("flow.fact.kind")}</dt>
-            <dd className="mono">{scope.kind ?? "-"}</dd>
-          </div>
-        </dl>
-      )}
       <Counts counts={scope.counts} />
       {scope.name !== null && (
         <p className="flow-panel-actions">
@@ -188,18 +192,35 @@ export function ScopeView({
       )}
       {children}
       {scope.name !== null && scope.read !== null && <NodeText project={project} name={scope.name} read={scope.read} />}
+      {scope.name !== null && (
+        <TechnicalDetails>
+          <div className="fact fact-wide">
+            <dt>{t("flow.fact.name")}</dt>
+            <dd className="mono">{scope.name}</dd>
+          </div>
+          <div className="fact">
+            <dt>{t("flow.fact.kind")}</dt>
+            <dd className="mono">{scope.kind ?? "-"}</dd>
+          </div>
+          <div className="fact fact-wide">
+            <dt>{t("flow.fact.where")}</dt>
+            <dd className="mono">{scope.where ?? "-"}</dd>
+          </div>
+        </TechnicalDetails>
+      )}
       <p className="muted">{t("flow.throughAi")}</p>
     </>
   );
 }
 
-/** A box: its words and place, its holder with Open, a group's inner links and Open, its cards, its text and links. */
+/** A box: its title, stage and holder with Open, a group's Open, its cards, its text and links; its name, kind, place, distance, marks and inner links folded. */
 export function BoxView({
   project,
   node,
   inLane,
   scopeName,
   scopeTitle,
+  titleOf,
   headingRef,
   enterPlace,
   onBack,
@@ -210,6 +231,8 @@ export function BoxView({
   /** The scope drawn: its own name is no holder to open. */
   scopeName: string | null;
   scopeTitle: string;
+  /** A name's title where a read gives one, else the name. */
+  titleOf: (name: string) => string;
   headingRef: Ref<HTMLHeadingElement> | undefined;
   /** The place entering a group. */
   enterPlace: (name: string) => FlowPlace;
@@ -217,67 +240,32 @@ export function BoxView({
 }) {
   const t = useTranslate();
   const name = nodeName(node);
+  const title = boxWords(node);
   const read = useNode(project, name, { with: ["links"] });
   return (
     <>
       <BackTo name={scopeTitle} onBack={onBack} />
       <header className="flow-panel-head">
-        <h2 ref={headingRef} tabIndex={-1} className="flow-panel-title mono">
-          {name}
+        <h2 ref={headingRef} tabIndex={-1} className="flow-panel-title">
+          <bdi>{title}</bdi>
         </h2>
       </header>
       <dl className="facts">
-        <div className="fact fact-wide">
-          <dt>{t("flow.fact.title")}</dt>
-          <dd>
-            <bdi>{boxWords(node)}</bdi>
-          </dd>
-        </div>
-        <div className="fact">
-          <dt>{t("flow.fact.kind")}</dt>
-          <dd className="mono">{node.kind ?? "-"}</dd>
-        </div>
-        <div className="fact">
-          <dt>{t("flow.fact.distance")}</dt>
-          <dd>{node.distance ?? t("flow.offWalk")}</dd>
-        </div>
         <div className="fact">
           <dt>{t("flow.fact.stage")}</dt>
           <dd>
             <bdi>{stageWords(node.stage, t)}</bdi>
           </dd>
         </div>
-        <div className="fact fact-wide">
-          <dt>{t("flow.fact.where")}</dt>
-          <dd className="mono">
-            {node.path}:{node.line}
-          </dd>
-        </div>
         {node.group !== null && node.group !== scopeName && (
           <div className="fact fact-wide">
             <dt>{t("flow.fact.group")}</dt>
             <dd>
-              <span className="mono">{node.group}</span> <a href={flowHash(project, enterPlace(node.group))}>{t("flow.openGroup", { name: node.group })}</a>
+              <bdi>{titleOf(node.group)}</bdi> <a href={flowHash(project, enterPlace(node.group))}>{t("flow.openGroup", { name: titleOf(node.group) })}</a>
             </dd>
           </div>
         )}
       </dl>
-      {(node.start || node.end) && (
-        <p className="flow-panel-marks">
-          {node.start && (
-            <span className="flow-mark flow-mark-start">
-              <Icon name="flowStart" />
-              {startWord(inLane, t)}
-            </span>
-          )}
-          {node.end && (
-            <span className="flow-mark flow-mark-end">
-              <Icon name="flowEnd" />
-              {t("flow.end")}
-            </span>
-          )}
-        </p>
-      )}
       {isGroup(node) && (
         <section className="flow-panel-section" aria-label={t("flow.groupHeading")}>
           <h3 className="card-section-title">{t("flow.groupHeading")}</h3>
@@ -285,19 +273,10 @@ export function BoxView({
             {holdsText(node.holds, t)}
             {node.gaps > 0 && `, ${withGapsText(node.gaps, t)}`}
           </p>
-          {node.inner.length > 0 && (
-            <ul className="flow-panel-inner">
-              {node.inner.map((inner) => (
-                <li key={inner.type}>
-                  <span className="mono">{inner.type}</span> {t("flow.within", { count: inner.count })}
-                </li>
-              ))}
-            </ul>
-          )}
           <p>
             <a className="button" href={flowHash(project, enterPlace(name))}>
               <Icon name="chevronRight" />
-              <span>{t("flow.openGroup", { name })}</span>
+              <span>{t("flow.openGroup", { name: title })}</span>
             </a>
           </p>
         </section>
@@ -313,6 +292,59 @@ export function BoxView({
           <span>{t("flow.openInGraph")}</span>
         </a>
       </p>
+      <TechnicalDetails
+        more={
+          (node.start || node.end) && (
+            <p className="flow-panel-marks">
+              {node.start && (
+                <span className="flow-mark flow-mark-start">
+                  <Icon name="flowStart" />
+                  {startWord(inLane, t)}
+                </span>
+              )}
+              {node.end && (
+                <span className="flow-mark flow-mark-end">
+                  <Icon name="flowEnd" />
+                  {t("flow.end")}
+                </span>
+              )}
+            </p>
+          )
+        }
+      >
+        <div className="fact fact-wide">
+          <dt>{t("flow.fact.name")}</dt>
+          <dd className="mono">{node.id ?? "-"}</dd>
+        </div>
+        <div className="fact">
+          <dt>{t("flow.fact.kind")}</dt>
+          <dd className="mono">{node.kind ?? "-"}</dd>
+        </div>
+        <div className="fact">
+          <dt>{t("flow.fact.distance")}</dt>
+          <dd>{node.distance ?? t("flow.offWalk")}</dd>
+        </div>
+        <div className="fact fact-wide">
+          <dt>{t("flow.fact.where")}</dt>
+          <dd className="mono">
+            {node.path}:{node.line}
+          </dd>
+        </div>
+        {node.inner.length > 0 && (
+          <div className="fact fact-wide">
+            <dt>{t("flow.groupHeading")}</dt>
+            <dd>
+              <ul className="flow-panel-inner">
+                {node.inner.map((inner) => (
+                  <li key={inner.type}>
+                    <span className="mono">{inner.type}</span> {t("flow.within", { count: inner.count })}
+                  </li>
+                ))}
+              </ul>
+            </dd>
+          </div>
+        )}
+      </TechnicalDetails>
       <p className="muted">{t("flow.throughAi")}</p>
     </>
   );
@@ -389,7 +421,7 @@ export function EdgeView({
         </div>
         <div className="fact">
           <dt>{t("flow.edge.kind")}</dt>
-          <dd className="mono">{edge.kind ?? t("flow.edge.none")}</dd>
+          <dd>{edge.kind === null ? t("flow.edge.none") : kindWords(edge.kind, t)}</dd>
         </div>
         <div className="fact fact-wide">
           <dt>{t("flow.edge.when")}</dt>

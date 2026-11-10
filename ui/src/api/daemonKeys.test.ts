@@ -80,6 +80,7 @@ import type {
   RoundTarget,
   RoundTask,
   SearchHit,
+  ShownAncestor,
   ShownBindings,
   ShownLink,
   ShownNode,
@@ -169,11 +170,14 @@ import type {
 // author's optional `login`, in no set; and hub-git's one (docs/features/hub-git.md "Data": the answer
 // of `GET .../sync`, set 110 `HubSync`); and workspaces' three (docs/features/workspaces.md "Data": the
 // answer of `GET .../workspaces`, a workspace, a module, sets 111 to 113, `WorkspaceModule`); and
-// card-tasks' one (docs/features/card-tasks.md "Documents": a card's linked task, set 114 `CardTask`,
-// the last), with a card's `tasks` after `evidence` (31 keys). A key the types carry ahead of the file
-// is listed in AHEAD_OF_FIXTURE, empty again since card-tasks' test wrote set 114 and a card's
-// `tasks`; a listed key the file already names fails. While that file is absent the comparison is
-// skipped, saying so; once it exists it names all one hundred and fourteen, in the slices' order.
+// card-tasks' one (docs/features/card-tasks.md "Documents": a card's linked task, set 114 `CardTask`),
+// with a card's `tasks` after `evidence` (31 keys); and flow-scenario's one (RM-0094: a shown
+// node's ancestor, set 115 `ShownAncestor`, the last), with a shown node's
+// `ancestors` after `omitted` (20 keys), the flow document's `not_in_flow` and `types` after
+// `omitted_edges` (13) and a flow node's `in_flow` after `end` (16). A key the types carry ahead of the
+// file is listed in AHEAD_OF_FIXTURE, empty again since flow-scenario's test wrote set 115 and its
+// four keys; a listed key the file already names fails. While that file is absent the comparison is
+// skipped, saying so; once it exists it names all one hundred and fifteen, in the slices' order.
 
 const KEYS = {
   // docs/features/daemon-read.md "Data": `[{slug, name, root, branch}]`.
@@ -654,7 +658,8 @@ const KEYS = {
   DriftLevels: { lock: true, markers: true, changed: true } satisfies Record<keyof DriftLevels, true>,
   // crates/specengine-cli/README.md "Output and the cap": `spec show --json`'s node; its 19th key
   // `bindings` after `links` and that key's three: docs/canon/code-reads.md "spec show --bindings"
-  // (docs/features/ui-node-bindings.md, UI-8 and TE-1).
+  // (docs/features/ui-node-bindings.md, UI-8 and TE-1); `ancestors` after `omitted`, 20 keys (RM-0094
+  // flow-scenario).
   ShownNode: {
     id: true,
     kind: true,
@@ -673,6 +678,7 @@ const KEYS = {
     text: true,
     truncated: true,
     omitted: true,
+    ancestors: true,
     links: true,
     bindings: true,
   } satisfies Record<keyof ShownNode, true>,
@@ -684,7 +690,8 @@ const KEYS = {
   LockDiffRow: { row: true, spec: true, code: true } satisfies Record<keyof LockDiffRow, true>,
   LockDiffSpecSide: { commit: true, path: true, diff: true } satisfies Record<keyof LockDiffSpecSide, true>,
   LockDiffCodeSide: { blob: true, file: true, diff: true } satisfies Record<keyof LockDiffCodeSide, true>,
-  // docs/features/flow-read.md "Output": the five sets after `LockDiffCodeSide`, keys in its order.
+  // docs/features/flow-read.md "Output": the five sets after `LockDiffCodeSide`, keys in its order;
+  // `not_in_flow`, `types` and a node's `in_flow`: docs/canon/spec-flow.md "Output" (RM-0094 flow-scenario).
   FlowView: {
     root: true,
     reason: true,
@@ -694,6 +701,8 @@ const KEYS = {
     truncated: true,
     omitted_nodes: true,
     omitted_edges: true,
+    not_in_flow: true,
+    types: true,
     gaps: true,
     nodes: true,
     edges: true,
@@ -710,6 +719,7 @@ const KEYS = {
     stage: true,
     start: true,
     end: true,
+    in_flow: true,
     holds: true,
     inner: true,
     gaps: true,
@@ -820,6 +830,8 @@ const KEYS = {
   WorkspaceModule: { name: true, title: true, root: true } satisfies Record<keyof WorkspaceModule, true>,
   // docs/features/card-tasks.md "Documents": one linked task, read when the card is; every key present.
   CardTask: { id: true, status: true, title: true, stale: true } satisfies Record<keyof CardTask, true>,
+  // crates/specengine-cli/README.md "Output and the cap": one entry of a shown node's `ancestors` (RM-0094); every key present.
+  ShownAncestor: { id: true, kind: true, title: true, path: true } satisfies Record<keyof ShownAncestor, true>,
 };
 
 type Named = keyof typeof KEYS;
@@ -912,16 +924,16 @@ const CITED: Record<Named, string> = {
   DriftMarker: "line, rev",
   DriftLock: "rev, commit, verified_at",
   DriftLevels: "lock, markers, changed",
-  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links, bindings",
+  ShownNode: "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, ancestors, links, bindings",
   ShownBindings: "rows, omitted, tested",
   LockDiffView: "ref, reason, notes, nodes",
   LockDiffNode: "id, path, line, rows",
   LockDiffRow: "row, spec, code",
   LockDiffSpecSide: "commit, path, diff",
   LockDiffCodeSide: "blob, file, diff",
-  FlowView: "root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, gaps, nodes, edges",
+  FlowView: "root, reason, depth, notes, left_out, truncated, omitted_nodes, omitted_edges, not_in_flow, types, gaps, nodes, edges",
   FlowGap: "code, state, count, items, cause",
-  FlowNode: "id, kind, title, path, line, distance, group, stage, start, end, holds, inner, gaps, rollup, counts",
+  FlowNode: "id, kind, title, path, line, distance, group, stage, start, end, in_flow, holds, inner, gaps, rollup, counts",
   FlowEdge: "from, to, type, kind, when, count, path, line",
   FlowInner: "type, count",
   CardList: "flows, cards, notes, truncated, omitted",
@@ -952,6 +964,7 @@ const CITED: Record<Named, string> = {
   Workspace: "name, title, landing, sections, flows, module",
   WorkspaceModule: "name, title, root",
   CardTask: "id, status, title, stale",
+  ShownAncestor: "id, kind, title, path",
 };
 
 const NAMES = Object.keys(KEYS) as Named[];
@@ -1150,8 +1163,14 @@ const BEFORE_CARD_TASKS: readonly Named[] = [...BEFORE_WORKSPACES, ...WORKSPACES
 /** card-tasks' one: a card's linked task, set 114 (docs/features/card-tasks.md "Documents"). */
 const CARD_TASKS: readonly Named[] = ["CardTask"];
 
+/** The hundred and fourteen types the fixture named before flow-scenario. */
+const BEFORE_FLOW_SCENARIO: readonly Named[] = [...BEFORE_CARD_TASKS, ...CARD_TASKS];
+
+/** flow-scenario's one: a shown node's ancestor, set 115 (RM-0094; fixtures/daemon-keys.json). */
+const FLOW_SCENARIO: readonly Named[] = ["ShownAncestor"];
+
 /** Every type the fixture names, in the slices' order. */
-const ALL: readonly Named[] = [...BEFORE_CARD_TASKS, ...CARD_TASKS];
+const ALL: readonly Named[] = [...BEFORE_FLOW_SCENARIO, ...FLOW_SCENARIO];
 
 /**
  * The keys only a check against a git base sends: the daemon runs the plain check, so it never
@@ -1179,9 +1198,10 @@ function served(name: Named): string[] {
  * of the file's types. A listed key the file already names fails ("lists no key ahead of the file
  * that the file names"): the list is emptied in the change that regenerates the file. Empty since
  * workspaces' test wrote its three sets, the hundred-and-eleventh to the hundred-and-thirteenth
- * (docs/features/workspaces.md "Data"), since board-handoff's wrote a flow's `return`, and again
- * since card-tasks' wrote a card's `tasks` and set 114 `CardTask` (docs/features/card-tasks.md
- * "Documents").
+ * (docs/features/workspaces.md "Data"), since board-handoff's wrote a flow's `return`, since
+ * card-tasks' wrote a card's `tasks` and set 114 `CardTask` (docs/features/card-tasks.md
+ * "Documents"), and again since flow-scenario's (RM-0094) wrote its four keys and set 115
+ * `ShownAncestor`.
  */
 const AHEAD_OF_FIXTURE: readonly (readonly [Named, string])[] = [];
 
@@ -1231,7 +1251,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HUB_GIT.at(-1)).toBe("ConfirmRead");
     expect(BEFORE_WORKSPACES.at(-1)).toBe("HubSync");
     expect(BEFORE_CARD_TASKS.at(-1)).toBe("WorkspaceModule");
-    expect(ALL.at(-1)).toBe("CardTask");
+    expect(BEFORE_FLOW_SCENARIO.at(-1)).toBe("CardTask");
+    expect(ALL.at(-1)).toBe("ShownAncestor");
   });
 
   it("declares in provisional.ts the review document's keys and the DriftEvidence set's, in the records' order: drift after revisions (UI-1 of drift-queue)", () => {
@@ -1260,7 +1281,7 @@ describe("the daemon's document types (AC-09)", () => {
     const at = source.indexOf("export interface StoredDriftRow ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/proposal-drift-item.md` "The item"');
     expect(Object.keys(KEYS)).not.toContain("StoredDriftRow");
-    expect(ALL).toHaveLength(114);
+    expect(ALL).toHaveLength(115);
   });
 
   it('DriftEvidence cites `docs/features/drift-queue.md` "Review, inbox, round, stage"; the review document cites it too', () => {
@@ -1271,7 +1292,7 @@ describe("the daemon's document types (AC-09)", () => {
     }
   });
 
-  it("lists ahead of the fixture only keys their types serve, none since card-tasks' test wrote a card's `tasks` and set 114 into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\")", () => {
+  it("lists ahead of the fixture only keys their types serve, none since flow-scenario's test wrote its four keys and set 115 into the file (UI-1 of lock-diff, U1 of hub-git, docs/canon/card-flows.md \"The rule\", docs/features/card-tasks.md \"Documents\", RM-0094)", () => {
     for (const [name, key] of AHEAD_OF_FIXTURE) {
       expect([name, key, served(name).includes(key)]).toEqual([name, key, true]);
     }
@@ -1310,7 +1331,26 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source).toMatch(/^ {2}evidence: CardEvidence\[\];\n {2}tasks: CardTask\[\];\n {2}acceptance: CardAcceptance \| null;$/m);
     const at = source.indexOf("export interface CardTask ");
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/cards.md` "Documents and events"');
-    expect(ALL.slice(BEFORE_CARD_TASKS.length)).toEqual([...CARD_TASKS]);
+    expect(ALL.slice(BEFORE_CARD_TASKS.length, BEFORE_FLOW_SCENARIO.length)).toEqual([...CARD_TASKS]);
+  });
+
+  it('types flow-scenario\'s keys (RM-0094) as the daemon serves them: a shown node\'s `ancestors` after `omitted` (20 keys), a ShownAncestor\'s four, `id`, `kind` and `title` nullable; the flow document\'s `not_in_flow` and `types` after `omitted_edges` (13), a flow node\'s `in_flow` after `end` (16) (FS-11)', () => {
+    const node = declaredKeys("ShownNode");
+    expect(node.slice(node.indexOf("omitted"), node.indexOf("omitted") + 3)).toEqual(["omitted", "ancestors", "links"]);
+    expect(node).toEqual(served("ShownNode"));
+    expect(node).toHaveLength(20);
+    expect(served("ShownAncestor")).toEqual(["id", "kind", "title", "path"]);
+    expect(declaredKeys("ShownAncestor")).toEqual(served("ShownAncestor"));
+    expect(source).toMatch(/^export interface ShownAncestor \{\n {2}id: string \| null;\n {2}kind: string \| null;\n {2}title: string \| null;\n {2}path: string;\n\}$/m);
+    expect(source).toMatch(/^ {2}ancestors: ShownAncestor\[\];\n {2}links: ShownLinks \| null;$/m);
+    const view = declaredKeys("FlowView");
+    expect(view.slice(view.indexOf("omitted_edges"), view.indexOf("omitted_edges") + 4)).toEqual(["omitted_edges", "not_in_flow", "types", "gaps"]);
+    expect([view.length, declaredKeys("FlowNode").length]).toEqual([13, 16]);
+    expect(source).toMatch(/^ {2}not_in_flow: number \| null;\n {2}types: string\[\];$/m);
+    expect(source).toMatch(/^ {2}end: boolean;\n {2}in_flow: boolean;\n {2}holds: number;$/m);
+    const at = source.indexOf("export interface ShownAncestor ");
+    expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`crates/specengine-cli/README.md` "Output and the cap"');
+    expect(ALL.slice(BEFORE_FLOW_SCENARIO.length)).toEqual([...FLOW_SCENARIO]);
   });
 
   it('types the identity read\'s answer as the canon writes it: one key, a login or null, citing `docs/canon/hub.md` "Routes" (AC-12 of hub-identity)', () => {
@@ -1461,8 +1501,9 @@ describe("the daemon's document types (AC-09)", () => {
     expect(BEFORE_HUB_GIT).toHaveLength(109);
     expect(BEFORE_WORKSPACES).toHaveLength(110);
     expect(BEFORE_CARD_TASKS).toHaveLength(113);
-    expect(ALL).toHaveLength(114);
-    expect(new Set(ALL).size).toBe(114);
+    expect(BEFORE_FLOW_SCENARIO).toHaveLength(114);
+    expect(ALL).toHaveLength(115);
+    expect(new Set(ALL).size).toBe(115);
   });
 
   it("gives the package its roadmap right after bundle, before author, declared in that order: a key, no set (UI-1 of roadmap-surfaces)", () => {
@@ -1499,8 +1540,8 @@ describe("the daemon's document types (AC-09)", () => {
     expect(source.slice(source.lastIndexOf("/**", at), at)).toContain('`docs/canon/spec-lock-tested.md` "Reads"');
   });
 
-  it("counts ui-node-bindings' two: a shown node's 19 keys, bindings its 19th after links, and ShownBindings' 3, declared so, the seventy-fifth and seventy-sixth sets (UI-8 of ui-node-bindings)", () => {
-    expect(UI_NODE_BINDINGS.map((name) => served(name).length)).toEqual([19, 3]);
+  it("counts ui-node-bindings' two: a shown node's 20 keys (flow-scenario's `ancestors` after `omitted`), bindings its last after links, and ShownBindings' 3, declared so, the seventy-fifth and seventy-sixth sets (UI-8 of ui-node-bindings)", () => {
+    expect(UI_NODE_BINDINGS.map((name) => served(name).length)).toEqual([20, 3]);
     expect(ALL.slice(BEFORE_UI_NODE_BINDINGS.length, BEFORE_LOCK_DIFF.length)).toEqual([...UI_NODE_BINDINGS]);
     expect(declaredKeys("ShownNode")).toEqual(Object.keys(KEYS.ShownNode));
     expect(declaredKeys("ShownBindings")).toEqual(Object.keys(KEYS.ShownBindings));
@@ -1704,17 +1745,31 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
   /** The types the file is compared with: all, less a set ahead of the file (every key ahead) it does not name yet. */
   const expected = ALL.filter((name) => Object.hasOwn(sets, name) || !served(name).every((key) => isAhead(name, key)));
 
-  it("names exactly the one hundred and fourteen types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one", () => {
+  it("names exactly the one hundred and fifteen types: daemon-read's six, ui-live's nine, ui-live-tasks' seventeen, decision-staging's two, ui-round's six, kind-interpretation's one, health-left's three, rev-discipline's one, drift-queue's one, health-code's ten, roadmap-screen's ten, bundle-bindings' one, tested-reads' one, health-drift's six, ui-node-bindings' two, lock-diff's five, flow-read's five, board-ui's twelve, card-trace's seven, trace-views' one, hub-identity's one, hub-team's one, hub-confirm's one, hub-git's one, workspaces' three, card-tasks' one, flow-scenario's one", () => {
     expect(Object.keys(sets).sort()).toEqual([...expected].sort());
-    // None is ahead of the file today: it names all one hundred and fourteen, in the slices' order.
+    // None is ahead of the file today: it names all one hundred and fifteen, in the slices' order.
     expect(expected).toEqual(ALL);
     expect(Object.keys(sets)).toEqual([...ALL]);
-    expect(Object.keys(sets)).toHaveLength(114);
+    expect(Object.keys(sets)).toHaveLength(115);
   });
 
-  it('names card-tasks\' one last, after WorkspaceModule, set 114 `CardTask` with its four keys in the types\' order; a card\'s `tasks` right after `evidence`, 31 keys (docs/features/card-tasks.md "Documents")', () => {
-    expect(Object.keys(sets).slice(BEFORE_CARD_TASKS.length)).toEqual([...CARD_TASKS]);
-    expect(Object.keys(sets).at(-1)).toBe("CardTask");
+  it('names flow-scenario\'s one last, after CardTask, set 115 `ShownAncestor` with its four keys in the types\' order; a shown node\'s `ancestors` after `omitted` (20), the flow document\'s 13 keys and a flow node\'s 16 (RM-0094, FS-11)', () => {
+    expect(Object.keys(sets).slice(BEFORE_FLOW_SCENARIO.length)).toEqual([...FLOW_SCENARIO]);
+    expect(Object.keys(sets).at(-1)).toBe("ShownAncestor");
+    expect(Object.keys(sets).indexOf("ShownAncestor")).toBe(114);
+    expect(sets.ShownAncestor).toEqual(["id", "kind", "title", "path"]);
+    expect(sets.ShownAncestor).toEqual(declaredKeys("ShownAncestor"));
+    const node = sets.ShownNode ?? [];
+    expect(node.slice(node.indexOf("omitted"), node.indexOf("omitted") + 3)).toEqual(["omitted", "ancestors", "links"]);
+    expect(node).toEqual(declaredKeys("ShownNode"));
+    expect([sets.FlowView?.length, sets.FlowNode?.length]).toEqual([13, 16]);
+    expect(sets.FlowView).toEqual(declaredKeys("FlowView"));
+    expect(sets.FlowNode).toEqual(declaredKeys("FlowNode"));
+  });
+
+  it('names card-tasks\' one after WorkspaceModule, before flow-scenario\'s one, set 114 `CardTask` with its four keys in the types\' order; a card\'s `tasks` right after `evidence`, 31 keys (docs/features/card-tasks.md "Documents")', () => {
+    expect(Object.keys(sets).slice(BEFORE_CARD_TASKS.length, BEFORE_FLOW_SCENARIO.length)).toEqual([...CARD_TASKS]);
+    expect(Object.keys(sets).at(BEFORE_FLOW_SCENARIO.length - 1)).toBe("CardTask");
     expect(Object.keys(sets).indexOf("CardTask")).toBe(113);
     expect(sets.CardTask).toEqual(["id", "status", "title", "stale"]);
     expect(sets.CardTask).toEqual(declaredKeys("CardTask"));
@@ -1808,14 +1863,14 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect([health.indexOf("drift"), health.length]).toEqual([6, 7]);
   });
 
-  it("names ui-node-bindings' two after DriftLevels, before lock-diff's five: a shown node's 19 keys, bindings after links, and ShownBindings' 3, in the types' order (UI-8, TE-1 of ui-node-bindings)", () => {
+  it("names ui-node-bindings' two after DriftLevels, before lock-diff's five: a shown node's 20 keys, bindings after links, and ShownBindings' 3, in the types' order (UI-8, TE-1 of ui-node-bindings, flow-scenario's `ancestors`)", () => {
     expect(Object.keys(sets).slice(BEFORE_UI_NODE_BINDINGS.length, BEFORE_LOCK_DIFF.length)).toEqual([...UI_NODE_BINDINGS]);
     expect(Object.keys(sets).indexOf("ShownNode")).toBe(74);
     expect(Object.keys(sets).at(BEFORE_LOCK_DIFF.length - 1)).toBe("ShownBindings");
     expect(UI_NODE_BINDINGS.map((name) => sets[name])).toEqual(UI_NODE_BINDINGS.map((name) => served(name)));
     expect(sets.ShownBindings).toEqual(["rows", "omitted", "tested"]);
     const node = sets.ShownNode ?? [];
-    expect([node.indexOf("bindings"), node.length]).toEqual([18, 19]);
+    expect([node.indexOf("bindings"), node.length]).toEqual([19, 20]);
     expect(node.slice(-2)).toEqual(["links", "bindings"]);
   });
 
@@ -1886,12 +1941,12 @@ describe.skipIf(written === undefined)(written === undefined ? ABSENT : "the key
     expect(BOARD_UI.map((name) => declaredKeys(name))).toEqual(BOARD_UI.map((name) => served(name)));
   });
 
-  it("names flow-read's five after LockDiffCodeSide, before board-ui's twelve: 11, 5, 15, 8, 2 keys in the types' order, the eighty-sixth FlowInner (docs/features/flow-read.md, flow-canvas.md)", () => {
+  it("names flow-read's five after LockDiffCodeSide, before board-ui's twelve: 13, 5, 16, 8, 2 keys in the types' order (flow-scenario's three), the eighty-sixth FlowInner (docs/features/flow-read.md, flow-canvas.md, flow-scenario.md)", () => {
     expect(Object.keys(sets).slice(BEFORE_FLOW_READ.length, BEFORE_BOARD_UI.length)).toEqual([...FLOW_READ]);
     expect(Object.keys(sets).indexOf("FlowView")).toBe(81);
     expect(Object.keys(sets).at(BEFORE_BOARD_UI.length - 1)).toBe("FlowInner");
     expect(FLOW_READ.map((name) => sets[name])).toEqual(FLOW_READ.map((name) => served(name)));
-    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([11, 5, 15, 8, 2]);
+    expect(FLOW_READ.map((name) => sets[name]?.length)).toEqual([13, 5, 16, 8, 2]);
     expect(FLOW_READ.map((name) => declaredKeys(name))).toEqual(FLOW_READ.map((name) => served(name)));
   });
 

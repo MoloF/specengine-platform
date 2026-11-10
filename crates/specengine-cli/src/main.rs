@@ -143,6 +143,9 @@ enum Command {
         /// Keep the nodes of this stage, `-` the flow steps with none; the gap rows stay whole.
         #[arg(long, value_name = "S")]
         stage: Option<String>,
+        /// Leave out each node holding nothing of the flow (a ROOT stays); the header counts the documents left out.
+        #[arg(long)]
+        in_flow: bool,
         /// Each shown node's state and counts from `spec trace` too.
         #[arg(long)]
         trace: bool,
@@ -1169,6 +1172,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
             start,
             depth,
             stage,
+            in_flow,
             trace,
         } => Outcome::Flow(Box::new(specengine_cli::flow(
             env,
@@ -1178,6 +1182,7 @@ fn run(env: &Env, globals: &Globals, command: Command, json: bool) -> Result<Out
                 depth,
                 stage,
                 trace,
+                in_flow,
             },
         )?)),
         Command::Graph {

@@ -2,6 +2,7 @@ import { ClientError, type FlowOptions } from "../api/client";
 import type { FlowEdge, FlowGap, FlowInner, FlowNode, FlowView } from "../api/types";
 import type { MockCorpus } from "./build";
 import { nameOf, resolveRef } from "./corpus";
+import { ASIDE_ENDS, ASIDE_LINKS, ASIDE_STAGES, ASIDE_STARTS, ASIDE_STEPS, OPEN_DAY } from "./harbor-sim/aside";
 import type { Scenario } from "./scenario";
 import { HARBOR_STAGES } from "./trace";
 
@@ -20,6 +21,11 @@ import { HARBOR_STAGES } from "./trace";
 // ledger-api: no `[flow]`, so its rows are `not_configured`. `empty`: no flow, the rows stay.
 // `large`: 500 documents in 25 groups, generated, past the canvas's cap once a few open.
 // `no-gaps`: harbor-sim's own links, its ten rows written down at None.
+// `aside` and `aside40` (`docs/canon/spec-flow-screen.md` "Mock"; RM-0094): harbor-sim's corpus is
+// the pottery workshop of src/mocks/harbor-sim/aside.ts, its rows written down as `spec flow` gives them.
+// Every read serves `in_flow`, `not_in_flow` and `types` (flow-scenario D1 to D3): membership is the
+// set a read with no ROOT admits, folded like `start`, and `in_flow: true` cuts after the fold and the
+// stage, a ROOT's node always kept. Only the mock computes membership: the screen reads the flag.
 // `spec flow --trace` is joined after this read, in src/mocks/trace.ts, as the CLI joins it.
 
 /** A live document as a read sees it; `stage` its front-matter's, project vocabulary. */
@@ -58,6 +64,9 @@ export interface MockFlow {
 
 /** What `spec flow --stage` takes for the steps with no `stage:`. */
 const NO_STAGE = "-";
+
+/** The model's flow link types in their order, as every read serves them (`FLOW_LINK_TYPES`; flow-scenario D3). */
+export const FLOW_TYPES: readonly string[] = ["follows", "uses", "supplies"];
 
 /** A row's line above 0, as `spec flow` words it (`crates/specengine-cli/src/flow.rs` `remedy`). */
 export const GAP_REMEDIES: Readonly<Record<string, string>> = {
@@ -206,9 +215,32 @@ function largeFlow(): MockFlow {
   return { documents, links, starts: ["ZONE-GEN-01-01"], ends: ["ZONE-GEN-25-19"], steps: stray.flat(), rows, leftOut: { generated: 0, tier3: 0 } };
 }
 
+/** `aside`'s rows as `spec flow` gives them on `fixtures/flow-aside`: two starts, no `[[flow.definition]]`. */
+const ASIDE_ROWS: FlowGap[] = [
+  measured("no-start"),
+  measured("two-starts", [["POT-WEDGE", OPEN_DAY]]),
+  measured("unreachable"),
+  measured("no-way-to-end"),
+  measured("trap-cycle"),
+  measured("unjoined-parallel"),
+  measured("cycle-no-repeat"),
+  notConfigured("definition-unused", "definition"),
+  notConfigured("definition-once", "definition"),
+  measured("supply-unfed"),
+];
+
+/** The pottery's flow over its corpus (src/mocks/harbor-sim/aside.ts): its links, `[flow]` picks and stages. */
+function asideFlow(corpus: MockCorpus): MockFlow {
+  const { documents, leftOut } = documentsOf(corpus, ASIDE_STAGES);
+  return { documents, links: [...ASIDE_LINKS], starts: [...ASIDE_STARTS], ends: [...ASIDE_ENDS], steps: [...ASIDE_STEPS], rows: ASIDE_ROWS, leftOut };
+}
+
 function harborFlow(corpus: MockCorpus, scenario: Scenario): MockFlow {
   if (scenario === "large") {
     return largeFlow();
+  }
+  if (scenario === "aside" || scenario === "aside40") {
+    return asideFlow(corpus);
   }
   const { documents, leftOut } = documentsOf(corpus, HARBOR_STAGES);
   const rows = documents.length === 0 ? NO_STEP : scenario === "no-gaps" ? NO_GAPS : HARBOR_ROWS;
@@ -227,7 +259,7 @@ function byText(a: string, b: string): number {
 /**
  * `spec flow` over a mock flow: the scope, the walk, the fold, the lifted edges, the rows kept to the
  * scope; then `stage` cuts the shown nodes after the fold and moves nothing else
- * (`docs/canon/spec-flow.md` "The read"): a node whose own stage is S, `-` a shown step with none,
+ * (`docs/canon/spec-flow-cuts.md` "The cuts"): a node whose own stage is S, `-` a shown step with none,
  * never a group or a definition, then the edges whose two ends are kept.
  */
 function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"> {
@@ -236,6 +268,21 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
   for (const document of flow.documents) {
     if (document.parent !== null && byName.has(document.parent)) {
       kids.set(document.parent, [...(kids.get(document.parent) ?? []), document]);
+    }
+  }
+  // What a read with no ROOT admits (flow-scenario D1): every end of a flow link, what `[flow]` picks,
+  // and each live `parent:` holder of those. It is the flow's membership, by links and config alone.
+  const admitted = new Set<string>();
+  for (const link of flow.links) {
+    admitted.add(link.from);
+    admitted.add(link.to);
+  }
+  for (const name of [...flow.starts, ...flow.ends, ...flow.steps]) {
+    admitted.add(name);
+  }
+  for (const name of [...admitted]) {
+    for (let up = byName.get(name)?.parent ?? null; up !== null && byName.has(up); up = byName.get(up)?.parent ?? null) {
+      admitted.add(up);
     }
   }
   const scope = new Set<string>();
@@ -248,17 +295,8 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
       }
     }
   } else {
-    for (const link of flow.links) {
-      scope.add(link.from);
-      scope.add(link.to);
-    }
-    for (const name of [...flow.starts, ...flow.ends, ...flow.steps]) {
+    for (const name of admitted) {
       scope.add(name);
-    }
-    for (const name of [...scope]) {
-      for (let up = byName.get(name)?.parent ?? null; up !== null && byName.has(up); up = byName.get(up)?.parent ?? null) {
-        scope.add(up);
-      }
     }
   }
   const inScope = (name: string) => scope.has(name) && byName.has(name);
@@ -323,11 +361,16 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
   // A shown node is a start or an end when it or anything it holds is one (`docs/features/trace-views.md` "Folded start and end").
   const startsShown = new Set<string>();
   const endsShown = new Set<string>();
+  // In the flow is folded like `start`: a shown node is when it, or anything it holds, is admitted.
+  const flowShown = new Set<string>();
   for (const name of scope) {
     if (!inScope(name)) {
       continue;
     }
     const shown = shownAs(name);
+    if (admitted.has(name)) {
+      flowShown.add(shown);
+    }
     if (shown !== name) {
       holds.set(shown, (holds.get(shown) ?? 0) + 1);
     }
@@ -400,6 +443,7 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
           stage: document.stage,
           start: startsShown.has(name),
           end: endsShown.has(name),
+          in_flow: flowShown.has(name),
           holds: holds.get(name) ?? 0,
           inner: types,
           gaps: gaps.get(name) ?? 0,
@@ -411,10 +455,15 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
     .sort((a, b) => (a.distance ?? Infinity) - (b.distance ?? Infinity) || byText(a.path, b.path));
   const folded = [...merged.values()].sort((a, b) => byText(a.from, b.from) || byText(a.to, b.to) || byText(a.type, b.type) || byText(a.kind ?? "", b.kind ?? ""));
   const isStep = (node: FlowNode) => node.holds === 0 && steps.has(node.id ?? node.path);
-  const kept = options.stage === undefined ? shown : shown.filter((node) => (options.stage === NO_STAGE ? node.stage === null && isStep(node) : node.stage === options.stage));
-  const keptNames = new Set(kept.map((node) => node.id ?? node.path));
-  const edges = options.stage === undefined ? folded : folded.filter((edge) => keptNames.has(edge.from) && keptNames.has(edge.to));
-  const nodes = kept;
+  const staged = options.stage === undefined ? shown : shown.filter((node) => (options.stage === NO_STAGE ? node.stage === null && isStep(node) : node.stage === options.stage));
+  // The cut (flow-scenario D2): after the fold and the stage, each node holding nothing of the flow
+  // drops, a ROOT's own node always stays; `not_in_flow` counts the documents dropped, 1 + `holds` each.
+  const cut = options.in_flow === true;
+  const nodes = cut ? staged.filter((node) => node.in_flow || (node.id ?? node.path) === options.root) : staged;
+  const keptNodes = new Set(nodes);
+  const notInFlow = cut ? staged.filter((node) => !keptNodes.has(node)).reduce((sum, node) => sum + 1 + node.holds, 0) : null;
+  const keptNames = new Set(nodes.map((node) => node.id ?? node.path));
+  const edges = options.stage === undefined && !cut ? folded : folded.filter((edge) => keptNames.has(edge.from) && keptNames.has(edge.to));
   return {
     root: options.root ?? null,
     depth: options.depth ?? null,
@@ -423,6 +472,8 @@ function readFlow(flow: MockFlow, options: FlowOptions): Omit<FlowView, "reason"
     truncated: false,
     omitted_nodes: 0,
     omitted_edges: 0,
+    not_in_flow: notInFlow,
+    types: [...FLOW_TYPES],
     gaps: rows,
     nodes,
     edges,

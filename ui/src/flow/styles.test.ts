@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { SCALE_EXCEPTIONS } from "../styles/scale-exceptions";
 import appCss from "../styles/app.css?raw";
 import tokensCss from "../styles/tokens.css?raw";
+import flowCanvas from "./FlowCanvas.tsx?raw";
+import graphCanvas from "../graph/GraphCanvas.tsx?raw";
+import { FLOW_FIT_MIN_ZOOM, FLOW_PINCH_MIN_ZOOM } from "./geometry";
 
-// docs/features/writer-studio.md ST-4, ST-8, ST-11 (and ST-6's no dimming): jsdom lays nothing
-// out, so these pin the studio's rules, as the Board's styles.test.ts does; the looks L1 to L4 hold
-// them to a browser.
+// docs/features/writer-studio.md ST-4, ST-8, ST-11 (and ST-6's no dimming); flow-scenario FS-14 and
+// FS-22 (RM-0094): jsdom lays nothing out, so these pin the studio's rules, as the Board's
+// styles.test.ts does; the looks hold them to a browser.
 
 /** The file's top-level parts: each rule, and each `@media` block with the rules inside it. */
 interface Block {
@@ -67,7 +71,7 @@ const STACKED = "(max-width: 63.99rem)";
 describe("the page holds still (ST-4)", () => {
   it("fills the viewport less the shell above 64rem, measured, and hides its overflow", () => {
     const studio = ruleWith(".flow-studio", WIDE, /height:/);
-    expect(studio.body).toMatch(/height:\s*calc\(100dvh - var\(--flow-studio-top[^)]*\) - var\(--space-6\)\);/);
+    expect(studio.body).toMatch(/height:\s*calc\(100dvh - var\(--flow-studio-top[^)]*\) - var\(--space-400\)\);/);
     expect(studio.body).toMatch(/overflow:\s*hidden;/);
   });
 
@@ -136,6 +140,67 @@ describe("the legend at the bottom (ST-8)", () => {
     expect(bar.body).toMatch(/position:\s*sticky;/);
     expect(bar.body).toMatch(/bottom:\s*0;/);
     expect(ruleWith("html:has(.flow-bar)", STACKED, /scroll-padding-bottom:/).body).toMatch(/scroll-padding-bottom:\s*3rem;/);
+  });
+});
+
+/** A token's px, by its rem value in tokens.css. */
+function tokenPx(name: string): number {
+  const value = new RegExp(`${name}:\\s*([0-9.]+)rem;`).exec(tokensCss)?.[1];
+  return Number(value) * 16;
+}
+
+describe("readable boxes (FS-14)", () => {
+  it("sets a box's title at the body size, whose px at Flow's fit floor is 12 or more; every font size of the box a token", () => {
+    expect(ruleWith(".flow-box-title", null, /font-size:/).body).toMatch(/font-size:\s*var\(--font-size-body\);/);
+    expect(FLOW_FIT_MIN_ZOOM).toBe(0.92);
+    expect(tokenPx("--font-size-body") * FLOW_FIT_MIN_ZOOM).toBeGreaterThanOrEqual(12);
+    const sizes = blocks.filter((block) => /\.flow-(box|tab|edge-label|band|divider)/.test(block.selector)).flatMap((block) => Array.from(block.body.matchAll(/font-size:\s*([^;]+);/g), (match) => `${block.selector} ${match[1] ?? ""}`));
+    expect(sizes.length).toBeGreaterThan(5);
+    expect(sizes.filter((size) => !/ var\(--font-size-(small|body)\)$/.test(size))).toEqual([]);
+  });
+
+  it("gives Flow its own pinch floor, 0.5, and leaves Graph its 0.1; Flow takes no floor of Graph's", () => {
+    expect(FLOW_PINCH_MIN_ZOOM).toBe(0.5);
+    expect(flowCanvas).toContain("minZoom={FLOW_PINCH_MIN_ZOOM}");
+    expect(graphCanvas).toContain("minZoom={0.1}");
+    const flowSources = import.meta.glob<string>(["/src/flow/*.ts", "/src/flow/*.tsx", "!/src/flow/*.test.*"], { query: "?raw", import: "default", eager: true });
+    expect(Object.keys(flowSources).length).toBeGreaterThan(8);
+    for (const [path, text] of Object.entries(flowSources)) {
+      expect([path, /\bFIT_MIN_ZOOM\b/.test(text.replace(/FLOW_FIT_MIN_ZOOM/g, ""))]).toEqual([path, false]);
+    }
+  });
+
+  it("names no scale exception for RM-0094: Flow's sizes are the scale's", () => {
+    expect(SCALE_EXCEPTIONS.filter((exception) => (exception.until as string | null) === "RM-0094" || /\.flow-/.test(exception.selector))).toEqual([]);
+  });
+});
+
+describe("the path pane (FS-22)", () => {
+  it("keeps a group row's chevron on its title's line: no wrap, the words taking the room, the icon none", () => {
+    const row = ruleWith(".flow-places-body a.flow-places-group", null, /flex-wrap:/);
+    expect(row.body).toMatch(/flex-wrap:\s*nowrap;/);
+    expect(row.body).toMatch(/align-items:\s*flex-start;/);
+    const words = ruleWith(".flow-places-group .flow-places-words", null, /flex:/);
+    expect(words.body).toMatch(/flex:\s*1 1 0;/);
+    expect(words.body).toMatch(/min-width:\s*0;/);
+    expect(ruleWith(".flow-places-group .icon", null, /flex:/).body).toMatch(/flex:\s*none;/);
+  });
+
+  it("indents the path one step a level, the same token step each, six at most, the groups under it one more", () => {
+    for (const depth of [1, 2, 3, 4, 5, 6]) {
+      const rule = ruleWith(`.flow-path li[data-depth="${String(depth)}"]`, null, /margin-left:/);
+      expect(rule.selector).toContain(`.flow-places-groups[data-depth="${String(depth)}"]`);
+      const step = depth === 1 ? "var(--space-150)" : `calc(var(--space-150) * ${String(depth)})`;
+      expect([depth, /margin-left:\s*([^;]+);/.exec(rule.body)?.[1]]).toEqual([depth, step]);
+    }
+    expect(blocks.some((block) => block.selector.includes('data-depth="7"'))).toBe(false);
+  });
+
+  it("lays the Gaps control over the canvas as the legend lies, from its bottom edge, at most half its height", () => {
+    const gaps = ruleWith(".flow-gaps", null, /position:/);
+    expect(gaps.body).toMatch(/position:\s*absolute;/);
+    expect(gaps.body).toMatch(/bottom:\s*0;/);
+    expect(gaps.body).toMatch(/max-height:\s*50%;/);
   });
 });
 

@@ -107,10 +107,19 @@ async function settled() {
   });
 }
 
-/** D2's three forms, and nothing else. */
+/** D2's three forms, each cut to the flow (flow-scenario D6), and nothing else. */
 function isAForm(options: FlowOptions): boolean {
   const keys = Object.keys(options).sort().join(",");
-  return options.trace === true && (keys === "depth,trace" ? options.depth === 0 : keys === "depth,root,trace" ? options.depth === 1 : keys === "root,stage,trace");
+  return options.trace === true && options.in_flow === true && (keys === "depth,in_flow,trace" ? options.depth === 0 : keys === "depth,in_flow,root,trace" ? options.depth === 1 : keys === "in_flow,root,stage,trace");
+}
+
+/** The bar's Gaps control, opened (flow-scenario D10). */
+function openGaps(): HTMLElement {
+  const toggle = screen.getByRole("button", { name: /^Gaps/ });
+  if (toggle.getAttribute("aria-expanded") !== "true") {
+    fireEvent.click(toggle);
+  }
+  return screen.getByRole("region", { name: "Gaps" });
 }
 
 function checkForms(spies: Spies) {
@@ -149,7 +158,9 @@ describe("Back and reload (ST-2)", () => {
       window.history.back();
     });
     await hashIs("#/harbor-sim/flow?module=&scope=DOM-BERTHS");
-    await drawn("docs/spec/berths/draft-limits.md");
+    await drawn("MEC-MOORING");
+    // The berth limits hold no flow link: the cut leaves them to Records for the AI (flow-scenario D2).
+    expect(drawnNames()).not.toContain("docs/spec/berths/draft-limits.md");
     expect(panelTitle()).toBe("Berths and moorings");
     act(() => {
       window.history.back();
@@ -181,7 +192,7 @@ describe("Back and reload (ST-2)", () => {
     await waitFor(() => {
       expect(drawnNames()).toEqual(["MEC-MOORING"]);
     });
-    expect(panelTitle()).toBe("MEC-MOORING");
+    expect(panelTitle()).toBe("Mooring");
   });
 
   it("the module bar in the places pushes and stores the viewer's default (M6)", async () => {
@@ -212,7 +223,7 @@ describe("a stage narrows (ST-6)", () => {
     await waitFor(() => {
       expect(drawnNames().sort()).toEqual(["MEC-PILOT-CALL", "MEC-PILOTAGE", "RULE-HIGH-WATER", "RULE-SPRING-WINDOW"]);
     });
-    expect(spies.getFlow.mock.calls.map((call) => call[1])).toContainEqual({ root: "DOM-HARBOR", stage: "landfall", trace: true });
+    expect(spies.getFlow.mock.calls.map((call) => call[1])).toContainEqual({ root: "DOM-HARBOR", stage: "landfall", in_flow: true, trace: true });
     expect(document.querySelector("[data-id='n:MEC-FAIRWAY']")).toBeNull();
     const groups = within(within(places()).getByRole("list", { name: "Groups here" }));
     const named = groups.getAllByRole("link").map((link) => link.getAttribute("href"));
@@ -252,8 +263,8 @@ describe("a gap to the AI (ST-12)", () => {
   it("under DOM-HARBOR, cycle-no-repeat's item opens New card with both targets, the cause verbatim, the title; Create is one card, no task", async () => {
     const spies = renderMock(LENS);
     await drawn("MEC-FAIRWAY");
-    const row = within(panel()).getByText("cycle-no-repeat").closest("li");
-    const item = within(row as HTMLElement).getByRole("button", { name: "MEC-FAIRWAY" }).closest("li");
+    const row = within(openGaps()).getByText("cycle-no-repeat").closest("li.flow-gap");
+    const item = within(row as HTMLElement).getByRole("button", { name: "Fairway + Pilot boarding" }).closest("li");
     fireEvent.click(within(item as HTMLElement).getByRole("button", { name: /^Hand to your AI/ }));
     const dialog = await screen.findByRole("dialog", { name: "New card" });
     const cause = "a loop with no repeat edge: write the edge closing it as {to: ID, kind: repeat}";
@@ -283,25 +294,27 @@ describe("the reads stay bounded (ST-13)", () => {
     await drawn("DOM-BERTHS");
     await settled();
     expect(readLines(spies).sort()).toEqual(
-      ['flow {"depth":0,"trace":true}', 'flow {"root":"DOM-HARBOR","depth":1,"trace":true}', 'trace {"ref":"DOM-HARBOR","summary":true}', "node DOM-HARBOR"].sort(),
+      ['flow {"depth":0,"in_flow":true,"trace":true}', 'flow {"root":"DOM-HARBOR","depth":1,"in_flow":true,"trace":true}', 'trace {"ref":"DOM-HARBOR","summary":true}', "node DOM-HARBOR"].sort(),
     );
     let before = readLines(spies);
     fireEvent.click(await placeLink("#/harbor-sim/flow?module=&stage=quayside"));
     await drawn("MEC-PILOT-RETURN");
     await settled();
-    expect(readLines(spies).filter((line) => !before.includes(line))).toEqual(['flow {"root":"DOM-HARBOR","stage":"quayside","trace":true}']);
+    expect(readLines(spies).filter((line) => !before.includes(line))).toEqual(['flow {"root":"DOM-HARBOR","stage":"quayside","in_flow":true,"trace":true}']);
     before = readLines(spies);
     fireEvent.click(box("MEC-MOORING"));
     await waitFor(() => {
-      expect(panelTitle()).toBe("MEC-MOORING");
+      expect(panelTitle()).toBe("Mooring");
     });
     await settled();
     expect(readLines(spies).filter((line) => !before.includes(line)).sort()).toEqual(["node MEC-MOORING", 'trace {"ref":"MEC-MOORING"}']);
     before = readLines(spies);
-    fireEvent.click(within(panel()).getByRole("link", { name: "Open DOM-BERTHS" }));
-    await drawn("docs/spec/berths/draft-limits.md");
+    fireEvent.click(within(panel()).getByRole("link", { name: "Open Berths and moorings" }));
+    await waitFor(() => {
+      expect(panelTitle()).toBe("Berths and moorings");
+    });
     await settled();
-    expect(readLines(spies).filter((line) => !before.includes(line)).sort()).toEqual(['flow {"root":"DOM-BERTHS","depth":1,"trace":true}', 'trace {"ref":"DOM-BERTHS","summary":true}', "node DOM-BERTHS"].sort());
+    expect(readLines(spies).filter((line) => !before.includes(line)).sort()).toEqual(['flow {"root":"DOM-BERTHS","depth":1,"in_flow":true,"trace":true}', 'trace {"ref":"DOM-BERTHS","summary":true}', "node DOM-BERTHS"].sort());
     const count = readLines(spies).length;
     for (const step of ["back", "back", "forward"] as const) {
       act(() => {
@@ -331,12 +344,12 @@ describe("the reads stay bounded (ST-13)", () => {
     expect(window.history.length).toBe(before);
     expect(readLines(spies).sort()).toEqual(
       [
-        'flow {"depth":0,"trace":true}',
-        'flow {"root":"DOM-HARBOR","depth":1,"trace":true}',
+        'flow {"depth":0,"in_flow":true,"trace":true}',
+        'flow {"root":"DOM-HARBOR","depth":1,"in_flow":true,"trace":true}',
         'trace {"ref":"DOM-HARBOR","summary":true}',
         "node DOM-HARBOR",
         "tree {}",
-        'flow {"root":"DOM-PILOTS","depth":1,"trace":true}',
+        'flow {"root":"DOM-PILOTS","depth":1,"in_flow":true,"trace":true}',
         'trace {"ref":"DOM-PILOTS","summary":true}',
         "node DOM-PILOTS",
         'trace {"ref":"MEC-PILOT-RETURN"}',
@@ -350,7 +363,7 @@ describe("the reads stay bounded (ST-13)", () => {
     const spies = renderMock("#/harbor-sim/flow?module=berths");
     await drawn("MEC-MOORING");
     await settled();
-    expect(spies.getFlow.mock.calls.map((call) => call[1])).toEqual([{ root: "DOM-BERTHS", depth: 1, trace: true }]);
+    expect(spies.getFlow.mock.calls.map((call) => call[1])).toEqual([{ root: "DOM-BERTHS", depth: 1, in_flow: true, trace: true }]);
     checkForms(spies);
     expect(spies.getTree).not.toHaveBeenCalled();
   });
@@ -374,7 +387,7 @@ describe("the studio over the mock's scenarios", () => {
     await waitFor(() => {
       expect(boxes().length).toBeGreaterThan(0);
     });
-    const shown = within(panel());
+    const shown = within(openGaps());
     expect(shown.getByText("7 rows need [flow] rules in specengine.toml")).toBeTruthy();
     expect(shown.getAllByText("Not configured")).toHaveLength(7);
     const row = shown.getByText("no-start").closest("li");
@@ -397,7 +410,7 @@ describe("the studio over the mock's scenarios", () => {
   it("empty: the meaning and the next step, the rows standing", async () => {
     renderMock(LENS, "empty");
     expect(await screen.findByText("No flow in this project yet. Next: have your AI add flow links.")).toBeTruthy();
-    expect(within(panel()).getByText("Cannot measure")).toBeTruthy();
+    expect(within(openGaps()).getByText("Cannot measure")).toBeTruthy();
   });
 
   it("error: the daemon's message verbatim, Retry", async () => {
@@ -407,9 +420,62 @@ describe("the studio over the mock's scenarios", () => {
     expect(within(region).getByText(/database is locked/)).toBeTruthy();
   });
 
-  it("no-gaps: the one line in the rows' place", async () => {
+  it("no-gaps: the toggle says None; open, one line in the rows' place (flow-scenario D10)", async () => {
     renderMock(LENS, "no-gaps");
-    expect(await within(panel()).findByText("No gaps: every row reads None")).toBeTruthy();
-    expect(panel().querySelectorAll("li.flow-gap")).toHaveLength(0);
+    await drawn("DOM-BERTHS");
+    expect(within(screen.getByRole("button", { name: /^Gaps/ })).getByText("None")).toBeTruthy();
+    const control = openGaps();
+    expect(within(control).getByText("10 rows find nothing")).toBeTruthy();
+    expect(control.querySelectorAll("li.flow-gap")).toHaveLength(0);
   });
+});
+
+// flow-scenario FS-13, FS-18 (RM-0094) over the mock's `aside` and `aside40`: harbor-sim's spec is the
+// pottery workshop of `fixtures/flow-aside`, its membership the mock's.
+describe("the aside scenarios (flow-scenario)", () => {
+  it("aside: the lens root draws the scenario alone; at the kiln bay Records for the AI reads once, when asked, its records by kind", async () => {
+    const spies = renderMock("#/harbor-sim/flow", "aside", null);
+    await drawn("KRUN-FIRING");
+    expect(drawnNames()).toHaveLength(11);
+    expect(drawnNames().some((name) => /^(EDICT|HUNCH|PUZZLE|DESK)-|^docs\/notes\//.test(name))).toBe(false);
+    fireEvent.click(await placeLink("#/harbor-sim/flow?scope=WBAY-KILN"));
+    await drawn("CONE-GLOST");
+    await settled();
+    expect(drawnNames().sort()).toEqual(["CONE-BISQUE", "CONE-GLOST", "HUNCH-0007"]);
+    checkForms(spies);
+    const button = within(places()).getByRole("button", { name: "Records for the AI (141)" });
+    const before = spies.getFlow.mock.calls.length;
+    fireEvent.click(button);
+    const dialog = await screen.findByRole("dialog", { name: "Records for the AI (141)" });
+    await within(dialog).findByRole("group", { name: "puzzle" });
+    expect(spies.getFlow.mock.calls.slice(before).map((call) => call[1])).toEqual([{ root: "WBAY-KILN", depth: 1 }]);
+    expect(["edict", "hunch", "puzzle"].map((kind) => within(dialog).getByRole("group", { name: kind }).querySelectorAll("li").length)).toEqual([32, 59, 50]);
+    expect(within(dialog).getAllByRole("link")[0]?.getAttribute("href")).toBe("#/harbor-sim/tree/EDICT-0001");
+    fireEvent.keyDown(dialog, { key: "Escape" });
+    expect(document.activeElement).toBe(within(places()).getByRole("button", { name: "Records for the AI (141)" }));
+  });
+
+  it("aside: the path at the glost cone reads by titles from its own node read; the front office stands empty, its two papers for the AI", async () => {
+    renderMock("#/harbor-sim/flow?scope=CONE-GLOST", "aside", null);
+    await waitFor(() => {
+      const path = within(places()).getByRole("list", { name: "Path" });
+      expect(within(path).getAllByRole("link").map((link) => link.textContent)).toEqual(["The pottery", "Kiln bay", "Glost cone"]);
+    });
+    act(() => {
+      window.location.hash = "#/harbor-sim/flow?scope=WBAY-OFFICE";
+    });
+    expect(await screen.findByRole("heading", { level: 2, name: "Nothing here is part of the flow." })).toBeTruthy();
+    expect(screen.getByText("2 documents here are for your AI.")).toBeTruthy();
+  });
+
+  it("aside40: the kiln bay draws its three boxes; Records for the AI lists 200, then Show all 5679", async () => {
+    renderMock("#/harbor-sim/flow?scope=WBAY-KILN", "aside40", null);
+    await drawn("CONE-GLOST");
+    expect(drawnNames()).toHaveLength(3);
+    fireEvent.click(within(places()).getByRole("button", { name: "Records for the AI (5679)" }));
+    const dialog = await screen.findByRole("dialog", { name: "Records for the AI (5679)" });
+    await within(dialog).findByRole("group", { name: "edict" });
+    expect(dialog.querySelectorAll(".flow-records-group li")).toHaveLength(200);
+    expect(within(dialog).getByRole("button", { name: "Show all 5679" })).toBeTruthy();
+  }, 30_000);
 });

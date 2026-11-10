@@ -195,6 +195,9 @@ fn show_json_has_exactly_the_data_keys() {
             "text",
             "truncated",
             "omitted",
+            // docs/features/flow-scenario.md FS-8: the path from the top,
+            // before `links`.
+            "ancestors",
             // docs/features/spec-cli-graph.md AC-19: `null` without `--links`.
             "links",
             // docs/features/show-bindings.md "spec show --bindings":
@@ -205,6 +208,7 @@ fn show_json_has_exactly_the_data_keys() {
     );
     assert!(node["links"].is_null(), "{json}");
     assert!(node["bindings"].is_null(), "{json}");
+    assert!(node["ancestors"].is_array(), "{json}");
     assert_eq!(json["ref"], "MEC-STAMINA");
     assert!(json["reason"].is_null());
     assert_eq!(json["notes"], serde_json::json!([]));

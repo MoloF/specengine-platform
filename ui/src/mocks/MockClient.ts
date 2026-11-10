@@ -79,6 +79,7 @@ import {
 import { bundleOf, graphOf, nodeViewOf, searchOf, treeOf } from "./corpus";
 import { editorialScenario } from "./editorial";
 import { flowOf, mockFlowOf } from "./flow";
+import { ASIDE_KINDS, ASIDE_STATUSES, asideCorpusLinks, asideDocuments } from "./harbor-sim/aside";
 import { harborSim } from "./harbor-sim/fixtures";
 import { healthReportOf, walkGapMessage } from "./health";
 import { largeDocuments, largeLinks } from "./harbor-sim/large";
@@ -165,6 +166,14 @@ export class MockClient implements SpecEngineClient {
     }
     if (scenario === "editorial") {
       editorialScenario(this.projects, at);
+    }
+    if (scenario === "aside" || scenario === "aside40") {
+      // The pottery workshop of `fixtures/flow-aside` in place of harbor-sim's spec (`docs/canon/spec-flow-screen.md` "Mock"; RM-0094).
+      const harbor = this.project("harbor-sim");
+      const documents = asideDocuments(scenario === "aside40" ? 40 : 1);
+      harbor.corpus = { documents, links: asideCorpusLinks(documents), treeNotes: [] };
+      harbor.nodeKinds = ASIDE_KINDS;
+      harbor.specStatuses = ASIDE_STATUSES;
     }
     if (scenario === "large") {
       const harbor = this.project("harbor-sim");

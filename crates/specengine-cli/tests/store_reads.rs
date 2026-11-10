@@ -39,6 +39,13 @@
 //! The replays below run every row the same way with the binary under
 //! test, one test per fixture so nextest spreads them.
 //!
+//! docs/features/flow-scenario.md (RM-0094), its test churn: a `show
+//! --json` stream is compared with `ancestors` taken out
+//! ([`common::keys::without_keys`]), every other byte kept; a `bundle`
+//! stream (whose `ancestors` is a layer of its own), a plain stream and
+//! stderr with nothing removed. The golden does not change,
+//! and `flow-aside` joins [`AFTER_THE_GOLDEN`].
+//!
 //! Non-Latin characters in Rust sources are Unicode escapes (ADR-0024);
 //! the golden's are JSON `\u` escapes.
 
@@ -55,6 +62,7 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
+use common::keys::{SHOW_KEYS, without_keys};
 use common::{SPEC, Scratch, fixture, repository_root};
 use serde::{Deserialize, Serialize};
 use specengine_core::ProjectConfig;
@@ -101,11 +109,12 @@ const FIXTURES: [&str; 19] = [
 ];
 
 /// The configured fixtures added after the golden's recording
-/// (docs/features/workspaces.md, `fixtures/studio-lamp`): the golden cannot
+/// (docs/features/workspaces.md, `fixtures/studio-lamp`;
+/// docs/features/flow-scenario.md, `fixtures/flow-aside`): the golden cannot
 /// hold their rows, since a recording after the slice proves nothing, so no
 /// replay runs over them; the in-crate differential (`store_reads_tests.rs`)
 /// covers them with the binary under test.
-const AFTER_THE_GOLDEN: [&str; 1] = ["studio-lamp"];
+const AFTER_THE_GOLDEN: [&str; 2] = ["flow-aside", "studio-lamp"];
 
 /// A path no fixture holds: exit 1, `is no indexed document`.
 const MISSING_PATH: &str = "docs/store-reads-missing.md";
@@ -440,6 +449,19 @@ fn placeholders(
     out
 }
 
+/// A `show --json` stream with flow-scenario's `ancestors` taken out
+/// (RM-0094, its test churn), every other byte kept; a `bundle` stream (its
+/// own `ancestors` layer stays) and a stream holding no JSON document (exit
+/// 2, or not UTF-8) as they are.
+fn without_show_keys(command: &str, bytes: &[u8]) -> Vec<u8> {
+    match std::str::from_utf8(bytes) {
+        Ok(text) if command == "show" && text.starts_with('{') => {
+            without_keys(text, &SHOW_KEYS).into_bytes()
+        }
+        _ => bytes.to_vec(),
+    }
+}
+
 /// `bytes` with the scratch's paths written as placeholders.
 fn normalised(bytes: &[u8], places: &[(Vec<u8>, &'static str)]) -> Vec<u8> {
     let mut out = bytes.to_vec();
@@ -524,7 +546,7 @@ fn answer(
         args: args.to_vec(),
         code: format!("{} {}", text.code, json.code),
         text: Stream::of(&streams[0]),
-        json: Stream::of(&streams[1]),
+        json: Stream::of(&without_show_keys(&args[0], &streams[1])),
         stderr: Stream::of(&streams[2]),
     };
     (row, moved)

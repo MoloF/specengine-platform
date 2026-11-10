@@ -1,6 +1,6 @@
-import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type MouseEvent } from "react";
 import { apiErrorOf } from "../api/client";
-import { flowForm, useFlowRead, useHeldHolder, useHeldTitle, useScopeNode, useScopeStages, useTopOnDemand, useTreeOnDemand } from "../api/queries";
+import { flowForm, useFlowRead, useScopeNode, useScopeStages, useTopOnDemand, useTreeOnDemand } from "../api/queries";
 import type { CardWrite, FlowGap, FlowNode, FlowView as FlowAnswer, WorkspaceModule } from "../api/types";
 import { pushHash, replaceHash } from "../app/location";
 import { RegionBoundary } from "../app/RegionBoundary";
@@ -11,19 +11,23 @@ import { NewCardDialog, type NewCardPreset } from "../board/CardDialogs";
 import { nodeName } from "../graph/layout";
 import { useTranslate } from "../i18n";
 import { useAnnounce } from "../ui/announcer";
+import { Button } from "../ui/Button";
+import { EmptyState } from "../ui/EmptyState";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
+import { Lozenge } from "../ui/Lozenge";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import type { BoxCommand, Centring } from "./FlowCanvas";
-import { FlowGaps, GapsClear } from "./FlowGaps";
+import { FlowGaps } from "./FlowGaps";
 import { FlowLegend } from "./FlowLegend";
 import { FlowList, type ListPlaces } from "./FlowList";
 import { BoxView, EdgeView, ScopeView, type ScopeShown } from "./FlowPanel";
-import { FlowPlaces, type GroupLink, type StagesShown } from "./FlowPlaces";
-import { allClear, askedStageWords, boxWords, edgeKeyOf, edgeKeyText, emptyStageWords, handTitle, leftOutWords, namedByRows, namesDocuments, notDrawnLine, stageWords, statesHiddenWords, typesOf } from "./labels";
+import { FlowPlaces, type GroupLink, type PathEntry, type PathShown, type StagesShown } from "./FlowPlaces";
+import { FlowRecords } from "./FlowRecords";
+import { askedStageWords, boxWords, edgeKeyOf, edgeKeyText, emptyStageWords, gapsLook, handTitle, leftOutWords, namedByRows, namesDocuments, notDrawnLine, stageWords, statesHiddenWords, typesOf } from "./labels";
 import { isGroup, layoutFlow, type FlowBox, type LaidEdge } from "./layout";
 import { stageAsked, stageKey, withoutStates } from "./timeline";
 
@@ -134,13 +138,20 @@ function useStudioTop(studio: { current: HTMLElement | null }) {
   }, [studio]);
 }
 
+/** Where the Records dialog was opened from: focus goes back there when it closes. */
+interface RecordsOpen {
+  trigger: HTMLElement | null;
+}
+
 /**
  * Flow as a studio (`#/<p>/flow[/<name>][?module=&scope=&stage=&edge=]`,
- * docs/features/writer-studio.md): the places on the left, one scope's canvas in the centre, the
- * panel always on the right. Each picture is one read of three forms (D2), never a whole read; the
- * place is the hash's, so a reload, a link and Back draw one picture. A scope, stage or module change
- * pushes; a selection, a seek's fix and a correction replace (D5). Nothing here blocks: a gap is
- * information, and the one write is a card the owner makes from the panel (ADR-0012).
+ * docs/features/writer-studio.md, docs/features/flow-scenario.md): the path on the left, one scope's
+ * scenario in the centre, top to bottom, the panel always on the right. Each picture is one read of
+ * three forms (D2), cut to what holds part of the flow, never a whole read; what the cut leaves out is
+ * Records for the AI, read only when asked. The place is the hash's, so a reload, a link and Back
+ * draw one picture. A scope, stage or module change pushes; a selection, a seek's fix and a
+ * correction replace (D5). Nothing here blocks: a gap is information, and the one write is a card the
+ * owner makes from the panel (ADR-0012).
  */
 export function FlowView({
   project,
@@ -174,12 +185,14 @@ export function FlowView({
   const tabsBase = useId();
   const aboutId = useId();
   const legendId = useId();
+  const gapsId = useId();
   const studio = useRef<HTMLElement>(null);
   const region = useRef<HTMLElement>(null);
   const listRegion = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const panelHeading = useRef<HTMLHeadingElement>(null);
   const legendToggle = useRef<HTMLButtonElement>(null);
+  const gapsToggle = useRef<HTMLButtonElement>(null);
   const aboutToggle = useRef<HTMLButtonElement>(null);
   const [remembered] = useState(() => memory.recall(project));
   const narrow = useMedia(NARROW);
@@ -189,6 +202,10 @@ export function FlowView({
   const [placesOpen, setPlacesOpen] = useState(false);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [legendOpen, setLegendOpen] = useState(false);
+  const [gapsOpen, setGapsOpen] = useState(false);
+  const [records, setRecords] = useState<RecordsOpen | null>(null);
+  /** The titles the tree gives, read once the Gaps control names a document no drawing read titles. */
+  const [treeTitles, setTreeTitles] = useState<{ project: string; titles: ReadonlyMap<string, string> } | null>(null);
   const [marks, setMarks] = useState<readonly string[]>([]);
   const [centring, setCentring] = useState<Centring | null>(null);
   const [hand, setHand] = useState<Hand | null>(null);
@@ -237,6 +254,7 @@ export function FlowView({
   const topRead = useFlowRead(project, flowForm(null, null), moduleKnown && moduleRoot === null && place.scope === null);
   const top = moduleRoot === null ? topRead.data : undefined;
   const lensRoot: string | null | undefined = !moduleKnown ? undefined : (moduleRoot ?? (top === undefined ? undefined : soleRootOf(top)));
+  const lensTitle = module?.title ?? top?.nodes[0]?.title ?? (typeof lensRoot === "string" ? lensRoot : null);
   const scope = place.scope ?? lensRoot;
   const rooted = typeof scope === "string";
   const scopeName = rooted ? scope : null;
@@ -261,6 +279,16 @@ export function FlowView({
   const edges = useMemo(() => (shown === undefined || refused !== null ? [] : shown.edges), [shown, refused]);
   const layout = useMemo(() => (shown === undefined || refused !== null ? null : layoutFlow({ ...shown, nodes: boxes })), [shown, refused, boxes]);
   const types = useMemo(() => (shown === undefined ? [] : typesOf(shown)), [shown]);
+  /** The titles the reads in hand give, by name: the drawing read's, and its scope's when held. */
+  const heldTitles = useMemo(() => {
+    const titles = new Map<string, string>();
+    for (const node of [...(scopeRead.data?.nodes ?? []), ...(view?.nodes ?? [])]) {
+      if (node.title !== null) {
+        titles.set(nodeName(node), node.title);
+      }
+    }
+    return titles;
+  }, [scopeRead.data, view]);
   const named = useMemo(() => namedByRows(failedAgain ? [] : (shown?.gaps ?? [])), [shown, failedAgain]);
   // SA1: a rooted read holds its root as a node; a stage read only when it carries the stage, so the scope's read held stands in.
   const ownNode = useMemo(() => {
@@ -302,6 +330,11 @@ export function FlowView({
   const drawingKey = JSON.stringify(drawingForm);
   const scopeTitle =
     scope === undefined ? "" : scopeName === null ? t("flow.topTitle") : (ownNode?.title ?? scopeNode.data?.nodes[0]?.title ?? scopeName);
+  /** A name's words (flow-scenario D12): its title where a read in hand gives one, else the name. */
+  const titleOf = useCallback(
+    (name: string): string => heldTitles.get(name) ?? (treeTitles?.project === project ? treeTitles.titles.get(name) : undefined) ?? (name === scopeName ? scopeTitle : name),
+    [heldTitles, treeTitles, project, scopeName, scopeTitle],
+  );
   const stageShown = stage === null ? null : askedStageWords(stage, t);
   useEffect(() => {
     if (!landed || refused !== null || spokenFor.current === drawingKey) {
@@ -503,6 +536,7 @@ export function FlowView({
       return;
     }
     rememberOrigin(null);
+    setGapsOpen(false);
     setMarks(item);
     setCentring({ name: first, always: true });
     headingFor.current = first;
@@ -531,8 +565,22 @@ export function FlowView({
     setHand({ preset: { title: handTitle(gap.code, targets, t), goal: gap.cause ?? "", targets }, trigger: document.activeElement instanceof HTMLElement ? document.activeElement : null });
   }
 
-  function closeLegend() {
+  /** A focus or a click in the canvas closes what lies over it. */
+  function closeOverlays() {
     setLegendOpen(false);
+    setGapsOpen(false);
+  }
+
+  function openRecords(event: MouseEvent<HTMLElement>) {
+    setRecords({ trigger: event.currentTarget });
+  }
+
+  function closeRecords() {
+    const trigger = records?.trigger ?? null;
+    setRecords(null);
+    if (trigger?.isConnected === true) {
+      trigger.focus();
+    }
   }
 
   function onStudioKeyDown(event: KeyboardEvent<HTMLElement>) {
@@ -555,6 +603,10 @@ export function FlowView({
       event.preventDefault();
       setLegendOpen(false);
       legendToggle.current?.focus();
+    } else if (gapsOpen) {
+      event.preventDefault();
+      setGapsOpen(false);
+      gapsToggle.current?.focus();
     } else if (place.select !== null) {
       event.preventDefault();
       clearSelection();
@@ -566,22 +618,43 @@ export function FlowView({
   const leftOut = shown === undefined ? null : leftOutWords(shown.left_out, t);
   const noted = notes.length + (leftOut === null ? 0 : 1);
 
-  // The places pane. Up names the scope node's holder, from any read held, else the lens root; none at the lens root.
-  const holder = useHeldHolder(project, scopeName);
-  const upName = ownNode?.group ?? holder;
-  // Up says where it goes in the holder's own title when a held read gives one, else its name; it reads nothing.
-  const upTitle = useHeldTitle(project, upName !== null && upName !== lensRoot ? upName : typeof lensRoot === "string" ? lensRoot : null);
-  // A lens root not known yet (the hash named a scope, so the top was not read) is named as such, never as the whole project.
-  const up = useMemo(() => {
-    if (scopeName === null || scopeName === lensRoot) {
+  // The places pane's path (flow-scenario D11): the scope node's served `ancestors`, top first, then
+  // the scope; read by the scope view's own read, no other. Entries above the lens root are left out;
+  // an entry that is the lens root writes no scope; a lens root not known yet is named as a scope.
+  const path = useMemo<PathShown | null>(() => {
+    if (scope === undefined) {
       return null;
     }
-    if (upName !== null && upName !== lensRoot) {
-      return { place: enterPlace(upName), label: t("flow.up", { name: upTitle ?? upName }) };
+    const here = (label: string, at: PathEntry["place"], depth: number): PathEntry => ({ key: "here", label, place: at, depth, current: true });
+    if (scopeName === null || refused !== null) {
+      const label = scopeName === null || lensRoot === null ? t("flow.topTitle") : (lensTitle ?? t("flow.topTitle"));
+      return { entries: [here(label, placeAt({ scope: null, stage: null, select: null }), 0)], pending: false, failed: null };
     }
-    const label = typeof lensRoot === "string" ? t("flow.up", { name: upTitle ?? lensRoot }) : lensRoot === null ? t("flow.up", { name: t("flow.topTitle") }) : t("flow.upStart");
-    return { place: placeAt({ scope: null, stage: null, select: null }), label };
-  }, [scopeName, lensRoot, upName, upTitle, enterPlace, placeAt, t]);
+    const own = placeAt({ scope: place.scope, stage: null, select: null });
+    const read = scopeNode.data;
+    if (read === undefined) {
+      const failed =
+        scopeNode.error === null
+          ? null
+          : {
+              message: apiErrorOf(scopeNode.error).message,
+              retrying: scopeNode.isFetching,
+              onRetry: () => {
+                void scopeNode.refetch({ cancelRefetch: false });
+              },
+            };
+      return { entries: [here(scopeTitle, own, 0)], pending: failed === null, failed };
+    }
+    const ancestors = read.nodes[0]?.ancestors ?? [];
+    const names = ancestors.map((ancestor) => ancestor.id ?? ancestor.path);
+    const from = typeof lensRoot === "string" ? names.indexOf(lensRoot) : -1;
+    const kept = scopeName === lensRoot ? [] : from >= 0 ? ancestors.slice(from) : ancestors;
+    const entries = kept.map((ancestor, depth): PathEntry => {
+      const name = ancestor.id ?? ancestor.path;
+      return { key: `a:${name}`, label: ancestor.title ?? ancestor.id ?? ancestor.path, place: placeAt({ scope: name === lensRoot ? null : name, stage: null, select: null }), depth, current: false };
+    });
+    return { entries: [...entries, here(scopeTitle, own, kept.length)], pending: false, failed: null };
+  }, [scope, scopeName, refused, lensRoot, lensTitle, scopeNode, scopeTitle, placeAt, place.scope, t]);
   const groups = useMemo<GroupLink[]>(() => {
     if (stage === null) {
       return boxes.filter(isGroup).map((node) => ({ name: nodeName(node), label: boxWords(node), place: enterPlace(nodeName(node)) }));
@@ -592,8 +665,45 @@ export function FlowView({
         seen.push(node.group);
       }
     }
-    return seen.map((name) => ({ name, label: name, place: enterPlace(name) }));
-  }, [boxes, stage, scopeName, enterPlace]);
+    return seen.map((name) => ({ name, label: titleOf(name), place: enterPlace(name) }));
+  }, [boxes, stage, scopeName, enterPlace, titleOf]);
+
+  // Records for the AI's count (flow-scenario D6): the scope read's `not_in_flow`; in a stage view the
+  // scope read's held, else no count (null); none at the unrooted top, none at 0, none from a read the
+  // daemon did not cut.
+  const recordsCount: number | null | undefined = !rooted || refused !== null ? undefined : stage === null ? (view?.not_in_flow ?? undefined) : scopeRead.data === undefined ? null : (scopeRead.data.not_in_flow ?? undefined);
+  const recordsWords = recordsCount === null ? t("flow.records.openPlain") : recordsCount === undefined ? null : t("flow.records.open", { count: recordsCount });
+  const recordsButton =
+    recordsWords === null || recordsCount === 0 ? null : (
+      <p className="flow-places-records">
+        <Button appearance="subtle" aria-haspopup="dialog" onClick={openRecords}>
+          {recordsWords}
+        </Button>
+      </p>
+    );
+
+  // Titles the Gaps control needs that no read in hand gives: the tree's, read once, on demand.
+  const untitled = useMemo(
+    () => gapsOpen && shown !== undefined && shown.gaps.some((gap) => namesDocuments(gap) && gap.items.some((item) => item.some((member) => !heldTitles.has(member)))),
+    [gapsOpen, shown, heldTitles],
+  );
+  useEffect(() => {
+    if (!untitled || treeTitles?.project === project) {
+      return;
+    }
+    let live = true;
+    readTree().then(
+      (tree) => {
+        if (live) {
+          setTreeTitles({ project, titles: new Map(tree.nodes.flatMap((row) => (row.title === null ? [] : [[row.id ?? row.path, row.title] as const]))) });
+        }
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [untitled, treeTitles, project, readTree]);
   const stagesShown = useMemo<StagesShown>(() => {
     if (scope === null) {
       return { show: "top" };
@@ -725,11 +835,36 @@ export function FlowView({
         }}
       />
     );
-  } else if (boxes.length === 0) {
+  } else if (boxes.length === 0 && stage === null && scopeName !== null && ownNode?.in_flow === false && (view.not_in_flow ?? 0) > 0) {
+    // A cut that leaves only the scope's own node, at a scope where nothing is in the flow: its documents are the AI's.
+    const count = view.not_in_flow ?? 0;
     picture = (
-      <div className="empty-state">
-        <p>{stage !== null ? emptyStageWords(stage, t) : scopeName === null ? t("flow.emptyProject") : t("flow.emptyScope", { name: scopeName })}</p>
-      </div>
+      <EmptyState
+        title={t("flow.emptyAside")}
+        level={2}
+        description={<p>{t("flow.emptyAsideMore", { count })}</p>}
+        primary={
+          <Button appearance="primary" aria-haspopup="dialog" onClick={openRecords}>
+            {t("flow.records.open", { count })}
+          </Button>
+        }
+      />
+    );
+  } else if (boxes.length === 0) {
+    // A scope in the flow whose own documents are not: the scope's empty words, its records a click away.
+    const aside = stage === null && scopeName !== null ? (view.not_in_flow ?? 0) : 0;
+    picture = (
+      <EmptyState
+        title={stage !== null ? emptyStageWords(stage, t) : scopeName === null ? t("flow.emptyProject") : t("flow.emptyScope", { name: scopeTitle })}
+        level={2}
+        secondary={
+          aside > 0 ? (
+            <Button aria-haspopup="dialog" onClick={openRecords}>
+              {t("flow.records.open", { count: aside })}
+            </Button>
+          ) : undefined
+        }
+      />
     );
   } else if (layout !== null) {
     picture = (
@@ -798,19 +933,16 @@ export function FlowView({
     </>
   );
 
+  const held = ownNode ?? scopeNode.data?.nodes[0];
   const scopeShown: ScopeShown = {
     name: scopeName,
     title: scopeTitle,
-    kind: ownNode?.kind ?? scopeNode.data?.nodes[0]?.kind ?? null,
+    kind: held?.kind ?? null,
+    where: held === undefined ? null : `${held.path}:${String(held.line)}`,
     counts: ownNode?.counts ?? (rooted ? (lanes.data?.counts ?? null) : null),
     read: scopeName === null ? null : scopeNode,
   };
-  const gapRows =
-    shown === undefined || refused !== null ? null : !failedAgain && boxes.length > 0 && allClear(shown.gaps) ? (
-      <GapsClear />
-    ) : (
-      <FlowGaps gaps={shown.gaps} unread={failedAgain} rooted={rooted} marked={marked} headingLevel="h3" onActivate={activate} onHand={handOff} />
-    );
+  const gapsShown = shown !== undefined && refused === null;
   const boxShown = selBox ?? null;
   const panelBody = (
     <>
@@ -823,6 +955,7 @@ export function FlowView({
             inLane={rooted}
             scopeName={scopeName}
             scopeTitle={scopeTitle}
+            titleOf={titleOf}
             headingRef={boxShown !== null ? panelHeading : undefined}
             enterPlace={enterPlace}
             onBack={clearSelection}
@@ -863,7 +996,6 @@ export function FlowView({
               </span>
             </p>
           )}
-          {gapRows}
         </ScopeView>
       )}
     </>
@@ -896,16 +1028,16 @@ export function FlowView({
         onModule={(name) => {
           onChooseModule?.(name);
         }}
-        up={up}
-        scope={scope === undefined ? null : { place: placeAt({ scope: refused !== null ? null : place.scope, stage: null, select: null }), label: refused !== null ? (lensRoot ?? t("flow.topTitle")) : scopeTitle }}
+        path={path}
         stages={stagesShown}
         groups={groups}
+        records={recordsButton}
       />
       <div className="flow-centre">
         <div className="flow-view-area">
           <TabPanel base={tabsBase} id="canvas" selected={tab === "canvas"}>
             {tab === "canvas" && (
-              <section ref={region} className="flow-canvas-region" aria-label={t("flow.canvasLabel")} tabIndex={-1} onFocus={closeLegend} onPointerDown={closeLegend}>
+              <section ref={region} className="flow-canvas-region" aria-label={t("flow.canvasLabel")} tabIndex={-1} onFocus={closeOverlays} onPointerDown={closeOverlays}>
                 {lines}
                 {picture}
               </section>
@@ -913,7 +1045,7 @@ export function FlowView({
           </TabPanel>
           <TabPanel base={tabsBase} id="list" selected={tab === "list"}>
             {tab === "list" && (
-              <div ref={listRegion} className="flow-list-region" role="region" aria-label={t("flow.listLabel")} tabIndex={-1}>
+              <div ref={listRegion} className="flow-list-region" role="region" aria-label={t("flow.listLabel")} tabIndex={-1} onFocus={closeOverlays} onPointerDown={closeOverlays}>
                 <RegionBoundary name={t("flow.tabList")}>
                   {lines}
                   {landed && refused === null ? (
@@ -929,6 +1061,7 @@ export function FlowView({
                       selectedEdge={selKeyText}
                       marked={marked}
                       places={listPlaces}
+                      titleOf={titleOf}
                       scrollTo={centring}
                       onSelect={(element) => {
                         origin.current = element;
@@ -943,29 +1076,49 @@ export function FlowView({
           </TabPanel>
           {tab === "canvas" && legendOpen && <FlowLegend id={legendId} types={types} states={boxes.some((node) => node.rollup !== null || node.counts !== null)} />}
         </div>
-        {tab === "canvas" && (
-          <div className="flow-bar">
-            <button
+        <div className="flow-bar">
+          {tab === "canvas" && (
+            <Button
               ref={legendToggle}
-              type="button"
-              className="button button-quiet"
+              appearance="subtle"
+              spacing="compact"
+              icon={legendOpen ? "chevronDown" : "chevronRight"}
               aria-expanded={legendOpen}
               aria-controls={legendId}
               onClick={() => {
+                setGapsOpen(false);
                 setLegendOpen(!legendOpen);
               }}
             >
-              <Icon name={legendOpen ? "chevronDown" : "chevronRight"} />
-              <span>{t("flow.legendButton")}</span>
-            </button>
-            {layout !== null && layout.notDrawn > 0 && (
-              <p className="flow-bar-cut" role="note">
-                <Icon name="info" />
-                <span>{notDrawnLine(layout.notDrawn, layout.total, t)}</span>
-              </p>
-            )}
-          </div>
-        )}
+              {t("flow.legendButton")}
+            </Button>
+          )}
+          {gapsShown && (
+            <Button
+              ref={gapsToggle}
+              appearance="subtle"
+              spacing="compact"
+              icon={gapsOpen ? "chevronDown" : "chevronRight"}
+              className="flow-gaps-toggle"
+              aria-expanded={gapsOpen}
+              aria-controls={gapsId}
+              onClick={() => {
+                setLegendOpen(false);
+                setGapsOpen(!gapsOpen);
+              }}
+            >
+              {t("flow.gaps.toggle")} <Lozenge {...gapsLook(shown.gaps, failedAgain, t)} />
+            </Button>
+          )}
+          {tab === "canvas" && layout !== null && layout.notDrawn > 0 && (
+            <p className="flow-bar-cut" role="note">
+              <Icon name="info" />
+              <span>{notDrawnLine(layout.notDrawn, layout.total, t)}</span>
+            </p>
+          )}
+        </div>
+        {/* After its toggle in the DOM, so Tab goes from the toggle into it; the grid lays it over the canvas. */}
+        {gapsOpen && shown !== undefined && <FlowGaps id={gapsId} gaps={shown.gaps} unread={failedAgain} rooted={rooted} marked={marked} titleOf={titleOf} onActivate={activate} onHand={handOff} />}
       </div>
       <aside className="flow-panel" aria-label={t("flow.panelLabel")}>
         {panelBody}
@@ -979,6 +1132,15 @@ export function FlowView({
           <NewCardDialog project={project} preset={hand.preset} onClose={() => {
             afterCard(hand.trigger)(null);
           }} onDone={afterCard(hand.trigger)} />
+        </div>
+      )}
+      {records !== null && scopeName !== null && (
+        <div
+          onKeyDown={(event) => {
+            event.stopPropagation();
+          }}
+        >
+          <FlowRecords project={project} scope={scopeName} scopeTitle={scopeTitle} count={recordsCount === undefined ? null : recordsCount} onClose={closeRecords} />
         </div>
       )}
       {scopeCard !== null && scopeName !== null && (

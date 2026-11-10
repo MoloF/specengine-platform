@@ -58,7 +58,7 @@ use specengine_model::{BindingPlace, BindingRow, TestedRow};
 use crate::links::{LinksJson, block_lines, links_json};
 use crate::one_line;
 use crate::search::notes;
-use crate::show::{NestedSection, ShowOutcome, ShownBindings, ShownNode};
+use crate::show::{NestedSection, ShowOutcome, ShownAncestor, ShownBindings, ShownNode};
 use crate::tested::tested_line;
 use crate::verify::keyed_binding;
 
@@ -637,6 +637,8 @@ struct NodeJson<'a> {
     text: &'a str,
     truncated: bool,
     omitted: Option<OmittedJson>,
+    /// Top first; `[]` for a root.
+    ancestors: &'a [ShownAncestor],
     /// `null` without `--links`.
     links: Option<LinksJson<'a>>,
     /// `null` without `--bindings` or when no row could be read.
@@ -718,6 +720,7 @@ fn view(outcome: &ShowOutcome) -> ShowJson<'_> {
                         holders_more: omitted.holders_more,
                     }
                 }),
+                ancestors: &node.ancestors,
                 links: node.links.as_ref().map(|links| match this_cut {
                     Some(cut) => links_json(links, cut.links, links_not_shown(nodes, cut)),
                     None => links_json(links, usize::MAX, 0),

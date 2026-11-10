@@ -89,12 +89,23 @@ function placesOf({ flow, corpus, distance }: TraceWorld): Place[] {
   });
 }
 
+/** Each place's child documents by `parent:`, in the places' order: built once per read (`aside40` holds 5 680 records). */
+function childrenOf(places: readonly Place[]): ReadonlyMap<string, Place[]> {
+  const children = new Map<string, Place[]>();
+  for (const child of places) {
+    if (child.document && child.parent !== null) {
+      children.set(child.parent, [...(children.get(child.parent) ?? []), child]);
+    }
+  }
+  return children;
+}
+
 /** `at` and the documents it holds by `parent:`, each once. */
-function heldBy(at: Place, places: readonly Place[]): Place[] {
+function heldBy(at: Place, children: ReadonlyMap<string, readonly Place[]>): Place[] {
   const held = new Map([[at.name, at]]);
   for (const place of held.values()) {
-    for (const child of places) {
-      if (child.document && child.parent === place.name && !held.has(child.name)) {
+    for (const child of children.get(place.name) ?? []) {
+      if (!held.has(child.name)) {
         held.set(child.name, child);
       }
     }
@@ -138,7 +149,8 @@ export function traceOf(board: MockBoard, options: TraceOptions, world: TraceWor
     return isCounted(place, state) ? counted(sum, state) : sum;
   };
   const targeted = new Set(standing.flatMap((card) => card.targets));
-  const listed = root === undefined ? places.filter((place) => place.document || targeted.has(place.name)) : heldBy(root, places);
+  const children = childrenOf(places);
+  const listed = root === undefined ? places.filter((place) => place.document || targeted.has(place.name)) : heldBy(root, children);
   listed.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : a.line - b.line));
 
   const usesOf = (place: Place): TraceUse[] =>
@@ -153,7 +165,7 @@ export function traceOf(board: MockBoard, options: TraceOptions, world: TraceWor
   const laned = new Set<TraceNode>();
   const rows = listed.map((place): TraceNode => {
     const state = stateOf(place);
-    const held = place.document ? heldBy(place, places) : [place];
+    const held = place.document ? heldBy(place, children) : [place];
     const row: TraceNode = {
       id: place.name,
       title: place.title,

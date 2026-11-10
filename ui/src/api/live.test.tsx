@@ -968,7 +968,7 @@ describe("the Bindings tab on the live tail (UI-6 of ui-node-bindings)", () => {
 });
 
 describe("the flow on the live tail (writer-studio)", () => {
-  const FLOW_READS = ["/api/projects/alpha/flow?depth=0&trace=true", "/api/projects/alpha/flow?root=G-1&depth=1&trace=true"];
+  const FLOW_READS = ["/api/projects/alpha/flow?depth=0&trace=true&in_flow=true", "/api/projects/alpha/flow?root=G-1&depth=1&trace=true&in_flow=true"];
 
   function FlowReads() {
     useLiveQueue("alpha");

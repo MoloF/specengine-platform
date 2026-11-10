@@ -678,6 +678,7 @@ impl Session {
             depth,
             stage: stage.map(str::to_owned),
             trace: true,
+            in_flow: false,
         }
     }
 

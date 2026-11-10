@@ -209,6 +209,7 @@ export function aNode(fields: Partial<ShownNode> & Pick<ShownNode, "id">): Shown
     text: `## ${fields.id ?? "Node"}\n\nCurrent text.\n`,
     truncated: false,
     omitted: null,
+    ancestors: [],
     links: null,
     bindings: null,
     ...fields,
@@ -407,6 +408,7 @@ export function aFlowNode(fields: Partial<FlowNode> & Pick<FlowNode, "id" | "dis
     stage: null,
     start: false,
     end: false,
+    in_flow: true,
     holds: 0,
     inner: [],
     gaps: 0,
@@ -429,7 +431,13 @@ export function aFlowEdge(fields: Partial<FlowEdge> & Pick<FlowEdge, "from" | "t
   };
 }
 
-/** A whole flow read for tests: every key present, the ten rows at 0. */
+/**
+ * The served `types` of a test's flow reads: the stub's two invented types and a third, in the order
+ * the daemon would serve its own (docs/features/flow-scenario.md D3); never a real link type's name.
+ */
+export const FLOW_TYPES: readonly string[] = ["alpha_link", "beta_link", "gamma_link"];
+
+/** A whole flow read for tests: every key present, the ten rows at 0, the served types, no cut. */
 export function aFlowView(nodes: FlowNode[], edges: FlowEdge[], fields: Partial<FlowView> = {}): FlowView {
   return {
     root: null,
@@ -440,6 +448,8 @@ export function aFlowView(nodes: FlowNode[], edges: FlowEdge[], fields: Partial<
     truncated: false,
     omitted_nodes: 0,
     omitted_edges: 0,
+    not_in_flow: null,
+    types: [...FLOW_TYPES],
     gaps: tenGapRows(),
     nodes,
     edges,

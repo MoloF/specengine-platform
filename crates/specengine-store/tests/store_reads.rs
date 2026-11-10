@@ -160,8 +160,9 @@ fn links_view(graph: &SpecGraph<'_>, at: NodeAt) -> String {
 fn ac12_from_rows_over_every_stored_row_is_the_whole_graph() {
     let scratch = Scratch::new("store-reads-rows");
     let fixtures = configured_fixtures();
-    // 20 since docs/features/workspaces.md added `fixtures/studio-lamp`.
-    assert_eq!(fixtures.len(), 20, "premise: the configured fixtures");
+    // 20 since docs/features/workspaces.md added `fixtures/studio-lamp`, 21
+    // since docs/features/flow-scenario.md added `fixtures/flow-aside`.
+    assert_eq!(fixtures.len(), 21, "premise: the configured fixtures");
     let mut edges = 0;
     for name in &fixtures {
         let fixture = indexed(name, &scratch);

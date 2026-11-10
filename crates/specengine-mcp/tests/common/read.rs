@@ -963,6 +963,8 @@ pub fn library(tool: &str, args: &Value, env: &Env, globals: &Globals) -> Expect
                 // docs/features/flow-scope.md FS-6: `stage` as given.
                 stage: text("stage"),
                 trace: args["trace"] == json!(true),
+                // docs/features/flow-scenario.md FS-10: the cut as given.
+                in_flow: args["in_flow"] == json!(true),
             },
         )
         .map(|outcome| Outcome::Flow(Box::new(outcome))),

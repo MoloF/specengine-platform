@@ -1,17 +1,20 @@
-//! `spec flow [ROOT] [--depth N] [--stage S] [--trace]` (task specs
-//! `flow-read`, `trace-views`, `flow-scope`): what a flow diagram draws,
-//! over the index-fed spec graph and `[flow]`, read here alone. Core's
-//! [`flow_read`] finds the scope, the typed edges, the walk and the ten gap
-//! rows, and cuts the shown nodes to `--stage`'s after the fold; this file
-//! resolves `ROOT`, maps `-` to the steps with no stage, bounds and prints.
-//! `--trace` joins `spec trace`'s `rollup` and `counts` to each shown node
-//! here, over every node the read without `--stage` shows, so a stage moves
-//! no note: core's read stays pure and reads no queue. A stage echoes
-//! nothing: the header and the JSON keys are the read's, counting what is
-//! kept.
+//! `spec flow [ROOT] [--depth N] [--stage S] [--in-flow] [--trace]` (task
+//! specs `flow-read`, `trace-views`, `flow-scope`; canon `spec-flow`, "The
+//! read"): what a flow diagram draws, over the index-fed spec graph and
+//! `[flow]`, read here alone. Core's [`flow_read`] finds the scope, the
+//! typed edges, the walk, the ten gap rows and each node's `in_flow`, and
+//! cuts the shown nodes to `--stage`'s, then to those in the flow, after
+//! the fold; this file resolves `ROOT`, maps `-` to the steps with no
+//! stage, bounds and prints. `--trace` joins `spec trace`'s `rollup` and
+//! `counts` to each shown node here, over every node the read without a cut
+//! shows, so a cut moves no note: core's read stays pure and reads no
+//! queue. A stage echoes nothing: the header and the JSON keys are the
+//! read's, counting what is kept. `--in-flow` adds the documents it left
+//! out to the header and to `not_in_flow`, `null` without it. `types` is
+//! the model's flow link types, in their order, on every read.
 //!
 //! ```text
-//! flow <ROOT or all> | nodes <n>, edges <e>, depth <N or ->[; left out: …]
+//! flow <ROOT or all> | nodes <n>, edges <e>, depth <N or ->[; left out: …][; not in the flow: <d>]
 //! gap <code> | <state> | <count>[ | <item>, …][ | <cause>]
 //! <distance or -> <name> | <kind or -> | <title or -> | <path>:<line>[ | start][ | end][ | group <name>][ | stage <s>][ | holds <h>, inner <i>][ | gaps <g>][ | rollup <state>]
 //! <from> -> <to> | <type> | x<count>[ | kind <kind>][ | when <when>] | <path>:<line>
@@ -39,6 +42,7 @@ use specengine_core::{
     FlowAsk, FlowConfig, FlowEdge, FlowGap, FlowNeed, FlowNode, FlowStage, GapCause, GapCode,
     flow_read,
 };
+use specengine_model::FLOW_LINK_TYPES;
 
 use crate::cap::{View, lines_within};
 use crate::corpus::{LeftOut, depth_of, holders_warning, indexed_in, locate};
@@ -67,6 +71,9 @@ pub struct FlowRequest {
     pub stage: Option<String>,
     /// `--trace`: each shown node's `rollup` and `counts`.
     pub trace: bool,
+    /// `--in-flow`: keep the shown nodes holding something of the flow, a
+    /// `ROOT` holder's always, after `--stage`.
+    pub in_flow: bool,
 }
 
 impl FlowRequest {
@@ -96,6 +103,8 @@ pub struct FlowOutcome {
     pub edges: Vec<FlowEdge>,
     /// `--trace`: by a node's `file`; none joined, empty.
     pub badges: BTreeMap<usize, TraceBadge>,
+    /// `--in-flow`: the documents its cut left out; `None` without it.
+    pub not_in_flow: Option<usize>,
     /// How many of `nodes`, then of `edges`, are printed (text and JSON
     /// alike).
     pub shown_nodes: usize,
@@ -146,6 +155,7 @@ pub fn flow_with_view(
         nodes: Vec::new(),
         edges: Vec::new(),
         badges: BTreeMap::new(),
+        not_in_flow: request.in_flow.then_some(0),
         shown_nodes: 0,
         shown_edges: 0,
         gap_items: match view {
@@ -188,6 +198,7 @@ pub fn flow_with_view(
             roots: roots.as_deref(),
             depth,
             stage: request.stage(),
+            in_flow_only: request.in_flow,
             config: &config,
             config_label: &project.config_label,
             scope_name: outcome.root.as_deref().unwrap_or(ALL),
@@ -197,8 +208,8 @@ pub fn flow_with_view(
         outcome.left_out.add(graph.standing(file));
     }
     if request.trace {
-        // Over every node the read without `--stage` shows: a rooted read's
-        // notes name the cards of what they hold, and a stage moves none.
+        // Over every node the read without a cut shows: a rooted read's
+        // notes name the cards of what they hold, and a cut moves none.
         outcome.badges = flow_badges(
             env,
             &open.slug,
@@ -208,7 +219,7 @@ pub fn flow_with_view(
             roots.is_none(),
             &mut messages,
         );
-        if request.stage.is_some() {
+        if request.stage.is_some() || request.in_flow {
             let kept: BTreeSet<usize> = read.nodes.iter().map(|node| node.file).collect();
             outcome.badges.retain(|file, _| kept.contains(file));
         }
@@ -216,6 +227,7 @@ pub fn flow_with_view(
     outcome.gaps = read.gaps;
     outcome.nodes = read.nodes;
     outcome.edges = read.edges;
+    outcome.not_in_flow = read.not_in_flow;
     outcome.messages = messages;
     (outcome.shown_nodes, outcome.shown_edges) = match view {
         View::Capped => capped(&outcome),
@@ -283,7 +295,7 @@ fn left_out_suffix(left_out: LeftOut) -> String {
 
 fn header(outcome: &FlowOutcome) -> String {
     format!(
-        "flow {} | nodes {}, edges {}, depth {}{}",
+        "flow {} | nodes {}, edges {}, depth {}{}{}",
         outcome
             .root
             .as_deref()
@@ -293,7 +305,10 @@ fn header(outcome: &FlowOutcome) -> String {
         outcome
             .depth
             .map_or_else(|| "-".to_owned(), |depth| depth.to_string()),
-        left_out_suffix(outcome.left_out)
+        left_out_suffix(outcome.left_out),
+        outcome
+            .not_in_flow
+            .map_or_else(String::new, |count| format!("; not in the flow: {count}"))
     )
 }
 
@@ -488,6 +503,8 @@ struct FlowJson<'a> {
     truncated: bool,
     omitted_nodes: usize,
     omitted_edges: usize,
+    not_in_flow: Option<usize>,
+    types: [&'static str; FLOW_LINK_TYPES.len()],
     gaps: Vec<GapJson<'a>>,
     nodes: Vec<NodeJson<'a>>,
     edges: Vec<EdgeJson<'a>>,
@@ -514,6 +531,7 @@ struct NodeJson<'a> {
     stage: Option<&'a str>,
     start: bool,
     end: bool,
+    in_flow: bool,
     holds: usize,
     inner: Vec<InnerJson>,
     gaps: usize,
@@ -564,6 +582,7 @@ fn node_json<'a>(node: &'a FlowNode, badge: Option<&TraceBadge>) -> NodeJson<'a>
         stage: node.stage.as_deref(),
         start: node.start,
         end: node.end,
+        in_flow: node.in_flow,
         holds: node.holds,
         inner: node
             .inner
@@ -602,6 +621,8 @@ fn view(outcome: &FlowOutcome) -> FlowJson<'_> {
         truncated: outcome.truncated(),
         omitted_nodes: outcome.omitted_nodes(),
         omitted_edges: outcome.omitted_edges(),
+        not_in_flow: outcome.not_in_flow,
+        types: FLOW_LINK_TYPES.map(|(name, _)| name),
         gaps: outcome
             .gaps
             .iter()

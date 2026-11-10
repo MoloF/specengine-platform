@@ -345,8 +345,9 @@ fn assert_decoded(corpus: &Corpus, index: &specengine_store::SqliteIndex, contex
 fn sr3_every_configured_fixture_reads_back_as_parsed() {
     let scratch = Scratch::new("projection-all");
     let fixtures = configured_fixtures();
-    // 20 since docs/features/workspaces.md added `fixtures/studio-lamp`.
-    assert_eq!(fixtures.len(), 20, "premise: the configured fixtures");
+    // 20 since docs/features/workspaces.md added `fixtures/studio-lamp`, 21
+    // since docs/features/flow-scenario.md added `fixtures/flow-aside`.
+    assert_eq!(fixtures.len(), 21, "premise: the configured fixtures");
     let mut files = 0;
     for name in &fixtures {
         let corpus = Corpus::copy_of(name, &scratch, name);

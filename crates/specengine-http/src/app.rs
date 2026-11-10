@@ -685,16 +685,22 @@ async fn graph(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal>
 /// and gap item, nothing cut); `root` naming nothing: the exit-1 document,
 /// a 404. A gap row changes no status. `stage` is `--stage` (`-`: the
 /// steps with none), once. `trace=true` is `--trace`: a queue that cannot
-/// be read is a note, never a failed flow.
+/// be read is a note, never a failed flow. `in_flow=true` is `--in-flow`;
+/// freshness stays `trace`'s choice.
 async fn flow(State(app): State<Shared>, uri: Uri) -> Result<Response, Refusal> {
     let (project, _) = app.project_of(&uri)?;
-    let args = args("flow", &["root", "depth", "stage", "trace"], &uri)?;
+    let args = args(
+        "flow",
+        &["root", "depth", "stage", "trace", "in_flow"],
+        &uri,
+    )?;
     let request = (|| {
         Ok::<_, String>(FlowRequest {
             root: args.text("root")?,
             depth: args.integer("depth")?,
             stage: args.text("stage")?,
             trace: args.boolean("trace")?.unwrap_or(false),
+            in_flow: args.boolean("in_flow")?.unwrap_or(false),
         })
     })()
     .map_err(Refusal::bad_request)?;

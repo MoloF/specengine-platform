@@ -1,9 +1,20 @@
-import { FIT_MARGIN, FIT_MAX_ZOOM, FIT_MIN_ZOOM, type FitViewport } from "../graph/geometry";
+import { FIT_MARGIN, FIT_MAX_ZOOM, type FitViewport } from "../graph/geometry";
 
-// The Flow's drawing geometry (docs/features/flow-canvas.md "Layout"): pure numbers, no drawing
-// library. A forward edge is horizontal runs joined by S-curves in the gaps between columns; an arc
-// is an orthogonal line with rounded corners, through the gaps and along its track; a loop stays
-// under its box. Each keeps the points it passes, so "crosses no box" can be checked on them.
+// The Flow's drawing geometry (docs/features/flow-canvas.md "Layout", docs/features/flow-scenario.md
+// D7, D8): pure numbers, no drawing library. The walk runs top to bottom: a forward edge is vertical
+// runs joined by S-curves in the gaps between rows, drawn as the horizontal form with its axes
+// swapped; an arc is an orthogonal line with rounded corners, through the gaps and along its track
+// right of the walk; a loop stays beside its box. Each keeps the points it passes, so "crosses no
+// box" can be checked on them.
+
+/**
+ * Flow's own fit floor (flow-scenario D8): a box's 14 px title is 12.9 px or more at fit, so a
+ * picture too wide to read whole is panned, never shrunk past it. Graph keeps its 0.6.
+ */
+export const FLOW_FIT_MIN_ZOOM = 0.92;
+
+/** Flow's own pinch floor: the owner may zoom out to half, never further (Graph keeps its 0.1). */
+export const FLOW_PINCH_MIN_ZOOM = 0.5;
 
 export interface Point {
   x: number;
@@ -25,8 +36,11 @@ export interface Run {
 /** The band along an arrow a click takes, in px: wide enough to hit, its stroke unseen (docs/features/writer-studio.md D8). */
 export const EDGE_HIT = 12;
 
-/** A box of the flow: the Graph's box and a line more, its state under its marks (docs/features/trace-views.md "Flow badges"). */
+/** A box of the flow: its title on up to two lines, its marks, its state under them (docs/features/trace-views.md "Flow badges"). */
 export const BOX_HEIGHT = 92;
+
+/** A box's width: four of them and their gutters fit a 1100 px studio's canvas at the fit floor (`docs/canon/spec-flow-layout.md` "Layout"). */
+export const BOX_WIDTH = 160;
 
 /** How a corner of an arc rounds; a short stretch rounds less. */
 export const ARC_RADIUS = 8;
@@ -124,6 +138,22 @@ export function loopPath(box: Rect): { path: string; points: Point[]; middle: Po
   };
 }
 
+/** A point with its axes swapped: the horizontal forms drawn top to bottom. */
+export function swapped(point: Point): Point {
+  return { x: point.y, y: point.x };
+}
+
+/** An SVG path with every coordinate pair's axes swapped: `M1,2 C3,4 ...` becomes `M2,1 C4,3 ...`. */
+export function swappedPath(path: string): string {
+  return path.replace(/(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)/g, "$2,$1");
+}
+
+/** A box's edge to itself, beside it: out of its right side and back into it, arrow last. */
+export function sideLoopPath(box: Rect): { path: string; points: Point[]; middle: Point } {
+  const loop = loopPath({ x: box.y, y: box.x, width: box.height, height: box.width });
+  return { path: swappedPath(loop.path), points: loop.points.map(swapped), middle: swapped(loop.middle) };
+}
+
 /** Whether a point lies inside a rectangle, its border excluded: a port sits on the border. */
 export function pointInside(point: Point, box: Rect): boolean {
   return point.x > box.x && point.x < box.x + box.width && point.y > box.y && point.y < box.y + box.height;
@@ -145,9 +175,9 @@ export function inView(box: Rect, view: { x: number; y: number; zoom: number; wi
   return left >= 0 && top >= 0 && left + box.width * view.zoom <= view.width && top + box.height * view.zoom <= view.height;
 }
 
-/** The fit's zoom: the flow fills the width, no larger than 100 %, no smaller than readable. Height has no say: a tall picture is panned. */
+/** The fit's zoom: the flow fills the width, no larger than 100 %, no smaller than Flow's floor. Height has no say: a tall picture is panned. */
 function fitZoom(pictureWidth: number, width: number): number {
-  return Math.max(FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, (width - 2 * FIT_MARGIN) / pictureWidth));
+  return Math.max(FLOW_FIT_MIN_ZOOM, Math.min(FIT_MAX_ZOOM, (width - 2 * FIT_MARGIN) / pictureWidth));
 }
 
 /**

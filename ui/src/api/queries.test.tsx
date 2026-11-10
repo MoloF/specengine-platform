@@ -18,6 +18,7 @@ import {
   useCardWrite,
   useCheck,
   flowForm,
+  recordsForm,
   useFlowRead,
   useScopeNode,
   useScopeStages,
@@ -156,17 +157,19 @@ function EveryRead() {
 }
 
 describe("the flow's reads (writer-studio D2)", () => {
-  it("keys a read by [flow, project, root, depth, trace, stage], root null at the top, stage null for all", () => {
-    expect(queryKeys.flow("alpha", { depth: 0 })).toEqual(["flow", "alpha", null, 0, false, null]);
-    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1, trace: true })).toEqual(["flow", "alpha", "G-1", 1, true, null]);
-    expect(queryKeys.flow("alpha", { root: "G-1", stage: "-", trace: true })).toEqual(["flow", "alpha", "G-1", null, true, "-"]);
+  it("keys a read by [flow, project, root, depth, trace, stage, in_flow], root null at the top, stage null for all, the cut apart (flow-scenario D6)", () => {
+    expect(queryKeys.flow("alpha", { depth: 0 })).toEqual(["flow", "alpha", null, 0, false, null, false]);
+    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1, trace: true })).toEqual(["flow", "alpha", "G-1", 1, true, null, false]);
+    expect(queryKeys.flow("alpha", { root: "G-1", stage: "-", trace: true })).toEqual(["flow", "alpha", "G-1", null, true, "-", false]);
+    expect(queryKeys.flow("alpha", { root: "G-1", depth: 1, in_flow: true, trace: true })).toEqual(["flow", "alpha", "G-1", 1, true, null, true]);
   });
 
-  it("has three forms: the top at depth 0, a scope at depth 1, a stage under its root; never a whole read", () => {
-    expect(flowForm(null, null)).toEqual({ depth: 0, trace: true });
-    expect(flowForm(null, "gather")).toEqual({ depth: 0, trace: true });
-    expect(flowForm("G-1", null)).toEqual({ root: "G-1", depth: 1, trace: true });
-    expect(flowForm("G-1", "gather")).toEqual({ root: "G-1", stage: "gather", trace: true });
+  it("has three forms, each cut to the flow: the top at depth 0, a scope at depth 1, a stage under its root; never a whole read; the records' read uncut, no trace (flow-scenario D6)", () => {
+    expect(flowForm(null, null)).toEqual({ depth: 0, in_flow: true, trace: true });
+    expect(flowForm(null, "gather")).toEqual({ depth: 0, in_flow: true, trace: true });
+    expect(flowForm("G-1", null)).toEqual({ root: "G-1", depth: 1, in_flow: true, trace: true });
+    expect(flowForm("G-1", "gather")).toEqual({ root: "G-1", stage: "gather", in_flow: true, trace: true });
+    expect(recordsForm("G-1")).toEqual({ root: "G-1", depth: 1 });
   });
 
   it("reads a picture, a scope's lanes and its node once; a key changing back reads nothing it holds", async () => {
@@ -197,8 +200,8 @@ describe("the flow's reads (writer-studio D2)", () => {
       expect(client.getNode).toHaveBeenCalledTimes(1);
     });
     expect(client.getFlow.mock.calls.map((call) => call[1])).toEqual([
-      { root: "G-1", depth: 1, trace: true },
-      { root: "G-1", stage: "gather", trace: true },
+      { root: "G-1", depth: 1, in_flow: true, trace: true },
+      { root: "G-1", stage: "gather", in_flow: true, trace: true },
     ]);
     expect(argsOf(client.getTrace)).toEqual([["alpha", { ref: "G-1", summary: true }]]);
     expect(argsOf(client.getNode)).toEqual([["alpha", "G-1", { with: ["links"] }]]);

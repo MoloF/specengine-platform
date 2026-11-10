@@ -73,16 +73,16 @@
   "DriftMarker": ["line", "rev"],
   "DriftLock": ["rev", "commit", "verified_at"],
   "DriftLevels": ["lock", "markers", "changed"],
-  "ShownNode": ["id", "kind", "title", "path", "line", "end_line", "status", "rev", "tokens_est", "archived", "utf8", "sections", "norm_hash", "span_hash", "text", "truncated", "omitted", "links", "bindings"],
+  "ShownNode": ["id", "kind", "title", "path", "line", "end_line", "status", "rev", "tokens_est", "archived", "utf8", "sections", "norm_hash", "span_hash", "text", "truncated", "omitted", "ancestors", "links", "bindings"],
   "ShownBindings": ["rows", "omitted", "tested"],
   "LockDiffView": ["ref", "reason", "notes", "nodes"],
   "LockDiffNode": ["id", "path", "line", "rows"],
   "LockDiffRow": ["row", "spec", "code"],
   "LockDiffSpecSide": ["commit", "path", "diff"],
   "LockDiffCodeSide": ["blob", "file", "diff"],
-  "FlowView": ["root", "reason", "depth", "notes", "left_out", "truncated", "omitted_nodes", "omitted_edges", "gaps", "nodes", "edges"],
+  "FlowView": ["root", "reason", "depth", "notes", "left_out", "truncated", "omitted_nodes", "omitted_edges", "not_in_flow", "types", "gaps", "nodes", "edges"],
   "FlowGap": ["code", "state", "count", "items", "cause"],
-  "FlowNode": ["id", "kind", "title", "path", "line", "distance", "group", "stage", "start", "end", "holds", "inner", "gaps", "rollup", "counts"],
+  "FlowNode": ["id", "kind", "title", "path", "line", "distance", "group", "stage", "start", "end", "in_flow", "holds", "inner", "gaps", "rollup", "counts"],
   "FlowEdge": ["from", "to", "type", "kind", "when", "count", "path", "line"],
   "FlowInner": ["type", "count"],
   "CardList": ["flows", "cards", "notes", "truncated", "omitted"],
@@ -112,5 +112,6 @@
   "WorkspaceDocument": ["source", "notes", "workspaces", "modules"],
   "Workspace": ["name", "title", "landing", "sections", "flows", "module"],
   "WorkspaceModule": ["name", "title", "root"],
-  "CardTask": ["id", "status", "title", "stale"]
+  "CardTask": ["id", "status", "title", "stale"],
+  "ShownAncestor": ["id", "kind", "title", "path"]
 }

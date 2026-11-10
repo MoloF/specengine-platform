@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { curveMiddle, curvePath, curvePoints, durationOf, EDGE_HIT, fitOf, inView, loopPath, LOOP_DEPTH, pointInside, roundedPath, stretchCrosses } from "./geometry";
+import { curveMiddle, curvePath, curvePoints, durationOf, EDGE_HIT, fitOf, FLOW_FIT_MIN_ZOOM, inView, loopPath, LOOP_DEPTH, pointInside, roundedPath, sideLoopPath, stretchCrosses, swappedPath } from "./geometry";
 
 // The Flow's drawing geometry (docs/features/flow-canvas.md "Layout"): pure numbers.
 
@@ -70,6 +70,22 @@ describe("a box's edge to itself", () => {
   });
 });
 
+describe("the walk drawn top to bottom (flow-scenario D7)", () => {
+  it("swaps a path's axes pair by pair, so a horizontal form runs down", () => {
+    expect(swappedPath("M0,5 L10,5 C30,5 30,25 50,25")).toBe("M5,0 L5,10 C5,30 25,30 25,50");
+    expect(swappedPath("M-1.5,2 L3,-4.25")).toBe("M2,-1.5 L-4.25,3");
+  });
+
+  it("puts a box's edge to itself beside it, out of its right side and back", () => {
+    const box = { x: 100, y: 10, width: 160, height: 92 };
+    const loop = sideLoopPath(box);
+    expect(loop.points.every((point) => point.x === 260)).toBe(true);
+    expect(loop.points.every((point) => point.y > box.y && point.y < box.y + box.height)).toBe(true);
+    expect(loop.middle.x).toBeGreaterThan(260);
+    expect(pointInside(loop.middle, box)).toBe(false);
+  });
+});
+
 describe("whether a line touches a box", () => {
   const box = { x: 10, y: 10, width: 20, height: 20 };
 
@@ -94,10 +110,12 @@ describe("the view", () => {
     expect(fit?.y).toBe(200);
   });
 
-  it("starts a picture too wide to read whole at its top left, at the smallest readable zoom", () => {
+  it("starts a picture too wide to read whole at its top left, at Flow's own floor, 0.92 (FS-14)", () => {
+    expect(FLOW_FIT_MIN_ZOOM).toBe(0.92);
     const fit = fitOf({ width: 5000, height: 3000 }, 1000, 800);
-    expect(fit?.zoom).toBe(0.6);
+    expect(fit?.zoom).toBe(0.92);
     expect([fit?.x, fit?.y]).toEqual([32, 32]);
+    expect(fitOf({ width: 4000, height: 300 }, 832, 600)?.zoom).toBe(0.92);
   });
 
   it("gives no fit on a canvas with no size", () => {
@@ -106,9 +124,10 @@ describe("the view", () => {
 
   it("lets the width decide: a flow fills it whatever the canvas's height, and a tall one starts at its top, readable", () => {
     const wide = fitOf({ width: 1000, height: 300 }, 832, 800);
-    expect(wide?.zoom).toBe(0.768);
+    expect(wide?.zoom).toBe(0.92);
     expect(wide?.x).toBe(32);
-    expect(fitOf({ width: 1000, height: 300 }, 832, 300)?.zoom).toBe(0.768);
+    expect(fitOf({ width: 1000, height: 300 }, 832, 300)?.zoom).toBe(0.92);
+    expect(fitOf({ width: 800, height: 300 }, 832, 300)?.zoom).toBe(0.96);
     const tall = fitOf({ width: 800, height: 3000 }, 1000, 500);
     expect(tall?.zoom).toBe(1);
     expect([tall?.x, tall?.y]).toEqual([100, 32]);

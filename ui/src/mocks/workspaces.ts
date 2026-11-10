@@ -55,7 +55,8 @@ export const LEDGER_NOTE = `${CONFIG}:24: \`Back office\` is not a name: lower-c
 export function workspacesOf(slug: string, scenario: Scenario): WorkspaceDocument {
   const notes = scenario === "config-notes";
   if (slug === "harbor-sim") {
-    return harbor(notes ? [...HARBOR_NOTES] : []);
+    // `aside` holds the pottery workshop in harbor-sim's place: no `[[module]]` roots in it (flow-scenario, RM-0094).
+    return scenario === "aside" || scenario === "aside40" ? { ...harbor([]), modules: [] } : harbor(notes ? [...HARBOR_NOTES] : []);
   }
   return implicit(notes && slug === "ledger-api" ? [LEDGER_NOTE] : []);
 }

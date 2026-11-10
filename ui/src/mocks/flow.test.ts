@@ -48,7 +48,8 @@ describe("harbor-sim's flow", () => {
 
   it("answers depth 0 with one top group: every document it holds folded, no edge left over", async () => {
     const top = await read({ depth: 0 });
-    expect(Object.keys(top)).toEqual(["reason", "root", "depth", "notes", "left_out", "truncated", "omitted_nodes", "omitted_edges", "gaps", "nodes", "edges"]);
+    expect(Object.keys(top)).toEqual(["reason", "root", "depth", "notes", "left_out", "truncated", "omitted_nodes", "omitted_edges", "not_in_flow", "types", "gaps", "nodes", "edges"]);
+    expect([top.not_in_flow, top.types]).toEqual([null, ["follows", "uses", "supplies"]]);
     expect(names(top)).toEqual(["DOM-HARBOR"]);
     expect(top.nodes[0]?.holds).toBe(14);
     expect(top.nodes[0]?.gaps).toBe(5);
@@ -225,5 +226,67 @@ describe("the scenarios", () => {
 
   it("error: 503 in the mock's words", async () => {
     await expect(read({ depth: 0 }, "harbor-sim", "error")).rejects.toThrow(/database is locked/);
+  });
+});
+
+// flow-scenario (RM-0094): the `aside` scenario is `fixtures/flow-aside`, its reads the numbers
+// `spec flow` gives there (FS-2, FS-4, FS-6, FS-8): membership by links, `[flow]` and `parent:` alone,
+// folded, the cut after the fold and the stage, a ROOT's node kept.
+describe("the aside scenario (flow-scenario)", () => {
+  const cut = (root: string, scenario: Scenario = "aside") => read({ root, depth: 1, in_flow: true }, "harbor-sim", scenario);
+
+  it("cuts each scope as the daemon does: the lens root 12 nodes, 14 left out; the kiln 4, 141; the office its own node, 2; the run 11, 0", async () => {
+    const counts = await Promise.all(["ATL-POTTERY", "WBAY-KILN", "WBAY-OFFICE", "KRUN-FIRING"].map(async (root) => {
+      const view = await cut(root);
+      return [root, view.nodes.length, view.not_in_flow];
+    }));
+    expect(counts).toEqual([
+      ["ATL-POTTERY", 12, 14],
+      ["WBAY-KILN", 4, 141],
+      ["WBAY-OFFICE", 1, 2],
+      ["KRUN-FIRING", 11, 0],
+    ]);
+    expect(names(await cut("WBAY-KILN"))).toEqual(["HUNCH-0007", "WBAY-KILN", "CONE-BISQUE", "CONE-GLOST"]);
+    const office = await cut("WBAY-OFFICE");
+    expect(office.nodes.map((node) => [node.id, node.in_flow])).toEqual([["WBAY-OFFICE", false]]);
+    const lens = await cut("ATL-POTTERY");
+    expect(lens.edges).toHaveLength(9);
+    expect(lens.edges.find((edge) => edge.to === "WBAY-KILN")?.count).toBe(5);
+    expect(lens.nodes.filter((node) => node.holds > 0).map((node) => [node.id, node.holds])).toEqual([
+      ["WBAY-GALLERY", 1],
+      ["KRUN-FIRING", 10],
+      ["WBAY-KILN", 144],
+    ]);
+  });
+
+  it("serves `in_flow` on every read, `not_in_flow` null and nothing dropped without the cut, `types` always; the top all in the flow", async () => {
+    const whole = await read({ root: "WBAY-KILN", depth: 1 }, "harbor-sim", "aside");
+    expect([whole.nodes.length, whole.not_in_flow, whole.types]).toEqual([145, null, ["follows", "uses", "supplies"]]);
+    expect(whole.nodes.filter((node) => node.in_flow).map((node) => node.id)).toEqual(["HUNCH-0007", "WBAY-KILN", "CONE-BISQUE", "CONE-GLOST"]);
+    expect(whole.nodes.find((node) => node.id === "PUZZLE-0003")?.in_flow).toBe(false);
+    const top = await read({ depth: 0, in_flow: true }, "harbor-sim", "aside");
+    expect([names(top), top.nodes[0]?.holds, top.not_in_flow]).toEqual([["ATL-POTTERY"], 25, 0]);
+    const lens = await read({ root: "ATL-POTTERY", depth: 1 }, "harbor-sim", "aside");
+    expect(lens.nodes.find((node) => node.path === "docs/notes/note-1.md")?.in_flow).toBe(false);
+  });
+
+  it("cuts after the stage: glazing under the run, 2 nodes, 0 left out", async () => {
+    const glazing = await read({ root: "KRUN-FIRING", stage: "glazing", in_flow: true }, "harbor-sim", "aside");
+    expect([names(glazing), glazing.not_in_flow]).toEqual([["POT-GLAZE", "POT-FIRE"], 0]);
+  });
+
+  it("at 40x keeps the kiln's 4 nodes and counts 5 679 left out", async () => {
+    const kiln = await cut("WBAY-KILN", "aside40");
+    expect([kiln.nodes.length, kiln.not_in_flow]).toEqual([4, 5679]);
+  });
+
+  it("serves each node read's `ancestors`, top first", async () => {
+    const client = new MockClient("aside", { delayMs: 0 });
+    const chain = async (ref: string) => (await client.getNode("harbor-sim", ref)).nodes[0]?.ancestors.map((ancestor) => ancestor.id ?? ancestor.path);
+    expect(await chain("HUNCH-0007")).toEqual(["ATL-POTTERY", "WBAY-KILN"]);
+    expect(await chain("POT-FIRE")).toEqual(["ATL-POTTERY", "KRUN-FIRING"]);
+    expect(await chain("CONE-GLOST-SHELF")).toEqual(["ATL-POTTERY", "WBAY-KILN", "CONE-GLOST"]);
+    expect(await chain("docs/workshop/gallery/open-day.md")).toEqual(["ATL-POTTERY", "WBAY-GALLERY"]);
+    expect(await chain("ATL-POTTERY")).toEqual([]);
   });
 });

@@ -217,7 +217,8 @@ const KEYS = {
   } satisfies Record<keyof BundleLayers, true>,
   // crates/specengine-cli/README.md "Output and the cap": a shown node, `span_hash` included;
   // docs/features/norm-hash.md "Data": `norm_hash` right before it; docs/canon/code-reads.md
-  // "spec show --bindings": `bindings`, its 19th key, after `links`.
+  // "spec show --bindings": `bindings`, its last key, after `links`; RM-0094's `ancestors` after
+  // `omitted`, 20 keys.
   ShownNode: {
     id: true,
     kind: true,
@@ -236,6 +237,7 @@ const KEYS = {
     text: true,
     truncated: true,
     omitted: true,
+    ancestors: true,
     links: true,
     bindings: true,
   } satisfies Record<keyof ShownNode, true>,
@@ -323,9 +325,10 @@ const CITED: Record<keyof typeof KEYS, string> = {
   TailEntry: "name, title, path, line, tokens_est, layer",
   BundleLayers: "targets, open_questions, ancestors, criteria, bindings, decisions, neighbours, terms, tests",
   // docs/features/norm-hash.md "Data": JSON node {id, ..., sections, norm_hash, span_hash, ...};
-  // docs/canon/code-reads.md "spec show --bindings": `bindings` after `links`.
+  // docs/canon/code-reads.md "spec show --bindings": `bindings` after `links`; RM-0094's `ancestors`
+  // after `omitted`.
   ShownNode:
-    "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, links, bindings",
+    "id, kind, title, path, line, end_line, status, rev, tokens_est, archived, utf8, sections, norm_hash, span_hash, text, truncated, omitted, ancestors, links, bindings",
   ShownBindings: "rows, omitted, tested",
 };
 

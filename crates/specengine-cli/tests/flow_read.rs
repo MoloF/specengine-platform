@@ -714,6 +714,10 @@ fn every_key_is_present() {
                 "truncated",
                 "omitted_nodes",
                 "omitted_edges",
+                // docs/features/flow-scenario.md "Data": `null` without
+                // `--in-flow`; the model's three types.
+                "not_in_flow",
+                "types",
                 "gaps",
                 "nodes",
                 "edges",
@@ -736,7 +740,7 @@ fn every_key_is_present() {
                 keys(node),
                 BTreeSet::from([
                     "id", "kind", "title", "path", "line", "distance", "group", "stage", "start",
-                    "end", "holds", "inner", "gaps", "rollup", "counts",
+                    "end", "in_flow", "holds", "inner", "gaps", "rollup", "counts",
                 ]),
                 "{node}"
             );

@@ -185,6 +185,12 @@
 //!   entry 0.32.0, the tree with the version set back 0.31.0's (`read-spec`
 //!   byte-equal); a `SCHEMA_PINS` entry 0.32.0, 0.31.0's schemas today's
 //!   without the two keys ([`as_of_0_31_0`]).
+//! - flow-scenario (RM-0094, FS-11): 0.32.0 -> 0.33.0, MINOR: a key a tool
+//!   takes and returns, `get_flow`'s `in_flow`, and `get_node`'s
+//!   `ancestors`. A `PINS` entry 0.33.0, the tree with the version and
+//!   `read-spec`'s two additions set back 0.32.0's; a `SCHEMA_PINS` entry
+//!   0.33.0, 0.32.0's schemas today's without the five keys
+//!   ([`as_of_0_32_0`]).
 //!
 //! The repository is only read.
 
@@ -511,7 +517,25 @@ const PINS: &[(&str, &str)] = &[
         "0.32.0",
         "d7f3ef1544ca3d444f05f0a4725e710cc6d5f47a53c81c6042548f9e1441a780",
     ),
+    // flow-scenario (RM-0094, FS-11: 0.32.0 -> 0.33.0, MINOR: a key a tool
+    // takes and returns, `get_flow`'s `in_flow`): plugin.json's version and
+    // `read-spec`'s two lines, step 2's node bullet
+    // ([`READ_SPEC_NODE_0_33_0`]) and its flow bullet
+    // ([`READ_SPEC_FLOW_0_33_0`]), each reworded whole to fit the body's
+    // 4 096 B; all set back, the tree hashes as 0.32.0's pin.
+    (
+        "0.33.0",
+        "199db58b28e08d71dad038c0858d2551932aab3013f5bd93e020fe183041976d",
+    ),
 ];
+
+/// flow-scenario (RM-0094): `read-spec`'s step 2 node bullet as 0.33.0
+/// ships it, naming `ancestors` (0.32.0's: [`READ_SPEC_BULLET_0_13_0`]).
+const READ_SPEC_NODE_0_33_0: &str = "   - one node's current text and `ancestors`, its path from the top: `get_node` with its `id`; add `with: [\"links\"]` for its links both ways, `with: [\"bindings\"]` for the code bound to it and whether it still matches the spec (each binding's `sync`);";
+
+/// flow-scenario (RM-0094): `read-spec`'s flow bullet as 0.33.0 ships it,
+/// naming `in_flow` (0.32.0's: [`READ_SPEC_FLOW_0_21_0`] less its line feed).
+const READ_SPEC_FLOW_0_33_0: &str = "   - the ordered flow, its typed edges and gap rows, which stop nothing: `get_flow`; if too large, from a `root`, to a `depth`, or `in_flow: true` to keep only what is in the flow;";
 
 /// docs/canon/card-flows.md "MCP and hub": the sentence 0.31.0
 /// appends to `read-spec`'s cards bullet, its space before it (172 bytes).
@@ -799,6 +823,14 @@ const SCHEMA_PINS: &[(&str, &str)] = &[
     (
         "0.32.0",
         "3e83494b51b8f4030f65d0286c0c36eab398332ac2f2c7bee6eac491714b7091",
+    ),
+    // flow-scenario (RM-0094, FS-11): `get_flow`'s `in_flow`, its read's
+    // `not_in_flow` and `types`, a flow node's `in_flow`, a shown node's
+    // `ancestors` ([`as_of_0_32_0`] takes them out; no other tool's schema
+    // changed).
+    (
+        "0.33.0",
+        "ca95725f785c3e05500031dcce1c3253913796089d76bb7cd455cface0240d4f",
     ),
 ];
 
@@ -1806,7 +1838,8 @@ fn ac05_each_skill_file_has_data_s_front_matter_and_budgets() {
 /// 4 096 B, the descriptions at the budget's whole, plugin.json 0.29.0 since
 /// docs/features/hub-confirm.md, 0.29.1 since docs/features/spec-ids.md,
 /// 0.30.0 since docs/features/flow-scope.md (FS-6), 0.31.0 since
-/// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092). No
+/// docs/features/board-handoff.md, 0.32.0 since card-tasks (RM-0092), 0.33.0
+/// since flow-scenario (RM-0094). No
 /// room is left, so the next byte is over.
 /// M: a 31-byte description.
 #[test]
@@ -1829,7 +1862,7 @@ fn flow_authoring_ac05_seven_skills_within_their_budgets() {
     );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
-        json!("0.32.0")
+        json!("0.33.0")
     );
     assert_eq!(ac05_problems(&tree), Vec::<String>::new());
     let description = |tree: &Tree| {
@@ -1980,11 +2013,47 @@ fn ac10_the_content_and_version_are_the_last_pin() {
         "not the last pin's",
         "agents/x.md",
     );
+    // flow-scenario (RM-0094, FS-11: 0.32.0 -> 0.33.0): plugin.json's
+    // version and `read-spec`'s two lines, each whole; all set back, the
+    // tree is 0.32.0's pinned content. M: the version kept; another file
+    // changed.
+    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.33.0"));
+    assert_eq!(
+        json_at(&tree, PLUGIN_JSON).unwrap()["version"],
+        json!("0.33.0"),
+        "plugin.json's version"
+    );
+    let at_0_32_0 = edited(
+        &edited(
+            &edited(
+                &tree,
+                PLUGIN_JSON,
+                "\"version\": \"0.33.0\"",
+                "\"version\": \"0.32.0\"",
+            ),
+            READ_SPEC,
+            READ_SPEC_NODE_0_33_0,
+            READ_SPEC_BULLET_0_13_0,
+        ),
+        READ_SPEC,
+        READ_SPEC_FLOW_0_33_0,
+        READ_SPEC_FLOW_0_21_0.trim_end_matches('\n'),
+    );
+    assert_eq!(
+        content_hash(&at_0_32_0),
+        PINS[PINS.len() - 2].1,
+        "0.33.0 changes plugin.json's version and read-spec's two lines only"
+    );
+    let tree = at_0_32_0;
+    let pins_0_32_0 = &PINS[..PINS.len() - 1];
     // card-tasks (RM-0092, D15: 0.31.0 -> 0.32.0, MINOR: `edit_card`'s
     // `task`): plugin.json's version alone; set back, the tree is 0.31.0's
     // pinned content, `read-spec` byte-equal. M: the version kept; another
     // file changed.
-    assert_eq!(PINS.last().map(|(version, _)| *version), Some("0.32.0"));
+    assert_eq!(
+        pins_0_32_0.last().map(|(version, _)| *version),
+        Some("0.32.0")
+    );
     assert_eq!(
         json_at(&tree, PLUGIN_JSON).unwrap()["version"],
         json!("0.32.0"),
@@ -1998,11 +2067,11 @@ fn ac10_the_content_and_version_are_the_last_pin() {
     );
     assert_eq!(
         content_hash(&at_0_31_0),
-        PINS[PINS.len() - 2].1,
+        pins_0_32_0[pins_0_32_0.len() - 2].1,
         "0.32.0 changes plugin.json's version only"
     );
     let tree = at_0_31_0;
-    let pins_0_31_0 = &PINS[..PINS.len() - 1];
+    let pins_0_31_0 = &pins_0_32_0[..pins_0_32_0.len() - 1];
     // docs/canon/plugin-files.md "Changing it" (board-handoff, 0.30.0 ->
     // 0.31.0, MINOR: keys the card tools take): plugin.json's version and
     // `read-spec`'s cards bullet gaining the hand-off sentence; both set back,
@@ -2941,6 +3010,22 @@ fn reworded(schema: &mut Value, new: &str, old: &str) -> usize {
     }
 }
 
+/// flow-scenario (RM-0094, FS-11): `schemas` as 0.32.0 listed them:
+/// `get_flow` taking no `in_flow`, its document without `not_in_flow` and
+/// `types`, its nodes without `in_flow`; `get_node`'s nodes without
+/// `ancestors`. No other tool's schema changed.
+fn as_of_0_32_0(schemas: &mut Value) {
+    without_key(&mut schemas["get_flow"]["inputSchema"], "in_flow");
+    let flow = &mut schemas["get_flow"]["outputSchema"];
+    without_key(flow, "not_in_flow");
+    without_key(flow, "types");
+    without_key(&mut flow["properties"]["nodes"]["items"], "in_flow");
+    without_key(
+        &mut schemas["get_node"]["outputSchema"]["properties"]["nodes"]["items"],
+        "ancestors",
+    );
+}
+
 /// card-tasks (RM-0092): `schemas` as 0.31.0 listed them: `edit_card`
 /// without `task`, `get_card`'s document without `tasks`. No other tool's
 /// schema changed.
@@ -3402,7 +3487,20 @@ fn tool_schemas_follow_the_plugin_version() {
     assert_eq!(SCHEMA_PINS[21].0, "0.30.0", "an entry for 0.30.0");
     assert_eq!(SCHEMA_PINS[22].0, "0.31.0", "an entry for 0.31.0");
     assert_eq!(SCHEMA_PINS[23].0, "0.32.0", "an entry for 0.32.0");
-    assert_eq!(SCHEMA_PINS.len(), 24, "0.32.0 the last entry");
+    assert_eq!(SCHEMA_PINS[24].0, "0.33.0", "an entry for 0.33.0");
+    assert_eq!(SCHEMA_PINS.len(), 25, "0.33.0 the last entry");
+    // flow-scenario (RM-0094, FS-11): 0.32.0's schemas are today's without
+    // `get_flow`'s `in_flow`, `not_in_flow`, `types` and a node's `in_flow`,
+    // and without a shown node's `ancestors`.
+    let mut at_0_32_0 = schemas.clone();
+    as_of_0_32_0(&mut at_0_32_0);
+    let at_0_32_0_hash = schema_hash(&at_0_32_0);
+    assert_eq!(
+        at_0_32_0_hash, SCHEMA_PINS[23].1,
+        "0.32.0's schemas are today's without flow-scenario's five keys"
+    );
+    assert_ne!(at_0_32_0_hash, current, "flow-scenario changed the schemas");
+    let (schemas, current) = (at_0_32_0, at_0_32_0_hash);
     // card-tasks (RM-0092): 0.31.0's schemas are today's without
     // `edit_card`'s `task` and `get_card`'s `tasks`.
     let mut at_0_31_0 = schemas.clone();

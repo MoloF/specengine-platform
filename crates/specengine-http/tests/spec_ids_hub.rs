@@ -868,7 +868,8 @@ fn ac8a_both_descriptions_name_the_range_on_the_wire() {
 /// docs/features/flow-scope.md FS-6 (`get_flow`'s `stage`, the
 /// orchestrator's MINOR of 2026-11-08) the plugin, the tag and the example
 /// are 0.30.0; since docs/features/board-handoff.md (keys the card tools
-/// take) 0.31.0; since card-tasks (RM-0092, `edit_card`'s `task`) 0.32.0.
+/// take) 0.31.0; since card-tasks (RM-0092, `edit_card`'s `task`) 0.32.0;
+/// since flow-scenario (RM-0094, `get_flow`'s `in_flow`) 0.33.0.
 #[test]
 fn ac8d_the_release_tag_is_the_plugin_version() {
     let scratch = common::Scratch::new("si-tag");
@@ -880,7 +881,7 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
     ];
     let output = alarmed(
         Path::new("/bin/sh"),
-        &[script.as_os_str(), OsStr::new("v0.32.0")],
+        &[script.as_os_str(), OsStr::new("v0.33.0")],
         &env,
     )
     .current_dir(&elsewhere)
@@ -892,13 +893,13 @@ fn ac8d_the_release_tag_is_the_plugin_version() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.32.0\n");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0.33.0\n");
     let example = read_text(&repository_root(), "scripts/deploy/.env.example");
     assert_eq!(
         example
             .lines()
             .filter(|line| line.starts_with("SPECENGINE_VERSION="))
             .collect::<Vec<_>>(),
-        ["SPECENGINE_VERSION=0.32.0"]
+        ["SPECENGINE_VERSION=0.33.0"]
     );
 }

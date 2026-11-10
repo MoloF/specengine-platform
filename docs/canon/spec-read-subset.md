@@ -3,7 +3,7 @@ class: canon
 tier: 2
 scope: [crates/specengine-cli, crates/specengine-store, crates/specengine-core]
 owner: owner
-reviewed: 2026-11-04
+reviewed: 2026-11-10
 ---
 
 # spec show, show --links, spec bundle: a subset read from the index
@@ -31,15 +31,15 @@ Nothing in an attempt prints: an answer is built only once its files matched.
 
 | Read | Rows | Files |
 |---|---|---|
-| `show REF` | none | C(REF) |
-| `show REF --links` | for each shown node n and each m in W(n): HELD(m), ENDING(m) | C(REF); each edge's citing file and ends |
+| `show REF` | each shown node's chain of `PARENT` rows, file by file, to the row's first end, until none or one repeats: its `ancestors` (`spec-cli-read.md` "Output") | C(REF); every chain file |
+| `show REF --links` | `show REF`'s; for each shown node n and each m in W(n): HELD(m), ENDING(m) | C(REF); each chain file; each edge's citing file and ends |
 | `bundle REF...` | `--links`' rows for each kept target (`bundle_linked`); for each linked candidate c, its held `working_answer` edges and, for m in W(c), its ending `answers` edges; each kept target's chain of `PARENT` rows, file by file, to the row's first end, until none or one repeats | the C(REF)s; every citing, end and chain file of those rows |
 
 Generated and Tier 3 citing files are decoded too, for their standing (left-out counts, admission). Rows a read does not use stay out: a candidate's other edges, `PARENTED` and `DEPENDENTS`. So a hub candidate pulls only its `answers` citers, and a generated index citing the node joins once, without its fan-out.
 
 ## The walk
 
-The walk is the whole read, each command's function from before the subset, kept as the fallback and as the tests' oracle (D5). It runs from its own freshness step, keeping only step 1's messages, and it never retries. Its causes:
+The walk is the whole read, each command's function from before the subset, kept as the fallback and as the tests' oracle (D5). It runs from its own freshness step, keeping only step 1's messages, and it never retries. It always builds the whole graph (`SpecGraph::new`), plain `show` too, for `ancestors`. Its causes:
 - a second mismatch;
 - `NotIndexed` from a snapshot: a stamp or worktree row gone after the freshness step (another build recreated the tables, or a row was deleted);
 - any other store error in an attempt or from `update_paths`;
@@ -57,7 +57,7 @@ Each case below replaces a mixed state with one snapshot:
 
 ## Code-layer reads stay whole (D7)
 
-`show --bindings` and `bundle` when `[code]` is present or does not read (`CodeConfig::from_toml` other than `Ok(None)`), and `spec task show`'s bundle under the same condition, keep the whole read: the code judge builds `refs::Corpus` over every file. `show --bindings` without `[code]` reads a subset and adds its note.
+`show --bindings` and `bundle` when `[code]` is present or does not read (`CodeConfig::from_toml` other than `Ok(None)`), and `spec task show`'s bundle under the same condition, keep the whole read: the code judge builds `refs::Corpus` over every file, and `show --bindings` pays one whole-graph build more for `ancestors`, unmeasured. `show --bindings` without `[code]` reads a subset and adds its note.
 
 ## Whole reads keep a matching row's parse (Q7)
 
@@ -77,4 +77,4 @@ Every whole read that takes bytes still reads every parsed file: `tree`, `graph`
 - Statements are prepared per call: `prepare_cached` needs rusqlite's `cache` feature, and the workspace pins `default-features = false`.
 - Left as perf nits: closure rounds clone the parses they resolve over, and the graph a bundle builds only to find its linked candidates computes every edge's written form.
 - **Through a CLI REF the closure never grows past round 1:** look-alikes and mixed scripts are refused at classification, and an alias-prefix match keeps the run as written, so round 1 reads every key of the fallback chain. The later rounds and the bare form's key are untested guards; cutting either survives the tests.
-- **Not tested:** subset exactness on the 1k `scale` targets (the counters are CLI `#[cfg(test)]`, the tree is eval's; all 19 fixtures are covered). The 10k differential is `#[ignore]`d and has not been run.
+- **Not tested:** subset exactness on the 1k `scale` targets (the counters are CLI `#[cfg(test)]`, the tree is eval's; all 21 configured fixtures are covered). The 10k differential is `#[ignore]`d and has not been run.

@@ -38,7 +38,7 @@ One file, `src/styles/tokens.css`, holds every colour literal, in both themes, a
 
 `src/styles/scale.test.ts` reads every CSS file under `src` but `tokens.css`: `font-size`, `line-height`, `padding*`, `margin*`, gaps and radii take one `var()` of their family (spacing also `0`, `auto`, `calc()` of tokens); `font` only `inherit`; a last declaration with no `;`, a raw length in a custom property outside `tokens.css` and a `var()` fallback count. Every token resolves into the scale's sets. `.button` and `.field` are `var(--control-height)` tall, `.button-compact` the compact one. No non-test `.tsx` sets a size, space or radius inline.
 
-`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0094" | "RM-0095" | "RM-0099" | null}` matching a declaration. 29 at ship: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), 15 Flow's (RM-0094), one the document modal's (RM-0095), 11 other screens' (RM-0099). A new one names its reason and the item that empties it.
+`src/styles/scale-exceptions.ts` `SCALE_EXCEPTIONS: readonly ScaleException[]`, each `{file, selector, property, value, reason, until: "RM-0095" | "RM-0099" | null}` matching a declaration. 14, Flow's 15 gone with RM-0094: two kept (`.sr-only`'s `-1px`; `.tab`'s `-1px` laying a border over a border), one the document modal's (RM-0095), 11 other screens' (RM-0099). A new one names its reason and the item that empties it.
 
 ## Primitives
 
@@ -80,7 +80,7 @@ Inter 4.001 from `@fontsource-variable/inter` 5.3.0, committed in `ui/fonts/inte
 
 - `field-sizing: content` is Chrome's; elsewhere a header select is as wide as its widest option. Past 13rem a value is cut while closed.
 - Every asset is served `no-store`, so fonts are fetched once per page load; the blank page before the entry module shows the system scheme.
-- `.app-body`'s `min-height` stays, pinned by Flow's styles test, until RM-0094 or RM-0099.
+- `.app-body`'s `min-height` stays, pinned by Flow's styles test, until RM-0099.
 - Sizes and the one-row header are a look in Chrome (`design-foundation.md` DF-10, DF-14): jsdom lays nothing out.
 
 ## Tests

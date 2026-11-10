@@ -241,6 +241,9 @@ describe("each method hits its URL (AC-09)", () => {
     // docs/features/writer-studio.md D2: a stage of a scope, `root` then `stage`, encoded once; `-` for No stage.
     ["getFlow: a stage, root then stage then trace", (client) => client.getFlow("alpha", { root: "DOM-HARBOR", stage: "a b+c&d", trace: true }), "/api/projects/alpha/flow?root=DOM-HARBOR&stage=a%20b%2Bc%26d&trace=true"],
     ["getFlow: No stage as `-`", (client) => client.getFlow("alpha", { root: "DOM-HARBOR", stage: "-", trace: true }), "/api/projects/alpha/flow?root=DOM-HARBOR&stage=-&trace=true"],
+    // docs/features/flow-scenario.md D2, D6: the cut, `in_flow=true` after `trace`, sent only as true.
+    ["getFlow: the cut `in_flow` last, sent as true", (client) => client.getFlow("alpha", { root: "DOM-HARBOR", depth: 1, trace: true, in_flow: true }), "/api/projects/alpha/flow?root=DOM-HARBOR&depth=1&trace=true&in_flow=true"],
+    ["getFlow: `in_flow` false is left out", (client) => client.getFlow("alpha", { root: "DOM-HARBOR", depth: 1, in_flow: false }), "/api/projects/alpha/flow?root=DOM-HARBOR&depth=1"],
     ["getFlow: a path ROOT's `/` as %2F, non-Latin text as UTF-8", (client) => client.getFlow("a b", { root: `docs/${String.fromCodePoint(0x417)}.md`, depth: 1 }), "/api/projects/a%20b/flow?root=docs%2F%D0%97.md&depth=1"],
     ["getRoadmap: no query, the whole plan", (client) => client.getRoadmap("harbor-sim"), "/api/projects/harbor-sim/roadmap"],
     [

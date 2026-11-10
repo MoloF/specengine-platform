@@ -491,9 +491,10 @@ fn the_tool_is_a_flat_read_that_writes_nothing() {
             .keys()
             .collect();
         names.sort();
+        // docs/features/flow-scenario.md FS-10: `in_flow` joins.
         assert_eq!(
             names,
-            ["depth", "root", "stage", "trace"],
+            ["depth", "in_flow", "root", "stage", "trace"],
             "{era:?}: {input}"
         );
         assert_eq!(
@@ -643,4 +644,175 @@ fn fs6_get_flow_takes_a_stage() {
     );
     let folded = &results[6]["structuredContent"];
     assert_eq!(ids(folded), ["STEP-SORT"], "the fold first: {folded}");
+}
+
+// ------------------------------------------------------------------ flow-scenario FS-10
+
+/// The property `name` of a schema, wherever it stands first (an object's
+/// `properties`, an array's `items`, a branch of `anyOf`/`oneOf`).
+fn property<'a>(schema: &'a Value, name: &str) -> Option<&'a Value> {
+    if let Some(found) = schema.get("properties").and_then(|props| props.get(name)) {
+        return Some(found);
+    }
+    match schema {
+        Value::Object(map) => map.values().find_map(|value| property(value, name)),
+        Value::Array(items) => items.iter().find_map(|value| property(value, name)),
+        _ => None,
+    }
+}
+
+/// The property names of the object schema `schema` holds first.
+fn property_names(schema: &Value) -> Vec<String> {
+    fn object(schema: &Value) -> Option<&serde_json::Map<String, Value>> {
+        if let Some(props) = schema.get("properties").and_then(Value::as_object) {
+            return Some(props);
+        }
+        match schema {
+            Value::Object(map) => map.values().find_map(object),
+            Value::Array(items) => items.iter().find_map(object),
+            _ => None,
+        }
+    }
+    let mut names: Vec<String> = object(schema)
+        .unwrap_or_else(|| panic!("no object schema: {schema}"))
+        .keys()
+        .cloned()
+        .collect();
+    names.sort();
+    names
+}
+
+fn sorted(names: &[&str]) -> Vec<String> {
+    let mut out: Vec<String> = names.iter().map(|name| (*name).to_owned()).collect();
+    out.sort();
+    out
+}
+
+/// docs/features/flow-scenario.md FS-10, the tool, on a scratch copy of
+/// `fixtures/flow-aside`: `get_flow {root: "WBAY-KILN", depth: 1, in_flow:
+/// true}` is the CLI library's `spec flow WBAY-KILN --depth 1 --in-flow`
+/// (text and document, both eras, within the schema): four nodes, 141 left
+/// out, the model's `types`; `false`, `null` and no `in_flow` are the uncut
+/// read, `not_in_flow` `null`; beside `stage` and `trace` too. `in_flow:
+/// "yes"` and `in_flow: 1` are bad arguments. The input schema describes
+/// `in_flow` with the spec's text; the output schema holds the read's 13
+/// keys and a node's 16. M: `FlowArgs.in_flow` dropped (a bad argument, or
+/// 145 nodes); a key missing from a mirror.
+#[test]
+fn fs10_get_flow_takes_in_flow() {
+    let project = Project::new("flow-aside");
+    let results = parity(
+        &project,
+        &[
+            json!({"root": "WBAY-KILN", "depth": 1, "in_flow": true}),
+            json!({"root": "WBAY-KILN", "depth": 1, "in_flow": false}),
+            json!({"root": "WBAY-KILN", "depth": 1, "in_flow": null}),
+            json!({"root": "WBAY-KILN", "depth": 1}),
+            json!({"root": "KRUN-FIRING", "stage": "glazing", "in_flow": true}),
+            json!({"root": "ATL-POTTERY", "depth": 1, "trace": true, "in_flow": true}),
+            json!({"in_flow": true}),
+        ],
+    );
+    for result in &results {
+        assert_eq!(result["isError"], json!(false), "{result}");
+    }
+    let cut = &results[0]["structuredContent"];
+    assert_eq!(
+        ids(cut),
+        ["HUNCH-0007", "WBAY-KILN", "CONE-BISQUE", "CONE-GLOST"],
+        "{cut}"
+    );
+    assert_eq!(cut["not_in_flow"], json!(141), "{cut}");
+    assert_eq!(
+        cut["types"],
+        json!(["follows", "uses", "supplies"]),
+        "{cut}"
+    );
+    assert!(
+        content_text(&results[0])
+            .starts_with("flow WBAY-KILN | nodes 4, edges 0, depth 1; not in the flow: 141\n"),
+        "{}",
+        content_text(&results[0])
+    );
+    let whole = &results[3]["structuredContent"];
+    assert_eq!(whole["nodes"].as_array().map(Vec::len), Some(145));
+    assert_eq!(whole["not_in_flow"], Value::Null, "{whole}");
+    for at in [1, 2] {
+        assert_eq!(
+            results[at]["structuredContent"], *whole,
+            "call {at}: the uncut read"
+        );
+    }
+    let glazing = &results[4]["structuredContent"];
+    assert_eq!(ids(glazing), ["POT-GLAZE", "POT-FIRE"], "{glazing}");
+    assert_eq!(glazing["not_in_flow"], json!(0), "{glazing}");
+    let traced = &results[5]["structuredContent"];
+    assert_eq!(
+        traced["nodes"].as_array().map(Vec::len),
+        Some(12),
+        "{traced}"
+    );
+    assert_eq!(traced["not_in_flow"], json!(14), "{traced}");
+    let top = &results[6]["structuredContent"];
+    assert_eq!(top["not_in_flow"], json!(0), "no ROOT drops nothing: {top}");
+
+    for era in ERAS {
+        let mut session = project.session(era);
+        let list = session.tools();
+        let listed = tool(&list, "get_flow");
+        let input = &listed["inputSchema"];
+        assert_eq!(
+            input["properties"]["in_flow"]["description"],
+            json!(
+                "Leave out each node holding nothing of the flow; a ROOT stays; not_in_flow \
+                 counts the documents left out. The gap rows stay whole."
+            ),
+            "{era:?}: the spec's text: {input}"
+        );
+        assert_eq!(
+            flat_input_problems("get_flow", input),
+            Vec::<String>::new(),
+            "{era:?}"
+        );
+        let schemas = output_schemas(&list);
+        let schema = &schemas["get_flow"];
+        assert_eq!(
+            property_names(schema),
+            sorted(&[
+                "root",
+                "reason",
+                "depth",
+                "notes",
+                "left_out",
+                "truncated",
+                "omitted_nodes",
+                "omitted_edges",
+                "not_in_flow",
+                "types",
+                "gaps",
+                "nodes",
+                "edges",
+            ]),
+            "{era:?}: the read's 13 keys"
+        );
+        let nodes = property(schema, "nodes").expect("nodes");
+        assert_eq!(
+            property_names(&nodes["items"]),
+            sorted(&[
+                "id", "kind", "title", "path", "line", "distance", "group", "stage", "start",
+                "end", "in_flow", "holds", "inner", "gaps", "rollup", "counts",
+            ]),
+            "{era:?}: a node's 16 keys"
+        );
+        for args in [
+            json!({"root": "WBAY-KILN", "in_flow": "yes"}),
+            json!({"root": "WBAY-KILN", "in_flow": 1}),
+            json!({"in_flow": ["true"]}),
+        ] {
+            let reply = session.call("get_flow", args.clone());
+            assert_bad_arguments(&reply, "", &format!("{era:?} get_flow {args}"));
+        }
+        let done = session.finish();
+        assert!(done.status.success(), "{era:?}: {}", done.stderr);
+    }
 }

@@ -28,6 +28,12 @@
 //! ([`crate::links`]); `--archive` (only with `--links`) admits links
 //! written in Tier 3 files.
 //!
+//! Every shown node carries `ancestors` in JSON, the nodes it is listed
+//! under, top first ([`SpecGraph::ancestors`] reversed): over a subset
+//! read, from the stored parents of each holder's chain (canon
+//! `spec-read-subset`, "The subset"); over the walk, from the whole graph.
+//! The text prints none.
+//!
 //! `--bindings` (task spec `show-bindings`): each shown node also carries
 //! its code binding rows and its contained sections', judged as `spec
 //! verify --node` judges them ([`crate::bindings`]), over the code index
@@ -44,6 +50,7 @@ use std::panic::{self, AssertUnwindSafe};
 
 use std::collections::BTreeSet;
 
+use serde::Serialize;
 use specengine_core::check::{CheckInput, NodeAt, Resolution, Resolver, SpecGraph, is_tier3_file};
 use specengine_core::{CodeConfig, DOCUMENT_EXTENSION, is_clean_relative, tokens_est};
 use specengine_model::script::normalize_char;
@@ -127,12 +134,26 @@ pub struct ShownNode {
     pub span_hash: String,
     /// Its bytes: a section's span, a document's whole file.
     pub text: String,
+    /// The nodes it is listed under, top first: a section climbs to its
+    /// enclosing node, a document to its `parent:`'s first holder; empty
+    /// for a root, in `spec bundle`'s targets and for a whole file.
+    pub ancestors: Vec<ShownAncestor>,
     /// Its links with `--links`, else `None`.
     pub links: Option<ShownLinks>,
     /// Its code binding rows and its contained sections' with
     /// `--bindings`; `None` without the flag or when no row could be read
     /// (no `[code]`, a `[code]` error, a walk gap, the data directory).
     pub bindings: Option<ShownBindings>,
+}
+
+/// A node a shown node is listed under ([`SpecGraph::ancestors`]).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ShownAncestor {
+    pub id: Option<String>,
+    pub kind: Option<String>,
+    pub title: Option<String>,
+    /// Its file, root-relative: a section's document may have no ID.
+    pub path: String,
 }
 
 /// A shown node's code binding rows (task spec `show-bindings`).
@@ -259,8 +280,8 @@ struct Read<'a> {
 }
 
 /// The answer over a subset read's files: the holders resolved over them,
-/// `--links` from their rows, each holder printed from the bytes the
-/// attempt read.
+/// `ancestors` from their chains' `parent:` rows and `--links` from their
+/// edge rows, each holder printed from the bytes the attempt read.
 fn subset_answer(
     read: &Read<'_>,
     subset: SubsetRead,
@@ -281,10 +302,7 @@ fn subset_answer(
         Ok(holders) => holders,
         Err(reason) => return Ok(not_found(read.request, reason, messages)),
     };
-    let graph = read
-        .request
-        .links
-        .then(|| SpecGraph::from_rows(&input, &project.config.scheme, paths, rows));
+    let graph = SpecGraph::from_rows(&input, &project.config.scheme, paths, rows);
     // A holder is a subset file: its read is in `reads`, else (a parsed
     // file) its bytes moved into `input`.
     let mut bytes_of = |path: &str| match reads.remove(path) {
@@ -308,7 +326,7 @@ fn subset_answer(
         read,
         &holders,
         &resolver,
-        graph.as_ref(),
+        &graph,
         &mut bytes_of,
         &mut messages,
     ) {
@@ -352,12 +370,10 @@ fn walk(env: &Env, read: &Read<'_>, mut messages: Vec<Message>) -> Result<ShowOu
         Err(reason) => return Ok(not_found(request, reason, messages)),
     };
 
-    // `--links`: the graph over the same input; the holders' files are
-    // asked for, so their own links always count.
-    let graph = request.links.then(|| {
-        seams::note(Event::WholeGraph);
-        SpecGraph::new(&input, scheme, &project.config.paths)
-    });
+    // The graph over the same input: `ancestors`, and `--links`, whose
+    // holders' files are asked for, so their own links always count.
+    seams::note(Event::WholeGraph);
+    let graph = SpecGraph::new(&input, scheme, &project.config.paths);
     let tree = WorkingTree::new(&project.root, &project.config.paths).map_err(store_error)?;
     let mut bytes_of = |path: &str| match read_once.contains(path) {
         true => input
@@ -371,7 +387,7 @@ fn walk(env: &Env, read: &Read<'_>, mut messages: Vec<Message>) -> Result<ShowOu
         read,
         &holders,
         &resolver,
-        graph.as_ref(),
+        &graph,
         &mut bytes_of,
         &mut messages,
     ) {
@@ -431,19 +447,19 @@ struct Shown {
 }
 
 /// Each holder read through `bytes_of` once, parsed fresh and shown: the
-/// nodes `REF` names in it, `--links` from `graph`. `Err`: no node, with
-/// the reason (exit 1).
+/// nodes `REF` names in it, `ancestors` and `--links` from `graph`. `Err`:
+/// no node, with the reason (exit 1).
 fn read_holders(
     read: &Read<'_>,
     holders: &[String],
     resolver: &Resolver<'_>,
-    graph: Option<&SpecGraph<'_>>,
+    graph: &SpecGraph<'_>,
     bytes_of: &mut dyn FnMut(&str) -> std::io::Result<Vec<u8>>,
     messages: &mut Vec<Message>,
 ) -> Result<Shown, String> {
     let (request, target, written) = (read.request, read.target, read.written);
     let scheme = &read.project.config.scheme;
-    let admission = graph.map(|graph| {
+    let admission = request.links.then(|| {
         Admission::new(
             graph,
             request.archive,
@@ -451,12 +467,15 @@ fn read_holders(
         )
     });
     let links_of = |path: &str, ord: usize, id: Option<&str>| -> Option<ShownLinks> {
-        let (graph, admission) = (graph?, admission.as_ref()?);
+        let admission = admission.as_ref()?;
         Some(
             node_in_graph(graph, path, ord, id)
                 .map(|at| node_links(graph, at, admission))
                 .unwrap_or_default(),
         )
+    };
+    let ancestors_of = |path: &str, ord: usize, id: Option<&str>| -> Vec<ShownAncestor> {
+        node_in_graph(graph, path, ord, id).map_or_else(Vec::new, |at| ancestors(graph, at))
     };
 
     let mut nodes = Vec::new();
@@ -505,6 +524,7 @@ fn read_holders(
         for ord in pick(&parsed, target) {
             let mut node = shown(path, &bytes, &parsed, ord, archived, utf8);
             node.norm_hash = norm_hash(&parsed, &bytes, ord);
+            node.ancestors = ancestors_of(path, ord, node.id.as_deref());
             node.links = links_of(path, ord, node.id.as_deref());
             citations.push(match (resolver.feature_slug(path), &node.id) {
                 (Some(slug), Some(id)) => format!("{slug}/{id}"),
@@ -647,6 +667,26 @@ fn not_found(request: &ShowRequest, reason: String, messages: Vec<Message>) -> S
         nodes: Vec::new(),
         view: View::Capped,
     }
+}
+
+/// The nodes `at` is listed under, top first: [`SpecGraph::ancestors`]
+/// reversed, so a `parent:` that dangles, names another project or breaks
+/// a cycle ends the chain and no node is listed twice.
+fn ancestors(graph: &SpecGraph<'_>, at: NodeAt) -> Vec<ShownAncestor> {
+    graph
+        .ancestors(at)
+        .into_iter()
+        .rev()
+        .map(|up| {
+            let node = graph.node(up);
+            ShownAncestor {
+                id: node.and_then(|node| node.id.clone()),
+                kind: node.and_then(|node| node.kind.clone()),
+                title: node.and_then(|node| node.title.clone()),
+                path: graph.paths()[up.file].to_owned(),
+            }
+        })
+        .collect()
 }
 
 /// The graph node of a node read fresh from `path` at position `ord`: the
@@ -914,6 +954,7 @@ pub(crate) fn shown(
         norm_hash: None,
         span_hash: span_hash(bytes, node),
         text,
+        ancestors: Vec::new(),
         links: None,
         bindings: None,
     }
@@ -938,6 +979,7 @@ fn whole_file(path: &str, bytes: &[u8], archived: bool, utf8: bool) -> ShownNode
         norm_hash: None,
         span_hash: b3_hash(bytes),
         text,
+        ancestors: Vec::new(),
         links: None,
         bindings: None,
     }

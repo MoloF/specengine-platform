@@ -1637,3 +1637,82 @@ fn get_node_and_bundle_carry_tested() {
         "both eras give the same results"
     );
 }
+
+// ------------------------------------------------------------------ flow-scenario FS-10
+
+/// The served path of `fixtures/flow-aside` ("Data", "`spec show` JSON").
+fn aside_entry(id: &str, kind: &str, title: &str, path: &str) -> Value {
+    json!({"id": id, "kind": kind, "title": title, "path": path})
+}
+
+/// docs/features/flow-scenario.md FS-10, `get_node`: on a scratch copy of
+/// `fixtures/flow-aside`, `{id: "HUNCH-0007"}` is the CLI library's `spec
+/// show HUNCH-0007` (text and document, both eras, within the schema) and
+/// its `ancestors` are the served path, top first, each `{id, kind, title,
+/// path}`; a section's holds three, a root's none, `with: ["links"]` the
+/// same; the text names no ancestor. The schema's `ancestors` items hold
+/// exactly the four keys. M: `ancestors` missing from `ShowNode` (the schema
+/// walker refuses the key); `ShowAncestor` without `path`.
+#[test]
+fn fs10_get_node_serves_the_ancestors() {
+    let project = Project::new("flow-aside");
+    let atelier = aside_entry(
+        "ATL-POTTERY",
+        "atelier",
+        "The pottery",
+        "docs/workshop/atelier.md",
+    );
+    let kiln = aside_entry(
+        "WBAY-KILN",
+        "workbay",
+        "Kiln bay",
+        "docs/workshop/bays/kiln.md",
+    );
+    let glost = aside_entry(
+        "CONE-GLOST",
+        "conerule",
+        "Glost cone",
+        "docs/workshop/cones/glost.md",
+    );
+    let results = project.parity(&[
+        node("HUNCH-0007"),
+        node("CONE-GLOST-SHELF"),
+        node("ATL-POTTERY"),
+        links("HUNCH-0007", None),
+    ]);
+    for era in &results {
+        let shown = |at: usize| era[at]["structuredContent"]["nodes"][0].clone();
+        assert_eq!(
+            shown(0)["ancestors"],
+            json!([atelier.clone(), kiln.clone()]),
+            "{}",
+            shown(0)
+        );
+        assert_eq!(
+            shown(1)["ancestors"],
+            json!([atelier.clone(), kiln.clone(), glost.clone()]),
+            "{}",
+            shown(1)
+        );
+        assert_eq!(shown(2)["ancestors"], json!([]), "{}", shown(2));
+        assert_eq!(shown(3)["ancestors"], shown(0)["ancestors"]);
+        assert!(
+            !content_text(&era[1]).contains("The pottery"),
+            "the text names no ancestor: {}",
+            content_text(&era[1])
+        );
+    }
+    let (session, schemas) = project.open(ERAS[0]);
+    let ancestors = schemas["get_node"]
+        .pointer("/properties/nodes/items/properties/ancestors")
+        .unwrap_or_else(|| panic!("no `ancestors` in ShowNode: {}", schemas["get_node"]));
+    let mut keys: Vec<&String> = ancestors["items"]["properties"]
+        .as_object()
+        .unwrap_or_else(|| panic!("ShowAncestor is no object: {ancestors}"))
+        .keys()
+        .collect();
+    keys.sort();
+    assert_eq!(keys, ["id", "kind", "path", "title"], "{ancestors}");
+    let done = session.finish();
+    assert!(done.status.success(), "{}", done.stderr);
+}

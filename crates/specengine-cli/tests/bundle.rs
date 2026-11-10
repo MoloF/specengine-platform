@@ -1082,6 +1082,8 @@ fn ac14_both_fixtures_give_one_key_set() {
             "text",
             "truncated",
             "omitted",
+            // docs/features/flow-scenario.md FS-8.
+            "ancestors",
             "links",
             // docs/features/show-bindings.md "spec show --bindings".
             "bindings",

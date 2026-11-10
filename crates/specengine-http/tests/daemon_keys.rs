@@ -260,6 +260,12 @@
 //! `WorkspaceModule`: `CardTask` (`{id, status, title, stale}`), from the same
 //! copy of `fixtures/card-press`, whose `C-0001` links `T-0001` (made by `spec
 //! task new`) before its accept.
+//!
+//! docs/features/flow-scenario.md (RM-0094) FS-11: `FlowView` gains
+//! `not_in_flow` and `types` (13 keys), `FlowNode` `in_flow` after `end` (16),
+//! `ShownNode` `ancestors` before `links` (20), and one set more, 115 in all,
+//! last: `ShownAncestor` (`{id, kind, title, path}`), from MEC-STAMINA's read
+//! on spec-a. M: a key missing from the fixture.
 
 mod common;
 mod task_state;
@@ -1208,6 +1214,12 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
     // their entries (more `BindingRow` and `TestedRow` instances).
     let bound_nodes = items(&bound_view, "nodes");
     let shown_nodes = [items(&nodes, "nodes"), bound_nodes.clone()].concat();
+    // docs/features/flow-scenario.md FS-11: MEC-STAMINA's path from the top.
+    let shown_ancestors = items(&shown_nodes, "ancestors");
+    assert!(
+        !shown_ancestors.is_empty(),
+        "ShownAncestor: a shown node stands under another: {shown_nodes:?}"
+    );
     let shown_bindings = objects(&with_object(&bound_nodes, "bindings"), "bindings");
     assert!(
         !shown_bindings.is_empty(),
@@ -1781,6 +1793,10 @@ fn daemon_key_sets() -> Vec<(&'static str, Vec<String>)> {
             one_key_set("WorkspaceModule", &workspace_modules, keys_of),
         ),
         ("CardTask", one_key_set("CardTask", &card_tasks, keys_of)),
+        (
+            "ShownAncestor",
+            one_key_set("ShownAncestor", &shown_ancestors, keys_of),
+        ),
     ]
 }
 
@@ -2107,12 +2123,13 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     let names: Vec<&str> = sets.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         names.len(),
-        114,
+        115,
         "{names:?} (health-left: 41 -> 44; rev-discipline: 45; drift-queue: 46; \
          health-code: 56; roadmap-screen: 66; bundle-bindings: 67; tested-reads: 68; \
          health-drift: 74; ui-node-bindings: 76; lock-diff: 81; flow-read: 86; \
          board-ui: 98; card-trace: 105; trace-views: 106; hub-identity: 107; hub-team: 108; \
-         hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114)"
+         hub-confirm: 109; hub-git: 110; workspaces: 113; card-tasks: 114; \
+         flow-scenario: 115)"
     );
     let counts: Vec<(&str, usize)> = sets[6..15]
         .iter()
@@ -2481,9 +2498,10 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         assert_eq!(*name, want_name);
         assert_eq!(keys, want_keys, "{name}");
     }
-    // ui-node-bindings' two, last (TE-1): a shown node's 19 keys in
-    // `spec show --json`'s order, `bindings` after `links`, and its
-    // bindings object's three.
+    // ui-node-bindings' two, last (TE-1): a shown node's keys in `spec show
+    // --json`'s order, `bindings` after `links`, and its bindings object's
+    // three. docs/features/flow-scenario.md FS-11: 20 since `ancestors`,
+    // before `links`.
     assert_eq!(sets[74].0, "ShownNode");
     assert_eq!(
         sets[74].1,
@@ -2505,6 +2523,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "text",
             "truncated",
             "omitted",
+            "ancestors",
             "links",
             "bindings",
         ]
@@ -2524,7 +2543,9 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
         assert_eq!(*name, want_name);
         assert_eq!(keys, want_keys, "{name}");
     }
-    // flow-read's five, last: "Output"'s order and keys.
+    // flow-read's five, last: "Output"'s order and keys;
+    // docs/features/flow-scenario.md FS-11: `FlowView` 13 with `not_in_flow`
+    // and `types`, `FlowNode` 16 with `in_flow`.
     let five: Vec<(&str, Vec<String>)> = sets[81..86].to_vec();
     let want: [(&str, &[&str]); 5] = [
         (
@@ -2538,6 +2559,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
                 "truncated",
                 "omitted_nodes",
                 "omitted_edges",
+                "not_in_flow",
+                "types",
                 "gaps",
                 "nodes",
                 "edges",
@@ -2548,7 +2571,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
             "FlowNode",
             &[
                 "id", "kind", "title", "path", "line", "distance", "group", "stage", "start",
-                "end", "holds", "inner", "gaps", "rollup", "counts",
+                "end", "in_flow", "holds", "inner", "gaps", "rollup", "counts",
             ],
         ),
         (
@@ -2744,9 +2767,13 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
     );
     assert_eq!(sets[112].0, "WorkspaceModule");
     assert_eq!(sets[112].1, ["name", "title", "root"]);
-    // card-tasks' one, last: docs/canon/cards.md "Documents and events".
+    // card-tasks' one: docs/canon/cards.md "Documents and events".
     assert_eq!(sets[113].0, "CardTask");
     assert_eq!(sets[113].1, ["id", "status", "title", "stale"]);
+    // docs/features/flow-scenario.md FS-11, set 115, last: a shown node's
+    // `ancestors` entry.
+    assert_eq!(sets[114].0, "ShownAncestor");
+    assert_eq!(sets[114].1, ["id", "kind", "title", "path"]);
     let path = repository_root().join("fixtures").join("daemon-keys.json");
     if std::env::var_os("SPECENGINE_WRITE_DAEMON_KEYS").is_some_and(|value| value == "1") {
         fs::write(&path, &text).expect("write fixtures/daemon-keys.json");
@@ -2767,7 +2794,7 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 }
 
 /// docs/features/kind-decision.md AC-T4 ("Data": `fixtures/daemon-keys.json`
-/// unchanged, no new key): the fixture holds 114 sets (41 until
+/// unchanged, no new key): the fixture holds 115 sets (41 until
 /// docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2787,7 +2814,8 @@ fn ac09_the_daemons_key_sets_are_fixtures_daemon_keys_json() {
 /// docs/features/hub-confirm.md its `ConfirmRead`, and
 /// docs/features/hub-git.md its `HubSync`, and
 /// docs/features/workspaces.md its three, and
-/// docs/features/card-tasks.md its `CardTask`); a decision
+/// docs/features/card-tasks.md its `CardTask`, and
+/// docs/features/flow-scenario.md its `ShownAncestor`); a decision
 /// raised through `spec propose decision` (with its patch's linked update,
 /// a staged answer) is served with the fixture's `Proposal` keys in order
 /// (its update's review too), its stage with `StagedApprove`'s, its inbox
@@ -2801,8 +2829,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        114,
-        "114 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        115,
+        "115 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -2810,7 +2838,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
-         workspaces' three (WS-12) and card-tasks' `CardTask`"
+         workspaces' three (WS-12), card-tasks' `CardTask` and flow-scenario's \
+         `ShownAncestor` (FS-11)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]
@@ -2924,7 +2953,7 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 }
 
 /// docs/features/kind-amendment.md AC-T4 ("Row": `fixtures/daemon-keys.json`
-/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 114 sets
+/// unchanged, no new key) and AC-R8's HTTP half: the fixture holds 115 sets
 /// (41 until docs/features/health-left.md added its three, AC-T2,
 /// docs/features/rev-discipline.md its `RevisionRow`, TE-3,
 /// docs/features/drift-queue.md its `DriftEvidence`, TE-11,
@@ -2942,7 +2971,8 @@ fn kind_decision_ac_t4_a_decision_is_served_with_the_fixture_key_sets() {
 /// docs/features/hub-confirm.md its `ConfirmRead`, and
 /// docs/features/hub-git.md its `HubSync`, and
 /// docs/features/workspaces.md its three, and
-/// docs/features/card-tasks.md its `CardTask`); the amendment of
+/// docs/features/card-tasks.md its `CardTask`, and
+/// docs/features/flow-scenario.md its `ShownAncestor`); the amendment of
 /// docs/features/kind-amendment.md "Data", raised through `spec propose
 /// amendment`, is served with the fixture's `Proposal` keys in order (`kind`
 /// `amendment`, `base_hash` null, `target_ids` the file and its own new
@@ -2959,8 +2989,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
     let sets = fixture.as_object().expect("an object of sets");
     assert_eq!(
         sets.len(),
-        114,
-        "114 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
+        115,
+        "115 sets: 41, health-left's three (docs/features/health-left.md AC-T2), \
          rev-discipline's `RevisionRow` (TE-3), drift-queue's `DriftEvidence`, \
          health-code's ten (AC-9), roadmap-screen's ten (TE-1), \
          bundle-bindings' `BindingRow` (RD-8), tested-reads' `TestedRow` (TE-5), \
@@ -2968,7 +2998,8 @@ fn kind_amendment_ac_t4_an_amendment_is_served_with_the_fixture_key_sets() {
          lock-diff's five (TE-2), flow-read's five, board-ui's twelve (AC-09), \
          card-trace's seven, trace-views' `TraceStage`, hub-identity's `Identity`, \
          hub-team's `Team`, hub-confirm's `ConfirmRead`, hub-git's `HubSync`, \
-         workspaces' three (WS-12) and card-tasks' `CardTask`"
+         workspaces' three (WS-12), card-tasks' `CardTask` and flow-scenario's \
+         `ShownAncestor` (FS-11)"
     );
     let set = |name: &str| -> Vec<String> {
         sets[name]

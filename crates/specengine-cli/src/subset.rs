@@ -5,9 +5,10 @@
 //! 1. The freshness step (`crate::freshness::step`: the stat-keyed walk,
 //!    or a hub's trusted index); its warnings print once.
 //! 2. An attempt: one index snapshot (T3) computes the subset ("Data": a
-//!    REF's closure, the edges of the shown nodes, a bundle's candidate
-//!    edges and parent chains) and decodes each of its files once with its
-//!    stored BLAKE3; the snapshot ends before any file is read.
+//!    REF's closure, the parent chains and edges of the shown nodes, a
+//!    bundle's candidate edges and parent chains) and decodes each of its
+//!    files once with its stored BLAKE3; the snapshot ends before any file
+//!    is read.
 //! 3. Every subset file is read once through the freshness step's
 //!    `WorkingTree` and compared with its row (T5, R3): its bytes hash to
 //!    the row's BLAKE3, or the row has no hash and the read fails now too.
@@ -392,28 +393,59 @@ impl<'s, 'i> Gather<'s, 'i> {
         self.decode(named.iter().map(String::as_str))
     }
 
-    /// `show REF [--links]`: C(REF); with links, for each shown node n and
-    /// each m within it, the edges m holds and those ending on m, and
-    /// their files.
+    /// The stored parents of `path`'s chain, by file, as `ancestors`
+    /// climbs it: a section climbs to its document, a document goes to its
+    /// stored parent's first end, until none or one repeats; every end's
+    /// file decoded.
+    fn chain(&mut self, path: &str) -> Result<(), StoreError> {
+        let mut seen = BTreeSet::from([path.to_owned()]);
+        let mut file = path.to_owned();
+        while let Some(parent) = self.snapshot.parent(&file)? {
+            let next = (parent.state == LinkState::Resolved)
+                .then(|| parent.ends.first().map(|(path, _)| path.clone()))
+                .flatten();
+            let ends: Vec<String> = parent.ends.iter().map(|(path, _)| path.clone()).collect();
+            self.parents.insert(file.clone(), parent);
+            self.decode(ends.iter().map(String::as_str))?;
+            match next {
+                Some(next) if seen.insert(next.clone()) => file = next,
+                _ => break,
+            }
+        }
+        Ok(())
+    }
+
+    /// `show REF [--links]`: C(REF); for each holder with a shown node, its
+    /// chain of stored parents; with links, for each shown node n and each
+    /// m within it, the edges m holds and those ending on m, and their
+    /// files.
     fn show(&mut self, target: &Target, links: bool) -> Result<(), StoreError> {
         let holders = self.holders(target)?;
-        if !links {
-            return Ok(());
-        }
         for path in &holders {
             let Some(parsed) = self.file(path).and_then(|file| file.parsed.as_ref()) else {
                 continue;
             };
-            let mut within: BTreeSet<usize> = BTreeSet::new();
-            if !parsed.nodes.is_empty() {
-                for ord in pick(parsed, target) {
-                    within.extend(nodes_within(&parsed.nodes, ord));
-                }
+            let picked = if parsed.nodes.is_empty() {
+                Vec::new()
+            } else {
+                pick(parsed, target)
+            };
+            if links {
+                let within: BTreeSet<usize> = picked
+                    .iter()
+                    .flat_map(|&ord| nodes_within(&parsed.nodes, ord))
+                    .collect();
+                let within: Vec<usize> = within.into_iter().collect();
+                self.node_edges(path, &within)?;
             }
-            let within: Vec<usize> = within.into_iter().collect();
-            self.node_edges(path, &within)?;
+            if !picked.is_empty() {
+                self.chain(path)?;
+            }
         }
-        self.decode_edge_files()
+        if links {
+            self.decode_edge_files()?;
+        }
+        Ok(())
     }
 
     /// `bundle REF…`: the union of the closures; for each kept target, the
@@ -470,23 +502,9 @@ impl<'s, 'i> Gather<'s, 'i> {
         }
         self.decode_edge_files()?;
 
-        // Each kept target's chain, by file: a section climbs to its
-        // document, a document goes to its stored parent's first end.
+        // Each kept target's chain.
         for (path, _, _) in &kept {
-            let mut seen = BTreeSet::from([path.clone()]);
-            let mut file = path.clone();
-            while let Some(parent) = self.snapshot.parent(&file)? {
-                let next = (parent.state == LinkState::Resolved)
-                    .then(|| parent.ends.first().map(|(path, _)| path.clone()))
-                    .flatten();
-                let ends: Vec<String> = parent.ends.iter().map(|(path, _)| path.clone()).collect();
-                self.parents.insert(file.clone(), parent);
-                self.decode(ends.iter().map(String::as_str))?;
-                match next {
-                    Some(next) if seen.insert(next.clone()) => file = next,
-                    _ => break,
-                }
-            }
+            self.chain(path)?;
         }
         Ok(())
     }

@@ -102,11 +102,11 @@ describe("the shell (AC-11)", () => {
     expect(current?.textContent).toBe("Health");
   });
 
-  it("builds the Flow: its heading, the gap rows' section, no stand-in (flow-canvas)", async () => {
+  it("builds the Flow: its heading, the Gaps control, no stand-in (flow-canvas, flow-scenario D10)", async () => {
     const client = stubClient();
     renderApp(client, "#/alpha/flow");
     expect(await screen.findByRole("heading", { level: 1, name: "Flow" })).toBeTruthy();
-    expect(await screen.findByRole("region", { name: "Gaps" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: /^Gaps/ })).toBeTruthy();
     const current = (await shownNav()).find((link) => link.getAttribute("aria-current") === "page");
     expect(current?.textContent).toBe("Flow");
     expect(client.getFlow.mock.calls.every((call) => call[1].depth !== undefined)).toBe(true);

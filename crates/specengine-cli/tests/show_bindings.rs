@@ -827,14 +827,15 @@ fn spec_part(document: &Value) -> Value {
 }
 
 /// `spec show REF` without `--bindings`: each node's `bindings` `null`,
-/// its last key, after `links` (19 keys): docs/features/show-bindings.md
+/// its last key, after `links` (20 keys since docs/features/flow-scenario.md
+/// FS-8 added `ancestors`): docs/features/show-bindings.md
 /// "spec show --bindings".
 fn assert_unbound_document(run: &Show) {
     for node in run.nodes() {
         assert!(
             node.as_object()
-                .is_some_and(|object| object.contains_key("bindings") && object.len() == 19),
-            "{}: `bindings` present, 19 keys\n{}",
+                .is_some_and(|object| object.contains_key("bindings") && object.len() == 20),
+            "{}: `bindings` present, 20 keys\n{}",
             run.what,
             run.show()
         );

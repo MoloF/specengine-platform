@@ -1186,6 +1186,7 @@ fn shown_node(graph: &SpecGraph<'_>, at: NodeAt) -> ShownNode {
             norm_hash: None,
             span_hash: b3_hash(&[]),
             text: String::new(),
+            ancestors: Vec::new(),
             links: None,
             bindings: None,
         },

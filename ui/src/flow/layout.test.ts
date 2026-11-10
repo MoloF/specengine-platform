@@ -1,13 +1,15 @@
 import { describe, expect, it } from "vitest";
 import type { FlowNode } from "../api/types";
+import { asideFiring, asideLens } from "../test/asideStub";
 import { aFlowEdge, aFlowNode, aFlowView } from "../test/builders";
 import { aLine, flow200, forwardCrossings, TYPE_B } from "../test/flowStub";
 import { stretchCrosses, type Point } from "./geometry";
-import { BOX_HEIGHT, BOX_WIDTH, boxAfterKey, CANVAS_LIMIT, COLUMN_GAP, layoutFlow, LANE_PAD, type FlowBox, type FlowLayout, type LaidEdge } from "./layout";
+import { BOX_HEIGHT, BOX_WIDTH, BOX_GAP, boxAfterKey, CANVAS_LIMIT, layoutFlow, LANE_PAD, type FlowBox, type FlowLayout, type LaidEdge } from "./layout";
 
-// docs/features/flow-canvas.md "Layout": AC-04 layers, AC-05 arcs, AC-11's cap, AC-12 the trial of
-// owner's decision 11 and the keys' moves; one read, one lane (docs/features/writer-studio.md D1).
-// Pure: a read in, positions out.
+// docs/features/flow-canvas.md "Layout" and flow-scenario FS-15 (RM-0094): the walk top to bottom,
+// a row per distance, the band under the last row, stage dividers where stages begin, arcs on their
+// own tracks right of the walk; AC-11's cap, AC-12's trial of owner's decision 11 and the keys'
+// moves; one read, one lane (docs/features/writer-studio.md D1). Pure: a read in, positions out.
 
 function box(layout: FlowLayout, name: string): FlowBox {
   const found = layout.boxes.find((candidate) => candidate.name === name);
@@ -25,7 +27,7 @@ function edge(layout: FlowLayout, from: string, to: string): LaidEdge {
   return found;
 }
 
-/** Whether a line's stretches pass through a box other than its own two ends'. */
+/** The boxes a line's stretches pass through, its own two ends' excepted when it touches only their sides. */
 function crossesABox(laid: LaidEdge, layout: FlowLayout): FlowBox[] {
   const stretches: [Point, Point][] = [];
   laid.points.forEach((point, index) => {
@@ -49,42 +51,110 @@ function overlapping(boxes: readonly FlowBox[]): string[] {
   return hits;
 }
 
-describe("layers (AC-04)", () => {
-  it("runs boxes at distance 0, 4 and 9 left to right: a column per distinct layer, no empty column", () => {
+/** The firing run as the daemon serves it, the run's own node left out as the screen leaves it. */
+function firingBoxes() {
+  const read = asideFiring();
+  return { ...read, nodes: read.nodes.filter((node) => node.id !== "KRUN-FIRING") };
+}
+
+describe("rows (AC-04, FS-15)", () => {
+  it("runs boxes at distance 0, 4 and 9 top to bottom: a row per distinct distance, no empty row, one above the other", () => {
     const layout = layoutFlow(aFlowView([aFlowNode({ id: "NINE", distance: 9 }), aFlowNode({ id: "ZERO", distance: 0 }), aFlowNode({ id: "FOUR", distance: 4 })], []));
-    expect(box(layout, "ZERO").x).toBeLessThan(box(layout, "FOUR").x);
-    expect(box(layout, "FOUR").x).toBeLessThan(box(layout, "NINE").x);
-    expect(["ZERO", "FOUR", "NINE"].map((name) => box(layout, name).column)).toEqual([0, 1, 2]);
-    expect(box(layout, "FOUR").x - box(layout, "ZERO").x).toBe(BOX_WIDTH + COLUMN_GAP);
+    expect(box(layout, "ZERO").y).toBeLessThan(box(layout, "FOUR").y);
+    expect(box(layout, "FOUR").y).toBeLessThan(box(layout, "NINE").y);
+    expect(["ZERO", "FOUR", "NINE"].map((name) => box(layout, name).level)).toEqual([0, 1, 2]);
+    // M: `x` by distance; a walk with one box a row stands as one column.
+    expect(new Set(["ZERO", "FOUR", "NINE"].map((name) => box(layout, name).x)).size).toBe(1);
   });
 
-  it("lays layer null in the band under the lane, its caption over them", () => {
-    const layout = layoutFlow(aFlowView([...aLine(["A", "B"]), aFlowNode({ id: "DEF", distance: null })], []));
-    const definition = box(layout, "DEF");
-    expect(definition.column).toBeNull();
-    expect(definition.y).toBeGreaterThan(box(layout, "A").y + BOX_HEIGHT);
-    expect(layout.lanes[0]?.band).toEqual([["n:DEF"]]);
-    expect(layout.lanes[0]?.bandY).toBeLessThan(definition.y);
+  it("on the firing run: y grows with distance, one distance shares one y, Mending and Packing side by side", () => {
+    const layout = layoutFlow(firingBoxes());
+    const steps = layout.boxes.filter((one) => one.node.distance !== null).sort((a, b) => (a.node.distance ?? 0) - (b.node.distance ?? 0));
+    steps.forEach((one, index) => {
+      const next = steps[index + 1];
+      if (next !== undefined) {
+        expect([one.name, next.name, one.node.distance === next.node.distance ? one.y === next.y : one.y < next.y]).toEqual([one.name, next.name, true]);
+      }
+    });
+    const [mend, pack] = [box(layout, "POT-MEND"), box(layout, "POT-PACK")];
+    expect(mend.y).toBe(pack.y);
+    expect(Math.abs(mend.x - pack.x)).toBeGreaterThanOrEqual(BOX_WIDTH + BOX_GAP);
+    expect(overlapping(layout.boxes)).toEqual([]);
   });
 
-  it("pulls a join between its branches: rows are ordered, then aligned", () => {
+  it("stands four dividers, wheelwork, bisque, glazing and crating, above rows 0, 3, 5 and 7; none in a stage view", () => {
+    const layout = layoutFlow(firingBoxes());
+    const lane = layout.lanes[0];
+    expect(lane?.dividers.map((divider) => [divider.level, divider.stages])).toEqual([
+      [0, ["wheelwork"]],
+      [3, ["bisque"]],
+      [5, ["glazing"]],
+      [7, ["crating"]],
+    ]);
+    for (const divider of lane?.dividers ?? []) {
+      const first = layout.boxes.find((one) => one.id === lane?.rows[divider.level]?.[0]);
+      expect([divider.level, divider.y < (first?.y ?? 0)]).toEqual([divider.level, true]);
+    }
+    // M: a divider per row.
+    expect(lane?.dividers).toHaveLength(4);
+    const glazing = firingBoxes();
+    const stage = layoutFlow({ ...glazing, nodes: glazing.nodes.filter((node) => node.stage === "glazing") });
+    expect(stage.boxes).toHaveLength(2);
+    expect(stage.lanes[0]?.dividers).toEqual([]);
+  });
+
+  it("draws no divider for a picture of fewer than two stages, and none for a band box's stage", () => {
+    const one = layoutFlow(aFlowView([aFlowNode({ id: "A", distance: 0, stage: "only" }), aFlowNode({ id: "B", distance: 1, stage: "only" }), aFlowNode({ id: "C", distance: null, stage: "elsewhere" })], []));
+    expect(one.lanes[0]?.dividers).toEqual([]);
+  });
+
+  it("shares one divider between stages beginning in one row, their words joined in row order", () => {
+    const layout = layoutFlow(aFlowView([aFlowNode({ id: "A", distance: 0, stage: "first" }), aFlowNode({ id: "B", distance: 1, stage: "second", path: "docs/a.md" }), aFlowNode({ id: "C", distance: 1, stage: "third", path: "docs/b.md" })], []));
+    expect(layout.lanes[0]?.dividers.map((divider) => divider.level)).toEqual([0, 1]);
+    expect([...(layout.lanes[0]?.dividers[1]?.stages ?? [])].sort()).toEqual(["second", "third"]);
+  });
+
+  it("lays the boxes off the walk in the band under the last row, its caption over them, wrapped at four boxes", () => {
+    const layout = layoutFlow(aFlowView([...aLine(["A", "B"]), ...["D1", "D2", "D3", "D4", "D5", "D6"].map((id) => aFlowNode({ id, distance: null }))], []));
+    const band = layout.lanes[0]?.band ?? [];
+    expect(band.map((shelf) => shelf.length)).toEqual([4, 2]);
+    const bottom = box(layout, "B").y + BOX_HEIGHT;
+    expect(layout.boxes.filter((one) => one.level === null).every((one) => one.y > bottom)).toBe(true);
+    expect(layout.lanes[0]?.bandY).toBeGreaterThan(bottom);
+    expect(layout.lanes[0]?.bandY).toBeLessThan(box(layout, "D1").y);
+  });
+
+  it("at the pottery's lens root, the gallery and the run in row 0, the nine parts in the band, its edges off the walk", () => {
+    const read = asideLens();
+    const layout = layoutFlow({ ...read, nodes: read.nodes.filter((node) => node.id !== "ATL-POTTERY") });
+    expect(layout.lanes[0]?.rows.map((row) => row.length)).toEqual([2]);
+    expect(layout.lanes[0]?.band.flat()).toHaveLength(9);
+    expect(layout.lanes[0]?.band.map((shelf) => shelf.length)).toEqual([4, 4, 1]);
+    expect(layout.edges).toHaveLength(9);
+    expect(layout.edges.every((laid) => laid.offWalk && laid.route === "band")).toBe(true);
+    for (const laid of layout.edges) {
+      expect([laid.id, crossesABox(laid, layout).map((one) => one.name)]).toEqual([laid.id, []]);
+    }
+  });
+
+  it("pulls a join between its branches: places are ordered, then aligned", () => {
     const nodes = [aFlowNode({ id: "S", distance: 0 }), aFlowNode({ id: "UP", distance: 1 }), aFlowNode({ id: "DOWN", distance: 1 }), aFlowNode({ id: "JOIN", distance: 2 })];
     const edges = [aFlowEdge({ from: "S", to: "UP" }), aFlowEdge({ from: "S", to: "DOWN" }), aFlowEdge({ from: "UP", to: "JOIN" }), aFlowEdge({ from: "DOWN", to: "JOIN" })];
     const layout = layoutFlow(aFlowView(nodes, edges));
-    const middle = (box(layout, "UP").y + box(layout, "DOWN").y) / 2;
-    expect(box(layout, "JOIN").y).toBeCloseTo(middle, 0);
-    expect(box(layout, "S").y).toBeCloseTo(middle, 0);
+    const middle = (box(layout, "UP").x + box(layout, "DOWN").x) / 2;
+    expect(box(layout, "JOIN").x).toBeCloseTo(middle, 0);
+    expect(box(layout, "S").x).toBeCloseTo(middle, 0);
   });
 
-  it("orders rows by the neighbours: two parallel lines never swap", () => {
+  it("orders places by the neighbours: two parallel lines never swap", () => {
     const nodes = [aFlowNode({ id: "A1", distance: 0 }), aFlowNode({ id: "A2", distance: 0 }), aFlowNode({ id: "B1", distance: 1, path: "docs/spec/z.md" }), aFlowNode({ id: "B2", distance: 1, path: "docs/spec/a.md" })];
     const layout = layoutFlow(aFlowView(nodes, [aFlowEdge({ from: "A1", to: "B1" }), aFlowEdge({ from: "A2", to: "B2" })]));
     expect(forwardCrossings(layout)).toBe(0);
-    expect(box(layout, "A1").y < box(layout, "A2").y).toBe(box(layout, "B1").y < box(layout, "B2").y);
+    expect(box(layout, "A1").x < box(layout, "A2").x).toBe(box(layout, "B1").x < box(layout, "B2").x);
   });
 });
 
-describe("edges (AC-05): columns decide the shape, never a kind", () => {
+describe("edges (AC-05, FS-15): rows decide the shape, never a kind", () => {
   const nodes = [...aLine(["A", "B", "C", "D"]), aFlowNode({ id: "A2", distance: 0 }), aFlowNode({ id: "B2", distance: 1 }), aFlowNode({ id: "C2", distance: 2 })];
   const edges = [
     aFlowEdge({ from: "A", to: "B", kind: "repeat" }),
@@ -97,58 +167,66 @@ describe("edges (AC-05): columns decide the shape, never a kind", () => {
   ];
   const layout = layoutFlow(aFlowView(nodes, edges));
 
-  it("arcs a backward edge with a kind and one without; a forward edge with a kind curves", () => {
+  it("arcs a backward edge with a kind and one without; a forward edge with a kind runs down", () => {
     expect(edge(layout, "D", "A").route).toBe("arc");
     expect(edge(layout, "C", "B").route).toBe("arc");
     expect(edge(layout, "A", "B").route).toBe("forward");
     expect(edge(layout, "B", "C").route).toBe("forward");
   });
 
-  it("puts an edge within a column in the gap on its right, an edge to itself under the box", () => {
-    expect(edge(layout, "A", "A2").route).toBe("beside");
+  it("joins two boxes of a row side by side, and puts an edge to itself beside its box", () => {
     const beside = edge(layout, "A", "A2");
-    const [, turn] = beside.points;
-    expect(turn?.x).toBeGreaterThan(box(layout, "A").x + BOX_WIDTH);
-    expect(turn?.x).toBeLessThan(box(layout, "B").x);
+    expect(beside.route).toBe("beside");
+    expect(crossesABox(beside, layout)).toEqual([]);
     const loop = edge(layout, "B", "B");
     expect(loop.route).toBe("self");
-    expect(loop.points.every((point) => point.y === box(layout, "B").y + BOX_HEIGHT)).toBe(true);
+    expect(loop.points.every((point) => point.x === box(layout, "B").x + BOX_WIDTH)).toBe(true);
+    expect(loop.label.x).toBeGreaterThan(box(layout, "B").x + BOX_WIDTH);
   });
 
-  it("keeps a box clear of the row under a loop, its label on the free side", () => {
-    expect(box(layout, "B2").y).toBeGreaterThan(box(layout, "B").y + BOX_HEIGHT + 24);
-    expect(edge(layout, "B", "B").label.y).toBeGreaterThan(box(layout, "B").y + BOX_HEIGHT);
+  it("keeps a box clear of the loop beside its neighbour", () => {
+    const b = box(layout, "B");
+    const b2 = box(layout, "B2");
+    expect(b2.x > b.x ? b2.x - (b.x + BOX_WIDTH) : b.x - (b2.x + BOX_WIDTH)).toBeGreaterThan(BOX_GAP);
   });
 
-  it("lets no arc point fall in a box: it runs through the gaps, on its own track under the lane", () => {
+  it("lets no arc point fall in a box: it runs through the gaps, on its own track right of the walk", () => {
     const arcs = layout.edges.filter((laid) => laid.route === "arc");
     expect(arcs.length).toBe(2);
+    const walkRight = Math.max(...layout.boxes.map((candidate) => candidate.x + candidate.width));
     for (const arc of arcs) {
       expect(crossesABox(arc, layout)).toEqual([]);
+      expect(Math.max(...arc.points.map((point) => point.x))).toBeGreaterThan(walkRight);
     }
-    const tracks = arcs.map((arc) => arc.points[2]?.y);
+    const tracks = arcs.map((arc) => Math.max(...arc.points.map((point) => point.x)));
     expect(new Set(tracks).size).toBe(2);
-    const bottom = Math.max(...layout.boxes.map((candidate) => candidate.y + candidate.height));
-    expect(tracks.every((track) => (track ?? 0) > bottom)).toBe(true);
   });
 
-  it("gives the shorter arc the track nearer the boxes, so the longer wraps it", () => {
-    expect(edge(layout, "C", "B").points[2]?.y).toBeLessThan(edge(layout, "D", "A").points[2]?.y ?? 0);
+  it("gives the shorter arc the track nearer the walk, so the longer wraps it", () => {
+    const track = (laid: LaidEdge) => Math.max(...laid.points.map((point) => point.x));
+    expect(track(edge(layout, "C", "B"))).toBeLessThan(track(edge(layout, "D", "A")));
   });
 
-  it("enters an arc's target by its left port, as any step is entered", () => {
-    const arc = edge(layout, "D", "A");
-    const last = arc.points[arc.points.length - 1];
-    expect(last?.x).toBe(box(layout, "A").x);
+  it("runs the firing run's repeat, Glost firing back to Dipping in glaze, right of the walk, crossing no box", () => {
+    const firing = layoutFlow(firingBoxes());
+    const repeat = edge(firing, "POT-FIRE", "POT-GLAZE");
+    expect(repeat.route).toBe("arc");
+    expect(crossesABox(repeat, firing)).toEqual([]);
+    const walkRight = Math.max(...firing.boxes.map((candidate) => candidate.x + candidate.width));
+    expect(Math.max(...repeat.points.map((point) => point.x))).toBeGreaterThan(walkRight);
+    expect(firing.edges.filter((laid) => laid.offWalk)).toEqual([]);
+    for (const laid of firing.edges) {
+      expect([laid.id, crossesABox(laid, firing).map((one) => one.name)]).toEqual([laid.id, []]);
+    }
   });
 
-  it("keeps a lane's own margin for the arcs at its ends", () => {
-    expect(box(layout, "A").x).toBeGreaterThan(LANE_PAD);
+  it("keeps a lane's own margin round the walk", () => {
+    expect(box(layout, "A").y).toBeGreaterThanOrEqual(LANE_PAD);
     const right = Math.max(...layout.boxes.map((candidate) => candidate.x + candidate.width));
     expect(layout.width).toBeGreaterThan(right + LANE_PAD);
   });
 
-  it("carries a long forward edge past the boxes between: a passage in each column it skips", () => {
+  it("carries a long forward edge past the rows between: a passage in each row it skips", () => {
     const skipping = layoutFlow(
       aFlowView(
         [...aLine(["P", "Q", "R", "S"]), aFlowNode({ id: "Q2", distance: 1 }), aFlowNode({ id: "R2", distance: 2 })],
@@ -161,25 +239,26 @@ describe("edges (AC-05): columns decide the shape, never a kind", () => {
     expect(overlapping(skipping.boxes)).toEqual([]);
   });
 
-  it("routes an edge to the band from the gap right of its source, through the arc band, into the box's left port", () => {
+  it("routes an edge to the band down the gap under its source, into the box's top, off the walk", () => {
     const banded = layoutFlow(aFlowView([...aLine(["A", "B", "C"]), aFlowNode({ id: "DEF", distance: null })], [aFlowEdge({ from: "A", to: "DEF", type: TYPE_B }), aFlowEdge({ from: "C", to: "DEF", type: TYPE_B })]));
     const first = edge(banded, "A", "DEF");
     expect(first.route).toBe("band");
+    expect(first.offWalk).toBe(true);
     expect(crossesABox(first, banded)).toEqual([]);
-    expect(first.points[first.points.length - 1]?.x).toBe(box(banded, "DEF").x);
-    // Two edges to one definition share their last stretch: a trunk, not a tangle.
-    expect(edge(banded, "C", "DEF").points[3]).toEqual(first.points[3]);
+    expect(first.points[first.points.length - 1]?.y).toBe(box(banded, "DEF").y);
+    expect(crossesABox(edge(banded, "C", "DEF"), banded)).toEqual([]);
   });
 
-  it("feeds a step from the band through the same band", () => {
+  it("feeds a step from the band on a trunk left of the walk", () => {
     const banded = layoutFlow(aFlowView([...aLine(["A", "B"]), aFlowNode({ id: "DEF", distance: null })], [aFlowEdge({ from: "DEF", to: "B", type: TYPE_B })]));
     const fed = edge(banded, "DEF", "B");
     expect(fed.route).toBe("band");
-    expect(fed.points[fed.points.length - 1]?.x).toBe(box(banded, "B").x);
+    expect(fed.points[fed.points.length - 1]?.y).toBe(box(banded, "B").y);
+    expect(Math.min(...fed.points.map((point) => point.x))).toBeLessThan(box(banded, "A").x);
     expect(crossesABox(fed, banded)).toEqual([]);
   });
 
-  it("keeps a chain off the walk together, each link a line from port to port with no track", () => {
+  it("keeps a chain off the walk together, each link a line from side to side", () => {
     const chain = layoutFlow(
       aFlowView(
         [...aLine(["A", "B", "C", "D"]), aFlowNode({ id: "Z-3", distance: null, path: "docs/a.md" }), aFlowNode({ id: "Z-1", distance: null, path: "docs/b.md" }), aFlowNode({ id: "Z-2", distance: null, path: "docs/c.md" })],
@@ -190,21 +269,20 @@ describe("edges (AC-05): columns decide the shape, never a kind", () => {
     const link = edge(chain, "Z-1", "Z-2");
     expect(link.points[0]?.x).toBe(box(chain, "Z-1").x + BOX_WIDTH);
     expect(link.points[link.points.length - 1]?.x).toBe(box(chain, "Z-2").x);
-    expect(link.points.every((point) => point.y >= box(chain, "Z-1").y)).toBe(true);
     expect(crossesABox(link, chain)).toEqual([]);
   });
 
   it("spreads edges along a box's side, so two between one pair of boxes stay two", () => {
     const pair = layoutFlow(aFlowView(aLine(["A", "B"]), [aFlowEdge({ from: "A", to: "B" }), aFlowEdge({ from: "A", to: "B", type: TYPE_B })]));
     const [first, second] = pair.edges;
-    expect(first?.points[0]?.y).not.toBe(second?.points[0]?.y);
+    expect(first?.points[0]?.x).not.toBe(second?.points[0]?.x);
     expect(first?.id).not.toBe(second?.id);
   });
 
-  it("stacks the words of two edges between one pair of boxes", () => {
+  it("sets the words of two edges between one pair of boxes apart", () => {
     const pair = layoutFlow(aFlowView(aLine(["A", "B"]), [aFlowEdge({ from: "A", to: "B", kind: "alternative", when: "one way" }), aFlowEdge({ from: "A", to: "B", kind: "parallel", when: "other way" })]));
     const [first, second] = pair.edges;
-    expect(Math.abs((first?.label.y ?? 0) - (second?.label.y ?? 0))).toBeGreaterThanOrEqual(30);
+    expect(Math.abs((first?.label.x ?? 0) - (second?.label.x ?? 0))).toBeGreaterThanOrEqual(30);
   });
 
   it("draws an edge with an undrawn end not at all", () => {
@@ -233,13 +311,12 @@ describe("two holders of one ID in a read", () => {
     expect(ids).toEqual(["n:TWIN", "n:TWIN@docs/spec/b.md:12", "n:AFTER"]);
     expect(new Set(ids).size).toBe(3);
     expect([layout.total, layout.notDrawn]).toEqual([3, 0]);
-    expect(layout.lanes[0]?.columns).toEqual([["n:TWIN"], ["n:TWIN@docs/spec/b.md:12"], ["n:AFTER"]]);
+    expect(layout.lanes[0]?.rows).toEqual([["n:TWIN"], ["n:TWIN@docs/spec/b.md:12"], ["n:AFTER"]]);
   });
 
   it("lands a link on the first holder", () => {
     expect(edge(layout, "TWIN", "AFTER").source).toBe("n:TWIN");
   });
-
 });
 
 describe("the cap (AC-11)", () => {
@@ -263,10 +340,10 @@ describe("the trial of owner's decision 11 (AC-12)", () => {
   const layout = layoutFlow(trial);
   const spent = performance.now() - started;
 
-  it("holds 200 boxes, 12 columns, 30 off the walk, 40 edges against it", () => {
+  it("holds 200 boxes, 12 rows, 30 off the walk, 40 edges against it", () => {
     expect(layout.boxes).toHaveLength(200);
-    expect(layout.lanes[0]?.columns).toHaveLength(12);
-    expect(layout.boxes.filter((candidate) => candidate.column === null)).toHaveLength(30);
+    expect(layout.lanes[0]?.rows).toHaveLength(12);
+    expect(layout.boxes.filter((candidate) => candidate.level === null)).toHaveLength(30);
     expect(layout.edges.filter((laid) => laid.route === "arc")).toHaveLength(40);
     expect(layout.notDrawn).toBe(0);
   });
@@ -275,18 +352,18 @@ describe("the trial of owner's decision 11 (AC-12)", () => {
     expect(overlapping(layout.boxes)).toEqual([]);
   });
 
-  it("runs every forward edge right, clear of every box", () => {
+  it("runs every forward edge down, clear of every box", () => {
     const forward = layout.edges.filter((laid) => laid.route === "forward");
     expect(forward.length).toBeGreaterThan(150);
     for (const laid of forward) {
       laid.points.forEach((point, index) => {
         const next = laid.points[index + 1];
         if (next !== undefined) {
-          expect(next.x).toBeGreaterThanOrEqual(point.x);
+          expect(next.y).toBeGreaterThanOrEqual(point.y);
         }
       });
-      const inColumns = laid.points.flatMap((point, index) => (index % 2 === 0 && laid.points[index + 1] !== undefined ? [[point, laid.points[index + 1]] as const] : []));
-      for (const [from, to] of inColumns) {
+      const inRows = laid.points.flatMap((point, index) => (index % 2 === 0 && laid.points[index + 1] !== undefined ? [[point, laid.points[index + 1]] as const] : []));
+      for (const [from, to] of inRows) {
         if (to !== undefined) {
           expect(layout.boxes.filter((candidate) => stretchCrosses(from, to, candidate))).toEqual([]);
         }
@@ -300,14 +377,14 @@ describe("the trial of owner's decision 11 (AC-12)", () => {
   });
 
   it("gives each arc its own track", () => {
-    const tracks = layout.edges.filter((laid) => laid.route === "arc").map((laid) => laid.points[2]?.y);
+    const tracks = layout.edges.filter((laid) => laid.route === "arc").map((laid) => Math.max(...laid.points.map((point) => point.x)));
     expect(new Set(tracks).size).toBe(40);
   });
 
   it("gives the same picture for the same reads in reverse order", () => {
     const reversed = { ...trial, nodes: [...trial.nodes].reverse(), edges: [...trial.edges].reverse() };
     const again = layoutFlow(reversed);
-    const places = (boxes: readonly FlowBox[]) => boxes.map((one) => [one.id, one.column, one.row, one.x, one.y]);
+    const places = (boxes: readonly FlowBox[]) => boxes.map((one) => [one.id, one.level, one.order, one.x, one.y]);
     expect(places(again.boxes)).toEqual(places(layout.boxes));
     expect(again.edges.map((laid) => [laid.id, laid.path])).toEqual(layout.edges.map((laid) => [laid.id, laid.path]));
   });
@@ -321,22 +398,22 @@ describe("the trial of owner's decision 11 (AC-12)", () => {
   });
 });
 
-describe("keys' moves", () => {
+describe("keys' moves (FS-15)", () => {
   const layout = layoutFlow(aFlowView([aFlowNode({ id: "A", distance: 0 }), aFlowNode({ id: "B", distance: 1 }), aFlowNode({ id: "C", distance: 1 }), aFlowNode({ id: "LOOSE", distance: null }), aFlowNode({ id: "LOOSE2", distance: null })], []));
 
-  it("goes up and down within a column, then down into the band", () => {
-    expect(boxAfterKey(layout, "n:B", "ArrowDown")).toBe("n:C");
-    expect(boxAfterKey(layout, "n:C", "ArrowUp")).toBe("n:B");
-    expect(boxAfterKey(layout, "n:B", "ArrowUp")).toBeNull();
-    expect(boxAfterKey(layout, "n:C", "ArrowDown")).toMatch(/^n:LOOSE2?$/);
-    expect(boxAfterKey(layout, "n:LOOSE", "ArrowUp")).not.toBeNull();
+  it("goes left and right within a row, and stays at either end", () => {
+    expect(boxAfterKey(layout, "n:B", "ArrowRight")).toBe("n:C");
+    expect(boxAfterKey(layout, "n:C", "ArrowLeft")).toBe("n:B");
+    expect(boxAfterKey(layout, "n:B", "ArrowLeft")).toBeNull();
+    expect(boxAfterKey(layout, "n:C", "ArrowRight")).toBeNull();
   });
 
-  it("goes across to the nearest box of the column beside, and stays at either end", () => {
-    expect(boxAfterKey(layout, "n:A", "ArrowRight")).toMatch(/^n:[BC]$/);
-    expect(boxAfterKey(layout, "n:B", "ArrowLeft")).toBe("n:A");
-    expect(boxAfterKey(layout, "n:A", "ArrowLeft")).toBeNull();
-    expect(boxAfterKey(layout, "n:B", "ArrowRight")).toBeNull();
+  it("goes up and down across the rows to the nearest box, the band last", () => {
+    expect(boxAfterKey(layout, "n:A", "ArrowDown")).toMatch(/^n:[BC]$/);
+    expect(boxAfterKey(layout, "n:B", "ArrowUp")).toBe("n:A");
+    expect(boxAfterKey(layout, "n:A", "ArrowUp")).toBeNull();
+    expect(boxAfterKey(layout, "n:C", "ArrowDown")).toMatch(/^n:LOOSE2?$/);
+    expect(boxAfterKey(layout, "n:LOOSE", "ArrowUp")).toMatch(/^n:[BC]$/);
   });
 
   it("moves along the band, staying at its ends", () => {
@@ -344,6 +421,7 @@ describe("keys' moves", () => {
     expect(boxAfterKey(layout, "n:LOOSE2", "ArrowLeft")).toBe("n:LOOSE");
     expect(boxAfterKey(layout, "n:LOOSE", "ArrowLeft")).toBeNull();
     expect(boxAfterKey(layout, "n:LOOSE2", "ArrowRight")).toBeNull();
+    expect(boxAfterKey(layout, "n:LOOSE", "ArrowDown")).toBeNull();
   });
 
   it("stays on an unknown key, on an unknown box", () => {

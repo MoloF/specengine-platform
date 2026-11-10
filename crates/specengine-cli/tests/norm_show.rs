@@ -287,6 +287,8 @@ fn te7_json_keys_in_order() {
         "text",
         "truncated",
         "omitted",
+        // docs/features/flow-scenario.md FS-8: before `links`.
+        "ancestors",
         "links",
         // docs/features/show-bindings.md "spec show --bindings": last.
         "bindings",

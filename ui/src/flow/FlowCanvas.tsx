@@ -24,17 +24,20 @@ import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { focusIsLost } from "../ui/focus";
 import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
-import { durationOf, EDGE_HIT, fitOf, inView, type Rect } from "./geometry";
-import { boxWords, countsText, dashOf, edgeName, edgeWords, gapMark, holdsText, isNoCard, isRepeat, rollupLook, startWord, typeColour, type GapMark } from "./labels";
-import { boxAfterKey, isGroup, LANE_PAD, type FlowBox, type FlowLane, type FlowLayout, type LaidEdge } from "./layout";
+import { durationOf, EDGE_HIT, fitOf, FLOW_PINCH_MIN_ZOOM, inView, type Rect } from "./geometry";
+import { boxWords, countsText, dashOf, dividerWords, edgeName, edgeShownWords, gapMark, holdsText, isNoCard, isRepeat, rollupLook, startWord, typeColour, type GapMark } from "./labels";
+import { BAND_CAPTION_WIDTH, boxAfterKey, DIVIDER_HEIGHT, isGroup, LANE_PAD, type FlowBox, type FlowDivider, type FlowLane, type FlowLayout, type LaidEdge } from "./layout";
 
-// The Flow's canvas (docs/features/writer-studio.md D1, D8, D9; ui/README.md "Screen rules",
-// Canvas): React Flow draws one read's boxes and edges where the layout put them; nothing drags,
-// connects or deletes. A click on a box or an arrow selects it, a group is entered, never opened in
-// place, so no frame lies under an arrow. The wheel pans and a pinch or the zoom key zooms; the
-// picture fits once, when it is drawn, and then only the owner, `c` and a gap moves it. Every key
-// option is null and React Flow's words are the catalog's; the boxes keep one tab stop the arrow keys
-// move, and no arrow takes one: the keyboard reaches arrows through the List.
+// The Flow's canvas (docs/features/writer-studio.md D1, D8, D9; docs/features/flow-scenario.md D7 to
+// D9; ui/README.md "Screen rules", Canvas): React Flow draws one read's boxes and edges where the
+// layout put them, the walk top to bottom under its stage dividers; nothing drags, connects or
+// deletes. A box says its title, never its ID. An edge with an end off the walk shows only while that
+// end or the edge is selected, so no bundle stands on the canvas. A click on a box or an arrow selects
+// it, a group is entered, never opened in place, so no frame lies under an arrow. The wheel pans and a
+// pinch or the zoom key zooms; the picture fits once, when it is drawn, and then only the owner, `c`
+// and a gap moves it. Every key option is null and React Flow's words are the catalog's; the boxes
+// keep one tab stop the arrow keys move, and no arrow takes one: the keyboard reaches arrows through
+// the List.
 
 /** React Flow's words for what this canvas draws, in the catalog's: no controls are drawn, so none is named. */
 function ariaLabels(t: Translate): Partial<AriaLabelConfig> {
@@ -57,8 +60,9 @@ type BoxMarks = {
 
 type BoxData = { box: FlowBox; inLane: boolean } & BoxMarks;
 type BandData = { lane: FlowLane };
+type DividerData = { divider: FlowDivider };
 type BoxNode = Node<BoxData, "box">;
-type CanvasNode = BoxNode | Node<BandData, "band">;
+type CanvasNode = BoxNode | Node<BandData, "band"> | Node<DividerData, "divider">;
 type LinkData = { laid: LaidEdge; emphasis: boolean };
 type LinkEdge = Edge<LinkData, "link">;
 
@@ -69,8 +73,8 @@ const TOGGLE = "data-flow-toggle";
 function Handles() {
   return (
     <>
-      <Handle type="source" position={Position.Right} id="out" isConnectable={false} aria-hidden="true" />
-      <Handle type="target" position={Position.Left} id="in" isConnectable={false} aria-hidden="true" />
+      <Handle type="source" position={Position.Bottom} id="out" isConnectable={false} aria-hidden="true" />
+      <Handle type="target" position={Position.Top} id="in" isConnectable={false} aria-hidden="true" />
     </>
   );
 }
@@ -150,7 +154,7 @@ function WorkState({ box }: { box: FlowBox }) {
   );
 }
 
-/** A step or a group: its words, name, kind, what marks it, then its work. A step with no card is hollow. */
+/** A step or a group: its title, what marks it, then its work; no ID, no kind (flow-scenario D12). A step with no card is hollow. */
 const BoxView = memo(function BoxView({ data }: NodeProps<BoxNode>) {
   const t = useTranslate();
   const { box, inLane } = data;
@@ -180,11 +184,7 @@ const BoxView = memo(function BoxView({ data }: NodeProps<BoxNode>) {
             <Icon name="chevronRight" />
           </span>
         )}
-        <span className="flow-box-title">{boxWords(node)}</span>
-      </p>
-      <p className="flow-box-name">
-        <span className="mono flow-box-id">{box.name}</span>
-        {node.kind !== null && <span className="mono flow-box-kind">{node.kind}</span>}
+        <bdi className="flow-box-title">{boxWords(node)}</bdi>
       </p>
       {marked && (
         <p className="flow-box-marks">
@@ -203,22 +203,33 @@ const BoxView = memo(function BoxView({ data }: NodeProps<BoxNode>) {
   );
 });
 
-/** The band's caption. */
-const BandCaption = memo(function BandCaption() {
+/** The band's caption: what it is, how many it holds, why they stand apart. */
+const BandCaption = memo(function BandCaption({ data }: NodeProps<Node<BandData, "band">>) {
   const t = useTranslate();
+  const count = data.lane.band.reduce((sum, shelf) => sum + shelf.length, 0);
   return (
     <p className="flow-band" aria-hidden="true">
-      {t("flow.offWalk")}
+      <span className="flow-band-name">{t("flow.offWalk")}</span> <span className="flow-band-count">{count}</span> <span className="flow-band-about">{t("flow.offWalkAbout")}</span>
+    </p>
+  );
+});
+
+/** A stage divider: the stage words raw, a rule across the picture; hidden from assistive technology, never focused (flow-scenario D7). */
+const DividerView = memo(function DividerView({ data }: NodeProps<Node<DividerData, "divider">>) {
+  return (
+    <p className="flow-divider" aria-hidden="true">
+      <bdi className="flow-divider-words">{dividerWords(data.divider.stages)}</bdi>
     </p>
   );
 });
 
 /** An edge: the layout's path, its type's colour, its dash, its words where it has any, and a 12 px band a click takes. */
 const LinkView = memo(function LinkView({ id, markerEnd, style, data }: EdgeProps<LinkEdge>) {
+  const t = useTranslate();
   if (data === undefined) {
     return null;
   }
-  const words = edgeWords(data.laid.edge);
+  const words = edgeShownWords(data.laid.edge, t);
   return (
     <>
       <BaseEdge id={id} path={data.laid.path} markerEnd={markerEnd} style={style} interactionWidth={EDGE_HIT} />
@@ -241,18 +252,15 @@ const LinkView = memo(function LinkView({ id, markerEnd, style, data }: EdgeProp
   );
 });
 
-const NODE_TYPES = { box: BoxView, band: BandCaption };
+const NODE_TYPES = { box: BoxView, band: BandCaption, divider: DividerView };
 const EDGE_TYPES = { link: LinkView };
 
-/** A box's accessible name: its words, marks and gaps. */
+/** A box's accessible name: its words, its stage, marks and gaps (flow-scenario "Stage dividers"); its ID and kind stand in the panel. */
 export function boxName(box: FlowBox, marks: BoxMarks, inLane: boolean, t: Translate): string {
   const { node } = box;
-  const parts = [box.name];
-  if (node.title !== null) {
-    parts.push(node.title);
-  }
-  if (node.kind !== null) {
-    parts.push(node.kind);
+  const parts = [boxWords(node)];
+  if (node.stage !== null) {
+    parts.push(node.stage);
   }
   if (node.start) {
     parts.push(startWord(inLane, t));
@@ -281,10 +289,10 @@ export function boxName(box: FlowBox, marks: BoxMarks, inLane: boolean, t: Trans
 }
 
 function handlesOf(box: FlowBox) {
-  const y = box.height / 2 - HANDLE_SIZE / 2;
+  const x = box.width / 2 - HANDLE_SIZE / 2;
   return [
-    { id: "out", type: "source" as const, position: Position.Right, x: box.width - HANDLE_SIZE / 2, y, width: HANDLE_SIZE, height: HANDLE_SIZE },
-    { id: "in", type: "target" as const, position: Position.Left, x: -HANDLE_SIZE / 2, y, width: HANDLE_SIZE, height: HANDLE_SIZE },
+    { id: "out", type: "source" as const, position: Position.Bottom, x, y: box.height - HANDLE_SIZE / 2, width: HANDLE_SIZE, height: HANDLE_SIZE },
+    { id: "in", type: "target" as const, position: Position.Top, x, y: -HANDLE_SIZE / 2, width: HANDLE_SIZE, height: HANDLE_SIZE },
   ];
 }
 
@@ -307,24 +315,21 @@ function nodeOf(box: FlowBox, marks: BoxMarks, inLane: boolean, tabStop: boolean
   };
 }
 
-function bandNode(lane: FlowLane, y: number): CanvasNode {
-  return {
-    id: "band",
-    type: "band",
-    position: { x: lane.x + LANE_PAD, y },
-    width: 200,
-    height: 24,
-    data: { lane },
-    zIndex: 2,
-    draggable: false,
-    selectable: false,
-    connectable: false,
-    deletable: false,
-    focusable: false,
-  };
+/** The words of the band and of a divider: no box, no tab stop, hidden from assistive technology (the List and the boxes' names say it). */
+const WORDS_ONLY = { zIndex: 2, draggable: false, selectable: false, connectable: false, deletable: false, focusable: false, domAttributes: { "aria-hidden": true } } as const;
+
+/** The caption's height: two lines of its words, which wrap in a narrow picture. */
+const BAND_CAPTION_HEIGHT = 32;
+
+function bandNode(lane: FlowLane, x: number, y: number, width: number): CanvasNode {
+  return { id: "band", type: "band", position: { x, y }, width, height: BAND_CAPTION_HEIGHT, data: { lane }, ...WORDS_ONLY };
 }
 
-function edgeOf(laid: LaidEdge, types: readonly string[], emphasis: boolean): LinkEdge {
+function dividerNode(divider: FlowDivider, width: number): CanvasNode {
+  return { id: divider.id, type: "divider", position: { x: 0, y: divider.y }, width, height: DIVIDER_HEIGHT, data: { divider }, ...WORDS_ONLY };
+}
+
+function edgeOf(laid: LaidEdge, types: readonly string[], emphasis: boolean, t: Translate): LinkEdge {
   const colour = typeColour(laid.edge.type, types);
   return {
     id: laid.id,
@@ -334,7 +339,7 @@ function edgeOf(laid: LaidEdge, types: readonly string[], emphasis: boolean): Li
     sourceHandle: "out",
     targetHandle: "in",
     data: { laid, emphasis },
-    ariaLabel: edgeName(laid.edge),
+    ariaLabel: edgeName(laid.edge, t),
     className: emphasis ? "is-emphasis" : undefined,
     style: { stroke: colour, strokeDasharray: dashOf(laid.edge, types), ...(isRepeat(laid.edge) ? { strokeWidth: "var(--flow-repeat-width)" } : {}) },
     markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14, color: colour },
@@ -423,7 +428,7 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
   const labels = useMemo(() => ariaLabels(t), [t]);
 
   const selectedId = useMemo(() => layout.boxes.find((box) => box.name === selected)?.id ?? null, [layout, selected]);
-  const firstId = layout.lanes[0]?.columns[0]?.[0] ?? layout.lanes[0]?.band[0]?.[0] ?? null;
+  const firstId = layout.lanes[0]?.rows[0]?.[0] ?? layout.lanes[0]?.band[0]?.[0] ?? null;
   const drawn = useMemo(() => new Set(layout.boxes.map((box) => box.id)), [layout]);
   const rovingId = roving !== null && drawn.has(roving) ? roving : (selectedId ?? firstId);
 
@@ -441,12 +446,21 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
         t,
       ),
     );
-    const bands = layout.lanes.flatMap((lane) => (lane.bandY === null ? [] : [bandNode(lane, lane.bandY)]));
-    return [...boxes, ...bands];
+    const bands = layout.lanes.flatMap((lane) => {
+      const first = layout.boxes.find((box) => box.id === lane.band[0]?.[0]);
+      // The caption's least width, clamped to the picture: it never runs past the layout's right edge.
+      return lane.bandY === null || first === undefined ? [] : [bandNode(lane, first.x, lane.bandY, Math.min(Math.max(layout.width - first.x - LANE_PAD, BAND_CAPTION_WIDTH), layout.width - first.x))];
+    });
+    const dividers = layout.lanes.flatMap((lane) => lane.dividers.map((divider) => dividerNode(divider, layout.width)));
+    return [...dividers, ...boxes, ...bands];
   }, [layout, selected, marked, named, inLane, rovingId, t]);
+  // An edge with an end off the walk stands only while that end or the edge is selected (flow-scenario D9).
   const edges = useMemo(
-    () => layout.edges.map((laid) => edgeOf(laid, types, laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)))),
-    [layout, types, selectedEdge, selectedId],
+    () =>
+      layout.edges
+        .filter((laid) => !laid.offWalk || laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)))
+        .map((laid) => edgeOf(laid, types, laid.id === selectedEdge || (selectedId !== null && (laid.source === selectedId || laid.target === selectedId)), t)),
+    [layout, types, selectedEdge, selectedId, t],
   );
 
   const boxElement = useCallback((id: string): HTMLElement | null => {
@@ -617,7 +631,7 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
         proOptions={{ hideAttribution: true }}
         ariaLabelConfig={labels}
         defaultMarkerColor={null}
-        minZoom={0.1}
+        minZoom={FLOW_PINCH_MIN_ZOOM}
         maxZoom={2}
         onMoveStart={(event) => {
           if (event !== null) {
@@ -637,7 +651,8 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
           }
         }}
       >
-        {!pictureWhole && <MiniMap style={MINIMAP_SIZE} pannable={false} zoomable={false} />}
+        {/* Bottom left: the arcs and their words run on the right of the walk. */}
+        {!pictureWhole && <MiniMap position="bottom-left" style={MINIMAP_SIZE} pannable={false} zoomable={false} />}
         <FitOnce layout={layout} touched={touched} />
       </ReactFlow>
     </div>

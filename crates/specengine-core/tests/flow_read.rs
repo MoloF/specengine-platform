@@ -94,6 +94,7 @@ fn read_input(
             config_label: LABEL,
             scope_name: root.unwrap_or("the-whole"),
             stage: None,
+            in_flow_only: false,
         },
     )
 }
@@ -1163,6 +1164,7 @@ fn read_time(graph: &SpecGraph<'_>, flow: &FlowConfig, depth: Option<usize>) -> 
             config_label: LABEL,
             scope_name: "the-whole",
             stage: None,
+            in_flow_only: false,
         },
     );
     let elapsed = started.elapsed();
@@ -1200,6 +1202,7 @@ fn a_chain_four_times_as_deep_reads_in_at_most_eight_times_the_time() {
                 config_label: LABEL,
                 scope_name: "the-whole",
                 stage: None,
+                in_flow_only: false,
             },
         );
         assert_eq!(
@@ -1230,4 +1233,82 @@ fn a_chain_four_times_as_deep_reads_in_at_most_eight_times_the_time() {
             best[0]
         );
     }
+}
+
+// ---------------------------------------------------- flow-scenario (RM-0094)
+
+/// docs/features/flow-scenario.md FS-2 "Core `tests/flow_read.rs`": a Tier 3
+/// ROOT (a shipped spec) holding a live step. Membership admits live
+/// documents alone, so the ROOT's own node is never a member: unbounded it
+/// holds nothing and is out of the flow while its two steps are in; at depth
+/// 0 it holds them both and is in the flow by the fold. M: the fold dropped
+/// (the Tier 3 ROOT false at depth 0).
+#[test]
+fn fs2_a_tier_3_root_holding_a_live_step_is_in_the_flow_by_the_fold() {
+    let text = "[project]\nslug = \"shelved\"\n\n[ids]\n\
+                OLDP = { kind = \"oldplan\", shape = \"name\" }\n\
+                MOVE = { kind = \"move\", shape = \"name\" }\n\n\
+                [[flow.step]]\nkinds = [\"move\"]\n";
+    let config = Config::from_toml(text);
+    let files = [
+        (
+            "docs/spec/oldp-plan.md",
+            "---\nid: OLDP-PLAN\nclass: spec\nstatus: shipped\nscope: [plan]\n---\n\n\
+             # The old plan\n\nShipped long ago.\n",
+        ),
+        (
+            "docs/spec/move-one.md",
+            "---\nid: MOVE-ONE\nclass: canon\ntitle: The first move\nparent: OLDP-PLAN\n\
+             owner: owner\nreviewed: 2026-10-01\n---\n\n# The first move\n\nOne.\n",
+        ),
+        (
+            "docs/spec/move-two.md",
+            "---\nid: MOVE-TWO\nclass: canon\ntitle: The second move\nparent: OLDP-PLAN\n\
+             owner: owner\nreviewed: 2026-10-01\nlinks:\n  follows: [MOVE-ONE]\n---\n\n\
+             # The second move\n\nTwo.\n",
+        ),
+    ];
+    let input = config.input(&files);
+    let graph = SpecGraph::new(&input, &config.scheme, &config.paths);
+    let root = find(&graph, "OLDP-PLAN");
+    assert!(graph.is_tier3(root.file), "premise: the ROOT is Tier 3");
+
+    let whole = read_input(text, &config, &input, Some("OLDP-PLAN"), None);
+    let flags: BTreeMap<&str, bool> = whole
+        .nodes
+        .iter()
+        .map(|node| (name_of(node), node.in_flow))
+        .collect();
+    assert_eq!(
+        flags,
+        BTreeMap::from([("OLDP-PLAN", false), ("MOVE-ONE", true), ("MOVE-TWO", true)]),
+        "unbounded: the ROOT's own node is no member"
+    );
+
+    let folded = read_input(text, &config, &input, Some("OLDP-PLAN"), Some(0));
+    assert_eq!(folded.nodes.len(), 1, "{:?}", folded.nodes);
+    assert_eq!(folded.nodes[0].holds, 2, "{:?}", folded.nodes);
+    assert!(
+        folded.nodes[0].in_flow,
+        "depth 0: the ROOT holds both steps, so it is in the flow by the fold"
+    );
+    assert_eq!(folded.not_in_flow, None, "no cut asked, no count");
+
+    // The cut keeps the ROOT's node, out of the flow, and drops nothing.
+    let flow = FlowConfig::from_toml(text, &config.scheme);
+    let roots = vec![root];
+    let cut = flow_read(
+        &graph,
+        &FlowAsk {
+            roots: Some(&roots),
+            depth: None,
+            config: &flow,
+            config_label: LABEL,
+            scope_name: "OLDP-PLAN",
+            stage: None,
+            in_flow_only: true,
+        },
+    );
+    assert_eq!(cut.nodes, whole.nodes, "a ROOT stays");
+    assert_eq!(cut.not_in_flow, Some(0));
 }

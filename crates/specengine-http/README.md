@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [crates/specengine-http]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-10
 ---
 
 # specengine-http -- SpecEngine over HTTP
@@ -35,7 +35,7 @@ Methods, past the fence: a read route takes GET only, any other (HEAD too) -> 40
 | GET `.../search` | `query`, `kinds`, `limit`, `archive` | `spec search --json`, browser view |
 | GET `.../bundle` | `node_ids`, `budget` | `spec bundle --json` |
 | GET `.../graph` | `ref`, `impact`, `types`, `depth`, `archive` | `spec graph REF --json`, browser view |
-| GET `.../flow` | `root`, `depth`, `stage`, `trace` | `spec flow --json`, browser view |
+| GET `.../flow` | `spec-flow.md`'s | `spec flow --json`, browser view |
 | GET `.../check` | -- | `spec check --json`, the plain run |
 | GET `.../health` | -- | `spec health --json` (`health*.md`) |
 | GET `.../roadmap` | `release`, `pool` | `spec roadmap --json`, browser view |

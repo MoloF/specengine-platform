@@ -3,14 +3,16 @@ import type { FlowEdgeKey } from "../app/routes";
 import { compareText, nodeName } from "../graph/layout";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
+import type { LozengeLook } from "../ui/Lozenge";
 
 // The Flow's closed tables and words (docs/features/flow-canvas.md "Data", "Gap rows";
-// docs/features/trace-views.md). The one place under src/flow/ and src/trace/ that tells a gap state,
-// a gap code, an edge's `kind` or a rollup apart: an edge's `kind` is the closed `FlowEdgeKind` of the
-// daemon's schema, no project vocabulary, and a repeat is always dotted. A link `type` is never
-// spelled: its colour and plain dash go by its place in the sorted types of the top read, which hold
-// every edge, so folding moves no dash. A stage is project vocabulary, shown as served. Every word is
-// the catalog's `flow` group; an edge's `kind`, `when` and `spec flow`'s line stay as served.
+// docs/features/trace-views.md; docs/features/flow-scenario.md D3, D9, D10). The one place under
+// src/flow/ and src/trace/ that tells a gap state, a gap code, an edge's `kind` or a rollup apart: an
+// edge's `kind` is the closed `FlowEdgeKind` of the daemon's schema, no project vocabulary, and a
+// repeat is always dotted. A link `type` is never spelled: its colour and plain dash go by its place
+// in the read's served `types`, the model's order, so a type keeps one look in every picture. A stage
+// is project vocabulary, shown as served. Every word is the catalog's `flow` group; an edge's `kind`,
+// `when` and `spec flow`'s line stay as served.
 
 /** The seven stroke patterns: four by a type's place, then the three kinds; `repeat` alone is dotted. */
 export const FLOW_DASHES = ["none", "14 6", "24 5 6 5", "6 5 6 14", "9 5", "18 4 3 4", "1 7"] as const;
@@ -26,6 +28,14 @@ const KIND_DASHES: Record<string, string> = {
 /** The kinds the legend always names, as the daemon writes them. */
 export const FLOW_KINDS: readonly string[] = Object.keys(KIND_DASHES);
 
+/** The closed `FlowEdgeKind` words with their catalog keys: SpecEngine's own, so named in the viewer's language. */
+const KIND_KEYS = { alternative: "alternative", parallel: "parallel", repeat: "repeat" } as const;
+
+/** An edge kind as the viewer reads it: a known one from the catalog, any other raw. */
+export function kindWords(kind: string, t: Translate): string {
+  return Object.hasOwn(KIND_KEYS, kind) ? t(`flow.edgeKind.${KIND_KEYS[kind as keyof typeof KIND_KEYS]}`) : kind;
+}
+
 /** The edge colours of tokens.css, `--flow-edge-0` to `-3`. */
 const EDGE_COLOURS = 4;
 
@@ -34,15 +44,9 @@ function placeOf(type: string, types: readonly string[], size: number): number {
   return Math.max(0, types.indexOf(type)) % size;
 }
 
-/** Every type a project's flow holds, sorted: the top read's edges and each node's `inner`. */
-export function typesOf(top: FlowView): string[] {
-  const types = new Set(top.edges.map((edge) => edge.type));
-  for (const node of top.nodes) {
-    for (const inner of node.inner) {
-      types.add(inner.type);
-    }
-  }
-  return [...types].sort(compareText);
+/** The flow's link types in the daemon's order, as every read serves them (flow-scenario D3): the screen counts none. */
+export function typesOf(view: FlowView): readonly string[] {
+  return view.types;
 }
 
 /** A type's plain stroke pattern, by its place. */
@@ -75,7 +79,7 @@ export function shortWhen(when: string): string {
   return characters.length > WHEN_SHOWN ? `${characters.slice(0, WHEN_SHOWN).join("")}…` : when;
 }
 
-/** What an edge says on the canvas: `kind`, `when` clipped, `x<count>` above 1; empty for a plain edge. */
+/** What an edge says on the canvas: `kind`, `when` clipped; empty for a plain edge. Its count stands in the List and the panel (flow-scenario D9). */
 export function edgeWords(edge: FlowEdge): string[] {
   const words: string[] = [];
   if (edge.kind !== null) {
@@ -83,9 +87,6 @@ export function edgeWords(edge: FlowEdge): string[] {
   }
   if (edge.when !== null) {
     words.push(shortWhen(edge.when));
-  }
-  if (edge.count > 1) {
-    words.push(`x${String(edge.count)}`);
   }
   return words;
 }
@@ -100,14 +101,17 @@ export function edgeKeyText(key: FlowEdgeKey): string {
   return [key.from, key.to, key.type, key.kind ?? ""].join("\n");
 }
 
-/** An arrow's row in the List: `<type> <to name>, <to title>[, <kind>][, when <when>][, ×<count>]`, its words whole, type raw. */
+/** An edge's words as the canvas shows them: its kind named, its `when` clipped; empty for a plain edge. */
+export function edgeShownWords(edge: FlowEdge, t: Translate): string[] {
+  const words = edgeWords(edge);
+  return edge.kind === null ? words : [kindWords(edge.kind, t), ...words.slice(1)];
+}
+
+/** An arrow's row in the List: `<type> <to title>[, <kind>][, when <when>][, ×<count>]`, the title its name when it has none, its words whole, type raw (flow-scenario D12). */
 export function edgeRowWords(edge: FlowEdge, toTitle: string | null, t: Translate): string {
-  const parts = [`${edge.type} ${edge.to}`];
-  if (toTitle !== null) {
-    parts.push(toTitle);
-  }
+  const parts = [`${edge.type} ${toTitle ?? edge.to}`];
   if (edge.kind !== null) {
-    parts.push(edge.kind);
+    parts.push(kindWords(edge.kind, t));
   }
   if (edge.when !== null) {
     parts.push(t("flow.edgeWhen", { when: edge.when }));
@@ -119,8 +123,8 @@ export function edgeRowWords(edge: FlowEdge, toTitle: string | null, t: Translat
 }
 
 /** An edge's accessible name: `<from> <type> <to>`, then what it says. */
-export function edgeName(edge: FlowEdge): string {
-  return [`${edge.from} ${edge.type} ${edge.to}`, ...edgeWords(edge)].join(", ");
+export function edgeName(edge: FlowEdge, t: Translate): string {
+  return [`${edge.from} ${edge.type} ${edge.to}`, ...edgeShownWords(edge, t)].join(", ");
 }
 
 /** The gap codes the daemon writes, each with its catalog key. */
@@ -228,7 +232,44 @@ export function gapMark(node: FlowNode, named: ReadonlySet<string>, t: Translate
 
 /** Every served row measured at 0: the rows have nothing to say. */
 export function allClear(gaps: readonly FlowGap[]): boolean {
-  return gaps.length > 0 && gaps.every((gap) => gap.state === "measured" && gap.count === 0);
+  return gaps.length > 0 && gaps.every(isZero);
+}
+
+/** A row measured above 0: it found something. */
+export function isFound(gap: FlowGap): boolean {
+  return gap.state === "measured" && gap.count !== null && gap.count > 0;
+}
+
+/** A row measured at 0: it finds nothing. */
+export function isZero(gap: FlowGap): boolean {
+  return gap.state === "measured" && gap.count === 0;
+}
+
+/**
+ * The Gaps control's order (flow-scenario D10): the rows found, as served; then the rows not
+ * measured, unknown states last; the rows at 0 stand apart, counted in one line.
+ */
+export function gapsSorted(gaps: readonly FlowGap[]): { found: FlowGap[]; unmeasured: FlowGap[]; zero: number } {
+  const ordered = gapsInOrder(gaps);
+  return { found: ordered.filter(isFound), unmeasured: ordered.filter((gap) => !isFound(gap) && !isZero(gap)), zero: ordered.filter(isZero).length };
+}
+
+/**
+ * The Gaps toggle's lozenge: warning with the rows found, when any is; neutral "not all measured"
+ * when any row is not; success "None" otherwise; neutral "Not read" when the read failed again.
+ */
+export function gapsLook(gaps: readonly FlowGap[], unread: boolean, t: Translate): LozengeLook {
+  if (unread) {
+    return { appearance: "neutral", icon: "unknown", label: t("flow.gap.notRead") };
+  }
+  const found = gaps.filter(isFound).length;
+  if (found > 0) {
+    return { appearance: "warning", icon: "flowGap", label: t("flow.gap.found", { count: found }) };
+  }
+  if (!allClear(gaps)) {
+    return { appearance: "neutral", icon: "info", label: t("flow.gaps.notAll") };
+  }
+  return { appearance: "success", icon: "checkClean", label: t("flow.gap.none") };
 }
 
 /** `<n> rows need [flow] rules in specengine.toml`; null when none does. */
@@ -272,9 +313,14 @@ export function leftOutWords(leftOut: { generated: number; tier3: number }, t: T
   return parts.length === 0 ? null : t("flow.leftOut", { parts: parts.join(", ") });
 }
 
-/** A box's words as the panel, the canvas and the List say them. */
+/** A box's words as the panel, the canvas and the List say them: its title, else its ID, else its path (flow-scenario D12). */
 export function boxWords(node: FlowNode): string {
   return node.title ?? nodeName(node);
+}
+
+/** A stage divider's words: the stages that begin in its row, raw, joined (flow-scenario D7). */
+export function dividerWords(stages: readonly string[]): string {
+  return stages.join(" \u00b7 ");
 }
 
 /** The word of a node with no card: a gap in the plan, drawn hollow wherever a step stands. */
@@ -382,3 +428,32 @@ export function gapNotRead(t: Translate): Look {
   return { label: t("flow.gap.notRead"), tone: "flow-gap-unknown", icon: "unknown" };
 }
 
+/** One kind's records, raw kind or none, in served order. */
+export interface KindGroup {
+  kind: string | null;
+  nodes: FlowNode[];
+}
+
+/**
+ * What the uncut scope read lists (`docs/canon/spec-flow-screen.md` "Reads"; RM-0094): its nodes
+ * holding nothing of the flow, the scope's own node left out; those with an ID grouped by raw kind,
+ * the kinds sorted and no kind last, each in served order; those without one counted, for the Spec
+ * tree. The flag is the daemon's: nothing here tells a record from a step.
+ */
+export function recordsOf(nodes: readonly FlowNode[], scope: string): { groups: KindGroup[]; withId: number; noId: number } {
+  const aside = nodes.filter((node) => !node.in_flow && nodeName(node) !== scope);
+  const named = aside.filter((node) => node.id !== null);
+  const byKind = new Map<string | null, FlowNode[]>();
+  for (const node of named) {
+    const held = byKind.get(node.kind);
+    if (held === undefined) {
+      byKind.set(node.kind, [node]);
+    } else {
+      held.push(node);
+    }
+  }
+  const groups = [...byKind.entries()]
+    .sort(([a], [b]) => (a === null ? 1 : b === null ? -1 : compareText(a, b)))
+    .map(([kind, held]) => ({ kind, nodes: held }));
+  return { groups, withId: named.length, noId: aside.length - named.length };
+}

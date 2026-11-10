@@ -337,6 +337,9 @@ function shownNode(corpus: MockCorpus, node: MockNode, links: ShownLinks | null,
     text,
     truncated: false,
     omitted: null,
+    ancestors: ancestorsOf(corpus, node)
+      .reverse()
+      .map((ancestor) => ({ id: ancestor.id, kind: ancestor.kind, title: ancestor.title, path: ancestor.path })),
     links,
     bindings,
   };
@@ -659,7 +662,11 @@ function isLive(corpus: MockCorpus, node: MockNode): boolean {
   return !file.archived && !file.generated;
 }
 
-/** The parent chain of a node in the tree, nearest first (ancestors layer). */
+/**
+ * The parent chain of a node in the tree, nearest first (the bundle's ancestors layer; `spec show`'s
+ * `ancestors` reversed, docs/features/flow-scenario.md D4): a section climbs to its enclosing node, a
+ * document to its `parent:`'s first holder; a dangling `parent:` or a cycle ends it.
+ */
 function ancestorsOf(corpus: MockCorpus, node: MockNode): MockNode[] {
   const chain: MockNode[] = [];
   let current: MockNode = node;

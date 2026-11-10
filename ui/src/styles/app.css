@@ -4880,7 +4880,7 @@ mark {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas: "head" "places" "centre" "panel";
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
 }
 
@@ -4889,7 +4889,7 @@ mark {
   flex-wrap: wrap;
   grid-area: head;
   align-items: center;
-  gap: var(--space-2) var(--space-4);
+  gap: var(--space-100) var(--space-200);
   min-width: 0;
 }
 
@@ -4920,15 +4920,15 @@ mark {
 /* The about text and the daemon's notes lie over the panes: the header stays one line. */
 .flow-about-body {
   position: absolute;
-  top: calc(100% + var(--space-1));
+  top: calc(100% + var(--space-050));
   right: 0;
   z-index: 6;
   display: grid;
-  gap: var(--space-2);
-  width: min(30rem, calc(100vw - 2 * var(--space-4)));
+  gap: var(--space-100);
+  width: min(30rem, calc(100vw - 2 * var(--space-200)));
   max-height: 60dvh;
   overflow: auto;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-m);
   background: var(--surface-overlay);
@@ -4950,9 +4950,9 @@ mark {
   position: relative;
   display: grid;
   align-content: start;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
+  padding: var(--space-100) var(--space-150);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -4960,18 +4960,19 @@ mark {
 
 .flow-places-part {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
 }
 
 .flow-places-heading {
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
-.flow-places-body ul {
+.flow-places-body ul,
+.flow-places-body ol {
   display: grid;
   gap: var(--space-025);
   margin: 0;
@@ -4983,9 +4984,9 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-025) var(--space-2);
+  gap: var(--space-025) var(--space-100);
   min-height: max(var(--target-min), 2rem);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-050) var(--space-100);
   border-left: 3px solid transparent;
   border-radius: var(--radius-s);
   color: var(--text-primary);
@@ -5010,20 +5011,77 @@ mark {
   border-left: 3px solid transparent;
 }
 
-.flow-places-groups {
-  margin-left: var(--space-3);
-}
-
 .flow-places-words {
   display: grid;
   min-width: 0;
 }
 
-.flow-places-name,
+/* A group row keeps its chevron on the title's first line, however long the title (flow-scenario "The path pane"). */
+.flow-places-body a.flow-places-group {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+}
+
+.flow-places-group .flow-places-words {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.flow-places-group .icon {
+  flex: none;
+  margin-top: var(--space-025);
+}
+
+/* The path, top first, one step in per level, six at most; the groups under it one more. Each step
+   is one --space-150. */
+.flow-path li[data-depth="1"],
+.flow-places-groups[data-depth="1"] {
+  margin-left: var(--space-150);
+}
+
+.flow-path li[data-depth="2"],
+.flow-places-groups[data-depth="2"] {
+  margin-left: calc(var(--space-150) * 2);
+}
+
+.flow-path li[data-depth="3"],
+.flow-places-groups[data-depth="3"] {
+  margin-left: calc(var(--space-150) * 3);
+}
+
+.flow-path li[data-depth="4"],
+.flow-places-groups[data-depth="4"] {
+  margin-left: calc(var(--space-150) * 4);
+}
+
+.flow-path li[data-depth="5"],
+.flow-places-groups[data-depth="5"] {
+  margin-left: calc(var(--space-150) * 5);
+}
+
+.flow-path li[data-depth="6"],
+.flow-places-groups[data-depth="6"] {
+  margin-left: calc(var(--space-150) * 6);
+}
+
 .flow-places-score {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   font-weight: 400;
+}
+
+/* Records for the AI, at the pane's foot. */
+.flow-places-records {
+  margin: 0;
+  padding-top: var(--space-100);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.flow-places-records .button {
+  height: auto;
+  min-height: var(--control-height);
+  text-align: left;
+  white-space: normal;
 }
 
 .flow-places-lane .trace-bar {
@@ -5058,7 +5116,7 @@ mark {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-100);
   height: min(70dvh, 40rem);
   min-width: 0;
   min-height: 16rem;
@@ -5081,25 +5139,41 @@ mark {
   border-color: var(--border-control);
 }
 
+/* The Gaps control lies there as the legend does; one of the two at a time (flow-scenario D10). It
+   stands after the bar in the DOM, so Tab reaches it from its toggle: placed in the centre's first
+   row, that row's area is its containing block, and it lies over the canvas as the legend does. */
+.flow-gaps {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 4;
+  grid-row: 1;
+  grid-column: 1;
+  max-height: 50%;
+  overflow: auto;
+  border-color: var(--border-control);
+}
+
 /* The bar: the Legend and, past the cap, what was not drawn; one line. */
 .flow-bar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-3);
+  gap: var(--space-050) var(--space-150);
   min-width: 0;
-  padding: var(--space-1) 0;
+  padding: var(--space-050) 0;
   background: var(--surface-canvas);
 }
 
 .flow-bar-cut {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
   margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .flow-panel {
@@ -5107,11 +5181,11 @@ mark {
   display: grid;
   grid-area: panel;
   align-content: start;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-150) var(--space-200);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-m);
   background: var(--surface-panel);
@@ -5121,11 +5195,11 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .flow-panel-title {
-  font-size: var(--font-size-m);
+  font-size: var(--font-size-heading-s);
   overflow-wrap: anywhere;
 }
 
@@ -5135,7 +5209,7 @@ mark {
 
 .flow-panel-section {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
@@ -5144,19 +5218,19 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .flow-panel-counts {
   display: grid;
-  gap: var(--space-1);
-  font-size: var(--font-size-s);
+  gap: var(--space-050);
+  font-size: var(--font-size-body);
   font-weight: 600;
 }
 
 .flow-panel-inner {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
   padding: 0;
   list-style: none;
@@ -5196,7 +5270,7 @@ mark {
     grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-columns: minmax(var(--flow-canvas-min), 1fr) var(--flow-panel-width);
     grid-template-areas: "head head" "places places" "centre panel";
-    height: calc(100dvh - var(--flow-studio-top, 8rem) - var(--space-6));
+    height: calc(100dvh - var(--flow-studio-top, 8rem) - var(--space-400));
     overflow: hidden;
   }
 
@@ -5232,7 +5306,7 @@ mark {
 
   .flow-places.is-open .flow-places-body {
     position: absolute;
-    top: calc(100% + var(--space-1));
+    top: calc(100% + var(--space-050));
     left: 0;
     width: var(--flow-places-width);
     max-height: calc(100dvh - var(--flow-studio-top, 8rem) - 8rem);
@@ -5270,19 +5344,31 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
-}
-
-.flow-gaps-clear .icon {
-  color: var(--flow-gap-none);
+  gap: var(--space-100);
 }
 
 .flow-gaps {
   display: grid;
-  gap: var(--space-2);
+  align-content: start;
+  gap: var(--space-100);
   min-width: 0;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--border-subtle);
+}
+
+/* The Gaps toggle carries its state as a lozenge after its word. */
+.flow-gaps-toggle .lozenge {
+  margin-left: var(--space-050);
+}
+
+.flow-gaps-zero {
+  display: flex;
+  align-items: center;
+  gap: var(--space-050);
+  margin: 0;
+  color: var(--text-secondary);
+}
+
+.flow-gaps-zero .icon {
+  color: var(--flow-gap-none);
 }
 
 .flow-gap-list,
@@ -5294,14 +5380,14 @@ mark {
 }
 
 .flow-gap-list {
-  gap: var(--space-2);
+  gap: var(--space-100);
 }
 
 .flow-gap {
   display: grid;
   gap: var(--space-025);
   min-width: 0;
-  padding-bottom: var(--space-2);
+  padding-bottom: var(--space-100);
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -5315,19 +5401,28 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-1) var(--space-2);
+  gap: var(--space-050) var(--space-100);
 }
 
 .flow-gap-code {
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
-.flow-gap-meaning,
+.flow-gap-meaning {
+  flex: 1 1 12rem;
+  min-width: 0;
+  color: var(--text-primary);
+}
+
 .flow-gap-cause {
+  margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+}
+
+.flow-gap-code {
+  margin: 0;
 }
 
 .flow-gap-cause {
@@ -5336,7 +5431,7 @@ mark {
 
 .flow-gap-items {
   gap: var(--space-025);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .flow-gap-item {
@@ -5344,7 +5439,7 @@ mark {
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-025) var(--space-2);
+  gap: var(--space-025) var(--space-100);
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -5356,13 +5451,62 @@ mark {
 .flow-gap-hand {
   min-height: var(--target-min);
   padding-block: 0;
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .flow-gap-item .link-button {
   min-height: var(--target-min);
   overflow-wrap: anywhere;
   text-align: left;
+}
+
+/* Records for the AI (flow-scenario "Records for the AI"): kinds as headings, each record a link by title. */
+.flow-records-list {
+  position: relative;
+  display: grid;
+  gap: var(--space-150);
+  max-height: 50vh;
+  overflow: auto;
+}
+
+.flow-records-group {
+  display: grid;
+  gap: var(--space-050);
+}
+
+.flow-records-kind {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+}
+
+.flow-records-group ul {
+  display: grid;
+  gap: var(--space-025);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-records-group li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-100);
+  overflow-wrap: anywhere;
+}
+
+.flow-records-holds {
+  color: var(--text-secondary);
+}
+
+.flow-records-noid {
+  margin: 0;
+}
+
+.flow-panel-details .facts {
+  margin-top: var(--space-100);
 }
 
 .flow-gap-item .link-button[aria-current="true"] {
@@ -5377,7 +5521,7 @@ mark {
 }
 
 .flow-canvas .react-flow__minimap {
-  margin: var(--space-1) var(--space-2);
+  margin: var(--space-050) var(--space-100);
 }
 
 /* Labels over every edge; the edges' stacking is the layout's. */
@@ -5398,23 +5542,23 @@ mark {
   position: relative;
   display: grid;
   align-content: center;
-  gap: 1px;
+  gap: var(--space-025);
   width: 100%;
   height: 100%;
-  padding: var(--space-1) var(--space-3);
+  padding: var(--space-050) var(--space-100);
   border: var(--xy-node-border);
   border-radius: var(--radius-m);
   background: var(--flow-box-surface);
   color: var(--xy-node-color);
-  font-size: var(--font-size-s);
-  line-height: 1.3;
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
   cursor: pointer;
 }
 
 .flow-box p {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
@@ -5425,11 +5569,11 @@ mark {
   height: 12px;
 }
 
-/* The terminators of a flowchart, rounded; an end doubled, so the shape says it without colour. */
+/* The terminators of a flowchart, a stadium; an end doubled, so the shape says it without colour. */
 .flow-box.is-start,
 .flow-box.is-end {
-  padding-inline: var(--space-4);
-  border-radius: 36px;
+  padding-inline: var(--space-150);
+  border-radius: var(--radius-full);
 }
 
 .flow-box.is-start {
@@ -5467,40 +5611,29 @@ mark {
   outline-offset: 3px;
 }
 
+/* The box's title at the body size, 12.9 px or more at Flow's fit floor (flow-scenario D8), on up to
+   two lines; the whole of it stands in the List and the panel. */
 .flow-box-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   min-width: 0;
   overflow: hidden;
-  font-weight: 650;
-  text-overflow: ellipsis;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-body);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-.flow-box-words {
-  min-height: 1.3em;
-}
-
-.flow-box p.flow-box-name {
-  color: var(--text-secondary);
-  font-size: 0.6875rem;
-}
-
-.flow-box-id {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 0.6875rem;
-  text-overflow: ellipsis;
-}
-
-.flow-box-kind {
-  flex: none;
-  margin-left: auto;
-  color: var(--text-secondary);
-  font-size: 0.6875rem;
+.flow-box p.flow-box-words {
+  align-items: flex-start;
+  white-space: normal;
 }
 
 .flow-box p.flow-box-marks {
   min-height: 1.2em;
-  gap: var(--space-2);
+  gap: var(--space-100);
   color: var(--text-secondary);
   font-size: var(--font-size-small);
 }
@@ -5509,26 +5642,26 @@ mark {
 .flow-box p.flow-box-state {
   display: block;
   color: var(--text-primary);
-  font-size: 0.6875rem;
+  font-size: var(--font-size-small);
   font-weight: 600;
-  line-height: 1.5;
+  line-height: var(--line-height-small);
   text-overflow: ellipsis;
 }
 
 /* A badge in a box keeps the box's own metrics, not the lozenge's 20 px: the layout measured it. */
 .flow-box .badge {
   min-height: 0;
-  padding: 0 var(--space-1);
-  font-size: 0.6875rem;
-  line-height: 1.4;
+  padding: 0 var(--space-050);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
   white-space: nowrap;
 }
 
 .flow-box-bar.trace-bar {
   position: absolute;
-  right: var(--space-4);
+  right: var(--space-200);
   bottom: 5px;
-  left: var(--space-4);
+  left: var(--space-200);
   height: 3px;
 }
 
@@ -5588,7 +5721,7 @@ mark {
   justify-content: center;
   width: var(--target-min);
   height: var(--target-min);
-  margin-left: calc(var(--space-1) * -1);
+  margin-left: calc(var(--space-050) * -1);
   border-radius: var(--radius-s);
 }
 
@@ -5601,20 +5734,20 @@ mark {
   top: -10px;
   right: 10px;
   display: flex;
-  gap: var(--space-1);
+  gap: var(--space-050);
 }
 
 .flow-tab {
   display: inline-flex;
   align-items: center;
   gap: var(--space-025);
-  padding: 0 var(--space-1);
+  padding: 0 var(--space-050);
   border: 1px solid var(--border-control);
   border-radius: var(--radius-s);
   background: var(--surface-overlay);
   color: var(--text-primary);
-  font-size: 0.6875rem;
-  line-height: 1.5;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
 }
 
 .flow-tab-selected .icon {
@@ -5625,12 +5758,41 @@ mark {
   color: var(--flow-marked);
 }
 
+/* The band's caption: what stands below, how many, and why they stand apart. */
 .flow-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-100);
+  margin: 0;
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
-  font-weight: 600;
-  line-height: 24px;
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
   pointer-events: none;
+}
+
+.flow-band-name {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* A stage divider: the stage words raw over a rule across the picture (flow-scenario D7). */
+.flow-divider {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-100);
+  height: 100%;
+  margin: 0;
+  border-bottom: 1px dashed var(--border-control);
+  color: var(--text-secondary);
+  font-size: var(--font-size-small);
+  font-weight: var(--font-weight-semibold);
+  line-height: var(--line-height-small);
+  pointer-events: none;
+}
+
+.flow-divider-words {
+  padding: 0 var(--space-100) var(--space-025);
 }
 
 .flow-edge-label {
@@ -5638,13 +5800,13 @@ mark {
   display: grid;
   justify-items: center;
   max-width: 128px;
-  padding: 1px var(--space-1);
+  padding: var(--space-025) var(--space-050);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-canvas);
   color: var(--text-secondary);
-  font-size: 0.6875rem;
-  line-height: var(--line-height-tight);
+  font-size: var(--font-size-small);
+  line-height: var(--line-height-small);
   text-align: center;
   overflow-wrap: anywhere;
   pointer-events: none;
@@ -5668,7 +5830,7 @@ mark {
   position: relative;
   display: grid;
   align-content: start;
-  gap: var(--space-2);
+  gap: var(--space-100);
   min-width: 0;
 }
 
@@ -5681,29 +5843,29 @@ mark {
   position: relative;
   display: grid;
   align-content: start;
-  gap: var(--space-3);
+  gap: var(--space-150);
   min-width: 0;
-  padding: var(--space-1) 0 var(--space-3);
+  padding: var(--space-050) 0 var(--space-150);
 }
 
 .flow-list-boxes,
 .flow-list-edges {
   display: grid;
-  gap: var(--space-1);
+  gap: var(--space-050);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .flow-list-group {
-  margin: 0 0 var(--space-1);
-  font-size: var(--font-size-s);
+  margin: 0 0 var(--space-050);
+  font-size: var(--font-size-body);
 }
 
 .flow-list-box {
   display: grid;
   gap: var(--space-025);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-050) var(--space-100);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-s);
   background: var(--surface-raised);
@@ -5719,32 +5881,32 @@ mark {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-025) var(--space-2);
+  gap: var(--space-025) var(--space-100);
   min-width: 0;
 }
 
 .flow-list-name {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: 0 var(--space-2);
+  gap: 0 var(--space-100);
   min-width: 0;
 }
 
 .flow-list-meta,
 .flow-list-holds {
   color: var(--text-secondary);
-  font-size: var(--font-size-s);
+  font-size: var(--font-size-body);
 }
 
 .flow-list-edges {
-  margin-left: var(--space-4);
-  font-size: var(--font-size-s);
+  margin-left: var(--space-200);
+  font-size: var(--font-size-body);
 }
 
 .flow-list-edges a {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: var(--space-050);
   min-height: var(--target-min);
 }
 

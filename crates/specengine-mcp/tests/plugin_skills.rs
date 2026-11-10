@@ -1223,8 +1223,9 @@ fn kind_interpretation_ac_r12_the_plugin_texts_name_the_kind_and_its_fields() {
     // docs/features/spec-ids.md; 0.30.0 since docs/features/flow-scope.md
     // (FS-6, `get_flow`'s `stage`, the orchestrator's MINOR of 2026-11-08);
     // 0.31.0 since docs/features/board-handoff.md (the card tools' keys);
-    // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`).
-    assert_eq!(manifest["version"], "0.32.0");
+    // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`); 0.33.0 since
+    // flow-scenario (RM-0094, `get_flow`'s `in_flow`).
+    assert_eq!(manifest["version"], "0.33.0");
     // The fields are `propose_change`'s properties on the wire.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1326,8 +1327,9 @@ fn kind_decision_ac_r11_ask_owner_and_spec_author_send_a_decision() {
     // docs/features/spec-ids.md; 0.30.0 since docs/features/flow-scope.md
     // (FS-6, `get_flow`'s `stage`, the orchestrator's MINOR of 2026-11-08);
     // 0.31.0 since docs/features/board-handoff.md (the card tools' keys);
-    // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`).
-    assert_eq!(manifest["version"], "0.32.0");
+    // 0.32.0 since card-tasks (RM-0092, `edit_card`'s `task`); 0.33.0 since
+    // flow-scenario (RM-0094, `get_flow`'s `in_flow`).
+    assert_eq!(manifest["version"], "0.33.0");
     // The names are the server's.
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1430,7 +1432,7 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
     )
     .expect("JSON");
     assert_eq!(
-        manifest["version"], "0.32.0",
+        manifest["version"], "0.33.0",
         "W36: 0.5.0 -> 0.6.0; norm-hash: 0.7.0; spec-lock: 0.7.1; rev-discipline: 0.7.2; \
          drift-queue: 0.8.0; code-tools: 0.9.0; bevy-roles-reads: 0.10.0; \
          roadmap-surfaces: 0.11.0; check-binding: 0.12.0; show-bindings: 0.13.0; \
@@ -1438,7 +1440,8 @@ fn kind_amendment_ac_r12_propose_spec_change_teaches_the_amendment() {
          tested-reads: 0.18.0; review-form: 0.19.0; layer-c-reads: 0.20.0; flow-read: 0.21.0; \
          flow-canvas: 0.22.0; card-store: 0.23.0; flow-authoring: 0.28.0; hub-confirm: 0.29.0; \
          spec-ids: 0.29.1; flow-scope (FS-6, `get_flow`'s `stage`): 0.30.0; board-handoff \
-         (`reviewer`, `note`, `parent`): 0.31.0; card-tasks (`edit_card`'s `task`): 0.32.0"
+         (`reviewer`, `note`, `parent`): 0.31.0; card-tasks (`edit_card`'s `task`): 0.32.0; \
+         flow-scenario (`get_flow`'s `in_flow`): 0.33.0"
     );
     let mut session = Session::open(Era::Stateless, &[], None, Home::Fresh);
     let list = session.tools();
@@ -1960,8 +1963,10 @@ fn impact_since_implement_reports_with_since() {
 // ------------------------------------------------- show-bindings (7a-1)
 
 /// docs/features/show-bindings.md "Plugin 0.13.0": `read-spec`'s step 2,
-/// its first bullet, word for word.
-const READ_SPEC_NODE_BULLET: &str = "   - one node's current text: `get_node` with its `id`; add `with: [\"links\"]` for its links when you need what it points at and what points at it, `with: [\"bindings\"]` for the code bound to it and whether that code still matches the spec (each binding's `sync`);";
+/// its first bullet, word for word; flow-scenario (RM-0094, 0.33.0) names
+/// `ancestors`, the path from the top, and shortens the links clause to fit
+/// the body's 4 096 B.
+const READ_SPEC_NODE_BULLET: &str = "   - one node's current text and `ancestors`, its path from the top: `get_node` with its `id`; add `with: [\"links\"]` for its links both ways, `with: [\"bindings\"]` for the code bound to it and whether it still matches the spec (each binding's `sync`);";
 
 /// docs/features/show-bindings.md "Plugin 0.13.0": `read-spec` names the
 /// bindings read in its step 2's first bullet (the spec's text, once, the
@@ -2060,11 +2065,12 @@ fn read_spec_names_the_bundles_code_and_tests() {
     assert!(body.len() <= 4096, "the body is {} bytes", body.len());
     assert_eq!(
         text.len(),
-        4_400,
+        4_415,
         "SKILL.md's bytes: 3 720 as docs/features/tested-reads.md measures them (3 444 before), \
          154 more since docs/features/flow-read.md (the `get_flow` line), 214 more since \
          docs/features/card-store.md (the cards bullet), 172 more since \
-         docs/features/board-handoff.md (the hand-off sentence)"
+         docs/features/board-handoff.md (the hand-off sentence), 15 more since \
+         docs/features/flow-scenario.md (`ancestors` and `in_flow`, two lines reworded)"
     );
     let reworded = edited(
         &skills,
@@ -2167,8 +2173,9 @@ fn tested_reads_skills_name_tested() {
     assert_eq!(
         (body(read_spec), read_spec.len()),
         // docs/features/board-handoff.md: 172 bytes more, the hand-off
-        // sentence, the body still within 4 096.
-        (4_079, 4_400),
+        // sentence, the body still within 4 096; flow-scenario (RM-0094):
+        // 15 more, `ancestors` and `in_flow` in two reworded lines.
+        (4_094, 4_415),
         "read-spec's bytes"
     );
     assert_eq!(
@@ -2513,6 +2520,7 @@ fn spec_ids_propose_spec_change_names_the_other_range() {
     // 0.29.1 for spec-ids; 0.30.0 since docs/features/flow-scope.md (FS-6,
     // `get_flow`'s `stage`, the orchestrator's MINOR of 2026-11-08); 0.31.0
     // since docs/features/board-handoff.md (the card tools' keys); 0.32.0
-    // since card-tasks (RM-0092, `edit_card`'s `task`).
-    assert_eq!(manifest["version"], "0.32.0");
+    // since card-tasks (RM-0092, `edit_card`'s `task`); 0.33.0 since
+    // flow-scenario (RM-0094, `get_flow`'s `in_flow`).
+    assert_eq!(manifest["version"], "0.33.0");
 }

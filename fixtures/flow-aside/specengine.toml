@@ -1,0 +1,29 @@
+# Fixture corpus flow-aside: an invented pottery workshop. What is in the flow is
+# told by links, [flow] and parent: alone (docs/features/flow-scenario.md "Data").
+# `[paths] roots` walks the whole of `docs/`: the workshop, the notes and the
+# three record directories lie outside the default role directories.
+[project]
+slug = "flow-aside"
+
+[paths]
+roots = ["docs"]
+
+[ids]
+ATL    = { kind = "atelier",   shape = "name" }
+KRUN   = { kind = "kilnrun",   shape = "name" }
+POT    = { kind = "potstep",   shape = "name" }
+WBAY   = { kind = "workbay",   shape = "name" }
+CONE   = { kind = "conerule",  shape = "name" }
+DESK   = { kind = "deskpaper", shape = "name" }
+HUNCH  = { kind = "hunch",  width = 4 }
+PUZZLE = { kind = "puzzle", width = 4 }
+EDICT  = { kind = "edict",  width = 4 }
+
+[[flow.step]]
+kinds = ["potstep"]
+
+[[flow.start]]
+paths = ["docs/workshop/run/wedge.md", "docs/workshop/gallery/open-day.md"]
+
+[[flow.end]]
+paths = ["docs/workshop/run/pack.md", "docs/workshop/gallery/open-day.md"]

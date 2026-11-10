@@ -7,13 +7,14 @@ import { useTranslate } from "../i18n";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
 import { isPlainClick } from "./clicks";
-import { countsText, edgeKeyOf, edgeKeyText, edgeRowWords, gapMark, holdsText, rollupLook, startWord } from "./labels";
+import { boxWords, countsText, edgeKeyOf, edgeKeyText, edgeRowWords, gapMark, holdsText, rollupLook, startWord } from "./labels";
 import { isGroup } from "./layout";
 
-// The List (docs/features/writer-studio.md D10, "List"): the canvas's text twin, every node and
-// arrow of the drawing read, past the cap too, in served order. Each row is a link that selects
-// what it names, one history entry replaced; `path:line` stands in the panel alone. A group adds what
-// it holds and Open, which enters it. In a stage view the boxes stand under their group.
+// The List (docs/features/writer-studio.md D10, "List"; docs/features/flow-scenario.md D12): the
+// canvas's text twin, every node and arrow of the drawing read, past the cap too, in served order,
+// each by its title. Each row is a link that selects what it names, one history entry replaced; IDs
+// and `path:line` stand in the panel alone. A group adds what it holds and Open, which enters it. An
+// arrow keeps its count here. In a stage view the boxes stand under their group.
 
 /** Where the List's links go. */
 export interface ListPlaces {
@@ -35,7 +36,7 @@ function selecting(onSelect: (origin: HTMLElement) => void) {
   };
 }
 
-function EdgeRows({ edges, titles, places, selectedEdge, onSelect }: { edges: readonly FlowEdge[]; titles: ReadonlyMap<string, string | null>; places: ListPlaces; selectedEdge: string | null; onSelect: (origin: HTMLElement) => void }) {
+function EdgeRows({ edges, titleOf, places, selectedEdge, onSelect }: { edges: readonly FlowEdge[]; titleOf: (name: string) => string; places: ListPlaces; selectedEdge: string | null; onSelect: (origin: HTMLElement) => void }) {
   const t = useTranslate();
   if (edges.length === 0) {
     return null;
@@ -48,7 +49,7 @@ function EdgeRows({ edges, titles, places, selectedEdge, onSelect }: { edges: re
           <li key={key} data-flow-edge={key} aria-current={key === selectedEdge ? "true" : undefined}>
             <a href={flowHash(places.project, places.edge(edgeKeyOf(edge)))} onClick={selecting(onSelect)}>
               <Icon name="arrowRight" />
-              <bdi>{edgeRowWords(edge, titles.get(edge.to) ?? null, t)}</bdi>
+              <bdi>{edgeRowWords(edge, titleOf(edge.to), t)}</bdi>
             </a>
           </li>
         );
@@ -64,7 +65,7 @@ function BoxRow({
   selected,
   marked,
   edges,
-  titles,
+  titleOf,
   places,
   selectedEdge,
   onSelect,
@@ -75,7 +76,7 @@ function BoxRow({
   selected: boolean;
   marked: boolean;
   edges: readonly FlowEdge[];
-  titles: ReadonlyMap<string, string | null>;
+  titleOf: (name: string) => string;
   places: ListPlaces;
   selectedEdge: string | null;
   onSelect: (origin: HTMLElement) => void;
@@ -88,18 +89,13 @@ function BoxRow({
     <li className="flow-list-box" data-flow-row={name} aria-current={selected ? "true" : undefined}>
       <p className="flow-list-head">
         <a className="flow-list-name" href={flowHash(places.project, places.box(name))} onClick={selecting(onSelect)}>
-          <span className="mono">{name}</span>
-          {node.title !== null && (
-            <span className="flow-list-title">
-              <bdi>{node.title}</bdi>
-            </span>
-          )}
+          <bdi className="flow-list-title">{boxWords(node)}</bdi>
         </a>
         {!group && node.rollup !== null && <Badge look={rollupLook(node.rollup, t)} />}
         {group && <span className="flow-list-holds">{holdsText(node.holds, t)}</span>}
         {group && (
           <a className="flow-list-open" href={flowHash(places.project, places.enter(name))}>
-            {t("flow.openGroup", { name })}
+            {t("flow.openGroup", { name: boxWords(node) })}
           </a>
         )}
       </p>
@@ -136,7 +132,7 @@ function BoxRow({
           </span>
         )}
       </p>
-      <EdgeRows edges={edges} titles={titles} places={places} selectedEdge={selectedEdge} onSelect={onSelect} />
+      <EdgeRows edges={edges} titleOf={titleOf} places={places} selectedEdge={selectedEdge} onSelect={onSelect} />
     </li>
   );
 }
@@ -159,6 +155,7 @@ export const FlowList = memo(function FlowList({
   selectedEdge,
   marked,
   places,
+  titleOf,
   scrollTo,
   onSelect,
 }: {
@@ -177,17 +174,23 @@ export const FlowList = memo(function FlowList({
   selectedEdge: string | null;
   marked: ReadonlySet<string>;
   places: ListPlaces;
+  /** A name's title where a read gives one, else the name. */
+  titleOf: (name: string) => string;
   /** A name to scroll to; a new object each time. */
   scrollTo: { name: string } | null;
   onSelect: (origin: HTMLElement) => void;
 }) {
   const list = useRef<HTMLDivElement>(null);
   const scrolled = useRef<{ name: string } | null>(null);
-  const titles = useMemo(() => new Map(boxes.map((node) => [nodeName(node), node.title])), [boxes]);
   const outOf = useMemo(() => {
     const found = new Map<string, FlowEdge[]>();
     for (const edge of edges) {
-      found.set(edge.from, [...(found.get(edge.from) ?? []), edge]);
+      const held = found.get(edge.from);
+      if (held === undefined) {
+        found.set(edge.from, [edge]);
+      } else {
+        held.push(edge);
+      }
     }
     return found;
   }, [edges]);
@@ -197,7 +200,12 @@ export const FlowList = memo(function FlowList({
     }
     const byGroup = new Map<string | null, FlowNode[]>();
     for (const node of boxes) {
-      byGroup.set(node.group, [...(byGroup.get(node.group) ?? []), node]);
+      const held = byGroup.get(node.group);
+      if (held === undefined) {
+        byGroup.set(node.group, [node]);
+      } else {
+        held.push(node);
+      }
     }
     return [...byGroup].map(([group, held]) => ({ group, boxes: held }));
   }, [boxes, stageView]);
@@ -219,16 +227,16 @@ export const FlowList = memo(function FlowList({
       {own.length > 0 && scope !== null && (
         <section className="flow-list-own">
           <h2 className="flow-list-group">
-            <bdi>{scopeTitle}</bdi> <span className="mono">{scope}</span>
+            <bdi>{scopeTitle}</bdi>
           </h2>
-          <EdgeRows edges={own} titles={titles} places={places} selectedEdge={selectedEdge} onSelect={onSelect} />
+          <EdgeRows edges={own} titleOf={titleOf} places={places} selectedEdge={selectedEdge} onSelect={onSelect} />
         </section>
       )}
       {shelves.map((shelf) => (
         <section key={shelf.group ?? ""} className="flow-list-shelf">
           {stageView && shelf.group !== null && (
             <h2 className="flow-list-group">
-              <span className="mono">{shelf.group}</span>
+              <bdi>{titleOf(shelf.group)}</bdi>
             </h2>
           )}
           <ul className="flow-list-boxes">
@@ -241,7 +249,7 @@ export const FlowList = memo(function FlowList({
                 selected={nodeName(node) === selected}
                 marked={marked.has(nodeName(node))}
                 edges={outOf.get(nodeName(node)) ?? []}
-                titles={titles}
+                titleOf={titleOf}
                 places={places}
                 selectedEdge={selectedEdge}
                 onSelect={onSelect}

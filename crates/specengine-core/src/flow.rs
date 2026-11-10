@@ -34,6 +34,17 @@
 //!   `stage:`, and the edges whose two ends are kept. Each kept node and
 //!   edge is the read's own object, its `group` and `distance` included;
 //!   the scope, the walk, the gap rows and `left_out` never see the cut.
+//! - **In the flow.** A document is in the flow when the read with no
+//!   `ROOT`, admitting live documents alone, holds it: by links, `[flow]`
+//!   and `parent:`, never by a kind, a path, a prefix or an ID's shape.
+//!   Each shown node's `in_flow` is folded as `start` is: it or anything it
+//!   holds is. Computed once per read, from the read's own links and parent
+//!   map whenever every `ROOT` holder is live, so a rooted read gains one
+//!   linear pass; with no `ROOT` it is the scope itself. The opt-in cut
+//!   ([`FlowAsk::in_flow_only`]) runs after the fold and after the stage
+//!   and moves nothing else, as the stage does: it drops each shown node
+//!   not in the flow but a `ROOT` holder's, then the edges losing an end,
+//!   and counts the documents the dropped nodes stand for.
 //! - **Gaps.** All ten, always in [`GapCode::ALL`]'s order, computed before
 //!   any fold, so a depth never changes one. A `follows` edge crossing the
 //!   scope is an entry or a way out, so a sub-flow is not called broken;
@@ -177,6 +188,9 @@ pub struct FlowNode {
     pub start: bool,
     /// It or something it holds is an end.
     pub end: bool,
+    /// It or something it holds is in the flow: held by the read with no
+    /// `ROOT`.
+    pub in_flow: bool,
     /// The documents folded into it.
     pub holds: usize,
     /// The edges with both ends in it, per type, by type.
@@ -216,6 +230,9 @@ pub struct FlowAsk<'r> {
     pub depth: Option<usize>,
     /// `--stage`: which shown nodes are kept; `None`: all of them.
     pub stage: Option<FlowStage<'r>>,
+    /// `--in-flow`: keep only the shown nodes in the flow, a `ROOT`
+    /// holder's always, after the stage's cut.
+    pub in_flow_only: bool,
     pub config: &'r FlowConfig,
     /// How a cause names the config.
     pub config_label: &'r str,
@@ -251,15 +268,18 @@ pub struct FlowRead {
     pub left_out: Vec<usize>,
     /// All ten, in [`GapCode::ALL`]'s order.
     pub gaps: Vec<FlowGap>,
-    /// By (distance, unreached last; path); with a stage, the kept ones.
+    /// By (distance, unreached last; path); with a cut, the kept ones.
     pub nodes: Vec<FlowNode>,
-    /// By (`from`, `to`, type, kind); with a stage, those whose two ends
+    /// By (`from`, `to`, type, kind); with a cut, those whose two ends
     /// are kept.
     pub edges: Vec<FlowEdge>,
-    /// The file of every shown node before a stage kept some, in the
-    /// order of the read without it: what a join over the shown nodes
-    /// reads, so a stage moves none of its notes (`spec flow --trace`).
+    /// The file of every shown node before a cut kept some, in the
+    /// order of the read without one: what a join over the shown nodes
+    /// reads, so a cut moves none of its notes (`spec flow --trace`).
     pub shown: Vec<usize>,
+    /// With [`FlowAsk::in_flow_only`], the documents the nodes it dropped
+    /// stand for, each node 1 and what it holds; `None` without it.
+    pub not_in_flow: Option<usize>,
 }
 
 /// What a walk found, by file.
@@ -376,21 +396,53 @@ pub fn flow_read(graph: &SpecGraph<'_>, ask: &FlowAsk<'_>) -> FlowRead {
     let gaps = gaps_of(graph, ask, &scope.members, &links, &steps, &selected);
     let named: BTreeSet<usize> = gaps.iter().flat_map(|gap| gap.files.clone()).collect();
     let tree = tree_of(&parents, &scope);
-    let (mut nodes, edges) = shown(graph, ask.depth, &scope, &tree, &links, &steps, &named);
-    let shown_files: Vec<usize> = nodes.iter().map(|node| node.file).collect();
-    // The cut comes after the fold: each kept node and edge is the read's
-    // own object, and the rows above never see it.
-    let edges = match ask.stage {
-        None => edges.into_iter().map(|(_, edge)| edge).collect(),
-        Some(stage) => {
-            nodes.retain(|node| stage.keeps(node, &steps.steps));
-            let kept: BTreeSet<usize> = nodes.iter().map(|node| node.file).collect();
-            edges
-                .into_iter()
-                .filter(|((from, to), _)| kept.contains(from) && kept.contains(to))
-                .map(|(_, edge)| edge)
-                .collect()
+    // In the flow: what the read with no `ROOT` holds, live documents alone
+    // admitted. With no `ROOT` that is this scope; under live `ROOT`
+    // holders the read's own links already admit live documents alone.
+    let rooted;
+    let in_flow = match ask.roots {
+        None => &scope.members,
+        Some(_) => {
+            let live = |file: usize| graph.standing(file) == Standing::Live;
+            rooted = if asked.iter().all(|&file| live(file)) {
+                flow_members(&links, &strays, &selected, &live, &parents).0
+            } else {
+                let (links, strays) = read_links(graph, &live);
+                flow_members(&links, &strays, &selected, &live, &parents).0
+            };
+            &rooted
         }
+    };
+    let (mut nodes, edges) = shown(
+        graph, ask.depth, &scope, &tree, &links, &steps, &named, in_flow,
+    );
+    let shown_files: Vec<usize> = nodes.iter().map(|node| node.file).collect();
+    // The cuts come after the fold, the stage's first: each kept node and
+    // edge is the read's own object, and the rows above never see them.
+    if let Some(stage) = ask.stage {
+        nodes.retain(|node| stage.keeps(node, &steps.steps));
+    }
+    let not_in_flow = ask.in_flow_only.then(|| {
+        let mut dropped = 0;
+        nodes.retain(|node| {
+            // A `ROOT` holder stays: the scope keeps its anchor.
+            let kept = node.in_flow || asked.contains(&node.file);
+            if !kept {
+                dropped += 1 + node.holds;
+            }
+            kept
+        });
+        dropped
+    });
+    let edges = if ask.stage.is_none() && !ask.in_flow_only {
+        edges.into_iter().map(|(_, edge)| edge).collect()
+    } else {
+        let kept: BTreeSet<usize> = nodes.iter().map(|node| node.file).collect();
+        edges
+            .into_iter()
+            .filter(|((from, to), _)| kept.contains(from) && kept.contains(to))
+            .map(|(_, edge)| edge)
+            .collect()
     };
     FlowRead {
         left_out: scope.left_out.into_iter().collect(),
@@ -398,6 +450,7 @@ pub fn flow_read(graph: &SpecGraph<'_>, ask: &FlowAsk<'_>) -> FlowRead {
         nodes,
         edges,
         shown: shown_files,
+        not_in_flow,
     }
 }
 
@@ -538,47 +591,7 @@ fn scope_of(
             files.into_iter().collect()
         }
         None => {
-            for link in links {
-                members.extend([link.from, link.to]);
-            }
-            for file in selected.all() {
-                if admitted(file) {
-                    members.insert(file);
-                } else {
-                    left_out.insert(file);
-                }
-            }
-            for stray in strays {
-                for file in std::iter::once(stray.source).chain(stray.target) {
-                    if !admitted(file) {
-                        left_out.insert(file);
-                    } else if file == stray.source {
-                        members.insert(file);
-                    }
-                }
-            }
-            // Everything above an ancestor already walked is in `members` or
-            // `left_out` already, so the walk stops there: each file is
-            // climbed from at most once per read. A file past the map has no
-            // parent document, so its walk is empty.
-            let mut walked = vec![false; parents.len()];
-            for member in members.clone() {
-                let mut at = member;
-                while let Some(done) = walked.get_mut(at) {
-                    if std::mem::replace(done, true) {
-                        break;
-                    }
-                    let Some(parent) = parent_document(parents, at) else {
-                        break;
-                    };
-                    if !admitted(parent) {
-                        left_out.insert(parent);
-                        break;
-                    }
-                    members.insert(parent);
-                    at = parent;
-                }
-            }
+            (members, left_out) = flow_members(links, strays, selected, admitted, parents);
             let parented = |file: usize| {
                 parent_document(parents, file).is_some_and(|parent| members.contains(&parent))
             };
@@ -594,6 +607,63 @@ fn scope_of(
         roots,
         left_out,
     }
+}
+
+/// The documents a read with no `ROOT` holds, and the left-out files it
+/// meets: every admitted end of `links`, every document `[flow]` selects,
+/// the admitted source of each stray, and their `parent:` holders, climbed
+/// through `parents` ([`parents_of`]) up to the first one left out.
+fn flow_members(
+    links: &[Link<'_>],
+    strays: &[Stray],
+    selected: &Selected,
+    admitted: &impl Fn(usize) -> bool,
+    parents: &[Option<usize>],
+) -> (BTreeSet<usize>, BTreeSet<usize>) {
+    let mut members = BTreeSet::new();
+    let mut left_out = BTreeSet::new();
+    for link in links {
+        members.extend([link.from, link.to]);
+    }
+    for file in selected.all() {
+        if admitted(file) {
+            members.insert(file);
+        } else {
+            left_out.insert(file);
+        }
+    }
+    for stray in strays {
+        for file in std::iter::once(stray.source).chain(stray.target) {
+            if !admitted(file) {
+                left_out.insert(file);
+            } else if file == stray.source {
+                members.insert(file);
+            }
+        }
+    }
+    // Everything above an ancestor already walked is in `members` or
+    // `left_out` already, so the walk stops there: each file is climbed
+    // from at most once per read. A file past the map has no parent
+    // document, so its walk is empty.
+    let mut walked = vec![false; parents.len()];
+    for member in members.clone() {
+        let mut at = member;
+        while let Some(done) = walked.get_mut(at) {
+            if std::mem::replace(done, true) {
+                break;
+            }
+            let Some(parent) = parent_document(parents, at) else {
+                break;
+            };
+            if !admitted(parent) {
+                left_out.insert(parent);
+                break;
+            }
+            members.insert(parent);
+            at = parent;
+        }
+    }
+    (members, left_out)
 }
 
 /// Each file's parent document, by file: the document it is listed under,
@@ -1108,7 +1178,9 @@ fn unfed(members: &BTreeSet<usize>, links: &[Link<'_>]) -> Vec<Vec<usize>> {
 }
 
 /// The shown nodes and edges at `depth`, each edge with the files of its
-/// shown ends (`from`, `to`).
+/// shown ends (`from`, `to`); `in_flow`: the documents in the flow, folded
+/// as the starts are.
+#[allow(clippy::too_many_arguments)]
 fn shown(
     graph: &SpecGraph<'_>,
     depth: Option<usize>,
@@ -1117,6 +1189,7 @@ fn shown(
     links: &[Link<'_>],
     steps: &Steps,
     named: &BTreeSet<usize>,
+    in_flow: &BTreeSet<usize>,
 ) -> (Vec<FlowNode>, Vec<EndedEdge>) {
     let fold = folded(tree, depth);
     let shown_as = |file: usize| -> usize { fold.get(&file).copied().unwrap_or(file) };
@@ -1125,8 +1198,12 @@ fn shown(
     let mut gaps: BTreeMap<usize, usize> = BTreeMap::new();
     let mut starting = BTreeSet::new();
     let mut ending = BTreeSet::new();
+    let mut flowing = BTreeSet::new();
     for &member in &scope.members {
         let shown = shown_as(member);
+        if in_flow.contains(&member) {
+            flowing.insert(shown);
+        }
         if shown != member {
             *holds.entry(shown).or_default() += 1;
         }
@@ -1201,6 +1278,7 @@ fn shown(
                 stage: stage_of(graph, file).map(str::to_owned),
                 start: starting.contains(&file),
                 end: ending.contains(&file),
+                in_flow: flowing.contains(&file),
                 holds: holds.get(&file).copied().unwrap_or(0),
                 inner: inner
                     .get(&file)

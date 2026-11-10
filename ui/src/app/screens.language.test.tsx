@@ -6,6 +6,7 @@ import type { Translate } from "../i18n";
 import { en } from "../i18n/en";
 import { ru } from "../i18n/ru";
 import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aCheckFinding, aCheckReport, aFlowNode, aFlowView, aNode, aProposal, aRoadmap, aRoadmapGroup, aRoadmapItem, aTreeNode, aTreeView } from "../test/builders";
+import { ASIDE, asideClient } from "../test/asideStub";
 import { renderApp } from "../test/render";
 import { stubClient, STAGED_AT, type StubClient } from "../test/stubClient";
 import { enT, ruT } from "../test/text";
@@ -335,5 +336,54 @@ describe("the work item and the header in Russian (DF-11 of design-foundation)",
     expect(screen.queryByRole("button", { name: new RegExp(`^${en.board.item.development}`) })).toBeNull();
     // The board under the modal: its heads' lozenges read the served titles, as written.
     expect(document.querySelector(".board-head .lozenge-label")?.textContent).toBe("To do");
+  });
+});
+
+// FS-23 of flow-scenario (RM-0094): Flow in Russian with the Gaps control, Technical details and
+// Records for the AI open, and no English of the slice's own left; the daemon's causes stay English
+// under lang="en", spec titles as written.
+describe("Flow's scenario in Russian (FS-23 of flow-scenario)", () => {
+  it("shows the path, the Gaps control, Technical details and the Records dialog in Russian", async () => {
+    const client = asideClient();
+    renderApp(client, `#/${ASIDE}/flow?scope=WBAY-KILN`);
+    await screen.findByRole("button", { name: /^Records for the AI/ });
+    fireEvent.change(languageSelect(en.language.label), { target: { value: "ru" } });
+    await settle();
+    const places = screen.getByRole("navigation", { name: ru.flow.placesLabel });
+    expect(within(places).getByRole("list", { name: ru.flow.path })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${ru.flow.gaps.toggle}`) }));
+    const gaps = screen.getByRole("region", { name: ru.flow.gaps.toggle });
+    for (const details of within(gaps).getAllByRole("button", { name: ru.ui.technicalDetails })) {
+      fireEvent.click(details);
+    }
+    expect(within(gaps).getByText(ruT("flow.gaps.zero", { count: 6 }))).toBeTruthy();
+    const cause = within(gaps).getByText("no start and no entering edge to walk from");
+    expect(cause.getAttribute("lang")).toBe("en");
+    const panel = screen.getByRole("complementary", { name: ru.flow.panelLabel });
+    fireEvent.click(within(panel).getByRole("button", { name: ru.ui.technicalDetails }));
+    fireEvent.click(within(places).getByRole("button", { name: ruT("flow.records.open", { count: 141 }) }));
+    const dialog = await screen.findByRole("dialog", { name: ruT("flow.records.open", { count: 141 }) });
+    await within(dialog).findByRole("group", { name: "hunch" });
+    expect(within(dialog).getByText(ruT("flow.records.about", { scope: "Kiln bay" }))).toBeTruthy();
+    expect(within(dialog).getByRole("button", { name: ru.ui.close })).toBeTruthy();
+    const english = [
+      en.flow.path,
+      en.flow.gaps.toggle,
+      en.flow.gaps.notAll,
+      enT("flow.gaps.zero", { count: 6 }),
+      en.ui.technicalDetails,
+      enT("flow.records.open", { count: 141 }),
+      en.flow.records.title,
+      enT("flow.records.about", { scope: "Kiln bay" }),
+      en.ui.close,
+      en.flow.offWalk,
+      en.flow.offWalkAbout,
+      en.flow.gapMeaning.noStart,
+      en.flow.fact.name,
+    ];
+    for (const word of english) {
+      // The daemon's words stay as served, under lang="en".
+      expect([word, screen.queryAllByText(word, { exact: false }).filter((element) => element.closest("[lang='en']") === null).map((element) => element.textContent)]).toEqual([word, []]);
+    }
   });
 });

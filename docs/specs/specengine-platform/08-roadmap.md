@@ -234,7 +234,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | Step | Slice | Item | Result | ADR issued | Hours | After |
 |---|---|---|---|---|---|---|
 | 1 | `design-foundation` | RM-0093 | Shipped 2026-11-10: light and dark tokens as `light-dark()` roles (light by default, dark by the system, a Theme select per viewer); Inter 4.001 bundled as files; a rem type scale, spacing on 8 px, radii, a guard with 29 listed exceptions; Button, Lozenge, PropertyList, Breadcrumbs, IssueView, EmptyState, Disclosure; the card modal and page as the first work item; column heads by status category; a one-row header; first-load JS 806.03 kB of 845 (`docs/canon/ui-design.md`) | - | 12-17 | - |
-| 2 | `flow-scenario` | RM-0094 | Flow v2 3c with the path: `in_flow` and an opt-in cut, readable boxes, a top-to-bottom walk, Records for the AI, a served `ancestors` path, the places pane a path (`docs/features/flow-scenario.md`) | - | 11-17 | 1 |
+| 2 | `flow-scenario` | RM-0094 | Shipped 2026-11-10: a domain-free `in_flow` on every flow node, folded, `types`, and an opt-in cut counting `not_in_flow`; the canvas the cut's nodes, top to bottom, stage dividers, 160 px boxes, a 0.92 fit floor, off-walk edges on selection; Gaps in the bar; Records for the AI on demand; a served `ancestors` path from the subset's `PARENT` rows, the places pane that path, Up gone; plugin 0.33.0; first-load JS 815.13 kB of 845; its follow-up RM-0101 `gap-titles` in the pool (`docs/canon/spec-flow-cuts.md`, `spec-flow-bar.md`) | - | 11-17 | 1 |
 | 3 | `doc-modal` | RM-0095, RM-0091 | Flow v2 3d: link ends' titles, one document modal and page everywhere, the path its breadcrumb, technical details folded; RM-0091's plural fixes | - | 8-12 | 1, 2 |
 | 4 | `departments` | RM-0096 | The owner's words; `[[card.flow]] title`; `[[module]] kinds`; hand-off by department; preset titles | `departments` (amends ADR-0073) | 9-13 | 1 |
 | 5 | `card-questions` | RM-0097 | Intake items name `card_id` (queue schema 11, backup format 5); a decision's `why`; Activity; "Ask the writers" in Return; answers from the task | `card-questions` (supplements ADR-0056, ADR-0074, ADR-0075) | 10-14 | 1 |
@@ -270,6 +270,7 @@ It is recorded as step 7e was: counts of actions, help requests and dead ends, p
 - **Into `v5`.** RM-0086 becomes step 12 and RM-0088 step 10, both re-scoped; RM-0089 becomes step 13. Steps 17-19 (RM-0059 to RM-0061) become steps 8, 9 and 11. RM-0091 ships inside step 3.
 - **To the pool**, priorities kept: 10c (RM-0052), steps 13-16 (RM-0055 to RM-0058, with RM-0035 and RM-0036 inside step 14), steps 20 and 21 (RM-0062, RM-0017), RM-0070 and RM-0063. RM-0087 goes to the pool as `could` (Q12).
 - `zone-index`'s draft spec stays committed.
+- RM-0101 `gap-titles`, step 2's follow-up, joins the pool as `should`.
 - `spec roadmap` still reads `current mvp`.
 
 **Risks.**

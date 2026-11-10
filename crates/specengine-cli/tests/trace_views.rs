@@ -47,6 +47,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use common::graph::spec30;
+use common::keys::{FLOW_KEYS, without_keys};
 use common::proposal::{LATER, Pair};
 use common::{Run, Scratch, fixture, index, md_files, read, read_text, replace, write};
 use serde_json::{Value, json};
@@ -89,10 +90,10 @@ const SET_MEANING: (&str, &str) = ("opens on a right-hand page", "opens on a lef
 const PROOF_MEANING: (&str, &str) = ("One proof goes", "Two proofs go");
 
 /// `spec flow --json`'s node, in order ("Routes and types": 15 keys; `stage`
-/// after `group`).
-const FLOW_NODE_KEYS: [&str; 15] = [
-    "id", "kind", "title", "path", "line", "distance", "group", "stage", "start", "end", "holds",
-    "inner", "gaps", "rollup", "counts",
+/// after `group`; docs/features/flow-scenario.md: 16, `in_flow` after `end`).
+const FLOW_NODE_KEYS: [&str; 16] = [
+    "id", "kind", "title", "path", "line", "distance", "group", "stage", "start", "end", "in_flow",
+    "holds", "inner", "gaps", "rollup", "counts",
 ];
 
 /// `spec trace --json`'s lane.
@@ -863,9 +864,11 @@ fn before_rows() -> Vec<Before> {
 
 /// `stdout` with the three keys of this slice taken out, each `null`: what
 /// the binary before it wrote. A key left with another value stays, and the
-/// comparison shows it.
+/// comparison shows it. docs/features/flow-scenario.md (RM-0094), its test
+/// churn: the three flow keys of that slice are taken out first, whatever their value
+/// ([`without_keys`]).
 fn without_this_slice(stdout: &str) -> String {
-    stdout
+    without_keys(stdout, &FLOW_KEYS)
         .replace("\"stage\":null,", "")
         .replace("\"rollup\":null,", "")
         .replace("\"counts\":null,", "")

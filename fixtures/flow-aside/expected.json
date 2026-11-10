@@ -1,0 +1,2401 @@
+{
+  "prefixes": [
+    "ATL",
+    "CONE",
+    "DESK",
+    "EDICT",
+    "HUNCH",
+    "KRUN",
+    "POT",
+    "PUZZLE",
+    "WBAY"
+  ],
+  "kinds": [
+    "atelier",
+    "conerule",
+    "deskpaper",
+    "edict",
+    "hunch",
+    "kilnrun",
+    "potstep",
+    "puzzle",
+    "workbay"
+  ],
+  "documents": 181,
+  "in_flow": 26,
+  "check": {
+    "verdict": "clean",
+    "errors": 0,
+    "warnings": 0
+  },
+  "files": {
+    "docs/edicts/EDICT-0001.md": {
+      "id": "EDICT-0001",
+      "kind": "edict",
+      "title": "A rule on sweeping the wheel room, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0002.md": {
+      "id": "EDICT-0002",
+      "kind": "edict",
+      "title": "A rule on closing the clay bags, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0003.md": {
+      "id": "EDICT-0003",
+      "kind": "edict",
+      "title": "A rule on labelling the glaze buckets, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0004.md": {
+      "id": "EDICT-0004",
+      "kind": "edict",
+      "title": "A rule on stacking the kiln shelves, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0005.md": {
+      "id": "EDICT-0005",
+      "kind": "edict",
+      "title": "A rule on wiping the wheel heads, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0006.md": {
+      "id": "EDICT-0006",
+      "kind": "edict",
+      "title": "A rule on airing the drying loft, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0007.md": {
+      "id": "EDICT-0007",
+      "kind": "edict",
+      "title": "A rule on logging each firing, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0008.md": {
+      "id": "EDICT-0008",
+      "kind": "edict",
+      "title": "A rule on wearing aprons at the bench, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0009.md": {
+      "id": "EDICT-0009",
+      "kind": "edict",
+      "title": "A rule on returning the tools, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0010.md": {
+      "id": "EDICT-0010",
+      "kind": "edict",
+      "title": "A rule on checking the flue damper, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0011.md": {
+      "id": "EDICT-0011",
+      "kind": "edict",
+      "title": "A rule on covering the slip bucket, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0012.md": {
+      "id": "EDICT-0012",
+      "kind": "edict",
+      "title": "A rule on emptying the sink trap, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0013.md": {
+      "id": "EDICT-0013",
+      "kind": "edict",
+      "title": "A rule on sweeping the wheel room, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0014.md": {
+      "id": "EDICT-0014",
+      "kind": "edict",
+      "title": "A rule on closing the clay bags, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0015.md": {
+      "id": "EDICT-0015",
+      "kind": "edict",
+      "title": "A rule on labelling the glaze buckets, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0016.md": {
+      "id": "EDICT-0016",
+      "kind": "edict",
+      "title": "A rule on stacking the kiln shelves, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0017.md": {
+      "id": "EDICT-0017",
+      "kind": "edict",
+      "title": "A rule on wiping the wheel heads, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0018.md": {
+      "id": "EDICT-0018",
+      "kind": "edict",
+      "title": "A rule on airing the drying loft, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0019.md": {
+      "id": "EDICT-0019",
+      "kind": "edict",
+      "title": "A rule on logging each firing, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0020.md": {
+      "id": "EDICT-0020",
+      "kind": "edict",
+      "title": "A rule on wearing aprons at the bench, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0021.md": {
+      "id": "EDICT-0021",
+      "kind": "edict",
+      "title": "A rule on returning the tools, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0022.md": {
+      "id": "EDICT-0022",
+      "kind": "edict",
+      "title": "A rule on checking the flue damper, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0023.md": {
+      "id": "EDICT-0023",
+      "kind": "edict",
+      "title": "A rule on covering the slip bucket, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0024.md": {
+      "id": "EDICT-0024",
+      "kind": "edict",
+      "title": "A rule on emptying the sink trap, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0025.md": {
+      "id": "EDICT-0025",
+      "kind": "edict",
+      "title": "A rule on sweeping the wheel room, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0026.md": {
+      "id": "EDICT-0026",
+      "kind": "edict",
+      "title": "A rule on closing the clay bags, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0027.md": {
+      "id": "EDICT-0027",
+      "kind": "edict",
+      "title": "A rule on labelling the glaze buckets, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0028.md": {
+      "id": "EDICT-0028",
+      "kind": "edict",
+      "title": "A rule on stacking the kiln shelves, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0029.md": {
+      "id": "EDICT-0029",
+      "kind": "edict",
+      "title": "A rule on wiping the wheel heads, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0030.md": {
+      "id": "EDICT-0030",
+      "kind": "edict",
+      "title": "A rule on airing the drying loft, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0031.md": {
+      "id": "EDICT-0031",
+      "kind": "edict",
+      "title": "A rule on logging each firing, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/edicts/EDICT-0032.md": {
+      "id": "EDICT-0032",
+      "kind": "edict",
+      "title": "A rule on wearing aprons at the bench, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0001.md": {
+      "id": "HUNCH-0001",
+      "kind": "hunch",
+      "title": "A hunch about ash in the glaze, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0002.md": {
+      "id": "HUNCH-0002",
+      "kind": "hunch",
+      "title": "A hunch about wet weather and drying, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0003.md": {
+      "id": "HUNCH-0003",
+      "kind": "hunch",
+      "title": "A hunch about thick rims, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0004.md": {
+      "id": "HUNCH-0004",
+      "kind": "hunch",
+      "title": "A hunch about slow cooling, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0005.md": {
+      "id": "HUNCH-0005",
+      "kind": "hunch",
+      "title": "A hunch about the north shelf, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0006.md": {
+      "id": "HUNCH-0006",
+      "kind": "hunch",
+      "title": "A hunch about fresh clay, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0007.md": {
+      "id": "HUNCH-0007",
+      "kind": "hunch",
+      "title": "Glaze crawls on damp bisque",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0008.md": {
+      "id": "HUNCH-0008",
+      "kind": "hunch",
+      "title": "A hunch about the third shelf, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0009.md": {
+      "id": "HUNCH-0009",
+      "kind": "hunch",
+      "title": "A hunch about heavy lids, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0010.md": {
+      "id": "HUNCH-0010",
+      "kind": "hunch",
+      "title": "A hunch about dusty bisque, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0011.md": {
+      "id": "HUNCH-0011",
+      "kind": "hunch",
+      "title": "A hunch about the morning firing, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0012.md": {
+      "id": "HUNCH-0012",
+      "kind": "hunch",
+      "title": "A hunch about warped plates, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0013.md": {
+      "id": "HUNCH-0013",
+      "kind": "hunch",
+      "title": "A hunch about ash in the glaze, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0014.md": {
+      "id": "HUNCH-0014",
+      "kind": "hunch",
+      "title": "A hunch about wet weather and drying, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0015.md": {
+      "id": "HUNCH-0015",
+      "kind": "hunch",
+      "title": "A hunch about thick rims, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0016.md": {
+      "id": "HUNCH-0016",
+      "kind": "hunch",
+      "title": "A hunch about slow cooling, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0017.md": {
+      "id": "HUNCH-0017",
+      "kind": "hunch",
+      "title": "A hunch about the north shelf, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0018.md": {
+      "id": "HUNCH-0018",
+      "kind": "hunch",
+      "title": "A hunch about fresh clay, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0019.md": {
+      "id": "HUNCH-0019",
+      "kind": "hunch",
+      "title": "A hunch about thin feet, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0020.md": {
+      "id": "HUNCH-0020",
+      "kind": "hunch",
+      "title": "A hunch about the third shelf, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0021.md": {
+      "id": "HUNCH-0021",
+      "kind": "hunch",
+      "title": "A hunch about heavy lids, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0022.md": {
+      "id": "HUNCH-0022",
+      "kind": "hunch",
+      "title": "A hunch about dusty bisque, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0023.md": {
+      "id": "HUNCH-0023",
+      "kind": "hunch",
+      "title": "A hunch about the morning firing, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0024.md": {
+      "id": "HUNCH-0024",
+      "kind": "hunch",
+      "title": "A hunch about warped plates, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0025.md": {
+      "id": "HUNCH-0025",
+      "kind": "hunch",
+      "title": "A hunch about ash in the glaze, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0026.md": {
+      "id": "HUNCH-0026",
+      "kind": "hunch",
+      "title": "A hunch about wet weather and drying, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0027.md": {
+      "id": "HUNCH-0027",
+      "kind": "hunch",
+      "title": "A hunch about thick rims, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0028.md": {
+      "id": "HUNCH-0028",
+      "kind": "hunch",
+      "title": "A hunch about slow cooling, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0029.md": {
+      "id": "HUNCH-0029",
+      "kind": "hunch",
+      "title": "A hunch about the north shelf, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0030.md": {
+      "id": "HUNCH-0030",
+      "kind": "hunch",
+      "title": "A hunch about fresh clay, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0031.md": {
+      "id": "HUNCH-0031",
+      "kind": "hunch",
+      "title": "A hunch about thin feet, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0032.md": {
+      "id": "HUNCH-0032",
+      "kind": "hunch",
+      "title": "A hunch about the third shelf, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0033.md": {
+      "id": "HUNCH-0033",
+      "kind": "hunch",
+      "title": "A hunch about heavy lids, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0034.md": {
+      "id": "HUNCH-0034",
+      "kind": "hunch",
+      "title": "A hunch about dusty bisque, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0035.md": {
+      "id": "HUNCH-0035",
+      "kind": "hunch",
+      "title": "A hunch about the morning firing, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0036.md": {
+      "id": "HUNCH-0036",
+      "kind": "hunch",
+      "title": "A hunch about warped plates, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0037.md": {
+      "id": "HUNCH-0037",
+      "kind": "hunch",
+      "title": "A hunch about ash in the glaze, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0038.md": {
+      "id": "HUNCH-0038",
+      "kind": "hunch",
+      "title": "A hunch about wet weather and drying, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0039.md": {
+      "id": "HUNCH-0039",
+      "kind": "hunch",
+      "title": "A hunch about thick rims, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0040.md": {
+      "id": "HUNCH-0040",
+      "kind": "hunch",
+      "title": "A hunch about slow cooling, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0041.md": {
+      "id": "HUNCH-0041",
+      "kind": "hunch",
+      "title": "A hunch about the north shelf, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0042.md": {
+      "id": "HUNCH-0042",
+      "kind": "hunch",
+      "title": "A hunch about fresh clay, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0043.md": {
+      "id": "HUNCH-0043",
+      "kind": "hunch",
+      "title": "A hunch about thin feet, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0044.md": {
+      "id": "HUNCH-0044",
+      "kind": "hunch",
+      "title": "A hunch about the third shelf, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0045.md": {
+      "id": "HUNCH-0045",
+      "kind": "hunch",
+      "title": "A hunch about heavy lids, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0046.md": {
+      "id": "HUNCH-0046",
+      "kind": "hunch",
+      "title": "A hunch about dusty bisque, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0047.md": {
+      "id": "HUNCH-0047",
+      "kind": "hunch",
+      "title": "A hunch about the morning firing, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0048.md": {
+      "id": "HUNCH-0048",
+      "kind": "hunch",
+      "title": "A hunch about warped plates, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0049.md": {
+      "id": "HUNCH-0049",
+      "kind": "hunch",
+      "title": "A hunch about ash in the glaze, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0050.md": {
+      "id": "HUNCH-0050",
+      "kind": "hunch",
+      "title": "A hunch about wet weather and drying, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0051.md": {
+      "id": "HUNCH-0051",
+      "kind": "hunch",
+      "title": "A hunch about thick rims, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0052.md": {
+      "id": "HUNCH-0052",
+      "kind": "hunch",
+      "title": "A hunch about slow cooling, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0053.md": {
+      "id": "HUNCH-0053",
+      "kind": "hunch",
+      "title": "A hunch about the north shelf, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0054.md": {
+      "id": "HUNCH-0054",
+      "kind": "hunch",
+      "title": "A hunch about fresh clay, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0055.md": {
+      "id": "HUNCH-0055",
+      "kind": "hunch",
+      "title": "A hunch about thin feet, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0056.md": {
+      "id": "HUNCH-0056",
+      "kind": "hunch",
+      "title": "A hunch about the third shelf, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0057.md": {
+      "id": "HUNCH-0057",
+      "kind": "hunch",
+      "title": "A hunch about heavy lids, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0058.md": {
+      "id": "HUNCH-0058",
+      "kind": "hunch",
+      "title": "A hunch about dusty bisque, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0059.md": {
+      "id": "HUNCH-0059",
+      "kind": "hunch",
+      "title": "A hunch about the morning firing, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/hunches/HUNCH-0060.md": {
+      "id": "HUNCH-0060",
+      "kind": "hunch",
+      "title": "A hunch about warped plates, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/notes/note-1.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on studio lighting",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/notes/note-2.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on the window sills",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/notes/note-3.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on visitors' boots",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/notes/note-4.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on the noticeboard",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/notes/note-5.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on the radio",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/notes/note-6.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on the swept floor",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/notes/note-7.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on the coat pegs",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/notes/note-8.md": {
+      "id": null,
+      "kind": null,
+      "title": "A note on the spare keys",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0001.md": {
+      "id": "PUZZLE-0001",
+      "kind": "puzzle",
+      "title": "A puzzle of pinholes on the rim, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0002.md": {
+      "id": "PUZZLE-0002",
+      "kind": "puzzle",
+      "title": "A puzzle of a shelf that tilts, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0003.md": {
+      "id": "PUZZLE-0003",
+      "kind": "puzzle",
+      "title": "A puzzle of a cone that bends late, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [
+        "PUZZLE-0003 depends_on frontmatter POT-BISQUE"
+      ],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0004.md": {
+      "id": "PUZZLE-0004",
+      "kind": "puzzle",
+      "title": "A puzzle of blisters near the foot, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0005.md": {
+      "id": "PUZZLE-0005",
+      "kind": "puzzle",
+      "title": "A puzzle of a crack across the base, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0006.md": {
+      "id": "PUZZLE-0006",
+      "kind": "puzzle",
+      "title": "A puzzle of a lid that sticks, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0007.md": {
+      "id": "PUZZLE-0007",
+      "kind": "puzzle",
+      "title": "A puzzle of a glaze that runs, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0008.md": {
+      "id": "PUZZLE-0008",
+      "kind": "puzzle",
+      "title": "A puzzle of a handle that drops, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0009.md": {
+      "id": "PUZZLE-0009",
+      "kind": "puzzle",
+      "title": "A puzzle of a colour that fades, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0010.md": {
+      "id": "PUZZLE-0010",
+      "kind": "puzzle",
+      "title": "A puzzle of a hairline in the bowl, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0011.md": {
+      "id": "PUZZLE-0011",
+      "kind": "puzzle",
+      "title": "A puzzle of a spout that drips, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0012.md": {
+      "id": "PUZZLE-0012",
+      "kind": "puzzle",
+      "title": "A puzzle of a foot ring that chips, the first",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0013.md": {
+      "id": "PUZZLE-0013",
+      "kind": "puzzle",
+      "title": "A puzzle of pinholes on the rim, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0014.md": {
+      "id": "PUZZLE-0014",
+      "kind": "puzzle",
+      "title": "A puzzle of a shelf that tilts, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0015.md": {
+      "id": "PUZZLE-0015",
+      "kind": "puzzle",
+      "title": "A puzzle of a cone that bends late, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0016.md": {
+      "id": "PUZZLE-0016",
+      "kind": "puzzle",
+      "title": "A puzzle of blisters near the foot, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0017.md": {
+      "id": "PUZZLE-0017",
+      "kind": "puzzle",
+      "title": "A puzzle of a crack across the base, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0018.md": {
+      "id": "PUZZLE-0018",
+      "kind": "puzzle",
+      "title": "A puzzle of a lid that sticks, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0019.md": {
+      "id": "PUZZLE-0019",
+      "kind": "puzzle",
+      "title": "A puzzle of a glaze that runs, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0020.md": {
+      "id": "PUZZLE-0020",
+      "kind": "puzzle",
+      "title": "A puzzle of a handle that drops, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0021.md": {
+      "id": "PUZZLE-0021",
+      "kind": "puzzle",
+      "title": "A puzzle of a colour that fades, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0022.md": {
+      "id": "PUZZLE-0022",
+      "kind": "puzzle",
+      "title": "A puzzle of a hairline in the bowl, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0023.md": {
+      "id": "PUZZLE-0023",
+      "kind": "puzzle",
+      "title": "A puzzle of a spout that drips, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0024.md": {
+      "id": "PUZZLE-0024",
+      "kind": "puzzle",
+      "title": "A puzzle of a foot ring that chips, the second",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0025.md": {
+      "id": "PUZZLE-0025",
+      "kind": "puzzle",
+      "title": "A puzzle of pinholes on the rim, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0026.md": {
+      "id": "PUZZLE-0026",
+      "kind": "puzzle",
+      "title": "A puzzle of a shelf that tilts, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0027.md": {
+      "id": "PUZZLE-0027",
+      "kind": "puzzle",
+      "title": "A puzzle of a cone that bends late, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0028.md": {
+      "id": "PUZZLE-0028",
+      "kind": "puzzle",
+      "title": "A puzzle of blisters near the foot, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0029.md": {
+      "id": "PUZZLE-0029",
+      "kind": "puzzle",
+      "title": "A puzzle of a crack across the base, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0030.md": {
+      "id": "PUZZLE-0030",
+      "kind": "puzzle",
+      "title": "A puzzle of a lid that sticks, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0031.md": {
+      "id": "PUZZLE-0031",
+      "kind": "puzzle",
+      "title": "A puzzle of a glaze that runs, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0032.md": {
+      "id": "PUZZLE-0032",
+      "kind": "puzzle",
+      "title": "A puzzle of a handle that drops, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0033.md": {
+      "id": "PUZZLE-0033",
+      "kind": "puzzle",
+      "title": "A puzzle of a colour that fades, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0034.md": {
+      "id": "PUZZLE-0034",
+      "kind": "puzzle",
+      "title": "A puzzle of a hairline in the bowl, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0035.md": {
+      "id": "PUZZLE-0035",
+      "kind": "puzzle",
+      "title": "A puzzle of a spout that drips, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0036.md": {
+      "id": "PUZZLE-0036",
+      "kind": "puzzle",
+      "title": "A puzzle of a foot ring that chips, the third",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0037.md": {
+      "id": "PUZZLE-0037",
+      "kind": "puzzle",
+      "title": "A puzzle of pinholes on the rim, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0038.md": {
+      "id": "PUZZLE-0038",
+      "kind": "puzzle",
+      "title": "A puzzle of a shelf that tilts, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0039.md": {
+      "id": "PUZZLE-0039",
+      "kind": "puzzle",
+      "title": "A puzzle of a cone that bends late, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0040.md": {
+      "id": "PUZZLE-0040",
+      "kind": "puzzle",
+      "title": "A puzzle of blisters near the foot, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0041.md": {
+      "id": "PUZZLE-0041",
+      "kind": "puzzle",
+      "title": "A puzzle of a crack across the base, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0042.md": {
+      "id": "PUZZLE-0042",
+      "kind": "puzzle",
+      "title": "A puzzle of a lid that sticks, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0043.md": {
+      "id": "PUZZLE-0043",
+      "kind": "puzzle",
+      "title": "A puzzle of a glaze that runs, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0044.md": {
+      "id": "PUZZLE-0044",
+      "kind": "puzzle",
+      "title": "A puzzle of a handle that drops, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0045.md": {
+      "id": "PUZZLE-0045",
+      "kind": "puzzle",
+      "title": "A puzzle of a colour that fades, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0046.md": {
+      "id": "PUZZLE-0046",
+      "kind": "puzzle",
+      "title": "A puzzle of a hairline in the bowl, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0047.md": {
+      "id": "PUZZLE-0047",
+      "kind": "puzzle",
+      "title": "A puzzle of a spout that drips, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0048.md": {
+      "id": "PUZZLE-0048",
+      "kind": "puzzle",
+      "title": "A puzzle of a foot ring that chips, the fourth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0049.md": {
+      "id": "PUZZLE-0049",
+      "kind": "puzzle",
+      "title": "A puzzle of pinholes on the rim, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/puzzles/PUZZLE-0050.md": {
+      "id": "PUZZLE-0050",
+      "kind": "puzzle",
+      "title": "A puzzle of a shelf that tilts, the fifth",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/workshop/atelier.md": {
+      "id": "ATL-POTTERY",
+      "kind": "atelier",
+      "title": "The pottery",
+      "parent": null,
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": []
+    },
+    "docs/workshop/bays/canteen.md": {
+      "id": "WBAY-CANTEEN",
+      "kind": "workbay",
+      "title": "Staff canteen",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/clay.md": {
+      "id": "WBAY-CLAY",
+      "kind": "workbay",
+      "title": "Clay cellar",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/drying.md": {
+      "id": "WBAY-DRYING",
+      "kind": "workbay",
+      "title": "Drying loft",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/fuel.md": {
+      "id": "WBAY-FUEL",
+      "kind": "workbay",
+      "title": "Fuel shed",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/gallery.md": {
+      "id": "WBAY-GALLERY",
+      "kind": "workbay",
+      "title": "Gallery bay",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/glaze.md": {
+      "id": "WBAY-GLAZE",
+      "kind": "workbay",
+      "title": "Glaze kitchen",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/kiln.md": {
+      "id": "WBAY-KILN",
+      "kind": "workbay",
+      "title": "Kiln bay",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/office.md": {
+      "id": "WBAY-OFFICE",
+      "kind": "workbay",
+      "title": "Front office",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/packing.md": {
+      "id": "WBAY-PACKING",
+      "kind": "workbay",
+      "title": "Packing shed",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/sorting.md": {
+      "id": "WBAY-SORTING",
+      "kind": "workbay",
+      "title": "Sorting bench",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/store.md": {
+      "id": "WBAY-STORE",
+      "kind": "workbay",
+      "title": "Finished-ware store",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/water.md": {
+      "id": "WBAY-WATER",
+      "kind": "workbay",
+      "title": "Water butts",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/wheel.md": {
+      "id": "WBAY-WHEEL",
+      "kind": "workbay",
+      "title": "Wheel room",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/bays/yard.md": {
+      "id": "WBAY-YARD",
+      "kind": "workbay",
+      "title": "Loading yard",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/cones/bisque.md": {
+      "id": "CONE-BISQUE",
+      "kind": "conerule",
+      "title": "Bisque cone",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/workshop/cones/glost.md": {
+      "id": "CONE-GLOST",
+      "kind": "conerule",
+      "title": "Glost cone",
+      "parent": "WBAY-KILN",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "sections": [
+        "CONE-GLOST-SHELF"
+      ],
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-KILN"
+      ]
+    },
+    "docs/workshop/gallery/open-day.md": {
+      "id": null,
+      "kind": null,
+      "title": "Open day",
+      "parent": "WBAY-GALLERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-GALLERY"
+      ]
+    },
+    "docs/workshop/office/ledger.md": {
+      "id": "DESK-LEDGER",
+      "kind": "deskpaper",
+      "title": "Order ledger",
+      "parent": "WBAY-OFFICE",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-OFFICE"
+      ]
+    },
+    "docs/workshop/office/rota.md": {
+      "id": "DESK-ROTA",
+      "kind": "deskpaper",
+      "title": "Weekly rota",
+      "parent": "WBAY-OFFICE",
+      "stage": null,
+      "links": [],
+      "in_flow": false,
+      "ancestors": [
+        "ATL-POTTERY",
+        "WBAY-OFFICE"
+      ]
+    },
+    "docs/workshop/run/bisque.md": {
+      "id": "POT-BISQUE",
+      "kind": "potstep",
+      "title": "Bisque firing",
+      "parent": "KRUN-FIRING",
+      "stage": "bisque",
+      "links": [
+        "POT-BISQUE follows frontmatter POT-DRY",
+        "POT-BISQUE uses frontmatter WBAY-KILN",
+        "POT-BISQUE uses frontmatter CONE-BISQUE"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/dry.md": {
+      "id": "POT-DRY",
+      "kind": "potstep",
+      "title": "Drying on the racks",
+      "parent": "KRUN-FIRING",
+      "stage": "bisque",
+      "links": [
+        "POT-DRY follows frontmatter POT-TRIM"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/fire.md": {
+      "id": "POT-FIRE",
+      "kind": "potstep",
+      "title": "Glost firing",
+      "parent": "KRUN-FIRING",
+      "stage": "glazing",
+      "links": [
+        "POT-FIRE follows frontmatter POT-GLAZE",
+        "POT-FIRE uses frontmatter WBAY-KILN",
+        "POT-FIRE uses frontmatter CONE-GLOST",
+        "POT-FIRE uses frontmatter HUNCH-0007"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/firing.md": {
+      "id": "KRUN-FIRING",
+      "kind": "kilnrun",
+      "title": "Firing run",
+      "parent": "ATL-POTTERY",
+      "stage": null,
+      "links": [],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY"
+      ]
+    },
+    "docs/workshop/run/glaze.md": {
+      "id": "POT-GLAZE",
+      "kind": "potstep",
+      "title": "Dipping in glaze",
+      "parent": "KRUN-FIRING",
+      "stage": "glazing",
+      "links": [
+        "POT-GLAZE follows frontmatter POT-BISQUE",
+        "POT-GLAZE follows frontmatter POT-FIRE | kind repeat",
+        "POT-GLAZE uses frontmatter WBAY-GLAZE"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/mend.md": {
+      "id": "POT-MEND",
+      "kind": "potstep",
+      "title": "Mending a cracked pot",
+      "parent": "KRUN-FIRING",
+      "stage": "crating",
+      "links": [
+        "POT-MEND follows frontmatter POT-SORT | kind alternative | when cracked",
+        "POT-MEND uses frontmatter WBAY-SORTING"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/pack.md": {
+      "id": "POT-PACK",
+      "kind": "potstep",
+      "title": "Packing the crates",
+      "parent": "KRUN-FIRING",
+      "stage": "crating",
+      "links": [
+        "POT-PACK follows frontmatter POT-SORT",
+        "POT-PACK follows frontmatter POT-MEND",
+        "POT-PACK uses frontmatter WBAY-PACKING",
+        "POT-PACK uses frontmatter WBAY-STORE",
+        "POT-PACK uses frontmatter WBAY-YARD"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/sort.md": {
+      "id": "POT-SORT",
+      "kind": "potstep",
+      "title": "Sorting the kiln load",
+      "parent": "KRUN-FIRING",
+      "stage": "crating",
+      "links": [
+        "POT-SORT follows frontmatter POT-FIRE",
+        "POT-SORT uses frontmatter WBAY-SORTING"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/throw.md": {
+      "id": "POT-THROW",
+      "kind": "potstep",
+      "title": "Throwing on the wheel",
+      "parent": "KRUN-FIRING",
+      "stage": "wheelwork",
+      "links": [
+        "POT-THROW follows frontmatter POT-WEDGE",
+        "POT-THROW uses frontmatter WBAY-WHEEL"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/trim.md": {
+      "id": "POT-TRIM",
+      "kind": "potstep",
+      "title": "Trimming the foot",
+      "parent": "KRUN-FIRING",
+      "stage": "wheelwork",
+      "links": [
+        "POT-TRIM follows frontmatter POT-THROW",
+        "POT-TRIM uses frontmatter WBAY-WHEEL",
+        "POT-TRIM uses frontmatter WBAY-DRYING"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    },
+    "docs/workshop/run/wedge.md": {
+      "id": "POT-WEDGE",
+      "kind": "potstep",
+      "title": "Wedging",
+      "parent": "KRUN-FIRING",
+      "stage": "wheelwork",
+      "links": [
+        "POT-WEDGE uses frontmatter WBAY-CLAY"
+      ],
+      "in_flow": true,
+      "ancestors": [
+        "ATL-POTTERY",
+        "KRUN-FIRING"
+      ]
+    }
+  }
+}

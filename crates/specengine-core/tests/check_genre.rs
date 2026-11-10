@@ -705,6 +705,11 @@ fn the_flow_sources_name_no_kind_or_prefix_of_a_fixture() {
         "yearbook",
         "committee",
         "errand",
+        // docs/features/flow-scenario.md FS-1: the pottery's, a record's
+        // kind among them.
+        "potstep",
+        "workbay",
+        "hunch",
     ] {
         assert!(kinds.contains(kind), "{kind} is a fixture kind: {kinds:?}");
     }

@@ -6,8 +6,8 @@
 //! and `since` told at run time before any discovery, as `find_symbols`'
 //! forms), `get_trace` (task spec `card-trace`: `spec trace [REF]`) and
 //! `get_flow` (task specs `flow-read`, `trace-views`, `flow-scope`: `spec
-//! flow [ROOT] [--depth N] [--stage S] [--trace]`), each one call into the
-//! CLI library.
+//! flow [ROOT] [--depth N] [--stage S] [--in-flow] [--trace]`), each one
+//! call into the CLI library.
 //!
 //! A call runs on the blocking pool (`spawn_blocking`): `Env` from the
 //! process, the server's `--root` / `--config` as the CLI globals, one
@@ -702,6 +702,8 @@ pub(crate) struct FlowArgs {
     pub stage: Option<String>,
     /// Each node's `rollup` and `counts`, as `get_trace` reads them.
     pub trace: Option<bool>,
+    /// Leave out each node holding nothing of the flow; a ROOT stays; not_in_flow counts the documents left out. The gap rows stay whole.
+    pub in_flow: Option<bool>,
 }
 
 /// `get_trace` arguments.
@@ -860,6 +862,7 @@ impl SpecEngineServer {
             depth: args.depth,
             stage: args.stage,
             trace: args.trace.unwrap_or(false),
+            in_flow: args.in_flow.unwrap_or(false),
         };
         Ok(self
             .call(move |env, globals| {

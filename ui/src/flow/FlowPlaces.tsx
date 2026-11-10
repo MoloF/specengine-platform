@@ -4,16 +4,18 @@ import { replaceHash } from "../app/location";
 import { flowHash, type FlowPlace } from "../app/routes";
 import { useTranslate } from "../i18n";
 import { TraceBar } from "../trace/TraceBar";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { Skeleton } from "../ui/states";
 import { isPlainClick } from "./clicks";
 import { confirmedLine } from "./labels";
 import { laneTotal } from "./timeline";
 
-// The places pane (docs/features/writer-studio.md "Description and interactions"): a `<nav>` of links, each a
-// `flowHash`, so a click pushes one history entry and Back returns. The module bar, the scope with
-// Up, the stages with their scores, and under the current one where to go next. Nothing here reads:
-// the view hands it what its reads hold.
+// The places pane (docs/features/writer-studio.md "Description and interactions";
+// docs/features/flow-scenario.md D11): a `<nav>` of links, each a `flowHash`, so a
+// click pushes one history entry and Back returns. The module bar; the path, top to bottom, from the
+// scope's served `ancestors` to the scope, the groups under it; the stages with their scores; Records
+// for the AI at its foot. Nothing here reads: the view hands it what its reads hold.
 
 /** A place to go and its words. */
 export interface PlaceLink {
@@ -25,6 +27,23 @@ export interface PlaceLink {
 export interface GroupLink extends PlaceLink {
   name: string;
 }
+
+/** One entry of the path: its title, its depth from the top shown, whether it is where you are. */
+export interface PathEntry extends PlaceLink {
+  key: string;
+  depth: number;
+  current: boolean;
+}
+
+/** The path as the scope's node read gives it: the entries; a skeleton line while it reads; its failure. */
+export interface PathShown {
+  entries: PathEntry[];
+  pending: boolean;
+  failed: { message: string; retrying: boolean; onRetry: () => void } | null;
+}
+
+/** Indentation stops at six levels: a deeper path keeps the sixth. */
+const DEEPEST = 6;
 
 /** A stage to choose, with its served score. */
 export interface LaneLink extends PlaceLink {
@@ -40,26 +59,68 @@ export type StagesShown =
   | { show: "failed"; message: string; retrying: boolean; onRetry: () => void }
   | { show: "lanes"; all: PlaceLink & { current: boolean }; lanes: LaneLink[] };
 
-/** The groups under the current item. */
-function Groups({ project, groups }: { project: string; groups: readonly GroupLink[] }) {
+/** The groups under the path's current entry, one level deeper, by title: the chevron stays on the title's first line. */
+function Groups({ project, groups, depth }: { project: string; groups: readonly GroupLink[]; depth: number }) {
   const t = useTranslate();
   if (groups.length === 0) {
     return null;
   }
   return (
-    <ul className="flow-places-groups" aria-label={t("flow.groupsLabel")}>
+    <ul className="flow-places-groups" aria-label={t("flow.groupsLabel")} data-depth={Math.min(depth, DEEPEST)}>
       {groups.map((group) => (
         <li key={group.name}>
-          <a href={flowHash(project, group.place)}>
-            <Icon name="chevronRight" />
+          <a className="flow-places-group" href={flowHash(project, group.place)}>
             <span className="flow-places-words">
               <bdi>{group.label}</bdi>
-              {group.label !== group.name && <span className="mono flow-places-name">{group.name}</span>}
             </span>
+            <Icon name="chevronRight" />
           </a>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** The path: an ordered list, top first, each entry a place link, the last where you are. */
+function Path({ project, path }: { project: string; path: PathShown }) {
+  const t = useTranslate();
+  const id = useId();
+  return (
+    <section className="flow-places-part" aria-labelledby={id}>
+      <h2 id={id} className="flow-places-heading">
+        {t("flow.path")}
+      </h2>
+      {path.pending && (
+        <div aria-busy="true">
+          <Skeleton label={t("flow.path")} lines={1} />
+        </div>
+      )}
+      <ol className="flow-path" aria-labelledby={id}>
+        {path.entries.map((entry) => (
+          <li key={entry.key} data-depth={Math.min(entry.depth, DEEPEST)}>
+            <a href={flowHash(project, entry.place)} aria-current={entry.current ? "location" : undefined} className={entry.current ? "flow-places-current" : undefined}>
+              <bdi>{entry.label}</bdi>
+            </a>
+          </li>
+        ))}
+      </ol>
+      {path.failed !== null && (
+        <div className="flow-failed">
+          <p className="note" role="alert">
+            <Icon name="alert" />
+            <span>
+              {t("flow.pathFailed")}{" "}
+              <span className="verbatim" lang="en">
+                {path.failed.message}
+              </span>
+            </span>
+          </p>
+          <Button icon="retry" aria-disabled={path.failed.retrying} onClick={path.failed.retrying ? undefined : path.failed.onRetry}>
+            {path.failed.retrying ? t("ui.retrying") : t("ui.retry")}
+          </Button>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -84,10 +145,10 @@ export function FlowPlaces({
   modules,
   module,
   onModule,
-  up,
-  scope,
+  path,
   stages,
   groups,
+  records,
 }: {
   project: string;
   /** The hash of the place shown with nothing selected: a link to it only clears the selection. */
@@ -100,17 +161,18 @@ export function FlowPlaces({
   module: string;
   /** A module chosen here is the viewer's default from then on (1a's key). */
   onModule: (name: string) => void;
-  /** Up, its words whole. */
-  up: PlaceLink | null;
-  /** The scope in force; null while it is not known. */
-  scope: PlaceLink | null;
+  /** The path to the scope in force; null while the scope is not known. */
+  path: PathShown | null;
   stages: StagesShown;
+  /** The groups under the path's current entry. */
   groups: readonly GroupLink[];
+  /** Records for the AI, at the pane's foot; null where there is none. */
+  records: ReactNode;
 }) {
   const t = useTranslate();
   const bodyId = useId();
   const modulesId = useId();
-  const allCurrent = stages.show === "lanes" ? stages.all.current : stages.show === "top";
+  const depth = path === null ? 0 : (path.entries[path.entries.length - 1]?.depth ?? 0) + 1;
   return (
     <div className={`flow-places${open ? " is-open" : ""}`}>
       <button type="button" className="button button-quiet flow-places-toggle" aria-expanded={open} aria-controls={bodyId} onClick={onToggle}>
@@ -162,32 +224,10 @@ export function FlowPlaces({
             </ul>
           </div>
         )}
-        <Part heading={t("flow.scopeLabel")}>
-          <ul className="flow-places-scope">
-            {up !== null && (
-              <li>
-                <a href={flowHash(project, up.place)}>
-                  <Icon name="back" />
-                  <span>{up.label}</span>
-                </a>
-              </li>
-            )}
-            {scope !== null && (
-              <li>
-                <a href={flowHash(project, scope.place)} aria-current="location" className="flow-places-current">
-                  <bdi>{scope.label}</bdi>
-                </a>
-              </li>
-            )}
-          </ul>
-        </Part>
+        {path !== null && <Path project={project} path={path} />}
+        <Groups project={project} groups={groups} depth={depth} />
         <Part heading={t("flow.stagesHeading")}>
-          {stages.show === "top" && (
-            <>
-              <p className="muted">{t("flow.stagesAtTop")}</p>
-              <Groups project={project} groups={groups} />
-            </>
-          )}
+          {stages.show === "top" && <p className="muted">{t("flow.stagesAtTop")}</p>}
           {stages.show === "reading" && (
             <div aria-busy="true">
               <Skeleton label={t("flow.stagesReading")} lines={3} />
@@ -213,10 +253,9 @@ export function FlowPlaces({
           {stages.show === "lanes" && (
             <ul className="flow-places-stages">
               <li>
-                <a href={flowHash(project, stages.all.place)} aria-current={allCurrent ? "true" : undefined}>
+                <a href={flowHash(project, stages.all.place)} aria-current={stages.all.current ? "true" : undefined}>
                   {stages.all.label}
                 </a>
-                {allCurrent && <Groups project={project} groups={groups} />}
               </li>
               {stages.lanes.map((lane) => (
                 <li key={lane.key}>
@@ -225,13 +264,12 @@ export function FlowPlaces({
                     <span className="flow-places-score">{confirmedLine(lane.counts.confirmed, laneTotal(lane.counts), t)}</span>
                     <TraceBar counts={lane.counts} />
                   </a>
-                  {lane.current && <Groups project={project} groups={groups} />}
                 </li>
               ))}
             </ul>
           )}
-          {stages.show !== "lanes" && stages.show !== "top" && <Groups project={project} groups={groups} />}
         </Part>
+        {records}
       </nav>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useTranslate } from "../i18n";
 import { Badge } from "../ui/Badge";
 import { Icon } from "../ui/Icon";
-import { countsText, dashOf, FLOW_KINDS, rollupMeanings, startWord, typeColour, typeDash } from "./labels";
+import { countsText, dashOf, FLOW_KINDS, kindWords, rollupMeanings, startWord, typeColour, typeDash } from "./labels";
 
 /** A stroke as the canvas draws it. */
 function Sample({ dash, colour }: { dash: string; colour: string }) {
@@ -39,12 +39,12 @@ export function FlowLegend({ id, types, states }: { id: string; types: readonly 
         {FLOW_KINDS.map((kind) => (
           <li key={kind} className="graph-legend-item">
             <Sample dash={kindDashOf(kind)} colour="var(--graph-edge)" />
-            <span className="mono">{kind}</span>
+            <span>{kindWords(kind, t)}</span>
           </li>
         ))}
         <li className="graph-legend-item">
           <svg className="flow-sample" viewBox="0 0 48 14" width="48" height="14" aria-hidden="true" focusable="false">
-            <path d="M47,2 H42 Q38,2 38,6 V8 Q38,12 34,12 H14 Q10,12 10,8 V6 Q10,2 6,2 H1" style={{ stroke: "var(--graph-edge)" }} />
+            <path d="M1,12 H38 Q42,12 42,8 V6 Q42,2 38,2 H1" style={{ stroke: "var(--graph-edge)" }} />
           </svg>
           <span>{t("flow.legend.arc")}</span>
         </li>

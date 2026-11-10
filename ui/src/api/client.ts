@@ -88,11 +88,13 @@ export interface GraphOptions {
 }
 
 /**
- * `spec flow`: ROOT, `--depth N`, `--stage S`, `--trace` (`docs/canon/spec-flow.md` "The read"). The
+ * `spec flow`: ROOT, `--depth N`, `--stage S`, `--trace`, `--in-flow` (`docs/canon/spec-flow-cuts.md` "The cuts"). The
  * screen sends one of three forms: the top `depth=0`, a scope `root=R&depth=1`, a stage of a scope
  * `root=R&stage=S`; a whole-flow read, which fails at volume, is never made
  * (`docs/features/writer-studio.md` D2). `trace` is sent only as true, and the Flow always sends it
- * (`docs/features/trace-views.md` "Flow badges").
+ * (`docs/features/trace-views.md` "Flow badges"). `in_flow`, sent only as true, is `--in-flow`: each
+ * drawing read leaves out the nodes holding nothing of the flow (`docs/features/flow-scenario.md`
+ * D2, D6); the Records read alone goes without it.
  */
 export interface FlowOptions {
   root?: string;
@@ -100,6 +102,7 @@ export interface FlowOptions {
   /** A served lane's stage, `-` for the steps with none. */
   stage?: string;
   trace?: boolean;
+  in_flow?: boolean;
 }
 
 /** `spec round new`: `--limit N`, 1 to 200 (absent: the daemon's default, 20). */

@@ -14,6 +14,7 @@ pub mod check;
 pub mod decision;
 pub mod git;
 pub mod graph;
+pub mod keys;
 pub mod proposal;
 pub mod serve;
 pub mod staged;
