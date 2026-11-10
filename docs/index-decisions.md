@@ -82,3 +82,4 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [ADR-0073](decisions/ADR-0073.md) A workspace is a trade's lens from project config, never an entitlement, a control point or a hidden route · architecture · accepted
 - [ADR-0074](decisions/ADR-0074.md) A hand-off is a child card the asking side reviews; a return is a move with a reason; no card's write touches another · architecture · accepted
 - [ADR-0075](decisions/ADR-0075.md) A card links T- tasks on its own row; the link and a task's state decide nothing; local only · architecture · accepted
+- [ADR-0076](decisions/ADR-0076.md) A department is a workspace in the owner's words; a module may be a kinds direction; a hand-off names a department · architecture · accepted

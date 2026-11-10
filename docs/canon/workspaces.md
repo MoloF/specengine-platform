@@ -3,17 +3,23 @@ class: canon
 tier: 2
 scope: [crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-11
 ---
 
 # Workspaces: a trade's lens on a project
 
+## State
+
+The lens below holds; ADR-0076's parts are not built. v5 step 4 `departments` (RM-0096, `docs/features/departments.md`) builds the words, a flow's `title`, `kinds` directions and the hand-off by department. Until it ships the sections after "The lens" hold: the chrome says Workspace, card and Tasks, a module needs `root`, and a `title` in `[[card.flow]]` or `kinds` in `[[module]]` is an unknown key.
+
 <a id="the-lens"></a>
 ## The lens
 
-A workspace is how one trade sees a project: the sections its nav lists, in its order, the section it lands on, the card flows its Board shows, and a default module. A module is one root document and its subtree; choosing it roots the Tree and Flow reads there. Both are the project's config, read apart from every other read, as `[flow]`, `[card]` and `[team]` are: a bad table serves the implicit workspace, every section but Tasks, with a note, and fails nothing.
+A workspace is how one trade sees a project, a **Department** in the chrome: the sections its nav lists, in its order, the section it lands on, the card flows its Board shows, and a default module. Its statuses are those flows' columns, each column's category from its place in its flow (`ui-design.md` "Status categories"); no table names a status. A module is a root document and its subtree, or a **direction**: the nodes of the kinds it lists, with no root. A rooted module roots the Tree and Flow reads; a direction is applied by the reads that take a kind (the Tree's list, a document's Inside), and Flow, which draws from a root, takes rooted modules only. Both tables are the project's config, read apart from every other read, as `[flow]`, `[card]` and `[team]` are: a bad table serves the implicit workspace, every section but Tasks, with a note, and fails nothing.
 
-A workspace is never an entitlement, a control point or a hidden route. Every section keeps its hash route and its palette entry, and a workspace changes no right, gate, finding or exit (ADR-0012). `[team]`'s roles stay the acts' entitlements (ADR-0060). Locally the choice is each viewer's own; a hub login's default is RM-0089's. The core names no trade: the gamedev preset is a file outside the crates (ADR-0008). ADR-0073.
+The chrome's words are the owner's: Department for a workspace, Task for a card, Subtask for a child card, Agent task for a `T-` task. Config keys, the CLI, MCP and the daemon's text keep `workspace`, `module`, `card` and `task`, with no alias key, since a new top-level key would make an older binary refuse the file. A `[[card.flow]]` may carry a `title`, its display name. A hand-off names a department; the card carries a discipline that the new-card rule places in one of that department's flows (`card-flows.md` "Config").
+
+A workspace is never an entitlement, a control point, a filter that hides work or a hidden route. Every section keeps its hash route and its palette entry, every flow stays one Show all flows away, and a workspace changes no right, gate, finding or exit (ADR-0012). `[team]`'s roles stay the acts' entitlements (ADR-0060). Locally the choice is each viewer's own; a hub login's default is RM-0089's. The core names no trade: the gamedev preset is a file outside the crates (ADR-0008). ADR-0073, ADR-0076.
 
 ## Config
 
