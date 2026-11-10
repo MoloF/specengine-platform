@@ -1,0 +1,308 @@
+import * as ts from "typescript";
+import { describe, expect, it } from "vitest";
+import { SCALE_EXCEPTIONS, type ScaleException } from "./scale-exceptions";
+import tokensCss from "./tokens.css?raw";
+
+// DF-1, DF-2 and DF-3 of docs/features/design-foundation.md ("Guards and staging", "Size tokens",
+// "Exceptions"): every style file under `ui/src` but tokens.css sets a font size, a line height, a
+// space and a radius only through the scale's tokens, or through a listed exception that names why
+// and the item that removes it; the tokens themselves resolve into the scale's sets; the controls are
+// 32 px, or 24 px compact; no component sets a size inline.
+
+const SHEETS = import.meta.glob<string>("/src/**/*.css", { query: "?raw", import: "default", eager: true });
+const COMPONENTS = import.meta.glob<string>(["/src/**/*.tsx", "!/src/**/*.test.tsx"], { query: "?raw", import: "default", eager: true });
+
+/** One declaration of a style file, with its rule's selector (whitespace collapsed) and the at-rule around it. */
+interface Declaration {
+  file: string;
+  at: string | null;
+  selector: string;
+  property: string;
+  value: string;
+}
+
+/** The text with its comments blanked. */
+function uncommented(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, " "));
+}
+
+/** Every declaration of `css`, its rules found inside `@media`, `@supports`, `@container` and `@keyframes` too. */
+function declarationsOf(file: string, css: string): Declaration[] {
+  const text = uncommented(css);
+  const found: Declaration[] = [];
+  let at = 0;
+  const walk = (until: number, around: string | null): void => {
+    while (at < until) {
+      const open = text.indexOf("{", at);
+      const close = text.indexOf("}", at);
+      if (open < 0 || open >= until || (close >= 0 && close < open)) {
+        at = (close < 0 || close > until ? until : close) + 1;
+        return;
+      }
+      const head = text.slice(at, open).trim().replace(/\s+/g, " ");
+      let depth = 1;
+      let end = open + 1;
+      for (; end < text.length && depth > 0; end += 1) {
+        depth += text[end] === "{" ? 1 : text[end] === "}" ? -1 : 0;
+      }
+      if (/^@(media|supports|container|layer|keyframes)\b/.test(head)) {
+        at = open + 1;
+        walk(end - 1, head);
+        at = end;
+      } else {
+        // Each declaration, the last one too where it has no `;`.
+        for (const part of text.slice(open + 1, end - 1).split(";")) {
+          const match = /^\s*(-?-?[a-z][a-z0-9-]*)\s*:\s*([\s\S]*?)\s*$/.exec(part);
+          if (match !== null) {
+            found.push({ file, at: around, selector: head, property: match[1] ?? "", value: match[2] ?? "" });
+          }
+        }
+        at = end;
+      }
+    }
+  };
+  walk(text.length, null);
+  return found;
+}
+
+const TOKENS_PATH = "/src/styles/tokens.css";
+const DECLARATIONS = Object.entries(SHEETS)
+  .filter(([path]) => path !== TOKENS_PATH)
+  .flatMap(([path, css]) => declarationsOf(path, css));
+
+const rootBlock = /(^|\n):root\s*\{([^}]*)\}/.exec(uncommented(tokensCss))?.[2] ?? "";
+const TOKENS = new Map(Array.from(rootBlock.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g), (match): [string, string] => [match[1] ?? "", (match[2] ?? "").trim()]));
+
+/** A token's value through its aliases. */
+function resolved(name: string, seen: string[] = []): string {
+  const value = TOKENS.get(name);
+  if (value === undefined) {
+    throw new Error(`${name} is not defined in tokens.css`);
+  }
+  const alias = /^var\((--[a-z0-9-]+)\)$/.exec(value)?.[1];
+  if (alias === undefined) {
+    return value;
+  }
+  if (seen.includes(alias)) {
+    throw new Error(`alias cycle through ${alias}`);
+  }
+  return resolved(alias, [...seen, name]);
+}
+
+/** The tokens of a family, by prefix. */
+function family(prefix: string): string[] {
+  return [...TOKENS.keys()].filter((name) => name.startsWith(prefix));
+}
+
+/** "Data", "Size tokens": the scale's sets. */
+const SIZES = ["0.75rem", "0.875rem", "1rem", "1.25rem", "1.5rem"];
+const LINE_HEIGHTS = ["1rem", "1.25rem", "1.5rem", "1.75rem"];
+const SPACES = ["0.125rem", "0.25rem", "0.375rem", "0.5rem", "0.75rem", "1rem", "1.25rem", "1.5rem", "2rem", "2.5rem", "3rem"];
+const RADII = ["2px", "4px", "6px", "8px", "12px", "999px"];
+/** The one legacy ratio, `--line-height-tight`, until RM-0099. */
+const LEGACY_RATIO: Readonly<Record<string, string>> = { "--line-height-tight": "1.25" };
+
+/** The path an exception names, as the glob keys it. */
+function pathOf(exception: ScaleException): string {
+  return `/${exception.file}`;
+}
+
+function listed(declaration: Declaration): boolean {
+  return SCALE_EXCEPTIONS.some(
+    (exception) => pathOf(exception) === declaration.file && exception.selector === declaration.selector && exception.property === declaration.property && exception.value === declaration.value,
+  );
+}
+
+function shown(declaration: Declaration): string {
+  return `${declaration.file} ${declaration.at === null ? "" : `${declaration.at} `}${declaration.selector} { ${declaration.property}: ${declaration.value} }`;
+}
+
+/** A value that is one `var()` of a defined token of `prefix`. */
+function oneToken(value: string, prefix: string): boolean {
+  const name = /^var\((--[a-z0-9-]+)\)$/.exec(value)?.[1];
+  return name !== undefined && name.startsWith(prefix) && TOKENS.has(name);
+}
+
+/** A non-zero length literal: a number with a length unit. */
+const LENGTH = /(^|[^\w.-])-?(\d*\.?\d+)(px|rem|em|ch|ex|vw|vh|vmin|vmax|dvh|svh|lvh|dvw|svw|lvw|pt|pc|cm|mm|in|lh|rlh|cap|ic)\b/g;
+
+/** A value with each `var(--name)` taken out, a fallback's text left in its place to be read: `var(--a, 3px)` reads `3px`. */
+function withoutTokens(value: string): string {
+  let out = value;
+  for (;;) {
+    const next = out.replace(/var\(\s*--[a-z0-9-]+\s*(?:,([^()]*))?\)/g, (_whole, fallback: string | undefined) => ` ${fallback ?? ""} `);
+    if (next === out) {
+      return out;
+    }
+    out = next;
+  }
+}
+
+/** Whether a value holds a non-zero length outside a token: `0`, `auto`, a percentage and `calc()` of tokens and plain numbers pass; a `var()`'s fallback is read. */
+function holdsRawLength(value: string): boolean {
+  return Array.from(withoutTokens(value).matchAll(LENGTH)).some((match) => Number(match[2]) !== 0);
+}
+
+/** The `--space-*` a value names, each to be defined. */
+function spacesNamed(value: string): string[] {
+  return Array.from(value.matchAll(/var\((--space-[a-z0-9-]+)\)/g), (match) => match[1] ?? "");
+}
+
+const SPACING = /^(padding|margin)(-[a-z-]+)?$|^(row-|column-)?gap$/;
+const RADIUS = /^border(-[a-z]+)*-radius$/;
+
+describe("the type scale (DF-1)", () => {
+  it("reads every style file under src but tokens.css", () => {
+    expect(Object.keys(SHEETS)).toEqual(expect.arrayContaining(["/src/styles/app.css", "/src/styles/fonts.css", TOKENS_PATH]));
+    expect(DECLARATIONS.length).toBeGreaterThan(3000);
+  });
+
+  it("sets every font size and line height through one var() of a token, or a listed exception", () => {
+    const raw = DECLARATIONS.filter((declaration) => {
+      if (declaration.property === "font-size") {
+        return !oneToken(declaration.value, "--font-size-");
+      }
+      if (declaration.property === "line-height") {
+        return !oneToken(declaration.value, "--line-height-");
+      }
+      return false;
+    });
+    expect(raw.filter((declaration) => !listed(declaration)).map(shown)).toEqual([]);
+  });
+
+  it("writes the font shorthand only as inherit", () => {
+    expect(DECLARATIONS.filter((declaration) => declaration.property === "font" && declaration.value !== "inherit" && !listed(declaration)).map(shown)).toEqual([]);
+  });
+
+  it("resolves every size and line-height token into the scale; --line-height-tight the one legacy ratio", () => {
+    expect(family("--font-size-").length).toBeGreaterThanOrEqual(11);
+    for (const name of family("--font-size-")) {
+      expect([name, SIZES.includes(resolved(name))]).toEqual([name, true]);
+    }
+    for (const name of family("--line-height-")) {
+      const legacy = LEGACY_RATIO[name];
+      expect([name, legacy === undefined ? LINE_HEIGHTS.includes(resolved(name)) : resolved(name) === legacy]).toEqual([name, true]);
+    }
+    // The steps' pairs (docs/features/design-foundation.md "Typography").
+    const pairs = ["small", "body", "document", "heading-s", "heading-m", "heading-l", "code"].map((step) => [step, resolved(`--font-size-${step}`), resolved(`--line-height-${step}`)]);
+    expect(pairs).toEqual([
+      ["small", "0.75rem", "1rem"],
+      ["body", "0.875rem", "1.25rem"],
+      ["document", "1rem", "1.5rem"],
+      ["heading-s", "1rem", "1.25rem"],
+      ["heading-m", "1.25rem", "1.5rem"],
+      ["heading-l", "1.5rem", "1.75rem"],
+      ["code", "0.75rem", "1.25rem"],
+    ]);
+    // The legacy names land on the scale: 13 px reads 14, 15 reads 16, 18 reads 20 (W10).
+    expect(["s", "m", "l", "xl"].map((size) => resolved(`--font-size-${size}`))).toEqual(["0.875rem", "1rem", "1.25rem", "1.5rem"]);
+  });
+
+  it("lists no exception that matches nothing, and names each one's reason and its item", () => {
+    const unmatched = SCALE_EXCEPTIONS.filter(
+      (exception) =>
+        !DECLARATIONS.some(
+          (declaration) => declaration.file === pathOf(exception) && declaration.selector === exception.selector && declaration.property === exception.property && declaration.value === exception.value,
+        ),
+    );
+    expect(unmatched).toEqual([]);
+    for (const exception of SCALE_EXCEPTIONS) {
+      expect([exception.selector, exception.reason.length > 10]).toEqual([exception.selector, true]);
+    }
+    // Kept for good: the visually hidden pattern and a border laid over a border, nothing else.
+    expect(SCALE_EXCEPTIONS.filter((exception) => exception.until === null).map((exception) => exception.selector)).toEqual([".sr-only", ".tab"]);
+  });
+});
+
+describe("spacing (DF-2)", () => {
+  it("holds no non-zero length literal outside var() of a --space-* in padding, margin and gap, but listed exceptions", () => {
+    const raw = DECLARATIONS.filter((declaration) => SPACING.test(declaration.property) && holdsRawLength(declaration.value));
+    expect(raw.filter((declaration) => !listed(declaration)).map(shown)).toEqual([]);
+    // Every space named is a token.
+    const unknown = DECLARATIONS.filter((declaration) => SPACING.test(declaration.property)).flatMap((declaration) => spacesNamed(declaration.value).filter((name) => !TOKENS.has(name)).map((name) => `${shown(declaration)}: ${name}`));
+    expect(unknown).toEqual([]);
+    // The detector itself.
+    expect(["0", "auto", "0 auto", "var(--space-100) var(--space-200)", "calc(var(--space-1) * 2)", "calc(-1 * var(--space-050))", "50%"].map(holdsRawLength)).toEqual([false, false, false, false, false, false, false]);
+    expect(["3px", "0 1px", "calc(var(--space-1) + 1px)", "0.2em", "min(10vh, 5rem)"].map(holdsRawLength)).toEqual([true, true, true, true, true]);
+  });
+
+  it("holds no raw length in a custom property declared outside tokens.css, but listed exceptions", () => {
+    const custom = DECLARATIONS.filter((declaration) => declaration.property.startsWith("--"));
+    expect(custom.length).toBeGreaterThan(20);
+    expect(custom.filter((declaration) => holdsRawLength(declaration.value) && !listed(declaration)).map(shown)).toEqual([]);
+  });
+
+  it("reads a last declaration with no semicolon, a custom property, and a fallback's length (the detector)", () => {
+    const probe = declarationsOf("/probe.css", ".a { display: block; gap: 3px }\n@media (min-width: 1rem) { .b { --gap: 3px } }");
+    expect(probe.map((declaration) => [declaration.at, declaration.selector, declaration.property, declaration.value])).toEqual([
+      [null, ".a", "display", "block"],
+      [null, ".a", "gap", "3px"],
+      ["@media (min-width: 1rem)", ".b", "--gap", "3px"],
+    ]);
+    expect(probe.filter((declaration) => (SPACING.test(declaration.property) || declaration.property.startsWith("--")) && holdsRawLength(declaration.value)).map((declaration) => declaration.property)).toEqual(["gap", "--gap"]);
+    expect(["var(--space-100, 3px)", "var(--a, var(--b, 1px))", "calc(var(--space-050) + var(--x, 2px))"].map(holdsRawLength)).toEqual([true, true, true]);
+    expect(["var(--space-100, var(--space-050))", "var(--depth, 0)", "var(--board-columns, 1)"].map(holdsRawLength)).toEqual([false, false, false]);
+  });
+
+  it("resolves every --space-* into the 8 px scale", () => {
+    expect(family("--space-").length).toBeGreaterThanOrEqual(17);
+    for (const name of family("--space-")) {
+      expect([name, SPACES.includes(resolved(name))]).toEqual([name, true]);
+    }
+  });
+
+  it("sets no font size, line height, padding, margin, gap or radius in a component's inline style", () => {
+    const sizing = /^(fontSize|lineHeight|padding\w*|margin\w*|gap|rowGap|columnGap|borderRadius|border\w*Radius)$/;
+    const found: string[] = [];
+    for (const [path, text] of Object.entries(COMPONENTS)) {
+      const file = ts.createSourceFile(path, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+      const walk = (node: ts.Node): void => {
+        if (ts.isJsxAttribute(node) && node.name.getText(file) === "style" && node.initializer !== undefined && ts.isJsxExpression(node.initializer)) {
+          const expression = node.initializer.expression;
+          if (expression !== undefined && ts.isObjectLiteralExpression(expression)) {
+            for (const property of expression.properties) {
+              const name = property.name?.getText(file).replace(/^["']|["']$/g, "") ?? "";
+              if (sizing.test(name)) {
+                found.push(`${path}: style ${name}`);
+              }
+            }
+          }
+        }
+        ts.forEachChild(node, walk);
+      };
+      walk(file);
+    }
+    expect(Object.keys(COMPONENTS)).toEqual(expect.arrayContaining(["/src/board/BoardCard.tsx", "/src/ui/Lozenge.tsx"]));
+    expect(found).toEqual([]);
+  });
+});
+
+describe("radii and control heights (DF-3)", () => {
+  it("rounds only with 0 or var(--radius-*), but listed exceptions", () => {
+    const raw = DECLARATIONS.filter(
+      (declaration) =>
+        RADIUS.test(declaration.property) &&
+        !declaration.value
+          .split(/[\s/]+/)
+          .filter((part) => part !== "")
+          .every((part) => part === "0" || oneToken(part, "--radius-")),
+    );
+    expect(raw.filter((declaration) => !listed(declaration)).map(shown)).toEqual([]);
+  });
+
+  it("resolves every --radius-* into the scale", () => {
+    expect(family("--radius-").length).toBe(6);
+    for (const name of family("--radius-")) {
+      expect([name, RADII.includes(resolved(name))]).toEqual([name, true]);
+    }
+  });
+
+  it("makes .button and .field 32 px tall and .button-compact 24 px, from the tokens", () => {
+    const minHeight = (selector: string) =>
+      DECLARATIONS.filter((declaration) => declaration.at === null && declaration.selector === selector && declaration.property === "min-height").map((declaration) => declaration.value);
+    expect(minHeight(".button")).toEqual(["var(--control-height)"]);
+    expect(minHeight(".field")).toEqual(["var(--control-height)"]);
+    expect(minHeight(".button-compact")).toEqual(["var(--control-height-compact)"]);
+    expect([resolved("--control-height"), resolved("--control-height-compact"), resolved("--target-min"), resolved("--nav-height")]).toEqual(["2rem", "1.5rem", "24px", "3rem"]);
+  });
+});

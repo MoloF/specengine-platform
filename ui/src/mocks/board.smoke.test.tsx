@@ -463,11 +463,13 @@ describe("hand-offs and returns over the mock", () => {
     renderMock("normal", "#/harbor-sim/board/C-0001");
     const parent = await modal("Write the tide table foreword");
     const handOffs = within(await within(parent).findByRole("region", { name: "Hand-offs" })).getAllByRole("listitem");
+    // Each child's flow by name and its status lozenge (DF-5 of design-foundation), the raw pair gone.
     expect(handOffs.map((item) => item.textContent)).toEqual([
-      "C-0019Tide table glossarycopy/editTomas OakesTaken",
-      "C-0013Tide table plateplates/queuedUnassignedHanded off",
-      "C-0016Tide table coverplates/struckNoor AinsleyAccepted",
+      "C-0019Tide table glossarycopyEditTomas OakesTaken",
+      "C-0013Tide table plateplatesqueuedUnassignedHanded off",
+      "C-0016Tide table coverplatesstruckNoor AinsleyAccepted",
     ]);
+    expect(handOffs.map((item) => item.querySelector(".lozenge")?.getAttribute("data-appearance"))).toEqual(["information", "neutral", "success"]);
     fireEvent.click(within(handOffs[1] as HTMLElement).getByRole("link", { name: "C-0013" }));
     await modal("Tide table plate");
     expect(window.location.hash).toBe("#/harbor-sim/board/C-0013");
@@ -517,7 +519,9 @@ describe("hand-offs and returns over the mock", () => {
   it("the modal of a card with three links: its Tasks part shows each, the approval to copy on the one in review", async () => {
     renderMock("normal", "#/harbor-sim/board/C-0001");
     const opened = await modal("Write the tide table foreword");
-    const part = await within(opened).findByRole("region", { name: "Tasks" });
+    // Folded under Development (DF-7 of design-foundation): expanded first.
+    fireEvent.click(await within(opened).findByRole("button", { name: "Development \u00b7 3 agent tasks" }));
+    const part = within(opened).getByRole("region", { name: "Tasks" });
     expect(Array.from(part.querySelectorAll("li[data-task]"), (row) => row.getAttribute("data-task"))).toEqual(["T-0107", "T-0109", "T-0106"]);
     expect(within(part).getByRole("link", { name: "T-0107" }).getAttribute("href")).toBe("#/harbor-sim/tasks/T-0107");
     expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(["spec task approve T-0107"]);

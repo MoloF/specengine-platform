@@ -60,6 +60,8 @@ export const en = {
     chordApple: "⌘K",
     chordOther: "Ctrl K",
     shortcutsButton: "Keyboard shortcuts",
+    // The Theme select in the header (theme.ts, ThemeSwitcher.tsx): its label and choices, in THEMES' order.
+    theme: { label: "Theme", system: "System", light: "Light", dark: "Dark" },
     mockData: "Mock data",
     scenario: "scenario: {{scenario}}",
     // The bare `#/` before a project's landing.
@@ -279,6 +281,10 @@ export const en = {
     copy: "Copy",
     copied: "Copied",
     badgeName: "{{name}}: ",
+    // The primitives (src/ui/): the breadcrumb trail's name, a property list's folded rows and an empty value.
+    breadcrumbs: "Breadcrumbs",
+    moreFields: "More fields ({{n}})",
+    emptyValue: "None",
     diff: {
       label: "Section diff",
       none: "No section diff attached.",
@@ -456,7 +462,6 @@ export const en = {
       edit: "Edit",
       assign: "Assign",
       cancel: "Cancel card",
-      in: "In {{column}}",
       notes: "Notes from the daemon on the card",
       markFailed: "Whether the brief changed under this card could not be read: {{message}}",
       stateFailed: "The state of this card's targets could not be read: {{message}}",
@@ -492,6 +497,15 @@ export const en = {
     },
     page: {
       openOnBoard: "Open on the board",
+    },
+    // The work item's side column (CardPanel.tsx): its status, the flow, and Development's summary.
+    item: {
+      status: "Status",
+      flow: "Flow",
+      development: "Development",
+      agentTasks_one: "{{count}} agent task",
+      agentTasks_other: "{{count}} agent tasks",
+      noAgentTasks: "No agent tasks",
     },
     // The Lanes select and each swimlane's head (BoardView.tsx).
     lanes: {

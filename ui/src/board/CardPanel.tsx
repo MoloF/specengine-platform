@@ -1,17 +1,25 @@
-import { type MouseEvent, type ReactNode } from "react";
+import { useId, type MouseEvent, type ReactNode } from "react";
 import { apiErrorOf } from "../api/client";
-import type { CardQuery } from "../api/queries";
+import { useProjects, type CardQuery } from "../api/queries";
 import type { Card, CardEvent, CardFlow, CardNotFound } from "../api/types";
-import { cardPageHash, sectionHash } from "../app/routes";
+import { RegionBoundary } from "../app/RegionBoundary";
+import { cardPageHash, homeHash, sectionHash } from "../app/routes";
 import { rollupLook } from "../flow/labels";
 import { Badge } from "../ui/Badge";
+import { Breadcrumbs, type Crumb } from "../ui/Breadcrumbs";
+import { Button } from "../ui/Button";
+import { Disclosure } from "../ui/Disclosure";
 import { Icon } from "../ui/Icon";
+import { IssueView } from "../ui/IssueView";
+import { Lozenge } from "../ui/Lozenge";
+import { PropertyList, type Property } from "../ui/PropertyList";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { shownSlot, shownText } from "../ui/text";
 import { formatUtc } from "../ui/time";
 import { useRetainedFailure } from "../ui/useRetainedFailure";
 import { actingName, useActing, useAllowed } from "./acting";
 import { ActOff } from "./ActOff";
+import { statusLook } from "./category";
 import { isOverdue } from "./due";
 import { useTranslate, type Translate } from "../i18n";
 import { fill, slot } from "../i18n/fill";
@@ -34,12 +42,16 @@ import {
 import { returnReasonOf, type Rollup } from "./rollup";
 import { CardTasks, ownNotes } from "./CardTasks";
 
-// A card's body (`docs/canon/cards.md` "Documents and events"): every field, its mark and Clear,
-// Accept's verdict, its history with each move's note, its links, its hand-offs, its linked `T-`
-// tasks (`docs/canon/card-tasks.md` "The rule"; their notes stand on their rows) and, standing in its
-// flow's return column, why it came back. The Board's modal and the card's page show it alike; the
-// acts open their dialogs over it (`docs/canon/card-flows.md` "The rule"). Nothing here judges a
-// column: the return column and the accept column are the flow's, looked up.
+// A card as a work item (`docs/canon/cards.md` "Documents and events";
+// docs/features/design-foundation.md "The work item: the task modal and page"): one IssueView for
+// the Board's modal and the card's page alike. The head holds the breadcrumbs, the caller's tools and
+// title, and the acts (Accept, primary, in `accept.from` alone; Hand off; Return…; Edit; Assign; Cancel
+// card, subtle and last). The main column holds the card's blocks (its mark and Clear, why it came
+// back, Accept's verdict, the cancellation), Goal and Criteria at the document's size, Source,
+// Hand-offs, Evidence and History, each as before. The side column holds the status (its column's
+// lozenge and the Move menu), the people's fields with the empty ones folded, and Development, the
+// linked `T-` tasks (`docs/canon/card-tasks.md` "The rule"), folded. Nothing here judges a column: the
+// return column and the accept column are the flow's, looked up (`docs/canon/card-flows.md` "The rule").
 
 /** The card's acts, each a dialog but Move, which opens the Move menu. */
 export type CardAction = "move" | "handoff" | "return" | "edit" | "assign" | "cancel" | "accept" | "clear";
@@ -56,18 +68,28 @@ export interface CardLinks {
   onFollow: (id: string) => void;
 }
 
-/** One fact; an absent value `-`, as `spec card show`. */
-function Fact({ term, children }: { term: string; children: ReactNode }) {
-  return (
-    <div className="fact">
-      <dt>{term}</dt>
-      <dd>{children}</dd>
-    </div>
-  );
+/** What the work item reads and does, the Board's modal and the card's page alike. */
+export interface CardViewProps {
+  project: string;
+  id: string;
+  query: CardQuery;
+  flowOf: (name: string) => CardFlow | undefined;
+  today: string;
+  mark: CardMark | null;
+  /** Each target's rollup, as the trace read has it. */
+  rollups: ReadonlyMap<string, string>;
+  /** The card's children in the list read. */
+  handOffs: Rollup;
+  /** Why the list, which says the mark, could not be read: no mark is shown. */
+  markFailure: string | null;
+  /** Why the trace, which says the targets' states, could not be read. */
+  stateFailure: string | null;
+  links: CardLinks;
+  onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
 }
 
-function Value({ text }: { text: string | null }) {
-  return text === null ? "-" : <bdi>{shownSlot(text)}</bdi>;
+function Value({ text }: { text: string }) {
+  return <bdi>{shownSlot(text)}</bdi>;
 }
 
 /** A stored UTC time, as stored to the minute. */
@@ -82,10 +104,7 @@ function isPlainClick(event: MouseEvent<HTMLElement>): boolean {
 }
 
 /** A link to another card; the ID as stored. A plain click follows it in place, any other is the browser's. */
-function CardLink({ id, links }: { id: string | null; links: CardLinks }) {
-  if (id === null) {
-    return "-";
-  }
+function CardLink({ id, links }: { id: string; links: CardLinks }) {
   const onClick = (event: MouseEvent<HTMLAnchorElement>) => {
     if (isPlainClick(event)) {
       event.preventDefault();
@@ -158,10 +177,11 @@ function HistoryLine({ event, flow }: { event: CardEvent; flow: CardFlow | undef
   );
 }
 
-function Part({ title, children }: { title: string; children: ReactNode }) {
+/** A part of the main column: a region named by its heading. */
+function Part({ title, className, children }: { title: string; className?: string; children: ReactNode }) {
   return (
-    <section className="board-panel-part" aria-label={title}>
-      <h3 className="card-section-title">{title}</h3>
+    <section className={className === undefined ? "board-panel-part" : `board-panel-part ${className}`} aria-label={title}>
+      <h3 className="issue-section-title">{title}</h3>
       {children}
     </section>
   );
@@ -218,9 +238,7 @@ function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; 
       </p>
       {canClear(mark) && (
         <div className="board-panel-actions">
-          <button
-            type="button"
-            className="button"
+          <Button
             aria-disabled={!clears}
             onClick={(event) => {
               if (clears) {
@@ -229,7 +247,7 @@ function BriefMark({ card, mark, clears, onAct }: { card: Card; mark: CardMark; 
             }}
           >
             {t("board.panel.clear")}
-          </button>
+          </Button>
         </div>
       )}
       {canClear(mark) && !clears && <ActOff act="clear" />}
@@ -244,11 +262,13 @@ function TargetState({ rollup }: { rollup: string | undefined }) {
 }
 
 /**
- * An open card's acts: Move, Hand off, Return when its flow names a return column it is not in and
- * `allowed` holds the move there, Edit, Assign, Cancel card, and Accept in `accept.from` alone. A
- * `by` the acting name lacks reads "needs <names>", as in the Move menu; the daemon judges either way.
+ * An open card's acts, the head's, in this order: Accept, the one primary, in `accept.from` alone and
+ * idle where a hub's `allowed` omits it; Hand off; Return when its flow names a return column it is
+ * not in and `allowed` holds the move there; Edit; Assign; Cancel card, subtle and last. Move stands
+ * in the side column's Status. A `by` the acting name lacks reads "needs <names>", as in the Move menu;
+ * the daemon judges either way.
  */
-function Actions({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | undefined; accepts: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+function HeadActs({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | undefined; accepts: boolean; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
   const t = useTranslate();
   const [acting] = useActing();
   const inAcceptColumn = card.column === flow?.accept.from;
@@ -264,34 +284,24 @@ function Actions({ card, flow, accepts, onAct }: { card: Card; flow: CardFlow | 
   return (
     <>
       <div className="board-panel-actions" role="group" aria-label={t("board.panel.actions")}>
-        <button type="button" className="button" aria-haspopup="menu" onClick={act("move")}>
-          <Icon name="cardMove" />
-          <span>{t("board.panel.move")}</span>
-        </button>
-        <button type="button" className="button" onClick={act("handoff")}>
-          <Icon name="cardHandOff" />
-          <span>{t("board.handoff.action")}</span>
-        </button>
-        {returning !== undefined && (
-          <button type="button" className="button" onClick={act("return")}>
-            <Icon name="cardReturned" />
-            <span>{t("board.return.action")}</span>
-          </button>
-        )}
-        <button type="button" className="button" onClick={act("edit")}>
-          {t("board.panel.edit")}
-        </button>
-        <button type="button" className="button" onClick={act("assign")}>
-          {t("board.panel.assign")}
-        </button>
-        <button type="button" className="button button-danger" onClick={act("cancel")}>
-          {t("board.panel.cancel")}
-        </button>
         {inAcceptColumn && (
-          <button type="button" className="button button-primary" aria-disabled={!accepts} onClick={accepts ? act("accept") : undefined}>
+          <Button appearance="primary" aria-disabled={!accepts} onClick={accepts ? act("accept") : undefined}>
             {t("board.panel.accept")}
-          </button>
+          </Button>
         )}
+        <Button icon="cardHandOff" onClick={act("handoff")}>
+          <span>{t("board.handoff.action")}</span>
+        </Button>
+        {returning !== undefined && (
+          <Button icon="cardReturned" onClick={act("return")}>
+            <span>{t("board.return.action")}</span>
+          </Button>
+        )}
+        <Button onClick={act("edit")}>{t("board.panel.edit")}</Button>
+        <Button onClick={act("assign")}>{t("board.panel.assign")}</Button>
+        <Button appearance="subtle" onClick={act("cancel")}>
+          {t("board.panel.cancel")}
+        </Button>
       </div>
       {needs !== null && (
         <p className="note">
@@ -328,8 +338,8 @@ function ReturnReason({ card, column }: { card: Card; column: string }) {
   );
 }
 
-/** The card's children: ID (a link), title, `<flow>/<column>`, assignee and word; a child of a flow not served has no word. */
-function HandOffs({ rollup, links }: { rollup: Rollup; links: CardLinks }) {
+/** The card's children: ID (a link), title, the flow's name, its status lozenge, assignee and word; a child of a flow not served is stranded and has no word. */
+function HandOffs({ rollup, links, flowOf }: { rollup: Rollup; links: CardLinks; flowOf: (name: string) => CardFlow | undefined }) {
   const t = useTranslate();
   return (
     <Part title={t("board.modal.handOffs")}>
@@ -341,9 +351,8 @@ function HandOffs({ rollup, links }: { rollup: Rollup; links: CardLinks }) {
             <li key={row.id} className="board-handoff">
               <CardLink id={row.id} links={links} />
               <bdi className="board-handoff-title">{shownSlot(row.title)}</bdi>
-              <span className="mono muted">
-                {shownSlot(row.flow)}/{shownSlot(row.column)}
-              </span>
+              <bdi className="muted">{shownSlot(row.flow)}</bdi>
+              <Lozenge {...statusLook(flowOf(row.flow), row.column)} />
               <span className={row.assignee === null ? "muted" : undefined}>
                 <bdi>{row.assignee === null ? unassigned(t) : shownSlot(row.assignee)}</bdi>
               </span>
@@ -356,46 +365,16 @@ function HandOffs({ rollup, links }: { rollup: Rollup; links: CardLinks }) {
   );
 }
 
-function Details({
-  project,
-  card,
-  flow,
-  today,
-  mark,
-  rollups,
-  handOffs,
-  markFailure,
-  stateFailure,
-  links,
-  onAct,
-}: {
-  project: string;
-  card: Card;
-  flow: CardFlow | undefined;
-  today: string;
-  mark: CardMark | null;
-  rollups: ReadonlyMap<string, string>;
-  handOffs: Rollup;
-  markFailure: string | null;
-  stateFailure: string | null;
-  links: CardLinks;
-  onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
-}) {
+/** The main column of a card read: its blocks, then Goal, Criteria, Source, Hand-offs, Evidence and History. */
+function MainParts({ project, card, flow, mark, rollups, handOffs, markFailure, stateFailure, links, flowOf, onAct }: Omit<CardViewProps, "id" | "query" | "today"> & { card: Card; flow: CardFlow | undefined }) {
   const t = useTranslate();
   const allows = useAllowed(project);
-  const accepted = card.acceptance !== null;
   const cancelled = card.cancellation !== null;
   const back = flow?.return ?? null;
   const history = [...(card.history ?? [])].sort((a, b) => a.seq - b.seq);
   const notes = ownNotes(card);
   return (
     <>
-      <p className="board-panel-state">
-        <span>{fill(t("board.panel.in", { column: slot("column") }), { column: <bdi>{columnTitle(flow, card.column)}</bdi> })}</span>
-        {accepted && <Badge look={acceptedLook(t)} />}
-        {cancelled && <Badge look={cancelledLook(t)} />}
-        {isOverdue({ due: card.due, accepted, cancelled }, today) && <Badge look={overdueLook(t)} />}
-      </p>
       {notes.length > 0 && (
         <ul className="note-list" aria-label={t("board.panel.notes")}>
           {notes.map((note, index) => (
@@ -419,16 +398,16 @@ function Details({
           <span>{fill(t("board.panel.stateFailed", { message: slot("message") }), { message: <span lang="en">{stateFailure}</span> })}</span>
         </p>
       )}
-      {accepted || cancelled ? <Closure card={card} /> : <Actions card={card} flow={flow} accepts={allows("accept")} onAct={onAct} />}
       {back !== null && card.column === back && !cancelled && <ReturnReason card={card} column={back} />}
+      <Closure card={card} />
       {card.goal !== null && (
-        <Part title={t("board.panel.goal")}>
+        <Part title={t("board.panel.goal")} className="issue-document">
           <p className="board-text">{shownText(card.goal)}</p>
         </Part>
       )}
       {card.criteria.length > 0 && (
-        <Part title={t("board.panel.criteria")}>
-          <ul className="board-panel-list">
+        <Part title={t("board.panel.criteria")} className="issue-document">
+          <ul className="board-panel-list issue-criteria">
             {card.criteria.map((criterion, index) => (
               <li key={`${String(index)}-${criterion}`} className="board-text">
                 {shownText(criterion)}
@@ -453,39 +432,7 @@ function Details({
           </ul>
         )}
       </Part>
-      <HandOffs rollup={handOffs} links={links} />
-      <Part title={t("board.tasks.title")}>
-        <CardTasks project={project} card={card} />
-      </Part>
-      <Part title={t("board.panel.details")}>
-        <dl className="facts">
-          <Fact term={t("board.panel.discipline")}>
-            <Value text={card.discipline} />
-          </Fact>
-          <Fact term={t("board.panel.estimate")}>
-            <Value text={card.estimate} />
-          </Fact>
-          <Fact term={t("board.panel.due")}>
-            <Value text={card.due} />
-          </Fact>
-          <Fact term={t("board.panel.assignee")}>{card.assignee === null ? unassigned(t) : <Value text={card.assignee} />}</Fact>
-          <Fact term={t("board.panel.reviewer")}>
-            <Value text={card.reviewer} />
-          </Fact>
-          <Fact term={t("board.panel.parent")}>
-            <CardLink id={card.parent} links={links} />
-          </Fact>
-          <Fact term={t("board.panel.corrects")}>
-            <CardLink id={card.corrects} links={links} />
-          </Fact>
-          <Fact term={t("board.panel.createdBy")}>
-            <Value text={card.created_by} />
-          </Fact>
-          <Fact term={t("board.panel.createdAt")}>
-            <At at={card.created_at} />
-          </Fact>
-        </dl>
-      </Part>
+      <HandOffs rollup={handOffs} links={links} flowOf={flowOf} />
       <Part title={t("board.panel.evidence")}>
         {card.evidence.length === 0 ? (
           <p className="muted">{t("board.panel.noneYet")}</p>
@@ -520,41 +467,12 @@ function Details({
 }
 
 /**
- * The card's body as its read stands: a skeleton while out, the daemon's words and Retry when it
- * failed, its `{id, reason}` verbatim when there is no such card, else every part. A read failing
+ * The main column as the card's read stands: a skeleton while out, the daemon's words and Retry when
+ * it failed, its `{id, reason}` verbatim when there is no such card, else every part. A read failing
  * again keeps what it last read, saying so.
  */
-export function CardBody({
-  project,
-  id,
-  query,
-  flowOf,
-  today,
-  mark,
-  rollups,
-  handOffs,
-  markFailure,
-  stateFailure,
-  links,
-  onAct,
-}: {
-  project: string;
-  id: string;
-  query: CardQuery;
-  flowOf: (name: string) => CardFlow | undefined;
-  today: string;
-  mark: CardMark | null;
-  /** Each target's rollup, as the trace read has it. */
-  rollups: ReadonlyMap<string, string>;
-  /** The card's children in the list read. */
-  handOffs: Rollup;
-  /** Why the list, which says the mark, could not be read: no mark is shown. */
-  markFailure: string | null;
-  /** Why the trace, which says the targets' states, could not be read. */
-  stateFailure: string | null;
-  links: CardLinks;
-  onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void;
-}) {
+function CardMain(props: CardViewProps) {
+  const { project, id, query, flowOf } = props;
   const t = useTranslate();
   const failure = useRetainedFailure(query.error, query.isFetching);
   const answer = query.data;
@@ -586,21 +504,7 @@ export function CardBody({
       </div>
     );
   } else {
-    body = (
-      <Details
-        project={project}
-        card={answer}
-        flow={flowOf(answer.flow)}
-        today={today}
-        mark={mark}
-        rollups={rollups}
-        handOffs={handOffs}
-        markFailure={markFailure}
-        stateFailure={stateFailure}
-        links={links}
-        onAct={onAct}
-      />
-    );
+    body = <MainParts {...props} card={answer} flow={flowOf(answer.flow)} />;
   }
   return (
     <>
@@ -612,6 +516,137 @@ export function CardBody({
       )}
       {body}
     </>
+  );
+}
+
+/** "Development · 2 agent tasks", or "No agent tasks": every link counted, read here or not. */
+function developmentSummary(card: Card, t: Translate): string {
+  const tasks = card.tasks.length === 0 ? t("board.item.noAgentTasks") : t("board.item.agentTasks", { count: card.tasks.length });
+  return `${t("board.item.development")} · ${tasks}`;
+}
+
+/**
+ * The side column: the status (its column's lozenge, the card's own badges, and Move on an open
+ * card), the people's fields in a list whose empty ones fold under "More fields", and Development, the
+ * card's Tasks part (`docs/canon/card-tasks.md` "Screen"), folded.
+ */
+function CardSide({ project, card, flow, today, links, onAct }: { project: string; card: Card; flow: CardFlow | undefined; today: string; links: CardLinks; onAct: (action: CardAction, card: Card, trigger: HTMLElement) => void }) {
+  const t = useTranslate();
+  const statusId = useId();
+  const accepted = card.acceptance !== null;
+  const cancelled = card.cancellation !== null;
+  const text = (value: string | null) => (value === null ? null : <Value text={value} />);
+  const details: Property[] = [
+    { key: "assignee", label: t("board.panel.assignee"), value: text(card.assignee) },
+    { key: "reviewer", label: t("board.panel.reviewer"), value: text(card.reviewer) },
+    { key: "flow", label: t("board.item.flow"), value: <Value text={card.flow} /> },
+    { key: "due", label: t("board.panel.due"), value: text(card.due) },
+    { key: "estimate", label: t("board.panel.estimate"), value: text(card.estimate) },
+    { key: "discipline", label: t("board.panel.discipline"), value: text(card.discipline) },
+    { key: "parent", label: t("board.panel.parent"), value: card.parent === null ? null : <CardLink id={card.parent} links={links} /> },
+    { key: "corrects", label: t("board.panel.corrects"), value: card.corrects === null ? null : <CardLink id={card.corrects} links={links} /> },
+    { key: "createdBy", label: t("board.panel.createdBy"), value: <Value text={card.created_by} /> },
+    { key: "createdAt", label: t("board.panel.createdAt"), value: <At at={card.created_at} /> },
+  ];
+  return (
+    <>
+      <section aria-labelledby={statusId}>
+        <div className="property-row">
+          <span id={statusId} className="property-label">
+            {t("board.item.status")}
+          </span>
+          <div className="property-value issue-status">
+            <Lozenge {...statusLook(flow, card.column)} />
+            {accepted && <Badge look={acceptedLook(t)} />}
+            {cancelled && <Badge look={cancelledLook(t)} />}
+            {isOverdue({ due: card.due, accepted, cancelled }, today) && <Badge look={overdueLook(t)} />}
+            {!accepted && !cancelled && (
+              <Button
+                spacing="compact"
+                icon="cardMove"
+                aria-haspopup="menu"
+                onClick={(event) => {
+                  onAct("move", card, event.currentTarget);
+                }}
+              >
+                <span>{t("board.panel.move")}</span>
+              </Button>
+            )}
+          </div>
+        </div>
+      </section>
+      <PropertyList label={t("board.panel.details")} items={details} foldEmpty />
+      <Disclosure summary={developmentSummary(card, t)} regionLabel={t("board.tasks.title")} className="issue-development">
+        <CardTasks project={project} card={card} />
+      </Disclosure>
+    </>
+  );
+}
+
+/**
+ * The work item: the IssueView of the card, its head the trail (Project, Board, the parent, the card),
+ * the caller's tools and title (the modal's `h2`, the page's `h1`), and the acts of an open card; its
+ * main column the card's read as it stands, the caller's notices first; its side column once the card
+ * is read. Each column has its own boundary, the title outside them.
+ */
+export function CardView({ heading, tools, notices, ...props }: CardViewProps & { heading: ReactNode; tools: ReactNode; notices?: ReactNode }) {
+  const { project, id, query, flowOf, links, onAct, today } = props;
+  const t = useTranslate();
+  const projects = useProjects();
+  const allows = useAllowed(project);
+  const card = query.data !== undefined && isCard(query.data) ? query.data : undefined;
+  const flow = card === undefined ? undefined : flowOf(card.flow);
+  const listed = projects.data?.find((candidate) => candidate.slug === project);
+  const parent = card?.parent ?? null;
+  const crumbs: Crumb[] = [
+    { key: "project", label: listed?.name ?? project, href: homeHash(project) },
+    { key: "board", label: t("app.sections.board.label"), href: sectionHash(project, "board") },
+    ...(parent === null
+      ? []
+      : [
+          {
+            key: "parent",
+            label: parent,
+            href: sectionHash(project, "board", parent),
+            mono: true,
+            onFollow: links.page
+              ? undefined
+              : () => {
+                  links.onFollow(parent);
+                },
+          },
+        ]),
+    { key: "card", label: id, mono: true },
+  ];
+  const open = card !== undefined && card.acceptance === null && card.cancellation === null;
+  return (
+    <IssueView
+      breadcrumbs={<Breadcrumbs items={crumbs} />}
+      tools={tools}
+      title={heading}
+      actions={
+        open ? (
+          <RegionBoundary name={t("board.view.boundaryCard")}>
+            <HeadActs card={card} flow={flow} accepts={allows("accept")} onAct={onAct} />
+          </RegionBoundary>
+        ) : null
+      }
+      main={
+        <>
+          {notices}
+          <RegionBoundary name={t("board.view.boundaryCard")}>
+            <CardMain {...props} />
+          </RegionBoundary>
+        </>
+      }
+      side={
+        card === undefined ? null : (
+          <RegionBoundary name={t("board.view.boundaryCard")}>
+            <CardSide project={project} card={card} flow={flow} today={today} links={links} onAct={onAct} />
+          </RegionBoundary>
+        )
+      }
+    />
   );
 }
 

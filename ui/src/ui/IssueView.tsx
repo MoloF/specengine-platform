@@ -1,0 +1,40 @@
+import type { ReactNode } from "react";
+
+// The work-item layout (docs/features/design-foundation.md "Primitives (`ui/src/ui/`)"), a size container: a head of
+// breadcrumbs and tools on one line, the caller's title (an `h1` on a page, a dialog's `h2` in a
+// modal), then the acts; a body of a main column and a side column at most 330 px wide. Under 42.5rem
+// of its own width the body is one column, main first. The DOM order is main then side at every
+// width, so reading and focus order never jump.
+
+export function IssueView({
+  breadcrumbs,
+  tools,
+  title,
+  actions,
+  main,
+  side,
+}: {
+  breadcrumbs: ReactNode;
+  tools?: ReactNode;
+  title: ReactNode;
+  actions?: ReactNode;
+  main: ReactNode;
+  side: ReactNode;
+}) {
+  return (
+    <div className="issue-view">
+      <div className="issue-view-head">
+        <div className="issue-view-bar">
+          {breadcrumbs}
+          {tools !== undefined && tools !== null && <div className="issue-view-tools">{tools}</div>}
+        </div>
+        {title}
+        {actions !== undefined && actions !== null && <div className="issue-view-actions">{actions}</div>}
+      </div>
+      <div className="issue-view-body">
+        <div className="issue-view-main">{main}</div>
+        <div className="issue-view-side">{side}</div>
+      </div>
+    </div>
+  );
+}

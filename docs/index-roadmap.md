@@ -52,7 +52,6 @@ A shard of [docs/index.md](index.md), the index's one entry point.
 - [docs/roadmap/RM-0088.md](roadmap/RM-0088.md) plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs · crates/specengine-mcp, crates/specengine-cli, crates/specengine-http, ui, plugin · draft
 - [docs/roadmap/RM-0089.md](roadmap/RM-0089.md) hub-department (Phase 7, v5 step 13): a hub's per-login default department · crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0091.md](roadmap/RM-0091.md) english-polish: the UI's English grammar slips, fixed with their tests · ui · draft
-- [docs/roadmap/RM-0093.md](roadmap/RM-0093.md) design-foundation (Phase 7, v5 step 1): light and dark tokens, Inter, a type scale, primitives, the task as a work item · ui · draft
 - [docs/roadmap/RM-0094.md](roadmap/RM-0094.md) flow-scenario (Phase 7, v5 step 2): Flow draws the scenario, and its left pane is a path · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, fixtures · draft
 - [docs/roadmap/RM-0095.md](roadmap/RM-0095.md) doc-modal (Phase 7, v5 step 3): one document modal everywhere, with the path as its breadcrumb · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui · draft
 - [docs/roadmap/RM-0096.md](roadmap/RM-0096.md) departments (Phase 7, v5 step 4): the owner's words, department statuses and directions · crates/specengine-core, crates/specengine-cli, crates/specengine-http, ui, plugin, scripts · draft

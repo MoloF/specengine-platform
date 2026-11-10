@@ -1,6 +1,9 @@
 import { type DragEvent, type ReactNode } from "react";
-import { useTranslate } from "../i18n";
+import type { CardFlow } from "../api/types";
+import { useTranslate, type Translate } from "../i18n";
 import { around } from "../i18n/fill";
+import { Lozenge, type LozengeLook } from "../ui/Lozenge";
+import { outsideLook, statusLook } from "./category";
 import { COLUMN_SHOWN, type BoardColumnCell, type BoardColumnHead } from "./filter";
 
 /** Where a drag at height `y` would put its card: the first card whose middle lies below it; none: last. */
@@ -28,14 +31,21 @@ function Count({ count }: { count: number }) {
   );
 }
 
+/** A head's lozenge: its column's category in the flow, its served title; "Not in the flow" stranded's. */
+function headLook(head: BoardColumnHead, flow: CardFlow | undefined, t: Translate): LozengeLook {
+  return head.column === null ? outsideLook(t) : statusLook(flow, head.column);
+}
+
 /**
- * A column's head in the board's sticky header row: its title as stored and how many cards stand in
- * it across every lane. A filter or a lane never changes which heads stand, so none of them moves.
+ * A column's head in the board's sticky header row: its category's lozenge, its title as stored, and
+ * how many cards stand in it across every lane (docs/features/design-foundation.md "The Board"). A
+ * filter or a lane never changes which heads stand, so none of them moves.
  */
-export function BoardColumnHeader({ head, id, count }: { head: BoardColumnHead; id: string; count: number }) {
+export function BoardColumnHeader({ head, flow, id, count }: { head: BoardColumnHead; flow: CardFlow | undefined; id: string; count: number }) {
+  const t = useTranslate();
   return (
     <h2 id={id} className={head.column === null ? "board-column-title board-column-title-outside" : "board-column-title"} data-column-head={head.key}>
-      <bdi>{head.title}</bdi>
+      <Lozenge {...headLook(head, flow, t)} />
       <Count count={count} />
     </h2>
   );
@@ -50,6 +60,7 @@ export function BoardColumnHeader({ head, id, count }: { head: BoardColumnHead; 
  */
 export function BoardColumn({
   cell,
+  flow,
   labelledBy,
   collapsed,
   expanded,
@@ -63,6 +74,8 @@ export function BoardColumn({
   children,
 }: {
   cell: BoardColumnCell;
+  /** The board's flow: the cell's title is its column's lozenge where the columns stack. */
+  flow: CardFlow | undefined;
   /** Its column head's ID, then its lane's, if any. */
   labelledBy: string;
   /** Its lane is collapsed: the count stands, no card. */
@@ -108,7 +121,7 @@ export function BoardColumn({
   return (
     <section className={classes} aria-labelledby={labelledBy} data-lane={cell.key} data-cell-column={cell.column ?? ""} onDragOver={over} onDragLeave={left} onDrop={dropped}>
       <p className="board-cell-title" aria-hidden="true">
-        <bdi>{cell.title}</bdi>
+        <Lozenge {...headLook(cell, flow, t)} />
         <Count count={cell.count} />
       </p>
       {collapsed ? (

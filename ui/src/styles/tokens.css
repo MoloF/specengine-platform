@@ -1,72 +1,108 @@
 /*
- * SpecEngine design tokens: the only colour literals of the UI (`ui/README.md` "Screen rules").
- * Dark navy surfaces, blue-tinted greys, one azure accent; status colours are their own roles.
- * Contrast (WCAG 2.2 AA, checked by src/styles/tokens.test.ts): text primary, secondary and accent
- * at least 4.5:1 on every surface, primary also on the diff surfaces, on-accent on accent; focus
- * ring, control border and every status colour at least 3:1 on every surface; primary text on the
- * search highlight; the graph's edge and minimap colours, the flow's edge types and marks at least
- * 3:1 on every surface. Dark theme only.
+ * SpecEngine design tokens: the only colour literals of the UI (`ui/README.md` "Screen rules";
+ * docs/features/design-foundation.md "Data"). One block of roles, two themes: a colour role is
+ * `light-dark(<light>, <dark>)`, each side a literal or a `var()`; an alias of a role is a plain
+ * `var()` and follows its target per theme; a size has no theme. `color-scheme: light dark` lets the
+ * page follow the system's scheme, light when it states none; the Theme select pins one through
+ * `data-theme` on <html> (src/app/theme.ts). Neutral grey surfaces in both themes, one indigo accent,
+ * status colours their own roles. Contrast (WCAG 2.2 AA) is checked in both themes by
+ * src/styles/tokens.test.ts on the resolved values: text at least 4.5:1 on every surface, focus
+ * ring, control border and every status colour at least 3:1. The scale (type, space, radii,
+ * controls) is the guard's of src/styles/scale.test.ts; the legacy names stand as aliases until
+ * RM-0099.
  */
 :root {
-  color-scheme: dark;
+  color-scheme: light dark;
 
-  /* Surfaces, back to front. */
-  --surface-canvas: #0b1322;
-  --surface-panel: #111c30;
-  --surface-raised: #17253d;
-  --surface-overlay: #1d2d49;
-  --scrim: rgba(3, 8, 17, 0.72);
+  /* Surfaces, back to front. Sunken: board columns, wells, code; raised: tiles (with
+     --shadow-raised); overlay: dialogs and menus (with --shadow-overlay). */
+  --surface-canvas: light-dark(#ffffff, #1f1f21);
+  --surface-sunken: light-dark(#f8f8f8, #18191a);
+  --surface-panel: light-dark(#ffffff, #1f1f21);
+  --surface-raised: light-dark(#ffffff, #242528);
+  --surface-overlay: light-dark(#ffffff, #2b2c2f);
+  --surface-hovered: light-dark(#f0f1f2, #303134);
+  /* The nav's current item, a chosen row. */
+  --surface-selected: light-dark(#eef0ff, #2b2e4a);
+  --scrim: light-dark(rgba(5, 12, 31, 0.46), rgba(16, 18, 20, 0.6));
+  --shadow-key: light-dark(#1e1f2140, #03040480);
+  --shadow-ambient: light-dark(#1e1f214f, #0304047a);
+  --shadow-raised: 0 1px 1px var(--shadow-key), 0 0 1px var(--shadow-ambient);
+  --shadow-overlay: 0 8px 12px var(--shadow-key), 0 0 1px var(--shadow-ambient);
 
-  /* Lines and focus. */
-  --border-subtle: #22344f;
-  --border-control: #6c82a6;
-  --focus-ring: #9ccaff;
+  /* Lines and focus: a divider has no contrast duty, a control's border has. */
+  --border-subtle: light-dark(#dfe1e6, #3d3f43);
+  --border-control: light-dark(#7d818a, #8c8f97);
+  --focus-ring: light-dark(#4f46e5, #a5b4fc);
 
   /* Text. */
-  --text-primary: #e4ebf7;
-  --text-secondary: #a8b6cd;
-  --text-on-accent: #04101f;
+  --text-primary: light-dark(#292a2e, #cecfd2);
+  --text-secondary: light-dark(#505258, #a9abaf);
+  --text-subtlest: light-dark(#63666e, #96999e);
+  --text-on-accent: light-dark(#ffffff, #1f1f21);
 
-  /* The one accent. */
-  --accent: #72b2ff;
+  /* The one accent, SpecEngine's own indigo (W3): links, the primary button, the nav's current. */
+  --accent: light-dark(#4f46e5, #a5b4fc);
+  --accent-hovered: light-dark(#4338ca, #c7d2fe);
+
+  /* The bold fills of a warning and a danger button, with their text. */
+  --warning-bold: light-dark(#fbc828, #fbc828);
+  --text-on-warning: light-dark(#292a2e, #1f1f21);
+  --danger-bold: light-dark(#c9372c, #fd9891);
+  --text-on-danger: light-dark(#ffffff, #1f1f21);
+
+  /* A lozenge's six appearances (src/ui/Lozenge.tsx): each a surface and its text, a label and an
+     icon, never colour alone. Banner text (primary, secondary) reads on each surface too. */
+  --lozenge-neutral-surface: light-dark(#f0f1f2, #303134);
+  --lozenge-neutral-text: light-dark(#292a2e, #cecfd2);
+  --lozenge-information-surface: light-dark(#e9f2fe, #1c2b42);
+  --lozenge-information-text: light-dark(#1558bc, #8fb8f6);
+  --lozenge-success-surface: light-dark(#efffd6, #28311b);
+  --lozenge-success-text: light-dark(#4c6b1f, #b3df72);
+  --lozenge-warning-surface: light-dark(#fff5db, #3a2c1f);
+  --lozenge-warning-text: light-dark(#9e4c00, #fbc828);
+  --lozenge-danger-surface: light-dark(#ffeceb, #42221f);
+  --lozenge-danger-text: light-dark(#ae2e24, #fd9891);
+  --lozenge-discovery-surface: light-dark(#f8eefe, #35243f);
+  --lozenge-discovery-text: light-dark(#803fa5, #d8a0f7);
 
   /* Attention without a status: the "Mock data" indicator. */
-  --attention: #f2bb5c;
+  --attention: light-dark(#a54800, #f2bb5c);
 
   /* Severity: queue order, never a hold on work. */
-  --severity-high: #ff7d88;
-  --severity-normal: #f2bb5c;
-  --severity-low: #8fb3e0;
-  --severity-unknown: #a3acbd;
+  --severity-high: light-dark(#c9372c, #ff7d88);
+  --severity-normal: light-dark(#a54800, #f2bb5c);
+  --severity-low: light-dark(#3d6eb8, #8fb3e0);
+  --severity-unknown: light-dark(#6b6e76, #a3acbd);
 
   /* Proposal states (05 §3.3) and unknown. */
   --proposal-open: var(--accent);
-  --proposal-changes-requested: #f2bb5c;
-  --proposal-approved: #7fd4f0;
-  --proposal-applied: #4cc995;
-  --proposal-rejected: #ff7d88;
-  --proposal-deferred: #c2b0f5;
-  --proposal-superseded: #97a3b8;
+  --proposal-changes-requested: light-dark(#a54800, #f2bb5c);
+  --proposal-approved: light-dark(#1d7f8c, #7fd4f0);
+  --proposal-applied: light-dark(#1f845a, #4cc995);
+  --proposal-rejected: light-dark(#c9372c, #ff7d88);
+  --proposal-deferred: light-dark(#8f46c1, #c2b0f5);
+  --proposal-superseded: light-dark(#626f86, #97a3b8);
   --proposal-unknown: var(--severity-unknown);
 
   /* Task states (05 §3.3) and unknown. */
-  --task-draft: #97a3b8;
-  --task-analysis: #6fcbdc;
-  --task-review: #c2b0f5;
-  --task-changes-requested: #f2bb5c;
+  --task-draft: light-dark(#626f86, #97a3b8);
+  --task-analysis: light-dark(#20748f, #6fcbdc);
+  --task-review: light-dark(#8f46c1, #c2b0f5);
+  --task-changes-requested: light-dark(#a54800, #f2bb5c);
   --task-ready: var(--accent);
-  --task-in-progress: #8fc1ff;
-  --task-in-review: #d4a6ef;
-  --task-done: #4cc995;
-  --task-accepted: #7ad9b0;
-  --task-cancelled: #8e99ad;
+  --task-in-progress: light-dark(#1d6ce0, #8fc1ff);
+  --task-in-review: light-dark(#a33fa3, #d4a6ef);
+  --task-done: light-dark(#1f845a, #4cc995);
+  --task-accepted: light-dark(#216e4e, #7ad9b0);
+  --task-cancelled: light-dark(#707784, #8e99ad);
   --task-unknown: var(--severity-unknown);
 
   /* Run outcomes (task-package canon, "Caps") and unknown; none of them is a hold on work. */
   --run-completed: var(--sync-ok);
-  --run-partial: #f2bb5c;
-  --run-failed: #ff7d88;
-  --run-abandoned: #97a3b8;
+  --run-partial: light-dark(#a54800, #f2bb5c);
+  --run-failed: light-dark(#c9372c, #ff7d88);
+  --run-abandoned: light-dark(#626f86, #97a3b8);
   --run-unknown: var(--severity-unknown);
 
   /* A task's spec since approval: changed draws attention; unknown takes cannot-verify's colour,
@@ -76,14 +112,14 @@
   --stale-unknown: var(--sync-cannot-verify);
 
   /* Sync states (05, "Markers and the sync matrix"); cannot-verify has its own colour, never ok's. */
-  --sync-ok: #4cc995;
-  --sync-spec-ahead: #6fcbdc;
-  --sync-code-ahead: #f2bb5c;
-  --sync-conflict: #ff7d88;
-  --sync-broken-binding: #ff9a6b;
-  --sync-unbound: #a8b6cd;
-  --sync-predated: #f59ac2;
-  --sync-cannot-verify: #c2b0f5;
+  --sync-ok: light-dark(#1f845a, #4cc995);
+  --sync-spec-ahead: light-dark(#20748f, #6fcbdc);
+  --sync-code-ahead: light-dark(#a54800, #f2bb5c);
+  --sync-conflict: light-dark(#c9372c, #ff7d88);
+  --sync-broken-binding: light-dark(#c25100, #ff9a6b);
+  --sync-unbound: light-dark(#5d6470, #a8b6cd);
+  --sync-predated: light-dark(#ae4787, #f59ac2);
+  --sync-cannot-verify: light-dark(#8f46c1, #c2b0f5);
   /* A binding row's sync (docs/features/bundle-bindings.md): verify's other two states take
      existing roles (a bad marker a fix's, as Health's look-alike marker; unlocked a low check's);
      a row not judged and an unknown word are neutral, never ok's or cannot-verify's. */
@@ -146,13 +182,13 @@
   --roadmap-bar-track: var(--border-control);
 
   /* A search hit inside a snippet (with weight and an underline, never colour alone). */
-  --highlight-surface: #4a3a10;
+  --highlight-surface: light-dark(#fff7d6, #4a3a10);
   --highlight-line: var(--attention);
 
   /* The graph canvas (docs/features/ui-graph.md): edges, boxes, the minimap; styled by role and
      by a type's position, never by a type's name. Every --xy-* variable of React Flow's base.css
      takes one of these roles (app.css). */
-  --graph-edge: #7f93b5;
+  --graph-edge: light-dark(#6b7a99, #7f93b5);
   --graph-edge-emphasis: var(--accent);
   --graph-edge-width: 1.5;
   --graph-edge-width-emphasis: 2.75;
@@ -160,21 +196,21 @@
   --graph-box-border: 1px solid var(--border-control);
   --graph-box-border-selected: 2px solid var(--accent);
   --graph-minimap-surface: var(--surface-panel);
-  --graph-minimap-node: #62789e;
-  --graph-minimap-mask: rgba(3, 8, 17, 0.55);
+  --graph-minimap-node: light-dark(#808b9e, #7187ad);
+  --graph-minimap-mask: light-dark(rgba(9, 30, 66, 0.16), rgba(3, 4, 4, 0.55));
   --graph-minimap-stroke-width: 1;
   --graph-minimap-node-stroke-width: 0;
-  --graph-selection-surface: rgba(114, 178, 255, 0.12);
+  --graph-selection-surface: light-dark(rgba(79, 70, 229, 0.08), rgba(165, 180, 252, 0.12));
   --graph-selection-border: 1px dotted var(--accent);
 
   /* The Flow (docs/features/flow-canvas.md): an edge's colour goes by its type's place, never its
      name, and four are told apart by hue so a dash is never the only difference; none is a state
      colour's. A gap row stops nothing, so "found" draws attention and no alarm; a row that cannot be
      measured takes cannot-verify's own colour and icon, never None's. */
-  --flow-edge-0: #7fb8ff;
-  --flow-edge-1: #dfe6f2;
-  --flow-edge-2: #f0a6c8;
-  --flow-edge-3: #6fd6c4;
+  --flow-edge-0: light-dark(#2f6fc0, #7fb8ff);
+  --flow-edge-1: light-dark(#505258, #dfe6f2);
+  --flow-edge-2: light-dark(#b8457f, #f0a6c8);
+  --flow-edge-3: light-dark(#206a83, #6fd6c4);
   --flow-gap-none: var(--sync-ok);
   --flow-gap-found: var(--attention);
   --flow-gap-not-configured: var(--severity-low);
@@ -186,8 +222,8 @@
   --flow-repeat-width: 2.25;
 
   /* The Board (docs/features/board-ui.md): a closed card's two marks and a late one's, each a label
-     and an icon, none of them a hold on work; where a drag would land. A column is project
-     vocabulary and has no colour. */
+     and an icon, none of them a hold on work; where a drag would land. A column's status is its
+     category's lozenge (src/board/category.ts), derived from its place in the flow. */
   --card-accepted: var(--task-accepted);
   --card-cancelled: var(--task-cancelled);
   --card-overdue: var(--attention);
@@ -221,32 +257,98 @@
   --flow-canvas-min: 20rem;
 
   /* Section diffs. */
-  --diff-added-surface: #123628;
-  --diff-removed-surface: #3d1c25;
+  --diff-added-surface: light-dark(#dcfff1, #123628);
+  --diff-removed-surface: light-dark(#ffeceb, #3d1c25);
 
-  /* Space, shape, type, motion, layers, targets. */
-  --space-1: 0.25rem;
-  --space-2: 0.5rem;
-  --space-3: 0.75rem;
-  --space-4: 1rem;
-  --space-5: 1.5rem;
-  --space-6: 2rem;
-  --radius-s: 4px;
-  --radius-m: 8px;
-  --font-sans: system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Type: Inter bundled (src/styles/fonts.css), the system stack behind it, glyph by glyph. The
+     scale in rem, each size with its line height; weights 400 to 700. */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", "Noto Sans", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, "Noto Sans Mono", "Liberation Mono", monospace;
-  --font-size-s: 0.8125rem;
-  --font-size-m: 0.9375rem;
-  --font-size-l: 1.125rem;
-  --font-size-xl: 1.5rem;
-  --line-height-body: 1.5;
+  --font-size-small: 0.75rem;
+  --line-height-small: 1rem;
+  --font-size-body: 0.875rem;
+  --line-height-body: 1.25rem;
+  --font-size-document: 1rem;
+  --line-height-document: 1.5rem;
+  --font-size-heading-s: 1rem;
+  --line-height-heading-s: 1.25rem;
+  --font-size-heading-m: 1.25rem;
+  --line-height-heading-m: 1.5rem;
+  --font-size-heading-l: 1.5rem;
+  --line-height-heading-l: 1.75rem;
+  --font-size-code: 0.75rem;
+  --line-height-code: 1.25rem;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Space on an 8 px base. */
+  --space-025: 0.125rem;
+  --space-050: 0.25rem;
+  --space-075: 0.375rem;
+  --space-100: 0.5rem;
+  --space-150: 0.75rem;
+  --space-200: 1rem;
+  --space-250: 1.25rem;
+  --space-300: 1.5rem;
+  --space-400: 2rem;
+  --space-500: 2.5rem;
+  --space-600: 3rem;
+
+  /* Shape: small marks, lozenges and badges, buttons and fields, tiles and panels, dialogs, dots. */
+  --radius-xs: 2px;
+  --radius-s: 4px;
+  --radius-control: 6px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --radius-full: 999px;
+
+  /* Sizes: controls 32 px or 24 px compact, the 24 px target minimum, the one-line header. */
+  --control-height: 2rem;
+  --control-height-compact: 1.5rem;
+  --target-min: 24px;
+  --nav-height: 3rem;
+  --lozenge-height: 1.25rem;
+  --lozenge-max-width: 12.5rem;
+  --reading-width: 68ch;
+  --empty-state-width: 29rem;
+  /* The work item (src/ui/IssueView.tsx): a side column beside a main one; the dialogs' widths. */
+  --issue-side-width: 20.625rem;
+  --issue-main-min: 20rem;
+  --modal-width-s: 37.5rem;
+  --modal-width-m: 50rem;
+  --modal-width-l: 60.5rem;
+
+  /* The legacy names, aliases onto the scale until RM-0099 renames their uses: 13 px reads 14,
+     15 reads 16, 18 reads 20 (W10). */
+  --font-size-s: var(--font-size-body);
+  --font-size-m: var(--font-size-heading-s);
+  --font-size-l: var(--font-size-heading-m);
+  --font-size-xl: var(--font-size-heading-l);
   --line-height-tight: 1.25;
+  --space-1: var(--space-050);
+  --space-2: var(--space-100);
+  --space-3: var(--space-150);
+  --space-4: var(--space-200);
+  --space-5: var(--space-300);
+  --space-6: var(--space-400);
+
+  /* Motion and layers. */
   --duration-fast: 120ms;
   --duration-normal: 200ms;
   --duration-slow: 400ms;
   --z-header: 10;
   --z-dialog: 100;
-  --target-min: 24px;
+}
+
+/* The viewer's choice (src/app/theme.ts): with none, the system's scheme. */
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
 }
 
 @media (prefers-reduced-motion: reduce) {

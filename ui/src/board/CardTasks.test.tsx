@@ -39,12 +39,19 @@ function cardClient(card: Card, login: string | null = null): StubClient {
   return client;
 }
 
-/** The card's page, its Tasks part once read. */
+/** The work item's Development, folded until clicked (DF-7 of design-foundation). */
+async function expandDevelopment(scope: HTMLElement = document.body): Promise<HTMLElement> {
+  const development = await within(scope).findByRole("button", { name: /^Development \u00b7 / });
+  fireEvent.click(development);
+  return within(scope).getByRole("region", { name: "Tasks" });
+}
+
+/** The card's page, its Tasks part once read, under Development expanded. */
 async function page(card: Card = LINKED, login: string | null = null): Promise<{ client: StubClient; part: HTMLElement }> {
   const client = cardClient(card, login);
   renderApp(client, `#/alpha/board/${card.id}/page`);
   await screen.findByRole("heading", { level: 1, name: card.title });
-  return { client, part: await screen.findByRole("region", { name: "Tasks" }) };
+  return { client, part: await expandDevelopment() };
 }
 
 function rowOf(part: HTMLElement, id: string, nth = 0): HTMLElement {
@@ -85,12 +92,14 @@ function called(client: StubClient): string[] {
 }
 
 describe("the Tasks part stands in the modal and on the page (CT-5)", () => {
-  it("in the modal, right after Hand-offs, a row per link in link order", async () => {
+  // Replaced by DF-7 of design-foundation: the part is folded under the side column's Development.
+  it("in the modal, under the side column's Development, a row per link in link order once it is expanded", async () => {
     renderApp(cardClient(LINKED), "#/alpha/board/C-0001");
     const dialog = await screen.findByRole("dialog", { name: "Light the harbour" });
-    const part = await within(dialog).findByRole("region", { name: "Tasks" });
-    const parts = within(dialog).getAllByRole("region").map((region) => region.getAttribute("aria-label"));
-    expect(parts.slice(parts.indexOf("Hand-offs"), parts.indexOf("Hand-offs") + 2)).toEqual(["Hand-offs", "Tasks"]);
+    await within(dialog).findByRole("region", { name: "Hand-offs" });
+    expect(within(dialog).queryByRole("region", { name: "Tasks" })).toBeNull();
+    const part = await expandDevelopment(dialog);
+    expect(part.closest(".issue-view-side")).not.toBeNull();
     expect(within(part).getByRole("list", { name: "Tasks linked to C-0001" })).toBeTruthy();
     expect(Array.from(part.querySelectorAll("li[data-task]"), (row) => row.getAttribute("data-task"))).toEqual(["T-0001", "T-0002", "T-0003", "T-0004"]);
   });

@@ -1,6 +1,9 @@
 import type { CardAllowed, CardFlow, CardMove, CardRow, KnownTeamAct, TraceCard } from "../api/types";
 import type { Translate } from "../i18n";
 import type { Look } from "../ui/Badge";
+import type { IconName } from "../ui/Icon";
+import type { LozengeAppearance } from "../ui/Lozenge";
+import type { StatusCategory } from "./category";
 
 // The Board's words, one map (`docs/features/board-ui.md` "Rules and edge cases"), each from the
 // catalog's `board` group: columns, flows and disciplines are project vocabulary, shown as stored; an
@@ -246,4 +249,22 @@ export function columnTitle(flow: CardFlow | undefined, column: string): string 
 export function movesFrom(flow: CardFlow | undefined, column: string): CardAllowed[] {
   const listed: readonly CardMove[] = flow?.moves ?? [];
   return listed.filter((move) => move.from === column).map(({ to, by }) => ({ to, by }));
+}
+
+/**
+ * How each status category looks (docs/features/design-foundation.md "Status categories"): its
+ * lozenge's appearance and icon; the label is the column's served title (category.ts). Stranded and
+ * to do are neutral, never in progress's information blue; returned warns and done succeeds.
+ */
+const CATEGORY_MARKS: Readonly<Record<StatusCategory, { appearance: LozengeAppearance; icon: IconName }>> = {
+  stranded: { appearance: "neutral", icon: "unknown" },
+  done: { appearance: "success", icon: "taskAccepted" },
+  returned: { appearance: "warning", icon: "cardReturned" },
+  todo: { appearance: "neutral", icon: "open" },
+  doing: { appearance: "information", icon: "taskInProgress" },
+};
+
+/** A category's appearance and icon. */
+export function categoryMark(category: StatusCategory): { appearance: LozengeAppearance; icon: IconName } {
+  return CATEGORY_MARKS[category];
 }

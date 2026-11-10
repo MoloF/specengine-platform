@@ -5,19 +5,25 @@
 // chunk of their own, only under `?scenario=`: the daemon's page never fetches them. The catalog's
 // instance starts with the first import in English; a page starting in Russian renders nothing until
 // Russian's chunk lands or the wait runs out (docs/canon/ui-languages.md "Catalog"), so a local
-// daemon's page never flashes English.
+// daemon's page never flashes English. The viewer's theme is applied before the root is made, so the
+// first render is already in it (docs/features/design-foundation.md "Themes"); Inter's faces come
+// before the tokens that name it.
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import type { SpecEngineClient } from "./api/client";
 import { HttpClient } from "./api/http";
 import { App } from "./app/App";
+import { applyTheme, storedTheme } from "./app/theme";
 import { readyLanguage, useTranslate } from "./i18n";
 import { fill, slot } from "./i18n/fill";
 import { scenarioFromSearch } from "./mocks/scenario";
 // React Flow's structural styles only (base.css, never style.css); its colours come from tokens.css.
 import "@xyflow/react/dist/base.css";
+import "./styles/fonts.css";
 import "./styles/tokens.css";
 import "./styles/app.css";
+
+applyTheme(storedTheme());
 
 const search = window.location.search;
 const mocked = new URLSearchParams(search).has("scenario");

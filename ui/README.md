@@ -3,7 +3,7 @@ class: canon
 tier: 1
 scope: [ui]
 owner: owner
-reviewed: 2026-11-09
+reviewed: 2026-11-10
 ---
 
 # ui -- the web UI
@@ -25,18 +25,18 @@ A standalone pnpm project on strict TypeScript, no root `package.json`. Tests: V
 
 Every slice keeps these (UI tests, `ui_policy.rs`).
 
-- **Tokens**: `src/styles/tokens.css` holds every colour literal and the spacing, type, motion (0 if reduced), `--target-min: 24px` and the screens' tokens; dark only. WCAG 2.2 AA: text >= 4.5:1; focus ring, control border, statuses >= 3:1; `cannot-verify` its own colour and icon.
+- **Tokens**: `src/styles/tokens.css` holds every colour literal, light and dark `light-dark()` roles, the size scales, motion (0 if reduced); no raw size elsewhere; views build from `src/ui/` (`ui-design.md`). WCAG 2.2 AA in both themes: text >= 4.5:1; focus ring, control border, statuses >= 3:1; `cannot-verify` its own colour and icon.
 - **Status** never by colour alone: label and icon. An unknown value: a neutral badge, the raw text, sorted last; `kind`, `contour`, `role`, `profile`, spec statuses, link types (but `mentions`), workspace and module names stay `string` (ADR-0031), never quoted outside `src/mocks/` and tests, but `edge.kind` in `src/flow/`. Rollups, stages, marks: `labels.ts` alone, `src/trace/`'s too.
 - **States**: loading: a skeleton, `aria-busy`; empty: the meaning, the next step; error: the daemon's message verbatim, Retry. Live regions (polite for results, assertive for a 409) sit outside any inert subtree.
 - **Dialogs** in-app (`role="dialog"`, `aria-modal`, focus trap, Esc but mid-IME, focus back to the trigger; a scrim click closes only the palette and a card's modal; no `alert`, `confirm`, `prompt`, `showModal`). A submit is one call; while pending no dialog closes or opens; a refusal keeps the dialog, the typed text and a `role="alert"`; a proposal revised meanwhile shows as changed, to submit again.
-- **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4), letters by `letterOf`; `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, no other on `document` or `window` for keys (`focusManager` is for focus). Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never on `body` nor under a sticky bar (scroll padding).
+- **Keyboard**: hotkeys act only with focus in their region, outside text fields, unmodified (WCAG 2.1.4), letters by `letterOf`; `?` lists them. Cmd-K or Ctrl-K opens the palette anywhere: the shell's `document` keydown listener, the only key listener on `document` or `window`. Skip link, landmarks, one `h1` per view, a `:focus-visible` ring; focus never on `body` nor under a sticky bar (scroll padding).
 - **Text**: chrome from `src/i18n/` (`ui-languages.md`); data is text, no HTML sink, a proposal's login escaped (`ProposalCard`), each `href` from `routes.ts`; wraps (`overflow-wrap: anywhere`); anything cut is seen whole; filters compare `normalize("NFC").toLowerCase()`; no "block" wording (ADR-0012), `blocked` only as `spec check`'s verdict: the `KnownCheckVerdict` line, mocks, tests; shown "Fails the check". Prose renders as markdown only via `src/markdown/` (ADR-0036): raw HTML as text, an anchor only where the links read resolved one.
 - **Canvas** (`@xyflow/react`, lazy, a hand-written layout): read-only, key options `null`, the wheel scrolls the page; Flow's pans, zooms by key; `base.css` only, each `--xy-*` from a token; a List holds the answer as text; attribution hidden, credited as text.
-- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: home; Flow: `spec-flow-place.md`; card page `#/<p>/board/<C>/page`), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), but the Tree's Show drift, `specengine.{board.as,board.lanes.<p>,workspace.<p>,module.<p>,language}` in `localStorage`; a root error boundary, one per view.
+- **Shell**: hash routes `#/<project>[/<section>[/<id>]]` (bare: home; Flow: `spec-flow-place.md`; card page `#/<p>/board/<C>/page`), nine sections, routed whatever the nav lists (`workspaces.md`); "Mock data" on every route while the mock serves; per-project screen state in the Shell (Questions: `round-ui.md`), but the Tree's Show drift, `specengine.{board.as,board.lanes.<p>,workspace.<p>,module.<p>,language,theme}` in `localStorage`; a root error boundary, one per view.
 
 ## Dependencies
 
-The owner's allowlist: the 19 below (2026-10-05; the last four ADR-0036, ADR-0072). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree.
+The owner's allowlist: the 19 below (2026-10-05; the last four ADR-0036, ADR-0072). `package.json` (both lists) names exactly the table's, at its versions; `packageManager` `pnpm@10.28.2`; `ui_policy.rs` checks these and the lockfile agree. Inter 4.001 (OFL-1.1) is files, no package: `ui/fonts/inter/` (the owner, 2026-11-10).
 
 | Package | Version | Role |
 |---|---|---|
@@ -62,7 +62,7 @@ The owner's allowlist: the 19 below (2026-10-05; the last four ADR-0036, ADR-007
 
 **Held back.** TypeScript 7 (outside `typescript-eslint`'s peers), jsdom 30 (Node >= 24.15, here 24.14).
 
-**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches too, is an owner decision recorded here. Install scripts stay off (pnpm's default): no `onlyBuiltDependencies`, no `pnpm approve-builds`.
+**Pinned-versions policy.** Exact `x.y.z` only: no range, tag, URL, `file:`, `link:` or alias. Pins are at least 7 days old (`pnpm-workspace.yaml` `minimumReleaseAge: 10080`). `.npmrc`: `save-exact=true`, `strict-peer-dependencies=true`, the default isolated linker (never `node-linker=hoisted` or `shamefully-hoist`). `pnpm-lock.yaml` is committed, installed only frozen. Any change, security patches too, is an owner decision recorded here. Install scripts stay off: no `onlyBuiltDependencies` or `pnpm approve-builds`.
 
 ## Gates
 
@@ -85,8 +85,8 @@ From the root: the docs gate (`CLAUDE.md` "Documentation") and `cargo nextest ru
 
 ## Owner's manual steps
 
-1. `pnpm --dir ui install --frozen-lockfile` per lockfile change, `pnpm --dir ui build`, install `specengine-http`: `spec serve` alone serves the UI (`serve-ui.md`).
-2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`. Never `pnpm dev --host` with the daemon up. The mock: `?scenario=<name>` before the `#`, names and projects in `src/mocks/scenario.ts`.
+1. Build and install: `serve-ui.md` "Build order"; `spec serve` alone serves the UI.
+2. UI work: `spec serve`, then `pnpm --dir ui dev`; open the printed `http://127.0.0.1:5173/`, not `localhost`; never `--host` with the daemon up. The mock: `?scenario=<name>` before the `#` (`src/mocks/scenario.ts`).
 
 ## Roles here
 

@@ -617,7 +617,6 @@ function Canvas({ layout, types, inLane, selected, selectedEdge, marked, named, 
         proOptions={{ hideAttribution: true }}
         ariaLabelConfig={labels}
         defaultMarkerColor={null}
-        colorMode="dark"
         minZoom={0.1}
         maxZoom={2}
         onMoveStart={(event) => {

@@ -1,10 +1,22 @@
 import { describe, expect, it } from "vitest";
+import indexHtml from "../../index.html?raw";
 import appCss from "./app.css?raw";
 import tokensCss from "./tokens.css?raw";
 
-// AC-09 and AC-10 of docs/features/ui-shell.md: the contrast pairs (WCAG 2.2 AA) of
-// `ui/README.md` "Screen rules" on the resolved values, cannot-verify never ok's colour, the focus
-// ring, reduced motion.
+// DF-9 and DF-12 of docs/features/design-foundation.md ("Data", "Contrast matrix", "Theme choice"),
+// with AC-09 and AC-10 of docs/features/ui-shell.md: one block of roles, a colour role written once
+// as `light-dark(<light>, <dark>)`, each side resolved per theme through its aliases; the matrix's
+// pairs (WCAG 2.2 AA) in the light and the dark theme; today's distinctness checks per theme
+// (cannot-verify never ok's colour, row 4's nine states, the four flow edges, the trace states);
+// the theme's `color-scheme`; the focus ring and reduced motion.
+
+type Theme = "light" | "dark";
+const THEMES: readonly Theme[] = ["light", "dark"];
+
+/** The text with its comments blanked, so a comment's words never read as a declaration. */
+function uncommented(css: string): string {
+  return css.replace(/\/\*[\s\S]*?\*\//g, "");
+}
 
 function declarations(block: string): Map<string, string> {
   const found = new Map<string, string>();
@@ -17,24 +29,57 @@ function declarations(block: string): Map<string, string> {
   return found;
 }
 
-const rootBlock = /:root\s*\{([^}]*)\}/.exec(tokensCss)?.[1] ?? "";
-const motionBlock =
-  /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*:root\s*\{([^}]*)\}/.exec(tokensCss)?.[1] ?? "";
+const plainTokens = uncommented(tokensCss);
+const rootBlock = /(^|\n):root\s*\{([^}]*)\}/.exec(plainTokens)?.[2] ?? "";
+const motionBlock = /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*:root\s*\{([^}]*)\}/.exec(plainTokens)?.[1] ?? "";
 const tokens = declarations(rootBlock);
 
-function resolve(name: string, seen: string[] = []): string {
+/** A value's arguments split at its top-level commas: a `light-dark()` whose light side holds commas of its own still gives two. */
+function topLevelArguments(inner: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let at = 0; at < inner.length; at += 1) {
+    const char = inner[at];
+    if (char === "(") {
+      depth += 1;
+    } else if (char === ")") {
+      depth -= 1;
+    } else if (char === "," && depth === 0) {
+      parts.push(inner.slice(start, at).trim());
+      start = at + 1;
+    }
+  }
+  parts.push(inner.slice(start).trim());
+  return parts;
+}
+
+/** A `light-dark(L, D)` value's two sides, or null for any other value. */
+function sidesOf(value: string): [string, string] | null {
+  const inner = /^light-dark\(([\s\S]*)\)$/.exec(value)?.[1];
+  if (inner === undefined) {
+    return null;
+  }
+  const parts = topLevelArguments(inner);
+  return parts.length === 2 ? [parts[0] ?? "", parts[1] ?? ""] : null;
+}
+
+/** A role's value in a theme, through `light-dark()` and its aliases. */
+function resolve(name: string, theme: Theme, seen: string[] = []): string {
   const value = tokens.get(name);
   if (value === undefined) {
     throw new Error(`${name} is not defined in tokens.css`);
   }
-  const alias = /^var\((--[a-z0-9-]+)\)$/.exec(value)?.[1];
+  const sides = sidesOf(value);
+  const own = sides === null ? value : theme === "light" ? sides[0] : sides[1];
+  const alias = /^var\((--[a-z0-9-]+)\)$/.exec(own)?.[1];
   if (alias === undefined) {
-    return value;
+    return own.toLowerCase();
   }
   if (seen.includes(alias)) {
     throw new Error(`alias cycle through ${alias}`);
   }
-  return resolve(alias, [...seen, name]);
+  return resolve(alias, theme, [...seen, name]);
 }
 
 function luminance(hex: string): number {
@@ -49,26 +94,22 @@ function luminance(hex: string): number {
   return 0.2126 * (r ?? 0) + 0.7152 * (g ?? 0) + 0.0722 * (b ?? 0);
 }
 
-function contrast(a: string, b: string): number {
-  const [light, dark] = [luminance(resolve(a)), luminance(resolve(b))].sort((x, y) => y - x);
+function contrast(a: string, b: string, theme: Theme): number {
+  const [light, dark] = [luminance(resolve(a, theme)), luminance(resolve(b, theme))].sort((x, y) => y - x);
   return ((light ?? 0) + 0.05) / ((dark ?? 0) + 0.05);
 }
 
-const SURFACES = ["--surface-canvas", "--surface-panel", "--surface-raised", "--surface-overlay"];
+/** The five surfaces every status colour reads on. */
+const SURFACES = ["--surface-canvas", "--surface-sunken", "--surface-panel", "--surface-raised", "--surface-overlay"];
+/** The surfaces text reads on: the five, a hovered row and a chosen one ("Surfaces*" of the matrix). */
+const TEXT_SURFACES = [...SURFACES, "--surface-hovered", "--surface-selected"];
+const APPEARANCES = ["neutral", "information", "success", "warning", "danger", "discovery"];
+const LOZENGE_SURFACES = APPEARANCES.map((appearance) => `--lozenge-${appearance}-surface`);
+/** The roles that take an alpha channel, excepted by name from the six-digit rule. */
+const ALPHA_ROLES = ["--scrim", "--shadow-key", "--shadow-ambient", "--graph-minimap-mask", "--graph-selection-surface"];
+
 const PROPOSAL = ["open", "changes-requested", "approved", "applied", "rejected", "deferred", "superseded", "unknown"];
-const TASK = [
-  "draft",
-  "analysis",
-  "review",
-  "changes-requested",
-  "ready",
-  "in-progress",
-  "in-review",
-  "done",
-  "accepted",
-  "cancelled",
-  "unknown",
-];
+const TASK = ["draft", "analysis", "review", "changes-requested", "ready", "in-progress", "in-review", "done", "accepted", "cancelled", "unknown"];
 const SYNC = [
   "ok",
   "spec-ahead",
@@ -132,31 +173,74 @@ const STATUS = [
   "--graph-minimap-node",
 ];
 
-const pairs: [string, string, number][] = [
-  ...["--text-primary", "--text-secondary", "--accent"].flatMap((text) =>
-    SURFACES.map((surface): [string, string, number] => [text, surface, 4.5]),
-  ),
-  ["--text-primary", "--diff-added-surface", 4.5],
-  ["--text-primary", "--diff-removed-surface", 4.5],
-  ["--text-primary", "--highlight-surface", 4.5],
+/** "Data", "Contrast matrix": each foreground on each background, at its minimum. */
+const MATRIX: [string, string, number][] = [
+  ...["--text-primary", "--text-secondary", "--text-subtlest", "--accent"].flatMap((text) => TEXT_SURFACES.map((surface): [string, string, number] => [text, surface, 4.5])),
   ["--text-on-accent", "--accent", 4.5],
-  ...["--focus-ring", "--border-control", ...STATUS].flatMap((token) =>
-    SURFACES.map((surface): [string, string, number] => [token, surface, 3]),
-  ),
+  ["--text-on-accent", "--accent-hovered", 4.5],
+  ["--text-on-warning", "--warning-bold", 4.5],
+  ["--text-on-danger", "--danger-bold", 4.5],
+  ...APPEARANCES.map((appearance): [string, string, number] => [`--lozenge-${appearance}-text`, `--lozenge-${appearance}-surface`, 4.5]),
+  ...["--text-primary", "--text-secondary"].flatMap((text) => LOZENGE_SURFACES.map((surface): [string, string, number] => [text, surface, 4.5])),
+  ...["--diff-added-surface", "--diff-removed-surface", "--highlight-surface"].map((surface): [string, string, number] => ["--text-primary", surface, 4.5]),
+  ...["--focus-ring", "--border-control"].flatMap((token) => TEXT_SURFACES.map((surface): [string, string, number] => [token, surface, 3])),
+  ...STATUS.flatMap((token) => SURFACES.map((surface): [string, string, number] => [token, surface, 3])),
 ];
 
-describe("tokens.css (AC-09)", () => {
-  it("defines every role of the slice", () => {
+const PAIRS: [Theme, string, string, number][] = THEMES.flatMap((theme) => MATRIX.map(([foreground, background, minimum]): [Theme, string, string, number] => [theme, foreground, background, minimum]));
+
+const HEX6 = /^#[0-9a-f]{6}$/i;
+const ALIAS = /^var\(--[a-z0-9-]+\)$/;
+const COLOUR_LITERAL = /#[0-9a-f]{3,8}\b|\b(rgb|rgba|hsl|hsla|oklch|color-mix)\(/i;
+
+describe("tokens.css: one block of roles, two themes (DF-9)", () => {
+  it("writes every role holding a colour literal as light-dark(L, D), each side a six-digit hex or a var(); the alpha roles by name", () => {
+    const literal = [...tokens].filter(([, value]) => COLOUR_LITERAL.test(value));
+    expect(literal.length).toBeGreaterThan(70);
+    const wrong: string[] = [];
+    for (const [name, value] of literal) {
+      const sides = sidesOf(value);
+      const sideOk = (side: string) => HEX6.test(side) || ALIAS.test(side) || (ALPHA_ROLES.includes(name) && (/^#[0-9a-f]{8}$/i.test(side) || /^rgba\([^()]*\)$/.test(side)));
+      if (sides === null || !sides.every(sideOk)) {
+        wrong.push(`${name}: ${value}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+    // Each alpha role is one: excepted only where it holds alpha.
+    for (const name of ALPHA_ROLES) {
+      expect([name, sidesOf(tokens.get(name) ?? "") !== null]).toEqual([name, true]);
+    }
+  });
+
+  it("declares light-dark( in tokens.css alone", () => {
+    const sheets = import.meta.glob<string>("/src/**/*.css", { query: "?raw", import: "default", eager: true });
+    expect(Object.keys(sheets)).toEqual(expect.arrayContaining(["/src/styles/app.css", "/src/styles/fonts.css", "/src/styles/tokens.css"]));
+    const others = Object.entries(sheets).filter(([path, text]) => path !== "/src/styles/tokens.css" && text.includes("light-dark("));
+    expect(others.map(([path]) => path)).toEqual([]);
+  });
+
+  it("defines every role, the slice's new ones too", () => {
     const required = [
-      ...SURFACES,
+      ...TEXT_SURFACES,
       "--border-subtle",
       "--border-control",
       "--focus-ring",
       "--text-primary",
       "--text-secondary",
+      "--text-subtlest",
       "--text-on-accent",
       "--accent",
+      "--accent-hovered",
+      "--warning-bold",
+      "--text-on-warning",
+      "--danger-bold",
+      "--text-on-danger",
+      ...APPEARANCES.flatMap((appearance) => [`--lozenge-${appearance}-surface`, `--lozenge-${appearance}-text`]),
       "--scrim",
+      "--shadow-key",
+      "--shadow-ambient",
+      "--shadow-raised",
+      "--shadow-overlay",
       ...STATUS,
       "--diff-added-surface",
       "--diff-removed-surface",
@@ -177,94 +261,145 @@ describe("tokens.css (AC-09)", () => {
     ];
     expect(required.filter((name) => !tokens.has(name))).toEqual([]);
     expect(tokens.get("--target-min")).toBe("24px");
+    expect(tokens.get("--shadow-raised")).toBe("0 1px 1px var(--shadow-key), 0 0 1px var(--shadow-ambient)");
+    expect(tokens.get("--shadow-overlay")).toBe("0 8px 12px var(--shadow-key), 0 0 1px var(--shadow-ambient)");
   });
 
-  it.each(pairs)("%s on %s reaches %f:1", (foreground, background, minimum) => {
-    expect(contrast(foreground, background)).toBeGreaterThanOrEqual(minimum);
+  it.each(PAIRS)("%s: %s on %s reaches %f:1", (theme, foreground, background, minimum) => {
+    expect(contrast(foreground, background, theme)).toBeGreaterThanOrEqual(minimum);
   });
+
+  it("tells the accent from an in-progress lozenge's information blue, in both themes (W3)", () => {
+    for (const theme of THEMES) {
+      expect([theme, resolve("--accent", theme) === resolve("--lozenge-information-text", theme)]).toEqual([theme, false]);
+    }
+  });
+});
+
+describe("the theme's colour scheme (DF-12)", () => {
+  it("lets the page follow the system in :root, and pins light and dark under data-theme", () => {
+    expect(/color-scheme:\s*([^;]+);/.exec(rootBlock)?.[1]?.trim()).toBe("light dark");
+    expect(/:root\[data-theme="light"\]\s*\{\s*color-scheme:\s*light;\s*\}/.test(plainTokens)).toBe(true);
+    expect(/:root\[data-theme="dark"\]\s*\{\s*color-scheme:\s*dark;\s*\}/.test(plainTokens)).toBe(true);
+  });
+
+  it("names both schemes in index.html's meta, so the page before the entry module follows the system", () => {
+    expect(/<meta name="color-scheme" content="light dark" \/>/.test(indexHtml)).toBe(true);
+  });
+});
+
+describe.each(THEMES)("today's distinctness in the %s theme (AC-09)", (theme) => {
+  const shade = (name: string) => resolve(name, theme);
 
   it("never gives an unchecked or skipped link a resolved link's colour", () => {
-    const resolved = resolve("--link-resolved").toLowerCase();
+    const resolved = shade("--link-resolved");
     for (const state of ["unchecked", "skipped", "dangling", "unknown"]) {
-      expect(resolve(`--link-${state}`).toLowerCase()).not.toBe(resolved);
+      expect(shade(`--link-${state}`)).not.toBe(resolved);
     }
   });
 
   it("never gives a task's unknown staleness the unchanged colour, nor a run's unknown outcome a completed one's", () => {
-    expect(resolve("--stale-unknown").toLowerCase()).not.toBe(resolve("--stale-unchanged").toLowerCase());
-    expect(resolve("--stale-unknown").toLowerCase()).toBe(resolve("--sync-cannot-verify").toLowerCase());
-    expect(resolve("--stale-changed").toLowerCase()).not.toBe(resolve("--stale-unchanged").toLowerCase());
-    expect(resolve("--run-unknown").toLowerCase()).not.toBe(resolve("--run-completed").toLowerCase());
+    expect(shade("--stale-unknown")).not.toBe(shade("--stale-unchanged"));
+    expect(shade("--stale-unknown")).toBe(shade("--sync-cannot-verify"));
+    expect(shade("--stale-changed")).not.toBe(shade("--stale-unchanged"));
+    expect(shade("--run-unknown")).not.toBe(shade("--run-completed"));
   });
 
   it("draws a check that could not vouch for the corpus in cannot-verify's colour, never clean's or another verdict's (AC-03 of ui-health)", () => {
-    const own = resolve("--check-cannot-check").toLowerCase();
-    expect(own).toBe(resolve("--sync-cannot-verify").toLowerCase());
+    const own = shade("--check-cannot-check");
+    expect(own).toBe(shade("--sync-cannot-verify"));
     for (const verdict of CHECK.filter((value) => value !== "cannot-check")) {
-      expect([verdict, resolve(`--check-${verdict}`).toLowerCase() === own]).toEqual([verdict, false]);
+      expect([verdict, shade(`--check-${verdict}`) === own]).toEqual([verdict, false]);
     }
-    expect(resolve("--check-clean").toLowerCase()).not.toBe(resolve("--check-fails").toLowerCase());
+    expect(shade("--check-clean")).not.toBe(shade("--check-fails"));
   });
 
   it("draws a marker that cannot be verified in cannot-verify's colour, and no reason a marker binds not in ok's (health-code-ui)", () => {
-    expect(resolve("--unbound-cannot-verify").toLowerCase()).toBe(resolve("--sync-cannot-verify").toLowerCase());
+    expect(shade("--unbound-cannot-verify")).toBe(shade("--sync-cannot-verify"));
     for (const reason of UNBOUND) {
-      expect([reason, resolve(`--unbound-${reason}`).toLowerCase() === resolve("--sync-ok").toLowerCase()]).toEqual([reason, false]);
+      expect([reason, shade(`--unbound-${reason}`) === shade("--sync-ok")]).toEqual([reason, false]);
     }
-    const unknown = resolve("--assumed-unknown").toLowerCase();
+    const unknown = shade("--assumed-unknown");
     for (const state of ASSUMED.filter((value) => value !== "unknown")) {
-      expect([state, resolve(`--assumed-${state}`).toLowerCase() === unknown]).toEqual([state, false]);
+      expect([state, shade(`--assumed-${state}`) === unknown]).toEqual([state, false]);
     }
   });
 
   it("gives row 4's nine states nine colours, each at least 3:1 on every surface: otherwise never rejected's (UI-8 of health-ui-follow-up)", () => {
     expect(ASSUMED).toHaveLength(9);
-    const colours = ASSUMED.map((state) => resolve(`--assumed-${state}`).toLowerCase());
+    const colours = ASSUMED.map((state) => shade(`--assumed-${state}`));
     expect(new Set(colours).size).toBe(ASSUMED.length);
-    expect(resolve("--assumed-otherwise").toLowerCase()).not.toBe(resolve("--assumed-rejected").toLowerCase());
+    expect(shade("--assumed-otherwise")).not.toBe(shade("--assumed-rejected"));
     for (const state of ASSUMED) {
       for (const surface of SURFACES) {
-        expect([state, surface, contrast(`--assumed-${state}`, surface) >= 3]).toEqual([state, surface, true]);
+        expect([state, surface, contrast(`--assumed-${state}`, surface, theme) >= 3]).toEqual([state, surface, true]);
       }
     }
   });
 
   it("gives the Roadmap's five marks five colours, each at least 3:1 on every surface, the item status a neutral one (roadmap-screen)", () => {
-    const marks = ["current", "cut", "cycle", "waits", "unestimated"].map((mark) => resolve(`--roadmap-${mark}`).toLowerCase());
+    const marks = ["current", "cut", "cycle", "waits", "unestimated"].map((mark) => shade(`--roadmap-${mark}`));
     expect(new Set(marks).size).toBe(5);
-    expect(resolve("--roadmap-status").toLowerCase()).toBe(resolve("--severity-unknown").toLowerCase());
+    expect(shade("--roadmap-status")).toBe(shade("--severity-unknown"));
     for (const role of ROADMAP) {
       for (const surface of SURFACES) {
-        expect([role, surface, contrast(`--roadmap-${role}`, surface) >= 3]).toEqual([role, surface, true]);
+        expect([role, surface, contrast(`--roadmap-${role}`, surface, theme) >= 3]).toEqual([role, surface, true]);
       }
     }
   });
 
   it("gives the flow's edge types four colours, each at least 3:1 on every surface, none a state's (AC-06 of flow-canvas)", () => {
-    const colours = FLOW_EDGE.map((value) => resolve(`--flow-edge-${value}`).toLowerCase());
+    const colours = FLOW_EDGE.map((value) => shade(`--flow-edge-${value}`));
     expect(new Set(colours).size).toBe(4);
     for (const value of FLOW_EDGE) {
       for (const surface of [...SURFACES, "--flow-box-surface"]) {
-        expect([value, surface, contrast(`--flow-edge-${value}`, surface) >= 3]).toEqual([value, surface, true]);
+        expect([value, surface, contrast(`--flow-edge-${value}`, surface, theme) >= 3]).toEqual([value, surface, true]);
       }
     }
-    const states = ["--sync-ok", "--sync-conflict", "--sync-cannot-verify", "--attention"].map((name) => resolve(name).toLowerCase());
+    const states = ["--sync-ok", "--sync-conflict", "--sync-cannot-verify", "--attention"].map(shade);
     expect(colours.filter((colour) => states.includes(colour))).toEqual([]);
   });
 
   it("gives each state of a node its own colour, at least 3:1 on the Flow's and the panels' surfaces, none a sync colour of a check that passed or cannot verify (trace-views)", () => {
-    const states = TRACE.filter((state) => state !== "unknown").map((state) => resolve(`--trace-${state}`).toLowerCase());
+    const states = TRACE.filter((state) => state !== "unknown").map((state) => shade(`--trace-${state}`));
     expect(new Set(states).size).toBe(states.length);
-    expect(states).not.toContain(resolve("--sync-ok").toLowerCase());
-    expect(states).not.toContain(resolve("--sync-cannot-verify").toLowerCase());
+    expect(states).not.toContain(shade("--sync-ok"));
+    expect(states).not.toContain(shade("--sync-cannot-verify"));
     for (const state of TRACE) {
       for (const surface of [...SURFACES, "--flow-box-surface"]) {
-        expect([state, surface, contrast(`--trace-${state}`, surface) >= 3]).toEqual([state, surface, true]);
+        expect([state, surface, contrast(`--trace-${state}`, surface, theme) >= 3]).toEqual([state, surface, true]);
       }
     }
   });
 
-  it("gives a tone class to every state of a node, an unknown word dashed (trace-views)", () => {
+  it("keeps a gap row that cannot be measured off None's colour, and None's off cannot-verify's (AC-08 of flow-canvas)", () => {
+    expect(shade("--flow-gap-none")).not.toBe(shade("--sync-cannot-verify"));
+    for (const state of FLOW_GAP.filter((value) => value !== "none")) {
+      expect([state, shade(`--flow-gap-${state}`) === shade("--flow-gap-none")]).toEqual([state, false]);
+    }
+    expect(contrast("--text-primary", "--flow-box-surface", theme)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast("--text-secondary", "--flow-box-surface", theme)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("never gives a binding row ok's colour unless it is in sync, nor one not judged cannot-verify's (bundle-bindings)", () => {
+    const ok = shade("--sync-ok");
+    for (const state of SYNC.filter((value) => value !== "ok")) {
+      expect([state, shade(`--sync-${state}`) === ok]).toEqual([state, false]);
+    }
+    expect(shade("--sync-not-judged")).not.toBe(shade("--sync-cannot-verify"));
+    expect(shade("--sync-not-judged")).toBe(shade("--severity-unknown"));
+  });
+
+  it("gives cannot-verify its own colour, never ok's or another sync state's", () => {
+    const own = shade("--sync-cannot-verify");
+    for (const state of SYNC.filter((value) => value !== "cannot-verify")) {
+      expect(shade(`--sync-${state}`)).not.toBe(own);
+    }
+  });
+});
+
+describe("the Board's and the trace's tones (trace-views)", () => {
+  it("gives a tone class to every state of a node, an unknown word dashed", () => {
     for (const state of TRACE) {
       expect(appCss).toContain(`.tone-trace-${state} { --badge-color: var(--trace-${state}); }`);
     }
@@ -276,33 +411,6 @@ describe("tokens.css (AC-09)", () => {
     expect(tokens.has("--flow-dimmed")).toBe(false);
     // No frame is drawn: a group is entered, never opened in place (D1).
     expect([...tokens.keys()].filter((name) => name.startsWith("--flow-frame"))).toEqual([]);
-  });
-
-  it("keeps a gap row that cannot be measured off None's colour, and None's off cannot-verify's (AC-08 of flow-canvas)", () => {
-    expect(resolve("--flow-gap-none").toLowerCase()).not.toBe(resolve("--sync-cannot-verify").toLowerCase());
-    for (const state of FLOW_GAP.filter((value) => value !== "none")) {
-      expect([state, resolve(`--flow-gap-${state}`).toLowerCase() === resolve("--flow-gap-none").toLowerCase()]).toEqual([state, false]);
-    }
-    for (const surface of ["--flow-box-surface"]) {
-      expect(contrast("--text-primary", surface)).toBeGreaterThanOrEqual(4.5);
-      expect(contrast("--text-secondary", surface)).toBeGreaterThanOrEqual(4.5);
-    }
-  });
-
-  it("never gives a binding row ok's colour unless it is in sync, nor one not judged cannot-verify's (bundle-bindings)", () => {
-    const ok = resolve("--sync-ok").toLowerCase();
-    for (const state of SYNC.filter((value) => value !== "ok")) {
-      expect([state, resolve(`--sync-${state}`).toLowerCase() === ok]).toEqual([state, false]);
-    }
-    expect(resolve("--sync-not-judged").toLowerCase()).not.toBe(resolve("--sync-cannot-verify").toLowerCase());
-    expect(resolve("--sync-not-judged").toLowerCase()).toBe(resolve("--severity-unknown").toLowerCase());
-  });
-
-  it("gives cannot-verify its own colour, never ok's or another sync state's", () => {
-    const own = resolve("--sync-cannot-verify").toLowerCase();
-    for (const state of SYNC.filter((value) => value !== "cannot-verify")) {
-      expect(resolve(`--sync-${state}`).toLowerCase()).not.toBe(own);
-    }
   });
 });
 

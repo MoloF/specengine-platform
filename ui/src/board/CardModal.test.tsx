@@ -5,6 +5,7 @@ import type { Card, CardList } from "../api/types";
 import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
+import { statusLook } from "./category";
 import { recallLaneMode } from "./swimlanes";
 
 // BH-3, BH-4, BH-7 and BH-16 of board-handoff: a card opens as a modal dialog over a board that holds
@@ -308,27 +309,40 @@ describe("links inside the modal (BH-7)", () => {
 });
 
 describe("the parent's hand-offs (BH-16)", () => {
-  it("lists each child with ID, title, <flow>/<column>, assignee and word; a cancelled one left out, an unserved flow's with no word", async () => {
+  // Replaced by DF-5 of design-foundation: the raw `<flow>/<column>` leaves the row for the flow's name
+  // and the child's status lozenge, the look `statusLook` gives; an unserved flow's child is stranded.
+  it("lists each child with ID, title, its flow's name and status lozenge, assignee and word; a cancelled one left out, an unserved flow's stranded with no word", async () => {
     await board(boardClient(LIST, CARDS), "#/alpha/board/C-0001");
     const dialog = await screen.findByRole("dialog", { name: "The parent" });
     const items = within(await within(dialog).findByRole("region", { name: "Hand-offs" })).getAllByRole("listitem");
     expect(items.map((item) => item.textContent)).toEqual([
-      "C-0003A plateplates/todoUnassignedHanded off",
-      "C-0004Sent backplates/doingNoor AinsleyReturned",
-      "C-0005In workplates/checkUnassignedTaken",
-      "C-0006Done oneplates/closedUnassignedAccepted",
-      "C-0008Elsewheregone/xUnassigned",
+      "C-0003A plateplatesTo doUnassignedHanded off",
+      "C-0004Sent backplatesDoingNoor AinsleyReturned",
+      "C-0005In workplatesCheckUnassignedTaken",
+      "C-0006Done oneplatesClosedUnassignedAccepted",
+      "C-0008ElsewheregonexUnassigned",
     ]);
+    expect(items.map((item) => item.textContent).join("")).not.toMatch(/plates\/|gone\//);
+    const flows = new Map(TWO_FLOWS.map((flow) => [flow.name, flow]));
+    const children = LIST.cards.filter((row) => row.parent === "C-0001" && !row.cancelled);
+    expect(items.map((item) => [item.querySelector(".lozenge")?.getAttribute("data-appearance"), item.querySelector(".lozenge-label")?.textContent])).toEqual(
+      children.map((row) => {
+        const look = statusLook(flows.get(row.flow), row.column);
+        return [look.appearance, look.label];
+      }),
+    );
+    expect(items.map((item) => item.querySelector(".lozenge")?.getAttribute("data-appearance"))).toEqual(["neutral", "warning", "information", "success", "neutral"]);
     for (const item of items.slice(0, 4)) {
       expect(item.querySelector(".badge svg")).not.toBeNull();
     }
   });
 });
 
-// CT-5 of card-tasks: the modal's body shows the card's linked `T-` tasks after its hand-offs, inside
-// the body that scrolls, so opening a card with tasks moves no column (BH-1).
+// CT-5 of card-tasks, as DF-7 of design-foundation folds it: the modal shows the card's linked `T-`
+// tasks under the side column's Development, collapsed by default, inside the body that scrolls, so
+// opening a card with tasks, or its Development, moves no column (BH-1).
 describe("the card's tasks (CT-5 of card-tasks)", () => {
-  it("lists each linked task after Hand-offs, in the scrolling body; the board's heads hold still and nothing reads a task", async () => {
+  it("holds the Tasks part inside Development, collapsed by default, in the scrolling body; the board's heads hold still and nothing reads a task", async () => {
     const linked: Record<string, Card> = {
       ...CARDS,
       "C-0001": aCard({
@@ -348,10 +362,15 @@ describe("the card's tasks (CT-5 of card-tasks)", () => {
     expect(heads.length).toBeGreaterThan(0);
     clickTitle("C-0001");
     const dialog = await screen.findByRole("dialog", { name: "The parent" });
-    const part = await within(dialog).findByRole("region", { name: "Tasks" });
-    const parts = within(dialog).getAllByRole("region").map((region) => region.getAttribute("aria-label"));
-    expect(parts.indexOf("Tasks")).toBe(parts.indexOf("Hand-offs") + 1);
-    expect(part.closest(".card-modal-body")).not.toBeNull();
+    const development = await within(dialog).findByRole("button", { name: "Development \u00b7 3 agent tasks" });
+    expect(development.getAttribute("aria-expanded")).toBe("false");
+    expect(within(dialog).queryByRole("region", { name: "Tasks" })).toBeNull();
+    fireEvent.click(development);
+    expect(development.getAttribute("aria-expanded")).toBe("true");
+    const part = within(dialog).getByRole("region", { name: "Tasks" });
+    expect(development.getAttribute("aria-controls")).toBe(part.id);
+    expect(part.closest(".issue-view-side")).not.toBeNull();
+    expect(part.closest(".issue-view-body")).not.toBeNull();
     expect(Array.from(part.querySelectorAll("li[data-task]"), (row) => row.textContent)).toEqual([
       "T-0001Light the north lampPlan reviewAwaiting youspec task approve T-0001Copy the command: spec task approve T-0001",
       "T-0002Wire the switchIn progressSpec changed",

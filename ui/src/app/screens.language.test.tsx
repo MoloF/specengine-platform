@@ -295,3 +295,45 @@ describe("served text stays as served (LS-4)", () => {
     expect([shown.getAttribute("lang"), shown.closest("[lang]")?.tagName]).toEqual([null, "HTML"]);
   });
 });
+
+// DF-11 of docs/features/design-foundation.md: the work item's and the header's new words are the
+// catalog's, so a Russian page shows the Board, the card's modal with Development and More fields
+// open, and the header with no English of their own left; spec content and IDs stay as written.
+describe("the work item and the header in Russian (DF-11 of design-foundation)", () => {
+  it("shows the Board, the modal with Development and More fields open, and the header in Russian", async () => {
+    const client = stubClient();
+    client.getCards.mockResolvedValue(aCardList([aCardRow({ id: "C-1" }), aCardRow({ id: "C-2", parent: "C-1", column: "doing" })]));
+    client.getCard.mockResolvedValue(
+      aCard({
+        id: "C-1",
+        tasks: [
+          { id: "T-0001", status: "review", title: "Light the north lamp", stale: false },
+          { id: "T-0002", status: null, title: null, stale: null },
+        ],
+      }),
+    );
+    renderApp(client, "#/alpha/board/C-1");
+    const dialog = await screen.findByRole("dialog", { name: "Card C-1" });
+    await within(dialog).findByRole("region", { name: en.board.panel.details });
+    fireEvent.change(languageSelect(en.language.label), { target: { value: "ru" } });
+    await settle();
+    fireEvent.click(within(dialog).getByRole("button", { name: `${ru.board.item.development} · ${ruT("board.item.agentTasks", { count: 2 })}` }));
+    fireEvent.click(within(dialog).getByRole("button", { name: ruT("ui.moreFields", { n: "7" }) }));
+    expect(within(dialog).getByRole("region", { name: ru.board.tasks.title })).toBeTruthy();
+    expect(within(dialog).getByRole("region", { name: ru.board.item.status })).toBeTruthy();
+    expect(within(dialog).getAllByText(ru.ui.emptyValue)).toHaveLength(7);
+    expect(within(dialog).getByText(ru.board.item.flow)).toBeTruthy();
+    const trail = within(dialog).getByRole("navigation", { name: ru.ui.breadcrumbs });
+    expect(within(trail).getByRole("link", { name: ru.app.sections.board.label })).toBeTruthy();
+    expect(within(document.querySelector(".app-header") as HTMLElement).getByRole("combobox", { name: ru.app.theme.label })).toBeTruthy();
+    // No English of the slice's own is left: its words, the trail's name, the header's Theme.
+    const english = [en.board.item.status, en.board.item.flow, en.board.item.noAgentTasks, enT("board.item.agentTasks", { count: 2 }), enT("ui.moreFields", { n: "7" }), en.ui.emptyValue, en.app.theme.label, en.app.theme.system];
+    for (const word of english) {
+      expect([word, screen.queryAllByText(word, { exact: false }).length]).toEqual([word, 0]);
+    }
+    expect(screen.queryByRole("navigation", { name: en.ui.breadcrumbs })).toBeNull();
+    expect(screen.queryByRole("button", { name: new RegExp(`^${en.board.item.development}`) })).toBeNull();
+    // The board under the modal: its heads' lozenges read the served titles, as written.
+    expect(document.querySelector(".board-head .lozenge-label")?.textContent).toBe("To do");
+  });
+});

@@ -86,6 +86,14 @@ const PATHS = {
   laneClosed: "M6 3.5 10.5 8 6 12.5",
   laneOpen: "M3.5 6 8 10.5 12.5 6",
   cardPage: "M9 2.5h4.5V7 M13.5 2.5 7.5 8.5 M11.5 9.5v4h-9v-9h4",
+  // The header (docs/features/design-foundation.md "The header"): the theme's three choices, the
+  // language, the project and the workspace, each in front of its select's value.
+  themeSystem: "M2 3h12v8H2Z M6 14h4 M8 11v3",
+  themeLight: "M8 5.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z M8 1.5v1.4 M8 13.1v1.4 M1.5 8h1.4 M13.1 8h1.4 M3.4 3.4l1 1 M11.6 11.6l1 1 M3.4 12.6l1-1 M11.6 4.4l1-1",
+  themeDark: "M13.5 9.6A5.6 5.6 0 0 1 6.4 2.5a5.6 5.6 0 1 0 7.1 7.1Z",
+  language: "M8 2.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11Z M2.5 8h11 M8 2.5c1.5 1.6 2.3 3.4 2.3 5.5S9.5 11.9 8 13.5 M8 2.5C6.5 4.1 5.7 5.9 5.7 8s.8 3.9 2.3 5.5",
+  project: "M2 3.5h4l1.5 1.8H14v7.2H2Z",
+  workspace: "M2.5 2.5h4.5v4.5H2.5Z M9 2.5h4.5v4.5H9Z M2.5 9h4.5v4.5H2.5Z M9 9h4.5v4.5H9Z",
 } as const;
 
 export type IconName = keyof typeof PATHS;

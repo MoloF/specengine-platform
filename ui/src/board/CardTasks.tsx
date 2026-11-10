@@ -5,12 +5,14 @@ import { approveCommand, awaitsOwner, TASK_ID } from "../tasks/actions";
 import { specChanged, taskStatusLook } from "../tasks/labels";
 import { Badge, type Look } from "../ui/Badge";
 import { CopyButton } from "../ui/CopyButton";
+import { EmptyState } from "../ui/EmptyState";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
 import { useHubLogin } from "./acting";
 
 // A card's Tasks part (`docs/canon/card-tasks.md` "The rule";
-// `docs/canon/board-screen.md` "The card modal and page"): the `T-` tasks the card links, in link
+// `docs/canon/board-screen.md` "The card modal and page"), under the work item's Development, folded
+// (docs/features/design-foundation.md "The work item: the task modal and page"): the `T-` tasks the card links, in link
 // order, each with its state as the card's read served it. It reads nothing of its own and writes
 // nothing: no link, no task (`ui/README.md` "Screen rules"). A task's state is shown beside its card
 // and decides nothing; the one command that waits on the owner, a plan's approval, is a command to
@@ -121,28 +123,32 @@ export function CardTasks({ project, card }: { project: string; card: Card }) {
   const onHub = useHubLogin() !== null;
   const tasks = card.tasks;
   if (tasks.length === 0) {
+    // The empty state: no task yet, and how to make one and link it, or on a hub a sentence alone.
     const link = linkCommand(card.id);
     return (
-      <>
-        <p className="muted">{t("board.tasks.none")}</p>
-        {onHub ? (
-          <p className="note">
-            <Icon name="terminal" />
-            <span>{t("board.tasks.onHub")}</span>
-          </p>
-        ) : (
-          <>
+      <EmptyState
+        title={t("board.tasks.none")}
+        level={3}
+        description={
+          onHub ? (
             <p className="note">
               <Icon name="terminal" />
-              <span>{t("board.tasks.howTo")}</span>
+              <span>{t("board.tasks.onHub")}</span>
             </p>
-            <ul className="command-list card-task-commands">
-              <Command meaning={t("board.tasks.make")} text={newTaskCommand(card.targets)} />
-              {link !== null && <Command meaning={t("board.tasks.link")} text={link} />}
-            </ul>
-          </>
-        )}
-      </>
+          ) : (
+            <>
+              <p className="note">
+                <Icon name="terminal" />
+                <span>{t("board.tasks.howTo")}</span>
+              </p>
+              <ul className="command-list card-task-commands">
+                <Command meaning={t("board.tasks.make")} text={newTaskCommand(card.targets)} />
+                {link !== null && <Command meaning={t("board.tasks.link")} text={link} />}
+              </ul>
+            </>
+          )
+        }
+      />
     );
   }
   return (

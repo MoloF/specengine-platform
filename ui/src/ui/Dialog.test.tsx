@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { Announcer } from "./announcer";
-import { Dialog } from "./Dialog";
+import { Dialog, focusables, isTabStop } from "./Dialog";
 
 // The in-app dialog of `ui/README.md` "Screen rules": modal, Esc, focus kept inside.
 
@@ -136,5 +136,34 @@ describe("Dialog", () => {
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(behind.isConnected).toBe(true);
     expect(isInert(behind)).toBe(false);
+  });
+});
+
+// The review of design-foundation (iteration 2): a stop inside a `hidden` or `inert` region, or not
+// displayed, is no stop of the trap; jsdom lays nothing out, so its boxes decide nothing here.
+describe("the trap's stops", () => {
+  it("leaves out a stop inside a hidden or inert region, or one not displayed or not visible", () => {
+    const root = document.createElement("div");
+    /** An element with its text, its attributes, inside `holder` (else the root). */
+    const add = (tag: string, text: string, attributes: Record<string, string>, holder: HTMLElement = root): HTMLElement => {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      for (const [name, value] of Object.entries(attributes)) {
+        element.setAttribute(name, value);
+      }
+      holder.append(element);
+      return element;
+    };
+    add("button", "Shown", { type: "button" });
+    add("a", "Folded", { href: "#x" }, add("div", "", { hidden: "" }));
+    add("button", "Inert", { type: "button" }, add("div", "", { inert: "" }));
+    add("button", "None", { type: "button", style: "display: none" });
+    add("button", "Invisible", { type: "button", style: "visibility: hidden" });
+    add("a", "Last", { href: "#y" });
+    document.body.append(root);
+    expect(focusables(root).map((stop) => stop.textContent)).toEqual(["Shown", "Last"]);
+    const folded = root.querySelector("a") as HTMLElement;
+    expect(isTabStop(folded, root)).toBe(false);
+    root.remove();
   });
 });

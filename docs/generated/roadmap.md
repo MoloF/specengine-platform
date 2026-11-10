@@ -8,7 +8,7 @@ source: the plan items of [roadmap]
 
 <!-- Built by `cargo run -q -p specengine-cli -- export index`. Manual edits are overwritten on rebuild, and `cargo run -q -p specengine-cli -- check` rejects them. -->
 
-roadmap: 48 open, 52 done; current mvp; to mvp 2-3 days; total 13-21 days, 16 unestimated
+roadmap: 47 open, 53 done; current mvp; to mvp 2-3 days; total 13-21 days, 15 unestimated
 
 ## release mvp | current | mvp cut | 1 open, 0 done | 2-3 days
 
@@ -29,23 +29,22 @@ roadmap: 48 open, 52 done; current mvp; to mvp 2-3 days; total 13-21 days, 16 un
 
 ## release v4 | 0 open, 8 done | 0 days
 
-## release v5 | 15 open, 0 done | 0 days, 15 unestimated
+## release v5 | 14 open, 1 done | 0 days, 14 unestimated
 
-1. [RM-0093](../roadmap/RM-0093.md) | design-foundation (Phase 7, v5 step 1): light and dark tokens, Inter, a type scale, primitives, the task as a work item | draft | must | -
-2. [RM-0094](../roadmap/RM-0094.md) | flow-scenario (Phase 7, v5 step 2): Flow draws the scenario, and its left pane is a path | draft | must | - | waits on RM-0093
-3. [RM-0091](../roadmap/RM-0091.md) | english-polish: the UI's English grammar slips, fixed with their tests | draft | must | - | waits on RM-0094
-4. [RM-0095](../roadmap/RM-0095.md) | doc-modal (Phase 7, v5 step 3): one document modal everywhere, with the path as its breadcrumb | draft | must | - | waits on RM-0093, RM-0094, RM-0091
-5. [RM-0096](../roadmap/RM-0096.md) | departments (Phase 7, v5 step 4): the owner's words, department statuses and directions | draft | must | - | waits on RM-0093
-6. [RM-0097](../roadmap/RM-0097.md) | card-questions (Phase 7, v5 step 5): a task asks the writers, and the answer is a recorded decision | draft | must | - | waits on RM-0093
-7. [RM-0098](../roadmap/RM-0098.md) | handoff-progress (Phase 7, v5 step 6): a parent shows Ready to accept and a progress bar | draft | must | - | waits on RM-0093
-8. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | - | waits on RM-0093, RM-0098
-9. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
-10. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
-11. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0059, RM-0060, RM-0097
-12. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a config proposal | draft | could | - | waits on RM-0096
-13. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | - | waits on RM-0096, RM-0097, RM-0098
-14. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | - | waits on RM-0096
-15. [RM-0100](../roadmap/RM-0100.md) | journeys (Phase 7, v5, optional): one act hands a task to several departments | draft | could | - | waits on RM-0096, RM-0098
+1. [RM-0094](../roadmap/RM-0094.md) | flow-scenario (Phase 7, v5 step 2): Flow draws the scenario, and its left pane is a path | draft | must | -
+2. [RM-0091](../roadmap/RM-0091.md) | english-polish: the UI's English grammar slips, fixed with their tests | draft | must | - | waits on RM-0094
+3. [RM-0095](../roadmap/RM-0095.md) | doc-modal (Phase 7, v5 step 3): one document modal everywhere, with the path as its breadcrumb | draft | must | - | waits on RM-0094, RM-0091
+4. [RM-0096](../roadmap/RM-0096.md) | departments (Phase 7, v5 step 4): the owner's words, department statuses and directions | draft | must | -
+5. [RM-0097](../roadmap/RM-0097.md) | card-questions (Phase 7, v5 step 5): a task asks the writers, and the answer is a recorded decision | draft | must | -
+6. [RM-0098](../roadmap/RM-0098.md) | handoff-progress (Phase 7, v5 step 6): a parent shows Ready to accept and a progress bar | draft | must | -
+7. [RM-0099](../roadmap/RM-0099.md) | design-sweep (Phase 7, v5 step 7): every other screen on the foundation | draft | must | - | waits on RM-0098
+8. [RM-0059](../roadmap/RM-0059.md) | intake-similar (Phase 7, v5 step 8): similar and distinct_from on create | draft | should | -
+9. [RM-0060](../roadmap/RM-0060.md) | collision-pass (Phase 7, v5 step 9): candidates, a pair ledger, a skill | draft | should | - | waits on RM-0059
+10. [RM-0088](../roadmap/RM-0088.md) | plain-questions (Phase 7, v5 step 10): a question's gist and options, collisions as pairs | draft | should | - | waits on RM-0059, RM-0060, RM-0097
+11. [RM-0061](../roadmap/RM-0061.md) | pack (Phase 7, v5 step 11): spec init --pack and a config proposal | draft | could | - | waits on RM-0096
+12. [RM-0086](../roadmap/RM-0086.md) | department-overview (Phase 7, v5 step 12): an Overview per department, counted by status category | draft | could | - | waits on RM-0096, RM-0097, RM-0098
+13. [RM-0089](../roadmap/RM-0089.md) | hub-department (Phase 7, v5 step 13): a hub's per-login default department | draft | could | - | waits on RM-0096
+14. [RM-0100](../roadmap/RM-0100.md) | journeys (Phase 7, v5, optional): one act hands a task to several departments | draft | could | - | waits on RM-0096, RM-0098
 
 ## pool | 26 open, 1 done | 7-12 days, 22 unestimated
 

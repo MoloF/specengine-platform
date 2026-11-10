@@ -7,7 +7,8 @@ import { ErrorPanel } from "../ui/states";
 /**
  * The Workspace select in the shell's header (docs/features/workspaces.md "The UI", D6): named
  * Workspace, never "View as", its hint saying it changes no right. Its options are the served
- * titles in served order; shown only with two or more workspaces.
+ * titles in served order; shown only with two or more workspaces. In the one-line header its label is
+ * visually hidden, the value shown with an icon in front; its name stays "Workspace".
  */
 export function WorkspaceSwitcher({
   workspaces,
@@ -24,11 +25,14 @@ export function WorkspaceSwitcher({
     return null;
   }
   return (
-    <div className="workspace-switcher">
-      <label htmlFor={id}>{t("workspace.workspaceLabel")}</label>
+    <div className="header-select workspace-switcher">
+      <label htmlFor={id} className="sr-only">
+        {t("workspace.workspaceLabel")}
+      </label>
+      <Icon name="workspace" />
       <select
         id={id}
-        className="field"
+        className="field header-field"
         value={chosen.name}
         // Seen on hover too; read aloud once, as the description (aria-describedby wins over title).
         title={t("workspace.workspaceHint")}
@@ -105,7 +109,11 @@ export function ConfigNotes({
         }}
       >
         <Icon name={failure === null ? "info" : "alert"} />
-        <span>{t("workspace.notesButton", { n: String(count) })}</span>
+        <span className="header-button-label">{t("workspace.notesButton", { n: String(count) })}</span>
+        {/* The short form below 100rem; the words above name the button at every width. */}
+        <span className="config-notes-count" aria-hidden="true">
+          {count}
+        </span>
       </button>
       {/* Drawn only open: closed, its words are nowhere on the page, so nothing else's text repeats unseen. */}
       {open && (

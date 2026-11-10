@@ -54,14 +54,14 @@ A card that links none reads as before: no git, no task read, any root. Git runs
 
 ## Screen
 
-A **Tasks** part in `CardBody`, after Hand-offs, modal and page alike (`board-screen.md` "The card modal and page"), rendered from the card read: no read of its own, no write. The UI writes no link and makes no task (Q9 of 2026-11-08); it copies commands of fixed words and checked IDs.
+A **Tasks** part inside the work item's Development, collapsed (`ui-design.md` "The work item"), modal and page alike, rendered from the card read: no read of its own, no write. The UI writes no link and makes no task (Q9 of 2026-11-08); it copies commands of fixed words and checked IDs.
 
 - **A row per link**: the ID, linked to `#/<p>/tasks/<id>` when `TASK_ID` matches; the title or `tasks.untitled`; the status by `taskStatusLook`, label and icon; `tasks.specChanged` when `stale`. In `review` alone (`awaitsOwner`, `src/tasks/actions.ts`, so `src/board/` names no status): "Awaiting you" and `spec task approve <id>` with Copy. Status `null`: the ID as text, "State not read here".
 - **Notes**: a task's notes (`<id>: `) show only on its row, verbatim under `lang="en"`; the card's notes list shows the rest.
-- **No link, locally**: "No task yet." and two commands with Copy: `spec task new --nodes <refs> --title "..."`, `<refs>` the card's targets when each matches `^[A-Za-z0-9][A-Za-z0-9._/-]*$`, else `REF`, the title never filled in; `spec card edit <C> --task T-NNNN` when `<C>` is a card ID.
+- **No link, locally**, an `EmptyState`: "No task yet." and two commands with Copy: `spec task new --nodes <refs> --title "..."`, `<refs>` the card's targets when each matches `^[A-Za-z0-9][A-Za-z0-9._/-]*$`, else `REF`, the title never filled in; `spec card edit <C> --task T-NNNN` when `<C>` is a card ID.
 - **The hub view** (`useHubLogin()` resolved): no command, as a terminal's would write its own queue; one sentence, a task runs on a terminal and an agent links one with `edit_card`, under the empty state and the rows alike.
 - **Live** (`src/api/queries.ts`): `task.*` and `proposal.applied` (an apply may move a `stale`) invalidate the project's per-card reads, so the open card is read again; the card list never is, for a task.
-- Ten keys `board.tasks.*` in both catalogs, the rest reused from `tasks.*`; the daemon's notes English (ADR-0072). No word says "blocked", and the part, in the modal's scrolling body, moves no column.
+- Ten keys `board.tasks.*` in both catalogs, the rest reused from `tasks.*`; the daemon's notes English (ADR-0072). No word says "blocked", and the part moves no column.
 
 ## MCP and hub
 

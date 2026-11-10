@@ -2,6 +2,7 @@ import { memo, type DragEvent, type MouseEvent } from "react";
 import type { CardRow } from "../api/types";
 import { cardPageHash, sectionHash } from "../app/routes";
 import { Badge } from "../ui/Badge";
+import { Button } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { shownSlot } from "../ui/text";
 import { isOverdue } from "./due";
@@ -176,9 +177,11 @@ export const BoardCard = memo(function BoardCard({
         <div className="board-card-foot">
           <Source project={project} targets={row.targets} />
           {!closed && (
-            <button
-              type="button"
-              className="button button-quiet board-move"
+            <Button
+              appearance="subtle"
+              spacing="compact"
+              icon="cardMove"
+              className="board-move"
               data-card-move=""
               tabIndex={-1}
               aria-haspopup="menu"
@@ -187,9 +190,8 @@ export const BoardCard = memo(function BoardCard({
                 actions.onMove(row, event.currentTarget);
               }}
             >
-              <Icon name="cardMove" />
               <span>{fill(t("board.card.move", { id: slot("id") }), { id: <span className="sr-only">{t("board.card.moveId", { id: row.id })}</span> })}</span>
-            </button>
+            </Button>
           )}
         </div>
       </article>

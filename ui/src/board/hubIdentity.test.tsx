@@ -774,8 +774,8 @@ describe("a hub's controls follow `allowed` (A9 of hub-team)", () => {
     fireEvent.click(accept);
     expect(writeDialogs()).toEqual([]);
     expect(idle(within(actions).getByRole("button", { name: "Edit" }))).toBe(false);
-    // The modal's Move opens the same menu as a tile's.
-    fireEvent.click(within(actions).getByRole("button", { name: "Move" }));
+    // The modal's Move, in its side column's Status (DF-6 of design-foundation), opens the same menu as a tile's.
+    fireEvent.click(within(screen.getByRole("region", { name: "Status" })).getByRole("button", { name: "Move" }));
     const menu = await screen.findByRole("menu", { name: "Move C-0001" });
     expect(within(menu).queryByRole("menuitem", { name: /^Accept/ })).toBeNull();
     expect(within(menu).queryByRole("menuitem", { name: /^To do/ })).not.toBeNull();

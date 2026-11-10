@@ -73,6 +73,9 @@ const textModules = import.meta.glob<Record<string, unknown>>(["/src/round/text.
 const mockWorkspaces = import.meta.glob<{ workspacesOf: (slug: string, scenario: string) => WorkspaceDocument }>("/src/mocks/workspaces.ts", { eager: true });
 const mockScenarios = import.meta.glob<{ SCENARIOS: readonly string[] }>("/src/mocks/scenario.ts", { eager: true });
 
+/** The mock's boards, loaded as data the same way: the Board's column and flow words read at run time (design-foundation's review, the category's guard). */
+const mockCards = import.meta.glob<{ mockBoard: (slug: string, scenario: string, at: number) => { flows: readonly { name: string; columns: readonly { id: string }[] }[] } }>("/src/mocks/cards.ts", { eager: true });
+
 /** The Bindings tab's sources (docs/features/ui-node-bindings.md): held to Health's rules for rows (UI-7); its command list shared with the lock diff's rows. */
 const BINDINGS_TAB: readonly string[] = ["/src/tree/BindingsPanel.tsx", "/src/tree/BindingLine.tsx", "/src/tree/commands.ts", "/src/tree/CommandList.tsx"];
 
@@ -133,6 +136,11 @@ const TEXT_PROPS: Readonly<Record<string, readonly string[]>> = {
   DiffView: ["label"],
   Tabs: ["label"],
   NotFound: ["reason"],
+  // The primitives of docs/features/design-foundation.md "Primitives (`ui/src/ui/`)".
+  Lozenge: ["label"],
+  PropertyList: ["label"],
+  EmptyState: ["title"],
+  Disclosure: ["summary", "regionLabel"],
 };
 
 function isTestPath(path: string): boolean {
@@ -948,6 +956,40 @@ describe("source policy", () => {
     expect(sources["/src/board/due.ts"]).not.toMatch(/toISOString|getUTC/);
     // A second table of words: a typed record of labels or a Map literal lives in labels.ts alone.
     expect(offending(/\bnew Map\(\[/, scanned)).toEqual([]);
+  });
+
+  it("spells no column or flow the mock serves in the Board's code, and compares no bare column with a spelled word: a status category is the column's place, looked up (design-foundation)", () => {
+    const mockBoard = mockCards["/src/mocks/cards.ts"]?.mockBoard;
+    const scenarios = mockScenarios["/src/mocks/scenario.ts"]?.SCENARIOS ?? [];
+    expect(mockBoard).toBeDefined();
+    const words = new Set<string>();
+    for (const scenario of scenarios) {
+      for (const slug of ["harbor-sim", "ledger-api"]) {
+        for (const flow of mockBoard?.(slug, scenario, 0).flows ?? []) {
+          words.add(flow.name);
+          for (const column of flow.columns) {
+            words.add(column.id);
+          }
+        }
+      }
+    }
+    expect([...words]).toEqual(expect.arrayContaining(["queued", "blocked", "checked", "struck", "draft", "proof", "filed", "copy", "plates"]));
+    // The Board's own act word, the write named `edit` (CardActs.tsx, CardDialogs.tsx): code, never a column.
+    const own = ["edit"];
+    const banned = [...words].filter((word) => !own.includes(word));
+    const boardSource = (path: string) => !path.startsWith("/src/board/") || /\.test\.tsx?$/.test(path);
+    const quoted = new RegExp(`["'\`](${banned.map((word) => word.replace(/[.*+?^${}()|[\]\\-]/g, "\\$&")).join("|")})["'\`]`);
+    expect(offending(quoted, boardSource)).toEqual([]);
+    // A bare `column` (or `to`, `from`) against a spelled word, as the field form is caught above.
+    const bare = /(?<![\w.])(column|to|from)\s*[!=]==?\s*["'`]|["'`]\s*[!=]==?\s*(column|to|from)\b/;
+    expect(offending(bare, boardSource)).toEqual([]);
+    // The detector itself: the category's mutation is caught, a look-up is not.
+    for (const line of ['if (column === flow.return || column === "blocked") {', 'return "queued" === column ? a : b;', 'const late = to === "struck";', 'const word = "filed";']) {
+      expect([line, quoted.test(line) || bare.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["if (column === flow.accept.to) {", 'send({ write: "edit", id: card.id });', "return column === flow.columns[0]?.id ? a : b;"]) {
+      expect([line, quoted.test(line) || bare.test(line)]).toEqual([line, false]);
+    }
   });
 
   it("branches on no rollup, stage or mark word in the Flow, the node's cards or the Board but in their labels.ts (AC-08 of trace-views)", () => {

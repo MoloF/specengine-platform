@@ -3,18 +3,18 @@ import { apiErrorOf } from "../api/client";
 import { useCard, useCards, useCardWrite, useCardWriting, useTrace } from "../api/queries";
 import type { Card, CardFlow, CardMoveBody, CardRow, CardWrite } from "../api/types";
 import { replaceHash } from "../app/location";
-import { RegionBoundary } from "../app/RegionBoundary";
 import { cardPageHash, sectionHash } from "../app/routes";
 import { useOpenShortcuts } from "../app/shortcuts";
 import { useTranslate } from "../i18n";
 import { useAnnounce } from "../ui/announcer";
+import { buttonClasses } from "../ui/Button";
 import { Icon } from "../ui/Icon";
 import { hasModifier, isTextField } from "../ui/keys";
 import { shownSlot } from "../ui/text";
 import { useFocusLater } from "../ui/useFocusLater";
 import { actingName, useActing, useAllowed } from "./acting";
 import { CardActDialog, moveChoicesOf, type BoardChoice, type OpenDialog, type Said } from "./CardActs";
-import { CardBody, isCard, titleOf, type CardAction, type CardLinks } from "./CardPanel";
+import { CardView, isCard, titleOf, type CardAction, type CardLinks } from "./CardPanel";
 import { useToday } from "./due";
 import { openRows, reorderOf } from "./filter";
 import { columnTitle, rowMark } from "./labels";
@@ -31,10 +31,10 @@ interface Refusal {
 }
 
 /**
- * A card's page (`#/<p>/board/<C>/page`, `ui/README.md` "Screen rules", Shell): no columns, one `h1`,
- * the card's title, then the modal's body and acts, and a link to the card on the board. It reads
- * what the board reads, the list (for the flows and the children) and the card, so a reload keeps
- * it; the nav marks Board. A link to another card goes to that card's page, replacing this one.
+ * A card's page (`#/<p>/board/<C>/page`, `ui/README.md` "Screen rules", Shell): no columns, the work
+ * item the modal shows (CardPanel.tsx `CardView`), its title the one `h1`, "Open on the board" on the
+ * breadcrumb line. It reads what the board reads, the list (for the flows and the children) and the
+ * card, so a reload keeps it; the nav marks Board. A link to another card goes to that card's page, replacing this one.
  * Nothing here judges a column: the moves are the card's `allowed`, the daemon answers.
  */
 export function CardPage({ project, id }: { project: string; id: string }) {
@@ -178,58 +178,57 @@ export function CardPage({ project, id }: { project: string; id: string }) {
 
   return (
     <section className="view card-page" aria-labelledby={titleId} onKeyDown={onKeyDown}>
-      <header className="view-head card-page-head">
-        <p className="mono board-card-id">{id}</p>
-        <h1 ref={heading} id={titleId} tabIndex={-1}>
-          <bdi>{title === null ? id : shownSlot(title)}</bdi>
-        </h1>
-        <p>
-          <a href={sectionHash(project, "board", id)}>
+      <CardView
+        heading={
+          <h1 ref={heading} id={titleId} tabIndex={-1}>
+            <bdi>{title === null ? id : shownSlot(title)}</bdi>
+          </h1>
+        }
+        tools={
+          <a className={buttonClasses("subtle", "compact")} href={sectionHash(project, "board", id)}>
             <Icon name="arrowLeft" />
             <span>{t("board.page.openOnBoard")}</span>
           </a>
-        </p>
-      </header>
-      {refusal !== null && (
-        <div key={refusal.count} className="refusal" role="alert">
-          <p className="refusal-title">
-            <Icon name="alert" />
-            <span>{t("board.view.refused")}</span>
-          </p>
-          <p className="verbatim" lang="en">
-            {refusal.message}
-          </p>
-        </div>
-      )}
-      <div role="status">
-        {writeNotes.length > 0 && (
-          <ul className="note-list" aria-label={t("board.view.writeNotes")}>
-            {writeNotes.map((note, index) => (
-              <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
-                {note}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-      <div className="card-page-body">
-        <RegionBoundary name={t("board.view.boundaryCard")}>
-          <CardBody
-            project={project}
-            id={id}
-            query={query}
-            flowOf={flowOf}
-            today={today}
-            mark={cards.error !== null || row === undefined ? null : rowMark(row)}
-            rollups={rollups}
-            handOffs={handOffs}
-            markFailure={cards.error === null ? null : apiErrorOf(cards.error).message}
-            stateFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
-            links={links}
-            onAct={onAct}
-          />
-        </RegionBoundary>
-      </div>
+        }
+        notices={
+          <>
+            {refusal !== null && (
+              <div key={refusal.count} className="refusal" role="alert">
+                <p className="refusal-title">
+                  <Icon name="alert" />
+                  <span>{t("board.view.refused")}</span>
+                </p>
+                <p className="verbatim" lang="en">
+                  {refusal.message}
+                </p>
+              </div>
+            )}
+            <div role="status">
+              {writeNotes.length > 0 && (
+                <ul className="note-list" aria-label={t("board.view.writeNotes")}>
+                  {writeNotes.map((note, index) => (
+                    <li key={`${String(index)}-${note}`} className="verbatim-note" lang="en">
+                      {note}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </>
+        }
+        project={project}
+        id={id}
+        query={query}
+        flowOf={flowOf}
+        today={today}
+        mark={cards.error !== null || row === undefined ? null : rowMark(row)}
+        rollups={rollups}
+        handOffs={handOffs}
+        markFailure={cards.error === null ? null : apiErrorOf(cards.error).message}
+        stateFailure={trace.error === null ? null : apiErrorOf(trace.error).message}
+        links={links}
+        onAct={onAct}
+      />
       {menu !== null && card !== undefined && (
         <MoveMenu
           label={t("board.menu.label", { id })}

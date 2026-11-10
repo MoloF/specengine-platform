@@ -12,6 +12,7 @@ import { useAnnounce } from "../ui/announcer";
 import { focusIsLost } from "../ui/focus";
 import { Icon } from "../ui/Icon";
 import { hasModifier, hotkeyOf, isTextField, letterOf } from "../ui/keys";
+import { Lozenge } from "../ui/Lozenge";
 import { ErrorPanel, Skeleton } from "../ui/states";
 import { TabPanel, Tabs } from "../ui/Tabs";
 import { shownSlot } from "../ui/text";
@@ -22,9 +23,10 @@ import { useViewTop } from "../ui/useViewTop";
 import { actingName, isActingLine, useActing, useAllowed, useHubLogin } from "./acting";
 import { BoardCard, type CardActions } from "./BoardCard";
 import { BoardColumn, BoardColumnHeader } from "./BoardColumn";
+import { statusLook } from "./category";
 import { CardActDialog, moveChoicesOf, type BoardChoice, type OpenDialog, type Said } from "./CardActs";
 import { CardModal } from "./CardModal";
-import { CardBody, isCard, titleOf, type CardAction, type CardLinks } from "./CardPanel";
+import { CardView, isCard, titleOf, type CardAction, type CardLinks } from "./CardPanel";
 import { useToday } from "./due";
 import {
   ANY,
@@ -166,12 +168,13 @@ function isPlainClick(event: MouseEvent<HTMLElement>): boolean {
 /**
  * A swimlane's head, spanning the grid, its label kept in view as the board scrolls sideways: what
  * the lane holds and a button folding it; a parent lane also names the parent, a link opening its
- * card, and where it stands, whichever flow that is.
+ * card, and where it stands, whichever flow that is: the flow's name and the column's lozenge.
  */
 function LaneHead({
   project,
   lane,
   id,
+  flowOf,
   collapsed,
   onToggle,
   onOpenCard,
@@ -179,6 +182,8 @@ function LaneHead({
   project: string;
   lane: Swimlane;
   id: string;
+  /** A served flow by its name: a parent's lozenge looks its column up there, whichever flow that is. */
+  flowOf: (name: string) => CardFlow | undefined;
   collapsed: boolean;
   onToggle: () => void;
   onOpenCard: (id: string) => void;
@@ -219,8 +224,9 @@ function LaneHead({
               {shownSlot(head.id)}
             </a>
             {head.card !== undefined && (
-              <span className="mono muted">
-                {shownSlot(head.card.flow)}/{shownSlot(head.card.column)}
+              <span className="board-lane-status">
+                <bdi className="muted">{shownSlot(head.card.flow)}</bdi>
+                <Lozenge {...statusLook(flowOf(head.card.flow), head.card.column)} />
               </span>
             )}
           </>
@@ -995,7 +1001,7 @@ export function BoardView({
       >
         <div ref={measureHead} className="board-head">
           {heads.map((head, index) => (
-            <BoardColumnHeader key={head.key} head={head} id={`${headBase}-head-${String(index)}`} count={headCells[index]?.count ?? 0} />
+            <BoardColumnHeader key={head.key} head={head} flow={flow} id={`${headBase}-head-${String(index)}`} count={headCells[index]?.count ?? 0} />
           ))}
         </div>
         {shownLanes.map((lane, laneIndex) => {
@@ -1009,6 +1015,7 @@ export function BoardView({
                   project={project}
                   lane={lane}
                   id={laneId}
+                  flowOf={flowOf}
                   collapsed={folded}
                   onToggle={() => {
                     toggleLane(lane.key);
@@ -1020,6 +1027,7 @@ export function BoardView({
                 <BoardColumn
                   key={cell.key}
                   cell={whole.cells[index] ?? cell}
+                  flow={flow}
                   labelledBy={lane.head.cut === "all" ? `${headBase}-head-${String(index)}` : `${headBase}-head-${String(index)} ${laneId}`}
                   collapsed={folded}
                   expanded={expanded.has(cell.key)}
@@ -1295,27 +1303,39 @@ export function BoardView({
       </div>
       {menuShown("board")}
       {shownId !== null && (
-        <CardModal key={shownId} project={project} id={shownId} title={titleOf(panel)} pending={writing} onClose={closeCard}>
-          {refusal !== null && refusal.place === "modal" && (
-            <div key={refusal.count} className="refusal" role="alert">
-              <p className="refusal-title">
-                <Icon name="alert" />
-                <span>{t("board.view.refused")}</span>
-              </p>
-              <p className="verbatim" lang="en">
-                {refusal.message}
-              </p>
-            </div>
-          )}
-          {modalLine !== null && (
-            // The acting name's field is on the board, inert beneath: its line is said here.
-            <p className="field-error" role="alert" lang="en">
-              {modalLine}
-            </p>
-          )}
-          <div role="status">{modalNotes.length > 0 && <Notes notes={modalNotes} label={t("board.view.writeNotes")} />}</div>
-          <RegionBoundary name={t("board.view.boundaryCard")}>
-            <CardBody
+        <CardModal
+          key={shownId}
+          project={project}
+          id={shownId}
+          title={titleOf(panel)}
+          pending={writing}
+          onClose={closeCard}
+          view={({ heading, tools }) => (
+            <CardView
+              heading={heading}
+              tools={tools}
+              notices={
+                <>
+                  {refusal !== null && refusal.place === "modal" && (
+                    <div key={refusal.count} className="refusal" role="alert">
+                      <p className="refusal-title">
+                        <Icon name="alert" />
+                        <span>{t("board.view.refused")}</span>
+                      </p>
+                      <p className="verbatim" lang="en">
+                        {refusal.message}
+                      </p>
+                    </div>
+                  )}
+                  {modalLine !== null && (
+                    // The acting name's field is on the board, inert beneath: its line is said here.
+                    <p className="field-error" role="alert" lang="en">
+                      {modalLine}
+                    </p>
+                  )}
+                  <div role="status">{modalNotes.length > 0 && <Notes notes={modalNotes} label={t("board.view.writeNotes")} />}</div>
+                </>
+              }
               project={project}
               id={shownId}
               query={panel}
@@ -1329,7 +1349,8 @@ export function BoardView({
               links={modalLinks}
               onAct={onAct}
             />
-          </RegionBoundary>
+          )}
+        >
           {menuShown("modal")}
         </CardModal>
       )}

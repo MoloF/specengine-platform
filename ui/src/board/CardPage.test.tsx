@@ -45,7 +45,9 @@ describe("a card's page (BH-6)", () => {
     expect(document.querySelector(".board-grid, .board-cell, [data-card]")).toBeNull();
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByRole("link", { name: "Open on the board" }).getAttribute("href")).toBe("#/alpha/board/C-0001");
-    expect(within(screen.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move", "Hand off", "Return", "Edit", "Assign", "Cancel card"]);
+    // The work item's order (DF-6 of design-foundation): the head's acts, Move in the side column's Status.
+    expect(within(screen.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Return", "Edit", "Assign", "Cancel card"]);
+    expect(within(screen.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
     expect(within(await screen.findByRole("region", { name: "Goal" })).getByText("What it is for")).toBeTruthy();
     const child = within(screen.getByRole("region", { name: "Hand-offs" })).getByRole("link", { name: "C-0002" });
     expect(child.getAttribute("href")).toBe("#/alpha/board/C-0002/page");
@@ -82,13 +84,16 @@ describe("a card's page (BH-6)", () => {
     expect(client.moveCard.mock.calls[0]).toEqual(["alpha", "C-0001", { to: "doing", note: "Two endings.", revision: "1", as: null }]);
   });
 
-  it("shows the card's Tasks part, as the modal does: a card with no link says No task yet and how to make and link one (CT-5 of card-tasks)", async () => {
+  // Replaced by DF-7 of design-foundation: the part is folded under the side column's Development, expanded first.
+  it("shows the card's Tasks part under Development, as the modal does: a card with no link says No task yet and how to make and link one (CT-5 of card-tasks)", async () => {
     await page();
-    const part = await screen.findByRole("region", { name: "Tasks" });
-    expect(within(part).getByText("No task yet.")).toBeTruthy();
+    const development = await screen.findByRole("button", { name: "Development \u00b7 No agent tasks" });
+    expect(screen.queryByRole("region", { name: "Tasks" })).toBeNull();
+    fireEvent.click(development);
+    const part = screen.getByRole("region", { name: "Tasks" });
+    expect(within(part).getByRole("heading", { level: 3, name: "No task yet." })).toBeTruthy();
     expect(Array.from(part.querySelectorAll("code"), (code) => code.textContent)).toEqual(['spec task new --nodes REF --title "..."', "spec card edit C-0001 --task T-NNNN"]);
-    const parts = screen.getAllByRole("region").map((region) => region.getAttribute("aria-label"));
-    expect(parts.indexOf("Tasks")).toBe(parts.indexOf("Hand-offs") + 1);
+    expect(part.closest(".issue-view-side")).not.toBeNull();
   });
 
   it("no such card: the daemon's `no card C-9999` verbatim under lang=en", async () => {

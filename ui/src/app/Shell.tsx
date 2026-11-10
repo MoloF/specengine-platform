@@ -32,6 +32,7 @@ import { isJumpChord, JUMP_KEYSHORTCUTS } from "./chord";
 import { DataSource } from "./DataSource";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { ThemeSwitcher } from "./ThemeSwitcher";
 import { pushHash, replaceHash, useHash } from "./location";
 import { ALL_SECTIONS, homeHash, navOf, parseHash, sectionHash, type Route } from "./routes";
 import { ShortcutsDialog, ShortcutsOpener } from "./shortcuts";
@@ -122,12 +123,15 @@ function ProjectSwitcher({
   }
 
   return (
-    <div className="project-switcher">
-      <label htmlFor="project-switcher">{t("app.project.label")}</label>
+    <div className="header-select project-switcher">
+      <label htmlFor="project-switcher" className="sr-only">
+        {t("app.project.label")}
+      </label>
+      <Icon name="project" />
       <select
         id="project-switcher"
         ref={select}
-        className="field"
+        className="field header-field"
         value={current}
         disabled={projects === undefined}
         onChange={(event) => {
@@ -525,6 +529,7 @@ export function Shell({ scenario }: { scenario: string | null }) {
             />
           )}
           <LanguageSwitcher />
+          <ThemeSwitcher />
           <DataSource dataSource={dataSource} scenario={scenario} />
           <button
             type="button"
@@ -536,14 +541,14 @@ export function Shell({ scenario }: { scenario: string | null }) {
             }}
           >
             <Icon name="search" />
-            <span>{t("app.jumpTo")}</span>
+            <span className="header-button-label">{t("app.jumpTo")}</span>
             <kbd className="jump-hint" aria-hidden="true">
               {t(CHORD_HINT)}
             </kbd>
           </button>
-          <button type="button" className="button button-quiet" onClick={openShortcuts}>
+          <button type="button" className="button button-quiet shortcuts-button" onClick={openShortcuts}>
             <Icon name="keyboard" />
-            <span>{t("app.shortcutsButton")}</span>
+            <span className="header-button-label">{t("app.shortcutsButton")}</span>
           </button>
         </header>
         <div className="app-body">

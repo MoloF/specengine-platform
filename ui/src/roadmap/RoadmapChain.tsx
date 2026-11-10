@@ -357,7 +357,6 @@ function Canvas({ plan, layout, selectedId, onSelect }: RoadmapChainProps & { la
         proOptions={{ hideAttribution: true }}
         ariaLabelConfig={labels}
         defaultMarkerColor={null}
-        colorMode="dark"
         minZoom={0.1}
         maxZoom={2}
         onNodeClick={(_event, node) => {

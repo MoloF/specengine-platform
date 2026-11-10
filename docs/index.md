@@ -21,7 +21,6 @@ Reading protocol (§9): this index, then at most three documents. Needing a thir
 ## Specs
 
 - [docs/features/bevy-dump.md](features/bevy-dump.md) bevy-dump: the project's schedule dump annotates symbols (layer B) · crates/specengine-code, crates/specengine-core, crates/specengine-store, crates/specengine-cli, crates/specengine-eval, crates/specengine-mcp, fixtures · draft
-- [docs/features/design-foundation.md](features/design-foundation.md) design-foundation: light and dark tokens, Inter, a type scale, primitives, and the task as the first work item (RM-0093) · ui · draft
 - [docs/features/flow-scenario.md](features/flow-scenario.md) flow-scenario: Flow draws the scenario, and its left pane is a path (RM-0094) · crates/specengine-core, crates/specengine-cli, crates/specengine-mcp, crates/specengine-http, ui, plugin, fixtures · draft
 - [docs/features/zone-index.md](features/zone-index.md) zone-index: canon under the index entry's unlisted globs takes no line, and canon retires by status (RM-0055) · crates/specengine-core, crates/specengine-store, crates/specengine-cli, docs · draft
 - [docs/specs/specengine-platform/04-prior-art-and-stack.md](specs/specengine-platform/04-prior-art-and-stack.md) 04. Prior art, MCP, Claude Code, the stack · specengine · in-progress

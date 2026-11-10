@@ -52,6 +52,7 @@ export const ru: Catalog = {
     chordApple: "⌘K",
     chordOther: "Ctrl K",
     shortcutsButton: "Горячие клавиши",
+    theme: { label: "Тема", system: "Как в системе", light: "Светлая", dark: "Тёмная" },
     mockData: "Демо-данные",
     scenario: "сценарий: {{scenario}}",
     start: {
@@ -279,6 +280,9 @@ export const ru: Catalog = {
     copy: "Копировать",
     copied: "Скопировано",
     badgeName: "{{name}}: ",
+    breadcrumbs: "Навигационная цепочка",
+    moreFields: "Ещё поля ({{n}})",
+    emptyValue: "Нет",
     diff: {
       label: "Изменения раздела",
       none: "Изменения раздела не приложены.",
@@ -461,7 +465,6 @@ export const ru: Catalog = {
       edit: "Изменить",
       assign: "Назначить",
       cancel: "Отменить карточку",
-      in: "В колонке {{column}}",
       notes: "Заметки демона о карточке",
       markFailed: "Не удалось прочитать, менялся ли бриф под этой карточкой: {{message}}",
       stateFailed: "Не удалось прочитать состояние целей этой карточки: {{message}}",
@@ -496,6 +499,16 @@ export const ru: Catalog = {
     },
     page: {
       openOnBoard: "Открыть на доске",
+    },
+    item: {
+      status: "Статус",
+      flow: "Поток",
+      development: "Разработка",
+      agentTasks_one: "{{count}} задача агента",
+      agentTasks_few: "{{count}} задачи агента",
+      agentTasks_many: "{{count}} задач агента",
+      agentTasks_other: "{{count}} задачи агента",
+      noAgentTasks: "Нет задач агента",
     },
     lanes: {
       label: "Дорожки",

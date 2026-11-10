@@ -109,11 +109,13 @@ describe("the header stays; the page never scrolls sideways (BH-2)", () => {
     expect(NARROW).not.toMatch(/\.board-region\s*\{[^}]*overflow:\s*auto/);
   });
 
-  it("keeps the card modal inside the viewport: at most 48rem wide and the height less 2rem, its body scrolling", () => {
+  // Replaced by design-foundation (W12, "The work item: the task modal and page"): the work item needs a
+  // main column beside a 330 px side column, so the modal is 968 px wide; its body still scrolls inside.
+  it("keeps the card modal inside the viewport: at most --modal-width-l (968 px) wide and the height less 2rem, its work item's body scrolling", () => {
     const modal = ruleWith(".card-modal", /width/);
-    expect(modal).toMatch(/width:\s*min\(48rem, 100vw - 2rem\);/);
+    expect(modal).toMatch(/width:\s*min\(var\(--modal-width-l\), 100vw - 2rem\);/);
     expect(modal).toMatch(/max-height:\s*calc\(100dvh - 2rem\);/);
-    expect(ruleWith(".card-modal-body", /overflow/)).toMatch(/overflow:\s*auto;/);
+    expect(ruleWith(".card-modal .issue-view-body", /overflow/)).toMatch(/overflow:\s*auto;/);
   });
 
   it("stretches the title's link over the tile, the other controls above it", () => {

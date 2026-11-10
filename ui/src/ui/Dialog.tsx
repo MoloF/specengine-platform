@@ -11,10 +11,30 @@ const FOCUSABLE = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(",");
 
-/** The dialog's tab stops in order; a radio group is one stop, its checked radio (else its first). */
-function focusables(root: HTMLElement): HTMLElement[] {
+/**
+ * Whether an element of the dialog can take focus as it is drawn: not inside a `hidden` or `inert`
+ * region (a collapsed disclosure keeps its links in the DOM), not `display: none` or
+ * `visibility: hidden`, and, where the page is laid out at all, with a box of its own. jsdom lays
+ * nothing out, so there the boxes say nothing and the first checks alone decide.
+ */
+export function isTabStop(element: HTMLElement, root: HTMLElement): boolean {
+  if (element.closest("[hidden], [inert]") !== null) {
+    return false;
+  }
+  const style = window.getComputedStyle(element);
+  if (style.display === "none" || style.visibility === "hidden") {
+    return false;
+  }
+  return element.getClientRects().length > 0 || root.getClientRects().length === 0;
+}
+
+/** The dialog's tab stops in order, those drawn alone; a radio group is one stop, its checked radio (else its first). */
+export function focusables(root: HTMLElement): HTMLElement[] {
   const radios = Array.from(root.querySelectorAll<HTMLInputElement>('input[type="radio"]'));
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((element) => {
+    if (!isTabStop(element, root)) {
+      return false;
+    }
     if (!(element instanceof HTMLInputElement) || element.type !== "radio" || element.name === "") {
       return true;
     }
@@ -31,8 +51,11 @@ function focusables(root: HTMLElement): HTMLElement[] {
  * (a dialog with nothing to lose: the palette, the Board's card) a click there closes it as Esc does.
  * Esc calls onClose, which may decline (a decision being sent). Focus starts on the first field
  * marked `data-autofocus`, else the first stop; with `focusTitle`, on the heading itself (a dialog
- * that is read first). Dialogs stack: each makes what lies under it inert, the one under too, and
- * gives it back when it closes. The caller returns focus on close.
+ * that is read first), whence Tab goes to the first stop after it in the DOM and Shift+Tab to the
+ * last. A stop inside a collapsed (`hidden`) region is no stop. Dialogs stack: each makes what lies under it inert, the one under too, and
+ * gives it back when it closes. The caller returns focus on close. With `frame`, the caller lays the
+ * heading out among its own parts (the work item's breadcrumbs above it, its columns below), the
+ * children after them.
  */
 export function Dialog({
   title,
@@ -41,15 +64,18 @@ export function Dialog({
   className,
   closeOnScrim = false,
   focusTitle = false,
+  frame,
 }: {
   title: ReactNode;
   onClose: () => void;
-  children: ReactNode;
+  children?: ReactNode;
   className?: string;
   /** A click on the scrim calls onClose; off by default, so a misplaced click keeps typed text. */
   closeOnScrim?: boolean;
   /** Focus starts on the heading, which then takes focus by script alone. */
   focusTitle?: boolean;
+  /** Lays the heading out with the caller's parts around it; the dialog's own `h2` all the same. */
+  frame?: (heading: ReactNode) => ReactNode;
 }) {
   const titleId = useId();
   const panel = useRef<HTMLDivElement>(null);
@@ -101,10 +127,20 @@ export function Dialog({
       return;
     }
     const active = document.activeElement;
+    // A heading focused by script (`focusTitle`): Tab goes on to the first stop after it in the DOM
+    // (the work item's breadcrumbs stand above it), Shift+Tab round to the last.
+    if (active instanceof HTMLElement && active.classList.contains("dialog-title") && root.contains(active)) {
+      event.preventDefault();
+      if (event.shiftKey) {
+        last.focus();
+      } else {
+        (items.find((item) => (active.compareDocumentPosition(item) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0) ?? first).focus();
+      }
+      return;
+    }
     // The panel itself (focused by a click on its text) counts as outside: the browser's next stop
     // back from it lies before the dialog, so Tab goes to the first stop and Shift+Tab to the last.
-    // So does a heading focused by script (`focusTitle`): it stands before the first stop.
-    const inside = active !== root && root.contains(active) && !(active instanceof HTMLElement && active.classList.contains("dialog-title"));
+    const inside = active !== root && root.contains(active);
     if (event.shiftKey && (active === first || !inside)) {
       event.preventDefault();
       last.focus();
@@ -113,6 +149,12 @@ export function Dialog({
       first.focus();
     }
   }
+
+  const heading = (
+    <h2 id={titleId} className="dialog-title" tabIndex={focusTitle ? -1 : undefined}>
+      {title}
+    </h2>
+  );
 
   return createPortal(
     <div className="dialog-host" data-dialog-host="" onKeyDown={onKeyDown}>
@@ -136,9 +178,7 @@ export function Dialog({
         tabIndex={-1}
         className={className === undefined ? "dialog" : `dialog ${className}`}
       >
-        <h2 id={titleId} className="dialog-title" tabIndex={focusTitle ? -1 : undefined}>
-          {title}
-        </h2>
+        {frame === undefined ? heading : frame(heading)}
         {children}
       </div>
     </div>,

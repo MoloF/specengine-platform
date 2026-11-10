@@ -1,4 +1,4 @@
-import { act, cleanup, createEvent, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { sentence } from "../test/text";
 import { describe, expect, it, vi } from "vitest";
 import { ClientError } from "../api/client";
@@ -6,6 +6,7 @@ import type { Card, CardList, CardRow, QueueEvent } from "../api/types";
 import { aCard, aCardFlow, aCardList, aCardRow, aCardWrite, aTrace, aTraceCard, aTraceNode, aWorkspace, aWorkspaces } from "../test/builders";
 import { renderApp } from "../test/render";
 import { stubClient, type StubClient } from "../test/stubClient";
+import { Icon, type IconName } from "../ui/Icon";
 import { ACTING_KEY } from "./acting";
 import { COLUMN_SHOWN } from "./filter";
 
@@ -111,6 +112,47 @@ const TWO_FLOWS = [
     accept: { from: "checked", to: "struck" },
   }),
 ];
+
+// DF-5 of docs/features/design-foundation.md ("The Board", "Status categories"): each column head's
+// title is its category's lozenge, the count after it; the stranded head neutral with the unknown icon.
+describe("the column heads' lozenges (DF-5)", () => {
+  /** The path an icon draws, for telling one icon from another. */
+  function iconPath(name: IconName): string {
+    const { container, unmount } = render(<Icon name={name} />);
+    const d = container.querySelector("path")?.getAttribute("d") ?? "";
+    unmount();
+    return d;
+  }
+
+  it("draws each head as its column's category lozenge, label per the table, the count after it; Not in the flow neutral with the unknown icon", async () => {
+    const plates = aCardFlow({
+      name: "plates",
+      columns: ["queued", "blocked", "checked", "struck"].map((id) => ({ id, title: id })),
+      moves: [],
+      accept: { from: "checked", to: "struck" },
+      return: "blocked",
+    });
+    const list = aCardList([aCardRow({ id: "C-0001", flow: "plates", column: "queued" }), aCardRow({ id: "C-0002", flow: "plates", column: "inked" })], { flows: [plates] });
+    await open(boardClient(list));
+    await waitFor(() => card("C-0002"));
+    const heads = Array.from(document.querySelectorAll<HTMLElement>(".board-head > h2"));
+    const looks = heads.map((one) => {
+      const lozenge = one.querySelector(".lozenge");
+      return [lozenge?.getAttribute("data-appearance"), lozenge?.querySelector(".lozenge-label")?.textContent, lozenge?.querySelector("path")?.getAttribute("d")];
+    });
+    expect(looks).toEqual([
+      ["neutral", "queued", iconPath("open")],
+      ["warning", "blocked", iconPath("cardReturned")],
+      ["information", "checked", iconPath("taskInProgress")],
+      ["success", "struck", iconPath("taskAccepted")],
+      ["neutral", "Not in the flow", iconPath("unknown")],
+    ]);
+    // The lozenge comes first, the count after it; the head's name reads both.
+    expect(heads.map((one) => one.firstElementChild?.classList.contains("lozenge"))).toEqual([true, true, true, true, true]);
+    expect(head("queued").textContent).toBe("queued, 1 card");
+    expect(head("Not in the flow").classList.contains("board-column-title-outside")).toBe(true);
+  });
+});
 
 // docs/features/workspaces.md "The UI": the workspace's flows, judged against the read list alone.
 describe("the workspace's flows", () => {
@@ -746,8 +788,10 @@ describe("the card's modal", () => {
       expect(panel.getAllByText(value).length).toBeGreaterThan(0);
     }
     expect(panel.getByRole("link", { name: "R-2" }).getAttribute("href")).toBe("#/alpha/tree/R-2");
-    expect(panel.getByRole("link", { name: "C-0007" }).getAttribute("href")).toBe("#/alpha/board/C-0007");
-    expect(panel.getByRole("link", { name: "C-0008" }).getAttribute("href")).toBe("#/alpha/board/C-0008");
+    // The parent is in the breadcrumbs too (DF-8 of design-foundation): its field's link, in Details.
+    const details = within(panel.getByRole("region", { name: "Details" }));
+    expect(details.getByRole("link", { name: "C-0007" }).getAttribute("href")).toBe("#/alpha/board/C-0007");
+    expect(details.getByRole("link", { name: "C-0008" }).getAttribute("href")).toBe("#/alpha/board/C-0008");
   });
 
   it("evidence: kind, value, by, at; a url is text, never a link", async () => {
@@ -769,14 +813,18 @@ describe("the card's modal", () => {
     ]);
   });
 
-  it("offers Move, Hand off, Edit, Assign, Cancel card, and Accept in accept.from alone; no Return in a flow that names none", async () => {
+  // The work item's order (DF-6 of design-foundation): Accept first and primary in accept.from, Cancel
+  // card last; Move stands in the side column's Status.
+  it("offers Accept first and primary, in accept.from alone, then Hand off, Edit, Assign and Cancel card, with Move in the side column's Status; no Return in a flow that names none", async () => {
     const panel = within(await panelOf(FULL));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move", "Hand off", "Edit", "Assign", "Cancel card", "Accept"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Accept", "Hand off", "Edit", "Assign", "Cancel card"]);
+    expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
   });
 
   it("has no Accept outside accept.from", async () => {
     const panel = within(await panelOf({ ...FULL, column: "todo" }));
-    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move", "Hand off", "Edit", "Assign", "Cancel card"]);
+    expect(within(panel.getByRole("group", { name: "Actions" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Hand off", "Edit", "Assign", "Cancel card"]);
+    expect(within(panel.getByRole("region", { name: "Status" })).getAllByRole("button").map((button) => button.textContent)).toEqual(["Move"]);
   });
 
   it("an accepted card has no actions and shows who accepted it", async () => {
@@ -1933,7 +1981,12 @@ describe("swimlanes (BH-8)", () => {
     await waitFor(() => card("C-0004"));
     expect(laneHeads()).toEqual(["A hidden flow's card", "Everything else"]);
     const head = document.querySelector(".board-lane-head") as HTMLElement;
-    expect(head.textContent).toContain("hidden/draft");
+    // Where it stands (DF-5 of design-foundation): its flow's name and its column's lozenge, the raw pair gone.
+    const status = head.querySelector(".board-lane-status") as HTMLElement;
+    expect(status.querySelector("bdi")?.textContent).toBe("hidden");
+    const lozenge = status.querySelector(".lozenge");
+    expect([lozenge?.getAttribute("data-appearance"), lozenge?.querySelector(".lozenge-label")?.textContent, lozenge?.querySelector("svg")?.getAttribute("aria-hidden")]).toEqual(["neutral", "Draft", "true"]);
+    expect(head.textContent).not.toContain("hidden/draft");
     const link = within(head).getByRole("link", { name: "C-0090" });
     expect(link.getAttribute("href")).toBe("#/alpha/board/C-0090");
     fireEvent.click(link);
