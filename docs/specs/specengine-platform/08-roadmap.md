@@ -225,7 +225,7 @@ The same day, Flow v2 (RM-0094, RM-0095): the canvas is noisy, the documents in 
 - **Department** is an ADR-0073 workspace. Its statuses are its `[[card.flow]]` columns. Each column's status category comes from its position: the first column is to do, `accept.to` is done, `return` is returned, and the others are in progress. There is no `categories` key in `v5`.
 - **Task** is a card (`C-`), **Subtask** a child card from a hand-off, and **Agent task** a `T-` task.
 - **Entity type** is a node kind. **Direction** is a `[[module]]`: a root, or `kinds` from RM-0096.
-- **Path** is the served `path` (RM-0094).
+- **Path** is the served `ancestors` list, the `parent:` chain from the top (RM-0094).
 - **Proof** is a decision record that the card links back to.
 - **Folded in the UI.** These are local technical details: the UI folds them and never moves them. They are IDs, paths, raw kinds, revisions and hashes, tokens, distance, gap codes, Bindings, Bundle, the lock diff and drift. `T-` tasks show as a Development summary.
 
@@ -234,7 +234,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | Step | Slice | Item | Result | ADR issued | Hours | After |
 |---|---|---|---|---|---|---|
 | 1 | `design-foundation` | RM-0093 | Light and dark tokens (light by default, dark by the system, a Theme select per viewer); Inter bundled; a rem type scale, spacing on 8 px, radii, guards; Button, Lozenge, PropertyList, Breadcrumbs, IssueView, EmptyState; the card modal and page as the first work item; column heads by status category; a one-line header (`docs/features/design-foundation.md`) | - | 12-17 | - |
-| 2 | `flow-scenario` | RM-0094 | Flow v2 3c with the path: `in_flow` and an opt-in cut, readable boxes, a top-to-bottom walk, Records for the AI, a served `path`, the places pane a path | - | 11-17 | 1 |
+| 2 | `flow-scenario` | RM-0094 | Flow v2 3c with the path: `in_flow` and an opt-in cut, readable boxes, a top-to-bottom walk, Records for the AI, a served `ancestors` path, the places pane a path (`docs/features/flow-scenario.md`) | - | 11-17 | 1 |
 | 3 | `doc-modal` | RM-0095, RM-0091 | Flow v2 3d: link ends' titles, one document modal and page everywhere, the path its breadcrumb, technical details folded; RM-0091's plural fixes | - | 8-12 | 1, 2 |
 | 4 | `departments` | RM-0096 | The owner's words; `[[card.flow]] title`; `[[module]] kinds`; hand-off by department; preset titles | `departments` (amends ADR-0073) | 9-13 | 1 |
 | 5 | `card-questions` | RM-0097 | Intake items name `card_id` (queue schema 11, backup format 5); a decision's `why`; Activity; "Ask the writers" in Return; answers from the task | `card-questions` (supplements ADR-0056, ADR-0074, ADR-0075) | 10-14 | 1 |
@@ -250,7 +250,7 @@ The order is the one `spec roadmap` computes: `must` first, then `should`, then 
 | opt. | `journeys` | RM-0100 | One act hands a task to several departments, with a soft `after` | one, for the new key | 6-9 | 4, 6, gate |
 
 **Lanes.** Two lanes run side by side.
-- **The Rust lane** holds the cores of steps 2-5 (`in_flow` and `path`, link ends' titles, the department keys, the card's intake link), then steps 8 and 9.
+- **The Rust lane** holds the cores of steps 2-5 (`in_flow` and `ancestors`, link ends' titles, the department keys, the card's intake link), then steps 8 and 9.
 - **The UI lane** starts with step 1, then takes the UIs of steps 2-5, then steps 6 and 7.
 
 A slice's UI waits for its core and for step 1; no core waits for the UI lane. Steps 10-13 follow both lanes.
