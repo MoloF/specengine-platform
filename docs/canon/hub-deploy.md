@@ -61,11 +61,11 @@ Every router to the daemon also carries `hardening` (`nosniff`, HSTS, COOP `same
 
 ADR-0068. Root is the host's shell: `docker compose run --rm admin <act>` runs `admin/hub-admin`, POSIX `sh` on the door's own image and CLI. `admin` has `network_mode: none`, `logging: {driver: none}`, no port, `depends_on` or restart, and `profiles: [admin]`, so `up -d` never starts it; `specengine` mounts nothing of it; an act that writes, or `code`, needs a terminal. No crate holds account code.
 
-It alone writes `users.yml`, the MCP users file and the stamp `traefik/dynamic/mcp-stamp.yml` (an unused value that goes up, so Traefik builds anew), each staged, read back and renamed under the lock `admin-log/lock/`, logged to `admin-log/acts.log` without secrets. Logins match `^[a-z]([a-z0-9._-]{0,62}[a-z0-9])?$`, never `local`, `agent`, `null`, `true`, `false`; names and the users file refuse what the door's YAML parser rejects. `disable` writes the door first; a `reset` that left a passkey exits 1, and the account stays disabled until one leaves none. `add` prints the `[team]` row; `spec team | hub-admin check` compares. The read-only users folder and a first `add` before `up -d` close 11b-1's possible default user. Acts and procedures: the guide.
+It alone writes `users.yml`, the MCP users file and the stamp `traefik/dynamic/mcp-stamp.yml` (an unused value that goes up, so Traefik builds anew), each staged, read back and renamed under the lock `admin-log/lock/`, logged to `admin-log/acts.log` without secrets. The door's CLI draws each password and secret (`--random`): none is on stdin or an argument. Logins match `^[a-z]([a-z0-9._-]{0,62}[a-z0-9])?$`, never `local`, `agent`, `null`, `true`, `false`; names and the users file refuse what the door's YAML parser rejects. `disable` writes the door first; a `reset` that left a passkey exits 1, and the account stays disabled until one leaves none. `add` prints the `[team]` row; `spec team | hub-admin check` compares. The read-only users folder and a first `add` before `up -d` close 11b-1's possible default user. Acts and procedures: the guide.
 
 ## Gate
 
-Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md`, HO1-HO17 of `docs/features/hub-ops.md`, G1-G10 of `hub-accounts.md`, SG1-SG2 of `stream-life.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here, with versions and dates; `--push` and real people wait for it.
+Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of `docs/features/hub-deploy.md`, HO1-HO17 of `docs/features/hub-ops.md`, G1-G10 of `hub-accounts.md`, SG1-SG2 of `stream-life.md` and the claude.ai half of `hub-mcp.md` "Client check". Findings land here, with versions and dates; `--push` and real people wait for it. 2026-11-10, the VPS, Authelia 4.39.28: `add` failed, a piped password refused; `--random` works (VF1).
 
 ## Known limits
 
@@ -77,7 +77,7 @@ Step 11b-3, by hand: the owner's, on a clean VM, then the VPS, through H1-H17 of
 - AI on a hub means Claude Code until the claude.ai check; writers without it use the web UI.
 - A `specengine.toml` below its repository's top is not served.
 - The MCP users file is read when its middleware is built (from memory), hence the stamp; VF2 open.
-- `hub-admin` until VF1-VF3 (`docs/features/hub-accounts.md`): the door's CLI flags and "nothing to delete" answers from memory, busybox `od`, `awk` untested, the NUL case proven on macOS awk alone; smaller limits: the guide.
+- `hub-admin` until VF1-VF3 (`hub-accounts.md`): the deletes' flags and "nothing to delete" answers from memory, busybox `od`, `awk` untested, the NUL case proven on macOS awk alone; smaller limits: the guide.
 - A private GHCR package needs a pull credential on the host.
 - A hand change on the host (`git pull`, an edit, a restore) reaches trusting reads after `spec index` or a reconcile (`spec-read-freshness.md`).
 - Unverified until the gate (from memory): that Traefik keeps the client's `Host` and drops a client's copy of a listed header also when the door returns none; that the door on a sibling subdomain makes the landing a `same-site` navigation (tried in no browser).

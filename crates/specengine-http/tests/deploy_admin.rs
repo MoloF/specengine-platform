@@ -9,11 +9,16 @@
 //! (`notification.txt`) and `tmp/`, the container's own `/tmp` (R4). First on
 //! `PATH` (D12's pattern):
 //! - a stub `authelia` that keeps each call's arguments and stdin and answers in
-//!   the shapes "The door's CLI" records (from memory until VF1): `Digest: <d>`
-//!   for `crypto hash generate argon2|bcrypt`, a bare exit 0 for `storage user
-//!   webauthn|totp delete`. A control file lists the calls that exit 1
+//!   the shapes "The door's CLI" records (from memory until VF1), a bare exit
+//!   0 for `storage user webauthn|totp delete`. `crypto hash generate
+//!   argon2|bcrypt` answers as the pinned 4.39.28 was seen to on the owner's
+//!   VPS: no password from a pipe (exit 1, its "failed to read the password
+//!   from the terminal" and usage), and with `--random` the lines `Random
+//!   Password: <value>` (of `--random.characters`, `--random.length` long)
+//!   and `Digest: <d>`. A control file lists the calls that exit 1
 //!   (`fail-at`; a delete then answers a recorded "nothing to delete" line),
-//!   answer off their shape (`bad-at`) or wait for a release (`hold-at`);
+//!   answer a digest off its shape (`bad-at`) or wait for a release
+//!   (`hold-at`); `password.<n>` replaces call n's `Random Password:` line;
 //! - a `base64` that wraps at 76 columns, as busybox's in the pinned image
 //!   does ("`mcp rotate`'s output"); macOS's does not wrap, so without it a
 //!   missing newline removal would pass on the laptop;
@@ -98,19 +103,143 @@ const TOTP_ANSWER: &str = "Error: the user has no TOTP configuration to delete";
 /// R10's line when a passkey delete failed.
 const NO_ENABLE: &str = "hub-admin: passkeys not deleted: do not enable this account until reset ends without passkeys-left";
 
+/// The pinned door's refusal of a hash with neither `--password` nor
+/// `--random` and stdin no terminal, its first stderr line (verified on
+/// `authelia/authelia:4.39.28`).
+const NO_TERMINAL: &str = "Error: failed to read the password from the terminal: you must either use an interactive terminal or use the --password flag";
+
+/// The characters `hub-admin` asks the door's random password of
+/// (`--random.characters`).
+const HEX: &str = "0123456789abcdef";
+
 /// The stub of the door's CLI; `@DOOR@` is its records' folder, `@BCRYPT@`
-/// [`BCRYPT_FILL`], `@PASSKEYS@` and `@TOTP@` the delete answers.
+/// [`BCRYPT_FILL`], `@PASSKEYS@` and `@TOTP@` the delete answers,
+/// `@NO_TERMINAL@` [`NO_TERMINAL`].
 const DOOR_STUB: &str = r#"#!/bin/sh
 # The door's CLI as docs/features/hub-accounts.md "The door's CLI" records it
-# (from memory until VF1). Each call's arguments and stdin are kept under the
-# records' folder; `fail-at`, `bad-at` and `hold-at` there list the calls that
-# exit 1, answer off their shape, or wait for `release`.
+# (from memory until VF1). `crypto hash generate argon2|bcrypt` answers as the
+# pinned authelia 4.39.28 does: with neither `--password` nor `--random` and
+# stdin no terminal it refuses with its usage and exits 1, and never reads a
+# password from stdin; `--random` prints `Random Password: <value>` and
+# `Digest: <d>`. Each call's arguments and stdin are kept under the records'
+# folder, and a random password it printed in `random.<n>`; `fail-at`,
+# `bad-at` and `hold-at` there list the calls that exit 1, answer a digest
+# off its shape, or wait for `release`; a file `password.<n>` is printed in
+# place of call n's `Random Password:` line.
 door='@DOOR@'
 listed() {
     case " $(cat "$door/$1" 2>/dev/null) " in
         *" $n "*) return 0 ;;
     esac
     return 1
+}
+# `crypto hash generate <kind> [flags]`, as authelia 4.39.28 parses its flags
+# (`--flag value` or `--flag=value`). The defaults (alphanumeric, 72
+# characters, cost 12) are assumed, not seen: a script that drops
+# `--random.characters`, `--random.length` or `--cost` gets a value or a
+# digest off the shape it asked for.
+crypto_hash() {
+    kind=$4
+    shift 4
+    random=no
+    password=no
+    characters=
+    charset=alphanumeric
+    length=72
+    cost=12
+    expect=
+    for argument in "$@"; do
+        if [ -n "$expect" ]; then
+            case $expect in
+                --password) password=yes ;;
+                --random.characters) characters=$argument ;;
+                --random.charset) charset=$argument ;;
+                --random.length) length=$argument ;;
+                --cost) cost=$argument ;;
+            esac
+            expect=
+            continue
+        fi
+        case $kind:$argument in
+            *:--random | *:--random=true) random=yes ;;
+            *:--random=false) random=no ;;
+            *:--password=*) password=yes ;;
+            *:--random.characters=*) characters=${argument#*=} ;;
+            *:--random.charset=*) charset=${argument#*=} ;;
+            *:--random.length=*) length=${argument#*=} ;;
+            bcrypt:--cost=*) cost=${argument#*=} ;;
+            *:--password | *:--random.characters | *:--random.charset | *:--random.length | bcrypt:--cost)
+                expect=$argument
+                ;;
+            *)
+                echo "Error: unknown flag: $argument" >&2
+                exit 1
+                ;;
+        esac
+    done
+    if [ -n "$expect" ]; then
+        echo "Error: flag needs an argument: $expect" >&2
+        exit 1
+    fi
+    if [ "$random" = no ] && [ "$password" = no ]; then
+        if [ -f "$door/tty.$n" ]; then
+            echo "Error: the stub does not answer the door's interactive prompt" >&2
+            exit 1
+        fi
+        echo '@NO_TERMINAL@' >&2
+        printf 'Usage:\n  authelia crypto hash generate %s [flags]\n\n' "$kind" >&2
+        printf 'Flags:\n  -h, --help   help for %s\n      --password string   manually supply the password\n      --random   uses a randomly generated password\n\n' "$kind" >&2
+        printf 'Global Flags:\n  -c, --config strings   configuration files or directories to load\n' >&2
+        exit 1
+    fi
+    if [ "$random" = yes ] && [ "$password" = yes ]; then
+        echo "Error: the stub holds no recording for --password with --random" >&2
+        exit 1
+    fi
+    case $length:$cost in
+        :* | *[!0-9:]* | 0:* | *:)
+            echo "Error: the stub holds no recording for --random.length $length --cost $cost" >&2
+            exit 1
+            ;;
+    esac
+    if [ -z "$characters" ]; then
+        case $charset in
+            alphanumeric) characters=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 ;;
+            *)
+                echo "Error: the stub holds no recording for --random.charset $charset" >&2
+                exit 1
+                ;;
+        esac
+    fi
+    if [ "$random" = yes ]; then
+        value=$(awk -v c="$characters" -v l="$length" -v n="$n" 'BEGIN {
+            k = length(c); s = ""
+            for (i = 0; i < l; i++) s = s substr(c, (n * 5 + i * 3) % k + 1, 1)
+            print s
+        }')
+        printf '%s\n' "$value" > "$door/random.$n"
+        if [ -f "$door/password.$n" ]; then
+            cat "$door/password.$n"
+        else
+            printf 'Random Password: %s\n' "$value"
+        fi
+    fi
+    case $kind in
+        argon2)
+            if [ "$bad" = yes ]; then
+                echo 'Digest: $argon2id$v=19$m=65536,t=3,p=4$c2FsdA'
+            else
+                printf 'Digest: $argon2id$v=19$m=65536,t=3,p=4$c2FsdA%s$aGFzaA%s\n' "$n" "$n"
+            fi
+            ;;
+        bcrypt)
+            if [ "$bad" = yes ]; then
+                echo 'Digest: $2b$10$short'
+            else
+                printf 'Digest: $2b$%02d$@BCRYPT@%03d\n' "$cost" "$n"
+            fi
+            ;;
+    esac
 }
 n=1
 if [ -f "$door/count" ]; then n=$(( $(cat "$door/count") + 1 )); fi
@@ -148,19 +277,8 @@ case "$1 $2 $3 $4" in
         ;;
 esac
 case "$1 $2 $3 $4" in
-    "crypto hash generate argon2")
-        if [ "$bad" = yes ]; then
-            echo 'Digest: $argon2id$v=19$m=65536,t=3,p=4$c2FsdA'
-        else
-            printf 'Digest: $argon2id$v=19$m=65536,t=3,p=4$c2FsdA%s$aGFzaA%s\n' "$n" "$n"
-        fi
-        ;;
-    "crypto hash generate bcrypt")
-        if [ "$bad" = yes ]; then
-            echo 'Digest: $2b$10$short'
-        else
-            printf 'Digest: $2b$10$@BCRYPT@%03d\n' "$n"
-        fi
+    "crypto hash generate argon2" | "crypto hash generate bcrypt")
+        crypto_hash "$@"
         ;;
     "storage user webauthn delete")
         if [ "$fail" = yes ]; then
@@ -512,6 +630,8 @@ struct Call {
     args: Vec<String>,
     stdin: String,
     on_terminal: bool,
+    /// The random password the stub generated (`Random Password: `), if any.
+    random: Option<String>,
 }
 
 impl Call {
@@ -519,9 +639,65 @@ impl Call {
         self.args.len() >= words.len() && self.args[..words.len()] == *words
     }
 
-    /// stdin without one final newline.
-    fn secret(&self) -> &str {
-        self.stdin.strip_suffix('\n').unwrap_or(&self.stdin)
+    /// The value of the flag `name`, given as `name value` or `name=value`.
+    fn flag(&self, name: &str) -> Option<&str> {
+        let joined = format!("{name}=");
+        self.args.iter().enumerate().find_map(|(at, arg)| {
+            if arg == name {
+                self.args.get(at + 1).map(String::as_str)
+            } else {
+                arg.strip_prefix(&joined)
+            }
+        })
+    }
+
+    /// Whether any argument is `--password`, in either form.
+    fn gives_password(&self) -> bool {
+        self.args
+            .iter()
+            .any(|arg| arg == "--password" || arg.starts_with("--password="))
+    }
+
+    /// The door's random password the stub printed, which `hub-admin` must
+    /// take as the account's password or MCP secret.
+    fn generated(&self) -> &str {
+        self.random
+            .as_deref()
+            .unwrap_or_else(|| panic!("the stub generated no random password: {self:?}"))
+    }
+
+    /// The hash of `kind` as `hub-admin` must ask it (the pinned door takes
+    /// no password on stdin): `crypto hash generate <kind> --random` with
+    /// `--random.characters` [`HEX`] and `--random.length` `length`, no
+    /// `--password`, nothing on stdin, the door's password in no argument.
+    fn assert_random_hash(&self, kind: &str, length: usize, label: &str) {
+        assert!(
+            self.starts(&["crypto", "hash", "generate", kind]),
+            "{label}: the {kind} hash: {self:?}"
+        );
+        assert!(
+            self.names("--random") || self.names("--random=true"),
+            "{label}: the door generates the password (--random): {self:?}"
+        );
+        assert_eq!(
+            self.flag("--random.characters"),
+            Some(HEX),
+            "{label}: lower-case hex: {self:?}"
+        );
+        assert_eq!(
+            self.flag("--random.length"),
+            Some(length.to_string().as_str()),
+            "{label}: {length} characters: {self:?}"
+        );
+        assert!(
+            !self.gives_password(),
+            "{label}: no --password in argv: {self:?}"
+        );
+        assert_eq!(self.stdin, "", "{label}: nothing on the hash's stdin");
+        assert!(
+            !self.holds(self.generated()),
+            "{label}: the password is in no argument: {self:?}"
+        );
     }
 
     /// `--`, then `login` right after it (R7).
@@ -643,7 +819,8 @@ impl Hub {
                 .replace("@DOOR@", text_of(&door))
                 .replace("@BCRYPT@", BCRYPT_FILL)
                 .replace("@PASSKEYS@", PASSKEYS_ANSWER)
-                .replace("@TOTP@", TOTP_ANSWER),
+                .replace("@TOTP@", TOTP_ANSWER)
+                .replace("@NO_TERMINAL@", NO_TERMINAL),
         );
         executable(
             &bin.join("base64"),
@@ -766,6 +943,12 @@ impl Hub {
         fs::write(self.door.join(name), listed.join(" ")).expect("a control file");
     }
 
+    /// The stub prints `text` in place of call `call`'s `Random Password:`
+    /// line (empty: no such line).
+    fn password_line(&self, call: usize, text: &str) {
+        fs::write(self.door.join(format!("password.{call}")), text).expect("a control file");
+    }
+
     fn calls(&self) -> Vec<Call> {
         let Ok(count) = fs::read_to_string(self.door.join("count")) else {
             return Vec::new();
@@ -779,6 +962,9 @@ impl Hub {
                     .collect(),
                 stdin: read(&self.door.join(format!("stdin.{n}"))),
                 on_terminal: self.door.join(format!("tty.{n}")).exists(),
+                random: fs::read_to_string(self.door.join(format!("random.{n}")))
+                    .ok()
+                    .map(|text| text.trim_end_matches('\n').to_owned()),
             })
             .collect()
     }
@@ -1051,10 +1237,14 @@ const ADD_LENA: [&str; 6] = [
 /// of "Data" (`displayname`, `email`, `disabled: false`, the stub's digest
 /// without `Digest: `), `olek`'s lines byte for byte. `users.yml` is a new
 /// inode of mode 600, the old bytes kept as `users.yml.prev`, mode 600. The
-/// password, 32 hex, is printed once and is the stub's stdin, in none of its
-/// arguments. The act log, mode 600, gains one `add mira -` line holding no
-/// password or digest. stdout is "`add`'s output", the `[team]` row included,
-/// and the lock is gone. M: keep the prefix; write in place; drop the log line.
+/// password, 32 hex, is the door's own (`crypto hash generate argon2
+/// --random`, its `Random Password:` line, as the pinned 4.39.28 takes no
+/// password on stdin), printed once; the hash is given no `--password`,
+/// nothing on stdin and the password in none of its arguments, and no file
+/// under the root holds it afterwards. The act log, mode 600, gains one `add
+/// mira -` line holding no password or digest. stdout is "`add`'s output",
+/// the `[team]` row included, and the lock is gone. M: keep the prefix; write
+/// in place; drop the log line; pipe the password to the hash.
 #[test]
 fn ac01_add_appends_the_entry_through_a_new_file_and_shows_the_password_once() {
     let hub = Hub::new("ac01");
@@ -1120,21 +1310,27 @@ fn ac01_add_appends_the_entry_through_a_new_file_and_shows_the_password_once() {
     );
     let calls = hub.calls();
     assert_eq!(calls.len(), 1, "one call of the door's CLI: {calls:?}");
-    assert!(
-        calls[0].starts(&["crypto", "hash", "generate", "argon2"]),
-        "{:?}",
-        calls[0]
-    );
-    assert!(
-        !calls[0].on_terminal,
-        "the hash reads a pipe, not the terminal"
-    );
+    calls[0].assert_random_hash("argon2", 32, "add");
+    assert!(!calls[0].on_terminal, "the hash never reads the terminal");
     assert_eq!(
-        calls[0].secret(),
+        calls[0].generated(),
         password,
-        "the password reaches the door's CLI on stdin"
+        "the shown password is the door's `Random Password:`"
     );
-    assert!(!calls[0].holds(&password), "the password is no argument");
+    let holding: Vec<String> = hub
+        .files()
+        .into_iter()
+        .filter(|(_, content)| {
+            content
+                .as_deref()
+                .is_some_and(|data| String::from_utf8_lossy(data).contains(&password))
+        })
+        .map(|(path, _)| path)
+        .collect();
+    assert!(
+        holding.is_empty(),
+        "no file keeps the password: {holding:?}"
+    );
 
     let expected = format!(
         "added mira\n\
@@ -1801,7 +1997,8 @@ fn ac05_enable_reopens_the_account_alone() {
 
 /// AC6: `reset mira` writes the stub's new digest in `mira`'s `password:`
 /// line, every other byte kept. The stub's log shows, in order, the argon2
-/// hash (the printed password on stdin), the WebAuthn delete with `--all`,
+/// hash (`--random`, the printed password its `Random Password:`, no
+/// `--password`, nothing on stdin), the WebAuthn delete with `--all`,
 /// and the TOTP delete, each with `--` right before `mira` (R7), and nothing
 /// else. It prints `reset mira` and the password once, and logs `reset mira
 /// password passkeys totp`. M: skip the WebAuthn delete; drop `--`.
@@ -1830,11 +2027,7 @@ fn ac06_reset_hashes_then_deletes_passkeys_then_totp() {
         3,
         "the hash, two deletes, nothing else: {calls:?}"
     );
-    assert!(
-        calls[0].starts(&["crypto", "hash", "generate", "argon2"]),
-        "{:?}",
-        calls[0]
-    );
+    calls[0].assert_random_hash("argon2", 32, "reset");
     assert!(
         calls[1].starts(&["storage", "user", "webauthn", "delete"])
             && calls[1].login_after_dashes("mira")
@@ -1857,8 +2050,11 @@ fn ac06_reset_hashes_then_deletes_passkeys_then_totp() {
     );
     let shown = hex_words(&act.stdout, 32);
     assert_eq!(shown.len(), 1, "one password: {}", act.show());
-    assert_eq!(calls[0].secret(), shown[0], "the password on stdin");
-    assert!(!calls[0].holds(&shown[0]), "the password is no argument");
+    assert_eq!(
+        calls[0].generated(),
+        shown[0],
+        "the shown password is the door's `Random Password:`"
+    );
     assert_eq!(act.everything().matches(&shown[0]).count(), 1);
     let log = hub.log_lines();
     assert_eq!(log.len(), 1, "{log:?}");
@@ -1870,11 +2066,14 @@ fn ac06_reset_hashes_then_deletes_passkeys_then_totp() {
 /// `claude mcp add` line for `https://hub.example.org/mcp/<slug>`, whose Basic
 /// value decodes to `mira:<secret>` on one line (the `base64` first on `PATH`
 /// wraps as busybox's does). `mira`'s line is replaced, so the file holds one
-/// `mira:` line, the stub's digest, and the others byte for byte in order. The
-/// secret is the stub's stdin and in none of its arguments. The stamp goes to
-/// 1, and the act log gains `mcp-rotate mira -`, no secret or digest. `rotate`
-/// of the disabled `zed` exits 2, writing and calling nothing. M: append a
-/// line; pass the secret as an argument; base64 without removing newlines.
+/// `mira:` line, the stub's bcrypt digest at `--cost 10`, and the others byte
+/// for byte in order. The secret is the door's own (`crypto hash generate
+/// bcrypt --cost 10 --random`, 64 hex, its `Random Password:` line); the hash
+/// is given no `--password`, nothing on stdin and the secret in none of its
+/// arguments. The stamp goes to 1, and the act log gains `mcp-rotate mira -`,
+/// no secret or digest. `rotate` of the disabled `zed` exits 2, writing and
+/// calling nothing. M: append a line; pass the secret as an argument; base64
+/// without removing newlines; pipe the secret to the hash.
 #[test]
 fn ac07_rotate_replaces_the_line_and_prints_one_usable_header() {
     let hub = Hub::new("ac07");
@@ -1921,17 +2120,14 @@ fn ac07_rotate_replaces_the_line_and_prints_one_usable_header() {
 
     let calls = hub.calls();
     assert_eq!(calls.len(), 1, "{calls:?}");
-    assert!(
-        calls[0].starts(&["crypto", "hash", "generate", "bcrypt"]),
-        "{:?}",
-        calls[0]
+    calls[0].assert_random_hash("bcrypt", 64, "mcp rotate");
+    assert_eq!(calls[0].flag("--cost"), Some("10"), "{:?}", calls[0]);
+    assert!(!calls[0].on_terminal, "the hash never reads the terminal");
+    assert_eq!(
+        calls[0].generated(),
+        secret,
+        "the shown secret is the door's `Random Password:`"
     );
-    assert!(
-        !calls[0].on_terminal,
-        "the hash reads a pipe, not the terminal"
-    );
-    assert_eq!(calls[0].secret(), secret, "the secret on stdin");
-    assert!(!calls[0].holds(&secret), "the secret is no argument");
 
     let file = read(&hub.mcp());
     let (own, others): (Vec<&str>, Vec<&str>) =
@@ -2013,8 +2209,9 @@ fn ac07_a_stamp_that_cannot_be_written_still_shows_the_secret() {
     );
     let calls = hub.calls();
     assert_eq!(calls.len(), 1, "{calls:?}");
+    calls[0].assert_random_hash("bcrypt", 64, "mcp rotate, no stamp");
     assert_eq!(
-        calls[0].secret(),
+        calls[0].generated(),
         secret,
         "the shown secret is the hashed one"
     );
@@ -2207,6 +2404,207 @@ fn ac09_a_failing_door_leaves_every_file_whole() {
     }
 }
 
+// ------------------------------------------------------------- the door's random password
+
+/// The stub answers `crypto hash generate` as the pinned
+/// `authelia/authelia:4.39.28` was seen to: with neither `--password` nor
+/// `--random` and stdin no terminal (`/dev/null`, or a pipe holding a
+/// password), it exits 1 printing [`NO_TERMINAL`] and then its usage on
+/// stderr, nothing on stdout; `argon2 --random --random.characters <hex>
+/// --random.length 32` prints exactly `Random Password: <32 hex>` and
+/// `Digest: $argon2id$v=19$m=65536,t=3,p=4$<salt>$<hash>`; `bcrypt --cost 10
+/// --random ... --random.length 64` exactly `Random Password: <64 hex>` and
+/// `Digest: $2b$10$<53>`. A stand-in that took a piped password would let
+/// `hub-admin` pass here and fail on the VPS, as it did.
+#[test]
+fn door_stub_answers_crypto_hash_as_the_pinned_cli() {
+    let hub = Hub::new("door-stub");
+    let door = hub.bin.join("authelia");
+    let run = |args: &[&str], stdin: Option<&str>| -> (i32, String, String) {
+        let mut child = Command::new(&door)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .args(args)
+            .stdin(if stdin.is_some() {
+                Stdio::piped()
+            } else {
+                Stdio::null()
+            })
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("the stub runs");
+        if let Some(text) = stdin {
+            let mut pipe = child.stdin.take().expect("its stdin");
+            let _ = pipe.write_all(text.as_bytes());
+        }
+        let output = child.wait_with_output().expect("the stub ends");
+        (
+            output.status.code().unwrap_or(-1),
+            String::from_utf8_lossy(&output.stdout).into_owned(),
+            String::from_utf8_lossy(&output.stderr).into_owned(),
+        )
+    };
+
+    let argon2: &[&str] = &["crypto", "hash", "generate", "argon2"];
+    let bcrypt: &[&str] = &["crypto", "hash", "generate", "bcrypt", "--cost", "10"];
+    for (args, stdin) in [
+        (argon2, None),
+        (argon2, Some("0123456789abcdef0123456789abcdef\n")),
+        (bcrypt, None),
+        (bcrypt, Some("0123456789abcdef0123456789abcdef\n")),
+    ] {
+        let (code, stdout, stderr) = run(args, stdin);
+        let label = format!("{args:?}, stdin {stdin:?}");
+        assert_eq!(code, 1, "{label}: refused: {stderr}");
+        assert_eq!(stdout, "", "{label}: nothing on stdout");
+        assert_eq!(
+            stderr.lines().next(),
+            Some(NO_TERMINAL),
+            "{label}: the door's own words first: {stderr}"
+        );
+        assert!(
+            stderr.lines().any(|line| line == "Usage:"),
+            "{label}: then its usage: {stderr}"
+        );
+    }
+
+    let (code, stdout, stderr) = run(
+        &[
+            "crypto",
+            "hash",
+            "generate",
+            "argon2",
+            "--random",
+            "--random.characters",
+            HEX,
+            "--random.length",
+            "32",
+        ],
+        None,
+    );
+    assert_eq!(code, 0, "argon2 --random: {stderr}");
+    let shape = Regex::new(
+        r"^Random Password: [0-9a-f]{32}\nDigest: \$argon2id\$v=19\$m=65536,t=3,p=4\$[A-Za-z0-9+/]+\$[A-Za-z0-9+/]+\n$",
+    )
+    .expect("a pattern");
+    assert!(shape.is_match(&stdout), "argon2 --random: {stdout:?}");
+
+    let (code, stdout, stderr) = run(
+        &[
+            "crypto",
+            "hash",
+            "generate",
+            "bcrypt",
+            "--cost",
+            "10",
+            "--random",
+            "--random.characters",
+            HEX,
+            "--random.length",
+            "64",
+        ],
+        None,
+    );
+    assert_eq!(code, 0, "bcrypt --random: {stderr}");
+    let shape =
+        Regex::new(r"^Random Password: [0-9a-f]{64}\nDigest: \$2b\$10\$[./A-Za-z0-9]{53}\n$")
+            .expect("a pattern");
+    assert!(shape.is_match(&stdout), "bcrypt --random: {stdout:?}");
+}
+
+/// The hotfix's refusal: with the stub's `Random Password:` line missing,
+/// doubled, or off its shape (empty, a hex short or long by one, upper-case,
+/// a non-hex character, a `Random password:` spelling), `add`, `reset` and
+/// `mcp rotate` exit 1 with a `hub-admin: ` line saying `nothing changed`,
+/// show no password or secret, make no call after the hash (so no delete),
+/// keep the users file, the MCP file, the stamp and `hub.yml` byte for byte,
+/// log nothing, and leave no temp file and no lock. M: take the line
+/// unchecked; accept any length; accept upper-case.
+#[test]
+fn a_missing_or_off_shape_random_password_changes_nothing() {
+    let reset: &[&str] = &["reset", "mira"];
+    let rotate: &[&str] = &["mcp", "rotate", "mira"];
+    let shapes = |width: usize| -> Vec<(String, String)> {
+        let good = "0123456789abcdef".repeat(4)[..width].to_owned();
+        vec![
+            ("no line".to_owned(), String::new()),
+            (
+                "an empty value".to_owned(),
+                "Random Password: \n".to_owned(),
+            ),
+            (
+                "one short".to_owned(),
+                format!("Random Password: {}\n", &good[1..]),
+            ),
+            ("one long".to_owned(), format!("Random Password: {good}0\n")),
+            (
+                "upper-case".to_owned(),
+                format!("Random Password: {}\n", good.to_uppercase()),
+            ),
+            (
+                "a non-hex character".to_owned(),
+                format!("Random Password: g{}\n", &good[1..]),
+            ),
+            (
+                "another spelling".to_owned(),
+                format!("Random password: {good}\n"),
+            ),
+            (
+                "two lines".to_owned(),
+                format!("Random Password: {good}\nRandom Password: {good}\n"),
+            ),
+        ]
+    };
+    let mut cases: Vec<(&[&str], String, String)> = Vec::new();
+    for (args, width) in [(&ADD_LENA[..], 32), (reset, 32), (rotate, 64)] {
+        for (shape, line) in shapes(width) {
+            cases.push((args, shape, line));
+        }
+    }
+    for (args, shape, line) in cases {
+        let label = format!("{args:?}, {shape}");
+        let hub = Hub::new("random-shape");
+        hub.put(
+            &hub.users(),
+            &users_file(&[
+                &entry("mira", "Mira K", "mira@example.org", false),
+                &entry("olek", "Olek", "olek@example.org", false),
+            ]),
+        );
+        hub.put(&hub.mcp(), &mcp_line("mira", 'M'));
+        hub.put(&hub.stamp(), &stamp_text(3));
+        let watched = hub.watched();
+        hub.password_line(1, &line);
+
+        let act = hub.terminal(args, &[]);
+        assert_eq!(act.code, 1, "{label}: {}", act.show());
+        act.refused(1);
+        assert!(
+            act.stderr
+                .lines()
+                .any(|one| one.starts_with(REFUSAL) && one.ends_with("nothing changed")),
+            "{label}: `... nothing changed`: {}",
+            act.show()
+        );
+        assert!(
+            !act.everything().contains("shown once"),
+            "{label}: nothing shown as a password or secret: {}",
+            act.show()
+        );
+        assert_eq!(
+            hub.calls().len(),
+            1,
+            "{label}: nothing after the hash, no delete"
+        );
+        assert_eq!(hub.watched(), watched, "{label}: every file whole");
+        assert!(hub.temps().is_empty(), "{label}: {:?}", hub.temps());
+        assert!(!hub.lock().exists(), "{label}: the lock is gone");
+        let log = hub.log_lines();
+        assert!(log.is_empty(), "{label}: nothing to log: {log:?}");
+    }
+}
+
 // ------------------------------------------------------------- AC19: a failing delete
 
 /// AC19 (R3, R10): `reset mira` with the stub's delete exiting 1 with its
@@ -2285,10 +2683,11 @@ fn ac19_reset_completes_with_a_warning_when_a_delete_fails() {
         );
         let shown = hex_words(&act.stdout, 32);
         assert_eq!(shown.len(), 1, "{label}: one password: {}", act.show());
+        calls[0].assert_random_hash("argon2", 32, label);
         assert_eq!(
-            calls[0].secret(),
+            calls[0].generated(),
             shown[0],
-            "{label}: the password on stdin"
+            "{label}: the shown password is the door's `Random Password:`"
         );
         let log = hub.log_lines();
         assert_eq!(log.len(), 1, "{label}: {log:?}");

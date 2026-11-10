@@ -121,7 +121,7 @@ claude mcp add --transport http --scope user hub-<slug> https://hub.example.org/
 ## Before the gate
 
 `hub-admin` was tested against a stand-in for the door's CLI. On the pinned images, before real people (`docs/features/hub-accounts.md` VF1-VF3):
-1. **The door's image:** its `sh`, `awk`, `od`, `base64`; `crypto hash generate` on stdin, its output, the lowest bcrypt cost; both `storage user ... delete` calls, and their answer when nothing is there; no default user for a missing users file; a start on a read-only one.
+1. **The door's image:** its `sh`, `awk`, `od`, `base64`; `crypto hash generate --random`, its output, the lowest bcrypt cost; both `storage user ... delete` calls, and their answer when nothing is there; no default user for a missing users file; a start on a read-only one.
 2. **The proxy:** a new stamp (`traefik/dynamic/mcp-stamp.yml`) makes it read the MCP users file again; `$2b$` digests pass; what a missing users file does to `/mcp`.
 3. **The door, on Linux:** a `disable` ends a live session at its next request; two edits in a row are both read.
 4. **Dumps and health:** VF4-VF9 of `docs/features/hub-ops.md`.

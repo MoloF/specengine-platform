@@ -7,9 +7,10 @@
 # unless stdin is a terminal. It writes the door's users file, the proxy's MCP
 # users file and its stamp (S1), each through a staging file renamed in its
 # own folder, under the lock admin-log/lock/, and appends the act log; the
-# door's output is caught under the container's own /tmp (R4). Passwords and
-# secrets reach the door's CLI on stdin alone and are printed once, never
-# logged. It never writes [team]: `add` prints a row for a reviewed commit.
+# door's output is caught under the container's own /tmp (R4). The door's CLI
+# draws each password and secret itself (`--random`), so none is ever an
+# argument; each is printed once, never logged. It never writes [team]: `add`
+# prints a row for a reviewed commit.
 # `dump` and `restore` (docs/features/hub-ops.md "`hub-admin`: `dump` and
 # `restore`") carry the door off a host and back: `dump`, run by dump-door's
 # loop with no terminal, copies the files and runs the door's passkey and
@@ -784,6 +785,9 @@ door_run() {
     fi
     [ -d "$tmp_dir" ] || mkdir -p "$tmp_dir" ||
         refuse "cannot make $tmp_dir for the door's output; nothing changed"
+    # Fresh files, so umask 077 makes them mode 600: door_out may hold a
+    # password or secret the door drew.
+    rm -f "$door_out" "$door_err"
     if [ -n "$door_input" ]; then
         printf '%s\n' "$door_input" | "$@" > "$door_out" 2> "$door_err" &
     else
@@ -796,11 +800,33 @@ door_run() {
     return "$door_status"
 }
 
-# The door's last non-blank stderr line, a control character shown as `?`;
-# its exit status when it said nothing.
+# The door's last stderr line starting `Error: `, else its last non-blank
+# one, a control character shown as `?`; its exit status when it said
+# nothing. The pinned CLI prints its usage after the error.
 door_said() {
-    said=$(awk 'NF { last = $0 } END { gsub(/[[:cntrl:]]/, "?", last); print last }' "$door_err" 2>/dev/null)
+    said=$(awk '
+        /^Error: / { error = $0 }
+        NF { last = $0 }
+        END {
+            if (error != "") last = error
+            gsub(/[[:cntrl:]]/, "?", last)
+            print last
+        }' "$door_err" 2>/dev/null)
     printf '%s' "${said:-no message, exit $door_status}"
+}
+
+# The one `Random Password: ` line of door_out, its prefix stripped, if it
+# is `$1` lower-case hex. Read by `$(...)`, so the value is on no argument
+# and no stderr.
+random_of() {
+    HA_LENGTH=$1 awk '
+        /^Random Password: / { found++; random = substr($0, 18) }
+        END {
+            if (found != 1) exit 1
+            if (length(random) != ENVIRON["HA_LENGTH"] + 0) exit 1
+            if (random !~ "^[0123456789abcdef]+$") exit 1
+            print random
+        }' "$door_out"
 }
 
 # The one `Digest: ` line of door_out, its prefix stripped, if it has the
@@ -819,21 +845,34 @@ digest_of() {
         }' "$door_out"
 }
 
-# Sets digest to the argon2 digest of the password `$1`.
+# The door draws a value and hashes it: the pinned CLI reads no password from
+# a pipe, and `--password` would show it in the process list. The value comes
+# back on its stdout, in door_out (mode 600 under tmp_dir), removed here or by
+# cleanup on any exit.
+
+# Sets password to 32 random lower-case hex (128 bits), drawn by the door,
+# and digest to its argon2 digest.
 hash_password() {
     stage=hash
-    door_run "$1" crypto hash generate argon2 ||
+    door_run "" crypto hash generate argon2 \
+        --random --random.characters 0123456789abcdef --random.length 32 ||
         refuse "the door's CLI failed hashing the password: $(door_said); nothing changed"
+    password=$(random_of 32) ||
+        refuse "the door's CLI answered off its shape: no one \`Random Password: \` line of 32 lower-case hex; nothing changed"
     digest=$(digest_of argon2) ||
         refuse "the door's CLI answered off its shape: no one \`Digest: \$argon2id\$...\` line; nothing changed"
     rm -f "$door_out" "$door_err"
 }
 
-# Sets digest to the bcrypt digest of the secret `$1`.
+# Sets secret to 64 random lower-case hex (256 bits), drawn by the door, and
+# digest to its bcrypt digest.
 hash_secret() {
     stage=hash
-    door_run "$1" crypto hash generate bcrypt --cost "$BCRYPT_COST" ||
+    door_run "" crypto hash generate bcrypt --cost "$BCRYPT_COST" \
+        --random --random.characters 0123456789abcdef --random.length 64 ||
         refuse "the door's CLI failed hashing the secret: $(door_said); nothing changed"
+    secret=$(random_of 64) ||
+        refuse "the door's CLI answered off its shape: no one \`Random Password: \` line of 64 lower-case hex; nothing changed"
     digest=$(digest_of bcrypt) ||
         refuse "the door's CLI answered off its shape: no one \`Digest: \$2b\$...\` line; nothing changed"
     rm -f "$door_out" "$door_err"
@@ -849,15 +888,6 @@ delete_passkeys() {
 delete_totp() {
     stage=totp
     door_run "" storage user totp delete --sqlite.path "$door_db" -- "$1"
-}
-
-# `$1` random bytes from /dev/urandom, as lower-case hex, in random.
-random_hex() {
-    random=$(od -An -N"$1" -tx1 /dev/urandom | tr -d ' \n')
-    [ "${#random}" -eq $(($1 * 2)) ] || refuse "cannot read $1 random bytes from /dev/urandom"
-    case $random in
-        *[!0123456789abcdef]*) refuse "cannot read $1 random bytes from /dev/urandom" ;;
-    esac
 }
 
 # ------------------------------------------------------------------ the writers
@@ -1017,9 +1047,7 @@ act_add() {
     need_dir "$users_dir" ./authelia/users
     find_door_cli
 
-    random_hex 16
-    password=$random
-    hash_password "$password"
+    hash_password
     yaml_name=$(quoted "$name")
     stage=write
     # A file with no `users:` yet (missing, empty or comments alone) gets one.
@@ -1115,9 +1143,7 @@ act_reset() {
     one_login "$@"
     need_dir "$users_dir" ./authelia/users
     find_door_cli
-    random_hex 16
-    password=$random
-    hash_password "$password"
+    hash_password
     if ! delete_passkeys "$login"; then
         passkeys_left=1
         say "warning: passkeys not deleted: $(door_said)"
@@ -1148,9 +1174,7 @@ act_mcp_rotate() {
     need_dir "$mcp_dir" ./traefik/mcp-users
     need_dir "$stamp_dir" ./traefik/dynamic
     find_door_cli
-    random_hex 32
-    secret=$random
-    hash_secret "$secret"
+    hash_secret
     stage=mcp
     if [ "$mcp_at" != 0 ]; then
         edit_lines replace "$mcp_file" "$mcp_tmp" "$mcp_at" "$login:$digest"
